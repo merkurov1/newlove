@@ -142,7 +142,20 @@ export default function HomeClient() {
         </div>
       </div>
 
-      <div />
+      <footer className="w-full flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-wider text-neutral-400 z-20 pb-2">
+        <Link href="/journal" className="transition hover:text-neutral-900">
+          Journal ↗
+        </Link>
+        <span className="text-neutral-300">·</span>
+        <a
+          href="https://t.me/unframed_am"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="transition hover:text-neutral-900"
+        >
+          tg ↗
+        </a>
+      </footer>
     </main>
   );
 }

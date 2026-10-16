@@ -386,7 +386,7 @@ export default function Header() {
                   </div>
 
                   {/* 3. FLOW */}
-                  <div className="pt-3 border-t border-stone-100">
+                  <div className="space-y-2 pt-3 border-t border-stone-100">
                     <Link
                       href="/flow"
                       onClick={() => setIsSiteMenuOpen(false)}
@@ -398,6 +398,20 @@ export default function Header() {
                     >
                       FLOW
                     </Link>
+
+                    <div className="pl-3.5 space-y-1.5 border-l border-stone-200/80 font-bold uppercase tracking-[0.15em] text-xs text-stone-500">
+                      <Link
+                        href="/journal"
+                        onClick={() => setIsSiteMenuOpen(false)}
+                        className={`block py-0.5 transition-colors ${
+                          normalizedPath === '/journal' || normalizedPath.startsWith('/journal/')
+                            ? 'text-stone-900'
+                            : 'hover:text-stone-900'
+                        }`}
+                      >
+                        JOURNAL
+                      </Link>
+                    </div>
                   </div>
 
                   {/* 4. ART ENGINE */}

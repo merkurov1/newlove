@@ -207,7 +207,7 @@ function getTelegramUrl(item: FlowItem): string | null {
     (getRecord(item.metadata)?.telegram_message_id as string | number | undefined);
 
   if (msgId) {
-    return `https://t.me/merkurov/${msgId}`;
+    return `https://t.me/unframed_am/${msgId}`;
   }
   return null;
 }
@@ -327,37 +327,23 @@ function EntryMeta({
   onDelete: () => void;
 }) {
   const tgUrl = getTelegramUrl(item);
-  const bskyUrl = getBlueskyUrl(item);
 
   return (
     <div className="mb-3 flex items-center justify-between gap-4">
       <div className="flex items-center gap-2.5 font-mono text-[11px] text-neutral-400">
         <EntryDate item={item} />
-        {(tgUrl || bskyUrl) && (
+        {tgUrl && (
           <div className="flex items-center gap-2 text-neutral-400">
             <span className="text-neutral-300">·</span>
-            {tgUrl && (
-              <a
-                href={tgUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition hover:text-neutral-900"
-                title="View on Telegram"
-              >
-                tg ↗
-              </a>
-            )}
-            {bskyUrl && (
-              <a
-                href={bskyUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition hover:text-neutral-900"
-                title="View on Bluesky"
-              >
-                bsky ↗
-              </a>
-            )}
+            <a
+              href={tgUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition hover:text-neutral-900"
+              title="View on Telegram"
+            >
+              tg ↗
+            </a>
           </div>
         )}
       </div>
@@ -995,22 +981,20 @@ export default function FlowPage() {
               </p>
             </div>
             <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider text-neutral-400">
-              <a
-                href="https://t.me/merkurov"
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                href="/journal"
                 className="transition hover:text-neutral-900"
               >
-                Telegram ↗
-              </a>
+                Journal ↗
+              </Link>
               <span className="text-neutral-200">·</span>
               <a
-                href="https://bsky.app/profile/merkurov.love"
+                href="https://t.me/unframed_am"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition hover:text-neutral-900"
               >
-                Bluesky ↗
+                tg ↗
               </a>
             </div>
           </header>

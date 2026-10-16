@@ -30,6 +30,8 @@ type IssueResponse = {
   jobId?: string;
   jobStatus?: string;
   activeSubscribers?: number;
+  activeSubscribersRu?: number;
+  activeSubscribersEn?: number;
   sentCount?: number;
   failedCount?: number;
   skippedCount?: number;
@@ -63,6 +65,8 @@ export default function FlowIssueAdmin() {
   const [issue, setIssue] = useState<IssueRecord | null>(null);
   const [existingIssues, setExistingIssues] = useState<IssueRecord[]>([]);
   const [activeSubscribers, setActiveSubscribers] = useState<number>(0);
+  const [activeSubscribersRu, setActiveSubscribersRu] = useState<number>(0);
+  const [activeSubscribersEn, setActiveSubscribersEn] = useState<number>(0);
   const [isLoadingIssues, setIsLoadingIssues] = useState(true);
 
   const [jobId, setJobId] = useState("");
@@ -77,6 +81,12 @@ export default function FlowIssueAdmin() {
         setExistingIssues(data.issues);
         if (typeof data.activeSubscribers === "number") {
           setActiveSubscribers(data.activeSubscribers);
+        }
+        if (typeof data.activeSubscribersRu === "number") {
+          setActiveSubscribersRu(data.activeSubscribersRu);
+        }
+        if (typeof data.activeSubscribersEn === "number") {
+          setActiveSubscribersEn(data.activeSubscribersEn);
         }
       }
     } catch (err) {
@@ -196,9 +206,14 @@ export default function FlowIssueAdmin() {
 
     const target = existingIssues.find((i) => i.id === idToSend) || issue;
     const title = target?.title || "этот выпуск";
+    const targetLang = target?.lang || "ru";
+    const targetCount =
+      targetLang === "en" ? activeSubscribersEn : activeSubscribersRu;
+    const langLabel =
+      targetLang === "en" ? "англоязычным" : "русскоязычным";
 
     const confirmed = window.confirm(
-      `Отправить «${title}» всем активным подписчикам (${activeSubscribers})?\n\n` +
+      `Отправить «${title}» ${langLabel} подписчикам (${targetCount})?\n\n` +
         `Выпуск будет опубликован автоматически и разослан через Resend.`,
     );
 
@@ -285,9 +300,13 @@ export default function FlowIssueAdmin() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="rounded-lg border border-[#E8E2D8] bg-[#F7F4EE] px-3.5 py-2 font-mono text-xs">
-            <span className="text-[#89827B]">Подписчиков: </span>
-            <strong className="text-[#990F3D]">{activeSubscribers}</strong>
+          <div className="flex items-center gap-2 rounded-lg border border-[#E8E2D8] bg-[#F7F4EE] px-3.5 py-2 font-mono text-xs">
+            <span className="text-[#89827B]">Подписчики:</span>
+            <span title="Русскоязычные">RU: <strong className="text-[#990F3D]">{activeSubscribersRu}</strong></span>
+            <span className="text-stone-300">·</span>
+            <span title="Англоязычные">EN: <strong className="text-[#990F3D]">{activeSubscribersEn}</strong></span>
+            <span className="text-stone-300">·</span>
+            <span className="text-stone-500">Всего: {activeSubscribers}</span>
           </div>
 
           <Link
@@ -589,7 +608,7 @@ export default function FlowIssueAdmin() {
                   ? "Отправляю подписчикам…"
                   : isCurrentAlreadySent
                     ? "Уже отправлен"
-                    : `Отправить рассылку (${activeSubscribers})`}
+                    : `Отправить рассылку (${issue.lang === "en" ? `EN: ${activeSubscribersEn}` : `RU: ${activeSubscribersRu}`})`}
               </button>
             </div>
           </div>

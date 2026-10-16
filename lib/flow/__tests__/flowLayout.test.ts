@@ -77,7 +77,7 @@ function getTelegramUrl(item: {
     (item.metadata?.telegram_message_id as string | number | undefined);
 
   if (msgId) {
-    return `https://t.me/merkurov/${msgId}`;
+    return `https://t.me/unframed_am/${msgId}`;
   }
   return null;
 }
@@ -201,7 +201,7 @@ console.log('--- Running Flow Module Layout & Deduplication Tests ---');
 // Test 6: Social link generation
 {
   const tg = getTelegramUrl({ telegram_message_id: 1234 });
-  assert.strictEqual(tg, 'https://t.me/merkurov/1234');
+  assert.strictEqual(tg, 'https://t.me/unframed_am/1234');
 
   const bsky = getBlueskyUrl({ bluesky_uri: 'at://did:plc:123/app.bsky.feed.post/3ldf2' });
   assert.strictEqual(bsky, 'https://bsky.app/profile/merkurov.love/post/3ldf2');

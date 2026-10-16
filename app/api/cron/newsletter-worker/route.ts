@@ -4,6 +4,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { getServerSupabaseClient } from "@/lib/serverAuth";
 import { sendNewsletterToSubscriber } from "@/lib/newsletter/sendNewsletterToSubscriber";
 import { renderNewsletterEmail } from "@/emails/NewsletterEmail";
+import { filterSubscribersByLang } from "@/lib/newsletter/language";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -95,7 +96,7 @@ async function handleWorker(request: Request) {
     const { data: letter, error: letterError } = await supabase
       .from("letters")
       .select(
-        "id,title,slug,content,published,kind,html_email,text_email,status,sent_at,sentAt",
+        "id,title,slug,content,published,kind,lang,html_email,text_email,status,sent_at,sentAt",
       )
       .eq("id", job.letter_id)
       .maybeSingle();
@@ -165,9 +166,9 @@ async function handleWorker(request: Request) {
       );
     }
 
-    const { data: subscribers, error: subsError } = await supabase
+    const { data: allSubscribers, error: subsError } = await supabase
       .from("subscribers")
-      .select("id,email")
+      .select("id,email,locale")
       .eq("isActive", true);
 
     if (subsError) {
@@ -186,7 +187,15 @@ async function handleWorker(request: Request) {
       );
     }
 
+    const subscribers = filterSubscribersByLang(
+      allSubscribers || [],
+      letter.lang,
+    );
+
     if (!subscribers?.length) {
+      const langLabel = letter.lang === "en" ? "англоязычных" : "русскоязычных";
+      const noSubsMsg = `Нет активных ${langLabel} подписчиков`;
+
       await supabase
         .from("newsletter_jobs")
         .update({
@@ -194,13 +203,13 @@ async function handleWorker(request: Request) {
           total_count: 0,
           sent_count: 0,
           failed_count: 0,
-          error_message: "No active subscribers",
+          error_message: noSubsMsg,
           completed_at: new Date().toISOString(),
         })
         .eq("id", job.id);
 
       return NextResponse.json(
-        { error: "No active subscribers", processed: 0 },
+        { error: noSubsMsg, processed: 0 },
         { status: 409 },
       );
     }

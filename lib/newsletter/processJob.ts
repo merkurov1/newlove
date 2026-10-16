@@ -2,6 +2,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { getServerSupabaseClient } from "@/lib/serverAuth";
 import { sendNewsletterToSubscriber } from "@/lib/newsletter/sendNewsletterToSubscriber";
 import { renderNewsletterEmail } from "@/emails/NewsletterEmail";
+import { filterSubscribersByLang } from "@/lib/newsletter/language";
 
 const BATCH_SIZE = 10;
 const BATCH_DELAY_MS = 1500;
@@ -66,7 +67,7 @@ export async function processNewsletterJob(
     const { data: letter, error: letterError } = await supabase
       .from("letters")
       .select(
-        "id,title,slug,content,published,kind,html_email,text_email,status,sent_at,sentAt",
+        "id,title,slug,content,published,kind,lang,html_email,text_email,status,sent_at,sentAt",
       )
       .eq("id", job.letter_id)
       .maybeSingle();
@@ -91,9 +92,9 @@ export async function processNewsletterJob(
       };
     }
 
-    const { data: subscribers, error: subsError } = await supabase
+    const { data: allSubscribers, error: subsError } = await supabase
       .from("subscribers")
-      .select("id,email")
+      .select("id,email,locale")
       .eq("isActive", true);
 
     if (subsError) {
@@ -116,7 +117,15 @@ export async function processNewsletterJob(
       };
     }
 
+    const subscribers = filterSubscribersByLang(
+      allSubscribers || [],
+      letter.lang,
+    );
+
     if (!subscribers || subscribers.length === 0) {
+      const langLabel = letter.lang === "en" ? "англоязычных" : "русскоязычных";
+      const noSubsMsg = `Нет активных ${langLabel} подписчиков`;
+
       await supabase
         .from("newsletter_jobs")
         .update({
@@ -124,14 +133,14 @@ export async function processNewsletterJob(
           total_count: 0,
           sent_count: 0,
           failed_count: 0,
-          error_message: "No active subscribers",
+          error_message: noSubsMsg,
           completed_at: new Date().toISOString(),
         })
         .eq("id", job.id);
 
       return {
         ok: false,
-        error: "Нет активных подписчиков",
+        error: noSubsMsg,
         sentCount: 0,
         failedCount: 0,
         skippedCount: 0,

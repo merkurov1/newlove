@@ -11,6 +11,10 @@ import {
 } from "@/lib/flow-issue/build";
 import { renderIssue } from "@/lib/flow-issue/render";
 import { processNewsletterJob } from "@/lib/newsletter/processJob";
+import {
+  filterSubscribersByLang,
+  isSubscriberMatchingLang,
+} from "@/lib/newsletter/language";
 import type { IssueLang } from "@/lib/flow-issue/types";
 
 export const dynamic = "force-dynamic";
@@ -58,15 +62,26 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    const { count: activeSubscribers } = await supabase
+    const { data: activeSubs } = await supabase
       .from("subscribers")
-      .select("id", { count: "exact", head: true })
+      .select("id,locale")
       .eq("isActive", true);
+
+    const activeList = activeSubs || [];
+    const activeSubscribersTotal = activeList.length;
+    const activeSubscribersEn = activeList.filter((s) =>
+      isSubscriberMatchingLang(s.locale, "en"),
+    ).length;
+    const activeSubscribersRu = activeList.filter((s) =>
+      isSubscriberMatchingLang(s.locale, "ru"),
+    ).length;
 
     return NextResponse.json({
       ok: true,
       issues: issues || [],
-      activeSubscribers: activeSubscribers ?? 0,
+      activeSubscribers: activeSubscribersTotal,
+      activeSubscribersRu,
+      activeSubscribersEn,
     });
   } catch (error) {
     const message =
@@ -269,7 +284,7 @@ export async function PATCH(request: Request) {
     const { data: issue, error: fetchError } = await supabase
       .from("letters")
       .select(
-        "id,title,slug,kind,status,published,publishedAt,sent_at,html_email,text_email",
+        "id,title,slug,kind,lang,status,published,publishedAt,sent_at,html_email,text_email",
       )
       .eq("id", id)
       .eq("kind", "issue")
@@ -391,17 +406,26 @@ export async function PATCH(request: Request) {
       });
     }
 
-    const { count: activeSubscribers, error: subscribersError } =
+    const { data: activeSubs, error: subscribersError } =
       await supabase
         .from("subscribers")
-        .select("id", { count: "exact", head: true })
+        .select("id,locale")
         .eq("isActive", true);
 
     if (subscribersError) throw subscribersError;
 
-    if (!activeSubscribers) {
+    const matchingSubs = filterSubscribersByLang(
+      activeSubs || [],
+      issue.lang,
+    );
+
+    if (!matchingSubs.length) {
+      const langLabel =
+        issue.lang === "en" ? "англоязычных" : "русскоязычных";
       return NextResponse.json(
-        { error: "Нет активных подписчиков. Рассылка не создана." },
+        {
+          error: `Нет активных ${langLabel} подписчиков. Рассылка не создана.`,
+        },
         { status: 409 },
       );
     }
@@ -487,7 +511,7 @@ export async function PATCH(request: Request) {
       queued: true,
       alreadyQueued: false,
       jobId,
-      activeSubscribers,
+      activeSubscribers: matchingSubs.length,
       sentCount: sendResult.sentCount,
       failedCount: sendResult.failedCount,
       skippedCount: sendResult.skippedCount,

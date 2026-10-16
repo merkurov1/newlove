@@ -7,6 +7,7 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { generateFlowContext } from '@/lib/flow/ai';
+import PierrotContextBlock from '@/components/flow/PierrotContextBlock';
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -477,7 +478,7 @@ function getTelegramUrl(item: FlowItem): string | null {
     (item.metadata?.telegram_message_id as string | number | undefined);
 
   if (msgId) {
-    return `https://t.me/merkurov/${msgId}`;
+    return `https://t.me/unframed_am/${msgId}`;
   }
   return null;
 }
@@ -962,55 +963,14 @@ function SmartFlowContent({
   );
 }
 
-function AIContextBlock({ context }: { context: AIContext | null }) {
-  if (
-    !context ||
-    context.status !== 'ready' ||
-    !context.content
-  ) {
-    return null;
-  }
-
-  return (
-    <section className="mt-14 border-t border-stone-200 pt-7 sm:mt-16 sm:pt-8">
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500">
-            DeepSeek · Context Architecture
-          </span>
-        </div>
-
-        {context.model && (
-          <div className="font-mono text-[9px] uppercase tracking-wider text-stone-400">
-            {context.provider ? `${context.provider} · ` : ''}
-            {context.model}
-          </div>
-        )}
-      </div>
-
-      <div className="font-serif text-base font-light leading-[1.8] text-stone-600 sm:text-lg">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            p: ({ children }) => (
-              <p className="mb-4 whitespace-pre-wrap leading-relaxed last:mb-0">
-                {children}
-              </p>
-            ),
-            hr: () => <hr className="my-6 border-stone-200" />,
-            strong: ({ children }) => (
-              <strong className="font-mono text-[11px] font-normal uppercase tracking-widest text-stone-500">
-                {children}
-              </strong>
-            ),
-          }}
-        >
-          {context.content}
-        </ReactMarkdown>
-      </div>
-    </section>
-  );
+function AIContextBlock({
+  context,
+  defaultLang = 'ru',
+}: {
+  context: AIContext | null;
+  defaultLang?: string;
+}) {
+  return <PierrotContextBlock context={context} defaultLang={defaultLang} />;
 }
 
 export default async function FlowItemPage({ params }: PageProps) {
@@ -1087,7 +1047,7 @@ export default async function FlowItemPage({ params }: PageProps) {
                 item_id: item.id,
                 content: generated.content,
                 model: generated.model,
-                provider: generated.provider || 'deepseek',
+                provider: generated.provider || 'pierrot',
                 status: 'ready',
                 generated_at: now,
                 updated_at: now,
@@ -1113,14 +1073,14 @@ export default async function FlowItemPage({ params }: PageProps) {
               item_id: item.id,
               content: generated.content,
               model: generated.model,
-              provider: generated.provider || 'deepseek',
+              provider: generated.provider || 'pierrot',
               status: 'ready',
               generated_at: now,
             };
       }
     } catch (genError) {
       console.warn(
-        '[flow/item] On-demand DeepSeek context generation failed:',
+        '[flow/item] On-demand Pierrot context generation failed:',
         genError,
       );
     }
@@ -1290,22 +1250,20 @@ export default async function FlowItemPage({ params }: PageProps) {
             </Link>
 
             <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider text-stone-400">
-              <a
-                href={tgUrl || 'https://t.me/merkurov'}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                href="/journal"
                 className="transition hover:text-stone-900"
               >
-                Telegram ↗
-              </a>
+                Journal ↗
+              </Link>
               <span className="text-stone-200">·</span>
               <a
-                href={bskyUrl || 'https://bsky.app/profile/merkurov.love'}
+                href={tgUrl || 'https://t.me/unframed_am'}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition hover:text-stone-900"
               >
-                Bluesky ↗
+                tg ↗
               </a>
             </div>
           </header>
@@ -1339,7 +1297,10 @@ export default async function FlowItemPage({ params }: PageProps) {
           />
 
           {item.type !== 'photo' && (
-            <AIContextBlock context={context} />
+            <AIContextBlock
+              context={context}
+              defaultLang={item.lang || 'ru'}
+            />
           )}
         </article>
       </main>

@@ -1019,7 +1019,7 @@ export async function sendLetter(prevState: any, formData: any) {
 
   const { data: letter, error: letterErr } = await supabase
     .from('letters')
-    .select('id,title,slug,content,published,sentAt')
+    .select('id,title,slug,content,published,sentAt,lang')
     .eq('id', letterId)
     .maybeSingle();
   if (letterErr || !letter) {
@@ -1088,14 +1088,22 @@ export async function sendLetter(prevState: any, formData: any) {
   const SEND_LIMIT = parseInt(process.env.NEWSLETTER_SEND_LIMIT || '100');
 
   try {
-    const { data: subs, error: subsErr } = await supabase
+    const { data: allSubs, error: subsErr } = await supabase
       .from('subscribers')
-      .select('id,email')
+      .select('id,email,locale')
       .eq('isActive', true)
       .limit(SEND_LIMIT);
 
-    if (subsErr || !subs || subs.length === 0) {
+    if (subsErr || !allSubs || allSubs.length === 0) {
       return { status: 'error', message: 'There are no active subscribers to receive this letter.' };
+    }
+
+    const { filterSubscribersByLang } = await import('@/lib/newsletter/language');
+    const subs = filterSubscribersByLang(allSubs, letter.lang);
+
+    if (!subs || subs.length === 0) {
+      const langLabel = letter.lang === 'en' ? 'English' : 'Russian';
+      return { status: 'error', message: `There are no active ${langLabel} subscribers to receive this letter.` };
     }
 
     let sent = 0;
