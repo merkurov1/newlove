@@ -1,12 +1,52 @@
+
 import { useState, useRef, useEffect, useCallback } from "react";
-import type { FlowImageAttachment, FlowLinkAttachment, YouTubeMetadata } from "./types";
-import { isYouTubeVideo, isProbablyImageUrl } from "./utils";
+import type {
+  FlowImageAttachment,
+  FlowLinkAttachment,
+  YouTubeMetadata,
+} from "./types";
+import {
+  isYouTubeVideo,
+  isProbablyImageUrl,
+  normalizePastedUrl,
+} from "./utils";
 
 interface UseNewPostModalParams {
   open: boolean;
   onClose: () => void;
   onCreated?: (item?: any) => void;
   itemId?: string | null;
+}
+
+function makeId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 10)}`;
+}
+
+function extractUrls(text: string): string[] {
+  const matches =
+    text.match(/https?:\/\/[^\s<>"'`]+/gi) ?? [];
+
+  const urls: string[] = [];
+  const seen = new Set<string>();
+
+  for (const match of matches) {
+    // Remove common punctuation around pasted URLs.
+    const cleaned = match.replace(/[),.;!?}\]]+$/g, "");
+    const normalized = normalizePastedUrl(cleaned);
+
+    if (!normalized || seen.has(normalized)) continue;
+
+    seen.add(normalized);
+    urls.push(normalized);
+  }
+
+  return urls;
+}
+
+async function readResponse(res: Response): Promise<any> {
+  return res.json().catch(() => ({}));
 }
 
 export function useNewPostModal({
@@ -19,13 +59,12 @@ export function useNewPostModal({
   const [title, setTitle] = useState("");
   const [bodyMd, setBodyMd] = useState("");
 
-  // Attached media states - supporting multiple arrays for images and links
   const [links, setLinks] = useState<FlowLinkAttachment[]>([]);
   const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [youtubeMetadata, setYoutubeMetadata] = useState<YouTubeMetadata | null>(null);
+  const [youtubeMetadata, setYoutubeMetadata] =
+    useState<YouTubeMetadata | null>(null);
   const [images, setImages] = useState<FlowImageAttachment[]>([]);
 
-  // UI inputs visibility
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [showYouTubeInput, setShowYouTubeInput] = useState(false);
 
@@ -43,8 +82,24 @@ export function useNewPostModal({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const isEditing = Boolean(itemId);
-  const canClear = Boolean(bodyMd.trim() || links.length > 0 || youtubeUrl || images.length > 0);
-  const canPost = Boolean(bodyMd.trim() || links.length > 0 || youtubeUrl || images.length > 0);
+
+  const canClear = Boolean(
+    title.trim() ||
+      bodyMd.trim() ||
+      links.length > 0 ||
+      youtubeUrl ||
+      youtubeMetadata ||
+      images.length > 0,
+  );
+
+  const canPost = Boolean(
+    bodyMd.trim() ||
+      links.length > 0 ||
+      youtubeUrl ||
+      youtubeMetadata ||
+      images.length > 0,
+  );
+
   const busy =
     isInitializing ||
     isParsingLink ||
@@ -53,7 +108,7 @@ export function useNewPostModal({
     isPublishing ||
     isClearing;
 
-  // Load existing post on edit
+  // Reset the composer when it closes.
   useEffect(() => {
     if (!open) {
       setItem(null);
@@ -66,212 +121,279 @@ export function useNewPostModal({
       setShowLinkInput(false);
       setShowYouTubeInput(false);
       setError(null);
+      setSaveState("idle");
       return;
     }
 
-    if (itemId) {
-      setIsInitializing(true);
-      fetch(`/api/flow/items/${itemId}`)
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to load item");
-          return res.json();
-        })
-        .then((data) => {
-          const found = data.item;
-          if (found) {
-            setItem(found);
-            setTitle(found.title || "");
-            setBodyMd(found.body_md || "");
-
-            // Restore attached media
-            const meta = found.metadata || {};
-            if (meta.youtube) {
-              setYoutubeMetadata(meta.youtube);
-              if (meta.youtube.video_id) {
-                setYoutubeUrl(`https://www.youtube.com/watch?v=${meta.youtube.video_id}`);
-              }
-            } else if (found.source_url && isYouTubeVideo(found.source_url)) {
-              setYoutubeUrl(found.source_url);
-            }
-
-            // Restore links (array or legacy single link_preview)
-            const loadedLinks: FlowLinkAttachment[] = [];
-            if (Array.isArray(meta.link_previews)) {
-              meta.link_previews.forEach((lp: any, idx: number) => {
-                if (lp && lp.url) {
-                  loadedLinks.push({
-                    id: `link-${idx}-${Date.now()}`,
-                    url: lp.url,
-                    preview: lp,
-                  });
-                }
-              });
-            } else if (meta.link_preview && typeof meta.link_preview === 'object') {
-              loadedLinks.push({
-                id: `link-legacy-${Date.now()}`,
-                url: meta.link_preview.url || found.source_url || "",
-                preview: meta.link_preview,
-              });
-            } else if (found.source_url && !isYouTubeVideo(found.source_url)) {
-              loadedLinks.push({
-                id: `link-source-${Date.now()}`,
-                url: found.source_url,
-                preview: { url: found.source_url, title: found.source_url },
-              });
-            }
-            setLinks(loadedLinks);
-
-            // Restore images (array or legacy single image/public_url)
-            const loadedImages: FlowImageAttachment[] = [];
-            const rawImages = Array.isArray(meta.images)
-              ? meta.images
-              : [meta.public_url, meta.image, meta.image_url, meta.og_image].filter(Boolean);
-
-            rawImages.forEach((imgUrl: string, idx: number) => {
-              if (typeof imgUrl === 'string' && imgUrl.trim()) {
-                loadedImages.push({
-                  id: `img-${idx}-${Date.now()}`,
-                  url: imgUrl.trim(),
-                  name: `Image ${idx + 1}`,
-                });
-              }
-            });
-            setImages(loadedImages);
-          }
-        })
-        .catch((err) => {
-          console.error("Failed to load item for edit:", err);
-          setError("Failed to load post for editing");
-        })
-        .finally(() => setIsInitializing(false));
-    } else {
+    if (!itemId) {
       setItem({ id: "new" });
+      return;
     }
+
+    let cancelled = false;
+
+    async function loadItem() {
+      setIsInitializing(true);
+      setError(null);
+
+      try {
+        const res = await fetch(
+          `/api/flow/items/${encodeURIComponent(itemId!)}`,
+          { cache: "no-store" },
+        );
+
+        const data = await readResponse(res);
+
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to load item.");
+        }
+
+        const found = data.item;
+
+        if (!found || cancelled) return;
+
+        setItem(found);
+        setTitle(found.title || "");
+        setBodyMd(found.body_md || "");
+
+        const meta =
+          found.metadata && typeof found.metadata === "object"
+            ? found.metadata
+            : {};
+
+        const youtube = meta.youtube as
+          | YouTubeMetadata
+          | undefined;
+
+        if (youtube) {
+          setYoutubeMetadata(youtube);
+
+          if (youtube.video_id) {
+            setYoutubeUrl(
+              `https://www.youtube.com/watch?v=${youtube.video_id}`,
+            );
+          }
+        } else if (
+          found.source_url &&
+          isYouTubeVideo(found.source_url)
+        ) {
+          setYoutubeUrl(found.source_url);
+        } else {
+          setYoutubeUrl("");
+          setYoutubeMetadata(null);
+        }
+
+        // Restore multiple link previews and older single-link records.
+        const restoredLinks: FlowLinkAttachment[] = [];
+        const rawLinks = Array.isArray(meta.link_previews)
+          ? meta.link_previews
+          : meta.link_preview
+            ? [meta.link_preview]
+            : [];
+
+        for (const raw of rawLinks) {
+          if (!raw || typeof raw !== "object") continue;
+
+          const preview = raw as Record<string, any>;
+          const url =
+            typeof preview.url === "string"
+              ? preview.url
+              : "";
+
+          if (!url) continue;
+
+          restoredLinks.push({
+            id: makeId("link"),
+            url,
+            preview: {
+              url,
+              title: preview.title || url,
+              description: preview.description,
+              image: preview.image,
+              site_name: preview.site_name,
+              favicon: preview.favicon,
+              domain: preview.domain,
+            },
+          });
+        }
+
+        if (
+          restoredLinks.length === 0 &&
+          found.source_url &&
+          !isYouTubeVideo(found.source_url)
+        ) {
+          restoredLinks.push({
+            id: makeId("link"),
+            url: found.source_url,
+            preview: {
+              url: found.source_url,
+              title: found.source_url,
+            },
+          });
+        }
+
+        setLinks(restoredLinks);
+
+        // Support both the current array format and legacy image fields.
+        const rawImages = Array.isArray(meta.images)
+          ? meta.images
+          : [
+              meta.public_url,
+              meta.image,
+              meta.image_url,
+              meta.og_image,
+            ].filter(Boolean);
+
+        const restoredImages: FlowImageAttachment[] = [];
+
+        for (const raw of rawImages) {
+          let url = "";
+          let name = "";
+
+          if (typeof raw === "string") {
+            url = raw.trim();
+          } else if (raw && typeof raw === "object") {
+            const value = raw as Record<string, unknown>;
+
+            if (typeof value.url === "string") {
+              url = value.url.trim();
+            }
+
+            if (typeof value.name === "string") {
+              name = value.name;
+            }
+          }
+
+          if (!url) continue;
+
+          if (
+            !restoredImages.some((image) => image.url === url)
+          ) {
+            restoredImages.push({
+              id: makeId("image"),
+              url,
+              name: name || `Image ${restoredImages.length + 1}`,
+            });
+          }
+        }
+
+        if (!cancelled) {
+          setImages(restoredImages);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error(
+            "[useNewPostModal] Failed to load item:",
+            err,
+          );
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load post for editing.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsInitializing(false);
+        }
+      }
+    }
+
+    void loadItem();
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, itemId]);
 
-  const parseLink = useCallback(async (url: string) => {
-    const trimmed = url.trim();
-    if (!trimmed) return;
+  const uploadImageFile = useCallback(
+    async (file: File): Promise<FlowImageAttachment> => {
+      const formData = new FormData();
+      formData.append("image", file);
 
-    setIsParsingLink(true);
-    setError(null);
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
 
-    try {
-      const res = await fetch(`/api/flow/parse-url?url=${encodeURIComponent(trimmed)}`);
-      if (!res.ok) throw new Error("Could not fetch link preview");
-      const data = await res.json();
+      const data = await readResponse(res);
 
-      if (data.isYouTube && data.youtube) {
-        setYoutubeMetadata(data.youtube);
-        setYoutubeUrl(data.url);
-        setShowYouTubeInput(false);
-      } else {
-        const newLink: FlowLinkAttachment = {
-          id: `link-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          url: data.url || trimmed,
-          preview: {
-            url: data.url || trimmed,
-            title: data.title || trimmed,
-            description: data.description,
-            image: data.image,
-            site_name: data.site_name,
-            favicon: data.favicon,
-            domain: data.domain,
-          },
-        };
-        setLinks((prev) => [...prev, newLink]);
-        setShowLinkInput(false);
+      if (!res.ok || !data.success || !data.file?.url) {
+        throw new Error(
+          data.error || `Failed to upload ${file.name}.`,
+        );
       }
-    } catch (e: any) {
-      console.warn("Link preview failed:", e);
-      const fallbackLink: FlowLinkAttachment = {
-        id: `link-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        url: trimmed,
-        preview: { url: trimmed, title: trimmed },
+
+      return {
+        id: makeId("image"),
+        url: data.file.url,
+        name: file.name || "Uploaded image",
+        file,
       };
-      setLinks((prev) => [...prev, fallbackLink]);
-      setShowLinkInput(false);
-    } finally {
-      setIsParsingLink(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
-  const parseYouTube = useCallback(async (url: string) => {
-    const trimmed = url.trim();
-    if (!trimmed) return;
+  const handleImageUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const selectedFiles = Array.from(event.target.files || []);
 
-    setIsParsingYouTube(true);
-    setError(null);
-
-    try {
-      const res = await fetch(`/api/flow/parse-url?url=${encodeURIComponent(trimmed)}`);
-      if (!res.ok) throw new Error("Could not fetch YouTube info");
-      const data = await res.json();
-
-      if (data.youtube) {
-        setYoutubeMetadata(data.youtube);
-        setYoutubeUrl(data.url);
-        setShowYouTubeInput(false);
-      } else {
-        throw new Error("Not a valid YouTube video");
-      }
-    } catch (e: any) {
-      console.warn("YouTube parse failed:", e);
-      setError("Failed to load YouTube video. Check URL.");
-    } finally {
-      setIsParsingYouTube(false);
-    }
-  }, []);
-
-  // Upload multiple image files to Supabase Storage via /api/upload
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
+    if (selectedFiles.length === 0) return;
 
     setIsUploadingImage(true);
     setError(null);
 
+    const uploaded: FlowImageAttachment[] = [];
+    const failures: string[] = [];
+
     try {
-      const newAttachments: FlowImageAttachment[] = [];
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const formData = new FormData();
-        formData.append("image", file);
-
-        const res = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || `Failed to upload image ${file.name}`);
-        }
-
-        const data = await res.json();
-        if (data.success && data.file?.url) {
-          newAttachments.push({
-            id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            url: data.file.url,
-            name: file.name,
-            file,
-          });
+      // Upload sequentially to avoid overloading the upload endpoint.
+      for (const file of selectedFiles) {
+        try {
+          const attachment = await uploadImageFile(file);
+          uploaded.push(attachment);
+        } catch (err) {
+          failures.push(
+            err instanceof Error
+              ? err.message
+              : `Failed to upload ${file.name}.`,
+          );
         }
       }
 
-      setImages((prev) => [...prev, ...newAttachments]);
-    } catch (err: any) {
-      console.error("[useNewPostModal] Image upload error:", err);
-      setError(err.message || "Image upload failed.");
+      // Keep successful uploads even when another file fails.
+      if (uploaded.length > 0) {
+        setImages((prev) => {
+          const existingUrls = new Set(
+            prev.map((image) => image.url),
+          );
+
+          return [
+            ...prev,
+            ...uploaded.filter(
+              (image) => !existingUrls.has(image.url),
+            ),
+          ];
+        });
+      }
+
+      if (failures.length > 0) {
+        setError(
+          `${uploaded.length} image(s) uploaded. ${failures.join(" ")}`,
+        );
+      }
     } finally {
       setIsUploadingImage(false);
-      if (fileRef.current) fileRef.current.value = "";
+
+      if (fileRef.current) {
+        fileRef.current.value = "";
+      }
     }
   };
 
   const removeImage = (id: string) => {
-    setImages((prev) => prev.filter((img) => img.id !== id));
+    setImages((prev) => prev.filter((image) => image.id !== id));
   };
 
   const removeYouTube = () => {
@@ -281,73 +403,253 @@ export function useNewPostModal({
   };
 
   const removeLink = (id: string) => {
-    setLinks((prev) => prev.filter((l) => l.id !== id));
+    setLinks((prev) => prev.filter((link) => link.id !== id));
   };
 
-  const handlePaste = async (event: React.ClipboardEvent) => {
-    // 1. Check if image(s) pasted from clipboard
-    const clipboardItems = event.clipboardData?.items;
-    if (clipboardItems) {
-      for (let i = 0; i < clipboardItems.length; i++) {
-        if (clipboardItems[i].type.startsWith("image/")) {
-          const file = clipboardItems[i].getAsFile();
-          if (file) {
-            event.preventDefault();
-            setIsUploadingImage(true);
-            try {
-              const formData = new FormData();
-              formData.append("image", file);
-              const res = await fetch("/api/upload", {
-                method: "POST",
-                body: formData,
-              });
-              const data = await res.json();
-              if (res.ok && data.success && data.file?.url) {
-                setImages((prev) => [
-                  ...prev,
-                  {
-                    id: `img-pasted-${Date.now()}`,
-                    url: data.file.url,
-                    name: "pasted-image.png",
-                  },
-                ]);
-              }
-            } catch (err) {
-              console.error("Pasted image upload failed:", err);
-              setError("Failed to upload pasted image.");
-            } finally {
-              setIsUploadingImage(false);
-            }
-            return;
-          }
-        }
-      }
+  const parseLink = useCallback(async (url: string) => {
+    const normalized = normalizePastedUrl(url);
+
+    if (!normalized) {
+      setError("Please enter a valid http or https URL.");
+      return;
     }
 
-    // 2. Check if a URL was pasted
-    const pastedText = event.clipboardData?.getData("text")?.trim();
-    if (pastedText && /^https?:\/\//i.test(pastedText)) {
-      if (isYouTubeVideo(pastedText) && !youtubeMetadata) {
-        event.preventDefault();
-        void parseYouTube(pastedText);
-      } else if (isProbablyImageUrl(pastedText)) {
-        event.preventDefault();
-        setImages((prev) => [
+    if (isProbablyImageUrl(normalized)) {
+      setImages((prev) =>
+        prev.some((image) => image.url === normalized)
+          ? prev
+          : [
+              ...prev,
+              {
+                id: makeId("image-url"),
+                url: normalized,
+                name: "Linked image",
+              },
+            ],
+      );
+      setShowLinkInput(false);
+      return;
+    }
+
+    if (isYouTubeVideo(normalized)) {
+      await parseYouTube(normalized);
+      return;
+    }
+
+    setIsParsingLink(true);
+    setError(null);
+
+    try {
+      const res = await fetch(
+        `/api/flow/parse-url?url=${encodeURIComponent(normalized)}`,
+      );
+      const data = await readResponse(res);
+
+      if (!res.ok) {
+        throw new Error(data.error || "Could not fetch link preview.");
+      }
+
+      const finalUrl = data.url || normalized;
+
+      setLinks((prev) => {
+        if (prev.some((link) => link.url === finalUrl)) {
+          return prev;
+        }
+
+        return [
           ...prev,
           {
-            id: `img-url-${Date.now()}`,
-            url: pastedText,
-            name: "image-url",
+            id: makeId("link"),
+            url: finalUrl,
+            preview: {
+              url: finalUrl,
+              title: data.title || finalUrl,
+              description: data.description,
+              image: data.image,
+              site_name: data.site_name,
+              favicon: data.favicon,
+              domain: data.domain,
+            },
           },
-        ]);
+        ];
+      });
+
+      setShowLinkInput(false);
+    } catch (err) {
+      // Keep the URL as an attachment even if preview parsing fails.
+      console.warn("[useNewPostModal] Link preview failed:", err);
+
+      setLinks((prev) =>
+        prev.some((link) => link.url === normalized)
+          ? prev
+          : [
+              ...prev,
+              {
+                id: makeId("link"),
+                url: normalized,
+                preview: {
+                  url: normalized,
+                  title: normalized,
+                },
+              },
+            ],
+      );
+
+      setShowLinkInput(false);
+    } finally {
+      setIsParsingLink(false);
+    }
+  }, []);
+
+  const parseYouTube = useCallback(async (url: string) => {
+    const normalized = normalizePastedUrl(url);
+
+    if (!normalized || !isYouTubeVideo(normalized)) {
+      setError("Please enter a valid YouTube video URL.");
+      return;
+    }
+
+    setIsParsingYouTube(true);
+    setError(null);
+
+    try {
+      const res = await fetch(
+        `/api/flow/parse-url?url=${encodeURIComponent(normalized)}`,
+      );
+      const data = await readResponse(res);
+
+      if (!res.ok || !data.youtube) {
+        throw new Error(
+          data.error || "Could not load YouTube video information.",
+        );
+      }
+
+      setYoutubeMetadata(data.youtube);
+      setYoutubeUrl(data.url || normalized);
+      setShowYouTubeInput(false);
+    } catch (err) {
+      console.warn("[useNewPostModal] YouTube parse failed:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to load YouTube video. Check the URL.",
+      );
+    } finally {
+      setIsParsingYouTube(false);
+    }
+  }, []);
+
+  const handlePaste = async (event: React.ClipboardEvent) => {
+    const clipboardItems = Array.from(
+      event.clipboardData?.items || [],
+    );
+
+    const imageFiles: File[] = [];
+
+    for (const clipboardItem of clipboardItems) {
+      if (!clipboardItem.type.startsWith("image/")) continue;
+
+      const file = clipboardItem.getAsFile();
+
+      if (file) imageFiles.push(file);
+    }
+
+    if (imageFiles.length > 0) {
+      event.preventDefault();
+      setIsUploadingImage(true);
+      setError(null);
+
+      const uploaded: FlowImageAttachment[] = [];
+      const failures: string[] = [];
+
+      try {
+        // Process every image in the clipboard, not just the first.
+        for (const file of imageFiles) {
+          try {
+            uploaded.push(await uploadImageFile(file));
+          } catch (err) {
+            failures.push(
+              err instanceof Error
+                ? err.message
+                : "Failed to upload a pasted image.",
+            );
+          }
+        }
+
+        if (uploaded.length > 0) {
+          setImages((prev) => {
+            const existingUrls = new Set(
+              prev.map((image) => image.url),
+            );
+
+            return [
+              ...prev,
+              ...uploaded.filter(
+                (image) => !existingUrls.has(image.url),
+              ),
+            ];
+          });
+        }
+
+        if (failures.length > 0) {
+          setError(
+            `${uploaded.length} image(s) uploaded. ${failures.join(" ")}`,
+          );
+        }
+      } finally {
+        setIsUploadingImage(false);
+      }
+
+      return;
+    }
+
+    const pastedText =
+      event.clipboardData?.getData("text/plain")?.trim() || "";
+
+    const urls = extractUrls(pastedText);
+
+    if (urls.length === 0) return;
+
+    // Prevent URLs from being inserted as plain text when they are
+    // being interpreted as attachments. Preserve ordinary prose.
+    const textContainsOnlyUrls = pastedText
+      .replace(/https?:\/\/[^\s<>"'`]+/gi, "")
+      .replace(/[\s),.;!?}\]]+/g, "")
+      .length === 0;
+
+    if (!textContainsOnlyUrls) return;
+
+    event.preventDefault();
+
+    for (const url of urls) {
+      if (isProbablyImageUrl(url)) {
+        setImages((prev) =>
+          prev.some((image) => image.url === url)
+            ? prev
+            : [
+                ...prev,
+                {
+                  id: makeId("image-url"),
+                  url,
+                  name: "Linked image",
+                },
+              ],
+        );
+      } else if (isYouTubeVideo(url)) {
+        // The composer supports one YouTube attachment at a time.
+        // Keep the first video and process other URLs as links.
+        if (!youtubeUrl && !youtubeMetadata) {
+          await parseYouTube(url);
+        } else {
+          await parseLink(url);
+        }
       } else {
-        event.preventDefault();
-        void parseLink(pastedText);
+        await parseLink(url);
       }
     }
   };
 
-  // Submit and save post
   const finish = useCallback(async () => {
     if (!canPost || busy) return;
 
@@ -356,22 +658,31 @@ export function useNewPostModal({
     setSaveState("publishing");
 
     try {
-      // Gather all image URLs
-      const imageUrls = images.map((img) => img.url).filter(Boolean);
+      const imageUrls = Array.from(
+        new Set(
+          images
+            .map((image) => image.url.trim())
+            .filter(Boolean),
+        ),
+      );
 
-      // Prepare metadata with arrays for multi-attachment support + legacy compatibility
       const metadata: Record<string, unknown> = {
-        ...(item?.metadata || {}),
+        ...(item?.metadata &&
+        typeof item.metadata === "object"
+          ? item.metadata
+          : {}),
       };
 
       if (imageUrls.length > 0) {
         metadata.images = imageUrls;
+        // Legacy fields keep older renderers working.
         metadata.image = imageUrls[0];
         metadata.public_url = imageUrls[0];
       } else {
         delete metadata.images;
         delete metadata.image;
         delete metadata.public_url;
+        delete metadata.image_url;
       }
 
       if (youtubeMetadata) {
@@ -380,27 +691,29 @@ export function useNewPostModal({
         delete metadata.youtube;
       }
 
-      const linkPreviewsList = links.map((l) => l.preview).filter(Boolean);
-      if (linkPreviewsList.length > 0) {
-        metadata.link_previews = linkPreviewsList;
-        metadata.link_preview = linkPreviewsList[0];
+      const linkPreviews = links.map((link) => ({
+        ...link.preview,
+        url: link.url,
+      }));
+
+      if (linkPreviews.length > 0) {
+        metadata.link_previews = linkPreviews;
+        metadata.link_preview = linkPreviews[0];
       } else {
         delete metadata.link_previews;
         delete metadata.link_preview;
       }
 
-      // Determine primary source url
       const primarySourceUrl =
         links[0]?.url ||
         (youtubeMetadata?.video_id
           ? `https://www.youtube.com/watch?v=${youtubeMetadata.video_id}`
-          : null);
+          : youtubeUrl || null);
 
-      // Determine type for DB
       const determinedType =
         bodyMd.trim().length > 180
           ? "article"
-          : youtubeMetadata
+          : youtubeMetadata || youtubeUrl
             ? "video"
             : imageUrls.length > 0
               ? "photo"
@@ -410,8 +723,10 @@ export function useNewPostModal({
 
       const postTitle =
         title.trim() ||
-        (bodyMd.trim() ? bodyMd.slice(0, 80).split("\n")[0].trim() : null) ||
-        linkPreviewsList[0]?.title ||
+        (bodyMd.trim()
+          ? bodyMd.trim().slice(0, 80).split(/\r?\n/)[0].trim()
+          : "") ||
+        linkPreviews[0]?.title ||
         youtubeMetadata?.title ||
         "Flow thought";
 
@@ -425,32 +740,41 @@ export function useNewPostModal({
         metadata,
       };
 
-      let res;
-      if (isEditing && itemId) {
-        res = await fetch(`/api/flow/items/${itemId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-      } else {
-        res = await fetch(`/api/flow/items`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-      }
+      const endpoint =
+        isEditing && itemId
+          ? `/api/flow/items/${encodeURIComponent(itemId)}`
+          : "/api/flow/items";
 
-      const data = await res.json();
+      const res = await fetch(endpoint, {
+        method: isEditing ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await readResponse(res);
+
       if (!res.ok || data.error) {
-        throw new Error(data.error || data.details || "Failed to save post");
+        throw new Error(
+          data.error ||
+            data.details ||
+            "Failed to save Flow post.",
+        );
       }
 
       setSaveState("saved");
       onCreated?.(data.item);
       onClose();
-    } catch (err: any) {
+    } catch (err) {
       console.error("[useNewPostModal] Save error:", err);
-      setError(err.message || "Failed to post");
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to publish Flow post.",
+      );
+
       setSaveState("idle");
     } finally {
       setIsPublishing(false);
@@ -461,6 +785,7 @@ export function useNewPostModal({
     images,
     item,
     youtubeMetadata,
+    youtubeUrl,
     links,
     bodyMd,
     title,
@@ -472,16 +797,20 @@ export function useNewPostModal({
 
   const clearDraft = async () => {
     setIsClearing(true);
-    setTitle("");
-    setBodyMd("");
-    setLinks([]);
-    setYoutubeUrl("");
-    setYoutubeMetadata(null);
-    setImages([]);
-    setShowLinkInput(false);
-    setShowYouTubeInput(false);
-    setError(null);
-    setIsClearing(false);
+
+    try {
+      setTitle("");
+      setBodyMd("");
+      setLinks([]);
+      setYoutubeUrl("");
+      setYoutubeMetadata(null);
+      setImages([]);
+      setShowLinkInput(false);
+      setShowYouTubeInput(false);
+      setError(null);
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   const handleClose = useCallback(async () => {
@@ -494,19 +823,25 @@ export function useNewPostModal({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         if (busy) return;
+
         event.preventDefault();
         void handleClose();
         return;
       }
 
-      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.key === "Enter"
+      ) {
         if (busy || isClearing) return;
+
         event.preventDefault();
         void finish();
       }
     };
 
     document.addEventListener("keydown", onKeyDown);
+
     return () => {
       document.removeEventListener("keydown", onKeyDown);
     };

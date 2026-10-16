@@ -1,13 +1,23 @@
+
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { deleteFromBluesky } from '@/lib/bluesky';
 import { deleteFromTelegramChannel } from '@/lib/telegram';
 import { crosspostFlowItem } from '@/lib/flow/crosspost';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
+type RouteContext = {
+  params: {
+    id: string;
+  };
+};
+
 function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) {
@@ -23,28 +33,67 @@ function getSupabaseAdmin() {
   });
 }
 
-// --- GET: Fetch single Flow item by ID ---
+async function isAdminRequest(req: Request): Promise<boolean> {
+  try {
+    await requireAdminFromRequest(req);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// GET: public items are readable by everyone;
+// drafts and private items are only readable by an administrator.
 export async function GET(
   req: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: RouteContext,
 ) {
   try {
-    const { id } = await params;
+    const { id } = params;
+    const admin = await isAdminRequest(req);
     const supabase = getSupabaseAdmin();
 
-    const { data: item, error } = await supabase
+    let query = supabase
       .from('items')
       .select('*')
-      .eq('id', id)
-      .maybeSingle();
+      .eq('id', id);
 
-    if (error || !item) {
-      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+    if (!admin) {
+      query = query
+        .eq('status', 'published')
+        .eq('visibility', 'public');
     }
 
-    return NextResponse.json({ item });
+    const { data: item, error } = await query.maybeSingle();
+
+    if (error) {
+      console.error('[api/flow/items/[id]:GET] database error:', error);
+
+      return NextResponse.json(
+        { error: 'Failed to load item.' },
+        { status: 500 },
+      );
+    }
+
+    if (!item) {
+      // Use 404 for private records to avoid confirming their existence.
+      return NextResponse.json(
+        { error: 'Item not found' },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json(
+      { item },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+      },
+    );
   } catch (error) {
     console.error('[api/flow/items/[id]:GET] error:', error);
+
     return NextResponse.json(
       { error: 'Internal server error while fetching item.' },
       { status: 500 },
@@ -52,24 +101,56 @@ export async function GET(
   }
 }
 
-// --- PATCH: Update Flow item by ID ---
+// PATCH: administrator-only update.
 export async function PATCH(
   req: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: RouteContext,
 ) {
   try {
-    const { id } = await params;
+    try {
+      await requireAdminFromRequest(req);
+    } catch {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 },
+      );
+    }
+
+    const { id } = params;
     const body = await req.json();
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json(
+        { error: 'Invalid request body.' },
+        { status: 400 },
+      );
+    }
+
     const supabase = getSupabaseAdmin();
 
-    const { data: existing, error: fetchErr } = await supabase
+    const { data: existing, error: fetchError } = await supabase
       .from('items')
       .select('*')
       .eq('id', id)
       .maybeSingle();
 
-    if (fetchErr || !existing) {
-      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+    if (fetchError) {
+      console.error(
+        '[api/flow/items/[id]:PATCH] lookup error:',
+        fetchError,
+      );
+
+      return NextResponse.json(
+        { error: 'Failed to load item.' },
+        { status: 500 },
+      );
+    }
+
+    if (!existing) {
+      return NextResponse.json(
+        { error: 'Item not found' },
+        { status: 404 },
+      );
     }
 
     const updatePayload: Record<string, unknown> = {
@@ -81,45 +162,79 @@ export async function PATCH(
     if (body.lang !== undefined) updatePayload.lang = body.lang;
     if (body.type !== undefined) updatePayload.type = body.type;
     if (body.status !== undefined) updatePayload.status = body.status;
-    if (body.visibility !== undefined) updatePayload.visibility = body.visibility;
-    if (body.body_md !== undefined) updatePayload.body_md = body.body_md;
-    if (body.source_url !== undefined) updatePayload.source_url = body.source_url;
+    if (body.visibility !== undefined) {
+      updatePayload.visibility = body.visibility;
+    }
+    if (body.body_md !== undefined) {
+      updatePayload.body_md = body.body_md;
+    }
+    if (body.source_url !== undefined) {
+      updatePayload.source_url = body.source_url;
+    }
 
     if (body.metadata !== undefined) {
+      if (
+        !body.metadata ||
+        typeof body.metadata !== 'object' ||
+        Array.isArray(body.metadata)
+      ) {
+        return NextResponse.json(
+          { error: 'metadata must be an object.' },
+          { status: 400 },
+        );
+      }
+
       updatePayload.metadata = {
         ...(existing.metadata || {}),
-        ...(body.metadata || {}),
+        ...body.metadata,
       };
     }
 
-    const { data: updatedItem, error: updateErr } = await supabase
+    const { data: updatedItem, error: updateError } = await supabase
       .from('items')
       .update(updatePayload)
       .eq('id', id)
       .select()
       .single();
 
-    if (updateErr || !updatedItem) {
+    if (updateError || !updatedItem) {
+      console.error(
+        '[api/flow/items/[id]:PATCH] update error:',
+        updateError,
+      );
+
       return NextResponse.json(
-        { error: 'Failed to update item', details: updateErr?.message },
+        { error: 'Failed to update item.' },
         { status: 500 },
       );
     }
 
-    // If publishing newly or re-publishing
-    const wasPublished = existing.status === 'published' && existing.visibility === 'public';
-    const isNowPublished = updatedItem.status === 'published' && updatedItem.visibility === 'public';
+    const wasPublished =
+      existing.status === 'published' &&
+      existing.visibility === 'public';
+
+    const isNowPublished =
+      updatedItem.status === 'published' &&
+      updatedItem.visibility === 'public';
+
     if (!wasPublished && isNowPublished) {
       try {
         await crosspostFlowItem(updatedItem);
-      } catch (cErr) {
-        console.error('[api/flow/items/[id]:PATCH] crosspost error:', cErr);
+      } catch (crosspostError) {
+        console.error(
+          '[api/flow/items/[id]:PATCH] crosspost error:',
+          crosspostError,
+        );
       }
     }
 
-    return NextResponse.json({ success: true, item: updatedItem });
+    return NextResponse.json({
+      success: true,
+      item: updatedItem,
+    });
   } catch (error) {
     console.error('[api/flow/items/[id]:PATCH] error:', error);
+
     return NextResponse.json(
       { error: 'Internal server error while updating item.' },
       { status: 500 },
@@ -127,27 +242,49 @@ export async function PATCH(
   }
 }
 
-// --- DELETE: Delete Flow item + Cascade delete Bluesky & Telegram ---
+// DELETE: administrator-only deletion, including external copies.
 export async function DELETE(
   req: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: RouteContext,
 ) {
   try {
-    const { id } = await params;
+    try {
+      await requireAdminFromRequest(req);
+    } catch {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 },
+      );
+    }
+
+    const { id } = params;
     const supabase = getSupabaseAdmin();
 
-    // 1. Находим пост, его bluesky_uri и telegram_message_id
     const { data: item, error: fetchError } = await supabase
       .from('items')
       .select('id, bluesky_uri, telegram_message_id')
       .eq('id', id)
       .maybeSingle();
 
-    if (fetchError || !item) {
-      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+    if (fetchError) {
+      console.error(
+        '[api/flow/items/[id]:DELETE] lookup error:',
+        fetchError,
+      );
+
+      return NextResponse.json(
+        { error: 'Failed to load item.' },
+        { status: 500 },
+      );
     }
 
-    // 2. Параллельно удаляем пост из внешней сети Bluesky и Telegram-канала
+    if (!item) {
+      return NextResponse.json(
+        { error: 'Item not found' },
+        { status: 404 },
+      );
+    }
+
     const deletePromises: Promise<unknown>[] = [];
 
     if (item.bluesky_uri) {
@@ -155,29 +292,51 @@ export async function DELETE(
     }
 
     if (item.telegram_message_id) {
-      deletePromises.push(deleteFromTelegramChannel(item.telegram_message_id));
+      deletePromises.push(
+        deleteFromTelegramChannel(item.telegram_message_id),
+      );
     }
 
     if (deletePromises.length > 0) {
-      await Promise.all(deletePromises);
+      try {
+        await Promise.all(deletePromises);
+      } catch (externalError) {
+        console.error(
+          '[api/flow/items/[id]:DELETE] external deletion error:',
+          externalError,
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              'Could not delete the external post copies. The Flow item was not deleted.',
+          },
+          { status: 502 },
+        );
+      }
     }
 
-    // 3. Удаляем запись из Supabase
     const { error: deleteError } = await supabase
       .from('items')
       .delete()
       .eq('id', id);
 
     if (deleteError) {
+      console.error(
+        '[api/flow/items/[id]:DELETE] database delete error:',
+        deleteError,
+      );
+
       return NextResponse.json(
-        { error: 'Failed to delete item', details: deleteError.message },
+        { error: 'Failed to delete item.' },
         { status: 500 },
       );
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('[api/flow/items/delete] error:', error);
+    console.error('[api/flow/items/[id]:DELETE] error:', error);
+
     return NextResponse.json(
       { error: 'Internal server error while deleting item.' },
       { status: 500 },
