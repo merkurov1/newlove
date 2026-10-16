@@ -6,9 +6,9 @@ import {
   type CrosspostPayload,
 } from '@/lib/flow/crosspost';
 
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-export const runtime = 'nodejs'; // Явно указываем Node.js runtime для работы с внешними сервисами и модулями
 
 function getSupabaseAdmin() {
   const url =
@@ -36,8 +36,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   );
 }
 
+/**
+ * POST /api/flow/crosspost
+ *
+ * Поддерживаемые запросы:
+ *   { id }                  — запись по ID из Supabase
+ *   { slug }                — запись по slug из Supabase
+ *   { title, body_md, ... } — публикация из переданного содержимого
+ *
+ * Доступ разрешён только администратору.
+ */
 export async function POST(req: Request) {
   try {
+    // Авторизация до чтения или публикации данных.
     try {
       await requireAdminFromRequest(req);
     } catch {
@@ -82,6 +93,7 @@ export async function POST(req: Request) {
     const slug =
       typeof body.slug === 'string' ? body.slug.trim() : '';
 
+    // 1. Публикация существующей записи из Supabase.
     if (id || slug) {
       const supabase = getSupabaseAdmin();
 
@@ -136,6 +148,7 @@ export async function POST(req: Request) {
 
       payload = item as CrosspostPayload;
     } else {
+      // 2. Ручная публикация из переданного содержимого.
       const title =
         typeof body.title === 'string' ? body.title : null;
       const bodyMd =
@@ -193,6 +206,7 @@ export async function POST(req: Request) {
       };
     }
 
+    // Каждый канал обрабатывается независимо внутри crosspostFlowItem.
     const result = await crosspostFlowItem(payload);
 
     const channels = {
