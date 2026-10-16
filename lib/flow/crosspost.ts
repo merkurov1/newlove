@@ -225,17 +225,24 @@ async function formatTelegramMessage(
   flowUrl: string,
   lang = 'ru'
 ): Promise<string> {
-  let rawContent = title?.trim()
-    ? `<b>${escapeHtml(title.trim())}</b>\n\n`
+  const cleanTitle = (title || '').trim();
+  const rawBody = (bodyMd || '').trim();
+  const cleanBody = rawBody
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1: $2')
+    .replace(/[#*_`~]/g, '')
+    .trim();
+
+  const isRedundantTitle =
+    !cleanTitle ||
+    cleanTitle.toLowerCase() === cleanBody.toLowerCase() ||
+    cleanBody.toLowerCase().startsWith(cleanTitle.toLowerCase());
+
+  let rawContent = (!isRedundantTitle && cleanTitle)
+    ? `<b>${escapeHtml(cleanTitle)}</b>\n\n`
     : '';
 
-  if (bodyMd) {
-    const cleanBody = bodyMd
-      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1: $2')
-      .replace(/[#*_`~]/g, '')
-      .trim();
-
+  if (cleanBody) {
     rawContent += escapeHtml(cleanBody);
   }
 
@@ -365,6 +372,59 @@ async function publishTelegram(
     );
 
     return response.json();
+  }
+
+  // If multiple images are provided, send a native Telegram media album
+  if (imageUrls.length > 1) {
+    const media = imageUrls.slice(0, 10).map((url, i) => ({
+      type: 'photo',
+      media: url,
+      ...(i === 0
+        ? {
+            caption: formattedText.slice(0, 1024),
+            parse_mode: 'HTML',
+          }
+        : {}),
+    }));
+
+    try {
+      const groupRes = await fetch(
+        `https://api.telegram.org/bot${botToken}/sendMediaGroup`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: channelId, media }),
+          signal: AbortSignal.timeout(15000),
+        }
+      );
+      const groupData = await groupRes.json();
+      if (
+        groupData.ok &&
+        Array.isArray(groupData.result) &&
+        groupData.result.length > 0
+      ) {
+        console.info('[crosspost:telegram] Published media group album:', {
+          channelId,
+          messageId: groupData.result[0].message_id,
+          photoCount: media.length,
+        });
+        return {
+          messageId: groupData.result[0].message_id,
+          chatId: String(groupData.result[0].chat.id),
+          bot,
+        };
+      } else {
+        console.warn(
+          '[crosspost:telegram] sendMediaGroup returned non-ok, falling back to single photo/message:',
+          groupData.description
+        );
+      }
+    } catch (groupError) {
+      console.warn(
+        '[crosspost:telegram] sendMediaGroup exception, falling back:',
+        groupError
+      );
+    }
   }
 
   try {

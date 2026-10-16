@@ -312,8 +312,13 @@ export async function publishToBluesky({
       cardUrl = pageUrl || validUrl(source_url);
     }
 
+    const isRedundantTitle =
+      !cleanTitle ||
+      cleanTitle.toLowerCase() === cleanBody.toLowerCase() ||
+      cleanBody.toLowerCase().startsWith(cleanTitle.toLowerCase());
+
     const textParts = [
-      cleanTitle,
+      isRedundantTitle ? null : cleanTitle,
       cleanBody,
     ].filter(Boolean);
 
