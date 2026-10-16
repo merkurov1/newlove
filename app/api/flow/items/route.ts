@@ -1,9 +1,8 @@
-
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { crosspostFlowItem } from '@/lib/flow/crosspost';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
@@ -221,6 +220,8 @@ export async function POST(req: Request) {
       item.visibility === 'public'
     ) {
       try {
+        // Ленивый импорт: sharp не грузится на этапе сборки.
+        const { crosspostFlowItem } = await import('@/lib/flow/crosspost');
         crosspostResult = await crosspostFlowItem(item);
       } catch (crosspostError) {
         console.error(
