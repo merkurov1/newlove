@@ -30,11 +30,13 @@ export async function POST(req: NextRequest) {
     let subscriberId = existing?.id;
 
     if (!subscriberId) {
-      // Создаем нового с учетом локали и userId (если пользователь авторизован)
+      // Создаем нового активного подписчика с учетом локали и userId
+      const now = new Date().toISOString();
       const insertData: any = { 
         email, 
-        isActive: false, 
-        locale: locale 
+        isActive: true, 
+        locale: locale,
+        confirmedAt: now,
       };
       if (userId) {
         insertData.userId = userId;
@@ -47,8 +49,13 @@ export async function POST(req: NextRequest) {
       }
       subscriberId = insert.data?.id;
     } else {
-      // Если подписчик уже был, можно обновить его язык, если он его сменил
-      await supabase.from('subscribers').update({ locale: locale, ...(userId ? { userId } : {}) }).eq('id', subscriberId);
+      // Если подписчик уже был, реактивируем его и обновляем язык/userId
+      await supabase.from('subscribers').update({ 
+        isActive: true, 
+        locale: locale, 
+        confirmedAt: new Date().toISOString(),
+        ...(userId ? { userId } : {}) 
+      }).eq('id', subscriberId);
     }
 
     // Generate confirmation token and store

@@ -145,7 +145,7 @@ export async function GET() {
         letterUrls = letters
           .filter((l) => l.slug && typeof l.slug === 'string')
           .map((letter) => ({
-            loc: `${baseUrl}/${encodeURIComponent(letter.slug.trim())}`,
+            loc: `${baseUrl}/letters/${encodeURIComponent(letter.slug.trim())}`,
             lastmod: letter.updatedAt || letter.publishedAt || now,
             changefreq: 'monthly' as const,
             priority: 0.7,

@@ -231,7 +231,7 @@ export default function MediaLinksPanel() {
             type="button"
             onClick={() => void parseUrl()}
             disabled={busy || !url.trim()}
-            className="rounded-lg bg-gray-950 px-5 py-2.5 text-sm text-white disabled:opacity-40"
+            className="rounded-lg bg-[#990F3D] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#7E0C33] disabled:opacity-40"
           >
             {busy ? 'Обработка…' : 'Разобрать URL'}
           </button>
@@ -406,7 +406,7 @@ export default function MediaLinksPanel() {
               type="button"
               disabled={busy}
               onClick={() => void saveRecord('published')}
-              className="rounded-lg bg-gray-950 px-4 py-2 text-sm text-white disabled:opacity-40"
+              className="rounded-lg bg-[#990F3D] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#7E0C33] disabled:opacity-40"
             >
               Опубликовать
             </button>

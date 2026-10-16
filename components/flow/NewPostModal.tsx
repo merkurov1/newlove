@@ -174,22 +174,6 @@ export default function NewPostModal({
         {/* Writing area: no field borders or inner card */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 pt-3 sm:px-7 sm:pt-4">
           <div className="flex min-h-full flex-col">
-            <input
-              type="text"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Title (optional)"
-              disabled={busy}
-              aria-label="Post title"
-              className="
-                mb-3 w-full border-0 bg-transparent p-0
-                font-serif text-xl font-medium text-[#302C26]
-                outline-none ring-0 placeholder:text-[#C0B8AC]
-                focus:outline-none focus:ring-0
-                sm:text-2xl
-              "
-            />
-
             <textarea
               ref={textareaRef}
               value={bodyMd}

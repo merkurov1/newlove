@@ -43,12 +43,14 @@ function Metric({ item }: { item: CountResult }) {
       className="group block border-t border-[#D9D3CD] py-5 transition-colors hover:border-[#990F3D]"
     >
       <div className="flex items-start justify-between gap-3">
-        <span className="text-sm text-[#746D66]">{item.label}</span>
+        <span className="text-sm text-[#746D66] group-hover:text-[#211F1F]">
+          {item.label}
+        </span>
         <span className="text-xs text-[#A29B94] transition group-hover:text-[#990F3D]">
           ↗
         </span>
       </div>
-      <div className="mt-3 font-serif text-4xl font-normal tracking-tight text-[#211F1F]">
+      <div className="mt-3 font-serif text-3xl font-normal tracking-tight text-[#211F1F] sm:text-4xl">
         {item.value === null ? "—" : item.value.toLocaleString("en-GB")}
       </div>
       {item.detail && (
@@ -75,7 +77,7 @@ function Section({
           href={href}
           className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-[#827B74] hover:text-[#990F3D]"
         >
-          Open ↗
+          Все ↗
         </Link>
       </div>
       {children}
@@ -88,236 +90,268 @@ export default async function AdminDashboard() {
 
   const [
     users,
-    subscribers,
+    activeSubscribers,
+    totalSubscribers,
+    flowIssues,
+    sentFlowIssues,
+    mediaRecords,
     items,
     publishedItems,
     drafts,
     projects,
-    articles,
     letters,
-    newsletterJobs,
-    postcards,
-    postcardOrders,
-    lots,
-    templeEvents,
+    recentIssuesResult,
+    recentMediaResult,
     recentItemsResult,
-    recentProjectsResult,
     recentLettersResult,
   ] = await Promise.all([
     countRows(supabase, "users"),
+    countRows(supabase, "subscribers", (q) => q.eq("isActive", true)),
     countRows(supabase, "subscribers"),
+    countRows(supabase, "letters", (q) => q.eq("kind", "issue")),
+    countRows(supabase, "letters", (q) =>
+      q.eq("kind", "issue").not("sent_at", "is", null),
+    ),
+    countRows(supabase, "media_archive_records"),
     countRows(supabase, "items"),
     countRows(supabase, "items", (q) =>
       q.eq("status", "published").eq("visibility", "public"),
     ),
     countRows(supabase, "items", (q) => q.eq("status", "draft")),
     countRows(supabase, "projects"),
-    countRows(supabase, "articles"),
-    countRows(supabase, "letters"),
-    countRows(supabase, "newsletter_jobs"),
-    countRows(supabase, "postcards"),
-    countRows(supabase, "postcard_orders"),
-    countRows(supabase, "lots"),
-    countRows(supabase, "temple_log"),
+    countRows(supabase, "letters", (q) => q.neq("kind", "issue")),
+    supabase
+      .from("letters")
+      .select(
+        "id,title,slug,number,lang,status,published,sent_at,publishedAt,createdAt",
+      )
+      .eq("kind", "issue")
+      .order("createdAt", { ascending: false })
+      .limit(5),
+    supabase
+      .from("media_archive_records")
+      .select("id,title,outlet,kind,published_date,status,created_at")
+      .order("created_at", { ascending: false })
+      .limit(5),
     supabase
       .from("items")
       .select("id,type,title,slug,status,visibility,published_at,created_at")
       .order("updated_at", { ascending: false })
-      .limit(6),
-    supabase
-      .from("projects")
-      .select("id,title,slug,published,createdAt")
-      .order("createdAt", { ascending: false })
       .limit(5),
     supabase
       .from("letters")
       .select("id,title,slug,published,createdAt")
+      .neq("kind", "issue")
       .order("createdAt", { ascending: false })
       .limit(5),
   ]);
 
   const metrics: CountResult[] = [
-    { label: "Users", value: users, href: "/admin/users" },
     {
-      label: "Subscribers",
-      value: subscribers,
+      label: "Пользователи",
+      value: users,
       href: "/admin/users",
-      detail: "Subscriber records",
+      detail: "Зарегистрированные профили",
     },
     {
-      label: "Public Flow items",
+      label: "Подписчики",
+      value: activeSubscribers,
+      href: "/admin/users",
+      detail: `${totalSubscribers ?? "—"} всего в базе · Активные`,
+    },
+    {
+      label: "Выпуски Flow",
+      value: flowIssues,
+      href: "/admin/flow-issues",
+      detail: `${sentFlowIssues ?? 0} разослано`,
+    },
+    {
+      label: "Медиа публикации",
+      value: mediaRecords,
+      href: "/admin/media",
+      detail: "В архиве /media",
+    },
+    {
+      label: "Flow записи",
       value: publishedItems,
       href: "/flow",
-      detail: `${drafts ?? "—"} drafts · ${items ?? "—"} total`,
-    },
-    { label: "Projects", value: projects, href: "/admin/projects" },
-    {
-      label: "Legacy articles",
-      value: articles,
-      href: "/admin/selection",
+      detail: `${drafts ?? 0} черновиков`,
     },
     {
-      label: "Newsletter archive",
-      value: letters,
-      href: "/admin/letters",
-    },
-    {
-      label: "Delivery jobs",
-      value: newsletterJobs,
-      href: "/admin/newsletter-jobs",
-    },
-    {
-      label: "Postcards",
-      value: postcards,
-      href: "/admin/postcards",
-      detail: `${postcardOrders ?? "—"} orders`,
-    },
-    { label: "Art lots", value: lots, href: "/admin/ai-selection" },
-    {
-      label: "Temple events",
-      value: templeEvents,
-      href: "/temple",
-      detail: "Recorded activity",
+      label: "Проекты",
+      value: projects,
+      href: "/admin/projects",
+      detail: "Архив проектов",
     },
   ];
 
+  const recentIssues = Array.isArray(recentIssuesResult.data)
+    ? recentIssuesResult.data
+    : [];
+  const recentMedia = Array.isArray(recentMediaResult.data)
+    ? recentMediaResult.data
+    : [];
   const recentItems = Array.isArray(recentItemsResult.data)
     ? recentItemsResult.data
-    : [];
-  const recentProjects = Array.isArray(recentProjectsResult.data)
-    ? recentProjectsResult.data
     : [];
   const recentLetters = Array.isArray(recentLettersResult.data)
     ? recentLettersResult.data
     : [];
 
-  const queryErrors = [
-    recentItemsResult.error,
-    recentProjectsResult.error,
-    recentLettersResult.error,
-  ].filter(Boolean);
-
   return (
     <div className="space-y-12 pb-10">
+      {/* Header with primary actions */}
       <header className="border-b border-[#D9D3CD] pb-7">
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#89827B]">
           MERKUROV.LOVE / CONTROL ROOM
         </p>
-        <div className="mt-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+
+        <div className="mt-4 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>
             <h1 className="font-serif text-4xl font-normal tracking-tight sm:text-5xl">
-              Overview
+              Обзор
             </h1>
-            <p className="mt-2 max-w-xl text-sm text-[#746D66]">
-              Content, audience, projects and distribution.
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#746D66]">
+              Управление выпуском газеты, добавление публикаций в Медиа, стрим Flow и аудитория.
             </p>
           </div>
-          <Link
-            href="/flow"
-            className="inline-flex w-fit items-center gap-3 border border-[#990F3D] bg-[#990F3D] px-4 py-3 text-xs text-white transition hover:bg-[#7E0C33]"
-          >
-            Open Flow <span aria-hidden="true">↗</span>
-          </Link>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/admin/flow-issues"
+              className="inline-flex items-center gap-2 border border-[#990F3D] bg-[#990F3D] px-4 py-2.5 text-xs font-medium text-white transition hover:bg-[#7E0C33] active:scale-95 shadow-sm"
+            >
+              Газета: собрать & отправить ↗
+            </Link>
+
+            <Link
+              href="/admin/media"
+              className="inline-flex items-center gap-2 border border-[#D9D3CD] bg-white px-4 py-2.5 text-xs font-medium text-[#211F1F] transition hover:border-[#990F3D] hover:text-[#990F3D]"
+            >
+              Добавить в Медиа ↗
+            </Link>
+
+            <Link
+              href="/flow"
+              className="inline-flex items-center gap-1.5 px-2 py-2 text-xs font-mono uppercase tracking-wider text-[#827B74] transition hover:text-[#211F1F]"
+            >
+              Стрим Flow ↗
+            </Link>
+          </div>
         </div>
       </header>
 
-      {queryErrors.length > 0 && (
-        <div
-          role="status"
-          className="border border-[#E7C9D2] bg-[#FFF1E5] px-4 py-3 text-sm text-[#7E0C33]"
-        >
-          Some recent-content lists could not be loaded. The affected database
-          query is logged on the server.
-        </div>
-      )}
-
+      {/* Live key statistics: Users and Subscribers strictly separated */}
       <section>
         <div className="mb-5 flex items-end justify-between gap-3">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#89827B]">
-              Database
+              Статистика
             </p>
-            <h2 className="mt-2 font-serif text-2xl">Project statistics</h2>
+            <h2 className="mt-1 font-serif text-2xl">Ключевые показатели</h2>
           </div>
-          <span className="text-xs text-[#89827B]">Live counts</span>
+          <span className="text-xs text-[#89827B]">Live</span>
         </div>
-        <div className="grid grid-cols-2 gap-x-5 gap-y-1 sm:grid-cols-3 xl:grid-cols-5">
+
+        <div className="grid grid-cols-2 gap-x-5 gap-y-2 sm:grid-cols-3 xl:grid-cols-6">
           {metrics.map((item) => (
             <Metric key={item.label} item={item} />
           ))}
         </div>
       </section>
 
-      <section>
-        <div className="mb-5 border-b border-[#D9D3CD] pb-3">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#89827B]">
-            Actions
-          </p>
-          <h2 className="mt-2 font-serif text-2xl">Workspace</h2>
-        </div>
-        <div className="grid grid-cols-1 gap-0 sm:grid-cols-2 xl:grid-cols-3">
-          {[
-            {
-              href: "/admin/users",
-              number: "01",
-              title: "Users & access",
-              detail: "Accounts, roles and subscriptions",
-            },
-            {
-              href: "/flow",
-              number: "02",
-              title: "Flow",
-              detail: "Write, edit and publish stream items",
-            },
-            {
-              href: "/admin/projects",
-              number: "03",
-              title: "Projects",
-              detail: "Manage existing project pages",
-            },
-            {
-              href: "/admin/letters",
-              number: "04",
-              title: "Newsletter archive",
-              detail: "Review existing letters and delivery",
-            },
-            {
-              href: "/admin/postcards",
-              number: "05",
-              title: "Postcards",
-              detail: "Catalogue and availability",
-            },
-            {
-              href: "/admin/newsletter-jobs",
-              number: "06",
-              title: "Delivery logs",
-              detail: "Review newsletter jobs",
-            },
-          ].map((action) => (
-            <Link
-              key={action.href}
-              href={action.href}
-              className="group border-b border-[#D9D3CD] py-5 pr-4 transition hover:bg-[#FFF1E5] sm:odd:pr-6 sm:even:pl-6 xl:odd:pr-8"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <span className="font-mono text-[10px] text-[#A29B94]">
-                  {action.number}
-                </span>
-                <span className="text-sm text-[#A29B94] group-hover:text-[#990F3D]">
-                  ↗
-                </span>
-              </div>
-              <h3 className="mt-4 font-serif text-xl">{action.title}</h3>
-              <p className="mt-1 text-xs text-[#746D66]">{action.detail}</p>
-            </Link>
-          ))}
-        </div>
-      </section>
-
+      {/* Main Content Sections: Flow Issues, Media, Flow Posts, Letters */}
       <div className="grid grid-cols-1 gap-10 xl:grid-cols-2">
-        <Section title="Recent Flow" href="/flow">
+        {/* SECTION 1: Flow Issues */}
+        <Section title="Выпуски газеты Flow" href="/admin/flow-issues">
+          {recentIssues.length === 0 ? (
+            <p className="py-6 text-sm text-[#89827B]">Выпуски ещё не созданы.</p>
+          ) : (
+            <div>
+              {recentIssues.map((issueItem: any) => (
+                <div
+                  key={issueItem.id}
+                  className="flex items-center justify-between gap-4 border-b border-[#EAE6E1] py-3.5"
+                >
+                  <div className="min-w-0">
+                    <Link
+                      href={`/letters/${issueItem.slug}`}
+                      className="block truncate text-sm font-medium hover:text-[#990F3D]"
+                    >
+                      {issueItem.title || `Выпуск №${issueItem.number || ""}`}
+                    </Link>
+                    <p className="mt-1 truncate font-mono text-[10px] text-[#89827B]">
+                      {issueItem.lang?.toUpperCase() || "RU"} ·{" "}
+                      {issueItem.publishedAt
+                        ? new Date(issueItem.publishedAt).toLocaleDateString("ru-RU")
+                        : "Черновик"}
+                    </p>
+                  </div>
+
+                  <span
+                    className={[
+                      "shrink-0 font-mono text-[10px] uppercase",
+                      issueItem.sent_at
+                        ? "text-[#356B4D]"
+                        : issueItem.published
+                          ? "text-[#990F3D]"
+                          : "text-[#89827B]",
+                    ].join(" ")}
+                  >
+                    {issueItem.sent_at
+                      ? "Разослан"
+                      : issueItem.published
+                        ? "Опубликован"
+                        : "Черновик"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+
+        {/* SECTION 2: Media Archive */}
+        <Section title="Медиа публикации" href="/admin/media">
+          {recentMedia.length === 0 ? (
+            <p className="py-6 text-sm text-[#89827B]">
+              Публикаций в каталоге пока нет.
+            </p>
+          ) : (
+            <div>
+              {recentMedia.map((record: any) => (
+                <div
+                  key={record.id}
+                  className="flex items-center justify-between gap-4 border-b border-[#EAE6E1] py-3.5"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-[#211F1F]">
+                      {record.title || "Без заголовка"}
+                    </p>
+                    <p className="mt-1 truncate font-mono text-[10px] text-[#89827B]">
+                      {record.outlet} · {record.kind || "статья"}
+                    </p>
+                  </div>
+
+                  <span
+                    className={[
+                      "shrink-0 font-mono text-[10px] uppercase",
+                      record.status === "published"
+                        ? "text-[#356B4D]"
+                        : "text-[#89827B]",
+                    ].join(" ")}
+                  >
+                    {record.status === "published" ? "Опубликовано" : "Черновик"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+
+        {/* SECTION 3: Recent Flow Stream Items */}
+        <Section title="Стрим Flow" href="/flow">
           {recentItems.length === 0 ? (
-            <p className="py-6 text-sm text-[#89827B]">No items found.</p>
+            <p className="py-6 text-sm text-[#89827B]">Записей не найдено.</p>
           ) : (
             <div>
               {recentItems.map((item: any) => (
@@ -327,7 +361,7 @@ export default async function AdminDashboard() {
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm">
-                      {item.title || "Untitled"}
+                      {item.title || "Короткая мысль / заметка"}
                     </p>
                     <p className="mt-1 font-mono text-[10px] uppercase text-[#89827B]">
                       {item.type} · {item.status}
@@ -349,39 +383,10 @@ export default async function AdminDashboard() {
           )}
         </Section>
 
-        <Section title="Recent projects" href="/admin/projects">
-          {recentProjects.length === 0 ? (
-            <p className="py-6 text-sm text-[#89827B]">No projects found.</p>
-          ) : (
-            <div>
-              {recentProjects.map((project: any) => (
-                <div
-                  key={project.id}
-                  className="flex items-center justify-between gap-4 border-b border-[#EAE6E1] py-3"
-                >
-                  <div className="min-w-0">
-                    <Link
-                      href={`/admin/projects/edit/${project.id}`}
-                      className="block truncate text-sm hover:text-[#990F3D]"
-                    >
-                      {project.title || "Untitled project"}
-                    </Link>
-                    <p className="mt-1 truncate font-mono text-[10px] text-[#89827B]">
-                      /{project.slug}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-[10px] uppercase text-[#89827B]">
-                    {project.published ? "Published" : "Draft"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </Section>
-
-        <Section title="Newsletter archive" href="/admin/letters">
+        {/* SECTION 4: Newsletter Archive & Letters */}
+        <Section title="Архив писем" href="/admin/letters">
           {recentLetters.length === 0 ? (
-            <p className="py-6 text-sm text-[#89827B]">No letters found.</p>
+            <p className="py-6 text-sm text-[#89827B]">Писем не найдено.</p>
           ) : (
             <div>
               {recentLetters.map((letter: any) => (
@@ -407,42 +412,6 @@ export default async function AdminDashboard() {
               ))}
             </div>
           )}
-        </Section>
-
-        <Section title="Legacy systems" href="/admin/ai-selection">
-          <div className="border-b border-[#EAE6E1] py-4">
-            <Link
-              href="/admin/ai-selection"
-              className="text-sm hover:text-[#990F3D]"
-            >
-              AI selection / Art Engine legacy ↗
-            </Link>
-            <p className="mt-1 text-xs text-[#746D66]">
-              Keep available until the current lot workflow is verified.
-            </p>
-          </div>
-          <div className="border-b border-[#EAE6E1] py-4">
-            <Link
-              href="/admin/monitor"
-              className="text-sm hover:text-[#990F3D]"
-            >
-              Auction monitor legacy ↗
-            </Link>
-            <p className="mt-1 text-xs text-[#746D66]">
-              Retained for inspection; do not use as the primary import flow.
-            </p>
-          </div>
-          <div className="border-b border-[#EAE6E1] py-4">
-            <Link
-              href="/admin/selection"
-              className="text-sm hover:text-[#990F3D]"
-            >
-              Existing article archive ↗
-            </Link>
-            <p className="mt-1 text-xs text-[#746D66]">
-              Preserve existing records; new stream content belongs in Flow.
-            </p>
-          </div>
         </Section>
       </div>
     </div>

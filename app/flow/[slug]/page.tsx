@@ -36,6 +36,8 @@ type FlowItem = {
   ai_allowed: boolean;
   metadata: Record<string, unknown> | null;
   published_at: string | null;
+  bluesky_uri?: string | null;
+  telegram_message_id?: string | number | null;
 };
 
 type AIContext = {
@@ -469,187 +471,452 @@ function getLinkPreviewData(item: FlowItem) {
   };
 }
 
-function FlowMediaStack({ item }: { item: FlowItem }) {
-  const videoId = getYouTubeVideoId(item);
-  const dedicatedImages = getDedicatedImages(item);
+function getTelegramUrl(item: FlowItem): string | null {
+  const msgId =
+    item.telegram_message_id ||
+    (item.metadata?.telegram_message_id as string | number | undefined);
 
-  const linkPreviews = (() => {
-    const metadata = item.metadata ?? {};
+  if (msgId) {
+    return `https://t.me/merkurov/${msgId}`;
+  }
+  return null;
+}
 
-    const raw = Array.isArray(metadata.link_previews)
-      ? metadata.link_previews
-      : metadata.link_preview
-        ? [metadata.link_preview]
-        : [];
+function getBlueskyUrl(item: FlowItem): string | null {
+  const uri =
+    item.bluesky_uri ||
+    (typeof item.metadata?.bluesky_uri === 'string'
+      ? item.metadata.bluesky_uri
+      : null);
 
-    const previews = raw
-      .filter(
-        (value): value is Record<string, unknown> =>
-          Boolean(value) &&
-          typeof value === 'object' &&
-          !Array.isArray(value),
-      )
-      .map((preview) => {
-        const url = getMetadataString(preview, 'url');
-
-        if (!url) return null;
-
-        let hostname: string;
-
-        try {
-          hostname = new URL(url).hostname.replace(/^www\./, '');
-        } catch {
-          return null;
-        }
-
-        return {
-          url,
-          site:
-            getMetadataString(preview, 'site_name') || hostname,
-          title:
-            getMetadataString(preview, 'title') || hostname,
-          description:
-            getMetadataString(preview, 'description'),
-          image:
-            getMetadataString(preview, 'image'),
-        };
-      })
-      .filter(
-        (preview): preview is NonNullable<typeof preview> =>
-          preview !== null,
-      );
-
-    if (previews.length === 0) {
-      const legacy = getLinkPreviewData(item);
-
-      if (legacy) previews.push(legacy);
+  if (uri) {
+    const rkey = uri.split('/').pop();
+    if (rkey) {
+      return `https://bsky.app/profile/merkurov.love/post/${encodeURIComponent(rkey)}`;
     }
+  }
+  return null;
+}
 
-    const seen = new Set<string>();
+function normalizeForComparison(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+    .trim();
+}
 
-    return previews.filter((preview) => {
-      if (seen.has(preview.url)) return false;
-      seen.add(preview.url);
-      return true;
-    });
-  })();
+function getTitleAndBodyDisplay(item: FlowItem) {
+  const rawTitle = (item.title || '').trim();
+  const rawBody = (item.body_md || '').trim();
 
-  const photoCaption =
-    getMetadataString(item.metadata, 'alt') ||
-    (item.type === 'photo' ? item.title : null);
+  if (!rawTitle) {
+    return { title: null, body: rawBody || null };
+  }
 
-  return (
-    <div className="space-y-7">
-      {videoId && (
-        <div className="overflow-hidden bg-black">
-          <div className="aspect-video">
-            <iframe
-              src={`https://www.youtube-nocookie.com/embed/${videoId}`}
-              title={item.title || 'YouTube video'}
-              className="h-full w-full"
-              loading="lazy"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
-          </div>
-        </div>
-      )}
+  if (!rawBody) {
+    return { title: rawTitle, body: null };
+  }
 
-      {dedicatedImages.length > 0 && (
-        <div
-          className={
-            dedicatedImages.length === 1
-              ? 'space-y-2'
-              : 'grid grid-cols-2 gap-2 sm:gap-3'
-          }
+  const normTitle = normalizeForComparison(rawTitle);
+  const normBody = normalizeForComparison(rawBody);
+
+  // If title is redundant with body
+  if (
+    normTitle === normBody ||
+    normBody.startsWith(normTitle) ||
+    normTitle.startsWith(normBody)
+  ) {
+    return { title: null, body: rawBody };
+  }
+
+  const firstLine = rawBody.split(/\r?\n/)[0]?.trim() || '';
+  const firstLineNorm = normalizeForComparison(firstLine);
+  if (
+    firstLineNorm &&
+    (firstLineNorm === normTitle ||
+      normTitle.startsWith(firstLineNorm) ||
+      firstLineNorm.startsWith(normTitle))
+  ) {
+    return { title: null, body: rawBody };
+  }
+
+  return { title: rawTitle, body: rawBody };
+}
+
+type Archetype = 'video' | 'visual_story' | 'curated_links' | 'short_note' | 'article';
+
+function detectArchetype(
+  item: FlowItem,
+  videoId: string | null,
+  images: string[],
+  linkCount: number,
+): Archetype {
+  if (videoId) return 'video';
+  if (images.length >= 2 || item.type === 'photo') return 'visual_story';
+  if (linkCount >= 2 || (item.type === 'link' && linkCount > 0)) return 'curated_links';
+
+  const body = item.body_md || '';
+  if (item.type === 'article' || body.length > 350 || body.includes('\n#') || body.includes('\n\n')) {
+    return 'article';
+  }
+
+  return 'short_note';
+}
+
+function estimateReadingTime(text: string): string {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  const minutes = Math.max(1, Math.ceil(words / 170));
+  return `${minutes} min read`;
+}
+
+function SmartGallery({
+  images,
+  caption,
+}: {
+  images: string[];
+  caption: string | null;
+}) {
+  if (images.length === 0) return null;
+
+  if (images.length === 1) {
+    return (
+      <figure className="my-6">
+        <a
+          href={images[0]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block overflow-hidden rounded-2xl bg-stone-100"
         >
-          {dedicatedImages.map((imageUrl, index) => (
-            <figure
-              key={`${imageUrl}-${index}`}
-              className="min-w-0"
+          <img
+            src={images[0]}
+            alt={caption || 'Attached image'}
+            loading="eager"
+            className="mx-auto max-h-[78vh] w-auto max-w-full object-contain"
+          />
+        </a>
+        {caption && (
+          <figcaption className="mt-2.5 text-center font-serif text-xs italic text-stone-500">
+            {caption}
+          </figcaption>
+        )}
+      </figure>
+    );
+  }
+
+  if (images.length === 2) {
+    return (
+      <div className="my-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+        {images.map((url, i) => (
+          <figure key={`${url}-${i}`}>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block overflow-hidden rounded-2xl bg-stone-100"
             >
+              <img
+                src={url}
+                alt={caption || `Image ${i + 1}`}
+                loading={i === 0 ? 'eager' : 'lazy'}
+                className="aspect-[4/3] w-full object-cover transition duration-300 hover:scale-[1.01]"
+              />
+            </a>
+          </figure>
+        ))}
+      </div>
+    );
+  }
+
+  if (images.length === 3) {
+    return (
+      <div className="my-6 space-y-3 sm:space-y-4">
+        <figure>
+          <a
+            href={images[0]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block overflow-hidden rounded-2xl bg-stone-100"
+          >
+            <img
+              src={images[0]}
+              alt={caption || 'Featured image'}
+              loading="eager"
+              className="aspect-[16/10] w-full object-cover transition duration-300 hover:scale-[1.01]"
+            />
+          </a>
+        </figure>
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          {images.slice(1, 3).map((url, i) => (
+            <figure key={`${url}-${i}`}>
               <a
-                href={imageUrl}
+                href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block overflow-hidden bg-stone-100/70"
+                className="block overflow-hidden rounded-2xl bg-stone-100"
               >
                 <img
-                  src={imageUrl}
-                  alt={photoCaption || `Image ${index + 1}`}
-                  loading={index === 0 ? 'eager' : 'lazy'}
-                  className={
-                    dedicatedImages.length === 1
-                      ? 'mx-auto max-h-[78vh] w-full object-contain'
-                      : 'aspect-square h-full w-full object-cover'
-                  }
+                  src={url}
+                  alt={caption || `Image ${i + 2}`}
+                  loading="lazy"
+                  className="aspect-[4/3] w-full object-cover transition duration-300 hover:scale-[1.01]"
                 />
               </a>
-
-              {photoCaption && index === 0 && (
-                <figcaption className="mt-2 text-xs text-stone-500">
-                  {photoCaption}
-                </figcaption>
-              )}
             </figure>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="my-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+      {images.map((url, i) => (
+        <figure key={`${url}-${i}`}>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block overflow-hidden rounded-2xl bg-stone-100"
+          >
+            <img
+              src={url}
+              alt={caption || `Image ${i + 1}`}
+              loading={i === 0 ? 'eager' : 'lazy'}
+              className="aspect-square w-full object-cover transition duration-300 hover:scale-[1.01]"
+            />
+          </a>
+        </figure>
+      ))}
+    </div>
+  );
+}
+
+function SmartLinks({
+  previews,
+}: {
+  previews: Array<{
+    url: string;
+    site: string;
+    title: string;
+    description: string | null;
+    image: string | null;
+  }>;
+}) {
+  if (previews.length === 0) return null;
+
+  return (
+    <div className="my-6 divide-y divide-stone-200/70 overflow-hidden rounded-2xl border border-stone-200/80 bg-stone-50/40">
+      {previews.map((preview) => (
+        <a
+          key={preview.url}
+          href={preview.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group flex min-w-0 items-center justify-between gap-4 p-4 transition hover:bg-stone-100/50"
+        >
+          <div className="flex min-w-0 items-center gap-4">
+            {preview.image ? (
+              <img
+                src={preview.image}
+                alt=""
+                loading="lazy"
+                className="h-14 w-14 shrink-0 rounded-xl bg-stone-200 object-cover"
+              />
+            ) : (
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-stone-200/50 font-mono text-sm text-stone-400">
+                ↗
+              </div>
+            )}
+
+            <div className="min-w-0 flex-1">
+              <span className="block font-mono text-[10px] uppercase tracking-wider text-stone-400">
+                {preview.site}
+              </span>
+
+              <span className="mt-0.5 block truncate font-serif text-[16px] font-medium leading-snug text-stone-900 transition group-hover:text-stone-600 sm:text-[17px]">
+                {preview.title}
+              </span>
+
+              {preview.description && (
+                <span className="mt-1 line-clamp-1 block text-xs leading-relaxed text-stone-500">
+                  {preview.description}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <span
+            aria-hidden="true"
+            className="shrink-0 p-1 font-mono text-sm text-stone-400 transition group-hover:text-stone-900"
+          >
+            ↗
+          </span>
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function SmartFlowContent({
+  item,
+  archetype,
+  display,
+  videoId,
+  dedicatedImages,
+  linkPreviews,
+  photoCaption,
+}: {
+  item: FlowItem;
+  archetype: Archetype;
+  display: { title: string | null; body: string | null };
+  videoId: string | null;
+  dedicatedImages: string[];
+  linkPreviews: Array<{
+    url: string;
+    site: string;
+    title: string;
+    description: string | null;
+    image: string | null;
+  }>;
+  photoCaption: string | null;
+}) {
+  if (archetype === 'short_note') {
+    return (
+      <div className="space-y-6">
+        {display.title && (
+          <h1 className="font-serif text-2xl font-medium leading-snug text-stone-900 sm:text-3xl">
+            {display.title}
+          </h1>
+        )}
+
+        {display.body && (
+          <div className="py-4 sm:py-6">
+            <p className="whitespace-pre-line font-serif text-2xl font-light leading-[1.65] text-stone-900 sm:text-3xl">
+              {display.body}
+            </p>
+          </div>
+        )}
+
+        {dedicatedImages.length > 0 && (
+          <SmartGallery images={dedicatedImages} caption={photoCaption} />
+        )}
+
+        {linkPreviews.length > 0 && (
+          <SmartLinks previews={linkPreviews} />
+        )}
+      </div>
+    );
+  }
+
+  if (archetype === 'visual_story') {
+    return (
+      <div className="space-y-6">
+        <SmartGallery images={dedicatedImages} caption={photoCaption} />
+
+        {display.title && (
+          <h1 className="font-serif text-2xl font-light text-stone-900 sm:text-3xl">
+            {display.title}
+          </h1>
+        )}
+
+        {display.body && <MarkdownBody body={display.body} />}
+
+        {linkPreviews.length > 0 && (
+          <SmartLinks previews={linkPreviews} />
+        )}
+      </div>
+    );
+  }
+
+  if (archetype === 'video') {
+    return (
+      <div className="space-y-6">
+        {videoId && (
+          <div className="overflow-hidden rounded-2xl bg-black">
+            <div className="aspect-video">
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+                title={item.title || 'YouTube video'}
+                className="h-full w-full"
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        )}
+
+        {display.title && (
+          <h1 className="font-serif text-2xl font-light text-stone-900 sm:text-3xl">
+            {display.title}
+          </h1>
+        )}
+
+        {display.body && <MarkdownBody body={display.body} />}
+
+        {dedicatedImages.length > 0 && (
+          <SmartGallery images={dedicatedImages} caption={photoCaption} />
+        )}
+
+        {linkPreviews.length > 0 && (
+          <SmartLinks previews={linkPreviews} />
+        )}
+      </div>
+    );
+  }
+
+  if (archetype === 'curated_links') {
+    return (
+      <div className="space-y-6">
+        {display.title && (
+          <h1 className="font-serif text-2xl font-light text-stone-900 sm:text-3xl">
+            {display.title}
+          </h1>
+        )}
+
+        {display.body && (
+          <div className="pb-2">
+            <MarkdownBody body={display.body} />
+          </div>
+        )}
+
+        <SmartLinks previews={linkPreviews} />
+
+        {dedicatedImages.length > 0 && (
+          <SmartGallery images={dedicatedImages} caption={photoCaption} />
+        )}
+      </div>
+    );
+  }
+
+  // article (default)
+  return (
+    <div className="space-y-7">
+      {display.title && (
+        <h1 className="font-serif text-3xl font-light leading-[1.25] text-stone-900 sm:text-4xl lg:text-5xl">
+          {display.title}
+        </h1>
+      )}
+
+      {dedicatedImages.length === 1 && (
+        <SmartGallery images={dedicatedImages} caption={photoCaption} />
+      )}
+
+      {display.body && <MarkdownBody body={display.body} />}
+
+      {dedicatedImages.length > 1 && (
+        <SmartGallery images={dedicatedImages} caption={photoCaption} />
       )}
 
       {linkPreviews.length > 0 && (
-        <div className="divide-y divide-stone-200 border-y border-stone-200">
-          {linkPreviews.map((preview) => (
-            <a
-              key={preview.url}
-              href={preview.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group flex min-w-0 items-center gap-3 py-4 sm:gap-5"
-            >
-              {preview.image && (
-                <img
-                  src={preview.image}
-                  alt=""
-                  loading="lazy"
-                  className="h-14 w-16 shrink-0 object-cover sm:h-16 sm:w-24"
-                />
-              )}
-
-              <span className="min-w-0 flex-1">
-                <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-stone-400">
-                  {preview.site}
-                </span>
-
-                <span className="mt-1 block break-words font-serif text-lg font-light leading-snug text-stone-900 transition-colors group-hover:text-stone-500 sm:text-xl">
-                  {preview.title}
-                </span>
-
-                {preview.description && (
-                  <span className="mt-1 line-clamp-2 block text-sm leading-relaxed text-stone-500">
-                    {preview.description}
-                  </span>
-                )}
-              </span>
-
-              <span
-                aria-hidden="true"
-                className="shrink-0 text-sm text-stone-400"
-              >
-                ↗
-              </span>
-            </a>
-          ))}
-        </div>
-      )}
-
-      {item.body_md && (
-        <MarkdownBody body={item.body_md} />
+        <SmartLinks previews={linkPreviews} />
       )}
 
       {!videoId &&
         dedicatedImages.length === 0 &&
         linkPreviews.length === 0 &&
-        !item.body_md && (
+        !display.body &&
+        !display.title && (
           <p className="text-sm text-stone-400">
             No content.
           </p>
@@ -668,12 +935,12 @@ function AIContextBlock({ context }: { context: AIContext | null }) {
   }
 
   return (
-    <section className="mt-10 border-t border-stone-200 pt-6 sm:mt-12 sm:pt-7">
+    <section className="mt-14 border-t border-stone-200 pt-7 sm:mt-16 sm:pt-8">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
           <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500">
-            Context Architecture
+            DeepSeek · Context Architecture
           </span>
         </div>
 
@@ -690,11 +957,11 @@ function AIContextBlock({ context }: { context: AIContext | null }) {
           remarkPlugins={[remarkGfm]}
           components={{
             p: ({ children }) => (
-              <p className="mb-4 whitespace-pre-wrap last:mb-0">
+              <p className="mb-4 whitespace-pre-wrap leading-relaxed last:mb-0">
                 {children}
               </p>
             ),
-            hr: () => <hr className="my-5 border-stone-200" />,
+            hr: () => <hr className="my-6 border-stone-200" />,
             strong: ({ children }) => (
               <strong className="font-mono text-[11px] font-normal uppercase tracking-widest text-stone-500">
                 {children}
@@ -718,7 +985,7 @@ export default async function FlowItemPage({ params }: PageProps) {
   const { data, error } = await supabase
     .from('items')
     .select(
-      'id,title,slug,lang,type,status,visibility,body_md,source_url,ai_allowed,metadata,published_at',
+      'id,title,slug,lang,type,status,visibility,body_md,source_url,ai_allowed,metadata,published_at,bluesky_uri,telegram_message_id',
     )
     .eq('slug', decodedSlug)
     .eq('status', 'published')
@@ -879,6 +1146,87 @@ export default async function FlowItemPage({ params }: PageProps) {
     ],
   };
 
+  const videoId = getYouTubeVideoId(item);
+  const dedicatedImages = getDedicatedImages(item);
+  const photoCaption =
+    getMetadataString(item.metadata, 'alt') ||
+    (item.type === 'photo' ? item.title : null);
+
+  const linkPreviews = (() => {
+    const metadata = item.metadata ?? {};
+
+    const raw = Array.isArray(metadata.link_previews)
+      ? metadata.link_previews
+      : metadata.link_preview
+        ? [metadata.link_preview]
+        : [];
+
+    const previews = raw
+      .filter(
+        (value): value is Record<string, unknown> =>
+          Boolean(value) &&
+          typeof value === 'object' &&
+          !Array.isArray(value),
+      )
+      .map((preview) => {
+        const url = getMetadataString(preview, 'url');
+        if (!url) return null;
+
+        let hostname: string;
+        try {
+          hostname = new URL(url).hostname.replace(/^www\./, '');
+        } catch {
+          return null;
+        }
+
+        return {
+          url,
+          site: getMetadataString(preview, 'site_name') || hostname,
+          title: getMetadataString(preview, 'title') || hostname,
+          description: getMetadataString(preview, 'description'),
+          image: getMetadataString(preview, 'image'),
+        };
+      })
+      .filter(
+        (preview): preview is NonNullable<typeof preview> =>
+          preview !== null,
+      );
+
+    if (previews.length === 0) {
+      const legacy = getLinkPreviewData(item);
+      if (legacy) previews.push(legacy);
+    }
+
+    const seen = new Set<string>();
+    return previews.filter((preview) => {
+      if (seen.has(preview.url)) return false;
+      seen.add(preview.url);
+      return true;
+    });
+  })();
+
+  const display = getTitleAndBodyDisplay(item);
+  const archetype = detectArchetype(
+    item,
+    videoId,
+    dedicatedImages,
+    linkPreviews.length,
+  );
+  const readingTime =
+    archetype === 'article' && item.body_md
+      ? estimateReadingTime(item.body_md)
+      : null;
+  const tgUrl = getTelegramUrl(item);
+  const bskyUrl = getBlueskyUrl(item);
+
+  const archetypeLabels: Record<Archetype, string> = {
+    short_note: 'Note',
+    article: 'Article',
+    visual_story: 'Visual Story',
+    curated_links: 'Digest',
+    video: 'Video',
+  };
+
   return (
     <>
       <script
@@ -894,17 +1242,39 @@ export default async function FlowItemPage({ params }: PageProps) {
         }}
       />
 
-      <main className="min-h-screen bg-white px-5 pb-24 pt-28 text-stone-900 sm:px-8 sm:pt-36">
+      <main className="min-h-screen bg-white px-5 pb-24 pt-20 text-stone-900 sm:px-8 sm:pt-24">
         <article className="mx-auto max-w-3xl">
-          <Link
-            href="/flow"
-            className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400 transition hover:text-stone-950"
-          >
-            ← Flow
-          </Link>
+          <header className="mb-8 flex items-center justify-between gap-4 border-b border-stone-100 pb-5">
+            <Link
+              href="/flow"
+              className="font-mono text-[11px] uppercase tracking-[0.2em] text-stone-400 transition hover:text-stone-950"
+            >
+              ← Flow
+            </Link>
 
-          <div className="mt-8 flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
-            <span>{item.type}</span>
+            <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider text-stone-400">
+              <a
+                href={tgUrl || 'https://t.me/merkurov'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition hover:text-stone-900"
+              >
+                Telegram ↗
+              </a>
+              <span className="text-stone-200">·</span>
+              <a
+                href={bskyUrl || 'https://bsky.app/profile/merkurov.love'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition hover:text-stone-900"
+              >
+                Bluesky ↗
+              </a>
+            </div>
+          </header>
+
+          <div className="mb-6 flex flex-wrap items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
+            <span>{archetypeLabels[archetype]}</span>
 
             {item.published_at && (
               <>
@@ -912,11 +1282,24 @@ export default async function FlowItemPage({ params }: PageProps) {
                 <span>{formatDate(item.published_at)}</span>
               </>
             )}
+
+            {readingTime && (
+              <>
+                <span>·</span>
+                <span>{readingTime}</span>
+              </>
+            )}
           </div>
 
-          <div className="mt-7">
-            <FlowMediaStack item={item} />
-          </div>
+          <SmartFlowContent
+            item={item}
+            archetype={archetype}
+            display={display}
+            videoId={videoId}
+            dedicatedImages={dedicatedImages}
+            linkPreviews={linkPreviews}
+            photoCaption={photoCaption}
+          />
 
           {item.type !== 'photo' && (
             <AIContextBlock context={context} />

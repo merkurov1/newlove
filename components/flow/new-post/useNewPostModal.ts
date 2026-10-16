@@ -722,13 +722,10 @@ export function useNewPostModal({
                 : "note";
 
       const postTitle =
-        title.trim() ||
-        (bodyMd.trim()
-          ? bodyMd.trim().slice(0, 80).split(/\r?\n/)[0].trim()
-          : "") ||
+        (isEditing && title.trim() ? title.trim() : null) ||
         linkPreviews[0]?.title ||
         youtubeMetadata?.title ||
-        "Flow thought";
+        null;
 
       const payload = {
         title: postTitle,

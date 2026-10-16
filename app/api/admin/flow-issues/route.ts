@@ -10,6 +10,7 @@ import {
   resolveIssueWindow,
 } from "@/lib/flow-issue/build";
 import { renderIssue } from "@/lib/flow-issue/render";
+import { processNewsletterJob } from "@/lib/newsletter/processJob";
 import type { IssueLang } from "@/lib/flow-issue/types";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +41,43 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 async function getAdminSupabase() {
   return getServerSupabaseClient({ useServiceRole: true });
+}
+
+export async function GET(request: Request) {
+  try {
+    await requireAdminFromRequest(request);
+    const supabase = await getAdminSupabase();
+
+    const { data: issues, error } = await supabase
+      .from("letters")
+      .select(
+        "id,title,slug,number,lang,status,published,sent_at,sentAt,createdAt,publishedAt,updatedAt",
+      )
+      .eq("kind", "issue")
+      .order("createdAt", { ascending: false });
+
+    if (error) throw error;
+
+    const { count: activeSubscribers } = await supabase
+      .from("subscribers")
+      .select("id", { count: "exact", head: true })
+      .eq("isActive", true);
+
+    return NextResponse.json({
+      ok: true,
+      issues: issues || [],
+      activeSubscribers: activeSubscribers ?? 0,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Ошибка загрузки выпусков";
+    const unauthorized = /unauthorized|admin access required/i.test(message);
+
+    return NextResponse.json(
+      { error: unauthorized ? "Доступ запрещён" : message },
+      { status: unauthorized ? 401 : 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
@@ -436,21 +474,38 @@ export async function PATCH(request: Request) {
       throw jobError;
     }
 
+    const sendResult = await processNewsletterJob(jobId, supabase);
+
+    const { data: updatedIssue } = await supabase
+      .from("letters")
+      .select("id,title,slug,status,published,sent_at,publishedAt")
+      .eq("id", issue.id)
+      .maybeSingle();
+
     return NextResponse.json({
       ok: true,
       queued: true,
       alreadyQueued: false,
       jobId,
       activeSubscribers,
-      issue: {
+      sentCount: sendResult.sentCount,
+      failedCount: sendResult.failedCount,
+      skippedCount: sendResult.skippedCount,
+      issue: updatedIssue || {
         id: issue.id,
         title: issue.title,
         slug: issue.slug,
         status: "published",
-        sent_at: null,
+        sent_at: new Date().toISOString(),
       },
       message:
-        "Выпуск опубликован и поставлен в очередь. Worker обработает задачу.",
+        sendResult.sentCount > 0
+          ? `Выпуск успешно разослан ${sendResult.sentCount} подписчикам.`
+          : sendResult.skippedCount > 0
+            ? `Выпуск обработан (отправка пропущена: ${sendResult.skippedCount} адресов).`
+            : sendResult.failedCount > 0
+              ? `Ошибка отправки подписчикам: ${sendResult.error || 'проверьте журнал рассылок'}.`
+              : "Выпуск опубликован и разослан.",
     });
   } catch (error) {
     console.error("[flow-issues] PATCH failed", error);

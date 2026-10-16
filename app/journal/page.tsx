@@ -107,13 +107,14 @@ export default async function JournalPage({ searchParams }: Props) {
     createdAt: string | null;
     kind: string;
     lang: string | null;
+    number?: number | null;
   }> = [];
 
   try {
     const supabase = createClient();
 
     const selectCols =
-      'id,title,slug,content,published,publishedAt,sentAt,createdAt,kind,lang,status';
+      'id,title,slug,content,published,publishedAt,sentAt,createdAt,kind,lang,status,number';
 
     let lettersData: any[] | null = null;
     let queryError: any = null;
@@ -147,16 +148,18 @@ export default async function JournalPage({ searchParams }: Props) {
         title: String(letter.title || 'Untitled'),
         slug: String(letter.slug || ''),
         preview:
-          letter.kind === 'issue'
+          getPreviewText(letter.content, 260) ||
+          (letter.kind === 'issue'
             ? letter.lang === 'ru'
               ? 'Газетный выпуск Flow.'
               : 'Flow newspaper issue.'
-            : getPreviewText(letter.content),
+            : ''),
         publishedAt: letter.publishedAt || null,
         sentAt: letter.sentAt || null,
         createdAt: letter.createdAt || null,
         kind: letter.kind || 'letter',
         lang: letter.lang || null,
+        number: letter.number || null,
       }));
 
       initialLetters.sort((a, b) => {
@@ -176,9 +179,8 @@ export default async function JournalPage({ searchParams }: Props) {
 
   return (
     <main className="min-h-screen bg-[#FDFBF7] font-sans text-[#111] selection:bg-black selection:text-white">
-      <div className="mx-auto max-w-3xl px-6 py-20 md:py-32">
+      <div className="mx-auto max-w-3xl px-6 py-20 md:py-28">
         <CenteredHeader
-          eyebrow={<>// System Logs</>}
           title={<>The Journal</>}
           subtitle={
             <>Notes on art, technology, and the architecture of value.</>
@@ -187,9 +189,9 @@ export default async function JournalPage({ searchParams }: Props) {
         <SubscribeFormClient />
       </div>
 
-      <div className="mx-auto max-w-3xl space-y-12 px-6 pb-24">
+      <div className="mx-auto max-w-3xl space-y-8 px-6 pb-28">
         {initialLetters.length === 0 ? (
-          <div className="py-12 text-center font-serif text-gray-500">
+          <div className="py-16 text-center font-serif text-gray-500">
             No dispatches found.
           </div>
         ) : (
@@ -206,45 +208,89 @@ export default async function JournalPage({ searchParams }: Props) {
 
             const isIssue = article.kind === 'issue';
 
-            return (
-              <article key={article.id} className="group">
-                <Link href={href} className="block">
-                  <div className="mb-3 flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-widest text-gray-400">
-                    {displayDate && (
-                      <time dateTime={displayDate}>
-                        {new Date(displayDate).toLocaleDateString(
-                          'en-GB',
-                          {
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric',
-                            timeZone: 'UTC',
-                          },
-                        )}
-                      </time>
+            const formattedDate = displayDate
+              ? new Date(displayDate).toLocaleDateString('en-GB', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                  timeZone: 'UTC',
+                })
+              : null;
+
+            if (isIssue) {
+              return (
+                <article
+                  key={article.id}
+                  className="group relative overflow-hidden rounded-2xl border border-[#E8E2D8] bg-white/70 p-6 sm:p-8 transition-all duration-300 hover:border-[#990F3D]/40 hover:bg-white hover:shadow-[0_8px_30px_rgba(153,15,61,0.06)]"
+                >
+                  <Link href={href} className="block">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-[#F0EAE1] pb-3 font-mono text-[11px] uppercase tracking-wider text-gray-400">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-2 w-2 rounded-full bg-[#990F3D]" />
+                        <span className="font-semibold text-[#990F3D]">
+                          Газета Flow
+                          {article.number ? ` · № ${article.number}` : ''}
+                        </span>
+                        <span className="rounded bg-[#F4EFEA] px-1.5 py-0.5 text-[9px] text-gray-600">
+                          {article.lang === 'ru' ? 'RU' : 'EN'}
+                        </span>
+                      </div>
+
+                      {formattedDate && (
+                        <time dateTime={displayDate || undefined} className="text-gray-400">
+                          {formattedDate}
+                        </time>
+                      )}
+                    </div>
+
+                    <h2 className="mb-3 font-serif text-2xl font-medium leading-tight text-black transition-colors duration-200 group-hover:text-[#990F3D] sm:text-3xl">
+                      {article.title}
+                    </h2>
+
+                    {article.preview && (
+                      <p className="mb-5 line-clamp-3 font-serif text-base leading-relaxed text-gray-600 sm:text-[17px]">
+                        {article.preview}
+                      </p>
                     )}
 
-                    {isIssue && (
-                      <span className="text-[#990F3D]">
-                        {article.lang === 'ru'
-                          ? 'Flow · RU'
-                          : 'Flow · EN'}
-                      </span>
+                    <div className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-[#990F3D] transition-transform duration-200 group-hover:translate-x-1">
+                      Читать выпуск ↗
+                    </div>
+                  </Link>
+                </article>
+              );
+            }
+
+            return (
+              <article
+                key={article.id}
+                className="group border-b border-[#E8E2D8]/80 pb-8 last:border-b-0"
+              >
+                <Link href={href} className="block">
+                  <div className="mb-2.5 flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-widest text-gray-400">
+                    <span className="text-gray-500">Dispatch</span>
+                    {formattedDate && (
+                      <>
+                        <span>·</span>
+                        <time dateTime={displayDate || undefined}>
+                          {formattedDate}
+                        </time>
+                      </>
                     )}
                   </div>
 
-                  <h2 className="mb-3 font-serif text-2xl font-medium leading-tight text-black transition-colors duration-300 group-hover:text-red-700 md:text-4xl">
+                  <h2 className="mb-3 font-serif text-2xl font-medium leading-tight text-black transition-colors duration-200 group-hover:text-[#990F3D] sm:text-3xl">
                     {article.title}
                   </h2>
 
                   {article.preview && (
-                    <p className="mb-4 whitespace-pre-line font-serif text-base leading-relaxed text-gray-700 md:text-lg">
+                    <p className="mb-4 whitespace-pre-line font-serif text-base leading-relaxed text-gray-700 sm:text-lg">
                       {article.preview}
                     </p>
                   )}
 
-                  <div className="inline-flex items-center gap-2 border-b border-black pb-1 text-xs font-bold uppercase tracking-widest transition-all group-hover:border-red-700 group-hover:text-red-700">
-                    {isIssue ? 'Read Issue' : 'Read Dispatch'}
+                  <div className="inline-flex items-center gap-2 border-b border-black pb-1 text-xs font-bold uppercase tracking-widest transition-all group-hover:border-[#990F3D] group-hover:text-[#990F3D]">
+                    Read Dispatch
                     <ArrowRight size={12} />
                   </div>
                 </Link>

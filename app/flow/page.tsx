@@ -24,6 +24,8 @@ type FlowItem = {
   metadata?: Record<string, unknown> | null;
   published_at?: string | null;
   created_at?: string | null;
+  bluesky_uri?: string | null;
+  telegram_message_id?: string | number | null;
 };
 
 type FlowResponse = {
@@ -199,6 +201,77 @@ function plainText(value: string | null | undefined) {
     .trim();
 }
 
+function getTelegramUrl(item: FlowItem): string | null {
+  const msgId =
+    item.telegram_message_id ||
+    (getRecord(item.metadata)?.telegram_message_id as string | number | undefined);
+
+  if (msgId) {
+    return `https://t.me/merkurov/${msgId}`;
+  }
+  return null;
+}
+
+function getBlueskyUrl(item: FlowItem): string | null {
+  const uri =
+    item.bluesky_uri ||
+    (getString(getRecord(item.metadata)?.bluesky_uri) as string | null);
+
+  if (uri && typeof uri === 'string') {
+    const rkey = uri.split('/').pop();
+    if (rkey) {
+      return `https://bsky.app/profile/merkurov.love/post/${encodeURIComponent(rkey)}`;
+    }
+  }
+  return null;
+}
+
+function normalizeForComparison(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+    .trim();
+}
+
+function getTitleAndBodyDisplay(item: FlowItem) {
+  const rawTitle = (item.title || '').trim();
+  const rawBody = plainText(item.body_md).trim();
+
+  if (!rawTitle) {
+    return { title: null, body: rawBody || null };
+  }
+
+  if (!rawBody) {
+    return { title: rawTitle, body: null };
+  }
+
+  const normTitle = normalizeForComparison(rawTitle);
+  const normBody = normalizeForComparison(rawBody);
+
+  // If title is redundant with body (e.g. title === body or body starts with title)
+  if (
+    normTitle === normBody ||
+    normBody.startsWith(normTitle) ||
+    normTitle.startsWith(normBody)
+  ) {
+    return { title: null, body: rawBody };
+  }
+
+  // Also check first line of body
+  const firstLine = rawBody.split(/\r?\n/)[0]?.trim() || '';
+  const firstLineNorm = normalizeForComparison(firstLine);
+  if (
+    firstLineNorm &&
+    (firstLineNorm === normTitle ||
+      normTitle.startsWith(firstLineNorm) ||
+      firstLineNorm.startsWith(normTitle))
+  ) {
+    return { title: null, body: rawBody };
+  }
+
+  return { title: rawTitle, body: rawBody };
+}
+
 function EntryDate({ item }: { item: FlowItem }) {
   const value = item.published_at || item.created_at;
   const date = formatDate(value);
@@ -208,10 +281,62 @@ function EntryDate({ item }: { item: FlowItem }) {
   return (
     <time
       dateTime={value || undefined}
-      className="text-xs font-medium tracking-wide text-neutral-400"
+      className="text-xs font-mono tracking-wide text-neutral-400"
     >
       {date}
     </time>
+  );
+}
+
+function EntryMeta({
+  item,
+  admin,
+  onEdit,
+  onDelete,
+}: {
+  item: FlowItem;
+  admin: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const tgUrl = getTelegramUrl(item);
+  const bskyUrl = getBlueskyUrl(item);
+
+  return (
+    <div className="mb-3 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-2.5 font-mono text-[11px] text-neutral-400">
+        <EntryDate item={item} />
+        {(tgUrl || bskyUrl) && (
+          <div className="flex items-center gap-2 text-neutral-400">
+            <span className="text-neutral-300">·</span>
+            {tgUrl && (
+              <a
+                href={tgUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition hover:text-neutral-900"
+                title="View on Telegram"
+              >
+                tg ↗
+              </a>
+            )}
+            {bskyUrl && (
+              <a
+                href={bskyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition hover:text-neutral-900"
+                title="View on Bluesky"
+              >
+                bsky ↗
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+
+      {admin && <AdminControls onEdit={onEdit} onDelete={onDelete} />}
+    </div>
   );
 }
 
@@ -311,6 +436,187 @@ function LinkCard({
   );
 }
 
+function CompactLinkRow({
+  preview,
+  itemHref: href,
+}: {
+  preview: LinkPreviewData;
+  itemHref: string;
+}) {
+  let domain = preview.site_name || '';
+
+  if (!domain) {
+    try {
+      domain = new URL(preview.url).hostname.replace(/^www\./, '');
+    } catch {
+      domain = preview.url;
+    }
+  }
+
+  return (
+    <div className="group/row flex items-center justify-between gap-3 p-3 transition hover:bg-neutral-100/50">
+      <div className="flex min-w-0 items-center gap-3">
+        {preview.image ? (
+          <img
+            src={preview.image}
+            alt=""
+            loading="lazy"
+            className="h-10 w-10 shrink-0 rounded-lg bg-neutral-200 object-cover"
+          />
+        ) : (
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-200/50 font-mono text-xs text-neutral-400">
+            ↗
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1">
+          <span className="block font-mono text-[10px] uppercase tracking-wider text-neutral-400">
+            {domain}
+          </span>
+          <Link
+            href={href}
+            className="block truncate text-[13px] font-medium leading-tight text-neutral-900 group-hover/row:text-neutral-700"
+          >
+            {preview.title || preview.url}
+          </Link>
+        </div>
+      </div>
+
+      <a
+        href={preview.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`Open ${domain}`}
+        onClick={(event) => event.stopPropagation()}
+        className="shrink-0 p-1 font-mono text-xs text-neutral-400 transition hover:text-neutral-900"
+      >
+        ↗
+      </a>
+    </div>
+  );
+}
+
+function GalleryGrid({
+  urls,
+  title,
+  alt,
+  itemHref: href,
+}: {
+  urls: string[];
+  title: string | null;
+  alt: string | null;
+  itemHref: string;
+}) {
+  const count = urls.length;
+  if (count === 0) return null;
+
+  if (count === 1) {
+    return (
+      <div className="mb-4">
+        <Link
+          href={href}
+          className="inline-block max-w-full overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50 transition hover:border-neutral-300"
+        >
+          <img
+            src={urls[0]}
+            alt={alt || title || 'Attached image'}
+            loading="lazy"
+            className="block max-h-[520px] w-auto max-w-full object-cover"
+          />
+        </Link>
+      </div>
+    );
+  }
+
+  if (count === 2) {
+    return (
+      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:gap-3">
+        {urls.slice(0, 2).map((url, index) => (
+          <Link
+            key={`${url}-${index}`}
+            href={href}
+            className="block overflow-hidden rounded-2xl bg-neutral-100 transition hover:opacity-95"
+          >
+            <img
+              src={url}
+              alt={alt || (title ? `${title} — image ${index + 1}` : '')}
+              loading="lazy"
+              className="block aspect-[4/3] w-full object-cover"
+            />
+          </Link>
+        ))}
+      </div>
+    );
+  }
+
+  if (count === 3) {
+    return (
+      <div className="mb-4 space-y-2.5 sm:space-y-3">
+        <Link
+          href={href}
+          className="block overflow-hidden rounded-2xl bg-neutral-100 transition hover:opacity-95"
+        >
+          <img
+            src={urls[0]}
+            alt={alt || (title ? `${title} — image 1` : '')}
+            loading="lazy"
+            className="block aspect-[16/9] w-full object-cover"
+          />
+        </Link>
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+          {urls.slice(1, 3).map((url, index) => (
+            <Link
+              key={`${url}-${index}`}
+              href={href}
+              className="block overflow-hidden rounded-2xl bg-neutral-100 transition hover:opacity-95"
+            >
+              <img
+                src={url}
+                alt={alt || (title ? `${title} — image ${index + 2}` : '')}
+                loading="lazy"
+                className="block aspect-[4/3] w-full object-cover"
+              />
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // 4 or more
+  const displayPhotos = urls.slice(0, 4);
+  const remaining = count - 4;
+
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-2.5 sm:gap-3">
+      {displayPhotos.map((url, index) => {
+        const isLastWithMore = index === 3 && remaining > 0;
+        return (
+          <Link
+            key={`${url}-${index}`}
+            href={href}
+            className="relative block overflow-hidden rounded-2xl bg-neutral-100 transition hover:opacity-95"
+          >
+            <img
+              src={url}
+              alt={alt || (title ? `${title} — image ${index + 1}` : '')}
+              loading="lazy"
+              className="block aspect-square w-full object-cover"
+            />
+            {isLastWithMore && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white backdrop-blur-[2px]">
+                <span className="font-mono text-sm font-medium tracking-widest">
+                  +{remaining + 1}
+                </span>
+              </div>
+            )}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
 function Entry({
   item,
   admin,
@@ -327,7 +633,7 @@ function Entry({
   const youtubeThumbnail = youtube ? getYouTubeThumbnail(item) : null;
   const photoUrls = getPhotoUrls(item);
   const linkPreviews = getLinkPreviewData(item);
-  const body = plainText(item.body_md);
+  const display = getTitleAndBodyDisplay(item);
 
   const linkImages = new Set(
     linkPreviews.map((preview) => preview.image).filter(Boolean),
@@ -340,26 +646,28 @@ function Entry({
   return (
     <article className="group border-b border-neutral-100 py-8 first:pt-0 last:border-b-0">
       {/* Meta header */}
-      <div className="mb-3 flex items-center justify-between gap-4">
-        <EntryDate item={item} />
-        {admin && <AdminControls onEdit={onEdit} onDelete={onDelete} />}
-      </div>
+      <EntryMeta
+        item={item}
+        admin={admin}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
 
-      {/* Title */}
-      {item.title && (
-        <h2 className="mb-2.5 text-lg font-normal leading-relaxed text-neutral-900 sm:text-xl">
+      {/* Title (rendered only when it doesn't duplicate the body) */}
+      {display.title && (
+        <h2 className="mb-2 text-lg font-medium leading-snug text-neutral-900 sm:text-xl">
           <Link href={href} className="transition hover:text-neutral-600">
-            {item.title}
+            {display.title}
           </Link>
         </h2>
       )}
 
       {/* Text body */}
-      {body && (
+      {display.body && (
         <div className="mb-4">
           <Link href={href} className="block">
-            <p className="whitespace-pre-line text-[15px] leading-relaxed text-neutral-700 sm:text-[16px]">
-              {body}
+            <p className="whitespace-pre-line font-serif text-[16px] leading-[1.7] text-neutral-800 sm:text-[17px]">
+              {display.body}
             </p>
           </Link>
         </div>
@@ -414,48 +722,27 @@ function Entry({
         </div>
       )}
 
-      {/* Attached images */}
+      {/* Attached images - Creative and adaptive gallery */}
       {visiblePhotoUrls.length > 0 && (
-        <div
-          className={
-            visiblePhotoUrls.length === 1
-              ? 'mb-4'
-              : 'mb-4 grid grid-cols-2 gap-2.5 sm:gap-3'
-          }
-        >
-          {visiblePhotoUrls.map((url, index) => (
-            <Link
-              key={`${url}-${index}`}
-              href={href}
-              className={
-                visiblePhotoUrls.length === 1
-                  ? 'inline-block max-w-full overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50'
-                  : 'block min-w-0 overflow-hidden rounded-2xl bg-neutral-100'
-              }
-            >
-              <img
-                src={url}
-                alt={
-                  getString(item.metadata?.alt) ||
-                  (item.title ? `${item.title} — image ${index + 1}` : '')
-                }
-                loading="lazy"
-                className={
-                  visiblePhotoUrls.length === 1
-                    ? 'block max-h-[520px] w-auto object-cover'
-                    : 'block aspect-[4/3] h-full max-h-[360px] w-full object-cover transition duration-300 hover:scale-[1.01]'
-                }
-              />
-            </Link>
-          ))}
+        <GalleryGrid
+          urls={visiblePhotoUrls}
+          title={display.title}
+          alt={getString(item.metadata?.alt)}
+          itemHref={href}
+        />
+      )}
+
+      {/* Web link cards - single rich card or compact curated list */}
+      {linkPreviews.length === 1 && (
+        <div className="mt-3">
+          <LinkCard preview={linkPreviews[0]} itemHref={href} />
         </div>
       )}
 
-      {/* Web link cards */}
-      {linkPreviews.length > 0 && (
-        <div className="mt-3 grid gap-2.5">
+      {linkPreviews.length > 1 && (
+        <div className="mt-3 overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50/40 divide-y divide-neutral-200/50">
           {linkPreviews.map((preview) => (
-            <LinkCard
+            <CompactLinkRow
               key={preview.url}
               preview={preview}
               itemHref={href}
@@ -661,6 +948,36 @@ export default function FlowPage() {
     <>
       <main className="min-h-screen bg-white px-5 pb-24 pt-20 text-neutral-900 sm:px-8 sm:pt-24">
         <div className="mx-auto max-w-2xl">
+          <header className="mb-10 flex flex-col justify-between gap-3 border-b border-neutral-100 pb-6 sm:flex-row sm:items-baseline">
+            <div>
+              <h1 className="font-serif text-3xl font-light tracking-tight text-neutral-900 sm:text-4xl">
+                Flow
+              </h1>
+              <p className="mt-1 font-serif text-sm text-neutral-400">
+                Stream of thoughts, media & signals
+              </p>
+            </div>
+            <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider text-neutral-400">
+              <a
+                href="https://t.me/merkurov"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition hover:text-neutral-900"
+              >
+                Telegram ↗
+              </a>
+              <span className="text-neutral-200">·</span>
+              <a
+                href="https://bsky.app/profile/merkurov.love"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition hover:text-neutral-900"
+              >
+                Bluesky ↗
+              </a>
+            </div>
+          </header>
+
           {loadError && items.length === 0 ? (
             <Message
               action={

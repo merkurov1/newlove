@@ -5,30 +5,27 @@ import { usePathname } from "next/navigation";
 
 const groups = [
   {
-    title: "Workspace",
+    title: "Главное",
     links: [
-      { href: "/admin", label: "Overview", icon: "↗" },
-      { href: "/admin/users", label: "Users", icon: "○" },
-      { href: "/flow", label: "Flow", icon: "≋" },
-      { href: "/admin/projects", label: "Projects", icon: "◇" },
+      { href: "/admin", label: "Обзор", icon: "↗" },
+      { href: "/admin/flow-issues", label: "Газета Flow", icon: "📰" },
+      { href: "/admin/media", label: "Медиа публикации", icon: "▦" },
+      { href: "/flow", label: "Стрим Flow", icon: "≋" },
     ],
   },
   {
-    title: "Publishing",
+    title: "Издательство",
     links: [
-      { href: "/admin/letters", label: "Newsletter archive", icon: "✉" },
-      { href: "/admin/newsletter-jobs", label: "Delivery logs", icon: "↗" },
-      { href: "/admin/postcards", label: "Postcards", icon: "▧" },
-      { href: "/admin/selection", label: "Art selection archive", icon: "◈" },
+      { href: "/admin/letters", label: "Архив писем", icon: "✉" },
+      { href: "/admin/newsletter-jobs", label: "Логи доставки", icon: "↗" },
+      { href: "/admin/projects", label: "Проекты", icon: "◇" },
+      { href: "/admin/postcards", label: "Открытки", icon: "▧" },
     ],
   },
   {
-    title: "System",
+    title: "Аудитория",
     links: [
-      { href: "/admin/media", label: "Media", icon: "▦" },
-      { href: "/admin/banners", label: "Banners", icon: "▱" },
-      { href: "/admin/ai-selection", label: "Legacy: AI selection", icon: "⌁" },
-      { href: "/admin/monitor", label: "Legacy: Monitor", icon: "⌕" },
+      { href: "/admin/users", label: "Пользователи & Подписчики", icon: "○" },
     ],
   },
 ];

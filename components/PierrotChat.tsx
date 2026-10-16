@@ -291,9 +291,12 @@ export default function PierrotChat({ compact = false }: PierrotChatProps) {
                 transition={{ duration: 0.16 }}
                 className="
                   fixed inset-0 z-[9999] flex items-center justify-center
-                  overflow-hidden bg-[#6B6255]/25 p-2
-                  backdrop-blur-sm sm:p-5
+                  bg-[#24211D]/25 p-0 backdrop-blur-[3px]
+                  sm:p-4
                 "
+                role="dialog"
+                aria-modal="true"
+                aria-label="Pierrot conversation"
                 onMouseDown={(event: React.MouseEvent<HTMLDivElement>) => {
                   if (event.target === event.currentTarget) {
                     setIsOpen(false);
@@ -301,46 +304,41 @@ export default function PierrotChat({ compact = false }: PierrotChatProps) {
                 }}
               >
                 <motion.section
-                  initial={{ opacity: 0, y: 5, scale: 0.995 }}
+                  initial={{ opacity: 0, y: 6, scale: 0.995 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 4, scale: 0.995 }}
                   transition={{ duration: 0.16 }}
-                  role="dialog"
-                  aria-modal="true"
-                  aria-label="Pierrot conversation"
                   className="
-                    relative flex h-[min(88dvh,760px)]
-                    max-h-[calc(100dvh-1rem)] w-full max-w-2xl
-                    flex-col overflow-hidden rounded-[28px]
-                    border border-[#E8E0D4]
-                    bg-[#F7F4EE] text-[#49443C]
-                    shadow-[0_24px_80px_rgba(64,52,38,0.18)]
+                    flex h-[100dvh] max-h-[100dvh] w-full flex-col
+                    overflow-hidden bg-[#FAF8F4] text-[#37332D]
+                    sm:h-[min(88dvh,780px)] sm:max-h-[calc(100dvh-2rem)]
+                    sm:max-w-2xl sm:rounded-2xl sm:border sm:border-[#ECE6DC]
+                    shadow-[0_24px_80px_rgba(36,33,29,0.14)]
                   "
                   onMouseDown={(event: React.MouseEvent<HTMLElement>) => event.stopPropagation()}
                 >
-                  {/* Compact action bar: intentionally no title or divider. */}
-                  <div className="
-                    absolute inset-x-0 top-0 z-20 flex
-                    items-center justify-between px-4 pt-3 pb-2
-                    pointer-events-none sm:px-5 sm:pt-4
-                  ">
-                    <div className="flex items-center gap-2 pointer-events-auto">
+                  {/* Minimal top row matching NewPostModal */}
+                  <header className="flex shrink-0 items-center justify-between border-b border-[#ECE6DC]/60 px-5 py-3 sm:px-7 sm:py-4">
+                    <div className="flex items-center gap-2.5">
                       <span
                         className="h-2 w-2 rounded-full bg-[#8CA18A]"
                         title="Online"
                       />
+                      <span className="font-serif text-[15px] font-medium text-[#37332D]">
+                        Pierrot
+                      </span>
                       {isAdminSession && (
                         <span className="
                           rounded-full border border-[#E4DCCF]
-                          bg-white/70 px-2 py-0.5 font-mono
-                          text-[9px] uppercase tracking-widest text-[#8B8174]
+                          bg-black/[0.03] px-2 py-0.5 font-mono
+                          text-[9px] uppercase tracking-widest text-[#898277]
                         ">
                           Master
                         </span>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1 pointer-events-auto">
+                    <div className="flex items-center gap-1">
                       {messages.length > 0 && (
                         <button
                           type="button"
@@ -349,9 +347,8 @@ export default function PierrotChat({ compact = false }: PierrotChatProps) {
                           aria-label="New chat"
                           className="
                             flex h-9 w-9 items-center justify-center
-                            rounded-full text-[#928779]
-                            transition-colors hover:bg-[#EBE4D9]
-                            hover:text-[#49443C]
+                            rounded-full text-[#898277] transition
+                            hover:bg-black/[0.04] hover:text-[#37332D]
                           "
                         >
                           <RotateCcw size={15} />
@@ -364,56 +361,53 @@ export default function PierrotChat({ compact = false }: PierrotChatProps) {
                         title="Close"
                         aria-label="Close Pierrot"
                         className="
-                          flex h-9 w-9 items-center justify-center
-                          rounded-full text-[#928779]
-                          transition-colors hover:bg-[#EBE4D9]
-                          hover:text-[#49443C]
+                          -mr-2 flex h-9 w-9 shrink-0 items-center justify-center
+                          rounded-full text-[#898277] transition
+                          hover:bg-black/[0.04] hover:text-[#37332D]
                         "
                       >
-                        <X size={17} />
+                        <X size={18} strokeWidth={1.6} />
                       </button>
                     </div>
-                  </div>
+                  </header>
 
+                  {/* Messages container */}
                   <div
                     ref={messagesContainerRef}
                     className="
                       min-h-0 flex-1 overflow-y-auto overscroll-contain
-                      px-4 pt-12 pb-4 sm:px-8 sm:pt-14 sm:pb-5
+                      px-5 py-5 sm:px-7 sm:py-6
                     "
                   >
                     <div className="mx-auto flex min-h-full w-full flex-col justify-end">
                       {messages.length === 0 ? (
                         <div className="
                           my-auto flex flex-col items-center
-                          justify-center px-2 py-8 text-center
+                          justify-center px-2 py-10 text-center
                         ">
+                          <div className="
+                            flex h-12 w-12 items-center justify-center
+                            rounded-full border border-[#E6DEC6]
+                            bg-[#F4EFE6] font-serif text-[20px] font-medium text-[#554E44]
+                          ">
+                            P
+                          </div>
+
                           <h2 className="
-                            font-serif text-[34px] font-normal
-                            leading-tight tracking-[-0.035em]
-                            text-[#49443C] sm:text-[40px]
+                            mt-4 font-serif text-2xl font-light
+                            tracking-tight text-[#37332D] sm:text-3xl
                           ">
                             Pierrot
                           </h2>
 
                           <p className="
-                            mt-3 font-mono text-[12px] font-medium
-                            uppercase tracking-[0.16em]
-                            text-[#82786A] sm:text-[13px]
+                            mt-1.5 font-mono text-[11px] uppercase
+                            tracking-[0.18em] text-[#898277]
                           ">
-                            The advisor is listening
+                            Digital shadow & advisor
                           </p>
 
-                          <p className="
-                            mt-4 max-w-md font-serif text-[17px]
-                            leading-[1.65] text-[#71685C]
-                            sm:text-[19px]
-                          ">
-                            Art, strategy, digital architecture.
-                            Ask what deserves your attention.
-                          </p>
-
-                          <div className="mt-7 flex flex-wrap justify-center gap-2">
+                          <div className="mt-8 flex flex-wrap justify-center gap-2">
                             {SUGGESTIONS.map((suggestion) => (
                               <button
                                 key={suggestion}
@@ -422,12 +416,11 @@ export default function PierrotChat({ compact = false }: PierrotChatProps) {
                                 disabled={isLoading}
                                 className="
                                   rounded-full border border-[#E3DACD]
-                                  bg-[#FBF9F5] px-4 py-2
-                                  text-[12px] text-[#71685C]
-                                  transition-colors
-                                  hover:border-[#CFC3B1] hover:bg-white
-                                  hover:text-[#49443C]
-                                  disabled:opacity-50 sm:text-[13px]
+                                  bg-white/60 px-3.5 py-1.5
+                                  font-serif text-[13px] text-[#554E44]
+                                  transition hover:border-[#CFC3B1]
+                                  hover:bg-white hover:text-[#37332D]
+                                  disabled:opacity-40
                                 "
                               >
                                 {suggestion}
@@ -436,7 +429,7 @@ export default function PierrotChat({ compact = false }: PierrotChatProps) {
                           </div>
                         </div>
                       ) : (
-                        <div className="space-y-5 sm:space-y-6">
+                        <div className="space-y-6">
                           {messages.map((message, index) => (
                             <motion.article
                               key={`${index}-${message.role}`}
@@ -449,26 +442,31 @@ export default function PierrotChat({ compact = false }: PierrotChatProps) {
                                   : 'items-start'
                               }`}
                             >
-                              <div
-                                className={`
-                                  max-w-[96%] whitespace-pre-wrap
-                                  break-words rounded-[22px] border
-                                  px-4 py-3.5 text-[16px]
-                                  leading-[1.7] sm:px-5 sm:py-4
-                                  sm:text-[17px]
-                                  ${
-                                    message.role === 'user'
-                                      ? 'max-w-[88%] rounded-tr-md border-[#E4D9C9] bg-[#EDE5D9] text-[#4E473D] sm:max-w-[80%]'
-                                      : 'rounded-tl-md border-[#EBE4D9] bg-[#FCFAF6] font-serif text-[#49443C] shadow-[0_2px_8px_rgba(75,62,45,0.025)]'
-                                  }
-                                `}
-                              >
-                                {message.content}
-                              </div>
+                              {message.role === 'user' ? (
+                                <div className="
+                                  max-w-[88%] sm:max-w-[78%]
+                                  whitespace-pre-wrap break-words
+                                  rounded-2xl rounded-br-sm
+                                  bg-[#ECE5D9] px-4 py-2.5
+                                  font-serif text-[15px] sm:text-[16px]
+                                  leading-[1.65] text-[#37332D]
+                                ">
+                                  {message.content}
+                                </div>
+                              ) : (
+                                <div className="
+                                  max-w-[96%]
+                                  whitespace-pre-wrap break-words
+                                  font-serif text-[16px] sm:text-[17px]
+                                  leading-[1.75] text-[#2F2B26]
+                                ">
+                                  {message.content}
+                                </div>
+                              )}
 
                               {message.provider && (
                                 <span className="
-                                  mt-1.5 px-1 font-mono text-[9px]
+                                  mt-1 font-mono text-[9px]
                                   uppercase tracking-wider text-[#A49A8C]
                                 ">
                                   via {message.provider}
@@ -479,12 +477,12 @@ export default function PierrotChat({ compact = false }: PierrotChatProps) {
 
                           {isLoading && (
                             <div className="
-                              flex items-center gap-2 px-1
-                              text-[12px] text-[#918779]
+                              flex items-center gap-2 text-xs
+                              font-mono text-[#898277]
                             ">
                               <span className="
                                 inline-block h-2 w-2 animate-pulse
-                                rounded-full bg-[#A9B5A1]
+                                rounded-full bg-[#8CA18A]
                               " />
                               <span>Thinking…</span>
                             </div>
@@ -494,19 +492,17 @@ export default function PierrotChat({ compact = false }: PierrotChatProps) {
                     </div>
                   </div>
 
+                  {/* Laconic Footer Input matching NewPostModal */}
                   <footer className="
-                    shrink-0 border-t border-[#EAE2D7]
-                    bg-[#F7F4EE] p-3
+                    shrink-0 border-t border-[#ECE6DC]/60
+                    px-5 py-3 sm:px-7 sm:py-4
                     pb-[max(12px,env(safe-area-inset-bottom))]
-                    sm:p-4 sm:pb-4
                   ">
                     <div className="
-                      mx-auto flex w-full items-end gap-2
-                      rounded-[22px] border border-[#E4DCCF]
-                      bg-[#FCFAF6] p-2
-                      transition-colors
-                      focus-within:border-[#CFC3B1]
-                      sm:p-2.5
+                      flex items-end gap-2 rounded-2xl
+                      border border-[#E3DACD] bg-white/70
+                      p-2 sm:p-2.5 transition
+                      focus-within:border-[#B5AAA0] focus-within:bg-white
                     ">
                       <textarea
                         ref={inputRef}
@@ -517,11 +513,11 @@ export default function PierrotChat({ compact = false }: PierrotChatProps) {
                         rows={1}
                         disabled={isLoading}
                         className="
-                          max-h-36 min-h-[42px] min-w-0 flex-1
+                          max-h-36 min-h-[38px] min-w-0 flex-1
                           resize-none border-0 bg-transparent
-                          px-2.5 py-2.5 font-sans text-[16px]
-                          leading-relaxed text-[#49443C]
-                          outline-none placeholder:text-[#A69C8E]
+                          px-2 py-1.5 font-serif text-[16px]
+                          leading-relaxed text-[#37332D]
+                          outline-none placeholder:text-[#B8B0A4]
                           focus:outline-none focus:ring-0
                           disabled:opacity-60
                         "
@@ -533,26 +529,18 @@ export default function PierrotChat({ compact = false }: PierrotChatProps) {
                         disabled={!input.trim() || isLoading}
                         aria-label="Send message"
                         className="
-                          flex h-10 w-10 shrink-0 items-center
-                          justify-center rounded-[15px]
-                          bg-[#6C6559] text-white
-                          transition-colors hover:bg-[#575145]
+                          flex h-9 w-9 shrink-0 items-center
+                          justify-center rounded-xl
+                          bg-[#37332D] text-white
+                          transition hover:bg-[#201D1A]
                           active:scale-95
                           disabled:cursor-not-allowed
-                          disabled:bg-[#E7E0D6]
-                          disabled:text-[#A9A092]
+                          disabled:opacity-20
                         "
                       >
-                        <ArrowUp size={18} strokeWidth={2.2} />
+                        <ArrowUp size={16} strokeWidth={2.2} />
                       </button>
                     </div>
-
-                    <p className="
-                      mt-2 text-center font-mono text-[9px]
-                      tracking-wide text-[#A49A8C]
-                    ">
-                      Enter to send · Shift + Enter for new line
-                    </p>
                   </footer>
                 </motion.section>
               </motion.div>
