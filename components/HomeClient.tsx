@@ -1,3 +1,4 @@
+```tsx
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -21,6 +22,7 @@ export default function HomeClient() {
 
   const shuffleItems = useCallback(() => {
     const tg = (window as any)?.Telegram?.WebApp;
+
     if (tg?.HapticFeedback) {
       tg.HapticFeedback.impactOccurred('medium');
     }
@@ -68,7 +70,10 @@ export default function HomeClient() {
 
     return () => {
       if (typeof window !== 'undefined' && 'DeviceMotionEvent' in window) {
-        window.removeEventListener('devicemotion', handleMotion as EventListener);
+        window.removeEventListener(
+          'devicemotion',
+          handleMotion as EventListener
+        );
       }
     };
   }, [shuffleItems]);
@@ -91,7 +96,9 @@ export default function HomeClient() {
 
         <h1 className="text-3xl sm:text-6xl md:text-7xl lg:text-8xl font-serif font-normal tracking-tight leading-[1.15] sm:leading-[0.98] text-[#111111] mb-10 sm:mb-16 px-1 [hyphens:none] break-words">
           Context Architecture <br className="hidden sm:inline" />
-          <span className="text-zinc-500 italic font-serif">&amp; Cultural Capital</span>
+          <span className="text-zinc-500 italic font-serif">
+            &amp; Cultural Capital
+          </span>
         </h1>
 
         <nav
@@ -141,21 +148,7 @@ export default function HomeClient() {
           </Link>
         </div>
       </div>
-
-      <footer className="w-full flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-wider text-neutral-400 z-20 pb-2">
-        <Link href="/journal" className="transition hover:text-neutral-900">
-          Journal ↗
-        </Link>
-        <span className="text-neutral-300">·</span>
-        <a
-          href="https://t.me/unframed_am"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="transition hover:text-neutral-900"
-        >
-          tg ↗
-        </a>
-      </footer>
     </main>
   );
 }
+```
