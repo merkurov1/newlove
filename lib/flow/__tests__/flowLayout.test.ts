@@ -101,6 +101,33 @@ function getBlueskyUrl(item: {
   return null;
 }
 
+function isDuplicateOfLink(
+  text: string | null | undefined,
+  preview: { title?: string | null; url?: string | null } | null | undefined,
+): boolean {
+  if (!text || !text.trim() || !preview) return false;
+  const cleanT = text.trim();
+  const cleanUrl = (preview.url || '').trim();
+
+  // If text is literally the URL itself
+  if (cleanT === cleanUrl) return true;
+
+  const previewTitle = (preview.title || '').trim();
+  if (!previewTitle) return false;
+
+  const normT = normalizeForComparison(cleanT);
+  const normP = normalizeForComparison(previewTitle);
+
+  if (!normT || !normP) return false;
+
+  // Exact match or one starts with the other
+  if (normT === normP || normT.startsWith(normP) || normP.startsWith(normT)) {
+    return true;
+  }
+
+  return false;
+}
+
 // Tests
 console.log('--- Running Flow Module Layout & Deduplication Tests ---');
 
@@ -181,4 +208,36 @@ console.log('--- Running Flow Module Layout & Deduplication Tests ---');
   console.log('✓ Test 6 passed: Telegram and Bluesky URLs correctly constructed');
 }
 
-console.log('All 6 test suites passed successfully!');
+// Test 7: Deduplication of single link card title (e.g. Palantir Guardian)
+{
+  const linkPreview = {
+    title: 'Palantir and Sadiq Khan drop legal battle over Met contract',
+    url: 'https://theguardian.com/article',
+  };
+  const title = 'Palantir and Sadiq Khan drop legal battle over Met contract';
+  const body = 'Palantir and Sadiq Khan drop legal battle over Met contract';
+
+  assert.strictEqual(
+    isDuplicateOfLink(title, linkPreview),
+    true,
+    'Title matching link preview title must be flagged as duplicate',
+  );
+  assert.strictEqual(
+    isDuplicateOfLink(body, linkPreview),
+    true,
+    'Body matching link preview title must be flagged as duplicate',
+  );
+  assert.strictEqual(
+    isDuplicateOfLink('https://theguardian.com/article', linkPreview),
+    true,
+    'Body containing only link URL must be flagged as duplicate',
+  );
+  assert.strictEqual(
+    isDuplicateOfLink('Интересный комментарий к новости', linkPreview),
+    false,
+    'Unique commentary must NOT be flagged as duplicate',
+  );
+  console.log('✓ Test 7 passed: Single link title/body deduplication validated');
+}
+
+console.log('All 7 test suites passed successfully!');

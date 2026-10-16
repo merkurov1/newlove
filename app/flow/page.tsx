@@ -272,6 +272,33 @@ function getTitleAndBodyDisplay(item: FlowItem) {
   return { title: rawTitle, body: rawBody };
 }
 
+function isDuplicateOfLink(
+  text: string | null | undefined,
+  preview: LinkPreviewData | null | undefined,
+): boolean {
+  if (!text || !text.trim() || !preview) return false;
+  const cleanT = text.trim();
+  const cleanUrl = (preview.url || '').trim();
+
+  // If text is literally the URL itself
+  if (cleanT === cleanUrl) return true;
+
+  const previewTitle = (preview.title || '').trim();
+  if (!previewTitle) return false;
+
+  const normT = normalizeForComparison(cleanT);
+  const normP = normalizeForComparison(previewTitle);
+
+  if (!normT || !normP) return false;
+
+  // Exact match or one starts with the other
+  if (normT === normP || normT.startsWith(normP) || normP.startsWith(normT)) {
+    return true;
+  }
+
+  return false;
+}
+
 function EntryDate({ item }: { item: FlowItem }) {
   const value = item.published_at || item.created_at;
   const date = formatDate(value);
@@ -643,6 +670,16 @@ function Entry({
     (url) => url !== youtubeThumbnail && !linkImages.has(url),
   );
 
+  const singlePreview = linkPreviews.length === 1 ? linkPreviews[0] : null;
+
+  const showTitle =
+    display.title &&
+    (!singlePreview || !isDuplicateOfLink(display.title, singlePreview));
+
+  const showBody =
+    display.body &&
+    (!singlePreview || !isDuplicateOfLink(display.body, singlePreview));
+
   return (
     <article className="group border-b border-neutral-100 py-8 first:pt-0 last:border-b-0">
       {/* Meta header */}
@@ -653,8 +690,8 @@ function Entry({
         onDelete={onDelete}
       />
 
-      {/* Title (rendered only when it doesn't duplicate the body) */}
-      {display.title && (
+      {/* Title (rendered only when it doesn't duplicate the body or single link card) */}
+      {showTitle && (
         <h2 className="mb-2 text-lg font-medium leading-snug text-neutral-900 sm:text-xl">
           <Link href={href} className="transition hover:text-neutral-600">
             {display.title}
@@ -662,8 +699,8 @@ function Entry({
         </h2>
       )}
 
-      {/* Text body */}
-      {display.body && (
+      {/* Text body (rendered only when it doesn't duplicate the single link preview) */}
+      {showBody && (
         <div className="mb-4">
           <Link href={href} className="block">
             <p className="whitespace-pre-line font-serif text-[16px] leading-[1.7] text-neutral-800 sm:text-[17px]">

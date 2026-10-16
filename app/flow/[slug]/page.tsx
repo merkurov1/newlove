@@ -569,6 +569,33 @@ function estimateReadingTime(text: string): string {
   return `${minutes} min read`;
 }
 
+function isDuplicateOfLink(
+  text: string | null | undefined,
+  preview: { title?: string | null; url?: string | null } | null | undefined,
+): boolean {
+  if (!text || !text.trim() || !preview) return false;
+  const cleanT = text.trim();
+  const cleanUrl = (preview.url || '').trim();
+
+  // If text is literally the URL itself
+  if (cleanT === cleanUrl) return true;
+
+  const previewTitle = (preview.title || '').trim();
+  if (!previewTitle) return false;
+
+  const normT = normalizeForComparison(cleanT);
+  const normP = normalizeForComparison(previewTitle);
+
+  if (!normT || !normP) return false;
+
+  // Exact match or one starts with the other
+  if (normT === normP || normT.startsWith(normP) || normP.startsWith(normT)) {
+    return true;
+  }
+
+  return false;
+}
+
 function SmartGallery({
   images,
   caption,
@@ -780,16 +807,26 @@ function SmartFlowContent({
   }>;
   photoCaption: string | null;
 }) {
+  const singlePreview = linkPreviews.length === 1 ? linkPreviews[0] : null;
+
+  const showTitle =
+    display.title &&
+    (!singlePreview || !isDuplicateOfLink(display.title, singlePreview));
+
+  const showBody =
+    display.body &&
+    (!singlePreview || !isDuplicateOfLink(display.body, singlePreview));
+
   if (archetype === 'short_note') {
     return (
       <div className="space-y-6">
-        {display.title && (
+        {showTitle && (
           <h1 className="font-serif text-2xl font-medium leading-snug text-stone-900 sm:text-3xl">
             {display.title}
           </h1>
         )}
 
-        {display.body && (
+        {showBody && (
           <div className="py-4 sm:py-6">
             <p className="whitespace-pre-line font-serif text-2xl font-light leading-[1.65] text-stone-900 sm:text-3xl">
               {display.body}
@@ -813,13 +850,13 @@ function SmartFlowContent({
       <div className="space-y-6">
         <SmartGallery images={dedicatedImages} caption={photoCaption} />
 
-        {display.title && (
+        {showTitle && (
           <h1 className="font-serif text-2xl font-light text-stone-900 sm:text-3xl">
             {display.title}
           </h1>
         )}
 
-        {display.body && <MarkdownBody body={display.body} />}
+        {showBody && display.body && <MarkdownBody body={display.body} />}
 
         {linkPreviews.length > 0 && (
           <SmartLinks previews={linkPreviews} />
@@ -846,13 +883,13 @@ function SmartFlowContent({
           </div>
         )}
 
-        {display.title && (
+        {showTitle && (
           <h1 className="font-serif text-2xl font-light text-stone-900 sm:text-3xl">
             {display.title}
           </h1>
         )}
 
-        {display.body && <MarkdownBody body={display.body} />}
+        {showBody && display.body && <MarkdownBody body={display.body} />}
 
         {dedicatedImages.length > 0 && (
           <SmartGallery images={dedicatedImages} caption={photoCaption} />
@@ -868,13 +905,13 @@ function SmartFlowContent({
   if (archetype === 'curated_links') {
     return (
       <div className="space-y-6">
-        {display.title && (
+        {showTitle && (
           <h1 className="font-serif text-2xl font-light text-stone-900 sm:text-3xl">
             {display.title}
           </h1>
         )}
 
-        {display.body && (
+        {showBody && display.body && (
           <div className="pb-2">
             <MarkdownBody body={display.body} />
           </div>
@@ -892,7 +929,7 @@ function SmartFlowContent({
   // article (default)
   return (
     <div className="space-y-7">
-      {display.title && (
+      {showTitle && (
         <h1 className="font-serif text-3xl font-light leading-[1.25] text-stone-900 sm:text-4xl lg:text-5xl">
           {display.title}
         </h1>
@@ -902,7 +939,7 @@ function SmartFlowContent({
         <SmartGallery images={dedicatedImages} caption={photoCaption} />
       )}
 
-      {display.body && <MarkdownBody body={display.body} />}
+      {showBody && display.body && <MarkdownBody body={display.body} />}
 
       {dedicatedImages.length > 1 && (
         <SmartGallery images={dedicatedImages} caption={photoCaption} />
@@ -915,8 +952,8 @@ function SmartFlowContent({
       {!videoId &&
         dedicatedImages.length === 0 &&
         linkPreviews.length === 0 &&
-        !display.body &&
-        !display.title && (
+        !showBody &&
+        !showTitle && (
           <p className="text-sm text-stone-400">
             No content.
           </p>
