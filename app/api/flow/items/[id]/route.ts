@@ -1,17 +1,13 @@
-
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { deleteFromBluesky } from '@/lib/bluesky';
-import { deleteFromTelegramChannel } from '@/lib/telegram';
-import { crosspostFlowItem } from '@/lib/flow/crosspost';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Next 14: params — объект; Next 15+: Promise. Тип покрывает оба случая.
 type RouteContext = {
-  params: {
-    id: string;
-  };
+  params: Promise<{ id: string }> | { id: string };
 };
 
 function getSupabaseAdmin() {
@@ -46,10 +42,10 @@ async function isAdminRequest(req: Request): Promise<boolean> {
 // drafts and private items are only readable by an administrator.
 export async function GET(
   req: Request,
-  { params }: RouteContext,
+  context: RouteContext,
 ) {
   try {
-    const { id } = params;
+    const { id } = await context.params;
     const admin = await isAdminRequest(req);
     const supabase = getSupabaseAdmin();
 
@@ -104,7 +100,7 @@ export async function GET(
 // PATCH: administrator-only update.
 export async function PATCH(
   req: Request,
-  { params }: RouteContext,
+  context: RouteContext,
 ) {
   try {
     try {
@@ -116,7 +112,7 @@ export async function PATCH(
       );
     }
 
-    const { id } = params;
+    const { id } = await context.params;
     const body = await req.json();
 
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -219,6 +215,8 @@ export async function PATCH(
 
     if (!wasPublished && isNowPublished) {
       try {
+        // Ленивый импорт: sharp не грузится на этапе сборки.
+        const { crosspostFlowItem } = await import('@/lib/flow/crosspost');
         await crosspostFlowItem(updatedItem);
       } catch (crosspostError) {
         console.error(
@@ -245,7 +243,7 @@ export async function PATCH(
 // DELETE: administrator-only deletion, including external copies.
 export async function DELETE(
   req: Request,
-  { params }: RouteContext,
+  context: RouteContext,
 ) {
   try {
     try {
@@ -257,7 +255,7 @@ export async function DELETE(
       );
     }
 
-    const { id } = params;
+    const { id } = await context.params;
     const supabase = getSupabaseAdmin();
 
     const { data: item, error: fetchError } = await supabase
@@ -288,10 +286,12 @@ export async function DELETE(
     const deletePromises: Promise<unknown>[] = [];
 
     if (item.bluesky_uri) {
+      const { deleteFromBluesky } = await import('@/lib/bluesky');
       deletePromises.push(deleteFromBluesky(item.bluesky_uri));
     }
 
     if (item.telegram_message_id) {
+      const { deleteFromTelegramChannel } = await import('@/lib/telegram');
       deletePromises.push(
         deleteFromTelegramChannel(item.telegram_message_id),
       );
