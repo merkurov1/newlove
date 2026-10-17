@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowDown, ArrowRight } from 'lucide-react';
+import { ArrowDown } from 'lucide-react';
 
 export interface JournalArticle {
   id: string;
@@ -14,301 +14,259 @@ export interface JournalArticle {
   createdAt: string | null;
   kind: string;
   lang: string | null;
-  number?: number | null;
+}
+
+export interface JournalCursor {
+  id: string;
+  publishedAt: string | null;
+}
+
+interface Props {
+  initialArticles: JournalArticle[];
+  initialCursor: JournalCursor | null;
+  initialHasMore: boolean;
 }
 
 type Language = 'all' | 'ru' | 'en';
 
-interface Props {
-  initialArticles: JournalArticle[];
-  initialHasMore: boolean;
-}
-
-interface ApiResponse {
-  articles?: JournalArticle[];
-  hasMore?: boolean;
-  nextOffset?: number;
+interface JournalResponse {
+  articles: JournalArticle[];
+  cursor: JournalCursor | null;
+  hasMore: boolean;
   error?: string;
 }
 
-function isEnglish(article: JournalArticle) {
-  return /^en/i.test((article.lang || '').trim());
+const isEnglish = (language: string | null) =>
+  (language || '').toLowerCase().trim().startsWith('en');
+
+function getDisplayDate(article: JournalArticle) {
+  return article.publishedAt || article.sentAt || article.createdAt || null;
 }
 
-function articleDate(article: JournalArticle) {
-  return article.publishedAt || article.sentAt || article.createdAt;
-}
-
-function formatDate(article: JournalArticle) {
-  const value = articleDate(article);
-  if (!value) return null;
-
-  return new Date(value).toLocaleDateString(
-    isEnglish(article) ? 'en-GB' : 'ru-RU',
-    {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'UTC',
-    },
+function formatDate(date: string | null, language: string | null) {
+  if (!date) return null;
+  return new Date(date).toLocaleDateString(
+    isEnglish(language) ? 'en-GB' : 'ru-RU',
+    { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' },
   );
 }
 
-async function fetchIssues(
-  language: Language,
-  offset: number,
-): Promise<ApiResponse> {
-  const params = new URLSearchParams({
-    type: 'issues',
-    lang: language,
-    offset: String(offset),
-    limit: '10',
-  });
-
-  const response = await fetch(`/api/journal?${params.toString()}`, {
-    cache: 'no-store',
-    headers: { Accept: 'application/json' },
-  });
-
-  const data = (await response.json()) as ApiResponse;
-
-  if (!response.ok) {
-    throw new Error(data.error || 'Could not load editions.');
-  }
-
-  return data;
-}
-
-function IssueRow({
-  article,
-  index,
-}: {
-  article: JournalArticle;
-  index: number;
-}) {
-  const english = isEnglish(article);
-  const date = formatDate(article);
-  const dateTime = articleDate(article);
-
-  return (
-    <article className="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-3 border-b border-[#CFC1B3] py-6 sm:grid-cols-[3.5rem_minmax(0,1fr)_9rem] sm:gap-5 sm:py-7">
-      <div className="pt-1 font-mono text-xs tabular-nums text-[#8B7D72]">
-        {String(index + 1).padStart(2, '0')}
-      </div>
-
-      <div className="min-w-0">
-        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] uppercase tracking-[0.12em]">
-          <span className="font-bold text-[#990F3D]">
-            {english ? 'Flow · English edition' : 'Flow · Русский выпуск'}
-          </span>
-
-          {article.number != null && (
-            <span className="text-[#70675F]">No. {article.number}</span>
-          )}
-
-          <span className="text-[#70675F]">{english ? 'EN' : 'RU'}</span>
-        </div>
-
-        <h2 className="font-serif text-[1.65rem] font-bold leading-[1.08] tracking-[-0.025em] sm:text-[2rem]">
-          <Link
-            href={`/letters/${article.slug}`}
-            className="decoration-[#0D7680] decoration-1 underline-offset-4 hover:underline"
-          >
-            {article.title}
-          </Link>
-        </h2>
-
-        {article.preview && (
-          <p className="mt-2 max-w-2xl font-serif text-[15px] leading-relaxed text-[#655A52] sm:text-base">
-            {article.preview}
-          </p>
-        )}
-
-        <Link
-          href={`/letters/${article.slug}`}
-          className="mt-3 inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#0D7680] hover:text-[#07565D]"
-        >
-          {english ? 'Read edition' : 'Читать выпуск'}
-          <ArrowRight size={12} />
-        </Link>
-      </div>
-
-      <div className="col-start-2 mt-1 font-mono text-[10px] text-[#8B7D72] sm:col-start-3 sm:row-start-1 sm:mt-0 sm:pt-1 sm:text-right">
-        {date && (
-          <time dateTime={dateTime || undefined}>
-            {date}
-          </time>
-        )}
-      </div>
-    </article>
-  );
-}
+const TABS = [
+  ['all', 'Все'],
+  ['ru', 'По-русски'],
+  ['en', 'In English'],
+] as const;
 
 export default function JournalViewClient({
   initialArticles,
+  initialCursor,
   initialHasMore,
 }: Props) {
-  const [language, setLanguage] = useState<Language>('all');
   const [articles, setArticles] = useState(initialArticles);
+  const [cursor, setCursor] = useState<JournalCursor | null>(initialCursor);
   const [hasMore, setHasMore] = useState(initialHasMore);
-  const [nextOffset, setNextOffset] = useState(initialArticles.length);
+  const [selectedLang, setSelectedLang] = useState<Language>('all');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  async function selectLanguage(nextLanguage: Language) {
-    if (nextLanguage === language || loading) return;
+  async function fetchPage(
+    language: Language,
+    nextCursor: JournalCursor | null,
+  ): Promise<JournalResponse> {
+    const params = new URLSearchParams();
+    if (language !== 'all') params.set('lang', language);
+    if (nextCursor) params.set('cursor', JSON.stringify(nextCursor));
 
-    setLanguage(nextLanguage);
+    const response = await fetch(`/api/journal?${params.toString()}`, {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    const result = (await response.json()) as JournalResponse;
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Could not load journal entries.');
+    }
+    return result;
+  }
+
+  async function changeLanguage(language: Language) {
+    if (loading || language === selectedLang) return;
+
+    setSelectedLang(language);
     setLoading(true);
-    setError('');
+    setErrorMessage('');
 
     try {
-      const data = await fetchIssues(nextLanguage, 0);
-      const nextArticles = data.articles || [];
-
-      setArticles(nextArticles);
-      setHasMore(Boolean(data.hasMore));
-      setNextOffset(
-        typeof data.nextOffset === 'number'
-          ? data.nextOffset
-          : nextArticles.length,
-      );
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Could not load editions.',
-      );
-      setArticles([]);
-      setHasMore(false);
-      setNextOffset(0);
+      const result = await fetchPage(language, null);
+      setArticles(result.articles);
+      setCursor(result.cursor);
+      setHasMore(result.hasMore);
+    } catch (error) {
+      console.error('[Journal] Language filter failed:', error);
+      setErrorMessage('Could not load publications. Please try again.');
     } finally {
       setLoading(false);
     }
   }
 
   async function loadMore() {
-    if (loading || !hasMore) return;
+    if (loading || !hasMore || !cursor) return;
 
     setLoading(true);
-    setError('');
+    setErrorMessage('');
 
     try {
-      const data = await fetchIssues(language, nextOffset);
-      const incoming = data.articles || [];
-
+      const result = await fetchPage(selectedLang, cursor);
       setArticles((current) => {
-        const ids = new Set(current.map((article) => article.id));
-        return [...current, ...incoming.filter((article) => !ids.has(article.id))];
+        const known = new Set(current.map((a) => a.id));
+        return [...current, ...result.articles.filter((a) => !known.has(a.id))];
       });
-
-      setHasMore(Boolean(data.hasMore));
-      setNextOffset(
-        typeof data.nextOffset === 'number'
-          ? data.nextOffset
-          : nextOffset + incoming.length,
-      );
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Could not load more editions.',
-      );
+      setCursor(result.cursor);
+      setHasMore(result.hasMore);
+    } catch (error) {
+      console.error('[Journal] Load more failed:', error);
+      setErrorMessage('Could not load more publications. Please try again.');
     } finally {
       setLoading(false);
     }
   }
 
-  const filters: { value: Language; label: string }[] = [
-    { value: 'all', label: 'All editions' },
-    { value: 'ru', label: 'Русский' },
-    { value: 'en', label: 'English' },
-  ];
-
   return (
-    <section className="pb-10 pt-7 sm:pt-10">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b-[3px] border-[#33302E] pb-3">
-        <div>
-          <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-[#990F3D]">
-            The latest
-          </p>
-          <h2 className="font-serif text-3xl font-bold tracking-[-0.035em] sm:text-4xl">
-            Latest editions
-          </h2>
-        </div>
+    <section
+      id="publications"
+      className="mx-auto max-w-6xl px-5 pb-28 pt-6 sm:px-8"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-4 border-t-2 border-neutral-900 pb-3 pt-3">
+        <h2 className="font-serif text-xl font-normal text-neutral-900">
+          Публикации
+        </h2>
 
-        <div className="flex flex-wrap gap-3 pb-1 font-mono text-[10px] font-bold uppercase tracking-[0.1em]">
-          {filters.map((filter) => (
+        <div
+          className="flex items-center gap-6"
+          role="group"
+          aria-label="Filter publications by language"
+        >
+          {TABS.map(([value, label]) => (
             <button
-              key={filter.value}
+              key={value}
               type="button"
-              onClick={() => selectLanguage(filter.value)}
+              onClick={() => changeLanguage(value)}
               disabled={loading}
-              aria-pressed={language === filter.value}
-              className={`border-b-2 pb-1 transition-colors disabled:opacity-50 ${
-                language === filter.value
-                  ? 'border-[#990F3D] text-[#990F3D]'
-                  : 'border-transparent text-[#70675F] hover:text-[#33302E]'
+              aria-pressed={selectedLang === value}
+              className={`border-b pb-0.5 font-mono text-[10px] uppercase tracking-[0.16em] transition-colors disabled:cursor-wait ${
+                selectedLang === value
+                  ? 'border-neutral-900 text-neutral-900'
+                  : 'border-transparent text-neutral-400 hover:text-neutral-700'
               }`}
             >
-              {filter.label}
+              {label}
             </button>
           ))}
         </div>
       </div>
 
       {articles.length === 0 && !loading ? (
-        <div className="border-b border-[#CFC1B3] py-12">
-          <p className="font-serif text-lg text-[#655A52]">
-            {error ||
-              (language === 'en'
-                ? 'No English editions found.'
-                : language === 'ru'
-                  ? 'Русских выпусков пока нет.'
-                  : 'No editions found.')}
+        <div className="border-t border-neutral-300 py-16 text-center">
+          <p className="font-serif text-lg italic text-neutral-500">
+            {selectedLang === 'en'
+              ? 'No English publications found.'
+              : selectedLang === 'ru'
+                ? 'Русскоязычных публикаций не найдено.'
+                : 'No publications found.'}
           </p>
+          {selectedLang !== 'all' && (
+            <button
+              type="button"
+              onClick={() => changeLanguage('all')}
+              className="mt-4 font-mono text-[10px] uppercase tracking-[0.16em] text-neutral-700 underline underline-offset-4 transition-colors hover:text-[#990F3D]"
+            >
+              Show all publications
+            </button>
+          )}
         </div>
       ) : (
-        <div aria-busy={loading}>
-          {articles.map((article, index) => (
-            <IssueRow
-              key={article.id}
-              article={article}
-              index={index}
-            />
-          ))}
-        </div>
-      )}
+        <div>
+          {articles.map((article) => {
+            const displayDate = getDisplayDate(article);
+            const formattedDate = formatDate(displayDate, article.lang);
+            const en = isEnglish(article.lang);
 
-      {error && articles.length > 0 && (
-        <p role="alert" className="pt-4 font-mono text-xs text-[#990F3D]">
-          {error}
-        </p>
+            return (
+              <article key={article.id} className="border-t border-neutral-300">
+                <Link
+                  href={`/journal/${article.slug}`}
+                  className="group grid gap-x-10 gap-y-2 py-7 md:grid-cols-[160px_1fr]"
+                >
+                  <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-500 md:pt-2">
+                    {formattedDate && (
+                      <time dateTime={displayDate || undefined}>
+                        {formattedDate}
+                      </time>
+                    )}
+                    <span className="ml-2 text-neutral-400 md:ml-0 md:block md:pt-1">
+                      {en ? 'EN' : 'RU'}
+                    </span>
+                  </div>
+
+                  <div className="max-w-2xl">
+                    <h3 className="font-serif text-2xl font-normal leading-tight text-neutral-900 transition-colors group-hover:text-[#990F3D] sm:text-[1.75rem]">
+                      {article.title}
+                    </h3>
+                    {article.preview && (
+                      <p className="mt-3 line-clamp-2 font-serif text-base leading-relaxed text-neutral-600">
+                        {article.preview}
+                      </p>
+                    )}
+                  </div>
+                </Link>
+              </article>
+            );
+          })}
+        </div>
       )}
 
       {loading && (
-        <p className="py-5 font-mono text-[10px] uppercase tracking-wider text-[#70675F]">
-          Loading editions…
+        <p
+          role="status"
+          className="py-8 text-center font-mono text-[10px] uppercase tracking-widest text-neutral-400"
+        >
+          Loading…
         </p>
       )}
 
-      {hasMore && !loading && (
-        <div className="border-b border-[#CFC1B3] py-6">
+      {errorMessage && (
+        <div className="mt-8 text-center">
+          <p role="alert" className="font-mono text-xs text-[#990F3D]">
+            {errorMessage}
+          </p>
+          <button
+            type="button"
+            onClick={() =>
+              selectedLang === 'all' ? loadMore() : changeLanguage(selectedLang)
+            }
+            className="mt-3 font-mono text-xs uppercase tracking-wider underline underline-offset-4"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {!loading && hasMore && articles.length > 0 && (
+        <div className="mt-10 flex justify-center border-t border-neutral-300 pt-10">
           <button
             type="button"
             onClick={loadMore}
-            className="inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#0D7680] hover:text-[#07565D]"
+            className="inline-flex items-center gap-2 border border-neutral-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-neutral-900 transition-colors hover:bg-neutral-900 hover:text-[#FDFBF7]"
           >
-            Load more editions
+            Load 10 more
             <ArrowDown size={13} />
           </button>
         </div>
       )}
 
-      {!hasMore && articles.length > 0 && (
-        <p className="pt-5 font-mono text-[10px] uppercase tracking-[0.12em] text-[#8B7D72]">
-          End of latest editions ·{' '}
-          <Link href="/letters" className="text-[#0D7680] hover:underline">
-            Browse the archive
-          </Link>
+      {!loading && !hasMore && articles.length > 0 && (
+        <p className="mt-12 border-t border-neutral-300 pt-8 text-center font-mono text-[10px] uppercase tracking-widest text-neutral-400">
+          — End of journal —
         </p>
       )}
     </section>
