@@ -28,13 +28,17 @@ export const metadata = sanitizeMetadata({
 export default function IsAKeyForAllPage() {
   return (
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
-      
       <div className="max-w-3xl mx-auto px-6 pt-36 md:pt-44 pb-24">
-        
         {/* Header: The Monument (motion) */}
         <CenteredHeader>
           <HeroMotion
-            title={<><span>Love is a</span><br/>key for all.</>}
+            title={
+              <>
+                <span>Love is a</span>
+                <br />
+                key for all.
+              </>
+            }
             subtitle={<>Artist. Digital Architect. Humanist.</>}
           />
         </CenteredHeader>
@@ -43,23 +47,23 @@ export default function IsAKeyForAllPage() {
         <article className="prose prose-lg prose-stone prose-p:font-light prose-p:leading-relaxed prose-headings:font-serif max-w-none">
           <div className="space-y-8 text-lg leading-relaxed text-[#111]">
             <p className="first-letter:text-5xl first-letter:font-serif first-letter:font-bold first-letter:float-left first-letter:mr-3 first-letter:mt-[-8px]">
-              Anton Merkurov is a media expert, publicist, artist, and art dealer. 
-              As the great-grandson of the monumental sculptor Sergey Merkurov, he grew up in Moscow 
+              Anton Merkurov is a media expert, publicist, artist, and art dealer.
+              As the great-grandson of the monumental sculptor Sergey Merkurov, he grew up in Moscow
               during the late Soviet era and the 1990s, later dividing his life between London and Moscow.
             </p>
 
             <p>
-              While immersed in the artistic community from childhood, Merkurov initially chose a path 
-              in technology and new media. Over two decades, he established himself as one of the most 
-              prominent digital consultants and internet experts in Russia—co-founding early IT companies 
-              in the late 90s, working as a photographer through the transition from film to digital, 
+              While immersed in the artistic community from childhood, Merkurov initially chose a path
+              in technology and new media. Over two decades, he established himself as one of the most
+              prominent digital consultants and internet experts in Russia—co-founding early IT companies
+              in the late 90s, working as a photographer through the transition from film to digital,
               advising corporations, lecturing at universities, and advocating for policy change.
             </p>
 
             <p>
-              Alongside his career in communications, Merkurov has continuously engaged with his family’s 
-              profound cultural heritage—developing the Sergey Merkurov Museum in Gyumri, Armenia, 
-              publishing family letters and memoirs, and organizing exhibitions featuring archival works, 
+              Alongside his career in communications, Merkurov has continuously engaged with his family’s
+              profound cultural heritage—developing the Sergey Merkurov Museum in Gyumri, Armenia,
+              publishing family letters and memoirs, and organizing exhibitions featuring archival works,
               including an NFT drop of the historic mask of Lenin sculpted by his great-grandfather.
             </p>
 
@@ -70,37 +74,59 @@ export default function IsAKeyForAllPage() {
             </blockquote>
 
             <p>
-              In 2015, at the age of 33, this philosophy crystallized into his ongoing multidisciplinary 
-              art project, <strong className="font-semibold text-black">Heart & Angel</strong>, beginning with simple hearts drawn in a naive art technique. 
-              Over the years, Merkurov has refined this vision into a distinct artistic statement spanning 
-              physical paintings, digital art, and dynamic web components.
+              In 2015, at the age of 33, this philosophy crystallized into his ongoing multidisciplinary
+              art project, <strong className="font-semibold text-black">Heart & Angel</strong>, beginning
+              with simple hearts drawn in a naive art technique. Over the years, Merkurov has refined this
+              vision into a distinct artistic statement spanning physical paintings, digital art, and
+              dynamic web components.
             </p>
 
-            {/* Core Manifesto Box */}
-            <div className="bg-white/70 border border-stone-200 p-8 rounded-2xl my-12 space-y-4 shadow-sm">
-              <h4 className="font-serif text-xl font-bold text-black mb-4">Love is a Key for All</h4>
-              <ul className="space-y-3 text-stone-800 font-light list-none pl-0">
-                <li className="flex items-start gap-3">
-                  <span className="text-black font-bold">•</span>
-                  <span><strong>Love is necessary. Love is never enough. Love is a key for all.</strong> I want to multiply love as a social profit to provide tangible benefits around the world.</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-black font-bold">•</span>
-                  <span><strong>Everything starts with a symbol.</strong> A heart is the universal symbol of love that everyone understands, transcending social burdens and uniting us across borders.</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-black font-bold">•</span>
-                  <span><strong>Every piece is unique</strong> — by type, size, medium, or material — bridging both offline and online worlds.</span>
-                </li>
-              </ul>
-              <div className="pt-4 border-t border-stone-100 italic text-stone-600 text-base">
-                "I have spent more than 20 years in media, running new media and promoting new technology. But why do you need this if you don’t have love?"
+            {/* Core Manifesto */}
+            <section className="my-12 space-y-8">
+              <h3 className="font-serif text-2xl sm:text-3xl font-normal text-black">
+                Love is a Key for All
+              </h3>
+
+              <div className="space-y-7">
+                <div className="border-t border-stone-300 pt-5">
+                  <p className="font-serif text-xl text-black">
+                    Love is necessary. Love is never enough. Love is a key for all.
+                  </p>
+                  <p className="mt-2 text-stone-700 font-light">
+                    I want to multiply love as a social profit to provide tangible benefits around the world.
+                  </p>
+                </div>
+
+                <div className="border-t border-stone-300 pt-5">
+                  <p className="font-serif text-xl text-black">
+                    Everything starts with a symbol.
+                  </p>
+                  <p className="mt-2 text-stone-700 font-light">
+                    A heart is the universal symbol of love that everyone understands,
+                    transcending social burdens and uniting us across borders.
+                  </p>
+                </div>
+
+                <div className="border-t border-stone-300 pt-5">
+                  <p className="font-serif text-xl text-black">
+                    Every piece is unique.
+                  </p>
+                  <p className="mt-2 text-stone-700 font-light">
+                    By type, size, medium, or material, each work bridges both offline and online worlds.
+                  </p>
+                </div>
               </div>
-            </div>
+            </section>
+
+            <blockquote className="border-l-2 border-black pl-6 sm:pl-8 my-12 py-2">
+              <p className="text-xl sm:text-2xl font-serif italic text-black leading-relaxed">
+                "I have spent more than 20 years in media, running new media and promoting new technology. But why do you need this if you don’t have love?"
+              </p>
+            </blockquote>
 
             <p>
-              Today, while continuing to work with decentralized communications, Merkurov has fully 
-              embraced the opportunity to create as an artist—telling the world that love and 
+              Today, while continuing to work with decentralized communications, Merkurov has fully
+              embraced the opportunity to create as an artist—telling the world that love and
               humanity are the most important things in existence.
             </p>
           </div>
@@ -118,6 +144,7 @@ export default function IsAKeyForAllPage() {
               subtitle={<>A nonlinear recollection of art, exile, and the small violences of modern life.</>}
               layoutId="case-unframed"
             />
+
             <div className="mt-6">
               <CaseStudyCard
                 href="/research"
