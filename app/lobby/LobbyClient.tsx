@@ -108,9 +108,20 @@ export default function LobbyClient() {
       <section className="py-28 md:py-36 px-6 sm:px-8 md:px-16 border-b border-zinc-200/60 relative z-20">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-32">
           <div>
-            <h2 className="text-4xl md:text-6xl font-serif font-normal leading-[1.1] mb-8 text-[#111111]">
-              Structural shifts before they manifest.
-            </h2>
+            <Link
+              href="/research"
+              className="group mb-8 inline-flex items-start gap-3 text-[#111111]"
+              aria-label="Explore research and analysis"
+            >
+              <h2 className="text-4xl md:text-6xl font-serif font-normal leading-[1.1] underline decoration-transparent underline-offset-8 transition-colors duration-300 group-hover:decoration-zinc-400">
+                Structural shifts before they manifest.
+              </h2>
+
+              <ArrowUpRight
+                size={20}
+                className="mt-2 shrink-0 text-zinc-400 transition-all duration-300 group-hover:-translate-y-1 group-hover:translate-x-1 group-hover:text-[#111111]"
+              />
+            </Link>
 
             <p className="text-lg md:text-xl text-zinc-600 leading-relaxed max-w-md font-serif mb-10">
               Media analysis, decentralized communication protocols, cultural archives, and private art advisory for institutional and international clients.
@@ -123,6 +134,7 @@ export default function LobbyClient() {
                 </strong>{' '}
                 Moscow State University, OSCE, Goethe Institute, Polytechnic.
               </div>
+
               <div>
                 <strong className="text-zinc-800 uppercase tracking-wider">
                   Expert Status:
