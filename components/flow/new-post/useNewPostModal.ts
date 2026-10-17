@@ -24,17 +24,37 @@ function makeId(prefix: string): string {
     .slice(2, 10)}`;
 }
 
-function extractUrls(text: string): string[] {
-  const matches =
-    text.match(/https?:\/\/[^\s<>"'`]+/gi) ?? [];
+/**
+ * Recognizes complete URLs, www URLs and bare domains.
+ * A missing protocol is normalized to HTTPS.
+ */
+const URL_PATTERN =
+  /(?:https?:\/\/|www\.)[^\s<>"'`]+|(?:\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}(?:\/[^\s<>"'`]*)?)/gi;
 
+function normalizeExtractedUrl(value: string): string | null {
+  let candidate = value.trim();
+
+  // Strip punctuation commonly placed immediately after a URL.
+  candidate = candidate.replace(/[),.;!?}\]]+$/g, "");
+
+  if (!candidate) return null;
+
+  if (candidate.startsWith("//")) {
+    candidate = `https:${candidate}`;
+  } else if (!/^https?:\/\//i.test(candidate)) {
+    candidate = `https://${candidate}`;
+  }
+
+  return normalizePastedUrl(candidate);
+}
+
+function extractUrls(text: string): string[] {
+  const matches = text.match(URL_PATTERN) ?? [];
   const urls: string[] = [];
   const seen = new Set<string>();
 
   for (const match of matches) {
-    // Remove common punctuation around pasted URLs.
-    const cleaned = match.replace(/[),.;!?}\]]+$/g, "");
-    const normalized = normalizePastedUrl(cleaned);
+    const normalized = normalizeExtractedUrl(match);
 
     if (!normalized || seen.has(normalized)) continue;
 
@@ -407,7 +427,8 @@ export function useNewPostModal({
   };
 
   const parseLink = useCallback(async (url: string) => {
-    const normalized = normalizePastedUrl(url);
+    const normalized =
+      normalizeExtractedUrl(url) ?? normalizePastedUrl(url);
 
     if (!normalized) {
       setError("Please enter a valid http or https URL.");
@@ -502,7 +523,8 @@ export function useNewPostModal({
   }, []);
 
   const parseYouTube = useCallback(async (url: string) => {
-    const normalized = normalizePastedUrl(url);
+    const normalized =
+      normalizeExtractedUrl(url) ?? normalizePastedUrl(url);
 
     if (!normalized || !isYouTubeVideo(normalized)) {
       setError("Please enter a valid YouTube video URL.");
@@ -605,22 +627,48 @@ export function useNewPostModal({
     }
 
     const pastedText =
-      event.clipboardData?.getData("text/plain")?.trim() || "";
+      event.clipboardData?.getData("text/plain") || "";
 
     const urls = extractUrls(pastedText);
 
     if (urls.length === 0) return;
 
-    // Prevent URLs from being inserted as plain text when they are
-    // being interpreted as attachments. Preserve ordinary prose.
-    const textContainsOnlyUrls = pastedText
-      .replace(/https?:\/\/[^\s<>"'`]+/gi, "")
-      .replace(/[\s),.;!?}\]]+/g, "")
-      .length === 0;
-
-    if (!textContainsOnlyUrls) return;
-
+    // We have found one or more URLs. Handle them as attachments,
+    // while preserving any surrounding text in the writing area.
     event.preventDefault();
+
+    const textWithoutUrls = pastedText
+      .replace(URL_PATTERN, "")
+      .replace(/[ \t]{2,}/g, " ");
+
+    const textarea = textareaRef.current;
+
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const currentText = textarea.value;
+
+      const nextText =
+        currentText.slice(0, start) +
+        textWithoutUrls +
+        currentText.slice(end);
+
+      setBodyMd(nextText);
+
+      // Restore the caret after React updates the controlled textarea.
+      const nextCaret = start + textWithoutUrls.length;
+
+      requestAnimationFrame(() => {
+        const currentTextarea = textareaRef.current;
+
+        if (currentTextarea) {
+          currentTextarea.focus();
+          currentTextarea.setSelectionRange(nextCaret, nextCaret);
+        }
+      });
+    } else if (textWithoutUrls) {
+      setBodyMd((prev) => prev + textWithoutUrls);
+    }
 
     for (const url of urls) {
       if (isProbablyImageUrl(url)) {
