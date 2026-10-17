@@ -28,10 +28,6 @@ export interface ParsedTelegramMessage {
   photoUrl?: string;
 }
 
-/**
- * Fail closed: Telegram webhook requests are rejected unless a secret
- * is configured and matches the secret header.
- */
 export function verifyTelegramWebhookSecret(secret?: string): boolean {
   if (!WEBHOOK_SECRET || !secret) return false;
 
@@ -43,9 +39,6 @@ export function verifyTelegramWebhookSecret(secret?: string): boolean {
   return require('crypto').timingSafeEqual(expected, received);
 }
 
-/**
- * An empty allowlist must never mean "allow everyone".
- */
 export function isAllowedTelegramUser(userId: number): boolean {
   if (!Number.isSafeInteger(userId) || userId <= 0) return false;
   if (ALLOWED_USER_IDS.length === 0) return false;
@@ -78,7 +71,6 @@ export function parseTelegramMessage(
   const chatId = chat?.id;
   const userId = from?.id;
 
-  // Do not treat a channel/chat ID as a user's identity.
   if (
     typeof messageId !== 'number' ||
     !Number.isSafeInteger(messageId) ||
@@ -111,10 +103,6 @@ export function parseTelegramMessage(
   };
 }
 
-/**
- * Send a service reply to a Telegram chat.
- * Keeps the existing API used by the webhook.
- */
 export async function sendTelegramReply(
   chatId: number,
   text: string,
@@ -229,9 +217,7 @@ export async function publishToTelegramChannel({
   imageUrl?: string | null;
 }): Promise<{ messageId: number; chatId: string } | null> {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHANNEL_ID) {
-    console.warn(
-      '[telegram] Missing bot token or channel ID.',
-    );
+    console.warn('[telegram] Missing bot token or channel ID.');
     return null;
   }
 
@@ -257,68 +243,63 @@ export async function publishToTelegramChannel({
   const escapeAttribute = (value: string) =>
     escapeHtml(value).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-  const flowUrl = slug
-    ? `https://www.merkurov.love/flow/${encodeURIComponent(slug)}`
-    : null;
-
   const safeSourceUrl = safeUrl(source_url);
 
-  let rawContent = title?.trim()
-    ? `<b>${escapeHtml(title.trim())}</b>\n\n`
-    : '';
+  const rawContent: string[] = [];
+
+  if (title?.trim()) {
+    rawContent.push(`<b>${escapeHtml(title.trim())}</b>`);
+  }
 
   if (body_md?.trim()) {
-    // Preserve named Markdown links as HTML links.
     let body = body_md
       .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
       .replace(
         /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
         (_match, label: string, url: string) => {
           const safe = safeUrl(url);
+
           return safe
             ? `<a href="${escapeAttribute(safe)}">${escapeHtml(label)}</a>`
             : escapeHtml(label);
         },
       );
 
-    // Remove hashtags without stripping ordinary punctuation.
     body = body.replace(
       /(^|[\s([{])#[\p{L}\p{N}_]+/gu,
       '$1',
     );
 
-    // Escape ordinary text while retaining only our generated links.
     const links: string[] = [];
+
     body = body.replace(/<a href="[^"]+">[\s\S]*?<\/a>/g, (link) => {
       const token = `TELEGRAM_LINK_${links.length}_TOKEN`;
       links.push(link);
       return token;
     });
 
-    body = escapeHtml(
-      body.replace(/[*_`~]/g, ''),
-    );
+    body = escapeHtml(body.replace(/[*_`~]/g, ''));
 
     links.forEach((link, index) => {
       body = body.replace(`TELEGRAM_LINK_${index}_TOKEN`, link);
     });
 
-    rawContent += body;
+    rawContent.push(body);
   }
 
+  // Единственная подпись внизу сообщения.
+  // Текст ссылки — merkurov.love, адрес ссылки — исходный источник.
   if (safeSourceUrl) {
-    rawContent +=
-      `${rawContent ? '\n\n' : ''}` +
-      `<a href="${escapeAttribute(safeSourceUrl)}">Источник</a>`;
+    rawContent.push(
+      `<a href="${escapeAttribute(safeSourceUrl)}">merkurov.love</a>`,
+    );
+  } else {
+    // Если источник не указан, не создаём ложную ссылку на него.
+    rawContent.push('merkurov.love');
   }
 
-  if (flowUrl) {
-    rawContent +=
-      `${rawContent ? '\n\n' : ''}` +
-      `<a href="${escapeAttribute(flowUrl)}">Читать во Flow</a>`;
-  }
-
-  const formattedText = await enhanceTextForTelegram(rawContent, lang);
+  const rawText = rawContent.join('\n\n');
+  const formattedText = await enhanceTextForTelegram(rawText, lang);
 
   const send = async (
     endpoint: 'sendMessage' | 'sendPhoto',
@@ -353,15 +334,6 @@ export async function publishToTelegramChannel({
             link_preview_options: { is_disabled: true },
           }),
       parse_mode: 'HTML',
-      ...(flowUrl
-        ? {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: 'Читать во Flow ↗', url: flowUrl }],
-              ],
-            },
-          }
-        : {}),
     };
 
     let result = await send(endpoint, payload);
