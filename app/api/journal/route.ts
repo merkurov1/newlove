@@ -7,31 +7,33 @@ export const dynamic = 'force-dynamic';
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 20;
 
-function mapLetter(letter: any) {
-  const lang = String(letter.lang || '').trim();
+function mapIssue(issue: any) {
+  const lang = String(issue.lang || '').trim();
 
   return {
-    id: String(letter.id),
-    title: String(letter.title || 'Untitled'),
-    slug: String(letter.slug || ''),
-    preview:
-      extractPreview(letter.content, letter.payload, 280) ||
-      (letter.kind === 'issue'
-        ? /^en/i.test(lang)
-          ? 'Flow newspaper issue.'
-          : 'Газетный выпуск Flow.'
-        : ''),
-    publishedAt: letter.publishedAt || null,
-    sentAt: letter.sentAt || null,
-    createdAt: letter.createdAt || null,
-    kind: letter.kind || 'letter',
+    id: String(issue.id),
+    title: String(issue.title || 'Untitled'),
+    slug: String(issue.slug || ''),
+    preview: extractPreview(issue.content, issue.payload, 320),
+    publishedAt: issue.publishedAt || null,
+    sentAt: issue.sentAt || null,
+    createdAt: issue.createdAt || null,
+    kind: 'issue',
     lang: lang || null,
-    number: letter.number == null ? null : Number(letter.number),
+    number: issue.number == null ? null : Number(issue.number),
   };
 }
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+
+  const type = url.searchParams.get('type') || 'issues';
+  if (type !== 'issues') {
+    return NextResponse.json(
+      { error: 'Unsupported journal query.' },
+      { status: 400 },
+    );
+  }
 
   const requestedLang = url.searchParams.get('lang') || 'all';
   const lang =
@@ -59,22 +61,22 @@ export async function GET(request: Request) {
     const supabase = createClient();
 
     const columnsWithPayload =
-      'id,title,slug,content,published,publishedAt,sentAt,createdAt,kind,lang,status,number,payload';
+      'id,title,slug,content,published,publishedAt,sentAt,createdAt,kind,lang,number,payload';
 
     const columnsWithoutPayload =
-      'id,title,slug,content,published,publishedAt,sentAt,createdAt,kind,lang,status,number';
+      'id,title,slug,content,published,publishedAt,sentAt,createdAt,kind,lang,number';
 
     async function runQuery(columns: string) {
       let query: any = supabase
         .from('letters')
         .select(columns)
         .eq('published', true)
-        .or('kind.is.null,kind.neq.issue');
+        .eq('kind', 'issue');
 
       if (lang === 'en') {
         query = query.ilike('lang', 'en%');
       } else if (lang === 'ru') {
-        query = query.or('lang.is.null,lang.ilike.ru%');
+        query = query.ilike('lang', 'ru%');
       }
 
       return query
@@ -96,15 +98,14 @@ export async function GET(request: Request) {
       console.error('[Journal API] Query failed:', result.error);
 
       return NextResponse.json(
-        { error: 'Не удалось загрузить публикации.' },
+        { error: 'Could not load editions.' },
         { status: 500 },
       );
     }
 
     const rows = Array.isArray(result.data) ? result.data : [];
     const hasMore = rows.length > pageSize;
-    const pageRows = rows.slice(0, pageSize);
-    const articles = pageRows.map(mapLetter);
+    const articles = rows.slice(0, pageSize).map(mapIssue);
 
     return NextResponse.json(
       {
@@ -122,7 +123,7 @@ export async function GET(request: Request) {
     console.error('[Journal API] Unexpected error:', error);
 
     return NextResponse.json(
-      { error: 'Внутренняя ошибка при загрузке журнала.' },
+      { error: 'Internal error while loading editions.' },
       { status: 500 },
     );
   }
