@@ -330,7 +330,7 @@ export default function Header() {
                   transition={{ duration: 0.15, ease: 'easeOut' }}
                   id="site-menu"
                   role="menu"
-                  className="absolute left-0 mt-3 w-[calc(100vw-2rem)] max-w-xs sm:w-[22rem] p-5 sm:p-6 rounded-3xl bg-white/95 backdrop-blur-3xl border border-stone-200/90 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 space-y-5 font-sans max-h-[78vh] overflow-y-auto"
+                  className="absolute left-0 mt-3 w-[calc(100vw-2rem)] max-w-xs sm:w-[22rem] p-5 sm:p-6 rounded-3xl bg-white/95 backdrop-blur-3xl border border-stone-200/90 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 space-y-3 font-sans max-h-[78vh] overflow-y-auto"
                 >
                   {/* 1. ANTON MERKUROV */}
                   <div>
@@ -348,7 +348,7 @@ export default function Header() {
                   </div>
 
                   {/* 2. LOBBY — only UNFRAMED */}
-                  <div className="space-y-2 pt-3 border-t border-stone-100">
+                  <div className="space-y-2 pt-2 border-t border-stone-100">
                     <Link
                       href="/lobby"
                       onClick={closeSiteMenu}
@@ -375,7 +375,7 @@ export default function Header() {
                   </div>
 
                   {/* 3. FLOW */}
-                  <div className="space-y-2 pt-3 border-t border-stone-100">
+                  <div className="space-y-2 pt-2 border-t border-stone-100">
                     <Link
                       href="/flow"
                       onClick={closeSiteMenu}
@@ -402,7 +402,7 @@ export default function Header() {
                   </div>
 
                   {/* 4. ART ENGINE */}
-                  <div className="space-y-2 pt-3 border-t border-stone-100">
+                  <div className="space-y-2 pt-2 border-t border-stone-100">
                     <Link
                       href="/art-engine"
                       onClick={closeSiteMenu}
@@ -428,7 +428,7 @@ export default function Header() {
                   </div>
 
                   {/* 5. HEART & ANGEL — only TEMPLE */}
-                  <div className="space-y-2 pt-3 border-t border-stone-100">
+                  <div className="space-y-2 pt-2 border-t border-stone-100">
                     <Link
                       href="/heartandangel"
                       onClick={closeSiteMenu}
