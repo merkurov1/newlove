@@ -16,97 +16,114 @@ export const metadata = sanitizeMetadata({
     'Chronicles of the unframed. Market intelligence and heritage architecture.',
 });
 
-interface Props {
-  searchParams?:
-    | Promise<{ [key: string]: string | string[] | undefined }>
-    | { [key: string]: string | string[] | undefined };
+const PAGE_SIZE = 10;
+
+function mapLetter(letter: any): JournalArticle {
+  const lang = String(letter.lang || '').trim();
+
+  return {
+    id: String(letter.id),
+    title: String(letter.title || 'Untitled'),
+    slug: String(letter.slug || ''),
+    preview:
+      extractPreview(letter.content, letter.payload, 280) ||
+      (letter.kind === 'issue'
+        ? /^en/i.test(lang)
+          ? 'Flow newspaper issue.'
+          : 'Газетный выпуск Flow.'
+        : ''),
+    publishedAt: letter.publishedAt || null,
+    sentAt: letter.sentAt || null,
+    createdAt: letter.createdAt || null,
+    kind: letter.kind || 'letter',
+    lang: lang || null,
+    number: letter.number == null ? null : Number(letter.number),
+  };
 }
 
-export default async function JournalPage({ searchParams }: Props) {
-  if (
-    searchParams &&
-    typeof (searchParams as Promise<unknown>).then === 'function'
-  ) {
-    await searchParams;
+async function fetchLetters(
+  supabase: ReturnType<typeof createClient>,
+  kind: 'articles' | 'ru-issue' | 'en-issue',
+) {
+  const columnsWithPayload =
+    'id,title,slug,content,published,publishedAt,sentAt,createdAt,kind,lang,status,number,payload';
+  const columnsWithoutPayload =
+    'id,title,slug,content,published,publishedAt,sentAt,createdAt,kind,lang,status,number';
+
+  async function run(columns: string) {
+    let query = supabase
+      .from('letters')
+      .select(columns)
+      .eq('published', true);
+
+    if (kind === 'articles') {
+      query = query.or('kind.is.null,kind.neq.issue');
+    } else {
+      query = query.eq('kind', 'issue');
+
+      if (kind === 'ru-issue') {
+        query = query.ilike('lang', 'ru%');
+      } else {
+        query = query.ilike('lang', 'en%');
+      }
+    }
+
+    query = query
+      .order('publishedAt', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: false });
+
+    if (kind === 'articles') {
+      query = query.limit(PAGE_SIZE + 1);
+    } else {
+      query = query.limit(1);
+    }
+
+    return query;
   }
 
-  let initialLetters: JournalArticle[] = [];
+  let result = await run(columnsWithPayload);
+
+  if (result.error) {
+    result = await run(columnsWithoutPayload);
+  }
+
+  if (result.error) {
+    console.error(`[Journal] Failed to fetch ${kind}:`, result.error);
+    return [];
+  }
+
+  return Array.isArray(result.data) ? result.data : [];
+}
+
+export default async function JournalPage() {
+  let initialArticles: JournalArticle[] = [];
+  let latestIssues: JournalArticle[] = [];
+  let initialHasMore = false;
 
   try {
     const supabase = createClient();
 
-    const selectCols =
-      'id,title,slug,content,published,publishedAt,sentAt,createdAt,kind,lang,status,number,payload';
+    const [articleRows, russianIssueRows, englishIssueRows] =
+      await Promise.all([
+        fetchLetters(supabase, 'articles'),
+        fetchLetters(supabase, 'ru-issue'),
+        fetchLetters(supabase, 'en-issue'),
+      ]);
 
-    let lettersData: any[] | null = null;
-    let queryError: any = null;
+    initialHasMore = articleRows.length > PAGE_SIZE;
+    initialArticles = articleRows.slice(0, PAGE_SIZE).map(mapLetter);
 
-    const primary = await supabase
-      .from('letters')
-      .select(selectCols)
-      .eq('published', true)
-      .order('sentAt', { ascending: false })
-      .limit(100);
-
-    lettersData = primary.data as any[] | null;
-    queryError = primary.error;
-
-    // Fallback if payload column or sentAt fails
-    if (queryError) {
-      const fallbackCols =
-        'id,title,slug,content,published,publishedAt,sentAt,createdAt,kind,lang,status,number';
-      const fallbackRes = await supabase
-        .from('letters')
-        .select(fallbackCols)
-        .eq('published', true)
-        .order('publishedAt', { ascending: false })
-        .limit(100);
-
-      lettersData = fallbackRes.data as any[] | null;
-      queryError = fallbackRes.error;
-    } else if (!lettersData || lettersData.length === 0) {
-      const fallback = await supabase
-        .from('letters')
-        .select(selectCols)
-        .eq('published', true)
-        .order('publishedAt', { ascending: false })
-        .limit(100);
-
-      lettersData = fallback.data as any[] | null;
-      queryError = fallback.error;
-    }
-
-    if (!queryError && Array.isArray(lettersData)) {
-      initialLetters = lettersData.map((letter: any) => ({
-        id: String(letter.id),
-        title: String(letter.title || 'Untitled'),
-        slug: String(letter.slug || ''),
-        preview:
-          extractPreview(letter.content, letter.payload, 280) ||
-          (letter.kind === 'issue'
-            ? letter.lang === 'ru'
-              ? 'Газетный выпуск Flow.'
-              : 'Flow newspaper issue.'
-            : ''),
-        publishedAt: letter.publishedAt || null,
-        sentAt: letter.sentAt || null,
-        createdAt: letter.createdAt || null,
-        kind: letter.kind || 'letter',
-        lang: letter.lang || null,
-        number: letter.number || null,
-      }));
-
-      initialLetters.sort((a, b) => {
+    latestIssues = [...russianIssueRows, ...englishIssueRows]
+      .map(mapLetter)
+      .sort((a, b) => {
         const dateA = a.publishedAt || a.sentAt || a.createdAt;
         const dateB = b.publishedAt || b.sentAt || b.createdAt;
+
         return (
           new Date(dateB || 0).getTime() -
           new Date(dateA || 0).getTime()
         );
       });
-    } else if (queryError) {
-      console.error('[Journal] Query failed:', queryError);
-    }
   } catch (error) {
     console.error('[Journal] Unexpected fetch error:', error);
   }
@@ -123,7 +140,11 @@ export default async function JournalPage({ searchParams }: Props) {
         <SubscribeFormClient />
       </div>
 
-      <JournalViewClient articles={initialLetters} />
+      <JournalViewClient
+        initialArticles={initialArticles}
+        latestIssues={latestIssues}
+        initialHasMore={initialHasMore}
+      />
     </main>
   );
 }

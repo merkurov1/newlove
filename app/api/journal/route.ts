@@ -1,57 +1,129 @@
 import { createClient } from '@/lib/supabase/server';
-import buildSafeDebug from '@/lib/debug';
 import { NextResponse } from 'next/server';
+import { extractPreview } from '@/lib/journal/preview';
 
 export const dynamic = 'force-dynamic';
 
+const DEFAULT_PAGE_SIZE = 10;
+const MAX_PAGE_SIZE = 20;
+
+function mapLetter(letter: any) {
+  const lang = String(letter.lang || '').trim();
+
+  return {
+    id: String(letter.id),
+    title: String(letter.title || 'Untitled'),
+    slug: String(letter.slug || ''),
+    preview:
+      extractPreview(letter.content, letter.payload, 280) ||
+      (letter.kind === 'issue'
+        ? /^en/i.test(lang)
+          ? 'Flow newspaper issue.'
+          : 'Газетный выпуск Flow.'
+        : ''),
+    publishedAt: letter.publishedAt || null,
+    sentAt: letter.sentAt || null,
+    createdAt: letter.createdAt || null,
+    kind: letter.kind || 'letter',
+    lang: lang || null,
+    number: letter.number == null ? null : Number(letter.number),
+  };
+}
+
 export async function GET(request: Request) {
-  const debugEnabled = process.env.NEXT_PUBLIC_DEBUG === 'true' || process.env.NODE_ENV !== 'production';
   const url = new URL(request.url);
-  const includeDebugForRequest = debugEnabled || url.searchParams.get('debug') === '1';
+
+  const requestedLang = url.searchParams.get('lang') || 'all';
+  const lang =
+    requestedLang === 'ru' || requestedLang === 'en'
+      ? requestedLang
+      : 'all';
+
+  const parsedOffset = Number.parseInt(
+    url.searchParams.get('offset') || '0',
+    10,
+  );
+  const offset = Number.isFinite(parsedOffset)
+    ? Math.max(0, parsedOffset)
+    : 0;
+
+  const parsedLimit = Number.parseInt(
+    url.searchParams.get('limit') || String(DEFAULT_PAGE_SIZE),
+    10,
+  );
+  const pageSize = Number.isFinite(parsedLimit)
+    ? Math.min(MAX_PAGE_SIZE, Math.max(1, parsedLimit))
+    : DEFAULT_PAGE_SIZE;
 
   try {
-    const includeUnpublishedSample = includeDebugForRequest && url.searchParams.get('all') === '1';
-    const supabase = createClient({ useServiceRole: includeUnpublishedSample });
+    const supabase = createClient();
 
-    let lettersQuery = supabase
-      .from('letters')
-      .select('id, title, slug, published, publishedAt, createdAt, authorId, users(id, name, email)')
-      .order('publishedAt', { ascending: false })
-      .limit(100);
+    const columnsWithPayload =
+      'id,title,slug,content,published,publishedAt,sentAt,createdAt,kind,lang,status,number,payload';
 
-    if (!includeUnpublishedSample) {
-      lettersQuery = lettersQuery.eq('published', true);
+    const columnsWithoutPayload =
+      'id,title,slug,content,published,publishedAt,sentAt,createdAt,kind,lang,status,number';
+
+    async function runQuery(columns: string) {
+      let query: any = supabase
+        .from('letters')
+        .select(columns)
+        .eq('published', true)
+        .or('kind.is.null,kind.neq.issue');
+
+      if (lang === 'en') {
+        query = query.ilike('lang', 'en%');
+      } else if (lang === 'ru') {
+        query = query.or('lang.is.null,lang.ilike.ru%');
+      }
+
+      return query
+        .order('publishedAt', {
+          ascending: false,
+          nullsFirst: false,
+        })
+        .order('id', { ascending: false })
+        .range(offset, offset + pageSize);
     }
 
-    const { data: letters, error } = await lettersQuery;
+    let result = await runQuery(columnsWithPayload);
 
-    if (error) {
-      console.error('Journal fetch error:', error);
-      const outDebug = buildSafeDebug(request, { errors: [error.message, error.code, error.details] });
-      return NextResponse.json({ error: 'Failed to fetch journal letters', debug: includeDebugForRequest ? outDebug : undefined }, { status: 500 });
+    if (result.error) {
+      result = await runQuery(columnsWithoutPayload);
     }
 
-    const transformedLetters = (letters || []).map((letter: any) => {
-      const user = Array.isArray(letter.users) ? letter.users[0] : letter.users;
-      return {
-        id: letter.id,
-        title: letter.title,
-        slug: letter.slug,
-        published: letter.published,
-        publishedAt: letter.publishedAt,
-        createdAt: letter.createdAt,
-        authorId: letter.authorId,
-        author: { name: user?.name || user?.email?.split('@')[0] || 'Автор' },
-      };
-    });
+    if (result.error) {
+      console.error('[Journal API] Query failed:', result.error);
 
-    let outDebug: any = undefined;
-    if (includeDebugForRequest) outDebug = buildSafeDebug(request, { restStatus: 200, restBody: { itemCount: transformedLetters.length } });
+      return NextResponse.json(
+        { error: 'Не удалось загрузить публикации.' },
+        { status: 500 },
+      );
+    }
 
-    return NextResponse.json({ letters: transformedLetters, debug: outDebug });
-  } catch (e) {
-    console.error('Journal API unexpected error:', e);
-    const outDebug = buildSafeDebug(request, { errors: [String(e)] });
-    return NextResponse.json({ error: String(e), debug: includeDebugForRequest ? outDebug : undefined }, { status: 500 });
+    const rows = Array.isArray(result.data) ? result.data : [];
+    const hasMore = rows.length > pageSize;
+    const pageRows = rows.slice(0, pageSize);
+    const articles = pageRows.map(mapLetter);
+
+    return NextResponse.json(
+      {
+        articles,
+        hasMore,
+        nextOffset: offset + articles.length,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      },
+    );
+  } catch (error) {
+    console.error('[Journal API] Unexpected error:', error);
+
+    return NextResponse.json(
+      { error: 'Внутренняя ошибка при загрузке журнала.' },
+      { status: 500 },
+    );
   }
 }
