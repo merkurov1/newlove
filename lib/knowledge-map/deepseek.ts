@@ -1,4 +1,3 @@
-```typescript
 import OpenAI from 'openai';
 import { z } from 'zod';
 import type { ExtractionResult, GraphEdgeType, GraphNodeType } from './types';
@@ -275,4 +274,3 @@ export async function extractGraph(
     edges: parsed.edges,
   };
 }
-```
