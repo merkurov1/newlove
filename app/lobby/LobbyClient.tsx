@@ -42,28 +42,13 @@ export default function LobbyClient() {
                 className="group-hover:translate-x-1.5 transition-transform duration-300 text-[#111111] group-hover:text-zinc-600"
               />
             </Link>
-
-            <div className="mt-7">
-              <Link
-                href="/research"
-                className="group inline-flex items-center gap-2 text-zinc-500 hover:text-[#111111] transition-colors"
-              >
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em]">
-                  Research
-                </span>
-                <ArrowUpRight
-                  size={13}
-                  className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
-                />
-              </Link>
-            </div>
           </div>
         </div>
 
         {/* Institutional Proof Bar */}
         <div className="w-full max-w-6xl mx-auto pt-12 border-t border-zinc-300/60 grid grid-cols-2 md:grid-cols-4 gap-6 text-center font-mono text-[11px] uppercase tracking-[0.2em] text-zinc-500">
           <Link
-            href="/about"
+            href="/isakeyforall"
             className="group block hover:text-zinc-700 transition-colors"
           >
             <span className="block text-[#111111] font-semibold mb-1 group-hover:underline underline-offset-4 decoration-zinc-400">

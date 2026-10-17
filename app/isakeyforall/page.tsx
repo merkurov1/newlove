@@ -73,50 +73,43 @@ export default function IsAKeyForAllPage() {
               </p>
             </blockquote>
 
-            <p>
-              In 2015, at the age of 33, this philosophy crystallized into his ongoing multidisciplinary
-              art project, <strong className="font-semibold text-black">Heart & Angel</strong>, beginning
-              with simple hearts drawn in a naive art technique. Over the years, Merkurov has refined this
-              vision into a distinct artistic statement spanning physical paintings, digital art, and
-              dynamic web components.
-            </p>
+            {/* Heart & Angel — unified block */}
+            <div className="bg-white/70 border border-stone-200 p-8 rounded-2xl my-12 space-y-6 shadow-sm">
+              <p>
+                In 2015, at the age of 33, this philosophy crystallized into his ongoing multidisciplinary
+                art project, <strong className="font-semibold text-black">Heart &amp; Angel</strong>,
+                beginning with simple hearts drawn in a naive art technique. Over the years, Merkurov has
+                refined this vision into a distinct artistic statement spanning physical paintings,
+                digital art, and dynamic web components.
+              </p>
 
-            {/* Core Manifesto */}
-            <section className="my-12 space-y-8">
-              <h3 className="font-serif text-2xl sm:text-3xl font-normal text-black">
-                Love is a Key for All
-              </h3>
+              <p>
+                I want to multiply love as a social profit to provide tangible benefits around the world.
+              </p>
 
-              <div className="space-y-7">
-                <div className="border-t border-stone-300 pt-5">
-                  <p className="font-serif text-xl text-black">
-                    Love is necessary. Love is never enough. Love is a key for all.
-                  </p>
-                  <p className="mt-2 text-stone-700 font-light">
-                    I want to multiply love as a social profit to provide tangible benefits around the world.
-                  </p>
-                </div>
-
-                <div className="border-t border-stone-300 pt-5">
-                  <p className="font-serif text-xl text-black">
-                    Everything starts with a symbol.
-                  </p>
-                  <p className="mt-2 text-stone-700 font-light">
+              <ul className="space-y-3 text-stone-800 font-light list-none pl-0">
+                <li className="flex items-start gap-3">
+                  <span className="text-black font-bold">•</span>
+                  <span>
+                    <strong className="font-semibold text-black">
+                      Everything starts with a symbol.
+                    </strong>{' '}
                     A heart is the universal symbol of love that everyone understands,
                     transcending social burdens and uniting us across borders.
-                  </p>
-                </div>
+                  </span>
+                </li>
 
-                <div className="border-t border-stone-300 pt-5">
-                  <p className="font-serif text-xl text-black">
-                    Every piece is unique.
-                  </p>
-                  <p className="mt-2 text-stone-700 font-light">
-                    By type, size, medium, or material, each work bridges both offline and online worlds.
-                  </p>
-                </div>
-              </div>
-            </section>
+                <li className="flex items-start gap-3">
+                  <span className="text-black font-bold">•</span>
+                  <span>
+                    <strong className="font-semibold text-black">
+                      Every piece is unique
+                    </strong>{' '}
+                    — by type, size, medium, or material — bridging both offline and online worlds.
+                  </span>
+                </li>
+              </ul>
+            </div>
 
             <blockquote className="border-l-2 border-black pl-6 sm:pl-8 my-12 py-2">
               <p className="text-xl sm:text-2xl font-serif italic text-black leading-relaxed">
