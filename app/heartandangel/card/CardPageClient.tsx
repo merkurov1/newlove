@@ -11,6 +11,7 @@ const serif = Newsreader({
   weight: ['300', '400'],
   style: ['normal', 'italic'],
   display: 'swap',
+adjustFontFallback: false,
 });
 
 const sans = Manrope({
