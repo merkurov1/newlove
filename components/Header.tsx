@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -29,10 +30,6 @@ export default function Header() {
   const pathname = usePathname() || '';
   const normalizedPath = pathname.replace(/\/$/, '') || '/';
 
-  /*
-   * Heart & Angel / Temple is an immersive sub-world of the site.
-   * These routes have their own navigation and must not receive the global site Header.
-   */
   const isImmersiveRoute =
     normalizedPath === '/temple' ||
     normalizedPath === '/cast' ||
@@ -50,7 +47,10 @@ export default function Header() {
     const syncIdentity = () => {
       const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
       const telegramName = tgUser?.username || tgUser?.first_name;
-      const profileName = profile?.name || profile?.full_name || user?.user_metadata?.name;
+      const profileName =
+        profile?.name ||
+        profile?.full_name ||
+        user?.user_metadata?.name;
       const name = telegramName || profileName;
 
       if (name) {
@@ -64,9 +64,7 @@ export default function Header() {
   }, [profile, user]);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 10);
-    };
+    const handleScroll = () => setScrolled(window.scrollY > 10);
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
@@ -148,9 +146,11 @@ export default function Header() {
   const isAdmin =
     user?.email === 'merkurov@gmail.com' ||
     rolesArr.some(
-      (r) => typeof r === 'string' && r.toUpperCase() === 'ADMIN'
+      (r: unknown) =>
+        typeof r === 'string' && r.toUpperCase() === 'ADMIN'
     ) ||
-    (typeof roleStr === 'string' && roleStr.toUpperCase() === 'ADMIN');
+    (typeof roleStr === 'string' &&
+      roleStr.toUpperCase() === 'ADMIN');
 
   const isOwner =
     !user ||
@@ -165,6 +165,20 @@ export default function Header() {
     return null;
   }
 
+  const closeSiteMenu = () => setIsSiteMenuOpen(false);
+
+  const sectionLinkClass = (active: boolean) =>
+    `block font-bold text-sm sm:text-base uppercase tracking-[0.2em] transition-colors ${
+      active
+        ? 'text-stone-400'
+        : 'text-stone-900 hover:text-stone-600'
+    }`;
+
+  const submenuClass = (active: boolean) =>
+    `block py-0.5 transition-colors ${
+      active ? 'text-stone-900' : 'hover:text-stone-900'
+    }`;
+
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
@@ -174,9 +188,8 @@ export default function Header() {
       }`}
     >
       <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-10 flex items-center justify-between gap-2 sm:gap-4">
-        {/* Left Section: User Profile & Brand Navigation */}
+        {/* User profile */}
         <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
-          {/* User Profile Button / Dropdown */}
           <div className="relative shrink-0" ref={profileRef}>
             {isLoading ? (
               <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-stone-200/60 animate-pulse" />
@@ -286,8 +299,11 @@ export default function Header() {
             </AnimatePresence>
           </div>
 
-          {/* Site Navigation Dropdown Trigger */}
-          <div className="relative min-w-0 flex-1 sm:flex-none" ref={siteMenuRef}>
+          {/* Site navigation */}
+          <div
+            className="relative min-w-0 flex-1 sm:flex-none"
+            ref={siteMenuRef}
+          >
             <button
               type="button"
               onClick={() => {
@@ -305,7 +321,6 @@ export default function Header() {
               </span>
             </button>
 
-            {/* Site Navigation Menu */}
             <AnimatePresence>
               {isSiteMenuOpen && (
                 <motion.div
@@ -321,7 +336,7 @@ export default function Header() {
                   <div>
                     <Link
                       href="/"
-                      onClick={() => setIsSiteMenuOpen(false)}
+                      onClick={closeSiteMenu}
                       className={`block font-bold text-sm sm:text-base uppercase tracking-[0.2em] transition-colors ${
                         normalizedPath === '/'
                           ? 'text-stone-400'
@@ -332,53 +347,27 @@ export default function Header() {
                     </Link>
                   </div>
 
-                  {/* 2. LOBBY */}
+                  {/* 2. LOBBY — only UNFRAMED */}
                   <div className="space-y-2 pt-3 border-t border-stone-100">
                     <Link
                       href="/lobby"
-                      onClick={() => setIsSiteMenuOpen(false)}
-                      className={`block font-bold text-sm sm:text-base uppercase tracking-[0.2em] transition-colors ${
-                        normalizedPath === '/lobby'
-                          ? 'text-stone-400'
-                          : 'text-stone-900 hover:text-stone-600'
-                      }`}
+                      onClick={closeSiteMenu}
+                      className={sectionLinkClass(
+                        normalizedPath === '/lobby' ||
+                        normalizedPath.startsWith('/lobby/')
+                      )}
                     >
                       LOBBY
                     </Link>
 
                     <div className="pl-3.5 space-y-1.5 border-l border-stone-200/80 font-bold uppercase tracking-[0.15em] text-xs text-stone-500">
                       <Link
-                        href="/isakeyforall"
-                        onClick={() => setIsSiteMenuOpen(false)}
-                        className={`block py-0.5 transition-colors ${
-                          normalizedPath === '/isakeyforall'
-                            ? 'text-stone-900'
-                            : 'hover:text-stone-900'
-                        }`}
-                      >
-                        ABOUT
-                      </Link>
-
-                      <Link
-                        href="/advising"
-                        onClick={() => setIsSiteMenuOpen(false)}
-                        className={`block py-0.5 transition-colors ${
-                          normalizedPath === '/advising'
-                            ? 'text-stone-900'
-                            : 'hover:text-stone-900'
-                        }`}
-                      >
-                        ADVISING
-                      </Link>
-
-                      <Link
                         href="/unframed"
-                        onClick={() => setIsSiteMenuOpen(false)}
-                        className={`block py-0.5 transition-colors ${
-                          normalizedPath === '/unframed'
-                            ? 'text-stone-900'
-                            : 'hover:text-stone-900'
-                        }`}
+                        onClick={closeSiteMenu}
+                        className={submenuClass(
+                          normalizedPath === '/unframed' ||
+                          normalizedPath.startsWith('/unframed/')
+                        )}
                       >
                         UNFRAMED
                       </Link>
@@ -389,12 +378,11 @@ export default function Header() {
                   <div className="space-y-2 pt-3 border-t border-stone-100">
                     <Link
                       href="/flow"
-                      onClick={() => setIsSiteMenuOpen(false)}
-                      className={`block font-bold text-sm sm:text-base uppercase tracking-[0.2em] transition-colors ${
-                        normalizedPath === '/flow'
-                          ? 'text-stone-400'
-                          : 'text-stone-900 hover:text-stone-600'
-                      }`}
+                      onClick={closeSiteMenu}
+                      className={sectionLinkClass(
+                        normalizedPath === '/flow' ||
+                        normalizedPath.startsWith('/flow/')
+                      )}
                     >
                       FLOW
                     </Link>
@@ -402,12 +390,11 @@ export default function Header() {
                     <div className="pl-3.5 space-y-1.5 border-l border-stone-200/80 font-bold uppercase tracking-[0.15em] text-xs text-stone-500">
                       <Link
                         href="/journal"
-                        onClick={() => setIsSiteMenuOpen(false)}
-                        className={`block py-0.5 transition-colors ${
-                          normalizedPath === '/journal' || normalizedPath.startsWith('/journal/')
-                            ? 'text-stone-900'
-                            : 'hover:text-stone-900'
-                        }`}
+                        onClick={closeSiteMenu}
+                        className={submenuClass(
+                          normalizedPath === '/journal' ||
+                          normalizedPath.startsWith('/journal/')
+                        )}
                       >
                         JOURNAL
                       </Link>
@@ -418,12 +405,10 @@ export default function Header() {
                   <div className="space-y-2 pt-3 border-t border-stone-100">
                     <Link
                       href="/art-engine"
-                      onClick={() => setIsSiteMenuOpen(false)}
-                      className={`block font-bold text-sm sm:text-base uppercase tracking-[0.2em] transition-colors ${
+                      onClick={closeSiteMenu}
+                      className={sectionLinkClass(
                         normalizedPath.startsWith('/art-engine')
-                          ? 'text-stone-400'
-                          : 'text-stone-900 hover:text-stone-600'
-                      }`}
+                      )}
                     >
                       ART ENGINE
                     </Link>
@@ -431,59 +416,43 @@ export default function Header() {
                     <div className="pl-3.5 space-y-1.5 border-l border-stone-200/80 font-bold uppercase tracking-[0.15em] text-xs text-stone-500">
                       <Link
                         href="/selection"
-                        onClick={() => setIsSiteMenuOpen(false)}
-                        className={`block py-0.5 transition-colors ${
-                          normalizedPath === '/selection'
-                            ? 'text-stone-900'
-                            : 'hover:text-stone-900'
-                        }`}
+                        onClick={closeSiteMenu}
+                        className={submenuClass(
+                          normalizedPath === '/selection' ||
+                          normalizedPath.startsWith('/selection/')
+                        )}
                       >
                         SELECTION
                       </Link>
                     </div>
                   </div>
 
-                  {/* 5. HEART & ANGEL */}
+                  {/* 5. HEART & ANGEL — only TEMPLE */}
                   <div className="space-y-2 pt-3 border-t border-stone-100">
                     <Link
                       href="/heartandangel"
-                      onClick={() => setIsSiteMenuOpen(false)}
-                      className={`block font-bold text-sm sm:text-base uppercase tracking-[0.2em] transition-colors ${
+                      onClick={closeSiteMenu}
+                      className={sectionLinkClass(
                         normalizedPath.startsWith('/heartandangel') ||
                         normalizedPath.startsWith('/temple') ||
                         normalizedPath === '/vigil' ||
                         normalizedPath === '/absolution' ||
                         normalizedPath === '/tribute'
-                          ? 'text-stone-400'
-                          : 'text-stone-900 hover:text-stone-600'
-                      }`}
+                      )}
                     >
                       HEART &amp; ANGEL
                     </Link>
 
                     <div className="pl-3.5 space-y-1.5 border-l border-stone-200/80 font-bold uppercase tracking-[0.15em] text-xs text-stone-500">
                       <Link
-                        href="/heartandangel/calm/"
-                        onClick={() => setIsSiteMenuOpen(false)}
-                        className={`block py-0.5 transition-colors ${
-                          normalizedPath === '/heartandangel/calm'
-                            ? 'text-stone-900'
-                            : 'hover:text-stone-900'
-                        }`}
+                        href="/temple"
+                        onClick={closeSiteMenu}
+                        className={submenuClass(
+                          normalizedPath === '/temple' ||
+                          normalizedPath.startsWith('/temple/')
+                        )}
                       >
-                        CALM
-                      </Link>
-
-                      <Link
-                        href="/heartandangel/letitgo/"
-                        onClick={() => setIsSiteMenuOpen(false)}
-                        className={`block py-0.5 transition-colors ${
-                          normalizedPath === '/heartandangel/letitgo'
-                            ? 'text-stone-900'
-                            : 'hover:text-stone-900'
-                        }`}
-                      >
-                        LET IT GO
+                        TEMPLE
                       </Link>
                     </div>
                   </div>
@@ -493,7 +462,7 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Right Section: Composer Trigger & Pierrot Chat */}
+        {/* Right section: Composer and Pierrot */}
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           {user && <ComposerTrigger />}
           <PierrotChat compact />
