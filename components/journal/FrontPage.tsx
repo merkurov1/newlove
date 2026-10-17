@@ -10,6 +10,7 @@ export interface FrontIssue {
   number: number | null;
   headline: string;
   excerpt: string;
+  summary: string;
   published: number | null;
   publishedAt: string | null;
   periodStart: string | null;
@@ -18,6 +19,7 @@ export interface FrontIssue {
 
 export interface FlowEntry {
   id: string;
+  slug: string | null;
   type: string;
   lang: Lang;
   text: string;
@@ -182,13 +184,12 @@ function IssueLead({ issue, lang }: { issue: FrontIssue | null; lang: Lang }) {
 
 export default function FrontPage({ ru, en, flow, archive, subscribe }: Props) {
   return (
-    <div className="mx-auto max-w-6xl px-5 pb-6 pt-16 sm:px-8 md:pt-24">
+    <div className="mx-auto max-w-6xl px-5 pb-24 pt-16 sm:px-8 md:pt-24">
       {/* Masthead */}
       <header className="pb-6">
         <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-3">
           <div>
-            <p className={kicker}>Merkurov</p>
-            <h1 className="mt-2 font-serif text-5xl font-normal tracking-tight md:text-7xl">
+            <h1 className="font-serif text-5xl font-normal tracking-tight md:text-7xl">
               The Journal
             </h1>
           </div>
@@ -205,7 +206,6 @@ export default function FrontPage({ ru, en, flow, archive, subscribe }: Props) {
         <a href="#issues" className="hover:text-[#990F3D]">Flow / Выпуски</a>
         <a href="#stream" className="hover:text-[#990F3D]">Поток</a>
         <a href="#archive" className="hover:text-[#990F3D]">Архив</a>
-        <a href="#publications" className="hover:text-[#990F3D]">Публикации</a>
         <a href="#subscribe" className="ml-auto hover:text-[#990F3D]">Подписка</a>
       </nav>
 
@@ -230,11 +230,13 @@ export default function FrontPage({ ru, en, flow, archive, subscribe }: Props) {
                 const when = stamp(entry.at, entry.lang);
                 const label =
                   TYPE_LABEL[entry.lang][entry.type] || entry.type;
-                // INTEGRATION: маршрут отдельной записи потока.
+                const href = entry.slug
+                  ? `/flow/${encodeURIComponent(entry.slug)}`
+                  : '/flow';
                 return (
                   <li key={entry.id} className="border-t border-neutral-300">
                     <Link
-                      href={`/flow/${entry.id}`}
+                      href={href}
                       className="group grid grid-cols-[88px_1fr] gap-4 py-4"
                     >
                       <span className="font-mono text-[11px] leading-5 text-neutral-500">
@@ -266,31 +268,35 @@ export default function FrontPage({ ru, en, flow, archive, subscribe }: Props) {
             <p className="py-6 font-serif italic text-neutral-400">—</p>
           ) : (
             <ul>
-              {archive.map((issue) => (
-                <li key={issue.id} className="border-t border-neutral-300">
-                  <Link
-                    href={`/letters/${issue.slug}`}
-                    className="group grid grid-cols-[52px_1fr_auto] items-baseline gap-4 py-4"
-                  >
-                    <span className="font-serif text-2xl leading-none text-neutral-300 transition-colors group-hover:text-[#990F3D]">
-                      {issue.number ? `№${issue.number}` : '·'}
-                    </span>
-                    <span>
-                      <span className="block font-serif text-lg leading-snug text-neutral-900 transition-colors group-hover:text-[#990F3D]">
-                        {issue.headline}
+              {archive.map((issue) => {
+                const ru = issue.lang === 'ru';
+                return (
+                  <li key={issue.id} className="border-t border-neutral-300">
+                    <Link
+                      href={`/letters/${issue.slug}`}
+                      className="group grid grid-cols-[1fr_auto] items-baseline gap-4 py-4"
+                    >
+                      <span>
+                        <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-500">
+                          {dateLong(issue.publishedAt, issue.lang)}
+                        </span>
+                        <span className="mt-1 block font-serif text-xl leading-snug text-neutral-900 transition-colors group-hover:text-[#990F3D]">
+                          {ru ? 'Выпуск' : 'Issue'}
+                          {issue.number ? ` №${issue.number}` : ''}
+                        </span>
+                        {issue.summary && (
+                          <span className="mt-1 block font-serif text-sm text-neutral-500">
+                            {issue.summary}
+                          </span>
+                        )}
                       </span>
-                      <span className="mt-1 block font-mono text-[10px] tracking-wide text-neutral-500">
-                        {dateLong(issue.publishedAt, issue.lang)}
-                        {issue.published != null &&
-                          ` · ${items(issue.published, issue.lang)}`}
+                      <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                        {issue.lang}
                       </span>
-                    </span>
-                    <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
-                      {issue.lang}
-                    </span>
-                  </Link>
-                </li>
-              ))}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
