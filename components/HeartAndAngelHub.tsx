@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -67,9 +68,8 @@ export default function HeartAndAngelHub() {
           <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-black/40 pointer-events-none" />
         </div>
 
-        {/* --- МОБИЛЬНАЯ ВЕРСИЯ (< md) --- */}
+        {/* Мобильная версия */}
         <div className="flex md:hidden min-h-[calc(100vh-70px)] pt-20 pb-6 px-5 flex-col justify-between bg-[#EAF2F8]">
-
           <div className="text-center space-y-1.5">
             <h1 className="text-2xl font-serif font-light tracking-wider text-zinc-900">
               Heart &amp; Angel
@@ -110,7 +110,6 @@ export default function HeartAndAngelHub() {
                 className="inline-flex items-center justify-center gap-2 w-full py-3.5 rounded-full bg-zinc-900 text-white text-xs font-sans font-medium tracking-widest uppercase shadow-md hover:bg-zinc-800 transition-all duration-300 cursor-pointer"
               >
                 <span>Explore World</span>
-
                 <svg
                   className="w-3.5 h-3.5"
                   fill="none"
@@ -136,12 +135,10 @@ export default function HeartAndAngelHub() {
           </div>
         </div>
 
-        {/* --- ДЕСКТОПНАЯ ВЕРСИЯ (md:) --- */}
+        {/* Десктопная версия */}
         <div className="hidden md:flex flex-col justify-between h-full relative z-10">
-
           <div className="max-w-7xl w-full mx-auto px-10 pt-36 flex justify-end">
             <div className="text-right space-y-3 max-w-lg text-white drop-shadow-lg">
-
               <h1 className="text-6xl font-serif font-light tracking-wider text-white">
                 Heart &amp; Angel
               </h1>
@@ -153,14 +150,11 @@ export default function HeartAndAngelHub() {
               <p className="text-stone-100 text-lg font-serif font-light leading-relaxed tracking-wide italic pt-0.5">
                 The Greatest Love Story Ever Told.
               </p>
-
             </div>
           </div>
 
           <div className="max-w-7xl w-full mx-auto px-10 pb-28 flex flex-col items-start space-y-3">
-
             <div className="max-w-xl space-y-3 drop-shadow-lg">
-
               <h2 className="text-6xl font-serif font-light tracking-wider text-white">
                 Enter the Living World
               </h2>
@@ -170,13 +164,11 @@ export default function HeartAndAngelHub() {
               </p>
 
               <div className="pt-2 flex flex-wrap items-center gap-3">
-
                 <Link
                   href="/heartandangel/world"
                   className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-white text-stone-900 text-sm font-sans font-medium tracking-widest uppercase shadow-2xl hover:bg-stone-100 transition-all duration-300 cursor-pointer"
                 >
                   <span>Explore World</span>
-
                   <svg
                     className="w-4 h-4"
                     fill="none"
@@ -198,7 +190,6 @@ export default function HeartAndAngelHub() {
                 >
                   About the World
                 </Link>
-
               </div>
             </div>
           </div>
@@ -210,7 +201,6 @@ export default function HeartAndAngelHub() {
 
         {/* 1. Нарратив и манифест */}
         <article className="prose prose-stone prose-p:font-light prose-p:leading-relaxed prose-headings:font-serif max-w-none w-full space-y-6 sm:space-y-8 bg-white/80 backdrop-blur-md p-6 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm text-sm sm:text-lg">
-
           <p className="first-letter:text-4xl sm:first-letter:text-5xl first-letter:font-serif first-letter:font-bold first-letter:float-left first-letter:mr-3 first-letter:mt-[-4px]">
             Heart &amp; Angel is an ongoing multidisciplinary art project exploring the Angel, the Devil and the heart
             through painting, digital graphics, augmented reality and code.
@@ -230,12 +220,10 @@ export default function HeartAndAngelHub() {
             Each piece serves as both a physical artifact and a digital token—anchoring emotional
             capital onto decentralized ledgers to ensure permanence across mediums.
           </p>
-
         </article>
 
-        {/* 2. Увеличенный живой видеопортал (YouTube) */}
+        {/* 2. Живой видеопортал YouTube */}
         <div className="w-full">
-
           <div
             onClick={() => setIsModalOpen(true)}
             role="button"
@@ -249,7 +237,6 @@ export default function HeartAndAngelHub() {
             aria-label="Open Heart and Angel film"
             className="group relative w-full aspect-[16/9] sm:aspect-[16/10] rounded-3xl overflow-hidden bg-stone-900 shadow-2xl cursor-pointer border border-stone-200/80 transition-all duration-500 hover:scale-[1.01]"
           >
-
             <div className="absolute inset-0 pointer-events-none scale-125 opacity-90 transition-opacity duration-500 group-hover:opacity-100">
               <iframe
                 src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${videoId}&disablekb=1&modestbranding=1&iv_load_policy=3`}
@@ -266,17 +253,58 @@ export default function HeartAndAngelHub() {
                 ▶
               </span>
             </div>
-
           </div>
         </div>
 
-        {/* 3. Блок The Concept */}
+        {/* Publication in the magazine */}
+        <section className="w-full space-y-5 sm:space-y-7">
+          <div className="flex items-center gap-4">
+            <span className="h-px flex-1 bg-stone-300" />
+            <p className="font-mono text-[10px] sm:text-xs uppercase tracking-[0.2em] text-stone-500">
+              In the Press
+            </p>
+            <span className="h-px flex-1 bg-stone-300" />
+          </div>
+
+          <figure className="m-0 space-y-5 sm:space-y-7">
+            <div className="relative w-full overflow-hidden bg-white">
+              <Image
+                src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759056368546-IMG_0512.jpeg"
+                alt="Magazine spread featuring Angel’s Heart by Anton Merkurov"
+                width={1600}
+                height={1100}
+                unoptimized
+                className="block h-auto w-full object-contain"
+                sizes="(max-width: 768px) 100vw, 900px"
+              />
+            </div>
+
+            <figcaption className="mx-auto max-w-2xl px-1 sm:px-4">
+              <blockquote className="border-l border-stone-400 pl-5 sm:pl-7">
+                <p className="font-serif text-base sm:text-xl font-light leading-relaxed text-stone-800">
+                  I spent a long time looking for words to write in this issue, but I found something that, I hope, will speak better than words. This is the work of the artist Anton Merkurov (@merkurov.art). His “Angel’s Heart” speaks better. And may love give us strength, hope and support.
+                </p>
+              </blockquote>
+
+              <div className="mt-5 pl-5 sm:pl-7">
+                <p className="font-serif text-sm sm:text-base text-stone-900">
+                  Anna Burashova
+                </p>
+                <p className="mt-1 font-mono text-[10px] sm:text-xs uppercase tracking-[0.16em] text-stone-500">
+                  Editor in Chief
+                </p>
+                <p className="font-mono text-[10px] sm:text-xs uppercase tracking-[0.16em] text-stone-500">
+                  Marie Claire Russia
+                </p>
+              </div>
+            </figcaption>
+          </figure>
+        </section>
+
+        {/* 3. The Concept */}
         <div className="w-full bg-white/80 backdrop-blur-md p-6 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm">
-
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 sm:gap-10">
-
             <div className="md:col-span-7 space-y-4 sm:space-y-6">
-
               <h2 className="font-serif text-xl sm:text-2xl text-black tracking-tight">
                 The Concept
               </h2>
@@ -291,48 +319,28 @@ export default function HeartAndAngelHub() {
                 This project explores love not as a romantic category, but as the only viable strategy for survival.
                 It is an investigation into the physics of empathy in a broken world.
               </p>
-
             </div>
 
             <div className="md:col-span-5 space-y-6 sm:space-y-8 pt-2 md:pt-0">
-
               <div>
-
                 <h3 className="font-mono text-xs font-bold uppercase tracking-widest text-neutral-400 mb-3">
                   The Medium
                 </h3>
 
                 <ul className="space-y-3 text-xs sm:text-sm font-serif text-neutral-900">
-
                   <li className="flex items-start">
-                    <span className="w-24 font-bold shrink-0">
-                      Ink &amp; Paper
-                    </span>
-                    <span>
-                      Grounding the spirit in the physical.
-                    </span>
+                    <span className="w-24 font-bold shrink-0">Ink &amp; Paper</span>
+                    <span>Grounding the spirit in the physical.</span>
                   </li>
-
                   <li className="flex items-start">
-                    <span className="w-24 font-bold shrink-0">
-                      Digital / AR
-                    </span>
-                    <span>
-                      Living in the ether.
-                    </span>
+                    <span className="w-24 font-bold shrink-0">Digital / AR</span>
+                    <span>Living in the ether.</span>
                   </li>
-
                   <li className="flex items-start">
-                    <span className="w-24 font-bold shrink-0">
-                      Code
-                    </span>
-                    <span>
-                      Empathy as a ritual.
-                    </span>
+                    <span className="w-24 font-bold shrink-0">Code</span>
+                    <span>Empathy as a ritual.</span>
                   </li>
-
                 </ul>
-
               </div>
 
               <div className="border-l-2 border-black pl-4">
@@ -340,32 +348,27 @@ export default function HeartAndAngelHub() {
                   &quot;Love is necessary. Love is never enough.&quot;
                 </p>
               </div>
-
             </div>
           </div>
         </div>
 
-        {/* 4. Галерея: Swiper горизонтальная прокрутка */}
+        {/* 4. Галерея */}
         <div className="w-full">
-
           <Swiper
             modules={[FreeMode, Mousewheel]}
             spaceBetween={24}
-            slidesPerView={'auto'}
+            slidesPerView="auto"
             freeMode={true}
             mousewheel={{ forceToAxis: true }}
             grabCursor={true}
             className="w-full !overflow-visible py-2"
           >
-
             {galleryImages.map((src, idx) => (
               <SwiperSlide
                 key={idx}
                 className="!w-[360px] sm:!w-[520px] shrink-0"
               >
-
                 <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden bg-white shadow-sm border border-stone-200/60 flex items-center justify-center p-3 group">
-
                   <Image
                     src={src}
                     alt={`Gallery Artifact ${idx + 1}`}
@@ -373,17 +376,60 @@ export default function HeartAndAngelHub() {
                     className="object-contain rounded-2xl transition-transform duration-700 group-hover:scale-105"
                     sizes="(max-width: 768px) 360px, 520px"
                   />
-
                 </div>
               </SwiperSlide>
             ))}
-
           </Swiper>
         </div>
 
-        {/* 5. Блок социальных сетей */}
-        <div className="w-full bg-white/80 backdrop-blur-md p-8 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm text-center space-y-4">
+        {/* Heart & Angel Postcards */}
+        <section className="w-full overflow-hidden rounded-3xl border border-stone-200/70 bg-[#F1ECE5]">
+          <div className="grid grid-cols-1 md:grid-cols-2">
+            <Link
+              href="/heartandangel/card"
+              aria-label="Discover Heart & Angel postcards"
+              className="group relative block min-h-[340px] overflow-hidden bg-[#EAE4DA] sm:min-h-[460px]"
+            >
+              <Image
+                src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/artifacts/Postcard/IMG_0425.gif"
+                alt="An angel sending a Heart & Angel postcard"
+                fill
+                unoptimized
+                sizes="(max-width: 768px) 100vw, 50vw"
+                className="object-contain p-5 transition-transform duration-700 group-hover:scale-[1.025] sm:p-8"
+              />
+            </Link>
 
+            <div className="flex flex-col items-start justify-center px-7 py-9 sm:px-12 sm:py-14">
+              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-500">
+                A small thing that travels far
+              </p>
+
+              <h2 className="mt-4 max-w-md font-serif text-3xl font-light leading-tight tracking-tight text-stone-900 sm:text-4xl">
+                Send a little love.
+              </h2>
+
+              <p className="mt-5 max-w-md font-serif text-base leading-relaxed text-stone-700 sm:text-lg">
+                An original Heart &amp; Angel artwork, made into a physical postcard.
+                Add a message and send it directly to someone you care about.
+              </p>
+
+              <p className="mt-5 font-mono text-xs uppercase tracking-[0.14em] text-stone-500">
+                £29 · postage included
+              </p>
+
+              <Link
+                href="/heartandangel/card"
+                className="mt-7 inline-flex items-center gap-3 bg-stone-900 px-6 py-4 text-xs font-medium uppercase tracking-[0.16em] text-white transition hover:bg-stone-700"
+              >
+                Discover the postcard <span aria-hidden="true">↗</span>
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* 5. About the World */}
+        <div className="w-full bg-white/80 backdrop-blur-md p-8 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm text-center space-y-4">
           <h3 className="font-serif text-xl sm:text-2xl text-stone-900 tracking-tight">
             About the World
           </h3>
@@ -398,20 +444,18 @@ export default function HeartAndAngelHub() {
           >
             Read the story
           </Link>
-
         </div>
 
+        {/* 6. Социальные сети */}
         <div className="w-full bg-white/80 backdrop-blur-md p-8 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm text-center space-y-6">
-
           <h3 className="font-serif text-xl sm:text-2xl text-stone-900 tracking-tight">
             Connect &amp; Follow
           </h3>
 
           <div className="flex flex-wrap justify-center gap-3 sm:gap-4 pt-1">
-
-            {SOCIAL_LINKS.map((social, idx) => (
+            {SOCIAL_LINKS.map((social) => (
               <a
-                key={idx}
+                key={social.name}
                 href={social.href}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -420,13 +464,11 @@ export default function HeartAndAngelHub() {
                 {social.name}
               </a>
             ))}
-
           </div>
         </div>
-
       </div>
 
-      {/* Модальное окно для полноэкранного просмотра со звуком */}
+      {/* Модальное окно видео */}
       {isModalOpen && (
         <div
           onClick={() => setIsModalOpen(false)}
@@ -435,12 +477,10 @@ export default function HeartAndAngelHub() {
           aria-label="Heart and Angel film"
           className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 sm:p-8 animate-fadeIn"
         >
-
           <div
-            onClick={(e: { stopPropagation: () => void }) => e.stopPropagation()}
+            onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
             className="relative w-full max-w-5xl aspect-[16/9] bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/10"
           >
-
             <button
               onClick={() => setIsModalOpen(false)}
               aria-label="Close film"
@@ -456,11 +496,9 @@ export default function HeartAndAngelHub() {
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
-
           </div>
         </div>
       )}
-
     </main>
   );
 }

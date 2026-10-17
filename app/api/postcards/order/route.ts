@@ -1,157 +1,192 @@
-export const dynamic = 'force-dynamic';
-
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
 
-// Temporary: use a minimal Stripe client. In a follow-up we'll wire a server-side
-// Supabase/Onboard auth client and persist orders to the DB.
-const stripeKey = process.env.STRIPE_SECRET_KEY || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'sk_test_placeholder';
-const stripe = new Stripe(stripeKey, {
+export const dynamic = 'force-dynamic';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2025-08-27.basil',
 });
 
-// Validation schema
-const PostcardOrderSchema = z.object({
-  postcardId: z.string().min(1, 'Postcard ID is required'),
-  recipientName: z.string().min(2, 'Recipient name must be at least 2 characters').max(100),
-  streetAddress: z.string().min(5, 'Street address must be at least 5 characters').max(200),
-  addressLine2: z.string().max(200).optional(),
-  city: z.string().min(2, 'City must be at least 2 characters').max(100),
-  stateProvince: z.string().max(100).optional(),
-  postalCode: z.string().min(3, 'Postal code must be at least 3 characters').max(20),
-  country: z.string().min(2, 'Country must be at least 2 characters').max(100),
-  phone: z.string().max(30).optional(),
-  customMessage: z.string().max(500, 'Message must be less than 500 characters').optional(),
+const OrderSchema = z.object({
+  postcardId: z.string().min(1).max(100),
+  recipientName: z.string().trim().min(2).max(100),
+  streetAddress: z.string().trim().min(5).max(200),
+  addressLine2: z.string().trim().max(200).optional().default(''),
+  city: z.string().trim().min(2).max(100),
+  stateProvince: z.string().trim().max(100).optional().default(''),
+  postalCode: z.string().trim().min(3).max(20),
+  country: z.string().trim().min(2).max(100),
+  phone: z.string().trim().max(30).optional().default(''),
+  email: z.string().trim().email().max(254),
+  customMessage: z.string().max(500).optional().default(''),
 });
 
 export async function POST(request: Request) {
-  // Rate limiting: 10 orders per hour per IP
-  const clientIp = getClientIp(request);
-  const rateLimitResponse = checkRateLimit(clientIp, {
-    interval: 60 * 60 * 1000, // 1 hour
+  const limited = checkRateLimit(getClientIp(request), {
+    interval: 60 * 60 * 1000,
     maxRequests: 10,
     keyPrefix: 'postcards',
   });
-  if (rateLimitResponse) {
-    return rateLimitResponse;
-  }
+
+  if (limited) return limited;
 
   try {
-    // Try Supabase session first, fall back to x-user-id header for transition
-    let userId = request.headers.get('x-user-id');
-    try {
-      const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-      const { user } = await getUserAndSupabaseForRequest(request as any);
-      if (user?.id) userId = user.id;
-    } catch (e) {
-      // helper might fail — we'll rely on header fallback
-    }
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const parsed = OrderSchema.safeParse(await request.json());
 
-    const body = await request.json();
-    
-    // Validate input
-    const validation = PostcardOrderSchema.safeParse(body);
-    if (!validation.success) {
+    if (!parsed.success) {
       return NextResponse.json(
-        { 
-          error: 'Validation failed', 
-          details: validation.error.flatten().fieldErrors 
-        }, 
-        { status: 400 }
+        {
+          error: 'Please check the order details.',
+          details: parsed.error.flatten().fieldErrors,
+        },
+        { status: 400 },
       );
     }
 
-    const {
-      postcardId,
-      recipientName,
-      streetAddress,
-      addressLine2,
-      city,
-      stateProvince,
-      postalCode,
-      country,
-      phone,
-      customMessage,
-    } = validation.data;
+    const body = parsed.data;
 
-    // Mock postcards catalog until DB model is ready
-    const mockPostcards: Record<string, { id: string; price: number; available: boolean; title: string }> = {
-      postcard_1: { id: 'postcard_1', price: 2900, available: true, title: 'Авторская открытка "Закат"' },
-      postcard_2: { id: 'postcard_2', price: 2900, available: true, title: 'Открытка "Минимализм"' },
-    };
+    const supabase = getServerSupabaseClient({ useServiceRole: true });
 
-    const postcard = mockPostcards[postcardId];
-    if (!postcard || !postcard.available) {
-      return NextResponse.json({ error: 'Postcard not found or unavailable' }, { status: 404 });
+    const { data: postcard, error: postcardError } = await supabase
+      .from('postcards')
+      .select('id, title, description, image, price, available')
+      .eq('id', body.postcardId)
+      .eq('available', true)
+      .maybeSingle();
+
+    if (postcardError) {
+      console.error('Postcard lookup failed:', postcardError);
+      return NextResponse.json(
+        { error: 'Could not verify the postcard. Please try again.' },
+        { status: 500 },
+      );
     }
 
-    const fullAddress = [streetAddress, addressLine2].filter(Boolean).join(', ');
+    if (!postcard) {
+      return NextResponse.json(
+        { error: 'This postcard is currently unavailable.' },
+        { status: 404 },
+      );
+    }
 
-    const orderId = `order_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+    if (!Number.isInteger(postcard.price) || postcard.price <= 0) {
+      console.error('Invalid postcard price:', postcard.id, postcard.price);
+      return NextResponse.json(
+        { error: 'The postcard price is not configured correctly.' },
+        { status: 500 },
+      );
+    }
 
-    const mockOrder = {
-      id: orderId,
-      postcardId,
-      userId,
-      recipientName,
-      address: fullAddress,
-      city,
-      stateProvince,
-      postalCode,
-      country,
-      phone: phone || null,
-      customMessage: customMessage || null,
-      amount: postcard.price,
-      status: 'PENDING',
-    };
+    const baseUrl = (
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXTAUTH_URL ||
+      'http://localhost:3000'
+    ).replace(/\/$/, '');
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
+    const orderId = randomUUID();
+    const fullAddress = [body.streetAddress, body.addressLine2]
+      .filter(Boolean)
+      .join(', ');
 
-    const checkoutSession = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: 'gbp',
-            product_data: {
-              name: postcard.title,
-              description: 'Авторская открытка с международной доставкой',
-              images: ['/images/postcard-placeholder.jpg'],
-            },
-            unit_amount: postcard.price,
-          },
-          quantity: 1,
-        },
-      ],
-      mode: 'payment',
-      success_url: `${baseUrl}/letters/order-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/letters`,
-      metadata: {
-        orderId: mockOrder.id,
+    // The current table requires userId even for guest orders.
+    // "guest" is a marker, not an authenticated user identity.
+    const { error: insertError } = await supabase
+      .from('postcard_orders')
+      .insert({
+        id: orderId,
         postcardId: postcard.id,
-        userId,
-        recipientName,
-        fullAddress,
-        city,
-        stateProvince: stateProvince || '',
-        postalCode,
-        country,
-        phone: phone || '',
-        customMessage: customMessage || '',
-      },
-      customer_email: undefined,
-      shipping_address_collection: {
-        allowed_countries: ['GB', 'US', 'CA', 'AU', 'DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'CH', 'AT', 'SE', 'NO', 'DK', 'FI', 'JP', 'KR', 'SG', 'NZ', 'RU', 'PL', 'CZ', 'IE', 'PT'],
-      },
-      billing_address_collection: 'required',
-    });
+        userId: 'guest',
+        recipientName: body.recipientName,
+        address: fullAddress,
+        city: body.city,
+        postalCode: body.postalCode,
+        country: body.country,
+        phone: body.phone || null,
+        customMessage: body.customMessage || null,
+        amount: postcard.price,
+        status: 'PENDING',
+      });
 
-    return NextResponse.json({ success: true, orderId: mockOrder.id, paymentUrl: checkoutSession.url });
+    if (insertError) {
+      console.error('Postcard order insert failed:', insertError);
+      return NextResponse.json(
+        { error: 'Could not save the order. Please try again.' },
+        { status: 500 },
+      );
+    }
+
+    try {
+      const checkout = await stripe.checkout.sessions.create(
+        {
+          mode: 'payment',
+          payment_method_types: ['card'],
+          customer_email: body.email,
+          line_items: [
+            {
+              price_data: {
+                currency: 'gbp',
+                unit_amount: postcard.price,
+                product_data: {
+                  name: postcard.title,
+                  description:
+                    'Original Heart & Angel physical postcard. Postage included.',
+                  ...(postcard.image?.startsWith('https://')
+                    ? { images: [postcard.image] }
+                    : {}),
+                },
+              },
+              quantity: 1,
+            },
+          ],
+          success_url:
+            `${baseUrl}/heartandangel/card/success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${baseUrl}/heartandangel/card#order`,
+          metadata: {
+            type: 'postcard_v1',
+            orderId,
+            postcardId: postcard.id,
+          },
+          billing_address_collection: 'required',
+        },
+        {
+          idempotencyKey: `postcard-checkout-${orderId}`,
+        },
+      );
+
+      if (!checkout.url) {
+        throw new Error('Stripe did not return a Checkout URL.');
+      }
+
+      return NextResponse.json({
+        success: true,
+        orderId,
+        paymentUrl: checkout.url,
+      });
+    } catch (stripeError) {
+      console.error('Stripe Checkout creation failed:', stripeError);
+
+      await supabase
+        .from('postcard_orders')
+        .update({
+          status: 'CANCELLED',
+          updatedAt: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+
+      return NextResponse.json(
+        { error: 'Secure payment could not be started. Please try again.' },
+        { status: 502 },
+      );
+    }
   } catch (error) {
-    console.error('Error creating postcard order:', error);
-    return NextResponse.json({ error: 'Error creating order' }, { status: 500 });
+    console.error('Postcard order endpoint failed:', error);
+    return NextResponse.json(
+      { error: 'Unexpected error creating the order.' },
+      { status: 500 },
+    );
   }
 }
