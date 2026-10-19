@@ -227,9 +227,7 @@ export default function KnowledgeMapClient() {
   return (
     <main className="mx-auto min-h-screen max-w-7xl px-5 py-10 md:px-8">
       <header className="border-b border-neutral-200 pb-6">
-        <p className="font-mono text-xs uppercase tracking-widest text-neutral-500">
-          merkurov.love / all / map
-        </p>
+        
 
         <div className="mt-5 flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div>

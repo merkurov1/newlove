@@ -86,17 +86,7 @@ export default function CardPageClient() {
     <main
       className={`${sans.className} min-h-screen overflow-x-hidden bg-[#FAF8F5] text-[#141210] selection:bg-black selection:text-white`}
     >
-      <header className="mx-auto flex w-full max-w-[1440px] items-center justify-between px-6 py-5 md:px-10">
-        <Link
-          href="/heartandangel"
-          className="py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-600 transition hover:text-black"
-        >
-          ← Heart &amp; Angel
-        </Link>
-        <span className="hidden text-xs uppercase tracking-[0.18em] text-stone-400 sm:inline">
-          An original artwork
-        </span>
-      </header>
+     
 
       {/* ───────── Hero ───────── */}
       <section className="bg-[#A8402C] text-[#FAF8F5]">
