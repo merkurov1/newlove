@@ -224,7 +224,7 @@ export default function WorldScene() {
     <main
       ref={sceneRef}
       onPointerMove={handlePointerMove}
-      className={`relative isolate w-full h-[100dvh] overflow-hidden bg-gradient-to-b ${timeGradient} transition-colors duration-1000 select-none`}
+      className={`relative isolate w-full telegram-viewport overflow-hidden bg-gradient-to-b ${timeGradient} transition-colors duration-1000 select-none`}
     >
       <section
         className="sr-only"
@@ -260,7 +260,7 @@ export default function WorldScene() {
       </section>
 
       {/* Top Left Navigation: Back to Home */}
-      <div className="absolute top-4 left-4 sm:top-6 sm:left-6 z-50">
+      <div className="absolute left-4 sm:left-6 z-50 world-hud-top">
         <Link
           href="/"
           className="group inline-flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2 border border-white/50 bg-white/30 text-white/95 hover:bg-white/45 backdrop-blur-md rounded-full text-xs sm:text-sm font-mono uppercase tracking-[0.15em] shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
@@ -271,7 +271,7 @@ export default function WorldScene() {
       </div>
 
       {/* Global Heart & Angel / Temple sound */}
-      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-50">
+      <div className="absolute right-4 sm:right-6 z-50 world-hud-top">
         <SoundToggle
           showTextOnMobile
           className="px-3.5 py-2 sm:px-4 sm:py-2 border border-white/50 bg-white/30 text-white/95 hover:bg-white/45 backdrop-blur-md rounded-full text-xs sm:text-sm shadow-xl"
@@ -443,7 +443,7 @@ export default function WorldScene() {
       {/* Explicit Temple entry */}
       <Link
         href="/temple"
-        className="absolute bottom-5 sm:bottom-7 left-1/2 -translate-x-1/2 z-40 rounded-full border border-white/60 bg-black/25 px-5 py-2.5 text-[10px] font-mono uppercase tracking-[0.2em] text-white backdrop-blur-md shadow-lg transition hover:bg-black/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+        className="absolute left-1/2 -translate-x-1/2 z-40 world-hud-bottom rounded-full border border-white/60 bg-black/25 px-5 py-2.5 text-[10px] font-mono uppercase tracking-[0.2em] text-white backdrop-blur-md shadow-lg transition hover:bg-black/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
       >
         Enter the Temple →
       </Link>
