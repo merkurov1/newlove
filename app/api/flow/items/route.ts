@@ -1,15 +1,16 @@
+import { revalidateTag } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { FLOW_ITEMS_CACHE_TAG, getCachedFlowItems } from '@/lib/flow/items-cash';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 function getSupabaseAdmin() {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) {
@@ -25,15 +26,8 @@ function getSupabaseAdmin() {
   });
 }
 
-function generateSlug(
-  title?: string | null,
-  bodyMd?: string | null,
-): string {
-  const source = (
-    title?.trim() ||
-    bodyMd?.split(/\r?\n/)[0]?.trim() ||
-    'post'
-  ).slice(0, 50);
+function generateSlug(title?: string | null, bodyMd?: string | null): string {
+  const source = (title?.trim() || bodyMd?.split(/\r?\n/)[0]?.trim() || 'post').slice(0, 50);
 
   const base = source
     .toLowerCase()
@@ -44,89 +38,37 @@ function generateSlug(
 
   const idSuffix = Math.random().toString(36).substring(2, 7);
 
-  return base
-    ? `${base}-${idSuffix}`
-    : `flow-${Date.now().toString(36)}`;
+  return base ? `${base}-${idSuffix}` : `flow-${Date.now().toString(36)}`;
 }
 
-// GET: публичная лента опубликованных публичных записей.
+// GET: публичная лента с серверным кэшированием.
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
+
     const limitParam = searchParams.get('limit');
     const offsetParam = searchParams.get('offset');
 
-    const limit = Math.min(
-      Math.max(parseInt(limitParam || '10', 10) || 10, 1),
-      50,
-    );
-    const offset = Math.max(
-      parseInt(offsetParam || '0', 10) || 0,
-      0,
-    );
+    const limit = Math.min(Math.max(parseInt(limitParam || '10', 10) || 10, 1), 50);
 
-    const supabase = getSupabaseAdmin();
+    const offset = Math.max(parseInt(offsetParam || '0', 10) || 0, 0);
 
-    const { data, error, count } = await supabase
-      .from('items')
-      .select(
-        [
-          'id',
-          'title',
-          'slug',
-          'lang',
-          'type',
-          'status',
-          'visibility',
-          'body_md',
-          'published_at',
-          'source_url',
-          'metadata',
-          'bluesky_uri',
-          'telegram_message_id',
-        ].join(','),
-        { count: 'exact' },
-      )
-      .eq('status', 'published')
-      .eq('visibility', 'public')
-      .order('published_at', {
-        ascending: false,
-        nullsFirst: false,
-      })
-      .range(offset, offset + limit - 1);
+    const result = await getCachedFlowItems(limit, offset);
 
-    if (error) {
-      console.error('[api/flow/items] database error:', error);
-
-      return NextResponse.json(
-        { error: 'Failed to load Flow items.' },
-        { status: 500 },
-      );
-    }
-
-    const items = data ?? [];
-    const totalCount = count ?? 0;
-
-    return NextResponse.json(
-      {
-        items,
-        hasMore: totalCount > offset + items.length,
-        total: totalCount,
-        nextOffset: offset + items.length,
+    return NextResponse.json(result, {
+      status: 200,
+      headers: {
+        // Браузер не хранит ответ самостоятельно.
+        // Кэширование выполняется на стороне Next.js.
+        'Cache-Control': 'no-store',
       },
-      {
-        status: 200,
-        headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
-        },
-      },
-    );
+    });
   } catch (error) {
     console.error('[api/flow/items] GET error:', error);
 
     return NextResponse.json(
       { error: 'Internal server error while loading Flow items.' },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
@@ -137,48 +79,29 @@ export async function POST(req: Request) {
     try {
       await requireAdminFromRequest(req);
     } catch {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 },
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await req.json();
 
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json(
-        { error: 'Invalid request body.' },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
     }
 
     const supabase = getSupabaseAdmin();
     const now = new Date().toISOString();
     const slug = body.slug || generateSlug(body.title, body.body_md);
 
-    const allowedTypes = [
-      'note',
-      'article',
-      'link',
-      'photo',
-      'video',
-      'quote',
-    ];
+    const allowedTypes = ['note', 'article', 'link', 'photo', 'video', 'quote'];
 
-    const itemType = allowedTypes.includes(body.type)
-      ? body.type
-      : 'article';
+    const itemType = allowedTypes.includes(body.type) ? body.type : 'article';
 
     const allowedStatuses = ['draft', 'published', 'archived'];
     const allowedVisibilities = ['public', 'private', 'unlisted'];
 
-    const status = allowedStatuses.includes(body.status)
-      ? body.status
-      : 'published';
+    const status = allowedStatuses.includes(body.status) ? body.status : 'published';
 
-    const visibility = allowedVisibilities.includes(body.visibility)
-      ? body.visibility
-      : 'public';
+    const visibility = allowedVisibilities.includes(body.visibility) ? body.visibility : 'public';
 
     const { data: item, error } = await supabase
       .from('items')
@@ -192,14 +115,10 @@ export async function POST(req: Request) {
         body_md: body.body_md || null,
         source_url: body.source_url || null,
         metadata:
-          body.metadata &&
-          typeof body.metadata === 'object' &&
-          !Array.isArray(body.metadata)
+          body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
             ? body.metadata
             : {},
-        published_at: status === 'published'
-          ? body.published_at || now
-          : null,
+        published_at: status === 'published' ? body.published_at || now : null,
       })
       .select()
       .single();
@@ -207,27 +126,21 @@ export async function POST(req: Request) {
     if (error || !item) {
       console.error('[api/flow/items] insert error:', error);
 
-      return NextResponse.json(
-        { error: 'Failed to create item.' },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: 'Failed to create item.' }, { status: 500 });
     }
+
+    // Сбрасываем публичную ленту после успешной записи.
+    revalidateTag(FLOW_ITEMS_CACHE_TAG);
 
     let crosspostResult = null;
 
-    if (
-      item.status === 'published' &&
-      item.visibility === 'public'
-    ) {
+    if (item.status === 'published' && item.visibility === 'public') {
       try {
         // Ленивый импорт: sharp не грузится на этапе сборки.
         const { crosspostFlowItem } = await import('@/lib/flow/crosspost');
         crosspostResult = await crosspostFlowItem(item);
       } catch (crosspostError) {
-        console.error(
-          '[api/flow/items] crosspost error:',
-          crosspostError,
-        );
+        console.error('[api/flow/items] crosspost error:', crosspostError);
       }
     }
 
@@ -237,14 +150,14 @@ export async function POST(req: Request) {
         item,
         crosspost: crosspostResult,
       },
-      { status: 201 },
+      { status: 201 }
     );
   } catch (error) {
     console.error('[api/flow/items] POST error:', error);
 
     return NextResponse.json(
       { error: 'Internal server error while creating item.' },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
