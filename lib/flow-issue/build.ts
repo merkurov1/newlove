@@ -1,4 +1,3 @@
-
 import { classifyNewItems, heuristicLanguage } from "./deepseek";
 import {
   DEFAULT_ISSUE_TEMPLATE,
@@ -20,7 +19,10 @@ const SELECT_ITEMS =
   "id,type,status,visibility,lang,slug,title,body_md,source_url,ai_allowed,metadata,created_at,updated_at,published_at";
 
 const safeDate = (value: unknown): Date | null => {
-  if (typeof value !== "string" && !(value instanceof Date)) return null;
+  if (typeof value !== "string" && !(value instanceof Date)) {
+    return null;
+  }
+
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 };
@@ -29,13 +31,17 @@ const clean = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
 
 const itemText = (item: FlowItem) =>
-  [item.title, item.body_md].map(clean).filter(Boolean).join("\n\n");
+  [item.title, item.body_md]
+    .map(clean)
+    .filter(Boolean)
+    .join("\n\n");
 
 const itemHasContent = (item: FlowItem) =>
   Boolean(clean(item.title) || clean(item.body_md));
 
 const itemUrl = (item: FlowItem) => {
   const metadata = item.metadata || {};
+
   const raw =
     clean(metadata.canonical_url) ||
     clean(item.source_url) ||
@@ -43,6 +49,7 @@ const itemUrl = (item: FlowItem) => {
 
   try {
     const url = new URL(raw);
+
     return ["http:", "https:"].includes(url.protocol)
       ? url.toString()
       : null;
@@ -55,19 +62,37 @@ const metadataText = (item: IssueEntry, key: string) =>
   clean(item.metadata?.[key]);
 
 function isOwn(item: FlowItem, url: string | null) {
-  if (item.type === "note" || item.type === "photo") return true;
+  if (item.type === "note" || item.type === "photo") {
+    return true;
+  }
+
   if (!url) return false;
 
   try {
     const host = new URL(url).hostname.toLowerCase();
-    return host === "merkurov.love" || host.endsWith(".merkurov.love");
+
+    return (
+      host === "merkurov.love" ||
+      host.endsWith(".merkurov.love")
+    );
   } catch {
     return false;
   }
 }
 
+/**
+ * The explicit Flow language is authoritative.
+ * AI classification is used only when the item has no supported
+ * explicit language. This prevents a caption or link title from
+ * silently moving a Russian Flow item into the English issue.
+ */
 function inferLanguage(item: FlowItem): IssueLang | "other" {
+  if (item.lang === "ru" || item.lang === "en") {
+    return item.lang;
+  }
+
   const cached = item.metadata?.issue_ai;
+
   if (
     cached?.lang === "ru" ||
     cached?.lang === "en" ||
@@ -81,6 +106,7 @@ function inferLanguage(item: FlowItem): IssueLang | "other" {
 
 function inferKind(item: FlowItem): IssueKind {
   const cached = item.metadata?.issue_ai?.kind;
+
   if (
     cached === "about_flow" ||
     cached === "world" ||
@@ -116,6 +142,7 @@ function toEntry(item: FlowItem): IssueEntry {
 
 function median(values: number[]): number | null {
   if (!values.length) return null;
+
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
 
@@ -136,6 +163,7 @@ export function formatDuration(
 
     const hours = Math.floor(value / 3600);
     const minutes = Math.round((value % 3600) / 60);
+
     return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
   }
 
@@ -144,16 +172,22 @@ export function formatDuration(
 
   const hours = Math.floor(value / 3600);
   const minutes = Math.round((value % 3600) / 60);
-  return minutes ? `${hours} ч ${minutes}` : `${hours} ч`;
+
+  return minutes
+    ? `${hours} ч ${minutes} мин`
+    : `${hours} ч`;
 }
 
 function countBy<T extends string>(
   values: T[],
 ): Record<string, number> {
-  return values.reduce<Record<string, number>>((counts, value) => {
-    counts[value] = (counts[value] || 0) + 1;
-    return counts;
-  }, {});
+  return values.reduce<Record<string, number>>(
+    (counts, value) => {
+      counts[value] = (counts[value] || 0) + 1;
+      return counts;
+    },
+    {},
+  );
 }
 
 function dayKey(date: Date) {
@@ -191,16 +225,21 @@ function calculateMetrics(
 
   const entries = published.map(toEntry);
   const dayCounts = new Map<string, number>();
-  const hourCounts = Array.from({ length: 24 }, (_, hour) => ({
-    hour,
-    count: 0,
-  }));
+
+  const hourCounts = Array.from(
+    { length: 24 },
+    (_, hour) => ({
+      hour,
+      count: 0,
+    }),
+  );
 
   for (const item of published) {
     const date = safeDate(item.published_at);
     if (!date) continue;
 
     const key = dayKey(date);
+
     dayCounts.set(key, (dayCounts.get(key) || 0) + 1);
     hourCounts[date.getUTCHours()].count++;
   }
@@ -210,7 +249,11 @@ function calculateMetrics(
 
   const mismatch = published.filter((item) => {
     const detected = inferLanguage(item);
-    return detected !== "other" && item.lang !== detected;
+
+    return (
+      detected !== "other" &&
+      item.lang !== detected
+    );
   }).length;
 
   const altEqualsFilename = published.filter((item) => {
@@ -240,6 +283,7 @@ function calculateMetrics(
     cursor += DAY
   ) {
     const date = new Date(cursor);
+
     perDay.push({
       date: dayKey(date),
       count: dayCounts.get(dayKey(date)) || 0,
@@ -339,6 +383,8 @@ export async function resolveIssueWindow(
     return { start, end };
   }
 
+  // Keep the last published issue as the period boundary.
+  // Drafts are checked for duplicate content by the API route.
   const { data: lastIssue, error: lastError } = await supabase
     .from("letters")
     .select("period_end")
@@ -353,7 +399,15 @@ export async function resolveIssueWindow(
 
   const previousEnd = safeDate(lastIssue?.period_end);
 
-  if (previousEnd) return { start: previousEnd, end };
+  if (previousEnd) {
+    if (previousEnd.getTime() >= end.getTime()) {
+      throw new Error(
+        "Конец периода должен быть позже конца предыдущего опубликованного выпуска.",
+      );
+    }
+
+    return { start: previousEnd, end };
+  }
 
   const { data: firstItem, error: firstError } = await supabase
     .from("items")
@@ -381,26 +435,29 @@ export async function buildIssuePayload(
   start: Date,
   end: Date,
 ): Promise<IssuePayload> {
-  const [publishedResult, draftsResult, activeTemplate] =
-    await Promise.all([
-      supabase
-        .from("items")
-        .select(SELECT_ITEMS)
-        .eq("status", "published")
-        .eq("visibility", "public")
-        .gte("published_at", start.toISOString())
-        .lte("published_at", end.toISOString())
-        .order("published_at", { ascending: false }),
+  const [
+    publishedResult,
+    draftsResult,
+    activeTemplate,
+  ] = await Promise.all([
+    supabase
+      .from("items")
+      .select(SELECT_ITEMS)
+      .eq("status", "published")
+      .eq("visibility", "public")
+      .gte("published_at", start.toISOString())
+      .lte("published_at", end.toISOString())
+      .order("published_at", { ascending: false }),
 
-      supabase
-        .from("items")
-        .select(SELECT_ITEMS)
-        .eq("status", "draft")
-        .gte("created_at", start.toISOString())
-        .lte("created_at", end.toISOString()),
+    supabase
+      .from("items")
+      .select(SELECT_ITEMS)
+      .eq("status", "draft")
+      .gte("created_at", start.toISOString())
+      .lte("created_at", end.toISOString()),
 
-      loadActiveTemplate(supabase),
-    ]);
+    loadActiveTemplate(supabase),
+  ]);
 
   if (publishedResult.error) throw publishedResult.error;
   if (draftsResult.error) throw draftsResult.error;
@@ -415,8 +472,8 @@ export async function buildIssuePayload(
       itemHasContent(item),
   );
 
-  // The classifier is only used for metadata. Original Flow text
-  // is never rewritten by the issue builder.
+  // AI classification enriches metadata only. It must never rewrite
+  // the original Flow text.
   await classifyNewItems(supabase, published);
 
   const ids = published.map((item) => item.id);
@@ -429,6 +486,7 @@ export async function buildIssuePayload(
       .in("id", ids);
 
     if (error) throw error;
+
     classifiedItems = (data || []) as FlowItem[];
   }
 
@@ -442,20 +500,42 @@ export async function buildIssuePayload(
   const { config: template, version: templateVersion } =
     activeTemplate;
 
+  // Prefer an author's own note. If there is none, prefer an own
+  // publication with actual text before falling back to an external link.
   const lead =
-    entries.find((entry) => entry.type === "note") ||
+    entries.find(
+      (entry) =>
+        entry.type === "note" &&
+        Boolean(entry.body || entry.title),
+    ) ||
+    entries.find(
+      (entry) =>
+        entry.own &&
+        entry.type === "photo" &&
+        Boolean(entry.body || entry.title),
+    ) ||
     entries[0] ||
     null;
 
-  const latest = entries.slice(0, template.limits.latest);
+  // The lead is not repeated in the "Latest" section.
+  // Links, videos and photos are rendered in their own sections.
+  const latest = entries
+    .filter(
+      (entry) =>
+        entry.type === "note" &&
+        entry.id !== lead?.id,
+    )
+    .slice(0, template.limits.latest);
 
   const links = entries
     .filter((entry) => entry.type === "link")
     .slice(0, template.limits.links)
     .map((entry) => {
       const metadata = entry.metadata;
+
       const originalDate =
         safeDate(metadata.published_at)?.toISOString() || null;
+
       const addedAt = safeDate(entry.publishedAt);
       const original = safeDate(originalDate);
 
@@ -471,9 +551,10 @@ export async function buildIssuePayload(
 
       return {
         ...entry,
-        description: metadataText(entry, "description"),
+        description: clean(metadata.description),
         siteName:
-          clean(metadata.site_name) || clean(metadata.domain),
+          clean(metadata.site_name) ||
+          clean(metadata.domain),
         author: clean(metadata.author),
         image: clean(metadata.image),
         originalDate,
@@ -490,7 +571,8 @@ export async function buildIssuePayload(
       return {
         ...entry,
         title:
-          clean(entry.metadata.youtube?.title) || entry.title,
+          clean(entry.metadata.youtube?.title) ||
+          entry.title,
         image: clean(entry.metadata.youtube?.thumbnail_url),
         videoId: videoId || null,
         url: videoId
@@ -512,7 +594,8 @@ export async function buildIssuePayload(
   const sourceIndex = entries
     .filter(
       (entry) =>
-        entry.type === "link" || entry.type === "video",
+        entry.type === "link" ||
+        entry.type === "video",
     )
     .map((entry) => ({
       id: entry.id,
@@ -528,9 +611,20 @@ export async function buildIssuePayload(
       addedAt: entry.publishedAt,
     }));
 
+  // Metrics must describe the same language stream as the issue.
+  const languagePublished = classifiedItems.filter(
+    (item) => inferLanguage(item) === lang,
+  );
+
+  const languageDrafts = drafts.filter(
+    (item) =>
+      item.lang === lang ||
+      (!item.lang && inferLanguage(item) === lang),
+  );
+
   const stats = calculateMetrics(
-    [...published, ...drafts],
-    drafts,
+    [...languagePublished, ...languageDrafts],
+    languageDrafts,
     start,
     end,
   );
@@ -553,7 +647,7 @@ export async function buildIssuePayload(
     templateVersion,
     template,
     design: {
-      // Retain the old property for compatibility with older code.
+      // Retain the old property for compatibility.
       template: "classic",
       tokens: {
         accent: template.theme.accent,
