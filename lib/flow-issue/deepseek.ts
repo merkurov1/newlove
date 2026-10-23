@@ -8,6 +8,14 @@ const ResultSchema = z.object({
   kind: z.enum(["about_flow", "world", "other"]),
 });
 
+const TranslationSchema = z.object({
+  title: z.string(),
+  body: z.string(),
+  description: z.string(),
+  alt: z.string(),
+  caption: z.string(),
+});
+
 const MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 const TIMEOUT_MS = 12_000;
 const MAX_RETRIES = 2;
@@ -59,16 +67,12 @@ async function classifyOnce(text: string) {
           "world means external world events, art, technology, politics, or society. " +
           "Everything else is other.",
       },
-      {
-        role: "user",
-        content: text.slice(0, 7000),
-      },
+      { role: "user", content: text.slice(0, 7000) },
     ],
   });
 
   const raw = response.choices[0]?.message?.content;
   if (!raw) throw new Error("DeepSeek returned an empty classification");
-
   return ResultSchema.parse(JSON.parse(raw));
 }
 
@@ -99,7 +103,7 @@ export async function classifyNewItems(
 ): Promise<Map<string, IssueAI>> {
   const result = new Map<string, IssueAI>();
 
-  // INTEGRATION: items with ai_allowed=false never leave Supabase.
+  // Items with ai_allowed=false must never leave Supabase.
   const eligible = items.filter(
     (item) =>
       item.ai_allowed === true &&
@@ -135,7 +139,7 @@ export async function classifyNewItems(
           lang = classified.lang;
           kind = classified.kind;
         } catch (error) {
-          console.warn("[flow-issue] DeepSeek fallback", item.id, error);
+          console.warn("[flow-issue] DeepSeek classification fallback", item.id, error);
           lang = heuristicLanguage(text);
           kind = "other";
         }
@@ -149,7 +153,6 @@ export async function classifyNewItems(
 
         result.set(item.id, tag);
 
-        // Cache result in metadata without deleting unrelated metadata.
         const nextMetadata = { ...metadata, issue_ai: tag };
         const { error } = await supabase
           .from("items")
@@ -168,4 +171,87 @@ export async function classifyNewItems(
   }
 
   return result;
+}
+
+export type TranslatableIssueEntry = {
+  title?: string;
+  body?: string;
+  description?: string;
+  alt?: string;
+  caption?: string;
+  [key: string]: any;
+};
+
+async function translateOnce(
+  fields: z.infer<typeof TranslationSchema>,
+): Promise<z.infer<typeof TranslationSchema>> {
+  const response = await client().chat.completions.create({
+    model: MODEL,
+    response_format: { type: "json_object" },
+    temperature: 0.1,
+    messages: [
+      {
+        role: "system",
+        content:
+          "Translate the supplied Flow issue fields into natural, concise English. " +
+          "Return JSON only with exactly these string keys: title, body, description, alt, caption. " +
+          "Preserve meaning, tone, names, quotations and factual details. " +
+          "Do not summarize or add information. Keep URLs, usernames, product names and proper nouns unchanged. " +
+          "Empty input fields must remain empty. Do not translate a field that is already natural English.",
+      },
+      {
+        role: "user",
+        content: JSON.stringify(fields),
+      },
+    ],
+  });
+
+  const raw = response.choices[0]?.message?.content;
+  if (!raw) throw new Error("DeepSeek returned an empty translation");
+  return TranslationSchema.parse(JSON.parse(raw));
+}
+
+/**
+ * Translates only the issue payload copy. It does not update Flow items
+ * in Supabase and does not translate URLs, source names or metadata.
+ */
+export async function translateIssueEntries<T extends TranslatableIssueEntry>(
+  entries: T[],
+): Promise<T[]> {
+  return Promise.all(
+    entries.map(async (entry) => {
+      const fields = {
+        title: typeof entry.title === "string" ? entry.title : "",
+        body: typeof entry.body === "string" ? entry.body : "",
+        description:
+          typeof entry.description === "string" ? entry.description : "",
+        alt: typeof entry.alt === "string" ? entry.alt : "",
+        caption: typeof entry.caption === "string" ? entry.caption : "",
+      };
+
+      const text = Object.values(fields).filter(Boolean).join("\n");
+      if (!text.trim()) return entry;
+
+      // Avoid spending a translation request on text that is already English.
+      if (heuristicLanguage(text) === "en") return entry;
+
+      try {
+        const translated = await translateOnce(fields);
+        return {
+          ...entry,
+          title: fields.title ? translated.title : entry.title,
+          body: fields.body ? translated.body : entry.body,
+          description: fields.description
+            ? translated.description
+            : entry.description,
+          alt: fields.alt ? translated.alt : entry.alt,
+          caption: fields.caption ? translated.caption : entry.caption,
+        };
+      } catch (error) {
+        // Keep the original content rather than dropping an entry.
+        console.warn("[flow-issue] translation fallback", entry.title, error);
+        return entry;
+      }
+    }),
+  );
 }

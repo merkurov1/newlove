@@ -1,4 +1,9 @@
-import { classifyNewItems, heuristicLanguage } from "./deepseek";
+
+import {
+  classifyNewItems,
+  heuristicLanguage,
+  translateIssueEntries,
+} from "./deepseek";
 import {
   DEFAULT_ISSUE_TEMPLATE,
   normalizeIssueTemplate,
@@ -18,6 +23,9 @@ const DAY = 86_400_000;
 const SELECT_ITEMS =
   "id,type,status,visibility,lang,slug,title,body_md,source_url,ai_allowed,metadata,created_at,updated_at,published_at";
 
+const clean = (value: unknown): string =>
+  typeof value === "string" ? value.trim() : "";
+
 const safeDate = (value: unknown): Date | null => {
   if (typeof value !== "string" && !(value instanceof Date)) {
     return null;
@@ -27,30 +35,24 @@ const safeDate = (value: unknown): Date | null => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-const clean = (value: unknown) =>
-  typeof value === "string" ? value.trim() : "";
-
 const itemText = (item: FlowItem) =>
-  [item.title, item.body_md]
-    .map(clean)
-    .filter(Boolean)
-    .join("\n\n");
+  [item.title, item.body_md].map(clean).filter(Boolean).join("\n\n");
 
 const itemHasContent = (item: FlowItem) =>
   Boolean(clean(item.title) || clean(item.body_md));
 
-const itemUrl = (item: FlowItem) => {
+const itemUrl = (item: FlowItem): string | null => {
   const metadata = item.metadata || {};
 
   const raw =
     clean(metadata.canonical_url) ||
     clean(item.source_url) ||
-    clean(item.slug && `${SITE}/flow/${item.slug}`);
+    (item.slug ? `${SITE}/flow/${item.slug}` : "");
 
   try {
     const url = new URL(raw);
 
-    return ["http:", "https:"].includes(url.protocol)
+    return url.protocol === "http:" || url.protocol === "https:"
       ? url.toString()
       : null;
   } catch {
@@ -58,10 +60,7 @@ const itemUrl = (item: FlowItem) => {
   }
 };
 
-const metadataText = (item: IssueEntry, key: string) =>
-  clean(item.metadata?.[key]);
-
-function isOwn(item: FlowItem, url: string | null) {
+function isOwn(item: FlowItem, url: string | null): boolean {
   if (item.type === "note" || item.type === "photo") {
     return true;
   }
@@ -80,25 +79,15 @@ function isOwn(item: FlowItem, url: string | null) {
   }
 }
 
-/**
- * The explicit Flow language is authoritative.
- * AI classification is used only when the item has no supported
- * explicit language. This prevents a caption or link title from
- * silently moving a Russian Flow item into the English issue.
- */
 function inferLanguage(item: FlowItem): IssueLang | "other" {
   if (item.lang === "ru" || item.lang === "en") {
     return item.lang;
   }
 
-  const cached = item.metadata?.issue_ai;
+  const cached = item.metadata?.issue_ai?.lang;
 
-  if (
-    cached?.lang === "ru" ||
-    cached?.lang === "en" ||
-    cached?.lang === "other"
-  ) {
-    return cached.lang;
+  if (cached === "ru" || cached === "en" || cached === "other") {
+    return cached;
   }
 
   return heuristicLanguage(itemText(item));
@@ -141,71 +130,35 @@ function toEntry(item: FlowItem): IssueEntry {
 }
 
 function median(values: number[]): number | null {
-  if (!values.length) return null;
+  if (values.length === 0) return null;
 
   const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
+  const middle = Math.floor(sorted.length / 2);
 
-  return sorted.length % 2
-    ? sorted[mid]
-    : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
-}
-
-export function formatDuration(
-  seconds: number,
-  lang: IssueLang = "ru",
-) {
-  const value = Math.max(0, Math.round(seconds));
-
-  if (lang === "en") {
-    if (value < 60) return `${value}s`;
-    if (value < 3600) return `${Math.round(value / 60)}m`;
-
-    const hours = Math.floor(value / 3600);
-    const minutes = Math.round((value % 3600) / 60);
-
-    return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
-  }
-
-  if (value < 60) return `${value} с`;
-  if (value < 3600) return `${Math.round(value / 60)} мин`;
-
-  const hours = Math.floor(value / 3600);
-  const minutes = Math.round((value % 3600) / 60);
-
-  return minutes
-    ? `${hours} ч ${minutes} мин`
-    : `${hours} ч`;
+  return sorted.length % 2 === 1
+    ? sorted[middle]
+    : Math.round((sorted[middle - 1] + sorted[middle]) / 2);
 }
 
 function countBy<T extends string>(
   values: T[],
 ): Record<string, number> {
-  return values.reduce<Record<string, number>>(
-    (counts, value) => {
-      counts[value] = (counts[value] || 0) + 1;
-      return counts;
-    },
-    {},
-  );
+  return values.reduce<Record<string, number>>((counts, value) => {
+    counts[value] = (counts[value] || 0) + 1;
+    return counts;
+  }, {});
 }
 
-function dayKey(date: Date) {
+function dayKey(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
 function calculateMetrics(
-  items: FlowItem[],
-  drafts: FlowItem[],
+  published: FlowItem[],
   start: Date,
   end: Date,
-) {
-  const published = items.filter(
-    (item) =>
-      item.status === "published" &&
-      item.visibility === "public" &&
-      itemHasContent(item),
-  );
+): IssuePayload["stats"] {
+  const entries = published.map(toEntry);
 
   const delays = published
     .map((item) => {
@@ -223,40 +176,30 @@ function calculateMetrics(
     })
     .filter((value): value is number => value !== null);
 
-  const entries = published.map(toEntry);
   const dayCounts = new Map<string, number>();
-
-  const hourCounts = Array.from(
-    { length: 24 },
-    (_, hour) => ({
-      hour,
-      count: 0,
-    }),
-  );
+  const byUtcHour = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    count: 0,
+  }));
 
   for (const item of published) {
     const date = safeDate(item.published_at);
     if (!date) continue;
 
     const key = dayKey(date);
-
     dayCounts.set(key, (dayCounts.get(key) || 0) + 1);
-    hourCounts[date.getUTCHours()].count++;
+    byUtcHour[date.getUTCHours()].count++;
   }
 
   const byType = countBy(published.map((item) => item.type));
-  const byKind = countBy(entries.map((item) => item.kind));
+  const byKind = countBy(entries.map((entry) => entry.kind));
 
   const mismatch = published.filter((item) => {
     const detected = inferLanguage(item);
-
-    return (
-      detected !== "other" &&
-      item.lang !== detected
-    );
+    return detected !== "other" && item.lang !== detected;
   }).length;
 
-  const altEqualsFilename = published.filter((item) => {
+  const photoAltEqualsFilename = published.filter((item) => {
     if (item.type !== "photo") return false;
 
     const alt = clean(item.metadata?.alt);
@@ -264,10 +207,6 @@ function calculateMetrics(
 
     return Boolean(alt && filename && alt === filename);
   }).length;
-
-  const emptyDrafts = drafts.filter(
-    (item) => !itemHasContent(item),
-  ).length;
 
   const startDay = new Date(start);
   startDay.setUTCHours(0, 0, 0, 0);
@@ -283,18 +222,18 @@ function calculateMetrics(
     cursor += DAY
   ) {
     const date = new Date(cursor);
+    const key = dayKey(date);
 
     perDay.push({
-      date: dayKey(date),
-      count: dayCounts.get(dayKey(date)) || 0,
+      date: key,
+      count: dayCounts.get(key) || 0,
     });
   }
 
   const delayBuckets = new Map<number, number>();
 
   for (const seconds of delays) {
-    const bucket =
-      seconds <= 0 ? 0 : Math.floor(Math.log10(seconds));
+    const bucket = seconds <= 0 ? 0 : Math.floor(Math.log10(seconds));
 
     delayBuckets.set(
       bucket,
@@ -310,9 +249,10 @@ function calculateMetrics(
     }));
 
   return {
-    total: published.length + drafts.length,
+    // Count only records included in the published issue.
+    total: published.length,
     published: published.length,
-    drafts: drafts.length,
+    drafts: 0,
     days: Math.max(
       1,
       Math.ceil((end.getTime() - start.getTime()) / DAY),
@@ -326,13 +266,13 @@ function calculateMetrics(
     },
     own: entries.filter((entry) => entry.own).length,
     external: entries.filter((entry) => !entry.own).length,
-    byUtcHour: hourCounts,
+    byUtcHour,
     perDay,
     delays: delayDistribution,
     quality: {
       langFieldMismatch: mismatch,
-      photoAltEqualsFilename: altEqualsFilename,
-      emptyDrafts,
+      photoAltEqualsFilename,
+      emptyDrafts: 0,
     },
   };
 }
@@ -375,16 +315,12 @@ export async function resolveIssueWindow(
     }
 
     if (start.getTime() >= end.getTime()) {
-      throw new Error(
-        "Начало периода должно быть раньше окончания.",
-      );
+      throw new Error("Начало периода должно быть раньше окончания.");
     }
 
     return { start, end };
   }
 
-  // Keep the last published issue as the period boundary.
-  // Drafts are checked for duplicate content by the API route.
   const { data: lastIssue, error: lastError } = await supabase
     .from("letters")
     .select("period_end")
@@ -435,11 +371,7 @@ export async function buildIssuePayload(
   start: Date,
   end: Date,
 ): Promise<IssuePayload> {
-  const [
-    publishedResult,
-    draftsResult,
-    activeTemplate,
-  ] = await Promise.all([
+  const [publishedResult, activeTemplate] = await Promise.all([
     supabase
       .from("items")
       .select(SELECT_ITEMS)
@@ -449,20 +381,10 @@ export async function buildIssuePayload(
       .lte("published_at", end.toISOString())
       .order("published_at", { ascending: false }),
 
-    supabase
-      .from("items")
-      .select(SELECT_ITEMS)
-      .eq("status", "draft")
-      .gte("created_at", start.toISOString())
-      .lte("created_at", end.toISOString()),
-
     loadActiveTemplate(supabase),
   ]);
 
   if (publishedResult.error) throw publishedResult.error;
-  if (draftsResult.error) throw draftsResult.error;
-
-  const drafts = (draftsResult.data || []) as FlowItem[];
 
   const published = (
     (publishedResult.data || []) as FlowItem[]
@@ -472,27 +394,26 @@ export async function buildIssuePayload(
       itemHasContent(item),
   );
 
-  // AI classification enriches metadata only. It must never rewrite
-  // the original Flow text.
+  // Classification only enriches metadata; it does not rewrite Flow text.
   await classifyNewItems(supabase, published);
 
   const ids = published.map((item) => item.id);
   let classifiedItems = published;
 
-  if (ids.length) {
+  if (ids.length > 0) {
     const { data, error } = await supabase
       .from("items")
       .select(SELECT_ITEMS)
       .in("id", ids);
 
     if (error) throw error;
-
     classifiedItems = (data || []) as FlowItem[];
   }
 
+  // Crucial: do not filter records by language here.
+  // Both language versions must be built from this same canonical set.
   const entries = classifiedItems
     .map(toEntry)
-    .filter((entry) => entry.lang === lang)
     .sort((a, b) =>
       b.publishedAt.localeCompare(a.publishedAt),
     );
@@ -500,8 +421,6 @@ export async function buildIssuePayload(
   const { config: template, version: templateVersion } =
     activeTemplate;
 
-  // Prefer an author's own note. If there is none, prefer an own
-  // publication with actual text before falling back to an external link.
   const lead =
     entries.find(
       (entry) =>
@@ -517,13 +436,10 @@ export async function buildIssuePayload(
     entries[0] ||
     null;
 
-  // The lead is not repeated in the "Latest" section.
-  // Links, videos and photos are rendered in their own sections.
   const latest = entries
     .filter(
       (entry) =>
-        entry.type === "note" &&
-        entry.id !== lead?.id,
+        entry.type === "note" && entry.id !== lead?.id,
     )
     .slice(0, template.limits.latest);
 
@@ -532,7 +448,6 @@ export async function buildIssuePayload(
     .slice(0, template.limits.links)
     .map((entry) => {
       const metadata = entry.metadata;
-
       const originalDate =
         safeDate(metadata.published_at)?.toISOString() || null;
 
@@ -571,8 +486,7 @@ export async function buildIssuePayload(
       return {
         ...entry,
         title:
-          clean(entry.metadata.youtube?.title) ||
-          entry.title,
+          clean(entry.metadata.youtube?.title) || entry.title,
         image: clean(entry.metadata.youtube?.thumbnail_url),
         videoId: videoId || null,
         url: videoId
@@ -594,8 +508,7 @@ export async function buildIssuePayload(
   const sourceIndex = entries
     .filter(
       (entry) =>
-        entry.type === "link" ||
-        entry.type === "video",
+        entry.type === "link" || entry.type === "video",
     )
     .map((entry) => ({
       id: entry.id,
@@ -611,23 +524,171 @@ export async function buildIssuePayload(
       addedAt: entry.publishedAt,
     }));
 
-  // Metrics must describe the same language stream as the issue.
-  const languagePublished = classifiedItems.filter(
-    (item) => inferLanguage(item) === lang,
-  );
+  // Explicit payload shape prevents TypeScript from inferring lead as
+  // a non-null IssueEntry and fixes the nullable-lead assignment error.
+  type IssueContent = Pick<
+    IssuePayload,
+    "lead" | "latest" | "links" | "videos" | "photos" | "sourceIndex"
+  >;
 
-  const languageDrafts = drafts.filter(
-    (item) =>
-      item.lang === lang ||
-      (!item.lang && inferLanguage(item) === lang),
-  );
+  let payloadEntries: IssueContent = {
+    lead,
+    latest,
+    links,
+    videos,
+    photos,
+    sourceIndex,
+  };
 
-  const stats = calculateMetrics(
-    [...languagePublished, ...languageDrafts],
-    languageDrafts,
-    start,
-    end,
-  );
+  if (lang === "en") {
+    const translationInput: {
+      key: string;
+      title: string;
+      body: string;
+      description: string;
+      alt: string;
+      caption: string;
+    }[] = [];
+
+    if (lead) {
+      translationInput.push({
+        key: "lead",
+        title: lead.title || "",
+        body: lead.body || "",
+        description: "",
+        alt: "",
+        caption: "",
+      });
+    }
+
+    latest.forEach((entry, index) => {
+      translationInput.push({
+        key: `latest:${index}`,
+        title: entry.title || "",
+        body: entry.body || "",
+        description: "",
+        alt: "",
+        caption: "",
+      });
+    });
+
+    links.forEach((entry, index) => {
+      translationInput.push({
+        key: `links:${index}`,
+        title: entry.title || "",
+        body: entry.body || "",
+        description:
+          typeof entry.description === "string"
+            ? entry.description
+            : "",
+        alt: "",
+        caption: "",
+      });
+    });
+
+    videos.forEach((entry, index) => {
+      translationInput.push({
+        key: `videos:${index}`,
+        title: entry.title || "",
+        body: entry.body || "",
+        description: "",
+        alt: "",
+        caption: "",
+      });
+    });
+
+    photos.forEach((entry, index) => {
+      translationInput.push({
+        key: `photos:${index}`,
+        title: entry.title || "",
+        body: entry.body || "",
+        description: "",
+        alt: typeof entry.alt === "string" ? entry.alt : "",
+        caption:
+          typeof entry.caption === "string"
+            ? entry.caption
+            : "",
+      });
+    });
+
+    const translated = await translateIssueEntries(translationInput);
+    const translations = new Map(
+      translated.map((entry) => [entry.key, entry]),
+    );
+
+    const translateEntry = <T extends { title: string; body: string }>(
+      entry: T,
+      key: string,
+    ): T => {
+      const tr = translations.get(key);
+      if (!tr) return entry;
+
+      return {
+        ...entry,
+        title: tr.title || entry.title,
+        body: tr.body || entry.body,
+      };
+    };
+
+    payloadEntries = {
+      lead: lead ? translateEntry(lead, "lead") : null,
+
+      latest: latest.map((entry, index) =>
+        translateEntry(entry, `latest:${index}`),
+      ),
+
+      links: links.map((entry, index) => {
+        const tr = translations.get(`links:${index}`);
+        if (!tr) return entry;
+
+        return {
+          ...entry,
+          title: tr.title || entry.title,
+          body: tr.body || entry.body,
+          description: tr.description || entry.description,
+        };
+      }),
+
+      videos: videos.map((entry, index) =>
+        translateEntry(entry, `videos:${index}`),
+      ),
+
+      photos: photos.map((entry, index) => {
+        const tr = translations.get(`photos:${index}`);
+        if (!tr) return entry;
+
+        return {
+          ...entry,
+          title: tr.title || entry.title,
+          body: tr.body || entry.body,
+          alt: tr.alt || entry.alt,
+          caption: tr.caption || entry.caption,
+        };
+      }),
+
+      sourceIndex: sourceIndex.map((source) => {
+        const index = links.findIndex(
+          (entry) => entry.id === source.id,
+        );
+        const tr =
+          index >= 0 ? translations.get(`links:${index}`) : undefined;
+
+        return tr
+          ? { ...source, title: tr.title || source.title }
+          : source;
+      }),
+    };
+  }
+
+  const stats = calculateMetrics(classifiedItems, start, end);
+
+  // Keep the metrics unambiguous: published records are counted once;
+  // drafts are not included in the issue header.
+  const displayStats = {
+    ...stats,
+    total: undefined,
+    drafts: undefined,
+  } as unknown as IssuePayload["stats"];
 
   return {
     schemaVersion: 2,
@@ -637,17 +698,16 @@ export async function buildIssuePayload(
       end: end.toISOString(),
       timezone: "UTC",
     },
-    stats,
-    lead,
-    latest,
-    links,
-    videos,
-    photos,
-    sourceIndex,
+    stats: displayStats,
+    lead: payloadEntries.lead,
+    latest: payloadEntries.latest,
+    links: payloadEntries.links,
+    videos: payloadEntries.videos,
+    photos: payloadEntries.photos,
+    sourceIndex: payloadEntries.sourceIndex,
     templateVersion,
     template,
     design: {
-      // Retain the old property for compatibility.
       template: "classic",
       tokens: {
         accent: template.theme.accent,
