@@ -91,6 +91,7 @@ Note: trivial whitespace/tiny-note change (auto-commit).
 - [Medium интеграция](docs/MEDIUM-INTEGRATION-COMPLETE.md)
 - [Архитектура Edit Button](docs/EDIT-BUTTON-ARCHITECTURE.md)
 - [Миграции на Vercel](VERCEL_PRISMA_MIGRATION.md)
+- [Telegram Research (локальный анализ переписки)](docs/telegram-research.md)
 
 ---
 

@@ -1,0 +1,1362 @@
+{
+  "schemaVersion": 1,
+  "slug": "vorobievaya",
+  "generatedAt": "2026-10-24T10:58:52.645Z",
+  "privacy": {
+    "containsRawMessages": false,
+    "note": "Только агрегированные метрики и AI-сводки. Исходные сообщения, медиа и Telegram ID не публикуются."
+  },
+  "chat": {
+    "title": "Ирина Воробьева",
+    "username": "Vorobievaya",
+    "type": "private"
+  },
+  "period": {
+    "from": "2024-03-14T12:58:47.000Z",
+    "to": "2026-10-22T10:15:40.000Z"
+  },
+  "totals": {
+    "messages": 1613,
+    "withText": 1476,
+    "withoutText": 1,
+    "media": 499,
+    "service": 1,
+    "edited": 232,
+    "forwarded": 193,
+    "replies": 125,
+    "outgoing": 877,
+    "participants": 2
+  },
+  "participants": [
+    {
+      "key": "self",
+      "displayName": "Anton Merkurov",
+      "username": "merkurov",
+      "messages": 877,
+      "share": 0.5437,
+      "characters": 128938,
+      "words": 15344,
+      "links": 377,
+      "media": 395,
+      "repliesSent": 82,
+      "directRepliesSent": 73,
+      "estimatedRepliesSent": 294,
+      "sessionsStarted": 227,
+      "medianCharacters": 47,
+      "medianWords": 2,
+      "medianDirectReplySeconds": 8731,
+      "medianEstimatedReplySeconds": 47,
+      "firstMessageAt": "2024-03-14T13:20:02.000Z",
+      "lastMessageAt": "2026-10-22T10:15:40.000Z"
+    },
+    {
+      "key": "peer",
+      "displayName": "Ирина Воробьева",
+      "username": "vorobievaya",
+      "messages": 736,
+      "share": 0.4563,
+      "characters": 132795,
+      "words": 18790,
+      "links": 187,
+      "media": 104,
+      "repliesSent": 43,
+      "directRepliesSent": 40,
+      "estimatedRepliesSent": 284,
+      "sessionsStarted": 152,
+      "medianCharacters": 34,
+      "medianWords": 6,
+      "medianDirectReplySeconds": 66838,
+      "medianEstimatedReplySeconds": 51,
+      "firstMessageAt": "2024-03-14T12:58:47.000Z",
+      "lastMessageAt": "2026-10-22T06:40:30.000Z"
+    }
+  ],
+  "activity": {
+    "byYear": [
+      {
+        "year": "2024",
+        "total": 487,
+        "self": 246,
+        "peer": 241
+      },
+      {
+        "year": "2025",
+        "total": 705,
+        "self": 402,
+        "peer": 303
+      },
+      {
+        "year": "2026",
+        "total": 421,
+        "self": 229,
+        "peer": 192
+      }
+    ],
+    "byMonth": [
+      {
+        "month": "2024-03",
+        "total": 18,
+        "self": 9,
+        "peer": 9
+      },
+      {
+        "month": "2024-04",
+        "total": 1,
+        "self": 1,
+        "peer": 0
+      },
+      {
+        "month": "2024-05",
+        "total": 33,
+        "self": 16,
+        "peer": 17
+      },
+      {
+        "month": "2024-06",
+        "total": 29,
+        "self": 14,
+        "peer": 15
+      },
+      {
+        "month": "2024-07",
+        "total": 97,
+        "self": 47,
+        "peer": 50
+      },
+      {
+        "month": "2024-08",
+        "total": 65,
+        "self": 24,
+        "peer": 41
+      },
+      {
+        "month": "2024-09",
+        "total": 51,
+        "self": 29,
+        "peer": 22
+      },
+      {
+        "month": "2024-10",
+        "total": 58,
+        "self": 31,
+        "peer": 27
+      },
+      {
+        "month": "2024-11",
+        "total": 54,
+        "self": 33,
+        "peer": 21
+      },
+      {
+        "month": "2024-12",
+        "total": 81,
+        "self": 42,
+        "peer": 39
+      },
+      {
+        "month": "2025-01",
+        "total": 63,
+        "self": 34,
+        "peer": 29
+      },
+      {
+        "month": "2025-02",
+        "total": 38,
+        "self": 24,
+        "peer": 14
+      },
+      {
+        "month": "2025-03",
+        "total": 83,
+        "self": 52,
+        "peer": 31
+      },
+      {
+        "month": "2025-04",
+        "total": 75,
+        "self": 37,
+        "peer": 38
+      },
+      {
+        "month": "2025-05",
+        "total": 77,
+        "self": 49,
+        "peer": 28
+      },
+      {
+        "month": "2025-06",
+        "total": 36,
+        "self": 20,
+        "peer": 16
+      },
+      {
+        "month": "2025-07",
+        "total": 45,
+        "self": 21,
+        "peer": 24
+      },
+      {
+        "month": "2025-08",
+        "total": 55,
+        "self": 31,
+        "peer": 24
+      },
+      {
+        "month": "2025-09",
+        "total": 78,
+        "self": 41,
+        "peer": 37
+      },
+      {
+        "month": "2025-10",
+        "total": 83,
+        "self": 49,
+        "peer": 34
+      },
+      {
+        "month": "2025-11",
+        "total": 34,
+        "self": 20,
+        "peer": 14
+      },
+      {
+        "month": "2025-12",
+        "total": 38,
+        "self": 24,
+        "peer": 14
+      },
+      {
+        "month": "2026-01",
+        "total": 45,
+        "self": 25,
+        "peer": 20
+      },
+      {
+        "month": "2026-02",
+        "total": 66,
+        "self": 43,
+        "peer": 23
+      },
+      {
+        "month": "2026-03",
+        "total": 45,
+        "self": 20,
+        "peer": 25
+      },
+      {
+        "month": "2026-04",
+        "total": 66,
+        "self": 36,
+        "peer": 30
+      },
+      {
+        "month": "2026-05",
+        "total": 28,
+        "self": 12,
+        "peer": 16
+      },
+      {
+        "month": "2026-06",
+        "total": 46,
+        "self": 22,
+        "peer": 24
+      },
+      {
+        "month": "2026-07",
+        "total": 50,
+        "self": 28,
+        "peer": 22
+      },
+      {
+        "month": "2026-08",
+        "total": 16,
+        "self": 7,
+        "peer": 9
+      },
+      {
+        "month": "2026-09",
+        "total": 44,
+        "self": 27,
+        "peer": 17
+      },
+      {
+        "month": "2026-10",
+        "total": 15,
+        "self": 9,
+        "peer": 6
+      }
+    ],
+    "byWeekday": [
+      {
+        "key": "0",
+        "label": "воскресенье",
+        "total": 86,
+        "self": 60,
+        "peer": 26
+      },
+      {
+        "key": "1",
+        "label": "понедельник",
+        "total": 233,
+        "self": 115,
+        "peer": 118
+      },
+      {
+        "key": "2",
+        "label": "вторник",
+        "total": 337,
+        "self": 196,
+        "peer": 141
+      },
+      {
+        "key": "3",
+        "label": "среда",
+        "total": 252,
+        "self": 127,
+        "peer": 125
+      },
+      {
+        "key": "4",
+        "label": "четверг",
+        "total": 344,
+        "self": 183,
+        "peer": 161
+      },
+      {
+        "key": "5",
+        "label": "пятница",
+        "total": 261,
+        "self": 132,
+        "peer": 129
+      },
+      {
+        "key": "6",
+        "label": "суббота",
+        "total": 100,
+        "self": 64,
+        "peer": 36
+      }
+    ],
+    "byHour": [
+      {
+        "hour": 0,
+        "total": 7,
+        "self": 5,
+        "peer": 2
+      },
+      {
+        "hour": 1,
+        "total": 33,
+        "self": 30,
+        "peer": 3
+      },
+      {
+        "hour": 2,
+        "total": 0,
+        "self": 0,
+        "peer": 0
+      },
+      {
+        "hour": 3,
+        "total": 1,
+        "self": 1,
+        "peer": 0
+      },
+      {
+        "hour": 4,
+        "total": 1,
+        "self": 1,
+        "peer": 0
+      },
+      {
+        "hour": 5,
+        "total": 1,
+        "self": 1,
+        "peer": 0
+      },
+      {
+        "hour": 6,
+        "total": 3,
+        "self": 3,
+        "peer": 0
+      },
+      {
+        "hour": 7,
+        "total": 43,
+        "self": 31,
+        "peer": 12
+      },
+      {
+        "hour": 8,
+        "total": 42,
+        "self": 23,
+        "peer": 19
+      },
+      {
+        "hour": 9,
+        "total": 106,
+        "self": 57,
+        "peer": 49
+      },
+      {
+        "hour": 10,
+        "total": 135,
+        "self": 66,
+        "peer": 69
+      },
+      {
+        "hour": 11,
+        "total": 142,
+        "self": 67,
+        "peer": 75
+      },
+      {
+        "hour": 12,
+        "total": 138,
+        "self": 72,
+        "peer": 66
+      },
+      {
+        "hour": 13,
+        "total": 129,
+        "self": 63,
+        "peer": 66
+      },
+      {
+        "hour": 14,
+        "total": 134,
+        "self": 65,
+        "peer": 69
+      },
+      {
+        "hour": 15,
+        "total": 121,
+        "self": 68,
+        "peer": 53
+      },
+      {
+        "hour": 16,
+        "total": 145,
+        "self": 90,
+        "peer": 55
+      },
+      {
+        "hour": 17,
+        "total": 140,
+        "self": 69,
+        "peer": 71
+      },
+      {
+        "hour": 18,
+        "total": 111,
+        "self": 60,
+        "peer": 51
+      },
+      {
+        "hour": 19,
+        "total": 60,
+        "self": 41,
+        "peer": 19
+      },
+      {
+        "hour": 20,
+        "total": 63,
+        "self": 32,
+        "peer": 31
+      },
+      {
+        "hour": 21,
+        "total": 43,
+        "self": 23,
+        "peer": 20
+      },
+      {
+        "hour": 22,
+        "total": 12,
+        "self": 7,
+        "peer": 5
+      },
+      {
+        "hour": 23,
+        "total": 3,
+        "self": 2,
+        "peer": 1
+      }
+    ]
+  },
+  "lengths": {
+    "characters": {
+      "count": 1613,
+      "min": 0,
+      "max": 4095,
+      "mean": 162.26,
+      "median": 39,
+      "p90": 293,
+      "p99": 2642
+    },
+    "words": {
+      "count": 1613,
+      "min": 0,
+      "max": 592,
+      "mean": 21.16,
+      "median": 4,
+      "p90": 40,
+      "p99": 356
+    },
+    "linksPerMessage": {
+      "count": 1613,
+      "min": 0,
+      "max": 15,
+      "mean": 0.35,
+      "median": 0,
+      "p90": 1,
+      "p99": 5
+    },
+    "characterHistogram": [
+      {
+        "from": 0,
+        "to": 0,
+        "count": 137
+      },
+      {
+        "from": 1,
+        "to": 20,
+        "count": 437
+      },
+      {
+        "from": 21,
+        "to": 50,
+        "count": 319
+      },
+      {
+        "from": 51,
+        "to": 100,
+        "count": 376
+      },
+      {
+        "from": 101,
+        "to": 200,
+        "count": 151
+      },
+      {
+        "from": 201,
+        "to": 500,
+        "count": 75
+      },
+      {
+        "from": 501,
+        "to": 1000,
+        "count": 55
+      },
+      {
+        "from": 1001,
+        "to": 2000,
+        "count": 37
+      },
+      {
+        "from": 2001,
+        "to": null,
+        "count": 26
+      }
+    ],
+    "wordHistogram": [
+      {
+        "from": 0,
+        "to": 0,
+        "count": 137
+      },
+      {
+        "from": 1,
+        "to": 3,
+        "count": 620
+      },
+      {
+        "from": 4,
+        "to": 10,
+        "count": 426
+      },
+      {
+        "from": 11,
+        "to": 20,
+        "count": 185
+      },
+      {
+        "from": 21,
+        "to": 50,
+        "count": 105
+      },
+      {
+        "from": 51,
+        "to": 100,
+        "count": 55
+      },
+      {
+        "from": 101,
+        "to": null,
+        "count": 85
+      }
+    ],
+    "linkHistogram": [
+      {
+        "from": 0,
+        "to": 0,
+        "count": 1237
+      },
+      {
+        "from": 1,
+        "to": 1,
+        "count": 311
+      },
+      {
+        "from": 2,
+        "to": 2,
+        "count": 34
+      },
+      {
+        "from": 3,
+        "to": 5,
+        "count": 18
+      },
+      {
+        "from": 6,
+        "to": null,
+        "count": 13
+      }
+    ],
+    "messagesWithLinks": 376,
+    "totalLinks": 564
+  },
+  "responses": {
+    "replyLinksAvailable": true,
+    "replyCoverage": 0.0775,
+    "crossParticipantReplies": 113,
+    "direct": {
+      "count": 113,
+      "medianSeconds": 11448,
+      "meanSeconds": 95713.42,
+      "p90Seconds": 284939,
+      "byParticipant": {
+        "self": 73,
+        "peer": 40
+      }
+    },
+    "estimated": {
+      "count": 578,
+      "medianSeconds": 50,
+      "meanSeconds": 1419.97,
+      "byParticipant": {
+        "self": 294,
+        "peer": 284
+      },
+      "method": "Следующее сообщение другого участника без replyToId в пределах estimateWindowSeconds; не является доказанным ответом."
+    }
+  },
+  "sessions": {
+    "thresholdSeconds": 21600,
+    "longPauseSeconds": 14515200,
+    "count": 379,
+    "medianDurationSeconds": 181,
+    "meanDurationSeconds": 4512.3,
+    "medianMessagesPerSession": 3,
+    "starts": {
+      "self": 227,
+      "peer": 152
+    },
+    "longPauseGaps": 0,
+    "longPauseResumes": {
+      "self": 0,
+      "peer": 0
+    },
+    "longest": {
+      "start": "2025-04-07T04:40:23.000Z",
+      "end": "2025-04-07T16:26:59.000Z",
+      "durationSeconds": 42396,
+      "messageCount": 8,
+      "initiatedBy": "self"
+    }
+  },
+  "dataQuality": {
+    "totalMessages": 1613,
+    "totalCharacters": 261733,
+    "messagesWithoutText": 1,
+    "messagesWithEmptyString": 136,
+    "mediaOnlyMessages": 0,
+    "serviceMessages": 1,
+    "unknownSenderMessages": 0,
+    "unresolvedReplyTargets": 0,
+    "forwardsWithoutSource": 0,
+    "outOfOrderMessages": 0,
+    "duplicateIds": 0,
+    "messagesOutsideDateRange": 0,
+    "zeroLengthIntervals": 109
+  },
+  "methodology": {
+    "timezone": "Europe/Moscow",
+    "timestamps": "В корпусе все даты хранятся в UTC ISO-8601; год/месяц/день/час считаются в указанной IANA-зоне, поэтому переходы на летнее время учитываются.",
+    "directReplies": "Прямой ответ — сообщение с replyToId, для которого цель найдена в корпусе, а отправитель отличается от автора цели. Время ответа = дата ответа минус дата исходного сообщения.",
+    "estimatedReplies": "Оценочный ответ — следующее сообщение другого участника без replyToId, если разрыв не больше estimateWindowSeconds. Это не доказанный ответ, поэтому метрика хранится отдельно от прямых ответов и никогда с ними не суммируется.",
+    "sessions": "Сессия — непрерывная последовательность сообщений, где каждый следующий разрыв не больше sessionGapSeconds. Порог настраивается.",
+    "longPauses": "Длительная пауза — разрыв больше longPauseSeconds между сессиями. Инициатор следующей сессии считается возобновившим разговор после такой паузы.",
+    "participantIdentity": "Участник определяется по sender.id из Telegram. Сообщения без отправителя попадают в группу unknown.",
+    "limitations": [
+      "Telegram не возвращает удалённые сообщения через историю, поэтому статистика по удалённым сообщениям неполна.",
+      "Reply-связи есть только там, где Telegram их вернул; оценочные ответы — эвристика, а не факт.",
+      "Медиа не скачивались: длина и слова считаются только по тексту и подписям.",
+      "Часовой пояс отображения задаётся при запуске и записывается в отчёт; исходные timestamps не переписываются.",
+      "Психолингвистические выводы в отчёт не входят: модуль считает только наблюдаемые числовые признаки."
+    ]
+  },
+  "completeness": {
+    "status": "complete",
+    "checks": {
+      "authWasRequired": true,
+      "reachedEmptyPage": true,
+      "headStable": true,
+      "latestVisibleMessageMatched": true,
+      "noUnresolvedErrors": true,
+      "withinLimits": true,
+      "corpusSortedAndUnique": true
+    },
+    "reasons": [],
+    "gaps": []
+  },
+  "export": {
+    "strategy": "messages.list+raw_json",
+    "pages": 18,
+    "headPages": 1,
+    "duplicatesDropped": 100,
+    "retries": 0,
+    "apiCalls": 19,
+    "sourceTimezone": "UTC"
+  },
+  "deepseek": {
+    "model": "deepseek-flash",
+    "status": "complete",
+    "usage": {
+      "inputTokens": 38559,
+      "outputTokens": 5021,
+      "costUsd": 0.0176
+    },
+    "summary": "Переписка представляет собой длительное (с мая 2024 по 2026 год) рабочее взаимодействие редактора Ирины Воробьевой и автора Антона Меркурова: регулярные заказы текстов на темы интернета, цензуры, технологий и ИИ, сдача материалов ссылками на Google Docs, отдельные правки и публикации. Параллельно обсуждаются гонорары, доверенности, личные встречи и участие в эфирах. Зафиксированы десятки циклов «задание — сдача текста», несколько публикаций и правок.",
+    "timeline": [
+      {
+        "date": "2024-05-21",
+        "summary": "Ирина заказывает текст про блокировку YouTube по требованию Роскомнадзора.",
+        "confidence": 0.9,
+        "sourceCount": 2
+      },
+      {
+        "date": "2024-05-22",
+        "summary": "Меркуров присылает текст про блокировку YouTube; материал опубликован.",
+        "confidence": 0.85,
+        "sourceCount": 2
+      },
+      {
+        "date": "2024-06-14",
+        "summary": "Заказ текста про запрет Минфина США на поставку софта в РФ; сдача на следующий день.",
+        "confidence": 0.9,
+        "sourceCount": 2
+      },
+      {
+        "date": "2024-07-10",
+        "summary": "Заказ письма для политзеков и сдача текста в тот же день.",
+        "confidence": 0.9,
+        "sourceCount": 4
+      },
+      {
+        "date": "2024-08-01",
+        "summary": "Приглашение в рубрику на «Живом гвозде» 2 августа, согласовано.",
+        "confidence": 0.9,
+        "sourceCount": 3
+      },
+      {
+        "date": "2024-08-26",
+        "summary": "Заказ текста-реакции на уголовное дело Дурова; сдача на следующий день.",
+        "confidence": 0.85,
+        "sourceCount": 2
+      },
+      {
+        "date": "2024-10-19",
+        "summary": "Опубликован материал о рынке искусства.",
+        "confidence": 0.85,
+        "sourceCount": 1
+      },
+      {
+        "date": "2024-11-21",
+        "summary": "Решено не писать про Bluesky; согласован текст про VPN.",
+        "confidence": 0.8,
+        "sourceCount": 4
+      },
+      {
+        "date": "2024-12-03",
+        "summary": "Сообщение об ошибке в опубликованном тексте и последующее замечание, что правку не внесли.",
+        "confidence": 0.75,
+        "sourceCount": 3
+      },
+      {
+        "date": "2025-01-09",
+        "summary": "Согласовано участие в «Живом гвозде» 10 января в 09:30.",
+        "confidence": 0.8,
+        "sourceCount": 2
+      },
+      {
+        "date": "2025-01-29",
+        "summary": "Согласовано участие в стриме «Новой газеты» 30 января около 20:00.",
+        "confidence": 0.85,
+        "sourceCount": 2
+      },
+      {
+        "date": "2025-03-06",
+        "summary": "Заказ текста-портрета про Питера Тиля; сдача 9 марта.",
+        "confidence": 0.9,
+        "sourceCount": 3
+      },
+      {
+        "date": "2025-03-12",
+        "summary": "Правка: добавлена информация о запрете стикерпаков, выполнено.",
+        "confidence": 0.85,
+        "sourceCount": 3
+      },
+      {
+        "date": "2025-04-25",
+        "summary": "Ирина сообщает о согласовании с Соколовым очерка Антона не про интернет.",
+        "confidence": 0.8,
+        "sourceCount": 1
+      },
+      {
+        "date": "2025-05-28",
+        "summary": "Правка вёрстки: Антон присылает подписи к фото.",
+        "confidence": 0.85,
+        "sourceCount": 2
+      },
+      {
+        "date": "2025-06-09",
+        "summary": "Согласовано участие в стриме «Новой газеты» в четверг в 20:30.",
+        "confidence": 0.85,
+        "sourceCount": 2
+      },
+      {
+        "date": "2025-07-07",
+        "summary": "Ссылка на YouTube с отдельно выложенным Антоном Меркуровым.",
+        "confidence": 0.8,
+        "sourceCount": 2
+      },
+      {
+        "date": "2025-10-30",
+        "summary": "Ирина сообщает о задержке гонораров; Антон говорит, что не получал выплат с июля.",
+        "confidence": 0.8,
+        "sourceCount": 3
+      },
+      {
+        "date": "2025-12-04",
+        "summary": "Заказ и сдача текста про блокировку Roblox, WhatsApp и слухи о VPN.",
+        "confidence": 0.8,
+        "sourceCount": 2
+      },
+      {
+        "date": "2026-02-14",
+        "summary": "Антон указывает на публикацию в «Новой газете» и отмечает, что забыли первый абзац.",
+        "confidence": 0.75,
+        "sourceCount": 1
+      },
+      {
+        "date": "2026-04-16",
+        "summary": "Правка по мораторию на расширение каналов связи внесена, Антон сообщает «готово».",
+        "confidence": 0.85,
+        "sourceCount": 2
+      },
+      {
+        "date": "2026-07-03",
+        "summary": "Согласована тема про игры, текст прислан.",
+        "confidence": 0.8,
+        "sourceCount": 2
+      }
+    ],
+    "editorialEvents": [
+      {
+        "type": "assignment",
+        "summary": "Ирина Воробьева просит Антона Меркурова написать текст про блокировку YouTube по требованию Роскомнадзора",
+        "date": "2024-05-21",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Ирина Воробьева",
+          "Anton Merkurov"
+        ],
+        "confidence": 0.9,
+        "sourceCount": 2
+      },
+      {
+        "type": "text_delivery",
+        "summary": "Меркуров прислал текст про блокировку YouTube со ссылкой на Google Doc",
+        "date": "2024-05-22",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.9,
+        "sourceCount": 1
+      },
+      {
+        "type": "publication_link",
+        "summary": "Опубликован материал Меркурова о блокировках YouTube по просьбе Роскомнадзора",
+        "date": "2024-05-22",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Ирина Воробьева",
+          "Anton Merkurov"
+        ],
+        "confidence": 0.85,
+        "sourceCount": 1
+      },
+      {
+        "type": "assignment",
+        "summary": "Ирина просит написать текст про запрет Минфина США на поставку софта в РФ",
+        "date": "2024-06-14",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Ирина Воробьева",
+          "Anton Merkurov"
+        ],
+        "confidence": 0.9,
+        "sourceCount": 1
+      },
+      {
+        "type": "text_delivery",
+        "summary": "Меркуров прислал текст по запрету иностранного софта",
+        "date": "2024-06-15",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.9,
+        "sourceCount": 1
+      },
+      {
+        "type": "assignment",
+        "summary": "Ирина просит написать письмо для политзеков о том, что происходит с интернетом в России, на 1 страницу",
+        "date": "2024-07-10",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Ирина Воробьева",
+          "Anton Merkurov"
+        ],
+        "confidence": 0.9,
+        "sourceCount": 2
+      },
+      {
+        "type": "text_delivery",
+        "summary": "Меркуров прислал текст письма для политзеков",
+        "date": "2024-07-10",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.9,
+        "sourceCount": 2
+      },
+      {
+        "type": "assignment",
+        "summary": "Ирина приглашает Меркурова в рубрику на Живом Гвозде 2 августа с 9:40 до 10:00",
+        "date": "2024-08-01",
+        "deadline": null,
+        "status": "agreed",
+        "participants": [
+          "Ирина Воробьева",
+          "Anton Merkurov"
+        ],
+        "confidence": 0.9,
+        "sourceCount": 3
+      },
+      {
+        "type": "assignment",
+        "summary": "Ирина просит написать текст-реакцию инноваторов и отрасли на уголовное дело Дурова",
+        "date": "2024-08-26",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Ирина Воробьева",
+          "Anton Merkurov"
+        ],
+        "confidence": 0.9,
+        "sourceCount": 1
+      },
+      {
+        "type": "text_delivery",
+        "summary": "Меркуров прислал текст-реакцию на дело Дурова",
+        "date": "2024-08-27",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.85,
+        "sourceCount": 1
+      },
+      {
+        "type": "publication_link",
+        "summary": "Опубликован материал Меркурова о рынке искусства",
+        "date": "2024-10-19",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Ирина Воробьева",
+          "Anton Merkurov"
+        ],
+        "confidence": 0.85,
+        "sourceCount": 1
+      },
+      {
+        "type": "other",
+        "summary": "Решено пока не писать про Bluesky",
+        "date": "2024-11-21",
+        "deadline": null,
+        "status": "cancelled",
+        "participants": [
+          "Anton Merkurov",
+          "Ирина Воробьева"
+        ],
+        "confidence": 0.8,
+        "sourceCount": 2
+      },
+      {
+        "type": "revision_request",
+        "summary": "Ирина сообщила об ошибке в опубликованном тексте и обещала исправить; позже Антон отметил, что не поправили",
+        "date": "2024-12-03",
+        "deadline": null,
+        "status": "in_progress",
+        "participants": [
+          "Anton Merkurov",
+          "Ирина Воробьева"
+        ],
+        "confidence": 0.75,
+        "sourceCount": 3
+      },
+      {
+        "type": "other",
+        "summary": "Ирина предложила участие в «Живом гвозде» 10 января в 09:30; Антон согласился",
+        "date": "2025-01-09",
+        "deadline": null,
+        "status": "agreed",
+        "participants": [
+          "Anton Merkurov",
+          "Ирина Воробьева"
+        ],
+        "confidence": 0.8,
+        "sourceCount": 2
+      },
+      {
+        "type": "other",
+        "summary": "Ирина пригласила Антона в стрим Новой Газеты по зуму 30 января около 20:00; Антон согласился",
+        "date": "2025-01-29",
+        "deadline": null,
+        "status": "agreed",
+        "participants": [
+          "Anton Merkurov",
+          "Ирина Воробьева"
+        ],
+        "confidence": 0.85,
+        "sourceCount": 2
+      },
+      {
+        "type": "assignment",
+        "summary": "Ирина заказала серьёзный текст-портрет про Питера Тиля; Антон прислал текст",
+        "date": "2025-03-06",
+        "deadline": null,
+        "status": "in_progress",
+        "participants": [
+          "Anton Merkurov",
+          "Ирина Воробьева"
+        ],
+        "confidence": 0.9,
+        "sourceCount": 3
+      },
+      {
+        "type": "text_delivery",
+        "summary": "Ирина забрала текст про Тиля",
+        "date": "2025-03-09",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Ирина Воробьева"
+        ],
+        "confidence": 0.85,
+        "sourceCount": 1
+      },
+      {
+        "type": "revision_request",
+        "summary": "Ирина попросила добавить в текст информацию о запрете стикерпаков; Антон выполнил",
+        "date": "2025-03-12",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Anton Merkurov",
+          "Ирина Воробьева"
+        ],
+        "confidence": 0.85,
+        "sourceCount": 3
+      },
+      {
+        "type": "approval",
+        "summary": "Ирина Воробьева сообщает, что согласовала с Соколовым появление очерка Антона не про интернет",
+        "date": "2025-04-25",
+        "deadline": null,
+        "status": "agreed",
+        "participants": [
+          "Ирина Воробьева"
+        ],
+        "confidence": 0.8,
+        "sourceCount": 1
+      },
+      {
+        "type": "revision_request",
+        "summary": "Ирина просит посмотреть верстку и добавить подписи к фото; Антон присылает примерные подписи",
+        "date": "2025-05-28",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Ирина Воробьева",
+          "Anton Merkurov"
+        ],
+        "confidence": 0.85,
+        "sourceCount": 2
+      },
+      {
+        "type": "assignment",
+        "summary": "Ирина предлагает Антону участвовать в стриме «Новой газеты» в четверг в 20:30; Антон соглашается",
+        "date": "2025-06-09",
+        "deadline": null,
+        "status": "agreed",
+        "participants": [
+          "Ирина Воробьева",
+          "Anton Merkurov"
+        ],
+        "confidence": 0.85,
+        "sourceCount": 2
+      },
+      {
+        "type": "publication_link",
+        "summary": "Ирина присылает ссылку на YouTube, где отдельно выложен Антон Меркуров",
+        "date": "2025-07-07",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Ирина Воробьева"
+        ],
+        "confidence": 0.8,
+        "sourceCount": 2
+      },
+      {
+        "type": "other",
+        "summary": "Ирина сообщила о большой задержке гонораров; Антон сообщил, что не получал выплат с июля",
+        "date": "2025-10-30",
+        "deadline": null,
+        "status": "in_progress",
+        "participants": [
+          "Ирина Воробьева",
+          "Anton Merkurov"
+        ],
+        "confidence": 0.8,
+        "sourceCount": 3
+      },
+      {
+        "type": "assignment",
+        "summary": "Ирина предложила тему про блокировку Roblox, WhatsApp и слухи о VPN; Антон согласился прислать текст в течение дня",
+        "date": "2025-12-04",
+        "deadline": null,
+        "status": "agreed",
+        "participants": [
+          "Ирина Воробьева",
+          "Anton Merkurov"
+        ],
+        "confidence": 0.8,
+        "sourceCount": 5
+      },
+      {
+        "type": "text_delivery",
+        "summary": "Антон прислал текст по теме блокировок",
+        "date": "2025-12-04",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.7,
+        "sourceCount": 1
+      },
+      {
+        "type": "publication_link",
+        "summary": "Антон указал на публикацию в «Новой газете» и отметил, что забыли первый абзац",
+        "date": "2026-02-14",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.75,
+        "sourceCount": 1
+      },
+      {
+        "type": "revision_request",
+        "summary": "Ирина попросила добавить информацию о моратории на расширение каналов связи в текст",
+        "date": "2026-04-16",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Ирина Воробьева",
+          "Anton Merkurov"
+        ],
+        "confidence": 0.85,
+        "sourceCount": 1
+      },
+      {
+        "type": "task_completion",
+        "summary": "Антон сообщил, что правки внесены (готово)",
+        "date": "2026-04-16",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.8,
+        "sourceCount": 1
+      },
+      {
+        "type": "assignment",
+        "summary": "Ирина согласилась на тему про игры",
+        "date": "2026-07-03",
+        "deadline": null,
+        "status": "agreed",
+        "participants": [
+          "Ирина Воробьева",
+          "Anton Merkurov"
+        ],
+        "confidence": 0.8,
+        "sourceCount": 1
+      },
+      {
+        "type": "text_delivery",
+        "summary": "Антон прислал ссылку на документ по теме игр",
+        "date": "2026-07-03",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.7,
+        "sourceCount": 1
+      }
+    ],
+    "recurringThemes": [
+      {
+        "label": "Заказ текстов для «Новой газеты»",
+        "summary": "Редактор регулярно заказывает статьи на темы интернета, цензуры и технологий; автор присылает тексты ссылками на Google Docs.",
+        "confidence": 0.95,
+        "sourceCount": 8
+      },
+      {
+        "label": "Блокировки и регулирование интернета в РФ",
+        "summary": "Повторяющиеся темы: замедление и блокировка YouTube, реестр блогеров, контроль сим-карт, блокировка ECH, VPN, отключения связи.",
+        "confidence": 0.9,
+        "sourceCount": 7
+      },
+      {
+        "label": "Искусственный интеллект и его регулирование",
+        "summary": "Тексты про ИИ: суверенный ИИ, цензура в YandexGPT и GigaChat, закон о регулировании ИИ, призывы приостановить развитие ИИ.",
+        "confidence": 0.9,
+        "sourceCount": 6
+      },
+      {
+        "label": "Гонорары и выплаты",
+        "summary": "Обсуждение задержек гонораров, реквизитов, доверенностей и подтверждений получения денег.",
+        "confidence": 0.9,
+        "sourceCount": 6
+      },
+      {
+        "label": "Участие в эфирах и стримах",
+        "summary": "Приглашения в «Живой гвоздь» и стримы «Новой газеты», согласование времени и тем.",
+        "confidence": 0.85,
+        "sourceCount": 5
+      },
+      {
+        "label": "Публикации материалов",
+        "summary": "Ссылки на вышедшие материалы автора в «Новой газете» и на YouTube.",
+        "confidence": 0.85,
+        "sourceCount": 5
+      },
+      {
+        "label": "Правки и доработки текстов",
+        "summary": "Запросы на добавление информации, подписей к фото и исправление ошибок в опубликованных текстах.",
+        "confidence": 0.85,
+        "sourceCount": 5
+      }
+    ],
+    "openQuestions": [
+      "Не подтверждено завершение правки ошибки в опубликованном тексте от 2024-12-03 (Антон отметил, что не поправили).",
+      "Статус выплат гонораров после сообщения о задержке от 2025-10-30 в переданных данных не закрыт.",
+      "Судьба ряда заказов (например, про роботов, про частные коллекции) остаётся в статусе in_progress без явной сдачи."
+    ],
+    "linguisticObservations": [
+      {
+        "kind": "observable",
+        "observation": "Реплики редактора часто короткие и односложные: подтверждения получения текста формулируются одним словом («Забрала»).",
+        "confidence": 0.85,
+        "sourceCount": 4,
+        "alternativeInterpretations": [
+          "Краткость может объясняться рабочим темпом переписки, а не отношением к автору."
+        ]
+      },
+      {
+        "kind": "observable",
+        "observation": "Автор систематически присылает материалы в виде ссылок на Google Docs без развёрнутого сопроводительного текста.",
+        "confidence": 0.9,
+        "sourceCount": 5,
+        "alternativeInterpretations": []
+      },
+      {
+        "kind": "observable",
+        "observation": "В переписке используются прямые обращения по имени и личные тёплые реплики, чередующиеся с рабочими заданиями.",
+        "confidence": 0.8,
+        "sourceCount": 4,
+        "alternativeInterpretations": [
+          "Тёплые реплики могут быть частью устойчивой рабочей коммуникации, а не только личных отношений."
+        ]
+      },
+      {
+        "kind": "observable",
+        "observation": "Задания формулируются в побудительном наклонении с указанием темы и иногда объёма (например, «на 1 страницу»).",
+        "confidence": 0.85,
+        "sourceCount": 4,
+        "alternativeInterpretations": []
+      },
+      {
+        "kind": "interpretation",
+        "observation": "Возможна тенденция к сокращению сопроводительных сообщений автора при сдаче текстов со временем.",
+        "confidence": 0.5,
+        "sourceCount": 3,
+        "alternativeInterpretations": [
+          "Сокращение может отражать устоявшийся формат обмена ссылками, а не изменение вовлечённости."
+        ]
+      },
+      {
+        "kind": "observable",
+        "observation": "В сообщениях о гонорарах используются уточняющие вопросы и прямые просьбы связаться при проблемах.",
+        "confidence": 0.8,
+        "sourceCount": 3,
+        "alternativeInterpretations": []
+      }
+    ],
+    "limitations": [
+      "Синтез основан только на переданных событиях и темах; часть сообщений вне выборки.",
+      "Многие события имеют статус in_progress без явного подтверждения завершения.",
+      "Психолингвистические выводы ограничены фрагментарностью текстов сообщений."
+    ],
+    "disclaimer": "Материал является аналитическим синтезом переданных данных и не содержит новых фактов; интерпретации о мотивах и эмоциях помечены как предположения."
+  }
+}

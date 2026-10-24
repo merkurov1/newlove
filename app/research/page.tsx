@@ -80,6 +80,30 @@ export default function ResearchPage() {
           </div>
         </section>
 
+        {/* TELEGRAM RESEARCH */}
+        <section className="mb-20 border-t border-stone-200 pt-10">
+          <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-end">
+            <div>
+              <div className="font-mono text-xs text-stone-400 mb-2 uppercase tracking-widest">
+                Telegram Research · Case 01
+              </div>
+              <h3 className="text-2xl md:text-3xl font-serif font-bold text-black mb-3">
+                Ирина Воробьева: ритм, паузы и редакционные следы
+              </h3>
+              <p className="text-stone-700 text-base md:text-lg leading-relaxed font-light max-w-2xl">
+                Локальный текстовый анализ 1 613 сообщений: агрегированная статистика, сессии,
+                прямые и оценочные ответы, извлечённые темы. Исходные сообщения не публикуются.
+              </p>
+            </div>
+            <Link
+              href="/research/telegram"
+              className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-wider font-bold border border-black px-6 py-3 hover:bg-black hover:text-white transition-colors"
+            >
+              Open case <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </section>
+
         {/* ABSTRACT */}
         <section className="mb-20 grid md:grid-cols-3 gap-12 bg-white/70 border border-stone-200 p-8 rounded-2xl">
           <div className="md:col-span-1">

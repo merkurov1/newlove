@@ -66,6 +66,15 @@ patches/
 project_info.txt
 tsc-output.txt
 
+# Telegram Research: local corpus, raw pages, credentials-adjacent exports,
+# intermediate DeepSeek responses and reports. Never commit any of this.
+/data/telegram-research/
+/data/telegram-research-*.zip
+/data/telegram-research-*.tar.gz
+/telegram-research-export-*.zip
+/telegram-research-export-*.tar.gz
+*.telegram-research.session
+
 # Cache directories
 cache/
 .cache/
