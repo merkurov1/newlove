@@ -499,12 +499,23 @@ function DeepSeekSection({
   );
 }
 
-export default function TelegramCaseView({ data }: { data: PublicTelegramCase }) {
+export default function TelegramCaseView({
+  data,
+  caseNumber = 1,
+}: {
+  data: PublicTelegramCase;
+  caseNumber?: number;
+}) {
   const self = data.participants.find((item) => item.key === 'self');
   const peer = data.participants.find((item) => item.key === 'peer');
   const maxWeekday = Math.max(...data.activity.byWeekday.map((item) => item.total), 1);
   const maxHour = Math.max(...data.activity.byHour.map((item) => item.total), 1);
   const totalYears = data.activity.byYear.reduce((sum, item) => sum + item.total, 0);
+  const activityYears = data.activity.byYear.map((item) => item.year).sort();
+  const activityRange =
+    activityYears.length > 0
+      ? `${activityYears[0]}–${activityYears[activityYears.length - 1]}`
+      : '';
 
   return (
     <main className="min-h-screen bg-[#FAF8F5] text-[#141210] selection:bg-[#141210] selection:text-[#FAF8F5]">
@@ -513,7 +524,7 @@ export default function TelegramCaseView({ data }: { data: PublicTelegramCase })
           <Link href="/research" className="transition-colors hover:text-[#A8402C]">
             ← Research
           </Link>
-          <span>Telegram Research / Case 01</span>
+          <span>Telegram Research / Case {String(caseNumber).padStart(2, '0')}</span>
         </nav>
 
         <header className="grid gap-10 lg:grid-cols-[1.25fr_0.75fr] lg:items-end">
@@ -528,8 +539,8 @@ export default function TelegramCaseView({ data }: { data: PublicTelegramCase })
               @{data.chat.username} · {formatDate(data.period.from)} — {formatDate(data.period.to)}
             </p>
             <p className="mt-8 max-w-2xl font-serif text-xl font-light leading-relaxed text-stone-700 md:text-2xl">
-              {formatNumber(data.totals.messages)} сообщений, {data.totals.participants} участника и
-              два с половиной года повседневной речи — без изображений, без скачивания медиа, без
+              {formatNumber(data.totals.messages)} сообщений, {data.totals.participants} участника и{' '}
+              {activityRange} — текстовый корпус без изображений, без скачивания медиа и без
               непроверенных выводов о личности.
             </p>
           </div>
@@ -618,7 +629,7 @@ export default function TelegramCaseView({ data }: { data: PublicTelegramCase })
               <span className="h-2 w-2 rounded-full bg-[#292524]" />
               {participantLabel(data, 'peer')}
             </span>
-            <span>месяцы, 2024–2026</span>
+            <span>месяцы, {activityRange}</span>
           </div>
           <MonthlyChart months={data.activity.byMonth} />
 

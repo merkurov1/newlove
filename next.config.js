@@ -20,6 +20,25 @@ const nextConfig = {
       },
     ];
   },
+  async headers() {
+    return [
+      {
+        // Private research pages must never be cached by a CDN or a shared
+        // proxy, even before the server-side ADMIN guard runs.
+        source: '/research/telegram/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'private, no-store, max-age=0, must-revalidate',
+          },
+          {
+            key: 'X-Robots-Tag',
+            value: 'noindex, nofollow',
+          },
+        ],
+      },
+    ];
+  },
   reactStrictMode: true,
   eslint: {
     // Temporarily disable ESLint during builds to avoid invalid-option failures

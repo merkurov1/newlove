@@ -4,6 +4,9 @@ import type { Metadata } from 'next';
 
 import { PUBLIC_TELEGRAM_CASES } from '@/lib/telegram-research/public-cases';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const metadata: Metadata = {
   title: 'Telegram Research | Anton Merkurov',
   description:
@@ -18,6 +21,34 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat('ru-RU').format(value);
 }
 
+function formatDate(value: string | null | undefined): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+}
+
+function formatCompleteness(value: string | null | undefined): string {
+  if (!value) return 'неизвестно';
+  if (value === 'complete') return 'полный';
+  if (value === 'partial') return 'частичный';
+  if (value === 'incomplete') return 'неполный';
+  if (value === 'failed') return 'ошибка';
+  return value;
+}
+
+function formatStatus(value: string | null | undefined): string {
+  if (!value) return 'не запущен';
+  if (value === 'complete') return 'завершён';
+  if (value === 'partial') return 'частично';
+  if (value === 'failed') return 'ошибка';
+  return value;
+}
+
 export default function TelegramResearchIndexPage() {
   return (
     <main className="min-h-screen bg-[#FAF8F5] text-[#141210]">
@@ -30,7 +61,7 @@ export default function TelegramResearchIndexPage() {
 
         <header>
           <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-[#A8402C]">
-            Local forensic studies
+            Local forensic studies · private
           </p>
           <h1 className="mt-4 font-serif text-5xl font-light leading-[0.95] tracking-tight md:text-7xl">
             Telegram Research
@@ -39,10 +70,13 @@ export default function TelegramResearchIndexPage() {
             Разборы личных диалогов как текстовых корпусов: без медиа, без публикации сырых
             сообщений, с явной методологией и границей между наблюдением и интерпретацией.
           </p>
+          <p className="mt-4 max-w-2xl font-mono text-[9px] uppercase leading-relaxed tracking-[0.14em] text-stone-500">
+            Доступ только для администратора-владельца. Обычный аккаунт получает 403.
+          </p>
         </header>
 
         <div className="mt-14 border-t border-stone-300/80">
-          {PUBLIC_TELEGRAM_CASES.map((item) => (
+          {PUBLIC_TELEGRAM_CASES.map((item, index) => (
             <Link
               key={item.slug}
               href={`/research/telegram/${item.slug}`}
@@ -50,17 +84,28 @@ export default function TelegramResearchIndexPage() {
             >
               <div>
                 <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-stone-500">
-                  Case 01 · {item.chat.type} · {item.chat.username}
+                  Case {String(index + 1).padStart(2, '0')} · {item.chat.type} ·{' '}
+                  {item.chat.username}
                 </p>
                 <h2 className="mt-2 font-serif text-3xl font-light text-stone-900 transition-colors group-hover:text-[#A8402C] md:text-4xl">
                   {item.chat.title}
                 </h2>
                 <p className="mt-3 max-w-xl text-sm leading-relaxed text-stone-600">
                   {formatNumber(item.totals.messages)} сообщений ·{' '}
-                  {formatNumber(item.sessions.count)} сессий ·{' '}
-                  {formatNumber(item.responses.direct.count)} прямых ответов ·{' '}
-                  {item.completeness.status}
+                  {formatDate(item.period.from)} — {formatDate(item.period.to)}
                 </p>
+                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[9px] uppercase tracking-[0.12em] text-stone-500">
+                  <span>
+                    экспорт: <span className="text-[#A8402C]">{formatCompleteness(item.completeness.status)}</span>
+                  </span>
+                  <span>страниц: {formatNumber(item.export.pages)}</span>
+                  <span>сессий: {formatNumber(item.sessions.count)}</span>
+                  <span>прямых ответов: {formatNumber(item.responses.direct.count)}</span>
+                  <span>оценочных: {formatNumber(item.responses.estimated.count)}</span>
+                  <span>
+                    LLM: <span className="text-[#A8402C]">{formatStatus(item.deepseek?.status)}</span>
+                  </span>
+                </div>
               </div>
               <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#A8402C]">
                 открыть разбор →
@@ -70,7 +115,8 @@ export default function TelegramResearchIndexPage() {
         </div>
 
         <p className="mt-10 max-w-2xl font-mono text-[9px] uppercase leading-relaxed tracking-[0.14em] text-stone-500">
-          Исходные сообщения, медиа и Telegram ID не публикуются. Страницы не индексируются.
+          Исходные сообщения, медиа и Telegram ID не публикуются. Страницы не индексируются и
+          доступны только после серверной проверки роли ADMIN.
         </p>
       </div>
     </main>

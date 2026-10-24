@@ -5,25 +5,17 @@ import { notFound } from 'next/navigation';
 import { PUBLIC_TELEGRAM_CASES, getPublicTelegramCase } from '@/lib/telegram-research/public-cases';
 import TelegramCaseView from './CaseView';
 
-export const dynamicParams = false;
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-export function generateStaticParams() {
-  return PUBLIC_TELEGRAM_CASES.map((item) => ({ slug: item.slug }));
-}
-
-export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
-  const data = getPublicTelegramCase(params.slug);
-
-  if (!data) {
-    return {
-      title: 'Telegram Research',
-      robots: { index: false, follow: false },
-    };
-  }
-
+/**
+ * Deliberately no `generateStaticParams`: a statically generated copy of a
+ * private case would be served without the server-side layout guard.
+ */
+export function generateMetadata(): Metadata {
   return {
-    title: `Telegram Research: ${data.chat.title}`,
-    description: `Аналитический разбор ${data.totals.messages} сообщений: ритм, ответы, сессии и извлечённые темы. Исходные сообщения не публикуются.`,
+    title: 'Telegram Research',
+    description: 'Приватное локальное исследование Telegram-диалогов.',
     robots: {
       index: false,
       follow: false,
@@ -42,5 +34,7 @@ export default function TelegramCasePage({ params }: { params: { slug: string } 
     notFound();
   }
 
-  return <TelegramCaseView data={data} />;
+  const caseNumber = PUBLIC_TELEGRAM_CASES.findIndex((item) => item.slug === data.slug) + 1;
+
+  return <TelegramCaseView data={data} caseNumber={caseNumber || 1} />;
 }

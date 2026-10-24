@@ -75,6 +75,11 @@ tsc-output.txt
 /telegram-research-export-*.tar.gz
 *.telegram-research.session
 
+# Generated public presentation cases are built from private local corpora.
+# Only the already-tracked Vorobievaya case is exempt; new cases stay local.
+/data/telegram-research-public/*
+!/data/telegram-research-public/vorobievaya.json
+
 # Cache directories
 cache/
 .cache/
