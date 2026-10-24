@@ -35,8 +35,8 @@ body {
   --site-font-serif:
     var(--font-cormorant, Garamond, Georgia, 'Times New Roman', Times, serif);
 
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
+  padding-left: max(env(safe-area-inset-left), var(--tg-safe-area-left, 0px));
+  padding-right: max(env(safe-area-inset-right), var(--tg-safe-area-right, 0px));
 }
 
 a {

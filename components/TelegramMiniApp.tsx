@@ -14,6 +14,15 @@ const RITUAL_ROUTES = [
   '/tribute',
 ];
 
+const IMMERSIVE_ROUTES = [
+  '/heartandangel/calm',
+  '/heartandangel/letitgo',
+  '/vigil',
+  '/absolution',
+  '/cast',
+  '/tribute',
+];
+
 const WORLD_ROUTE = '/heartandangel/world';
 
 type TelegramInset = {
@@ -53,6 +62,14 @@ function isRitualRoute(pathname: string) {
   const normalized = pathname.replace(/\/$/, '') || '/';
 
   return RITUAL_ROUTES.some((route) => normalized === route || normalized.startsWith(`${route}/`));
+}
+
+function isImmersiveRoute(pathname: string) {
+  const normalized = pathname.replace(/\/$/, '') || '/';
+
+  return IMMERSIVE_ROUTES.some(
+    (route) => normalized === route || normalized.startsWith(`${route}/`)
+  );
 }
 
 function getTelegramWebApp(): TelegramWebApp | null {
@@ -247,6 +264,10 @@ export default function TelegramMiniApp() {
   }, [isTelegram, pathname, router]);
 
   if (!isTelegram) return null;
+
+  if (isImmersiveRoute(pathname)) {
+    return null;
+  }
 
   return <TelegramNavigation />;
 }
