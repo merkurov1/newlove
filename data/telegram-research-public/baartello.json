@@ -1,0 +1,1185 @@
+{
+  "schemaVersion": 1,
+  "slug": "baartello",
+  "generatedAt": "2026-10-24T11:50:35.266Z",
+  "privacy": {
+    "containsRawMessages": false,
+    "note": "Только агрегированные метрики и AI-сводки. Исходные сообщения, медиа и Telegram ID не публикуются."
+  },
+  "chat": {
+    "title": "Belyshkin",
+    "username": "baartello",
+    "type": "private"
+  },
+  "period": {
+    "from": "2024-03-08T11:34:59.000Z",
+    "to": "2026-10-24T11:49:26.000Z"
+  },
+  "totals": {
+    "messages": 261,
+    "withText": 219,
+    "withoutText": 29,
+    "media": 25,
+    "service": 29,
+    "edited": 30,
+    "forwarded": 2,
+    "replies": 9,
+    "outgoing": 144,
+    "participants": 2
+  },
+  "participants": [
+    {
+      "key": "self",
+      "displayName": "Anton Merkurov",
+      "username": "merkurov",
+      "messages": 144,
+      "share": 0.5517,
+      "characters": 5317,
+      "words": 871,
+      "links": 10,
+      "media": 17,
+      "repliesSent": 4,
+      "directRepliesSent": 3,
+      "estimatedRepliesSent": 78,
+      "sessionsStarted": 14,
+      "medianCharacters": 14,
+      "medianWords": 2.5,
+      "medianDirectReplySeconds": 29,
+      "medianEstimatedReplySeconds": 48.5,
+      "firstMessageAt": "2024-04-01T10:58:15.000Z",
+      "lastMessageAt": "2026-10-24T11:47:50.000Z"
+    },
+    {
+      "key": "peer",
+      "displayName": "Belyshkin",
+      "username": "baartello",
+      "messages": 117,
+      "share": 0.4483,
+      "characters": 7298,
+      "words": 1134,
+      "links": 2,
+      "media": 8,
+      "repliesSent": 5,
+      "directRepliesSent": 5,
+      "estimatedRepliesSent": 73,
+      "sessionsStarted": 22,
+      "medianCharacters": 28,
+      "medianWords": 5,
+      "medianDirectReplySeconds": 455,
+      "medianEstimatedReplySeconds": 54,
+      "firstMessageAt": "2024-03-08T11:34:59.000Z",
+      "lastMessageAt": "2026-10-24T11:49:26.000Z"
+    }
+  ],
+  "activity": {
+    "byYear": [
+      {
+        "year": "2024",
+        "total": 97,
+        "self": 53,
+        "peer": 44
+      },
+      {
+        "year": "2025",
+        "total": 120,
+        "self": 68,
+        "peer": 52
+      },
+      {
+        "year": "2026",
+        "total": 44,
+        "self": 23,
+        "peer": 21
+      }
+    ],
+    "byMonth": [
+      {
+        "month": "2024-03",
+        "total": 1,
+        "self": 0,
+        "peer": 1
+      },
+      {
+        "month": "2024-04",
+        "total": 11,
+        "self": 6,
+        "peer": 5
+      },
+      {
+        "month": "2024-05",
+        "total": 21,
+        "self": 12,
+        "peer": 9
+      },
+      {
+        "month": "2024-07",
+        "total": 12,
+        "self": 7,
+        "peer": 5
+      },
+      {
+        "month": "2024-08",
+        "total": 7,
+        "self": 3,
+        "peer": 4
+      },
+      {
+        "month": "2024-09",
+        "total": 17,
+        "self": 10,
+        "peer": 7
+      },
+      {
+        "month": "2024-10",
+        "total": 28,
+        "self": 15,
+        "peer": 13
+      },
+      {
+        "month": "2025-01",
+        "total": 24,
+        "self": 13,
+        "peer": 11
+      },
+      {
+        "month": "2025-03",
+        "total": 7,
+        "self": 4,
+        "peer": 3
+      },
+      {
+        "month": "2025-05",
+        "total": 6,
+        "self": 4,
+        "peer": 2
+      },
+      {
+        "month": "2025-06",
+        "total": 9,
+        "self": 7,
+        "peer": 2
+      },
+      {
+        "month": "2025-07",
+        "total": 6,
+        "self": 2,
+        "peer": 4
+      },
+      {
+        "month": "2025-08",
+        "total": 3,
+        "self": 1,
+        "peer": 2
+      },
+      {
+        "month": "2025-10",
+        "total": 7,
+        "self": 5,
+        "peer": 2
+      },
+      {
+        "month": "2025-11",
+        "total": 27,
+        "self": 15,
+        "peer": 12
+      },
+      {
+        "month": "2025-12",
+        "total": 31,
+        "self": 17,
+        "peer": 14
+      },
+      {
+        "month": "2026-04",
+        "total": 6,
+        "self": 3,
+        "peer": 3
+      },
+      {
+        "month": "2026-06",
+        "total": 1,
+        "self": 0,
+        "peer": 1
+      },
+      {
+        "month": "2026-07",
+        "total": 13,
+        "self": 8,
+        "peer": 5
+      },
+      {
+        "month": "2026-10",
+        "total": 24,
+        "self": 12,
+        "peer": 12
+      }
+    ],
+    "byWeekday": [
+      {
+        "key": "0",
+        "label": "воскресенье",
+        "total": 56,
+        "self": 30,
+        "peer": 26
+      },
+      {
+        "key": "1",
+        "label": "понедельник",
+        "total": 41,
+        "self": 22,
+        "peer": 19
+      },
+      {
+        "key": "2",
+        "label": "вторник",
+        "total": 33,
+        "self": 18,
+        "peer": 15
+      },
+      {
+        "key": "3",
+        "label": "среда",
+        "total": 29,
+        "self": 15,
+        "peer": 14
+      },
+      {
+        "key": "4",
+        "label": "четверг",
+        "total": 54,
+        "self": 31,
+        "peer": 23
+      },
+      {
+        "key": "5",
+        "label": "пятница",
+        "total": 16,
+        "self": 8,
+        "peer": 8
+      },
+      {
+        "key": "6",
+        "label": "суббота",
+        "total": 32,
+        "self": 20,
+        "peer": 12
+      }
+    ],
+    "byHour": [
+      {
+        "hour": 0,
+        "total": 0,
+        "self": 0,
+        "peer": 0
+      },
+      {
+        "hour": 1,
+        "total": 0,
+        "self": 0,
+        "peer": 0
+      },
+      {
+        "hour": 2,
+        "total": 0,
+        "self": 0,
+        "peer": 0
+      },
+      {
+        "hour": 3,
+        "total": 1,
+        "self": 1,
+        "peer": 0
+      },
+      {
+        "hour": 4,
+        "total": 0,
+        "self": 0,
+        "peer": 0
+      },
+      {
+        "hour": 5,
+        "total": 0,
+        "self": 0,
+        "peer": 0
+      },
+      {
+        "hour": 6,
+        "total": 0,
+        "self": 0,
+        "peer": 0
+      },
+      {
+        "hour": 7,
+        "total": 0,
+        "self": 0,
+        "peer": 0
+      },
+      {
+        "hour": 8,
+        "total": 1,
+        "self": 1,
+        "peer": 0
+      },
+      {
+        "hour": 9,
+        "total": 0,
+        "self": 0,
+        "peer": 0
+      },
+      {
+        "hour": 10,
+        "total": 31,
+        "self": 15,
+        "peer": 16
+      },
+      {
+        "hour": 11,
+        "total": 17,
+        "self": 7,
+        "peer": 10
+      },
+      {
+        "hour": 12,
+        "total": 23,
+        "self": 14,
+        "peer": 9
+      },
+      {
+        "hour": 13,
+        "total": 15,
+        "self": 6,
+        "peer": 9
+      },
+      {
+        "hour": 14,
+        "total": 35,
+        "self": 18,
+        "peer": 17
+      },
+      {
+        "hour": 15,
+        "total": 12,
+        "self": 7,
+        "peer": 5
+      },
+      {
+        "hour": 16,
+        "total": 14,
+        "self": 7,
+        "peer": 7
+      },
+      {
+        "hour": 17,
+        "total": 7,
+        "self": 5,
+        "peer": 2
+      },
+      {
+        "hour": 18,
+        "total": 31,
+        "self": 17,
+        "peer": 14
+      },
+      {
+        "hour": 19,
+        "total": 13,
+        "self": 9,
+        "peer": 4
+      },
+      {
+        "hour": 20,
+        "total": 37,
+        "self": 25,
+        "peer": 12
+      },
+      {
+        "hour": 21,
+        "total": 14,
+        "self": 7,
+        "peer": 7
+      },
+      {
+        "hour": 22,
+        "total": 10,
+        "self": 5,
+        "peer": 5
+      },
+      {
+        "hour": 23,
+        "total": 0,
+        "self": 0,
+        "peer": 0
+      }
+    ]
+  },
+  "lengths": {
+    "characters": {
+      "count": 261,
+      "min": 0,
+      "max": 1104,
+      "mean": 48.33,
+      "median": 19,
+      "p90": 74,
+      "p99": 926
+    },
+    "words": {
+      "count": 261,
+      "min": 0,
+      "max": 164,
+      "mean": 7.68,
+      "median": 3,
+      "p90": 13,
+      "p99": 140
+    },
+    "linksPerMessage": {
+      "count": 261,
+      "min": 0,
+      "max": 2,
+      "mean": 0.05,
+      "median": 0,
+      "p90": 0,
+      "p99": 1
+    },
+    "characterHistogram": [
+      {
+        "from": 0,
+        "to": 0,
+        "count": 42
+      },
+      {
+        "from": 1,
+        "to": 20,
+        "count": 92
+      },
+      {
+        "from": 21,
+        "to": 50,
+        "count": 68
+      },
+      {
+        "from": 51,
+        "to": 100,
+        "count": 40
+      },
+      {
+        "from": 101,
+        "to": 200,
+        "count": 12
+      },
+      {
+        "from": 201,
+        "to": 500,
+        "count": 2
+      },
+      {
+        "from": 501,
+        "to": 1000,
+        "count": 3
+      },
+      {
+        "from": 1001,
+        "to": 2000,
+        "count": 2
+      },
+      {
+        "from": 2001,
+        "to": null,
+        "count": 0
+      }
+    ],
+    "wordHistogram": [
+      {
+        "from": 0,
+        "to": 0,
+        "count": 42
+      },
+      {
+        "from": 1,
+        "to": 3,
+        "count": 94
+      },
+      {
+        "from": 4,
+        "to": 10,
+        "count": 91
+      },
+      {
+        "from": 11,
+        "to": 20,
+        "count": 22
+      },
+      {
+        "from": 21,
+        "to": 50,
+        "count": 5
+      },
+      {
+        "from": 51,
+        "to": 100,
+        "count": 2
+      },
+      {
+        "from": 101,
+        "to": null,
+        "count": 5
+      }
+    ],
+    "linkHistogram": [
+      {
+        "from": 0,
+        "to": 0,
+        "count": 250
+      },
+      {
+        "from": 1,
+        "to": 1,
+        "count": 10
+      },
+      {
+        "from": 2,
+        "to": 2,
+        "count": 1
+      },
+      {
+        "from": 3,
+        "to": 5,
+        "count": 0
+      },
+      {
+        "from": 6,
+        "to": null,
+        "count": 0
+      }
+    ],
+    "messagesWithLinks": 11,
+    "totalLinks": 12
+  },
+  "responses": {
+    "replyLinksAvailable": true,
+    "replyCoverage": 0.0345,
+    "crossParticipantReplies": 8,
+    "direct": {
+      "count": 8,
+      "medianSeconds": 318.5,
+      "meanSeconds": 7853.75,
+      "p90Seconds": 61096,
+      "byParticipant": {
+        "self": 3,
+        "peer": 5
+      }
+    },
+    "estimated": {
+      "count": 151,
+      "medianSeconds": 50,
+      "meanSeconds": 637.98,
+      "byParticipant": {
+        "self": 78,
+        "peer": 73
+      },
+      "method": "Следующее сообщение другого участника без replyToId в пределах estimateWindowSeconds; не является доказанным ответом."
+    }
+  },
+  "sessions": {
+    "thresholdSeconds": 21600,
+    "longPauseSeconds": 14515200,
+    "count": 36,
+    "medianDurationSeconds": 698.5,
+    "meanDurationSeconds": 3594.3,
+    "medianMessagesPerSession": 6,
+    "starts": {
+      "self": 14,
+      "peer": 22
+    },
+    "longPauseGaps": 0,
+    "longPauseResumes": {
+      "self": 0,
+      "peer": 0
+    },
+    "longest": {
+      "start": "2025-05-08T10:36:27.000Z",
+      "end": "2025-05-08T18:08:57.000Z",
+      "durationSeconds": 27150,
+      "messageCount": 6,
+      "initiatedBy": "self"
+    }
+  },
+  "dataQuality": {
+    "totalMessages": 261,
+    "totalCharacters": 12615,
+    "messagesWithoutText": 29,
+    "messagesWithEmptyString": 13,
+    "mediaOnlyMessages": 0,
+    "serviceMessages": 29,
+    "unknownSenderMessages": 0,
+    "unresolvedReplyTargets": 0,
+    "forwardsWithoutSource": 0,
+    "outOfOrderMessages": 0,
+    "duplicateIds": 0,
+    "messagesOutsideDateRange": 0,
+    "zeroLengthIntervals": 1
+  },
+  "methodology": {
+    "timezone": "Europe/Moscow",
+    "timestamps": "В корпусе все даты хранятся в UTC ISO-8601; год/месяц/день/час считаются в указанной IANA-зоне, поэтому переходы на летнее время учитываются.",
+    "directReplies": "Прямой ответ — сообщение с replyToId, для которого цель найдена в корпусе, а отправитель отличается от автора цели. Время ответа = дата ответа минус дата исходного сообщения.",
+    "estimatedReplies": "Оценочный ответ — следующее сообщение другого участника без replyToId, если разрыв не больше estimateWindowSeconds. Это не доказанный ответ, поэтому метрика хранится отдельно от прямых ответов и никогда с ними не суммируется.",
+    "sessions": "Сессия — непрерывная последовательность сообщений, где каждый следующий разрыв не больше sessionGapSeconds. Порог настраивается.",
+    "longPauses": "Длительная пауза — разрыв больше longPauseSeconds между сессиями. Инициатор следующей сессии считается возобновившим разговор после такой паузы.",
+    "participantIdentity": "Участник определяется по sender.id из Telegram. Сообщения без отправителя попадают в группу unknown.",
+    "limitations": [
+      "Telegram не возвращает удалённые сообщения через историю, поэтому статистика по удалённым сообщениям неполна.",
+      "Reply-связи есть только там, где Telegram их вернул; оценочные ответы — эвристика, а не факт.",
+      "Медиа не скачивались: длина и слова считаются только по тексту и подписям.",
+      "Часовой пояс отображения задаётся при запуске и записывается в отчёт; исходные timestamps не переписываются.",
+      "Психолингвистические выводы в отчёт не входят: модуль считает только наблюдаемые числовые признаки."
+    ]
+  },
+  "completeness": {
+    "status": "complete",
+    "checks": {
+      "authWasRequired": true,
+      "reachedEmptyPage": true,
+      "headStable": true,
+      "latestVisibleMessageMatched": true,
+      "noUnresolvedErrors": true,
+      "withinLimits": true,
+      "corpusSortedAndUnique": true
+    },
+    "reasons": [],
+    "gaps": []
+  },
+  "export": {
+    "strategy": "messages.list+raw_json",
+    "pages": 4,
+    "headPages": 3,
+    "duplicatesDropped": 289,
+    "retries": 0,
+    "apiCalls": 7,
+    "sourceTimezone": "UTC"
+  },
+  "deepseek": {
+    "model": "deepseek-flash",
+    "status": "complete",
+    "usage": {
+      "inputTokens": 3716,
+      "outputTokens": 5013,
+      "costUsd": 0.0071
+    },
+    "summary": "Переписка охватывает длительный период (с сентября 2024 по октябрь 2026) и фиксирует обмен задачами, ссылками на проекты и обратной связью между Anton Merkurov и Belyshkin. Основные линии: изучение криптокошельков и приложения, разработка мобильного приложения, серия проектов (pierrot/ai, THE VIGIL, cast, playoftime, книга), а также регулярные договорённости о созвонах и обмен шутками. Отдельный блок — анализ самой переписки через ИИ (DeepSeek) с обещанием полной аналитики.",
+    "timeline": [
+      {
+        "date": "2024-09-12T17:03:27.000Z",
+        "summary": "Anton просит Belyshkin'а изучить каталоги сервисов в криптокошельках и сформировать мнение.",
+        "confidence": 0.85,
+        "sourceCount": 6
+      },
+      {
+        "date": "2024-09-12T19:08:58.000Z",
+        "summary": "Belyshkin подтверждает, что поставил себе задачу заняться изучением кошельков и приложения.",
+        "confidence": 0.8,
+        "sourceCount": 1
+      },
+      {
+        "date": "2025-01-27T17:34:15.000Z",
+        "summary": "Belyshkin отгружает новую версию приложения (с багом) и внедряет квестовую историю.",
+        "confidence": 0.75,
+        "sourceCount": 2
+      },
+      {
+        "date": "2025-11-08T19:33:32.000Z",
+        "summary": "Anton присылает ссылку на AI-проект pierrot.merkurov.love/ai.",
+        "confidence": 0.9,
+        "sourceCount": 1
+      },
+      {
+        "date": "2025-11-08T19:37:51.000Z",
+        "summary": "Anton просит развернуть проект на GitHub, настроить Vercel и Supabase.",
+        "confidence": 0.8,
+        "sourceCount": 1
+      },
+      {
+        "date": "2025-11-08T19:38:16.000Z",
+        "summary": "Belyshkin соглашается попробовать развернуть проект, но завтра.",
+        "confidence": 0.75,
+        "sourceCount": 1
+      },
+      {
+        "date": "2025-11-21T00:47:58.000Z",
+        "summary": "Anton присылает ссылку на проект THE VIGIL.",
+        "confidence": 0.9,
+        "sourceCount": 1
+      },
+      {
+        "date": "2025-11-21T07:04:54.000Z",
+        "summary": "Belyshkin одобряет проект THE VIGIL.",
+        "confidence": 0.85,
+        "sourceCount": 1
+      },
+      {
+        "date": "2025-11-23T09:04:25.000Z",
+        "summary": "Anton присылает ссылку на проект merkurov.love/cast.",
+        "confidence": 0.9,
+        "sourceCount": 1
+      },
+      {
+        "date": "2025-12-28T15:02:58.000Z",
+        "summary": "Anton присылает документ (чтиво на праздники).",
+        "confidence": 0.85,
+        "sourceCount": 2
+      },
+      {
+        "date": "2025-12-30T10:46:32.000Z",
+        "summary": "Belyshkin сообщает об опечатке в тексте.",
+        "confidence": 0.8,
+        "sourceCount": 1
+      },
+      {
+        "date": "2025-12-31T07:49:06.000Z",
+        "summary": "Belyshkin указывает на русский кусок текста.",
+        "confidence": 0.75,
+        "sourceCount": 1
+      },
+      {
+        "date": "2025-12-31T09:21:12.000Z",
+        "summary": "Belyshkin дочитал текст.",
+        "confidence": 0.85,
+        "sourceCount": 1
+      },
+      {
+        "date": "2026-07-31T16:28:38.000Z",
+        "summary": "Belyshkin присылает ссылку на свой проект playoftime.online.",
+        "confidence": 0.9,
+        "sourceCount": 1
+      },
+      {
+        "date": "2026-10-04T08:48:44.000Z",
+        "summary": "Anton просит Belyshkin'а посмотреть сайт merkurov.love критичным взглядом.",
+        "confidence": 0.85,
+        "sourceCount": 1
+      },
+      {
+        "date": "2026-10-04T15:31:20.000Z",
+        "summary": "Belyshkin готов дать обратную связь по сайту.",
+        "confidence": 0.75,
+        "sourceCount": 1
+      },
+      {
+        "date": "2026-10-11T18:29:02.000Z",
+        "summary": "Belyshkin присылает ссылку на playoftime.online/aloud.",
+        "confidence": 0.9,
+        "sourceCount": 1
+      },
+      {
+        "date": "2026-10-11T18:34:42.000Z",
+        "summary": "Anton сообщает, что допилил свой проект.",
+        "confidence": 0.8,
+        "sourceCount": 2
+      },
+      {
+        "date": "2026-10-24T11:40:20.000Z",
+        "summary": "Anton присылает аналитику переписки, сделанную через DeepSeek.",
+        "confidence": 0.8,
+        "sourceCount": 4
+      },
+      {
+        "date": "2026-10-24T11:47:50.000Z",
+        "summary": "Anton обещает прислать полную аналитику после завершения.",
+        "confidence": 0.75,
+        "sourceCount": 1
+      }
+    ],
+    "editorialEvents": [
+      {
+        "type": "assignment",
+        "summary": "Anton просит Belyshkin'а изучить каталоги сервисов в криптокошельках, поиграть в приложение с привязкой кошелька и сформировать мнение",
+        "date": "2024-09-12T17:03:27.000Z",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Anton Merkurov",
+          "Belyshkin"
+        ],
+        "confidence": 0.85,
+        "sourceCount": 6
+      },
+      {
+        "type": "assignment",
+        "summary": "Belyshkin подтверждает, что поставил себе задачу заняться изучением кошельков и приложения и сформировать мнение",
+        "date": "2024-09-12T19:08:58.000Z",
+        "deadline": null,
+        "status": "agreed",
+        "participants": [
+          "Belyshkin"
+        ],
+        "confidence": 0.8,
+        "sourceCount": 1
+      },
+      {
+        "type": "text_delivery",
+        "summary": "Belyshkin отгружает новую версию приложения (с багом) и внедряет квестовую историю",
+        "date": "2025-01-27T17:34:15.000Z",
+        "deadline": null,
+        "status": "in_progress",
+        "participants": [
+          "Belyshkin"
+        ],
+        "confidence": 0.75,
+        "sourceCount": 2
+      },
+      {
+        "type": "publication_link",
+        "summary": "Anton присылает ссылку на свой AI-проект pierrot.merkurov.love/ai",
+        "date": "2025-11-08T19:33:32.000Z",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.9,
+        "sourceCount": 1
+      },
+      {
+        "type": "assignment",
+        "summary": "Anton просит Belyshkin'а развернуть проект на GitHub, настроить Vercel и Supabase",
+        "date": "2025-11-08T19:37:51.000Z",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Anton Merkurov",
+          "Belyshkin"
+        ],
+        "confidence": 0.8,
+        "sourceCount": 1
+      },
+      {
+        "type": "assignment",
+        "summary": "Belyshkin соглашается попробовать развернуть проект, но завтра",
+        "date": "2025-11-08T19:38:16.000Z",
+        "deadline": null,
+        "status": "agreed",
+        "participants": [
+          "Belyshkin"
+        ],
+        "confidence": 0.75,
+        "sourceCount": 1
+      },
+      {
+        "type": "publication_link",
+        "summary": "Anton присылает ссылку на проект THE VIGIL",
+        "date": "2025-11-21T00:47:58.000Z",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.9,
+        "sourceCount": 1
+      },
+      {
+        "type": "approval",
+        "summary": "Belyshkin одобряет проект THE VIGIL",
+        "date": "2025-11-21T07:04:54.000Z",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Belyshkin"
+        ],
+        "confidence": 0.85,
+        "sourceCount": 1
+      },
+      {
+        "type": "publication_link",
+        "summary": "Anton присылает ссылку на проект merkurov.love/cast",
+        "date": "2025-11-23T09:04:25.000Z",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.9,
+        "sourceCount": 1
+      },
+      {
+        "type": "text_delivery",
+        "summary": "Anton присылает документ (чтиво на праздники)",
+        "date": "2025-12-28T15:02:58.000Z",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.85,
+        "sourceCount": 2
+      },
+      {
+        "type": "revision_request",
+        "summary": "Belyshkin сообщает об опечатке в тексте",
+        "date": "2025-12-30T10:46:32.000Z",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Belyshkin"
+        ],
+        "confidence": 0.8,
+        "sourceCount": 1
+      },
+      {
+        "type": "revision_request",
+        "summary": "Belyshkin указывает на русский кусок текста",
+        "date": "2025-12-31T07:49:06.000Z",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Belyshkin"
+        ],
+        "confidence": 0.75,
+        "sourceCount": 1
+      },
+      {
+        "type": "task_completion",
+        "summary": "Belyshkin дочитал текст",
+        "date": "2025-12-31T09:21:12.000Z",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Belyshkin"
+        ],
+        "confidence": 0.85,
+        "sourceCount": 1
+      },
+      {
+        "type": "publication_link",
+        "summary": "Belyshkin присылает ссылку на свой проект playoftime.online",
+        "date": "2026-07-31T16:28:38.000Z",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Belyshkin"
+        ],
+        "confidence": 0.9,
+        "sourceCount": 1
+      },
+      {
+        "type": "publication_link",
+        "summary": "Belyshkin присылает ссылку на playoftime.online/aloud",
+        "date": "2026-10-11T18:29:02.000Z",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Belyshkin"
+        ],
+        "confidence": 0.9,
+        "sourceCount": 1
+      },
+      {
+        "type": "task_completion",
+        "summary": "Anton сообщает, что допилил свой проект",
+        "date": "2026-10-11T18:34:42.000Z",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.8,
+        "sourceCount": 2
+      },
+      {
+        "type": "assignment",
+        "summary": "Anton просит Belyshkin'а посмотреть сайт merkurov.love критичным взглядом",
+        "date": "2026-10-04T08:48:44.000Z",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Anton Merkurov",
+          "Belyshkin"
+        ],
+        "confidence": 0.85,
+        "sourceCount": 1
+      },
+      {
+        "type": "task_completion",
+        "summary": "Belyshkin готов дать обратную связь по сайту",
+        "date": "2026-10-04T15:31:20.000Z",
+        "deadline": null,
+        "status": "completed",
+        "participants": [
+          "Belyshkin"
+        ],
+        "confidence": 0.75,
+        "sourceCount": 1
+      },
+      {
+        "type": "other",
+        "summary": "Anton присылает аналитику переписки, сделанную через DeepSeek",
+        "date": "2026-10-24T11:40:20.000Z",
+        "deadline": null,
+        "status": "stated",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.8,
+        "sourceCount": 4
+      },
+      {
+        "type": "other",
+        "summary": "Anton обещает прислать полную аналитику после завершения",
+        "date": "2026-10-24T11:47:50.000Z",
+        "deadline": null,
+        "status": "in_progress",
+        "participants": [
+          "Anton Merkurov"
+        ],
+        "confidence": 0.75,
+        "sourceCount": 1
+      }
+    ],
+    "recurringThemes": [
+      {
+        "label": "Восстановление старого аккаунта",
+        "summary": "Обсуждение восстановления старого аккаунта и того, что он снова работает.",
+        "confidence": 0.9,
+        "sourceCount": 4
+      },
+      {
+        "label": "Созвоны и голосовое общение",
+        "summary": "Регулярные договорённости созвониться и поболтать голосом, сигналы о готовности.",
+        "confidence": 0.95,
+        "sourceCount": 48
+      },
+      {
+        "label": "Дружеские шутки и анекдоты",
+        "summary": "Обмен шутками, анекдотами и ироничными комментариями.",
+        "confidence": 0.85,
+        "sourceCount": 10
+      },
+      {
+        "label": "Юзерпик и фото с жабо",
+        "summary": "Обсуждение юзерпика/сториес с жабой и обмен фотографиями.",
+        "confidence": 0.9,
+        "sourceCount": 12
+      },
+      {
+        "label": "Упаковка и монетизация «умного пиздежа»",
+        "summary": "Идея упаковать интеллектуальные беседы в продаваемый артефакт, перевод живого общения в продукт.",
+        "confidence": 0.9,
+        "sourceCount": 2
+      },
+      {
+        "label": "Криптокошельки и SEED-приложение",
+        "summary": "Просьба изучить каталог сервисов в криптокошельке, поиграть в приложение и привязать кошелёк.",
+        "confidence": 0.9,
+        "sourceCount": 9
+      },
+      {
+        "label": "Переезд и жизнь в Италии",
+        "summary": "Обсуждение переезда, нахождения в Италии и планов добраться до острова.",
+        "confidence": 0.85,
+        "sourceCount": 11
+      },
+      {
+        "label": "Разработка мобильного приложения",
+        "summary": "Работа над приложением: новая версия, баги, квесты, уровни, тестирование и продвижение.",
+        "confidence": 0.95,
+        "sourceCount": 19
+      },
+      {
+        "label": "Название serenity coin",
+        "summary": "Придумывание названия для главного индекса/монеты в игрушке и проверка синонимов.",
+        "confidence": 0.9,
+        "sourceCount": 6
+      },
+      {
+        "label": "Чтение Ревизора",
+        "summary": "Запись и отправка чтения Гоголевского «Ревизора».",
+        "confidence": 0.85,
+        "sourceCount": 3
+      },
+      {
+        "label": "NFT-проект с выбором Ангела или Демона",
+        "summary": "Презентация NFT-эксперимента с необратимым выбором между Ангелом и Демоном, предложение тестовых монет.",
+        "confidence": 0.9,
+        "sourceCount": 3
+      },
+      {
+        "label": "Проект THE VIGIL",
+        "summary": "Запуск эксперимента с комнатой, сосудами-сердцами и поддержанием огня, обсуждение механики и синхронности участников.",
+        "confidence": 0.95,
+        "sourceCount": 9
+      },
+      {
+        "label": "Сервис анализа архетипов CAST",
+        "summary": "Запуск сервиса cast, обсуждение результата анализа архетипа и его точности.",
+        "confidence": 0.9,
+        "sourceCount": 10
+      },
+      {
+        "label": "Книга и её вычитка",
+        "summary": "Отправка книги на праздники, конвертация в epub, правки опечаток и обсуждение прочитанного.",
+        "confidence": 0.9,
+        "sourceCount": 14
+      },
+      {
+        "label": "Проект playoftime",
+        "summary": "Презентация и обсуждение сайта playoftime.online и его раздела aloud.",
+        "confidence": 0.9,
+        "sourceCount": 12
+      },
+      {
+        "label": "Анализ переписки через ИИ",
+        "summary": "Скачивание переписки и прогон через DeepSeek, обсуждение результатов и идеи контент-анализа.",
+        "confidence": 0.95,
+        "sourceCount": 11
+      }
+    ],
+    "openQuestions": [
+      "Была ли завершена и отправлена полная аналитика переписки, обещанная Anton (187801)?",
+      "Было ли выполнено развёртывание проекта на GitHub/Vercel/Supabase после согласия Belyshkin'а (176377)?",
+      "Была ли устранена опечатка и правка русского куска текста после замечаний Belyshkin'а (178701, 178709)?"
+    ],
+    "linguisticObservations": [
+      {
+        "kind": "observable",
+        "observation": "Реплики часто короткие, обмен идёт серией подряд идущих сообщений (например, блоки 162414–162419, 187793–187798).",
+        "confidence": 0.8,
+        "sourceCount": 10,
+        "alternativeInterpretations": [
+          "Короткие серии могут отражать формат мессенджера, а не стилевую особенность."
+        ]
+      },
+      {
+        "kind": "observable",
+        "observation": "Повторяющийся мотив договорённостей о созвоне и голосовом общении фиксируется на протяжении всей переписки.",
+        "confidence": 0.85,
+        "sourceCount": 9,
+        "alternativeInterpretations": [
+          "Частые упоминания созвонов могут быть следствием длительности переписки, а не повышенной значимости темы."
+        ]
+      },
+      {
+        "kind": "observable",
+        "observation": "В переписке присутствуют обращения по имени/нику и обмен ссылками на проекты как регулярный элемент реплик.",
+        "confidence": 0.75,
+        "sourceCount": 6,
+        "alternativeInterpretations": [
+          "Обмен ссылками может быть технической необходимостью, а не стилевой чертой."
+        ]
+      },
+      {
+        "kind": "interpretation",
+        "observation": "Возможна тенденция к ироничному и шутливому тону вперемешку с деловой перепиской.",
+        "confidence": 0.6,
+        "sourceCount": 10,
+        "alternativeInterpretations": [
+          "Шутки могут быть локальными эпизодами, не characterizing общий тон переписки.",
+          "Ирония может быть следствием конкретных тем, а не устойчивой манеры общения."
+        ]
+      }
+    ],
+    "limitations": [
+      "Анализ основан только на переданных событиях и темах; полные тексты сообщений недоступны.",
+      "Часть событий имеет статус in_progress или agreed без подтверждения завершения.",
+      "Психолингвистические выводы ограничены наблюдаемыми признаками; мотивы и эмоции не установлены."
+    ],
+    "disclaimer": "Синтез отражает только переданные данные и не содержит добавленных фактов, дедлайнов или завершений задач. Интерпретации помечены отдельно и не являются установленными фактами."
+  }
+}

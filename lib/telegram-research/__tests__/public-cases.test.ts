@@ -49,28 +49,20 @@ function expectSanitized(item: PublicTelegramCase) {
 }
 
 describe('PUBLIC_TELEGRAM_CASES', () => {
-  it('keeps research cases separate and addressable by their own slug', () => {
-    const slugs = PUBLIC_TELEGRAM_CASES.map((item) => item.slug);
-
-    expect(slugs).toContain('vorobievaya');
-    expect(new Set(slugs).size).toBe(slugs.length);
+  it('keeps both research cases separate and addressable by their own slug', () => {
+    expect(PUBLIC_TELEGRAM_CASES.map((item) => item.slug)).toEqual(['vorobievaya', 'baartello']);
 
     const vorobievaya = getPublicTelegramCase('vorobievaya');
     const baartello = getPublicTelegramCase('baartello');
 
     expect(vorobievaya?.slug).toBe('vorobievaya');
+    expect(baartello?.slug).toBe('baartello');
+    expect(vorobievaya?.chat.username).not.toBe(baartello?.chat.username);
+    expect(vorobievaya?.totals.messages).not.toBe(baartello?.totals.messages);
     expect(getPublicTelegramCase('unknown')).toBeNull();
-
-    // The second report is intentionally local-only. When it exists, it must
-    // remain a separate case with its own data.
-    if (baartello) {
-      expect(baartello.slug).toBe('baartello');
-      expect(baartello.chat.username).not.toBe(vorobievaya?.chat.username);
-      expect(baartello.totals.messages).not.toBe(vorobievaya?.totals.messages);
-    }
   });
 
-  it('does not expose raw message identifiers or Telegram IDs in any case', () => {
+  it('does not expose raw message identifiers or Telegram IDs in either case', () => {
     for (const item of PUBLIC_TELEGRAM_CASES) {
       expectSanitized(item);
     }

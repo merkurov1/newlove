@@ -28,7 +28,7 @@
 - DeepSeek план построен: 7 фрагментов, 404 802 символа, бюджет $1 / 100 запросов.
 - DeepSeek-анализ завершён: 15 запросов, 345 089 input / 43 721 output токенов, оценка $0.156. Получено 30 редакционных событий, 7 повторяющихся тем, 6 наблюдений о языке.
 - Публичный обезличенный кейс собран в `data/telegram-research-public/vorobievaya.json`; страницы `/research/telegram` и `/research/telegram/vorobievaya` рендерятся из этого JSON, но доступ к ним защищён серверной проверкой Supabase Auth + роли `ADMIN`.
-- `data/telegram-research/` полностью исключён из Git; тексты переписки, raw-страницы и отчёты не коммитятся.
+- `data/telegram-research/` полностью исключён из Git; тексты переписки, raw-страницы, промежуточные LLM-ответы и сырые отчёты не коммитятся. Обезличенные public JSON публикуются только по явному решению.
 
 ### Второй кейс: `@baartello` (2026-10-24)
 
@@ -38,7 +38,7 @@
 - Повторный экспорт подтвердил возобновление и идемпотентность: head sync подхватил новые сообщения, дубликаты не попали в корпус.
 - Статистика: 36 сессий, 8 прямых ответов, 151 оценочный; timezone `Europe/Moscow`.
 - DeepSeek: `deepseek-flash`, 3 запроса, 31 374 input / 8 111 output токенов, оценка $0.0191; 20 редакционных событий, 16 тем, 4 наблюдения о языке.
-- Отчёт собран в `data/telegram-research-public/baartello.json` и **не коммитится**: каталог публичных кейсов, кроме уже отслеживаемого `vorobievaya.json`, исключён в `.gitignore`. Страница загружает локальный кейс с диска и пропускает его, если файла нет.
+- Отчёт собран в `data/telegram-research-public/baartello.json` и закоммичен как обезличенный JSON (без сырых сообщений, Telegram ID и source message IDs), как и `vorobievaya.json`. Страница импортирует его статически, поэтому кейс доступен и на Vercel.
 
 ### Доступ к `/research/telegram`
 
@@ -491,7 +491,7 @@ data/telegram-research-public/vorobievaya.json
 /research/telegram/vorobievaya
 ```
 
-Она рендерится динамически из `data/telegram-research-public/*.json` и защищена серверной проверкой Supabase Auth + `users.role = 'ADMIN'` (см. `app/research/telegram/layout.tsx`). Страницы закрыты от индексации (`noindex`) и не кэшируются публично. Сырые данные остаются только в `data/telegram-research/`, который исключён из Git; новые обезличенные отчёты также не коммитятся.
+Она рендерится динамически из `data/telegram-research-public/*.json` и защищена серверной проверкой Supabase Auth + `users.role = 'ADMIN'` (см. `app/research/telegram/layout.tsx`). Страницы закрыты от индексации (`noindex`) и не кэшируются публично. Сырые данные остаются только в `data/telegram-research/`, который исключён из Git; обезличенные отчёты, явно одобренные для публикации, коммитятся.
 
 ---
 
