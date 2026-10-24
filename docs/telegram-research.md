@@ -27,8 +27,26 @@
 - Локальная статистика рассчитана: 379 сессий, 113 прямых ответов, 578 оценочных ответов (порог сессии 6 ч, timezone `Europe/Moscow`).
 - DeepSeek план построен: 7 фрагментов, 404 802 символа, бюджет $1 / 100 запросов.
 - DeepSeek-анализ завершён: 15 запросов, 345 089 input / 43 721 output токенов, оценка $0.156. Получено 30 редакционных событий, 7 повторяющихся тем, 6 наблюдений о языке.
-- Публичный обезличенный кейс собран в `data/telegram-research-public/vorobievaya.json`; страницы `/research/telegram` и `/research/telegram/vorobievaya` рендерятся без Supabase.
+- Публичный обезличенный кейс собран в `data/telegram-research-public/vorobievaya.json`; страницы `/research/telegram` и `/research/telegram/vorobievaya` рендерятся из этого JSON, но доступ к ним защищён серверной проверкой Supabase Auth + роли `ADMIN`.
 - `data/telegram-research/` полностью исключён из Git; тексты переписки, raw-страницы и отчёты не коммитятся.
+
+### Второй кейс: `@baartello` (2026-10-24)
+
+- Диалог подтверждён: **Belyshkin**, `@baartello`, private chat ID `494647953`.
+- Экспорт завершён: **261 сообщение**, `2024-03-08T11:34:59Z` — `2026-10-24T11:49:26Z`, 4 страницы назад + 3 head-страницы, 289 дубликатов отброшено.
+- `status=complete` на момент снимка; live-head проверка совпала с экспортированным максимумом (`187803`). Переписка активна, поэтому более поздние сообщения в этот срез не входят.
+- Повторный экспорт подтвердил возобновление и идемпотентность: head sync подхватил новые сообщения, дубликаты не попали в корпус.
+- Статистика: 36 сессий, 8 прямых ответов, 151 оценочный; timezone `Europe/Moscow`.
+- DeepSeek: `deepseek-flash`, 3 запроса, 31 374 input / 8 111 output токенов, оценка $0.0191; 20 редакционных событий, 16 тем, 4 наблюдения о языке.
+- Отчёт собран в `data/telegram-research-public/baartello.json` и **не коммитится**: каталог публичных кейсов, кроме уже отслеживаемого `vorobievaya.json`, исключён в `.gitignore`. Страница загружает локальный кейс с диска и пропускает его, если файла нет.
+
+### Доступ к `/research/telegram`
+
+- `app/research/telegram/layout.tsx` — серверная проверка: неавторизованный → `/login?next=%2Fresearch%2Ftelegram`, авторизованный без `ADMIN` → `/403`.
+- Проверка использует существующий `getCurrentUser()` / `users.role = 'ADMIN'`; отдельного флага владельца в проекте нет.
+- Страницы переведены в `force-dynamic`, `generateStaticParams` удалён: статическая копия отчёта не генерируется.
+- `next.config.js` добавляет для `/research/telegram/:path*` заголовки `Cache-Control: private, no-store...` и `X-Robots-Tag: noindex, nofollow`.
+- В `app/research` публичный тизер больше не раскрывает имя участника и число сообщений.
 
 ---
 
@@ -434,7 +452,7 @@ DEEPSEEK_API_KEY=... bun run scripts/telegram-research/cli.ts deepseek \
 
 ---
 
-## 8. Публичная витрина кейса (без Supabase)
+## 8. Приватная витрина кейса
 
 После локального экспорта и статистики можно собрать обезличенный публичный JSON:
 
@@ -473,7 +491,7 @@ data/telegram-research-public/vorobievaya.json
 /research/telegram/vorobievaya
 ```
 
-Она рендерится статически из `data/telegram-research-public/*.json`, не требует Supabase и закрыта от индексации (`noindex`). Сырые данные остаются только в `data/telegram-research/`, который исключён из Git.
+Она рендерится динамически из `data/telegram-research-public/*.json` и защищена серверной проверкой Supabase Auth + `users.role = 'ADMIN'` (см. `app/research/telegram/layout.tsx`). Страницы закрыты от индексации (`noindex`) и не кэшируются публично. Сырые данные остаются только в `data/telegram-research/`, который исключён из Git; новые обезличенные отчёты также не коммитятся.
 
 ---
 

@@ -6,6 +6,7 @@ import { PUBLIC_TELEGRAM_CASES } from '@/lib/telegram-research/public-cases';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+export const runtime = 'nodejs';
 
 export const metadata: Metadata = {
   title: 'Telegram Research | Anton Merkurov',
@@ -91,19 +92,23 @@ export default function TelegramResearchIndexPage() {
                   {item.chat.title}
                 </h2>
                 <p className="mt-3 max-w-xl text-sm leading-relaxed text-stone-600">
-                  {formatNumber(item.totals.messages)} сообщений ·{' '}
-                  {formatDate(item.period.from)} — {formatDate(item.period.to)}
+                  {formatNumber(item.totals.messages)} сообщений · {formatDate(item.period.from)} —{' '}
+                  {formatDate(item.period.to)}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[9px] uppercase tracking-[0.12em] text-stone-500">
                   <span>
-                    экспорт: <span className="text-[#A8402C]">{formatCompleteness(item.completeness.status)}</span>
+                    экспорт:{' '}
+                    <span className="text-[#A8402C]">
+                      {formatCompleteness(item.completeness.status)}
+                    </span>
                   </span>
                   <span>страниц: {formatNumber(item.export.pages)}</span>
                   <span>сессий: {formatNumber(item.sessions.count)}</span>
                   <span>прямых ответов: {formatNumber(item.responses.direct.count)}</span>
                   <span>оценочных: {formatNumber(item.responses.estimated.count)}</span>
                   <span>
-                    LLM: <span className="text-[#A8402C]">{formatStatus(item.deepseek?.status)}</span>
+                    LLM:{' '}
+                    <span className="text-[#A8402C]">{formatStatus(item.deepseek?.status)}</span>
                   </span>
                 </div>
               </div>

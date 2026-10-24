@@ -7,6 +7,7 @@ import { telegramResearchAccessRedirect } from '@/lib/telegram-research/access';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+export const runtime = 'nodejs';
 
 export const metadata: Metadata = {
   robots: {
@@ -24,11 +25,7 @@ export const metadata: Metadata = {
  * and React Server Component requests. Unauthenticated visitors are sent to
  * the existing login page; authenticated non-admins are sent to /403.
  */
-export default async function TelegramResearchLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function TelegramResearchLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   const redirectTo = telegramResearchAccessRedirect(user);
 

@@ -18,9 +18,7 @@ describe('Telegram Research access policy', () => {
 
   it('denies an authenticated ordinary user', () => {
     expect(telegramResearchAccessDecision({ role: 'USER' })).toBe('forbidden');
-    expect(telegramResearchAccessRedirect({ role: 'USER' })).toBe(
-      TELEGRAM_RESEARCH_FORBIDDEN_PATH
-    );
+    expect(telegramResearchAccessRedirect({ role: 'USER' })).toBe(TELEGRAM_RESEARCH_FORBIDDEN_PATH);
   });
 
   it('allows the owner-level ADMIN role', () => {

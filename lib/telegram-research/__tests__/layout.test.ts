@@ -22,8 +22,9 @@ type LayoutModule = {
 
 // Deliberately require after the mocks are registered: static ES imports are
 // evaluated before jest.mock() in this setup.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { default: TelegramResearchLayout } = require('@/app/research/telegram/layout') as LayoutModule;
+const { default: TelegramResearchLayout } =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@/app/research/telegram/layout') as LayoutModule;
 
 describe('TelegramResearchLayout server guard', () => {
   beforeEach(() => {
@@ -33,18 +34,18 @@ describe('TelegramResearchLayout server guard', () => {
   it('redirects an unauthenticated visitor to the existing login page', async () => {
     mockGetCurrentUser.mockImplementation(async () => null);
 
-    await expect(
-      TelegramResearchLayout({ children: React.createElement('div') })
-    ).rejects.toThrow('REDIRECT:/login?next=%2Fresearch%2Ftelegram');
+    await expect(TelegramResearchLayout({ children: React.createElement('div') })).rejects.toThrow(
+      'REDIRECT:/login?next=%2Fresearch%2Ftelegram'
+    );
     expect(mockRedirect).toHaveBeenCalledWith('/login?next=%2Fresearch%2Ftelegram');
   });
 
   it('redirects an authenticated ordinary user to 403', async () => {
     mockGetCurrentUser.mockImplementation(async () => ({ role: 'USER' }));
 
-    await expect(
-      TelegramResearchLayout({ children: React.createElement('div') })
-    ).rejects.toThrow('REDIRECT:/403');
+    await expect(TelegramResearchLayout({ children: React.createElement('div') })).rejects.toThrow(
+      'REDIRECT:/403'
+    );
     expect(mockRedirect).toHaveBeenCalledWith('/403');
   });
 

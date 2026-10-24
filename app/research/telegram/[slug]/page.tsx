@@ -7,6 +7,7 @@ import TelegramCaseView from './CaseView';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+export const runtime = 'nodejs';
 
 /**
  * Deliberately no `generateStaticParams`: a statically generated copy of a

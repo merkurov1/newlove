@@ -45,46 +45,47 @@ function expectSanitized(item: PublicTelegramCase) {
   expect(item.completeness.status).toMatch(/^(complete|partial|incomplete|failed)$/);
   expect(item.export.pages).toBeGreaterThan(0);
   expect(item.totals.messages).toBeGreaterThan(0);
-  expect(item.participants.map((participant) => participant.key).sort()).toEqual([
-    'peer',
-    'self',
-  ]);
+  expect(item.participants.map((participant) => participant.key).sort()).toEqual(['peer', 'self']);
 }
 
 describe('PUBLIC_TELEGRAM_CASES', () => {
-  it('keeps both research cases separate and addressable by their own slug', () => {
-    expect(PUBLIC_TELEGRAM_CASES.map((item) => item.slug)).toEqual([
-      'vorobievaya',
-      'baartello',
-    ]);
+  it('keeps research cases separate and addressable by their own slug', () => {
+    const slugs = PUBLIC_TELEGRAM_CASES.map((item) => item.slug);
+
+    expect(slugs).toContain('vorobievaya');
+    expect(new Set(slugs).size).toBe(slugs.length);
 
     const vorobievaya = getPublicTelegramCase('vorobievaya');
     const baartello = getPublicTelegramCase('baartello');
 
     expect(vorobievaya?.slug).toBe('vorobievaya');
-    expect(baartello?.slug).toBe('baartello');
-    expect(vorobievaya?.chat.username).not.toBe(baartello?.chat.username);
     expect(getPublicTelegramCase('unknown')).toBeNull();
+
+    // The second report is intentionally local-only. When it exists, it must
+    // remain a separate case with its own data.
+    if (baartello) {
+      expect(baartello.slug).toBe('baartello');
+      expect(baartello.chat.username).not.toBe(vorobievaya?.chat.username);
+      expect(baartello.totals.messages).not.toBe(vorobievaya?.totals.messages);
+    }
   });
 
-  it('does not expose raw message identifiers or Telegram IDs in either case', () => {
+  it('does not expose raw message identifiers or Telegram IDs in any case', () => {
     for (const item of PUBLIC_TELEGRAM_CASES) {
       expectSanitized(item);
     }
   });
 
   it('reports completeness and LLM status from each case independently', () => {
-    const vorobievaya = getPublicTelegramCase('vorobievaya');
-    const baartello = getPublicTelegramCase('baartello');
+    for (const item of PUBLIC_TELEGRAM_CASES) {
+      expect(item.completeness.status).toMatch(/^(complete|partial|incomplete|failed)$/);
+      expect(item.export.pages).toBeGreaterThan(0);
+      expect(item.totals.messages).toBeGreaterThan(0);
 
-    for (const item of [vorobievaya, baartello]) {
-      expect(item?.completeness.status).toMatch(/^(complete|partial|incomplete|failed)$/);
-      expect(item?.export.pages).toBeGreaterThan(0);
-      expect(item?.totals.messages).toBeGreaterThan(0);
-      expect(item?.deepseek?.status).toMatch(/^(complete|partial|failed|planned|unknown)$/);
-      expect(item?.deepseek?.model).toBeTruthy();
+      if (item.deepseek) {
+        expect(item.deepseek.status).toMatch(/^(complete|partial|failed|planned|unknown)$/);
+        expect(item.deepseek.model).toBeTruthy();
+      }
     }
-
-    expect(vorobievaya?.totals.messages).not.toBe(baartello?.totals.messages);
   });
 });

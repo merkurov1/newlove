@@ -61,9 +61,7 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns', '@tiptap/react'],
     // Next 14: тот же эффект через experimental
-    ...(nextMajor < 15
-      ? { serverComponentsExternalPackages: externalPackages }
-      : {}),
+    ...(nextMajor < 15 ? { serverComponentsExternalPackages: externalPackages } : {}),
     ...(process.env.DISABLE_OPTIMIZE_CSS === '1'
       ? {}
       : {
