@@ -11,7 +11,7 @@ interface SitemapUrl {
 }
 
 function escapeXml(unsafe: string): string {
-  return unsafe.replace(/[<>&'\"]/g, (c) => {
+  return unsafe.replace(/[<>&'"]/g, (c) => {
     switch (c) {
       case '<':
         return '&lt;';
@@ -19,9 +19,9 @@ function escapeXml(unsafe: string): string {
         return '&gt;';
       case '&':
         return '&amp;';
-      case '\'':
+      case "'":
         return '&apos;';
-      case '\"':
+      case '"':
         return '&quot;';
       default:
         return c;
@@ -29,18 +29,61 @@ function escapeXml(unsafe: string): string {
   });
 }
 
+/**
+ * Convert a date to a valid ISO 8601 timestamp.
+ * Return an empty string for missing or invalid dates.
+ */
+function normalizeLastmod(value?: string | null): string {
+  if (typeof value !== 'string' || value.trim() === '') {
+    return '';
+  }
+
+  const timestamp = Date.parse(value);
+
+  if (!Number.isFinite(timestamp)) {
+    return '';
+  }
+
+  return new Date(timestamp).toISOString();
+}
+
 function buildSitemapXml(urls: SitemapUrl[]): string {
   const urlEntries = urls
     .map((item) => {
       const loc = `<loc>${escapeXml(item.loc)}</loc>`;
-      const lastmod = item.lastmod ? `<lastmod>${escapeXml(item.lastmod)}</lastmod>` : '';
-      const changefreq = item.changefreq ? `<changefreq>${item.changefreq}</changefreq>` : '';
-      const priority = item.priority !== undefined ? `<priority>${item.priority.toFixed(1)}</priority>` : '';
-      return `  <url>\n    ${loc}\n    ${lastmod}\n    ${changefreq}\n    ${priority}\n  </url>`;
+
+      const normalizedDate = normalizeLastmod(item.lastmod);
+      const lastmod = normalizedDate
+        ? `<lastmod>${normalizedDate}</lastmod>`
+        : '';
+
+      const changefreq = item.changefreq
+        ? `<changefreq>${item.changefreq}</changefreq>`
+        : '';
+
+      const priority =
+        item.priority !== undefined
+          ? `<priority>${item.priority.toFixed(1)}</priority>`
+          : '';
+
+      const fields = [
+        `    ${loc}`,
+        lastmod ? `    ${lastmod}` : '',
+        changefreq ? `    ${changefreq}` : '',
+        priority ? `    ${priority}` : '',
+      ].filter(Boolean);
+
+      return `  <url>\n${fields.join('\n')}\n  </url>`;
     })
     .join('\n');
 
-  return `<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<?xml-stylesheet type=\"text/xsl\" href=\"/sitemap.xsl\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n${urlEntries}\n</urlset>`;
+  return (
+    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<?xml-stylesheet type="text/xsl" href="/sitemap.xsl"?>\n' +
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    `${urlEntries}\n` +
+    '</urlset>'
+  );
 }
 
 export async function GET() {
@@ -86,7 +129,7 @@ export async function GET() {
 
     // 2. Flow posts (/flow/[slug])
     try {
-      const { data: flowItems } = await supabase
+      const { data: flowItems, error } = await supabase
         .from('items')
         .select('slug, updated_at, published_at')
         .eq('status', 'published')
@@ -95,9 +138,17 @@ export async function GET() {
         .order('published_at', { ascending: false })
         .limit(2000);
 
+      if (error) {
+        console.error('Sitemap fetch flow items error:', error);
+      }
+
       if (flowItems) {
         flowUrls = flowItems
-          .filter((item) => typeof item.slug === 'string' && item.slug.trim().length > 0)
+          .filter(
+            (item) =>
+              typeof item.slug === 'string' &&
+              item.slug.trim().length > 0,
+          )
           .map((item) => ({
             loc: `${baseUrl}/flow/${encodeURIComponent(item.slug.trim())}`,
             lastmod: item.updated_at || item.published_at || now,
@@ -109,18 +160,26 @@ export async function GET() {
       console.error('Sitemap fetch flow items error:', err);
     }
 
-    // 3. Articles (rooted /slug and /selection/[slug])
+    // 3. Articles
     try {
-      const { data: articles } = await supabase
+      const { data: articles, error } = await supabase
         .from('articles')
         .select('slug, updatedAt, publishedAt')
         .eq('published', true)
         .order('publishedAt', { ascending: false })
         .limit(1000);
 
+      if (error) {
+        console.error('Sitemap fetch articles error:', error);
+      }
+
       if (articles) {
         articleUrls = articles
-          .filter((a) => a.slug && typeof a.slug === 'string')
+          .filter(
+            (item) =>
+              typeof item.slug === 'string' &&
+              item.slug.trim().length > 0,
+          )
           .map((item) => ({
             loc: `${baseUrl}/${encodeURIComponent(item.slug.trim())}`,
             lastmod: item.updatedAt || item.publishedAt || now,
@@ -134,16 +193,24 @@ export async function GET() {
 
     // 4. Letters (/letters/[slug])
     try {
-      const { data: letters } = await supabase
+      const { data: letters, error } = await supabase
         .from('letters')
         .select('slug, updatedAt, publishedAt')
         .eq('published', true)
         .order('publishedAt', { ascending: false })
         .limit(500);
 
+      if (error) {
+        console.error('Sitemap fetch letters error:', error);
+      }
+
       if (letters) {
         letterUrls = letters
-          .filter((l) => l.slug && typeof l.slug === 'string')
+          .filter(
+            (letter) =>
+              typeof letter.slug === 'string' &&
+              letter.slug.trim().length > 0,
+          )
           .map((letter) => ({
             loc: `${baseUrl}/letters/${encodeURIComponent(letter.slug.trim())}`,
             lastmod: letter.updatedAt || letter.publishedAt || now,
@@ -157,15 +224,23 @@ export async function GET() {
 
     // 5. Projects
     try {
-      const { data: projects } = await supabase
+      const { data: projects, error } = await supabase
         .from('projects')
         .select('slug, updatedAt, createdAt')
         .eq('published', true)
         .limit(200);
 
+      if (error) {
+        console.error('Sitemap fetch projects error:', error);
+      }
+
       if (projects) {
         projectUrls = projects
-          .filter((p) => p.slug && typeof p.slug === 'string')
+          .filter(
+            (project) =>
+              typeof project.slug === 'string' &&
+              project.slug.trim().length > 0,
+          )
           .map((project) => ({
             loc: `${baseUrl}/${encodeURIComponent(project.slug.trim())}`,
             lastmod: project.updatedAt || project.createdAt || now,
@@ -179,20 +254,31 @@ export async function GET() {
 
     // 6. Tags
     try {
-      const { data: tags } = await supabase
+      const { data: tags, error } = await supabase
         .from('Tag')
         .select('slug, name')
         .limit(200);
 
+      if (error) {
+        console.error('Sitemap fetch tags error:', error);
+      }
+
       if (tags) {
         tagUrls = tags
-          .filter((t) => (t.slug || t.name))
-          .map((tag) => ({
-            loc: `${baseUrl}/tags/${encodeURIComponent((tag.slug || tag.name).trim())}`,
-            lastmod: now,
-            changefreq: 'weekly' as const,
-            priority: 0.5,
-          }));
+          .filter((tag) => {
+            const slug = tag.slug || tag.name;
+            return typeof slug === 'string' && slug.trim().length > 0;
+          })
+          .map((tag) => {
+            const slug = (tag.slug || tag.name).trim();
+
+            return {
+              loc: `${baseUrl}/tags/${encodeURIComponent(slug)}`,
+              lastmod: now,
+              changefreq: 'weekly' as const,
+              priority: 0.5,
+            };
+          });
       }
     } catch (err) {
       console.error('Sitemap fetch tags error:', err);
@@ -201,8 +287,9 @@ export async function GET() {
     console.error('Sitemap generation error:', globalErr);
   }
 
-  // Deduplicate URLs
+  // 7. Deduplicate URLs
   const uniqueUrlsMap = new Map<string, SitemapUrl>();
+
   for (const item of [
     ...staticUrls,
     ...flowUrls,
@@ -216,12 +303,15 @@ export async function GET() {
     }
   }
 
-  const sitemapXml = buildSitemapXml(Array.from(uniqueUrlsMap.values()));
+  const sitemapXml = buildSitemapXml(
+    Array.from(uniqueUrlsMap.values()),
+  );
 
   return new NextResponse(sitemapXml, {
     headers: {
       'Content-Type': 'application/xml; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400',
+      'Cache-Control':
+        'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400',
     },
   });
 }
