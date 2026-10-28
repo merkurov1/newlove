@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
+import PierrotSectionLink from '@/components/pierrot/PierrotSectionLink';
 
 export default function LobbyClient() {
   return (
@@ -30,8 +31,9 @@ export default function LobbyClient() {
               Two decades at the intersection of media, decentralized protocols, fine art, and monumental family heritage.
             </p>
 
-            <Link
+            <PierrotSectionLink
               href="/advising"
+              sectionId="advising"
               className="group inline-flex items-center gap-4 border-b-2 border-zinc-900 pb-1.5 hover:border-zinc-500 transition-all duration-300"
             >
               <span className="font-mono text-xs uppercase tracking-[0.25em] font-semibold text-[#111111] group-hover:text-zinc-600 transition-colors">
@@ -41,7 +43,7 @@ export default function LobbyClient() {
                 size={16}
                 className="group-hover:translate-x-1.5 transition-transform duration-300 text-[#111111] group-hover:text-zinc-600"
               />
-            </Link>
+            </PierrotSectionLink>
           </div>
         </div>
 
@@ -57,25 +59,27 @@ export default function LobbyClient() {
             Media &amp; Communications
           </Link>
 
-          <Link
+          <PierrotSectionLink
             href="/heritage"
+            sectionId="heritage"
             className="group block hover:text-zinc-700 transition-colors"
           >
             <span className="block text-zinc-700 font-semibold mb-1 group-hover:text-[#111111] transition-colors">
               Heritage
             </span>
             S. Merkurov Museum &amp; Archives
-          </Link>
+          </PierrotSectionLink>
 
-          <Link
+          <PierrotSectionLink
             href="/media"
+            sectionId="media"
             className="group block hover:text-zinc-700 transition-colors"
           >
             <span className="block text-[#111111] font-semibold mb-1 group-hover:underline underline-offset-4 decoration-zinc-400">
               Publicist
             </span>
             Novaya Gazeta &amp; Forbes
-          </Link>
+          </PierrotSectionLink>
 
           <Link
             href="/art-engine"
@@ -201,8 +205,9 @@ export default function LobbyClient() {
               </p>
             </div>
 
-            <Link
+            <PierrotSectionLink
               href="/media"
+              sectionId="media"
               className="group inline-flex w-fit shrink-0 items-center gap-4 border-b border-zinc-900 pb-3 text-[#111111] transition-colors hover:border-[#8D3D2E] hover:text-[#8D3D2E]"
             >
               <span className="font-mono text-xs uppercase tracking-[0.16em]">
@@ -212,7 +217,7 @@ export default function LobbyClient() {
                 size={17}
                 className="transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1"
               />
-            </Link>
+            </PierrotSectionLink>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-12 font-serif">
@@ -273,8 +278,9 @@ export default function LobbyClient() {
               appearances are collected in the chronological archive.
             </p>
 
-            <Link
+            <PierrotSectionLink
               href="/media"
+              sectionId="media"
               className="group inline-flex items-center gap-3 text-sm text-[#111111] hover:text-[#8D3D2E] transition-colors"
             >
               <span className="underline underline-offset-4 decoration-zinc-400 group-hover:decoration-[#8D3D2E]">
@@ -284,7 +290,7 @@ export default function LobbyClient() {
                 size={15}
                 className="transition-transform duration-300 group-hover:translate-x-1"
               />
-            </Link>
+            </PierrotSectionLink>
           </div>
         </div>
       </section>
@@ -311,8 +317,9 @@ export default function LobbyClient() {
                   Sergey Merkurov (1881–1952)
                 </div>
 
-                <Link
+                <PierrotSectionLink
                   href="/heritage"
+                  sectionId="heritage"
                   className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-zinc-300 bg-transparent text-zinc-700 hover:border-zinc-500 hover:text-zinc-900 transition-colors font-mono text-[11px] uppercase tracking-[0.2em] font-semibold"
                 >
                   <span>Heritage Archive</span>
@@ -320,7 +327,7 @@ export default function LobbyClient() {
                     size={14}
                     className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
                   />
-                </Link>
+                </PierrotSectionLink>
               </div>
             </div>
 

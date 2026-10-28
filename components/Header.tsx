@@ -9,6 +9,7 @@ import { useAuth } from '@/components/AuthContext';
 import useIsTelegram from '@/components/useIsTelegram';
 import ComposerTrigger from '@/components/flow/ComposerTrigger';
 import { PierrotTrigger } from '@/components/PierrotChat';
+import PierrotSectionLink from '@/components/pierrot/PierrotSectionLink';
 
 export default function Header() {
   const auth = useAuth() as any;
@@ -388,8 +389,9 @@ export default function Header() {
                     </Link>
 
                     <div className="pl-3.5 space-y-1.5 border-l border-stone-200/80 font-bold uppercase tracking-[0.15em] text-xs text-stone-500">
-                      <Link
+                      <PierrotSectionLink
                         href="/journal"
+                        sectionId="journal"
                         onClick={closeSiteMenu}
                         className={submenuClass(
                           normalizedPath === '/journal' ||
@@ -397,7 +399,7 @@ export default function Header() {
                         )}
                       >
                         JOURNAL
-                      </Link>
+                      </PierrotSectionLink>
                     </div>
                   </div>
 
@@ -414,8 +416,9 @@ export default function Header() {
                     </Link>
 
                     <div className="pl-3.5 space-y-1.5 border-l border-stone-200/80 font-bold uppercase tracking-[0.15em] text-xs text-stone-500">
-                      <Link
+                      <PierrotSectionLink
                         href="/selection"
+                        sectionId="selection"
                         onClick={closeSiteMenu}
                         className={submenuClass(
                           normalizedPath === '/selection' ||
@@ -423,7 +426,7 @@ export default function Header() {
                         )}
                       >
                         SELECTION
-                      </Link>
+                      </PierrotSectionLink>
                     </div>
                   </div>
 

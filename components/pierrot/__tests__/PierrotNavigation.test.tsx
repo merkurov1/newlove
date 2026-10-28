@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import HomeClient from '@/components/HomeClient';
+import LobbyClient from '@/app/lobby/LobbyClient';
 import PierrotChat from '@/components/PierrotChat';
 import { PierrotProvider, usePierrot } from '@/components/pierrot/PierrotContext';
 import { parseNavigationRecord } from '@/lib/pierrot/navigation';
@@ -52,6 +53,16 @@ function renderApp() {
   return render(
     <PierrotProvider>
       <HomeClient />
+      <PierrotChat />
+      <OpenChatButton />
+    </PierrotProvider>
+  );
+}
+
+function renderLobbyApp() {
+  return render(
+    <PierrotProvider>
+      <LobbyClient />
       <PierrotChat />
       <OpenChatButton />
     </PierrotProvider>
@@ -161,6 +172,10 @@ describe('Pierrot conversational navigation', () => {
 
     expect(pushMock).toHaveBeenCalledWith('/heartandangel');
 
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
     const record = parseNavigationRecord(
       window.sessionStorage.getItem('pierrot_navigation_arrival_v1')
     );
@@ -179,6 +194,7 @@ describe('Pierrot conversational navigation', () => {
         <OpenChatButton />
       </PierrotProvider>
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Open test chat' }));
 
     await waitFor(() => {
       expect(screen.getAllByText(/You're now in Heart & Angel\./)).toHaveLength(1);
@@ -279,6 +295,79 @@ describe('Pierrot conversational navigation', () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['Selection', /Selection is the vault/],
+    ['Advising', /Advising is the Office/],
+    ['Journal', /The Journal is the editorial record/],
+  ])('opens the curated %s scenario from the homepage', async (label, intro) => {
+    renderApp();
+
+    fireEvent.click(screen.getByRole('link', { name: label }));
+
+    expect(await screen.findByText(intro)).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it('navigates to Selection, closes the chat, and delivers its arrival message', async () => {
+    const view = renderApp();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Selection' }));
+    await screen.findByText(/Selection is the vault/);
+    fireEvent.click(screen.getByRole('button', { name: 'Enter Selection' }));
+
+    expect(pushMock).toHaveBeenCalledWith('/selection');
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    currentPathname = '/selection';
+    view.rerender(
+      <PierrotProvider>
+        <HomeClient />
+        <PierrotChat />
+        <OpenChatButton />
+      </PierrotProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open test chat' }));
+
+    expect(await screen.findByText(/You're now in Selection\./)).toBeInTheDocument();
+  });
+
+  it('shows homepage copy in the empty conversation and uses section buttons', async () => {
+    renderApp();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open test chat' }));
+
+    const dialog = screen.getByRole('dialog');
+
+    expect(within(dialog).getByText('Structure is the antidote to chaos.')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Context Architecture/)).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Selection' }));
+
+    expect(await within(dialog).findByText(/Selection is the vault/)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('opens the Heritage scenario from the Lobby page', async () => {
+    renderLobbyApp();
+
+    fireEvent.click(screen.getAllByRole('link', { name: /Heritage/i })[0]);
+
+    expect(await screen.findByText(/Heritage is the family archive/)).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it('opens the Media scenario from the Lobby page', async () => {
+    renderLobbyApp();
+
+    fireEvent.click(screen.getByRole('link', { name: /Explore the media archive/i }));
+
+    expect(await screen.findByText(/Media is the public record/)).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
   it('runs the Lobby explanation and navigates to the verified route', async () => {
     renderApp();
 
@@ -288,6 +377,9 @@ describe('Pierrot conversational navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enter Lobby' }));
 
     expect(pushMock).toHaveBeenCalledWith('/lobby');
-    expect(screen.getByRole('button', { name: 'Enter Lobby' })).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 });

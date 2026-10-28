@@ -10,8 +10,20 @@ import { PIERROT_COMPOSER_EXPAND_THRESHOLD, shouldExpandPierrotComposer } from '
 
 describe('Pierrot navigation metadata', () => {
   it('keeps the verified routes in one place', () => {
-    expect(PIERROT_SECTIONS.art.route).toBe('/heartandangel');
-    expect(PIERROT_SECTIONS.lobby.route).toBe('/lobby');
+    expect(
+      Object.fromEntries(
+        Object.entries(PIERROT_SECTIONS).map(([id, section]) => [id, section.route])
+      )
+    ).toEqual({
+      art: '/heartandangel',
+      lobby: '/lobby',
+      selection: '/selection',
+      journal: '/journal',
+      advising: '/advising',
+      media: '/media',
+      heritage: '/heritage',
+    });
+
     expect(PIERROT_SECTIONS.art.arrival.links).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ href: '/heartandangel/world' }),
@@ -34,6 +46,9 @@ describe('Pierrot navigation metadata', () => {
   it('detects typed section names without hijacking questions', () => {
     expect(findSectionByPrompt('Art')?.id).toBe('art');
     expect(findSectionByPrompt(' lobby. ')?.id).toBe('lobby');
+    expect(findSectionByPrompt('The Office')?.id).toBe('advising');
+    expect(findSectionByPrompt('Media Archive')?.id).toBe('media');
+    expect(findSectionByPrompt('Heritage Archive')?.id).toBe('heritage');
     expect(findSectionByPrompt('What is Art?')).toBeNull();
   });
 

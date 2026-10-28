@@ -1,26 +1,26 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import PierrotComposer from '@/components/pierrot/PierrotComposer';
-import { usePierrot } from '@/components/pierrot/PierrotContext';
+import PierrotSectionLink from '@/components/pierrot/PierrotSectionLink';
+import type { PierrotSectionId } from '@/lib/pierrot/navigation';
 
 interface NavItem {
   label: string;
   href: string;
+  sectionId: PierrotSectionId;
 }
 
 const INITIAL_ITEMS: NavItem[] = [
-  { label: 'Art', href: '/heartandangel' },
-  { label: 'Selection', href: '/selection' },
-  { label: 'Advising', href: '/advising' },
+  { label: 'Art', href: '/heartandangel', sectionId: 'art' },
+  { label: 'Selection', href: '/selection', sectionId: 'selection' },
+  { label: 'Advising', href: '/advising', sectionId: 'advising' },
 ];
 
 export default function HomeClient() {
   const [items, setItems] = useState<NavItem[]>(INITIAL_ITEMS);
   const [isShuffled, setIsShuffled] = useState(false);
-  const { exploreSection } = usePierrot();
 
   const shuffleItems = useCallback(() => {
     const tg = (window as any)?.Telegram?.WebApp;
@@ -109,33 +109,26 @@ export default function HomeClient() {
           title="Click or shake to shuffle"
         >
           {items.map((item) => (
-            <Link
+            <PierrotSectionLink
               key={item.label}
               href={item.href}
+              sectionId={item.sectionId}
               onClick={(event: React.MouseEvent<HTMLAnchorElement>) => {
                 event.stopPropagation();
-
-                if (item.label === 'Art') {
-                  event.preventDefault();
-                  exploreSection('art');
-                }
               }}
               className="group inline-flex items-center gap-2 py-2 text-[#111111] hover:text-zinc-600 transition-colors"
             >
               <span className="font-medium tracking-[0.2em] underline underline-offset-8 decoration-zinc-300 group-hover:decoration-black transition-colors">
                 {item.label}
               </span>
-            </Link>
+            </PierrotSectionLink>
           ))}
         </nav>
 
         <div className="flex flex-col items-center gap-4">
-          <Link
+          <PierrotSectionLink
             href="/lobby"
-            onClick={(event: React.MouseEvent<HTMLAnchorElement>) => {
-              event.preventDefault();
-              exploreSection('lobby');
-            }}
+            sectionId="lobby"
             className="group inline-flex items-center gap-3 border border-zinc-900/20 bg-white/80 hover:bg-[#111111] text-[#111111] hover:text-[#FAF8F5] px-7 py-3.5 sm:px-8 sm:py-4 transition-all duration-300 ease-out backdrop-blur-sm shadow-sm rounded-full"
           >
             <span className="font-serif text-base sm:text-lg italic font-normal tracking-wide px-1">
@@ -145,10 +138,11 @@ export default function HomeClient() {
               size={18}
               className="text-zinc-600 group-hover:text-[#FAF8F5] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-300"
             />
-          </Link>
+          </PierrotSectionLink>
 
-          <Link
+          <PierrotSectionLink
             href="/journal"
+            sectionId="journal"
             className="group inline-flex items-center gap-3 border border-zinc-900/20 bg-white/80 hover:bg-[#111111] text-[#111111] hover:text-[#FAF8F5] px-7 py-3.5 sm:px-8 sm:py-4 transition-all duration-300 ease-out backdrop-blur-sm shadow-sm rounded-full"
           >
             <span className="font-serif text-base sm:text-lg italic font-normal tracking-wide px-1">
@@ -158,7 +152,7 @@ export default function HomeClient() {
               size={18}
               className="text-zinc-600 group-hover:text-[#FAF8F5] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-300"
             />
-          </Link>
+          </PierrotSectionLink>
         </div>
       </div>
 

@@ -6,7 +6,8 @@
  * sections and confirmations are handled deterministically by the client.
  */
 
-export type PierrotSectionId = 'art' | 'lobby';
+export type PierrotSectionId =
+  'art' | 'lobby' | 'selection' | 'journal' | 'advising' | 'media' | 'heritage';
 
 export type PierrotMessageLink = {
   label: string;
@@ -30,6 +31,7 @@ export type PierrotSection = {
   label: string;
   route: string;
   triggerText: string;
+  aliases?: string[];
   actionLabel: string;
   intro: string;
   followUpPrompt: string;
@@ -45,6 +47,7 @@ export const PIERROT_SECTIONS: Record<PierrotSectionId, PierrotSection> = {
     label: 'Art',
     route: '/heartandangel',
     triggerText: 'Art',
+    aliases: ['heart & angel', 'heart and angel'],
     actionLabel: 'Enter Art',
     intro: `Art is where the site becomes something other than a portfolio.
 
@@ -71,6 +74,7 @@ Just ask, or select a section.`,
     label: 'Lobby',
     route: '/lobby',
     triggerText: 'Lobby',
+    aliases: ['the lobby'],
     actionLabel: 'Enter Lobby',
     intro: `The Lobby is the private office: two decades of work across media, decentralized protocols, fine art, and heritage.
 
@@ -92,12 +96,152 @@ Just ask, or select a section.`,
       ],
     },
   },
+  selection: {
+    id: 'selection',
+    label: 'Selection',
+    route: '/selection',
+    triggerText: 'Selection',
+    aliases: ['the vault', 'vault'],
+    actionLabel: 'Enter Selection',
+    intro: `Selection is the vault: a curated, auction-catalogue view of works and chronicles.
+
+Each entry carries the artist, year, and context around the piece. It is a record of what has been chosen, not everything that exists.
+
+Would you like to enter?`,
+    followUpPrompt: 'Tell me more about Selection.',
+    arrival: {
+      content: `You're now in Selection.
+
+The vault is arranged as a catalogue; each card opens a work or chronicle. You can return to the Lobby, browse the Art Engine, or ask about anything you see.
+
+Just ask, or select a section.`,
+      links: [
+        { label: 'Art Engine', href: '/art-engine' },
+        { label: 'Lobby', href: '/lobby' },
+        { label: 'Journal', href: '/journal' },
+      ],
+    },
+  },
+  journal: {
+    id: 'journal',
+    label: 'Journal',
+    route: '/journal',
+    triggerText: 'Journal',
+    aliases: ['the journal'],
+    actionLabel: 'Enter Journal',
+    intro: `The Journal is the editorial record: notes on art, technology, and the architecture of value.
+
+It brings together recent issues, the Flow stream, the issue archive, and a way to subscribe.
+
+Would you like to enter?`,
+    followUpPrompt: 'Tell me more about the Journal.',
+    arrival: {
+      content: `You're now in the Journal.
+
+You can read the latest issues, follow the Flow, open the issue archive, or subscribe.
+
+Just ask, or select a section.`,
+      links: [
+        { label: 'Issues', href: '/journal#issues' },
+        { label: 'Flow', href: '/flow' },
+        { label: 'Archive', href: '/letters' },
+        { label: 'Subscribe', href: '/journal#subscribe' },
+      ],
+    },
+  },
+  advising: {
+    id: 'advising',
+    label: 'Advising',
+    route: '/advising',
+    triggerText: 'Advising',
+    aliases: ['office', 'the office'],
+    actionLabel: 'Enter Office',
+    intro: `Advising is the Office: direct, peer-to-peer counsel at the intersection of technology, culture, and capital.
+
+It covers horizon navigation, cultural capital, high-stakes boards, and confidential strategy sessions.
+
+Would you like to enter?`,
+    followUpPrompt: 'Tell me more about Advising.',
+    arrival: {
+      content: `You're now in Advising.
+
+You can read the operating principles, review engagement formats, or start a direct conversation. The Lobby, Heritage, and the Media archive are also within reach.
+
+Just ask, or select a section.`,
+      links: [
+        { label: 'Lobby', href: '/lobby' },
+        { label: 'Heritage', href: '/heritage' },
+        { label: 'Media', href: '/media' },
+      ],
+    },
+  },
+  media: {
+    id: 'media',
+    label: 'Media',
+    route: '/media',
+    triggerText: 'Media',
+    aliases: ['media archive', 'the media archive'],
+    actionLabel: 'Enter Media',
+    intro: `Media is the public record: a chronological archive of interviews, commentary, columns, and citations.
+
+You can filter it by year, format, language, topic, and publication; every entry links to the original source.
+
+Would you like to enter?`,
+    followUpPrompt: 'Tell me more about the Media archive.',
+    arrival: {
+      content: `You're now in Media.
+
+The archive can be filtered by year, format, language, topic, and publication. Every record links to its original source. The Journal and Heritage archive are also within reach.
+
+Just ask, or select a section.`,
+      links: [
+        { label: 'Journal', href: '/journal' },
+        { label: 'Heritage', href: '/heritage' },
+        { label: 'Lobby', href: '/lobby' },
+      ],
+    },
+  },
+  heritage: {
+    id: 'heritage',
+    label: 'Heritage',
+    route: '/heritage',
+    triggerText: 'Heritage',
+    aliases: ['heritage archive', 'the heritage archive'],
+    actionLabel: 'Enter Heritage',
+    intro: `Heritage is the family archive: the documented legacy of sculptor Sergey Merkurov and Anton Merkurov's cultural and digital initiatives.
+
+It moves through family history, the Gyumri house-museum, the Dynamo reliefs, death masks, digital art, the alphabet, press, and sources.
+
+Would you like to enter?`,
+    followUpPrompt: 'Tell me more about the Heritage Archive.',
+    arrival: {
+      content: `You're now in the Heritage Archive.
+
+You can move through the chapters: Family, the Gyumri Museum, Dynamo, the Masks, Digital Art, Alphabet, Press, and Sources. The Lobby is also within reach.
+
+Just ask, or select a section.`,
+      links: [
+        { label: 'Family', href: '/heritage#family' },
+        { label: 'Museum', href: '/heritage#museum' },
+        { label: 'Digital Art', href: '/heritage#digital' },
+        { label: 'Lobby', href: '/lobby' },
+      ],
+    },
+  },
 };
 
 export const PIERROT_SECTION_IDS = Object.keys(PIERROT_SECTIONS) as PierrotSectionId[];
 
 export function isPierrotSectionId(value: unknown): value is PierrotSectionId {
-  return value === 'art' || value === 'lobby';
+  return (
+    value === 'art' ||
+    value === 'lobby' ||
+    value === 'selection' ||
+    value === 'journal' ||
+    value === 'advising' ||
+    value === 'media' ||
+    value === 'heritage'
+  );
 }
 
 export function getPierrotSection(sectionId: PierrotSectionId): PierrotSection {
@@ -118,8 +262,10 @@ export function findSectionByPrompt(text: string): PierrotSection | null {
   if (!normalized) return null;
 
   return (
-    PIERROT_SECTION_IDS.map((id) => PIERROT_SECTIONS[id]).find(
-      (section) => section.triggerText.toLowerCase() === normalized
+    PIERROT_SECTION_IDS.map((id) => PIERROT_SECTIONS[id]).find((section) =>
+      [section.triggerText, ...(section.aliases ?? [])].some(
+        (candidate) => candidate.toLowerCase() === normalized
+      )
     ) ?? null
   );
 }

@@ -325,6 +325,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         // message could be missed.
       }
 
+      setIsOpen(false);
       router.push(proposal.route);
 
       window.setTimeout(() => {

@@ -4,13 +4,19 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, RotateCcw, ArrowUp } from 'lucide-react';
+import { X, RotateCcw, ArrowUp, ArrowUpRight } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
-import type { PierrotChatAction } from '@/lib/pierrot/navigation';
+import type { PierrotChatAction, PierrotSectionId } from '@/lib/pierrot/navigation';
 
 type PierrotTriggerProps = {
   compact?: boolean;
 };
+
+const HOME_CHAT_SECTIONS: Array<{ label: string; sectionId: PierrotSectionId }> = [
+  { label: 'Art', sectionId: 'art' },
+  { label: 'Selection', sectionId: 'selection' },
+  { label: 'Advising', sectionId: 'advising' },
+];
 
 function usePrefersReducedMotion(): boolean {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -91,6 +97,7 @@ export default function PierrotChat() {
     sendMessage,
     clearChat,
     runAction,
+    exploreSection,
   } = usePierrot();
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -98,7 +105,7 @@ export default function PierrotChat() {
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const caretRef = useRef<number | null>(null);
   const shouldReduceMotion = usePrefersReducedMotion();
-  const [visualViewportHeight, setVisualViewportHeight] = useState<number | null>(null);
+  const [keyboardViewportHeight, setKeyboardViewportHeight] = useState<number | null>(null);
 
   caretRef.current = draftCaret;
 
@@ -134,7 +141,7 @@ export default function PierrotChat() {
 
   useEffect(() => {
     if (!isOpen) {
-      setVisualViewportHeight(null);
+      setKeyboardViewportHeight(null);
       return;
     }
 
@@ -142,7 +149,15 @@ export default function PierrotChat() {
 
     if (!viewport) return;
 
-    const sync = () => setVisualViewportHeight(viewport.height);
+    const sync = () => {
+      // iPad Safari reports a visual viewport slightly shorter than the
+      // layout viewport even when the keyboard is closed. Only shrink the
+      // modal for a real keyboard-sized inset; otherwise keep 100dvh so the
+      // modal never leaves a strip of backdrop at the bottom.
+      const keyboardInset = window.innerHeight - viewport.height - viewport.offsetTop;
+
+      setKeyboardViewportHeight(keyboardInset > 120 ? viewport.height : null);
+    };
 
     sync();
     viewport.addEventListener('resize', sync);
@@ -206,10 +221,10 @@ export default function PierrotChat() {
     void runAction(action);
   };
 
-  const modalStyle = visualViewportHeight
+  const modalStyle = keyboardViewportHeight
     ? {
-        height: `${visualViewportHeight}px`,
-        maxHeight: `${visualViewportHeight}px`,
+        height: `${keyboardViewportHeight}px`,
+        maxHeight: `${keyboardViewportHeight}px`,
       }
     : undefined;
 
@@ -227,9 +242,10 @@ export default function PierrotChat() {
                   duration: shouldReduceMotion ? 0 : 0.16,
                 }}
                 className="
-                  fixed inset-0 z-[9999] flex items-stretch justify-center
-                  bg-[#24211D]/25 backdrop-blur-[3px]
+                  fixed inset-x-0 top-0 z-[9999] flex h-[100dvh] w-full
+                  items-stretch justify-center bg-[#FAF8F4]
                 "
+                style={modalStyle}
                 role="dialog"
                 aria-modal="true"
                 aria-label="Pierrot conversation"
@@ -246,16 +262,15 @@ export default function PierrotChat() {
                   transition={{
                     duration: shouldReduceMotion ? 0 : 0.16,
                   }}
-                  style={modalStyle}
                   className="
-                    flex h-[100dvh] max-h-[100dvh] w-full flex-col
-                    overflow-hidden bg-[#FAF8F4] text-[#37332D]
+                    flex h-full max-h-full w-full flex-col overflow-hidden
+                    bg-[#FAF8F4] text-[#37332D]
                     shadow-[0_24px_80px_rgba(36,33,29,0.14)]
                   "
                   onMouseDown={(event: React.MouseEvent<HTMLElement>) => event.stopPropagation()}
                 >
                   <header className="shrink-0 border-b border-[#ECE6DC]/60">
-                    <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 py-3 sm:px-7 sm:py-4">
+                    <div className="flex w-full items-center justify-between px-3 py-3 sm:px-4 sm:py-4">
                       <div className="flex items-center gap-2.5">
                         <span className="h-2 w-2 rounded-full bg-[#8CA18A]" title="Online" />
                         <span className="font-serif text-[15px] font-medium text-[#37332D]">
@@ -297,7 +312,7 @@ export default function PierrotChat() {
                           title="Close"
                           aria-label="Close Pierrot"
                           className="
-                            -mr-2 flex h-9 w-9 shrink-0 items-center justify-center
+                            flex h-9 w-9 shrink-0 items-center justify-center
                             rounded-full text-[#898277] transition
                             hover:bg-black/[0.04] hover:text-[#37332D]
                           "
@@ -320,37 +335,98 @@ export default function PierrotChat() {
                       {messages.length === 0 ? (
                         <div
                           className="
-                            my-auto flex flex-col items-center
+                            my-auto flex w-full flex-col items-center
                             justify-center px-2 py-10 text-center
                           "
                         >
-                          <div
+                          <p
                             className="
-                              flex h-12 w-12 items-center justify-center
-                              rounded-full border border-[#E6DEC6]
-                              bg-[#F4EFE6] font-serif text-[20px] font-medium text-[#554E44]
+                              max-w-lg font-serif text-sm italic
+                              tracking-wide text-zinc-600 sm:text-lg
                             "
                           >
-                            P
-                          </div>
+                            Structure is the antidote to chaos.
+                          </p>
 
                           <h2
                             className="
-                              mt-4 font-serif text-2xl font-light
-                              tracking-tight text-[#37332D] sm:text-3xl
+                              mt-7 max-w-2xl break-words font-serif text-3xl
+                              font-normal leading-[1.15] tracking-tight
+                              text-[#111111] sm:text-5xl
                             "
                           >
-                            Pierrot
+                            Context Architecture <br className="hidden sm:inline" />
+                            <span className="font-serif italic text-zinc-500">
+                              &amp; Cultural Capital
+                            </span>
                           </h2>
 
-                          <p
+                          <nav
+                            aria-label="Pierrot sections"
                             className="
-                              mt-2 max-w-xs font-serif text-[14px]
-                              leading-relaxed text-[#898277]
+                              mt-8 flex flex-wrap items-center justify-center
+                              gap-3 px-2 font-mono text-xs uppercase
+                              tracking-[0.2em] sm:gap-6 sm:text-sm
                             "
                           >
-                            Ask about the site, or choose a section.
-                          </p>
+                            {HOME_CHAT_SECTIONS.map((section) => (
+                              <button
+                                key={section.sectionId}
+                                type="button"
+                                onClick={() => exploreSection(section.sectionId)}
+                                className="
+                                  inline-flex items-center py-2 text-[#111111]
+                                  underline decoration-zinc-300 underline-offset-8
+                                  transition-colors hover:text-zinc-600
+                                  hover:decoration-black
+                                "
+                              >
+                                {section.label}
+                              </button>
+                            ))}
+                          </nav>
+
+                          <div className="mt-7 flex flex-col items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => exploreSection('lobby')}
+                              className="
+                                group inline-flex items-center gap-3 rounded-full
+                                border border-zinc-900/20 bg-white/80 px-7 py-3
+                                text-[#111111] shadow-sm backdrop-blur-sm
+                                transition-all duration-300 hover:bg-[#111111]
+                                hover:text-[#FAF8F5]
+                              "
+                            >
+                              <span className="px-1 font-serif text-base font-normal italic tracking-wide">
+                                Enter The Lobby
+                              </span>
+                              <ArrowUpRight
+                                size={18}
+                                className="text-zinc-600 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[#FAF8F5]"
+                              />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => exploreSection('journal')}
+                              className="
+                                group inline-flex items-center gap-3 rounded-full
+                                border border-zinc-900/20 bg-white/80 px-7 py-3
+                                text-[#111111] shadow-sm backdrop-blur-sm
+                                transition-all duration-300 hover:bg-[#111111]
+                                hover:text-[#FAF8F5]
+                              "
+                            >
+                              <span className="px-1 font-serif text-base font-normal italic tracking-wide">
+                                Journal
+                              </span>
+                              <ArrowUpRight
+                                size={18}
+                                className="text-zinc-600 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[#FAF8F5]"
+                              />
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="space-y-6">
