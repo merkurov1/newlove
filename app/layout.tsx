@@ -17,6 +17,8 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import PierrotChat from '@/components/PierrotChat';
+import { PierrotProvider } from '@/components/pierrot/PierrotContext';
 import TelegramMiniApp from '@/components/TelegramMiniApp';
 import NextDynamic from 'next/dynamic';
 import { unstable_cache } from 'next/cache';
@@ -379,22 +381,26 @@ export default async function RootLayout({
       >
         <AuthProvider>
           <GlobalAudioProvider>
-            <TelegramMiniApp />
+            <PierrotProvider>
+              <TelegramMiniApp />
 
-            <a
-              href="#main-content"
-              className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg"
-            >
-              Skip to content
-            </a>
+              <a
+                href="#main-content"
+                className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg"
+              >
+                Skip to content
+              </a>
 
-            <Header />
+              <Header />
 
-            <UserSidebar />
+              <UserSidebar />
 
-            <main id="main-content">{children}</main>
+              <main id="main-content">{children}</main>
 
-            <Footer />
+              <Footer />
+
+              <PierrotChat />
+            </PierrotProvider>
           </GlobalAudioProvider>
         </AuthProvider>
 

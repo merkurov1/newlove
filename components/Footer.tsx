@@ -1,7 +1,5 @@
 'use client';
 
-import PierrotChat from './PierrotChat';
-
 export default function Footer() {
   const currentYear = new Date().getFullYear();
 
