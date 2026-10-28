@@ -114,6 +114,19 @@ npm run check:metadata      # Run metadata checks
 
 The repository also defines specialised commands for Telegram research, deployment, contracts, and diagnostics. Inspect `package.json` before running a specialised command; some require local credentials, external tools, or a specific environment.
 
+## Feeds
+
+The Flow stream is published as RSS 2.0 and JSON Feed 1.1:
+
+| URL | Description |
+| --- | --- |
+| `/flow/rss` | Canonical RSS feed (all languages) |
+| `/flow/rss.xml` | Alias for readers that probe the `.xml` path |
+| `/flow/feed.json` | JSON Feed 1.1 mirror |
+| `/rss.xml` | Legacy URL, permanently redirects to `/flow/rss` |
+
+Optional query parameters: `?lang=ru`, `?lang=en`, `?limit=1..100` (default 40). The RSS document includes Atom self-discovery, `content:encoded`, Media RSS previews, Dublin Core author metadata and `sy:updatePeriod`. Responses support `ETag`/`If-None-Match` and `Last-Modified`/`If-Modified-Since`, and are cached for 15 minutes with the `flow-items` revalidation tag, so publishing an item invalidates the feed immediately.
+
 ## Deployment
 
 The production site is hosted on Vercel.

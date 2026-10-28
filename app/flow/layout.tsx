@@ -2,15 +2,17 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Flow — Anton Merkurov',
-  description:
-    'Stream of thoughts, notes, media artifacts and signals by Anton Merkurov.',
+  description: 'Stream of thoughts, notes, media artifacts and signals by Anton Merkurov.',
   alternates: {
     canonical: 'https://www.merkurov.love/flow',
+    types: {
+      'application/rss+xml': 'https://www.merkurov.love/flow/rss',
+      'application/feed+json': 'https://www.merkurov.love/flow/feed.json',
+    },
   },
   openGraph: {
     title: 'Flow — Anton Merkurov',
-    description:
-      'Stream of thoughts, notes, media artifacts and signals by Anton Merkurov.',
+    description: 'Stream of thoughts, notes, media artifacts and signals by Anton Merkurov.',
     url: 'https://www.merkurov.love/flow',
     siteName: 'Anton Merkurov',
     type: 'website',
@@ -18,8 +20,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Flow — Anton Merkurov',
-    description:
-      'Stream of thoughts, notes, media artifacts and signals by Anton Merkurov.',
+    description: 'Stream of thoughts, notes, media artifacts and signals by Anton Merkurov.',
   },
   robots: {
     index: true,
@@ -34,10 +35,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default function FlowLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function FlowLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }

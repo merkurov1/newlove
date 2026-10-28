@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import * as cheerio from 'cheerio';
 import Parser from 'rss-parser';
 import {
@@ -6,6 +7,97 @@ import {
   resolveYouTube,
   type YouTubeMetadata,
 } from './youtube';
+
+const MAX_HTML_BYTES = 2_000_000;
+
+/**
+ * Link preview fetching is an admin-only server capability. Even so, block
+ * obvious SSRF targets: loopback, private networks, link-local/metadata
+ * addresses, credentials in URLs, and unusual ports.
+ *
+ * DNS rebinding is not fully solved here; the route is admin-only and uses a
+ * short timeout. If previews ever become public, resolve DNS and pin the IP.
+ */
+export function assertSafePublicUrl(rawUrl: string): URL {
+  const url = new URL(rawUrl);
+
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('Only http and https URLs are allowed.');
+  }
+
+  if (url.username || url.password) {
+    throw new Error('URLs with credentials are not allowed.');
+  }
+
+  if (url.port && url.port !== '80' && url.port !== '443') {
+    throw new Error('Only ports 80 and 443 are allowed.');
+  }
+
+  const hostname = url.hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.$/, '');
+
+  if (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname.endsWith('.local') ||
+    hostname.endsWith('.internal') ||
+    hostname.endsWith('.home') ||
+    hostname.endsWith('.lan') ||
+    hostname === 'metadata.google.internal'
+  ) {
+    throw new Error('Local and private hosts are not allowed.');
+  }
+
+  const version = isIP(hostname);
+
+  if (version === 4 && isPrivateIpv4(hostname)) {
+    throw new Error('Private network addresses are not allowed.');
+  }
+
+  if (version === 6 && isPrivateIpv6(hostname)) {
+    throw new Error('Private network addresses are not allowed.');
+  }
+
+  return url;
+}
+
+function isPrivateIpv4(hostname: string): boolean {
+  const parts = hostname.split('.').map(Number);
+
+  if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part))) {
+    return true;
+  }
+
+  const [first, second] = parts;
+
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 100 && second >= 64 && second <= 127) ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 198 && (second === 18 || second === 19)) ||
+    first >= 224
+  );
+}
+
+function isPrivateIpv6(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+
+  if (lower === '::' || lower === '::1') return true;
+  if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
+  if (/^fe[89ab]/.test(lower)) return true;
+
+  // IPv4-mapped IPv6 (including hex forms such as ::ffff:7f00:1) could
+  // otherwise reach loopback/private IPv4 space.
+  if (lower.startsWith('::ffff:')) return true;
+
+  return false;
+}
 
 export type ParsedUrlResult = {
   url: string;
@@ -106,9 +198,9 @@ export async function parseUrl(rawUrl: string): Promise<ParsedUrlResult> {
   let parsedUrl: URL;
 
   try {
-    parsedUrl = new URL(normalized);
-  } catch {
-    throw new Error('Invalid URL provided');
+    parsedUrl = assertSafePublicUrl(normalized);
+  } catch (error) {
+    throw error instanceof Error ? error : new Error('Invalid URL provided');
   }
 
   const domain = parsedUrl.hostname.replace(/^www\./, '');
@@ -216,7 +308,16 @@ export async function parseUrl(rawUrl: string): Promise<ParsedUrlResult> {
     }
 
     const finalUrl = res.url || normalized;
-    const html = await res.text();
+    const declaredLength = Number(
+      res.headers?.get?.('content-length') || 0,
+    );
+
+    if (declaredLength > MAX_HTML_BYTES) {
+      throw new Error('Source page is too large for a link preview.');
+    }
+
+    // Guard against servers that omit or lie about Content-Length.
+    const html = (await res.text()).slice(0, MAX_HTML_BYTES);
     const $ = cheerio.load(html);
 
     const getMeta = (...selectors: string[]): string | null => {

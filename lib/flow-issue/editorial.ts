@@ -1,5 +1,9 @@
 
-import { analysisForItem, keywordTokens } from "./analysis";
+import {
+  HEURISTIC_MODEL,
+  analysisForItem,
+  keywordTokens,
+} from "./analysis";
 import type {
   FlowItem,
   IssueAI,
@@ -61,6 +65,55 @@ export const DIVERSITY_PENALTY = 0.55;
 
 /** Preferred maximum number of entries from the same topic. */
 export const MAX_PER_TOPIC = 2;
+
+/**
+ * Heuristic fallback analyses are produced from visible structure only
+ * (length, punctuation, item type). Their scores are useful for ordering,
+ * but they are not a verdict on editorial quality: a one-line link or a
+ * short note would otherwise fall below MIN_SELECTION_SCORE and the issue
+ * would be assembled from a single long text.
+ *
+ * The floor equals the neutral legacy score after the confidence adjustment
+ * (2.5 × (0.65 + 0.35 × 0.3) ≈ 1.89). It is deliberately above
+ * MIN_SELECTION_SCORE and below MIN_LEAD_SCORE: fallback material fills the
+ * regular sections, but no item becomes a lead without a real analysis.
+ */
+export const HEURISTIC_NEUTRAL_SCORE =
+  LEGACY_NEUTRAL_SCORE * (0.65 + 0.35 * LEGACY_CONFIDENCE);
+
+/**
+ * True when the analysis came from the deterministic local fallback rather
+ * than a model (or a cached model response).
+ */
+export function isHeuristicAnalysis(analysis: IssueAI): boolean {
+  return analysis.model === HEURISTIC_MODEL;
+}
+
+/**
+ * A heuristic role describes the visible shape of an item, not its merit.
+ * Only a real analysis may exclude material with `role: "omit"`.
+ */
+function isExplicitlyOmitted(
+  candidate: Pick<IssueCandidate, "analysis">,
+): boolean {
+  return (
+    !isHeuristicAnalysis(candidate.analysis) &&
+    candidate.analysis.role === "omit"
+  );
+}
+
+/**
+ * Score used for eligibility. Heuristic analyses get a neutral floor so the
+ * absence of AI does not silently empty the issue, while model analyses keep
+ * their exact score.
+ */
+export function selectionScore(
+  candidate: Pick<IssueCandidate, "analysis" | "score">,
+): number {
+  return isHeuristicAnalysis(candidate.analysis)
+    ? Math.max(candidate.score, HEURISTIC_NEUTRAL_SCORE)
+    : candidate.score;
+}
 
 /** Token-overlap threshold for near-duplicate rejection. */
 export const NEAR_DUPLICATE_THRESHOLD = 0.72;
@@ -173,6 +226,9 @@ function roleAdjustment(
   candidate: Pick<IssueCandidate, "entry" | "analysis">,
 ): number {
   const role = candidate.analysis.role;
+
+  // A heuristic role is inferred from shape and cannot punish an item.
+  if (isHeuristicAnalysis(candidate.analysis)) return 0;
 
   // An explicit exclusion remains authoritative.
   if (role === "omit") return -10;
@@ -379,7 +435,11 @@ function selectSection(
   const available = pool.filter(
     (candidate) =>
       hasUsableContent(candidate) &&
-      candidate.analysis.role !== "omit" &&
+      !isExplicitlyOmitted(candidate) &&
+      // Admission is decided by the score alone. The diversity penalty
+      // below only reorders candidates: a soft penalty must not silently
+      // turn into a second, invisible threshold.
+      selectionScore(candidate) >= minimumScore &&
       !selected.some((item) =>
         areNearDuplicates(candidate, item),
       ),
@@ -390,20 +450,13 @@ function selectSection(
       (topicCounts.get(candidate.topicKey) || 0) >=
       MAX_PER_TOPIC;
 
-    // Prefer topic diversity when alternatives meet the threshold.
-    const alternatives = available.filter((candidate) => {
-      if (overCap(candidate)) return false;
+    // Prefer candidates that still respect the per-topic cap; use
+    // over-cap material only when nothing else is left.
+    const underCap = available.filter(
+      (candidate) => !overCap(candidate),
+    );
 
-      const penalty =
-        DIVERSITY_PENALTY *
-        (topicCounts.get(candidate.topicKey) || 0);
-
-      return candidate.score - penalty >= minimumScore;
-    });
-
-    const eligible = alternatives.length
-      ? available.filter((candidate) => !overCap(candidate))
-      : available;
+    const eligible = underCap.length ? underCap : available;
 
     let best: IssueCandidate | null = null;
     let bestScore = Number.NEGATIVE_INFINITY;
@@ -413,7 +466,7 @@ function selectSection(
         DIVERSITY_PENALTY *
         (topicCounts.get(candidate.topicKey) || 0);
 
-      const adjusted = candidate.score - diversityPenalty;
+      const adjusted = selectionScore(candidate) - diversityPenalty;
 
       if (
         adjusted > bestScore ||
@@ -429,7 +482,7 @@ function selectSection(
       }
     }
 
-    if (!best || bestScore < minimumScore) break;
+    if (!best) break;
 
     chosen.push(best);
 
@@ -466,8 +519,8 @@ function chooseLead(
   const leadPool = candidates
     .filter(
       (candidate) =>
-        candidate.score >= MIN_LEAD_SCORE &&
-        candidate.analysis.role !== "omit" &&
+        selectionScore(candidate) >= MIN_LEAD_SCORE &&
+        !isExplicitlyOmitted(candidate) &&
         hasUsableContent(candidate) &&
         (
           TEXT_TYPES.has(candidate.entry.type) ||
@@ -478,16 +531,16 @@ function chooseLead(
         ),
     )
     .sort((first, second) => {
-      const firstLead =
-        first.analysis.role === "lead" ? 0.25 : 0;
-
-      const secondLead =
-        second.analysis.role === "lead" ? 0.25 : 0;
+      const leadBonus = (candidate: IssueCandidate) =>
+        !isHeuristicAnalysis(candidate.analysis) &&
+        candidate.analysis.role === "lead"
+          ? 0.25
+          : 0;
 
       return (
-        second.score +
-          secondLead -
-          (first.score + firstLead) ||
+        selectionScore(second) +
+          leadBonus(second) -
+          (selectionScore(first) + leadBonus(first)) ||
         publishedTime(second.entry) -
           publishedTime(first.entry) ||
         first.entry.id.localeCompare(second.entry.id)

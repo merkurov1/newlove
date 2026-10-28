@@ -187,6 +187,16 @@ export type IssuePayload = {
   }[];
   modelAnnotation?: string | null;
 
+  /**
+   * How the editorial analyses behind this snapshot were produced. Optional:
+   * payloads stored before this field existed do not have it. A non-zero
+   * `heuristic` count means the composition relied on the local fallback.
+   */
+  analysis?: {
+    model: number;
+    heuristic: number;
+  };
+
   /** Immutable snapshot of the template used to build this issue. */
   templateVersion: number;
   template: IssueTemplateSettings;

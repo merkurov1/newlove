@@ -51,6 +51,40 @@ function isRecord(
   );
 }
 
+/**
+ * Explain degraded (heuristic-only) composition instead of leaving the admin
+ * with an unexplained thin issue. Analysis is advisory: it never blocks the
+ * response.
+ */
+function issueWarnings(payload: unknown): string[] {
+  if (!isRecord(payload) || !isRecord(payload.analysis)) {
+    return [];
+  }
+
+  const heuristic =
+    typeof payload.analysis.heuristic === "number"
+      ? payload.analysis.heuristic
+      : 0;
+  const model =
+    typeof payload.analysis.model === "number"
+      ? payload.analysis.model
+      : 0;
+
+  if (heuristic <= 0) return [];
+
+  const total = heuristic + model;
+
+  if (model === 0) {
+    return [
+      `Выпуск собран без модельного анализа: для всех ${total} материалов использована локальная эвристика (AI отключён для записей или сервис недоступен). Проверьте состав перед публикацией.`,
+    ];
+  }
+
+  return [
+    `Для ${heuristic} из ${total} материалов использована локальная эвристика (AI отключён для записей или сервис недоступен): часть оценок приблизительна.`,
+  ];
+}
+
 async function getAdminSupabase() {
   return getServerSupabaseClient({ useServiceRole: true });
 }
@@ -206,6 +240,27 @@ export async function POST(request: Request) {
       end,
     );
 
+    // An empty issue is almost always a data problem, not an editorial
+    // choice. Fail with an explanation instead of saving a draft with no
+    // material that the admin has to diagnose later.
+    const entryCount =
+      (payload.lead ? 1 : 0) +
+      payload.latest.length +
+      payload.links.length +
+      payload.videos.length +
+      payload.photos.length;
+
+    if (entryCount === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "В выбранном периоде нет материалов для выпуска. Проверьте, что записи опубликованы, видимы и содержат текст, ссылку или медиа.",
+          warnings: issueWarnings(payload),
+        },
+        { status: 409 },
+      );
+    }
+
     // Do not create another draft if the same Flow records are
     // already represented by an existing draft for this language.
     const existingDraft = await findExistingDraft(
@@ -219,6 +274,7 @@ export async function POST(request: Request) {
         {
           issue: existingDraft,
           reusedExistingDraft: true,
+          warnings: issueWarnings(existingDraft.payload),
         },
         { status: 200 },
       );
@@ -302,7 +358,11 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { issue, reusedExistingDraft: false },
+      {
+        issue,
+        reusedExistingDraft: false,
+        warnings: issueWarnings(payload),
+      },
       { status: 201 },
     );
   } catch (error) {

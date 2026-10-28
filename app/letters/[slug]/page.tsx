@@ -306,9 +306,9 @@ export default async function LetterPage({ params }: PageProps) {
     };
 
     return (
-      <main
+      <div
         lang={lang}
-        className="min-h-screen bg-white text-[#1C1A1B]"
+        className="flow-issue-page min-h-screen text-[#1C1A1B]"
       >
         <script
           type="application/ld+json"
@@ -320,8 +320,55 @@ export default async function LetterPage({ params }: PageProps) {
           }}
         />
         <style>{styles}</style>
+        <style>{`
+          body:has(.flow-issue-page) .site-header,
+          body:has(.flow-issue-page) .site-footer {
+            display: none !important;
+          }
+          body:has(.flow-issue-page) {
+            background: #FAF8F5 !important;
+          }
+          .flow-issue-page {
+            padding-top: 5rem;
+          }
+          @supports selector(:has(*)) {
+            body:has(.flow-issue-page) .flow-issue-page {
+              padding-top: 0;
+            }
+          }
+          .flow-issue-back {
+            position: relative;
+            z-index: 11;
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 14px 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font: 12px ui-monospace, monospace;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: #52525B;
+          }
+          .flow-issue-back a {
+            color: inherit;
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+          }
+          .flow-issue-back a:hover {
+            border-bottom-color: currentColor;
+          }
+          .flow-issue-back span {
+            color: #D4D4D8;
+          }
+        `}</style>
+        <div className="flow-issue-back">
+          <a href="/flow">← Flow</a>
+          <span>·</span>
+          <a href="/letters">Все выпуски</a>
+        </div>
         <div dangerouslySetInnerHTML={{ __html: body }} />
-      </main>
+      </div>
     );
   }
 

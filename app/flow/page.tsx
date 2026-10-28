@@ -985,6 +985,13 @@ export default function FlowPage() {
                 Telegram ↗
               </a>
               <span className="text-neutral-200">·</span>
+              <a
+                href="/flow/rss"
+                className="transition hover:text-neutral-900"
+              >
+                RSS ↗
+              </a>
+              <span className="text-neutral-200">·</span>
               <Link
                 href="/journal"
                 className="transition hover:text-neutral-900"

@@ -12,7 +12,7 @@ export default async function AdminLettersPage() {
 
   const { data, error: queryError } = await supabase
     .from("letters")
-    .select("id,title,slug,published,sentAt,createdAt,author:authorId(name)")
+    .select("id,title,slug,kind,status,lang,published,sentAt,createdAt,author:authorId(name)")
     .order("createdAt", { ascending: false });
 
   if (queryError) {
@@ -73,7 +73,13 @@ export default async function AdminLettersPage() {
         </p>
       ) : (
         <div>
-          {letters.map((letter) => (
+          {letters.map((letter) => {
+            const editHref =
+              letter.kind === "issue"
+                ? `/admin/flow-issues/${letter.id}`
+                : `/admin/letters/edit/${letter.id}`;
+
+            return (
             <article
               key={letter.id}
               className="grid grid-cols-1 gap-4 border-b border-[#EAE6E1] py-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
@@ -97,7 +103,7 @@ export default async function AdminLettersPage() {
                 </div>
 
                 <Link
-                  href={`/admin/letters/edit/${letter.id}`}
+                  href={editHref}
                   className="block truncate font-serif text-xl hover:text-[#990F3D]"
                 >
                   {letter.title || "Untitled letter"}
@@ -115,10 +121,10 @@ export default async function AdminLettersPage() {
                     : "—"}
                 </span>
                 <Link
-                  href={`/admin/letters/edit/${letter.id}`}
+                  href={editHref}
                   className="text-[#990F3D] hover:underline"
                 >
-                  Edit ↗
+                  {letter.kind === "issue" ? "Редактировать выпуск" : "Edit"} ↗
                 </Link>
                 <form action={deleteLetter}>
                   <input type="hidden" name="id" value={letter.id} />
@@ -131,7 +137,8 @@ export default async function AdminLettersPage() {
                 </form>
               </div>
             </article>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

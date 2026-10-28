@@ -194,6 +194,10 @@ export async function classifyNewItems(
   if (!pending.length) return result;
 
   if (!hasAIConfiguration()) {
+    console.warn(
+      "[flow-issue] DEEPSEEK_API_KEY is not configured; using local heuristic analysis for this issue",
+    );
+
     for (const item of pending) {
       result.set(item.id, heuristicAnalysis(item));
     }

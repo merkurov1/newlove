@@ -1,9 +1,27 @@
+import { revalidateTag } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { FLOW_ITEMS_CACHE_TAG } from '@/lib/flow/items-cash';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const ALLOWED_TYPES = [
+  'note',
+  'article',
+  'link',
+  'photo',
+  'video',
+  'quote',
+];
+
+const ALLOWED_STATUSES = ['draft', 'published', 'archived'];
+const ALLOWED_VISIBILITIES = ['public', 'private'];
+
+function isStringOrNull(value: unknown): value is string | null {
+  return value === null || typeof value === 'string';
+}
 
 // Next 14: params — объект; Next 15+: Promise. Тип покрывает оба случая.
 type RouteContext = {
@@ -122,6 +140,51 @@ export async function PATCH(
       );
     }
 
+    if (body.type !== undefined && !ALLOWED_TYPES.includes(body.type)) {
+      return NextResponse.json(
+        { error: 'Invalid item type.' },
+        { status: 400 },
+      );
+    }
+
+    if (
+      body.status !== undefined &&
+      !ALLOWED_STATUSES.includes(body.status)
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid item status.' },
+        { status: 400 },
+      );
+    }
+
+    if (
+      body.visibility !== undefined &&
+      !ALLOWED_VISIBILITIES.includes(body.visibility)
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid visibility.' },
+        { status: 400 },
+      );
+    }
+
+    for (const key of ['title', 'body_md', 'source_url'] as const) {
+      if (body[key] !== undefined && !isStringOrNull(body[key])) {
+        return NextResponse.json(
+          { error: `${key} must be a string or null.` },
+          { status: 400 },
+        );
+      }
+    }
+
+    for (const key of ['slug', 'lang'] as const) {
+      if (body[key] !== undefined && typeof body[key] !== 'string') {
+        return NextResponse.json(
+          { error: `${key} must be a string.` },
+          { status: 400 },
+        );
+      }
+    }
+
     const supabase = getSupabaseAdmin();
 
     const { data: existing, error: fetchError } = await supabase
@@ -160,6 +223,13 @@ export async function PATCH(
     if (body.status !== undefined) updatePayload.status = body.status;
     if (body.visibility !== undefined) {
       updatePayload.visibility = body.visibility;
+    }
+
+    if (
+      body.status === 'published' &&
+      !existing.published_at
+    ) {
+      updatePayload.published_at = new Date().toISOString();
     }
     if (body.body_md !== undefined) {
       updatePayload.body_md = body.body_md;
@@ -204,6 +274,10 @@ export async function PATCH(
         { status: 500 },
       );
     }
+
+    // The public feed is cached by tag; invalidate immediately after the
+    // database write, before waiting on external crossposting.
+    revalidateTag(FLOW_ITEMS_CACHE_TAG);
 
     const wasPublished =
       existing.status === 'published' &&
@@ -332,6 +406,8 @@ export async function DELETE(
         { status: 500 },
       );
     }
+
+    revalidateTag(FLOW_ITEMS_CACHE_TAG);
 
     return NextResponse.json({ success: true });
   } catch (error) {

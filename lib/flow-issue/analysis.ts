@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getLinkPreviews } from "./metadata";
 import type {
   FlowItem,
   IssueAI,
@@ -98,6 +99,14 @@ export function contentHash(value: string): string {
  */
 export function buildAnalysisInput(item: FlowItem): string {
   const metadata = item.metadata || {};
+  const linkPreviewFields = getLinkPreviews(metadata)
+    .slice(0, 2)
+    .flatMap((preview) => [
+      clean(preview.title),
+      clean(preview.description),
+      clean(preview.site_name),
+      clean(preview.domain),
+    ]);
 
   const parts = [
     `type: ${clean(item.type)}`,
@@ -111,6 +120,7 @@ export function buildAnalysisInput(item: FlowItem): string {
     clean(metadata.public_url),
     clean(metadata.alt),
     clean(metadata.caption),
+    ...linkPreviewFields,
     clean(metadata.youtube?.title),
     clean(metadata.youtube?.author_name),
     clean(metadata.youtube?.provider_name),
@@ -123,6 +133,13 @@ export function buildAnalysisInput(item: FlowItem): string {
 
 export function plainAnalysisText(item: FlowItem): string {
   const metadata = item.metadata || {};
+  const linkPreviewFields = getLinkPreviews(metadata)
+    .slice(0, 2)
+    .flatMap((preview) => [
+      clean(preview.title),
+      clean(preview.description),
+      clean(preview.site_name),
+    ]);
 
   return [
     clean(item.title),
@@ -131,6 +148,7 @@ export function plainAnalysisText(item: FlowItem): string {
     clean(metadata.description),
     clean(metadata.alt),
     clean(metadata.caption),
+    ...linkPreviewFields,
     clean(metadata.youtube?.title),
   ]
     .filter(Boolean)
@@ -178,10 +196,14 @@ function topKeywords(text: string, limit = 3): string[] {
 
 function heuristicTopic(item: FlowItem, text: string): string {
   const metadata = item.metadata || {};
+  const preview = getLinkPreviews(metadata)[0] || {};
   const title =
     clean(item.title) ||
     clean(metadata.title) ||
-    clean(metadata.youtube?.title);
+    clean(metadata.youtube?.title) ||
+    clean(preview.title) ||
+    clean(metadata.alt) ||
+    clean(metadata.caption);
   const keywords = topKeywords(title || text, 3);
 
   return keywords.join(", ") || "unclassified";

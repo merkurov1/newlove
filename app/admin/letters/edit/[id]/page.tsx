@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import ContentForm from '@/components/admin/ContentForm';
 import { updateLetter } from '../../../actions';
 import SendLetterForm from '@/components/admin/SendLetterForm';
@@ -43,6 +43,13 @@ export default async function EditLetterPage({ params }: PageProps) {
   }
   
   if (error || !letter) notFound();
+
+  // Flow issues are rendered from a structured payload, not Editor.js
+  // blocks. Send them to the dedicated issue editor instead of showing a
+  // form that cannot save them.
+  if (letter.kind === 'issue') {
+    redirect(`/admin/flow-issues/${letter.id}`);
+  }
   
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-16 font-sans">

@@ -38,8 +38,10 @@ type IssueResponse = {
   queued?: boolean;
   alreadyQueued?: boolean;
   alreadyPublished?: boolean;
+  reusedExistingDraft?: boolean;
   sent_at?: string | null;
   message?: string;
+  warnings?: string[];
 };
 
 function toLocalInputValue(date: Date): string {
@@ -62,6 +64,7 @@ export default function FlowIssueAdmin() {
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [issue, setIssue] = useState<IssueRecord | null>(null);
   const [existingIssues, setExistingIssues] = useState<IssueRecord[]>([]);
   const [activeSubscribers, setActiveSubscribers] = useState<number>(0);
@@ -104,6 +107,7 @@ export default function FlowIssueAdmin() {
     setLoading(true);
     setError("");
     setMessage("");
+    setWarnings([]);
     setIssue(null);
     setJobId("");
 
@@ -131,8 +135,13 @@ export default function FlowIssueAdmin() {
       }
 
       setIssue(data.issue);
+      setWarnings(
+        Array.isArray(data.warnings) ? data.warnings : [],
+      );
       setMessage(
-        "Черновик создан. Проверьте веб-версию и письмо перед отправкой.",
+        data.reusedExistingDraft
+          ? "Черновик с этим составом уже существует — открыт он."
+          : "Черновик создан. Проверьте веб-версию и письмо перед отправкой.",
       );
       await loadIssues();
     } catch (err) {
@@ -341,6 +350,17 @@ export default function FlowIssueAdmin() {
         </div>
       )}
 
+      {warnings.length > 0 && (
+        <div
+          role="status"
+          className="mb-6 border-l-2 border-amber-600 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900"
+        >
+          {warnings.map((warning) => (
+            <p key={warning}>{warning}</p>
+          ))}
+        </div>
+      )}
+
       {/* SECTION 1: Архив и управление существующими выпусками */}
       <section className="mb-12 border border-[#1C1A1B]/15 bg-white p-5 sm:p-7">
         <div className="mb-5 flex items-center justify-between border-b border-[#EAE6E1] pb-3">
@@ -443,6 +463,15 @@ export default function FlowIssueAdmin() {
                           >
                             Веб ↗
                           </a>
+
+                          {!isPub && (
+                            <Link
+                              href={`/admin/flow-issues/${item.id}`}
+                              className="font-mono text-xs text-[#89827B] hover:text-[#1C1A1B]"
+                            >
+                              Редактировать
+                            </Link>
+                          )}
 
                           {!isPub && (
                             <button
@@ -582,6 +611,15 @@ export default function FlowIssueAdmin() {
               >
                 Открыть страницу
               </a>
+
+              {!isCurrentPublished && (
+                <Link
+                  href={`/admin/flow-issues/${issue.id}`}
+                  className="inline-flex min-h-10 items-center border border-[#1C1A1B]/25 px-4 py-2 text-sm hover:border-[#990F3D]"
+                >
+                  Редактировать выпуск
+                </Link>
+              )}
 
               {!isCurrentPublished && (
                 <button

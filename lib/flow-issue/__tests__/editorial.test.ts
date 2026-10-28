@@ -1,9 +1,13 @@
 import {
+  HEURISTIC_MODEL,
+  heuristicAnalysis,
+} from "../analysis";
+import {
   MIN_LEAD_SCORE,
   buildCandidate,
   selectIssueContent,
 } from "../editorial";
-import type { IssueAI, IssueEntry } from "../types";
+import type { FlowItem, IssueAI, IssueEntry } from "../types";
 
 const windowEnd = new Date("2026-10-28T12:00:00.000Z");
 
@@ -82,6 +86,37 @@ function candidate(
 }
 
 const limits = { latest: 3, links: 3, videos: 2, photos: 2 };
+
+/**
+ * Build a candidate whose analysis comes from the deterministic fallback,
+ * i.e. the situation where DeepSeek is unavailable or the item is not
+ * ai_allowed.
+ */
+function heuristicCandidate(
+  id: string,
+  overrides: Partial<IssueEntry> = {},
+) {
+  const source = entry({ id, ...overrides });
+
+  const item: FlowItem = {
+    id,
+    type: source.type,
+    status: "published",
+    visibility: "public",
+    lang: source.lang === "other" ? null : source.lang,
+    slug: id,
+    title: source.title || null,
+    body_md: source.body || null,
+    source_url: source.url,
+    ai_allowed: false,
+    metadata: source.metadata,
+    created_at: source.createdAt,
+    updated_at: source.createdAt,
+    published_at: source.publishedAt,
+  };
+
+  return buildCandidate(source, heuristicAnalysis(item), windowEnd);
+}
 
 describe("Flow issue editorial selection", () => {
   it("lets a strong older entry outrank a weak recent entry", () => {
@@ -239,6 +274,69 @@ describe("Flow issue editorial selection", () => {
 
     expect(ids).toHaveLength(2);
     expect(ids).toContain("art-c");
+  });
+
+  it("keeps short links and notes when only heuristic analysis exists", () => {
+    const items = [
+      heuristicCandidate("note-short", {
+        title: "Короткая заметка",
+        body: "Мысль на два предложения.",
+      }),
+      heuristicCandidate("link-a", {
+        type: "link",
+        title: "Why archives matter",
+        body: "",
+        url: "https://example.com/archives",
+      }),
+      heuristicCandidate("link-b", {
+        type: "link",
+        title: "Новая книга о памяти",
+        body: "",
+        url: "https://example.org/book",
+      }),
+      heuristicCandidate("photo-a", {
+        type: "photo",
+        title: "",
+        body: "",
+        metadata: {
+          public_url: "https://example.com/sea.jpg",
+          alt: "Вид на море",
+        },
+      }),
+    ];
+
+    const selection = selectIssueContent(items, limits, windowEnd);
+    const ids = selection.selected.map((item) => item.entry.id);
+
+    // Regression: the deterministic fallback used to score every short item
+    // below the selection threshold, so an issue assembled without AI
+    // contained at most one long text.
+    expect(ids).toContain("note-short");
+    expect(ids).toContain("link-a");
+    expect(ids).toContain("link-b");
+    expect(ids).toContain("photo-a");
+  });
+
+  it("does not let a heuristic omit role remove an item", () => {
+    const shortNote = heuristicCandidate("short-omit", {
+      title: "Короткая мысль",
+      body: "Два слова.",
+    });
+
+    expect(shortNote.analysis.model).toBe(HEURISTIC_MODEL);
+    expect(shortNote.analysis.role).toBe("omit");
+
+    const selection = selectIssueContent(
+      [shortNote],
+      limits,
+      windowEnd,
+    );
+
+    expect(selection.latest.map((item) => item.id)).toContain(
+      "short-omit",
+    );
+    // Without a real analysis the fallback must not invent a lead.
+    expect(selection.lead).toBeNull();
   });
 
   it("omits weak material instead of padding the issue", () => {

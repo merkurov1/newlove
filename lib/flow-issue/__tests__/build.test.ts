@@ -189,6 +189,76 @@ describe("buildIssuePayload", () => {
 
     expect(payload.schemaVersion).toBe(2);
     expect(Array.isArray(payload.latest)).toBe(true);
+    // Regression: a heuristic-only run used to leave the issue empty.
+    expect(payload.latest.map((entry) => entry.id)).toContain(
+      "heuristic-note",
+    );
+    expect(payload.analysis).toEqual({
+      model: 0,
+      heuristic: 1,
+    });
+
+    const rendered = renderIssue(payload, {
+      title: "Fallback issue",
+      slug: "fallback-issue",
+      number: 1,
+    });
+
+    expect(rendered.htmlWeb).toContain("A long note");
+    expect(rendered.textEmail).toContain("A long note");
+  });
+
+  it("uses composer link_previews for issue cards and the source index", async () => {
+    const link = withAnalysis(
+      item({
+        id: "link-preview",
+        type: "link",
+        title: "Why archives matter",
+        body_md: "",
+        source_url: "https://example.com/archives",
+        metadata: {
+          link_previews: [
+            {
+              url: "https://example.com/archives",
+              title: "Why archives matter",
+              description: "A detailed argument about public memory.",
+              site_name: "Example Journal",
+              image: "https://example.com/cover.jpg",
+            },
+          ],
+        },
+      }),
+      {
+        role: "link",
+        editorialValue: 4,
+        originality: 3,
+        specificity: 4,
+        readerValue: 4,
+        confidence: 0.85,
+      },
+    );
+
+    const payload = await buildIssuePayload(
+      fakeSupabase([link]) as any,
+      "ru",
+      start,
+      end,
+    );
+
+    expect(payload.links).toHaveLength(1);
+    expect(payload.links[0].description).toContain("public memory");
+    expect(payload.links[0].siteName).toBe("Example Journal");
+    expect(payload.links[0].image).toBe(
+      "https://example.com/cover.jpg",
+    );
+    expect(payload.sourceIndex).toEqual([
+      expect.objectContaining({
+        id: "link-preview",
+        source: "Example Journal",
+        title: "Why archives matter",
+        url: "https://example.com/archives",
+      }),
+    ]);
   });
 
   it("keeps old payloads rendering through the existing HTML/email contract", async () => {

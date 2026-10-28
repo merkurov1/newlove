@@ -133,7 +133,9 @@ export const metadata: Metadata = sanitizeMetadata({
     },
     types: {
       'application/rss+xml':
-        'https://www.merkurov.love/rss.xml',
+        'https://www.merkurov.love/flow/rss',
+      'application/feed+json':
+        'https://www.merkurov.love/flow/feed.json',
     },
   },
 

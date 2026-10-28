@@ -97,7 +97,7 @@ export async function POST(req: Request) {
     const itemType = allowedTypes.includes(body.type) ? body.type : 'article';
 
     const allowedStatuses = ['draft', 'published', 'archived'];
-    const allowedVisibilities = ['public', 'private', 'unlisted'];
+    const allowedVisibilities = ['public', 'private'];
 
     const status = allowedStatuses.includes(body.status) ? body.status : 'published';
 

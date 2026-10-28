@@ -4,7 +4,15 @@ import {
   heuristicLanguage,
   translateIssueEntries,
 } from "./deepseek";
-import { candidateFromItem, selectIssueContent } from "./editorial";
+import {
+  candidateFromItem,
+  isHeuristicAnalysis,
+  selectIssueContent,
+} from "./editorial";
+import {
+  buildSourceIndex,
+  getLinkPresentation,
+} from "./metadata";
 import {
   DEFAULT_ISSUE_TEMPLATE,
   normalizeIssueTemplate,
@@ -57,8 +65,10 @@ const itemIsSelectable = (item: FlowItem): boolean => {
   const metadata = item.metadata || {};
 
   switch (item.type) {
-    case "link":
-      return Boolean(clean(metadata.title) || clean(metadata.description));
+    case "link": {
+      const link = getLinkPresentation(metadata);
+      return Boolean(link.title || link.description);
+    }
     case "video":
       return Boolean(
         clean(metadata.youtube?.title) ||
@@ -144,6 +154,7 @@ function inferKind(item: FlowItem): IssueKind {
 function toEntry(item: FlowItem): IssueEntry {
   const metadata = item.metadata || {};
   const url = itemUrl(item);
+  const link = getLinkPresentation(metadata);
 
   return {
     id: item.id,
@@ -151,6 +162,7 @@ function toEntry(item: FlowItem): IssueEntry {
     title:
       clean(item.title) ||
       clean(metadata.title) ||
+      link.title ||
       clean(metadata.youtube?.title),
     body: clean(item.body_md),
     url,
@@ -432,6 +444,19 @@ export async function buildIssuePayload(
   // Analysis only enriches metadata; it does not rewrite Flow text.
   const analyses = await classifyNewItems(supabase, published);
 
+  // Diagnostics: a fully heuristic run is a degraded composition, not a
+  // failure, and the admin UI should be able to say so.
+  const analysisSources = { model: 0, heuristic: 0 };
+
+  for (const item of published) {
+    const analysis = analyses.get(item.id);
+
+    if (!analysis) continue;
+
+    if (isHeuristicAnalysis(analysis)) analysisSources.heuristic++;
+    else analysisSources.model++;
+  }
+
   const ids = published.map((item) => item.id);
   let classifiedItems = published;
 
@@ -480,6 +505,7 @@ export async function buildIssuePayload(
 
   const links = selection.links.map((entry) => {
     const metadata = entry.metadata;
+    const link = getLinkPresentation(metadata);
     const originalDate =
       safeDate(metadata.published_at)?.toISOString() || null;
 
@@ -498,12 +524,11 @@ export async function buildIssuePayload(
 
     return {
       ...entry,
-      description: clean(metadata.description),
-      siteName:
-        clean(metadata.site_name) ||
-        clean(metadata.domain),
-      author: clean(metadata.author),
-      image: clean(metadata.image),
+      title: entry.title || link.title,
+      description: link.description,
+      siteName: link.siteName,
+      author: link.author,
+      image: link.image,
       originalDate,
       ageDays,
     };
@@ -541,25 +566,7 @@ export async function buildIssuePayload(
 
   externalEntries.push(...selection.links, ...selection.videos);
 
-  const sourceIndex = externalEntries
-    .filter(
-      (entry, index, all) =>
-        all.findIndex((candidate) => candidate.id === entry.id) ===
-        index,
-    )
-    .map((entry) => ({
-      id: entry.id,
-      source:
-        clean(entry.metadata.site_name) ||
-        clean(entry.metadata.domain) ||
-        "—",
-      title: entry.title,
-      url: entry.url,
-      originalDate:
-        safeDate(entry.metadata.published_at)?.toISOString() ||
-        null,
-      addedAt: entry.publishedAt,
-    }));
+  const sourceIndex = buildSourceIndex(externalEntries);
 
   // Explicit payload shape prevents TypeScript from inferring lead as
   // a non-null IssueEntry and fixes the nullable-lead assignment error.
@@ -768,6 +775,7 @@ export async function buildIssuePayload(
     sourceIndex: payloadEntries.sourceIndex,
     templateVersion,
     template,
+    analysis: analysisSources,
     design: {
       template: "classic",
       tokens: {

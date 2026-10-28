@@ -267,7 +267,15 @@ export async function generateMetadata({
     return sanitizeMetadata({
       title,
       description,
-      alternates: { canonical },
+      alternates: {
+        canonical,
+        types: {
+          'application/rss+xml':
+            'https://www.merkurov.love/flow/rss',
+          'application/feed+json':
+            'https://www.merkurov.love/flow/feed.json',
+        },
+      },
       openGraph: {
         title,
         description,
@@ -1229,13 +1237,19 @@ export default async function FlowItemPage({ params }: PageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(flowArticleSchema),
+          __html: JSON.stringify(flowArticleSchema).replace(
+            /</g,
+            '\\u003c',
+          ),
         }}
       />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbSchema),
+          __html: JSON.stringify(breadcrumbSchema).replace(
+            /</g,
+            '\\u003c',
+          ),
         }}
       />
 

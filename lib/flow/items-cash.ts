@@ -102,3 +102,78 @@ export async function getCachedFlowItems(
 ): Promise<CachedFlowItemsResult> {
   return readCachedFlowItems(limit, offset);
 }
+
+const FEED_FIELDS = [
+  'id',
+  'title',
+  'slug',
+  'lang',
+  'type',
+  'body_md',
+  'source_url',
+  'metadata',
+  'published_at',
+  'updated_at',
+  'created_at',
+  'bluesky_uri',
+  'telegram_message_id',
+].join(',');
+
+export type CachedFlowFeedResult = {
+  items: Record<string, unknown>[];
+};
+
+/**
+ * Reader-facing feed snapshot. It uses the same cache tag as the public
+ * list, so publishing or editing an item invalidates both immediately.
+ */
+const readCachedFlowFeed = unstable_cache(
+  async (
+    limit: number,
+    lang: string | null,
+  ): Promise<CachedFlowFeedResult> => {
+    const supabase = getSupabaseAdmin();
+
+    const base = supabase
+      .from('items')
+      .select(FEED_FIELDS)
+      .eq('status', 'published')
+      .eq('visibility', 'public')
+      .not('published_at', 'is', null);
+
+    const filtered = lang ? base.eq('lang', lang) : base;
+
+    const { data, error } = await filtered
+      .order('published_at', {
+        ascending: false,
+        nullsFirst: false,
+      })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(
+        `Failed to load Flow feed items: ${error.message}`,
+      );
+    }
+
+    return {
+      items: (data ?? []) as unknown as Record<
+        string,
+        unknown
+      >[],
+    };
+  },
+  ['flow-public-feed-v1'],
+  {
+    revalidate: 900,
+    tags: [FLOW_ITEMS_CACHE_TAG],
+  },
+);
+
+export async function getCachedFlowFeedItems(
+  limit: number,
+  lang: string | null,
+): Promise<CachedFlowFeedResult> {
+  return readCachedFlowFeed(limit, lang);
+}
+
