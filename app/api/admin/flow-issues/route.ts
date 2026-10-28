@@ -9,6 +9,10 @@ import {
   resolveIssueWindow,
 } from "@/lib/flow-issue/build";
 import { renderIssue } from "@/lib/flow-issue/render";
+import {
+  getPayloadItemIds,
+  samePayloadComposition,
+} from "@/lib/flow-issue/draft";
 import { processNewsletterJob } from "@/lib/newsletter/processJob";
 import {
   filterSubscribersByLang,
@@ -49,51 +53,6 @@ function isRecord(
 
 async function getAdminSupabase() {
   return getServerSupabaseClient({ useServiceRole: true });
-}
-
-/**
- * Return the unique Flow item IDs represented in an issue payload.
- * The same item may legitimately appear in more than one payload
- * section, so duplicates are removed before comparing signatures.
- */
-function getPayloadItemIds(payload: unknown): string[] {
-  if (!isRecord(payload)) return [];
-
-  const ids = new Set<string>();
-
-  const addEntry = (entry: unknown) => {
-    if (!isRecord(entry)) return;
-
-    if (typeof entry.id === "string" && entry.id.trim()) {
-      ids.add(entry.id);
-    }
-  };
-
-  addEntry(payload.lead);
-
-  for (const key of ["latest", "links", "videos", "photos"]) {
-    const entries = payload[key];
-
-    if (Array.isArray(entries)) {
-      entries.forEach(addEntry);
-    }
-  }
-
-  return [...ids].sort();
-}
-
-function samePayloadComposition(
-  first: unknown,
-  second: unknown,
-): boolean {
-  const a = getPayloadItemIds(first);
-  const b = getPayloadItemIds(second);
-
-  // An empty payload is not enough evidence to reuse a draft.
-  if (!a.length || !b.length) return false;
-  if (a.length !== b.length) return false;
-
-  return a.every((id, index) => id === b[index]);
 }
 
 async function findExistingDraft(

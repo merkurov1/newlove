@@ -4,11 +4,52 @@ export type IssueStatus = "draft" | "published";
 export type IssueKind = "about_flow" | "world" | "other";
 export type ItemType = "note" | "link" | "video" | "photo";
 
+/**
+ * The editorial role is a recommendation from the model. Selection still
+ * applies explicit thresholds and diversity/redundancy rules, so a model
+ * cannot unilaterally promote an item.
+ */
+export type IssueAIRole =
+  | "lead"
+  | "supporting"
+  | "link"
+  | "visual"
+  | "omit";
+
+/**
+ * Analysis cached in `items.metadata.issue_ai`.
+ *
+ * Legacy records only have { lang, kind, model, at }. New fields are
+ * optional so old cached records and old payloads remain valid.
+ */
 export type IssueAI = {
   lang: IssueLang | "other";
   kind: IssueKind;
   model: string;
   at: string;
+
+  /** Schema version of the extended analysis (legacy records omit it). */
+  schemaVersion?: number;
+  /** Hash of the exact source material sent for analysis. */
+  contentHash?: string;
+  topic?: string;
+  subtopic?: string;
+  summary?: string;
+  thesis?: string;
+  /** Integer 0–5. 0 means the quality is absent, 5 means exceptional. */
+  editorialValue?: number;
+  /** Integer 0–5. Distinctiveness of the observation or selection. */
+  originality?: number;
+  /** Integer 0–5. Concrete detail, evidence, precision. */
+  specificity?: number;
+  /** Integer 0–5. What a thoughtful reader gains. */
+  readerValue?: number;
+  /** What the reader needs to know that the item does not explain. */
+  contextRequired?: string;
+  /** 0–1 confidence in the analysis given only the supplied material. */
+  confidence?: number;
+  role?: IssueAIRole;
+  rationale?: string;
 };
 
 export type FlowItem = {

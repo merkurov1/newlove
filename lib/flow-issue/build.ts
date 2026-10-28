@@ -4,6 +4,7 @@ import {
   heuristicLanguage,
   translateIssueEntries,
 } from "./deepseek";
+import { candidateFromItem, selectIssueContent } from "./editorial";
 import {
   DEFAULT_ISSUE_TEMPLATE,
   normalizeIssueTemplate,
@@ -38,8 +39,41 @@ const safeDate = (value: unknown): Date | null => {
 const itemText = (item: FlowItem) =>
   [item.title, item.body_md].map(clean).filter(Boolean).join("\n\n");
 
-const itemHasContent = (item: FlowItem) =>
+/**
+ * Metrics keep their original eligibility rule: a published record with a
+ * title or body. Do not broaden this without treating it as a metrics change.
+ */
+const itemHasCoreContent = (item: FlowItem): boolean =>
   Boolean(clean(item.title) || clean(item.body_md));
+
+/**
+ * Selection eligibility is broader: a link or video whose only usable text is
+ * preview metadata is still a real candidate, even though it never counted
+ * toward the old metrics denominator.
+ */
+const itemIsSelectable = (item: FlowItem): boolean => {
+  if (itemHasCoreContent(item)) return true;
+
+  const metadata = item.metadata || {};
+
+  switch (item.type) {
+    case "link":
+      return Boolean(clean(metadata.title) || clean(metadata.description));
+    case "video":
+      return Boolean(
+        clean(metadata.youtube?.title) ||
+          clean(metadata.youtube?.video_id),
+      );
+    case "photo":
+      return Boolean(
+        clean(metadata.public_url) ||
+          clean(metadata.alt) ||
+          clean(metadata.caption),
+      );
+    default:
+      return Boolean(clean(metadata.title) || clean(metadata.description));
+  }
+};
 
 const itemUrl = (item: FlowItem): string | null => {
   const metadata = item.metadata || {};
@@ -153,7 +187,7 @@ function dayKey(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-function calculateMetrics(
+export function calculateMetrics(
   published: FlowItem[],
   start: Date,
   end: Date,
@@ -386,16 +420,17 @@ export async function buildIssuePayload(
 
   if (publishedResult.error) throw publishedResult.error;
 
-  const published = (
-    (publishedResult.data || []) as FlowItem[]
-  ).filter(
-    (item) =>
-      safeDate(item.published_at) !== null &&
-      itemHasContent(item),
+  const records = ((publishedResult.data || []) as FlowItem[]).filter(
+    (item) => safeDate(item.published_at) !== null,
   );
 
-  // Classification only enriches metadata; it does not rewrite Flow text.
-  await classifyNewItems(supabase, published);
+  const published = records.filter(itemIsSelectable);
+
+  // Preserve the pre-existing metrics denominator (title/body records only).
+  const metricSource = records.filter(itemHasCoreContent);
+
+  // Analysis only enriches metadata; it does not rewrite Flow text.
+  const analyses = await classifyNewItems(supabase, published);
 
   const ids = published.map((item) => item.id);
   let classifiedItems = published;
@@ -407,108 +442,110 @@ export async function buildIssuePayload(
       .in("id", ids);
 
     if (error) throw error;
-    classifiedItems = (data || []) as FlowItem[];
+
+    classifiedItems = ((data || []) as FlowItem[]).map((item) => {
+      const analysis = analyses.get(item.id);
+
+      // Only AI-eligible records may carry AI metadata. The per-run map is
+      // merged so a failed cache write does not discard a valid analysis.
+      if (!analysis || item.ai_allowed !== true) return item;
+
+      return {
+        ...item,
+        metadata: {
+          ...(item.metadata || {}),
+          issue_ai: analysis,
+        },
+      };
+    });
   }
 
   // Crucial: do not filter records by language here.
   // Both language versions must be built from this same canonical set.
-  const entries = classifiedItems
-    .map(toEntry)
-    .sort((a, b) =>
-      b.publishedAt.localeCompare(a.publishedAt),
-    );
+  const candidates = classifiedItems.map((item) =>
+    candidateFromItem(item, toEntry(item), end),
+  );
 
   const { config: template, version: templateVersion } =
     activeTemplate;
 
-  const lead =
-    entries.find(
-      (entry) =>
-        entry.type === "note" &&
-        Boolean(entry.body || entry.title),
-    ) ||
-    entries.find(
-      (entry) =>
-        entry.own &&
-        entry.type === "photo" &&
-        Boolean(entry.body || entry.title),
-    ) ||
-    entries[0] ||
-    null;
+  const selection = selectIssueContent(
+    candidates,
+    template.limits,
+    end,
+  );
 
-  const latest = entries
-    .filter(
-      (entry) =>
-        entry.type === "note" && entry.id !== lead?.id,
-    )
-    .slice(0, template.limits.latest);
+  const lead = selection.lead;
+  const latest = selection.latest;
 
-  const links = entries
-    .filter((entry) => entry.type === "link")
-    .slice(0, template.limits.links)
-    .map((entry) => {
-      const metadata = entry.metadata;
-      const originalDate =
-        safeDate(metadata.published_at)?.toISOString() || null;
+  const links = selection.links.map((entry) => {
+    const metadata = entry.metadata;
+    const originalDate =
+      safeDate(metadata.published_at)?.toISOString() || null;
 
-      const addedAt = safeDate(entry.publishedAt);
-      const original = safeDate(originalDate);
+    const addedAt = safeDate(entry.publishedAt);
+    const original = safeDate(originalDate);
 
-      const ageDays =
-        addedAt && original
-          ? Math.max(
-              0,
-              Math.floor(
-                (addedAt.getTime() - original.getTime()) / DAY,
-              ),
-            )
-          : null;
+    const ageDays =
+      addedAt && original
+        ? Math.max(
+            0,
+            Math.floor(
+              (addedAt.getTime() - original.getTime()) / DAY,
+            ),
+          )
+        : null;
 
-      return {
-        ...entry,
-        description: clean(metadata.description),
-        siteName:
-          clean(metadata.site_name) ||
-          clean(metadata.domain),
-        author: clean(metadata.author),
-        image: clean(metadata.image),
-        originalDate,
-        ageDays,
-      };
-    });
-
-  const videos = entries
-    .filter((entry) => entry.type === "video")
-    .slice(0, template.limits.videos)
-    .map((entry) => {
-      const videoId = clean(entry.metadata.youtube?.video_id);
-
-      return {
-        ...entry,
-        title:
-          clean(entry.metadata.youtube?.title) || entry.title,
-        image: clean(entry.metadata.youtube?.thumbnail_url),
-        videoId: videoId || null,
-        url: videoId
-          ? `https://www.youtube.com/watch?v=${videoId}`
-          : entry.url,
-      };
-    });
-
-  const photos = entries
-    .filter((entry) => entry.type === "photo")
-    .slice(0, template.limits.photos)
-    .map((entry) => ({
+    return {
       ...entry,
-      image: clean(entry.metadata.public_url),
-      alt: clean(entry.metadata.alt),
-      caption: entry.body,
-    }));
+      description: clean(metadata.description),
+      siteName:
+        clean(metadata.site_name) ||
+        clean(metadata.domain),
+      author: clean(metadata.author),
+      image: clean(metadata.image),
+      originalDate,
+      ageDays,
+    };
+  });
 
-  const sourceIndex = entries
+  const videos = selection.videos.map((entry) => {
+    const videoId = clean(entry.metadata.youtube?.video_id);
+
+    return {
+      ...entry,
+      title:
+        clean(entry.metadata.youtube?.title) || entry.title,
+      image: clean(entry.metadata.youtube?.thumbnail_url),
+      videoId: videoId || null,
+      url: videoId
+        ? `https://www.youtube.com/watch?v=${videoId}`
+        : entry.url,
+    };
+  });
+
+  const photos = selection.photos.map((entry) => ({
+    ...entry,
+    image: clean(entry.metadata.public_url),
+    alt: clean(entry.metadata.alt),
+    caption: entry.body,
+  }));
+
+  // The source index describes the issue that was actually assembled,
+  // not every external record in the period.
+  const externalEntries: IssueEntry[] = [];
+
+  if (lead && (lead.type === "link" || lead.type === "video")) {
+    externalEntries.push(lead);
+  }
+
+  externalEntries.push(...selection.links, ...selection.videos);
+
+  const sourceIndex = externalEntries
     .filter(
-      (entry) =>
-        entry.type === "link" || entry.type === "video",
+      (entry, index, all) =>
+        all.findIndex((candidate) => candidate.id === entry.id) ===
+        index,
     )
     .map((entry) => ({
       id: entry.id,
@@ -541,6 +578,12 @@ export async function buildIssuePayload(
   };
 
   if (lang === "en") {
+    const aiAllowedById = new Map(
+      classifiedItems.map((item) => [
+        item.id,
+        item.ai_allowed === true,
+      ]),
+    );
     const translationInput: {
       key: string;
       title: string;
@@ -548,6 +591,7 @@ export async function buildIssuePayload(
       description: string;
       alt: string;
       caption: string;
+      aiAllowed: boolean;
     }[] = [];
 
     if (lead) {
@@ -558,6 +602,7 @@ export async function buildIssuePayload(
         description: "",
         alt: "",
         caption: "",
+        aiAllowed: aiAllowedById.get(lead.id) === true,
       });
     }
 
@@ -569,6 +614,7 @@ export async function buildIssuePayload(
         description: "",
         alt: "",
         caption: "",
+        aiAllowed: aiAllowedById.get(entry.id) === true,
       });
     });
 
@@ -583,6 +629,7 @@ export async function buildIssuePayload(
             : "",
         alt: "",
         caption: "",
+        aiAllowed: aiAllowedById.get(entry.id) === true,
       });
     });
 
@@ -594,6 +641,7 @@ export async function buildIssuePayload(
         description: "",
         alt: "",
         caption: "",
+        aiAllowed: aiAllowedById.get(entry.id) === true,
       });
     });
 
@@ -608,6 +656,7 @@ export async function buildIssuePayload(
           typeof entry.caption === "string"
             ? entry.caption
             : "",
+        aiAllowed: aiAllowedById.get(entry.id) === true,
       });
     });
 
@@ -629,6 +678,15 @@ export async function buildIssuePayload(
         body: tr.body || entry.body,
       };
     };
+
+    const translationKeyById = new Map<string, string>();
+
+    links.forEach((entry, index) =>
+      translationKeyById.set(entry.id, `links:${index}`),
+    );
+    videos.forEach((entry, index) =>
+      translationKeyById.set(entry.id, `videos:${index}`),
+    );
 
     payloadEntries = {
       lead: lead ? translateEntry(lead, "lead") : null,
@@ -667,11 +725,8 @@ export async function buildIssuePayload(
       }),
 
       sourceIndex: sourceIndex.map((source) => {
-        const index = links.findIndex(
-          (entry) => entry.id === source.id,
-        );
-        const tr =
-          index >= 0 ? translations.get(`links:${index}`) : undefined;
+        const key = translationKeyById.get(source.id);
+        const tr = key ? translations.get(key) : undefined;
 
         return tr
           ? { ...source, title: tr.title || source.title }
@@ -680,7 +735,13 @@ export async function buildIssuePayload(
     };
   }
 
-  const stats = calculateMetrics(classifiedItems, start, end);
+  const classifiedById = new Map(
+    classifiedItems.map((item) => [item.id, item]),
+  );
+  const metricItems = metricSource.map(
+    (item) => classifiedById.get(item.id) || item,
+  );
+  const stats = calculateMetrics(metricItems, start, end);
 
   // Keep the metrics unambiguous: published records are counted once;
   // drafts are not included in the issue header.
