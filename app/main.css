@@ -425,11 +425,11 @@ select:focus-visible {
    TELEGRAM MINI APP / RITUAL SHELL
    ========================================================= */
 
-body.telegram-app header {
+body.telegram-app .site-header {
   display: none !important;
 }
 
-body.telegram-app footer {
+body.telegram-app .site-footer {
   display: none !important;
 }
 

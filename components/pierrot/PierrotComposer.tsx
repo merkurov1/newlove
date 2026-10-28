@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from 'react';
 import { ArrowUp } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
+import useIsTelegram from '@/components/useIsTelegram';
 
 const COMPOSER_ID = 'pierrot-home-composer';
 
@@ -16,9 +17,11 @@ export default function PierrotComposer() {
     updateDraft,
     sendMessage,
   } = usePierrot();
+  const isTelegram = useIsTelegram();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wasOpenRef = useRef(isComposerOpen);
+  const safeBottom = 'max(1rem, env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))';
 
   useEffect(() => {
     if (isComposerOpen && !wasOpenRef.current) {
@@ -69,7 +72,7 @@ export default function PierrotComposer() {
           aria-controls={COMPOSER_ID}
           title="Ask Pierrot"
           style={{
-            bottom: 'max(1rem, env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))',
+            bottom: isTelegram ? `calc(${safeBottom} + 56px)` : safeBottom,
             right: 'max(1rem, env(safe-area-inset-right), var(--tg-safe-area-right, 0px))',
           }}
           className="
@@ -90,8 +93,7 @@ export default function PierrotComposer() {
       {isComposerOpen && (
         <div
           style={{
-            paddingBottom:
-              'max(1rem, env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))',
+            paddingBottom: isTelegram ? `calc(${safeBottom} + 56px)` : safeBottom,
             paddingLeft: 'max(1rem, env(safe-area-inset-left), var(--tg-safe-area-left, 0px))',
             paddingRight: 'max(1rem, env(safe-area-inset-right), var(--tg-safe-area-right, 0px))',
           }}

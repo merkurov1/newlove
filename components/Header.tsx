@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -10,16 +9,15 @@ import useIsTelegram from '@/components/useIsTelegram';
 import ComposerTrigger from '@/components/flow/ComposerTrigger';
 import { PierrotTrigger } from '@/components/PierrotChat';
 import PierrotSectionLink from '@/components/pierrot/PierrotSectionLink';
+import { usePierrot } from '@/components/pierrot/PierrotContext';
+import { PIERROT_AVATAR_SRC } from '@/lib/pierrot/config';
 
 export default function Header() {
   const auth = useAuth() as any;
+  const { isHomeMode } = usePierrot();
   const user = auth?.user;
   const profile = auth?.profile;
-  const roles =
-    auth?.roles ||
-    profile?.roles ||
-    user?.user_metadata?.roles ||
-    [];
+  const roles = auth?.roles || profile?.roles || user?.user_metadata?.roles || [];
   const isLoading = auth?.isLoading;
   const signOut = auth?.signOut;
 
@@ -48,10 +46,7 @@ export default function Header() {
     const syncIdentity = () => {
       const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
       const telegramName = tgUser?.username || tgUser?.first_name;
-      const profileName =
-        profile?.name ||
-        profile?.full_name ||
-        user?.user_metadata?.name;
+      const profileName = profile?.name || profile?.full_name || user?.user_metadata?.name;
       const name = telegramName || profileName;
 
       if (name) {
@@ -85,17 +80,11 @@ export default function Header() {
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (
-        profileRef.current &&
-        !profileRef.current.contains(event.target as Node)
-      ) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
         setIsProfileOpen(false);
       }
 
-      if (
-        siteMenuRef.current &&
-        !siteMenuRef.current.contains(event.target as Node)
-      ) {
+      if (siteMenuRef.current && !siteMenuRef.current.contains(event.target as Node)) {
         setIsSiteMenuOpen(false);
       }
     }
@@ -125,15 +114,9 @@ export default function Header() {
     null;
 
   const userName =
-    profile?.name ||
-    profile?.full_name ||
-    user?.user_metadata?.name ||
-    user?.email ||
-    'Guest';
+    profile?.name || profile?.full_name || user?.user_metadata?.name || user?.email || 'Guest';
 
-  const userInitials = userName
-    ? userName.substring(0, 2).toUpperCase()
-    : 'AM';
+  const userInitials = userName ? userName.substring(0, 2).toUpperCase() : 'AM';
 
   const roleStr =
     profile?.role ||
@@ -146,21 +129,17 @@ export default function Header() {
 
   const isAdmin =
     user?.email === 'merkurov@gmail.com' ||
-    rolesArr.some(
-      (r: unknown) =>
-        typeof r === 'string' && r.toUpperCase() === 'ADMIN'
-    ) ||
-    (typeof roleStr === 'string' &&
-      roleStr.toUpperCase() === 'ADMIN');
+    rolesArr.some((r: unknown) => typeof r === 'string' && r.toUpperCase() === 'ADMIN') ||
+    (typeof roleStr === 'string' && roleStr.toUpperCase() === 'ADMIN');
 
   const isOwner =
     !user ||
     userName.toLowerCase().includes('merkurov') ||
     userName.toLowerCase().includes('антон');
 
-  const brandDisplay = isOwner
-    ? 'Merkurov'
-    : userName.split(' ').slice(-1)[0] || userName;
+  const brandDisplay = isOwner ? 'Merkurov' : userName.split(' ').slice(-1)[0] || userName;
+
+  const displayBrand = isHomeMode ? 'Pierrot' : brandDisplay;
 
   if (telegramApp || isImmersiveRoute) {
     return null;
@@ -170,15 +149,11 @@ export default function Header() {
 
   const sectionLinkClass = (active: boolean) =>
     `block font-bold text-sm sm:text-base uppercase tracking-[0.2em] transition-colors ${
-      active
-        ? 'text-stone-400'
-        : 'text-stone-900 hover:text-stone-600'
+      active ? 'text-stone-400' : 'text-stone-900 hover:text-stone-600'
     }`;
 
   const submenuClass = (active: boolean) =>
-    `block py-0.5 transition-colors ${
-      active ? 'text-stone-900' : 'hover:text-stone-900'
-    }`;
+    `block py-0.5 transition-colors ${active ? 'text-stone-900' : 'hover:text-stone-900'}`;
 
   return (
     <header
@@ -192,7 +167,23 @@ export default function Header() {
         {/* User profile */}
         <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
           <div className="relative shrink-0" ref={profileRef}>
-            {isLoading ? (
+            {isHomeMode ? (
+              <div
+                className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#37332D] font-serif text-lg font-medium text-white shadow-md ring-2 ring-white/90 sm:h-11 sm:w-11"
+                aria-label="Pierrot avatar"
+                title="Pierrot"
+              >
+                {PIERROT_AVATAR_SRC ? (
+                  <img
+                    src={PIERROT_AVATAR_SRC}
+                    alt="Pierrot"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  'P'
+                )}
+              </div>
+            ) : isLoading ? (
               <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-stone-200/60 animate-pulse" />
             ) : user ? (
               <button
@@ -208,11 +199,7 @@ export default function Header() {
                 aria-haspopup="menu"
               >
                 {userImage ? (
-                  <img
-                    src={userImage}
-                    alt={userName}
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={userImage} alt={userName} className="w-full h-full object-cover" />
                 ) : (
                   <span>{userInitials}</span>
                 )}
@@ -227,7 +214,7 @@ export default function Header() {
             )}
 
             <AnimatePresence>
-              {isProfileOpen && user && (
+              {isProfileOpen && user && !isHomeMode && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.96, y: 8 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -238,9 +225,7 @@ export default function Header() {
                   className="absolute left-0 mt-3 w-[calc(100vw-2rem)] max-w-[280px] p-4 rounded-3xl bg-white/95 backdrop-blur-3xl border border-stone-200/90 shadow-[0_20px_50px_rgba(0,0,0,0.12)] z-50 space-y-1.5 font-sans"
                 >
                   <div className="px-4 pb-3 mb-1 border-b border-stone-100">
-                    <p className="truncate text-sm font-semibold text-stone-900">
-                      {userName}
-                    </p>
+                    <p className="truncate text-sm font-semibold text-stone-900">{userName}</p>
                     {user?.email && (
                       <p className="truncate text-[10px] font-mono tracking-wide text-stone-400">
                         {user.email}
@@ -301,10 +286,7 @@ export default function Header() {
           </div>
 
           {/* Site navigation */}
-          <div
-            className="relative min-w-0 flex-1 sm:flex-none"
-            ref={siteMenuRef}
-          >
+          <div className="relative min-w-0 flex-1 sm:flex-none" ref={siteMenuRef}>
             <button
               type="button"
               onClick={() => {
@@ -316,10 +298,8 @@ export default function Header() {
               aria-controls="site-menu"
               aria-haspopup="menu"
             >
-              <span className="truncate">{brandDisplay}</span>
-              <span className="text-[9px] sm:text-[10px] font-mono text-stone-400 shrink-0">
-                ▼
-              </span>
+              <span className="truncate">{displayBrand}</span>
+              <span className="text-[9px] sm:text-[10px] font-mono text-stone-400 shrink-0">▼</span>
             </button>
 
             <AnimatePresence>
@@ -354,8 +334,7 @@ export default function Header() {
                       href="/lobby"
                       onClick={closeSiteMenu}
                       className={sectionLinkClass(
-                        normalizedPath === '/lobby' ||
-                        normalizedPath.startsWith('/lobby/')
+                        normalizedPath === '/lobby' || normalizedPath.startsWith('/lobby/')
                       )}
                     >
                       LOBBY
@@ -366,8 +345,7 @@ export default function Header() {
                         href="/unframed"
                         onClick={closeSiteMenu}
                         className={submenuClass(
-                          normalizedPath === '/unframed' ||
-                          normalizedPath.startsWith('/unframed/')
+                          normalizedPath === '/unframed' || normalizedPath.startsWith('/unframed/')
                         )}
                       >
                         UNFRAMED
@@ -381,8 +359,7 @@ export default function Header() {
                       href="/flow"
                       onClick={closeSiteMenu}
                       className={sectionLinkClass(
-                        normalizedPath === '/flow' ||
-                        normalizedPath.startsWith('/flow/')
+                        normalizedPath === '/flow' || normalizedPath.startsWith('/flow/')
                       )}
                     >
                       FLOW
@@ -394,8 +371,7 @@ export default function Header() {
                         sectionId="journal"
                         onClick={closeSiteMenu}
                         className={submenuClass(
-                          normalizedPath === '/journal' ||
-                          normalizedPath.startsWith('/journal/')
+                          normalizedPath === '/journal' || normalizedPath.startsWith('/journal/')
                         )}
                       >
                         JOURNAL
@@ -408,9 +384,7 @@ export default function Header() {
                     <Link
                       href="/art-engine"
                       onClick={closeSiteMenu}
-                      className={sectionLinkClass(
-                        normalizedPath.startsWith('/art-engine')
-                      )}
+                      className={sectionLinkClass(normalizedPath.startsWith('/art-engine'))}
                     >
                       ART ENGINE
                     </Link>
@@ -422,7 +396,7 @@ export default function Header() {
                         onClick={closeSiteMenu}
                         className={submenuClass(
                           normalizedPath === '/selection' ||
-                          normalizedPath.startsWith('/selection/')
+                            normalizedPath.startsWith('/selection/')
                         )}
                       >
                         SELECTION
@@ -437,10 +411,10 @@ export default function Header() {
                       onClick={closeSiteMenu}
                       className={sectionLinkClass(
                         normalizedPath.startsWith('/heartandangel') ||
-                        normalizedPath.startsWith('/temple') ||
-                        normalizedPath === '/vigil' ||
-                        normalizedPath === '/absolution' ||
-                        normalizedPath === '/tribute'
+                          normalizedPath.startsWith('/temple') ||
+                          normalizedPath === '/vigil' ||
+                          normalizedPath === '/absolution' ||
+                          normalizedPath === '/tribute'
                       )}
                     >
                       HEART &amp; ANGEL
@@ -451,8 +425,7 @@ export default function Header() {
                         href="/temple"
                         onClick={closeSiteMenu}
                         className={submenuClass(
-                          normalizedPath === '/temple' ||
-                          normalizedPath.startsWith('/temple/')
+                          normalizedPath === '/temple' || normalizedPath.startsWith('/temple/')
                         )}
                       >
                         TEMPLE

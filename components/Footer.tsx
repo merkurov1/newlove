@@ -1,12 +1,16 @@
 'use client';
 
+import { usePierrot } from '@/components/pierrot/PierrotContext';
+
 export default function Footer() {
   const currentYear = new Date().getFullYear();
+  const { isHomeMode } = usePierrot();
+
+  if (isHomeMode) return null;
 
   return (
     <>
       {/* Плавающий ассистент Пьеро в правом нижнем углу */}
-    
 
       {/* Лаконичный футер */}
       <footer className="site-footer w-full bg-[#FAF8F5] border-t border-zinc-200/60 py-8 px-6 text-center font-mono text-[11px] text-zinc-500 uppercase tracking-[0.2em]">

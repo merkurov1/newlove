@@ -46,12 +46,16 @@ type PierrotContextValue = {
   draft: string;
   draftCaret: number | null;
   isOpen: boolean;
+  isHomeMode: boolean;
   isLoading: boolean;
   isComposerOpen: boolean;
   isAdminSession: boolean;
   pendingNavigation: PierrotNavigationProposal | null;
   expandThreshold: number;
   openChat: () => void;
+  openConversation: () => void;
+  toggleConversation: () => void;
+  closeConversation: () => void;
   closeChat: () => void;
   toggleComposer: () => void;
   updateDraft: (value: string, caret?: number | null) => void;
@@ -203,6 +207,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   const [draft, setDraft] = useState('');
   const [draftCaret, setDraftCaret] = useState<number | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [isHomeMode, setIsHomeMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isAdminSession, setIsAdminSession] = useState(false);
@@ -265,7 +270,40 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const openChat = useCallback(() => {
+    setIsHomeMode(false);
+    setIsComposerOpen(false);
     setIsOpen(true);
+  }, []);
+
+  const openConversation = useCallback(() => {
+    if (normalizePathname(pathname) === '/') {
+      setIsOpen(false);
+      setIsComposerOpen(false);
+      setIsHomeMode(true);
+      return;
+    }
+
+    setIsHomeMode(false);
+    setIsComposerOpen(false);
+    setIsOpen(true);
+  }, [pathname]);
+
+  const toggleConversation = useCallback(() => {
+    if (normalizePathname(pathname) === '/') {
+      setIsOpen(false);
+      setIsComposerOpen(false);
+      setIsHomeMode((current) => !current);
+      return;
+    }
+
+    setIsComposerOpen(false);
+    setIsOpen((current) => !current);
+  }, [pathname]);
+
+  const closeConversation = useCallback(() => {
+    setIsOpen(false);
+    setIsHomeMode(false);
+    setIsComposerOpen(false);
   }, []);
 
   const closeChat = useCallback(() => {
@@ -326,6 +364,8 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       }
 
       setIsOpen(false);
+      setIsHomeMode(false);
+      setIsComposerOpen(false);
       router.push(proposal.route);
 
       window.setTimeout(() => {
@@ -357,7 +397,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
 
       if (!section) return;
 
-      openChat();
+      openConversation();
 
       const alreadyIntroduced = messagesRef.current.some(
         (message) => message.meta?.kind === 'section-intro' && message.meta.sectionId === sectionId
@@ -409,7 +449,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         updatePendingNavigation(createNavigationProposal(sectionId));
       }, INTRO_DELAY_MS);
     },
-    [appendMessage, openChat, updatePendingNavigation]
+    [appendMessage, openConversation, updatePendingNavigation]
   );
 
   const exploreSection = useCallback(
@@ -598,6 +638,12 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
+    if (normalizePathname(pathname) !== '/') {
+      setIsHomeMode(false);
+    }
+  }, [pathname]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
 
     let raw: string | null = null;
@@ -670,12 +716,16 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     draft,
     draftCaret,
     isOpen,
+    isHomeMode,
     isLoading,
     isComposerOpen,
     isAdminSession,
     pendingNavigation,
     expandThreshold: PIERROT_COMPOSER_EXPAND_THRESHOLD,
     openChat,
+    openConversation,
+    toggleConversation,
+    closeConversation,
     closeChat,
     toggleComposer,
     updateDraft,

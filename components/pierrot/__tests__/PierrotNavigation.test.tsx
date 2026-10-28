@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import HomeClient from '@/components/HomeClient';
 import LobbyClient from '@/app/lobby/LobbyClient';
+import Header from '@/components/Header';
 import PierrotChat from '@/components/PierrotChat';
 import { PierrotProvider, usePierrot } from '@/components/pierrot/PierrotContext';
 import { parseNavigationRecord } from '@/lib/pierrot/navigation';
@@ -49,12 +50,23 @@ function OpenChatButton() {
   );
 }
 
+function TogglePierrotButton() {
+  const { toggleConversation } = usePierrot();
+
+  return (
+    <button type="button" onClick={toggleConversation}>
+      Toggle test Pierrot
+    </button>
+  );
+}
+
 function renderApp() {
   return render(
     <PierrotProvider>
       <HomeClient />
       <PierrotChat />
       <OpenChatButton />
+      <TogglePierrotButton />
     </PierrotProvider>
   );
 }
@@ -65,13 +77,9 @@ function renderLobbyApp() {
       <LobbyClient />
       <PierrotChat />
       <OpenChatButton />
+      <TogglePierrotButton />
     </PierrotProvider>
   );
-}
-
-async function openComposer() {
-  fireEvent.click(screen.getByRole('button', { name: 'Show Pierrot composer' }));
-  return screen.getByRole('textbox', { name: 'Message Pierrot' });
 }
 
 async function openArtIntro() {
@@ -95,12 +103,45 @@ describe('Pierrot conversational navigation', () => {
     window.sessionStorage.clear();
   });
 
-  it('toggles the homepage composer with the P control', async () => {
+  it('toggles the homepage into Pierrot mode with the P control', async () => {
     renderApp();
 
     expect(screen.queryByRole('textbox', { name: 'Message Pierrot' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show Pierrot composer' })).toBeInTheDocument();
 
-    await openComposer();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
+
+    expect(screen.getByRole('textbox', { name: 'Message Pierrot' })).toBeInTheDocument();
+    expect(screen.getByText('Structure is the antidote to chaos.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show Pierrot composer' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
+
+    expect(screen.queryByRole('textbox', { name: 'Message Pierrot' })).not.toBeInTheDocument();
+  });
+
+  it('switches the site header identity in homepage Pierrot mode', async () => {
+    render(
+      <PierrotProvider>
+        <Header />
+        <TogglePierrotButton />
+      </PierrotProvider>
+    );
+
+    expect(screen.getByText('Merkurov')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
+
+    expect(screen.getByText('Pierrot')).toBeInTheDocument();
+    expect(screen.getByLabelText('Pierrot avatar')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Exit Pierrot mode' })).toBeInTheDocument();
+  });
+
+  it('restores the compact composer P control on the homepage', async () => {
+    renderApp();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show Pierrot composer' }));
 
     expect(screen.getByRole('textbox', { name: 'Message Pierrot' })).toBeInTheDocument();
 
@@ -109,37 +150,20 @@ describe('Pierrot conversational navigation', () => {
     expect(screen.queryByRole('textbox', { name: 'Message Pierrot' })).not.toBeInTheDocument();
   });
 
-  it('expands only above 100 characters and preserves the draft', async () => {
+  it('sends a short message from the inline Pierrot mode', async () => {
     renderApp();
-    const composer = await openComposer();
-    const thresholdDraft = 'a'.repeat(100);
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
 
-    fireEvent.change(composer, { target: { value: thresholdDraft } });
+    const input = screen.getByRole('textbox', { name: 'Message Pierrot' });
 
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-
-    const longDraft = `${thresholdDraft}b`;
-    fireEvent.change(composer, { target: { value: longDraft } });
-
-    const dialog = screen.getByRole('dialog');
-    const modalInput = within(dialog).getByRole('textbox');
-
-    expect(modalInput).toHaveValue(longDraft);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('sends a short message normally without opening the modal first', async () => {
-    renderApp();
-    const composer = await openComposer();
-
-    fireEvent.change(composer, { target: { value: 'hello' } });
-    fireEvent.keyDown(composer, { key: 'Enter' });
+    fireEvent.change(input, { target: { value: 'hello' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(fetchMock.mock.calls[0][1].body).toContain('"message":"hello"');
   });
 
@@ -221,6 +245,7 @@ describe('Pierrot conversational navigation', () => {
   });
 
   it('closes the conversation without navigating and preserves the draft', async () => {
+    currentPathname = '/lobby';
     renderApp();
     await openArtIntro();
 
@@ -245,6 +270,7 @@ describe('Pierrot conversational navigation', () => {
   });
 
   it('allows a natural-language confirmation only while a proposal is pending', async () => {
+    currentPathname = '/lobby';
     renderApp();
 
     await openArtIntro();
@@ -261,7 +287,7 @@ describe('Pierrot conversational navigation', () => {
   it('does not navigate on a standalone yes or on a follow-up question', async () => {
     const standalone = renderApp();
 
-    await openComposer();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
     const composerInput = screen.getByRole('textbox', {
       name: 'Message Pierrot',
     });
@@ -278,6 +304,7 @@ describe('Pierrot conversational navigation', () => {
     window.sessionStorage.clear();
     fetchMock.mockClear();
     pushMock.mockClear();
+    currentPathname = '/lobby';
 
     renderApp();
     await openArtIntro();
@@ -335,6 +362,7 @@ describe('Pierrot conversational navigation', () => {
   });
 
   it('shows homepage copy in the empty conversation and uses section buttons', async () => {
+    currentPathname = '/lobby';
     renderApp();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open test chat' }));
@@ -351,6 +379,7 @@ describe('Pierrot conversational navigation', () => {
   });
 
   it('opens the Heritage scenario from the Lobby page', async () => {
+    currentPathname = '/lobby';
     renderLobbyApp();
 
     fireEvent.click(screen.getAllByRole('link', { name: /Heritage/i })[0]);
@@ -360,6 +389,7 @@ describe('Pierrot conversational navigation', () => {
   });
 
   it('opens the Media scenario from the Lobby page', async () => {
+    currentPathname = '/lobby';
     renderLobbyApp();
 
     fireEvent.click(screen.getByRole('link', { name: /Explore the media archive/i }));
@@ -369,6 +399,7 @@ describe('Pierrot conversational navigation', () => {
   });
 
   it('runs the Lobby explanation and navigates to the verified route', async () => {
+    currentPathname = '/lobby';
     renderApp();
 
     fireEvent.click(screen.getByRole('link', { name: /Enter The Lobby/i }));

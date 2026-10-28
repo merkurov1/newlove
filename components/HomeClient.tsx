@@ -2,8 +2,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowUpRight } from 'lucide-react';
+import HomePierrotMode from '@/components/pierrot/HomePierrotMode';
 import PierrotComposer from '@/components/pierrot/PierrotComposer';
 import PierrotSectionLink from '@/components/pierrot/PierrotSectionLink';
+import { usePierrot } from '@/components/pierrot/PierrotContext';
 import type { PierrotSectionId } from '@/lib/pierrot/navigation';
 
 interface NavItem {
@@ -21,6 +23,7 @@ const INITIAL_ITEMS: NavItem[] = [
 export default function HomeClient() {
   const [items, setItems] = useState<NavItem[]>(INITIAL_ITEMS);
   const [isShuffled, setIsShuffled] = useState(false);
+  const { isHomeMode } = usePierrot();
 
   const shuffleItems = useCallback(() => {
     const tg = (window as any)?.Telegram?.WebApp;
@@ -72,13 +75,14 @@ export default function HomeClient() {
 
     return () => {
       if (typeof window !== 'undefined' && 'DeviceMotionEvent' in window) {
-        window.removeEventListener(
-          'devicemotion',
-          handleMotion as EventListener
-        );
+        window.removeEventListener('devicemotion', handleMotion as EventListener);
       }
     };
   }, [shuffleItems]);
+
+  if (isHomeMode) {
+    return <HomePierrotMode />;
+  }
 
   return (
     <main className="min-h-screen w-full bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] flex flex-col justify-between px-5 sm:px-12 pt-32 md:pt-44 pb-12 antialiased relative overflow-x-hidden">
@@ -98,9 +102,7 @@ export default function HomeClient() {
 
         <h1 className="text-3xl sm:text-6xl md:text-7xl lg:text-8xl font-serif font-normal tracking-tight leading-[1.15] sm:leading-[0.98] text-[#111111] mb-10 sm:mb-16 px-1 [hyphens:none] break-words">
           Context Architecture <br className="hidden sm:inline" />
-          <span className="text-zinc-500 italic font-serif">
-            &amp; Cultural Capital
-          </span>
+          <span className="text-zinc-500 italic font-serif">&amp; Cultural Capital</span>
         </h1>
 
         <nav
