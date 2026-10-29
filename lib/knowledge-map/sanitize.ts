@@ -1,9 +1,8 @@
-
 const SENSITIVE_KEY =
   /password|passwd|secret|token|authorization|cookie|session|api[_-]?key|private[_-]?key|access[_-]?key|refresh[_-]?token|email|phone|mobile|telegram[_-]?id|ip[_-]?address|recipient|subscriber/i;
 
 const EXCLUDED_TABLE =
-  /^(sessions|session|verificationtokens|subscriber_tokens|accounts|messages|newsletter_logs|revalidation_audit|subscribers_backup_.*|user_roles|roles|access_requests|bot_sessions|temple_users)$/i;
+  /^(sessions|session|verificationtokens|subscriber_tokens|accounts|messages|newsletter_logs|revalidation_audit|subscribers_backup_.*|user_roles|roles|access_requests|art_service_leads|subscription_events|pierrot_conversations|pierrot_messages|pierrot_events|bot_sessions|temple_users)$/i;
 
 export function shouldExcludeTable(tableName: string): boolean {
   return EXCLUDED_TABLE.test(tableName.replace(/^public\./i, ''));
@@ -43,14 +42,26 @@ export function isTextFile(path: string, mimeType?: string | null): boolean {
   const extension = path.split('.').pop()?.toLowerCase() || '';
 
   const textExtensions = new Set([
-    'txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'jsonl',
-    'xml', 'html', 'htm', 'yaml', 'yml', 'log', 'sql', 'rtf',
+    'txt',
+    'md',
+    'markdown',
+    'csv',
+    'tsv',
+    'json',
+    'jsonl',
+    'xml',
+    'html',
+    'htm',
+    'yaml',
+    'yml',
+    'log',
+    'sql',
+    'rtf',
   ]);
 
   if (textExtensions.has(extension)) return true;
 
   return Boolean(
-    mimeType &&
-    (/^text\//i.test(mimeType) || /json|xml|yaml|javascript/i.test(mimeType)),
+    mimeType && (/^text\//i.test(mimeType) || /json|xml|yaml|javascript/i.test(mimeType))
   );
 }

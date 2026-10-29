@@ -19,9 +19,9 @@ const content = {
     placeholder: 'ваш@email.com',
     button: 'Подписаться',
     submitting: 'Подключение...',
-    successTitle: 'Спасибо! Вы во Flow',
+    successTitle: 'Проверьте почту',
     successText:
-      'Первый выпуск придет на ваш email. Проверьте почту для подтверждения.',
+      'Подписка станет активной только после подтверждения по ссылке в письме.',
     anotherEmail: 'Указать другой email',
     privacy: 'Без спама и трекеров. Отписка в любой момент.',
   },
@@ -33,9 +33,9 @@ const content = {
     placeholder: 'you@example.com',
     button: 'Subscribe',
     submitting: 'Connecting...',
-    successTitle: 'Welcome to the Flow',
+    successTitle: 'Check your inbox',
     successText:
-      'Thank you! The dispatch will arrive in your inbox shortly.',
+      'The subscription becomes active only after you confirm via the email link.',
     anotherEmail: 'Subscribe another email',
     privacy: 'Zero tracking. Instant one-click unsubscribe anytime.',
   },
@@ -45,9 +45,21 @@ export default function FlowJoinClient() {
   const [lang, setLang] = useState<Language>('ru');
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<
-    'idle' | 'loading' | 'success' | 'error'
+    'idle' | 'loading' | 'success' | 'already' | 'error'
   >('idle');
+  const [pierrotAttribution, setPierrotAttribution] = useState<string | null>(
+    null
+  );
   const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const ref = new URLSearchParams(window.location.search).get('pierrot');
+    setPierrotAttribution(
+      ref && /^psub_[A-Za-z0-9_-]{8,64}$/.test(ref) ? ref : null
+    );
+  }, []);
 
   // Автоопределение языка браузера при первом входе
   useEffect(() => {
@@ -77,6 +89,7 @@ export default function FlowJoinClient() {
           email: trimmedEmail,
           language: lang,
           locale: lang,
+          ...(pierrotAttribution ? { pierrotAttribution } : {}),
         }),
       });
 
@@ -89,7 +102,7 @@ export default function FlowJoinClient() {
         );
       }
 
-      setStatus('success');
+      setStatus(data.status === 'already_confirmed' ? 'already' : 'success');
       setEmail('');
     } catch (err: any) {
       console.error('Subscription error:', err);
@@ -177,7 +190,7 @@ export default function FlowJoinClient() {
 
           {/* Форма ввода email / Сообщение об успехе */}
           <AnimatePresence mode="wait">
-            {status === 'success' ? (
+            {status === 'success' || status === 'already' ? (
               <motion.div
                 key="success"
                 initial={{ opacity: 0, scale: 0.96 }}
@@ -187,10 +200,18 @@ export default function FlowJoinClient() {
               >
                 <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
                 <h3 className="text-base font-bold text-stone-900">
-                  {t.successTitle}
+                  {status === 'already'
+                    ? lang === 'ru'
+                      ? 'Этот email уже подтверждён'
+                      : 'This email is already confirmed'
+                    : t.successTitle}
                 </h3>
                 <p className="text-xs text-stone-600 leading-relaxed">
-                  {t.successText}
+                  {status === 'already'
+                    ? lang === 'ru'
+                      ? 'Подписка уже активна.'
+                      : 'The subscription is already active.'
+                    : t.successText}
                 </p>
                 <button
                   type="button"

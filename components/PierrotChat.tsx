@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, RotateCcw } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
 import { PierrotInput, PierrotMessageList } from '@/components/pierrot/PierrotConversation';
+import PierrotDataNotice from '@/components/pierrot/PierrotDataNotice';
 import usePrefersReducedMotion from '@/components/pierrot/usePrefersReducedMotion';
 import useKeyboardViewportHeight from '@/components/pierrot/useKeyboardViewportHeight';
 
@@ -14,8 +15,12 @@ type PierrotTriggerProps = {
 };
 
 export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
-  const { toggleConversation, isHomeMode } = usePierrot();
-  const label = isHomeMode ? 'Exit Pierrot mode' : 'Open Pierrot';
+  const { toggleConversation, isHomeMode, hasUnread } = usePierrot();
+  const label = isHomeMode
+    ? 'Exit Pierrot mode'
+    : hasUnread
+      ? 'Open Pierrot, new message'
+      : 'Open Pierrot';
 
   if (compact) {
     return (
@@ -27,7 +32,7 @@ export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
         aria-pressed={isHomeMode}
         title={isHomeMode ? 'Back to Merkurov' : 'Pierrot'}
         className={`
-          group flex h-10 w-10 shrink-0 items-center justify-center
+          group relative flex h-10 w-10 shrink-0 items-center justify-center
           rounded-full border font-serif text-[17px] font-medium
           shadow-[0_2px_8px_rgba(75,62,45,0.04)]
           transition-colors duration-200 active:scale-95
@@ -41,6 +46,12 @@ export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
         `}
       >
         <span className="transition-transform duration-200 group-hover:scale-110">P</span>
+        {hasUnread && !isHomeMode && (
+          <span
+            aria-hidden="true"
+            className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-[#8CA18A] ring-2 ring-[#FAF8F5]"
+          />
+        )}
       </button>
     );
   }
@@ -53,7 +64,7 @@ export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
       aria-haspopup={isHomeMode ? undefined : 'dialog'}
       aria-pressed={isHomeMode}
       className={`
-        group inline-flex items-center gap-2 rounded-full border
+        group relative inline-flex items-center gap-2 rounded-full border
         px-3.5 py-1.5 font-mono text-[10px] uppercase
         tracking-[0.16em] transition-colors
         ${
@@ -65,6 +76,9 @@ export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
     >
       <span className="h-1.5 w-1.5 rounded-full bg-[#8CA18A]" />
       <span>{isHomeMode ? 'Exit Pierrot' : 'Pierrot'}</span>
+      {hasUnread && !isHomeMode && (
+        <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-[#B08A5A]" aria-hidden="true" />
+      )}
     </button>
   );
 }
@@ -73,6 +87,7 @@ export default function PierrotChat() {
   const { messages, isOpen, isAdminSession, closeChat, clearChat } = usePierrot();
 
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const modalRef = useRef<HTMLElement | null>(null);
   const shouldReduceMotion = usePrefersReducedMotion();
   const keyboardViewportHeight = useKeyboardViewportHeight(isOpen);
 
@@ -110,7 +125,35 @@ export default function PierrotChat() {
     if (!isOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeChat();
+      if (event.key === 'Escape') {
+        closeChat();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const root = modalRef.current;
+      if (!root) return;
+
+      const focusable = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((element) => element.offsetParent !== null);
+
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && (active === first || !root.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -153,6 +196,7 @@ export default function PierrotChat() {
                 }}
               >
                 <motion.section
+                  ref={modalRef}
                   initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 4 }}
@@ -190,7 +234,7 @@ export default function PierrotChat() {
                         {messages.length > 0 && (
                           <button
                             type="button"
-                            onClick={clearChat}
+                            onClick={() => clearChat()}
                             title="New chat"
                             aria-label="New chat"
                             className="
@@ -233,6 +277,7 @@ export default function PierrotChat() {
                     "
                   >
                     <div className="mx-auto w-full max-w-3xl">
+                      <PierrotDataNotice className="mb-2 px-1" />
                       <PierrotInput />
                     </div>
                   </footer>

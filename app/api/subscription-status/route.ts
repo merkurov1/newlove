@@ -9,7 +9,13 @@ export async function GET(req: Request) {
     // Check subscribers table in Supabase for this user
     try {
       if (!supabase) return NextResponse.json({ isSubscribed: false });
-      const { data, error } = await supabase.from('subscribers').select('id').eq('userId', (user as any).id).limit(1).maybeSingle();
+      const { data, error } = await supabase
+        .from('subscribers')
+        .select('id')
+        .eq('userId', (user as any).id)
+        .eq('isActive', true)
+        .limit(1)
+        .maybeSingle();
       if (error) {
         console.error('Supabase query error', error);
         return NextResponse.json({ isSubscribed: false }, { status: 500 });

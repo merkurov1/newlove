@@ -1,5 +1,4 @@
 import assert from 'node:assert';
-import { test } from 'node:test';
 import { stripHtml, extractPreview } from '../preview';
 
 test('stripHtml strips style, script, head, tags and decodes entities', () => {

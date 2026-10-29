@@ -440,7 +440,7 @@ export default function Header() {
 
         {/* Right section: Composer and Pierrot */}
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {user && <ComposerTrigger />}
+          {isAdmin && <ComposerTrigger />}
           <PierrotTrigger compact />
         </div>
       </div>

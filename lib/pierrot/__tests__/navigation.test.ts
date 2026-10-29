@@ -3,6 +3,7 @@ import {
   createNavigationProposal,
   createNavigationRecord,
   findSectionByPrompt,
+  getSectionByRoute,
   isNavigationConfirmation,
   parseNavigationRecord,
 } from '../navigation';
@@ -50,6 +51,12 @@ describe('Pierrot navigation metadata', () => {
     expect(findSectionByPrompt('Media Archive')?.id).toBe('media');
     expect(findSectionByPrompt('Heritage Archive')?.id).toBe('heritage');
     expect(findSectionByPrompt('What is Art?')).toBeNull();
+  });
+
+  it('maps nested routes back to their section', () => {
+    expect(getSectionByRoute('/heartandangel/world')?.id).toBe('art');
+    expect(getSectionByRoute('/selection/anything')?.id).toBe('selection');
+    expect(getSectionByRoute('/unknown')).toBeNull();
   });
 
   it('creates a pending proposal and an executed arrival record', () => {

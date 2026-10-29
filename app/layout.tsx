@@ -5,7 +5,7 @@ import { GlobalAudioProvider } from '@/components/AudioContext';
 
 import './main.css';
 
-// ПРИМЕЧАНИЕ: Импорты Swiper рекомендовано перенести в сам компонент слайдера, 
+// ПРИМЕЧАНИЕ: Импорты Swiper рекомендовано перенести в сам компонент слайдера,
 // чтобы не раздувать глобальный CSS для всех страниц.
 import 'swiper/css';
 import 'swiper/css/navigation';
@@ -23,10 +23,7 @@ import TelegramMiniApp from '@/components/TelegramMiniApp';
 import NextDynamic from 'next/dynamic';
 import { unstable_cache } from 'next/cache';
 
-const UserSidebar = NextDynamic(
-  () => import('@/components/UserSidebar'),
-  { ssr: false }
-);
+const UserSidebar = NextDynamic(() => import('@/components/UserSidebar'), { ssr: false });
 
 // --- STRATEGIC SEO: GLOBAL POSITIONING ---
 
@@ -35,6 +32,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
+  viewportFit: 'cover',
   themeColor: '#ffffff',
 };
 
@@ -75,8 +73,7 @@ export const metadata: Metadata = sanitizeMetadata({
 
   openGraph: {
     title: 'Anton Merkurov | Art x Love x Money',
-    description:
-      'Digital Strategist, Art Dealer, and Heritage Architect.',
+    description: 'Digital Strategist, Art Dealer, and Heritage Architect.',
     url: 'https://www.merkurov.love',
     siteName: 'Anton Merkurov',
     images: [
@@ -119,9 +116,7 @@ export const metadata: Metadata = sanitizeMetadata({
       { url: '/favicon.ico', sizes: 'any' },
       { url: '/icon', sizes: '512x512', type: 'image/png' },
     ],
-    apple: [
-      { url: '/apple-icon', sizes: '180x180', type: 'image/png' },
-    ],
+    apple: [{ url: '/apple-icon', sizes: '180x180', type: 'image/png' }],
   },
 
   manifest: '/manifest.webmanifest',
@@ -134,10 +129,8 @@ export const metadata: Metadata = sanitizeMetadata({
       'x-default': 'https://www.merkurov.love',
     },
     types: {
-      'application/rss+xml':
-        'https://www.merkurov.love/flow/rss',
-      'application/feed+json':
-        'https://www.merkurov.love/flow/feed.json',
+      'application/rss+xml': 'https://www.merkurov.love/flow/rss',
+      'application/feed+json': 'https://www.merkurov.love/flow/feed.json',
     },
   },
 
@@ -239,10 +232,7 @@ const googleSearchCardSchema = {
       founder: {
         '@id': 'https://www.merkurov.love/#person',
       },
-      sameAs: [
-        'https://twitter.com/merkurov',
-        'https://t.me/merkurov',
-      ],
+      sameAs: ['https://twitter.com/merkurov', 'https://t.me/merkurov'],
     },
     {
       '@type': 'ProfilePage',
@@ -326,9 +316,7 @@ const getSubscriberCount = unstable_cache(
         })
         .eq('isActive', true);
 
-      return res && typeof res.count === 'number'
-        ? Number(res.count)
-        : 0;
+      return res && typeof res.count === 'number' ? Number(res.count) : 0;
     } catch {
       return 0;
     }
@@ -338,28 +326,19 @@ const getSubscriberCount = unstable_cache(
 );
 
 // Определение системных стеков вместо сетевых шрифтов
-const systemSans = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
+const systemSans =
+  'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
 const systemSerif = 'Garamond, Georgia, "Baskerville", "Times New Roman", serif';
 
-export default async function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const projects = await getPublicProjects();
   const subscriberCount = await getSubscriberCount();
 
   return (
     <html lang="en">
       <head>
-        <link
-          rel="preconnect"
-          href="https://txvkqcitalfbjytmnawq.supabase.co"
-        />
-        <link
-          rel="dns-prefetch"
-          href="https://txvkqcitalfbjytmnawq.supabase.co"
-        />
+        <link rel="preconnect" href="https://txvkqcitalfbjytmnawq.supabase.co" />
+        <link rel="dns-prefetch" href="https://txvkqcitalfbjytmnawq.supabase.co" />
 
         <script
           type="application/ld+json"
@@ -408,10 +387,7 @@ export default async function RootLayout({
         <SpeedInsights />
 
         {/* Загружаем Telegram Web App асинхронно, чтобы исключить Forced Reflow при первой загрузке */}
-        <Script
-          src="https://telegram.org/js/telegram-web-app.js"
-          strategy="lazyOnload"
-        />
+        <Script src="https://telegram.org/js/telegram-web-app.js" strategy="lazyOnload" />
 
         {/* Аналитика Umami без блокировки основного потока */}
         <Script

@@ -43,8 +43,10 @@ const inputClass =
 
 export default function PostcardOrderForm({
   postcard,
+  pierrotAttribution = null,
 }: {
   postcard: Postcard;
+  pierrotAttribution?: string | null;
 }) {
   const [fields, setFields] = useState<OrderFields>(initialFields);
   const [loading, setLoading] = useState(false);
@@ -72,6 +74,7 @@ export default function PostcardOrderForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           postcardId: postcard.id,
+          ...(pierrotAttribution ? { pierrotAttribution } : {}),
           ...fields,
         }),
       });

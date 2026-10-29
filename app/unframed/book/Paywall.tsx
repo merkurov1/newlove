@@ -20,18 +20,13 @@ export default function Paywall({ onUnlock }: PaywallProps) {
     setLoading(true);
     setError(false);
     try {
-      const successUrl = window.location.origin + '/unframed/book?session_id={CHECKOUT_SESSION_ID}';
-      const cancelUrl = window.location.origin + '/unframed/book';
+      const pierrotAttribution = new URLSearchParams(window.location.search).get('pierrot');
 
-      const res = await fetch('/api/stripe/checkout', {
+      const res = await fetch('/api/unframed/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          amount: 1500, // $15.00
-          currency: 'usd', 
-          successUrl, 
-          cancelUrl,
-          product: 'UNFRAMED Manuscript Access'
+        body: JSON.stringify({
+          ...(pierrotAttribution ? { pierrotAttribution } : {}),
         }),
       });
 

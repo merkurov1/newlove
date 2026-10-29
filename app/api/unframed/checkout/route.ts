@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { normalizePierrotUnframedRef } from '@/lib/pierrot/orderAttribution';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2025-08-27.basil' as any,
@@ -7,41 +9,51 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 
 export const dynamic = 'force-dynamic';
 
+// The existing reader paywall displays a $15 access charge. The amount is
+// fixed on the server so a browser cannot choose what to pay.
+const UNFRAMED_ACCESS_AMOUNT = 1500;
+const UNFRAMED_ACCESS_CURRENCY = 'usd';
+
 export async function POST(req: Request) {
+  const limited = checkRateLimit(getClientIp(req), {
+    interval: 60 * 60 * 1000,
+    maxRequests: 10,
+    keyPrefix: 'unframed-checkout',
+  });
+  if (limited) return limited;
+
   try {
-    const { amount, currency = 'usd', email, successUrl, cancelUrl } = await req.json();
-    const finalAmount = typeof amount === 'number' && amount > 0 ? amount : 1400; // $14.00 по умолчанию
-    if (!finalAmount || finalAmount < 1) {
-      return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
-    }
+    const body = await req.json().catch(() => ({}));
     const origin = req.headers.get('origin') || 'https://merkurov.love';
+    const pierrotAttribution = normalizePierrotUnframedRef(body?.pierrotAttribution);
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
           price_data: {
-            currency,
+            currency: UNFRAMED_ACCESS_CURRENCY,
             product_data: {
-              name: 'Unframed Book Access',
-              description: 'Доступ к книге Unframed',
+              name: 'UNFRAMED Manuscript Access',
+              description: 'Digital access to the UNFRAMED manuscript',
             },
-            unit_amount: finalAmount, // в центах
+            unit_amount: UNFRAMED_ACCESS_AMOUNT,
           },
           quantity: 1,
         },
       ],
       mode: 'payment',
-      success_url: successUrl || `${origin}/unframed/book/?paid=1`,
-      cancel_url: cancelUrl || `${origin}/unframed/book/?cancel=1`,
-      customer_email: email,
+      success_url: `${origin}/unframed/book?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/unframed/book`,
       metadata: {
         type: 'unframed_book',
-        email: email || '',
+        ...(pierrotAttribution ? { pierrotAttribution } : {}),
       },
     });
+
     return NextResponse.json({ url: session.url });
   } catch (err: any) {
-    console.error('Stripe error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error('UNFRAMED checkout error:', err);
+    return NextResponse.json({ error: err?.message || 'Checkout unavailable' }, { status: 500 });
   }
 }

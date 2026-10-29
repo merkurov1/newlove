@@ -248,6 +248,17 @@ export function getPierrotSection(sectionId: PierrotSectionId): PierrotSection {
   return PIERROT_SECTIONS[sectionId];
 }
 
+export function getSectionByRoute(pathname: string): PierrotSection | null {
+  const normalized = normalizePathname(pathname);
+
+  return (
+    PIERROT_SECTION_IDS.map((id) => PIERROT_SECTIONS[id]).find((section) => {
+      const route = normalizePathname(section.route);
+      return normalized === route || normalized.startsWith(`${route}/`);
+    }) ?? null
+  );
+}
+
 /**
  * Detect a section when the visitor types its name instead of clicking it.
  * Matching is deliberately narrow so ordinary questions still reach the API.

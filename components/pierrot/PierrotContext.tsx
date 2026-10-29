@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useAuth } from '@/components/AuthContext';
 import {
   PIERROT_SECTIONS,
   createNavigationProposal,
@@ -22,8 +23,26 @@ import {
   PIERROT_COMPOSER_EXPAND_THRESHOLD,
   shouldExpandPierrotComposer,
 } from '@/lib/pierrot/config';
+import {
+  endPierrotConversation,
+  getPierrotConsent,
+  getPierrotConversationId,
+  getPierrotSessionId,
+  rotatePierrotConversationId,
+  setPierrotConversationId,
+  trackPierrotEvent,
+} from '@/lib/pierrot/clientTelemetry';
+import {
+  isPierrotOfferId,
+  isVerifiedPierrotInternalDestination,
+  normalizePierrotOfferCta,
+  type PierrotOfferCta,
+  type PierrotOfferId,
+} from '@/lib/pierrot/offers';
 
 export type PierrotMessageKind = 'chat' | 'section-trigger' | 'section-intro' | 'arrival';
+
+export type PierrotMode = 'site' | 'composer' | 'inline' | 'modal';
 
 export type PierrotMessageMeta = {
   kind: PierrotMessageKind;
@@ -38,11 +57,15 @@ export type PierrotMessage = {
   provider?: string;
   actions?: PierrotChatAction[];
   links?: PierrotMessageLink[];
+  offerId?: PierrotOfferId;
+  cta?: PierrotOfferCta;
   meta?: PierrotMessageMeta;
 };
 
 type PierrotContextValue = {
   messages: PierrotMessage[];
+  mode: PierrotMode;
+  hasUnread: boolean;
   draft: string;
   draftCaret: number | null;
   isOpen: boolean;
@@ -60,7 +83,7 @@ type PierrotContextValue = {
   toggleComposer: () => void;
   updateDraft: (value: string, caret?: number | null) => void;
   sendMessage: (overrideText?: string) => Promise<void>;
-  clearChat: () => void;
+  clearChat: (reason?: 'new_chat' | 'user_closed') => void;
   exploreSection: (sectionId: PierrotSectionId) => void;
   runAction: (action: PierrotChatAction) => void;
 };
@@ -121,7 +144,7 @@ function normalizeLink(value: unknown): PierrotMessageLink | null {
   if (
     typeof link.label !== 'string' ||
     typeof link.href !== 'string' ||
-    !link.href.startsWith('/')
+    !isVerifiedPierrotInternalDestination(link.href)
   ) {
     return null;
   }
@@ -166,6 +189,8 @@ function normalizeMessage(value: unknown, index: number): PierrotMessage | null 
   const links = Array.isArray(message.links)
     ? message.links.map(normalizeLink).filter((link): link is PierrotMessageLink => link !== null)
     : [];
+  const cta = normalizePierrotOfferCta(message.cta);
+  const offerId = cta?.offerId ?? (isPierrotOfferId(message.offerId) ? message.offerId : undefined);
 
   return {
     id:
@@ -177,6 +202,8 @@ function normalizeMessage(value: unknown, index: number): PierrotMessage | null 
     provider: typeof message.provider === 'string' ? message.provider : undefined,
     actions: actions.length > 0 ? actions : undefined,
     links: links.length > 0 ? links : undefined,
+    offerId,
+    cta: cta ?? undefined,
     meta: normalizeMeta(message.meta),
   };
 }
@@ -202,18 +229,25 @@ function loadMessages(): PierrotMessage[] {
 export function PierrotProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname() || '/';
+  const { user: authUser, isLoading: isAuthLoading } = useAuth();
 
   const [messages, setMessages] = useState<PierrotMessage[]>(loadMessages);
   const [draft, setDraft] = useState('');
   const [draftCaret, setDraftCaret] = useState<number | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const [isHomeMode, setIsHomeMode] = useState(false);
+  const [mode, setMode] = useState<PierrotMode>('site');
+  const [hasUnread, setHasUnread] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isAdminSession, setIsAdminSession] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<PierrotNavigationProposal | null>(
     null
   );
+
+  const isOpen = mode === 'modal';
+  const isHomeMode = mode === 'inline';
+  const isComposerOpen = mode === 'composer';
+
+  const modeRef = useRef<PierrotMode>(mode);
+  modeRef.current = mode;
 
   const messagesRef = useRef<PierrotMessage[]>(messages);
   const pendingNavigationRef = useRef<PierrotNavigationProposal | null>(null);
@@ -224,6 +258,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   const navigationLockRef = useRef<string | null>(null);
   const navigationTargetRef = useRef<string | null>(null);
   const thresholdArmedRef = useRef(true);
+  const lastAuthUserIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -259,66 +294,70 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
 
+      if (
+        nextMessage.role === 'assistant' &&
+        modeRef.current !== 'inline' &&
+        modeRef.current !== 'modal'
+      ) {
+        setHasUnread(true);
+      }
+
       return nextMessage;
     },
     []
   );
 
+  useEffect(() => {
+    if (mode === 'inline' || mode === 'modal') {
+      setHasUnread(false);
+    }
+  }, [mode]);
+
   const updatePendingNavigation = useCallback((proposal: PierrotNavigationProposal | null) => {
     pendingNavigationRef.current = proposal;
     setPendingNavigation(proposal);
+
+    if (proposal) {
+      trackPierrotEvent('navigation_proposed', proposal.id, {
+        section_id: proposal.sectionId,
+      });
+    }
   }, []);
 
   const openChat = useCallback(() => {
-    setIsHomeMode(false);
-    setIsComposerOpen(false);
-    setIsOpen(true);
+    setMode('modal');
   }, []);
 
   const openConversation = useCallback(() => {
-    if (normalizePathname(pathname) === '/') {
-      setIsOpen(false);
-      setIsComposerOpen(false);
-      setIsHomeMode(true);
-      return;
-    }
-
-    setIsHomeMode(false);
-    setIsComposerOpen(false);
-    setIsOpen(true);
+    setMode(normalizePathname(pathname) === '/' ? 'inline' : 'modal');
   }, [pathname]);
 
   const toggleConversation = useCallback(() => {
-    if (normalizePathname(pathname) === '/') {
-      setIsOpen(false);
-      setIsComposerOpen(false);
-      setIsHomeMode((current) => !current);
-      return;
-    }
+    setMode((current) => {
+      if (normalizePathname(pathname) === '/') {
+        return current === 'inline' ? 'site' : 'inline';
+      }
 
-    setIsComposerOpen(false);
-    setIsOpen((current) => !current);
+      return current === 'modal' ? 'site' : 'modal';
+    });
   }, [pathname]);
 
   const closeConversation = useCallback(() => {
-    setIsOpen(false);
-    setIsHomeMode(false);
-    setIsComposerOpen(false);
+    setMode('site');
   }, []);
 
   const closeChat = useCallback(() => {
-    setIsOpen(false);
+    setMode((current) => (current === 'modal' ? 'site' : current));
   }, []);
 
   const toggleComposer = useCallback(() => {
-    setIsComposerOpen((current) => {
-      const next = !current;
-
-      if (next) {
-        thresholdArmedRef.current = !shouldExpandPierrotComposer(draft);
+    setMode((current) => {
+      if (current === 'composer') {
+        return 'site';
       }
 
-      return next;
+      thresholdArmedRef.current = !shouldExpandPierrotComposer(draft);
+      return 'composer';
     });
   }, [draft]);
 
@@ -327,7 +366,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       setDraft(value);
       setDraftCaret(caret);
 
-      if (isOpen || !isComposerOpen) {
+      if (mode !== 'composer') {
         if (!shouldExpandPierrotComposer(value)) {
           thresholdArmedRef.current = true;
         }
@@ -342,9 +381,9 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       if (!thresholdArmedRef.current) return;
 
       thresholdArmedRef.current = false;
-      setIsOpen(true);
+      setMode('modal');
     },
-    [isComposerOpen, isOpen]
+    [mode]
   );
 
   const executeNavigation = useCallback(
@@ -363,9 +402,11 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         // message could be missed.
       }
 
-      setIsOpen(false);
-      setIsHomeMode(false);
-      setIsComposerOpen(false);
+      trackPierrotEvent('navigation_completed', proposal.id, {
+        section_id: proposal.sectionId,
+      });
+
+      setMode('site');
       router.push(proposal.route);
 
       window.setTimeout(() => {
@@ -532,14 +573,35 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
 
       try {
+        const telegramInitData =
+          typeof window !== 'undefined'
+            ? (
+                window as Window & {
+                  Telegram?: { WebApp?: { initData?: string } };
+                }
+              ).Telegram?.WebApp?.initData
+            : '';
+
         const response = await fetch('/api/pierrot-web', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(telegramInitData ? { 'x-telegram-init-data': String(telegramInitData) } : {}),
+          },
           body: JSON.stringify({
             message: text,
-            history: previousMessages.map(({ role, content }) => ({
+            conversationId: getPierrotConversationId(),
+            sessionId: getPierrotSessionId(),
+            userMessageId: userMessage.id,
+            consent: getPierrotConsent(),
+            context: {
+              pathname,
+              referrer: typeof document !== 'undefined' ? document.referrer : undefined,
+            },
+            history: previousMessages.map(({ role, content, offerId }) => ({
               role,
               content,
+              ...(offerId ? { offerId } : {}),
             })),
           }),
           signal: controller.signal,
@@ -553,12 +615,35 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
 
         if (requestIdRef.current !== requestId) return;
 
+        setPierrotConversationId(data.conversationId);
+
         if (data.admin) setIsAdminSession(true);
+
+        const responseActions = Array.isArray(data.actions)
+          ? data.actions
+              .map((action: unknown) => normalizeAction(action))
+              .filter(
+                (action: PierrotChatAction | null): action is PierrotChatAction => action !== null
+              )
+          : [];
+        const responseLinks = Array.isArray(data.links)
+          ? data.links
+              .map((link: unknown) => normalizeLink(link))
+              .filter(
+                (link: PierrotMessageLink | null): link is PierrotMessageLink => link !== null
+              )
+          : [];
+        const responseCta = normalizePierrotOfferCta(data.cta);
 
         appendMessage({
           role: 'assistant',
           content: data.reply || 'Silence.',
           provider: data.provider,
+          actions: responseActions.length > 0 ? responseActions : undefined,
+          links: responseLinks.length > 0 ? responseLinks : undefined,
+          offerId:
+            responseCta?.offerId ?? (isPierrotOfferId(data.offerId) ? data.offerId : undefined),
+          cta: responseCta ?? undefined,
           meta: { kind: 'chat' },
         });
       } catch (error: unknown) {
@@ -587,11 +672,17 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [appendMessage, draft, executeNavigation, introduceSection]
+    [appendMessage, draft, executeNavigation, introduceSection, pathname]
   );
 
   const runAction = useCallback(
     (action: PierrotChatAction) => {
+      trackPierrotEvent('action_clicked', createPierrotId(), {
+        action_kind: action.kind,
+        ...(action.kind === 'navigate' ? { section_id: action.sectionId } : {}),
+        label_length: action.label.length,
+      });
+
       if (action.kind === 'navigate') {
         navigateToSection(action.sectionId);
         return;
@@ -602,31 +693,57 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     [navigateToSection, sendMessage]
   );
 
-  const clearChat = useCallback(() => {
-    requestIdRef.current += 1;
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    loadingRef.current = false;
+  const clearChat = useCallback(
+    (reason: 'new_chat' | 'user_closed' = 'new_chat') => {
+      endPierrotConversation(reason);
+      rotatePierrotConversationId();
 
-    Object.values(introTimersRef.current).forEach((timer) => window.clearTimeout(timer));
-    introTimersRef.current = {};
+      requestIdRef.current += 1;
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+      loadingRef.current = false;
 
-    setMessages([]);
-    messagesRef.current = [];
-    setDraft('');
-    setDraftCaret(0);
-    thresholdArmedRef.current = true;
-    setIsLoading(false);
-    setIsAdminSession(false);
-    updatePendingNavigation(null);
+      Object.values(introTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+      introTimersRef.current = {};
 
-    try {
-      window.sessionStorage.removeItem(STORAGE_KEY);
-      window.sessionStorage.removeItem(ARRIVAL_STORAGE_KEY);
-    } catch {
-      // Ignore storage errors.
+      setMessages([]);
+      messagesRef.current = [];
+      setDraft('');
+      setDraftCaret(0);
+      thresholdArmedRef.current = true;
+      setIsLoading(false);
+      setIsAdminSession(false);
+      updatePendingNavigation(null);
+
+      try {
+        window.sessionStorage.removeItem(STORAGE_KEY);
+        window.sessionStorage.removeItem(ARRIVAL_STORAGE_KEY);
+      } catch {
+        // Ignore storage errors.
+      }
+    },
+    [updatePendingNavigation]
+  );
+
+  // Conversation history lives in sessionStorage and is shared by every tab
+  // session. When the authenticated identity changes (sign-in, sign-out or a
+  // different account), drop the previous identity's transcript and the
+  // owner-only "Master" badge instead of showing them to the next user.
+  useEffect(() => {
+    if (isAuthLoading) return;
+
+    const userId = authUser?.id ?? null;
+
+    if (lastAuthUserIdRef.current === undefined) {
+      lastAuthUserIdRef.current = userId;
+      return;
     }
-  }, [updatePendingNavigation]);
+
+    if (lastAuthUserIdRef.current === userId) return;
+
+    lastAuthUserIdRef.current = userId;
+    clearChat('user_closed');
+  }, [authUser?.id, clearChat, isAuthLoading]);
 
   useEffect(() => {
     if (!navigationTargetRef.current) return;
@@ -638,9 +755,15 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
-    if (normalizePathname(pathname) !== '/') {
-      setIsHomeMode(false);
-    }
+    setMode((current) => {
+      if (current === 'modal') return 'site';
+
+      if (normalizePathname(pathname) !== '/') {
+        return current === 'inline' || current === 'composer' ? 'site' : current;
+      }
+
+      return current;
+    });
   }, [pathname]);
 
   useEffect(() => {
@@ -713,6 +836,8 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
 
   const value: PierrotContextValue = {
     messages,
+    mode,
+    hasUnread,
     draft,
     draftCaret,
     isOpen,

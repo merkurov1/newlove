@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { usePierrot } from '@/components/pierrot/PierrotContext';
 
 type NavigationItem = {
   href: string;
@@ -83,6 +84,7 @@ function isActiveRoute(pathname: string, href: string) {
 
 export default function TelegramNavigation() {
   const pathname = usePathname() || '';
+  const { mode, hasUnread, toggleConversation } = usePierrot();
   const [isOpen, setIsOpen] = useState(false);
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -128,8 +130,29 @@ export default function TelegramNavigation() {
     };
   }, [isOpen, closeMenu]);
 
+  if (mode !== 'site') {
+    return null;
+  }
+
   return (
     <>
+      <button
+        type="button"
+        onClick={toggleConversation}
+        aria-label={hasUnread ? 'Open Pierrot, new message' : 'Open Pierrot'}
+        title="Pierrot"
+        className="telegram-nav-trigger telegram-pierrot-trigger"
+      >
+        <span className="font-serif text-[15px] font-medium normal-case tracking-normal">P</span>
+        <span className="hidden sm:inline">Pierrot</span>
+        {hasUnread && (
+          <span
+            aria-hidden="true"
+            className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber-300 ring-2 ring-[#141210]"
+          />
+        )}
+      </button>
+
       <button
         ref={triggerRef}
         type="button"

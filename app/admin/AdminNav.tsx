@@ -28,6 +28,12 @@ const groups = [
       { href: "/admin/users", label: "Пользователи & Подписчики", icon: "○" },
     ],
   },
+  {
+    title: "Pierrot",
+    links: [
+      { href: "/admin/pierrot", label: "Pierrot Intelligence", icon: "◐" },
+    ],
+  },
 ];
 
 export default function AdminNav() {

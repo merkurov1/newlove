@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Newsreader, Manrope } from 'next/font/google';
 import PostcardOrderForm from '@/components/heartandangel/PostcardOrderForm';
+import { readPierrotPostcardAttribution } from '@/lib/pierrot/orderAttribution';
 
 const serif = Newsreader({
   subsets: ['latin'],
@@ -40,6 +41,16 @@ export default function CardPageClient() {
   const [postcard, setPostcard] = useState<Postcard | null>(null);
   const [loading, setLoading] = useState(true);
   const [catalogError, setCatalogError] = useState('');
+  const [pierrotAttribution, setPierrotAttribution] = useState<string | null>(null);
+  const [checkoutCancelled, setCheckoutCancelled] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    setPierrotAttribution(readPierrotPostcardAttribution(window.location.search));
+    setCheckoutCancelled(params.get('checkout') === 'cancelled');
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -174,6 +185,16 @@ export default function CardPageClient() {
           </p>
 
           <div className="mt-10 border-t border-[#D9D2C7] pt-8">
+            {checkoutCancelled && (
+              <p
+                role="status"
+                className="mb-8 border border-[#D9D2C7] bg-[#F2EDE5] px-4 py-3 text-sm leading-relaxed text-[#5B544C]"
+              >
+                Payment was cancelled. Nothing has been charged and your order is not confirmed. You can
+                review the details and try again below.
+              </p>
+            )}
+
             {loading ? (
               <div className="space-y-4" aria-busy="true" aria-live="polite">
                 <div className="h-12 animate-pulse bg-[#E7E1D7]" />
@@ -186,7 +207,7 @@ export default function CardPageClient() {
                 {catalogError}
               </p>
             ) : postcard ? (
-              <PostcardOrderForm postcard={postcard} />
+              <PostcardOrderForm postcard={postcard} pierrotAttribution={pierrotAttribution} />
             ) : null}
           </div>
         </div>

@@ -609,6 +609,12 @@ export default function ArtEngineClient() {
                     />
                     <p className="text-[10px] text-gray-400 mt-2 leading-relaxed">
                       Access is restricted to verified art dealers, family offices, museum curators, and financial institutions.
+                      This request is for terminal access only. Advisory, analysis or acquisition work is a separate service inquiry.
+                    </p>
+                    <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
+                      <Link href="/advising" className="underline hover:text-black">
+                        Discuss advisory work instead →
+                      </Link>
                     </p>
                   </div>
 

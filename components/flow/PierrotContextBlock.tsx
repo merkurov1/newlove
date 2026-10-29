@@ -20,7 +20,11 @@ interface Props {
   defaultLang?: string;
 }
 
-export default function PierrotContextBlock({ context, defaultLang = 'ru' }: Props) {
+export default function PierrotContextBlock({ context }: Props) {
+  // Hooks must run on every render, including the "no context" state, so the
+  // order stays stable when the server sends ready content after a null one.
+  const [mode, setMode] = useState<'both' | 'ru' | 'en'>('both');
+
   if (!context || context.status !== 'ready' || !context.content) {
     return null;
   }
@@ -28,25 +32,10 @@ export default function PierrotContextBlock({ context, defaultLang = 'ru' }: Pro
   const parsed = parseBilingualContent(context.content);
   const isBilingual = parsed.isBilingual;
 
-  // Initial view mode: 'both' if bilingual, otherwise 'single'
-  const [mode, setMode] = useState<'both' | 'ru' | 'en'>('both');
-
   const markdownComponents: Components = {
-    p: ({ children }) => (
-      <p className="mb-3 leading-relaxed last:mb-0">
-        {children}
-      </p>
-    ),
-    strong: ({ children }) => (
-      <strong className="font-semibold text-stone-900">
-        {children}
-      </strong>
-    ),
-    em: ({ children }) => (
-      <em className="italic text-stone-700">
-        {children}
-      </em>
-    ),
+    p: ({ children }) => <p className="mb-3 leading-relaxed last:mb-0">{children}</p>,
+    strong: ({ children }) => <strong className="font-semibold text-stone-900">{children}</strong>,
+    em: ({ children }) => <em className="italic text-stone-700">{children}</em>,
   };
 
   return (
@@ -125,10 +114,7 @@ export default function PierrotContextBlock({ context, defaultLang = 'ru' }: Pro
                   <span className="text-stone-400">Русская версия</span>
                 </div>
                 <div className="font-serif text-[15px] sm:text-[16px] font-light leading-[1.8] text-stone-700">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={markdownComponents}
-                  >
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                     {parsed.ru || ''}
                   </ReactMarkdown>
                 </div>
@@ -141,10 +127,7 @@ export default function PierrotContextBlock({ context, defaultLang = 'ru' }: Pro
                   <span className="text-stone-400">English version</span>
                 </div>
                 <div className="font-serif text-[15px] sm:text-[16px] font-light leading-[1.8] text-stone-700">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={markdownComponents}
-                  >
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                     {parsed.en || ''}
                   </ReactMarkdown>
                 </div>
@@ -159,10 +142,7 @@ export default function PierrotContextBlock({ context, defaultLang = 'ru' }: Pro
                 <span className="text-stone-400">Pierrot Editorial</span>
               </div>
               <div className="font-serif text-base sm:text-lg font-light leading-[1.85] text-stone-800">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={markdownComponents}
-                >
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                   {parsed.ru || ''}
                 </ReactMarkdown>
               </div>
@@ -176,10 +156,7 @@ export default function PierrotContextBlock({ context, defaultLang = 'ru' }: Pro
                 <span className="text-stone-400">Pierrot Editorial</span>
               </div>
               <div className="font-serif text-base sm:text-lg font-light leading-[1.85] text-stone-800">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={markdownComponents}
-                >
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                   {parsed.en || ''}
                 </ReactMarkdown>
               </div>
@@ -196,10 +173,7 @@ export default function PierrotContextBlock({ context, defaultLang = 'ru' }: Pro
             <span className="text-stone-400">Pierrot Editorial</span>
           </div>
           <div className="font-serif text-base sm:text-lg font-light leading-[1.85] text-stone-800">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={markdownComponents}
-            >
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
               {parsed.singleText || parsed.ru || parsed.en || ''}
             </ReactMarkdown>
           </div>

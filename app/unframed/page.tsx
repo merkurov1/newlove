@@ -268,9 +268,20 @@ export default function UnframedPage() {
     email: '',
   });
 
+  const [pierrotAttribution, setPierrotAttribution] = useState<string | null>(null);
+
   // --- SCROLL ANIMATION ---
 
   const [scrollY, setScrollY] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const ref = new URLSearchParams(window.location.search).get('pierrot');
+    setPierrotAttribution(
+      ref && /^punf_[A-Za-z0-9_-]{8,64}$/.test(ref) ? ref : null
+    );
+  }, []);
 
   useEffect(() => {
     const onScroll = () =>
@@ -372,6 +383,11 @@ export default function UnframedPage() {
     try {
       const payload = {
         form: formData,
+        ...(pierrotAttribution ? { pierrotAttribution } : {}),
+        requestId:
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : String(Date.now()),
       };
 
       const res = await fetch(
@@ -704,7 +720,11 @@ export default function UnframedPage() {
             {/* 01 — PRIVATE READER */}
 
             <Link
-              href="/unframed/book"
+              href={
+                pierrotAttribution
+                  ? `/unframed/book?pierrot=${encodeURIComponent(pierrotAttribution)}`
+                  : "/unframed/book"
+              }
               className="
                 group
                 relative

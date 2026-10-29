@@ -6,7 +6,20 @@ import { motion } from 'framer-motion';
 import { ArrowUp, ArrowUpRight } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
 import usePrefersReducedMotion from '@/components/pierrot/usePrefersReducedMotion';
-import type { PierrotChatAction, PierrotSectionId } from '@/lib/pierrot/navigation';
+import {
+  createPierrotId,
+  type PierrotChatAction,
+  type PierrotSectionId,
+} from '@/lib/pierrot/navigation';
+import { getPierrotConversationId, trackPierrotEvent } from '@/lib/pierrot/clientTelemetry';
+import {
+  appendPierrotPostcardAttribution,
+  appendPierrotSubscriptionAttribution,
+  appendPierrotUnframedAttribution,
+  createPierrotPostcardRef,
+  createPierrotSubscriptionRef,
+  createPierrotUnframedRef,
+} from '@/lib/pierrot/orderAttribution';
 
 const HOME_CHAT_SECTIONS: Array<{ label: string; sectionId: PierrotSectionId }> = [
   { label: 'Art', sectionId: 'art' },
@@ -195,6 +208,74 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   </div>
                 )}
 
+                {message.cta && (
+                  <div className="mt-3">
+                    {message.cta.kind === 'external' ? (
+                      <a
+                        href={message.cta.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => {
+                          trackPierrotEvent('offer_action_clicked', createPierrotId(), {
+                            offer_id: message.cta!.offerId,
+                            cta_kind: message.cta!.kind,
+                            destination: message.cta!.href,
+                          });
+                          closeConversation();
+                        }}
+                        className="
+                          inline-flex items-center rounded-full bg-[#37332D] px-4 py-2
+                          font-mono text-[10px] uppercase tracking-[0.16em] text-white
+                          transition hover:bg-[#201D1A]
+                        "
+                      >
+                        {message.cta.label}
+                      </a>
+                    ) : (
+                      <Link
+                        href={
+                          message.cta.offerId === 'heart_angel_postcard'
+                            ? appendPierrotPostcardAttribution(
+                                message.cta.href,
+                                createPierrotPostcardRef(getPierrotConversationId())
+                              )
+                            : message.cta.offerId === 'journal_flow'
+                              ? appendPierrotSubscriptionAttribution(
+                                  message.cta.href,
+                                  createPierrotSubscriptionRef(getPierrotConversationId())
+                                )
+                              : message.cta.offerId === 'unframed'
+                                ? appendPierrotUnframedAttribution(
+                                    message.cta.href,
+                                    createPierrotUnframedRef(getPierrotConversationId())
+                                  )
+                                : message.cta.href
+                        }
+                        onClick={() => {
+                          trackPierrotEvent('offer_action_clicked', createPierrotId(), {
+                            offer_id: message.cta!.offerId,
+                            cta_kind: message.cta!.kind,
+                            destination: message.cta!.href,
+                          });
+                          if (message.cta!.offerId === 'journal_flow') {
+                            trackPierrotEvent('subscribe_cta_clicked', createPierrotId(), {
+                              offer_id: 'journal_flow',
+                            });
+                          }
+                          closeConversation();
+                        }}
+                        className="
+                          inline-flex items-center rounded-full bg-[#37332D] px-4 py-2
+                          font-mono text-[10px] uppercase tracking-[0.16em] text-white
+                          transition hover:bg-[#201D1A]
+                        "
+                      >
+                        {message.cta.label}
+                      </Link>
+                    )}
+                  </div>
+                )}
+
                 {message.links && message.links.length > 0 && (
                   <nav
                     aria-label="Pierrot navigation"
@@ -203,7 +284,14 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                     {message.links.map((link) => (
                       <Link
                         key={link.href}
-                        href={link.href}
+                        href={
+                          link.href.startsWith('/unframed')
+                            ? appendPierrotUnframedAttribution(
+                                link.href,
+                                createPierrotUnframedRef(getPierrotConversationId())
+                              )
+                            : link.href
+                        }
                         onClick={closeConversation}
                         className="
                           inline-flex items-center rounded-full

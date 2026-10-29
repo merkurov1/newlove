@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import useIsTelegram from '@/components/useIsTelegram';
 import TelegramNavigation from '@/components/telegram/TelegramNavigation';
+import { usePierrot } from '@/components/pierrot/PierrotContext';
 
 const RITUAL_ROUTES = [
   '/temple',
@@ -123,6 +124,7 @@ export default function TelegramMiniApp() {
   const pathname = usePathname() || '';
   const router = useRouter();
   const isTelegram = useIsTelegram();
+  const { mode, closeConversation } = usePierrot();
 
   useEffect(() => {
     const ritual = isRitualRoute(pathname);
@@ -231,8 +233,14 @@ export default function TelegramMiniApp() {
     if (!backButton) return;
 
     const isEntryRoute = pathname === '/' || pathname === WORLD_ROUTE;
+    const isConversationOpen = mode !== 'site';
 
     const handleBack = () => {
+      if (isConversationOpen) {
+        closeConversation();
+        return;
+      }
+
       if (typeof window !== 'undefined' && window.history.length > 1) {
         router.back();
         return;
@@ -242,7 +250,7 @@ export default function TelegramMiniApp() {
     };
 
     try {
-      if (isEntryRoute) {
+      if (isEntryRoute && !isConversationOpen) {
         backButton.hide?.();
       } else {
         backButton.show?.();
@@ -261,7 +269,7 @@ export default function TelegramMiniApp() {
         /* Telegram BackButton is optional. */
       }
     };
-  }, [isTelegram, pathname, router]);
+  }, [closeConversation, isTelegram, mode, pathname, router]);
 
   if (!isTelegram) return null;
 

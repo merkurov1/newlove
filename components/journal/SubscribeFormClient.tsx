@@ -13,11 +13,20 @@ export default function SubscribeFormClient({ defaultLanguage }: SubscribeFormCl
   const [email, setEmail] = useState('');
   const [language, setLanguage] = useState<'ru' | 'en'>(defaultLanguage || 'ru');
   const [ok, setOk] = useState(false);
+  const [successKind, setSuccessKind] = useState<'pending' | 'already'>('pending');
+  const [pierrotAttribution, setPierrotAttribution] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   
   // Автоматически выводим точный тип рефа из компонента AuthLoginModal
   const modalRef = useRef<ElementRef<typeof AuthLoginModal>>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const ref = new URLSearchParams(window.location.search).get('pierrot');
+    setPierrotAttribution(ref && /^psub_[A-Za-z0-9_-]{8,64}$/.test(ref) ? ref : null);
+  }, []);
 
   // Автоматическое определение языка браузера, если defaultLanguage не задан явно
   useEffect(() => {
@@ -47,6 +56,7 @@ export default function SubscribeFormClient({ defaultLanguage }: SubscribeFormCl
           email: trimmedEmail,
           language,
           userId: session?.user?.id || null,
+          ...(pierrotAttribution ? { pierrotAttribution } : {}),
         }),
       });
 
@@ -56,6 +66,7 @@ export default function SubscribeFormClient({ defaultLanguage }: SubscribeFormCl
         throw new Error(data.error || (language === 'ru' ? 'Ошибка при оформлении подписки' : 'Subscription failed'));
       }
 
+      setSuccessKind(data.status === 'already_confirmed' ? 'already' : 'pending');
       setOk(true);
       setEmail('');
     } catch (err: any) {
@@ -69,6 +80,7 @@ export default function SubscribeFormClient({ defaultLanguage }: SubscribeFormCl
 
   function handleReset() {
     setOk(false);
+    setSuccessKind('pending');
     setErrorMsg('');
   }
 
@@ -110,14 +122,22 @@ export default function SubscribeFormClient({ defaultLanguage }: SubscribeFormCl
         {ok ? (
           <div className="py-4 text-center space-y-2">
             <p className="text-base font-medium text-emerald-600 dark:text-emerald-400">
-              {language === 'ru'
-                ? 'Спасибо! Выпуск придет на ваш email.'
-                : 'Thank you! You are now subscribed.'}
+              {successKind === 'already'
+                ? language === 'ru'
+                  ? 'Этот email уже подтверждён.'
+                  : 'This email is already confirmed.'
+                : language === 'ru'
+                  ? 'Проверьте почту, чтобы подтвердить подписку.'
+                  : 'Check your inbox to confirm the subscription.'}
             </p>
             <p className="text-xs text-neutral-500">
-              {language === 'ru'
-                ? 'Проверьте почту для подтверждения.'
-                : 'Check your inbox for confirmation.'}
+              {successKind === 'already'
+                ? language === 'ru'
+                  ? 'Подписка уже активна.'
+                  : 'The subscription is already active.'
+                : language === 'ru'
+                  ? 'Пока вы не подтвердите письмо, подписка не активна.'
+                  : 'The subscription is not active until you confirm the email.'}
             </p>
             <button
               type="button"

@@ -60,6 +60,12 @@ function TogglePierrotButton() {
   );
 }
 
+function UnreadStatus() {
+  const { hasUnread } = usePierrot();
+
+  return <span data-testid="unread-status">{hasUnread ? 'unread' : 'read'}</span>;
+}
+
 function renderApp() {
   return render(
     <PierrotProvider>
@@ -67,6 +73,7 @@ function renderApp() {
       <PierrotChat />
       <OpenChatButton />
       <TogglePierrotButton />
+      <UnreadStatus />
     </PierrotProvider>
   );
 }
@@ -78,6 +85,7 @@ function renderLobbyApp() {
       <PierrotChat />
       <OpenChatButton />
       <TogglePierrotButton />
+      <UnreadStatus />
     </PierrotProvider>
   );
 }
@@ -85,6 +93,12 @@ function renderLobbyApp() {
 async function openArtIntro() {
   fireEvent.click(screen.getByRole('link', { name: 'Art' }));
   return screen.findByText(/Art is where the site becomes something other than a portfolio\./);
+}
+
+function chatFetchCalls() {
+  return fetchMock.mock.calls.filter(
+    ([url]) => typeof url === 'string' && url.includes('/api/pierrot-web')
+  );
 }
 
 describe('Pierrot conversational navigation', () => {
@@ -101,6 +115,7 @@ describe('Pierrot conversational navigation', () => {
     global.fetch = fetchMock as unknown as typeof fetch;
 
     window.sessionStorage.clear();
+    window.localStorage.clear();
   });
 
   it('toggles the homepage into Pierrot mode with the P control', async () => {
@@ -160,11 +175,11 @@ describe('Pierrot conversational navigation', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(chatFetchCalls()).toHaveLength(1);
     });
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(fetchMock.mock.calls[0][1].body).toContain('"message":"hello"');
+    expect(chatFetchCalls()[0][1].body).toContain('"message":"hello"');
   });
 
   it('opens Art as a conversation and inserts its curated intro once', async () => {
@@ -185,7 +200,7 @@ describe('Pierrot conversational navigation', () => {
       screen.getAllByText(/Art is where the site becomes something other than a portfolio\./)
     ).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Enter Art' })).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(chatFetchCalls()).toHaveLength(0);
   });
 
   it('navigates to Art from the action and delivers the arrival message once', async () => {
@@ -244,6 +259,42 @@ describe('Pierrot conversational navigation', () => {
     });
   });
 
+  it('marks an arrival message as unread until the conversation opens', async () => {
+    const view = renderApp();
+
+    window.sessionStorage.setItem(
+      'pierrot_navigation_arrival_v1',
+      JSON.stringify({
+        id: 'nav-unread',
+        sectionId: 'art',
+        route: '/heartandangel',
+        arrivalDelivered: false,
+        createdAt: Date.now(),
+      })
+    );
+
+    currentPathname = '/heartandangel';
+    view.rerender(
+      <PierrotProvider>
+        <HomeClient />
+        <PierrotChat />
+        <OpenChatButton />
+        <TogglePierrotButton />
+        <UnreadStatus />
+      </PierrotProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('unread-status')).toHaveTextContent('unread');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('unread-status')).toHaveTextContent('read');
+    });
+  });
+
   it('closes the conversation without navigating and preserves the draft', async () => {
     currentPathname = '/lobby';
     renderApp();
@@ -281,7 +332,7 @@ describe('Pierrot conversational navigation', () => {
     fireEvent.keyDown(modalInput, { key: 'Enter' });
 
     expect(pushMock).toHaveBeenCalledWith('/heartandangel');
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(chatFetchCalls()).toHaveLength(0);
   });
 
   it('does not navigate on a standalone yes or on a follow-up question', async () => {
@@ -296,7 +347,7 @@ describe('Pierrot conversational navigation', () => {
     fireEvent.keyDown(composerInput, { key: 'Enter' });
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(chatFetchCalls()).toHaveLength(1);
     });
     expect(pushMock).not.toHaveBeenCalled();
 
@@ -317,7 +368,7 @@ describe('Pierrot conversational navigation', () => {
     fireEvent.keyDown(modalInput, { key: 'Enter' });
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(chatFetchCalls()).toHaveLength(1);
     });
     expect(pushMock).not.toHaveBeenCalled();
   });
@@ -375,7 +426,7 @@ describe('Pierrot conversational navigation', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Selection' }));
 
     expect(await within(dialog).findByText(/Selection is the vault/)).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(chatFetchCalls()).toHaveLength(0);
   });
 
   it('opens the Heritage scenario from the Lobby page', async () => {

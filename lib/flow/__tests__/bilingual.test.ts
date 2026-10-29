@@ -1,5 +1,4 @@
 import assert from 'node:assert';
-import { test } from 'node:test';
 import { parseBilingualContent } from '../bilingual';
 
 test('parseBilingualContent parses [RU] and [EN] tags', () => {
@@ -24,7 +23,10 @@ test('parseBilingualContent parses EN first then RU tags', () => {
   const result = parseBilingualContent(text);
   assert.strictEqual(result.isBilingual, true);
   assert.strictEqual(result.en, 'Global liquidity flows into scarce historical narratives.');
-  assert.strictEqual(result.ru, 'Глобальная ликвидность перетекает в редкие исторические нарративы.');
+  assert.strictEqual(
+    result.ru,
+    'Глобальная ликвидность перетекает в редкие исторические нарративы.'
+  );
 });
 
 test('parseBilingualContent parses divider-separated text without explicit tags', () => {
@@ -35,7 +37,10 @@ test('parseBilingualContent parses divider-separated text without explicit tags'
   `;
   const result = parseBilingualContent(text);
   assert.strictEqual(result.isBilingual, true);
-  assert.strictEqual(result.ru, 'Цифровое наследие сохраняет ценность в эпоху алгоритмического шума.');
+  assert.strictEqual(
+    result.ru,
+    'Цифровое наследие сохраняет ценность в эпоху алгоритмического шума.'
+  );
   assert.strictEqual(result.en, 'Digital heritage preserves value in an era of algorithmic noise.');
 });
 

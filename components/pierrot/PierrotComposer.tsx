@@ -12,6 +12,7 @@ export default function PierrotComposer() {
     draft,
     isComposerOpen,
     expandThreshold,
+    hasUnread,
     openChat,
     toggleComposer,
     updateDraft,
@@ -69,7 +70,6 @@ export default function PierrotComposer() {
           onClick={toggleComposer}
           aria-label="Show Pierrot composer"
           aria-expanded={false}
-          aria-controls={COMPOSER_ID}
           title="Ask Pierrot"
           style={{
             bottom: isTelegram ? `calc(${safeBottom} + 56px)` : safeBottom,
@@ -87,6 +87,12 @@ export default function PierrotComposer() {
           "
         >
           P
+          {hasUnread && (
+            <span
+              aria-hidden="true"
+              className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-[#8CA18A] ring-2 ring-[#FAF8F5]"
+            />
+          )}
         </button>
       )}
 

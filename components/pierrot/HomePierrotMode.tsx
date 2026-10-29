@@ -4,6 +4,7 @@ import React from 'react';
 import useIsTelegram from '@/components/useIsTelegram';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
 import { PierrotInput, PierrotMessageList } from '@/components/pierrot/PierrotConversation';
+import PierrotDataNotice from '@/components/pierrot/PierrotDataNotice';
 import useKeyboardViewportHeight from '@/components/pierrot/useKeyboardViewportHeight';
 
 export default function HomePierrotMode() {
@@ -40,6 +41,7 @@ export default function HomePierrotMode() {
             pb-[max(1rem,env(safe-area-inset-bottom),var(--tg-safe-area-bottom,0px))]
           "
         >
+          <PierrotDataNotice className="mb-2 px-1" />
           <PierrotInput />
         </div>
       </div>

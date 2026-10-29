@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
+import { normalizePierrotPostcardRef } from '@/lib/pierrot/orderAttribution';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +24,8 @@ const OrderSchema = z.object({
   phone: z.string().trim().max(30).optional().default(''),
   email: z.string().trim().email().max(254),
   customMessage: z.string().max(500).optional().default(''),
+  // Opaque attribution only. Never a price, status or trusted order field.
+  pierrotAttribution: z.string().max(80).optional(),
 });
 
 export async function POST(request: Request) {
@@ -66,7 +69,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!postcard) {
+    if (!postcard || postcard.available === false) {
       return NextResponse.json(
         { error: 'This postcard is currently unavailable.' },
         { status: 404 },
@@ -88,6 +91,7 @@ export async function POST(request: Request) {
     ).replace(/\/$/, '');
 
     const orderId = randomUUID();
+    const pierrotAttribution = normalizePierrotPostcardRef(body.pierrotAttribution);
     const fullAddress = [body.streetAddress, body.addressLine2]
       .filter(Boolean)
       .join(', ');
@@ -144,11 +148,12 @@ export async function POST(request: Request) {
           ],
           success_url:
             `${baseUrl}/heartandangel/card/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${baseUrl}/heartandangel/card#order`,
+          cancel_url: `${baseUrl}/heartandangel/card?checkout=cancelled#order`,
           metadata: {
             type: 'postcard_v1',
             orderId,
             postcardId: postcard.id,
+            ...(pierrotAttribution ? { pierrotAttribution } : {}),
           },
           billing_address_collection: 'required',
         },
