@@ -9,8 +9,10 @@ import {
   OPENROUTER_EMBEDDINGS_ENDPOINT,
   UNFRAMED_EMBEDDING_BATCH_SIZE,
   UNFRAMED_EMBEDDING_TIMEOUT_MS,
-  type RagEnvironment,
+  isSupportedEmbeddingResponseModel,
   resolveUnframedEmbeddingConfig,
+  resolveUnframedEmbeddingProvider,
+  type RagEnvironment,
 } from './config';
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -25,6 +27,7 @@ export type OpenRouterEmbeddingOptions = {
   apiKey: string;
   modelId: string;
   dimensions: number;
+  provider?: string | null;
   fetchImpl?: FetchLike;
   endpoint?: string;
   timeoutMs?: number;
@@ -54,9 +57,10 @@ function parseEmbeddingResponse(
 
   const actualModel = typeof record.model === 'string' ? record.model.trim() : 'unknown';
 
-  // OpenRouter currently returns the BGE model id as `BAAI/bge-m3` while its
-  // catalogue/request id is `baai/bge-m3`. Model identity is case-insensitive.
-  if (actualModel.toLowerCase() !== expectedModel.trim().toLowerCase()) {
+  // OpenRouter may return the canonical model id or a provider-prefixed alias
+  // for the same underlying model (for example `parasail-bge-m3`). Unknown
+  // models are still rejected.
+  if (!isSupportedEmbeddingResponseModel(actualModel)) {
     throw new EmbeddingModelMismatchError(expectedModel, actualModel);
   }
 
@@ -121,6 +125,7 @@ export function createOpenRouterEmbeddingClient(
   const apiKey = options.apiKey.trim();
   const modelId = options.modelId.trim();
   const dimensions = options.dimensions;
+  const provider = options.provider?.trim().toLowerCase() || null;
   const fetchImpl = options.fetchImpl ?? fetch;
   const endpoint = options.endpoint ?? OPENROUTER_EMBEDDINGS_ENDPOINT;
   const timeoutMs = options.timeoutMs ?? UNFRAMED_EMBEDDING_TIMEOUT_MS;
@@ -130,6 +135,9 @@ export function createOpenRouterEmbeddingClient(
   if (!modelId) throw new RagConfigurationError('embedding_model_missing');
   if (!Number.isInteger(dimensions) || dimensions < 1) {
     throw new RagConfigurationError('embedding_dimensions_invalid');
+  }
+  if (provider && !/^[a-z0-9][a-z0-9._-]{1,63}$/.test(provider)) {
+    throw new RagConfigurationError('embedding_provider_invalid');
   }
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 256) {
     throw new RagConfigurationError('embedding_batch_size_invalid');
@@ -158,6 +166,14 @@ export function createOpenRouterEmbeddingClient(
           model: modelId,
           input: texts,
           encoding_format: 'float',
+          ...(provider
+            ? {
+                provider: {
+                  order: [provider],
+                  allow_fallbacks: false,
+                },
+              }
+            : {}),
         }),
         signal: controller.signal,
         cache: 'no-store',
@@ -231,6 +247,7 @@ export function createOpenRouterEmbeddingClientFromEnv(
     apiKey,
     modelId: config.modelId,
     dimensions: config.dimensions,
+    provider: resolveUnframedEmbeddingProvider(env),
     fetchImpl,
   });
 }

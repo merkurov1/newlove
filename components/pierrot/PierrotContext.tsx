@@ -35,6 +35,10 @@ import {
   type PierrotOfferCta,
   type PierrotOfferId,
 } from '@/lib/pierrot/offers';
+import type {
+  PierrotCommercialMarker,
+  PierrotCommercialMarkerAction,
+} from '@/lib/pierrot/strategy';
 
 export type PierrotMessageKind = 'chat' | 'section-trigger' | 'section-intro' | 'arrival';
 
@@ -55,6 +59,7 @@ export type PierrotMessage = {
   links?: PierrotMessageLink[];
   offerId?: PierrotOfferId;
   cta?: PierrotOfferCta;
+  commercialMarker?: PierrotCommercialMarker;
   meta?: PierrotMessageMeta;
 };
 
@@ -162,6 +167,28 @@ function normalizeMeta(value: unknown): PierrotMessageMeta | undefined {
   };
 }
 
+function normalizeCommercialMarker(value: unknown): PierrotCommercialMarker | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+
+  const marker = value as Record<string, unknown>;
+  const actions: PierrotCommercialMarkerAction[] = [
+    'introduced',
+    'objection',
+    'declined',
+    'purchased',
+    'subscribed',
+  ];
+
+  if (!isPierrotOfferId(marker.offerId)) return undefined;
+  if (typeof marker.action !== 'string') return undefined;
+  if (!(actions as string[]).includes(marker.action)) return undefined;
+
+  return {
+    offerId: marker.offerId,
+    action: marker.action as PierrotCommercialMarkerAction,
+  };
+}
+
 function normalizeMessage(value: unknown, index: number): PierrotMessage | null {
   if (!value || typeof value !== 'object') return null;
 
@@ -197,6 +224,7 @@ function normalizeMessage(value: unknown, index: number): PierrotMessage | null 
     links: links.length > 0 ? links : undefined,
     offerId,
     cta: cta ?? undefined,
+    commercialMarker: normalizeCommercialMarker(message.commercialMarker ?? message.commercial),
     meta: normalizeMeta(message.meta),
   };
 }
@@ -569,10 +597,11 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
               pathname,
               referrer: typeof document !== 'undefined' ? document.referrer : undefined,
             },
-            history: previousMessages.map(({ role, content, offerId }) => ({
+            history: previousMessages.map(({ role, content, offerId, commercialMarker }) => ({
               role,
               content,
               ...(offerId ? { offerId } : {}),
+              ...(commercialMarker ? { commercialMarker } : {}),
             })),
           }),
           signal: controller.signal,
@@ -588,7 +617,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
 
         setPierrotConversationId(data.conversationId);
 
-        if (data.admin) setIsAdminSession(true);
+        setIsAdminSession(data.admin === true);
 
         const responseActions = Array.isArray(data.actions)
           ? data.actions
@@ -605,6 +634,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
               )
           : [];
         const responseCta = normalizePierrotOfferCta(data.cta);
+        const responseMarker = normalizeCommercialMarker(data.commercialMarker);
 
         appendMessage({
           role: 'assistant',
@@ -615,6 +645,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
           offerId:
             responseCta?.offerId ?? (isPierrotOfferId(data.offerId) ? data.offerId : undefined),
           cta: responseCta ?? undefined,
+          commercialMarker: responseMarker,
           meta: { kind: 'chat' },
         });
       } catch (error: unknown) {

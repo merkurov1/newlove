@@ -21,7 +21,7 @@
 | Manifest hash    | `78f704b33c900897256a7e9a3b6263c3d7114783ae184326be0301d32f0624d2` |
 | C4 question hash | `d65b319474378ebc2f0f71ba946f11a4fdbf93417b1c53d05288834eb816d167` |
 | C4 protocol hash | `d2dba136d553ddb959880bc315d4b886474f3559899dadfd171e60574d4541b8` |
-| Knowledge tests  | 7 suites, 85 tests passed                                          |
+| Knowledge tests  | 7 suites, 90 tests passed                                          |
 | Type check       | `npx tsc --noEmit` — 0 errors                                      |
 
 The existing parser, chunker, C4 fixture, C4 protocol and C4 evaluator were reused without modification.
@@ -67,7 +67,13 @@ The client requires:
 - `data` length equal to the input batch length;
 - contiguous `index` values from `0` to `n-1`;
 - a finite numeric vector of exactly **1024** dimensions;
-- a response `model` exactly equal to `baai/bge-m3`.
+- a response `model` equal to `baai/bge-m3` or a verified provider alias
+  (`parasail-bge-m3`, `deepinfra-bge-m3`, case-insensitive); unknown models are rejected.
+
+OpenRouter may route the same model through different providers and return a
+provider-prefixed model id. The canonical `baai/bge-m3` id is persisted;
+optional `UNFRAMED_EMBEDDING_PROVIDER` pins one provider with fallbacks disabled
+for consistent vectors across ingestion and query time.
 
 Any mismatch fails closed. No response body is logged.
 
@@ -438,9 +444,9 @@ Results:
 
 | Check                     | Result                                                                                             |
 | ------------------------- | -------------------------------------------------------------------------------------------------- |
-| RAG suite                 | 25 tests passed                                                                                    |
-| All knowledge suites      | 7 suites, 85 tests passed                                                                          |
-| Repository-wide Jest      | 70 suites, 469 tests passed (`--forceExit`; Jest reported open handles and did not exit by itself) |
+| RAG suite                 | 30 tests passed                                                                                    |
+| All knowledge suites      | 7 suites, 90 tests passed                                                                          |
+| Repository-wide Jest      | 72 suites, 495 tests passed (`--forceExit`; Jest reported open handles and did not exit by itself) |
 | TypeScript                | 0 errors                                                                                           |
 | Ingestion dry run         | 169 chunks, 6 batches, no external call                                                            |
 | Evaluation blocked report | Frozen hashes verified; no paid call                                                               |

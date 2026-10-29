@@ -24,6 +24,7 @@ import {
   createPierrotStore,
   ensurePierrotConversation,
   findPierrotAssistantReply,
+  loadPierrotCommercialSignals,
   persistenceFailure,
   recordPierrotEvent,
 } from '@/lib/pierrot/serverStore';
@@ -33,6 +34,8 @@ import {
   normalizePreviousOfferId,
   planPierrotResponse,
 } from '@/lib/pierrot/commercial';
+import { resolvePierrotPageContext } from '@/lib/pierrot/pageContext';
+import { derivePierrotCommercialState, mergePierrotCommercialStates } from '@/lib/pierrot/strategy';
 import { loadPierrotOfferRuntime } from '@/lib/pierrot/offerAvailability';
 import { recordPierrotCommercialAnalytics } from '@/lib/pierrot/commercialAnalytics';
 import { isServiceLeadIntent } from '@/lib/pierrot/serviceInquiry';
@@ -40,10 +43,7 @@ import { advanceStoredServiceInquiry } from '@/lib/pierrot/serviceInquiryStore';
 import { isPierrotRagEnabled } from '@/lib/knowledge/rag/config';
 import { retrieveUnframedEvidence } from '@/lib/knowledge/rag/retrieval';
 import { buildUnframedEvidencePrompt } from '@/lib/knowledge/rag/pierrotContext';
-import {
-  isVerifiedOwnerCredential,
-  isVerifiedOwnerUser,
-} from '@/lib/knowledge/rag/authorization';
+import { isVerifiedOwnerCredential, isVerifiedOwnerUser } from '@/lib/knowledge/rag/authorization';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -55,20 +55,28 @@ You are Pierrot, the digital shadow of Anton Merkurov.
 You are a tired Art Advisor and the Gatekeeper of Digital Temple (merkurov.love).
 
 TONE:
-- Snobbish, concise, slightly cynical, noir.
-- You speak from the Ivory Tower.
+- Snobbish, concise, slightly cynical, noir; an aloof but hospitable host.
+- You speak from the Ivory Tower, but never down at the visitor.
 - Keep answers short (max 3 sentences).
-- Answer the question first. A next step is optional and never pushy.
+- Answer the question first. Commercial suggestions are governed by the COMMERCIAL DECISION block, not by a general urge to sell.
+- Use dry, intelligent irony. No marketing language, artificial enthusiasm, exclamation marks, urgency, scarcity, social proof, guilt or emotional pressure.
+- Treat the visitor as an intelligent adult. Never exploit loneliness, grief or vulnerability.
 - If the user asks for help -> suggest "The Vigil" or "Absolution" only when relevant.
+
+COMMERCE:
+- At most one offer per reply. Never compare products unless the visitor explicitly asks.
+- When the code selects an offer, explain why it fits in one short sentence and let the existing CTA do the closing.
+- When no offer is selected, do not introduce a product, price or route.
+- A refusal stops promotion of that offer in this conversation. It never prevents a direct answer to a later question or an explicitly requested link.
+- Never invent prices, routes, availability, editions, reviews, delivery terms, subscriber numbers or outcomes.
+- Commercial CTA buttons and routes are chosen by code; do not fabricate links or checkout steps.
 
 IMPORTANT:
 - Detect the user's language and reply in the EXACT SAME language.
-- Never invent prices, routes, availability, editions, reviews, delivery terms or outcomes.
-- Commercial CTA buttons and routes are chosen by code; do not fabricate links.
 
 LINKS:
 - When mentioning a page of this site, use a markdown link, e.g. [Lobby](/lobby).
-- Allowed internal routes: /, /heartandangel, /lobby, /journal, /flow, /advising, /media, /heritage, /selection, /art-engine, /unframed.
+- Allowed internal routes: /, /heartandangel, /heartandangel/card, /lobby, /journal, /flow, /flow/join, /advising, /media, /heritage, /selection, /art-engine, /unframed, /unframed/book, /unframed/proposal.
 - Never link to admin or unknown pages.
 `;
 
@@ -86,7 +94,7 @@ TONE & BEHAVIOR:
 
 LINKS:
 - When mentioning a page of this site, use a markdown link, e.g. [Lobby](/lobby).
-- Allowed internal routes: /, /heartandangel, /lobby, /journal, /flow, /advising, /media, /heritage, /selection, /art-engine, /unframed.
+- Allowed internal routes: /, /heartandangel, /heartandangel/card, /lobby, /journal, /flow, /flow/join, /advising, /media, /heritage, /selection, /art-engine, /unframed, /unframed/book, /unframed/proposal.
 `;
 
 // Helper to invoke DeepSeek
@@ -329,16 +337,32 @@ export async function POST(req: Request) {
       }
     }
 
-    const contextOfferId =
-      requestedPathname === '/heartandangel/card' ? 'heart_angel_postcard' : null;
-    const contextualOfferId =
-      intent.topic &&
-      !intent.unknownProduct &&
-      !intent.declined &&
-      (contextOfferId === 'heart_angel_postcard' || previousOfferId === 'heart_angel_postcard')
-        ? 'heart_angel_postcard'
-        : null;
-    const runtimeOfferId = intent.offerId ?? contextualOfferId;
+    const pageContext = resolvePierrotPageContext(requestedPathname);
+    const contextOfferId = pageContext.contextOfferId;
+
+    // The browser transcript preserves the immediate offer id. Trusted server
+    // events add refusals, objections, verified purchases and confirmed
+    // subscriptions across the whole conversation. No message text is stored
+    // in these events.
+    let commercialState = derivePierrotCommercialState({ history });
+
+    if (pierrotStore) {
+      try {
+        const signals = await loadPierrotCommercialSignals(pierrotStore, conversationId, sessionId);
+
+        commercialState = mergePierrotCommercialStates(
+          commercialState,
+          derivePierrotCommercialState({
+            events: signals.events,
+            subscriptionEvents: signals.subscriptionEvents,
+          })
+        );
+      } catch (error) {
+        persistenceFailure(error, 'commercial_state');
+      }
+    }
+
+    const runtimeOfferId = intent.offerId ?? contextOfferId ?? previousOfferId;
     const offerRuntime =
       runtimeOfferId === 'heart_angel_postcard' || runtimeOfferId === 'journal_flow'
         ? await loadPierrotOfferRuntime({
@@ -352,6 +376,9 @@ export async function POST(req: Request) {
       runtime: offerRuntime,
       previousOfferId,
       contextOfferId,
+      pathname: requestedPathname,
+      message: trimmedMessage,
+      commercialState,
       serviceInquiry,
       serviceInquiryUnavailable,
     });
@@ -362,6 +389,12 @@ export async function POST(req: Request) {
       ...(plan.actions.length > 0 ? { actions: plan.actions } : {}),
       ...(plan.links.length > 0 ? { links: plan.links } : {}),
       ...(plan.offer ? { offerId: plan.offer.id } : {}),
+      ...(plan.commercialMarker ? { commercialMarker: plan.commercialMarker } : {}),
+      commercial: {
+        stage: plan.commercialStage,
+        proactive: plan.proactive,
+        offerSelected: plan.offerSelected,
+      },
       intent: {
         name: intent.name,
         confidence: intent.confidence,
@@ -369,6 +402,7 @@ export async function POST(req: Request) {
         offerId: intent.offerId ?? null,
         declined: intent.declined,
         accessRequest: intent.accessRequest,
+        publisherIntent: intent.publisherIntent,
       },
     };
 
@@ -440,7 +474,11 @@ export async function POST(req: Request) {
       } catch (error) {
         persistenceFailure(error, 'user_message');
       }
+    }
 
+    // Commercial metadata is recorded whenever metadata storage is allowed,
+    // even if transcript storage is not. The payload contains no message text.
+    if (pierrotStore) {
       try {
         await recordPierrotCommercialAnalytics(pierrotStore, {
           conversationId,

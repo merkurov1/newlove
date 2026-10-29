@@ -11,7 +11,9 @@ import type { C4Question } from '../../evaluation/c4/types';
 import { isVerifiedOwnerCredential, isVerifiedOwnerUser } from '../authorization';
 import {
   isPierrotRagEnabled,
+  isSupportedEmbeddingResponseModel,
   resolveUnframedEmbeddingConfig,
+  resolveUnframedEmbeddingProvider,
   resolveUnframedRagThreshold,
   UNFRAMED_EMBEDDING_DIMENSIONS,
   UNFRAMED_EMBEDDING_MODEL,
@@ -180,6 +182,24 @@ describe('RAG configuration', () => {
       'rag_configuration'
     );
   });
+
+  it('accepts verified provider aliases but rejects unknown models', () => {
+    expect(isSupportedEmbeddingResponseModel('baai/bge-m3')).toBe(true);
+    expect(isSupportedEmbeddingResponseModel('BAAI/bge-m3')).toBe(true);
+    expect(isSupportedEmbeddingResponseModel('parasail-bge-m3')).toBe(true);
+    expect(isSupportedEmbeddingResponseModel('deepinfra-bge-m3')).toBe(true);
+    expect(isSupportedEmbeddingResponseModel('openai/text-embedding-3-small')).toBe(false);
+  });
+
+  it('validates an optional provider pin', () => {
+    expect(resolveUnframedEmbeddingProvider({})).toBeNull();
+    expect(resolveUnframedEmbeddingProvider({ UNFRAMED_EMBEDDING_PROVIDER: 'DeepInfra' })).toBe(
+      'deepinfra'
+    );
+    expect(() =>
+      resolveUnframedEmbeddingProvider({ UNFRAMED_EMBEDDING_PROVIDER: 'bad/provider' })
+    ).toThrow('rag_configuration');
+  });
 });
 
 describe('OpenRouter embedding client', () => {
@@ -208,6 +228,41 @@ describe('OpenRouter embedding client', () => {
     expect(calls[0].authorization).toBe('Bearer test-key');
     expect(calls[0].body.model).toBe(UNFRAMED_EMBEDDING_MODEL);
     expect(calls[0].body.encoding_format).toBe('float');
+  });
+
+  it('accepts provider-prefixed model aliases while keeping the canonical id', async () => {
+    for (const model of ['parasail-bge-m3', 'deepinfra-bge-m3', 'BAAI/bge-m3']) {
+      const client = createOpenRouterEmbeddingClient({
+        apiKey: 'test-key',
+        modelId: UNFRAMED_EMBEDDING_MODEL,
+        dimensions: UNFRAMED_EMBEDDING_DIMENSIONS,
+        fetchImpl: async () => response(embeddingResponse(1, model)),
+      });
+
+      await expect(client.embed(['a'])).resolves.toHaveLength(1);
+      expect(client.modelId).toBe(UNFRAMED_EMBEDDING_MODEL);
+    }
+  });
+
+  it('can pin a single provider with fallbacks disabled', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const client = createOpenRouterEmbeddingClient({
+      apiKey: 'test-key',
+      modelId: UNFRAMED_EMBEDDING_MODEL,
+      dimensions: UNFRAMED_EMBEDDING_DIMENSIONS,
+      provider: 'deepinfra',
+      fetchImpl: async (_url: string, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+        return response(embeddingResponse(1));
+      },
+    });
+
+    await client.embed(['a']);
+
+    expect(bodies[0].provider).toEqual({
+      order: ['deepinfra'],
+      allow_fallbacks: false,
+    });
   });
 
   it('fails on a dimension mismatch without echoing input text', async () => {

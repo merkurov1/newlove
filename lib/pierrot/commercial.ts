@@ -16,6 +16,15 @@ import {
 } from '@/lib/pierrot/offers';
 import type { PierrotIntent } from '@/lib/pierrot/intents';
 import type { PierrotOfferRuntime } from '@/lib/pierrot/offerAvailability';
+import { resolvePierrotPageContext } from '@/lib/pierrot/pageContext';
+import {
+  commercialStageForIntent,
+  emptyPierrotCommercialState,
+  selectProactivePierrotOffer,
+  type PierrotCommercialMarker,
+  type PierrotCommercialStage,
+  type PierrotCommercialState,
+} from '@/lib/pierrot/strategy';
 import { renderServiceInquiry, type ServiceInquiryState } from '@/lib/pierrot/serviceInquiry';
 
 export type PierrotPlanMode =
@@ -34,6 +43,18 @@ export type PierrotCommercialPlan = {
   ctaShown: boolean;
   commercialDeclined: boolean;
   offerUnavailable: boolean;
+  commercialStage: PierrotCommercialStage;
+  /** A planner-selected offer, before any CTA or prose is rendered. */
+  offerSelected: boolean;
+  proactive: boolean;
+  /** The reason this offer was selected; used by the model prompt only. */
+  commercialReason?: string | null;
+  /** A prompt-only instruction when a pitch must be withheld. */
+  commercialNote?: string | null;
+  /** The offer that a refusal applies to, when one can be identified. */
+  declinedOfferId?: PierrotOfferId | null;
+  /** Persisted with the assistant turn so refusal/objection survives a reload. */
+  commercialMarker?: PierrotCommercialMarker | null;
   commercialReturned?: {
     fromOfferId: PierrotOfferId;
     sectionId: PierrotSectionId;
@@ -51,6 +72,9 @@ type PlanInput = {
    * supplies a price or a fact.
    */
   contextOfferId?: PierrotOfferId | null;
+  pathname?: string | null;
+  message?: string;
+  commercialState?: PierrotCommercialState | null;
   serviceInquiry?: ServiceInquiryState | null;
   serviceInquiryUnavailable?: boolean;
 };
@@ -252,8 +276,8 @@ function journalReply(
 
   if (runtime?.subscribed === true) {
     return ru
-      ? `${reading} По текущей сессии видно, что подписка уже активна; управление — через существующую форму.`
-      : `${reading} The current session shows an active subscription; manage it through the existing form.`;
+      ? `${reading} В текущей сессии видна активная подписка, поэтому продавать её снова не нужно. Можно открыть последние выпуски или читать Flow.`
+      : `${reading} The current session shows an active subscription, so there is nothing to sell again. Read the latest issues or the Flow stream instead.`;
   }
 
   return ru
@@ -285,10 +309,16 @@ function advisingReply(language: 'ru' | 'en' | 'und'): string {
 function unframedReply(intent: PierrotIntent, language: 'ru' | 'en' | 'und'): string {
   const ru = isRu(language);
 
+  if (intent.publisherIntent) {
+    return ru
+      ? 'Для литературных агентов и издателей существует отдельный publisher proposal на /unframed/proposal: это профессиональный запрос, а не покупка книги. Потребительская рукопись и ретейлеры — другой маршрут.'
+      : 'Literary agents and publishers have a separate publisher proposal at /unframed/proposal: it is a professional inquiry, not a book purchase. The consumer manuscript and retailer editions are a different route.';
+  }
+
   if (intent.name === 'purchase_intent' || intent.name === 'book_inquiry') {
     return ru
-      ? 'UNFRAMED — мемуар. На /unframed есть ссылки на цифровые издания в Apple Books (£3.99) и Barnes & Noble ($4.99); это магазины, поэтому наличие и цену проверяй там. Отдельно на /unframed/book есть существующий Stripe-доступ к приватной рукописи. Форма с name/agency/email — это запрос proposal для агентов и издателей, а не покупка книги.'
-      : 'UNFRAMED is a memoir. The /unframed page links to digital editions on Apple Books (£3.99) and Barnes & Noble ($4.99); those are retailers, so check price and stock there. Separately, /unframed/book has an existing Stripe checkout for digital manuscript access. The name/agency/email form is a proposal request for agents and publishers, not a book purchase.';
+      ? 'UNFRAMED — мемуар Антона Меркурова; публичная страница описывает его как возвращение к мальчику на полу и к линии, от советского прошлого к цифровому эфиру. На /unframed показаны цифровые издания в Apple Books (£3.99) и Barnes & Noble ($4.99), но это каталожные цены ретейлеров, а не живая котировка: наличие и цену подтверждает сам магазин. Отдельно на /unframed/book есть существующий Stripe-доступ к приватной рукописи. Форма с name/agency/email — это proposal request для агентов и издателей, а не покупка книги.'
+      : 'UNFRAMED is Anton Merkurov’s memoir; the public page frames it as a return to the boy on the floor and to the line, from the Soviet past to the digital ether. The /unframed page shows digital editions on Apple Books (£3.99) and Barnes & Noble ($4.99), but those are catalogue listings rather than live quotes: the retailer confirms current price and availability. Separately, /unframed/book has an existing Stripe checkout for the private manuscript. The name/agency/email form is a proposal request for agents and publishers, not a book purchase.';
   }
 
   return ru
@@ -354,7 +384,7 @@ function offerReply(
   return {
     reply: unframedReply(intent, language),
     unavailable: false,
-    cta,
+    cta: intent.publisherIntent ? null : cta,
   };
 }
 
@@ -369,26 +399,39 @@ export function planPierrotResponse({
   runtime,
   previousOfferId,
   contextOfferId,
+  pathname,
+  message = '',
+  commercialState,
   serviceInquiry,
   serviceInquiryUnavailable,
 }: PlanInput): PierrotCommercialPlan {
   const previousOffer = findPierrotOfferById(previousOfferId);
   const explicitOffer = findPierrotOfferById(intent.offerId);
+  const page = resolvePierrotPageContext(pathname);
+  const effectiveContextOfferId = contextOfferId ?? page.contextOfferId;
+  const contextOffer = findPierrotOfferById(effectiveContextOfferId);
 
-  // A demonstrative or topic question on a postcard page (or immediately after
-  // a postcard answer) resolves to the postcard offer. This only selects the
-  // catalogue entry; the facts and price still come from the verified runtime.
-  const contextualPostcard =
+  // A demonstrative or topic question on an offer page (or immediately after
+  // an offer answer) resolves to that catalogue entry. This only selects the
+  // entry; facts, prices and the CTA still come from verified code.
+  const contextualOffer =
     !explicitOffer &&
     !intent.unknownProduct &&
     !intent.declined &&
     intent.name !== 'navigation' &&
     Boolean(intent.topic) &&
-    (contextOfferId === 'heart_angel_postcard' || previousOfferId === 'heart_angel_postcard')
-      ? findPierrotOfferById('heart_angel_postcard')
+    Boolean(contextOffer || previousOffer)
+      ? (contextOffer ?? previousOffer)
       : null;
 
-  const offer = explicitOffer ?? contextualPostcard;
+  const offer = explicitOffer ?? contextualOffer;
+  const declinedOfferId = intent.declined
+    ? (explicitOffer?.id ??
+      contextOffer?.id ??
+      previousOffer?.id ??
+      commercialState?.lastOfferId ??
+      null)
+    : null;
 
   const base: PierrotCommercialPlan = {
     mode: 'model',
@@ -402,9 +445,19 @@ export function planPierrotResponse({
     ctaShown: false,
     commercialDeclined: false,
     offerUnavailable: false,
+    commercialStage: 'exploration',
+    offerSelected: false,
+    proactive: false,
+    commercialReason: null,
+    commercialNote: null,
+    declinedOfferId,
   };
 
   if (intent.declined) {
+    const marker = declinedOfferId
+      ? { offerId: declinedOfferId, action: 'declined' as const }
+      : null;
+
     // An explicit navigation request after a refusal is honoured, but no
     // commercial CTA or offer is attached to it.
     if (intent.name === 'navigation' && intent.sectionId) {
@@ -423,6 +476,7 @@ export function planPierrotResponse({
           },
         ],
         commercialDeclined: true,
+        commercialMarker: marker,
       };
     }
 
@@ -432,6 +486,7 @@ export function planPierrotResponse({
       offer: null,
       reply: declineReply(language),
       commercialDeclined: true,
+      commercialMarker: marker,
       actions: [
         {
           kind: 'navigate',
@@ -519,6 +574,7 @@ export function planPierrotResponse({
         reply: artEngineReply(intent, language),
         cta,
         offerViewed: true,
+        offerSelected: true,
         ctaShown: Boolean(cta),
       };
     }
@@ -536,6 +592,7 @@ export function planPierrotResponse({
           : 'I could not save the qualification right now, so I will not pretend it was accepted. The existing Advising contact can continue directly.',
         cta,
         offerViewed: true,
+        offerSelected: true,
         ctaShown: Boolean(cta),
       };
     }
@@ -553,6 +610,7 @@ export function planPierrotResponse({
         links: rendered.links,
         cta: externalCta,
         offerViewed: true,
+        offerSelected: true,
         ctaShown: Boolean(externalCta),
       };
     }
@@ -567,22 +625,46 @@ export function planPierrotResponse({
       reply: advisingReply(language),
       cta,
       offerViewed: true,
+      offerSelected: true,
       ctaShown: Boolean(cta),
     };
   }
 
   if (offer) {
     const rendered = offerReply(offer.id, intent, language, runtime);
-    const unframedLinks =
-      offer.id === 'unframed' &&
-      (intent.name === 'purchase_intent' || intent.name === 'book_inquiry')
-        ? [
-            {
-              label: isRu(language) ? 'Открыть приватную рукопись' : 'Open the private manuscript',
-              href: '/unframed/book',
-            },
-          ]
-        : [];
+    const publisherRoute = offer.id === 'unframed' && intent.publisherIntent;
+    const subscribed = offer.id === 'journal_flow' && runtime?.subscribed === true;
+    const links: PierrotMessageLink[] = [];
+
+    if (offer.id === 'unframed') {
+      if (publisherRoute) {
+        links.push({
+          label: isRu(language) ? 'Открыть publisher proposal' : 'Open the publisher proposal',
+          href: '/unframed/proposal',
+        });
+      } else if (intent.name === 'purchase_intent' || intent.name === 'book_inquiry') {
+        links.push({
+          label: isRu(language) ? 'Открыть приватную рукопись' : 'Open the private manuscript',
+          href: '/unframed/book',
+        });
+      }
+    }
+
+    if (subscribed) {
+      links.push(
+        { label: isRu(language) ? 'Читать Flow' : 'Read Flow', href: '/flow' },
+        { label: isRu(language) ? 'Последние выпуски' : 'Latest issues', href: '/journal#issues' }
+      );
+    }
+
+    const commercial = !publisherRoute && !subscribed;
+    const marker: PierrotCommercialMarker | null = publisherRoute
+      ? null
+      : subscribed
+        ? { offerId: offer.id, action: 'subscribed' }
+        : intent.topic === 'price_objection'
+          ? { offerId: offer.id, action: 'objection' }
+          : { offerId: offer.id, action: 'introduced' };
 
     return {
       ...base,
@@ -590,16 +672,20 @@ export function planPierrotResponse({
       reply: rendered.reply,
       offer,
       cta: rendered.cta,
-      links: unframedLinks,
-      offerViewed: true,
+      links,
+      offerViewed: commercial,
+      offerSelected: commercial,
       ctaShown: Boolean(rendered.cta),
       offerUnavailable: rendered.unavailable,
+      commercialStage: publisherRoute ? 'exploration' : commercialStageForIntent(intent),
+      commercialMarker: marker,
     };
   }
 
   if (intent.name === 'book_inquiry') {
     const unframed = findPierrotOfferById('unframed');
     const rendered = offerReply('unframed', intent, language, runtime);
+    const publisherRoute = intent.publisherIntent;
 
     return {
       ...base,
@@ -607,16 +693,96 @@ export function planPierrotResponse({
       offer: unframed,
       reply: rendered.reply,
       cta: rendered.cta,
-      offerViewed: true,
+      links: publisherRoute
+        ? [
+            {
+              label: isRu(language) ? 'Открыть publisher proposal' : 'Open the publisher proposal',
+              href: '/unframed/proposal',
+            },
+          ]
+        : [
+            {
+              label: isRu(language) ? 'Открыть приватную рукопись' : 'Open the private manuscript',
+              href: '/unframed/book',
+            },
+          ],
+      offerViewed: !publisherRoute,
+      offerSelected: !publisherRoute,
       ctaShown: Boolean(rendered.cta),
+      commercialStage: publisherRoute ? 'exploration' : 'interest',
+      commercialMarker: publisherRoute ? null : { offerId: 'unframed', action: 'introduced' },
     };
   }
 
-  if (intent.name === 'general_question' || intent.name === 'unknown') {
+  if (
+    intent.name === 'general_question' ||
+    intent.name === 'unknown' ||
+    (intent.name === 'offer_information' && !offer)
+  ) {
+    const proactive = selectProactivePierrotOffer({
+      message,
+      intent,
+      pathname,
+      state: commercialState ?? emptyPierrotCommercialState(),
+      runtime,
+      contextOfferId: effectiveContextOfferId,
+    });
+
+    if (proactive) {
+      const proactiveOffer = findPierrotOfferById(proactive.offerId);
+      const cta = getVerifiedOfferCta(proactive.offerId);
+      const links: PierrotMessageLink[] =
+        proactive.offerId === 'unframed'
+          ? [
+              {
+                label: isRu(language)
+                  ? 'Открыть приватную рукопись'
+                  : 'Open the private manuscript',
+                href: '/unframed/book',
+              },
+            ]
+          : [];
+
+      return {
+        ...base,
+        mode: 'offer',
+        offer: proactiveOffer,
+        cta,
+        links,
+        useModel: true,
+        offerViewed: Boolean(cta),
+        offerSelected: Boolean(cta),
+        proactive: true,
+        ctaShown: Boolean(cta),
+        commercialStage: proactive.stage,
+        commercialReason: proactive.reason,
+        commercialMarker: { offerId: proactive.offerId, action: 'introduced' },
+      };
+    }
+
+    const suppressedOfferId =
+      effectiveContextOfferId ?? previousOffer?.id ?? commercialState?.lastOfferId ?? null;
+    let commercialNote: string | null = null;
+
+    if (suppressedOfferId === 'journal_flow' && runtime?.subscribed === true) {
+      commercialNote =
+        'The visitor has a verified active subscription. Do not ask them to subscribe; you may point to the latest issue or Flow.';
+    } else if (suppressedOfferId && commercialState?.declinedOfferIds.includes(suppressedOfferId)) {
+      commercialNote =
+        'The visitor declined this offer earlier. Do not promote it again; answer the current question normally.';
+    } else if (
+      suppressedOfferId &&
+      commercialState?.objectionOfferIds.includes(suppressedOfferId)
+    ) {
+      commercialNote =
+        'The visitor raised an objection to this offer earlier. Do not repeat the CTA; answer the current question factually.';
+    }
+
     return {
       ...base,
       mode: 'model',
       useModel: true,
+      commercialNote,
     };
   }
 
@@ -629,21 +795,58 @@ export function planPierrotResponse({
 
 export function buildPierrotCommercialPrompt(plan: PierrotCommercialPlan): string {
   const lines = [
-    'COMMERCIAL GROUNDING (do not contradict):',
+    'COMMERCIAL DECISION (owned by application code; do not override):',
+    `- Conversation stage: ${plan.commercialStage}.`,
     '- CTA buttons, internal routes and checkout links are chosen by code, never by you.',
-    '- Never invent a route, price, delivery time, edition size, material, review or availability.',
+    '- Never invent a route, price, delivery time, edition size, material, review, availability, reader testimonial or sales figure.',
     `- Known offers: ${PIERROT_OFFERS.map((offer) => offer.title).join(', ')}.`,
+    '- Use at most one offer in a reply. Never compare offers unless the visitor explicitly asks for a comparison.',
+    '- Never manufacture urgency, scarcity, social proof, personal familiarity, guilt or shame.',
   ];
 
-  if (plan.offer) {
-    lines.push(`RELEVANT OFFER: ${plan.offer.title} (${plan.offer.route})`);
-    plan.offer.facts.forEach((fact) => {
-      lines.push(`- ${fact.key}: ${fact.value} [source: ${fact.source}]`);
-    });
-
-    if (plan.offer.unknowns.length > 0) {
-      lines.push(`- Unknown: ${plan.offer.unknowns.join('; ')}.`);
+  if (!plan.offer) {
+    lines.push(
+      '- No commercial offer is selected for this turn. Do not introduce a product, price or CTA.'
+    );
+    if (plan.commercialNote) {
+      lines.push(`- ${plan.commercialNote}`);
     }
+    return lines.join('\n');
+  }
+
+  if (plan.commercialNote) {
+    lines.push(`- ${plan.commercialNote}`);
+  }
+
+  lines.push(`RELEVANT OFFER: ${plan.offer.title} (${plan.offer.route})`);
+
+  if (plan.proactive) {
+    lines.push(
+      '- The planner selected this offer proactively because the conversation and page context justify one suggestion.',
+      `- Why now: ${plan.commercialReason || 'the visitor expressed relevant interest.'}`,
+      '- Answer the visitor’s actual question first, in their language. Then add at most one short sentence naming the offer and the reason it fits. Do not repeat the pitch in different words.',
+      '- Do not write a URL, price or checkout instruction: the existing CTA is rendered by code below your reply.'
+    );
+  } else if (plan.commercialStage === 'conversion') {
+    lines.push(
+      '- Purchase intent is explicit. Keep the answer short, remove friction and point to the existing CTA. Do not add a second argument or a second offer.'
+    );
+  } else if (plan.commercialStage === 'consideration') {
+    lines.push(
+      '- Address the visitor’s objection or factual question directly before mentioning the CTA. If the code does not render a CTA, do not invent one.'
+    );
+  } else {
+    lines.push(
+      '- The visitor is exploring or has shown qualified interest. Give the useful fact first; one relevant offer is enough.'
+    );
+  }
+
+  plan.offer.facts.forEach((fact) => {
+    lines.push(`- ${fact.key}: ${fact.value} [source: ${fact.source}]`);
+  });
+
+  if (plan.offer.unknowns.length > 0) {
+    lines.push(`- Unknown: ${plan.offer.unknowns.join('; ')}.`);
   }
 
   return lines.join('\n');

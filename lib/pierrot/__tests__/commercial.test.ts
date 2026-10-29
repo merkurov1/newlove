@@ -389,7 +389,7 @@ describe('Pierrot commercial planner', () => {
     const result = plan('What is Art Engine?');
     const prompt = buildPierrotCommercialPrompt(result);
 
-    expect(prompt).toContain('COMMERCIAL GROUNDING');
+    expect(prompt).toContain('COMMERCIAL DECISION');
     expect(prompt).toContain('No public price');
     expect(prompt).toContain('Never invent a route, price');
     expect(prompt).toContain('Unknown');

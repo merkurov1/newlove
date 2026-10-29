@@ -4,7 +4,11 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
-import { normalizePierrotPostcardRef } from '@/lib/pierrot/orderAttribution';
+import {
+  normalizePierrotPostcardRef,
+  pierrotConversationIdFromRef,
+} from '@/lib/pierrot/orderAttribution';
+import { recordPierrotEventByConversationId } from '@/lib/pierrot/serverStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -164,6 +168,24 @@ export async function POST(request: Request) {
 
       if (!checkout.url) {
         throw new Error('Stripe did not return a Checkout URL.');
+      }
+
+      // The existing checkout session is the initiation event. Payment is
+      // still confirmed only by the trusted Stripe webhook.
+      const pierrotConversationId = pierrotConversationIdFromRef(pierrotAttribution);
+
+      if (pierrotConversationId) {
+        await recordPierrotEventByConversationId(supabase, {
+          conversationId: pierrotConversationId,
+          eventName: 'checkout_started',
+          eventKey: `checkout_started:${orderId}`,
+          payload: {
+            offer_id: 'heart_angel_postcard',
+            order_id: orderId,
+            amount_total: postcard.price,
+            currency: 'gbp',
+          },
+        });
       }
 
       return NextResponse.json({

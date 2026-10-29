@@ -195,6 +195,12 @@ export const PIERROT_OFFERS: PierrotOffer[] = [
         source: '/heartandangel/card and /components/heartandangel/PostcardOrderForm.tsx',
       },
       {
+        key: 'gesture',
+        value:
+          'The card is a physical artwork with a personal message, sent to a recipient address; the page frames it as a gesture rather than a digital file.',
+        source: '/heartandangel/card',
+      },
+      {
         key: 'recipient_fields',
         value:
           'The existing order form asks for the recipient name, delivery address and an optional personal message of up to 500 characters.',
@@ -255,6 +261,12 @@ export const PIERROT_OFFERS: PierrotOffer[] = [
         value:
           'The Journal holds issues and longer authored texts; Flow is the shorter stream of notes, links, videos and photographs.',
         source: '/journal and /flow',
+      },
+      {
+        key: 'flow_issue',
+        value:
+          'The Flow subscription page describes a weekly issue assembled from the stream; the Journal remains the longer editorial record.',
+        source: '/flow/join and /journal',
       },
       {
         key: 'subscription_form',
@@ -437,6 +449,17 @@ export const PIERROT_OFFERS: PierrotOffer[] = [
         source: '/unframed',
       },
       {
+        key: 'themes',
+        value:
+          'The public page frames the memoir as a return to the boy on the floor, the closing of a loop and a return to the line, moving from the Soviet past to the digital ether.',
+        source: '/unframed',
+      },
+      {
+        key: 'length',
+        value: 'The public page states approximately 60,000 words; genre Memoir / Noir; English.',
+        source: '/unframed',
+      },
+      {
         key: 'apple_books',
         value: 'Apple Books listing shown at £3.99, English, 215 pages.',
         source: '/unframed',
@@ -444,6 +467,12 @@ export const PIERROT_OFFERS: PierrotOffer[] = [
       {
         key: 'barnes_noble',
         value: 'Barnes & Noble eBook listing shown at $4.99.',
+        source: '/unframed',
+      },
+      {
+        key: 'retailer_price_status',
+        value:
+          'Retailer prices are catalogue listings shown on /unframed, not live quotes; the retailer page must confirm current price and availability.',
         source: '/unframed',
       },
       {

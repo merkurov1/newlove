@@ -30,8 +30,19 @@ jest.mock('@/lib/serverAuth', () => ({
   getServerSupabaseClient: jest.fn(),
 }));
 
+jest.mock('@/lib/pierrot/serverStore', () => ({
+  recordPierrotEventByConversationId: jest.fn(async () => true),
+}));
+
 const serverAuth = require('@/lib/serverAuth') as {
   getServerSupabaseClient: { mockReturnValue: (value: unknown) => void };
+};
+const pierrotStore = require('@/lib/pierrot/serverStore') as {
+  recordPierrotEventByConversationId: {
+    mock: { calls: unknown[][] };
+    mockResolvedValue: (value: unknown) => void;
+    mockRejectedValue: (value: unknown) => void;
+  };
 };
 const { POST } = require('../route') as {
   POST: (request: Request) => Promise<Response>;
@@ -144,6 +155,17 @@ describe('POST /api/postcards/order', () => {
     });
     expect(session.success_url).toContain('/heartandangel/card/success');
     expect(session.cancel_url).toContain('checkout=cancelled');
+    expect(pierrotStore.recordPierrotEventByConversationId).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        conversationId,
+        eventName: 'checkout_started',
+        payload: expect.objectContaining({
+          offer_id: 'heart_angel_postcard',
+          amount_total: 2900,
+        }),
+      })
+    );
   });
 
   it('drops a malformed attribution instead of passing it to Stripe', async () => {

@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
-import { normalizePierrotUnframedRef } from '@/lib/pierrot/orderAttribution';
+import {
+  normalizePierrotUnframedRef,
+  pierrotConversationIdFromUnframedRef,
+} from '@/lib/pierrot/orderAttribution';
+import { createPierrotStore, recordPierrotEventByConversationId } from '@/lib/pierrot/serverStore';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2025-08-27.basil' as any,
@@ -50,6 +54,25 @@ export async function POST(req: Request) {
         ...(pierrotAttribution ? { pierrotAttribution } : {}),
       },
     });
+
+    const pierrotConversationId = pierrotConversationIdFromUnframedRef(pierrotAttribution);
+
+    if (pierrotConversationId) {
+      const store = createPierrotStore();
+
+      if (store) {
+        await recordPierrotEventByConversationId(store, {
+          conversationId: pierrotConversationId,
+          eventName: 'checkout_started',
+          eventKey: `checkout_started:${session.id}`,
+          payload: {
+            offer_id: 'unframed',
+            amount_total: UNFRAMED_ACCESS_AMOUNT,
+            currency: UNFRAMED_ACCESS_CURRENCY,
+          },
+        });
+      }
+    }
 
     return NextResponse.json({ url: session.url });
   } catch (err: any) {

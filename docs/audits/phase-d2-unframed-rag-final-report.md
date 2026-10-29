@@ -154,6 +154,8 @@ Added to `.env.example` with placeholders only:
 ```text
 OPENROUTER_API_KEY=your-openrouter-key
 UNFRAMED_EMBEDDING_MODEL=baai/bge-m3
+# Optional: pin one OpenRouter provider for consistent vectors
+# UNFRAMED_EMBEDDING_PROVIDER=
 PIERROT_RAG_ENABLED=false
 UNFRAMED_RAG_MIN_SIMILARITY=0.45
 ```
@@ -166,9 +168,9 @@ UNFRAMED_RAG_MIN_SIMILARITY=0.45
 
 | Check                     | Result                                                                                             |
 | ------------------------- | -------------------------------------------------------------------------------------------------- |
-| RAG tests                 | 25 passed                                                                                          |
-| All knowledge tests       | 7 suites, 85 tests passed                                                                          |
-| Repository-wide Jest      | 70 suites, 469 tests passed (`--forceExit`; Jest reported open handles and did not exit by itself) |
+| RAG tests                 | 30 passed                                                                                          |
+| All knowledge tests       | 7 suites, 90 tests passed                                                                          |
+| Repository-wide Jest      | 72 suites, 495 tests passed (`--forceExit`; Jest reported open handles and did not exit by itself) |
 | TypeScript                | `npx tsc --noEmit` — 0 errors                                                                      |
 | C4 baseline re-run        | A: 13/30, B: 14/30, pure-Russian: 0/10                                                             |
 | Ingestion dry run         | 169 chunks, 6 batches, hashes match                                                                |

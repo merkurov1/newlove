@@ -198,6 +198,7 @@ describe('POST /api/pierrot-web persistence', () => {
       'message:user',
       'event:message_sent',
       'event:intent_classified',
+      'event:offer_selected',
       'event:offer_viewed',
       'event:cta_shown',
       'message:assistant',
@@ -282,6 +283,71 @@ describe('POST /api/pierrot-web persistence', () => {
     expect(json.offerId).toBe('heart_angel_postcard');
     expect(json.cta?.href).toBe('/heartandangel/card#order');
     expect(json.reply).toContain('£29');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('selects a contextual offer without letting the model choose the product', async () => {
+    const response = await POST(
+      makeRequest(
+        validBody({
+          message: 'I have been thinking about love and distance lately.',
+          context: { pathname: '/heartandangel' },
+        })
+      )
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      offerId?: string;
+      cta?: { href?: string };
+      commercial?: { stage?: string; proactive?: boolean };
+      commercialMarker?: { offerId?: string; action?: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.offerId).toBe('heart_angel_postcard');
+    expect(json.cta?.href).toBe('/heartandangel/card#order');
+    expect(json.commercial).toMatchObject({ stage: 'interest', proactive: true });
+    expect(json.commercialMarker).toEqual({
+      offerId: 'heart_angel_postcard',
+      action: 'introduced',
+    });
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockRecord).toEqual([
+      'conversation',
+      'event:conversation_started',
+      'message:user',
+      'event:message_sent',
+      'event:intent_classified',
+      'event:offer_selected',
+      'event:offer_viewed',
+      'event:cta_shown',
+      'ai',
+      'message:assistant',
+      'event:assistant_replied',
+    ]);
+  });
+
+  it('routes publisher interest to the proposal without a consumer CTA', async () => {
+    const response = await POST(
+      makeRequest(
+        validBody({
+          message: 'I am a literary agent interested in UNFRAMED. Can I see the proposal?',
+          context: { pathname: '/unframed' },
+        })
+      )
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      cta?: unknown;
+      links?: Array<{ href?: string }>;
+      intent?: { publisherIntent?: boolean };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.intent?.publisherIntent).toBe(true);
+    expect(json.cta).toBeUndefined();
+    expect(json.links?.[0]?.href).toBe('/unframed/proposal');
+    expect(json.reply).toContain('/unframed/proposal');
     expect(mockCreate).not.toHaveBeenCalled();
   });
 

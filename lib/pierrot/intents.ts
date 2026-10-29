@@ -44,6 +44,8 @@ export type PierrotIntent = {
   unknownProduct: boolean;
   /** Closed Art Engine access, explicitly not a commercial service lead. */
   accessRequest: boolean;
+  /** A literary agent or publisher asking about UNFRAMED, not a reader. */
+  publisherIntent: boolean;
   signals: string[];
 };
 
@@ -248,6 +250,22 @@ const BOOK_TERMS = [
   'электронн',
 ];
 
+const PUBLISHER_TERMS = [
+  'publisher',
+  'publishing',
+  'literary agent',
+  'agent',
+  'proposal',
+  'manuscript proposal',
+  'acquire the book',
+  'издател',
+  'издательств',
+  'литературн',
+  'агент',
+  'предложен',
+  'рукопис',
+];
+
 const HANDOFF_TERMS = [
   'talk to',
   'speak to',
@@ -433,11 +451,20 @@ export function classifyPierrotIntent(message: string): PierrotIntent {
   const subscription = hasAny(text, SUBSCRIPTION_TERMS);
   const service = hasAny(text, SERVICE_TERMS);
   const book = hasAny(text, BOOK_TERMS);
+  const publisher = hasAny(text, PUBLISHER_TERMS);
   const handoff = hasAny(text, HANDOFF_TERMS);
   const refusal = hasAny(text, REFUSAL_TERMS);
   const navigationVerb = hasAny(text, NAVIGATION_TERMS);
   const access = hasAny(text, ACCESS_TERMS);
   const question = text.includes('?') || hasAny(text, QUESTION_TERMS);
+  const publisherContext =
+    publisher &&
+    (book ||
+      primaryOffer?.id === 'unframed' ||
+      containsTerm(text, 'literary agent') ||
+      containsTerm(text, 'publisher') ||
+      containsTerm(text, 'proposal') ||
+      containsTerm(text, 'издател'));
 
   if (primaryOffer) {
     const offerClear = !secondOffer || offerMatches[0].score - secondOffer.score >= 0.75;
@@ -459,6 +486,10 @@ export function classifyPierrotIntent(message: string): PierrotIntent {
 
       if (book && primaryOffer.id === 'unframed') {
         add('book_inquiry', 4, 'book_offer');
+      }
+
+      if (publisherContext && primaryOffer.id === 'unframed') {
+        add('book_inquiry', 5.2, 'publisher_offer');
       }
 
       if (subscription && primaryOffer.id === 'journal_flow') {
@@ -506,6 +537,10 @@ export function classifyPierrotIntent(message: string): PierrotIntent {
       else if (info || question || containsTerm(text, 'book')) {
         add('book_inquiry', 2.2, 'book_terms');
       }
+    }
+
+    if (publisherContext && !book) {
+      add('book_inquiry', 4.2, 'publisher_terms');
     }
 
     if (service) {
@@ -683,6 +718,7 @@ export function classifyPierrotIntent(message: string): PierrotIntent {
       name !== 'service_inquiry' &&
       name !== 'handoff_request',
     accessRequest,
+    publisherIntent: publisherContext,
     signals: Array.from(signals).slice(0, 8),
   };
 }

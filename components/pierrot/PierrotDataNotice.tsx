@@ -55,16 +55,14 @@ export default function PierrotDataNotice({ className = '' }: PierrotDataNoticeP
       </p>
 
       <div className="flex items-center gap-3">
-        {state === 'granted' && (
-          <button
-            type="button"
-            onClick={deleteSavedCopy}
-            disabled={isDeleting}
-            className="underline decoration-[#CFC3B1] underline-offset-4 transition hover:text-[#37332D] disabled:opacity-40"
-          >
-            {isDeleting ? 'Deleting…' : 'Delete saved copy'}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={deleteSavedCopy}
+          disabled={isDeleting}
+          className="underline decoration-[#CFC3B1] underline-offset-4 transition hover:text-[#37332D] disabled:opacity-40"
+        >
+          {isDeleting ? 'Deleting…' : 'Delete saved copy'}
+        </button>
 
         <button
           type="button"

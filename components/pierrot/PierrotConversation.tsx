@@ -2,12 +2,17 @@
 
 import React, { useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import Markdown from 'markdown-to-jsx';
 import { motion } from 'framer-motion';
 import { ArrowUp, ArrowUpRight } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
 import usePrefersReducedMotion from '@/components/pierrot/usePrefersReducedMotion';
-import { createPierrotId, type PierrotChatAction } from '@/lib/pierrot/navigation';
+import {
+  createPierrotId,
+  normalizePathname,
+  type PierrotChatAction,
+} from '@/lib/pierrot/navigation';
 import { linkifyInternalRoutes } from '@/lib/pierrot/linkify';
 import { getPierrotConversationId, trackPierrotEvent } from '@/lib/pierrot/clientTelemetry';
 import {
@@ -18,6 +23,18 @@ import {
   createPierrotSubscriptionRef,
   createPierrotUnframedRef,
 } from '@/lib/pierrot/orderAttribution';
+
+function shouldCloseBeforeNavigation(href: string, pathname: string): boolean {
+  if (href.startsWith('#')) return true;
+  if (!href.startsWith('/')) return false;
+
+  try {
+    const target = new URL(href, 'https://pierrot.local');
+    return normalizePathname(target.pathname) === normalizePathname(pathname);
+  } catch {
+    return false;
+  }
+}
 
 function safeMarkdownUrl(value: string): string | null {
   if (typeof value !== 'string') return null;
@@ -38,6 +55,7 @@ function safeMarkdownUrl(value: string): string | null {
  */
 function PierrotMarkdown({ content }: { content: string }) {
   const { closeConversation } = usePierrot();
+  const pathname = usePathname() || '/';
 
   return (
     <Markdown
@@ -74,7 +92,9 @@ function PierrotMarkdown({ content }: { content: string }) {
                 return (
                   <Link
                     href={safe}
-                    onClick={() => closeConversation()}
+                    onClick={() => {
+                      if (shouldCloseBeforeNavigation(safe, pathname)) closeConversation();
+                    }}
                     className="underline decoration-[#CFC3B1] underline-offset-4 transition-colors hover:decoration-[#37332D]"
                     {...props}
                   >
@@ -180,6 +200,7 @@ const PIERROT_MENU = [
 
 function PierrotEmptyState() {
   const { closeConversation, startConversation } = usePierrot();
+  const pathname = usePathname() || '/';
 
   return (
     <div className="mx-auto my-auto w-full max-w-2xl px-1 py-3 sm:py-8">
@@ -214,7 +235,9 @@ function PierrotEmptyState() {
       <nav aria-label="Pierrot site navigation" className="mt-6 space-y-2 sm:mt-10 sm:space-y-4">
         <Link
           href="/"
-          onClick={() => closeConversation()}
+          onClick={() => {
+            if (shouldCloseBeforeNavigation('/', pathname)) closeConversation();
+          }}
           className="group flex items-baseline justify-between gap-4"
         >
           <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 transition-colors group-hover:text-[#111111]">
@@ -229,7 +252,9 @@ function PierrotEmptyState() {
           <div key={section.href} className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
             <Link
               href={section.href}
-              onClick={() => closeConversation()}
+              onClick={() => {
+                if (shouldCloseBeforeNavigation(section.href, pathname)) closeConversation();
+              }}
               className="
                 font-serif text-xl font-normal leading-tight tracking-tight
                 text-[#111111] underline-offset-8 transition-colors
@@ -242,7 +267,9 @@ function PierrotEmptyState() {
 
             <Link
               href={section.child.href}
-              onClick={() => closeConversation()}
+              onClick={() => {
+                if (shouldCloseBeforeNavigation(section.child.href, pathname)) closeConversation();
+              }}
               className="
                 font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500
                 transition-colors hover:text-[#111111] sm:text-[11px]
@@ -259,6 +286,7 @@ function PierrotEmptyState() {
 
 export function PierrotMessageList({ className = '' }: { className?: string }) {
   const { messages, isLoading, runAction, closeConversation } = usePierrot();
+  const pathname = usePathname() || '/';
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldReduceMotion = usePrefersReducedMotion();
 
@@ -418,7 +446,9 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                               offer_id: 'journal_flow',
                             });
                           }
-                          closeConversation();
+                          if (shouldCloseBeforeNavigation(message.cta!.href, pathname)) {
+                            closeConversation();
+                          }
                         }}
                         className="
                           inline-flex items-center rounded-full bg-[#37332D] px-4 py-2
@@ -448,7 +478,11 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                               )
                             : link.href
                         }
-                        onClick={closeConversation}
+                        onClick={() => {
+                          if (shouldCloseBeforeNavigation(link.href, pathname)) {
+                            closeConversation();
+                          }
+                        }}
                         className="
                           inline-flex items-center rounded-full
                           border border-[#DDD3C5] px-4 py-2

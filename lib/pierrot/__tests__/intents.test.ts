@@ -82,7 +82,29 @@ describe('Pierrot intent classification', () => {
     expect(analysis.offerId).toBe('advising');
   });
 
-  it('routes a human handoff request to the existing contact', () => {
+  it('recognises publisher interest as a book inquiry, not a consumer purchase', () => {
+    const publisher = classifyPierrotIntent(
+      'I am a literary agent interested in UNFRAMED. Can I see the proposal?'
+    );
+    const proposal = classifyPierrotIntent('Can I see the publisher proposal?');
+
+    expect(publisher.name).toBe('book_inquiry');
+    expect(publisher.offerId).toBe('unframed');
+    expect(publisher.publisherIntent).toBe(true);
+
+    expect(proposal.name).toBe('book_inquiry');
+    expect(proposal.publisherIntent).toBe(true);
+  });
+
+  it('does not treat a general art question as a commercial intent', () => {
+    const intent = classifyPierrotIntent('What is the difference between context and narrative?');
+
+    expect(intent.name).toBe('general_question');
+    expect(intent.offerId).toBeUndefined();
+    expect(intent.publisherIntent).toBe(false);
+  });
+
+  it('handles a human handoff request to the existing contact', () => {
     const intent = classifyPierrotIntent('Can I talk to Anton directly?');
 
     expect(intent.name).toBe('handoff_request');

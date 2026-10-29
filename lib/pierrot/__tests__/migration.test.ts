@@ -20,6 +20,10 @@ const serviceEventsMigration = fs.readFileSync(
   path.join(process.cwd(), 'migrations', '2026-10-29_extend_pierrot_service_events.sql'),
   'utf8'
 );
+const checkoutEventsMigration = fs.readFileSync(
+  path.join(process.cwd(), 'migrations', '2026-10-29_add_pierrot_checkout_events.sql'),
+  'utf8'
+);
 const subscriptionEventsMigration = fs.readFileSync(
   path.join(process.cwd(), 'migrations', '2026-10-29_create_subscription_events.sql'),
   'utf8'
@@ -75,6 +79,14 @@ describe('Pierrot conversation migration security', () => {
     expect(orderMigration).toContain('ON CONFLICT (conversation_id, event_key) DO NOTHING');
     expect(orderMigration).toContain('AND session_id = p_session_id');
     expect(orderMigration).toContain('GRANT EXECUTE ON FUNCTION public.pierrot_record_event');
+  });
+
+  it('separates planner selection from checkout initiation and confirmed payment', () => {
+    expect(checkoutEventsMigration).toContain("'offer_selected'");
+    expect(checkoutEventsMigration).toContain("'checkout_started'");
+    expect(checkoutEventsMigration).toContain("'order_paid'");
+    expect(checkoutEventsMigration).toContain('ON CONFLICT (conversation_id, event_key) DO NOTHING');
+    expect(checkoutEventsMigration).toContain('GRANT EXECUTE ON FUNCTION public.pierrot_record_event');
   });
 
   it('extends Pierrot events for service qualification and subscription CTA clicks', () => {

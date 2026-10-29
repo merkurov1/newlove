@@ -526,6 +526,12 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
         value: countForOffer('offer_action_clicked', 'heart_angel_postcard'),
       },
       {
+        key: 'checkout_started',
+        label: 'Checkout started',
+        value: countForOffer('checkout_started', 'heart_angel_postcard'),
+        note: 'Stripe Checkout session created; not a confirmed payment.',
+      },
+      {
         key: 'confirmed',
         label: 'Confirmed purchase',
         value:
@@ -589,6 +595,12 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
         key: 'clicked',
         label: 'CTA clicked',
         value: countForOffer('offer_action_clicked', 'unframed'),
+      },
+      {
+        key: 'checkout_started',
+        label: 'Checkout started',
+        value: countForOffer('checkout_started', 'unframed'),
+        note: 'Stripe Checkout session created; not a confirmed purchase.',
       },
       {
         key: 'request_submitted',

@@ -19,13 +19,21 @@ jest.mock('@/lib/rateLimit', () => ({
   getClientIp: jest.fn(() => 'test-client'),
 }));
 
+jest.mock('@/lib/pierrot/serverStore', () => ({
+  createPierrotStore: jest.fn(() => ({ mocked: true })),
+  recordPierrotEventByConversationId: jest.fn(async () => true),
+}));
+
 const { POST } = require('../checkout/route') as {
   POST: (request: Request) => Promise<Response>;
+};
+const eventStore = require('@/lib/pierrot/serverStore') as {
+  recordPierrotEventByConversationId: MockFn;
 };
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockCreate.mockResolvedValue({ url: 'https://checkout.stripe.com/session' });
+  mockCreate.mockResolvedValue({ id: 'session-1', url: 'https://checkout.stripe.com/session' });
   process.env.STRIPE_SECRET_KEY = 'sk_test_123';
 });
 
@@ -47,6 +55,14 @@ describe('POST /api/unframed/checkout', () => {
     expect(session.line_items[0].price_data.unit_amount).toBe(1500);
     expect(session.metadata.type).toBe('unframed_book');
     expect(session.metadata.pierrotAttribution).toBe('punf_11111111-1111-4111-8111-111111111111');
+    expect(eventStore.recordPierrotEventByConversationId).toHaveBeenCalledWith(
+      { mocked: true },
+      expect.objectContaining({
+        conversationId: '11111111-1111-4111-8111-111111111111',
+        eventName: 'checkout_started',
+        eventKey: 'checkout_started:session-1',
+      })
+    );
   });
 
   it('drops a malformed attribution', async () => {

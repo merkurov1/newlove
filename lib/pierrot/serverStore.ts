@@ -282,6 +282,98 @@ export async function loadPierrotHistory(
     .map((row) => ({ role: row.role, content: row.content }));
 }
 
+export type PierrotCommercialSignal = {
+  eventName: string;
+  payload: Record<string, unknown> | null;
+};
+
+const COMMERCIAL_EVENT_NAMES = [
+  'offer_selected',
+  'offer_viewed',
+  'cta_shown',
+  'commercial_declined',
+  'commercial_returned',
+  'intent_classified',
+  'order_paid',
+  'unframed_purchase_confirmed',
+] as const;
+
+function safePayload(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * Reconstructs the commercial state from trusted events. The query is scoped
+ * to one conversation and is only performed when the caller proves it owns
+ * the session. Failure is non-fatal: the conversation falls back to the
+ * browser transcript.
+ */
+export async function loadPierrotCommercialSignals(
+  store: SupabaseClient,
+  conversationId: string,
+  sessionId: string
+): Promise<{ events: PierrotCommercialSignal[]; subscriptionEvents: PierrotCommercialSignal[] }> {
+  const empty: {
+    events: PierrotCommercialSignal[];
+    subscriptionEvents: PierrotCommercialSignal[];
+  } = { events: [], subscriptionEvents: [] };
+
+  try {
+    const ownsConversation = await conversationBelongsToSession(store, conversationId, sessionId);
+
+    if (!ownsConversation) return empty;
+
+    const events: PierrotCommercialSignal[] = [];
+    const subscriptionEvents: PierrotCommercialSignal[] = [];
+
+    try {
+      const { data, error } = await store
+        .from('pierrot_events')
+        .select('event_name, payload')
+        .eq('conversation_id', conversationId)
+        .in('event_name', [...COMMERCIAL_EVENT_NAMES])
+        .order('created_at', { ascending: true })
+        .limit(80);
+
+      if (!error && Array.isArray(data)) {
+        for (const row of data) {
+          if (typeof row.event_name !== 'string') continue;
+          events.push({ eventName: row.event_name, payload: safePayload(row.payload) });
+        }
+      }
+    } catch {
+      // The transcript path remains available.
+    }
+
+    try {
+      const { data, error } = await store
+        .from('subscription_events')
+        .select('event_name, payload')
+        .eq('conversation_id', conversationId)
+        .eq('event_name', 'subscription_confirmed')
+        .limit(20);
+
+      if (!error && Array.isArray(data)) {
+        for (const row of data) {
+          if (row.event_name !== 'subscription_confirmed') continue;
+          subscriptionEvents.push({
+            eventName: row.event_name,
+            payload: safePayload(row.payload),
+          });
+        }
+      }
+    } catch {
+      // A missing subscription-events table must not break chat.
+    }
+
+    return { events, subscriptionEvents };
+  } catch {
+    return empty;
+  }
+}
+
 export async function getPierrotConversationConsent(
   store: SupabaseClient,
   conversationId: string,

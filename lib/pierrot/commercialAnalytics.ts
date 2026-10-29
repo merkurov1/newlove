@@ -14,6 +14,10 @@ type CommercialAnalyticsInput = {
 /**
  * Server-side analytics only. Event keys include the user message id, so an
  * HTTP retry or a duplicate request cannot insert the same event twice.
+ *
+ * `offer_selected` is the planner decision. `offer_viewed` and `cta_shown` are
+ * rendered artefacts. None of them is treated as a sale; confirmation comes
+ * only from the existing payment/confirmation handlers.
  */
 export async function recordPierrotCommercialAnalytics(
   store: SupabaseClient,
@@ -33,9 +37,27 @@ export async function recordPierrotCommercialAnalytics(
       offer_id: intent.offerId ?? null,
       topic: intent.topic,
       access_request: intent.accessRequest,
+      publisher_intent: intent.publisherIntent,
       declined: intent.declined,
+      stage: plan.commercialStage,
     },
   });
+
+  if (plan.offerSelected && plan.offer) {
+    await recordPierrotEvent(store, {
+      conversationId,
+      sessionId,
+      eventName: 'offer_selected',
+      eventKey: `offer_selected:${userMessageId}:${plan.offer.id}`,
+      payload: {
+        offer_id: plan.offer.id,
+        intent: intent.name,
+        stage: plan.commercialStage,
+        proactive: plan.proactive,
+        reason: plan.proactive ? (plan.commercialReason ?? null) : null,
+      },
+    });
+  }
 
   if (plan.offerViewed && plan.offer) {
     await recordPierrotEvent(store, {
@@ -47,6 +69,8 @@ export async function recordPierrotCommercialAnalytics(
         offer_id: plan.offer.id,
         intent: intent.name,
         confidence: intent.confidence,
+        stage: plan.commercialStage,
+        proactive: plan.proactive,
       },
     });
   }
@@ -62,6 +86,8 @@ export async function recordPierrotCommercialAnalytics(
         cta_kind: plan.cta.kind,
         destination: plan.cta.href,
         purpose: plan.cta.purpose,
+        stage: plan.commercialStage,
+        proactive: plan.proactive,
       },
     });
   }
@@ -74,7 +100,7 @@ export async function recordPierrotCommercialAnalytics(
       eventKey: `commercial_declined:${userMessageId}`,
       payload: {
         intent: intent.name,
-        offer_id: intent.offerId ?? null,
+        offer_id: plan.declinedOfferId ?? intent.offerId ?? null,
       },
     });
   }

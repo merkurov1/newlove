@@ -10,18 +10,29 @@ import { RagConfigurationError } from './errors';
  *
  * - POST https://openrouter.ai/api/v1/embeddings
  * - Authorization: Bearer <OPENROUTER_API_KEY>
- * - body: { model, input: string[] , encoding_format: 'float' }
+ * - body: { model, input: string[] , encoding_format: 'float', provider? }
  * - response: { data: [{ index, embedding: number[] }], model, usage }
  * - model catalogue: https://openrouter.ai/api/v1/models?output_modalities=embeddings
  *
  * `baai/bge-m3` is multilingual, 1024-dimensional and exposes an 8194-token
  * context. Only this model may be used until a new contract is reviewed and
  * the database is re-indexed deliberately.
+ *
+ * OpenRouter may return a provider-prefixed model id for the same model
+ * (`parasail-bge-m3`, `deepinfra-bge-m3`) depending on routing. Those aliases
+ * are accepted for validation, but the canonical model id is always persisted.
  */
 export const UNFRAMED_EMBEDDING_MODEL = 'baai/bge-m3';
+export const UNFRAMED_EMBEDDING_MODEL_ALIASES = [
+  'baai/bge-m3',
+  'parasail-bge-m3',
+  'deepinfra-bge-m3',
+] as const;
 export const UNFRAMED_EMBEDDING_DIMENSIONS = 1024;
 export const UNFRAMED_EMBEDDING_CONTEXT_TOKENS = 8194;
 export const OPENROUTER_EMBEDDINGS_ENDPOINT = 'https://openrouter.ai/api/v1/embeddings';
+
+const PROVIDER_SLUG_PATTERN = /^[a-z0-9][a-z0-9._-]{1,63}$/;
 
 /** Conservative batch size: OpenRouter does not publish a hard array limit. */
 export const UNFRAMED_EMBEDDING_BATCH_SIZE = 32;
@@ -57,6 +68,33 @@ export type UnframedEmbeddingConfig = {
 
 export function isPierrotRagEnabled(env: RagEnvironment = process.env): boolean {
   return (env.PIERROT_RAG_ENABLED || '').trim().toLowerCase() === 'true';
+}
+
+/**
+ * True when a response model id belongs to the verified UNFRAMED embedding
+ * model, including OpenRouter provider-prefixed aliases.
+ */
+export function isSupportedEmbeddingResponseModel(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+
+  return (UNFRAMED_EMBEDDING_MODEL_ALIASES as readonly string[]).includes(normalized);
+}
+
+/**
+ * Optional provider pin. When set, all ingestion and query embeddings use one
+ * OpenRouter provider with fallbacks disabled, preventing mixed provider
+ * vectors in one index.
+ */
+export function resolveUnframedEmbeddingProvider(env: RagEnvironment = process.env): string | null {
+  const raw = (env.UNFRAMED_EMBEDDING_PROVIDER || '').trim().toLowerCase();
+
+  if (!raw) return null;
+
+  if (!PROVIDER_SLUG_PATTERN.test(raw)) {
+    throw new RagConfigurationError('UNFRAMED_EMBEDDING_PROVIDER_invalid');
+  }
+
+  return raw;
 }
 
 export function resolveUnframedEmbeddingConfig(

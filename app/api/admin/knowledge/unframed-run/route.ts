@@ -12,6 +12,7 @@ import {
   UNFRAMED_EMBEDDING_DIMENSIONS,
   UNFRAMED_EMBEDDING_MODEL,
   resolveUnframedEmbeddingConfig,
+  resolveUnframedEmbeddingProvider,
 } from '@/lib/knowledge/rag/config';
 import { createOpenRouterEmbeddingClient } from '@/lib/knowledge/rag/embeddings';
 import {
@@ -233,6 +234,7 @@ function createEmbeddingClient() {
     apiKey,
     modelId: UNFRAMED_EMBEDDING_MODEL,
     dimensions: UNFRAMED_EMBEDDING_DIMENSIONS,
+    provider: resolveUnframedEmbeddingProvider(process.env),
   });
 }
 
