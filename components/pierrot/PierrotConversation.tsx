@@ -282,14 +282,20 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
   return (
     <div
       ref={containerRef}
+      data-pierrot-messages
       aria-live="polite"
+      style={{
+        // Keep the transcript usable on a keyboard-short landscape viewport
+        // without changing the normal 20/24px editorial spacing.
+        paddingBlock: 'clamp(0px, calc(var(--pierrot-viewport-height, 100dvh) - 280px), 1.5rem)',
+      }}
       className={`
-        min-h-0 overflow-y-auto overscroll-contain
-        px-5 py-5 sm:px-7 sm:py-6
+        min-h-0 min-w-0 overflow-y-auto overscroll-contain
+        px-5 sm:px-7
         ${className}
       `}
     >
-      <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col justify-end">
+      <div className="mx-auto flex min-h-full w-full min-w-0 max-w-3xl flex-col justify-end">
         {messages.length === 0 ? (
           <PierrotEmptyState />
         ) : (
@@ -479,6 +485,9 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
   );
 }
 
+const PIERROT_INPUT_MIN_HEIGHT = 38;
+const PIERROT_INPUT_MAX_HEIGHT = 144;
+
 export function PierrotInput({
   placeholder = 'Write to Pierrot…',
   className = '',
@@ -492,29 +501,48 @@ export function PierrotInput({
 
   caretRef.current = draftCaret;
 
-  useEffect(() => {
-    if (isLoading) return;
+  // Restore the caret when the user focuses the composer themselves. The
+  // previous effect focused the textarea whenever loading changed, which
+  // reopened the mobile keyboard on mount and after every response.
+  const handleFocus = () => {
+    const input = inputRef.current;
+    if (!input) return;
 
-    const frame = window.requestAnimationFrame(() => {
-      const input = inputRef.current;
-      if (!input) return;
-
-      input.focus({ preventScroll: true });
-
-      const position = Math.min(caretRef.current ?? input.value.length, input.value.length);
-      input.setSelectionRange(position, position);
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [isLoading]);
+    const position = Math.min(caretRef.current ?? input.value.length, input.value.length);
+    input.setSelectionRange(position, position);
+  };
 
   useEffect(() => {
     const input = inputRef.current;
     if (!input) return;
 
-    const nextHeight = Math.min(Math.max(input.scrollHeight, 38), 144);
+    const resizeInput = () => {
+      // The CSS max-height is derived from the modal's authoritative viewport
+      // variable, so a short visual viewport (keyboard in landscape) shrinks
+      // the composer before it can push the footer past the screen edge.
+      const cssMaxHeight = Number.parseFloat(window.getComputedStyle(input).maxHeight);
+      const maxHeight = Number.isFinite(cssMaxHeight)
+        ? Math.min(cssMaxHeight, PIERROT_INPUT_MAX_HEIGHT)
+        : PIERROT_INPUT_MAX_HEIGHT;
 
-    input.style.height = `${nextHeight}px`;
+      const nextHeight = Math.min(
+        Math.max(input.scrollHeight, PIERROT_INPUT_MIN_HEIGHT),
+        maxHeight
+      );
+
+      input.style.height = `${nextHeight}px`;
+      input.style.overflowY = input.scrollHeight > nextHeight ? 'auto' : 'hidden';
+    };
+
+    resizeInput();
+
+    const modal = input.closest('[data-pierrot-modal]');
+    if (!modal || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(resizeInput);
+    observer.observe(modal);
+
+    return () => observer.disconnect();
   }, [draft]);
 
   const submit = () => {
@@ -531,12 +559,13 @@ export function PierrotInput({
 
   return (
     <form
+      data-pierrot-composer
       onSubmit={(event) => {
         event.preventDefault();
         submit();
       }}
       className={`
-        flex items-end gap-2 rounded-2xl border border-[#E3DACD]
+        flex min-w-0 items-end gap-2 rounded-2xl border border-[#E3DACD]
         bg-white/70 p-2 transition focus-within:border-[#B5AAA0]
         focus-within:bg-white sm:p-2.5
         ${className}
@@ -548,23 +577,32 @@ export function PierrotInput({
         onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) =>
           updateDraft(event.target.value, event.target.selectionStart)
         }
+        onFocus={handleFocus}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         rows={1}
-        disabled={isLoading}
+        readOnly={isLoading}
+        aria-disabled={isLoading || undefined}
         data-pierrot-input
         aria-label="Message Pierrot"
+        style={{
+          // Grow to 144px, then scroll internally. On a short keyboard-visible
+          // viewport the 264px reserve keeps header + footer + a message row
+          // inside the modal. The viewport variable comes from PierrotChat.
+          maxHeight: 'clamp(38px, calc(var(--pierrot-viewport-height, 100dvh) - 264px), 144px)',
+        }}
         className="
-          max-h-36 min-h-[38px] min-w-0 flex-1 resize-none
-          border-0 bg-transparent px-2 py-1.5 font-serif
-          text-[16px] leading-relaxed text-[#37332D] outline-none
-          placeholder:text-[#B8B0A4] focus:outline-none focus:ring-0
-          disabled:opacity-60
+          min-h-[38px] min-w-0 flex-1 resize-none
+          overflow-y-auto border-0 bg-transparent px-2 py-1.5
+          font-serif text-[16px] leading-relaxed text-[#37332D]
+          outline-none placeholder:text-[#B8B0A4]
+          focus:outline-none focus:ring-0 aria-disabled:opacity-60
         "
       />
 
       <button
         type="submit"
+        data-pierrot-send
         disabled={!draft.trim() || isLoading}
         aria-label="Send message"
         className="

@@ -3,20 +3,60 @@
 import { useEffect, useState } from 'react';
 
 export type KeyboardViewport = {
+  width: number;
   height: number;
   offsetTop: number;
+  offsetLeft: number;
 };
 
+const roundPx = (value: number) => Math.round(value);
+
 /**
- * Returns the visual viewport only while a keyboard-sized inset is present.
- * Small differences are browser chrome (toolbar/scrollbar), not a keyboard;
- * shrinking the window for them leaves a visible gray strip at the bottom.
+ * Reads the visual viewport as one geometry object.
  *
- * The offset is needed because iOS can keep a fixed element anchored to the
- * layout viewport while the visual viewport is shifted by the keyboard.
+ * `window.innerHeight` is not used here: on iOS the layout viewport can stay
+ * at its original size while the visual viewport shrinks for the keyboard, so
+ * comparing the two makes the keyboard look like it has not opened. The
+ * visual viewport itself is already the rectangle the user can actually see,
+ * including browser chrome, the on-screen keyboard, pinch-zoom panning and
+ * viewport scrolling.
+ */
+export function readPierrotViewport(): KeyboardViewport | null {
+  if (typeof window === 'undefined') return null;
+
+  const viewport = window.visualViewport;
+  if (!viewport) return null;
+
+  const width = roundPx(viewport.width);
+  const height = roundPx(viewport.height);
+
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return null;
+  }
+
+  return {
+    width,
+    height,
+    offsetTop: roundPx(viewport.offsetTop),
+    offsetLeft: roundPx(viewport.offsetLeft),
+  };
+}
+
+/**
+ * Returns the modal geometry for the visible viewport while the modal is
+ * active. When VisualViewport is unavailable (or temporarily reports an
+ * unusable size) the caller falls back to CSS viewport units.
+ *
+ * Events are coalesced into one animation frame and identical geometry is
+ * ignored, so keyboard animations and viewport panning cannot cause a render
+ * loop or layout oscillation.
  */
 export default function useKeyboardViewportHeight(active: boolean): KeyboardViewport | null {
   const [viewportSize, setViewportSize] = useState<KeyboardViewport | null>(null);
+
+  // Read synchronously on the first render after opening so the modal does not
+  // paint at 100dvh for one frame while the effect is being attached.
+  const liveViewport = active ? readPierrotViewport() : null;
 
   useEffect(() => {
     if (!active) {
@@ -25,45 +65,49 @@ export default function useKeyboardViewportHeight(active: boolean): KeyboardView
     }
 
     const viewport = window.visualViewport;
+    if (!viewport) {
+      setViewportSize(null);
+      return;
+    }
 
-    if (!viewport) return;
+    let frame: number | null = null;
+    let lastKey = '';
 
     const sync = () => {
-      const keyboardInset = window.innerHeight - viewport.height - viewport.offsetTop;
+      frame = null;
 
-      setViewportSize(
-        keyboardInset > 120
-          ? {
-              height: viewport.height,
-              offsetTop: viewport.offsetTop,
-            }
-          : null
-      );
+      const next = readPierrotViewport();
+      if (!next) return;
+
+      const nextKey = `${next.width}:${next.height}:${next.offsetTop}:${next.offsetLeft}`;
+      if (nextKey === lastKey) return;
+
+      lastKey = nextKey;
+      setViewportSize(next);
     };
 
-    let focusTimer: number | null = null;
-
-    const handleFocus = () => {
-      if (focusTimer !== null) window.clearTimeout(focusTimer);
-      // The keyboard can appear after focus without a reliable resize event.
-      focusTimer = window.setTimeout(sync, 350);
+    const scheduleSync = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(sync);
     };
 
     sync();
-    viewport.addEventListener('resize', sync);
-    viewport.addEventListener('scroll', sync);
-    window.addEventListener('resize', sync);
-    document.addEventListener('focusin', handleFocus);
+    viewport.addEventListener('resize', scheduleSync);
+    viewport.addEventListener('scroll', scheduleSync);
+    window.addEventListener('resize', scheduleSync);
+    window.addEventListener('orientationchange', scheduleSync);
 
     return () => {
-      viewport.removeEventListener('resize', sync);
-      viewport.removeEventListener('scroll', sync);
-      window.removeEventListener('resize', sync);
-      document.removeEventListener('focusin', handleFocus);
+      viewport.removeEventListener('resize', scheduleSync);
+      viewport.removeEventListener('scroll', scheduleSync);
+      window.removeEventListener('resize', scheduleSync);
+      window.removeEventListener('orientationchange', scheduleSync);
 
-      if (focusTimer !== null) window.clearTimeout(focusTimer);
+      if (frame !== null) window.cancelAnimationFrame(frame);
     };
   }, [active]);
 
-  return viewportSize;
+  if (!active) return null;
+
+  return liveViewport ?? viewportSize;
 }

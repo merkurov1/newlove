@@ -33,6 +33,7 @@
     "render:logs": "echo 'Check logs at https://dashboard.render.com'",
     "render:shell": "echo 'Use Render Dashboard → Shell to access container'",
     "check:metadata": "node scripts/check_metadata.js",
+    "test:pierrot:viewport": "playwright test --config=tests/pierrot.playwright.config.ts",
     "test:attach-tags": "node scripts/test_attach_tags.js",
     "test:telegram-research": "jest lib/telegram-research --runInBand",
     "typecheck:telegram-research": "tsc -p tsconfig.telegram-research.json",
@@ -151,6 +152,7 @@
   },
   "devDependencies": {
     "@next/bundle-analyzer": "^14.2.5",
+    "@playwright/test": "^1.49.0",
     "@swc/jest": "^0.2.39",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",

@@ -82,28 +82,62 @@ export default function PierrotChat() {
   useEffect(() => {
     if (!isOpen) return;
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const root = document.documentElement;
+    const body = document.body;
+    const previousRootOverflow = root.style.overflow;
+    const previousBodyOverflow = body.style.overflow;
+    const previousBodyOverscroll = body.style.overscrollBehavior;
+
+    // Lock both scroll containers. Locking only <body> still lets iOS pan the
+    // document behind the fixed modal in some Safari versions.
+    root.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    body.style.overscrollBehavior = 'none';
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      root.style.overflow = previousRootOverflow;
+      body.style.overflow = previousBodyOverflow;
+      body.style.overscrollBehavior = previousBodyOverscroll;
     };
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen) {
-      previousFocusRef.current =
-        document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      return;
+    if (!isOpen) {
+      const previous = previousFocusRef.current;
+      previousFocusRef.current = null;
+
+      if (!previous || !document.contains(previous)) return;
+
+      const frame = window.requestAnimationFrame(() => {
+        previous.focus({ preventScroll: true });
+      });
+
+      return () => window.cancelAnimationFrame(frame);
     }
 
-    const previous = previousFocusRef.current;
-    previousFocusRef.current = null;
-
-    if (!previous || !document.contains(previous)) return;
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
     const frame = window.requestAnimationFrame(() => {
-      previous.focus({ preventScroll: true });
+      const modal = modalRef.current;
+      if (!modal) return;
+
+      // Desktop keeps the previous convenience of landing in the composer.
+      // Touch devices focus the dialog itself so opening the window does not
+      // summon the software keyboard before the user asks for it.
+      const finePointer =
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+      if (finePointer) {
+        const input = modal.querySelector<HTMLTextAreaElement>('[data-pierrot-input]');
+        if (input) {
+          input.focus({ preventScroll: true });
+          return;
+        }
+      }
+
+      modal.focus({ preventScroll: true });
     });
 
     return () => window.cancelAnimationFrame(frame);
@@ -135,10 +169,13 @@ export default function PierrotChat() {
       const last = focusable[focusable.length - 1];
       const active = document.activeElement;
 
-      if (!event.shiftKey && active === last) {
+      if (!event.shiftKey && (active === last || active === root || !root.contains(active))) {
         event.preventDefault();
         first.focus();
-      } else if (event.shiftKey && (active === first || !root.contains(active))) {
+      } else if (
+        event.shiftKey &&
+        (active === first || active === root || !root.contains(active))
+      ) {
         event.preventDefault();
         last.focus();
       }
@@ -148,15 +185,34 @@ export default function PierrotChat() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [closeChat, isOpen]);
 
-  const modalHeight = keyboardViewport
-    ? `${keyboardViewport.height}px`
-    : 'var(--tg-viewport-height, 100dvh)';
+  const safeLeft = 'max(0px, env(safe-area-inset-left), var(--tg-safe-area-left, 0px))';
+  const safeRight = 'max(0px, env(safe-area-inset-right), var(--tg-safe-area-right, 0px))';
 
-  const modalStyle: React.CSSProperties = {
-    height: modalHeight,
-    maxHeight: modalHeight,
-    ...(keyboardViewport ? { top: `${keyboardViewport.offsetTop}px` } : {}),
-  };
+  // One geometry model for the shell: the visual viewport rectangle when it is
+  // available, otherwise the CSS viewport with dynamic-viewport units. The
+  // custom property lets the composer cap its growth against the same height.
+  const modalStyle: React.CSSProperties = keyboardViewport
+    ? {
+        top: `${keyboardViewport.offsetTop}px`,
+        left: `${keyboardViewport.offsetLeft}px`,
+        width: `${keyboardViewport.width}px`,
+        height: `${keyboardViewport.height}px`,
+        maxWidth: `${keyboardViewport.width}px`,
+        maxHeight: `${keyboardViewport.height}px`,
+        paddingLeft: safeLeft,
+        paddingRight: safeRight,
+        ['--pierrot-viewport-height' as string]: `${keyboardViewport.height}px`,
+      }
+    : {
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: 'var(--tg-viewport-height, 100dvh)',
+        maxHeight: 'var(--tg-viewport-height, 100dvh)',
+        paddingLeft: safeLeft,
+        paddingRight: safeRight,
+        ['--pierrot-viewport-height' as string]: '100dvh',
+      };
 
   return (
     <>
@@ -171,9 +227,10 @@ export default function PierrotChat() {
                 transition={{
                   duration: shouldReduceMotion ? 0 : 0.16,
                 }}
+                data-pierrot-modal
                 className="
-                  fixed inset-x-0 top-0 z-[9999] flex h-[100dvh] w-full
-                  items-stretch justify-center bg-[#FAF8F5]
+                  fixed z-[9999] box-border flex items-stretch justify-center
+                  overflow-hidden overscroll-none bg-[#FAF8F5]
                 "
                 style={modalStyle}
                 role="dialog"
@@ -187,26 +244,26 @@ export default function PierrotChat() {
               >
                 <motion.section
                   ref={modalRef}
-                  initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 4 }}
+                  initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={shouldReduceMotion ? { opacity: 1 } : { opacity: 0 }}
                   transition={{
                     duration: shouldReduceMotion ? 0 : 0.16,
                   }}
+                  tabIndex={-1}
                   className="
-                    flex h-full max-h-full w-full flex-col overflow-hidden
-                    bg-[#FAF8F5] text-[#37332D]
+                    flex h-full min-h-0 max-h-full w-full min-w-0 flex-col
+                    overflow-hidden bg-[#FAF8F5] text-[#37332D] outline-none
                     shadow-[0_24px_80px_rgba(36,33,29,0.14)]
                   "
                   onMouseDown={(event: React.MouseEvent<HTMLElement>) => event.stopPropagation()}
                 >
                   <header
+                    data-pierrot-header
                     className="shrink-0 bg-transparent"
                     style={{
                       paddingTop:
                         'max(0px, env(safe-area-inset-top), var(--tg-safe-area-top, 0px))',
-                      paddingLeft: 'env(safe-area-inset-left)',
-                      paddingRight: 'env(safe-area-inset-right)',
                     }}
                   >
                     <div className="mx-auto flex w-full max-w-[1800px] items-center justify-between gap-2 px-4 py-4 sm:gap-4 sm:px-6 sm:py-6 lg:px-10">
@@ -283,20 +340,17 @@ export default function PierrotChat() {
                     </div>
                   </header>
 
-                  <PierrotMessageList className="flex-1" />
+                  <PierrotMessageList className="min-h-0 flex-1" />
 
                   <footer
+                    data-pierrot-footer
                     style={{
                       paddingBottom:
                         'max(12px, env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))',
-                      paddingLeft:
-                        'max(20px, env(safe-area-inset-left), var(--tg-safe-area-left, 0px))',
-                      paddingRight:
-                        'max(20px, env(safe-area-inset-right), var(--tg-safe-area-right, 0px))',
                     }}
                     className="
                       shrink-0 border-t border-[#ECE6DC]/60
-                      px-5 py-3 sm:px-7 sm:py-4
+                      px-5 pt-3 sm:px-7 sm:pt-4
                     "
                   >
                     <div className="mx-auto w-full max-w-3xl">
