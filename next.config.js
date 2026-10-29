@@ -60,6 +60,11 @@ const nextConfig = {
   // Автоматический Tree-Shaking для утилит и иконок
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns', '@tiptap/react'],
+    // Temporary production ingestion route needs the canonical manuscript in
+    // its serverless bundle. Removed together with the route after indexing.
+    outputFileTracingIncludes: {
+      '/api/admin/knowledge/**': ['./app/unframed/Unframed.markdown'],
+    },
     // Next 14: тот же эффект через experimental
     ...(nextMajor < 15 ? { serverComponentsExternalPackages: externalPackages } : {}),
     ...(process.env.DISABLE_OPTIMIZE_CSS === '1'

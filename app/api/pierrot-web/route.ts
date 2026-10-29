@@ -37,6 +37,13 @@ import { loadPierrotOfferRuntime } from '@/lib/pierrot/offerAvailability';
 import { recordPierrotCommercialAnalytics } from '@/lib/pierrot/commercialAnalytics';
 import { isServiceLeadIntent } from '@/lib/pierrot/serviceInquiry';
 import { advanceStoredServiceInquiry } from '@/lib/pierrot/serviceInquiryStore';
+import { isPierrotRagEnabled } from '@/lib/knowledge/rag/config';
+import { retrieveUnframedEvidence } from '@/lib/knowledge/rag/retrieval';
+import { buildUnframedEvidencePrompt } from '@/lib/knowledge/rag/pierrotContext';
+import {
+  isVerifiedOwnerCredential,
+  isVerifiedOwnerUser,
+} from '@/lib/knowledge/rag/authorization';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -187,11 +194,17 @@ export async function POST(req: Request) {
     // Check if requester is Admin (Anton Merkurov)
     let isAdmin = false;
     let currentUserId: string | null = null;
+    // Owner-only manuscript retrieval requires a verified server-side identity.
+    // The legacy shared x-admin-key below is deliberately not sufficient.
+    let ragOwnerAuthorized = false;
     try {
       const user = await getCurrentUser();
       currentUserId = user?.id ?? null;
       if (user?.role === 'ADMIN') {
         isAdmin = true;
+      }
+      if (isVerifiedOwnerUser(user)) {
+        ragOwnerAuthorized = true;
       }
     } catch {
       isAdmin = false;
@@ -208,6 +221,10 @@ export async function POST(req: Request) {
         try {
           const admin = await requireAdminFromRequest(req);
           isAdmin = admin.role === 'ADMIN';
+          // A dedicated service secret ("system-admin") is an existing admin
+          // credential, but it is not a user identity. Keep owner manuscript
+          // retrieval limited to verified user/admin sessions.
+          if (isVerifiedOwnerCredential(admin)) ragOwnerAuthorized = true;
         } catch {
           isAdmin = false;
         }
@@ -486,7 +503,38 @@ export async function POST(req: Request) {
         const prefersReasoning =
           isAdmin && reasoningKeywords.some((keyword) => contextScan.includes(keyword));
 
-        reply = await callDeepSeek(systemPrompt, openAiMessages, prefersReasoning);
+        // Owner-only UNFRAMED retrieval. When the flag is absent/false or the
+        // requester is not a verified owner, generation uses the exact existing
+        // prompt path. Retrieval failures fall back without breaking chat.
+        let generationSystemPrompt = systemPrompt;
+
+        if (isPierrotRagEnabled() && ragOwnerAuthorized) {
+          try {
+            const retrieval = await retrieveUnframedEvidence({
+              query: trimmedMessage,
+              scope: 'owner',
+              ownerAuthorized: true,
+            });
+            const ragPrompt = buildUnframedEvidencePrompt(retrieval);
+
+            if (ragPrompt) {
+              generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+            }
+
+            console.info('[Pierrot RAG]', {
+              status: retrieval.outcome,
+              scope: 'owner',
+              chunks: retrieval.hits.length,
+              latency_ms: retrieval.latencyMs,
+              code: retrieval.code ?? null,
+            });
+          } catch {
+            // Never log query text, passages or provider/database details.
+            console.warn('[Pierrot RAG] unavailable (unexpected)');
+          }
+        }
+
+        reply = await callDeepSeek(generationSystemPrompt, openAiMessages, prefersReasoning);
         usedProvider = 'deepseek';
       } catch (aiError) {
         if (pierrotStore && canStoreTranscript) {
