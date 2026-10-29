@@ -65,7 +65,7 @@ const CHUNK_COLUMNS = [
   'embedding',
 ].join(',');
 
-type RunAction = 'preflight' | 'ingest' | 'verify' | 'evaluate';
+type RunAction = 'preflight' | 'schema' | 'ingest' | 'verify' | 'evaluate';
 type EvaluationSplit = 'dev' | 'calibration' | 'test';
 
 type JsonBody = {
@@ -290,6 +290,74 @@ async function checkAnonymousAccess(): Promise<{
   };
 }
 
+async function probeSchema() {
+  const store = getServiceClient();
+
+  if (!store) {
+    return { status: 'blocked' as const, code: 'supabase_configuration_missing' };
+  }
+
+  const expected: Record<string, string[]> = {
+    knowledge_documents: [
+      'id',
+      'title',
+      'source_path',
+      'source_sha256',
+      'manifest_hash',
+      'parser_version',
+      'chunker_version',
+      'ingestion_version',
+      'embedding_model',
+      'embedding_dimensions',
+      'access_class',
+      'chunk_count',
+      'source_char_count',
+      'metadata',
+      'created_at',
+      'updated_at',
+    ],
+    knowledge_chunks: [
+      'id',
+      'document_id',
+      'embedding_model',
+      'embedding_dimensions',
+      'chunk_index',
+      'content',
+      'content_hash',
+      'heading',
+      'section_path',
+      'section_index',
+      'char_start',
+      'char_end',
+      'line_start',
+      'line_end',
+      'access_class',
+      'embedding',
+      'metadata',
+      'created_at',
+      'updated_at',
+    ],
+  };
+
+  const result: Record<string, { present: string[]; missing: string[] }> = {};
+
+  for (const [table, columns] of Object.entries(expected)) {
+    const present: string[] = [];
+    const missing: string[] = [];
+
+    for (const column of columns) {
+      const { error } = await store.from(table).select(column).limit(0);
+
+      if (error) missing.push(column);
+      else present.push(column);
+    }
+
+    result[table] = { present, missing };
+  }
+
+  return { status: 'ok' as const, tables: result };
+}
+
 async function buildPreflight() {
   const env = {
     openRouterKey: Boolean((process.env.OPENROUTER_API_KEY || '').trim()),
@@ -396,6 +464,8 @@ async function buildPreflight() {
     return {
       status: 'blocked' as const,
       code: errorCode(error),
+      phase: 'table_probe',
+      error: error instanceof Error ? error.message : 'unknown',
       check,
       env,
       project,
@@ -789,6 +859,7 @@ export async function POST(request: Request) {
 
   if (
     action !== 'preflight' &&
+    action !== 'schema' &&
     action !== 'ingest' &&
     action !== 'verify' &&
     action !== 'evaluate'
@@ -799,6 +870,10 @@ export async function POST(request: Request) {
   try {
     if (action === 'preflight') {
       return json(await buildPreflight());
+    }
+
+    if (action === 'schema') {
+      return json(await probeSchema());
     }
 
     if (action === 'ingest') {
