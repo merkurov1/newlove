@@ -1,7 +1,6 @@
 import { randomUUID } from 'crypto';
 import OpenAI from 'openai';
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getCurrentUser, requireAdminFromRequest } from '@/lib/serverAuth';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { getSectionByRoute } from '@/lib/pierrot/navigation';
@@ -59,6 +58,11 @@ IMPORTANT:
 - Detect the user's language and reply in the EXACT SAME language.
 - Never invent prices, routes, availability, editions, reviews, delivery terms or outcomes.
 - Commercial CTA buttons and routes are chosen by code; do not fabricate links.
+
+LINKS:
+- When mentioning a page of this site, use a markdown link, e.g. [Lobby](/lobby).
+- Allowed internal routes: /, /heartandangel, /lobby, /journal, /flow, /advising, /media, /heritage, /selection, /art-engine, /unframed.
+- Never link to admin or unknown pages.
 `;
 
 const PIERROT_PROMPT_OWNER = `
@@ -72,65 +76,11 @@ TONE & BEHAVIOR:
 - Concise, profound, loyal, and clear.
 - Tailor answers to Anton's voice: high aesthetics, precision, no fluff.
 - Match Anton's language (Russian or English).
+
+LINKS:
+- When mentioning a page of this site, use a markdown link, e.g. [Lobby](/lobby).
+- Allowed internal routes: /, /heartandangel, /lobby, /journal, /flow, /advising, /media, /heritage, /selection, /art-engine, /unframed.
 `;
-
-const FREE_MODELS_OPENROUTER = [
-  'openrouter/free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'deepseek/deepseek-r1:free',
-  'qwen/qwen-2.5-72b-instruct:free',
-  'google/gemma-2-9b-it:free',
-];
-
-// Helper to invoke Gemini
-async function callGemini(
-  systemPrompt: string,
-  history: Array<{ role: string; content: string }>,
-  message: string
-): Promise<string> {
-  const apiKey = (
-    process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.GOOGLE_KEY ||
-    process.env.google_API_key ||
-    ''
-  ).trim();
-
-  if (!apiKey) {
-    throw new Error('Gemini API key is not configured.');
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-  let lastError = null;
-
-  for (const modelName of candidateModels) {
-    try {
-      const model = genAI.getGenerativeModel({
-        model: modelName,
-        systemInstruction: systemPrompt,
-      });
-
-      const contents = history.map((item) => ({
-        role: item.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: item.content }],
-      }));
-
-      contents.push({ role: 'user', parts: [{ text: message }] });
-
-      const response = await model.generateContent({ contents });
-      const text = response.response.text();
-      if (text && text.trim().length > 0) {
-        return text.trim();
-      }
-    } catch (err: any) {
-      console.warn(`[Pierrot Gemini] Failed model ${modelName}:`, err?.message || err);
-      lastError = err;
-    }
-  }
-
-  throw lastError || new Error('All Gemini candidate models failed.');
-}
 
 // Helper to invoke DeepSeek
 async function callDeepSeek(
@@ -162,48 +112,6 @@ async function callDeepSeek(
   }
 
   return reply.trim();
-}
-
-// Helper to invoke OpenRouter
-async function callOpenRouter(
-  systemPrompt: string,
-  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
-): Promise<string> {
-  const apiKey = (process.env.OPENROUTER_API_KEY || '').trim();
-  if (!apiKey) {
-    throw new Error('OPENROUTER_API_KEY is not configured.');
-  }
-
-  const openai = new OpenAI({
-    baseURL: 'https://openrouter.ai/api/v1',
-    apiKey,
-    defaultHeaders: {
-      'HTTP-Referer': 'https://merkurov.love',
-      'X-Title': 'Pierrot Chatbot',
-    },
-  });
-
-  let lastError = null;
-
-  for (const model of FREE_MODELS_OPENROUTER) {
-    try {
-      const completion = await openai.chat.completions.create({
-        model,
-        messages: [{ role: 'system', content: systemPrompt }, ...messages],
-        temperature: 0.7,
-      });
-
-      const reply = completion?.choices[0]?.message?.content;
-      if (reply && reply.trim().length > 0) {
-        return reply.trim();
-      }
-    } catch (err: any) {
-      console.warn(`[Pierrot OpenRouter] Model ${model} failed:`, err?.message || err);
-      lastError = err;
-    }
-  }
-
-  throw lastError || new Error('All free OpenRouter models failed.');
 }
 
 export async function POST(req: Request) {
@@ -528,95 +436,48 @@ export async function POST(req: Request) {
 
     if (plan.useModel) {
       try {
-        // --- OWNER ROUTING: GEMINI VS DEEPSEEK (CONTEXT-AWARE) ---
-        if (isAdmin) {
-          const analyticalKeywords = [
-            'code',
-            'код',
-            'refactor',
-            'рефактор',
-            'bug',
-            'баг',
-            'error',
-            'ошибка',
-            'анализ',
-            'проанализируй',
-            'разбери',
-            'сравни',
-            'почему',
-            'архитектур',
-            'структур',
-            'алгоритм',
-            'логик',
-            'стратеги',
-            'детально',
-            'подробно',
-            'deep',
-            'reason',
-            'calculate',
-            'вычисли',
-            'исследуй',
-            'system',
-            'database',
-            'sql',
-          ];
+        // DeepSeek only. No OpenRouter/Gemini fallback: a failed request
+        // returns a clear 500 rather than silently switching providers.
+        const reasoningKeywords = [
+          'code',
+          'код',
+          'refactor',
+          'рефактор',
+          'bug',
+          'баг',
+          'error',
+          'ошибка',
+          'анализ',
+          'проанализируй',
+          'разбери',
+          'сравни',
+          'почему',
+          'архитектур',
+          'структур',
+          'алгоритм',
+          'логик',
+          'стратеги',
+          'детально',
+          'подробно',
+          'deep',
+          'reason',
+          'calculate',
+          'вычисли',
+          'исследуй',
+          'system',
+          'database',
+          'sql',
+        ];
 
-          const contextScan = `${trimmedMessage} ${normalizedHistory
-            .slice(-2)
-            .map((h) => h.content)
-            .join(' ')}`.toLowerCase();
-          const prefersDeepSeek = analyticalKeywords.some((kw) => contextScan.includes(kw));
+        const contextScan = `${trimmedMessage} ${normalizedHistory
+          .slice(-2)
+          .map((h) => h.content)
+          .join(' ')}`.toLowerCase();
+        const prefersReasoning =
+          isAdmin && reasoningKeywords.some((keyword) => contextScan.includes(keyword));
 
-          if (prefersDeepSeek) {
-            // DeepSeek first, fallback to Gemini, then OpenRouter
-            try {
-              reply = await callDeepSeek(systemPrompt, openAiMessages, true);
-              usedProvider = 'deepseek';
-            } catch (dsErr: any) {
-              console.warn(
-                '[Pierrot Admin] DeepSeek failed, falling back to Gemini:',
-                dsErr?.message
-              );
-              try {
-                reply = await callGemini(systemPrompt, normalizedHistory, trimmedMessage);
-                usedProvider = 'gemini';
-              } catch (gemErr: any) {
-                console.warn(
-                  '[Pierrot Admin] Gemini failed, falling back to OpenRouter:',
-                  gemErr?.message
-                );
-                reply = await callOpenRouter(systemPrompt, openAiMessages);
-                usedProvider = 'openrouter';
-              }
-            }
-          } else {
-            // Gemini first, fallback to DeepSeek, then OpenRouter
-            try {
-              reply = await callGemini(systemPrompt, normalizedHistory, trimmedMessage);
-              usedProvider = 'gemini';
-            } catch (gemErr: any) {
-              console.warn(
-                '[Pierrot Admin] Gemini failed, falling back to DeepSeek:',
-                gemErr?.message
-              );
-              try {
-                reply = await callDeepSeek(systemPrompt, openAiMessages, false);
-                usedProvider = 'deepseek';
-              } catch (dsErr: any) {
-                console.warn(
-                  '[Pierrot Admin] DeepSeek failed, falling back to OpenRouter:',
-                  dsErr?.message
-                );
-                reply = await callOpenRouter(systemPrompt, openAiMessages);
-                usedProvider = 'openrouter';
-              }
-            }
-          }
-        } else {
-          // --- PUBLIC ROUTING: OPENROUTER ---
-          reply = await callOpenRouter(systemPrompt, openAiMessages);
-          usedProvider = 'openrouter';
-        }
+        reply = await callDeepSeek(systemPrompt, openAiMessages, prefersReasoning);
+        usedProvider = 'deepseek';
       } catch (aiError) {
         if (pierrotStore && canStoreTranscript) {
           try {

@@ -8,6 +8,7 @@ import { ArrowUp, ArrowUpRight } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
 import usePrefersReducedMotion from '@/components/pierrot/usePrefersReducedMotion';
 import { createPierrotId, type PierrotChatAction } from '@/lib/pierrot/navigation';
+import { linkifyInternalRoutes } from '@/lib/pierrot/linkify';
 import { getPierrotConversationId, trackPierrotEvent } from '@/lib/pierrot/clientTelemetry';
 import {
   appendPierrotPostcardAttribution,
@@ -149,7 +150,7 @@ function PierrotMarkdown({ content }: { content: string }) {
         },
       }}
     >
-      {content}
+      {linkifyInternalRoutes(content)}
     </Markdown>
   );
 }
@@ -178,47 +179,45 @@ const PIERROT_MENU = [
 ] as const;
 
 function PierrotEmptyState() {
-  const { closeConversation } = usePierrot();
-
-  const focusInput = () => {
-    const input = document.querySelector<HTMLTextAreaElement>('textarea[data-pierrot-input]');
-    input?.focus({ preventScroll: true });
-  };
+  const { closeConversation, startConversation } = usePierrot();
 
   return (
-    <div className="mx-auto my-auto w-full max-w-2xl px-1 py-6 sm:py-8">
+    <div className="mx-auto my-auto w-full max-w-2xl px-1 py-3 sm:py-8">
       <p className="text-center font-serif text-sm italic tracking-wide text-zinc-600 sm:text-lg">
         Structure is the antidote to chaos.
       </p>
 
-      <div className="mt-6 flex justify-center">
+      <div className="mt-5 flex justify-center sm:mt-7">
         <button
           type="button"
-          onClick={focusInput}
+          onClick={startConversation}
           className="
-            group inline-flex items-center gap-2 font-sans text-sm font-bold
-            uppercase tracking-[0.2em] text-[#111111] transition-colors
-            hover:text-[#625B50]
+            group inline-flex items-center gap-3 rounded-full border
+            border-zinc-900/20 bg-white/80 px-5 py-2.5 font-serif text-base
+            font-normal italic tracking-wide text-[#111111] shadow-sm
+            backdrop-blur-sm transition-all duration-300 hover:bg-[#111111]
+            hover:text-[#FAF8F5] sm:px-7 sm:py-3.5 sm:text-lg
           "
         >
           Ask Pierrot something
           <ArrowUpRight
-            size={15}
+            size={17}
             className="
-              transition-transform duration-200
+              text-zinc-600 transition-all duration-300
               group-hover:-translate-y-0.5 group-hover:translate-x-0.5
+              group-hover:text-[#FAF8F5]
             "
           />
         </button>
       </div>
 
-      <nav aria-label="Pierrot site navigation" className="mt-8 space-y-3">
+      <nav aria-label="Pierrot site navigation" className="mt-6 space-y-2 sm:mt-10 sm:space-y-4">
         <Link
           href="/"
           onClick={() => closeConversation()}
           className="group flex items-baseline justify-between gap-4"
         >
-          <span className="font-sans text-sm font-bold uppercase tracking-[0.2em] text-[#111111] transition-colors group-hover:text-[#625B50]">
+          <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 transition-colors group-hover:text-[#111111]">
             Anton Merkurov
           </span>
           <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#B8B0A4]">
@@ -232,9 +231,10 @@ function PierrotEmptyState() {
               href={section.href}
               onClick={() => closeConversation()}
               className="
-                font-sans text-xl font-bold uppercase leading-tight
-                tracking-[0.16em] text-[#111111] transition-colors
-                hover:text-[#625B50] sm:text-3xl
+                font-serif text-xl font-normal leading-tight tracking-tight
+                text-[#111111] underline-offset-8 transition-colors
+                hover:text-zinc-600 hover:underline hover:decoration-zinc-300
+                sm:text-3xl
               "
             >
               {section.label}
@@ -244,9 +244,8 @@ function PierrotEmptyState() {
               href={section.child.href}
               onClick={() => closeConversation()}
               className="
-                font-sans text-xs font-bold uppercase tracking-[0.15em]
-                text-[#898277] transition-colors hover:text-[#111111]
-                sm:text-sm
+                font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500
+                transition-colors hover:text-[#111111] sm:text-[11px]
               "
             >
               {section.child.label}

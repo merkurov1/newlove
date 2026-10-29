@@ -6,6 +6,8 @@
  * escape the source first, then insert only a controlled set of tags.
  */
 
+import { linkifyInternalRoutes } from '@/lib/pierrot/linkify';
+
 const SITE_URL = 'https://www.merkurov.love';
 
 function escapeHtml(value: string): string {
@@ -17,7 +19,7 @@ function escapeHtml(value: string): string {
 }
 
 export function toTelegramHtml(markdown: string): string {
-  let text = markdown.replace(/\r\n?/g, '\n');
+  let text = linkifyInternalRoutes(markdown).replace(/\r\n?/g, '\n');
 
   // Keep code blocks literal: markdown inside them must not become tags.
   const codeBlocks: string[] = [];

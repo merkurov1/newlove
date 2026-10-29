@@ -21,13 +21,13 @@ The exact routes and capabilities evolve with the application. The source code i
 
 ## Architecture
 
-| Layer | Role |
-| --- | --- |
-| Next.js App Router + React | Website, server-rendered pages, route handlers, and application UI |
-| TypeScript | Application and tooling code |
-| Supabase | Primary application data, authentication, and configured storage services |
-| Vercel | Production hosting and deployment |
-| External services | Optional integrations used by specific features, configured through environment variables |
+| Layer                      | Role                                                                                      |
+| -------------------------- | ----------------------------------------------------------------------------------------- |
+| Next.js App Router + React | Website, server-rendered pages, route handlers, and application UI                        |
+| TypeScript                 | Application and tooling code                                                              |
+| Supabase                   | Primary application data, authentication, and configured storage services                 |
+| Vercel                     | Production hosting and deployment                                                         |
+| External services          | Optional integrations used by specific features, configured through environment variables |
 
 The project uses a mixture of server-side rendering, static generation, and revalidation where appropriate. Do not assume every route or integration uses the same rendering or caching strategy.
 
@@ -75,18 +75,19 @@ Some routes and integrations will not work until their corresponding services, d
 
 Start with [`.env.example`](./.env.example). The core variables currently documented there are:
 
-| Variable | Purpose |
-| --- | --- |
-| `NEXT_PUBLIC_APP_URL` | Canonical app URL for the current environment |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL used by client-side configuration |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase publishable/anon key |
-| `SUPABASE_URL` | Server-side Supabase project URL |
-| `SUPABASE_KEY` | Compatibility key used by selected integrations |
-| `SUPABASE_SERVICE_ROLE_KEY` | Privileged server-side Supabase access; **never expose to the browser** |
-| `TELEGRAM_WEBHOOK_SECRET` | Secret used to validate configured Telegram webhook requests |
+| Variable                          | Purpose                                                                                                                     |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_APP_URL`             | Canonical app URL for the current environment                                                                               |
+| `NEXT_PUBLIC_SUPABASE_URL`        | Supabase project URL used by client-side configuration                                                                      |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`   | Supabase publishable/anon key                                                                                               |
+| `SUPABASE_URL`                    | Server-side Supabase project URL                                                                                            |
+| `SUPABASE_KEY`                    | Compatibility key used by selected integrations                                                                             |
+| `SUPABASE_SERVICE_ROLE_KEY`       | Privileged server-side Supabase access; **never expose to the browser**                                                     |
+| `TELEGRAM_WEBHOOK_SECRET`         | Secret used to validate configured Telegram webhook requests                                                                |
 | `TELEGRAM_WEBHOOK_ENFORCE_SECRET` | Set to `1` only after the webhook is registered with `secret_token` matching `TELEGRAM_WEBHOOK_SECRET`; otherwise leave off |
-| `TELEGRAM_ALLOWED_USER_IDS` | Telegram user IDs allowed by the relevant bot workflow |
-| `NEXT_PUBLIC_SITE_NAME` | Optional display name |
+| `DEEPSEEK_API_KEY`                | DeepSeek key used by Pierrot web and the Telegram bot (the only chat provider)                                              |
+| `TELEGRAM_ALLOWED_USER_IDS`       | Telegram user IDs allowed by the relevant bot workflow                                                                      |
+| `NEXT_PUBLIC_SITE_NAME`           | Optional display name                                                                                                       |
 
 Individual features may require additional variables (for example, email delivery, payment processing, or AI providers). Check the relevant implementation and deployment documentation before configuring them.
 
@@ -119,12 +120,12 @@ The repository also defines specialised commands for Telegram research, deployme
 
 The Flow stream is published as RSS 2.0 and JSON Feed 1.1:
 
-| URL | Description |
-| --- | --- |
-| `/flow/rss` | Canonical RSS feed (all languages) |
-| `/flow/rss.xml` | Alias for readers that probe the `.xml` path |
-| `/flow/feed.json` | JSON Feed 1.1 mirror |
-| `/rss.xml` | Legacy URL, permanently redirects to `/flow/rss` |
+| URL               | Description                                      |
+| ----------------- | ------------------------------------------------ |
+| `/flow/rss`       | Canonical RSS feed (all languages)               |
+| `/flow/rss.xml`   | Alias for readers that probe the `.xml` path     |
+| `/flow/feed.json` | JSON Feed 1.1 mirror                             |
+| `/rss.xml`        | Legacy URL, permanently redirects to `/flow/rss` |
 
 Optional query parameters: `?lang=ru`, `?lang=en`, `?limit=1..100` (default 40). The RSS document includes Atom self-discovery, `content:encoded`, Media RSS previews, Dublin Core author metadata and `sy:updatePeriod`. Responses support `ETag`/`If-None-Match` and `Last-Modified`/`If-Modified-Since`, and are cached for 15 minutes with the `flow-items` revalidation tag, so publishing an item invalidates the feed immediately.
 

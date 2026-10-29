@@ -70,6 +70,7 @@ type PierrotContextValue = {
   pendingNavigation: PierrotNavigationProposal | null;
   openChat: () => void;
   openConversation: () => void;
+  startConversation: () => void;
   toggleConversation: () => void;
   closeConversation: () => void;
   closeChat: () => void;
@@ -247,6 +248,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   const introTimersRef = useRef<Record<string, number>>({});
   const navigationLockRef = useRef<string | null>(null);
   const navigationTargetRef = useRef<string | null>(null);
+  const startLockRef = useRef(false);
   const lastAuthUserIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
@@ -316,6 +318,30 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   const openConversation = useCallback(() => {
     setMode('modal');
   }, []);
+
+  const startConversation = useCallback(() => {
+    if (startLockRef.current || messagesRef.current.length > 0) return;
+
+    startLockRef.current = true;
+    setMode('modal');
+
+    appendMessage({
+      role: 'user',
+      content: 'Where should I start?',
+      meta: { kind: 'chat' },
+    });
+
+    appendMessage({
+      role: 'assistant',
+      content:
+        'Start with the [Lobby](/lobby) — it is the private office and the clearest way into the site. From there you can open [UNFRAMED](/unframed), the [Journal](/journal), the [Art Engine](/art-engine), or [Heart & Angel](/heartandangel).',
+      actions: [
+        { kind: 'navigate', label: 'Enter the Lobby', sectionId: 'lobby' },
+        { kind: 'navigate', label: 'Open the Journal', sectionId: 'journal' },
+      ],
+      meta: { kind: 'chat' },
+    });
+  }, [appendMessage]);
 
   const toggleConversation = useCallback(() => {
     setMode((current) => (current === 'modal' ? 'site' : 'modal'));
@@ -653,6 +679,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
 
       setMessages([]);
       messagesRef.current = [];
+      startLockRef.current = false;
       setDraft('');
       setDraftCaret(0);
       setIsLoading(false);
@@ -782,6 +809,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     pendingNavigation,
     openChat,
     openConversation,
+    startConversation,
     toggleConversation,
     closeConversation,
     closeChat,

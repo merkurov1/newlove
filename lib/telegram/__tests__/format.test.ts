@@ -5,6 +5,12 @@ describe('toTelegramHtml', () => {
     expect(toTelegramHtml('Read **this** and *that*.')).toBe('Read <b>this</b> and <i>that</i>.');
   });
 
+  it('links a known route written as prose', () => {
+    expect(toTelegramHtml('Арт (/heartandangel)')).toBe(
+      '<a href="https://www.merkurov.love/heartandangel">Арт</a>'
+    );
+  });
+
   it('converts safe links and makes internal routes absolute', () => {
     expect(toTelegramHtml('[Lobby](/lobby)')).toBe(
       '<a href="https://www.merkurov.love/lobby">Lobby</a>'

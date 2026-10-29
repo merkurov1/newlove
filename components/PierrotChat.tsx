@@ -173,7 +173,7 @@ export default function PierrotChat() {
                 }}
                 className="
                   fixed inset-x-0 top-0 z-[9999] flex h-[100dvh] w-full
-                  items-stretch justify-center bg-[#FAF8F4]
+                  items-stretch justify-center bg-[#FAF8F5]
                 "
                 style={modalStyle}
                 role="dialog"
@@ -195,7 +195,7 @@ export default function PierrotChat() {
                   }}
                   className="
                     flex h-full max-h-full w-full flex-col overflow-hidden
-                    bg-[#FAF8F4] text-[#37332D]
+                    bg-[#FAF8F5] text-[#37332D]
                     shadow-[0_24px_80px_rgba(36,33,29,0.14)]
                   "
                   onMouseDown={(event: React.MouseEvent<HTMLElement>) => event.stopPropagation()}

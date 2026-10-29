@@ -245,6 +245,40 @@ describe('Pierrot conversational navigation', () => {
     expect(link).toHaveAttribute('href', '/lobby');
   });
 
+  it('turns known routes in assistant prose into clickable links', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        reply:
+          'Погрузитесь в Арт (/heartandangel), Лобби (/lobby) или Журнал (/journal), чтобы почувствовать структуру.',
+      }),
+    });
+
+    renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
+
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByRole('textbox', { name: 'Message Pierrot' });
+
+    fireEvent.change(input, { target: { value: 'hi' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(chatFetchCalls()).toHaveLength(1);
+    });
+
+    expect(within(dialog).getByRole('link', { name: 'Арт' })).toHaveAttribute(
+      'href',
+      '/heartandangel'
+    );
+    expect(within(dialog).getByRole('link', { name: 'Лобби' })).toHaveAttribute('href', '/lobby');
+    expect(within(dialog).getByRole('link', { name: 'Журнал' })).toHaveAttribute(
+      'href',
+      '/journal'
+    );
+    expect(within(dialog).queryByText(/\/heartandangel/)).not.toBeInTheDocument();
+  });
+
   it('does not turn an unsafe markdown URL into a link', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -526,21 +560,21 @@ describe('Pierrot conversational navigation', () => {
     }
   });
 
-  it('starts a dialogue from the default CTA', () => {
+  it('starts a guaranteed curated dialogue from the default CTA', async () => {
     currentPathname = '/lobby';
     renderApp();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open test chat' }));
 
     const dialog = screen.getByRole('dialog');
-    const input = within(dialog).getByRole('textbox', { name: 'Message Pierrot' });
-
-    input.blur();
-    expect(input).not.toHaveFocus();
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Ask Pierrot something' }));
 
-    expect(input).toHaveFocus();
+    expect(within(dialog).getByText('Where should I start?')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Start with the/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Lobby' })).toHaveAttribute('href', '/lobby');
+    expect(within(dialog).getByRole('button', { name: 'Enter the Lobby' })).toBeInTheDocument();
+    expect(chatFetchCalls()).toHaveLength(0);
   });
 
   it('opens the Heritage scenario from the Lobby page', async () => {

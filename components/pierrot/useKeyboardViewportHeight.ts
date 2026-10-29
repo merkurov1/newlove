@@ -8,10 +8,9 @@ export type KeyboardViewport = {
 };
 
 /**
- * Returns the visual viewport whenever it is shorter than the layout viewport.
- * A keyboard can be an overlay (iOS) or resize the layout viewport (Android),
- * and waiting for a large inset leaves the input behind the keyboard on some
- * devices. Any positive inset is therefore treated as a viewport reduction.
+ * Returns the visual viewport only while a keyboard-sized inset is present.
+ * Small differences are browser chrome (toolbar/scrollbar), not a keyboard;
+ * shrinking the window for them leaves a visible gray strip at the bottom.
  *
  * The offset is needed because iOS can keep a fixed element anchored to the
  * layout viewport while the visual viewport is shifted by the keyboard.
@@ -33,7 +32,7 @@ export default function useKeyboardViewportHeight(active: boolean): KeyboardView
       const keyboardInset = window.innerHeight - viewport.height - viewport.offsetTop;
 
       setViewportSize(
-        keyboardInset > 0
+        keyboardInset > 120
           ? {
               height: viewport.height,
               offsetTop: viewport.offsetTop,

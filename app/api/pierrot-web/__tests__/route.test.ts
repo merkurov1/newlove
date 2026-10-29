@@ -61,7 +61,7 @@ jest.mock('openai', () => {
   };
 });
 
-process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+process.env.DEEPSEEK_API_KEY = 'test-deepseek-key';
 
 // require (not a static import) so the jest.mock registrations above are in
 // effect before the route and its dependencies are loaded.
@@ -152,6 +152,7 @@ describe('POST /api/pierrot-web persistence', () => {
     expect(response.status).toBe(200);
     expect(json).toMatchObject({
       reply: 'Pierrot reply',
+      provider: 'deepseek',
       conversationId,
       sessionId,
       userMessageId,
@@ -287,7 +288,7 @@ describe('POST /api/pierrot-web persistence', () => {
   it('replays an existing assistant reply instead of writing a duplicate on retry', async () => {
     asMock(pierrotStore.findPierrotAssistantReply).mockResolvedValueOnce({
       content: 'Stored reply',
-      provider: 'openrouter',
+      provider: 'deepseek',
     });
 
     const response = await POST(makeRequest(validBody()));
@@ -305,7 +306,7 @@ describe('POST /api/pierrot-web persistence', () => {
     asMock(pierrotStore.conversationBelongsToSession).mockResolvedValue(false);
     asMock(pierrotStore.findPierrotAssistantReply).mockResolvedValueOnce({
       content: "Somebody else's transcript",
-      provider: 'openrouter',
+      provider: 'deepseek',
     });
 
     const response = await POST(

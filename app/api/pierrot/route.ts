@@ -10,55 +10,41 @@ export const runtime = 'nodejs';
 const token = process.env.PIERROT_BOT_TOKEN;
 const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const apiKey = process.env.OPENROUTER_API_KEY;
+const apiKey = process.env.DEEPSEEK_API_KEY;
 
 if (!token) throw new Error('PIERROT_BOT_TOKEN is unset');
 if (!sbUrl || !sbKey) throw new Error('SUPABASE credentials missing');
-if (!apiKey) throw new Error('OPENROUTER_API_KEY is unset');
+if (!apiKey) throw new Error('DEEPSEEK_API_KEY is unset');
 
 // --- INIT ---
 const bot = new Bot(token);
 const supabase = createClient(sbUrl, sbKey);
 
 const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
+  baseURL: 'https://api.deepseek.com',
   apiKey: apiKey.trim(),
-  defaultHeaders: {
-    'HTTP-Referer': 'https://merkurov.love',
-    'X-Title': 'Pierrot Telegram Bot',
-  },
 });
 
-// Список бесплатных моделей с ротацией
-const FREE_MODELS = [
-  'openrouter/free', // Авто-выбор свободной модели
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'deepseek/deepseek-r1:free',
-  'qwen/qwen-2.5-72b-instruct:free',
-  'google/gemma-2-9b-it:free',
-];
-
-// Helper для вызова OpenRouter с фоллбеками
+// DeepSeek only: deepseek-chat for normal replies, deepseek-reasoner for the
+// long /cast analysis. A failure is surfaced through safeReply, not silently
+// routed to another provider.
 async function generateAIResponse(
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-  temperature = 0.7
+  temperature = 0.7,
+  isReasoning = false
 ): Promise<string> {
-  let lastError = null;
-  for (const model of FREE_MODELS) {
-    try {
-      const completion = await openai.chat.completions.create({
-        model,
-        messages,
-        temperature,
-      });
-      const reply = completion.choices[0]?.message?.content;
-      if (reply) return reply;
-    } catch (err: any) {
-      console.warn(`[Pierrot TG] Model ${model} failed:`, err?.message || err);
-      lastError = err;
-    }
+  const completion = await openai.chat.completions.create({
+    model: isReasoning ? 'deepseek-reasoner' : 'deepseek-chat',
+    messages,
+    temperature: isReasoning ? undefined : temperature,
+  });
+
+  const reply = completion.choices[0]?.message?.content;
+  if (!reply || !reply.trim()) {
+    throw new Error('DeepSeek returned empty response.');
   }
-  throw lastError || new Error('All free OpenRouter models failed.');
+
+  return reply.trim();
 }
 
 // --- DATA ---
@@ -107,6 +93,10 @@ TONE:
 
 LANGUAGE:
 - Reply in the EXACT SAME language as the user.
+
+LINKS:
+- When mentioning a page of this site, use a markdown link, e.g. [Lobby](/lobby).
+- Allowed internal routes: /, /heartandangel, /lobby, /journal, /flow, /advising, /media, /heritage, /selection, /art-engine, /unframed.
 `;
 
 bot.catch((err) => {
@@ -258,7 +248,11 @@ bot.on('message:text', async (ctx) => {
             [One imperative command]
           `;
 
-        const analysisText = await generateAIResponse([{ role: 'user', content: analysisPrompt }]);
+        const analysisText = await generateAIResponse(
+          [{ role: 'user', content: analysisPrompt }],
+          0.7,
+          true
+        );
 
         await safeReply(ctx, analysisText);
 
