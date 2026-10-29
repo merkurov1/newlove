@@ -19,7 +19,7 @@
 - Ввод: окно использует `visualViewport.height` и `offsetTop` при открытой клавиатуре, safe-area сверху/снизу, footer `shrink-0`, а textarea автоматически растёт до 144 px. Поле ввода остаётся внутри видимой области.
 - `HomePierrotMode`, `telegram-pierrot-inline`, `pierrot-inline-shell` и composer-режим удалены; `PierrotMode` теперь только `site | modal`.
 - Ответы Pierrot рендерятся как безопасный markdown: `**bold**`, `*italic*`, ссылки, списки и code больше не показываются literal; raw HTML отключён, URL фильтруются.
-- На default-странице добавлен CTA `Ask Pierrot something`: он фокусирует поле ввода и запускает диалог; ниже остаётся индекс `Or explore`.
+- На default-странице добавлен CTA `Ask Pierrot something`: он фокусирует поле ввода и запускает диалог. Ниже — компактный индекс без разделителей: крупный sans-uppercase раздел + мелкий дочерний (`LOBBY UNFRAMED`, `FLOW JOURNAL`, `ART ENGINE SELECTION`, `HEART & ANGEL TEMPLE`) в типографике Header.
 - Полный Jest после унификации: **61/61 suites, 365/365 tests PASS**.
 
 Разделы ниже, где упоминаются inline-режим и composer-порог, сохранены как история первичного аудита. Актуальное состояние — этот раздел и §7 (D-U1…D-U6).
@@ -138,7 +138,7 @@ SSR-прогон (dev, безопасные env-заглушки):
 | 24  | Telegram launcher → то же окно       | `/`                  | гость       | jsdom            | modal                   | modal                                 | PASS (fixed)        | там же                             |
 | 25  | Reset в шапке окна                   | `/`                  | гость       | jsdom            | очищает диалог          | очищает                               | PASS (fixed)        | `PierrotNavigation.test.tsx`       |
 | 26  | Клавиатура: высота/offset окна       | modal                | любой       | jsdom + мок VP   | input видим             | height 500 / top 50                   | PASS (fixed)        | `PierrotChatViewport.test.tsx`     |
-| 27  | Default-меню Pierrot                 | `/`, пустой диалог   | гость       | jsdom            | 5 разделов + brand      | все ссылки на месте                   | PASS                | `PierrotNavigation.test.tsx`       |
+| 27  | Default-меню Pierrot                 | `/`, пустой диалог   | гость       | jsdom + Chromium | 5 компактных строк      | все ссылки, без разделителей          | PASS                | `PierrotNavigation.test.tsx`       |
 | 28  | Шапка Pierrot = шапка Header         | modal                | любой       | статика          | avatar/logo/reset/close | выровнено                             | PASS (fixed)        | `PierrotChat.tsx`                  |
 | 29  | Markdown в ответе Pierrot            | modal                | гость       | jsdom            | bold/links, не `**`     | bold/link, raw HTML off               | PASS (fixed)        | `PierrotNavigation.test.tsx`       |
 | 30  | CTA «Ask Pierrot something»          | default window       | гость       | jsdom + Chromium | фокус в input           | фокус + input внутри viewport         | PASS                | `PierrotNavigation.test.tsx`       |
@@ -282,7 +282,7 @@ SSR-прогон (dev, безопасные env-заглушки):
 - **Воспроизведение:** открыть Pierrot или нажать `New chat`.
 - **Ожидание:** сохранённая фраза `Structure is the antidote to chaos.` и красивый индекс сайта.
 - **Факт:** старый hero `Context Architecture & Cultural Capital`, кнопки Art/Selection/Advising и Enter Lobby/Journal; меню Header не отражено.
-- **Исправление:** старый блок удалён; добавлен редакционный индекс `Anton Merkurov`, `Lobby → Unframed`, `Flow → Journal`, `Art Engine → Selection`, `Heart & Angel → Temple` с hairline-строками, индексами 01–04, serif-заголовками и mono-подписями. Пустой диалог теперь скроллится к началу, а не к низу.
+- **Исправление:** старый блок удалён; добавлен компактный индекс `Anton Merkurov`, `Lobby → Unframed`, `Flow → Journal`, `Art Engine → Selection`, `Heart & Angel → Temple` в типографике Header: крупный sans-uppercase раздел и мелкий дочерний в одну строку, без hairline-разделителей и номеров. CTA `Ask Pierrot something` фокусирует input. Пустой диалог скроллится к началу, а не к низу.
 - **Побочные эффекты:** меню стало прямой навигацией; это шаг к будущему отказу от Header-меню.
 - **Проверка:** `PierrotNavigation.test.tsx` (все 9 ссылок, старого hero нет).
 

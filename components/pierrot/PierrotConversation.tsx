@@ -186,47 +186,39 @@ function PierrotEmptyState() {
   };
 
   return (
-    <div className="mx-auto my-auto w-full max-w-2xl px-1 py-8 sm:py-10">
+    <div className="mx-auto my-auto w-full max-w-2xl px-1 py-6 sm:py-8">
       <p className="text-center font-serif text-sm italic tracking-wide text-zinc-600 sm:text-lg">
         Structure is the antidote to chaos.
       </p>
 
-      <button
-        type="button"
-        onClick={focusInput}
-        className="
-          group mt-8 flex w-full items-center justify-between gap-4
-          rounded-2xl border border-[#E4DCCF] bg-white/70 px-5 py-4
-          text-left transition-colors hover:border-[#CFC3B1] hover:bg-white
-        "
-      >
-        <span className="font-serif text-lg italic tracking-wide text-[#625B50] sm:text-xl">
-          Ask Pierrot something
-        </span>
-        <ArrowUpRight
-          size={18}
+      <div className="mt-6 flex justify-center">
+        <button
+          type="button"
+          onClick={focusInput}
           className="
-            shrink-0 text-[#898277] transition-transform
-            group-hover:-translate-y-0.5 group-hover:translate-x-0.5
-            group-hover:text-[#111111]
+            group inline-flex items-center gap-2 font-sans text-sm font-bold
+            uppercase tracking-[0.2em] text-[#111111] transition-colors
+            hover:text-[#625B50]
           "
-        />
-      </button>
-
-      <div className="mt-8 flex items-center gap-3">
-        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#B8B0A4]">
-          Or explore
-        </span>
-        <span className="h-px flex-1 bg-[#E4DCCF]" />
+        >
+          Ask Pierrot something
+          <ArrowUpRight
+            size={15}
+            className="
+              transition-transform duration-200
+              group-hover:-translate-y-0.5 group-hover:translate-x-0.5
+            "
+          />
+        </button>
       </div>
 
-      <nav aria-label="Pierrot site navigation" className="mt-4 border-b border-[#E4DCCF]">
+      <nav aria-label="Pierrot site navigation" className="mt-8 space-y-3">
         <Link
           href="/"
           onClick={() => closeConversation()}
-          className="group flex items-center justify-between gap-4 border-t border-[#E4DCCF] py-4"
+          className="group flex items-baseline justify-between gap-4"
         >
-          <span className="font-mono text-[10px] uppercase tracking-[0.26em] text-[#625B50] transition-colors group-hover:text-[#111111]">
+          <span className="font-sans text-sm font-bold uppercase tracking-[0.2em] text-[#111111] transition-colors group-hover:text-[#625B50]">
             Anton Merkurov
           </span>
           <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#B8B0A4]">
@@ -234,37 +226,30 @@ function PierrotEmptyState() {
           </span>
         </Link>
 
-        {PIERROT_MENU.map((section, index) => (
-          <div key={section.href} className="border-t border-[#E4DCCF]">
+        {PIERROT_MENU.map((section) => (
+          <div key={section.href} className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
             <Link
               href={section.href}
               onClick={() => closeConversation()}
-              className="group flex items-baseline justify-between gap-4 pt-4"
+              className="
+                font-sans text-xl font-bold uppercase leading-tight
+                tracking-[0.16em] text-[#111111] transition-colors
+                hover:text-[#625B50] sm:text-3xl
+              "
             >
-              <span className="min-w-0 font-serif text-2xl font-normal leading-tight tracking-tight text-[#111111] transition-colors group-hover:text-[#625B50] sm:text-3xl">
-                {section.label}
-              </span>
-              <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.2em] text-[#B8B0A4]">
-                {String(index + 1).padStart(2, '0')}
-              </span>
+              {section.label}
             </Link>
 
             <Link
               href={section.child.href}
               onClick={() => closeConversation()}
-              className="group mt-2 flex items-center gap-3 pb-4 pl-5 sm:pl-6"
+              className="
+                font-sans text-xs font-bold uppercase tracking-[0.15em]
+                text-[#898277] transition-colors hover:text-[#111111]
+                sm:text-sm
+              "
             >
-              <span
-                aria-hidden="true"
-                className="h-px w-5 bg-[#CFC3B1] transition-all duration-300 group-hover:w-8 group-hover:bg-[#8D3D2E]"
-              />
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#898277] transition-colors group-hover:text-[#111111]">
-                {section.child.label}
-              </span>
-              <ArrowUpRight
-                size={13}
-                className="text-[#B8B0A4] transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[#111111]"
-              />
+              {section.child.label}
             </Link>
           </div>
         ))}
