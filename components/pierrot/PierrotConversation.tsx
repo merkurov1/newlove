@@ -1,16 +1,12 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowUp, ArrowUpRight } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
 import usePrefersReducedMotion from '@/components/pierrot/usePrefersReducedMotion';
-import {
-  createPierrotId,
-  type PierrotChatAction,
-  type PierrotSectionId,
-} from '@/lib/pierrot/navigation';
+import { createPierrotId, type PierrotChatAction } from '@/lib/pierrot/navigation';
 import { getPierrotConversationId, trackPierrotEvent } from '@/lib/pierrot/clientTelemetry';
 import {
   appendPierrotPostcardAttribution,
@@ -21,88 +17,90 @@ import {
   createPierrotUnframedRef,
 } from '@/lib/pierrot/orderAttribution';
 
-const HOME_CHAT_SECTIONS: Array<{ label: string; sectionId: PierrotSectionId }> = [
-  { label: 'Art', sectionId: 'art' },
-  { label: 'Selection', sectionId: 'selection' },
-  { label: 'Advising', sectionId: 'advising' },
-];
+const PIERROT_MENU = [
+  {
+    label: 'Lobby',
+    href: '/lobby',
+    child: { label: 'Unframed', href: '/unframed' },
+  },
+  {
+    label: 'Flow',
+    href: '/flow',
+    child: { label: 'Journal', href: '/journal' },
+  },
+  {
+    label: 'Art Engine',
+    href: '/art-engine',
+    child: { label: 'Selection', href: '/selection' },
+  },
+  {
+    label: 'Heart & Angel',
+    href: '/heartandangel',
+    child: { label: 'Temple', href: '/temple' },
+  },
+] as const;
 
 function PierrotEmptyState() {
-  const { exploreSection } = usePierrot();
+  const { closeConversation } = usePierrot();
 
   return (
-    <div className="my-auto flex w-full flex-col items-center justify-center px-2 py-10 text-center">
-      <p className="max-w-lg font-serif text-sm italic tracking-wide text-zinc-600 sm:text-lg">
+    <div className="mx-auto my-auto w-full max-w-2xl px-1 py-8 sm:py-10">
+      <p className="text-center font-serif text-sm italic tracking-wide text-zinc-600 sm:text-lg">
         Structure is the antidote to chaos.
       </p>
 
-      <h2 className="mt-7 max-w-2xl break-words font-serif text-3xl font-normal leading-[1.15] tracking-tight text-[#111111] sm:text-5xl">
-        Context Architecture <br className="hidden sm:inline" />
-        <span className="font-serif italic text-zinc-500">&amp; Cultural Capital</span>
-      </h2>
-
       <nav
-        aria-label="Pierrot sections"
-        className="mt-8 flex flex-wrap items-center justify-center gap-3 px-2 font-mono text-xs uppercase tracking-[0.2em] sm:gap-6 sm:text-sm"
+        aria-label="Pierrot site navigation"
+        className="mt-10 border-b border-[#E4DCCF] sm:mt-12"
       >
-        {HOME_CHAT_SECTIONS.map((section) => (
-          <button
-            key={section.sectionId}
-            type="button"
-            onClick={() => exploreSection(section.sectionId)}
-            className="
-              inline-flex items-center py-2 text-[#111111]
-              underline decoration-zinc-300 underline-offset-8
-              transition-colors hover:text-zinc-600
-              hover:decoration-black
-            "
-          >
-            {section.label}
-          </button>
+        <Link
+          href="/"
+          onClick={() => closeConversation()}
+          className="group flex items-center justify-between gap-4 border-t border-[#E4DCCF] py-4"
+        >
+          <span className="font-mono text-[10px] uppercase tracking-[0.26em] text-[#625B50] transition-colors group-hover:text-[#111111]">
+            Anton Merkurov
+          </span>
+          <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#B8B0A4]">
+            Home
+          </span>
+        </Link>
+
+        {PIERROT_MENU.map((section, index) => (
+          <div key={section.href} className="border-t border-[#E4DCCF]">
+            <Link
+              href={section.href}
+              onClick={() => closeConversation()}
+              className="group flex items-baseline justify-between gap-4 pt-4"
+            >
+              <span className="min-w-0 font-serif text-2xl font-normal leading-tight tracking-tight text-[#111111] transition-colors group-hover:text-[#625B50] sm:text-3xl">
+                {section.label}
+              </span>
+              <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.2em] text-[#B8B0A4]">
+                {String(index + 1).padStart(2, '0')}
+              </span>
+            </Link>
+
+            <Link
+              href={section.child.href}
+              onClick={() => closeConversation()}
+              className="group mt-2 flex items-center gap-3 pb-4 pl-5 sm:pl-6"
+            >
+              <span
+                aria-hidden="true"
+                className="h-px w-5 bg-[#CFC3B1] transition-all duration-300 group-hover:w-8 group-hover:bg-[#8D3D2E]"
+              />
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#898277] transition-colors group-hover:text-[#111111]">
+                {section.child.label}
+              </span>
+              <ArrowUpRight
+                size={13}
+                className="text-[#B8B0A4] transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[#111111]"
+              />
+            </Link>
+          </div>
         ))}
       </nav>
-
-      <div className="mt-7 flex flex-col items-center gap-3">
-        <button
-          type="button"
-          onClick={() => exploreSection('lobby')}
-          className="
-            group inline-flex items-center gap-3 rounded-full
-            border border-zinc-900/20 bg-white/80 px-7 py-3
-            text-[#111111] shadow-sm backdrop-blur-sm
-            transition-all duration-300 hover:bg-[#111111]
-            hover:text-[#FAF8F5]
-          "
-        >
-          <span className="px-1 font-serif text-base font-normal italic tracking-wide">
-            Enter The Lobby
-          </span>
-          <ArrowUpRight
-            size={18}
-            className="text-zinc-600 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[#FAF8F5]"
-          />
-        </button>
-
-        <button
-          type="button"
-          onClick={() => exploreSection('journal')}
-          className="
-            group inline-flex items-center gap-3 rounded-full
-            border border-zinc-900/20 bg-white/80 px-7 py-3
-            text-[#111111] shadow-sm backdrop-blur-sm
-            transition-all duration-300 hover:bg-[#111111]
-            hover:text-[#FAF8F5]
-          "
-        >
-          <span className="px-1 font-serif text-base font-normal italic tracking-wide">
-            Journal
-          </span>
-          <ArrowUpRight
-            size={18}
-            className="text-zinc-600 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[#FAF8F5]"
-          />
-        </button>
-      </div>
     </div>
   );
 }
@@ -112,17 +110,18 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldReduceMotion = usePrefersReducedMotion();
 
-  const scrollToBottom = useCallback(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    container.scrollTop = container.scrollHeight;
-  }, []);
-
   useEffect(() => {
-    const frame = window.requestAnimationFrame(scrollToBottom);
+    const frame = window.requestAnimationFrame(() => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      // The empty state is a navigation index, not a transcript. Always show
+      // it from the top; only real conversations should stick to the bottom.
+      container.scrollTop = messages.length === 0 ? 0 : container.scrollHeight;
+    });
+
     return () => window.cancelAnimationFrame(frame);
-  }, [messages, isLoading, scrollToBottom]);
+  }, [messages, isLoading]);
 
   const handleAction = (action: PierrotChatAction) => {
     void runAction(action);

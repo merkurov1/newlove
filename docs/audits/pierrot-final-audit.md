@@ -14,6 +14,7 @@
 - На всех страницах и в Telegram используется **одно полноэкранное окно** `components/PierrotChat.tsx`.
 - Точки входа: compact-P в Header, плавающий P на главной, P в Telegram-навигации и ссылки `PierrotSectionLink`. Все они открывают один и тот же modal.
 - В шапке окна: аватар Pierrot, имя `Pierrot`, подпись `Digital shadow & advisor`, admin-бейдж `Master`, кнопка `New chat` (reset) и `Close Pierrot`.
+- Default/empty state — редакционный навигационный индекс: `Structure is the antidote to chaos.` + `Anton Merkurov`, `Lobby → Unframed`, `Flow → Journal`, `Art Engine → Selection`, `Heart & Angel → Temple`. Старый hero-блок (`Context Architecture…`, Art/Selection/Advising, Enter Lobby/Journal) удалён.
 - Окно рендерится в portal на `z-[9999]`, поэтому кнопка `FLOW` из основного Header (`z-50`) не перекрывает reset/close. Header, Footer и главная остаются в обычном виде; отдельного «второго» Pierrot-экрана нет.
 - Ввод: окно использует `visualViewport.height` и `offsetTop` при открытой клавиатуре, safe-area сверху/снизу, footer `shrink-0`, а textarea автоматически растёт до 144 px. Поле ввода остаётся внутри видимой области.
 - `HomePierrotMode`, `telegram-pierrot-inline`, `pierrot-inline-shell` и composer-режим удалены; `PierrotMode` теперь только `site | modal`.
@@ -135,6 +136,7 @@ SSR-прогон (dev, безопасные env-заглушки):
 | 24  | Telegram launcher → то же окно       | `/`                  | гость       | jsdom            | modal                 | modal                                 | PASS (fixed)        | там же                             |
 | 25  | Reset в шапке окна                   | `/`                  | гость       | jsdom            | очищает диалог        | очищает                               | PASS (fixed)        | `PierrotNavigation.test.tsx`       |
 | 26  | Клавиатура: высота/offset окна       | modal                | любой       | jsdom + мок VP   | input видим           | height 500 / top 50                   | PASS (fixed)        | `PierrotChatViewport.test.tsx`     |
+| 27  | Default-меню Pierrot                 | `/`, пустой диалог   | гость       | jsdom            | 5 разделов + brand    | все ссылки на месте                   | PASS                | `PierrotNavigation.test.tsx`       |
 
 ---
 
@@ -163,7 +165,7 @@ SSR-прогон (dev, безопасные env-заглушки):
 - `components/PierrotChat.tsx` — единое окно, аватар/имя/reset/close, safe-area, viewport.
 - `components/pierrot/PierrotContext.tsx` — один режим (site/modal), удалены inline/composer, auth-reset.
 - `components/pierrot/PierrotComposer.tsx` — только launcher, открывающий общее окно.
-- `components/pierrot/PierrotConversation.tsx` — auto-grow поля ввода.
+- `components/pierrot/PierrotConversation.tsx` — auto-grow поля ввода + default-индекс навигации.
 - `components/pierrot/useKeyboardViewportHeight.ts` — height + offsetTop.
 - `components/pierrot/HomePierrotMode.tsx` — удалён.
 - `components/Header.tsx` — обычный Header, Flow только admin.
@@ -248,6 +250,16 @@ SSR-прогон (dev, безопасные env-заглушки):
 - **Факт:** в inline-режиме основной Header с Flow оставался на экране; в modal header был другой, и элементы могли визуально конкурировать.
 - **Исправление:** единственное окно — full-screen portal `z-[9999]`; основной Header (`z-50`) остаётся позади; reset/close живут в собственной шапке окна.
 - **Проверка:** `PierrotNavigation.test.tsx` (reset в шапке), статическая проверка z-index; пиксельно — после браузерного прогона.
+
+#### D-U4 — P2. Default-страница Pierrot была маркетинговым hero, а не навигацией
+
+- **Где:** `components/pierrot/PierrotConversation.tsx`.
+- **Воспроизведение:** открыть Pierrot или нажать `New chat`.
+- **Ожидание:** сохранённая фраза `Structure is the antidote to chaos.` и красивый индекс сайта.
+- **Факт:** старый hero `Context Architecture & Cultural Capital`, кнопки Art/Selection/Advising и Enter Lobby/Journal; меню Header не отражено.
+- **Исправление:** старый блок удалён; добавлен редакционный индекс `Anton Merkurov`, `Lobby → Unframed`, `Flow → Journal`, `Art Engine → Selection`, `Heart & Angel → Temple` с hairline-строками, индексами 01–04, serif-заголовками и mono-подписями. Пустой диалог теперь скроллится к началу, а не к низу.
+- **Побочные эффекты:** меню стало прямой навигацией; это шаг к будущему отказу от Header-меню.
+- **Проверка:** `PierrotNavigation.test.tsx` (все 9 ссылок, старого hero нет).
 
 ### Не исправлялись (осознанно)
 

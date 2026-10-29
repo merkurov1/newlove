@@ -446,7 +446,7 @@ describe('Pierrot conversational navigation', () => {
     expect(await screen.findByText(/You're now in Selection\./)).toBeInTheDocument();
   });
 
-  it('shows homepage copy in the empty conversation and uses section buttons', async () => {
+  it('shows the navigation index in the empty conversation', () => {
     currentPathname = '/lobby';
     renderApp();
 
@@ -455,12 +455,21 @@ describe('Pierrot conversational navigation', () => {
     const dialog = screen.getByRole('dialog');
 
     expect(within(dialog).getByText('Structure is the antidote to chaos.')).toBeInTheDocument();
-    expect(within(dialog).getByText(/Context Architecture/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Context Architecture/)).not.toBeInTheDocument();
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Selection' }));
-
-    expect(await within(dialog).findByText(/Selection is the vault/)).toBeInTheDocument();
-    expect(chatFetchCalls()).toHaveLength(0);
+    for (const name of [
+      'Anton Merkurov',
+      'Lobby',
+      'Unframed',
+      'Flow',
+      'Journal',
+      'Art Engine',
+      'Selection',
+      'Heart & Angel',
+      'Temple',
+    ]) {
+      expect(within(dialog).getByRole('link', { name: new RegExp(name, 'i') })).toBeInTheDocument();
+    }
   });
 
   it('opens the Heritage scenario from the Lobby page', async () => {
