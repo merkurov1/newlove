@@ -1,15 +1,11 @@
 'use client';
 
 import React from 'react';
-import useIsTelegram from '@/components/useIsTelegram';
-import { usePierrot } from '@/components/pierrot/PierrotContext';
 import { PierrotInput, PierrotMessageList } from '@/components/pierrot/PierrotConversation';
 import PierrotDataNotice from '@/components/pierrot/PierrotDataNotice';
 import useKeyboardViewportHeight from '@/components/pierrot/useKeyboardViewportHeight';
 
 export default function HomePierrotMode() {
-  const isTelegram = useIsTelegram();
-  const { closeConversation } = usePierrot();
   const keyboardViewportHeight = useKeyboardViewportHeight(true);
   const height = keyboardViewportHeight
     ? `${keyboardViewportHeight}px`
@@ -19,7 +15,7 @@ export default function HomePierrotMode() {
     <main
       style={{ height }}
       className="
-        relative flex h-[100dvh] w-full flex-col overflow-hidden
+        pierrot-inline-shell relative flex h-[100dvh] w-full flex-col overflow-hidden
         bg-[#FAF8F5] pt-24 text-[#111111] font-sans
         selection:bg-[#111111] selection:text-[#FAF8F5] antialiased
         sm:pt-28 md:pt-32
@@ -45,26 +41,6 @@ export default function HomePierrotMode() {
           <PierrotInput />
         </div>
       </div>
-
-      {isTelegram && (
-        <button
-          type="button"
-          onClick={closeConversation}
-          aria-label="Exit Pierrot mode"
-          title="Back to Merkurov"
-          className="
-            fixed bottom-[max(1rem,env(safe-area-inset-bottom),var(--tg-safe-area-bottom,0px))]
-            left-[max(1rem,env(safe-area-inset-left),var(--tg-safe-area-left,0px))]
-            z-50 flex h-11 w-11 items-center justify-center
-            rounded-full border border-[#E4DCCF] bg-[#F8F5EF]/95
-            font-serif text-[17px] font-medium text-[#625B50] shadow-md
-            backdrop-blur-md transition-colors hover:border-[#CFC3B1]
-            hover:bg-white hover:text-[#3F3A33] active:scale-95
-          "
-        >
-          P
-        </button>
-      )}
     </main>
   );
 }

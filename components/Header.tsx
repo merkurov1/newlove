@@ -141,7 +141,14 @@ export default function Header() {
 
   const displayBrand = isHomeMode ? 'Pierrot' : brandDisplay;
 
-  if (telegramApp || isImmersiveRoute) {
+  if (isImmersiveRoute) {
+    return null;
+  }
+
+  // Inside Telegram the compact Mini App navigation replaces the web header,
+  // except in Pierrot's homepage inline mode. There the conversation keeps the
+  // same identity, menu and exit control as the web experience.
+  if (telegramApp && !isHomeMode) {
     return null;
   }
 

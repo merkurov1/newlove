@@ -99,7 +99,10 @@ export default function PierrotComposer() {
       {isComposerOpen && (
         <div
           style={{
-            paddingBottom: isTelegram ? `calc(${safeBottom} + 56px)` : safeBottom,
+            // The Telegram navigation is hidden while the composer is open, so
+            // the form only needs the device safe area, not the extra 56px used
+            // by the closed P button to clear that navigation.
+            paddingBottom: safeBottom,
             paddingLeft: 'max(1rem, env(safe-area-inset-left), var(--tg-safe-area-left, 0px))',
             paddingRight: 'max(1rem, env(safe-area-inset-right), var(--tg-safe-area-right, 0px))',
           }}

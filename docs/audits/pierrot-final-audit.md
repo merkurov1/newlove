@@ -13,7 +13,8 @@
 
 - P0/P1 дефектов не найдено.
 - Найдено и исправлено 4 воспроизводимых P2-дефекта и 1 P3 ARIA-дефект.
-- Полный Jest-прогон: **57/57 suites, 350/350 tests PASS**.
+- Полный Jest-прогон: **58/58 suites, 351/351 tests PASS**.
+- Telegram inline-режим приведён к веб-поведению: показывается тот же Header (Pierrot, аватар, меню, Exit), убран дублирующий нижний выход; открытый composer больше не оставляет лишний 56 px снизу.
 - TypeScript: **PASS** (чистый `tsc --noEmit`).
 - Production build: **compile + typecheck PASS**; полная статическая генерация в этом окружении упирается в отсутствие реальных env и внешний `fonts.gstatic.com`, а не в код.
 - Реальная браузерная геометрия/скриншоты/мобильная клавиатура **не проверены**: в окружении нет Playwright/Puppeteer/Chromium.
@@ -33,7 +34,7 @@
 ### После аудита
 
 - Изменены 9 файлов, добавлены 3 регрессионных теста и этот отчёт (см. §7).
-- `npm test`: **350/350 PASS**, 57/57 suites.
+- `npm test`: **351/351 PASS**, 58/58 suites.
 - `tsc --noEmit`: **PASS**.
 - `next lint` по затронутым файлам: новых ошибок нет; остаются только pre-existing `no-explicit-any` в `Header.tsx` и repo-wide `react/react-in-jsx-scope` из сломанного конфига.
 - Коммиты/пуш не выполнялись. Production-данные, Supabase, Stripe, Vercel, env не менялись.
@@ -90,30 +91,32 @@ SSR-прогон (dev, безопасные env-заглушки):
 
 ## 5. Матрица тестов
 
-| #   | Сценарий                                | Маршрут/контекст     | Авторизация | Viewport         | Ожидание              | Факт                                  | Статус              | Доказательство                 |
-| --- | --------------------------------------- | -------------------- | ----------- | ---------------- | --------------------- | ------------------------------------- | ------------------- | ------------------------------ |
-| 1   | Открыть Pierrot inline                  | `/`                  | гость       | jsdom            | inline-режим          | работает                              | PASS                | `PierrotNavigation.test.tsx`   |
-| 2   | Открыть/закрыть composer P              | `/`                  | гость       | jsdom            | работает              | работает                              | PASS                | там же                         |
-| 3   | Модалка, закрытие, сохранение черновика | `/lobby`             | гость       | jsdom            | черновик сохранён     | работает                              | PASS                | там же                         |
-| 4   | Отправить короткое сообщение            | `/`                  | гость       | jsdom            | 1 запрос              | 1 запрос                              | PASS                | там же                         |
-| 5   | Подтверждение навигации + arrival       | `/`                  | гость       | jsdom            | 1 переход, без дублей | работает                              | PASS                | там же                         |
-| 6   | Flow-кнопка у non-admin                 | Header               | non-admin   | статика + jest   | скрыта                | скрыта                                | PASS (fixed)        | `HeaderPierrotFlow.test.tsx`   |
-| 7   | Flow-кнопка у admin                     | Header               | admin       | статика + jest   | видна рядом с P       | видна                                 | PASS                | там же                         |
-| 8   | Сброс истории/бейджа при logout         | modal                | admin→guest | jsdom            | очищено               | очищено                               | PASS (fixed)        | `PierrotAuthReset.test.tsx`    |
-| 9   | История не чистится при F5              | modal                | admin       | jsdom            | сохранена             | сохранена                             | PASS                | там же                         |
-| 10  | Hook order null→ready                   | `/flow/[slug]`       | любой       | jsdom            | без краша             | без краша                             | PASS (fixed)        | `PierrotContextBlock.test.tsx` |
-| 11  | Escape / focus trap                     | modal                | любой       | статика          | работает              | код есть                              | PARTIAL             | `PierrotChat.tsx`              |
-| 12  | Flow vs clear: перекрытие               | auth + modal         | auth        | 320–1440         | нет перекрытия        | статически нет; пиксельно не измерено | PARTIAL             | см. §6                         |
-| 13  | P на immersive-маршрутах                | `/temple`, `/vigil`… | любой       | статика          | доступна              | отсутствует                           | FAIL (design)       | `Header.tsx`                   |
-| 14  | API validation                          | `/api/pierrot-web`   | n/a         | node/curl        | 400/413               | 400/413                               | PASS                | curl + jest                    |
-| 15  | Consent denied → нет записи             | API                  | n/a         | node             | нет store             | нет store                             | PASS                | `route.test.ts`                |
-| 16  | Идемпотентность / чужой session id      | API                  | n/a         | node             | replay/deny           | корректно                             | PASS                | `route.test.ts`                |
-| 17  | Детерминированный оффер                 | API                  | гость       | curl             | 200 + CTA             | 200 + CTA                             | PASS                | curl                           |
-| 18  | Полный Jest                             | весь проект          | n/a         | node             | зелёный               | 350/350                               | PASS                | см. §8                         |
-| 19  | TypeScript                              | весь проект          | n/a         | —                | без ошибок            | без ошибок                            | PASS                | `tsc`                          |
-| 20  | Production build                        | весь проект          | n/a         | —                | собирается            | compile+types OK; static — env/fonts  | PARTIAL             | см. §8                         |
-| 21  | Lint                                    | весь проект          | n/a         | —                | зелёный               | baseline 6334                         | FAIL (pre-existing) | см. §8                         |
-| 22  | Визуальная одинаковость страниц         | 10+ маршрутов        | —           | реальный браузер | —                     | не проверено                          | NOT TESTED          | нет браузера                   |
+| #   | Сценарий                                | Маршрут/контекст     | Авторизация | Viewport         | Ожидание              | Факт                                  | Статус              | Доказательство                     |
+| --- | --------------------------------------- | -------------------- | ----------- | ---------------- | --------------------- | ------------------------------------- | ------------------- | ---------------------------------- |
+| 1   | Открыть Pierrot inline                  | `/`                  | гость       | jsdom            | inline-режим          | работает                              | PASS                | `PierrotNavigation.test.tsx`       |
+| 2   | Открыть/закрыть composer P              | `/`                  | гость       | jsdom            | работает              | работает                              | PASS                | там же                             |
+| 3   | Модалка, закрытие, сохранение черновика | `/lobby`             | гость       | jsdom            | черновик сохранён     | работает                              | PASS                | там же                             |
+| 4   | Отправить короткое сообщение            | `/`                  | гость       | jsdom            | 1 запрос              | 1 запрос                              | PASS                | там же                             |
+| 5   | Подтверждение навигации + arrival       | `/`                  | гость       | jsdom            | 1 переход, без дублей | работает                              | PASS                | там же                             |
+| 6   | Flow-кнопка у non-admin                 | Header               | non-admin   | статика + jest   | скрыта                | скрыта                                | PASS (fixed)        | `HeaderPierrotFlow.test.tsx`       |
+| 7   | Flow-кнопка у admin                     | Header               | admin       | статика + jest   | видна рядом с P       | видна                                 | PASS                | там же                             |
+| 8   | Сброс истории/бейджа при logout         | modal                | admin→guest | jsdom            | очищено               | очищено                               | PASS (fixed)        | `PierrotAuthReset.test.tsx`        |
+| 9   | История не чистится при F5              | modal                | admin       | jsdom            | сохранена             | сохранена                             | PASS                | там же                             |
+| 10  | Hook order null→ready                   | `/flow/[slug]`       | любой       | jsdom            | без краша             | без краша                             | PASS (fixed)        | `PierrotContextBlock.test.tsx`     |
+| 11  | Escape / focus trap                     | modal                | любой       | статика          | работает              | код есть                              | PARTIAL             | `PierrotChat.tsx`                  |
+| 12  | Flow vs clear: перекрытие               | auth + modal         | auth        | 320–1440         | нет перекрытия        | статически нет; пиксельно не измерено | PARTIAL             | см. §6                             |
+| 13  | P на immersive-маршрутах                | `/temple`, `/vigil`… | любой       | статика          | доступна              | отсутствует                           | FAIL (design)       | `Header.tsx`                       |
+| 14  | API validation                          | `/api/pierrot-web`   | n/a         | node/curl        | 400/413               | 400/413                               | PASS                | curl + jest                        |
+| 15  | Consent denied → нет записи             | API                  | n/a         | node             | нет store             | нет store                             | PASS                | `route.test.ts`                    |
+| 16  | Идемпотентность / чужой session id      | API                  | n/a         | node             | replay/deny           | корректно                             | PASS                | `route.test.ts`                    |
+| 17  | Детерминированный оффер                 | API                  | гость       | curl             | 200 + CTA             | 200 + CTA                             | PASS                | curl                               |
+| 18  | Полный Jest                             | весь проект          | n/a         | node             | зелёный               | 351/351                               | PASS                | см. §8                             |
+| 19  | TypeScript                              | весь проект          | n/a         | —                | без ошибок            | без ошибок                            | PASS                | `tsc`                              |
+| 20  | Production build                        | весь проект          | n/a         | —                | собирается            | compile+types OK; static — env/fonts  | PARTIAL             | см. §8                             |
+| 21  | Lint                                    | весь проект          | n/a         | —                | зелёный               | baseline 6334                         | FAIL (pre-existing) | см. §8                             |
+| 22  | Визуальная одинаковость страниц         | 10+ маршрутов        | —           | реальный браузер | —                     | не проверено                          | NOT TESTED          | нет браузера                       |
+| 23  | Telegram site→inline→exit               | `/`                  | гость       | jsdom + CSS      | как в вебе            | Header/Exit как в вебе                | PASS (fixed)        | `TelegramPierrotBehavior.test.tsx` |
+| 24  | Telegram composer без лишнего отступа   | `/`                  | гость       | jsdom            | safe area             | safe area, без 56 px                  | PASS (fixed)        | там же                             |
 
 ---
 
@@ -139,13 +142,16 @@ SSR-прогон (dev, безопасные env-заглушки):
 
 ### Изменённые файлы
 
-- `components/pierrot/PierrotComposer.tsx` — D1, D5.
-- `components/Header.tsx` — D2.
+- `components/pierrot/PierrotComposer.tsx` — D1, D5, D-T2.
+- `components/Header.tsx` — D2, D-T1.
+- `components/TelegramMiniApp.tsx` — D-T1.
+- `components/pierrot/HomePierrotMode.tsx` — D-T1.
+- `app/main.css` — D-T1.
 - `components/pierrot/PierrotContext.tsx` — D3.
 - `components/PierrotChat.tsx` — D3 (обёртка обработчика `New chat`).
 - `components/flow/PierrotContextBlock.tsx` — D4.
 - `lib/newsletter/__tests__/language.test.ts`, `lib/journal/__tests__/preview.test.ts`, `lib/flow/__tests__/bilingual.test.ts`, `lib/flow/__tests__/flowLayout.test.ts` — перевод с `node:test`/скриптового стиля на Jest (инфраструктура тестов, не Pierrot-логика).
-- Добавлены: `components/pierrot/__tests__/PierrotAuthReset.test.tsx`, `components/flow/__tests__/PierrotContextBlock.test.tsx`, `components/__tests__/HeaderPierrotFlow.test.tsx`.
+- Добавлены: `components/pierrot/__tests__/PierrotAuthReset.test.tsx`, `components/flow/__tests__/PierrotContextBlock.test.tsx`, `components/__tests__/HeaderPierrotFlow.test.tsx`, `components/telegram/__tests__/TelegramPierrotBehavior.test.tsx`.
 - Добавлен: `docs/audits/pierrot-final-audit.md`.
 
 ### Исправленные
@@ -199,6 +205,26 @@ SSR-прогон (dev, безопасные env-заглушки):
 - **Исправление:** убран `aria-controls` у закрытой кнопки, т.к. целевой формы нет в DOM.
 - **Проверка:** статически; поведение не изменилось.
 
+#### D-T1 — P2. Telegram inline-режим расходился с вебом
+
+- **Где:** `components/Header.tsx`, `components/TelegramMiniApp.tsx`, `components/pierrot/HomePierrotMode.tsx`, `app/main.css`.
+- **Воспроизведение:** открыть Mini App → нажать `P` на главной.
+- **Ожидание:** как в вебе — остаётся Header с брендом «Pierrot», аватаром, меню и Exit; контент под ним.
+- **Факт:** Header был скрыт всегда (`body.telegram-app .site-header { display:none !important }`), сверху оставался пустой `pt-24`, а выход был отдельной нижней P.
+- **Первопричина:** Telegram-шелл скрывал web-header во всех режимах; inline-режим не имел своего класса.
+- **Исправление:** Header рендерится в Telegram только в inline-режиме; `TelegramMiniApp` добавляет `body.telegram-pierrot-inline`; CSS разрешает Header и учитывает `--tg-safe-area-top`; дублирующий нижний Exit удалён.
+- **Побочные эффекты:** в Telegram inline появляется web-меню/профиль (как в вебе); модалка и site-режим не затронуты.
+- **Проверка:** `TelegramPierrotBehavior.test.tsx` (site → inline → exit, один Exit, body-класс). Пиксельная проверка в реальном Telegram — после деплоя.
+
+#### D-T2 — P3. Открытый composer в Telegram оставлял лишние 56 px
+
+- **Где:** `components/pierrot/PierrotComposer.tsx`.
+- **Воспроизведение:** на главной в Telegram нажать `P` composer.
+- **Ожидание:** форма у нижнего safe-area, как в вебе.
+- **Факт:** форма сохраняла `+56px`, хотя Telegram-навигация в composer-режиме скрыта.
+- **Исправление:** 56 px оставлены только у закрытой P (чтобы не перекрывать нижнюю навигацию); открытая форма использует только safe-area.
+- **Проверка:** `TelegramPierrotBehavior.test.tsx` (inline style без `56px`).
+
 ### Не исправлялись (осознанно)
 
 #### D6 — P3. Pierrot недоступен на immersive-маршрутах
@@ -209,9 +235,9 @@ SSR-прогон (dev, безопасные env-заглушки):
 
 `body.overflow = hidden` без компенсации ширины скроллбара. На desktop возможен горизонтальный сдвиг. Лечится `scrollbar-gutter: stable` глобально — вне минимального фикса.
 
-#### D8 — P3. Дублирующий P в Telegram
+#### D8 — P3. Два P в Telegram site-режиме
 
-На главной в Telegram одновременно есть P в `TelegramNavigation` и `PierrotComposer` (разные функции, одинаковый смысл).
+На главной в Telegram одновременно есть P в `TelegramNavigation` (открывает inline-разговор) и `PierrotComposer` (открывает быстрый composer). Это разные функции, как compact-P и composer-P в вебе; после D-T1 inline-режим использует тот же Header/Exit, что и веб. Оставлено осознанно.
 
 ---
 
@@ -220,7 +246,7 @@ SSR-прогон (dev, безопасные env-заглушки):
 | Проверка                        | Команда                                                                                                                       | Результат                                                                                            |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | Pierrot Jest                    | `npx jest lib/pierrot components/pierrot app/api/pierrot-web app/api/pierrot/conversations app/api/admin/pierrot --runInBand` | 15 suites, **128 tests PASS**                                                                        |
-| Полный Jest                     | `npx jest --runInBand --forceExit`                                                                                            | 57 suites, **350 tests PASS**                                                                        |
+| Полный Jest                     | `npx jest --runInBand --forceExit`                                                                                            | 58 suites, **351 tests PASS**                                                                        |
 | TypeScript                      | `tsc --noEmit -p tsconfig.json`                                                                                               | **PASS**, 0 ошибок                                                                                   |
 | Prettier (затронутые файлы)     | `prettier --check ...`                                                                                                        | **PASS**                                                                                             |
 | Production build                | `next build` (без реальных env)                                                                                               | compile **PASS**, typecheck **PASS**, page data **FAIL** из-за отсутствия `NEXT_PUBLIC_SUPABASE_URL` |
@@ -292,6 +318,8 @@ SSR-прогон (dev, безопасные env-заглушки):
 6. **Нет виртуализации истории** — длинные диалоги могут тормозить.
 7. **Lint-конфиг** — repo-wide технический долг; не блокирует build, но делает `npm run lint` бесполезным.
 8. **Flow-контекст** — исправлен hook-order, но сам блок по-прежнему рендерит markdown без санитайзера на клиенте (контент приходит с сервера, не от пользователя; риск низкий).
+9. **Telegram-детект** — `useIsTelegram` ждёт `initData` от SDK, загружаемого `lazyOnload`; в первые кадры в Mini App может мелькнуть web-header. Функционально не ломает Pierrot, но требует проверки на реальном Telegram.
+10. **Telegram parity** — inline-режим выровнен в jsdom и CSS, но реальный Telegram WebApp (safe-area, клавиатура, BackButton, закрытие) ещё не проверялся.
 
 ---
 
@@ -303,8 +331,9 @@ SSR-прогон (dev, безопасные env-заглушки):
 
 1. В Vercel заданы все env из `.env.example` (Supabase, OpenRouter, Gemini/DeepSeek, Telegram, Stripe, admin secrets).
 2. После деплоя вручную проверены в браузере: `/`, `/lobby`, `/flow`, `/journal`, `/unframed/book`, `/temple`; гость и admin; открытие/закрытие/повторное открытие Pierrot; позиция P на главной; отсутствие Flow у non-admin; отсутствие `Master` после logout.
-3. Отдельно проверены мобильные 320–390 px и открытая клавиатура.
-4. Настроен retention purge (pg_cron или внешний job) и, при необходимости, внешний rate limit.
-5. Принято продуктовое решение по immersive-маршрутам и consent-политике.
+3. В реальном Telegram Mini App проверены: `P` → inline с тем же Header/Exit, что в вебе; BackButton; composer без лишнего нижнего отступа; safe-area сверху/снизу; отсутствие мелькания web-header.
+4. Отдельно проверены мобильные 320–390 px и открытая клавиатура.
+5. Настроен retention purge (pg_cron или внешний job) и, при необходимости, внешний rate limit.
+6. Принято продуктовое решение по immersive-маршрутам и consent-политике.
 
 P0/P1-блокеров нет. Все исправления минимальны и локальны; архитектура, схема БД, env и production-конфигурация не менялись.
