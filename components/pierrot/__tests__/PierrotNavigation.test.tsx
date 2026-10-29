@@ -213,7 +213,61 @@ describe('Pierrot conversational navigation', () => {
     await waitFor(() => {
       expect(within(dialog).getByText('Structure is the antidote to chaos.')).toBeInTheDocument();
     });
-    expect(within(dialog).queryByRole('button', { name: 'New chat' })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'New chat' })).toBeDisabled();
+  });
+
+  it('renders assistant markdown as formatting, not literal asterisks', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        reply: 'Read **this** and open [Lobby](/lobby).',
+      }),
+    });
+
+    renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
+
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByRole('textbox', { name: 'Message Pierrot' });
+
+    fireEvent.change(input, { target: { value: 'hi' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(chatFetchCalls()).toHaveLength(1);
+    });
+
+    const strong = await within(dialog).findByText('this');
+    expect(strong.tagName).toBe('STRONG');
+    expect(within(dialog).queryByText(/\*\*this\*\*/)).not.toBeInTheDocument();
+
+    const link = within(dialog).getByRole('link', { name: 'Lobby' });
+    expect(link).toHaveAttribute('href', '/lobby');
+  });
+
+  it('does not turn an unsafe markdown URL into a link', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        reply: 'Do not follow [this](javascript:alert(1)).',
+      }),
+    });
+
+    renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
+
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByRole('textbox', { name: 'Message Pierrot' });
+
+    fireEvent.change(input, { target: { value: 'hi' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(chatFetchCalls()).toHaveLength(1);
+    });
+
+    expect(await within(dialog).findByText('this')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('link', { name: 'this' })).not.toBeInTheDocument();
   });
 
   it('opens Art as a conversation and inserts its curated intro once', async () => {

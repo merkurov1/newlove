@@ -84,6 +84,7 @@ Start with [`.env.example`](./.env.example). The core variables currently docume
 | `SUPABASE_KEY` | Compatibility key used by selected integrations |
 | `SUPABASE_SERVICE_ROLE_KEY` | Privileged server-side Supabase access; **never expose to the browser** |
 | `TELEGRAM_WEBHOOK_SECRET` | Secret used to validate configured Telegram webhook requests |
+| `TELEGRAM_WEBHOOK_ENFORCE_SECRET` | Set to `1` only after the webhook is registered with `secret_token` matching `TELEGRAM_WEBHOOK_SECRET`; otherwise leave off |
 | `TELEGRAM_ALLOWED_USER_IDS` | Telegram user IDs allowed by the relevant bot workflow |
 | `NEXT_PUBLIC_SITE_NAME` | Optional display name |
 

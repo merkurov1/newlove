@@ -671,8 +671,8 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
 
   // Conversation history lives in sessionStorage and is shared by every tab
   // session. When the authenticated identity changes (sign-in, sign-out or a
-  // different account), drop the previous identity's transcript and the
-  // owner-only "Master" badge instead of showing them to the next user.
+  // different account), drop the previous identity's transcript and owner-only
+  // state instead of showing them to the next user.
   useEffect(() => {
     if (isAuthLoading) return;
 

@@ -13,14 +13,15 @@
 
 - На всех страницах и в Telegram используется **одно полноэкранное окно** `components/PierrotChat.tsx`.
 - Точки входа: compact-P в Header, плавающий P на главной, P в Telegram-навигации и ссылки `PierrotSectionLink`. Все они открывают один и тот же modal.
-- В шапке окна: аватар Pierrot, имя `Pierrot`, подпись `Digital shadow & advisor`, admin-бейдж `Master`, кнопка `New chat` (reset) и `Close Pierrot`.
+- В шапке окна: аватар Pierrot (те же 40/44 px, ring и shadow, что у аватара пользователя), имя `Pierrot` тем же шрифтом/размером/трекингом, что лого в Header, кнопки `New chat` (reset) и `Close Pierrot` в тех же пропорциях 40/44 px.
 - Default/empty state — редакционный навигационный индекс: `Structure is the antidote to chaos.` + `Anton Merkurov`, `Lobby → Unframed`, `Flow → Journal`, `Art Engine → Selection`, `Heart & Angel → Temple`. Старый hero-блок (`Context Architecture…`, Art/Selection/Advising, Enter Lobby/Journal) удалён.
 - Окно рендерится в portal на `z-[9999]`, поэтому кнопка `FLOW` из основного Header (`z-50`) не перекрывает reset/close. Header, Footer и главная остаются в обычном виде; отдельного «второго» Pierrot-экрана нет.
 - Ввод: окно использует `visualViewport.height` и `offsetTop` при открытой клавиатуре, safe-area сверху/снизу, footer `shrink-0`, а textarea автоматически растёт до 144 px. Поле ввода остаётся внутри видимой области.
 - `HomePierrotMode`, `telegram-pierrot-inline`, `pierrot-inline-shell` и composer-режим удалены; `PierrotMode` теперь только `site | modal`.
-- Полный Jest после унификации: **60/60 suites, 356/356 tests PASS**.
+- Ответы Pierrot рендерятся как безопасный markdown: `**bold**`, `*italic*`, ссылки, списки и code больше не показываются literal; raw HTML отключён, URL фильтруются.
+- Полный Jest после унификации: **61/61 suites, 363/363 tests PASS**.
 
-Разделы ниже, где упоминаются inline-режим и composer-порог, сохранены как история первичного аудита. Актуальное состояние — этот раздел и §7 (D-U1…D-U3).
+Разделы ниже, где упоминаются inline-режим и composer-порог, сохранены как история первичного аудита. Актуальное состояние — этот раздел и §7 (D-U1…D-U6).
 
 ---
 
@@ -30,7 +31,7 @@
 
 - P0/P1 дефектов не найдено.
 - Найдено и исправлено 6 воспроизводимых P2/P3-дефектов, включая унификацию окна.
-- Полный Jest-прогон: **60/60 suites, 356/356 tests PASS**.
+- Полный Jest-прогон: **61/61 suites, 363/363 tests PASS**.
 - Оставлено одно окно Pierrot с аватаром, именем, reset и close; поле ввода защищено от ухода за экран, reset не перекрывается Flow.
 - TypeScript: **PASS** (чистый `tsc --noEmit`).
 - Production build: **compile + typecheck PASS**; полная статическая генерация в этом окружении упирается в отсутствие реальных env и внешний `fonts.gstatic.com`, а не в код.
@@ -51,7 +52,7 @@
 ### После аудита
 
 - Изменены 13 файлов, удалён `HomePierrotMode`, добавлены 5 регрессионных тестов и этот отчёт (см. §7).
-- `npm test`: **356/356 PASS**, 60/60 suites.
+- `npm test`: **363/363 PASS**, 61/61 suites.
 - `tsc --noEmit`: **PASS**.
 - `next lint` по затронутым файлам: новых ошибок нет; остаются только pre-existing `no-explicit-any` в `Header.tsx` и repo-wide `react/react-in-jsx-scope` из сломанного конфига.
 - Коммиты/пуш не выполнялись. Production-данные, Supabase, Stripe, Vercel, env не менялись.
@@ -108,35 +109,37 @@ SSR-прогон (dev, безопасные env-заглушки):
 
 ## 5. Матрица тестов
 
-| #   | Сценарий                             | Маршрут/контекст     | Авторизация | Viewport         | Ожидание              | Факт                                  | Статус              | Доказательство                     |
-| --- | ------------------------------------ | -------------------- | ----------- | ---------------- | --------------------- | ------------------------------------- | ------------------- | ---------------------------------- |
-| 1   | Открыть Pierrot window               | `/`                  | гость       | jsdom            | modal                 | работает                              | PASS                | `PierrotNavigation.test.tsx`       |
-| 2   | Launcher P открывает то же окно      | `/`                  | гость       | jsdom            | modal                 | работает                              | PASS                | там же                             |
-| 3   | Окно, закрытие, сохранение черновика | `/lobby`             | гость       | jsdom            | черновик сохранён     | работает                              | PASS                | там же                             |
-| 4   | Отправить короткое сообщение         | `/`                  | гость       | jsdom            | 1 запрос              | 1 запрос                              | PASS                | там же                             |
-| 5   | Подтверждение навигации + arrival    | `/`                  | гость       | jsdom            | 1 переход, без дублей | работает                              | PASS                | там же                             |
-| 6   | Flow-кнопка у non-admin              | Header               | non-admin   | статика + jest   | скрыта                | скрыта                                | PASS (fixed)        | `HeaderPierrotFlow.test.tsx`       |
-| 7   | Flow-кнопка у admin                  | Header               | admin       | статика + jest   | видна рядом с P       | видна                                 | PASS                | там же                             |
-| 8   | Сброс истории/бейджа при logout      | modal                | admin→guest | jsdom            | очищено               | очищено                               | PASS (fixed)        | `PierrotAuthReset.test.tsx`        |
-| 9   | История не чистится при F5           | modal                | admin       | jsdom            | сохранена             | сохранена                             | PASS                | там же                             |
-| 10  | Hook order null→ready                | `/flow/[slug]`       | любой       | jsdom            | без краша             | без краша                             | PASS (fixed)        | `PierrotContextBlock.test.tsx`     |
-| 11  | Escape / focus trap                  | modal                | любой       | статика          | работает              | код есть                              | PARTIAL             | `PierrotChat.tsx`                  |
-| 12  | Flow vs clear: перекрытие            | auth + modal         | auth        | 320–1440         | нет перекрытия        | статически нет; пиксельно не измерено | PARTIAL             | см. §6                             |
-| 13  | P на immersive-маршрутах             | `/temple`, `/vigil`… | любой       | статика          | доступна              | отсутствует                           | FAIL (design)       | `Header.tsx`                       |
-| 14  | API validation                       | `/api/pierrot-web`   | n/a         | node/curl        | 400/413               | 400/413                               | PASS                | curl + jest                        |
-| 15  | Consent denied → нет записи          | API                  | n/a         | node             | нет store             | нет store                             | PASS                | `route.test.ts`                    |
-| 16  | Идемпотентность / чужой session id   | API                  | n/a         | node             | replay/deny           | корректно                             | PASS                | `route.test.ts`                    |
-| 17  | Детерминированный оффер              | API                  | гость       | curl             | 200 + CTA             | 200 + CTA                             | PASS                | curl                               |
-| 18  | Полный Jest                          | весь проект          | n/a         | node             | зелёный               | 356/356                               | PASS                | см. §8                             |
-| 19  | TypeScript                           | весь проект          | n/a         | —                | без ошибок            | без ошибок                            | PASS                | `tsc`                              |
-| 20  | Production build                     | весь проект          | n/a         | —                | собирается            | compile+types OK; static — env/fonts  | PARTIAL             | см. §8                             |
-| 21  | Lint                                 | весь проект          | n/a         | —                | зелёный               | baseline 6334                         | FAIL (pre-existing) | см. §8                             |
-| 22  | Визуальная одинаковость страниц      | 10+ маршрутов        | —           | реальный браузер | —                     | не проверено                          | NOT TESTED          | нет браузера                       |
-| 23  | Telegram P → одно окно               | `/`                  | гость       | jsdom            | modal                 | modal                                 | PASS (fixed)        | `TelegramPierrotBehavior.test.tsx` |
-| 24  | Telegram launcher → то же окно       | `/`                  | гость       | jsdom            | modal                 | modal                                 | PASS (fixed)        | там же                             |
-| 25  | Reset в шапке окна                   | `/`                  | гость       | jsdom            | очищает диалог        | очищает                               | PASS (fixed)        | `PierrotNavigation.test.tsx`       |
-| 26  | Клавиатура: высота/offset окна       | modal                | любой       | jsdom + мок VP   | input видим           | height 500 / top 50                   | PASS (fixed)        | `PierrotChatViewport.test.tsx`     |
-| 27  | Default-меню Pierrot                 | `/`, пустой диалог   | гость       | jsdom            | 5 разделов + brand    | все ссылки на месте                   | PASS                | `PierrotNavigation.test.tsx`       |
+| #   | Сценарий                             | Маршрут/контекст     | Авторизация | Viewport         | Ожидание                | Факт                                  | Статус              | Доказательство                     |
+| --- | ------------------------------------ | -------------------- | ----------- | ---------------- | ----------------------- | ------------------------------------- | ------------------- | ---------------------------------- |
+| 1   | Открыть Pierrot window               | `/`                  | гость       | jsdom            | modal                   | работает                              | PASS                | `PierrotNavigation.test.tsx`       |
+| 2   | Launcher P открывает то же окно      | `/`                  | гость       | jsdom            | modal                   | работает                              | PASS                | там же                             |
+| 3   | Окно, закрытие, сохранение черновика | `/lobby`             | гость       | jsdom            | черновик сохранён       | работает                              | PASS                | там же                             |
+| 4   | Отправить короткое сообщение         | `/`                  | гость       | jsdom            | 1 запрос                | 1 запрос                              | PASS                | там же                             |
+| 5   | Подтверждение навигации + arrival    | `/`                  | гость       | jsdom            | 1 переход, без дублей   | работает                              | PASS                | там же                             |
+| 6   | Flow-кнопка у non-admin              | Header               | non-admin   | статика + jest   | скрыта                  | скрыта                                | PASS (fixed)        | `HeaderPierrotFlow.test.tsx`       |
+| 7   | Flow-кнопка у admin                  | Header               | admin       | статика + jest   | видна рядом с P         | видна                                 | PASS                | там же                             |
+| 8   | Сброс истории/бейджа при logout      | modal                | admin→guest | jsdom            | очищено                 | очищено                               | PASS (fixed)        | `PierrotAuthReset.test.tsx`        |
+| 9   | История не чистится при F5           | modal                | admin       | jsdom            | сохранена               | сохранена                             | PASS                | там же                             |
+| 10  | Hook order null→ready                | `/flow/[slug]`       | любой       | jsdom            | без краша               | без краша                             | PASS (fixed)        | `PierrotContextBlock.test.tsx`     |
+| 11  | Escape / focus trap                  | modal                | любой       | статика          | работает                | код есть                              | PARTIAL             | `PierrotChat.tsx`                  |
+| 12  | Flow vs clear: перекрытие            | auth + modal         | auth        | 320–1440         | нет перекрытия          | статически нет; пиксельно не измерено | PARTIAL             | см. §6                             |
+| 13  | P на immersive-маршрутах             | `/temple`, `/vigil`… | любой       | статика          | доступна                | отсутствует                           | FAIL (design)       | `Header.tsx`                       |
+| 14  | API validation                       | `/api/pierrot-web`   | n/a         | node/curl        | 400/413                 | 400/413                               | PASS                | curl + jest                        |
+| 15  | Consent denied → нет записи          | API                  | n/a         | node             | нет store               | нет store                             | PASS                | `route.test.ts`                    |
+| 16  | Идемпотентность / чужой session id   | API                  | n/a         | node             | replay/deny             | корректно                             | PASS                | `route.test.ts`                    |
+| 17  | Детерминированный оффер              | API                  | гость       | curl             | 200 + CTA               | 200 + CTA                             | PASS                | curl                               |
+| 18  | Полный Jest                          | весь проект          | n/a         | node             | зелёный                 | 363/363                               | PASS                | см. §8                             |
+| 19  | TypeScript                           | весь проект          | n/a         | —                | без ошибок              | без ошибок                            | PASS                | `tsc`                              |
+| 20  | Production build                     | весь проект          | n/a         | —                | собирается              | compile+types OK; static — env/fonts  | PARTIAL             | см. §8                             |
+| 21  | Lint                                 | весь проект          | n/a         | —                | зелёный                 | baseline 6334                         | FAIL (pre-existing) | см. §8                             |
+| 22  | Визуальная одинаковость страниц      | 10+ маршрутов        | —           | реальный браузер | —                       | не проверено                          | NOT TESTED          | нет браузера                       |
+| 23  | Telegram P → одно окно               | `/`                  | гость       | jsdom            | modal                   | modal                                 | PASS (fixed)        | `TelegramPierrotBehavior.test.tsx` |
+| 24  | Telegram launcher → то же окно       | `/`                  | гость       | jsdom            | modal                   | modal                                 | PASS (fixed)        | там же                             |
+| 25  | Reset в шапке окна                   | `/`                  | гость       | jsdom            | очищает диалог          | очищает                               | PASS (fixed)        | `PierrotNavigation.test.tsx`       |
+| 26  | Клавиатура: высота/offset окна       | modal                | любой       | jsdom + мок VP   | input видим             | height 500 / top 50                   | PASS (fixed)        | `PierrotChatViewport.test.tsx`     |
+| 27  | Default-меню Pierrot                 | `/`, пустой диалог   | гость       | jsdom            | 5 разделов + brand      | все ссылки на месте                   | PASS                | `PierrotNavigation.test.tsx`       |
+| 28  | Шапка Pierrot = шапка Header         | modal                | любой       | статика          | avatar/logo/reset/close | выровнено                             | PASS (fixed)        | `PierrotChat.tsx`                  |
+| 29  | Markdown в ответе Pierrot            | modal                | гость       | jsdom            | bold/links, не `**`     | bold/link, raw HTML off               | PASS (fixed)        | `PierrotNavigation.test.tsx`       |
 
 ---
 
@@ -165,7 +168,7 @@ SSR-прогон (dev, безопасные env-заглушки):
 - `components/PierrotChat.tsx` — единое окно, аватар/имя/reset/close, safe-area, viewport.
 - `components/pierrot/PierrotContext.tsx` — один режим (site/modal), удалены inline/composer, auth-reset.
 - `components/pierrot/PierrotComposer.tsx` — только launcher, открывающий общее окно.
-- `components/pierrot/PierrotConversation.tsx` — auto-grow поля ввода + default-индекс навигации.
+- `components/pierrot/PierrotConversation.tsx` — auto-grow поля ввода, default-индекс навигации, безопасный markdown ответов.
 - `components/pierrot/useKeyboardViewportHeight.ts` — height + offsetTop.
 - `components/pierrot/HomePierrotMode.tsx` — удалён.
 - `components/Header.tsx` — обычный Header, Flow только admin.
@@ -173,6 +176,7 @@ SSR-прогон (dev, безопасные env-заглушки):
 - `components/TelegramMiniApp.tsx` — без inline body-класса; BackButton сохранён.
 - `app/main.css` — удалены inline-правила.
 - `components/flow/PierrotContextBlock.tsx` — порядок хуков.
+- `lib/telegram/format.ts` — безопасный Markdown → Telegram HTML для ответов бота.
 - `lib/newsletter/__tests__/language.test.ts`, `lib/journal/__tests__/preview.test.ts`, `lib/flow/__tests__/bilingual.test.ts`, `lib/flow/__tests__/flowLayout.test.ts` — перевод с `node:test`/скриптового стиля на Jest (инфраструктура тестов, не Pierrot-логика).
 - Добавлены: `components/pierrot/__tests__/PierrotAuthReset.test.tsx`, `components/flow/__tests__/PierrotContextBlock.test.tsx`, `components/__tests__/HeaderPierrotFlow.test.tsx`, `components/telegram/__tests__/TelegramPierrotBehavior.test.tsx`, `components/pierrot/__tests__/PierrotChatViewport.test.tsx`, `components/pierrot/__tests__/useKeyboardViewportHeight.test.tsx`.
 - Добавлен: `docs/audits/pierrot-final-audit.md`.
@@ -251,7 +255,26 @@ SSR-прогон (dev, безопасные env-заглушки):
 - **Исправление:** единственное окно — full-screen portal `z-[9999]`; основной Header (`z-50`) остаётся позади; reset/close живут в собственной шапке окна.
 - **Проверка:** `PierrotNavigation.test.tsx` (reset в шапке), статическая проверка z-index; пиксельно — после браузерного прогона.
 
-#### D-U4 — P2. Default-страница Pierrot была маркетинговым hero, а не навигацией
+#### D-U4 — P2. Шапка Pierrot не совпадала с основным Header
+
+- **Где:** `components/PierrotChat.tsx`.
+- **Ожидание:** два режима — пользователь и диалог с Pierrot — с одинаковой визуальной шапкой.
+- **Факт:** в окне был маленький аватар 36 px, serif-имя 15 px, подпись и admin-бейдж; шапка не совпадала с Header.
+- **Исправление:** аватар 40/44 px с тем же ring/shadow, имя `Pierrot` в логотипной пилюле (`font-sans font-bold text-sm sm:text-base uppercase tracking-[0.15em]/[0.2em]`), контейнер `max-w-[1800px] px-4 sm:px-6 lg:px-10 py-3 sm:py-4`, фон/бордер/blur как у scrolled Header; reset/close — 40/44 px. Подпись и бейдж `Master` из шапки убраны.
+- **Побочные эффекты:** admin-режим по-прежнему определяется сервером, но больше не показывается бейджем.
+- **Проверка:** статическая сверка классов с `Header.tsx`; тесты Pierrot/Telegram проходят. Пиксельно — после браузерного прогона.
+
+#### D-U5 — P2. Markdown в ответах Pierrot показывался literal
+
+- **Где:** `components/pierrot/PierrotConversation.tsx`.
+- **Воспроизведение:** ответ модели с `**bold**` или `[link](/lobby)`.
+- **Ожидание:** bold/italic/ссылки/списки отрисованы.
+- **Факт:** ассистентский текст выводился как plain text, поэтому `**` и markdown-ссылки были видны как технические символы.
+- **Причина:** `{message.content}` в обычном `<div>` без markdown-рендера.
+- **Исправление:** `markdown-to-jsx` только для assistant-сообщений; `disableParsingRawHTML`, фильтр URL (internal `/`, `#`, `http(s)`, `mailto`), internal links через `next/link`, внешние — `target=_blank rel=noopener noreferrer`, изображения отключены.
+- **Проверка:** `PierrotNavigation.test.tsx` (bold → `<strong>`, link → `/lobby`, `javascript:` не становится ссылкой).
+
+#### D-U6 — P2. Default-страница Pierrot была маркетинговым hero, а не навигацией
 
 - **Где:** `components/pierrot/PierrotConversation.tsx`.
 - **Воспроизведение:** открыть Pierrot или нажать `New chat`.
@@ -281,8 +304,8 @@ SSR-прогон (dev, безопасные env-заглушки):
 
 | Проверка                        | Команда                                                                                                                       | Результат                                                                                            |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Pierrot Jest                    | `npx jest lib/pierrot components/pierrot app/api/pierrot-web app/api/pierrot/conversations app/api/admin/pierrot --runInBand` | 18 suites, **134 tests PASS**                                                                        |
-| Полный Jest                     | `npx jest --runInBand --forceExit`                                                                                            | 60 suites, **356 tests PASS**                                                                        |
+| Pierrot Jest                    | `npx jest lib/pierrot components/pierrot app/api/pierrot-web app/api/pierrot/conversations app/api/admin/pierrot --runInBand` | 18 suites, **136 tests PASS**                                                                        |
+| Полный Jest                     | `npx jest --runInBand --forceExit`                                                                                            | 61 suites, **363 tests PASS**                                                                        |
 | TypeScript                      | `tsc --noEmit -p tsconfig.json`                                                                                               | **PASS**, 0 ошибок                                                                                   |
 | Prettier (затронутые файлы)     | `prettier --check ...`                                                                                                        | **PASS**                                                                                             |
 | Production build                | `next build` (без реальных env)                                                                                               | compile **PASS**, typecheck **PASS**, page data **FAIL** из-за отсутствия `NEXT_PUBLIC_SUPABASE_URL` |
@@ -373,3 +396,15 @@ SSR-прогон (dev, безопасные env-заглушки):
 6. Принято продуктовое решение по immersive-маршрутам и consent-политике.
 
 P0/P1-блокеров нет. Все исправления минимальны и локальны; архитектура, схема БД, env и production-конфигурация не менялись.
+
+---
+
+## 14. Telegram bot: webhook secret incident
+
+- **Симптом:** Telegram-бот перестал отвечать; сообщения не обрабатываются.
+- **Причина:** в `app/api/pierrot/route.ts` `webhookCallback` начал требовать `TELEGRAM_WEBHOOK_SECRET`, если переменная задана. Если webhook в Telegram зарегистрирован без `secret_token`, grammY отклоняет каждый апдейт (401) — бот молчит.
+- **Исправление:** проверка секрета сделана opt-in: `TELEGRAM_WEBHOOK_ENFORCE_SECRET=1`. По умолчанию secret не требуется, поэтому бот снова принимает апдейты; при включённом флаге секрет проверяется.
+- **Как включить безопасно:** зарегистрировать webhook с `secret_token=<TELEGRAM_WEBHOOK_SECRET>` и только затем выставить `TELEGRAM_WEBHOOK_ENFORCE_SECRET=1`.
+- **Проверка после деплоя:** `getWebhookInfo` не должен показывать `last_error_message`; в логах Vercel не должно быть 401/`getMe`; бот отвечает на `/start`.
+- **Если webhook был отключён Telegram:** перерегистрировать URL `https://www.merkurov.love/api/pierrot` (без вывода токена в чат).
+- **Форматирование ответов:** web-чат рендерит безопасный markdown через `markdown-to-jsx`; Telegram-бот конвертирует `**bold**`, ссылки и заголовки в HTML (`lib/telegram/format.ts`) и отправляет `parse_mode: 'HTML'`. Raw HTML экранируется, `javascript:` не становится ссылкой.

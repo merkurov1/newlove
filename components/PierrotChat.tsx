@@ -72,7 +72,7 @@ export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
 }
 
 export default function PierrotChat() {
-  const { messages, isOpen, isAdminSession, closeChat, clearChat } = usePierrot();
+  const { messages, isOpen, closeChat, clearChat } = usePierrot();
 
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const modalRef = useRef<HTMLElement | null>(null);
@@ -201,23 +201,20 @@ export default function PierrotChat() {
                   onMouseDown={(event: React.MouseEvent<HTMLElement>) => event.stopPropagation()}
                 >
                   <header
-                    className="shrink-0 border-b border-[#ECE6DC]/60"
+                    className="
+                      shrink-0 border-b border-stone-200/80 bg-[#FAF8F5]/85
+                      shadow-[0_4px_25px_rgba(0,0,0,0.03)] backdrop-blur-2xl
+                    "
                     style={{
                       paddingTop:
                         'max(12px, env(safe-area-inset-top), var(--tg-safe-area-top, 0px))',
+                      paddingLeft: 'env(safe-area-inset-left)',
+                      paddingRight: 'env(safe-area-inset-right)',
                     }}
                   >
-                    <div
-                      className="flex w-full items-center justify-between gap-3 px-3 pb-3 sm:px-4 sm:pb-4"
-                      style={{
-                        paddingLeft:
-                          'max(12px, env(safe-area-inset-left), var(--tg-safe-area-left, 0px))',
-                        paddingRight:
-                          'max(12px, env(safe-area-inset-right), var(--tg-safe-area-right, 0px))',
-                      }}
-                    >
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#37332D] font-serif text-[15px] font-medium text-white shadow-sm">
+                    <div className="mx-auto flex w-full max-w-[1800px] items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4 lg:px-10">
+                      <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#37332D] font-serif text-lg font-medium text-white shadow-md ring-2 ring-white/90 sm:h-11 sm:w-11">
                           {PIERROT_AVATAR_SRC ? (
                             <img
                               src={PIERROT_AVATAR_SRC}
@@ -229,48 +226,39 @@ export default function PierrotChat() {
                           )}
                         </span>
 
-                        <div className="min-w-0">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <p className="truncate font-serif text-[15px] font-medium text-[#37332D]">
-                              Pierrot
-                            </p>
-
-                            {isAdminSession && (
-                              <span
-                                className="
-                                  shrink-0 rounded-full border border-[#E4DCCF]
-                                  bg-black/[0.03] px-2 py-0.5 font-mono
-                                  text-[9px] uppercase tracking-widest text-[#898277]
-                                "
-                              >
-                                Master
-                              </span>
-                            )}
-                          </div>
-
-                          <p className="truncate font-mono text-[9px] uppercase tracking-[0.14em] text-[#A49A8C]">
-                            Digital shadow &amp; advisor
-                          </p>
+                        <div
+                          className="
+                            min-w-0 truncate rounded-2xl border border-stone-200/90
+                            bg-white/90 px-3.5 py-2 font-sans text-sm font-bold
+                            uppercase tracking-[0.15em] text-stone-900 shadow-sm
+                            backdrop-blur-md sm:px-5 sm:py-2.5 sm:text-base
+                            sm:tracking-[0.2em]
+                          "
+                        >
+                          Pierrot
                         </div>
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-1">
-                        {messages.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => clearChat()}
-                            title="New chat"
-                            aria-label="New chat"
-                            className="
-                              flex h-10 w-10 items-center justify-center
-                              rounded-full text-[#898277] transition
-                              hover:bg-black/[0.04] hover:text-[#37332D]
-                              focus:outline-none focus:ring-2 focus:ring-[#CFC3B1]
-                            "
-                          >
-                            <RotateCcw size={16} />
-                          </button>
-                        )}
+                      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                        <button
+                          type="button"
+                          onClick={() => clearChat()}
+                          disabled={messages.length === 0}
+                          title="New chat"
+                          aria-label="New chat"
+                          className="
+                            flex h-10 w-10 items-center justify-center
+                            rounded-full border border-[#E4DCCF] bg-[#F8F5EF]
+                            text-[#625B50] shadow-[0_2px_8px_rgba(75,62,45,0.04)]
+                            transition hover:border-[#CFC3B1] hover:bg-white
+                            hover:text-[#3F3A33] focus:outline-none focus:ring-2
+                            focus:ring-[#CFC3B1] focus:ring-offset-2
+                            disabled:cursor-not-allowed disabled:opacity-30
+                            sm:h-11 sm:w-11
+                          "
+                        >
+                          <RotateCcw size={17} />
+                        </button>
 
                         <button
                           type="button"
@@ -279,9 +267,12 @@ export default function PierrotChat() {
                           aria-label="Close Pierrot"
                           className="
                             flex h-10 w-10 shrink-0 items-center justify-center
-                            rounded-full text-[#898277] transition
-                            hover:bg-black/[0.04] hover:text-[#37332D]
-                            focus:outline-none focus:ring-2 focus:ring-[#CFC3B1]
+                            rounded-full border border-[#E4DCCF] bg-[#F8F5EF]
+                            text-[#625B50] shadow-[0_2px_8px_rgba(75,62,45,0.04)]
+                            transition hover:border-[#CFC3B1] hover:bg-white
+                            hover:text-[#3F3A33] focus:outline-none focus:ring-2
+                            focus:ring-[#CFC3B1] focus:ring-offset-2
+                            sm:h-11 sm:w-11
                           "
                         >
                           <X size={19} strokeWidth={1.6} />

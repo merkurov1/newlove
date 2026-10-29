@@ -1,6 +1,7 @@
 import { Bot, webhookCallback, InlineKeyboard } from 'grammy';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
+import { toTelegramHtml } from '@/lib/telegram/format';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -144,8 +145,8 @@ async function updateSession(chatId: number, data: any) {
 
 async function safeReply(ctx: any, text: string) {
   try {
-    await ctx.reply(text, { parse_mode: 'Markdown' });
-  } catch (e) {
+    await ctx.reply(toTelegramHtml(text), { parse_mode: 'HTML' });
+  } catch {
     await ctx.reply(text);
   }
 }
@@ -318,10 +319,23 @@ bot.on('message:text', async (ctx) => {
   }
 });
 
+// The secret token is opt-in. A deployment whose Telegram webhook was
+// registered without secret_token must not silently reject every update.
+// To enable it: register the webhook with
+//   secret_token=<TELEGRAM_WEBHOOK_SECRET>
+// and set TELEGRAM_WEBHOOK_ENFORCE_SECRET=1.
+const enforceWebhookSecret = process.env.TELEGRAM_WEBHOOK_ENFORCE_SECRET === '1';
+const webhookSecret = enforceWebhookSecret ? process.env.TELEGRAM_WEBHOOK_SECRET : undefined;
+
+if (process.env.TELEGRAM_WEBHOOK_SECRET && !enforceWebhookSecret) {
+  console.warn(
+    '[Pierrot TG] TELEGRAM_WEBHOOK_SECRET is set but enforcement is off. ' +
+      'Set TELEGRAM_WEBHOOK_ENFORCE_SECRET=1 after registering the webhook with secret_token.'
+  );
+}
+
 export const POST = webhookCallback(
   bot,
   'std/http',
-  process.env.TELEGRAM_WEBHOOK_SECRET
-    ? { secretToken: process.env.TELEGRAM_WEBHOOK_SECRET }
-    : undefined
+  webhookSecret ? { secretToken: webhookSecret } : undefined
 );

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import Link from 'next/link';
+import Markdown from 'markdown-to-jsx';
 import { motion } from 'framer-motion';
 import { ArrowUp, ArrowUpRight } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
@@ -16,6 +17,142 @@ import {
   createPierrotSubscriptionRef,
   createPierrotUnframedRef,
 } from '@/lib/pierrot/orderAttribution';
+
+function safeMarkdownUrl(value: string): string | null {
+  if (typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+
+  if (!trimmed) return null;
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed;
+  if (trimmed.startsWith('#')) return trimmed;
+  if (/^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed)) return trimmed;
+
+  return null;
+}
+
+/**
+ * Assistant replies are markdown. Render a safe subset (emphasis, links,
+ * lists, code) and never raw HTML. User messages stay plain text.
+ */
+function PierrotMarkdown({ content }: { content: string }) {
+  const { closeConversation } = usePierrot();
+
+  return (
+    <Markdown
+      options={{
+        disableParsingRawHTML: true,
+        forceBlock: true,
+        sanitizer: (value: string) => safeMarkdownUrl(value),
+        overrides: {
+          p: {
+            component: 'p',
+            props: { className: 'mb-2 last:mb-0' },
+          },
+          strong: {
+            component: 'strong',
+            props: { className: 'font-semibold text-[#1F1C18]' },
+          },
+          em: {
+            component: 'em',
+            props: { className: 'italic' },
+          },
+          a: {
+            component: ({
+              href,
+              children,
+              ...props
+            }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+              children?: React.ReactNode;
+            }) => {
+              const safe = safeMarkdownUrl(href || '');
+
+              if (!safe) return <span>{children}</span>;
+
+              if (safe.startsWith('/') || safe.startsWith('#')) {
+                return (
+                  <Link
+                    href={safe}
+                    onClick={() => closeConversation()}
+                    className="underline decoration-[#CFC3B1] underline-offset-4 transition-colors hover:decoration-[#37332D]"
+                    {...props}
+                  >
+                    {children}
+                  </Link>
+                );
+              }
+
+              return (
+                <a
+                  href={safe}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-[#CFC3B1] underline-offset-4 transition-colors hover:decoration-[#37332D]"
+                  {...props}
+                >
+                  {children}
+                </a>
+              );
+            },
+          },
+          ul: {
+            component: 'ul',
+            props: { className: 'my-2 list-disc space-y-1 pl-5' },
+          },
+          ol: {
+            component: 'ol',
+            props: { className: 'my-2 list-decimal space-y-1 pl-5' },
+          },
+          li: {
+            component: 'li',
+            props: { className: 'pl-0.5' },
+          },
+          code: {
+            component: 'code',
+            props: {
+              className:
+                'rounded bg-black/[0.05] px-1 py-0.5 font-mono text-[0.88em] text-[#37332D]',
+            },
+          },
+          pre: {
+            component: 'pre',
+            props: {
+              className:
+                'my-3 overflow-x-auto rounded-xl bg-[#F1ECE3] p-3 font-mono text-xs leading-relaxed',
+            },
+          },
+          blockquote: {
+            component: 'blockquote',
+            props: {
+              className: 'my-3 border-l-2 border-[#CFC3B1] pl-3 italic text-[#625B50]',
+            },
+          },
+          hr: {
+            component: 'hr',
+            props: { className: 'my-4 border-[#E4DCCF]' },
+          },
+          h1: {
+            component: 'h1',
+            props: { className: 'mb-2 mt-4 font-serif text-xl text-[#111111]' },
+          },
+          h2: {
+            component: 'h2',
+            props: { className: 'mb-2 mt-4 font-serif text-lg text-[#111111]' },
+          },
+          h3: {
+            component: 'h3',
+            props: { className: 'mb-2 mt-3 font-serif text-base text-[#111111]' },
+          },
+          img: {
+            component: () => null,
+          },
+        },
+      }}
+    >
+      {content}
+    </Markdown>
+  );
+}
 
 const PIERROT_MENU = [
   {
@@ -164,12 +301,11 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                 ) : (
                   <div
                     className="
-                      max-w-[96%] whitespace-pre-wrap break-words
-                      font-serif text-[16px] leading-[1.75]
-                      text-[#2F2B26] sm:text-[17px]
+                      max-w-[96%] break-words font-serif text-[16px]
+                      leading-[1.75] text-[#2F2B26] sm:text-[17px]
                     "
                   >
-                    {message.content}
+                    <PierrotMarkdown content={message.content} />
                   </div>
                 )}
 
