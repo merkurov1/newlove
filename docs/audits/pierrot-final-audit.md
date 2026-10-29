@@ -21,8 +21,9 @@
 - Ответы Pierrot рендерятся как безопасный markdown: `**bold**`, `*italic*`, ссылки, списки и code больше не показываются literal; raw HTML отключён, URL фильтруются.
 - Внутренние маршруты в прозе автоматически становятся ссылками: `Арт (/heartandangel)` → `[Арт](/heartandangel)`, только для verified-маршрутов; код и существующие ссылки не трогаются. Telegram-бот дополнительно делает их абсолютными HTML-ссылками.
 - Pierrot web и Telegram bot работают **строго через DeepSeek** (`deepseek-chat`, для admin-анализа `deepseek-reasoner`); fallback на OpenRouter/Gemini удалён. Живой запрос вернул `provider: "deepseek"`.
+- Telegram-бот переписан как тонкий адаптер к `/api/pierrot-web`: тот же intent/offer/link/CTA/persistence pipeline, что в вебе. Legacy `/cast`, 10 вопросов, email-capture, `bot_sessions`/`casts` и отдельный AI-клиент удалены. `/start`, `/help`, `/privacy on|off`, `/delete`; история из `pierrot_messages`, actions/links/CTA — inline-кнопки.
 - На default-странице CTA `Ask Pierrot something` сразу запускает **локальный гарантированный** диалог: вопрос `Where should I start?`, ответ про Lobby со ссылками и кнопки `Enter the Lobby` / `Open the Journal` — без запроса к AI. Ниже — компактный индекс в стилистике главной: serif-раздел крупно, mono-дочерний мелко (`Lobby / UNFRAMED`, `Flow / JOURNAL`, `Art Engine / SELECTION`, `Heart & Angel / TEMPLE`), без разделителей. CTA оформлен как pill с главной (`Ask Pierrot something`), input виден сразу.
-- Полный Jest после унификации: **62/62 suites, 371/371 tests PASS**.
+- Полный Jest после унификации: **63/63 suites, 377/377 tests PASS**.
 
 Разделы ниже, где упоминаются inline-режим и composer-порог, сохранены как история первичного аудита. Актуальное состояние — этот раздел и §7 (D-U1…D-U9).
 
@@ -34,7 +35,7 @@
 
 - P0/P1 дефектов не найдено.
 - Найдено и исправлено 6 воспроизводимых P2/P3-дефектов, включая унификацию окна.
-- Полный Jest-прогон: **62/62 suites, 371/371 tests PASS**.
+- Полный Jest-прогон: **63/63 suites, 377/377 tests PASS**.
 - Оставлено одно окно Pierrot с аватаром, именем, reset и close; поле ввода защищено от ухода за экран, reset не перекрывается Flow.
 - TypeScript: **PASS** (чистый `tsc --noEmit`).
 - Production build: **compile + typecheck PASS**; полная статическая генерация в этом окружении упирается в отсутствие реальных env и внешний `fonts.gstatic.com`, а не в код.
@@ -55,7 +56,7 @@
 ### После аудита
 
 - Изменены 13 файлов, удалён `HomePierrotMode`, добавлены 5 регрессионных тестов и этот отчёт (см. §7).
-- `npm test`: **371/371 PASS**, 62/62 suites.
+- `npm test`: **377/377 PASS**, 63/63 suites.
 - `tsc --noEmit`: **PASS**.
 - `next lint` по затронутым файлам: новых ошибок нет; остаются только pre-existing `no-explicit-any` в `Header.tsx` и repo-wide `react/react-in-jsx-scope` из сломанного конфига.
 - Коммиты/пуш не выполнялись. Production-данные, Supabase, Stripe, Vercel, env не менялись.
@@ -131,7 +132,7 @@ SSR-прогон (dev, безопасные env-заглушки):
 | 15  | Consent denied → нет записи           | API                  | n/a         | node             | нет store               | нет store                             | PASS                | `route.test.ts`                    |
 | 16  | Идемпотентность / чужой session id    | API                  | n/a         | node             | replay/deny             | корректно                             | PASS                | `route.test.ts`                    |
 | 17  | Детерминированный оффер               | API                  | гость       | curl             | 200 + CTA               | 200 + CTA                             | PASS                | curl                               |
-| 18  | Полный Jest                           | весь проект          | n/a         | node             | зелёный                 | 371/371                               | PASS                | см. §8                             |
+| 18  | Полный Jest                           | весь проект          | n/a         | node             | зелёный                 | 377/377                               | PASS                | см. §8                             |
 | 19  | TypeScript                            | весь проект          | n/a         | —                | без ошибок              | без ошибок                            | PASS                | `tsc`                              |
 | 20  | Production build                      | весь проект          | n/a         | —                | собирается              | compile+types OK; static — env/fonts  | PARTIAL             | см. §8                             |
 | 21  | Lint                                  | весь проект          | n/a         | —                | зелёный                 | baseline 6334                         | FAIL (pre-existing) | см. §8                             |
@@ -149,6 +150,10 @@ SSR-прогон (dev, безопасные env-заглушки):
 | 33  | Ссылки в прозе ответа                 | modal                | гость       | jsdom            | кликабельные labels     | `Арт/Лобби/Журнал` → href             | PASS (fixed)        | `linkify.test.ts`                  |
 | 34  | Провайдер Pierrot                     | `/api/pierrot-web`   | гость       | live DeepSeek    | только DeepSeek         | `provider: "deepseek"`                | PASS                | live curl                          |
 | 35  | 10 viewport-сценариев                 | `/` → Pierrot        | гость       | 320–1440         | input виден сразу       | все 10 PASS, 0 overflow               | PASS                | Playwright matrix                  |
+| 36  | Telegram → web pipeline               | bot adapter          | гость       | node             | те же ответы/ссылки     | provider deepseek, links              | PARTIAL             | internal curl + adapter tests      |
+| 37  | Telegram history owner-scoped         | serverStore          | n/a         | node             | чужая история пуста     | пусто / reverse order                 | PASS                | `serverStore.test.ts`              |
+| 38  | Telegram actions/links/CTA            | bot adapter          | n/a         | node             | inline URL/callback     | mapping + 64-byte limit               | PASS                | `pierrotAdapter.test.ts`           |
+| 39  | Telegram consent/delete               | bot commands         | гость       | статика          | on/off/delete           | код есть, live token нет              | PARTIAL             | `app/api/pierrot/route.ts`         |
 
 ---
 
@@ -179,7 +184,10 @@ SSR-прогон (dev, безопасные env-заглушки):
 - `components/pierrot/PierrotComposer.tsx` — только launcher, открывающий общее окно.
 - `components/pierrot/PierrotConversation.tsx` — auto-grow поля ввода, default-индекс навигации, CTA «Ask Pierrot something», безопасный markdown ответов.
 - `components/pierrot/useKeyboardViewportHeight.ts` — height + offsetTop, keyboard-only threshold.
-- `app/api/pierrot-web/route.ts`, `app/api/pierrot/route.ts` — строго DeepSeek, без OpenRouter/Gemini.
+- `app/api/pierrot-web/route.ts` — строго DeepSeek, без OpenRouter/Gemini; internal rate-limit bucket.
+- `app/api/pierrot/route.ts` — Telegram-адаптер к web pipeline; `/start`, `/help`, `/privacy`, `/delete`.
+- `lib/telegram/pierrotAdapter.ts` — Telegram ids, absolute URLs, inline action buttons.
+- `lib/pierrot/serverStore.ts` — owner-scoped history и consent.
 - `lib/pierrot/linkify.ts` — verified-маршруты в прозе → markdown-ссылки.
 - `components/pierrot/HomePierrotMode.tsx` — удалён.
 - `components/Header.tsx` — обычный Header, Flow только admin.
@@ -189,7 +197,7 @@ SSR-прогон (dev, безопасные env-заглушки):
 - `components/flow/PierrotContextBlock.tsx` — порядок хуков.
 - `lib/telegram/format.ts` — безопасный Markdown → Telegram HTML для ответов бота.
 - `lib/newsletter/__tests__/language.test.ts`, `lib/journal/__tests__/preview.test.ts`, `lib/flow/__tests__/bilingual.test.ts`, `lib/flow/__tests__/flowLayout.test.ts` — перевод с `node:test`/скриптового стиля на Jest (инфраструктура тестов, не Pierrot-логика).
-- Добавлены: `components/pierrot/__tests__/PierrotAuthReset.test.tsx`, `components/flow/__tests__/PierrotContextBlock.test.tsx`, `components/__tests__/HeaderPierrotFlow.test.tsx`, `components/telegram/__tests__/TelegramPierrotBehavior.test.tsx`, `components/pierrot/__tests__/PierrotChatViewport.test.tsx`, `components/pierrot/__tests__/useKeyboardViewportHeight.test.tsx`, `lib/pierrot/__tests__/linkify.test.ts`, `lib/telegram/__tests__/format.test.ts`.
+- Добавлены: `components/pierrot/__tests__/PierrotAuthReset.test.tsx`, `components/flow/__tests__/PierrotContextBlock.test.tsx`, `components/__tests__/HeaderPierrotFlow.test.tsx`, `components/telegram/__tests__/TelegramPierrotBehavior.test.tsx`, `components/pierrot/__tests__/PierrotChatViewport.test.tsx`, `components/pierrot/__tests__/useKeyboardViewportHeight.test.tsx`, `lib/pierrot/__tests__/linkify.test.ts`, `lib/telegram/__tests__/format.test.ts`, `lib/telegram/__tests__/pierrotAdapter.test.ts`; расширен `lib/pierrot/__tests__/serverStore.test.ts`.
 - Добавлен: `docs/audits/pierrot-final-audit.md`.
 
 ### Исправленные
@@ -326,6 +334,14 @@ SSR-прогон (dev, безопасные env-заглушки):
 - **Исправление:** родительские разделы — serif title case; дочерние — mono uppercase; CTA — pill с serif italic, как `Enter The Lobby` на главной; фон окна приведён к `#FAF8F5`. Мобильные отступы/размеры уплотнены, чтобы default-экран и input помещались сразу.
 - **Проверка:** 10 viewport-сценариев (320×568, 360×800, 375×667, 390×844, 430×932, 768×1024, 1024×768, 1280×800, 1440×900, 390×500): input/footer видны, горизонтального overflow нет; на 320×568 список 322/322 (помещается без прокрутки). CTA → локальный диалог ~64 ms, 0 API.
 
+#### D-U11 — P1. Telegram-бот был отдельным legacy-приложением
+
+- **Где:** `app/api/pierrot/route.ts`.
+- **Факт:** свой `/cast`-протокол на 10 вопросов, email-capture, таблицы `bot_sessions`/`casts`, отдельный OpenRouter/DeepSeek-клиент, свой промпт и никакой связи с web-интентами, офферами, ссылками, историей и consent.
+- **Исправление:** бот — тонкий адаптер к `/api/pierrot-web`. Сообщение, история, consent и стабильные Telegram-id уходят в тот же web pipeline; ответ, actions/links/CTA возвращаются в Telegram. История читается из `pierrot_messages`, consent — из `pierrot_conversations`; добавлены `/start`, `/help`, `/privacy on|off`, `/delete`. Legacy-код удалён.
+- **Побочные эффекты:** добавляется один внутренний HTTP-hop (бот → web API), поэтому задержка выше прямой интеграции; management-секрет `PIERO_API_SECRET` включает per-Telegram-user rate limit и admin-режим. Prompt-кнопки, чей callback payload >64 байт, пропускаются (ограничение Telegram).
+- **Проверка:** adapter unit tests, history tests, live internal call к `/api/pierrot-web` вернул `provider: deepseek` и markdown-ссылки. Реальный Telegram webhook не проверялся: в окружении нет боевого bot token.
+
 ### Не исправлялись (осознанно)
 
 #### D6 — P3. Pierrot недоступен на immersive-маршрутах
@@ -346,8 +362,8 @@ SSR-прогон (dev, безопасные env-заглушки):
 
 | Проверка                        | Команда                                                                                                                       | Результат                                                                                            |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Pierrot Jest                    | `npx jest lib/pierrot components/pierrot app/api/pierrot-web app/api/pierrot/conversations app/api/admin/pierrot --runInBand` | 19 suites, **143 tests PASS**                                                                        |
-| Полный Jest                     | `npx jest --runInBand --forceExit`                                                                                            | 62 suites, **371 tests PASS**                                                                        |
+| Pierrot Jest                    | `npx jest lib/pierrot components/pierrot app/api/pierrot-web app/api/pierrot/conversations app/api/admin/pierrot --runInBand` | 19 suites, **145 tests PASS**                                                                        |
+| Полный Jest                     | `npx jest --runInBand --forceExit`                                                                                            | 63 suites, **377 tests PASS**                                                                        |
 | TypeScript                      | `tsc --noEmit -p tsconfig.json`                                                                                               | **PASS**, 0 ошибок                                                                                   |
 | Prettier (затронутые файлы)     | `prettier --check ...`                                                                                                        | **PASS**                                                                                             |
 | Production build                | `next build` (без реальных env)                                                                                               | compile **PASS**, typecheck **PASS**, page data **FAIL** из-за отсутствия `NEXT_PUBLIC_SUPABASE_URL` |
@@ -421,6 +437,10 @@ SSR-прогон (dev, безопасные env-заглушки):
 8. **Flow-контекст** — исправлен hook-order, но сам блок по-прежнему рендерит markdown без санитайзера на клиенте (контент приходит с сервера, не от пользователя; риск низкий).
 9. **Telegram-детект** — `useIsTelegram` ждёт `initData` от SDK, загружаемого `lazyOnload`; в первые кадры в Mini App может мелькнуть web-header. Функционально не ломает Pierrot, но требует проверки на реальном Telegram.
 10. **Telegram / unified window** — окно и viewport проверены в jsdom, но реальный Telegram WebApp (safe-area, клавиатура, BackButton, закрытие, отсутствие визуальных перекрытий) ещё не проверялся.
+11. **Telegram bot transport** — бот делает внутренний HTTP-вызов `/api/pierrot-web`; это плюс один hop к задержке. Без `PIERO_API_SECRET` внутренний rate limit падает на общий egress IP (20/min), поэтому секрет нужен в production.
+12. **Telegram prompt buttons** — callback payload ограничен 64 байтами; слишком длинные prompt-actions пропускаются, остальные ссылки/CTA работают.
+13. **Telegram consent off** — при `/privacy off` новые сообщения не сохраняются, но у бота нет локального transcript, поэтому контекст между сообщениями теряется (в web остаётся sessionStorage). Это осознанное следствие opt-out.
+14. **Live Telegram webhook** — в окружении нет боевого bot token; проверены adapter unit tests, history tests и внутренний вызов web API, но не реальный update от Telegram.
 
 ---
 
@@ -430,14 +450,15 @@ SSR-прогон (dev, безопасные env-заглушки):
 
 Код можно пушить и тестировать на production/staging при условии:
 
-1. В Vercel заданы все env из `.env.example` (Supabase, OpenRouter, Gemini/DeepSeek, Telegram, Stripe, admin secrets).
+1. В Vercel заданы все env из `.env.example`: `DEEPSEEK_API_KEY`, `PIERO_API_SECRET`, Supabase, Telegram, Stripe, admin secrets. OpenRouter/Gemini для Pierrot больше не нужны.
 2. После деплоя вручную проверены в браузере: `/`, `/lobby`, `/flow`, `/journal`, `/unframed/book`, `/temple`; гость и admin; открытие/закрытие/повторное открытие одного окна; аватар/имя/reset/close; reset не перекрыт Flow; отсутствие `Master` после logout.
 3. В реальном Telegram Mini App проверены: `P` и home-launcher открывают то же окно; BackButton; safe-area сверху/снизу; клавиатура не выталкивает input; отсутствие мелькания web-header.
 4. Отдельно проверены мобильные 320–390 px и открытая клавиатура.
 5. Настроен retention purge (pg_cron или внешний job) и, при необходимости, внешний rate limit.
 6. Принято продуктовое решение по immersive-маршрутам и consent-политике.
+7. В реальном Telegram-боте проверены `/start`, обычный вопрос, inline-ссылки, prompt-кнопки, `/privacy off|on`, `/delete` и `getWebhookInfo`.
 
-P0/P1-блокеров нет. Все исправления минимальны и локальны; архитектура, схема БД, env и production-конфигурация не менялись.
+P0/P1-блокеров нет. Схема БД и production-данные не менялись; архитектура бота изменена на adapter к web pipeline. Env-документация обновлена (`DEEPSEEK_API_KEY`, `PIERO_API_SECRET`).
 
 ---
 
@@ -448,5 +469,23 @@ P0/P1-блокеров нет. Все исправления минимальн�
 - **Исправление:** проверка секрета сделана opt-in: `TELEGRAM_WEBHOOK_ENFORCE_SECRET=1`. По умолчанию secret не требуется, поэтому бот снова принимает апдейты; при включённом флаге секрет проверяется.
 - **Как включить безопасно:** зарегистрировать webhook с `secret_token=<TELEGRAM_WEBHOOK_SECRET>` и только затем выставить `TELEGRAM_WEBHOOK_ENFORCE_SECRET=1`.
 - **Проверка после деплоя:** `getWebhookInfo` не должен показывать `last_error_message`; в логах Vercel не должно быть 401/`getMe`; бот отвечает на `/start`.
+
+---
+
+## 15. Telegram bot architecture after refactor
+
+`app/api/pierrot/route.ts` now only adapts Telegram to the same web API:
+
+1. `bot.on('message:text')` → stable Telegram ids (`tgc_`, `tgs_`, `tgu_` from chat/message hashes).
+2. `loadPierrotHistory` reads the last 20 owner-scoped messages from `pierrot_messages`.
+3. `GET consent` reads `pierrot_conversations.consent_state`; `/privacy off|on` updates it; `/delete` deletes the conversation.
+4. Internal `POST /api/pierrot-web` with `x-pierrot-internal` / `x-telegram-user-id`; admin allowlist adds `x-admin-key`.
+5. The web pipeline returns the same `reply`, `actions`, `links`, `cta`, `provider` and persistence as the browser.
+6. `buildTelegramButtons` maps navigate/link/CTA to URL buttons and prompt actions to callback buttons (≤64 bytes); `toTelegramHtml` renders safe HTML.
+
+Removed legacy: `/cast`, 10-question protocol, `QUESTIONS_EN/RU`, email capture, `bot_sessions`/`casts` flow, separate OpenRouter/DeepSeek client and prompt. The old tables are untouched but unused.
+
+Verified locally: adapter unit tests, owner-scoped history tests, internal web API call returned `provider: "deepseek"` with `[Art](/heartandangel)`, `[Selection](/selection)`, `[Journal](/journal)`. Not verified: a real Telegram update (no production bot token in this workspace).
+
 - **Если webhook был отключён Telegram:** перерегистрировать URL `https://www.merkurov.love/api/pierrot` (без вывода токена в чат).
 - **Форматирование ответов:** web-чат рендерит безопасный markdown через `markdown-to-jsx`; Telegram-бот конвертирует `**bold**`, ссылки и заголовки в HTML (`lib/telegram/format.ts`) и отправляет `parse_mode: 'HTML'`. Raw HTML экранируется, `javascript:` не становится ссылкой.

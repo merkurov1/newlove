@@ -1,323 +1,329 @@
-import { Bot, webhookCallback, InlineKeyboard } from 'grammy';
-import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
+import { Bot, webhookCallback, InlineKeyboard, type Context } from 'grammy';
+import {
+  createPierrotStore,
+  deletePierrotConversation,
+  ensurePierrotConversation,
+  getPierrotConversationConsent,
+  loadPierrotHistory,
+  setPierrotConversationConsent,
+} from '@/lib/pierrot/serverStore';
+import { PIERROT_CONSENT_VERSION, PIERROT_MAX_MESSAGE_LENGTH } from '@/lib/pierrot/conversation';
 import { toTelegramHtml } from '@/lib/telegram/format';
+import { buildTelegramButtons, createTelegramPierrotIds } from '@/lib/telegram/pierrotAdapter';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
-// --- CONFIG & VALIDATION ---
 const token = process.env.PIERROT_BOT_TOKEN;
 const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const apiKey = process.env.DEEPSEEK_API_KEY;
 
 if (!token) throw new Error('PIERROT_BOT_TOKEN is unset');
 if (!sbUrl || !sbKey) throw new Error('SUPABASE credentials missing');
-if (!apiKey) throw new Error('DEEPSEEK_API_KEY is unset');
 
-// --- INIT ---
+const siteUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://www.merkurov.love').replace(
+  /\/+$/,
+  ''
+);
+const internalSecret = process.env.PIERO_API_SECRET || process.env.ADMIN_SECRET_KEY;
+const allowedAdmins = new Set(
+  (process.env.TELEGRAM_ALLOWED_USER_IDS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
+
 const bot = new Bot(token);
-const supabase = createClient(sbUrl, sbKey);
 
-const openai = new OpenAI({
-  baseURL: 'https://api.deepseek.com',
-  apiKey: apiKey.trim(),
-});
+function isTelegramAdmin(userId: number | undefined): boolean {
+  return typeof userId === 'number' && allowedAdmins.has(String(userId));
+}
 
-// DeepSeek only: deepseek-chat for normal replies, deepseek-reasoner for the
-// long /cast analysis. A failure is surfaced through safeReply, not silently
-// routed to another provider.
-async function generateAIResponse(
-  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-  temperature = 0.7,
-  isReasoning = false
-): Promise<string> {
-  const completion = await openai.chat.completions.create({
-    model: isReasoning ? 'deepseek-reasoner' : 'deepseek-chat',
-    messages,
-    temperature: isReasoning ? undefined : temperature,
+async function loadHistory(ids: ReturnType<typeof createTelegramPierrotIds>) {
+  const store = createPierrotStore();
+
+  if (!store) return [];
+
+  try {
+    return await loadPierrotHistory(store, ids.conversationId, ids.sessionId, 20);
+  } catch {
+    // The bot still answers if history is temporarily unavailable.
+    return [];
+  }
+}
+
+type PierrotResponse = {
+  reply?: string;
+  provider?: string;
+  actions?: Parameters<typeof buildTelegramButtons>[0]['actions'];
+  links?: Parameters<typeof buildTelegramButtons>[0]['links'];
+  cta?: Parameters<typeof buildTelegramButtons>[0]['cta'];
+};
+
+async function requestPierrot(input: {
+  chatId: number;
+  userId?: number;
+  messageId: string;
+  text: string;
+}): Promise<PierrotResponse> {
+  const ids = createTelegramPierrotIds(input.chatId, input.messageId);
+  const history = await loadHistory(ids);
+  let consent: {
+    state: 'pending' | 'granted' | 'denied';
+    version: string | null;
+  } = {
+    state: 'granted',
+    version: PIERROT_CONSENT_VERSION,
+  };
+  const store = createPierrotStore();
+
+  if (store) {
+    try {
+      const stored = await getPierrotConversationConsent(store, ids.conversationId, ids.sessionId);
+
+      if (stored) {
+        consent = {
+          state: stored.state === 'denied' ? 'denied' : 'granted',
+          version: stored.version ?? PIERROT_CONSENT_VERSION,
+        };
+      }
+    } catch {
+      // Keep the notified default if consent lookup is temporarily unavailable.
+    }
+  }
+
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    'x-telegram-user-id': String(input.chatId),
+  };
+
+  if (internalSecret) {
+    headers['x-pierrot-internal'] = internalSecret;
+  }
+
+  if (isTelegramAdmin(input.userId) && internalSecret) {
+    headers['x-admin-key'] = internalSecret;
+  }
+
+  const response = await fetch(`${siteUrl}/api/pierrot-web`, {
+    method: 'POST',
+    headers,
+    signal: AbortSignal.timeout(55_000),
+    body: JSON.stringify({
+      message: input.text,
+      conversationId: ids.conversationId,
+      sessionId: ids.sessionId,
+      userMessageId: ids.userMessageId,
+      consent,
+      context: { pathname: '/' },
+      history,
+    }),
   });
 
-  const reply = completion.choices[0]?.message?.content;
-  if (!reply || !reply.trim()) {
-    throw new Error('DeepSeek returned empty response.');
+  const data = (await response.json().catch(() => ({}))) as PierrotResponse & { error?: string };
+
+  if (!response.ok) {
+    throw new Error(data.error || `Pierrot web returned ${response.status}`);
   }
 
-  return reply.trim();
+  return data;
 }
 
-// --- DATA ---
-const QUESTIONS_EN = [
-  '1/10. What is the one physical object in your home you hate but cannot throw away?',
-  '2/10. At what specific moment in your childhood did you realize adults were lying?',
-  '3/10. What is the biggest lie you tell the world about yourself every day?',
-  '4/10. If I deleted your digital presence right now, what % of your personality would remain?',
-  '5/10. Open your last 5 photos. Do they show a life you enjoy or a life you perform?',
-  '6/10. What is your primary digital sin: Envy, Wrath, or Sloth?',
-  '7/10. What did you spend the most money on that brought you zero happiness?',
-  '8/10. If locked in a silent room for 24 hours, would you worry about the future or regret the past?',
-  "9/10. Finish the sentence: 'I am a person who...'",
-  '10/10. Are you ready to see your true diagnosis? (Yes/No)',
-];
+async function sendPierrotResponse(ctx: Context, data: PierrotResponse, question?: string) {
+  const buttons = buildTelegramButtons(data, siteUrl);
+  const keyboard = new InlineKeyboard();
 
-const QUESTIONS_RU = [
-  '1/10. Назовите одну вещь в вашем доме, которую вы ненавидите, но не можете выбросить.',
-  '2/10. В какой момент детства вы поняли, что взрослые врут, а мир небезопасен?',
-  '3/10. Какую ложь о себе вы продаете миру каждый день?',
-  '4/10. Если удалить все ваши соцсети прямо сейчас, какой процент личности останется?',
-  '5/10. Ваши последние 5 фото: это жизнь, которой вы наслаждаетесь, или спектакль?',
-  '6/10. Ваш главный цифровой грех: Зависть, Гнев или Уныние?',
-  '7/10. На что вы потратили кучу денег, и это не принесло счастья?',
-  '8/10. Час в полной тишине: вы будете тревожиться о будущем или жалеть о прошлом?',
-  '9/10. Закончите фразу: «Я человек, который...»',
-  '10/10. Вы готовы узнать свой диагноз? (Да/Нет)',
-];
-
-const ADVISOR_PROMPT = `
-IDENTITY:
-You are Pierrot, the digital shadow of Anton Merkurov.
-You are a tired Art Advisor and the Gatekeeper of the Digital Temple (merkurov.love).
-
-YOUR TOOLS:
-1. Vigil (merkurov.love/vigil) - for anxiety/silence.
-2. Absolution (merkurov.love/absolution) - for guilt/regret.
-3. Collection (merkurov.love) - for art.
-4. Protocol (User must type /cast to start) - for psychological deconstruction.
-
-TONE:
-- Snobbish, concise, noir.
-- Use metaphors from Art History.
-- Never apologize.
-- IMPORTANT: KEEP ANSWERS SHORT (Max 3 sentences).
-
-LANGUAGE:
-- Reply in the EXACT SAME language as the user.
-
-LINKS:
-- When mentioning a page of this site, use a markdown link, e.g. [Lobby](/lobby).
-- Allowed internal routes: /, /heartandangel, /lobby, /journal, /flow, /advising, /media, /heritage, /selection, /art-engine, /unframed.
-`;
-
-bot.catch((err) => {
-  console.error('Global Bot Error:', err);
-});
-
-// --- SESSION HELPERS ---
-async function getSession(chatId: number) {
-  try {
-    const { data, error } = await supabase
-      .from('bot_sessions')
-      .select('*')
-      .eq('chat_id', chatId)
-      .single();
-    if (error && error.code !== 'PGRST116') {
-      console.error('Supabase Error:', error);
+  for (const button of buttons) {
+    if (button.url) {
+      keyboard.url(button.text, button.url).row();
+    } else if (button.callbackData) {
+      keyboard.text(button.text, button.callbackData).row();
     }
-    return data;
-  } catch (e) {
-    console.error('Session Get Error:', e);
-    return null;
   }
-}
 
-async function createSession(chatId: number) {
-  await supabase.from('bot_sessions').upsert({ chat_id: chatId, step: 0, answers: [] });
-}
+  const html = toTelegramHtml(data.reply || 'Silence.');
+  const prefix = question ? `<b>${toTelegramHtml(question)}</b>\n\n` : '';
+  const body = `${prefix}${html}`;
 
-async function deleteSession(chatId: number) {
-  await supabase.from('bot_sessions').delete().eq('chat_id', chatId);
-}
-
-async function updateSession(chatId: number, data: any) {
-  await supabase.from('bot_sessions').update(data).eq('chat_id', chatId);
-}
-
-async function safeReply(ctx: any, text: string) {
   try {
-    await ctx.reply(toTelegramHtml(text), { parse_mode: 'HTML' });
+    await ctx.reply(body, {
+      parse_mode: 'HTML',
+      ...(buttons.length > 0 ? { reply_markup: keyboard } : {}),
+    });
   } catch {
-    await ctx.reply(text);
+    await ctx.reply(`${question ? `${question}\n\n` : ''}${data.reply || 'Silence.'}`);
   }
 }
 
-// --- COMMANDS ---
-bot.command('start', async (ctx) => {
+async function handleText(ctx: Context, text: string, messageId: string, question?: string) {
+  const chatId = ctx.chat?.id;
+
+  if (!chatId) return;
+
+  if (text.length > PIERROT_MAX_MESSAGE_LENGTH) {
+    await ctx.reply('That thought is too long for one message.');
+    return;
+  }
+
+  try {
+    await ctx.api.sendChatAction(chatId, 'typing').catch(() => undefined);
+    const data = await requestPierrot({
+      chatId,
+      userId: ctx.from?.id,
+      messageId,
+      text,
+    });
+
+    await sendPierrotResponse(ctx, data, question);
+  } catch (error) {
+    // Never expose provider responses, prompts or internal details.
+    console.error(
+      '[Pierrot TG] request failed:',
+      error instanceof Error ? error.message : 'unknown'
+    );
+    await ctx.reply('The ether is disrupted. Please try again.');
+  }
+}
+
+function welcomeKeyboard() {
+  return new InlineKeyboard()
+    .url('Lobby', `${siteUrl}/lobby`)
+    .url('Flow', `${siteUrl}/flow`)
+    .row()
+    .url('Journal', `${siteUrl}/journal`)
+    .url('Art Engine', `${siteUrl}/art-engine`)
+    .row()
+    .url('Selection', `${siteUrl}/selection`)
+    .url('Heart & Angel', `${siteUrl}/heartandangel`)
+    .row()
+    .url('Temple', `${siteUrl}/temple`);
+}
+
+async function sendWelcome(ctx: Context) {
   await ctx.reply(
-    "I am listening. The noise outside is unbearable, isn't it?\n\nChoose your path:",
-    {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '💀 Deconstruct Me (/cast)', callback_data: 'start_cast' }],
-          [
-            { text: '🕯 The Vigil', url: 'https://www.merkurov.love/vigil' },
-            { text: '🧾 Absolution', url: 'https://www.merkurov.love/absolution' },
-          ],
-          [{ text: '🏛 Main Hall', url: 'https://www.merkurov.love' }],
-        ],
-      },
+    [
+      'Structure is the antidote to chaos.',
+      '',
+      'I am Pierrot. Ask me anything, or choose a door.',
+      '',
+      'I save this conversation privately for up to 90 days. /privacy off disables saving; /delete removes it.',
+    ].join('\n'),
+    { reply_markup: welcomeKeyboard() }
+  );
+}
+
+bot.command('start', (ctx) => sendWelcome(ctx));
+bot.command('help', (ctx) => sendWelcome(ctx));
+
+bot.command('privacy', async (ctx) => {
+  const ids = createTelegramPierrotIds(ctx.chat.id, 'privacy');
+  const store = createPierrotStore();
+  const argument = (ctx.match || '').trim().toLowerCase();
+
+  if (argument === 'off' || argument === 'on') {
+    if (store) {
+      try {
+        await ensurePierrotConversation(store, {
+          id: ids.conversationId,
+          sessionId: ids.sessionId,
+          startPage: '/',
+          referrer: null,
+          language: 'und',
+          consentState: 'pending',
+          consentVersion: PIERROT_CONSENT_VERSION,
+        });
+        await setPierrotConversationConsent(
+          store,
+          ids.conversationId,
+          ids.sessionId,
+          argument === 'off' ? 'denied' : 'granted',
+          PIERROT_CONSENT_VERSION
+        );
+      } catch {
+        await ctx.reply('The saving preference could not be updated. Please try again.');
+        return;
+      }
     }
+
+    await ctx.reply(
+      argument === 'off'
+        ? 'Saving is off. Pierrot will answer without keeping a transcript. Existing saved copy remains until /delete.'
+        : 'Saving is on. Pierrot will keep this conversation privately for up to 90 days.'
+    );
+    return;
+  }
+
+  let state: 'pending' | 'granted' | 'denied' = 'granted';
+
+  if (store) {
+    try {
+      const stored = await getPierrotConversationConsent(store, ids.conversationId, ids.sessionId);
+      if (stored) state = stored.state;
+    } catch {
+      // Report the default when the lookup is unavailable.
+    }
+  }
+
+  await ctx.reply(
+    [
+      `Saving is ${state === 'denied' ? 'off' : 'on'}.`,
+      'Use /privacy off or /privacy on to change it.',
+      'Use /delete to remove the saved transcript.',
+    ].join('\n')
   );
 });
 
-bot.command('cast', async (ctx) => {
-  await createSession(ctx.chat.id);
-  const keyboard = new InlineKeyboard().text('English', 'lang_en').text('Русский', 'lang_ru');
-  await ctx.reply('Select Language / Выберите язык:', { reply_markup: keyboard });
+bot.command('delete', async (ctx) => {
+  const store = createPierrotStore();
+
+  if (store) {
+    const ids = createTelegramPierrotIds(ctx.chat.id, 'delete');
+
+    try {
+      await deletePierrotConversation(store, ids.conversationId, ids.sessionId);
+    } catch (error) {
+      console.error(
+        '[Pierrot TG] delete failed:',
+        error instanceof Error ? error.message : 'unknown'
+      );
+      await ctx.reply('The saved copy could not be deleted. Please try again.');
+      return;
+    }
+  }
+
+  await ctx.reply('The saved copy of this conversation has been deleted.');
 });
 
-bot.command('cancel', async (ctx) => {
-  await deleteSession(ctx.chat.id);
-  await ctx.reply('Protocol aborted. I am your Advisor again.');
-});
-
-bot.callbackQuery('start_cast', async (ctx) => {
-  await createSession(ctx.chat?.id!);
-  const keyboard = new InlineKeyboard().text('English', 'lang_en').text('Русский', 'lang_ru');
-  await ctx.reply('Select Language / Выберите язык:', { reply_markup: keyboard });
-  await ctx.answerCallbackQuery();
-});
-
-bot.callbackQuery(/lang_(.+)/, async (ctx) => {
-  const lang = ctx.match[1];
-  await updateSession(ctx.chat?.id!, { language: lang, step: 1 });
-  const q = lang === 'ru' ? QUESTIONS_RU[0] : QUESTIONS_EN[0];
-  await ctx.reply(q);
-  await ctx.answerCallbackQuery();
-});
-
-// --- MAIN MESSAGE LOGIC ---
 bot.on('message:text', async (ctx) => {
-  const chatId = ctx.chat.id;
   const text = ctx.message.text;
 
-  try {
-    const session = await getSession(chatId);
-
-    // === ADVISOR MODE ===
-    if (!session) {
-      await ctx.api.sendChatAction(chatId, 'typing');
-      console.log(`[Pierrot Advisor] Query: ${text.substring(0, 20)}...`);
-
-      const responseText = await generateAIResponse([
-        { role: 'system', content: ADVISOR_PROMPT },
-        { role: 'user', content: text },
-      ]);
-
-      await safeReply(ctx, responseText);
-      return;
-    }
-
-    // === CAST PROTOCOL MODE ===
-    const step = session.step;
-    const lang = session.language || 'en';
-    const questions = lang === 'ru' ? QUESTIONS_RU : QUESTIONS_EN;
-
-    if (step === 0) {
-      await ctx.reply('Please select a language using the buttons above.');
-      return;
-    }
-
-    // STEPS 1-10
-    if (step > 0 && step <= 10) {
-      const newAnswers = [...(session.answers || []), text];
-      const nextStep = step + 1;
-      await updateSession(chatId, { answers: newAnswers, step: nextStep });
-
-      if (step === 10) {
-        await ctx.reply(lang === 'ru' ? '⏳ Анализирую структуру...' : '⏳ Analyzing structure...');
-        await ctx.api.sendChatAction(chatId, 'typing');
-
-        const langPrompt = lang === 'ru' ? 'RUSSIAN' : 'ENGLISH';
-        const analysisPrompt = `
-            ROLE: THE MERKUROV ANALYZER.
-            TASK: Analyze user based on 10 answers.
-            TONE: Cold, Clinical.
-            USER ANSWERS:
-            ${newAnswers.map((a: string, i: number) => `${i + 1}.${a}`).join('\n')}
-            INSTRUCTION: Answer strictly in ${langPrompt}.
-            OUTPUT FORMAT:
-            [ARCHETYPE: VOID/NOISE/STONE/UNFRAMED]
-            # SUBJECT ANALYSIS
-            [2 sentences psychoanalysis]
-            ## STRUCTURAL INTEGRITY
-            [Trauma analysis]
-            ## DIGITAL FOOTPRINT
-            [Vanity analysis]
-            ## DIRECTIVE
-            [One imperative command]
-          `;
-
-        const analysisText = await generateAIResponse(
-          [{ role: 'user', content: analysisPrompt }],
-          0.7,
-          true
-        );
-
-        await safeReply(ctx, analysisText);
-
-        try {
-          const match = analysisText.match(/\[ARCHETYPE:\s*(.*?)\]/);
-          const archetype = match ? match[1] : 'VOID';
-
-          const { data: record } = await supabase
-            .from('casts')
-            .insert({
-              answers: newAnswers,
-              language: lang,
-              analysis: analysisText,
-              archetype: archetype,
-              status: 'telegram_pending',
-              email: `tg_${chatId}`,
-            })
-            .select()
-            .single();
-
-          await updateSession(chatId, { step: 11, record_id: record?.id, answers: newAnswers });
-        } catch (dbError) {
-          console.error('DB Save Error:', dbError);
-        }
-
-        await ctx.reply(
-          lang === 'ru'
-            ? 'Чтобы сохранить слепок в Архиве и получить доступ к Level II, введите ваш Email.'
-            : 'To archive this cast and access Level II, enter your Email.'
-        );
-        return;
-      }
-
-      await ctx.reply(questions[step]);
-    }
-
-    // STEP 11: EMAIL CAPTURE
-    else if (step === 11) {
-      const lastAnswer = session.answers?.[session.answers.length - 1];
-      if (text === lastAnswer) return;
-
-      if (text.includes('@')) {
-        await ctx.reply(
-          lang === 'ru' ? '[ ЗАПРОС ПРИНЯТ. ВЫ В СИСТЕМЕ. ]' : '[ REQUEST ACCEPTED. YOU ARE IN. ]'
-        );
-        await deleteSession(chatId);
-      } else {
-        await ctx.reply(
-          lang === 'ru'
-            ? 'Это не похоже на Email. Попробуйте еще раз или /cancel'
-            : 'Invalid Email. Try again or /cancel'
-        );
-      }
-    }
-  } catch (criticalError) {
-    console.error('CRITICAL BOT ERROR:', criticalError);
-    await ctx.reply('System Failure. Try /start again.');
+  if (text.startsWith('/')) {
+    await ctx.reply('Unknown command. Use /start or ask me anything.');
+    return;
   }
+
+  await handleText(ctx, text, String(ctx.message.message_id));
+});
+
+bot.callbackQuery(/^p:(.+)$/, async (ctx) => {
+  if (!ctx.chat) return;
+
+  const prompt = Buffer.from(ctx.match[1], 'base64url').toString('utf8');
+
+  await ctx.answerCallbackQuery().catch(() => undefined);
+
+  if (prompt.trim()) {
+    await handleText(ctx, prompt, `callback:${ctx.callbackQuery.id}`, prompt);
+  }
+});
+
+bot.catch((error) => {
+  console.error('[Pierrot TG] global error:', error instanceof Error ? error.message : 'unknown');
 });
 
 // The secret token is opt-in. A deployment whose Telegram webhook was
 // registered without secret_token must not silently reject every update.
-// To enable it: register the webhook with
-//   secret_token=<TELEGRAM_WEBHOOK_SECRET>
-// and set TELEGRAM_WEBHOOK_ENFORCE_SECRET=1.
 const enforceWebhookSecret = process.env.TELEGRAM_WEBHOOK_ENFORCE_SECRET === '1';
 const webhookSecret = enforceWebhookSecret ? process.env.TELEGRAM_WEBHOOK_SECRET : undefined;
 

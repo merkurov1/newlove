@@ -248,6 +248,89 @@ export async function conversationBelongsToSession(
   return Boolean(data);
 }
 
+/**
+ * Loads recent messages for a conversation after verifying that the caller
+ * owns the session. Used by server-side adapters (Telegram) that do not have
+ * a browser history to send.
+ */
+export async function loadPierrotHistory(
+  store: SupabaseClient,
+  conversationId: string,
+  sessionId: string,
+  limit = 20
+): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> {
+  const ownsConversation = await conversationBelongsToSession(store, conversationId, sessionId);
+
+  if (!ownsConversation) return [];
+
+  const safeLimit = Math.min(Math.max(limit, 1), 24);
+  const { data, error } = await store
+    .from('pierrot_messages')
+    .select('role, content')
+    .eq('conversation_id', conversationId)
+    .order('message_index', { ascending: false })
+    .limit(safeLimit);
+
+  if (error) throw error;
+
+  return (Array.isArray(data) ? data : [])
+    .reverse()
+    .filter(
+      (row): row is { role: 'user' | 'assistant'; content: string } =>
+        (row.role === 'user' || row.role === 'assistant') && typeof row.content === 'string'
+    )
+    .map((row) => ({ role: row.role, content: row.content }));
+}
+
+export async function getPierrotConversationConsent(
+  store: SupabaseClient,
+  conversationId: string,
+  sessionId: string
+): Promise<{ state: PierrotConsentState; version: string | null } | null> {
+  const { data, error } = await store
+    .from('pierrot_conversations')
+    .select('consent_state, consent_version')
+    .eq('id', conversationId)
+    .eq('session_id', sessionId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (
+    !data ||
+    (data.consent_state !== 'pending' &&
+      data.consent_state !== 'granted' &&
+      data.consent_state !== 'denied')
+  ) {
+    return null;
+  }
+
+  return {
+    state: data.consent_state,
+    version: typeof data.consent_version === 'string' ? data.consent_version : null,
+  };
+}
+
+export async function setPierrotConversationConsent(
+  store: SupabaseClient,
+  conversationId: string,
+  sessionId: string,
+  state: PierrotConsentState,
+  version: string | null
+): Promise<void> {
+  const { error } = await store
+    .from('pierrot_conversations')
+    .update({
+      consent_state: state,
+      consent_version: version,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', conversationId)
+    .eq('session_id', sessionId);
+
+  if (error) throw error;
+}
+
 export async function findPierrotAssistantReply(
   store: SupabaseClient,
   conversationId: string,

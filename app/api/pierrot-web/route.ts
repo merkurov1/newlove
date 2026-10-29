@@ -116,10 +116,20 @@ async function callDeepSeek(
 
 export async function POST(req: Request) {
   try {
-    const limited = checkRateLimit(getClientIp(req), {
+    const internalSecret = process.env.PIERO_API_SECRET || process.env.ADMIN_SECRET_KEY;
+    const isInternalRequest = Boolean(
+      internalSecret && req.headers.get('x-pierrot-internal') === internalSecret
+    );
+    const rateLimitKey = isInternalRequest
+      ? `tg:${req.headers.get('x-telegram-user-id') || 'unknown'}`
+      : getClientIp(req);
+
+    // The Telegram adapter calls this route server-to-server. Its users share
+    // the server egress IP, so it gets a per-Telegram-user bucket instead.
+    const limited = checkRateLimit(rateLimitKey, {
       interval: 60 * 1000,
-      maxRequests: 20,
-      keyPrefix: 'pierrot-web',
+      maxRequests: isInternalRequest ? 60 : 20,
+      keyPrefix: isInternalRequest ? 'pierrot-tg' : 'pierrot-web',
     });
 
     if (limited) return limited;

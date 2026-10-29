@@ -1,7 +1,12 @@
 /** @jest-environment node */
 
 import { describe, expect, it, jest } from '@jest/globals';
-import { appendPierrotMessage, createAssistantMessageId, recordPierrotEvent } from '../serverStore';
+import {
+  appendPierrotMessage,
+  createAssistantMessageId,
+  loadPierrotHistory,
+  recordPierrotEvent,
+} from '../serverStore';
 
 describe('Pierrot server store contracts', () => {
   it('derives a stable assistant message id for retries', () => {
@@ -37,6 +42,41 @@ describe('Pierrot server store contracts', () => {
         p_session_id: 'session-1',
       })
     );
+  });
+
+  it('loads chronological history only for an owned conversation', async () => {
+    const maybeSingle = jest.fn(async () => ({ data: { id: 'conversation-1' }, error: null }));
+    const limit = jest.fn(async (..._args: unknown[]) => ({
+      data: [
+        { role: 'assistant', content: 'Second' },
+        { role: 'user', content: 'First' },
+        { role: 'system', content: 'Ignored' },
+      ],
+      error: null,
+    }));
+    const order = jest.fn(() => ({ limit }));
+    const eq2 = jest.fn(() => ({ maybeSingle }));
+    const eq1 = jest.fn(() => ({ eq: eq2, order }));
+    const select = jest.fn(() => ({ eq: eq1 }));
+    const store = { from: jest.fn(() => ({ select })) } as never;
+
+    const history = await loadPierrotHistory(store, 'conversation-1', 'session-1', 10);
+
+    expect(history).toEqual([
+      { role: 'user', content: 'First' },
+      { role: 'assistant', content: 'Second' },
+    ]);
+    expect(limit).toHaveBeenCalledWith(10);
+  });
+
+  it('returns an empty history when the session does not own the conversation', async () => {
+    const maybeSingle = jest.fn(async () => ({ data: null, error: null }));
+    const eq2 = jest.fn(() => ({ maybeSingle }));
+    const eq1 = jest.fn(() => ({ eq: eq2 }));
+    const select = jest.fn(() => ({ eq: eq1 }));
+    const store = { from: jest.fn(() => ({ select })) } as never;
+
+    await expect(loadPierrotHistory(store, 'conversation-1', 'other', 10)).resolves.toEqual([]);
   });
 
   it('records events through the session-checked idempotent function', async () => {
