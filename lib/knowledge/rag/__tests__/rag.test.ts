@@ -223,6 +223,17 @@ describe('OpenRouter embedding client', () => {
     await expect(client.embed([sentinel])).rejects.not.toThrow(sentinel);
   });
 
+  it('accepts the provider model-id casing variant', async () => {
+    const client = createOpenRouterEmbeddingClient({
+      apiKey: 'test-key',
+      modelId: UNFRAMED_EMBEDDING_MODEL,
+      dimensions: UNFRAMED_EMBEDDING_DIMENSIONS,
+      fetchImpl: async () => response(embeddingResponse(1, 'BAAI/bge-m3')),
+    });
+
+    await expect(client.embed(['a'])).resolves.toHaveLength(1);
+  });
+
   it('fails on a model mismatch, HTTP error and partial response', async () => {
     const modelMismatch = createOpenRouterEmbeddingClient({
       apiKey: 'test-key',

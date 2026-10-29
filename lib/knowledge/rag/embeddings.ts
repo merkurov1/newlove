@@ -52,11 +52,12 @@ function parseEmbeddingResponse(
 
   const record = payload as Record<string, unknown>;
 
-  if (record.model !== expectedModel) {
-    throw new EmbeddingModelMismatchError(
-      expectedModel,
-      typeof record.model === 'string' ? record.model : 'unknown'
-    );
+  const actualModel = typeof record.model === 'string' ? record.model.trim() : 'unknown';
+
+  // OpenRouter currently returns the BGE model id as `BAAI/bge-m3` while its
+  // catalogue/request id is `baai/bge-m3`. Model identity is case-insensitive.
+  if (actualModel.toLowerCase() !== expectedModel.trim().toLowerCase()) {
+    throw new EmbeddingModelMismatchError(expectedModel, actualModel);
   }
 
   if (!Array.isArray(record.data) || record.data.length !== expectedCount) {
