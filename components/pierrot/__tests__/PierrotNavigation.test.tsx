@@ -526,6 +526,23 @@ describe('Pierrot conversational navigation', () => {
     }
   });
 
+  it('starts a dialogue from the default CTA', () => {
+    currentPathname = '/lobby';
+    renderApp();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open test chat' }));
+
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByRole('textbox', { name: 'Message Pierrot' });
+
+    input.blur();
+    expect(input).not.toHaveFocus();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ask Pierrot something' }));
+
+    expect(input).toHaveFocus();
+  });
+
   it('opens the Heritage scenario from the Lobby page', async () => {
     currentPathname = '/lobby';
     renderLobbyApp();

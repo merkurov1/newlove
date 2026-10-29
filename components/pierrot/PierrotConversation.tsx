@@ -180,16 +180,47 @@ const PIERROT_MENU = [
 function PierrotEmptyState() {
   const { closeConversation } = usePierrot();
 
+  const focusInput = () => {
+    const input = document.querySelector<HTMLTextAreaElement>('textarea[data-pierrot-input]');
+    input?.focus({ preventScroll: true });
+  };
+
   return (
     <div className="mx-auto my-auto w-full max-w-2xl px-1 py-8 sm:py-10">
       <p className="text-center font-serif text-sm italic tracking-wide text-zinc-600 sm:text-lg">
         Structure is the antidote to chaos.
       </p>
 
-      <nav
-        aria-label="Pierrot site navigation"
-        className="mt-10 border-b border-[#E4DCCF] sm:mt-12"
+      <button
+        type="button"
+        onClick={focusInput}
+        className="
+          group mt-8 flex w-full items-center justify-between gap-4
+          rounded-2xl border border-[#E4DCCF] bg-white/70 px-5 py-4
+          text-left transition-colors hover:border-[#CFC3B1] hover:bg-white
+        "
       >
+        <span className="font-serif text-lg italic tracking-wide text-[#625B50] sm:text-xl">
+          Ask Pierrot something
+        </span>
+        <ArrowUpRight
+          size={18}
+          className="
+            shrink-0 text-[#898277] transition-transform
+            group-hover:-translate-y-0.5 group-hover:translate-x-0.5
+            group-hover:text-[#111111]
+          "
+        />
+      </button>
+
+      <div className="mt-8 flex items-center gap-3">
+        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#B8B0A4]">
+          Or explore
+        </span>
+        <span className="h-px flex-1 bg-[#E4DCCF]" />
+      </div>
+
+      <nav aria-label="Pierrot site navigation" className="mt-4 border-b border-[#E4DCCF]">
         <Link
           href="/"
           onClick={() => closeConversation()}
@@ -537,6 +568,7 @@ export function PierrotInput({
         placeholder={placeholder}
         rows={1}
         disabled={isLoading}
+        data-pierrot-input
         aria-label="Message Pierrot"
         className="
           max-h-36 min-h-[38px] min-w-0 flex-1 resize-none

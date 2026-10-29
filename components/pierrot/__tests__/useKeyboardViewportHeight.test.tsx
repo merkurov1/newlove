@@ -40,8 +40,18 @@ describe('useKeyboardViewportHeight', () => {
     });
   });
 
-  it('returns null when the keyboard inset is small or the hook is inactive', () => {
+  it('uses the visual viewport for any positive inset', async () => {
     installVisualViewport(880, 0, 900);
+
+    const { result } = renderHook(() => useKeyboardViewportHeight(true));
+
+    await waitFor(() => {
+      expect(result.current).toEqual({ height: 880, offsetTop: 0 });
+    });
+  });
+
+  it('returns null when there is no inset or the hook is inactive', () => {
+    installVisualViewport(900, 0, 900);
 
     const active = renderHook(() => useKeyboardViewportHeight(true));
     expect(active.result.current).toBeNull();

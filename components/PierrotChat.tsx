@@ -201,20 +201,17 @@ export default function PierrotChat() {
                   onMouseDown={(event: React.MouseEvent<HTMLElement>) => event.stopPropagation()}
                 >
                   <header
-                    className="
-                      shrink-0 border-b border-stone-200/80 bg-[#FAF8F5]/85
-                      shadow-[0_4px_25px_rgba(0,0,0,0.03)] backdrop-blur-2xl
-                    "
+                    className="shrink-0 bg-transparent"
                     style={{
                       paddingTop:
-                        'max(12px, env(safe-area-inset-top), var(--tg-safe-area-top, 0px))',
+                        'max(0px, env(safe-area-inset-top), var(--tg-safe-area-top, 0px))',
                       paddingLeft: 'env(safe-area-inset-left)',
                       paddingRight: 'env(safe-area-inset-right)',
                     }}
                   >
-                    <div className="mx-auto flex w-full max-w-[1800px] items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4 lg:px-10">
-                      <div className="flex min-w-0 items-center gap-2 sm:gap-4">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#37332D] font-serif text-lg font-medium text-white shadow-md ring-2 ring-white/90 sm:h-11 sm:w-11">
+                    <div className="mx-auto flex w-full max-w-[1800px] items-center justify-between gap-2 px-4 py-4 sm:gap-4 sm:px-6 sm:py-6 lg:px-10">
+                      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-stone-900 font-serif text-xs font-medium text-white shadow-md ring-2 ring-white/90 sm:h-11 sm:w-11 sm:text-sm">
                           {PIERROT_AVATAR_SRC ? (
                             <img
                               src={PIERROT_AVATAR_SRC}
@@ -226,16 +223,23 @@ export default function PierrotChat() {
                           )}
                         </span>
 
-                        <div
-                          className="
-                            min-w-0 truncate rounded-2xl border border-stone-200/90
-                            bg-white/90 px-3.5 py-2 font-sans text-sm font-bold
-                            uppercase tracking-[0.15em] text-stone-900 shadow-sm
-                            backdrop-blur-md sm:px-5 sm:py-2.5 sm:text-base
-                            sm:tracking-[0.2em]
-                          "
-                        >
-                          Pierrot
+                        <div className="min-w-0 flex-1 sm:flex-none">
+                          <div
+                            className="
+                              flex w-full items-center justify-between gap-2.5
+                              truncate rounded-2xl border border-stone-200/90
+                              bg-white/90 px-3.5 py-2 font-sans text-sm font-bold
+                              uppercase tracking-[0.15em] text-stone-900 shadow-sm
+                              backdrop-blur-md sm:w-auto sm:px-5 sm:py-2.5
+                              sm:text-base sm:tracking-[0.2em]
+                            "
+                          >
+                            <span className="truncate">Pierrot</span>
+                            <span
+                              aria-hidden="true"
+                              className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#8CA18A]"
+                            />
+                          </div>
                         </div>
                       </div>
 
@@ -254,7 +258,6 @@ export default function PierrotChat() {
                             hover:text-[#3F3A33] focus:outline-none focus:ring-2
                             focus:ring-[#CFC3B1] focus:ring-offset-2
                             disabled:cursor-not-allowed disabled:opacity-30
-                            sm:h-11 sm:w-11
                           "
                         >
                           <RotateCcw size={17} />
@@ -272,7 +275,6 @@ export default function PierrotChat() {
                             transition hover:border-[#CFC3B1] hover:bg-white
                             hover:text-[#3F3A33] focus:outline-none focus:ring-2
                             focus:ring-[#CFC3B1] focus:ring-offset-2
-                            sm:h-11 sm:w-11
                           "
                         >
                           <X size={19} strokeWidth={1.6} />

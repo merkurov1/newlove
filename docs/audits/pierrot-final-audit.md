@@ -19,7 +19,8 @@
 - Ввод: окно использует `visualViewport.height` и `offsetTop` при открытой клавиатуре, safe-area сверху/снизу, footer `shrink-0`, а textarea автоматически растёт до 144 px. Поле ввода остаётся внутри видимой области.
 - `HomePierrotMode`, `telegram-pierrot-inline`, `pierrot-inline-shell` и composer-режим удалены; `PierrotMode` теперь только `site | modal`.
 - Ответы Pierrot рендерятся как безопасный markdown: `**bold**`, `*italic*`, ссылки, списки и code больше не показываются literal; raw HTML отключён, URL фильтруются.
-- Полный Jest после унификации: **61/61 suites, 363/363 tests PASS**.
+- На default-странице добавлен CTA `Ask Pierrot something`: он фокусирует поле ввода и запускает диалог; ниже остаётся индекс `Or explore`.
+- Полный Jest после унификации: **61/61 suites, 365/365 tests PASS**.
 
 Разделы ниже, где упоминаются inline-режим и composer-порог, сохранены как история первичного аудита. Актуальное состояние — этот раздел и §7 (D-U1…D-U6).
 
@@ -31,7 +32,7 @@
 
 - P0/P1 дефектов не найдено.
 - Найдено и исправлено 6 воспроизводимых P2/P3-дефектов, включая унификацию окна.
-- Полный Jest-прогон: **61/61 suites, 363/363 tests PASS**.
+- Полный Jest-прогон: **61/61 suites, 365/365 tests PASS**.
 - Оставлено одно окно Pierrot с аватаром, именем, reset и close; поле ввода защищено от ухода за экран, reset не перекрывается Flow.
 - TypeScript: **PASS** (чистый `tsc --noEmit`).
 - Production build: **compile + typecheck PASS**; полная статическая генерация в этом окружении упирается в отсутствие реальных env и внешний `fonts.gstatic.com`, а не в код.
@@ -52,7 +53,7 @@
 ### После аудита
 
 - Изменены 13 файлов, удалён `HomePierrotMode`, добавлены 5 регрессионных тестов и этот отчёт (см. §7).
-- `npm test`: **363/363 PASS**, 61/61 suites.
+- `npm test`: **365/365 PASS**, 61/61 suites.
 - `tsc --noEmit`: **PASS**.
 - `next lint` по затронутым файлам: новых ошибок нет; остаются только pre-existing `no-explicit-any` в `Header.tsx` и repo-wide `react/react-in-jsx-scope` из сломанного конфига.
 - Коммиты/пуш не выполнялись. Production-данные, Supabase, Stripe, Vercel, env не менялись.
@@ -128,7 +129,7 @@ SSR-прогон (dev, безопасные env-заглушки):
 | 15  | Consent denied → нет записи          | API                  | n/a         | node             | нет store               | нет store                             | PASS                | `route.test.ts`                    |
 | 16  | Идемпотентность / чужой session id   | API                  | n/a         | node             | replay/deny             | корректно                             | PASS                | `route.test.ts`                    |
 | 17  | Детерминированный оффер              | API                  | гость       | curl             | 200 + CTA               | 200 + CTA                             | PASS                | curl                               |
-| 18  | Полный Jest                          | весь проект          | n/a         | node             | зелёный                 | 363/363                               | PASS                | см. §8                             |
+| 18  | Полный Jest                          | весь проект          | n/a         | node             | зелёный                 | 365/365                               | PASS                | см. §8                             |
 | 19  | TypeScript                           | весь проект          | n/a         | —                | без ошибок              | без ошибок                            | PASS                | `tsc`                              |
 | 20  | Production build                     | весь проект          | n/a         | —                | собирается              | compile+types OK; static — env/fonts  | PARTIAL             | см. §8                             |
 | 21  | Lint                                 | весь проект          | n/a         | —                | зелёный                 | baseline 6334                         | FAIL (pre-existing) | см. §8                             |
@@ -140,6 +141,7 @@ SSR-прогон (dev, безопасные env-заглушки):
 | 27  | Default-меню Pierrot                 | `/`, пустой диалог   | гость       | jsdom            | 5 разделов + brand      | все ссылки на месте                   | PASS                | `PierrotNavigation.test.tsx`       |
 | 28  | Шапка Pierrot = шапка Header         | modal                | любой       | статика          | avatar/logo/reset/close | выровнено                             | PASS (fixed)        | `PierrotChat.tsx`                  |
 | 29  | Markdown в ответе Pierrot            | modal                | гость       | jsdom            | bold/links, не `**`     | bold/link, raw HTML off               | PASS (fixed)        | `PierrotNavigation.test.tsx`       |
+| 30  | CTA «Ask Pierrot something»          | default window       | гость       | jsdom + Chromium | фокус в input           | фокус + input внутри viewport         | PASS                | `PierrotNavigation.test.tsx`       |
 
 ---
 
@@ -168,7 +170,7 @@ SSR-прогон (dev, безопасные env-заглушки):
 - `components/PierrotChat.tsx` — единое окно, аватар/имя/reset/close, safe-area, viewport.
 - `components/pierrot/PierrotContext.tsx` — один режим (site/modal), удалены inline/composer, auth-reset.
 - `components/pierrot/PierrotComposer.tsx` — только launcher, открывающий общее окно.
-- `components/pierrot/PierrotConversation.tsx` — auto-grow поля ввода, default-индекс навигации, безопасный markdown ответов.
+- `components/pierrot/PierrotConversation.tsx` — auto-grow поля ввода, default-индекс навигации, CTA «Ask Pierrot something», безопасный markdown ответов.
 - `components/pierrot/useKeyboardViewportHeight.ts` — height + offsetTop.
 - `components/pierrot/HomePierrotMode.tsx` — удалён.
 - `components/Header.tsx` — обычный Header, Flow только admin.
@@ -305,7 +307,7 @@ SSR-прогон (dev, безопасные env-заглушки):
 | Проверка                        | Команда                                                                                                                       | Результат                                                                                            |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | Pierrot Jest                    | `npx jest lib/pierrot components/pierrot app/api/pierrot-web app/api/pierrot/conversations app/api/admin/pierrot --runInBand` | 18 suites, **136 tests PASS**                                                                        |
-| Полный Jest                     | `npx jest --runInBand --forceExit`                                                                                            | 61 suites, **363 tests PASS**                                                                        |
+| Полный Jest                     | `npx jest --runInBand --forceExit`                                                                                            | 61 suites, **365 tests PASS**                                                                        |
 | TypeScript                      | `tsc --noEmit -p tsconfig.json`                                                                                               | **PASS**, 0 ошибок                                                                                   |
 | Prettier (затронутые файлы)     | `prettier --check ...`                                                                                                        | **PASS**                                                                                             |
 | Production build                | `next build` (без реальных env)                                                                                               | compile **PASS**, typecheck **PASS**, page data **FAIL** из-за отсутствия `NEXT_PUBLIC_SUPABASE_URL` |
