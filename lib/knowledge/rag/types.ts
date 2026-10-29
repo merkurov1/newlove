@@ -52,6 +52,7 @@ export type KnowledgeDocumentRow = {
   access_class: KnowledgeAccessClass;
   chunk_count: number;
   source_char_count: number;
+  metadata?: Record<string, unknown>;
 };
 
 export type KnowledgeChunkRow = {

@@ -37,21 +37,7 @@ const EXPECTED_PROJECT_REF = 'txvkqcitalfbjytmnawq';
 const EXPECTED_QUESTION_HASH = 'd65b319474378ebc2f0f71ba946f11a4fdbf93417b1c53d05288834eb816d167';
 const EXPECTED_PROTOCOL_HASH = 'd2dba136d553ddb959880bc315d4b886474f3559899dadfd171e60574d4541b8';
 
-const DOCUMENT_COLUMNS = [
-  'id',
-  'title',
-  'source_path',
-  'source_sha256',
-  'manifest_hash',
-  'parser_version',
-  'chunker_version',
-  'ingestion_version',
-  'embedding_model',
-  'embedding_dimensions',
-  'access_class',
-  'chunk_count',
-  'source_char_count',
-].join(',');
+const DOCUMENT_COLUMNS = '*';
 
 const CHUNK_COLUMNS = [
   'id',
@@ -190,6 +176,19 @@ function parseVector(value: unknown): number[] | null {
   }
 
   return null;
+}
+
+function documentIngestionVersion(document: Record<string, unknown>): string | null {
+  if (typeof document.ingestion_version === 'string') return document.ingestion_version;
+
+  const metadata =
+    document.metadata && typeof document.metadata === 'object'
+      ? (document.metadata as Record<string, unknown>)
+      : null;
+
+  return metadata && typeof metadata.ingestion_version === 'string'
+    ? metadata.ingestion_version
+    : null;
 }
 
 async function readBuild() {
@@ -610,7 +609,7 @@ async function verifyIndex() {
     document.source_path === plan.document.source_path &&
     document.parser_version === plan.document.parser_version &&
     document.chunker_version === plan.document.chunker_version &&
-    document.ingestion_version === plan.document.ingestion_version &&
+    documentIngestionVersion(document) === plan.document.ingestion_version &&
     document.embedding_model === plan.document.embedding_model &&
     document.embedding_dimensions === plan.document.embedding_dimensions &&
     document.access_class === 'owner' &&

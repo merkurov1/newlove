@@ -121,7 +121,28 @@ export function createSupabaseKnowledgeRepository(
         .from('knowledge_documents')
         .upsert(document, { onConflict: 'id' });
 
-      if (error) throw new KnowledgeDatabaseError('write_failed');
+      if (!error) return;
+
+      // Production schema reconciliation: some already-applied RAG schemas
+      // predate the ingestion_version column. Keep the contract in metadata
+      // instead of changing the live schema during an ingestion operation.
+      if (error.code === '42703' && document.ingestion_version) {
+        const { ingestion_version, ...row } = document;
+        const { error: retryError } = await store.from('knowledge_documents').upsert(
+          {
+            ...row,
+            metadata: {
+              ...(document.metadata || {}),
+              ingestion_version,
+            },
+          },
+          { onConflict: 'id' }
+        );
+
+        if (!retryError) return;
+      }
+
+      throw new KnowledgeDatabaseError('write_failed');
     },
 
     async upsertChunks(chunks: KnowledgeChunkWithEmbedding[]): Promise<void> {
