@@ -15,6 +15,11 @@ import {
 } from '@/lib/knowledge/rag/config';
 import { createOpenRouterEmbeddingClient } from '@/lib/knowledge/rag/embeddings';
 import {
+  EmbeddingDimensionMismatchError,
+  EmbeddingModelMismatchError,
+  EmbeddingProviderError,
+} from '@/lib/knowledge/rag/errors';
+import {
   evaluateSemanticQuestion,
   semanticBreakdowns,
   semanticMetrics,
@@ -51,7 +56,7 @@ const CHUNK_COLUMNS = [
   'embedding',
 ].join(',');
 
-type RunAction = 'preflight' | 'schema' | 'ingest' | 'verify' | 'evaluate';
+type RunAction = 'preflight' | 'schema' | 'probe-embedding' | 'ingest' | 'verify' | 'evaluate';
 type EvaluationSplit = 'dev' | 'calibration' | 'test';
 
 type JsonBody = {
@@ -72,6 +77,32 @@ function json(body: unknown, status = 200): NextResponse {
 
 function fail(code: string, status = 400, extra: Record<string, unknown> = {}): NextResponse {
   return json({ status: 'failed', code, ...extra }, status);
+}
+
+function safeErrorDetails(error: unknown): Record<string, unknown> {
+  const code = errorCode(error);
+
+  if (error instanceof EmbeddingModelMismatchError) {
+    return {
+      code,
+      expectedModel: error.expected,
+      actualModel: error.actual.slice(0, 120),
+    };
+  }
+
+  if (error instanceof EmbeddingDimensionMismatchError) {
+    return {
+      code,
+      expectedDimensions: error.expected,
+      actualDimensions: error.actual,
+    };
+  }
+
+  if (error instanceof EmbeddingProviderError) {
+    return { code, providerStatus: error.status };
+  }
+
+  return { code };
 }
 
 function errorCode(error: unknown): string {
@@ -713,6 +744,22 @@ async function verifyIndex() {
   };
 }
 
+async function probeEmbedding() {
+  const client = createEmbeddingClient();
+  const startedAt = Date.now();
+  const vectors = await client.embed(['ping']);
+
+  return {
+    status: 'ok' as const,
+    model: client.modelId,
+    dimensions: client.dimensions,
+    vectors: vectors.length,
+    firstVectorLength: vectors[0]?.length ?? 0,
+    wouldCallEmbeddingApi: true,
+    latencyMs: Date.now() - startedAt,
+  };
+}
+
 async function ingestIndex() {
   const preflight = await buildPreflight();
 
@@ -873,6 +920,7 @@ export async function POST(request: Request) {
   if (
     action !== 'preflight' &&
     action !== 'schema' &&
+    action !== 'probe-embedding' &&
     action !== 'ingest' &&
     action !== 'verify' &&
     action !== 'evaluate'
@@ -887,6 +935,14 @@ export async function POST(request: Request) {
 
     if (action === 'schema') {
       return json(await probeSchema());
+    }
+
+    if (action === 'probe-embedding') {
+      if (body.confirm !== 'PROBE_PAID_EMBEDDING') {
+        return fail('confirmation_required', 400);
+      }
+
+      return json(await probeEmbedding());
     }
 
     if (action === 'ingest') {
@@ -918,6 +974,6 @@ export async function POST(request: Request) {
       code: errorCode(error),
     });
 
-    return fail(errorCode(error), 500);
+    return fail(errorCode(error), 500, safeErrorDetails(error));
   }
 }
