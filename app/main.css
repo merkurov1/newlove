@@ -437,20 +437,6 @@ body.telegram-app .site-header {
   display: none !important;
 }
 
-/*
- * Pierrot's homepage inline mode keeps the web header inside Telegram so the
- * conversation has the same identity, menu and exit control as on the web.
- * The extra top padding clears the Telegram status/close controls.
- */
-body.telegram-app.telegram-pierrot-inline .site-header {
-  display: block !important;
-  padding-top: max(1rem, env(safe-area-inset-top), var(--tg-safe-area-top, 0px));
-}
-
-body.telegram-app.telegram-pierrot-inline .pierrot-inline-shell {
-  padding-top: calc(6rem + max(env(safe-area-inset-top), var(--tg-safe-area-top, 0px)));
-}
-
 body.telegram-app .site-footer {
   display: none !important;
 }

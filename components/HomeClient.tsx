@@ -2,10 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowUpRight } from 'lucide-react';
-import HomePierrotMode from '@/components/pierrot/HomePierrotMode';
 import PierrotComposer from '@/components/pierrot/PierrotComposer';
 import PierrotSectionLink from '@/components/pierrot/PierrotSectionLink';
-import { usePierrot } from '@/components/pierrot/PierrotContext';
 import type { PierrotSectionId } from '@/lib/pierrot/navigation';
 
 interface NavItem {
@@ -23,7 +21,6 @@ const INITIAL_ITEMS: NavItem[] = [
 export default function HomeClient() {
   const [items, setItems] = useState<NavItem[]>(INITIAL_ITEMS);
   const [isShuffled, setIsShuffled] = useState(false);
-  const { isHomeMode } = usePierrot();
 
   const shuffleItems = useCallback(() => {
     const tg = (window as any)?.Telegram?.WebApp;
@@ -79,10 +76,6 @@ export default function HomeClient() {
       }
     };
   }, [shuffleItems]);
-
-  if (isHomeMode) {
-    return <HomePierrotMode />;
-  }
 
   return (
     <main className="min-h-screen w-full bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] flex flex-col justify-between px-5 sm:px-12 pt-32 md:pt-44 pb-12 antialiased relative overflow-x-hidden">

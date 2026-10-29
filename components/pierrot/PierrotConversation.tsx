@@ -358,6 +358,15 @@ export function PierrotInput({
     return () => window.cancelAnimationFrame(frame);
   }, [isLoading]);
 
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+
+    const nextHeight = Math.min(Math.max(input.scrollHeight, 38), 144);
+
+    input.style.height = `${nextHeight}px`;
+  }, [draft]);
+
   const submit = () => {
     if (!draft.trim() || isLoading) return;
     void sendMessage();

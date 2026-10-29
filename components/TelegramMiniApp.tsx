@@ -136,17 +136,6 @@ export default function TelegramMiniApp() {
     };
   }, [pathname]);
 
-  // The Telegram shell hides the web header. In Pierrot's homepage inline mode
-  // the header is shown again so the conversation has the same identity, menu
-  // and exit control as on the web.
-  useEffect(() => {
-    document.body.classList.toggle('telegram-pierrot-inline', isTelegram && mode === 'inline');
-
-    return () => {
-      document.body.classList.remove('telegram-pierrot-inline');
-    };
-  }, [isTelegram, mode]);
-
   useEffect(() => {
     if (!isTelegram) {
       document.body.classList.remove('telegram-app');

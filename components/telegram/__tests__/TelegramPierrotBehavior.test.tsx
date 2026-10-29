@@ -1,7 +1,8 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import Header from '@/components/Header';
 import HomeClient from '@/components/HomeClient';
+import PierrotChat from '@/components/PierrotChat';
 import TelegramMiniApp from '@/components/TelegramMiniApp';
 import { PierrotProvider } from '@/components/pierrot/PierrotContext';
 
@@ -55,11 +56,12 @@ function app() {
       <Header />
       <TelegramMiniApp />
       <HomeClient />
+      <PierrotChat />
     </PierrotProvider>
   );
 }
 
-describe('Telegram Pierrot parity with the web header', () => {
+describe('Telegram Pierrot uses the single conversation window', () => {
   beforeEach(() => {
     installTelegram();
     window.sessionStorage.clear();
@@ -70,47 +72,64 @@ describe('Telegram Pierrot parity with the web header', () => {
     delete (window as unknown as { Telegram?: unknown }).Telegram;
   });
 
-  it('keeps the web identity and exit control in Telegram inline mode', () => {
+  it('opens the same window as the web, with avatar, name, reset and close', async () => {
     render(app());
 
-    // Site mode uses the compact Telegram navigation, not the web header.
     expect(screen.getByRole('button', { name: 'Open Pierrot' })).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Open World, Temple and rituals navigation' })
     ).toBeInTheDocument();
-    const composerTrigger = screen.getByRole('button', {
-      name: 'Show Pierrot composer',
+
+    const launcher = screen.getByRole('button', {
+      name: 'Open Pierrot conversation',
     });
-    expect(composerTrigger.style.bottom).toContain('56px');
-    expect(screen.queryByLabelText('Pierrot avatar')).not.toBeInTheDocument();
+    expect(launcher.style.bottom).toContain('56px');
+    expect(screen.queryByText('Merkurov')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Pierrot' }));
 
-    // Inline mode now matches the web: Pierrot identity and exit live in the header.
-    expect(screen.getByLabelText('Pierrot avatar')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Exit Pierrot mode' })).toHaveLength(1);
-    expect(document.body).toHaveClass('telegram-pierrot-inline');
-    expect(screen.getByRole('textbox', { name: 'Message Pierrot' })).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Pierrot')).toBeInTheDocument();
+    expect(within(dialog).getByAltText('Pierrot')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Close Pierrot' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('textbox', { name: 'Message Pierrot' })).toBeInTheDocument();
+
     expect(
       screen.queryByRole('button', { name: 'Open World, Temple and rituals navigation' })
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Show Pierrot composer' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Open Pierrot conversation' })
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Exit Pierrot mode' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close Pierrot' }));
 
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
     expect(screen.getByRole('button', { name: 'Open Pierrot' })).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Open World, Temple and rituals navigation' })
     ).toBeInTheDocument();
-    expect(screen.queryByLabelText('Pierrot avatar')).not.toBeInTheDocument();
-    expect(document.body).not.toHaveClass('telegram-pierrot-inline');
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show Pierrot composer' }));
+  it('opens the same window from the home launcher, above Telegram navigation', async () => {
+    render(app());
 
-    const composer = document.getElementById('pierrot-home-composer');
-    expect(composer?.parentElement?.style.paddingBottom).not.toContain('56px');
-    expect(composer?.parentElement?.style.paddingBottom).toContain('safe-area-inset-bottom');
+    const launcher = screen.getByRole('button', {
+      name: 'Open Pierrot conversation',
+    });
+    expect(launcher.style.bottom).toContain('56px');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hide Pierrot composer' }));
+    fireEvent.click(launcher);
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('textbox', { name: 'Message Pierrot' })).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close Pierrot' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'Open Pierrot conversation' })).toBeInTheDocument();
   });
 });

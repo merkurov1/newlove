@@ -118,28 +118,34 @@ describe('Pierrot conversational navigation', () => {
     window.localStorage.clear();
   });
 
-  it('toggles the homepage into Pierrot mode with the P control', async () => {
+  it('opens the single Pierrot window from the homepage P control', async () => {
     renderApp();
 
     expect(screen.queryByRole('textbox', { name: 'Message Pierrot' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Show Pierrot composer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Pierrot conversation' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
 
-    expect(screen.getByRole('textbox', { name: 'Message Pierrot' })).toBeInTheDocument();
-    expect(screen.getByText('Structure is the antidote to chaos.')).toBeInTheDocument();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Show Pierrot composer' })).not.toBeInTheDocument();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('textbox', { name: 'Message Pierrot' })).toBeInTheDocument();
+    expect(within(dialog).getByText('Structure is the antidote to chaos.')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Open Pierrot conversation' })
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
 
-    expect(screen.queryByRole('textbox', { name: 'Message Pierrot' })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'Open Pierrot conversation' })).toBeInTheDocument();
   });
 
-  it('switches the site header identity in homepage Pierrot mode', async () => {
+  it('keeps the site header and shows the Pierrot identity inside the window', async () => {
     render(
       <PierrotProvider>
         <Header />
+        <PierrotChat />
         <TogglePierrotButton />
       </PierrotProvider>
     );
@@ -148,28 +154,34 @@ describe('Pierrot conversational navigation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
 
-    expect(screen.getByText('Pierrot')).toBeInTheDocument();
-    expect(screen.getByLabelText('Pierrot avatar')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Exit Pierrot mode' })).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Pierrot')).toBeInTheDocument();
+    expect(within(dialog).getByAltText('Pierrot')).toBeInTheDocument();
+    expect(screen.getByText('Merkurov')).toBeInTheDocument();
   });
 
-  it('restores the compact composer P control on the homepage', async () => {
+  it('opens the same window from the homepage launcher', async () => {
     renderApp();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show Pierrot composer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Pierrot conversation' }));
 
-    expect(screen.getByRole('textbox', { name: 'Message Pierrot' })).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('textbox', { name: 'Message Pierrot' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hide Pierrot composer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close Pierrot' }));
 
-    expect(screen.queryByRole('textbox', { name: 'Message Pierrot' })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'Open Pierrot conversation' })).toBeInTheDocument();
   });
 
-  it('sends a short message from the inline Pierrot mode', async () => {
+  it('sends a short message from the Pierrot window', async () => {
     renderApp();
     fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
 
-    const input = screen.getByRole('textbox', { name: 'Message Pierrot' });
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByRole('textbox', { name: 'Message Pierrot' });
 
     fireEvent.change(input, { target: { value: 'hello' } });
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -178,8 +190,30 @@ describe('Pierrot conversational navigation', () => {
       expect(chatFetchCalls()).toHaveLength(1);
     });
 
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('dialog')).getByRole('textbox')).toBeInTheDocument();
     expect(chatFetchCalls()[0][1].body).toContain('"message":"hello"');
+  });
+
+  it('resets the conversation from the window header', async () => {
+    renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
+
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByRole('textbox', { name: 'Message Pierrot' });
+
+    fireEvent.change(input, { target: { value: 'hello' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(within(dialog).getByRole('button', { name: 'New chat' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'New chat' }));
+
+    await waitFor(() => {
+      expect(within(dialog).getByText('Structure is the antidote to chaos.')).toBeInTheDocument();
+    });
+    expect(within(dialog).queryByRole('button', { name: 'New chat' })).not.toBeInTheDocument();
   });
 
   it('opens Art as a conversation and inserts its curated intro once', async () => {

@@ -9,18 +9,15 @@ import { PierrotInput, PierrotMessageList } from '@/components/pierrot/PierrotCo
 import PierrotDataNotice from '@/components/pierrot/PierrotDataNotice';
 import usePrefersReducedMotion from '@/components/pierrot/usePrefersReducedMotion';
 import useKeyboardViewportHeight from '@/components/pierrot/useKeyboardViewportHeight';
+import { PIERROT_AVATAR_SRC } from '@/lib/pierrot/config';
 
 type PierrotTriggerProps = {
   compact?: boolean;
 };
 
 export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
-  const { toggleConversation, isHomeMode, hasUnread } = usePierrot();
-  const label = isHomeMode
-    ? 'Exit Pierrot mode'
-    : hasUnread
-      ? 'Open Pierrot, new message'
-      : 'Open Pierrot';
+  const { toggleConversation, hasUnread } = usePierrot();
+  const label = hasUnread ? 'Open Pierrot, new message' : 'Open Pierrot';
 
   if (compact) {
     return (
@@ -28,25 +25,21 @@ export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
         type="button"
         onClick={toggleConversation}
         aria-label={label}
-        aria-haspopup={isHomeMode ? undefined : 'dialog'}
-        aria-pressed={isHomeMode}
-        title={isHomeMode ? 'Back to Merkurov' : 'Pierrot'}
-        className={`
+        aria-haspopup="dialog"
+        title="Pierrot"
+        className="
           group relative flex h-10 w-10 shrink-0 items-center justify-center
-          rounded-full border font-serif text-[17px] font-medium
+          rounded-full border border-[#E4DCCF] bg-[#F8F5EF] font-serif
+          text-[17px] font-medium text-[#625B50]
           shadow-[0_2px_8px_rgba(75,62,45,0.04)]
-          transition-colors duration-200 active:scale-95
+          transition-colors duration-200 hover:border-[#CFC3B1]
+          hover:bg-white hover:text-[#3F3A33] active:scale-95
           focus:outline-none focus:ring-2 focus:ring-[#CFC3B1]
           focus:ring-offset-2
-          ${
-            isHomeMode
-              ? 'border-[#37332D] bg-[#37332D] text-white hover:bg-[#201D1A]'
-              : 'border-[#E4DCCF] bg-[#F8F5EF] text-[#625B50] hover:border-[#CFC3B1] hover:bg-white hover:text-[#3F3A33]'
-          }
-        `}
+        "
       >
         <span className="transition-transform duration-200 group-hover:scale-110">P</span>
-        {hasUnread && !isHomeMode && (
+        {hasUnread && (
           <span
             aria-hidden="true"
             className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-[#8CA18A] ring-2 ring-[#FAF8F5]"
@@ -61,22 +54,17 @@ export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
       type="button"
       onClick={toggleConversation}
       aria-label={label}
-      aria-haspopup={isHomeMode ? undefined : 'dialog'}
-      aria-pressed={isHomeMode}
-      className={`
+      aria-haspopup="dialog"
+      className="
         group relative inline-flex items-center gap-2 rounded-full border
-        px-3.5 py-1.5 font-mono text-[10px] uppercase
-        tracking-[0.16em] transition-colors
-        ${
-          isHomeMode
-            ? 'border-[#37332D] bg-[#37332D] text-white'
-            : 'border-[#E4DCCF] bg-[#F8F5EF]/95 text-[#625B50] hover:border-[#CFC3B1] hover:bg-white'
-        }
-      `}
+        border-[#E4DCCF] bg-[#F8F5EF]/95 px-3.5 py-1.5 font-mono
+        text-[10px] uppercase tracking-[0.16em] text-[#625B50]
+        transition-colors hover:border-[#CFC3B1] hover:bg-white
+      "
     >
       <span className="h-1.5 w-1.5 rounded-full bg-[#8CA18A]" />
-      <span>{isHomeMode ? 'Exit Pierrot' : 'Pierrot'}</span>
-      {hasUnread && !isHomeMode && (
+      <span>Pierrot</span>
+      {hasUnread && (
         <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-[#B08A5A]" aria-hidden="true" />
       )}
     </button>
@@ -89,7 +77,7 @@ export default function PierrotChat() {
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const modalRef = useRef<HTMLElement | null>(null);
   const shouldReduceMotion = usePrefersReducedMotion();
-  const keyboardViewportHeight = useKeyboardViewportHeight(isOpen);
+  const keyboardViewport = useKeyboardViewportHeight(isOpen);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -160,12 +148,14 @@ export default function PierrotChat() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [closeChat, isOpen]);
 
-  const modalHeight = keyboardViewportHeight
-    ? `${keyboardViewportHeight}px`
+  const modalHeight = keyboardViewport
+    ? `${keyboardViewport.height}px`
     : 'var(--tg-viewport-height, 100dvh)';
-  const modalStyle = {
+
+  const modalStyle: React.CSSProperties = {
     height: modalHeight,
     maxHeight: modalHeight,
+    ...(keyboardViewport ? { top: `${keyboardViewport.offsetTop}px` } : {}),
   };
 
   return (
@@ -175,9 +165,9 @@ export default function PierrotChat() {
           <AnimatePresence>
             {isOpen && (
               <motion.div
-                initial={{ opacity: 0 }}
+                initial={{ opacity: 1 }}
                 animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+                exit={{ opacity: shouldReduceMotion ? 1 : 0 }}
                 transition={{
                   duration: shouldReduceMotion ? 0 : 0.16,
                 }}
@@ -210,27 +200,61 @@ export default function PierrotChat() {
                   "
                   onMouseDown={(event: React.MouseEvent<HTMLElement>) => event.stopPropagation()}
                 >
-                  <header className="shrink-0 border-b border-[#ECE6DC]/60">
-                    <div className="flex w-full items-center justify-between px-3 py-3 sm:px-4 sm:py-4">
-                      <div className="flex items-center gap-2.5">
-                        <span className="h-2 w-2 rounded-full bg-[#8CA18A]" title="Online" />
-                        <span className="font-serif text-[15px] font-medium text-[#37332D]">
-                          Pierrot
+                  <header
+                    className="shrink-0 border-b border-[#ECE6DC]/60"
+                    style={{
+                      paddingTop:
+                        'max(12px, env(safe-area-inset-top), var(--tg-safe-area-top, 0px))',
+                    }}
+                  >
+                    <div
+                      className="flex w-full items-center justify-between gap-3 px-3 pb-3 sm:px-4 sm:pb-4"
+                      style={{
+                        paddingLeft:
+                          'max(12px, env(safe-area-inset-left), var(--tg-safe-area-left, 0px))',
+                        paddingRight:
+                          'max(12px, env(safe-area-inset-right), var(--tg-safe-area-right, 0px))',
+                      }}
+                    >
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#37332D] font-serif text-[15px] font-medium text-white shadow-sm">
+                          {PIERROT_AVATAR_SRC ? (
+                            <img
+                              src={PIERROT_AVATAR_SRC}
+                              alt="Pierrot"
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            'P'
+                          )}
                         </span>
-                        {isAdminSession && (
-                          <span
-                            className="
-                              rounded-full border border-[#E4DCCF]
-                              bg-black/[0.03] px-2 py-0.5 font-mono
-                              text-[9px] uppercase tracking-widest text-[#898277]
-                            "
-                          >
-                            Master
-                          </span>
-                        )}
+
+                        <div className="min-w-0">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <p className="truncate font-serif text-[15px] font-medium text-[#37332D]">
+                              Pierrot
+                            </p>
+
+                            {isAdminSession && (
+                              <span
+                                className="
+                                  shrink-0 rounded-full border border-[#E4DCCF]
+                                  bg-black/[0.03] px-2 py-0.5 font-mono
+                                  text-[9px] uppercase tracking-widest text-[#898277]
+                                "
+                              >
+                                Master
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="truncate font-mono text-[9px] uppercase tracking-[0.14em] text-[#A49A8C]">
+                            Digital shadow &amp; advisor
+                          </p>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-1">
+                      <div className="flex shrink-0 items-center gap-1">
                         {messages.length > 0 && (
                           <button
                             type="button"
@@ -238,12 +262,13 @@ export default function PierrotChat() {
                             title="New chat"
                             aria-label="New chat"
                             className="
-                              flex h-9 w-9 items-center justify-center
+                              flex h-10 w-10 items-center justify-center
                               rounded-full text-[#898277] transition
                               hover:bg-black/[0.04] hover:text-[#37332D]
+                              focus:outline-none focus:ring-2 focus:ring-[#CFC3B1]
                             "
                           >
-                            <RotateCcw size={15} />
+                            <RotateCcw size={16} />
                           </button>
                         )}
 
@@ -253,12 +278,13 @@ export default function PierrotChat() {
                           title="Close"
                           aria-label="Close Pierrot"
                           className="
-                            flex h-9 w-9 shrink-0 items-center justify-center
+                            flex h-10 w-10 shrink-0 items-center justify-center
                             rounded-full text-[#898277] transition
                             hover:bg-black/[0.04] hover:text-[#37332D]
+                            focus:outline-none focus:ring-2 focus:ring-[#CFC3B1]
                           "
                         >
-                          <X size={18} strokeWidth={1.6} />
+                          <X size={19} strokeWidth={1.6} />
                         </button>
                       </div>
                     </div>
@@ -270,6 +296,10 @@ export default function PierrotChat() {
                     style={{
                       paddingBottom:
                         'max(12px, env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))',
+                      paddingLeft:
+                        'max(20px, env(safe-area-inset-left), var(--tg-safe-area-left, 0px))',
+                      paddingRight:
+                        'max(20px, env(safe-area-inset-right), var(--tg-safe-area-right, 0px))',
                     }}
                     className="
                       shrink-0 border-t border-[#ECE6DC]/60

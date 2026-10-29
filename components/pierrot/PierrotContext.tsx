@@ -20,10 +20,6 @@ import {
   type PierrotSectionId,
 } from '@/lib/pierrot/navigation';
 import {
-  PIERROT_COMPOSER_EXPAND_THRESHOLD,
-  shouldExpandPierrotComposer,
-} from '@/lib/pierrot/config';
-import {
   endPierrotConversation,
   getPierrotConsent,
   getPierrotConversationId,
@@ -42,7 +38,7 @@ import {
 
 export type PierrotMessageKind = 'chat' | 'section-trigger' | 'section-intro' | 'arrival';
 
-export type PierrotMode = 'site' | 'composer' | 'inline' | 'modal';
+export type PierrotMode = 'site' | 'modal';
 
 export type PierrotMessageMeta = {
   kind: PierrotMessageKind;
@@ -69,18 +65,14 @@ type PierrotContextValue = {
   draft: string;
   draftCaret: number | null;
   isOpen: boolean;
-  isHomeMode: boolean;
   isLoading: boolean;
-  isComposerOpen: boolean;
   isAdminSession: boolean;
   pendingNavigation: PierrotNavigationProposal | null;
-  expandThreshold: number;
   openChat: () => void;
   openConversation: () => void;
   toggleConversation: () => void;
   closeConversation: () => void;
   closeChat: () => void;
-  toggleComposer: () => void;
   updateDraft: (value: string, caret?: number | null) => void;
   sendMessage: (overrideText?: string) => Promise<void>;
   clearChat: (reason?: 'new_chat' | 'user_closed') => void;
@@ -243,8 +235,6 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   );
 
   const isOpen = mode === 'modal';
-  const isHomeMode = mode === 'inline';
-  const isComposerOpen = mode === 'composer';
 
   const modeRef = useRef<PierrotMode>(mode);
   modeRef.current = mode;
@@ -257,7 +247,6 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   const introTimersRef = useRef<Record<string, number>>({});
   const navigationLockRef = useRef<string | null>(null);
   const navigationTargetRef = useRef<string | null>(null);
-  const thresholdArmedRef = useRef(true);
   const lastAuthUserIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
@@ -294,11 +283,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
 
-      if (
-        nextMessage.role === 'assistant' &&
-        modeRef.current !== 'inline' &&
-        modeRef.current !== 'modal'
-      ) {
+      if (nextMessage.role === 'assistant' && modeRef.current !== 'modal') {
         setHasUnread(true);
       }
 
@@ -308,7 +293,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    if (mode === 'inline' || mode === 'modal') {
+    if (mode === 'modal') {
       setHasUnread(false);
     }
   }, [mode]);
@@ -329,18 +314,12 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const openConversation = useCallback(() => {
-    setMode(normalizePathname(pathname) === '/' ? 'inline' : 'modal');
-  }, [pathname]);
+    setMode('modal');
+  }, []);
 
   const toggleConversation = useCallback(() => {
-    setMode((current) => {
-      if (normalizePathname(pathname) === '/') {
-        return current === 'inline' ? 'site' : 'inline';
-      }
-
-      return current === 'modal' ? 'site' : 'modal';
-    });
-  }, [pathname]);
+    setMode((current) => (current === 'modal' ? 'site' : 'modal'));
+  }, []);
 
   const closeConversation = useCallback(() => {
     setMode('site');
@@ -350,41 +329,10 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     setMode((current) => (current === 'modal' ? 'site' : current));
   }, []);
 
-  const toggleComposer = useCallback(() => {
-    setMode((current) => {
-      if (current === 'composer') {
-        return 'site';
-      }
-
-      thresholdArmedRef.current = !shouldExpandPierrotComposer(draft);
-      return 'composer';
-    });
-  }, [draft]);
-
-  const updateDraft = useCallback(
-    (value: string, caret: number | null = null) => {
-      setDraft(value);
-      setDraftCaret(caret);
-
-      if (mode !== 'composer') {
-        if (!shouldExpandPierrotComposer(value)) {
-          thresholdArmedRef.current = true;
-        }
-        return;
-      }
-
-      if (!shouldExpandPierrotComposer(value)) {
-        thresholdArmedRef.current = true;
-        return;
-      }
-
-      if (!thresholdArmedRef.current) return;
-
-      thresholdArmedRef.current = false;
-      setMode('modal');
-    },
-    [mode]
-  );
+  const updateDraft = useCallback((value: string, caret: number | null = null) => {
+    setDraft(value);
+    setDraftCaret(caret);
+  }, []);
 
   const executeNavigation = useCallback(
     (proposal: PierrotNavigationProposal) => {
@@ -522,7 +470,6 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         });
         setDraft('');
         setDraftCaret(0);
-        thresholdArmedRef.current = true;
         executeNavigation(proposal);
         return;
       }
@@ -539,7 +486,6 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         });
         setDraft('');
         setDraftCaret(0);
-        thresholdArmedRef.current = true;
         introduceSection(typedSection.id, false);
         return;
       }
@@ -568,7 +514,6 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       loadingRef.current = true;
       setDraft('');
       setDraftCaret(0);
-      thresholdArmedRef.current = true;
       appendMessage(userMessage);
       setIsLoading(true);
 
@@ -710,7 +655,6 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       messagesRef.current = [];
       setDraft('');
       setDraftCaret(0);
-      thresholdArmedRef.current = true;
       setIsLoading(false);
       setIsAdminSession(false);
       updatePendingNavigation(null);
@@ -755,15 +699,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
-    setMode((current) => {
-      if (current === 'modal') return 'site';
-
-      if (normalizePathname(pathname) !== '/') {
-        return current === 'inline' || current === 'composer' ? 'site' : current;
-      }
-
-      return current;
-    });
+    setMode((current) => (current === 'modal' ? 'site' : current));
   }, [pathname]);
 
   useEffect(() => {
@@ -841,18 +777,14 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     draft,
     draftCaret,
     isOpen,
-    isHomeMode,
     isLoading,
-    isComposerOpen,
     isAdminSession,
     pendingNavigation,
-    expandThreshold: PIERROT_COMPOSER_EXPAND_THRESHOLD,
     openChat,
     openConversation,
     toggleConversation,
     closeConversation,
     closeChat,
-    toggleComposer,
     updateDraft,
     sendMessage,
     clearChat,

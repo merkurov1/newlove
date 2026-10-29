@@ -9,12 +9,9 @@ import useIsTelegram from '@/components/useIsTelegram';
 import ComposerTrigger from '@/components/flow/ComposerTrigger';
 import { PierrotTrigger } from '@/components/PierrotChat';
 import PierrotSectionLink from '@/components/pierrot/PierrotSectionLink';
-import { usePierrot } from '@/components/pierrot/PierrotContext';
-import { PIERROT_AVATAR_SRC } from '@/lib/pierrot/config';
 
 export default function Header() {
   const auth = useAuth() as any;
-  const { isHomeMode } = usePierrot();
   const user = auth?.user;
   const profile = auth?.profile;
   const roles = auth?.roles || profile?.roles || user?.user_metadata?.roles || [];
@@ -139,16 +136,9 @@ export default function Header() {
 
   const brandDisplay = isOwner ? 'Merkurov' : userName.split(' ').slice(-1)[0] || userName;
 
-  const displayBrand = isHomeMode ? 'Pierrot' : brandDisplay;
+  const displayBrand = brandDisplay;
 
-  if (isImmersiveRoute) {
-    return null;
-  }
-
-  // Inside Telegram the compact Mini App navigation replaces the web header,
-  // except in Pierrot's homepage inline mode. There the conversation keeps the
-  // same identity, menu and exit control as the web experience.
-  if (telegramApp && !isHomeMode) {
+  if (telegramApp || isImmersiveRoute) {
     return null;
   }
 
@@ -174,23 +164,7 @@ export default function Header() {
         {/* User profile */}
         <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
           <div className="relative shrink-0" ref={profileRef}>
-            {isHomeMode ? (
-              <div
-                className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#37332D] font-serif text-lg font-medium text-white shadow-md ring-2 ring-white/90 sm:h-11 sm:w-11"
-                aria-label="Pierrot avatar"
-                title="Pierrot"
-              >
-                {PIERROT_AVATAR_SRC ? (
-                  <img
-                    src={PIERROT_AVATAR_SRC}
-                    alt="Pierrot"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  'P'
-                )}
-              </div>
-            ) : isLoading ? (
+            {isLoading ? (
               <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-stone-200/60 animate-pulse" />
             ) : user ? (
               <button
@@ -221,7 +195,7 @@ export default function Header() {
             )}
 
             <AnimatePresence>
-              {isProfileOpen && user && !isHomeMode && (
+              {isProfileOpen && user && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.96, y: 8 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
