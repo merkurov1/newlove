@@ -13,7 +13,7 @@ import {
   UNFRAMED_EMBEDDING_MODEL,
   resolveUnframedEmbeddingConfig,
 } from '@/lib/knowledge/rag/config';
-import { createOpenRouterEmbeddingClientFromEnv } from '@/lib/knowledge/rag/embeddings';
+import { createOpenRouterEmbeddingClient } from '@/lib/knowledge/rag/embeddings';
 import {
   evaluateSemanticQuestion,
   semanticBreakdowns,
@@ -189,6 +189,20 @@ function documentIngestionVersion(document: Record<string, unknown>): string | n
   return metadata && typeof metadata.ingestion_version === 'string'
     ? metadata.ingestion_version
     : null;
+}
+
+function createEmbeddingClient() {
+  const apiKey = (process.env.OPENROUTER_API_KEY || '').trim();
+
+  if (!apiKey) {
+    throw new Error('OPENROUTER_API_KEY_missing');
+  }
+
+  return createOpenRouterEmbeddingClient({
+    apiKey,
+    modelId: UNFRAMED_EMBEDDING_MODEL,
+    dimensions: UNFRAMED_EMBEDDING_DIMENSIONS,
+  });
 }
 
 async function readBuild() {
@@ -628,7 +642,7 @@ async function verifyIndex() {
 
   let retrievalSmoke: unknown = { status: 'not_run' };
   try {
-    const embeddingClient = createOpenRouterEmbeddingClientFromEnv(process.env);
+    const embeddingClient = createEmbeddingClient();
     const searches = await Promise.all([
       retrieveUnframedEvidence({
         query: 'What does UNFRAMED say about the line?',
@@ -734,7 +748,7 @@ async function ingestIndex() {
     return { status: 'blocked' as const, code: 'supabase_configuration_missing' };
   }
 
-  const embeddingClient = createOpenRouterEmbeddingClientFromEnv(process.env);
+  const embeddingClient = createEmbeddingClient();
   const embeddings = await embeddingClient.embed(plan.embeddingInputs.map((item) => item.text));
   const summary = await applyUnframedIngestion({
     plan,
@@ -808,7 +822,7 @@ async function evaluateSplit(splitName: EvaluationSplit) {
 
   const split = splitC4Questions(C4_QUESTIONS);
   const questions = split[splitName];
-  const embeddingClient = createOpenRouterEmbeddingClientFromEnv(process.env);
+  const embeddingClient = createEmbeddingClient();
   const questionEmbeddings = await embeddingClient.embed(
     questions.map((question) => question.question)
   );
