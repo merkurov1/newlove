@@ -3,7 +3,10 @@
 import {
   BrainUrlError,
   assertSafePublicUrl,
+  getSourceDomain,
+  isNovayaGazetaUrl,
   normalizeSourceUrl,
+  publishedDateFromUrl,
   tryNormalizeSourceUrl,
 } from '../url';
 
@@ -46,5 +49,31 @@ describe('Brain URL normalization', () => {
     await expect(assertSafePublicUrl('https://metadata.google.internal/')).rejects.toThrow(
       BrainUrlError
     );
+  });
+
+  it('normalizes the source domain', () => {
+    expect(getSourceDomain('https://www.NovayaGazeta.ru/articles/2025/04/26/x')).toBe(
+      'novayagazeta.ru'
+    );
+    expect(getSourceDomain('https://example.substack.com/p/post')).toBe('example.substack.com');
+    expect(getSourceDomain('not a url')).toBeNull();
+  });
+
+  it('recovers only verifiable Novaya Gazeta dates from URL paths', () => {
+    expect(isNovayaGazetaUrl('https://novayagazeta.ru/articles/2025/04/26/x')).toBe(true);
+    expect(isNovayaGazetaUrl('https://novayagazeta.eu/articles/2025/04/26/x?utm_source=1')).toBe(
+      true
+    );
+    expect(isNovayaGazetaUrl('https://example.com/articles/2025/04/26/x')).toBe(false);
+
+    expect(publishedDateFromUrl('https://novayagazeta.ru/articles/2025/04/26/x')).toBe(
+      '2025-04-26T00:00:00.000Z'
+    );
+    expect(publishedDateFromUrl('https://novayagazeta.eu/articles/2025/04/26/x')).toBe(
+      '2025-04-26T00:00:00.000Z'
+    );
+    expect(publishedDateFromUrl('https://novayagazeta.ru/articles/2025/02/30/x')).toBeNull();
+    expect(publishedDateFromUrl('https://novayagazeta.ru/articles/no-date')).toBeNull();
+    expect(publishedDateFromUrl('https://example.com/articles/2025/04/26/x')).toBeNull();
   });
 });

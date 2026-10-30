@@ -3,7 +3,12 @@ import { createHash } from 'node:crypto';
 import * as cheerio from 'cheerio';
 import type { AnyNode, Element } from 'domhandler';
 
-import { normalizeSourceUrl, tryNormalizeSourceUrl } from './url';
+import {
+  getSourceDomain,
+  normalizeSourceUrl,
+  publishedDateFromUrl,
+  tryNormalizeSourceUrl,
+} from './url';
 
 export type ArticleBlockType = 'heading' | 'paragraph' | 'quote' | 'list';
 
@@ -13,27 +18,44 @@ export type ArticleBlock = {
   level?: number;
 };
 
-export type ArticleExtractionStatus = 'ok' | 'partial' | 'failed';
+export type ArticleExtractionStatus = 'complete' | 'partial' | 'failed' | 'needs_review';
+
+export type ArticlePublishedAtSource = 'metadata' | 'jsonld' | 'url_path' | null;
 
 export type ArticleExtractionDiagnostics = {
   parser: 'scored' | 'fallback' | 'none';
   fallbackChars: number;
   selectedChars: number;
+  bodyChars: number;
   wordCount: number;
   paragraphCount: number;
   headingCount: number;
   linkDensity: number;
+  boilerplateChars: number;
+  boilerplateCount: number;
+  boilerplateRatio: number;
+  completeness: number;
   paywallDetected: boolean;
+  truncated: boolean;
   htmlChars: number;
+  sourceDomain: string | null;
+  siteProfile: ArticleSiteProfile;
+  extractionVersion: string;
+  publishedAtSource: ArticlePublishedAtSource;
 };
+
+export type ArticleSiteProfile = 'novaya' | 'substack' | 'generic';
 
 export type ExtractedArticle = {
   url: string;
   canonicalUrl: string;
+  sourceDomain: string | null;
+  sourceType: 'article';
   title: string;
   author: string | null;
   siteName: string | null;
   publishedAt: string | null;
+  publishedAtSource: ArticlePublishedAtSource;
   language: string;
   text: string;
   blocks: ArticleBlock[];
@@ -41,8 +63,11 @@ export type ExtractedArticle = {
   wordCount: number;
   charCount: number;
   status: ArticleExtractionStatus;
+  extractionVersion: string;
   diagnostics: ArticleExtractionDiagnostics;
 };
+
+export const ARTICLE_EXTRACTION_VERSION = 'brain-article-extractor-v2';
 
 const PAYWALL_PATTERNS = [
   'subscribe to continue reading',
@@ -62,6 +87,22 @@ const PAYWALL_PATTERNS = [
   'чтобы читать дальше, оформите подписку',
 ];
 
+const TRUNCATION_PATTERNS = [
+  'continue reading',
+  'read the full article',
+  'read the full story',
+  'read the rest of',
+  'this is a preview',
+  'preview of the article',
+  'subscribe to read',
+  'sign in to read',
+  'log in to read',
+  'продолжение следует',
+  'читать полностью',
+  'продолжить чтение',
+  'материал доступен по подписке',
+];
+
 const NOISE_SELECTORS = [
   'script',
   'style',
@@ -72,39 +113,90 @@ const NOISE_SELECTORS = [
   'iframe',
   'form',
   'nav',
-  'header',
+  'body > header',
+  'body > footer',
   'footer',
   'aside',
   '[role="navigation"]',
   '[role="banner"]',
   '[role="contentinfo"]',
   '[aria-hidden="true"]',
+  '[hidden]',
+  '[style*="display:none"]',
+  '[style*="display: none"]',
   '.cookie',
   '.cookies',
   '.cookie-banner',
+  '.cookie-consent',
+  '.cookie-notice',
+  '.gdpr',
+  '.consent',
   '.paywall',
   '.subscribe',
   '.subscription',
+  '.subscribe-widget',
+  '.subscription-widget',
+  '.subscription-widget-wrap',
   '.newsletter',
+  '.newsletter-cta',
   '.advert',
   '.advertisement',
+  '.advertising',
   '.ads',
+  '.ad',
   '.promo',
+  '.banner',
+  '.outbrain',
+  '.taboola',
   '.related',
+  '.related-posts',
   '.recommended',
+  '.recommended-posts',
   '.recommendations',
+  '.read-next',
   '.comments',
   '.comment',
   '.share',
+  '.share-buttons',
   '.social',
+  '.social-buttons',
+  '.post-footer',
+  '.post-ufi',
+  '.post-cta',
+  '.post-end-cta',
+  '.byline',
+  '.author-bio',
+  '.dateline',
   '.breadcrumbs',
   '.tags',
+  '.menu',
+  '.navigation',
+  '.top-bar',
+  '.site-header',
+  '.site-footer',
   '.metadata',
+  '[class*="cookie"]',
+  '[class*="paywall"]',
+  '[class*="subscribe-widget"]',
+  '[class*="subscription-widget"]',
+  '[class*="newsletter-cta"]',
+  '[class*="related-posts"]',
+  '[class*="recommended-posts"]',
+  '[class*="read-next"]',
+  '[class*="share-buttons"]',
+  '[class*="social-buttons"]',
+  '[class*="post-ufi"]',
+  '[id*="cookie"]',
 ];
 
 const CONTENT_ROOT_SELECTORS = [
   'article',
   '[itemprop="articleBody"]',
+  '[itemprop="articleBody"] .article__body',
+  'article .article__body',
+  'article .article__text',
+  'article .material-body',
+  'article .article-text',
   'main article',
   'main',
   '[role="main"]',
@@ -113,6 +205,9 @@ const CONTENT_ROOT_SELECTORS = [
   '.article__text',
   '.article-text',
   '.post-content',
+  '.post-content.markup',
+  '.available-content',
+  '.body.markup',
   '.entry-content',
   '.story-body',
   '.story__body',
@@ -125,18 +220,139 @@ const CONTENT_ROOT_SELECTORS = [
 ];
 
 const SHORT_NOISE = new Set([
-  'share',
-  'tweet',
+  'ad',
+  'ads',
+  'advertisement',
+  'advertising',
+  'all rights reserved',
+  'back to top',
+  'by',
+  'close',
+  'cookie',
+  'cookies',
+  'copy link',
+  'copyright',
+  'email',
+  'follow',
   'follow us',
+  'loading',
+  'log in',
+  'menu',
+  'no posts',
+  'nothing here',
+  'read more',
+  'read next',
+  'recommended',
+  'related',
+  'share',
+  'sign in',
   'sign up',
   'subscribe',
-  'read more',
-  'advertisement',
+  'tweet',
+  'войти',
+  'загрузка',
+  'меню',
+  'наверх',
+  'нет записей',
   'поделиться',
   'подписаться',
-  'читать далее',
+  'пока нет',
   'реклама',
+  'читать далее',
 ]);
+
+const BOILERPLATE_PATTERNS: RegExp[] = [
+  /^(advertisement|advertising|реклама)$/i,
+  /^(share|tweet|email|copy link|поделиться|скопировать ссылку)$/i,
+  /^(subscribe|sign up|подписаться|оформить подписку)/i,
+  /^(read more|read next|читайте также|читать далее|смотрите также)/i,
+  /^(related|recommended|you may also like|материалы по теме)/i,
+  /^(cookie|we use cookies|используем cookie)/i,
+  /^(all rights reserved|copyright|©)/i,
+  /^(follow us|follow|мы в соцсетях)/i,
+  /^(no posts|nothing here|пока нет|нет записей)/i,
+  /^(loading|загрузка)/i,
+  /^(sign in|log in|войти)/i,
+  /^(back to top|наверх)/i,
+  /^(about the author|об авторе|author bio|биография автора)/i,
+];
+
+const NOVAYA_ROOT_SELECTORS = [
+  'article [itemprop="articleBody"]',
+  'article .article__body',
+  'article .article__text',
+  'article .material-body',
+  'article .article-text',
+  'article',
+  '[itemprop="articleBody"]',
+];
+
+const SUBSTACK_ROOT_SELECTORS = [
+  '.available-content',
+  '.post-content.markup',
+  '.post-content',
+  '.body.markup',
+  'article .body',
+  'article',
+];
+
+function detectSiteProfile(url: string): ArticleSiteProfile {
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+
+    if (host === 'novayagazeta.ru' || host === 'novayagazeta.eu') return 'novaya';
+    if (host === 'substack.com' || host.endsWith('.substack.com')) return 'substack';
+  } catch {
+    // Fall through to generic.
+  }
+
+  return 'generic';
+}
+
+function profileRootSelectors(profile: ArticleSiteProfile): string[] {
+  if (profile === 'novaya') return NOVAYA_ROOT_SELECTORS;
+  if (profile === 'substack') return SUBSTACK_ROOT_SELECTORS;
+  return [];
+}
+
+function removeSiteNoise($: cheerio.CheerioAPI, profile: ArticleSiteProfile): void {
+  if (profile === 'novaya') {
+    $(
+      [
+        '.article__author',
+        '.article__date',
+        '.article__meta',
+        '.article__tags',
+        '.article__social',
+        '.article__related',
+        '.article__subscribe',
+        '.article__footer',
+        '.material__footer',
+        '.material__social',
+        '.material__tags',
+        '.material__author',
+      ].join(',')
+    ).remove();
+  }
+
+  if (profile === 'substack') {
+    $(
+      [
+        '.post-footer',
+        '.post-ufi',
+        '.post-cta',
+        '.post-end-cta',
+        '.subscription-widget-wrap',
+        '.subscribe-widget',
+        '.paywall',
+        '.share',
+        '.social',
+        '.newsletter-cta',
+        '.post-end-cta',
+      ].join(',')
+    ).remove();
+  }
+}
 
 export function sha256Hex(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
@@ -144,6 +360,7 @@ export function sha256Hex(value: string): string {
 
 function normalizeText(value: string): string {
   return value
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
     .replace(/\u00a0/g, ' ')
     .replace(/[ \t]+/g, ' ')
     .replace(/\s*\n\s*/g, ' ')
@@ -153,7 +370,27 @@ function normalizeText(value: string): string {
 function isNoiseText(text: string): boolean {
   if (!text) return true;
   if (text.length <= 2) return true;
-  return SHORT_NOISE.has(text.toLowerCase());
+
+  const lower = text.toLowerCase();
+  if (SHORT_NOISE.has(lower)) return true;
+
+  return BOILERPLATE_PATTERNS.some((pattern) => pattern.test(lower));
+}
+
+function detectTruncation(html: string, text: string): boolean {
+  const visible = text.toLowerCase();
+
+  if (TRUNCATION_PATTERNS.some((pattern) => visible.includes(pattern))) return true;
+
+  // A short extraction with a preview/subscribe marker in the raw page is a
+  // truncation signal. Long complete articles can contain a "read more" link
+  // in a removed widget, so the raw HTML is only consulted for short text.
+  if (text.length < 600) {
+    const raw = html.toLowerCase();
+    return TRUNCATION_PATTERNS.some((pattern) => raw.includes(pattern));
+  }
+
+  return false;
 }
 
 function detectLanguage(value: string): string {
@@ -171,11 +408,16 @@ function detectPaywall(html: string): boolean {
   return PAYWALL_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 
-function collectBlocks(
-  $: cheerio.CheerioAPI,
-  root: cheerio.Cheerio<AnyNode>
-): ArticleBlock[] {
+type CollectedBlocks = {
+  blocks: ArticleBlock[];
+  boilerplateChars: number;
+  boilerplateCount: number;
+};
+
+function collectBlocks($: cheerio.CheerioAPI, root: cheerio.Cheerio<AnyNode>): CollectedBlocks {
   const blocks: ArticleBlock[] = [];
+  let boilerplateChars = 0;
+  let boilerplateCount = 0;
 
   root.find('h1,h2,h3,h4,h5,h6,p,blockquote,pre,li').each((_, element) => {
     const node = $(element as Element);
@@ -194,7 +436,11 @@ function collectBlocks(
 
     const text = normalizeText(node.text());
 
-    if (isNoiseText(text)) return;
+    if (isNoiseText(text)) {
+      boilerplateChars += text.length;
+      boilerplateCount += 1;
+      return;
+    }
 
     let block: ArticleBlock;
 
@@ -219,12 +465,13 @@ function collectBlocks(
     }
 
     const key = `${block.type}:${block.text}`;
-    if (key.length === 0) return;
+
+    if (!key) return;
 
     blocks.push(block);
   });
 
-  return blocks;
+  return { blocks, boilerplateChars, boilerplateCount };
 }
 
 function blocksToText(blocks: ArticleBlock[]): string {
@@ -244,15 +491,25 @@ type ScoredRoot = {
   parser: ArticleExtractionDiagnostics['parser'];
 };
 
-function scoreRoot($: cheerio.CheerioAPI, root: cheerio.Cheerio<AnyNode>, parser: 'scored' | 'fallback'): ScoredRoot {
-  const paragraphChars = root.find('p,li,blockquote').toArray().reduce((sum, element) => {
-    return sum + normalizeText($(element).text()).length;
-  }, 0);
+function scoreRoot(
+  $: cheerio.CheerioAPI,
+  root: cheerio.Cheerio<AnyNode>,
+  parser: 'scored' | 'fallback'
+): ScoredRoot {
+  const paragraphChars = root
+    .find('p,li,blockquote')
+    .toArray()
+    .reduce((sum, element) => {
+      return sum + normalizeText($(element).text()).length;
+    }, 0);
 
   const totalChars = normalizeText(root.text()).length;
-  const linkChars = root.find('a').toArray().reduce((sum, element) => {
-    return sum + normalizeText($(element).text()).length;
-  }, 0);
+  const linkChars = root
+    .find('a')
+    .toArray()
+    .reduce((sum, element) => {
+      return sum + normalizeText($(element).text()).length;
+    }, 0);
 
   const headingCount = root.find('h1,h2,h3,h4,h5,h6').length;
   const linkDensity = totalChars > 0 ? Math.min(1, linkChars / totalChars) : 1;
@@ -264,8 +521,31 @@ function scoreRoot($: cheerio.CheerioAPI, root: cheerio.Cheerio<AnyNode>, parser
 }
 
 function chooseMainRoot(
-  $: cheerio.CheerioAPI
-): { root: cheerio.Cheerio<AnyNode>; parser: ArticleExtractionDiagnostics['parser']; paragraphChars: number; linkDensity: number } {
+  $: cheerio.CheerioAPI,
+  profile: ArticleSiteProfile
+): {
+  root: cheerio.Cheerio<AnyNode>;
+  parser: ArticleExtractionDiagnostics['parser'];
+  paragraphChars: number;
+  linkDensity: number;
+} {
+  for (const selector of profileRootSelectors(profile)) {
+    const root = $(selector).first();
+
+    if (root.length === 0) continue;
+
+    const scored = scoreRoot($, root, 'scored');
+
+    if (scored.paragraphChars >= 300 && scored.score >= 200) {
+      return {
+        root: scored.root,
+        parser: scored.parser,
+        paragraphChars: scored.paragraphChars,
+        linkDensity: scored.linkDensity,
+      };
+    }
+  }
+
   const candidates = new Map<string, cheerio.Cheerio<AnyNode>>();
 
   for (const selector of CONTENT_ROOT_SELECTORS) {
@@ -297,9 +577,12 @@ function chooseMainRoot(
   }
 
   const bodyChars = normalizeText($('body').text()).length;
-  const bodyLinks = $('body').find('a').toArray().reduce((sum, element) => {
-    return sum + normalizeText($(element).text()).length;
-  }, 0);
+  const bodyLinks = $('body')
+    .find('a')
+    .toArray()
+    .reduce((sum, element) => {
+      return sum + normalizeText($(element).text()).length;
+    }, 0);
   const bodyLinkDensity = bodyChars > 0 ? Math.min(1, bodyLinks / bodyChars) : 1;
 
   if (!best || best.paragraphChars < 300 || best.score < 200) {
@@ -369,9 +652,13 @@ function isArticleJsonLd(value: Record<string, unknown>): boolean {
   return types.some(
     (entry) =>
       typeof entry === 'string' &&
-      ['Article', 'NewsArticle', 'BlogPosting', 'ReportageNewsArticle', 'OpinionNewsArticle'].includes(
-        entry
-      )
+      [
+        'Article',
+        'NewsArticle',
+        'BlogPosting',
+        'ReportageNewsArticle',
+        'OpinionNewsArticle',
+      ].includes(entry)
   );
 }
 
@@ -458,28 +745,136 @@ function chooseTitle($: cheerio.CheerioAPI, jsonLd: Record<string, unknown> | nu
   return 'Untitled article';
 }
 
+function normalizeAuthor(value: string | null): string | null {
+  if (!value) return null;
+
+  const normalized = value
+    .replace(/\s+/g, ' ')
+    .replace(/^(by|автор[:\s]+)\s+/i, '')
+    .trim();
+
+  return normalized ? normalized.slice(0, 300) : null;
+}
+
+function extractionCompleteness(input: {
+  wordCount: number;
+  paragraphCount: number;
+  headingCount: number;
+  linkDensity: number;
+  boilerplateRatio: number;
+  title: string;
+  publishedAt: string | null;
+  paywallDetected: boolean;
+  truncated: boolean;
+}): number {
+  let score = 0;
+
+  if (input.wordCount >= 20) score += 0.1;
+  if (input.wordCount >= 80) score += 0.15;
+  if (input.wordCount >= 300) score += 0.15;
+  if (input.wordCount >= 800) score += 0.1;
+  if (input.paragraphCount >= 2) score += 0.15;
+  if (input.paragraphCount >= 6) score += 0.1;
+  if (input.headingCount >= 1) score += 0.1;
+  if (input.title && input.title !== 'Untitled article') score += 0.05;
+  if (input.publishedAt) score += 0.05;
+
+  if (input.linkDensity <= 0.2) score += 0.1;
+  else if (input.linkDensity <= 0.35) score += 0.05;
+
+  if (input.boilerplateRatio <= 0.2) score += 0.05;
+  if (input.paywallDetected) score -= 0.35;
+  if (input.truncated) score -= 0.35;
+
+  return Number(Math.max(0, Math.min(1, score)).toFixed(4));
+}
+
+function chooseExtractionStatus(input: {
+  text: string;
+  wordCount: number;
+  charCount: number;
+  paragraphCount: number;
+  headingCount: number;
+  linkDensity: number;
+  boilerplateRatio: number;
+  completeness: number;
+  paywallDetected: boolean;
+  truncated: boolean;
+}): ArticleExtractionStatus {
+  if (!input.text || input.wordCount < 20 || input.charCount < 120) {
+    return input.paywallDetected || input.truncated ? 'partial' : 'failed';
+  }
+
+  if (
+    input.paywallDetected ||
+    input.truncated ||
+    input.wordCount < 120 ||
+    input.paragraphCount < 2 ||
+    input.charCount < 600 ||
+    input.linkDensity > 0.35
+  ) {
+    return 'partial';
+  }
+
+  if (
+    input.completeness < 0.8 ||
+    input.boilerplateRatio > 0.65 ||
+    (input.headingCount === 0 && input.wordCount < 400)
+  ) {
+    return 'needs_review';
+  }
+
+  return 'complete';
+}
+
 /**
- * Extracts full article text with a scored main-content selector and a body
- * fallback. A result is never silently treated as complete: short, paywalled
- * or empty extractions are marked partial/failed and must not be indexed.
+ * Extracts full article text with a site-aware main-content selector and a
+ * scored fallback. A result is never silently treated as complete: short,
+ * paywalled, truncated or structurally weak extractions are marked
+ * partial/failed/needs_review and must not be indexed.
  */
 export function extractArticle(html: string, finalUrl: string): ExtractedArticle {
   const $ = cheerio.load(html);
+  const profile = detectSiteProfile(finalUrl);
 
   const jsonLdValues = parseJsonLd($);
   const jsonLd = jsonLdValues.find(isArticleJsonLd) ?? jsonLdValues[0] ?? null;
 
   const canonicalUrl = canonicalFromDocument($, finalUrl, jsonLd);
+  const sourceDomain = getSourceDomain(canonicalUrl);
   const title = chooseTitle($, jsonLd);
 
-  $(NOISE_SELECTORS.join(',')).remove();
+  // Scripts and styles are not editorial text; remove them before measuring
+  // the page body so boilerplate ratio reflects visible interface text only.
+  $('script,style,noscript,template,svg,canvas,iframe').remove();
 
-  const main = chooseMainRoot($);
-  const blocks = collectBlocks($, main.root);
+  const bodyChars = normalizeText($('body').text()).length;
+
+  const noiseNodes = $(NOISE_SELECTORS.join(','));
+  let removedNoiseChars = 0;
+  noiseNodes.each((_, element) => {
+    removedNoiseChars += normalizeText($(element).text()).length;
+  });
+  noiseNodes.remove();
+  removeSiteNoise($, profile);
+
+  const main = chooseMainRoot($, profile);
+  const collected = collectBlocks($, main.root);
+  const blocks = collected.blocks;
+
+  const jsonLdBody =
+    jsonLd && typeof jsonLd.articleBody === 'string' ? jsonLd.articleBody.trim() : null;
+
+  if (blocks.length === 0 && jsonLdBody) {
+    for (const paragraph of jsonLdBody.split(/\n{2,}/)) {
+      const text = normalizeText(paragraph);
+      if (text) blocks.push({ type: 'paragraph', text });
+    }
+  }
 
   if (blocks.length === 0) {
-    const text = normalizeText(main.root.text());
-    if (text) blocks.push({ type: 'paragraph', text });
+    const fallbackText = normalizeText(main.root.text());
+    if (fallbackText) blocks.push({ type: 'paragraph', text: fallbackText });
   }
 
   const text = blocksToText(blocks);
@@ -490,19 +885,39 @@ export function extractArticle(html: string, finalUrl: string): ExtractedArticle
   ).length;
   const headingCount = blocks.filter((block) => block.type === 'heading').length;
   const paywallDetected = detectPaywall(html);
+  const truncated = detectTruncation(html, text);
+  const unselectedChars = Math.max(0, bodyChars - charCount);
+  const boilerplateChars = Math.min(
+    unselectedChars,
+    removedNoiseChars + collected.boilerplateChars
+  );
+  const boilerplateRatio =
+    boilerplateChars + charCount > 0
+      ? Number((boilerplateChars / (boilerplateChars + charCount)).toFixed(4))
+      : 0;
 
-  const author =
+  const author = normalizeAuthor(
     metaContent($, ['meta[name="author"]', 'meta[property="article:author"]']) ||
-    (jsonLd ? jsonLdAuthor(jsonLd) : null);
+      (jsonLd ? jsonLdAuthor(jsonLd) : null)
+  );
 
-  const publishedAt = normalizePublished(
+  const metadataPublished = normalizePublished(
     metaContent($, [
       'meta[property="article:published_time"]',
       'meta[name="date"]',
       'meta[itemprop="datePublished"]',
-    ]) ||
-      (jsonLd ? jsonLdString(jsonLd, 'datePublished') : null)
+    ])
   );
+  const jsonLdPublished = normalizePublished(jsonLd ? jsonLdString(jsonLd, 'datePublished') : null);
+  const urlPublished = publishedDateFromUrl(canonicalUrl) ?? publishedDateFromUrl(finalUrl);
+  const publishedAt = metadataPublished ?? jsonLdPublished ?? urlPublished;
+  const publishedAtSource: ArticlePublishedAtSource = metadataPublished
+    ? 'metadata'
+    : jsonLdPublished
+      ? 'jsonld'
+      : urlPublished
+        ? 'url_path'
+        : null;
 
   const siteName =
     metaContent($, ['meta[property="og:site_name"]']) ||
@@ -510,27 +925,41 @@ export function extractArticle(html: string, finalUrl: string): ExtractedArticle
       ? String((jsonLd.publisher as { name?: unknown }).name || '') || null
       : null);
 
-  const status: ArticleExtractionStatus =
-    !text
-      ? 'failed'
-      : paywallDetected
-        ? 'partial'
-        : wordCount < 20
-          ? 'failed'
-          : wordCount < 80 ||
-              paragraphCount < 2 ||
-              charCount < 500 ||
-              main.linkDensity > 0.35
-            ? 'partial'
-            : 'ok';
+  const completeness = extractionCompleteness({
+    wordCount,
+    paragraphCount,
+    headingCount,
+    linkDensity: main.linkDensity,
+    boilerplateRatio,
+    title,
+    publishedAt,
+    paywallDetected,
+    truncated,
+  });
+
+  const status = chooseExtractionStatus({
+    text,
+    wordCount,
+    charCount,
+    paragraphCount,
+    headingCount,
+    linkDensity: main.linkDensity,
+    boilerplateRatio,
+    completeness,
+    paywallDetected,
+    truncated,
+  });
 
   return {
     url: finalUrl,
     canonicalUrl,
+    sourceDomain: sourceDomain || null,
+    sourceType: 'article',
     title,
-    author: author ? author.slice(0, 300) : null,
+    author,
     siteName: siteName ? siteName.slice(0, 200) : null,
     publishedAt,
+    publishedAtSource,
     language: detectLanguage(`${title}\n${text}`),
     text,
     blocks,
@@ -538,16 +967,27 @@ export function extractArticle(html: string, finalUrl: string): ExtractedArticle
     wordCount,
     charCount,
     status,
+    extractionVersion: ARTICLE_EXTRACTION_VERSION,
     diagnostics: {
       parser: blocks.length > 0 ? main.parser : 'none',
       fallbackChars: main.paragraphChars,
       selectedChars: charCount,
+      bodyChars,
       wordCount,
       paragraphCount,
       headingCount,
       linkDensity: Number(main.linkDensity.toFixed(4)),
+      boilerplateChars,
+      boilerplateCount: collected.boilerplateCount,
+      boilerplateRatio,
+      completeness,
       paywallDetected,
+      truncated,
       htmlChars: html.length,
+      sourceDomain: sourceDomain || null,
+      siteProfile: profile,
+      extractionVersion: ARTICLE_EXTRACTION_VERSION,
+      publishedAtSource,
     },
   };
 }

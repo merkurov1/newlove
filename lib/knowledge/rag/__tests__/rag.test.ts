@@ -753,6 +753,56 @@ describe('Pierrot evidence prompt', () => {
     expect(buildUnframedEvidencePrompt(result, 10)).toBeNull();
   });
 
+  it('labels manuscript and published article sources explicitly', () => {
+    const manuscript = searchRow({ content: 'Manuscript passage', similarity: 0.9 });
+    const article = searchRow({ content: 'Article passage', similarity: 0.8 });
+
+    const prompt = buildUnframedEvidencePrompt({
+      outcome: 'relevant_results',
+      hits: [
+        {
+          chunkId: manuscript.chunk_id,
+          documentId: manuscript.document_id,
+          content: manuscript.content,
+          heading: manuscript.heading,
+          sectionPath: manuscript.section_path,
+          sectionIndex: manuscript.section_index,
+          lineStart: manuscript.line_start,
+          lineEnd: manuscript.line_end,
+          similarity: manuscript.similarity,
+          documentTitle: 'UNFRAMED',
+          sourceType: 'manuscript',
+          sourceClass: 'manuscript',
+          sourceDomain: null,
+        },
+        {
+          chunkId: article.chunk_id,
+          documentId: article.document_id,
+          content: article.content,
+          heading: article.heading,
+          sectionPath: article.section_path,
+          sectionIndex: article.section_index,
+          lineStart: article.line_start,
+          lineEnd: article.line_end,
+          similarity: article.similarity,
+          documentTitle: 'AI article',
+          sourceType: 'article',
+          sourceClass: 'article',
+          sourceDomain: 'novayagazeta.ru',
+          author: 'Новая газета',
+          publishedAt: '2025-04-26T00:00:00.000Z',
+        },
+      ],
+      latencyMs: 1,
+      topSimilarity: 0.9,
+    });
+
+    expect(prompt).toContain('UNFRAMED manuscript');
+    expect(prompt).toContain('article:novayagazeta.ru');
+    expect(prompt).toContain('document_title');
+    expect(prompt).toContain('do not describe personal writing as a published article');
+  });
+
   it('does not add context for weak or missing evidence', () => {
     const base = {
       hits: [],

@@ -285,16 +285,21 @@ export async function loadPierrotHistory(
 export type PierrotCommercialSignal = {
   eventName: string;
   payload: Record<string, unknown> | null;
+  createdAt: string | null;
 };
 
 const COMMERCIAL_EVENT_NAMES = [
+  'interest_detected',
+  'offer_eligible',
   'offer_selected',
+  'offer_shown',
   'offer_viewed',
   'cta_shown',
   'commercial_declined',
   'commercial_returned',
   'intent_classified',
   'order_paid',
+  'purchase_completed',
   'unframed_purchase_confirmed',
 ] as const;
 
@@ -331,7 +336,7 @@ export async function loadPierrotCommercialSignals(
     try {
       const { data, error } = await store
         .from('pierrot_events')
-        .select('event_name, payload')
+        .select('event_name, payload, created_at')
         .eq('conversation_id', conversationId)
         .in('event_name', [...COMMERCIAL_EVENT_NAMES])
         .order('created_at', { ascending: true })
@@ -340,7 +345,11 @@ export async function loadPierrotCommercialSignals(
       if (!error && Array.isArray(data)) {
         for (const row of data) {
           if (typeof row.event_name !== 'string') continue;
-          events.push({ eventName: row.event_name, payload: safePayload(row.payload) });
+          events.push({
+            eventName: row.event_name,
+            payload: safePayload(row.payload),
+            createdAt: typeof row.created_at === 'string' ? row.created_at : null,
+          });
         }
       }
     } catch {
@@ -350,7 +359,7 @@ export async function loadPierrotCommercialSignals(
     try {
       const { data, error } = await store
         .from('subscription_events')
-        .select('event_name, payload')
+        .select('event_name, payload, created_at')
         .eq('conversation_id', conversationId)
         .eq('event_name', 'subscription_confirmed')
         .limit(20);
@@ -361,6 +370,7 @@ export async function loadPierrotCommercialSignals(
           subscriptionEvents.push({
             eventName: row.event_name,
             payload: safePayload(row.payload),
+            createdAt: typeof row.created_at === 'string' ? row.created_at : null,
           });
         }
       }

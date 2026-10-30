@@ -1,6 +1,7 @@
 import type { PierrotIntent } from '@/lib/pierrot/intents';
 import type { PierrotOfferRuntime } from '@/lib/pierrot/offerAvailability';
 import { isPierrotOfferId, type PierrotOfferId } from '@/lib/pierrot/offers';
+import { getPierrotOfferPolicy, type PierrotOfferPolicyMap } from '@/lib/pierrot/offerPolicy';
 import { resolvePierrotPageContext } from '@/lib/pierrot/pageContext';
 
 /**
@@ -25,6 +26,8 @@ export type PierrotCommercialEventLike = {
   eventName?: unknown;
   event_name?: unknown;
   payload?: unknown;
+  createdAt?: unknown;
+  created_at?: unknown;
 };
 
 export type PierrotCommercialState = {
@@ -39,6 +42,8 @@ export type PierrotCommercialState = {
   lastOfferId: PierrotOfferId | null;
   /** One means the current message is the first turn after that offer. */
   turnsSinceLastOffer: number;
+  /** ISO timestamp of the most recent trusted offer event, when available. */
+  lastOfferAt: string | null;
   returnedFromOfferId: PierrotOfferId | null;
 };
 
@@ -72,6 +77,13 @@ const POSTCARD_TERMS: WeightedTerm[] = [
   { term: 'valentine', weight: 1.5 },
   { term: 'romantic', weight: 1.25 },
   { term: 'postcard', weight: 2 },
+  { term: 'meaning', weight: 1.5 },
+  { term: 'history', weight: 1.25 },
+  { term: 'artwork', weight: 1.5 },
+  { term: 'symbol', weight: 1.25 },
+  { term: 'смысл', weight: 1.5 },
+  { term: 'истори', weight: 1.25 },
+  { term: 'работ', weight: 1 },
   { term: 'send', weight: 1 },
   { term: 'send a card', weight: 2 },
   { term: 'send a postcard', weight: 2 },
@@ -246,13 +258,17 @@ const REASONS: Record<PierrotOfferId, Array<{ angle: string; reason: string }>> 
 };
 
 const EVENT_NAMES = new Set([
+  'interest_detected',
+  'offer_eligible',
   'offer_selected',
+  'offer_shown',
   'offer_viewed',
   'cta_shown',
   'commercial_declined',
   'commercial_returned',
   'intent_classified',
   'order_paid',
+  'purchase_completed',
   'unframed_purchase_confirmed',
 ]);
 
@@ -322,6 +338,7 @@ export function emptyPierrotCommercialState(): PierrotCommercialState {
     offerIntroductions: {},
     lastOfferId: null,
     turnsSinceLastOffer: Number.POSITIVE_INFINITY,
+    lastOfferAt: null,
     returnedFromOfferId: null,
   };
 }
@@ -355,9 +372,12 @@ export function derivePierrotCommercialState({
   const subscribed = new Set<PierrotOfferId>();
   const introductions: Partial<Record<PierrotOfferId, number>> = {};
   const historyIntroductions: Partial<Record<PierrotOfferId, number>> = {};
-  const eventIntroductions: Partial<Record<PierrotOfferId, number>> = {};
+  const shownIntroductions: Partial<Record<PierrotOfferId, number>> = {};
+  const viewedIntroductions: Partial<Record<PierrotOfferId, number>> = {};
+  const selectedIntroductions: Partial<Record<PierrotOfferId, number>> = {};
   let lastOfferId: PierrotOfferId | null = null;
   let lastOfferIndex: number | null = null;
+  let lastOfferAt: string | null = null;
   let returnedFromOfferId: PierrotOfferId | null = null;
 
   const items = Array.isArray(history) ? history : [];
@@ -414,16 +434,37 @@ export function derivePierrotCommercialState({
 
     if (!EVENT_NAMES.has(name)) continue;
 
-    if (name === 'offer_selected' || name === 'offer_viewed' || name === 'cta_shown') {
+    if (
+      name === 'offer_selected' ||
+      name === 'offer_shown' ||
+      name === 'offer_viewed' ||
+      name === 'cta_shown'
+    ) {
       if (isPierrotOfferId(offerId)) {
         introduced.add(offerId);
         displayed.add(offerId);
-        // `offer_viewed` is emitted once per rendered offer turn. `offer_selected`
-        // accompanies it in the same turn, so counting both would double the
-        // introduction count. Legacy rows may only have `offer_viewed`.
-        if (name === 'offer_viewed') {
-          bumpIntroduction(eventIntroductions, offerId);
-          lastOfferId = offerId;
+
+        if (name === 'offer_shown') {
+          bumpIntroduction(shownIntroductions, offerId);
+        } else if (name === 'offer_viewed') {
+          // Actual client view. Kept separate from `offer_shown` so a display
+          // and its later view never double-count the same turn.
+          bumpIntroduction(viewedIntroductions, offerId);
+        } else if (name === 'offer_selected') {
+          bumpIntroduction(selectedIntroductions, offerId);
+        }
+
+        lastOfferId = offerId;
+
+        const createdAt =
+          typeof event.createdAt === 'string'
+            ? event.createdAt
+            : typeof event.created_at === 'string'
+              ? event.created_at
+              : null;
+
+        if (createdAt && (!lastOfferAt || createdAt > lastOfferAt)) {
+          lastOfferAt = createdAt;
         }
       }
       continue;
@@ -453,6 +494,11 @@ export function derivePierrotCommercialState({
       continue;
     }
 
+    if (name === 'purchase_completed' && isPierrotOfferId(offerId)) {
+      purchased.add(offerId);
+      continue;
+    }
+
     if (name === 'unframed_purchase_confirmed') {
       purchased.add('unframed');
     }
@@ -464,7 +510,9 @@ export function derivePierrotCommercialState({
   for (const offerId of PROACTIVE_OFFER_IDS) {
     introductions[offerId] = Math.max(
       historyIntroductions[offerId] ?? 0,
-      eventIntroductions[offerId] ?? 0
+      shownIntroductions[offerId] ?? 0,
+      viewedIntroductions[offerId] ?? 0,
+      selectedIntroductions[offerId] ?? 0
     );
   }
 
@@ -478,6 +526,7 @@ export function derivePierrotCommercialState({
     offerIntroductions: introductions,
     lastOfferId,
     turnsSinceLastOffer,
+    lastOfferAt,
     returnedFromOfferId,
   };
 }
@@ -489,6 +538,7 @@ export function mergePierrotCommercialStates(
   const introductions: Partial<Record<PierrotOfferId, number>> = {};
   let lastOfferId: PierrotOfferId | null = null;
   let turns = Number.POSITIVE_INFINITY;
+  let lastOfferAt: string | null = null;
   let returned: PierrotOfferId | null = null;
 
   for (const state of states) {
@@ -528,12 +578,16 @@ export function mergePierrotCommercialStates(
 
     lastOfferId = state.lastOfferId ?? lastOfferId;
     turns = Math.min(turns, state.turnsSinceLastOffer);
+    if (state.lastOfferAt && (!lastOfferAt || state.lastOfferAt > lastOfferAt)) {
+      lastOfferAt = state.lastOfferAt;
+    }
     returned = state.returnedFromOfferId ?? returned;
   }
 
   merged.offerIntroductions = introductions;
   merged.lastOfferId = lastOfferId;
   merged.turnsSinceLastOffer = turns;
+  merged.lastOfferAt = lastOfferAt;
   merged.returnedFromOfferId = returned;
 
   return merged;
@@ -584,17 +638,20 @@ function chooseCandidate({
   contextOfferId,
   state,
   pageEngagement,
+  policies,
 }: {
   message: string;
   intent: PierrotIntent;
   contextOfferId: PierrotOfferId | null;
   state: PierrotCommercialState;
   pageEngagement: boolean;
+  policies?: PierrotOfferPolicyMap | null;
 }): { offerId: PierrotOfferId; score: number } | null {
   const scored = PROACTIVE_OFFER_IDS.map((offerId) => ({
     offerId,
     ...scorePierrotOfferInterest(message, offerId),
-  })).sort((a, b) => b.score - a.score);
+    priority: getPierrotOfferPolicy(offerId, policies).priority,
+  })).sort((a, b) => b.score + b.priority / 1000 - (a.score + a.priority / 1000));
 
   const best = scored[0];
   const second = scored[1];
@@ -701,10 +758,7 @@ const NEGATIVE_ENGAGEMENT_TERMS = [
  * the thing in front of the visitor (this/it/here) or explicitly ask to know
  * more.
  */
-export function hasPierrotPageEngagementSignal(
-  message: string,
-  intent: PierrotIntent
-): boolean {
+export function hasPierrotPageEngagementSignal(message: string, intent: PierrotIntent): boolean {
   const text = message.trim().toLowerCase();
 
   if (!text) return false;
@@ -723,6 +777,7 @@ export function selectProactivePierrotOffer({
   state,
   runtime,
   contextOfferId,
+  policies,
 }: {
   message: string;
   intent: PierrotIntent;
@@ -730,6 +785,7 @@ export function selectProactivePierrotOffer({
   state: PierrotCommercialState;
   runtime?: PierrotOfferRuntime | null;
   contextOfferId?: PierrotOfferId | null;
+  policies?: PierrotOfferPolicyMap | null;
 }): PierrotProactiveOffer | null {
   if (!isEligibleIntent(intent)) return null;
 
@@ -747,6 +803,7 @@ export function selectProactivePierrotOffer({
     contextOfferId: contextOfferId ?? page.contextOfferId,
     state,
     pageEngagement,
+    policies,
   });
 
   if (!candidate) return null;
@@ -767,19 +824,45 @@ export function selectProactivePierrotOffer({
     return null;
   }
 
+  const policy = getPierrotOfferPolicy(offerId, policies);
+
+  if (!policy.enabled || !policy.allowProactive) return null;
+
   const introductions = state.offerIntroductions[offerId] ?? 0;
 
-  if (introductions >= 3) return null;
+  if (introductions >= policy.maxShowsPerConversation) return null;
 
-  // A first "what is this?" may introduce the offer. After that, only a fresh
-  // signal in the message itself can justify another pitch; mere presence on
-  // the same page is never enough.
-  if (introductions > 0 && candidate.score < 1) return null;
+  // Product-specific relevance. The first page-aware introduction may use the
+  // lower page-engagement score; later pitches need a fresh message signal.
+  if (introductions > 0 && candidate.score < policy.minInterestScore) {
+    return null;
+  }
+
+  if (
+    policy.requiresRepeatedEngagement &&
+    introductions === 0 &&
+    !pageEngagement &&
+    candidate.score < policy.minInterestScore
+  ) {
+    return null;
+  }
 
   // A different offer immediately after the previous pitch is noise. This
   // does not block a direct answer to the visitor's new question.
-  if (state.lastOfferId && state.lastOfferId !== offerId && state.turnsSinceLastOffer < 2) {
+  if (
+    state.lastOfferId &&
+    state.lastOfferId !== offerId &&
+    state.turnsSinceLastOffer < policy.cooldownTurns
+  ) {
     return null;
+  }
+
+  if (state.lastOfferAt && policy.cooldownSeconds > 0) {
+    const elapsedMs = Date.now() - new Date(state.lastOfferAt).getTime();
+
+    if (Number.isFinite(elapsedMs) && elapsedMs >= 0 && elapsedMs < policy.cooldownSeconds * 1000) {
+      return null;
+    }
   }
 
   const reasons = REASONS[offerId];
@@ -791,7 +874,7 @@ export function selectProactivePierrotOffer({
   return {
     offerId,
     stage: introductions === 0 ? 'interest' : 'consideration',
-    reason: reason.reason,
+    reason: policy.recommendationCopy || reason.reason,
     angle: reason.angle,
     score: candidate.score,
   };

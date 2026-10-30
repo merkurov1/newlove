@@ -41,10 +41,20 @@ import {
   selectProactivePierrotOffer,
 } from '@/lib/pierrot/strategy';
 import { loadPierrotOfferRuntime } from '@/lib/pierrot/offerAvailability';
-import { recordPierrotCommercialAnalytics } from '@/lib/pierrot/commercialAnalytics';
+import { loadPierrotOfferPoliciesFromStore } from '@/lib/pierrot/offerPolicy';
+import {
+  recordPierrotCommercialAnalytics,
+  recordPierrotOfferShown,
+} from '@/lib/pierrot/commercialAnalytics';
 import { isServiceLeadIntent } from '@/lib/pierrot/serviceInquiry';
 import { advanceStoredServiceInquiry } from '@/lib/pierrot/serviceInquiryStore';
 import { retrieveUnframedEvidence } from '@/lib/knowledge/rag/retrieval';
+import {
+  retrieveBrainEvidence,
+  type BrainRetrievalResult,
+} from '@/lib/knowledge/rag/brainRetrieval';
+import { isBrainRetrievalV2Enabled } from '@/lib/knowledge/rag/config';
+import { buildBrainQueryPlan } from '@/lib/knowledge/rag/queryRouting';
 import {
   buildUnframedEvidencePrompt,
   buildUnframedUnavailablePrompt,
@@ -55,6 +65,27 @@ import {
 } from '@/lib/knowledge/rag/evidence';
 import type { RagRetrievalOutcome } from '@/lib/knowledge/rag/types';
 import { isVerifiedOwnerCredential, isVerifiedOwnerUser } from '@/lib/knowledge/rag/authorization';
+import { recordBrainRetrieval } from '@/lib/pierrot/brainAnalytics';
+import { detectHumanPresenceIntent } from '@/lib/pierrot/humanIntent';
+import {
+  createHumanAccessToken,
+  createHumanRequest,
+  buildHumanContextSummary,
+  expireHumanRequest,
+  getHumanPresenceForConversation,
+  publicHumanState,
+  recordHumanEvent,
+  setHumanRequestTelegramMessage,
+  visitorLabelForConversation,
+} from '@/lib/pierrot/humanPresence';
+import {
+  getHumanCopy,
+  humanLanguageFromDetected,
+} from '@/lib/pierrot/humanPresenceShared';
+import {
+  isHumanPresenceConfigured,
+  notifyHumanRequest,
+} from '@/lib/pierrot/humanPresenceTelegram';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -203,7 +234,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid conversation mode.' }, { status: 400 });
     }
 
-    const ownerMode = rawMode === 'unframed';
+    const requestedOwnerMode = rawMode === 'unframed';
+    const requestedSiteMode = rawMode === 'site';
 
     const requestedPathname = sanitizePierrotPathname(
       context && typeof context === 'object' ? context.pathname : undefined
@@ -273,9 +305,13 @@ export async function POST(req: Request) {
       isAdmin = true;
     }
 
-    if (ownerMode && !ragOwnerAuthorized) {
+    if (requestedOwnerMode && !ragOwnerAuthorized) {
       return NextResponse.json({ error: 'Owner mode is not available.' }, { status: 403 });
     }
+
+    // Owner knowledge is the default for a verified owner. Sending
+    // mode: "site" explicitly turns it off; non-owners never enter this path.
+    const ownerMode = ragOwnerAuthorized && !requestedSiteMode;
 
     // Format normalized conversation history with hard limits.
     const normalizedHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
@@ -338,6 +374,46 @@ export async function POST(req: Request) {
       }
     }
 
+    // Human takeover is enforced here, before any model call or commercial
+    // planning. Hiding the composer in the browser is not enough: a direct
+    // API request must also be refused while Anton is present.
+    let humanRecord: Awaited<ReturnType<typeof getHumanPresenceForConversation>> = null;
+
+    if (pierrotStore && canStoreMetadata) {
+      try {
+        humanRecord = await getHumanPresenceForConversation(
+          pierrotStore,
+          conversationId,
+          sessionId
+        );
+      } catch (error) {
+        // A missing migration must not take the normal Piero chat down.
+        persistenceFailure(error, 'human_presence_lookup');
+      }
+    }
+
+    if (humanRecord?.request.status === 'active') {
+      if (pierrotStore) {
+        await recordHumanEvent(pierrotStore, {
+          conversationId,
+          eventName: 'human_ai_blocked',
+          eventKey: `human_ai_blocked:${userMessageId}`,
+          payload: { request_id: humanRecord.request.id },
+        }).catch(() => undefined);
+      }
+
+      return NextResponse.json(
+        {
+          error: 'Anton is currently handling this conversation.',
+          humanMode: true,
+          human: publicHumanState(humanRecord.request),
+          conversationId,
+          sessionId,
+        },
+        { status: 409 }
+      );
+    }
+
     const section = requestedPathname ? getSectionByRoute(requestedPathname) : null;
     const contextPrompt = buildPierrotContextPrompt({
       pathname: requestedPathname,
@@ -367,6 +443,7 @@ export async function POST(req: Request) {
 
     const pageContext = resolvePierrotPageContext(requestedPathname);
     const contextOfferId = ownerMode ? null : pageContext.contextOfferId;
+    const offerPolicies = await loadPierrotOfferPoliciesFromStore(pierrotStore);
 
     // The browser transcript preserves the immediate offer id. Trusted server
     // events add refusals, objections, verified purchases and confirmed
@@ -402,6 +479,7 @@ export async function POST(req: Request) {
           state: commercialState,
           runtime: null,
           contextOfferId,
+          policies: offerPolicies,
         });
 
     const runtimeOfferId =
@@ -422,6 +500,7 @@ export async function POST(req: Request) {
       pathname: requestedPathname,
       message: trimmedMessage,
       commercialState,
+      offerPolicies,
       serviceInquiry,
       serviceInquiryUnavailable,
     });
@@ -440,6 +519,8 @@ export async function POST(req: Request) {
             stage: plan.commercialStage,
             proactive: plan.proactive,
             offerSelected: plan.offerSelected,
+            reason: plan.recommendationReason,
+            sourcePage: plan.sourcePage,
           },
           intent: {
             name: intent.name,
@@ -522,6 +603,194 @@ export async function POST(req: Request) {
       }
     }
 
+    // Deterministic human-presence intent. This is intentionally server-side:
+    // the browser cannot create requests by calling a public endpoint with a
+    // guessed conversation id, and pronoun/verb variations do not depend on
+    // the model's willingness to follow an instruction.
+    if (!ownerMode && canStoreTranscript && pierrotStore) {
+      const humanIntent = detectHumanPresenceIntent(trimmedMessage);
+
+      if (humanIntent.requested) {
+        const humanLanguage = humanLanguageFromDetected(language);
+        const copy = getHumanCopy(humanLanguage);
+        const humanAssistantId = createAssistantMessageId(conversationId, userMessageId);
+
+        const persistHumanReply = async (text: string) => {
+          try {
+            await appendPierrotMessage(pierrotStore, {
+              conversationId,
+              sessionId,
+              messageId: humanAssistantId,
+              role: 'assistant',
+              content: text,
+              provider: null,
+            });
+
+            await recordPierrotEvent(pierrotStore, {
+              conversationId,
+              sessionId,
+              eventName: 'assistant_replied',
+              eventKey: `assistant_replied:${humanAssistantId}`,
+              payload: {
+                message_id: humanAssistantId,
+                in_reply_to: userMessageId,
+                human_presence: true,
+                length: text.length,
+              },
+            });
+          } catch (error) {
+            persistenceFailure(error, 'human_presence_reply');
+          }
+        };
+
+        if (!isHumanPresenceConfigured()) {
+          const text = copy.unavailable;
+
+          await persistHumanReply(text);
+
+          return NextResponse.json({
+            reply: text,
+            conversationId,
+            sessionId,
+            userMessageId,
+            assistantMessageId: humanAssistantId,
+            recorded: canStoreTranscript,
+            humanUnavailable: true,
+          });
+        }
+
+        const access = createHumanAccessToken();
+        let created: Awaited<ReturnType<typeof createHumanRequest>>;
+
+        try {
+          created = await createHumanRequest(pierrotStore, {
+            conversationId,
+            sessionId,
+            accessTokenHash: access.hash,
+            visitorLabel: visitorLabelForConversation(conversationId),
+            startPage: requestedPathname,
+            contextSummary: buildHumanContextSummary(normalizedHistory),
+            language,
+          });
+        } catch (error) {
+          persistenceFailure(error, 'human_request_create');
+
+          const text = copy.unavailable;
+          await persistHumanReply(text);
+
+          return NextResponse.json({
+            reply: text,
+            conversationId,
+            sessionId,
+            userMessageId,
+            assistantMessageId: humanAssistantId,
+            recorded: canStoreTranscript,
+            humanUnavailable: true,
+          });
+        }
+
+        if (created.status === 'active') {
+          const activeHuman = await getHumanPresenceForConversation(
+            pierrotStore,
+            conversationId,
+            sessionId
+          ).catch(() => null);
+
+          return NextResponse.json(
+            {
+              error: 'Anton is currently handling this conversation.',
+              humanMode: true,
+              human: activeHuman ? publicHumanState(activeHuman.request) : null,
+              conversationId,
+              sessionId,
+            },
+            { status: 409 }
+          );
+        }
+
+        if (created.status === 'pending') {
+          const persisted = await getHumanPresenceForConversation(
+            pierrotStore,
+            conversationId,
+            sessionId
+          ).catch(() => null);
+
+          let notificationFailed = false;
+
+          // Create is idempotent. The notification is sent only when this
+          // request has no Telegram message yet, so pressing "call Anton"
+          // repeatedly cannot spam his chat.
+          if (persisted && !persisted.request.telegram_message_id) {
+            const notification = await notifyHumanRequest({
+              id: persisted.request.id,
+              visitor_label: persisted.request.visitor_label,
+              start_page: persisted.request.start_page,
+              context_summary: persisted.request.context_summary,
+            });
+
+            if (notification) {
+              await setHumanRequestTelegramMessage(pierrotStore, persisted.request.id, {
+                chatId: notification.chatId,
+                messageId: notification.messageId,
+              }).catch(() => undefined);
+
+              await recordHumanEvent(pierrotStore, {
+                conversationId,
+                eventName: 'human_requested',
+                eventKey: `human_requested:${persisted.request.id}`,
+                payload: {
+                  request_id: persisted.request.id,
+                  language,
+                  has_context: Boolean(persisted.request.context_summary),
+                },
+              }).catch(() => undefined);
+            } else {
+              notificationFailed = true;
+
+              await expireHumanRequest(pierrotStore, persisted.request.id).catch(
+                () => undefined
+              );
+
+              await recordHumanEvent(pierrotStore, {
+                conversationId,
+                eventName: 'human_notification_failed',
+                eventKey: `human_notification_failed:${persisted.request.id}`,
+                payload: { request_id: persisted.request.id },
+              }).catch(() => undefined);
+            }
+          } else {
+            await recordHumanEvent(pierrotStore, {
+              conversationId,
+              eventName: 'human_request_duplicate',
+              eventKey: `human_request_duplicate:${persisted?.request.id ?? created.requestId}`,
+              payload: { request_id: created.requestId },
+            }).catch(() => undefined);
+          }
+
+          const text = notificationFailed
+            ? copy.unavailable
+            : created.created
+              ? copy.pending
+              : copy.pendingRepeated;
+
+          await persistHumanReply(text);
+
+          const latest = notificationFailed ? null : persisted;
+
+          return NextResponse.json({
+            reply: text,
+            conversationId,
+            sessionId,
+            userMessageId,
+            assistantMessageId: humanAssistantId,
+            recorded: canStoreTranscript,
+            ...(latest ? { human: publicHumanState(latest.request) } : {}),
+            ...(latest ? { humanToken: access.token } : {}),
+          });
+        }
+      }
+    }
+
     // Commercial metadata is recorded whenever metadata storage is allowed,
     // even if transcript storage is not. The payload contains no message text.
     if (!ownerMode && pierrotStore) {
@@ -541,6 +810,8 @@ export async function POST(req: Request) {
     let reply = '';
     let usedProvider = '';
     let ownerRag: OwnerRagResponse | null = null;
+    let brainTrace: BrainRetrievalResult | null = null;
+    let usedRagContext = false;
 
     if (!useModel) {
       reply = plan.reply || 'Silence.';
@@ -595,44 +866,89 @@ export async function POST(req: Request) {
 
         if (ownerMode) {
           try {
-            const retrieval = await retrieveUnframedEvidence({
-              query: trimmedMessage,
-              scope: 'owner',
-              ownerAuthorized: true,
-              enabled: true,
-            });
+            const useBrainV2 = isBrainRetrievalV2Enabled();
 
-            ownerRag = {
-              mode: 'unframed',
-              outcome: retrieval.outcome,
-              sources:
+            if (useBrainV2) {
+              const retrieval = await retrieveBrainEvidence({
+                query: trimmedMessage,
+                scope: 'owner',
+                ownerAuthorized: true,
+                enabled: true,
+              });
+
+              brainTrace = retrieval;
+              ownerRag = {
+                mode: 'unframed',
+                outcome: retrieval.outcome,
+                sources:
+                  retrieval.outcome === 'relevant_results'
+                    ? buildUnframedEvidenceSources(retrieval)
+                    : [],
+              };
+
+              const ragPrompt =
                 retrieval.outcome === 'relevant_results'
-                  ? buildUnframedEvidenceSources(retrieval)
-                  : [],
-            };
+                  ? buildUnframedEvidencePrompt(retrieval)
+                  : buildUnframedUnavailablePrompt(retrieval.outcome);
 
-            const ragPrompt =
-              retrieval.outcome === 'relevant_results'
-                ? buildUnframedEvidencePrompt(retrieval)
-                : buildUnframedUnavailablePrompt(retrieval.outcome);
+              usedRagContext = Boolean(ragPrompt);
 
-            if (ragPrompt) {
-              generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+              if (ragPrompt) {
+                generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+              }
+
+              console.info('[Pierrot RAG v2]', {
+                status: retrieval.outcome,
+                intent: retrieval.plan.intent,
+                selected_sources: retrieval.selectedSourceClasses,
+                chunks: retrieval.hits.length,
+                documents: retrieval.documentIds.length,
+                latency_ms: retrieval.latencyMs,
+                code: retrieval.code ?? null,
+              });
+            } else {
+              const retrieval = await retrieveUnframedEvidence({
+                query: trimmedMessage,
+                scope: 'owner',
+                ownerAuthorized: true,
+                enabled: true,
+              });
+
+              ownerRag = {
+                mode: 'unframed',
+                outcome: retrieval.outcome,
+                sources:
+                  retrieval.outcome === 'relevant_results'
+                    ? buildUnframedEvidenceSources(retrieval)
+                    : [],
+              };
+
+              const ragPrompt =
+                retrieval.outcome === 'relevant_results'
+                  ? buildUnframedEvidencePrompt(retrieval)
+                  : buildUnframedUnavailablePrompt(retrieval.outcome);
+
+              usedRagContext = Boolean(ragPrompt);
+
+              if (ragPrompt) {
+                generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+              }
+
+              console.info('[Pierrot RAG v1]', {
+                status: retrieval.outcome,
+                scope: 'owner',
+                chunks: retrieval.hits.length,
+                latency_ms: retrieval.latencyMs,
+                code: retrieval.code ?? null,
+              });
             }
-
-            console.info('[Pierrot RAG]', {
-              status: retrieval.outcome,
-              scope: 'owner',
-              chunks: retrieval.hits.length,
-              latency_ms: retrieval.latencyMs,
-              code: retrieval.code ?? null,
-            });
           } catch {
             ownerRag = {
               mode: 'unframed',
               outcome: 'unavailable',
               sources: [],
             };
+            usedRagContext = false;
             generationSystemPrompt = `${systemPrompt}\n\n${buildUnframedUnavailablePrompt(
               'unavailable'
             )}`;
@@ -662,8 +978,33 @@ export async function POST(req: Request) {
           }
         }
 
+        if (brainTrace && pierrotStore) {
+          await recordBrainRetrieval(pierrotStore, {
+            conversationId,
+            sessionId,
+            userMessageId,
+            result: brainTrace,
+            usedContext: usedRagContext,
+            generationOk: false,
+          });
+        }
+
         console.error('[Pierrot Web Error]:', aiError);
         return NextResponse.json({ error: 'The ether is disrupted.' }, { status: 500 });
+      }
+    }
+
+    if (!ownerMode && pierrotStore) {
+      try {
+        await recordPierrotOfferShown(pierrotStore, {
+          conversationId,
+          sessionId,
+          userMessageId,
+          intent,
+          plan,
+        });
+      } catch (error) {
+        persistenceFailure(error, 'offer_shown');
       }
     }
 
@@ -704,6 +1045,17 @@ export async function POST(req: Request) {
       } catch (error) {
         persistenceFailure(error, 'assistant_message');
       }
+    }
+
+    if (brainTrace && pierrotStore) {
+      await recordBrainRetrieval(pierrotStore, {
+        conversationId,
+        sessionId,
+        userMessageId,
+        result: brainTrace,
+        usedContext: usedRagContext,
+        generationOk: true,
+      });
     }
 
     return NextResponse.json({

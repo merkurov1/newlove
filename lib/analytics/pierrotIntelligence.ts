@@ -330,7 +330,11 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
       const topic = payloadString(event.payload, 'topic');
 
       if (offerId) products.add(offerId);
-      if (event.event_name === 'offer_viewed' || event.event_name === 'cta_shown') {
+      if (
+        event.event_name === 'offer_shown' ||
+        event.event_name === 'offer_viewed' ||
+        event.event_name === 'cta_shown'
+      ) {
         if (offerId) ctaShown.add(offerId);
       }
       if (
@@ -345,7 +349,11 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
       }
       if (event.event_name === 'assistant_replied') hasReply = true;
       if (event.event_name === 'assistant_failed') hasError = true;
-      if (event.event_name === 'order_paid' || event.event_name === 'unframed_purchase_confirmed') {
+      if (
+        event.event_name === 'order_paid' ||
+        event.event_name === 'unframed_purchase_confirmed' ||
+        event.event_name === 'purchase_completed'
+      ) {
         outcomes.add('purchase');
       }
       if (
@@ -467,8 +475,18 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
   ).length;
   const confirmedUnframedPurchases = countUnique(
     filteredEvents
-      .filter((event) => event.event_name === 'unframed_purchase_confirmed')
-      .map((event) => event.event_key)
+      .filter(
+        (event) =>
+          event.event_name === 'unframed_purchase_confirmed' ||
+          (event.event_name === 'purchase_completed' &&
+            payloadString(event.payload, 'offer_id') === 'unframed')
+      )
+      .map(
+        (event) =>
+          payloadString(event.payload, 'provider_session_id') ??
+          payloadString(event.payload, 'order_id') ??
+          event.event_key
+      )
   );
   const confirmedPurchases =
     (!filters.product || filters.product === 'heart_angel_postcard' ? confirmedPostcardOrders : 0) +
@@ -508,23 +526,47 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
       : 0;
   const subscriptionConfirmed = confirmedSubscriptions;
 
+  const offerStages = (offerId: string): PierrotSnapshot['funnels']['postcard'] => [
+    {
+      key: 'interest_detected',
+      label: 'Interest detected',
+      value: countForOffer('interest_detected', offerId),
+    },
+    {
+      key: 'offer_eligible',
+      label: 'Offer eligible',
+      value: countForOffer('offer_eligible', offerId),
+    },
+    {
+      key: 'offer_selected',
+      label: 'Offer selected',
+      value: countForOffer('offer_selected', offerId),
+    },
+    {
+      key: 'offer_shown',
+      label: 'Offer shown',
+      value: countForOffer('offer_shown', offerId),
+    },
+    {
+      key: 'offer_viewed',
+      label: 'Offer viewed',
+      value: countForOffer('offer_viewed', offerId),
+    },
+    {
+      key: 'cta_shown',
+      label: 'CTA shown',
+      value: countForOffer('cta_shown', offerId),
+    },
+    {
+      key: 'clicked',
+      label: 'CTA clicked',
+      value: countForOffer('offer_action_clicked', offerId),
+    },
+  ];
+
   const funnels: PierrotSnapshot['funnels'] = {
     postcard: [
-      {
-        key: 'viewed',
-        label: 'Offer viewed',
-        value: countForOffer('offer_viewed', 'heart_angel_postcard'),
-      },
-      {
-        key: 'cta_shown',
-        label: 'CTA shown',
-        value: countForOffer('cta_shown', 'heart_angel_postcard'),
-      },
-      {
-        key: 'clicked',
-        label: 'CTA clicked',
-        value: countForOffer('offer_action_clicked', 'heart_angel_postcard'),
-      },
+      ...offerStages('heart_angel_postcard'),
       {
         key: 'checkout_started',
         label: 'Checkout started',
@@ -542,12 +584,7 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
       },
     ],
     journal: [
-      {
-        key: 'viewed',
-        label: 'Offer viewed',
-        value: countForOffer('offer_viewed', 'journal_flow'),
-      },
-      { key: 'cta_shown', label: 'CTA shown', value: countForOffer('cta_shown', 'journal_flow') },
+      ...offerStages('journal_flow').filter((stage) => stage.key !== 'clicked'),
       {
         key: 'clicked',
         label: 'Subscribe CTA clicked',
@@ -557,16 +594,7 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
       { key: 'confirmed', label: 'Confirmed subscription', value: subscriptionConfirmed },
     ],
     art_engine: [
-      {
-        key: 'viewed',
-        label: 'Access offer viewed',
-        value: countForOffer('offer_viewed', 'art_engine'),
-      },
-      {
-        key: 'cta_shown',
-        label: 'Access CTA shown',
-        value: countForOffer('cta_shown', 'art_engine'),
-      },
+      ...offerStages('art_engine').filter((stage) => stage.key !== 'clicked'),
       {
         key: 'access_clicked',
         label: 'Access CTA clicked',
@@ -589,13 +617,7 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
       },
     ],
     unframed: [
-      { key: 'viewed', label: 'Offer viewed', value: countForOffer('offer_viewed', 'unframed') },
-      { key: 'cta_shown', label: 'CTA shown', value: countForOffer('cta_shown', 'unframed') },
-      {
-        key: 'clicked',
-        label: 'CTA clicked',
-        value: countForOffer('offer_action_clicked', 'unframed'),
-      },
+      ...offerStages('unframed'),
       {
         key: 'checkout_started',
         label: 'Checkout started',

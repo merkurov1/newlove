@@ -44,6 +44,31 @@ export const UNFRAMED_RAG_TIMEOUT_MS = 1_500;
 export const UNFRAMED_RAG_MAX_QUERY_CHARS = 2_000;
 export const UNFRAMED_RAG_INGESTION_VERSION = 'unframed-rag-ingestion-v1';
 
+/** Source-aware Brain retrieval v2 (additive; the v1 function remains). */
+export const BRAIN_RAG_TOP_K = 8;
+export const BRAIN_RAG_CANDIDATE_LIMIT = 40;
+export const BRAIN_RAG_TIMEOUT_MS = 2_500;
+export const BRAIN_RAG_MAX_QUERY_CHARS = 2_000;
+export const BRAIN_RAG_PROVISIONAL_MIN_SIMILARITY = 0.32;
+
+export function isBrainRetrievalV2Enabled(env: RagEnvironment = process.env): boolean {
+  return (env.PIERROT_BRAIN_RETRIEVAL_V2 || 'true').trim().toLowerCase() !== 'false';
+}
+
+export function resolveBrainRagThreshold(env: RagEnvironment = process.env): number {
+  const raw = (env.BRAIN_RAG_MIN_SIMILARITY || '').trim();
+
+  if (!raw) return BRAIN_RAG_PROVISIONAL_MIN_SIMILARITY;
+
+  const value = Number(raw);
+
+  if (!Number.isFinite(value) || value < -1 || value > 1) {
+    throw new RagConfigurationError('BRAIN_RAG_MIN_SIMILARITY_invalid');
+  }
+
+  return value;
+}
+
 /**
  * Provisional, uncalibrated threshold. It must be selected on the C4
  * calibration split before production use and never described as validated

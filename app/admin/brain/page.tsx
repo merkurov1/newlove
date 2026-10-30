@@ -25,7 +25,8 @@ export default async function BrainAdminPage() {
           Paste article URLs, analyze them for duplicates, then process the queue. A durable
           Supabase queue fetches and extracts each article, stores full text and metadata, and
           indexes it with the existing <code className="font-mono text-xs">baai/bge-m3</code>{' '}
-          embedding pipeline. Partial or paywalled pages are never indexed silently.
+          embedding pipeline. Partial, failed or review-needed pages are never indexed silently.
+          Runs are resumable; use “Recheck existing” to update an article whose content changed.
         </p>
       </header>
 

@@ -28,6 +28,15 @@ export type RetrievedChunk = {
   lineStart: number;
   lineEnd: number;
   similarity: number;
+  documentTitle?: string;
+  sourceType?: string;
+  sourceClass?: string;
+  sourceDomain?: string | null;
+  author?: string | null;
+  language?: string | null;
+  publishedAt?: string | null;
+  lexicalScore?: number;
+  combinedScore?: number;
 };
 
 export type RagRetrievalResult = {
@@ -71,6 +80,7 @@ export type KnowledgeChunkRow = {
   embedding_model: string;
   embedding_dimensions: number;
   access_class: KnowledgeAccessClass;
+  metadata?: Record<string, unknown>;
 };
 
 export type KnowledgeChunkWithEmbedding = KnowledgeChunkRow & {
@@ -152,3 +162,36 @@ export type IngestionApplyInput = {
   repository: KnowledgeRepository;
   allowStaleDelete: boolean;
 };
+
+export type BrainSourceClass =
+  | 'article'
+  | 'manuscript'
+  | 'personal_writing'
+  | 'art_project'
+  | 'biography'
+  | 'research'
+  | 'other';
+
+export type BrainSearchRow = KnowledgeSearchRow & {
+  document_title: string;
+  source_type: string;
+  source_domain: string | null;
+  author: string | null;
+  language: string | null;
+  published_at: string | null;
+  lexical_score: number;
+};
+
+export type BrainSearchInput = KnowledgeSearchInput & {
+  queryText?: string | null;
+  sourceTypes?: string[] | null;
+  sourceDomains?: string[] | null;
+  authors?: string[] | null;
+  languages?: string[] | null;
+  documentIds?: string[] | null;
+  publishedFrom?: string | null;
+  publishedTo?: string | null;
+  matchCount?: number;
+};
+
+export type BrainSearch = (input: BrainSearchInput) => Promise<BrainSearchRow[]>;

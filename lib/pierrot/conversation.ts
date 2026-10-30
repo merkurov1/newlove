@@ -33,6 +33,8 @@ export const PIERROT_CLIENT_EVENTS = [
   'navigation_completed',
   'action_clicked',
   'offer_action_clicked',
+  'offer_viewed',
+  'answer_feedback',
   'subscribe_cta_clicked',
   'conversation_ended',
 ] as const;
@@ -43,12 +45,17 @@ export const PIERROT_SERVER_EVENTS = [
   'assistant_replied',
   'assistant_failed',
   'intent_classified',
+  'brain_retrieval',
+  'answer_corrected',
+  'interest_detected',
+  'offer_eligible',
   'offer_selected',
-  'offer_viewed',
+  'offer_shown',
   'cta_shown',
   'commercial_declined',
   'commercial_returned',
   'order_paid',
+  'purchase_completed',
   'checkout_started',
   'service_inquiry_started',
   'service_need_selected',
@@ -58,6 +65,16 @@ export const PIERROT_SERVER_EVENTS = [
   'service_inquiry_received',
   'unframed_request_submitted',
   'unframed_purchase_confirmed',
+  'human_requested',
+  'human_request_duplicate',
+  'human_accepted',
+  'human_declined',
+  'human_expired',
+  'human_closed',
+  'human_message_sent',
+  'human_message_received',
+  'human_notification_failed',
+  'human_ai_blocked',
 ] as const;
 
 export const PIERROT_EVENT_NAMES = [...PIERROT_CLIENT_EVENTS, ...PIERROT_SERVER_EVENTS] as const;
@@ -215,6 +232,27 @@ export function sanitizePierrotEventPayload(
         cta_kind: payload.cta_kind,
         destination: payload.destination,
       };
+    }
+
+    case 'offer_viewed': {
+      if (!isPierrotOfferId(payload.offer_id)) return null;
+
+      return { offer_id: payload.offer_id };
+    }
+
+    case 'answer_feedback': {
+      if (payload.rating !== 'up' && payload.rating !== 'down') return null;
+
+      const result: Record<string, unknown> = { rating: payload.rating };
+
+      if (
+        typeof payload.message_id === 'string' &&
+        /^[A-Za-z0-9_-]{8,64}$/.test(payload.message_id)
+      ) {
+        result.message_id = payload.message_id;
+      }
+
+      return result;
     }
 
     case 'subscribe_cta_clicked': {

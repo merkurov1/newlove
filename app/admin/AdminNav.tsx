@@ -1,47 +1,50 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 const groups = [
   {
-    title: "Главное",
+    title: 'Главное',
     links: [
-      { href: "/admin", label: "Обзор", icon: "↗" },
-      { href: "/admin/flow-issues", label: "Газета Flow", icon: "📰" },
-      { href: "/admin/media", label: "Медиа публикации", icon: "▦" },
-      { href: "/flow", label: "Стрим Flow", icon: "≋" },
+      { href: '/admin', label: 'Обзор', icon: '↗' },
+      { href: '/admin/flow-issues', label: 'Газета Flow', icon: '📰' },
+      { href: '/admin/media', label: 'Медиа публикации', icon: '▦' },
+      { href: '/flow', label: 'Стрим Flow', icon: '≋' },
     ],
   },
   {
-    title: "Издательство",
+    title: 'Издательство',
     links: [
-      { href: "/admin/letters", label: "Архив писем", icon: "✉" },
-      { href: "/admin/newsletter-jobs", label: "Логи доставки", icon: "↗" },
-      { href: "/admin/projects", label: "Проекты", icon: "◇" },
-      { href: "/admin/postcards", label: "Открытки", icon: "▧" },
+      { href: '/admin/letters', label: 'Архив писем', icon: '✉' },
+      { href: '/admin/newsletter-jobs', label: 'Логи доставки', icon: '↗' },
+      { href: '/admin/projects', label: 'Проекты', icon: '◇' },
+      { href: '/admin/postcards', label: 'Открытки', icon: '▧' },
     ],
   },
   {
-    title: "Аудитория",
-    links: [
-      { href: "/admin/users", label: "Пользователи & Подписчики", icon: "○" },
-    ],
+    title: 'Аудитория',
+    links: [{ href: '/admin/users', label: 'Пользователи & Подписчики', icon: '○' }],
   },
   {
-    title: "Pierrot",
+    title: 'Pierrot',
     links: [
-      { href: "/admin/pierrot", label: "Pierrot Intelligence", icon: "◐" },
-      { href: "/admin/brain", label: "Brain ingestion", icon: "◇" },
+      { href: '/admin/observatory', label: 'Observatory', icon: '◉' },
+      { href: '/admin/pierrot', label: 'Pierrot Intelligence', icon: '◐' },
+      { href: '/admin/pierrot/offers', label: 'Offer policy', icon: '◇' },
+      { href: '/admin/brain', label: 'Brain ingestion', icon: '◇' },
+      { href: '/admin/brain/graph', label: 'Knowledge graph', icon: '◎' },
+      { href: '/admin/brain/research', label: 'Brain research', icon: '⌕' },
+      { href: '/admin/brain/radar', label: 'Editorial radar', icon: '◈' },
     ],
   },
 ];
 
 export default function AdminNav() {
-  const pathname = usePathname() ?? "";
+  const pathname = usePathname() ?? '';
 
   function isActive(href: string) {
-    return href === "/admin"
+    return href === '/admin'
       ? pathname === href
       : pathname === href || pathname.startsWith(`${href}/`);
   }
@@ -78,13 +81,13 @@ export default function AdminNav() {
                   <li key={link.href}>
                     <Link
                       href={link.href}
-                      aria-current={active ? "page" : undefined}
+                      aria-current={active ? 'page' : undefined}
                       className={[
-                        "flex items-center gap-3 border px-3 py-2.5 text-xs transition-colors lg:w-full lg:border-transparent lg:text-[13px]",
+                        'flex items-center gap-3 border px-3 py-2.5 text-xs transition-colors lg:w-full lg:border-transparent lg:text-[13px]',
                         active
-                          ? "border-[#E7C9D2] bg-[#F8EAF0] text-[#7E0C33] lg:border-[#E7C9D2]"
-                          : "border-[#E7E2DC] bg-white/70 text-[#625D58] hover:border-[#CFC7C0] hover:bg-white lg:bg-transparent lg:hover:bg-white/80",
-                      ].join(" ")}
+                          ? 'border-[#E7C9D2] bg-[#F8EAF0] text-[#7E0C33] lg:border-[#E7C9D2]'
+                          : 'border-[#E7E2DC] bg-white/70 text-[#625D58] hover:border-[#CFC7C0] hover:bg-white lg:bg-transparent lg:hover:bg-white/80',
+                      ].join(' ')}
                     >
                       <span
                         aria-hidden="true"
@@ -106,10 +109,7 @@ export default function AdminNav() {
       </div>
 
       <div className="mt-8 hidden border-t border-[#E5E1DC] pt-4 lg:block">
-        <Link
-          href="/"
-          className="text-xs text-[#827B74] transition hover:text-[#990F3D]"
-        >
+        <Link href="/" className="text-xs text-[#827B74] transition hover:text-[#990F3D]">
           ← Open public site
         </Link>
       </div>

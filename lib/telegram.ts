@@ -103,14 +103,35 @@ export function parseTelegramMessage(
   };
 }
 
-export async function sendTelegramReply(
+export type TelegramSendResult = {
+  messageId: number;
+  chatId: number;
+};
+
+export type TelegramSendOptions = {
+  replyMarkup?: unknown;
+  replyToMessageId?: number;
+  disableLinkPreview?: boolean;
+  timeoutMs?: number;
+};
+
+/**
+ * Sends one message through the existing Piero bot and returns its Telegram
+ * message id. Failure is reported as `null` so callers can decide whether the
+ * surrounding operation should continue.
+ */
+export async function sendTelegramMessage(
   chatId: number,
   text: string,
-  replyMarkup?: unknown,
-): Promise<void> {
+  options: TelegramSendOptions = {},
+): Promise<TelegramSendResult | null> {
   if (!TELEGRAM_BOT_TOKEN) {
-    console.error('[telegram] Cannot send reply: bot token is missing.');
-    return;
+    console.error('[telegram] Cannot send message: bot token is missing.');
+    return null;
+  }
+
+  if (!Number.isSafeInteger(chatId) || chatId === 0 || typeof text !== 'string') {
+    return null;
   }
 
   try {
@@ -121,9 +142,72 @@ export async function sendTelegramReply(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: chatId,
-          text,
+          text: text.slice(0, 4096),
+          parse_mode: 'HTML',
+          ...(options.replyMarkup ? { reply_markup: options.replyMarkup } : {}),
+          ...(options.replyToMessageId
+            ? {
+                reply_parameters: {
+                  message_id: options.replyToMessageId,
+                  allow_sending_without_reply: true,
+                },
+              }
+            : {}),
+          ...(options.disableLinkPreview
+            ? { link_preview_options: { is_disabled: true } }
+            : {}),
+        }),
+        signal: AbortSignal.timeout(options.timeoutMs ?? 10000),
+      },
+    );
+
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || result?.ok !== true || !result.result) {
+      console.error('[telegram] Message failed:', {
+        status: response.status,
+        description: result?.description ?? 'Unknown Telegram API error',
+      });
+      return null;
+    }
+
+    return {
+      messageId: Number(result.result.message_id),
+      chatId: Number(result.result.chat?.id ?? chatId),
+    };
+  } catch (error) {
+    console.error('[telegram] Failed to send message:', error);
+    return null;
+  }
+}
+
+/**
+ * Edits an existing notification/status message. Used to remove action
+ * buttons after a request is accepted, declined or closed.
+ */
+export async function editTelegramMessage(
+  chatId: number,
+  messageId: number,
+  text: string,
+  replyMarkup?: unknown,
+): Promise<boolean> {
+  if (!TELEGRAM_BOT_TOKEN) return false;
+  if (!Number.isSafeInteger(chatId) || !Number.isSafeInteger(messageId)) return false;
+
+  try {
+    const response = await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          message_id: messageId,
+          text: text.slice(0, 4096),
           parse_mode: 'HTML',
           ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+          ...(!replyMarkup ? { reply_markup: { inline_keyboard: [] } } : {}),
+          link_preview_options: { is_disabled: true },
         }),
         signal: AbortSignal.timeout(10000),
       },
@@ -131,15 +215,19 @@ export async function sendTelegramReply(
 
     const result = await response.json().catch(() => null);
 
-    if (!response.ok || result?.ok !== true) {
-      console.error('[telegram] Reply failed:', {
-        status: response.status,
-        description: result?.description ?? 'Unknown Telegram API error',
-      });
-    }
+    return response.ok && result?.ok === true;
   } catch (error) {
-    console.error('[telegram] Failed to send reply:', error);
+    console.error('[telegram] Failed to edit message:', error);
+    return false;
   }
+}
+
+export async function sendTelegramReply(
+  chatId: number,
+  text: string,
+  replyMarkup?: unknown,
+): Promise<void> {
+  await sendTelegramMessage(chatId, text, { replyMarkup });
 }
 
 /**

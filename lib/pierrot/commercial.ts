@@ -16,6 +16,8 @@ import {
 } from '@/lib/pierrot/offers';
 import type { PierrotIntent } from '@/lib/pierrot/intents';
 import type { PierrotOfferRuntime } from '@/lib/pierrot/offerAvailability';
+import type { PierrotOfferPolicyMap } from '@/lib/pierrot/offerPolicy';
+import { getPierrotOfferPolicy } from '@/lib/pierrot/offerPolicy';
 import { resolvePierrotPageContext } from '@/lib/pierrot/pageContext';
 import {
   commercialStageForIntent,
@@ -47,6 +49,10 @@ export type PierrotCommercialPlan = {
   /** A planner-selected offer, before any CTA or prose is rendered. */
   offerSelected: boolean;
   proactive: boolean;
+  /** Page on which the recommendation was planned. */
+  sourcePage: string | null;
+  /** Why this offer is relevant to the current turn. */
+  recommendationReason: string | null;
   /** The reason this offer was selected; used by the model prompt only. */
   commercialReason?: string | null;
   /** A prompt-only instruction when a pitch must be withheld. */
@@ -75,6 +81,7 @@ type PlanInput = {
   pathname?: string | null;
   message?: string;
   commercialState?: PierrotCommercialState | null;
+  offerPolicies?: PierrotOfferPolicyMap | null;
   serviceInquiry?: ServiceInquiryState | null;
   serviceInquiryUnavailable?: boolean;
 };
@@ -388,6 +395,30 @@ function offerReply(
   };
 }
 
+function directRecommendationReason(offer: PierrotOffer, intent: PierrotIntent): string {
+  if (intent.name === 'purchase_intent') {
+    return `The visitor explicitly asked to buy ${offer.title}.`;
+  }
+
+  if (intent.name === 'book_inquiry') {
+    return 'The visitor asked about the book and its ideas.';
+  }
+
+  if (intent.name === 'service_inquiry' || intent.name === 'handoff_request') {
+    return 'The visitor asked about advisory services or direct contact.';
+  }
+
+  if (intent.topic === 'price') {
+    return `The visitor asked about the price of ${offer.title}.`;
+  }
+
+  if (intent.topic) {
+    return `The visitor asked a ${intent.topic.replace(/_/g, ' ')} question about ${offer.title}.`;
+  }
+
+  return `The visitor's message directly concerns ${offer.title}.`;
+}
+
 /**
  * Chooses an action from the catalogue. The model is only allowed to write prose
  * on the `model` path; every offer, route, price and CTA on the other paths is
@@ -402,6 +433,7 @@ export function planPierrotResponse({
   pathname,
   message = '',
   commercialState,
+  offerPolicies,
   serviceInquiry,
   serviceInquiryUnavailable,
 }: PlanInput): PierrotCommercialPlan {
@@ -448,6 +480,8 @@ export function planPierrotResponse({
     commercialStage: 'exploration',
     offerSelected: false,
     proactive: false,
+    sourcePage: pathname ?? null,
+    recommendationReason: offer ? directRecommendationReason(offer, intent) : null,
     commercialReason: null,
     commercialNote: null,
     declinedOfferId,
@@ -558,6 +592,7 @@ export function planPierrotResponse({
         : 'Direct contact is through the existing Advising contact. I am not creating a new form.',
       cta,
       offerViewed: Boolean(advising),
+      offerSelected: Boolean(cta),
       ctaShown: Boolean(cta),
     };
   }
@@ -658,6 +693,7 @@ export function planPierrotResponse({
     }
 
     const commercial = !publisherRoute && !subscribed;
+    const offerEnabled = getPierrotOfferPolicy(offer.id, offerPolicies).enabled;
     const marker: PierrotCommercialMarker | null = publisherRoute
       ? null
       : subscribed
@@ -671,14 +707,14 @@ export function planPierrotResponse({
       mode: 'offer',
       reply: rendered.reply,
       offer,
-      cta: rendered.cta,
+      cta: offerEnabled ? rendered.cta : null,
       links,
-      offerViewed: commercial,
-      offerSelected: commercial,
-      ctaShown: Boolean(rendered.cta),
+      offerViewed: commercial && offerEnabled,
+      offerSelected: commercial && offerEnabled,
+      ctaShown: offerEnabled && Boolean(rendered.cta),
       offerUnavailable: rendered.unavailable,
       commercialStage: publisherRoute ? 'exploration' : commercialStageForIntent(intent),
-      commercialMarker: marker,
+      commercialMarker: offerEnabled ? marker : null,
     };
   }
 
@@ -686,13 +722,14 @@ export function planPierrotResponse({
     const unframed = findPierrotOfferById('unframed');
     const rendered = offerReply('unframed', intent, language, runtime);
     const publisherRoute = intent.publisherIntent;
+    const offerEnabled = getPierrotOfferPolicy('unframed', offerPolicies).enabled;
 
     return {
       ...base,
       mode: 'offer',
       offer: unframed,
       reply: rendered.reply,
-      cta: rendered.cta,
+      cta: offerEnabled ? rendered.cta : null,
       links: publisherRoute
         ? [
             {
@@ -706,11 +743,12 @@ export function planPierrotResponse({
               href: '/unframed/book',
             },
           ],
-      offerViewed: !publisherRoute,
-      offerSelected: !publisherRoute,
-      ctaShown: Boolean(rendered.cta),
+      offerViewed: !publisherRoute && offerEnabled,
+      offerSelected: !publisherRoute && offerEnabled,
+      ctaShown: offerEnabled && Boolean(rendered.cta),
       commercialStage: publisherRoute ? 'exploration' : 'interest',
-      commercialMarker: publisherRoute ? null : { offerId: 'unframed', action: 'introduced' },
+      commercialMarker:
+        publisherRoute || !offerEnabled ? null : { offerId: 'unframed', action: 'introduced' },
     };
   }
 
@@ -726,6 +764,7 @@ export function planPierrotResponse({
       state: commercialState ?? emptyPierrotCommercialState(),
       runtime,
       contextOfferId: effectiveContextOfferId,
+      policies: offerPolicies,
     });
 
     if (proactive) {
@@ -755,6 +794,7 @@ export function planPierrotResponse({
         proactive: true,
         ctaShown: Boolean(cta),
         commercialStage: proactive.stage,
+        recommendationReason: proactive.reason,
         commercialReason: proactive.reason,
         commercialMarker: { offerId: proactive.offerId, action: 'introduced' },
       };

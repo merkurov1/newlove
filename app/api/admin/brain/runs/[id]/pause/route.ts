@@ -17,10 +17,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await authorizeKnowledgeAdmin(request);
 
   if (!auth.ok) return json({ error: 'Unauthorized' }, 401);
@@ -38,11 +35,14 @@ export async function POST(
 
     if (run.status === 'running') {
       await store.updateRun(id, { status: 'paused' });
+    } else if (run.status !== 'paused') {
+      return json({ error: 'This run cannot be paused.' }, 409);
     }
 
+    const updated = (await store.getRun(id)) ?? run;
     const jobs = await store.getJobs(id);
 
-    return json({ status: 'ok', run: { ...run, status: 'paused' }, jobs, progress: computeBrainProgress(jobs) });
+    return json({ status: 'ok', run: updated, jobs, progress: computeBrainProgress(jobs) });
   } catch {
     return json({ error: 'Could not pause the run.' }, 503);
   }

@@ -67,6 +67,7 @@ export async function POST(req: Request) {
           eventKey: `checkout_started:${session.id}`,
           payload: {
             offer_id: 'unframed',
+            product_id: 'unframed',
             amount_total: UNFRAMED_ACCESS_AMOUNT,
             currency: UNFRAMED_ACCESS_CURRENCY,
           },

@@ -16,6 +16,7 @@ import {
 } from './chunk';
 import {
   extractArticle as defaultExtractArticle,
+  ARTICLE_EXTRACTION_VERSION,
   type ExtractedArticle,
 } from './extract';
 import type {
@@ -126,7 +127,9 @@ function isRetryable(error: unknown): boolean {
   if (error instanceof EmbeddingTimeoutError) return true;
 
   if (error instanceof EmbeddingProviderError) {
-    return error.status === null || error.status === 408 || error.status === 429 || error.status >= 500;
+    return (
+      error.status === null || error.status === 408 || error.status === 429 || error.status >= 500
+    );
   }
 
   if (error instanceof KnowledgeDatabaseError) return true;
@@ -171,6 +174,12 @@ function safeErrorDetail(code: string): string {
       return 'The URL did not return an HTML page.';
     case 'response_too_large':
       return 'The page exceeded the ingest size limit.';
+    case 'truncated_content':
+      return 'The page exposed only a truncated article preview.';
+    case 'needs_review':
+      return 'Extraction requires operator review before it can be indexed.';
+    case 'brain_document_race_retry':
+      return 'A concurrent import updated the same document; the job was queued for a safe retry.';
     case 'embedding_rate_limited':
       return 'The embedding provider rate-limited the request.';
     case 'embedding_failed':
@@ -186,18 +195,31 @@ function safeErrorDetail(code: string): string {
 
 function partialReason(article: ExtractedArticle): string {
   if (article.diagnostics.paywallDetected) return 'paywall_detected';
-  if (article.wordCount < 80) return 'word_count_below_threshold';
+  if (article.diagnostics.truncated) return 'truncated_content';
+  if (article.status === 'needs_review') return 'needs_review';
+  if (article.wordCount < 120) return 'word_count_below_threshold';
   if (article.diagnostics.paragraphCount < 2) return 'too_few_paragraphs';
-  if (article.charCount < 500) return 'text_too_short';
+  if (article.charCount < 600) return 'text_too_short';
   return 'extraction_incomplete';
 }
 
-function extractionMetadata(article: ExtractedArticle): Record<string, unknown> {
+function extractionMetadata(
+  article: ExtractedArticle,
+  extra: Record<string, unknown> = {}
+): Record<string, unknown> {
   return {
     canonical_url: article.canonicalUrl,
     site_name: article.siteName,
+    source_domain: article.sourceDomain,
     language: article.language,
+    published_at: article.publishedAt,
+    published_at_source: article.publishedAtSource,
+    extraction_version: ARTICLE_EXTRACTION_VERSION,
+    parser_version: ARTICLE_PARSER_VERSION,
+    chunker_version: ARTICLE_CHUNKER_VERSION,
+    extraction_status: article.status,
     diagnostics: article.diagnostics,
+    ...extra,
   };
 }
 
@@ -207,7 +229,9 @@ function buildDocument(
   documentId: string,
   embeddingClient: EmbeddingClient,
   chunkCount: number,
-  sourceCharCount: number
+  sourceCharCount: number,
+  previousContentHash: string | null,
+  change: 'inserted' | 'updated'
 ): BrainArticleDocumentRow {
   const sourcePath =
     article.canonicalUrl.length <= 500 ? article.canonicalUrl : `brain/article/${documentId}`;
@@ -218,6 +242,7 @@ function buildDocument(
       contentHash: article.contentHash,
       parserVersion: ARTICLE_PARSER_VERSION,
       chunkerVersion: ARTICLE_CHUNKER_VERSION,
+      extractionVersion: ARTICLE_EXTRACTION_VERSION,
       chunkCount,
     })
   );
@@ -238,8 +263,17 @@ function buildDocument(
     source_char_count: sourceCharCount,
     metadata: {
       ingestion_version: BRAIN_INGESTION_VERSION,
+      extraction_version: ARTICLE_EXTRACTION_VERSION,
+      parser_version: ARTICLE_PARSER_VERSION,
+      chunker_version: ARTICLE_CHUNKER_VERSION,
       source_type: 'article',
+      source_domain: article.sourceDomain,
       site_name: article.siteName,
+      language: article.language,
+      published_at: article.publishedAt,
+      published_at_source: article.publishedAtSource,
+      change,
+      previous_content_hash: previousContentHash,
       extraction: article.diagnostics,
     },
     source_type: 'article',
@@ -250,7 +284,7 @@ function buildDocument(
     language: article.language,
     author: article.author,
     published_at: article.publishedAt,
-    extraction_status: 'ok',
+    extraction_status: article.status,
     ingestion_status: 'pending',
     processed_at: null,
   };
@@ -262,7 +296,8 @@ async function markDuplicate(
   documentId: string,
   title: string | null,
   canonicalUrl: string | null,
-  contentHash: string | null
+  contentHash: string | null,
+  options: { reason?: string; article?: ExtractedArticle } = {}
 ): Promise<void> {
   await store.updateJob(job.id, {
     status: 'duplicate',
@@ -270,8 +305,57 @@ async function markDuplicate(
     title,
     canonical_url: canonicalUrl,
     content_hash: contentHash,
+    final_url: options.article?.url.slice(0, 2048) ?? null,
+    extraction_status: options.article?.status ?? null,
+    extraction_metadata: options.article
+      ? extractionMetadata(options.article, {
+          stage: 'done',
+          duplicate_reason: options.reason ?? 'identical_content',
+        })
+      : { stage: 'done', duplicate_reason: options.reason ?? 'identical_content' },
     error_code: null,
-    error_detail: 'An existing Brain document already contains this article.',
+    error_detail:
+      options.reason === 'same_url'
+        ? 'This URL is already indexed with identical content.'
+        : 'An existing Brain document already contains this article.',
+    retry_after: null,
+    processed_at: new Date().toISOString(),
+    locked_at: null,
+    worker_id: null,
+  });
+}
+
+async function markNotIndexed(
+  store: BrainStore,
+  job: BrainJobRow,
+  article: ExtractedArticle,
+  existingDocumentId: string | null
+): Promise<void> {
+  const status = article.status === 'failed' ? 'failed' : 'partial';
+  const reason = partialReason(article);
+
+  await store.updateJob(job.id, {
+    status,
+    document_id: existingDocumentId,
+    canonical_url: article.canonicalUrl,
+    final_url: article.url.slice(0, 2048),
+    title: article.title,
+    language: article.language,
+    content_hash: article.contentHash,
+    extraction_status: article.status,
+    extraction_metadata: extractionMetadata(article, {
+      stage: 'done',
+      reason,
+      existing_document_preserved: Boolean(existingDocumentId),
+    }),
+    error_code: article.status === 'needs_review' ? 'needs_review' : reason,
+    error_detail:
+      article.status === 'needs_review'
+        ? 'Extraction requires operator review before it can be indexed.'
+        : existingDocumentId
+          ? 'Extraction was incomplete; the existing indexed document was preserved.'
+          : 'Extraction was incomplete and was not indexed.',
+    retry_after: null,
     processed_at: new Date().toISOString(),
     locked_at: null,
     worker_id: null,
@@ -303,6 +387,13 @@ async function finalizeRun(
     });
   } else {
     runStatus = 'running';
+
+    if (run.status !== 'running') {
+      await store.updateRun(runId, {
+        status: 'running',
+        completed_at: null,
+      });
+    }
   }
 
   return { progress, runStatus };
@@ -313,9 +404,7 @@ async function finalizeRun(
  * a browser close or serverless timeout cannot lose the whole batch. The queue
  * row is claimed atomically and can be resumed later.
  */
-export async function processNextBrainJob(
-  options: ProcessNextOptions
-): Promise<ProcessNextResult> {
+export async function processNextBrainJob(options: ProcessNextOptions): Promise<ProcessNextResult> {
   const { store, runId } = options;
   const run = await store.getRun(runId);
 
@@ -367,82 +456,88 @@ export async function processNextBrainJob(
 
   const extract = options.extractArticle ?? defaultExtractArticle;
 
+  const setStage = async (stage: string): Promise<void> => {
+    job.extraction_metadata = { ...job.extraction_metadata, stage };
+    await store.updateJob(job.id, { extraction_metadata: job.extraction_metadata });
+  };
+
   try {
-    // Fast path: a completed document with the same normalized URL needs no
-    // network request at all.
     const known = await store.findDuplicate({ normalizedUrl: job.normalized_url });
 
-    if (known && known.ingestionStatus === 'completed') {
-      await markDuplicate(store, job, known.documentId, known.title, null, null);
+    // A known URL is not skipped. Re-fetching is the only reliable way to
+    // detect that an article changed after it was first indexed.
+    await setStage('fetching');
+    const fetched = await fetchArticle(job.input_url || job.normalized_url);
+
+    await setStage('extracting');
+    const article = extract(fetched.html, fetched.url);
+
+    let canonicalUrl = article.canonicalUrl;
+
+    try {
+      canonicalUrl = normalizeSourceUrl(canonicalUrl);
+    } catch {
+      canonicalUrl = job.normalized_url;
+    }
+
+    article.canonicalUrl = canonicalUrl;
+
+    await setStage('validating');
+    const canonicalDuplicate = await store.findDuplicate({
+      normalizedUrl: job.normalized_url,
+      canonicalUrl,
+    });
+    const existing = canonicalDuplicate ?? known;
+
+    if (article.status !== 'complete') {
+      await markNotIndexed(store, job, article, existing?.documentId ?? null);
     } else {
-      const fetched = await fetchArticle(job.input_url || job.normalized_url);
-      const article = extract(fetched.html, fetched.url);
+      const sameContent =
+        Boolean(existing) &&
+        existing?.contentHash === article.contentHash &&
+        existing?.ingestionStatus === 'completed';
 
-      let canonicalUrl = article.canonicalUrl;
-
-      try {
-        canonicalUrl = normalizeSourceUrl(canonicalUrl);
-      } catch {
-        canonicalUrl = job.normalized_url;
-      }
-
-      const canonicalDuplicate = await store.findDuplicate({
-        normalizedUrl: job.normalized_url,
-        canonicalUrl,
-      });
-
-      if (canonicalDuplicate && canonicalDuplicate.ingestionStatus === 'completed') {
+      if (sameContent && existing) {
         await markDuplicate(
           store,
           job,
-          canonicalDuplicate.documentId,
+          existing.documentId,
           article.title,
           canonicalUrl,
-          article.contentHash
+          article.contentHash,
+          { reason: 'same_url', article }
         );
-      } else if (article.status !== 'ok') {
-        const reason = article.status === 'failed' ? 'extraction_failed' : partialReason(article);
-
-        await store.updateJob(job.id, {
-          status: article.status === 'failed' ? 'failed' : 'partial',
-          canonical_url: canonicalUrl,
-          final_url: fetched.url.slice(0, 2048),
-          title: article.title,
-          language: article.language,
-          content_hash: article.contentHash,
-          extraction_status: article.status,
-          extraction_metadata: extractionMetadata(article),
-          error_code: reason,
-          error_detail:
-            article.status === 'failed'
-              ? 'No usable article text could be extracted.'
-              : 'The extracted text looks incomplete and was not indexed.',
-          processed_at: new Date().toISOString(),
-          locked_at: null,
-          worker_id: null,
-        });
       } else {
         const contentDuplicate = await store.findDuplicate({
-          normalizedUrl: job.normalized_url,
-          canonicalUrl,
           contentHash: article.contentHash,
         });
+        const duplicateAtOtherUrl =
+          Boolean(contentDuplicate) &&
+          contentDuplicate?.documentId !== existing?.documentId &&
+          contentDuplicate?.ingestionStatus === 'completed';
 
-        if (contentDuplicate && contentDuplicate.ingestionStatus === 'completed') {
+        if (duplicateAtOtherUrl && contentDuplicate) {
           await markDuplicate(
             store,
             job,
             contentDuplicate.documentId,
             article.title,
             canonicalUrl,
-            article.contentHash
+            article.contentHash,
+            { reason: 'same_content', article }
           );
         } else {
+          const updateExisting =
+            existing ??
+            (contentDuplicate && contentDuplicate.ingestionStatus !== 'completed'
+              ? contentDuplicate
+              : null);
           const documentId =
-            contentDuplicate && contentDuplicate.ingestionStatus !== 'completed'
-              ? contentDuplicate.documentId
-              : deriveArticleDocumentId(canonicalUrl);
-
+            updateExisting?.documentId ??
+            contentDuplicate?.documentId ??
+            deriveArticleDocumentId(canonicalUrl);
+          const change: 'inserted' | 'updated' = updateExisting ? 'updated' : 'inserted';
+          const previousContentHash = updateExisting?.contentHash ?? null;
           const chunking = chunkArticle(article, documentId);
 
           if (chunking.chunks.length === 0) {
@@ -454,9 +549,14 @@ export async function processNextBrainJob(
               language: article.language,
               content_hash: article.contentHash,
               extraction_status: article.status,
-              extraction_metadata: extractionMetadata(article),
+              extraction_metadata: extractionMetadata(article, {
+                stage: 'done',
+                reason: 'no_chunks',
+                existing_document_preserved: Boolean(updateExisting),
+              }),
               error_code: 'no_chunks',
               error_detail: 'The article produced no indexable chunks.',
+              retry_after: null,
               processed_at: new Date().toISOString(),
               locked_at: null,
               worker_id: null,
@@ -467,6 +567,7 @@ export async function processNextBrainJob(
               return path ? `${path}\n\n${chunk.content}` : chunk.content;
             });
 
+            await setStage('embedding');
             const embeddings = await options.embeddingClient.embed(embeddingInputs);
 
             if (embeddings.length !== chunking.chunks.length) {
@@ -479,69 +580,77 @@ export async function processNextBrainJob(
               documentId,
               options.embeddingClient,
               chunking.chunks.length,
-              chunking.documentText.length
+              chunking.documentText.length,
+              previousContentHash,
+              change
             );
 
-            let insertResult: { status: 'inserted' | 'duplicate' };
+            await setStage('storing');
 
-            if (contentDuplicate && contentDuplicate.ingestionStatus !== 'completed') {
-              await store.updateArticleDocument(document);
-              insertResult = { status: 'inserted' };
-            } else {
-              insertResult = await store.insertArticleDocument(document);
-            }
+            const insertResult = updateExisting
+              ? (await store.updateArticleDocument(document), { status: 'inserted' as const })
+              : await store.insertArticleDocument(document);
 
             if (insertResult.status === 'duplicate') {
-              await markDuplicate(
-                store,
-                job,
-                documentId,
-                article.title,
-                canonicalUrl,
-                article.contentHash
-              );
-            } else {
-              const chunkRows: KnowledgeChunkWithEmbedding[] = chunking.chunks.map(
-                (chunk, index) => ({
-                  id: chunk.id,
-                  document_id: documentId,
-                  chunk_index: chunk.chunkIndex,
-                  content: chunk.content,
-                  content_hash: chunk.contentHash,
-                  heading: chunk.heading,
-                  section_path: chunk.sectionPath,
-                  section_index: chunk.sectionIndex,
-                  char_start: chunk.charStart,
-                  char_end: chunk.charEnd,
-                  line_start: chunk.lineStart,
-                  line_end: chunk.lineEnd,
-                  embedding_model: options.embeddingClient.modelId,
-                  embedding_dimensions: options.embeddingClient.dimensions,
-                  access_class: 'owner',
-                  embedding: embeddings[index],
-                })
-              );
-
-              await store.insertArticleChunks(chunkRows);
-              await store.completeArticleDocument(documentId);
-
-              await store.updateJob(job.id, {
-                status: 'completed',
-                canonical_url: canonicalUrl,
-                final_url: fetched.url.slice(0, 2048),
-                document_id: documentId,
-                title: article.title,
-                language: article.language,
-                content_hash: article.contentHash,
-                extraction_status: 'ok',
-                extraction_metadata: extractionMetadata(article),
-                error_code: null,
-                error_detail: null,
-                processed_at: new Date().toISOString(),
-                locked_at: null,
-                worker_id: null,
-              });
+              // A concurrent worker won the insert race. Retry: the next pass
+              // will find the existing logical document and update it safely.
+              throw new Error('brain_document_race_retry');
             }
+
+            const chunkRows: KnowledgeChunkWithEmbedding[] = chunking.chunks.map(
+              (chunk, index) => ({
+                id: chunk.id,
+                document_id: documentId,
+                chunk_index: chunk.chunkIndex,
+                content: chunk.content,
+                content_hash: chunk.contentHash,
+                heading: chunk.heading,
+                section_path: chunk.sectionPath,
+                section_index: chunk.sectionIndex,
+                char_start: chunk.charStart,
+                char_end: chunk.charEnd,
+                line_start: chunk.lineStart,
+                line_end: chunk.lineEnd,
+                embedding_model: options.embeddingClient.modelId,
+                embedding_dimensions: options.embeddingClient.dimensions,
+                access_class: 'owner',
+                metadata: chunk.metadata,
+                embedding: embeddings[index],
+              })
+            );
+
+            await store.insertArticleChunks(chunkRows);
+            await store.deleteArticleChunksExcept(
+              documentId,
+              chunking.chunks.map((chunk) => chunk.id)
+            );
+            await store.completeArticleDocument(documentId, article.status);
+
+            await store.updateJob(job.id, {
+              status: 'completed',
+              canonical_url: canonicalUrl,
+              final_url: fetched.url.slice(0, 2048),
+              document_id: documentId,
+              title: article.title,
+              language: article.language,
+              content_hash: article.contentHash,
+              extraction_status: article.status,
+              extraction_metadata: extractionMetadata(article, {
+                stage: 'done',
+                chunks: chunking.chunks.length,
+                change,
+                previous_content_hash: previousContentHash,
+              }),
+              error_code: null,
+              error_detail:
+                change === 'updated'
+                  ? 'Existing logical document updated because its content changed.'
+                  : null,
+              retry_after: null,
+              processed_at: new Date().toISOString(),
+              locked_at: null,
+              worker_id: null,
+            });
           }
         }
       }
@@ -554,11 +663,10 @@ export async function processNextBrainJob(
 
     await store.updateJob(job.id, {
       status: canRetry ? 'queued' : 'failed',
-      retry_after: canRetry
-        ? new Date(Date.now() + delaySeconds * 1000).toISOString()
-        : null,
+      retry_after: canRetry ? new Date(Date.now() + delaySeconds * 1000).toISOString() : null,
       error_code: code,
       error_detail: safeErrorDetail(code),
+      extraction_metadata: { ...job.extraction_metadata, stage: 'failed' },
       processed_at: canRetry ? null : new Date().toISOString(),
       locked_at: null,
       worker_id: null,

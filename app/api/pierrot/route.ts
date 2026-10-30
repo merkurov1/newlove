@@ -10,6 +10,29 @@ import {
 import { PIERROT_CONSENT_VERSION, PIERROT_MAX_MESSAGE_LENGTH } from '@/lib/pierrot/conversation';
 import { toTelegramHtml } from '@/lib/telegram/format';
 import { buildTelegramButtons, createTelegramPierrotIds } from '@/lib/telegram/pierrotAdapter';
+import { HUMAN_MAX_MESSAGE_LENGTH } from '@/lib/pierrot/humanPresenceShared';
+import {
+  acceptHumanRequest,
+  appendHumanMessage,
+  closeHumanSession,
+  declineHumanRequest,
+  deriveTelegramHumanMessageId,
+  getActiveHumanSessionForOwner,
+  getHumanPresenceByRequestId,
+  getHumanPresenceByTelegramMessage,
+  publicHumanState,
+  recordHumanEvent,
+} from '@/lib/pierrot/humanPresence';
+import {
+  acceptedNotificationText,
+  closedNotificationText,
+  declinedNotificationText,
+  editHumanRequestNotification,
+  expiredNotificationText,
+  getHumanOwnerTelegramId,
+  isHumanOwnerTelegramUser,
+  sendOwnerConfirmation,
+} from '@/lib/pierrot/humanPresenceTelegram';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -213,8 +236,394 @@ async function sendWelcome(ctx: Context) {
   );
 }
 
+async function editCallbackNotification(
+  ctx: Context,
+  text: string,
+  requestId?: string,
+  keepActiveControls = false
+): Promise<void> {
+  const chatId = ctx.chat?.id;
+  const messageId = ctx.callbackQuery?.message?.message_id;
+
+  if (!chatId || !messageId) return;
+
+  await editHumanRequestNotification(
+    chatId,
+    messageId,
+    text,
+    requestId,
+    keepActiveControls
+  ).catch(() => undefined);
+}
+
+async function handleHumanCallback(
+  ctx: Context,
+  action: 'accept' | 'decline' | 'status' | 'end',
+  requestId: string
+): Promise<void> {
+  const owner = getHumanOwnerTelegramId();
+  const fromId = ctx.from?.id;
+
+  // callback_data is never authorization. Only the configured owner may act.
+  if (!owner || !isHumanOwnerTelegramUser(fromId)) {
+    await ctx.answerCallbackQuery({ text: 'Unauthorized' }).catch(() => undefined);
+    return;
+  }
+
+  await ctx.answerCallbackQuery().catch(() => undefined);
+
+  const store = createPierrotStore();
+
+  if (!store) {
+    await ctx.reply('Storage is unavailable. Please try again.').catch(() => undefined);
+    return;
+  }
+
+  try {
+    if (action === 'accept') {
+      const result = await acceptHumanRequest(store, requestId, owner);
+      const label = result.visitorLabel || '#unknown';
+
+      if (result.result === 'accepted') {
+        await editCallbackNotification(
+          ctx,
+          acceptedNotificationText(label),
+          requestId,
+          true
+        );
+
+        await sendOwnerConfirmation(
+          owner,
+          [
+            `Conversation ${label} is active.`,
+            'Write here; every message goes to the visitor on merkurov.love.',
+            'Use /end to finish.',
+          ].join('\n')
+        ).catch(() => undefined);
+
+        if (result.conversationId) {
+          await recordHumanEvent(store, {
+            conversationId: result.conversationId,
+            eventName: 'human_accepted',
+            eventKey: `human_accepted:${requestId}`,
+            payload: { request_id: requestId },
+          }).catch(() => undefined);
+        }
+      } else if (result.result === 'already_active') {
+        await editCallbackNotification(
+          ctx,
+          acceptedNotificationText(label),
+          requestId,
+          true
+        );
+      } else if (result.result === 'owner_busy') {
+        await sendOwnerConfirmation(
+          owner,
+          [
+            `You are already in a live conversation${result.busyConversationId ? ` (${result.busyConversationId.slice(0, 8)})` : ''}.`,
+            'Use /end to close it first, then accept this request.',
+          ].join('\n')
+        ).catch(() => undefined);
+      } else if (result.result === 'expired') {
+        await editCallbackNotification(ctx, expiredNotificationText(label));
+      } else {
+        await ctx
+          .reply(`Request ${label} is ${result.result.replace(/_/g, ' ')}.`)
+          .catch(() => undefined);
+      }
+
+      return;
+    }
+
+    if (action === 'decline') {
+      const result = await declineHumanRequest(store, requestId, 'owner');
+      const label = result.visitorLabel || '#unknown';
+
+      if (result.result === 'declined') {
+        await editCallbackNotification(ctx, declinedNotificationText(label, 'owner'));
+        await sendOwnerConfirmation(
+          owner,
+          `Conversation ${label} declined. Piero remains with the visitor.`
+        ).catch(() => undefined);
+
+        if (result.conversationId) {
+          await recordHumanEvent(store, {
+            conversationId: result.conversationId,
+            eventName: 'human_declined',
+            eventKey: `human_declined:${requestId}`,
+            payload: { resolved_by: 'owner' },
+          }).catch(() => undefined);
+        }
+      } else if (result.result === 'already_declined') {
+        await editCallbackNotification(ctx, declinedNotificationText(label, 'owner'));
+      } else if (result.result === 'expired') {
+        await editCallbackNotification(ctx, expiredNotificationText(label));
+      } else {
+        await ctx
+          .reply(`Request ${label} is ${result.result.replace(/_/g, ' ')}.`)
+          .catch(() => undefined);
+      }
+
+      return;
+    }
+
+    if (action === 'status') {
+      const record = await getHumanPresenceByRequestId(store, requestId);
+
+      if (!record) {
+        await ctx.reply('Request not found.').catch(() => undefined);
+        return;
+      }
+
+      const state = publicHumanState(record.request);
+      const lines = [
+        `<b>PIEROT · HUMAN PRESENCE</b>`,
+        '',
+        `<b>Visitor:</b> ${state.visitorLabel}`,
+        `<b>Status:</b> ${state.status}`,
+        `<b>Page:</b> <code>${state.startPage || '/'}</code>`,
+      ];
+
+      if (state.acceptedAt) lines.push(`<b>Accepted:</b> ${state.acceptedAt}`);
+      if (state.closedAt) lines.push(`<b>Closed:</b> ${state.closedAt}`);
+
+      await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' }).catch(() => undefined);
+      return;
+    }
+
+    const result = await closeHumanSession(store, requestId, 'owner', owner);
+    const label = result.visitorLabel || '#unknown';
+
+    if (result.result === 'closed' || result.result === 'already_closed') {
+      await editCallbackNotification(ctx, closedNotificationText(label, 'Anton'));
+      await sendOwnerConfirmation(
+        owner,
+        `Conversation ${label} closed. Piero has resumed with the visitor.`
+      ).catch(() => undefined);
+
+      if (result.conversationId) {
+        await recordHumanEvent(store, {
+          conversationId: result.conversationId,
+          eventName: 'human_closed',
+          eventKey: `human_closed:${requestId}`,
+          payload: { closed_by: 'owner' },
+        }).catch(() => undefined);
+      }
+    } else {
+      await ctx
+        .reply(`Request ${label} is ${result.result.replace(/_/g, ' ')}.`)
+        .catch(() => undefined);
+    }
+  } catch {
+    // Do not log visitor text or callback contents.
+    console.error('[Pierrot TG] human callback failed');
+    await ctx.reply('The request could not be updated. Please try again.').catch(() => undefined);
+  }
+}
+
+/**
+ * Route a plain text message from Anton to the active website conversation.
+ * Returns true when the message was consumed by human presence, false when it
+ * should continue through the normal Piero AI pipeline.
+ */
+async function routeOwnerHumanText(ctx: Context): Promise<boolean> {
+  const owner = getHumanOwnerTelegramId();
+  const text = ctx.message?.text?.trim();
+
+  if (!owner || !isHumanOwnerTelegramUser(ctx.from?.id) || !text) return false;
+
+  if (text.length > HUMAN_MAX_MESSAGE_LENGTH) {
+    await ctx.reply('That thought is too long for one message.').catch(() => undefined);
+    return true;
+  }
+
+  const store = createPierrotStore();
+  if (!store) return false;
+
+  try {
+    const replyTo = ctx.message?.reply_to_message?.message_id;
+    let target = replyTo
+      ? await getHumanPresenceByTelegramMessage(store, owner, replyTo)
+      : null;
+
+    if (!target) {
+      target = await getActiveHumanSessionForOwner(store, owner);
+    }
+
+    if (!target) return false;
+
+    if (target.request.status !== 'active' || target.session?.status !== 'active') {
+      if (replyTo) {
+        await ctx
+          .reply(
+            `Conversation ${target.request.visitor_label} is ${target.request.status}. Piero is back with the visitor.`
+          )
+          .catch(() => undefined);
+        return true;
+      }
+
+      return false;
+    }
+
+    const chatId = ctx.chat?.id;
+    const messageId = ctx.message?.message_id;
+
+    if (!chatId || typeof messageId !== 'number') return true;
+
+    const appended = await appendHumanMessage(store, {
+      requestId: target.request.id,
+      messageId: deriveTelegramHumanMessageId(chatId, messageId),
+      role: 'human',
+      content: text,
+      direction: 'telegram_to_visitor',
+      telegramChatId: chatId,
+      telegramMessageId: messageId,
+    });
+
+    if (appended.inserted) {
+      await recordHumanEvent(store, {
+        conversationId: target.request.conversation_id,
+        eventName: 'human_message_received',
+        eventKey: `human_message_received:${appended.sequence}`,
+        payload: { length: text.length },
+      }).catch(() => undefined);
+    }
+
+    // Telegram may redeliver the exact update. The deterministic message id
+    // makes the second append a no-op, so no duplicate reaches the visitor.
+    return true;
+  } catch {
+    // A closed session can race with an incoming update. Do not fall through
+    // to Piero after the owner has started a human conversation.
+    await ctx
+      .reply('That conversation has ended. Piero is back with the visitor.')
+      .catch(() => undefined);
+    return true;
+  }
+}
+
+async function handleEndCommand(ctx: Context): Promise<void> {
+  const owner = getHumanOwnerTelegramId();
+
+  if (!owner || !isHumanOwnerTelegramUser(ctx.from?.id)) {
+    await ctx.reply('Unknown command. Use /start or ask me anything.').catch(() => undefined);
+    return;
+  }
+
+  const store = createPierrotStore();
+  if (!store) {
+    await ctx.reply('Storage is unavailable.').catch(() => undefined);
+    return;
+  }
+
+  try {
+    const active = await getActiveHumanSessionForOwner(store, owner);
+
+    if (!active) {
+      await ctx.reply('No active human conversation.').catch(() => undefined);
+      return;
+    }
+
+    const result = await closeHumanSession(store, active.request.id, 'owner', owner);
+
+    if (result.telegramChatId && (active.request.telegram_status_message_id || active.request.telegram_message_id)) {
+      await editHumanRequestNotification(
+        result.telegramChatId,
+        active.request.telegram_status_message_id ?? active.request.telegram_message_id ?? 0,
+        closedNotificationText(active.request.visitor_label, 'Anton')
+      ).catch(() => undefined);
+    }
+
+    await recordHumanEvent(store, {
+      conversationId: active.request.conversation_id,
+      eventName: 'human_closed',
+      eventKey: `human_closed:${active.request.id}`,
+      payload: { closed_by: 'owner' },
+    }).catch(() => undefined);
+
+    await ctx
+      .reply(
+        `Conversation ${active.request.visitor_label} closed. Piero has resumed with the visitor.`
+      )
+      .catch(() => undefined);
+  } catch {
+    await ctx
+      .reply('The conversation could not be closed. Please try again.')
+      .catch(() => undefined);
+  }
+}
+
+async function handleStatusCommand(ctx: Context): Promise<void> {
+  const owner = getHumanOwnerTelegramId();
+
+  if (!owner || !isHumanOwnerTelegramUser(ctx.from?.id)) {
+    await ctx.reply('Unknown command. Use /start or ask me anything.').catch(() => undefined);
+    return;
+  }
+
+  const store = createPierrotStore();
+
+  if (!store) {
+    await ctx.reply('Storage is unavailable.').catch(() => undefined);
+    return;
+  }
+
+  try {
+    const active = await getActiveHumanSessionForOwner(store, owner);
+
+    if (!active) {
+      await ctx.reply('No active human conversation.').catch(() => undefined);
+      return;
+    }
+
+    const state = publicHumanState(active.request);
+
+    await ctx
+      .reply(
+        [
+          '<b>PIEROT · HUMAN PRESENCE</b>',
+          '',
+          `<b>Visitor:</b> ${state.visitorLabel}`,
+          `<b>Status:</b> ${state.status}`,
+          `<b>Page:</b> <code>${state.startPage || '/'}</code>`,
+          `<b>Opened:</b> ${state.acceptedAt || '—'}`,
+          '',
+          'Write here to reply. Use /end to finish.',
+        ].join('\n'),
+        { parse_mode: 'HTML' }
+      )
+      .catch(() => undefined);
+  } catch {
+    await ctx.reply('Status is temporarily unavailable.').catch(() => undefined);
+  }
+}
+
+async function handleHumanHelpCommand(ctx: Context): Promise<void> {
+  if (!isHumanOwnerTelegramUser(ctx.from?.id)) {
+    await ctx.reply('Unknown command. Use /start or ask me anything.').catch(() => undefined);
+    return;
+  }
+
+  await ctx
+    .reply(
+      [
+        '<b>PIEROT · HUMAN PRESENCE</b>',
+        '',
+        'Accept a visitor request from its notification.',
+        'Write here to reply to the active visitor.',
+        '/status — current conversation',
+        '/end — close the conversation and return to Piero',
+      ].join('\n'),
+      { parse_mode: 'HTML' }
+    )
+    .catch(() => undefined);
+}
+
 bot.command('start', (ctx) => sendWelcome(ctx));
 bot.command('help', (ctx) => sendWelcome(ctx));
+bot.command('end', (ctx) => handleEndCommand(ctx));
+bot.command('status', (ctx) => handleStatusCommand(ctx));
+bot.command('human', (ctx) => handleHumanHelpCommand(ctx));
 
 bot.command('privacy', async (ctx) => {
   const ids = createTelegramPierrotIds(ctx.chat.id, 'privacy');
@@ -303,7 +712,26 @@ bot.on('message:text', async (ctx) => {
     return;
   }
 
+  // While Anton is in a human conversation, his text belongs to the visitor,
+  // not to Piero. Outside a human conversation this returns false and the
+  // existing Piero AI flow is untouched.
+  const handledAsHuman = await routeOwnerHumanText(ctx);
+
+  if (handledAsHuman) return;
+
   await handleText(ctx, text, String(ctx.message.message_id));
+});
+
+bot.callbackQuery(/^hp:(accept|decline|status|end):([0-9a-fA-F-]{36})$/, async (ctx) => {
+  const action = ctx.match?.[1] as 'accept' | 'decline' | 'status' | 'end';
+  const requestId = ctx.match?.[2];
+
+  if (!action || !requestId) {
+    await ctx.answerCallbackQuery({ text: 'Invalid request' }).catch(() => undefined);
+    return;
+  }
+
+  await handleHumanCallback(ctx, action, requestId);
 });
 
 bot.callbackQuery(/^p:(.+)$/, async (ctx) => {

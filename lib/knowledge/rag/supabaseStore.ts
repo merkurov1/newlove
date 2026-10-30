@@ -3,6 +3,9 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { RagEnvironment } from './config';
 import { KnowledgeDatabaseError } from './errors';
 import type {
+  BrainSearch,
+  BrainSearchInput,
+  BrainSearchRow,
   KnowledgeChunkWithEmbedding,
   KnowledgeDocumentRow,
   KnowledgeRepository,
@@ -150,6 +153,96 @@ export function createSupabaseKnowledgeSearch(
     if (error) throw new KnowledgeDatabaseError('query_failed');
 
     return parseSearchRows(data);
+  };
+}
+
+function parseBrainSearchRows(data: unknown): BrainSearchRow[] {
+  if (!Array.isArray(data)) return [];
+
+  return data.flatMap((row) => {
+    if (!row || typeof row !== 'object') return [];
+
+    const value = row as Record<string, unknown>;
+    const sectionPath = Array.isArray(value.section_path)
+      ? value.section_path.filter((part): part is string => typeof part === 'string')
+      : typeof value.section_path === 'string'
+        ? [value.section_path]
+        : [];
+
+    if (
+      typeof value.chunk_id !== 'string' ||
+      typeof value.document_id !== 'string' ||
+      typeof value.document_title !== 'string' ||
+      typeof value.source_type !== 'string' ||
+      typeof value.content !== 'string' ||
+      typeof value.heading !== 'string' ||
+      typeof value.section_index !== 'number' ||
+      typeof value.line_start !== 'number' ||
+      typeof value.line_end !== 'number' ||
+      typeof value.similarity !== 'number' ||
+      !Number.isFinite(value.similarity)
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        chunk_id: value.chunk_id,
+        document_id: value.document_id,
+        document_title: value.document_title,
+        source_type: value.source_type,
+        source_domain: typeof value.source_domain === 'string' ? value.source_domain : null,
+        author: typeof value.author === 'string' ? value.author : null,
+        language: typeof value.language === 'string' ? value.language : null,
+        published_at: typeof value.published_at === 'string' ? value.published_at : null,
+        content: value.content,
+        heading: value.heading,
+        section_path: sectionPath,
+        section_index: value.section_index,
+        line_start: value.line_start,
+        line_end: value.line_end,
+        similarity: value.similarity,
+        lexical_score:
+          typeof value.lexical_score === 'number' && Number.isFinite(value.lexical_score)
+            ? value.lexical_score
+            : 0,
+      },
+    ];
+  });
+}
+
+/**
+ * Source-aware hybrid search. The RPC is additive: the old vector-only
+ * knowledge_search_unframed() remains available for comparison/fallback.
+ */
+export function createSupabaseBrainSearch(env: RagEnvironment = process.env): BrainSearch | null {
+  const store = createServiceClient(env);
+
+  if (!store) return null;
+
+  return async (input: BrainSearchInput): Promise<BrainSearchRow[]> => {
+    if (input.signal?.aborted) throw new KnowledgeDatabaseError('query_failed');
+
+    const { data, error } = await store.rpc('brain_search_hybrid', {
+      p_query_embedding: toPgVector(input.queryEmbedding),
+      p_model_id: input.modelId,
+      p_dimensions: input.dimensions,
+      p_access_class: input.accessClass,
+      p_query_text: input.queryText || null,
+      p_source_types: input.sourceTypes || null,
+      p_source_domains: input.sourceDomains || null,
+      p_authors: input.authors || null,
+      p_languages: input.languages || null,
+      p_document_ids: input.documentIds || null,
+      p_published_from: input.publishedFrom || null,
+      p_published_to: input.publishedTo || null,
+      p_match_count: input.matchCount ?? Math.max(input.topK, 40),
+      p_min_similarity: input.minSimilarity,
+    });
+
+    if (error) throw new KnowledgeDatabaseError('query_failed');
+
+    return parseBrainSearchRows(data);
   };
 }
 

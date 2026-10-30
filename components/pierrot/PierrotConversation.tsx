@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Markdown from 'markdown-to-jsx';
@@ -14,6 +14,7 @@ import {
   type PierrotChatAction,
 } from '@/lib/pierrot/navigation';
 import { linkifyInternalRoutes } from '@/lib/pierrot/linkify';
+import { isPierrotOfferId } from '@/lib/pierrot/offers';
 import { getPierrotConversationId, trackPierrotEvent } from '@/lib/pierrot/clientTelemetry';
 import {
   appendPierrotPostcardAttribution,
@@ -172,6 +173,114 @@ function PierrotMarkdown({ content }: { content: string }) {
     >
       {linkifyInternalRoutes(content)}
     </Markdown>
+  );
+}
+
+function formatMessageTime(value?: string): string | null {
+  if (!value) return null;
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  try {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return null;
+  }
+}
+
+function deliveryLabel(delivery: 'sending' | 'sent' | 'failed'): string {
+  const ru =
+    typeof navigator !== 'undefined' &&
+    navigator.language?.toLowerCase().startsWith('ru');
+
+  if (delivery === 'sending') return ru ? 'отправка…' : 'sending…';
+  if (delivery === 'failed') return ru ? 'не доставлено' : 'not delivered';
+
+  return ru ? 'доставлено' : 'delivered';
+}
+
+function OfferImpression({ messageId, offerId }: { messageId: string; offerId: unknown }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const tracked = useRef(false);
+
+  useEffect(() => {
+    if (tracked.current || !isPierrotOfferId(offerId)) return;
+
+    const track = () => {
+      if (tracked.current) return;
+      tracked.current = true;
+      trackPierrotEvent('offer_viewed', messageId, { offer_id: offerId });
+    };
+
+    const element = ref.current;
+
+    if (!element || typeof IntersectionObserver === 'undefined') {
+      track();
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          track();
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, [messageId, offerId]);
+
+  return <span ref={ref} className="sr-only" aria-hidden="true" />;
+}
+
+function AnswerFeedback({ messageId }: { messageId: string }) {
+  const [rating, setRating] = useState<'up' | 'down' | null>(null);
+
+  const submit = (value: 'up' | 'down') => {
+    if (rating) return;
+    setRating(value);
+    trackPierrotEvent('answer_feedback', messageId, {
+      rating: value,
+      message_id: messageId,
+    });
+  };
+
+  return (
+    <div className="mt-3 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.12em] text-[#A49A8C]">
+      <span>Was this useful?</span>
+      <button
+        type="button"
+        aria-label="Useful answer"
+        onClick={() => submit('up')}
+        disabled={rating !== null}
+        className={`border px-1.5 py-0.5 transition ${
+          rating === 'up'
+            ? 'border-[#8CA18A] text-[#4F6B4D]'
+            : 'border-[#DDD3C5] hover:border-[#8CA18A]'
+        } disabled:opacity-50`}
+      >
+        Yes
+      </button>
+      <button
+        type="button"
+        aria-label="Not a useful answer"
+        onClick={() => submit('down')}
+        disabled={rating !== null}
+        className={`border px-1.5 py-0.5 transition ${
+          rating === 'down'
+            ? 'border-[#C9A0AA] text-[#8A1235]'
+            : 'border-[#DDD3C5] hover:border-[#C9A0AA]'
+        } disabled:opacity-50`}
+      >
+        No
+      </button>
+    </div>
   );
 }
 
@@ -334,18 +443,65 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                 initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: shouldReduceMotion ? 0 : 0.16 }}
-                className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
+                className={`flex flex-col ${
+                  message.role === 'user'
+                    ? 'items-end'
+                    : message.role === 'system'
+                      ? 'items-center'
+                      : 'items-start'
+                }`}
               >
-                {message.role === 'user' ? (
-                  <div
-                    className="
-                      max-w-[88%] whitespace-pre-wrap break-words
-                      rounded-2xl rounded-br-sm bg-[#ECE5D9] px-4 py-2.5
-                      font-serif text-[15px] leading-[1.65] text-[#37332D]
-                      sm:max-w-[78%] sm:text-[16px]
-                    "
-                  >
+                {message.role === 'system' ? (
+                  <p className="max-w-[92%] text-center font-mono text-[9px] uppercase tracking-[0.14em] text-[#8A8175]">
                     {message.content}
+                  </p>
+                ) : message.role === 'human' ? (
+                  <div className="flex max-w-[92%] flex-col items-start sm:max-w-[80%]">
+                    <span className="mb-1 font-mono text-[8px] uppercase tracking-[0.16em] text-[#8A8175]">
+                      Anton
+                    </span>
+                    <div
+                      className="
+                        whitespace-pre-wrap break-words rounded-2xl rounded-bl-sm
+                        border border-[#DDD3C5] bg-white/75 px-4 py-2.5
+                        font-serif text-[15px] leading-[1.65] text-[#37332D]
+                        sm:text-[16px]
+                      "
+                    >
+                      {message.content}
+                    </div>
+                    {formatMessageTime(message.createdAt) && (
+                      <span className="mt-1 font-mono text-[8px] text-[#A49A8C]">
+                        {formatMessageTime(message.createdAt)}
+                      </span>
+                    )}
+                  </div>
+                ) : message.role === 'user' ? (
+                  <div className="flex max-w-[88%] flex-col items-end sm:max-w-[78%]">
+                    <div
+                      className="
+                        whitespace-pre-wrap break-words
+                        rounded-2xl rounded-br-sm bg-[#ECE5D9] px-4 py-2.5
+                        font-serif text-[15px] leading-[1.65] text-[#37332D]
+                        sm:text-[16px]
+                      "
+                    >
+                      {message.content}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 font-mono text-[8px] text-[#A49A8C]">
+                      {formatMessageTime(message.createdAt) && (
+                        <span>{formatMessageTime(message.createdAt)}</span>
+                      )}
+                      {message.delivery && (
+                        <span
+                          className={
+                            message.delivery === 'failed' ? 'text-[#8A1235]' : undefined
+                          }
+                        >
+                          {deliveryLabel(message.delivery)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div
@@ -355,10 +511,24 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                     "
                   >
                     <PierrotMarkdown content={message.content} />
+                    {formatMessageTime(message.createdAt) && (
+                      <span className="mt-1 block font-mono text-[8px] text-[#A49A8C]">
+                        {formatMessageTime(message.createdAt)}
+                      </span>
+                    )}
                   </div>
                 )}
 
-                {message.actions && message.actions.length > 0 && (
+                {message.role === 'assistant' && (message.offerId || message.cta?.offerId) && (
+                  <OfferImpression
+                    messageId={message.id}
+                    offerId={message.offerId ?? message.cta?.offerId}
+                  />
+                )}
+
+                {message.role === 'assistant' &&
+                  message.actions &&
+                  message.actions.length > 0 && (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {message.actions.map((action) => (
                       <button
@@ -392,7 +562,7 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   </div>
                 )}
 
-                {message.cta && (
+                {message.role === 'assistant' && message.cta && (
                   <div className="mt-3">
                     {message.cta.kind === 'external' ? (
                       <a
@@ -462,7 +632,9 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   </div>
                 )}
 
-                {message.links && message.links.length > 0 && (
+                {message.role === 'assistant' &&
+                  message.links &&
+                  message.links.length > 0 && (
                   <nav
                     aria-label="Pierrot navigation"
                     className="mt-3 flex flex-wrap items-center gap-2"
@@ -519,15 +691,20 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                         >
                           <div className="flex items-start justify-between gap-3">
                             <span className="font-sans text-[11px] font-semibold leading-snug text-[#4D463D]">
-                              {source.heading}
+                              {source.documentTitle || source.heading}
                             </span>
                             <span className="shrink-0 font-mono text-[9px] text-[#9C9284]">
                               {source.similarity.toFixed(3)}
                             </span>
                           </div>
                           <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[#A49A8C]">
-                            {source.sectionPath.join(' / ')} · lines {source.lineStart}–
-                            {source.lineEnd}
+                            {source.sourceDomain
+                              ? `${source.sourceDomain} · `
+                              : source.sourceClass
+                                ? `${source.sourceClass.replace(/_/g, ' ')} · `
+                                : ''}
+                            {source.heading} · {source.sectionPath.join(' / ')} · lines{' '}
+                            {source.lineStart}–{source.lineEnd}
                           </p>
                           <p className="mt-1.5 font-serif text-[12px] leading-relaxed text-[#625B50]">
                             {source.excerpt}
@@ -538,7 +715,9 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   </details>
                 )}
 
-                {message.provider && (
+                {message.role === 'assistant' && <AnswerFeedback messageId={message.id} />}
+
+                {message.role === 'assistant' && message.provider && (
                   <span className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[#A49A8C]">
                     via {message.provider}
                   </span>

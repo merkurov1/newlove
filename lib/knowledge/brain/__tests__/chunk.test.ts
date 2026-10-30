@@ -9,27 +9,41 @@ function articleWith(blocks: ExtractedArticle['blocks']): ExtractedArticle {
   return {
     url: 'https://example.com/column',
     canonicalUrl: 'https://example.com/column',
+    sourceDomain: 'example.com',
+    sourceType: 'article',
     title: 'A Column About Attention',
     author: 'Anton Merkurov',
     siteName: 'Example',
-    publishedAt: null,
+    publishedAt: '2026-05-04T00:00:00.000Z',
+    publishedAtSource: 'metadata',
     language: 'en',
     text,
     blocks,
     contentHash: 'a'.repeat(64),
     wordCount: text.split(/\s+/).length,
     charCount: text.length,
-    status: 'ok',
+    status: 'complete',
+    extractionVersion: 'brain-article-extractor-v2',
     diagnostics: {
       parser: 'scored',
       fallbackChars: text.length,
       selectedChars: text.length,
+      bodyChars: text.length,
       wordCount: text.split(/\s+/).length,
       paragraphCount: blocks.length,
       headingCount: blocks.filter((block) => block.type === 'heading').length,
       linkDensity: 0,
+      boilerplateChars: 0,
+      boilerplateCount: 0,
+      boilerplateRatio: 0,
+      completeness: 1,
       paywallDetected: false,
+      truncated: false,
       htmlChars: text.length,
+      sourceDomain: 'example.com',
+      siteProfile: 'generic',
+      extractionVersion: 'brain-article-extractor-v2',
+      publishedAtSource: 'metadata',
     },
   };
 }
@@ -61,16 +75,42 @@ describe('Brain article chunking', () => {
       expect(chunk.lineEnd).toBeGreaterThanOrEqual(chunk.lineStart);
       expect(chunk.heading.length).toBeGreaterThan(0);
       expect(chunk.sectionPath.length).toBeGreaterThan(0);
+      expect(chunk.metadata).toMatchObject({
+        source_type: 'article',
+        source_domain: 'example.com',
+        language: 'en',
+        publication_date: '2026-05-04T00:00:00.000Z',
+        chunker_version: 'brain-article-chunker-v2',
+      });
     }
 
     const again = chunkArticle(article, 'doc_article_test');
     expect(again.chunks.map((chunk) => chunk.id)).toEqual(result.chunks.map((chunk) => chunk.id));
   });
 
+  it('keeps a quotation with the paragraph that introduced it', () => {
+    const paragraph =
+      'The room was quiet, but the argument was already moving through the furniture.';
+    const quote = '> Attention is a room we build before we know who will enter it.';
+
+    const article = articleWith([
+      { type: 'paragraph', text: paragraph },
+      { type: 'quote', text: quote },
+    ]);
+
+    const result = chunkArticle(article, 'doc_article_quote');
+    const combined = result.chunks.map((chunk) => chunk.content).join('\n');
+
+    expect(combined).toContain(paragraph);
+    expect(combined).toContain(quote);
+    expect(result.chunks.length).toBe(1);
+  });
+
   it('splits an oversized paragraph without truncating the text', () => {
     const paragraph = Array.from(
       { length: 120 },
-      (_, index) => `Sentence ${index + 1} carries the argument forward with enough words to matter.`
+      (_, index) =>
+        `Sentence ${index + 1} carries the argument forward with enough words to matter.`
     ).join(' ');
 
     const article = articleWith([{ type: 'paragraph', text: paragraph }]);

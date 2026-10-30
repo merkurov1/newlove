@@ -25,7 +25,9 @@ type BrainJob = {
   error_code: string | null;
   error_detail: string | null;
   extraction_status: string | null;
+  extraction_metadata: Record<string, unknown> | null;
   document_id: string | null;
+  updated_at?: string | null;
 };
 
 type BrainProgress = {
@@ -113,7 +115,11 @@ function ProgressBar({ progress }: { progress: BrainProgress | null }) {
   if (!progress) return null;
 
   const processed =
-    progress.completed + progress.duplicate + progress.partial + progress.failed + progress.cancelled;
+    progress.completed +
+    progress.duplicate +
+    progress.partial +
+    progress.failed +
+    progress.cancelled;
   const percentage = progress.total > 0 ? Math.round((processed / progress.total) * 100) : 0;
 
   return (
@@ -123,9 +129,8 @@ function ProgressBar({ progress }: { progress: BrainProgress | null }) {
           {processed} / {progress.total} processed
         </p>
         <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#89827B]">
-          {progress.completed} indexed · {progress.duplicate} duplicate · {progress.failed +
-            progress.partial}{' '}
-          errors
+          {progress.completed} indexed · {progress.duplicate} duplicate ·{' '}
+          {progress.failed + progress.partial} errors
         </p>
       </div>
       <div className="mt-2 h-2 w-full overflow-hidden bg-[#EEE9E4]">
@@ -152,6 +157,60 @@ function shortId(value: string): string {
   return value.slice(0, 8);
 }
 
+function extractionLabel(value: string | null): string {
+  if (!value) return '—';
+  if (value === 'complete' || value === 'ok') return 'Complete';
+  if (value === 'needs_review') return 'Needs review';
+  if (value === 'partial') return 'Partial';
+  if (value === 'failed') return 'Failed';
+  return value;
+}
+
+function stageLabel(job: BrainJob): string {
+  const raw =
+    job.extraction_metadata && typeof job.extraction_metadata.stage === 'string'
+      ? String(job.extraction_metadata.stage)
+      : '';
+
+  if (raw) return raw.replace(/_/g, ' ');
+  if (job.status === 'queued') return 'queued';
+  if (job.status === 'processing') return 'processing';
+  if (job.status === 'duplicate') return 'done';
+  if (job.status === 'completed') return 'done';
+  return job.status.replace(/_/g, ' ');
+}
+
+function jobChunkCount(job: BrainJob): number | null {
+  const value =
+    job.extraction_metadata && typeof job.extraction_metadata.chunks === 'number'
+      ? job.extraction_metadata.chunks
+      : null;
+
+  return value;
+}
+
+function jobDuplicateReason(job: BrainJob): string | null {
+  if (job.status !== 'duplicate') return null;
+
+  const value =
+    job.extraction_metadata && typeof job.extraction_metadata.duplicate_reason === 'string'
+      ? job.extraction_metadata.duplicate_reason
+      : null;
+
+  return value;
+}
+
+function canRetryJob(job: BrainJob): boolean {
+  return ['failed', 'partial', 'duplicate'].includes(job.status);
+}
+
+function queuePosition(jobs: BrainJob[], jobId: string): string {
+  const active = jobs.filter((job) => job.status === 'queued' || job.status === 'processing');
+  const index = active.findIndex((job) => job.id === jobId);
+
+  return index >= 0 ? `#${index + 1}` : '—';
+}
+
 export default function BrainIngestionClient() {
   const [urlsText, setUrlsText] = useState('');
   const [analyzed, setAnalyzed] = useState<AnalyzeRow[]>([]);
@@ -162,6 +221,8 @@ export default function BrainIngestionClient() {
   const [busy, setBusy] = useState<
     'analyze' | 'start' | 'process' | 'pause' | 'resume' | 'retry' | null
   >(null);
+  const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
+  const [recheckExisting, setRecheckExisting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -281,11 +342,13 @@ export default function BrainIngestionClient() {
     setBusy('start');
 
     try {
-      const newUrls = analyzed
-        .filter((row) => row.status === 'new' && row.normalizedUrl)
-        .map((row) => row.input);
+      const selected = analyzed.filter(
+        (row) =>
+          row.normalizedUrl &&
+          (row.status === 'new' || (recheckExisting && row.status === 'existing'))
+      );
 
-      const urls = newUrls.length > 0 ? newUrls : urlsText;
+      const urls = selected.length > 0 ? selected.map((row) => row.input) : urlsText;
 
       const data = await api<{
         status: string;
@@ -296,7 +359,7 @@ export default function BrainIngestionClient() {
         message?: string;
       }>('/api/admin/brain/runs', {
         method: 'POST',
-        body: JSON.stringify({ urls }),
+        body: JSON.stringify({ urls, recheckExisting }),
       });
 
       setRun(data.run);
@@ -391,6 +454,32 @@ export default function BrainIngestionClient() {
     }
   };
 
+  const handleRetryJob = async (job: BrainJob) => {
+    if (!run || !canRetryJob(job)) return;
+
+    setError(null);
+    setMessage(null);
+    setRetryingJobId(job.id);
+
+    try {
+      const data = await api<{ runId: string; jobs: BrainJob[]; progress: BrainProgress }>(
+        `/api/admin/brain/jobs/${job.id}/retry`,
+        { method: 'POST' }
+      );
+
+      setJobs(data.jobs || []);
+      setProgress(data.progress);
+      setMessage(`Job requeued. Continuing run ${shortId(data.runId)}…`);
+      await refreshRun(data.runId);
+      setRetryingJobId(null);
+      await processLoop(data.runId);
+    } catch (requestError) {
+      setError(errorCode(requestError));
+    } finally {
+      setRetryingJobId(null);
+    }
+  };
+
   const handleOpenRecent = async (runId: string) => {
     setError(null);
     setMessage(null);
@@ -417,12 +506,17 @@ export default function BrainIngestionClient() {
     setAnalyzed([]);
     setMessage(null);
     setError(null);
+    setRecheckExisting(false);
   };
 
   const isProcessing = busy === 'process';
   const newCount = analyzed.filter((row) => row.status === 'new').length;
+  const existingCount = analyzed.filter((row) => row.status === 'existing').length;
+  const selectedCount = newCount + (recheckExisting ? existingCount : 0);
   const canStart =
-    !run && !isProcessing && (newCount > 0 || urlsText.trim().split(/\r?\n/).filter(Boolean).length > 0);
+    !run &&
+    !isProcessing &&
+    (selectedCount > 0 || urlsText.trim().split(/\r?\n/).filter(Boolean).length > 0);
 
   return (
     <div className="space-y-10">
@@ -443,6 +537,21 @@ export default function BrainIngestionClient() {
           className="mt-3 w-full resize-y border border-[#D9D3CD] bg-[#FDFCFA] p-3 font-mono text-xs leading-relaxed text-[#211F1F] outline-none focus:border-[#990F3D]"
         />
 
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[#625D58]">
+            <input
+              type="checkbox"
+              checked={recheckExisting}
+              onChange={(event) => setRecheckExisting(event.target.checked)}
+              className="h-3.5 w-3.5 accent-[#990F3D]"
+            />
+            Recheck existing URLs for changed content
+          </label>
+          <span className="font-mono text-[10px] text-[#A29B94]">
+            {newCount} new{existingCount > 0 ? ` · ${existingCount} existing` : ''}
+          </span>
+        </div>
+
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -459,7 +568,11 @@ export default function BrainIngestionClient() {
             disabled={!canStart}
             className="inline-flex items-center border border-[#211F1F] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#211F1F] transition hover:bg-[#211F1F] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {busy === 'start' ? 'Starting…' : newCount > 0 ? `Process ${newCount} new` : 'Start queue'}
+            {busy === 'start'
+              ? 'Starting…'
+              : selectedCount > 0
+                ? `Process ${selectedCount}`
+                : 'Start queue'}
           </button>
 
           {run && (
@@ -477,10 +590,10 @@ export default function BrainIngestionClient() {
                 <button
                   type="button"
                   onClick={handleResume}
-                  disabled={busy !== null || run.status !== 'paused'}
+                  disabled={busy !== null || (run.status !== 'paused' && run.status !== 'running')}
                   className="inline-flex items-center border border-[#D9D3CD] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#625D58] transition hover:border-[#990F3D] hover:text-[#990F3D] disabled:opacity-40"
                 >
-                  Resume
+                  {run.status === 'running' ? 'Continue run' : 'Resume'}
                 </button>
               )}
 
@@ -574,44 +687,99 @@ export default function BrainIngestionClient() {
           </div>
 
           <div className="mt-5 overflow-x-auto border border-[#E5E1DC]">
-            <table className="w-full min-w-[720px] border-collapse text-left">
+            <table className="w-full min-w-[1080px] border-collapse text-left">
               <thead>
                 <tr className="bg-[#F6F3EF] font-mono text-[9px] uppercase tracking-[0.14em] text-[#746D66]">
+                  <th className="px-3 py-2 font-normal">#</th>
                   <th className="px-3 py-2 font-normal">Article</th>
+                  <th className="px-3 py-2 font-normal">Stage</th>
+                  <th className="px-3 py-2 font-normal">Extraction</th>
+                  <th className="px-3 py-2 font-normal">Chunks</th>
                   <th className="px-3 py-2 font-normal">Status</th>
                   <th className="px-3 py-2 font-normal">Attempts</th>
                   <th className="px-3 py-2 font-normal">Detail</th>
+                  <th className="px-3 py-2 font-normal" />
                 </tr>
               </thead>
               <tbody>
-                {jobs.map((job) => (
-                  <tr key={job.id} className="border-t border-[#EEE9E4] align-top">
-                    <td className="max-w-[380px] px-3 py-3">
-                      <p className="truncate text-sm text-[#211F1F]" title={job.title || job.input_url}>
-                        {job.title || job.input_url}
-                      </p>
-                      <p className="mt-1 truncate font-mono text-[10px] text-[#A29B94]" title={job.normalized_url}>
-                        {job.normalized_url}
-                      </p>
-                    </td>
-                    <td className="px-3 py-3">
-                      <StatusBadge status={job.status} />
-                    </td>
-                    <td className="px-3 py-3 font-mono text-[10px] text-[#746D66]">
-                      {job.attempts}/{job.max_attempts}
-                    </td>
-                    <td className="max-w-[300px] px-3 py-3 text-xs text-[#89827B]">
-                      {job.error_detail || (job.document_id ? `Document ${job.document_id}` : '—')}
-                    </td>
-                  </tr>
-                ))}
+                {jobs.map((job) => {
+                  const chunks = jobChunkCount(job);
+                  const duplicateReason = jobDuplicateReason(job);
+
+                  return (
+                    <tr key={job.id} className="border-t border-[#EEE9E4] align-top">
+                      <td className="px-3 py-3 font-mono text-[10px] text-[#A29B94]">
+                        {queuePosition(jobs, job.id)}
+                      </td>
+                      <td className="max-w-[320px] px-3 py-3">
+                        <p
+                          className="truncate text-sm text-[#211F1F]"
+                          title={job.title || job.input_url}
+                        >
+                          {job.title || job.input_url}
+                        </p>
+                        <p
+                          className="mt-1 truncate font-mono text-[10px] text-[#A29B94]"
+                          title={job.normalized_url}
+                        >
+                          {job.normalized_url}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3 font-mono text-[10px] uppercase tracking-[0.08em] text-[#746D66]">
+                        {stageLabel(job)}
+                      </td>
+                      <td className="px-3 py-3 text-xs">
+                        <span
+                          className={
+                            job.extraction_status === 'complete'
+                              ? 'text-[#2F6B45]'
+                              : job.extraction_status === 'needs_review'
+                                ? 'text-[#87652A]'
+                                : job.extraction_status
+                                  ? 'text-[#8A1235]'
+                                  : 'text-[#A29B94]'
+                          }
+                        >
+                          {extractionLabel(job.extraction_status)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 font-mono text-[10px] text-[#746D66]">
+                        {chunks === null ? '—' : chunks}
+                      </td>
+                      <td className="px-3 py-3">
+                        <StatusBadge status={job.status} />
+                      </td>
+                      <td className="px-3 py-3 font-mono text-[10px] text-[#746D66]">
+                        {job.attempts}/{job.max_attempts}
+                      </td>
+                      <td className="max-w-[260px] px-3 py-3 text-xs text-[#89827B]">
+                        {job.error_detail ||
+                          (duplicateReason
+                            ? `Duplicate: ${duplicateReason.replace(/_/g, ' ')}`
+                            : job.document_id
+                              ? `Document ${shortId(job.document_id)}`
+                              : '—')}
+                      </td>
+                      <td className="px-3 py-3">
+                        {canRetryJob(job) && (
+                          <button
+                            type="button"
+                            onClick={() => void handleRetryJob(job)}
+                            disabled={busy !== null || retryingJobId !== null}
+                            className="border border-[#D9D3CD] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#625D58] transition hover:border-[#990F3D] hover:text-[#990F3D] disabled:opacity-40"
+                          >
+                            {retryingJobId === job.id ? 'Retrying…' : 'Retry'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
-          {jobs.length === 0 && (
-            <p className="mt-4 text-sm text-[#89827B]">No jobs in this run.</p>
-          )}
+          {jobs.length === 0 && <p className="mt-4 text-sm text-[#89827B]">No jobs in this run.</p>}
         </section>
       )}
 

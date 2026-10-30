@@ -3,6 +3,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { buildPierrotCommercialPrompt, planPierrotResponse } from '../commercial';
 import { classifyPierrotIntent } from '../intents';
+import { loadPierrotOfferPolicies } from '../offerPolicy';
 import type { PierrotOfferRuntime } from '../offerAvailability';
 
 function runtime(overrides: Partial<PierrotOfferRuntime>): PierrotOfferRuntime {
@@ -80,6 +81,24 @@ describe('Pierrot commercial planner', () => {
     expect(result.cta).toBeNull();
     expect(result.ctaShown).toBe(false);
     expect(result.reply?.toLowerCase()).toContain('unavailable');
+  });
+
+  it('withholds a CTA when the owner disables an offer', () => {
+    const offerPolicies = loadPierrotOfferPolicies({
+      PIERROT_OFFER_POLICY_JSON: JSON.stringify({
+        heart_angel_postcard: { enabled: false },
+      }),
+    });
+    const result = planPierrotResponse({
+      intent: classifyPierrotIntent('I want to buy the Heart & Angel postcard'),
+      language: 'en',
+      offerPolicies,
+    });
+
+    expect(result.offer?.id).toBe('heart_angel_postcard');
+    expect(result.cta).toBeNull();
+    expect(result.offerSelected).toBe(false);
+    expect(result.ctaShown).toBe(false);
   });
 
   it('does not pretend an unverified stock state is available', () => {

@@ -5,21 +5,10 @@ import type { KnowledgeChunkWithEmbedding, KnowledgeDocumentRow } from '@/lib/kn
 import type { RagEnvironment } from '@/lib/knowledge/rag/config';
 
 export type BrainJobStatus =
-  | 'queued'
-  | 'processing'
-  | 'completed'
-  | 'duplicate'
-  | 'partial'
-  | 'failed'
-  | 'cancelled';
+  'queued' | 'processing' | 'completed' | 'duplicate' | 'partial' | 'failed' | 'cancelled';
 
 export type BrainRunStatus =
-  | 'running'
-  | 'paused'
-  | 'completed'
-  | 'completed_with_errors'
-  | 'failed'
-  | 'cancelled';
+  'running' | 'paused' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelled';
 
 export type BrainRunRow = {
   id: string;
@@ -78,7 +67,10 @@ export type ArticleDocumentLookup = {
   canonical_url: string | null;
   source_url: string | null;
   content_hash: string | null;
+  ingestion_status: string | null;
+  chunk_count: number | null;
   created_at: string;
+  updated_at?: string | null;
 };
 
 export type DuplicateMatch = {
@@ -86,6 +78,10 @@ export type DuplicateMatch = {
   title: string;
   match: 'normalized_url' | 'canonical_url' | 'content_hash';
   ingestionStatus: string | null;
+  contentHash: string | null;
+  canonicalUrl: string | null;
+  normalizedUrl: string | null;
+  chunkCount: number | null;
 };
 
 function createServiceClient(env: RagEnvironment): SupabaseClient | null {
@@ -103,7 +99,9 @@ function createServiceClient(env: RagEnvironment): SupabaseClient | null {
   });
 }
 
-function isUniqueViolation(error: { code?: unknown; message?: unknown } | null | undefined): boolean {
+function isUniqueViolation(
+  error: { code?: unknown; message?: unknown } | null | undefined
+): boolean {
   if (!error) return false;
 
   if (error.code === '23505') return true;
@@ -126,7 +124,9 @@ export function createBrainStore(env: RagEnvironment = process.env) {
     async listArticleDocuments(limit = 5000): Promise<ArticleDocumentLookup[]> {
       const { data, error } = await store
         .from('knowledge_documents')
-        .select('id,title,normalized_url,canonical_url,source_url,content_hash,created_at')
+        .select(
+          'id,title,normalized_url,canonical_url,source_url,content_hash,ingestion_status,chunk_count,created_at,updated_at'
+        )
         .eq('source_type', 'article')
         .order('created_at', { ascending: false })
         .limit(limit);
@@ -141,22 +141,37 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       canonicalUrl?: string | null;
       contentHash?: string | null;
     }): Promise<DuplicateMatch | null> {
+      const select =
+        'id,title,ingestion_status,content_hash,canonical_url,normalized_url,chunk_count';
+
       if (input.normalizedUrl) {
         const { data } = await store
           .from('knowledge_documents')
-          .select('id,title,ingestion_status')
+          .select(select)
           .eq('source_type', 'article')
           .eq('normalized_url', input.normalizedUrl)
           .limit(1)
           .maybeSingle();
 
         if (data) {
-          const row = data as { id: string; title: string; ingestion_status?: string | null };
+          const row = data as {
+            id: string;
+            title: string;
+            ingestion_status?: string | null;
+            content_hash?: string | null;
+            canonical_url?: string | null;
+            normalized_url?: string | null;
+            chunk_count?: number | null;
+          };
           return {
             documentId: String(row.id),
             title: String(row.title),
             match: 'normalized_url',
             ingestionStatus: row.ingestion_status ?? null,
+            contentHash: row.content_hash ?? null,
+            canonicalUrl: row.canonical_url ?? null,
+            normalizedUrl: row.normalized_url ?? null,
+            chunkCount: row.chunk_count ?? null,
           };
         }
       }
@@ -164,19 +179,31 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       if (input.canonicalUrl && input.canonicalUrl !== input.normalizedUrl) {
         const { data } = await store
           .from('knowledge_documents')
-          .select('id,title,ingestion_status')
+          .select(select)
           .eq('source_type', 'article')
           .eq('canonical_url', input.canonicalUrl)
           .limit(1)
           .maybeSingle();
 
         if (data) {
-          const row = data as { id: string; title: string; ingestion_status?: string | null };
+          const row = data as {
+            id: string;
+            title: string;
+            ingestion_status?: string | null;
+            content_hash?: string | null;
+            canonical_url?: string | null;
+            normalized_url?: string | null;
+            chunk_count?: number | null;
+          };
           return {
             documentId: String(row.id),
             title: String(row.title),
             match: 'canonical_url',
             ingestionStatus: row.ingestion_status ?? null,
+            contentHash: row.content_hash ?? null,
+            canonicalUrl: row.canonical_url ?? null,
+            normalizedUrl: row.normalized_url ?? null,
+            chunkCount: row.chunk_count ?? null,
           };
         }
       }
@@ -184,19 +211,31 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       if (input.contentHash) {
         const { data } = await store
           .from('knowledge_documents')
-          .select('id,title,ingestion_status')
+          .select(select)
           .eq('source_type', 'article')
           .eq('content_hash', input.contentHash)
           .limit(1)
           .maybeSingle();
 
         if (data) {
-          const row = data as { id: string; title: string; ingestion_status?: string | null };
+          const row = data as {
+            id: string;
+            title: string;
+            ingestion_status?: string | null;
+            content_hash?: string | null;
+            canonical_url?: string | null;
+            normalized_url?: string | null;
+            chunk_count?: number | null;
+          };
           return {
             documentId: String(row.id),
             title: String(row.title),
             match: 'content_hash',
             ingestionStatus: row.ingestion_status ?? null,
+            contentHash: row.content_hash ?? null,
+            canonicalUrl: row.canonical_url ?? null,
+            normalizedUrl: row.normalized_url ?? null,
+            chunkCount: row.chunk_count ?? null,
           };
         }
       }
@@ -299,7 +338,9 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       return Array.isArray(data) ? (data as unknown as BrainJobRow[]) : [];
     },
 
-    async findActiveJobsByUrls(urls: string[]): Promise<Array<{ run_id: string; normalized_url: string }>> {
+    async findActiveJobsByUrls(
+      urls: string[]
+    ): Promise<Array<{ run_id: string; normalized_url: string }>> {
       if (urls.length === 0) return [];
 
       const { data, error } = await store
@@ -311,9 +352,7 @@ export function createBrainStore(env: RagEnvironment = process.env) {
 
       if (error) throw new Error('brain_jobs_query_failed');
 
-      return Array.isArray(data)
-        ? (data as Array<{ run_id: string; normalized_url: string }>)
-        : [];
+      return Array.isArray(data) ? (data as Array<{ run_id: string; normalized_url: string }>) : [];
     },
 
     async updateJob(jobId: string, patch: Partial<BrainJobRow>): Promise<void> {
@@ -386,8 +425,11 @@ export function createBrainStore(env: RagEnvironment = process.env) {
           error_code: null,
           error_detail: null,
           retry_after: null,
+          extraction_status: null,
+          extraction_metadata: { stage: 'queued', requeued: true },
           worker_id: null,
           locked_at: null,
+          processed_at: null,
           updated_at: new Date().toISOString(),
         })
         .eq('run_id', runId)
@@ -435,7 +477,8 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       if (error) throw new Error('brain_document_update_failed');
     },
 
-    async insertArticleChunks(chunks: KnowledgeChunkWithEmbedding[]): Promise<void> {      const batchSize = 25;
+    async insertArticleChunks(chunks: KnowledgeChunkWithEmbedding[]): Promise<void> {
+      const batchSize = 25;
 
       for (let index = 0; index < chunks.length; index += batchSize) {
         const batch = chunks.slice(index, index + batchSize).map((chunk) => ({
@@ -443,26 +486,95 @@ export function createBrainStore(env: RagEnvironment = process.env) {
           embedding: toPgVector(chunk.embedding),
         }));
 
-        const { error } = await store
-          .from('knowledge_chunks')
-          .upsert(batch, { onConflict: 'id' });
+        const { error } = await store.from('knowledge_chunks').upsert(batch, { onConflict: 'id' });
 
         if (error) throw new Error('brain_chunks_insert_failed');
       }
     },
 
-    async completeArticleDocument(documentId: string): Promise<void> {
+    async deleteArticleChunksExcept(documentId: string, keepIds: string[]): Promise<number> {
+      const { data, error } = await store
+        .from('knowledge_chunks')
+        .select('id')
+        .eq('document_id', documentId)
+        .limit(10_000);
+
+      if (error) throw new Error('brain_chunks_query_failed');
+
+      const keep = new Set(keepIds);
+      const stale = (Array.isArray(data) ? data : [])
+        .map((row) => (row && typeof row === 'object' ? String((row as { id?: unknown }).id) : ''))
+        .filter((id) => id && !keep.has(id));
+
+      if (stale.length === 0) return 0;
+
+      for (let index = 0; index < stale.length; index += 100) {
+        const batch = stale.slice(index, index + 100);
+        const { error: deleteError } = await store
+          .from('knowledge_chunks')
+          .delete()
+          .eq('document_id', documentId)
+          .in('id', batch);
+
+        if (deleteError) throw new Error('brain_chunks_delete_failed');
+      }
+
+      return stale.length;
+    },
+
+    async completeArticleDocument(
+      documentId: string,
+      extractionStatus: string = 'complete'
+    ): Promise<void> {
       const { error } = await store
         .from('knowledge_documents')
         .update({
           ingestion_status: 'completed',
-          extraction_status: 'ok',
+          extraction_status: extractionStatus,
           processed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('id', documentId);
 
       if (error) throw new Error('brain_document_complete_failed');
+    },
+
+    async getJob(jobId: string): Promise<BrainJobRow | null> {
+      const { data, error } = await store
+        .from('brain_ingestion_jobs')
+        .select('*')
+        .eq('id', jobId)
+        .maybeSingle();
+
+      if (error) throw new Error('brain_job_query_failed');
+
+      return (data as unknown as BrainJobRow) || null;
+    },
+
+    async resetJob(jobId: string): Promise<BrainJobRow | null> {
+      const { data, error } = await store
+        .from('brain_ingestion_jobs')
+        .update({
+          status: 'queued',
+          attempts: 0,
+          retry_after: null,
+          error_code: null,
+          error_detail: null,
+          extraction_status: null,
+          extraction_metadata: { stage: 'queued', requeued: true },
+          worker_id: null,
+          locked_at: null,
+          processed_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', jobId)
+        .in('status', ['failed', 'partial', 'duplicate'])
+        .select('*')
+        .maybeSingle();
+
+      if (error) throw new Error('brain_job_retry_failed');
+
+      return (data as unknown as BrainJobRow) || null;
     },
 
     async deleteArticleDocument(documentId: string): Promise<void> {

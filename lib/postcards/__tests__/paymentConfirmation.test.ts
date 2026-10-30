@@ -136,6 +136,7 @@ describe('existing postcard payment confirmation', () => {
       'currency',
       'offer_id',
       'order_id',
+      'product_id',
     ]);
     expect(JSON.stringify(eventInput)).not.toContain('@');
     expect(JSON.stringify(eventInput)).not.toContain('address');

@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto';
 
 import type { ArticleBlock, ExtractedArticle } from './extract';
 
-export const ARTICLE_PARSER_VERSION = 'brain-article-parser-v1';
-export const ARTICLE_CHUNKER_VERSION = 'brain-article-chunker-v1';
-export const BRAIN_INGESTION_VERSION = 'brain-ingestion-v1';
+export const ARTICLE_PARSER_VERSION = 'brain-article-parser-v2';
+export const ARTICLE_CHUNKER_VERSION = 'brain-article-chunker-v2';
+export const BRAIN_INGESTION_VERSION = 'brain-ingestion-v2';
 export const ARTICLE_MAX_CHUNK_CHARS = 2400;
 export const ARTICLE_OVERLAP_CHARS = 300;
 
@@ -20,6 +20,7 @@ export type ArticleChunk = {
   charEnd: number;
   lineStart: number;
   lineEnd: number;
+  metadata: Record<string, unknown>;
 };
 
 export type ArticleChunkingResult = {
@@ -119,10 +120,7 @@ function sectionPathFor(
   return parts.slice(0, 8);
 }
 
-function groupSections(
-  title: string,
-  placed: PlacedBlock[]
-): Section[] {
+function groupSections(title: string, placed: PlacedBlock[]): Section[] {
   const sections: Section[] = [];
   const stack: Array<{ text: string; level: number }> = [];
 
@@ -171,11 +169,7 @@ function groupSections(
 
 type LocalRange = { start: number; end: number };
 
-function splitOversizedText(
-  text: string,
-  maxChars: number,
-  overlapChars: number
-): LocalRange[] {
+function splitOversizedText(text: string, maxChars: number, overlapChars: number): LocalRange[] {
   const ranges: LocalRange[] = [];
   let start = 0;
 
@@ -212,10 +206,7 @@ function splitOversizedText(
   return ranges;
 }
 
-export function chunkArticle(
-  article: ExtractedArticle,
-  documentId: string
-): ArticleChunkingResult {
+export function chunkArticle(article: ExtractedArticle, documentId: string): ArticleChunkingResult {
   const { text: documentText, placed } = placeBlocks(article.blocks);
   const starts = lineStarts(documentText);
   const title = article.title || 'Untitled article';
@@ -223,7 +214,13 @@ export function chunkArticle(
   const sections = groupSections(title, placed);
   const chunks: ArticleChunk[] = [];
 
-  const pushChunk = (content: string, start: number, end: number, section: Section, index: number) => {
+  const pushChunk = (
+    content: string,
+    start: number,
+    end: number,
+    section: Section,
+    index: number
+  ) => {
     const trimmed = content.trim();
 
     if (!trimmed) return;
@@ -235,14 +232,14 @@ export function chunkArticle(
     const chunkIndex = chunks.length;
 
     chunks.push({
-      id: `chk_${sha256(`${documentId}|${ARTICLE_CHUNKER_VERSION}|${chunkIndex}|${contentHash}`).slice(
-        0,
-        32
-      )}`,
+      id: `chk_${sha256(
+        `${documentId}|${ARTICLE_CHUNKER_VERSION}|${chunkIndex}|${contentHash}`
+      ).slice(0, 32)}`,
       chunkIndex,
       content: trimmed.slice(0, 4000),
       contentHash,
-      heading: (section.heading || title).replace(/\s+/g, ' ').trim().slice(0, 500) || 'Untitled article',
+      heading:
+        (section.heading || title).replace(/\s+/g, ' ').trim().slice(0, 500) || 'Untitled article',
       sectionPath:
         section.path.length > 0
           ? section.path
@@ -252,30 +249,47 @@ export function chunkArticle(
       charEnd,
       lineStart: lineAt(starts, charStart),
       lineEnd: lineAt(starts, Math.max(charStart, charEnd - 1)),
+      metadata: {
+        section: (section.path.length > 0 ? section.path : [title]).join(' / '),
+        source_type: article.sourceType,
+        source_domain: article.sourceDomain,
+        language: article.language,
+        publication_date: article.publishedAt,
+        extraction_version: article.extractionVersion,
+        chunker_version: ARTICLE_CHUNKER_VERSION,
+      },
     });
   };
 
   sections.forEach((section, sectionIndex) => {
-    let group: PlacedBlock[] = [];
-
-    const flush = () => {
-      if (group.length === 0) return;
-
-      const start = group[0].start;
-      const end = group[group.length - 1].end;
-
-      pushChunk(documentText.slice(start, end), start, end, section, sectionIndex);
-      group = [];
-    };
+    // Build logical units first. A quotation stays with the paragraph that
+    // introduced it, and consecutive list items stay together. A heading is
+    // already represented by the section boundary and its metadata.
+    const units: PlacedBlock[][] = [];
 
     for (const entry of section.blocks) {
-      const length = entry.end - entry.start;
+      const block = entry.block;
+      const last = units[units.length - 1];
 
-      if (length > ARTICLE_MAX_CHUNK_CHARS) {
-        flush();
+      if (block.type === 'quote' && last) {
+        last.push(entry);
+        continue;
+      }
 
-        const content = documentText.slice(entry.start, entry.end);
+      if (block.type === 'list' && last && last.every((item) => item.block.type === 'list')) {
+        last.push(entry);
+        continue;
+      }
 
+      units.push([entry]);
+    }
+
+    const pushUnit = (unit: PlacedBlock[]) => {
+      const start = unit[0].start;
+      const end = unit[unit.length - 1].end;
+      const content = documentText.slice(start, end);
+
+      if (content.length > ARTICLE_MAX_CHUNK_CHARS) {
         for (const range of splitOversizedText(
           content,
           ARTICLE_MAX_CHUNK_CHARS,
@@ -283,21 +297,43 @@ export function chunkArticle(
         )) {
           pushChunk(
             content.slice(range.start, range.end),
-            entry.start + range.start,
-            entry.start + range.end,
+            start + range.start,
+            start + range.end,
             section,
             sectionIndex
           );
         }
+        return;
+      }
 
+      pushChunk(content, start, end, section, sectionIndex);
+    };
+
+    let group: PlacedBlock[] = [];
+
+    const flush = () => {
+      if (group.length === 0) return;
+
+      pushUnit(group);
+      group = [];
+    };
+
+    for (const unit of units) {
+      const start = unit[0].start;
+      const end = unit[unit.length - 1].end;
+      const length = end - start;
+
+      if (length > ARTICLE_MAX_CHUNK_CHARS) {
+        flush();
+        pushUnit(unit);
         continue;
       }
 
-      if (group.length > 0 && entry.end - group[0].start > ARTICLE_MAX_CHUNK_CHARS) {
+      if (group.length > 0 && end - group[0].start > ARTICLE_MAX_CHUNK_CHARS) {
         flush();
       }
 
-      group.push(entry);
+      group.push(...unit);
     }
 
     flush();

@@ -5,6 +5,7 @@ import {
   pierrotConversationIdFromRef,
 } from '@/lib/pierrot/orderAttribution';
 import { recordPierrotEvent } from '@/lib/pierrot/serverStore';
+import { recordPierrotPurchaseCompleted } from '@/lib/pierrot/commercialAnalytics';
 
 /**
  * Existing postcard payment confirmation, extracted from the Stripe webhook so
@@ -58,9 +59,21 @@ async function recordConfirmedOrderAttribution(
       payload: {
         order_id: orderId,
         offer_id: 'heart_angel_postcard',
+        product_id: 'heart_angel_postcard',
         amount_total: typeof session.amount_total === 'number' ? session.amount_total : null,
         currency: typeof session.currency === 'string' ? session.currency : null,
       },
+    });
+
+    await recordPierrotPurchaseCompleted(supabase, {
+      conversationId,
+      eventKey: `purchase_completed:${session.id}`,
+      offerId: 'heart_angel_postcard',
+      orderId,
+      providerSessionId: session.id,
+      amountTotal: typeof session.amount_total === 'number' ? session.amount_total : null,
+      currency: typeof session.currency === 'string' ? session.currency : null,
+      source: 'postcard_webhook',
     });
   } catch {
     // Attribution is optional and must never change payment handling.

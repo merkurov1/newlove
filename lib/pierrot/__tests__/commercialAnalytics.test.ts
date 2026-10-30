@@ -4,6 +4,7 @@ import { describe, expect, it, jest } from '@jest/globals';
 
 jest.mock('@/lib/pierrot/serverStore', () => ({
   recordPierrotEvent: jest.fn(async () => true),
+  recordPierrotEventByConversationId: jest.fn(async () => true),
 }));
 
 const storeModule = require('@/lib/pierrot/serverStore') as {
@@ -12,7 +13,11 @@ const storeModule = require('@/lib/pierrot/serverStore') as {
     mockClear: () => void;
   };
 };
-const { recordPierrotCommercialAnalytics } = require('../commercialAnalytics') as {
+const {
+  recordPierrotCommercialAnalytics,
+  recordPierrotOfferShown,
+  recordPierrotPurchaseCompleted,
+} = require('../commercialAnalytics') as {
   recordPierrotCommercialAnalytics: (
     store: unknown,
     input: {
@@ -23,6 +28,29 @@ const { recordPierrotCommercialAnalytics } = require('../commercialAnalytics') a
       plan: ReturnType<typeof import('../commercial').planPierrotResponse>;
     }
   ) => Promise<void>;
+  recordPierrotOfferShown: (
+    store: unknown,
+    input: {
+      conversationId: string;
+      sessionId: string;
+      userMessageId: string;
+      intent: ReturnType<typeof import('../intents').classifyPierrotIntent>;
+      plan: ReturnType<typeof import('../commercial').planPierrotResponse>;
+    }
+  ) => Promise<void>;
+  recordPierrotPurchaseCompleted: (
+    store: unknown,
+    input: {
+      conversationId: string;
+      eventKey: string;
+      offerId: string;
+      orderId?: string | null;
+      providerSessionId?: string | null;
+      amountTotal?: number | null;
+      currency?: string | null;
+      source: 'postcard_webhook' | 'unframed_webhook' | 'unframed_verify';
+    }
+  ) => Promise<boolean>;
 };
 const { planPierrotResponse } = require('../commercial') as typeof import('../commercial');
 const { classifyPierrotIntent } = require('../intents') as typeof import('../intents');
@@ -40,7 +68,7 @@ function events() {
 }
 
 describe('Pierrot commercial analytics', () => {
-  it('distinguishes planner selection, rendered CTA and confirmation is absent', async () => {
+  it('distinguishes interest, eligibility, selection, display and CTA', async () => {
     storeModule.recordPierrotEvent.mockClear();
     const message = 'I have been thinking about love and distance lately.';
     const intent = classifyPierrotIntent(message);
@@ -56,18 +84,32 @@ describe('Pierrot commercial analytics', () => {
       intent,
       plan,
     });
+    await recordPierrotOfferShown({} as never, {
+      ...base,
+      intent,
+      plan,
+    });
 
     const names = events().map((event) => event.eventName);
 
-    expect(names).toEqual(['intent_classified', 'offer_selected', 'offer_viewed', 'cta_shown']);
+    expect(names).toEqual([
+      'intent_classified',
+      'interest_detected',
+      'offer_eligible',
+      'offer_selected',
+      'offer_shown',
+      'cta_shown',
+    ]);
+    expect(names).not.toContain('offer_viewed');
     expect(names).not.toContain('order_paid');
-    expect(names).not.toContain('checkout_started');
+    expect(names).not.toContain('purchase_completed');
 
     const selected = events().find((event) => event.eventName === 'offer_selected');
     expect(selected?.payload).toMatchObject({
+      product_id: 'heart_angel_postcard',
       offer_id: 'heart_angel_postcard',
-      stage: 'interest',
-      proactive: true,
+      source_page: '/heartandangel',
+      triggering_intent: 'unknown',
     });
 
     const shown = events().find((event) => event.eventName === 'cta_shown');
@@ -101,6 +143,7 @@ describe('Pierrot commercial analytics', () => {
     const declined = events().find((event) => event.eventName === 'commercial_declined');
     expect(declined?.payload).toMatchObject({
       offer_id: 'heart_angel_postcard',
+      product_id: 'heart_angel_postcard',
     });
     expect(events().map((event) => event.eventName)).not.toContain('cta_shown');
   });
@@ -123,5 +166,38 @@ describe('Pierrot commercial analytics', () => {
     });
 
     expect(events().map((event) => event.eventName)).toEqual(['intent_classified']);
+  });
+
+  it('records a purchase only through the trusted confirmation helper', async () => {
+    const { recordPierrotEventByConversationId } = require('@/lib/pierrot/serverStore') as {
+      recordPierrotEventByConversationId: { mockClear: () => void; mock: { calls: unknown[][] } };
+    };
+
+    recordPierrotEventByConversationId.mockClear();
+
+    await recordPierrotPurchaseCompleted({} as never, {
+      conversationId: base.conversationId,
+      eventKey: 'purchase_completed:cs_test',
+      offerId: 'unframed',
+      providerSessionId: 'cs_test',
+      amountTotal: 1500,
+      currency: 'usd',
+      source: 'unframed_webhook',
+    });
+
+    const [, event] = recordPierrotEventByConversationId.mock.calls[0] as [
+      unknown,
+      { eventName: string; payload: Record<string, unknown> },
+    ];
+
+    expect(event.eventName).toBe('purchase_completed');
+    expect(event.payload).toMatchObject({
+      offer_id: 'unframed',
+      product_id: 'unframed',
+      provider_session_id: 'cs_test',
+      amount_total: 1500,
+      currency: 'usd',
+      source: 'unframed_webhook',
+    });
   });
 });

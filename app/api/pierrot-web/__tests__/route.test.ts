@@ -79,6 +79,7 @@ jest.mock('openai', () => {
 });
 
 process.env.DEEPSEEK_API_KEY = 'test-deepseek-key';
+process.env.PIERROT_BRAIN_RETRIEVAL_V2 = 'false';
 
 // require (not a static import) so the jest.mock registrations above are in
 // effect before the route and its dependencies are loaded.
@@ -234,8 +235,10 @@ describe('POST /api/pierrot-web persistence', () => {
       'message:user',
       'event:message_sent',
       'event:intent_classified',
+      'event:interest_detected',
+      'event:offer_eligible',
       'event:offer_selected',
-      'event:offer_viewed',
+      'event:offer_shown',
       'event:cta_shown',
       'message:assistant',
       'event:assistant_replied',
@@ -354,10 +357,12 @@ describe('POST /api/pierrot-web persistence', () => {
       'message:user',
       'event:message_sent',
       'event:intent_classified',
+      'event:interest_detected',
+      'event:offer_eligible',
       'event:offer_selected',
-      'event:offer_viewed',
-      'event:cta_shown',
       'ai',
+      'event:offer_shown',
+      'event:cta_shown',
       'message:assistant',
       'event:assistant_replied',
     ]);

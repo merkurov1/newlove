@@ -54,7 +54,10 @@ function isTrackingParam(name: string): boolean {
 }
 
 function stripBrackets(value: string): string {
-  return value.trim().replace(/^[<"']+/, '').replace(/[>"']+$/, '');
+  return value
+    .trim()
+    .replace(/^[<"']+/, '')
+    .replace(/[>"']+$/, '');
 }
 
 /**
@@ -132,10 +135,72 @@ export function tryNormalizeSourceUrl(raw: string): { url: string | null; error:
   }
 }
 
+/**
+ * Returns the lower-case host without a leading `www.` or trailing dot.
+ * Used for provenance metadata; it never participates in authorization.
+ */
+export function getSourceDomain(raw: string): string | null {
+  try {
+    const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
+    const host = url.hostname
+      .toLowerCase()
+      .replace(/\.$/, '')
+      .replace(/^www\./, '');
+
+    return host || null;
+  } catch {
+    return null;
+  }
+}
+
+const NOVAYA_GAZETA_HOSTS = new Set(['novayagazeta.ru', 'novayagazeta.eu']);
+
+export function isNovayaGazetaUrl(raw: string): boolean {
+  const domain = getSourceDomain(raw);
+
+  return Boolean(domain && NOVAYA_GAZETA_HOSTS.has(domain));
+}
+
+/**
+ * Recovers a publication date from the Novaya Gazeta path convention
+ * `/articles/YYYY/MM/DD/...`. A date is returned only when every component is
+ * a real calendar date. No date is inferred for other hosts.
+ */
+export function publishedDateFromUrl(raw: string): string | null {
+  if (!isNovayaGazetaUrl(raw)) return null;
+
+  try {
+    const path = new URL(raw).pathname;
+    const match = path.match(/\/(20\d{2})\/(\d{2})\/(\d{2})(?:\/|$)/);
+
+    if (!match) return null;
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    if (
+      date.getUTCFullYear() !== year ||
+      date.getUTCMonth() !== month - 1 ||
+      date.getUTCDate() !== day
+    ) {
+      return null;
+    }
+
+    return date.toISOString();
+  } catch {
+    return null;
+  }
+}
+
 function isPrivateIpv4(address: string): boolean {
   const parts = address.split('.').map(Number);
 
-  if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part) || part < 0 || part > 255)) {
+  if (
+    parts.length !== 4 ||
+    parts.some((part) => !Number.isFinite(part) || part < 0 || part > 255)
+  ) {
     return true;
   }
 
@@ -323,7 +388,9 @@ export async function fetchHtmlSafely(
       });
     } catch (error) {
       const name = error && typeof error === 'object' && 'name' in error ? String(error.name) : '';
-      throw new BrainUrlError(name === 'TimeoutError' || name === 'AbortError' ? 'fetch_timeout' : 'fetch_failed');
+      throw new BrainUrlError(
+        name === 'TimeoutError' || name === 'AbortError' ? 'fetch_timeout' : 'fetch_failed'
+      );
     }
 
     if (response.status >= 300 && response.status < 400) {

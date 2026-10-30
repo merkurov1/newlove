@@ -8,6 +8,7 @@ import {
   pierrotConversationIdFromUnframedRef,
 } from '@/lib/pierrot/orderAttribution';
 import { recordPierrotEventByConversationId } from '@/lib/pierrot/serverStore';
+import { recordPierrotPurchaseCompleted } from '@/lib/pierrot/commercialAnalytics';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,9 +61,20 @@ export async function GET(request: Request) {
             eventKey: `unframed_purchase_confirmed:${session.id}`,
             payload: {
               offer_id: 'unframed',
+              product_id: 'unframed',
               amount_total: typeof session.amount_total === 'number' ? session.amount_total : null,
               currency: typeof session.currency === 'string' ? session.currency : null,
             },
+          });
+
+          await recordPierrotPurchaseCompleted(store, {
+            conversationId,
+            eventKey: `purchase_completed:${session.id}`,
+            offerId: 'unframed',
+            providerSessionId: session.id,
+            amountTotal: typeof session.amount_total === 'number' ? session.amount_total : null,
+            currency: typeof session.currency === 'string' ? session.currency : null,
+            source: 'unframed_verify',
           });
         } catch {
           // Confirmed access still works if analytics is unavailable.

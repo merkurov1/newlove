@@ -4,6 +4,7 @@ import type { EmbeddingClient } from '@/lib/knowledge/rag/embeddings';
 import { EmbeddingProviderError } from '@/lib/knowledge/rag/errors';
 
 import { processNextBrainJob } from '../process';
+import { extractArticle } from '../extract';
 import type { BrainJobRow, BrainStore } from '../store';
 
 const longText =
@@ -56,7 +57,10 @@ function embeddingClient(): EmbeddingClient {
   };
 }
 
-function fakeStore(initialJob: BrainJobRow, duplicate: Awaited<ReturnType<BrainStore['findDuplicate']>> = null) {
+function fakeStore(
+  initialJob: BrainJobRow,
+  duplicate: Awaited<ReturnType<BrainStore['findDuplicate']>> = null
+) {
   const state = {
     job: { ...initialJob },
     jobs: [initialJob] as BrainJobRow[],
@@ -107,9 +111,12 @@ function fakeStore(initialJob: BrainJobRow, duplicate: Awaited<ReturnType<BrainS
     insertArticleChunks: jest.fn(async (chunks: unknown[]) => {
       state.chunks.push(...chunks);
     }),
-    completeArticleDocument: jest.fn(async (documentId: string) => {
+    deleteArticleChunksExcept: jest.fn(async () => 0),
+    completeArticleDocument: jest.fn(async (documentId: string, _status?: string) => {
       state.completed.push(documentId);
     }),
+    getJob: jest.fn(async () => ({ ...state.job })),
+    resetJob: jest.fn(async () => ({ ...state.job, status: 'queued' as const })),
   };
 
   return { store: store as unknown as BrainStore, state, raw: store };
@@ -150,17 +157,62 @@ describe('Brain ingestion worker', () => {
     expect(document.canonical_url).toBe('https://example.com/column');
     expect(document.content_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(Number(document.chunk_count)).toBeGreaterThan(0);
+    expect(document.extraction_status).toBe('complete');
+    expect((document.metadata as Record<string, unknown>).source_domain).toBe('example.com');
+    expect((document.metadata as Record<string, unknown>).change).toBe('inserted');
+    expect(state.job.extraction_status).toBe('complete');
+    expect((state.job.extraction_metadata as Record<string, unknown>).chunks).toBe(
+      document.chunk_count
+    );
   });
 
-  it('does not fetch or re-embed an article that already exists', async () => {
+  it('updates the existing logical document when the content changed', async () => {
+    const { store, state, raw } = fakeStore(job(), {
+      documentId: 'doc_article_existing',
+      title: 'Existing article',
+      match: 'normalized_url',
+      ingestionStatus: 'completed',
+      contentHash: 'b'.repeat(64),
+      canonicalUrl: 'https://example.com/column',
+      normalizedUrl: 'https://example.com/column',
+      chunkCount: 2,
+    });
+
+    const result = await run(store);
+
+    expect(result.state).toBe('processed');
+    expect(state.job.status).toBe('completed');
+    expect(state.job.document_id).toBe('doc_article_existing');
+    expect(raw.updateArticleDocument).toHaveBeenCalledTimes(1);
+    expect(raw.insertArticleDocument).not.toHaveBeenCalled();
+    expect(raw.deleteArticleChunksExcept).toHaveBeenCalled();
+    expect(state.completed).toEqual(['doc_article_existing']);
+    expect((state.job.extraction_metadata as Record<string, unknown>).change).toBe('updated');
+    expect((state.job.extraction_metadata as Record<string, unknown>).previous_content_hash).toBe(
+      'b'.repeat(64)
+    );
+  });
+
+  it('fetches a known URL and marks it duplicate when the content is unchanged', async () => {
+    const existingHash = extractArticle(html(), 'https://example.com/column').contentHash;
     const { store, state } = fakeStore(job(), {
       documentId: 'doc_article_existing',
       title: 'Existing article',
       match: 'normalized_url',
       ingestionStatus: 'completed',
+      contentHash: existingHash,
+      canonicalUrl: 'https://example.com/column',
+      normalizedUrl: 'https://example.com/column',
+      chunkCount: 3,
     });
 
-    const fetchArticle = jest.fn();
+    const fetchArticle = jest.fn(async (url: string) => ({
+      url,
+      html: html(),
+      status: 200,
+      contentType: 'text/html',
+      bytes: html().length,
+    }));
 
     const result = await processNextBrainJob({
       runId: 'run-1',
@@ -171,7 +223,7 @@ describe('Brain ingestion worker', () => {
     });
 
     expect(result.state).toBe('processed');
-    expect(fetchArticle).not.toHaveBeenCalled();
+    expect(fetchArticle).toHaveBeenCalledTimes(1);
     expect(state.job.status).toBe('duplicate');
     expect(state.job.document_id).toBe('doc_article_existing');
   });
@@ -195,6 +247,75 @@ describe('Brain ingestion worker', () => {
 
     expect(result.state).toBe('processed');
     expect(state.job.status).toBe('partial');
+    expect(state.job.extraction_status).toBe('partial');
+    expect(raw.insertArticleDocument).not.toHaveBeenCalled();
+    expect(raw.insertArticleChunks).not.toHaveBeenCalled();
+  });
+
+  it('preserves an existing good document when a later extraction is partial', async () => {
+    const { store, state, raw } = fakeStore(job(), {
+      documentId: 'doc_article_existing',
+      title: 'Existing article',
+      match: 'normalized_url',
+      ingestionStatus: 'completed',
+      contentHash: 'a'.repeat(64),
+      canonicalUrl: 'https://example.com/column',
+      normalizedUrl: 'https://example.com/column',
+      chunkCount: 4,
+    });
+
+    const result = await processNextBrainJob({
+      runId: 'run-1',
+      store,
+      embeddingClient: embeddingClient(),
+      workerId: 'test-worker',
+      fetchArticle: async (url) => ({
+        url,
+        html: '<html><head><title>Locked</title></head><body><article><p>Subscribe to continue reading this article.</p></article></body></html>',
+        status: 200,
+        contentType: 'text/html',
+        bytes: 100,
+      }),
+    });
+
+    expect(result.state).toBe('processed');
+    expect(state.job.status).toBe('partial');
+    expect(state.job.document_id).toBe('doc_article_existing');
+    expect(raw.updateArticleDocument).not.toHaveBeenCalled();
+    expect(raw.insertArticleDocument).not.toHaveBeenCalled();
+    expect(raw.insertArticleChunks).not.toHaveBeenCalled();
+    expect(
+      (state.job.extraction_metadata as Record<string, unknown>).existing_document_preserved
+    ).toBe(true);
+  });
+
+  it('marks structurally weak extraction as needs_review without indexing', async () => {
+    const { store, state, raw } = fakeStore(job());
+
+    const weakHtml = `<html><head><title>Review me</title></head><body><article>${Array.from(
+      { length: 3 },
+      (_, index) =>
+        `<p>Paragraph ${index + 1}. ${Array.from({ length: 55 }, (_, word) => `word${word + 1}`).join(' ')}.</p>`
+    ).join('')}</article></body></html>`;
+
+    const result = await processNextBrainJob({
+      runId: 'run-1',
+      store,
+      embeddingClient: embeddingClient(),
+      workerId: 'test-worker',
+      fetchArticle: async (url) => ({
+        url,
+        html: weakHtml,
+        status: 200,
+        contentType: 'text/html',
+        bytes: weakHtml.length,
+      }),
+    });
+
+    expect(result.state).toBe('processed');
+    expect(state.job.status).toBe('partial');
+    expect(state.job.extraction_status).toBe('needs_review');
+    expect(state.job.error_code).toBe('needs_review');
     expect(raw.insertArticleDocument).not.toHaveBeenCalled();
     expect(raw.insertArticleChunks).not.toHaveBeenCalled();
   });

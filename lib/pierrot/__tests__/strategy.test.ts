@@ -385,6 +385,37 @@ describe('Pierrot commercial state', () => {
     expect(state.offerIntroductions.heart_angel_postcard).toBe(1);
   });
 
+  it('enforces product-specific show limits and cooldowns', () => {
+    const baseIntent = classifyPierrotIntent('I still think about love and distance.');
+    const capped = {
+      ...emptyPierrotCommercialState(),
+      offerIntroductions: { heart_angel_postcard: 3 },
+    };
+    const cooled = {
+      ...emptyPierrotCommercialState(),
+      lastOfferId: 'heart_angel_postcard' as const,
+      lastOfferAt: new Date().toISOString(),
+    };
+
+    expect(
+      selectProactivePierrotOffer({
+        message: 'I still think about love and distance.',
+        intent: baseIntent,
+        pathname: '/heartandangel',
+        state: capped,
+      })
+    ).toBeNull();
+
+    expect(
+      selectProactivePierrotOffer({
+        message: 'I still think about love and distance.',
+        intent: baseIntent,
+        pathname: '/heartandangel',
+        state: cooled,
+      })
+    ).toBeNull();
+  });
+
   it('does not treat page views or a generic word as purchase intent', () => {
     expect(scorePierrotOfferInterest('What is context architecture?', 'unframed').score).toBe(0);
     expect(scorePierrotOfferInterest('I like the layout', 'heart_angel_postcard').score).toBe(0);

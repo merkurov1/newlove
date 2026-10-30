@@ -181,6 +181,7 @@ export async function POST(request: Request) {
           eventKey: `checkout_started:${orderId}`,
           payload: {
             offer_id: 'heart_angel_postcard',
+            product_id: 'heart_angel_postcard',
             order_id: orderId,
             amount_total: postcard.price,
             currency: 'gbp',

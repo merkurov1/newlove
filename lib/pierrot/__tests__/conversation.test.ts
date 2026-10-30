@@ -107,6 +107,21 @@ describe('Pierrot conversation validation', () => {
 
     expect(isPierrotClientEventName('subscribe_cta_clicked')).toBe(true);
     expect(
+      sanitizePierrotEventPayload('offer_viewed', {
+        offer_id: 'journal_flow',
+        destination: 'https://evil.example',
+      })
+    ).toEqual({ offer_id: 'journal_flow' });
+    expect(sanitizePierrotEventPayload('offer_viewed', { offer_id: 'not-a-product' })).toBeNull();
+    expect(
+      sanitizePierrotEventPayload('answer_feedback', {
+        rating: 'down',
+        message_id: 'a_12345678',
+        content: 'private answer',
+      })
+    ).toEqual({ rating: 'down', message_id: 'a_12345678' });
+    expect(sanitizePierrotEventPayload('answer_feedback', { rating: 'neutral' })).toBeNull();
+    expect(
       sanitizePierrotEventPayload('subscribe_cta_clicked', {
         offer_id: 'journal_flow',
         email: 'private@example.com',

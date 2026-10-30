@@ -89,6 +89,10 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const inputs = parseUrls(body);
+  const recheckExisting =
+    Boolean(body) &&
+    typeof body === 'object' &&
+    (body as Record<string, unknown>).recheckExisting === true;
 
   if (inputs.length === 0) return json({ error: 'Provide at least one URL.' }, 400);
 
@@ -138,7 +142,7 @@ export async function POST(request: Request) {
 
     const existing = byNormalized.get(normalized.url) || byCanonical.get(normalized.url);
 
-    if (existing) {
+    if (existing && !recheckExisting) {
       skipped.push({
         input,
         normalizedUrl: normalized.url,

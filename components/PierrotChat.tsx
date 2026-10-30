@@ -10,6 +10,7 @@ import PierrotDataNotice from '@/components/pierrot/PierrotDataNotice';
 import usePrefersReducedMotion from '@/components/pierrot/usePrefersReducedMotion';
 import useKeyboardViewportHeight from '@/components/pierrot/useKeyboardViewportHeight';
 import { PIERROT_AVATAR_SRC } from '@/lib/pierrot/config';
+import { getHumanCopy } from '@/lib/pierrot/humanPresenceShared';
 
 type PierrotTriggerProps = {
   compact?: boolean;
@@ -80,7 +81,19 @@ export default function PierrotChat() {
     isUnframedMode,
     canShowBrainMode,
     toggleUnframedMode,
+    isHumanActive,
+    isHumanPending,
+    humanPresence,
+    cancelHumanRequest,
+    closeHumanConversation,
   } = usePierrot();
+
+  const humanLanguage =
+    typeof navigator !== 'undefined' &&
+    navigator.language?.toLowerCase().startsWith('ru')
+      ? 'ru'
+      : 'en';
+  const humanCopy = getHumanCopy(humanLanguage);
 
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const modalRef = useRef<HTMLElement | null>(null);
@@ -387,6 +400,44 @@ export default function PierrotChat() {
                     "
                   >
                     <div className="mx-auto w-full max-w-3xl">
+                      {isHumanPending && (
+                        <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#8A8175]">
+                          <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[#B08A5A]" />
+                          <span className="min-w-0 break-words">
+                            {humanCopy.waiting}
+                            {humanPresence?.visitorLabel
+                              ? ` · ${humanPresence.visitorLabel}`
+                              : ''}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void cancelHumanRequest()}
+                            className="ml-auto shrink-0 border-b border-[#CFC3B1] pb-0.5 transition hover:border-[#37332D] hover:text-[#37332D]"
+                          >
+                            {humanCopy.cancel}
+                          </button>
+                        </div>
+                      )}
+
+                      {isHumanActive && (
+                        <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#4F6B4D]">
+                          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#8CA18A]" />
+                          <span className="min-w-0 break-words">
+                            {humanCopy.activeLabel}
+                            {humanPresence?.visitorLabel
+                              ? ` · ${humanPresence.visitorLabel}`
+                              : ''}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void closeHumanConversation()}
+                            className="ml-auto shrink-0 border-b border-[#CFC3B1] pb-0.5 text-[#625B50] transition hover:border-[#37332D] hover:text-[#37332D]"
+                          >
+                            {humanLanguage === 'ru' ? 'Завершить' : 'End'}
+                          </button>
+                        </div>
+                      )}
+
                       {isUnframedMode && (
                         <div className="mb-2 flex items-center gap-2 px-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[#8A8175]">
                           <span className="h-1.5 w-1.5 rounded-full bg-[#8CA18A]" />
@@ -395,7 +446,13 @@ export default function PierrotChat() {
                       )}
                       <PierrotDataNotice className="mb-2 px-1" />
                       <PierrotInput
-                        placeholder={isUnframedMode ? 'Ask Brain…' : 'Write to Pierrot…'}
+                        placeholder={
+                          isHumanActive
+                            ? humanCopy.composerPlaceholder
+                            : isUnframedMode
+                              ? 'Ask Brain…'
+                              : 'Write to Pierrot…'
+                        }
                       />
                     </div>
                   </footer>

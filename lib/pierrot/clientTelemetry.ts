@@ -69,6 +69,15 @@ export function getPierrotConversationId(): string {
   return getOrCreateId(CONVERSATION_KEY);
 }
 
+/**
+ * Restores the session id when a human-presence recovery token is the only
+ * credential left after the browser tab was closed.
+ */
+export function setPierrotSessionId(value: unknown): void {
+  if (!isPierrotId(value)) return;
+  writeValue(SESSION_KEY, value, 'session');
+}
+
 export function setPierrotConversationId(value: unknown): void {
   if (!isPierrotId(value)) return;
   writeValue(CONVERSATION_KEY, value, 'session');
