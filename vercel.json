@@ -3,5 +3,10 @@
   "env": {
     "NEXT_TELEMETRY_DISABLED": "1"
   },
-  "ignoreCommand": "if [ \"$VERCEL_ENV\" = \"preview\" ]; then exit 0; fi; exit 1"
+  "git": {
+    "deploymentEnabled": {
+      "main": true,
+      "*": false
+    }
+  }
 }
