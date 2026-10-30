@@ -205,7 +205,7 @@ export async function GET(request: NextRequest) {
       .from('media_archive_records')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(200);
+      .limit(500);
 
     if (error) {
       console.error('[media-records] Supabase GET failed:', error);
