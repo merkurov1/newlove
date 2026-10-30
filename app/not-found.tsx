@@ -58,14 +58,14 @@ export default function NotFound() {
           <p className="text-sm text-gray-500 mb-4">You may also be interested in:</p>
           <div className="flex flex-wrap gap-3 justify-center">
             <Link
-              href="/projects"
+              href="/all"
               className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
             >
-              Projects
+              All projects
             </Link>
             <span className="text-gray-300">•</span>
             <Link
-              href="/letters"
+              href="/journal"
               className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
             >
               Journal

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   title: 'Absolution — Digital Temple | Merkurov Love',
 
   description:
-    'Release a digital burden and receive absolution in the Digital Temple. A ritual of letting go, lightness and freedom.',
+    'Release a digital burden and receive absolution in the Digital Temple: a ritual of letting go, lightness and freedom in the Heart & Angel world.',
 
   keywords: [
     'Absolution',

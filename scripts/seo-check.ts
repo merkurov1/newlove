@@ -13,6 +13,10 @@ import * as cheerio from 'cheerio';
 const BASE_URL = (process.env.SEO_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const CONCURRENCY = Number(process.env.SEO_CONCURRENCY || 6);
 const LIMIT = Number(process.env.SEO_LIMIT || 0);
+const ONLY = (process.env.SEO_PATHS || '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
 
 type Result = {
   url: string;
@@ -175,7 +179,10 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 
 async function main() {
   const urls = await fetchSitemap();
-  const selected = LIMIT > 0 ? urls.slice(0, LIMIT) : urls;
+  const filtered = ONLY.length > 0
+    ? urls.filter((url) => ONLY.includes(new URL(url).pathname))
+    : urls;
+  const selected = LIMIT > 0 ? filtered.slice(0, LIMIT) : filtered;
   console.log(`Checking ${selected.length} URLs against ${BASE_URL}\n`);
 
   const results = await mapLimit(selected, CONCURRENCY, checkUrl);

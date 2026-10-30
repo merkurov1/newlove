@@ -4,7 +4,7 @@ import CastClient from './CastClient';
 export const metadata: Metadata = {
   title: 'Cast — Psychological Protocol | Digital Temple',
   description:
-    'A psychological protocol of the Digital Temple. Ten questions, an Agency Index, and a perceptual archetype.',
+    'A psychological protocol of the Digital Temple: ten questions, an Agency Index and a perceptual archetype, built to deconstruct how you make choices.',
   alternates: {
     canonical: 'https://www.merkurov.love/cast',
   },

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   title: 'The Sanctuary — Digital Temple | Merkurov Love',
 
   description:
-    'A living digital sanctuary of presence, ritual and traces. Enter the Digital Temple by Merkurov Love.',
+    'A living digital sanctuary of presence, ritual and traces. Enter the Digital Temple by Merkurov Love and leave a mark in the chronicle.',
 
   keywords: [
     'Digital Temple',
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     title: 'The Sanctuary — Digital Temple',
 
     description:
-      'A living digital sanctuary of presence, ritual and traces. Enter the Digital Temple by Merkurov Love.',
+      'A living digital sanctuary of presence, ritual and traces. Enter the Digital Temple by Merkurov Love and leave a mark in the chronicle.',
 
     url: TEMPLE_URL,
 

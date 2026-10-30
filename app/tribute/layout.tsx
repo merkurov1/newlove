@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   title: 'Tribute — Digital Temple',
 
   description:
-    'Offer light to the Sanctuary. Tribute is a digital ritual of love, energy and generosity.',
+    'Offer light to the Sanctuary. Tribute is a digital ritual of love, energy and generosity inside the Heart & Angel Digital Temple.',
 
   alternates: {
     canonical: TRIBUTE_URL,

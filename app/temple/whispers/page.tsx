@@ -3,6 +3,13 @@ import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAu
 import MicrophoneButton from '@/components/MicrophoneButton';
 import WhisperTestClient from '../WhisperTest.client';
 import dynamicImport from 'next/dynamic';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Temple Whispers — private admin',
+  description: 'Private moderation view for Digital Temple whispers.',
+  robots: { index: false, follow: false },
+};
 
 export const dynamic = 'force-dynamic';
 

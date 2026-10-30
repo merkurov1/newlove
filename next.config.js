@@ -18,10 +18,26 @@ const nextConfig = {
         destination: 'https://www.merkurov.love/:path*',
         permanent: true,
       },
+      // Old sitemap entries / renamed routes.
+      { source: '/stat', destination: '/liveheart/stat', permanent: true },
+      { source: '/projects', destination: '/all', permanent: true },
+      { source: '/rss.xml', destination: '/feed.xml', permanent: true },
+      { source: '/feed', destination: '/flow', permanent: true },
     ];
   },
   async headers() {
     return [
+      {
+        source: '/(.*)',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), geolocation=(), microphone=(self)',
+          },
+        ],
+      },
       {
         // Private research pages must never be cached by a CDN or a shared
         // proxy, even before the server-side ADMIN guard runs.
@@ -40,6 +56,8 @@ const nextConfig = {
     ];
   },
   reactStrictMode: true,
+  poweredByHeader: false,
+  trailingSlash: false,
   eslint: {
     // Temporarily disable ESLint during builds to avoid invalid-option failures
     // (CI/deploy should set DISABLE_ESLINT=1 or fix ESLint config). Set to true

@@ -6,6 +6,7 @@ import { sanitizeMetadata } from '@/lib/metadataSanitize';
 export const metadata = sanitizeMetadata({
   title: 'Order successfully placed | Anton Merkurov',
   description: 'Your postcard order has been received and will be processed soon',
+  robots: { index: false, follow: false },
 });
 
 export default function OrderSuccessPage() {

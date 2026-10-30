@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   title: 'Vigil — Digital Temple',
 
   description:
-    'Keep the heart alive. Vigil is a shared digital ritual of presence, light and guardianship.',
+    'Keep the heart alive. Vigil is a shared digital ritual of presence, light and guardianship inside the Heart & Angel Digital Temple.',
 
   alternates: {
     canonical: VIGIL_URL,

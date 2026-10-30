@@ -3,6 +3,7 @@ import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
 export const metadata = sanitizeMetadata({
   alternates: { canonical: 'https://www.merkurov.love/talks' },
+  robots: { index: false, follow: false },
   title: 'Talks | Закрытое общение',
   description: 'Закрытый раздел для зарегистрированных пользователей',
 });
