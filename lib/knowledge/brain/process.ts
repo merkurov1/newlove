@@ -995,6 +995,7 @@ export async function processNextBrainJob(options: ProcessNextOptions): Promise<
   let mediaRecord: MediaArchiveRecord | null = options.mediaRecord ?? null;
   let mediaDocumentId: string | null = null;
   let extractedArticle: ExtractedArticle | null = null;
+  let linkedExisting = false;
 
   try {
     let known: Awaited<ReturnType<BrainStore['findDuplicate']>> = null;
@@ -1025,9 +1026,36 @@ export async function processNextBrainJob(options: ProcessNextOptions): Promise<
       });
 
       if (existingMedia && existingMedia.sourceType !== 'media_coverage') {
-        // Never create a second full-text document for a URL already owned by
-        // the article pipeline. A human must decide how to reconcile it.
-        throw new Error('media_document_conflict');
+        // The URL was already ingested by the article pipeline. Link that
+        // document to the Media Archive instead of creating a duplicate or
+        // re-running embeddings.
+        const linked = await store.linkArticleDocumentToMedia(
+          existingMedia.documentId,
+          mediaRecord
+        );
+
+        if (!linked) throw new Error('media_document_conflict');
+
+        const now = new Date().toISOString();
+        await store.updateJob(job.id, {
+          status: 'completed',
+          document_id: existingMedia.documentId,
+          title: mediaRecord.title,
+          canonical_url: mediaRecord.canonical_url,
+          content_hash: existingMedia.contentHash,
+          extraction_status: existingMedia.extractionStatus || 'complete',
+          extraction_metadata: {
+            stage: 'done',
+            linked_existing_article: true,
+          },
+          error_code: null,
+          error_detail: 'Linked existing article document; no duplicate created.',
+          retry_after: null,
+          processed_at: now,
+          locked_at: null,
+          worker_id: null,
+        });
+        linkedExisting = true;
       }
 
       if (existingMedia) {
@@ -1073,6 +1101,19 @@ export async function processNextBrainJob(options: ProcessNextOptions): Promise<
       }
     } else {
       known = await store.findDuplicate({ normalizedUrl: job.normalized_url });
+    }
+
+    if (linkedExisting) {
+      jobs = await store.getJobs(runId);
+      const finalized = await finalizeRun(store, runId, jobs);
+      const processed = jobs.find((entry) => entry.id === job.id) || job;
+
+      return {
+        state: 'processed',
+        job: processed,
+        progress: finalized.progress,
+        runStatus: finalized.runStatus,
+      };
     }
 
     // A known URL is not skipped. Re-fetching is the only reliable way to

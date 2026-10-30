@@ -13,12 +13,7 @@ export type BrainRunStatus =
 export type BrainSourceType = 'article' | 'media_coverage';
 
 export type MediaCoverageStatus =
-  | 'pending'
-  | 'processing'
-  | 'completed'
-  | 'failed'
-  | 'partial'
-  | 'blocked';
+  'pending' | 'processing' | 'completed' | 'failed' | 'partial' | 'blocked';
 
 export type MediaArchiveRecord = {
   id: string;
@@ -354,10 +349,7 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       throw new Error('brain_media_record_create_failed');
     },
 
-    async updateMediaRecord(
-      mediaRecordId: string,
-      patch: MediaArchivePatch
-    ): Promise<void> {
+    async updateMediaRecord(mediaRecordId: string, patch: MediaArchivePatch): Promise<void> {
       const { error } = await store
         .from('media_archive_records')
         .update({
@@ -1058,6 +1050,68 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       }
 
       throw new Error('brain_media_document_insert_failed');
+    },
+
+    async linkArticleDocumentToMedia(
+      documentId: string,
+      mediaRecord: MediaArchiveRecord
+    ): Promise<boolean> {
+      const { data: document, error: documentError } = await store
+        .from('knowledge_documents')
+        .select('id,source_type,media_record_id,chunk_count,extraction_status')
+        .eq('id', documentId)
+        .maybeSingle();
+
+      if (documentError || !document) return false;
+
+      const value = document as {
+        id: string;
+        source_type: string;
+        media_record_id: string | null;
+        chunk_count: number | null;
+        extraction_status: string | null;
+      };
+
+      if (value.source_type !== 'article') return false;
+      if (value.media_record_id && value.media_record_id !== mediaRecord.id) return false;
+
+      const chunkCount = Number(value.chunk_count || 0);
+      const coverageStatus = chunkCount > 0 ? 'completed' : 'failed';
+      const textQuality =
+        chunkCount > 0
+          ? value.extraction_status === 'complete'
+            ? 'full_text'
+            : 'partial_text'
+          : 'metadata_only';
+
+      const { error } = await store
+        .from('knowledge_documents')
+        .update({
+          media_record_id: mediaRecord.id,
+          media_outlet: mediaRecord.outlet.slice(0, 300),
+          media_kind: mediaRecord.kind.slice(0, 60),
+          media_topic: mediaRecord.topic.slice(0, 120),
+          media_language: mediaRecord.lang.slice(0, 16),
+          media_published_date: mediaRecord.published_date,
+          media_archive_status: mediaRecord.status.slice(0, 40),
+          media_coverage_status: coverageStatus,
+          media_text_quality: textQuality,
+          media_coverage_method: 'linked_article',
+          media_coverage_error_code: null,
+          media_coverage_error_detail: null,
+          media_coverage_diagnostics: {
+            linked_existing_article: true,
+            chunk_count: chunkCount,
+          },
+          processed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', documentId)
+        .eq('source_type', 'article');
+
+      if (error) throw new Error('brain_media_article_link_failed');
+
+      return true;
     },
 
     async updateMediaCoverageDocument(document: MediaCoverageDocumentRow): Promise<void> {
