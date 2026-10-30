@@ -498,6 +498,46 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   </nav>
                 )}
 
+                {message.ragOutcome && message.ragOutcome !== 'relevant_results' && (
+                  <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.12em] text-[#A49A8C]">
+                    {message.ragOutcome === 'unavailable'
+                      ? 'UNFRAMED retrieval is unavailable right now.'
+                      : 'No sufficiently relevant UNFRAMED passage was retrieved.'}
+                  </p>
+                )}
+
+                {message.evidence && message.evidence.length > 0 && (
+                  <details className="mt-3 rounded-xl border border-[#E4DCCF] bg-[#F8F5EF]/70 px-3 py-2">
+                    <summary className="cursor-pointer select-none font-mono text-[9px] uppercase tracking-[0.14em] text-[#7D7468]">
+                      Sources · {message.evidence.length}
+                    </summary>
+                    <ul className="mt-2 space-y-3">
+                      {message.evidence.map((source) => (
+                        <li
+                          key={source.chunkId}
+                          className="border-t border-[#E9E1D5] pt-2 first:border-0 first:pt-0"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="font-sans text-[11px] font-semibold leading-snug text-[#4D463D]">
+                              {source.heading}
+                            </span>
+                            <span className="shrink-0 font-mono text-[9px] text-[#9C9284]">
+                              {source.similarity.toFixed(3)}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[#A49A8C]">
+                            {source.sectionPath.join(' / ')} · lines {source.lineStart}–
+                            {source.lineEnd}
+                          </p>
+                          <p className="mt-1.5 font-serif text-[12px] leading-relaxed text-[#625B50]">
+                            {source.excerpt}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+
                 {message.provider && (
                   <span className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[#A49A8C]">
                     via {message.provider}

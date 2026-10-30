@@ -40,9 +40,16 @@ import { loadPierrotOfferRuntime } from '@/lib/pierrot/offerAvailability';
 import { recordPierrotCommercialAnalytics } from '@/lib/pierrot/commercialAnalytics';
 import { isServiceLeadIntent } from '@/lib/pierrot/serviceInquiry';
 import { advanceStoredServiceInquiry } from '@/lib/pierrot/serviceInquiryStore';
-import { isPierrotRagEnabled } from '@/lib/knowledge/rag/config';
 import { retrieveUnframedEvidence } from '@/lib/knowledge/rag/retrieval';
-import { buildUnframedEvidencePrompt } from '@/lib/knowledge/rag/pierrotContext';
+import {
+  buildUnframedEvidencePrompt,
+  buildUnframedUnavailablePrompt,
+} from '@/lib/knowledge/rag/pierrotContext';
+import {
+  buildUnframedEvidenceSources,
+  type UnframedEvidenceSource,
+} from '@/lib/knowledge/rag/evidence';
+import type { RagRetrievalOutcome } from '@/lib/knowledge/rag/types';
 import { isVerifiedOwnerCredential, isVerifiedOwnerUser } from '@/lib/knowledge/rag/authorization';
 
 export const runtime = 'nodejs';
@@ -96,6 +103,12 @@ LINKS:
 - When mentioning a page of this site, use a markdown link, e.g. [Lobby](/lobby).
 - Allowed internal routes: /, /heartandangel, /heartandangel/card, /lobby, /journal, /flow, /flow/join, /advising, /media, /heritage, /selection, /art-engine, /unframed, /unframed/book, /unframed/proposal.
 `;
+
+type OwnerRagResponse = {
+  mode: 'unframed';
+  outcome: RagRetrievalOutcome;
+  sources: UnframedEvidenceSource[];
+};
 
 // Helper to invoke DeepSeek
 async function callDeepSeek(
@@ -158,6 +171,7 @@ export async function POST(req: Request) {
       sessionId: rawSessionId,
       userMessageId: rawUserMessageId,
       consent: rawConsent,
+      mode: rawMode,
     } = body;
 
     if (!message || typeof message !== 'string' || !message.trim()) {
@@ -180,6 +194,12 @@ export async function POST(req: Request) {
     ) {
       return NextResponse.json({ error: 'Invalid conversation identifiers.' }, { status: 400 });
     }
+
+    if (rawMode !== undefined && rawMode !== 'site' && rawMode !== 'unframed') {
+      return NextResponse.json({ error: 'Invalid conversation mode.' }, { status: 400 });
+    }
+
+    const ownerMode = rawMode === 'unframed';
 
     const requestedPathname = sanitizePierrotPathname(
       context && typeof context === 'object' ? context.pathname : undefined
@@ -247,6 +267,10 @@ export async function POST(req: Request) {
         (process.env.PIERO_API_SECRET && customAdminHeader === process.env.PIERO_API_SECRET))
     ) {
       isAdmin = true;
+    }
+
+    if (ownerMode && !ragOwnerAuthorized) {
+      return NextResponse.json({ error: 'Owner mode is not available.' }, { status: 403 });
     }
 
     // Format normalized conversation history with hard limits.
@@ -323,7 +347,7 @@ export async function POST(req: Request) {
     let serviceInquiry: Awaited<ReturnType<typeof advanceStoredServiceInquiry>> = null;
     let serviceInquiryUnavailable = false;
 
-    if (pierrotStore && isServiceLeadIntent(intent)) {
+    if (!ownerMode && pierrotStore && isServiceLeadIntent(intent)) {
       try {
         serviceInquiry = await advanceStoredServiceInquiry({
           store: pierrotStore,
@@ -338,7 +362,7 @@ export async function POST(req: Request) {
     }
 
     const pageContext = resolvePierrotPageContext(requestedPathname);
-    const contextOfferId = pageContext.contextOfferId;
+    const contextOfferId = ownerMode ? null : pageContext.contextOfferId;
 
     // The browser transcript preserves the immediate offer id. Trusted server
     // events add refusals, objections, verified purchases and confirmed
@@ -364,7 +388,7 @@ export async function POST(req: Request) {
 
     const runtimeOfferId = intent.offerId ?? contextOfferId ?? previousOfferId;
     const offerRuntime =
-      runtimeOfferId === 'heart_angel_postcard' || runtimeOfferId === 'journal_flow'
+      !ownerMode && (runtimeOfferId === 'heart_angel_postcard' || runtimeOfferId === 'journal_flow')
         ? await loadPierrotOfferRuntime({
             offerId: runtimeOfferId,
             userId: currentUserId,
@@ -382,29 +406,32 @@ export async function POST(req: Request) {
       serviceInquiry,
       serviceInquiryUnavailable,
     });
-    const commercialPrompt = buildPierrotCommercialPrompt(plan);
+    const useModel = ownerMode || plan.useModel;
+    const commercialPrompt = ownerMode ? '' : buildPierrotCommercialPrompt(plan);
 
-    const responseExtras = {
-      ...(plan.cta ? { cta: plan.cta } : {}),
-      ...(plan.actions.length > 0 ? { actions: plan.actions } : {}),
-      ...(plan.links.length > 0 ? { links: plan.links } : {}),
-      ...(plan.offer ? { offerId: plan.offer.id } : {}),
-      ...(plan.commercialMarker ? { commercialMarker: plan.commercialMarker } : {}),
-      commercial: {
-        stage: plan.commercialStage,
-        proactive: plan.proactive,
-        offerSelected: plan.offerSelected,
-      },
-      intent: {
-        name: intent.name,
-        confidence: intent.confidence,
-        uncertain: intent.uncertain,
-        offerId: intent.offerId ?? null,
-        declined: intent.declined,
-        accessRequest: intent.accessRequest,
-        publisherIntent: intent.publisherIntent,
-      },
-    };
+    const responseExtras = ownerMode
+      ? {}
+      : {
+          ...(plan.cta ? { cta: plan.cta } : {}),
+          ...(plan.actions.length > 0 ? { actions: plan.actions } : {}),
+          ...(plan.links.length > 0 ? { links: plan.links } : {}),
+          ...(plan.offer ? { offerId: plan.offer.id } : {}),
+          ...(plan.commercialMarker ? { commercialMarker: plan.commercialMarker } : {}),
+          commercial: {
+            stage: plan.commercialStage,
+            proactive: plan.proactive,
+            offerSelected: plan.offerSelected,
+          },
+          intent: {
+            name: intent.name,
+            confidence: intent.confidence,
+            uncertain: intent.uncertain,
+            offerId: intent.offerId ?? null,
+            declined: intent.declined,
+            accessRequest: intent.accessRequest,
+            publisherIntent: intent.publisherIntent,
+          },
+        };
 
     const systemPrompt =
       (isAdmin ? PIERROT_PROMPT_OWNER : PIERROT_PROMPT_PUBLIC) +
@@ -478,7 +505,7 @@ export async function POST(req: Request) {
 
     // Commercial metadata is recorded whenever metadata storage is allowed,
     // even if transcript storage is not. The payload contains no message text.
-    if (pierrotStore) {
+    if (!ownerMode && pierrotStore) {
       try {
         await recordPierrotCommercialAnalytics(pierrotStore, {
           conversationId,
@@ -494,12 +521,13 @@ export async function POST(req: Request) {
 
     let reply = '';
     let usedProvider = '';
+    let ownerRag: OwnerRagResponse | null = null;
 
-    if (!plan.useModel) {
+    if (!useModel) {
       reply = plan.reply || 'Silence.';
     }
 
-    if (plan.useModel) {
+    if (useModel) {
       try {
         // DeepSeek only. No OpenRouter/Gemini fallback: a failed request
         // returns a clear 500 rather than silently switching providers.
@@ -541,19 +569,33 @@ export async function POST(req: Request) {
         const prefersReasoning =
           isAdmin && reasoningKeywords.some((keyword) => contextScan.includes(keyword));
 
-        // Owner-only UNFRAMED retrieval. When the flag is absent/false or the
-        // requester is not a verified owner, generation uses the exact existing
-        // prompt path. Retrieval failures fall back without breaking chat.
+        // Owner-only UNFRAMED retrieval. Public conversations never enter this
+        // branch. The mode is a client intent only; access is decided by the
+        // verified server-side owner identity above.
         let generationSystemPrompt = systemPrompt;
 
-        if (isPierrotRagEnabled() && ragOwnerAuthorized) {
+        if (ownerMode) {
           try {
             const retrieval = await retrieveUnframedEvidence({
               query: trimmedMessage,
               scope: 'owner',
               ownerAuthorized: true,
+              enabled: true,
             });
-            const ragPrompt = buildUnframedEvidencePrompt(retrieval);
+
+            ownerRag = {
+              mode: 'unframed',
+              outcome: retrieval.outcome,
+              sources:
+                retrieval.outcome === 'relevant_results'
+                  ? buildUnframedEvidenceSources(retrieval)
+                  : [],
+            };
+
+            const ragPrompt =
+              retrieval.outcome === 'relevant_results'
+                ? buildUnframedEvidencePrompt(retrieval)
+                : buildUnframedUnavailablePrompt(retrieval.outcome);
 
             if (ragPrompt) {
               generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
@@ -567,6 +609,15 @@ export async function POST(req: Request) {
               code: retrieval.code ?? null,
             });
           } catch {
+            ownerRag = {
+              mode: 'unframed',
+              outcome: 'unavailable',
+              sources: [],
+            };
+            generationSystemPrompt = `${systemPrompt}\n\n${buildUnframedUnavailablePrompt(
+              'unavailable'
+            )}`;
+
             // Never log query text, passages or provider/database details.
             console.warn('[Pierrot RAG] unavailable (unexpected)');
           }
@@ -640,6 +691,7 @@ export async function POST(req: Request) {
       reply: finalReply,
       provider: usedProvider || undefined,
       ...(isAdmin ? { admin: true } : {}),
+      ...(ownerRag ? { rag: ownerRag } : {}),
       conversationId,
       sessionId,
       userMessageId,

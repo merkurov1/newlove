@@ -3,6 +3,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthContext';
+import type { UnframedEvidenceSource } from '@/lib/knowledge/rag/evidence';
+import type { RagRetrievalOutcome } from '@/lib/knowledge/rag/types';
 import {
   PIERROT_SECTIONS,
   createNavigationProposal,
@@ -61,6 +63,8 @@ export type PierrotMessage = {
   cta?: PierrotOfferCta;
   commercialMarker?: PierrotCommercialMarker;
   meta?: PierrotMessageMeta;
+  evidence?: UnframedEvidenceSource[];
+  ragOutcome?: RagRetrievalOutcome;
 };
 
 type PierrotContextValue = {
@@ -72,11 +76,14 @@ type PierrotContextValue = {
   isOpen: boolean;
   isLoading: boolean;
   isAdminSession: boolean;
+  isUnframedMode: boolean;
+  canUseUnframedMode: boolean;
   pendingNavigation: PierrotNavigationProposal | null;
   openChat: () => void;
   openConversation: () => void;
   startConversation: () => void;
   toggleConversation: () => void;
+  toggleUnframedMode: () => void;
   closeConversation: () => void;
   closeChat: () => void;
   updateDraft: (value: string, caret?: number | null) => void;
@@ -189,6 +196,54 @@ function normalizeCommercialMarker(value: unknown): PierrotCommercialMarker | un
   };
 }
 
+function normalizeRagOutcome(value: unknown): RagRetrievalOutcome | undefined {
+  if (
+    value === 'relevant_results' ||
+    value === 'weak_match' ||
+    value === 'no_match' ||
+    value === 'unavailable'
+  ) {
+    return value;
+  }
+
+  return undefined;
+}
+
+function normalizeEvidenceSource(value: unknown): UnframedEvidenceSource | null {
+  if (!value || typeof value !== 'object') return null;
+
+  const source = value as Record<string, unknown>;
+  const sectionPath = Array.isArray(source.sectionPath)
+    ? source.sectionPath.filter((part): part is string => typeof part === 'string')
+    : null;
+
+  if (
+    typeof source.chunkId !== 'string' ||
+    typeof source.heading !== 'string' ||
+    !sectionPath ||
+    sectionPath.length === 0 ||
+    typeof source.sectionIndex !== 'number' ||
+    typeof source.lineStart !== 'number' ||
+    typeof source.lineEnd !== 'number' ||
+    typeof source.similarity !== 'number' ||
+    !Number.isFinite(source.similarity) ||
+    typeof source.excerpt !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    chunkId: source.chunkId,
+    heading: source.heading,
+    sectionPath,
+    sectionIndex: source.sectionIndex,
+    lineStart: source.lineStart,
+    lineEnd: source.lineEnd,
+    similarity: source.similarity,
+    excerpt: source.excerpt,
+  };
+}
+
 function normalizeMessage(value: unknown, index: number): PierrotMessage | null {
   if (!value || typeof value !== 'object') return null;
 
@@ -211,6 +266,11 @@ function normalizeMessage(value: unknown, index: number): PierrotMessage | null 
     : [];
   const cta = normalizePierrotOfferCta(message.cta);
   const offerId = cta?.offerId ?? (isPierrotOfferId(message.offerId) ? message.offerId : undefined);
+  const evidence = Array.isArray(message.evidence)
+    ? message.evidence
+        .map(normalizeEvidenceSource)
+        .filter((source): source is UnframedEvidenceSource => source !== null)
+    : [];
 
   return {
     id:
@@ -226,6 +286,8 @@ function normalizeMessage(value: unknown, index: number): PierrotMessage | null 
     cta: cta ?? undefined,
     commercialMarker: normalizeCommercialMarker(message.commercialMarker ?? message.commercial),
     meta: normalizeMeta(message.meta),
+    evidence: evidence.length > 0 ? evidence : undefined,
+    ragOutcome: normalizeRagOutcome(message.ragOutcome),
   };
 }
 
@@ -250,7 +312,12 @@ function loadMessages(): PierrotMessage[] {
 export function PierrotProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname() || '/';
-  const { user: authUser, isLoading: isAuthLoading } = useAuth();
+  const {
+    user: authUser,
+    profile: authProfile,
+    roles: authRoles,
+    isLoading: isAuthLoading,
+  } = useAuth();
 
   const [messages, setMessages] = useState<PierrotMessage[]>(loadMessages);
   const [draft, setDraft] = useState('');
@@ -259,9 +326,15 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   const [hasUnread, setHasUnread] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isAdminSession, setIsAdminSession] = useState(false);
+  const [isUnframedMode, setIsUnframedMode] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<PierrotNavigationProposal | null>(
     null
   );
+
+  const canUseUnframedMode =
+    isAdminSession ||
+    (Array.isArray(authRoles) && authRoles.some((role) => role.toUpperCase() === 'ADMIN')) ||
+    (typeof authProfile?.role === 'string' && authProfile.role.toUpperCase() === 'ADMIN');
 
   const isOpen = mode === 'modal';
 
@@ -346,6 +419,15 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   const openConversation = useCallback(() => {
     setMode('modal');
   }, []);
+
+  const toggleUnframedMode = useCallback(() => {
+    if (!canUseUnframedMode) return;
+    setIsUnframedMode((current) => !current);
+  }, [canUseUnframedMode]);
+
+  useEffect(() => {
+    if (!canUseUnframedMode) setIsUnframedMode(false);
+  }, [canUseUnframedMode]);
 
   const startConversation = useCallback(() => {
     if (startLockRef.current || messagesRef.current.length > 0) return;
@@ -589,6 +671,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
           },
           body: JSON.stringify({
             message: text,
+            mode: isUnframedMode ? 'unframed' : 'site',
             conversationId: getPierrotConversationId(),
             sessionId: getPierrotSessionId(),
             userMessageId: userMessage.id,
@@ -635,6 +718,14 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
           : [];
         const responseCta = normalizePierrotOfferCta(data.cta);
         const responseMarker = normalizeCommercialMarker(data.commercialMarker);
+        const ragPayload =
+          data.rag && typeof data.rag === 'object' ? (data.rag as Record<string, unknown>) : null;
+        const responseRagOutcome = normalizeRagOutcome(ragPayload?.outcome);
+        const responseEvidence = Array.isArray(ragPayload?.sources)
+          ? ragPayload.sources
+              .map(normalizeEvidenceSource)
+              .filter((source): source is UnframedEvidenceSource => source !== null)
+          : [];
 
         appendMessage({
           role: 'assistant',
@@ -646,6 +737,8 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
             responseCta?.offerId ?? (isPierrotOfferId(data.offerId) ? data.offerId : undefined),
           cta: responseCta ?? undefined,
           commercialMarker: responseMarker,
+          evidence: responseEvidence.length > 0 ? responseEvidence : undefined,
+          ragOutcome: responseRagOutcome,
           meta: { kind: 'chat' },
         });
       } catch (error: unknown) {
@@ -674,7 +767,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [appendMessage, draft, executeNavigation, introduceSection, pathname]
+    [appendMessage, draft, executeNavigation, introduceSection, isUnframedMode, pathname]
   );
 
   const runAction = useCallback(
@@ -715,6 +808,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       setDraftCaret(0);
       setIsLoading(false);
       setIsAdminSession(false);
+      setIsUnframedMode(false);
       updatePendingNavigation(null);
 
       try {
@@ -837,11 +931,14 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     isOpen,
     isLoading,
     isAdminSession,
+    isUnframedMode,
+    canUseUnframedMode,
     pendingNavigation,
     openChat,
     openConversation,
     startConversation,
     toggleConversation,
+    toggleUnframedMode,
     closeConversation,
     closeChat,
     updateDraft,

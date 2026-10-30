@@ -23,6 +23,23 @@ jest.mock('@/lib/serverAuth', () => ({
   }),
 }));
 
+jest.mock('@/lib/knowledge/rag/retrieval', () => ({
+  retrieveUnframedEvidence: jest.fn(),
+}));
+
+jest.mock('@/lib/knowledge/rag/pierrotContext', () => {
+  const actual = jest.requireActual('@/lib/knowledge/rag/pierrotContext') as Record<
+    string,
+    unknown
+  >;
+
+  return {
+    ...actual,
+    buildUnframedEvidencePrompt: jest.fn(() => 'MOCKED_EVIDENCE_PROMPT'),
+    buildUnframedUnavailablePrompt: jest.fn(() => 'MOCKED_NO_EVIDENCE_PROMPT'),
+  };
+});
+
 jest.mock('@/lib/rateLimit', () => ({
   checkRateLimit: jest.fn(() => null),
   getClientIp: jest.fn(() => 'test-client'),
@@ -68,6 +85,19 @@ process.env.DEEPSEEK_API_KEY = 'test-deepseek-key';
 const OpenAIModule = require('openai') as { __createMock: unknown };
 const pierrotStore =
   require('@/lib/pierrot/serverStore') as typeof import('@/lib/pierrot/serverStore');
+const serverAuth = require('@/lib/serverAuth') as {
+  getCurrentUser: {
+    mockResolvedValueOnce: (value: unknown) => void;
+    mockResolvedValue: (value: unknown) => void;
+  };
+};
+const retrieval = require('@/lib/knowledge/rag/retrieval') as {
+  retrieveUnframedEvidence: {
+    mockResolvedValueOnce: (value: unknown) => void;
+    mockResolvedValue: (value: unknown) => void;
+    mock: { calls: unknown[][] };
+  };
+};
 const serviceInquiryStore = require('@/lib/pierrot/serviceInquiryStore') as {
   advanceStoredServiceInquiry: {
     mock: { calls: unknown[][] };
@@ -136,6 +166,12 @@ beforeEach(() => {
   });
   asMock(pierrotStore.persistenceFailure).mockImplementation(() => undefined);
   serviceInquiryStore.advanceStoredServiceInquiry.mockResolvedValue(null);
+  retrieval.retrieveUnframedEvidence.mockResolvedValue({
+    outcome: 'no_match',
+    hits: [],
+    latencyMs: 1,
+    topSimilarity: null,
+  });
 
   mockCreate.mockReset();
   mockCreate.mockImplementation(async () => {
@@ -409,6 +445,119 @@ describe('POST /api/pierrot-web persistence', () => {
 
     errorSpy.mockRestore();
     warnSpy.mockRestore();
+  });
+
+  it('returns owner-only UNFRAMED evidence and suppresses commercial extras', async () => {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: 'owner-1',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+    retrieval.retrieveUnframedEvidence.mockResolvedValueOnce({
+      outcome: 'relevant_results',
+      hits: [
+        {
+          chunkId: 'chk_b03d6972f4cf898635f1cf65b58aaeb2',
+          documentId: 'doc_unframed_manuscript',
+          content: 'A passage about the archive and its memory.',
+          heading: 'CHAPTER 01: THE ARCHIVE',
+          sectionPath: ['PART I', 'CHAPTER 01: THE ARCHIVE'],
+          sectionIndex: 1,
+          lineStart: 10,
+          lineEnd: 12,
+          similarity: 0.82,
+        },
+      ],
+      latencyMs: 4,
+      topSimilarity: 0.82,
+    });
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'What does UNFRAMED say about the archive?',
+        })
+      )
+    );
+    const json = (await response.json()) as {
+      admin?: boolean;
+      cta?: unknown;
+      rag?: {
+        mode?: string;
+        outcome?: string;
+        sources?: Array<{ chunkId?: string; excerpt?: string; similarity?: number }>;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.admin).toBe(true);
+    expect(json.cta).toBeUndefined();
+    expect(json.rag).toMatchObject({
+      mode: 'unframed',
+      outcome: 'relevant_results',
+    });
+    expect(json.rag?.sources?.[0]).toMatchObject({
+      chunkId: 'chk_b03d6972f4cf898635f1cf65b58aaeb2',
+      excerpt: 'A passage about the archive and its memory.',
+      similarity: 0.82,
+    });
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(retrieval.retrieveUnframedEvidence.mock.calls[0][0]).toMatchObject({
+      scope: 'owner',
+      ownerAuthorized: true,
+      enabled: true,
+    });
+  });
+
+  it('returns an honest no-match owner response without sources', async () => {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: 'owner-1',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'What does UNFRAMED say about a topic it does not cover?',
+        })
+      )
+    );
+    const json = (await response.json()) as {
+      rag?: { outcome?: string; sources?: unknown[] };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.rag).toEqual({
+      mode: 'unframed',
+      outcome: 'no_match',
+      sources: [],
+    });
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects owner mode for a non-owner before persistence', async () => {
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'What does UNFRAMED say about the archive?',
+        })
+      )
+    );
+
+    expect(response.status).toBe(403);
+    expect(retrieval.retrieveUnframedEvidence).not.toHaveBeenCalled();
+    expect(pierrotStore.ensurePierrotConversation).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown conversation mode', async () => {
+    const response = await POST(makeRequest(validBody({ mode: 'admin' })));
+
+    expect(response.status).toBe(400);
+    expect(pierrotStore.ensurePierrotConversation).not.toHaveBeenCalled();
   });
 
   it('rejects oversized messages before touching storage', async () => {

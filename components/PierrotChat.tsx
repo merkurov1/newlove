@@ -3,7 +3,7 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, RotateCcw } from 'lucide-react';
+import { X, RotateCcw, BookOpen } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
 import { PierrotInput, PierrotMessageList } from '@/components/pierrot/PierrotConversation';
 import PierrotDataNotice from '@/components/pierrot/PierrotDataNotice';
@@ -72,7 +72,15 @@ export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
 }
 
 export default function PierrotChat() {
-  const { messages, isOpen, closeChat, clearChat } = usePierrot();
+  const {
+    messages,
+    isOpen,
+    closeChat,
+    clearChat,
+    isUnframedMode,
+    canUseUnframedMode,
+    toggleUnframedMode,
+  } = usePierrot();
 
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const modalRef = useRef<HTMLElement | null>(null);
@@ -301,6 +309,31 @@ export default function PierrotChat() {
                       </div>
 
                       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                        {canUseUnframedMode && (
+                          <button
+                            type="button"
+                            onClick={toggleUnframedMode}
+                            aria-pressed={isUnframedMode}
+                            title="Private UNFRAMED manuscript mode"
+                            aria-label="Toggle UNFRAMED manuscript mode"
+                            className={`
+                              flex h-10 items-center gap-1.5 rounded-full border px-3
+                              font-mono text-[9px] uppercase tracking-[0.16em]
+                              shadow-[0_2px_8px_rgba(75,62,45,0.04)]
+                              transition focus:outline-none focus:ring-2
+                              focus:ring-[#CFC3B1] focus:ring-offset-2 sm:px-4 sm:text-[10px]
+                              ${
+                                isUnframedMode
+                                  ? 'border-[#37332D] bg-[#37332D] text-white'
+                                  : 'border-[#E4DCCF] bg-[#F8F5EF] text-[#625B50] hover:border-[#CFC3B1] hover:bg-white hover:text-[#3F3A33]'
+                              }
+                            `}
+                          >
+                            <BookOpen size={14} strokeWidth={1.7} />
+                            <span className="hidden sm:inline">UNFRAMED</span>
+                          </button>
+                        )}
+
                         <button
                           type="button"
                           onClick={() => clearChat()}
@@ -354,8 +387,16 @@ export default function PierrotChat() {
                     "
                   >
                     <div className="mx-auto w-full max-w-3xl">
+                      {isUnframedMode && (
+                        <div className="mb-2 flex items-center gap-2 px-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[#8A8175]">
+                          <span className="h-1.5 w-1.5 rounded-full bg-[#8CA18A]" />
+                          <span>Private manuscript mode · answers use UNFRAMED evidence</span>
+                        </div>
+                      )}
                       <PierrotDataNotice className="mb-2 px-1" />
-                      <PierrotInput />
+                      <PierrotInput
+                        placeholder={isUnframedMode ? 'Ask UNFRAMED…' : 'Write to Pierrot…'}
+                      />
                     </div>
                   </footer>
                 </motion.section>
