@@ -37,6 +37,7 @@ import {
 } from '../evaluation';
 import { buildUnframedEvidencePrompt } from '../pierrotContext';
 import { retrieveUnframedEvidence } from '../retrieval';
+import { isMissingIngestionVersionColumn, upsertKnowledgeDocument } from '../supabaseStore';
 import type { KnowledgeRepository, KnowledgeSearchRow } from '../types';
 
 const env = {
@@ -484,6 +485,68 @@ describe('deterministic ingestion', () => {
         allowStaleDelete: true,
       })
     ).rejects.toThrow('database_failed');
+  });
+});
+
+describe('Supabase production-schema fallback', () => {
+  it('detects both PostgreSQL and PostgREST missing-column errors', () => {
+    expect(
+      isMissingIngestionVersionColumn({
+        code: '42703',
+        message: 'column "ingestion_version" does not exist',
+      })
+    ).toBe(true);
+    expect(
+      isMissingIngestionVersionColumn({
+        code: 'PGRST204',
+        message:
+          "Could not find the 'ingestion_version' column of 'knowledge_documents' in the schema cache",
+      })
+    ).toBe(true);
+    expect(
+      isMissingIngestionVersionColumn({
+        code: 'PGRST204',
+        message: "Could not find the 'other_column' column",
+      })
+    ).toBe(false);
+    expect(isMissingIngestionVersionColumn(null)).toBe(false);
+  });
+
+  it('retries without the column and preserves the version in metadata', async () => {
+    const plan = buildUnframedIngestionPlan({
+      build,
+      modelId: UNFRAMED_EMBEDDING_MODEL,
+      dimensions: UNFRAMED_EMBEDDING_DIMENSIONS,
+    });
+    const calls: Array<{ row: Record<string, unknown>; options: unknown }> = [];
+    const store = {
+      from: (_table: string) => ({
+        upsert: async (row: Record<string, unknown>, options: unknown) => {
+          calls.push({ row, options });
+
+          if (calls.length === 1) {
+            return {
+              error: {
+                code: 'PGRST204',
+                message:
+                  "Could not find the 'ingestion_version' column of 'knowledge_documents' in the schema cache",
+              },
+            };
+          }
+
+          return { error: null };
+        },
+      }),
+    } as unknown as Parameters<typeof upsertKnowledgeDocument>[0];
+
+    await upsertKnowledgeDocument(store, plan.document);
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0].row.ingestion_version).toBe('unframed-rag-ingestion-v1');
+    expect(calls[1].row.ingestion_version).toBeUndefined();
+    expect((calls[1].row.metadata as Record<string, unknown>).ingestion_version).toBe(
+      'unframed-rag-ingestion-v1'
+    );
   });
 });
 

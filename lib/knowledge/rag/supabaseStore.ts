@@ -23,6 +23,52 @@ export function toPgVector(vector: number[]): string {
   return `[${vector.join(',')}]`;
 }
 
+/**
+ * PostgREST reports a column missing from its schema cache as `PGRST204`,
+ * while direct PostgreSQL reports `42703`. Older live RAG schemas may predate
+ * `knowledge_documents.ingestion_version`.
+ */
+export function isMissingIngestionVersionColumn(
+  error: { code?: unknown; message?: unknown } | null | undefined
+): boolean {
+  if (!error) return false;
+
+  const code = typeof error.code === 'string' ? error.code : '';
+  const message = typeof error.message === 'string' ? error.message.toLowerCase() : '';
+
+  return (code === '42703' || code === 'PGRST204') && message.includes('ingestion_version');
+}
+
+export async function upsertKnowledgeDocument(
+  store: SupabaseClient,
+  document: KnowledgeDocumentRow
+): Promise<void> {
+  const { error } = await store.from('knowledge_documents').upsert(document, { onConflict: 'id' });
+
+  if (!error) return;
+
+  // Production schema reconciliation: some already-applied RAG schemas
+  // predate the ingestion_version column. Keep the contract in metadata
+  // instead of changing the live schema during an ingestion operation.
+  if (isMissingIngestionVersionColumn(error) && document.ingestion_version) {
+    const { ingestion_version, ...row } = document;
+    const { error: retryError } = await store.from('knowledge_documents').upsert(
+      {
+        ...row,
+        metadata: {
+          ...(document.metadata || {}),
+          ingestion_version,
+        },
+      },
+      { onConflict: 'id' }
+    );
+
+    if (!retryError) return;
+  }
+
+  throw new KnowledgeDatabaseError('write_failed');
+}
+
 function createServiceClient(env: RagEnvironment): SupabaseClient | null {
   const url = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
   const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -117,32 +163,7 @@ export function createSupabaseKnowledgeRepository(
 
   return {
     async upsertDocument(document: KnowledgeDocumentRow): Promise<void> {
-      const { error } = await store
-        .from('knowledge_documents')
-        .upsert(document, { onConflict: 'id' });
-
-      if (!error) return;
-
-      // Production schema reconciliation: some already-applied RAG schemas
-      // predate the ingestion_version column. Keep the contract in metadata
-      // instead of changing the live schema during an ingestion operation.
-      if (error.code === '42703' && document.ingestion_version) {
-        const { ingestion_version, ...row } = document;
-        const { error: retryError } = await store.from('knowledge_documents').upsert(
-          {
-            ...row,
-            metadata: {
-              ...(document.metadata || {}),
-              ingestion_version,
-            },
-          },
-          { onConflict: 'id' }
-        );
-
-        if (!retryError) return;
-      }
-
-      throw new KnowledgeDatabaseError('write_failed');
+      await upsertKnowledgeDocument(store, document);
     },
 
     async upsertChunks(chunks: KnowledgeChunkWithEmbedding[]): Promise<void> {
