@@ -73,6 +73,11 @@ const POSTCARD_TERMS: WeightedTerm[] = [
   { term: 'romantic', weight: 1.25 },
   { term: 'postcard', weight: 2 },
   { term: 'send', weight: 1 },
+  { term: 'send a card', weight: 2 },
+  { term: 'send a postcard', weight: 2 },
+  { term: 'someone i love', weight: 2 },
+  { term: 'someone i care', weight: 2 },
+  { term: 'want to send', weight: 1.5 },
   { term: 'someone', weight: 0.75 },
   { term: 'miss', weight: 1 },
   { term: 'любов', weight: 1.5 },
@@ -80,6 +85,7 @@ const POSTCARD_TERMS: WeightedTerm[] = [
   { term: 'ангел', weight: 1 },
   { term: 'отношен', weight: 1.5 },
   { term: 'подар', weight: 1.5 },
+  { term: 'подарить', weight: 1.5 },
   { term: 'расстоян', weight: 1.25 },
   { term: 'скуча', weight: 1 },
   { term: 'открытк', weight: 2 },
@@ -106,6 +112,10 @@ const UNFRAMED_TERMS: WeightedTerm[] = [
   { term: 'artist', weight: 0.75 },
   { term: 'writing', weight: 1 },
   { term: 'read', weight: 0.75 },
+  { term: 'read your book', weight: 2 },
+  { term: 'want to read', weight: 1.25 },
+  { term: 'your story', weight: 1.5 },
+  { term: 'your memoir', weight: 2 },
   { term: 'author', weight: 0.75 },
   { term: 'unframed', weight: 2 },
   { term: 'loop', weight: 1 },
@@ -135,8 +145,22 @@ const JOURNAL_TERMS: WeightedTerm[] = [
   { term: 'text', weight: 1 },
   { term: 'writing', weight: 1.25 },
   { term: 'read', weight: 0.75 },
+  { term: 'read more', weight: 1.5 },
+  { term: 'more of your writing', weight: 2 },
+  { term: 'your writing', weight: 2 },
+  { term: 'your essays', weight: 2 },
+  { term: 'love your work', weight: 2.5 },
+  { term: 'love what you do', weight: 2.5 },
+  { term: 'like your work', weight: 2.5 },
+  { term: 'like what you do', weight: 2.5 },
+  { term: 'admire your work', weight: 2.5 },
   { term: 'follow', weight: 1 },
+  { term: 'follow your work', weight: 2 },
+  { term: 'support your work', weight: 1.5 },
   { term: 'new work', weight: 1.75 },
+  { term: 'new writing', weight: 1.5 },
+  { term: 'what should i read', weight: 2 },
+  { term: 'where should i start reading', weight: 2 },
   { term: 'publish', weight: 1.25 },
   { term: 'newsletter', weight: 2 },
   { term: 'subscribe', weight: 2 },
@@ -150,7 +174,15 @@ const JOURNAL_TERMS: WeightedTerm[] = [
   { term: 'стать', weight: 1.25 },
   { term: 'писат', weight: 1.25 },
   { term: 'читать', weight: 0.75 },
+  { term: 'читать дальше', weight: 1.5 },
+  { term: 'ваши тексты', weight: 2 },
+  { term: 'твои тексты', weight: 2 },
+  { term: 'люблю вашу работу', weight: 2.5 },
+  { term: 'люблю твои работы', weight: 2.5 },
+  { term: 'нравится ваша работа', weight: 2.5 },
+  { term: 'восхищаюсь', weight: 2 },
   { term: 'следить', weight: 1 },
+  { term: 'следить за', weight: 1.5 },
   { term: 'подпис', weight: 2 },
   { term: 'выпуск', weight: 1 },
   { term: 'заметк', weight: 0.75 },
@@ -551,11 +583,13 @@ function chooseCandidate({
   intent,
   contextOfferId,
   state,
+  pageEngagement,
 }: {
   message: string;
   intent: PierrotIntent;
   contextOfferId: PierrotOfferId | null;
   state: PierrotCommercialState;
+  pageEngagement: boolean;
 }): { offerId: PierrotOfferId; score: number } | null {
   const scored = PROACTIVE_OFFER_IDS.map((offerId) => ({
     offerId,
@@ -565,15 +599,28 @@ function chooseCandidate({
   const best = scored[0];
   const second = scored[1];
 
-  if (!best || best.score <= 0) return null;
+  if (!best || best.score <= 0) {
+    // A genuine question about the page itself is a conversational signal,
+    // not a page view: "what is this?", "tell me more", "how does it work?".
+    if (pageEngagement && contextOfferId) {
+      return { offerId: contextOfferId, score: 0.5 };
+    }
+
+    return null;
+  }
 
   if (contextOfferId && best.offerId !== contextOfferId) {
     const contextual = scored.find((candidate) => candidate.offerId === contextOfferId);
 
-    // On a relevant page, a clear signal for that page's offer wins. A much
-    // stronger signal for another offer is still allowed off-page below.
+    // On a relevant page, a clear signal for that page's offer wins. If the
+    // page is the only concrete context and the visitor asked about it, prefer
+    // it over an unrelated catalogue match.
     if (contextual && contextual.score > 0) {
       return { offerId: contextual.offerId, score: contextual.score };
+    }
+
+    if (pageEngagement) {
+      return { offerId: contextOfferId, score: 0.5 };
     }
   }
 
@@ -592,6 +639,81 @@ function chooseCandidate({
   }
 
   return { offerId: best.offerId, score: best.score };
+}
+
+const PAGE_ENGAGEMENT_PHRASES = [
+  'tell me more',
+  'what is this',
+  "what's this",
+  'what am i looking at',
+  'how does this work',
+  'how does it work',
+  'how do this',
+  'why should i',
+  'should i',
+  'i like this',
+  'i like it',
+  'i want one',
+  'i need one',
+  "i'll take it",
+  'can i get it',
+  'i am interested',
+  "i'm interested",
+  'tell me about this',
+  'tell me about it',
+  'show me',
+  'worth it',
+  'what do i get',
+  'с чего начать',
+  'что это',
+  'что здесь',
+  'что тут',
+  'как это работает',
+  'как работает',
+  'расскажи подробнее',
+  'расскажи',
+  'подробнее',
+  'интересно',
+  'нравится',
+  'мне нравится',
+  'хочу такую',
+  'хочу такой',
+  'хочу это',
+  'стоит ли',
+  'хочу узнать',
+];
+
+const NEGATIVE_ENGAGEMENT_TERMS = [
+  "don't like",
+  'do not like',
+  'not really',
+  'not for me',
+  'no thanks',
+  'не нравится',
+  'не интересно',
+  'не надо',
+  'нет спасибо',
+];
+
+/**
+ * A page-aware question or expression of curiosity. This is deliberately
+ * narrower than "asked anything while on the page": the message must point at
+ * the thing in front of the visitor (this/it/here) or explicitly ask to know
+ * more.
+ */
+export function hasPierrotPageEngagementSignal(
+  message: string,
+  intent: PierrotIntent
+): boolean {
+  const text = message.trim().toLowerCase();
+
+  if (!text) return false;
+  if (intent.declined) return false;
+  if (NEGATIVE_ENGAGEMENT_TERMS.some((term) => text.includes(term))) return false;
+
+  if (intent.topic === 'product') return true;
+
+  return PAGE_ENGAGEMENT_PHRASES.some((phrase) => text.includes(phrase));
 }
 
 export function selectProactivePierrotOffer({
@@ -613,13 +735,18 @@ export function selectProactivePierrotOffer({
 
   const page = resolvePierrotPageContext(pathname);
 
-  if (!page.allowProactive) return null;
+  // These surfaces must not receive an unprompted consumer pitch. Explicit
+  // product questions still work through the normal intent path.
+  if (page.surface === 'unframed_proposal' || page.surface === 'flow_join') return null;
+
+  const pageEngagement = hasPierrotPageEngagementSignal(message, intent);
 
   const candidate = chooseCandidate({
     message,
     intent,
     contextOfferId: contextOfferId ?? page.contextOfferId,
     state,
+    pageEngagement,
   });
 
   if (!candidate) return null;
@@ -643,6 +770,11 @@ export function selectProactivePierrotOffer({
   const introductions = state.offerIntroductions[offerId] ?? 0;
 
   if (introductions >= 3) return null;
+
+  // A first "what is this?" may introduce the offer. After that, only a fresh
+  // signal in the message itself can justify another pitch; mere presence on
+  // the same page is never enough.
+  if (introductions > 0 && candidate.score < 1) return null;
 
   // A different offer immediately after the previous pitch is noise. This
   // does not block a direct answer to the visitor's new question.

@@ -122,7 +122,7 @@ export type KnowledgeSearchInput = {
   modelId: string;
   dimensions: number;
   accessClass: KnowledgeAccessClass;
-  documentId: string;
+  documentId: string | null;
   topK: number;
   minSimilarity: number;
   signal?: AbortSignal;

@@ -746,7 +746,7 @@ describe('Pierrot evidence prompt', () => {
 
     const prompt = buildUnframedEvidencePrompt(result);
 
-    expect(prompt).toContain('UNFRAMED_RETRIEVAL_CONTEXT');
+    expect(prompt).toContain('BRAIN_RETRIEVAL_CONTEXT');
     expect(prompt).toContain('untrusted reference material');
     expect(prompt).toContain('chunk:');
     expect(prompt).toContain('Quoted \\"passage\\" with\\nnewline.');

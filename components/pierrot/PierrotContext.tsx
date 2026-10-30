@@ -30,6 +30,14 @@ import {
   setPierrotConversationId,
   trackPierrotEvent,
 } from '@/lib/pierrot/clientTelemetry';
+import { detectPierrotLanguage } from '@/lib/pierrot/conversation';
+import {
+  getBrainAvailableText,
+  getBrainExampleQuestions,
+  getBrainIntroText,
+  isBrainActivationPhrase,
+  type BrainLanguage,
+} from '@/lib/pierrot/brain';
 import {
   isPierrotOfferId,
   isVerifiedPierrotInternalDestination,
@@ -78,6 +86,7 @@ type PierrotContextValue = {
   isAdminSession: boolean;
   isUnframedMode: boolean;
   canUseUnframedMode: boolean;
+  canShowBrainMode: boolean;
   pendingNavigation: PierrotNavigationProposal | null;
   openChat: () => void;
   openConversation: () => void;
@@ -97,7 +106,58 @@ const PierrotContext = createContext<PierrotContextValue | null>(null);
 
 const STORAGE_KEY = 'pierrot_chat_history_v2';
 const ARRIVAL_STORAGE_KEY = 'pierrot_navigation_arrival_v1';
+const ONBOARDING_STORAGE_KEY = 'pierrot_onboarding_v1';
+const BRAIN_UNLOCK_STORAGE_KEY = 'pierrot_brain_unlocked_v1';
 const INTRO_DELAY_MS = 420;
+const ONBOARDING_FIRST_NUDGE_MS = 10_000;
+const ONBOARDING_SECOND_NUDGE_MS = 10_000;
+
+const PIERROT_ONBOARDING_LINKS: PierrotMessageLink[] = [
+  { label: 'Anton Merkurov', href: '/' },
+  { label: 'Lobby', href: '/lobby' },
+  { label: 'UNFRAMED', href: '/unframed' },
+  { label: 'Flow', href: '/flow' },
+  { label: 'Journal', href: '/journal' },
+  { label: 'Art Engine', href: '/art-engine' },
+  { label: 'Selection', href: '/selection' },
+  { label: 'Heart & Angel', href: '/heartandangel' },
+  { label: 'Temple', href: '/temple' },
+];
+
+function onboardingLanguage(): 'ru' | 'en' {
+  if (typeof navigator === 'undefined') return 'ru';
+
+  return navigator.language?.toLowerCase().startsWith('ru') ? 'ru' : 'en';
+}
+
+function buildOnboardingSequence(): Array<Omit<PierrotMessage, 'id'>> {
+  const ru = onboardingLanguage() === 'ru';
+
+  return [
+    {
+      role: 'assistant',
+      content: ru
+        ? 'Привет! Я Пьеро, помощник Антона Меркурова.\nКак тебе помочь?'
+        : 'Hello. I am Pierrot, Anton Merkurov’s assistant.\nHow can I help?',
+      links: PIERROT_ONBOARDING_LINKS,
+      meta: { kind: 'chat' },
+    },
+    {
+      role: 'assistant',
+      content: ru
+        ? 'Что молчишь?\n\nЕсли скучно — почитай книгу.'
+        : 'Still there?\n\nIf you are bored, read the book.',
+      links: [{ label: 'UNFRAMED', href: '/unframed' }],
+      meta: { kind: 'chat' },
+    },
+    {
+      role: 'assistant',
+      content: ru ? 'Мало любви? — купи открытку.' : 'Short of love? Buy a postcard.',
+      links: [{ label: ru ? 'Купить открытку' : 'Heart & Angel postcard', href: '/heartandangel/card#order' }],
+      meta: { kind: 'chat' },
+    },
+  ];
+}
 
 export function usePierrot(): PierrotContextValue {
   const context = useContext(PierrotContext);
@@ -233,6 +293,7 @@ function normalizeEvidenceSource(value: unknown): UnframedEvidenceSource | null 
   }
 
   return {
+    documentId: typeof source.documentId === 'string' ? source.documentId : undefined,
     chunkId: source.chunkId,
     heading: source.heading,
     sectionPath,
@@ -327,6 +388,15 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isAdminSession, setIsAdminSession] = useState(false);
   const [isUnframedMode, setIsUnframedMode] = useState(false);
+  const [isBrainUnlocked, setIsBrainUnlocked] = useState(() => {
+    if (typeof window === 'undefined') return false;
+
+    try {
+      return window.sessionStorage.getItem(BRAIN_UNLOCK_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   const [pendingNavigation, setPendingNavigation] = useState<PierrotNavigationProposal | null>(
     null
   );
@@ -335,6 +405,8 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     isAdminSession ||
     (Array.isArray(authRoles) && authRoles.some((role) => role.toUpperCase() === 'ADMIN')) ||
     (typeof authProfile?.role === 'string' && authProfile.role.toUpperCase() === 'ADMIN');
+
+  const canShowBrainMode = canUseUnframedMode && isBrainUnlocked;
 
   const isOpen = mode === 'modal';
 
@@ -347,6 +419,8 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   const requestIdRef = useRef(0);
   const loadingRef = useRef(false);
   const introTimersRef = useRef<Record<string, number>>({});
+  const onboardingTimersRef = useRef<number[]>([]);
+  const onboardingCancelledRef = useRef(false);
   const navigationLockRef = useRef<string | null>(null);
   const navigationTargetRef = useRef<string | null>(null);
   const startLockRef = useRef(false);
@@ -395,6 +469,61 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const cancelOnboarding = useCallback(() => {
+    onboardingCancelledRef.current = true;
+
+    onboardingTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    onboardingTimersRef.current = [];
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let alreadyStarted = false;
+
+    try {
+      alreadyStarted = Boolean(window.sessionStorage.getItem(ONBOARDING_STORAGE_KEY));
+    } catch {
+      // Without storage, the in-memory guards still prevent a duplicate
+      // greeting during this mount.
+    }
+
+    if (alreadyStarted || messagesRef.current.length > 0) return;
+
+    try {
+      window.sessionStorage.setItem(ONBOARDING_STORAGE_KEY, '1');
+    } catch {
+      // Onboarding still works for this page view.
+    }
+
+    const [greeting, firstNudge, secondNudge] = buildOnboardingSequence();
+
+    appendMessage(greeting);
+
+    onboardingTimersRef.current.push(
+      window.setTimeout(() => {
+        if (onboardingCancelledRef.current) return;
+        if (messagesRef.current.some((message) => message.role === 'user')) return;
+
+        appendMessage(firstNudge);
+
+        onboardingTimersRef.current.push(
+          window.setTimeout(() => {
+            if (onboardingCancelledRef.current) return;
+            if (messagesRef.current.some((message) => message.role === 'user')) return;
+
+            appendMessage(secondNudge);
+          }, ONBOARDING_SECOND_NUDGE_MS)
+        );
+      }, ONBOARDING_FIRST_NUDGE_MS)
+    );
+
+    return () => {
+      onboardingTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      onboardingTimersRef.current = [];
+    };
+  }, [appendMessage]);
+
   useEffect(() => {
     if (mode === 'modal') {
       setHasUnread(false);
@@ -420,14 +549,78 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     setMode('modal');
   }, []);
 
+  useEffect(() => {
+    try {
+      if (isBrainUnlocked) {
+        window.sessionStorage.setItem(BRAIN_UNLOCK_STORAGE_KEY, '1');
+      } else {
+        window.sessionStorage.removeItem(BRAIN_UNLOCK_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore unavailable session storage.
+    }
+  }, [isBrainUnlocked]);
+
+  const currentBrainLanguage = useCallback((): BrainLanguage => {
+    const lastUserMessage = [...messagesRef.current]
+      .reverse()
+      .find((message) => message.role === 'user');
+    const detected = detectPierrotLanguage(lastUserMessage?.content || '');
+
+    if (detected !== 'und') return detected;
+
+    if (typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('ru')) {
+      return 'ru';
+    }
+
+    return 'en';
+  }, []);
+
+  const appendBrainExamples = useCallback(
+    (languageOverride?: BrainLanguage) => {
+      const language = languageOverride ?? currentBrainLanguage();
+
+      appendMessage({
+        role: 'assistant',
+        content: getBrainIntroText(language),
+        actions: getBrainExampleQuestions(language).map((question) => ({
+          kind: 'prompt' as const,
+          label: question.label,
+          prompt: question.prompt,
+        })),
+        meta: { kind: 'chat' },
+      });
+    },
+    [appendMessage, currentBrainLanguage]
+  );
+
   const toggleUnframedMode = useCallback(() => {
-    if (!canUseUnframedMode) return;
-    setIsUnframedMode((current) => !current);
-  }, [canUseUnframedMode]);
+    if (!canUseUnframedMode || !isBrainUnlocked) return;
+
+    if (isUnframedMode) {
+      setIsUnframedMode(false);
+      return;
+    }
+
+    cancelOnboarding();
+    setIsUnframedMode(true);
+    appendBrainExamples();
+  }, [
+    appendBrainExamples,
+    cancelOnboarding,
+    canUseUnframedMode,
+    isBrainUnlocked,
+    isUnframedMode,
+  ]);
 
   useEffect(() => {
-    if (!canUseUnframedMode) setIsUnframedMode(false);
-  }, [canUseUnframedMode]);
+    if (isAuthLoading) return;
+
+    if (!canUseUnframedMode) {
+      setIsUnframedMode(false);
+      setIsBrainUnlocked(false);
+    }
+  }, [canUseUnframedMode, isAuthLoading]);
 
   const startConversation = useCallback(() => {
     if (startLockRef.current || messagesRef.current.length > 0) return;
@@ -579,9 +772,10 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
 
   const exploreSection = useCallback(
     (sectionId: PierrotSectionId) => {
+      cancelOnboarding();
       introduceSection(sectionId, true);
     },
-    [introduceSection]
+    [cancelOnboarding, introduceSection]
   );
 
   const sendMessage = useCallback(
@@ -589,6 +783,8 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       const text = (overrideText ?? draft).trim();
 
       if (!text) return;
+
+      cancelOnboarding();
 
       if (pendingNavigationRef.current && isNavigationConfirmation(text)) {
         const proposal = pendingNavigationRef.current;
@@ -611,6 +807,32 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (loadingRef.current) return;
+
+      if (canUseUnframedMode && isBrainActivationPhrase(text)) {
+        const detected = detectPierrotLanguage(text);
+        const language: BrainLanguage = detected === 'und' ? currentBrainLanguage() : detected;
+
+        appendMessage({
+          role: 'user',
+          content: text,
+          meta: { kind: 'chat' },
+        });
+        setDraft('');
+        setDraftCaret(0);
+        setIsBrainUnlocked(true);
+
+        if (isUnframedMode) {
+          appendBrainExamples(language);
+        } else {
+          appendMessage({
+            role: 'assistant',
+            content: getBrainAvailableText(language),
+            meta: { kind: 'chat' },
+          });
+        }
+
+        return;
+      }
 
       const typedSection = findSectionByPrompt(text);
 
@@ -767,11 +989,23 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [appendMessage, draft, executeNavigation, introduceSection, isUnframedMode, pathname]
+    [
+      appendBrainExamples,
+      appendMessage,
+      canUseUnframedMode,
+      cancelOnboarding,
+      currentBrainLanguage,
+      draft,
+      executeNavigation,
+      introduceSection,
+      isUnframedMode,
+      pathname,
+    ]
   );
 
   const runAction = useCallback(
     (action: PierrotChatAction) => {
+      cancelOnboarding();
       trackPierrotEvent('action_clicked', createPierrotId(), {
         action_kind: action.kind,
         ...(action.kind === 'navigate' ? { section_id: action.sectionId } : {}),
@@ -785,11 +1019,12 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
 
       void sendMessage(action.prompt);
     },
-    [navigateToSection, sendMessage]
+    [cancelOnboarding, navigateToSection, sendMessage]
   );
 
   const clearChat = useCallback(
     (reason: 'new_chat' | 'user_closed' = 'new_chat') => {
+      cancelOnboarding();
       endPierrotConversation(reason);
       rotatePierrotConversationId();
 
@@ -809,16 +1044,20 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
       setIsAdminSession(false);
       setIsUnframedMode(false);
+      if (reason === 'user_closed') setIsBrainUnlocked(false);
       updatePendingNavigation(null);
 
       try {
         window.sessionStorage.removeItem(STORAGE_KEY);
         window.sessionStorage.removeItem(ARRIVAL_STORAGE_KEY);
+        if (reason === 'user_closed') {
+          window.sessionStorage.removeItem(BRAIN_UNLOCK_STORAGE_KEY);
+        }
       } catch {
         // Ignore storage errors.
       }
     },
-    [updatePendingNavigation]
+    [cancelOnboarding, updatePendingNavigation]
   );
 
   // Conversation history lives in sessionStorage and is shared by every tab
@@ -933,6 +1172,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     isAdminSession,
     isUnframedMode,
     canUseUnframedMode,
+    canShowBrainMode,
     pendingNavigation,
     openChat,
     openConversation,

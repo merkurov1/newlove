@@ -78,7 +78,7 @@ export default function PierrotChat() {
     closeChat,
     clearChat,
     isUnframedMode,
-    canUseUnframedMode,
+    canShowBrainMode,
     toggleUnframedMode,
   } = usePierrot();
 
@@ -309,13 +309,13 @@ export default function PierrotChat() {
                       </div>
 
                       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-                        {canUseUnframedMode && (
+                        {canShowBrainMode && (
                           <button
                             type="button"
                             onClick={toggleUnframedMode}
                             aria-pressed={isUnframedMode}
-                            title="Private UNFRAMED manuscript mode"
-                            aria-label="Toggle UNFRAMED manuscript mode"
+                            title="Private Brain knowledge mode"
+                            aria-label="Toggle Brain knowledge mode"
                             className={`
                               flex h-10 items-center gap-1.5 rounded-full border px-3
                               font-mono text-[9px] uppercase tracking-[0.16em]
@@ -330,7 +330,7 @@ export default function PierrotChat() {
                             `}
                           >
                             <BookOpen size={14} strokeWidth={1.7} />
-                            <span className="hidden sm:inline">UNFRAMED</span>
+                            <span className="hidden sm:inline">Brain</span>
                           </button>
                         )}
 
@@ -390,12 +390,12 @@ export default function PierrotChat() {
                       {isUnframedMode && (
                         <div className="mb-2 flex items-center gap-2 px-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[#8A8175]">
                           <span className="h-1.5 w-1.5 rounded-full bg-[#8CA18A]" />
-                          <span>Private manuscript mode · answers use UNFRAMED evidence</span>
+                          <span>Private Brain mode · answers use your knowledge base</span>
                         </div>
                       )}
                       <PierrotDataNotice className="mb-2 px-1" />
                       <PierrotInput
-                        placeholder={isUnframedMode ? 'Ask UNFRAMED…' : 'Write to Pierrot…'}
+                        placeholder={isUnframedMode ? 'Ask Brain…' : 'Write to Pierrot…'}
                       />
                     </div>
                   </footer>

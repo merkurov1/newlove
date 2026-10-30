@@ -32,6 +32,7 @@ const groups = [
     title: "Pierrot",
     links: [
       { href: "/admin/pierrot", label: "Pierrot Intelligence", icon: "◐" },
+      { href: "/admin/brain", label: "Brain ingestion", icon: "◇" },
     ],
   },
 ];

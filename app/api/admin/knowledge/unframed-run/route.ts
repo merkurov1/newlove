@@ -11,6 +11,7 @@ import type { C4Question } from '@/lib/knowledge/evaluation/c4/types';
 import {
   UNFRAMED_EMBEDDING_DIMENSIONS,
   UNFRAMED_EMBEDDING_MODEL,
+  UNFRAMED_RAG_DOCUMENT,
   resolveUnframedEmbeddingConfig,
   resolveUnframedEmbeddingProvider,
 } from '@/lib/knowledge/rag/config';
@@ -681,6 +682,7 @@ async function verifyIndex() {
         query: 'What does UNFRAMED say about the line?',
         scope: 'owner',
         ownerAuthorized: true,
+        documentId: UNFRAMED_RAG_DOCUMENT.id,
         enabled: true,
         embeddingClient,
         search: repository.search,
@@ -691,6 +693,7 @@ async function verifyIndex() {
         query: 'Что UNFRAMED говорит о линии?',
         scope: 'owner',
         ownerAuthorized: true,
+        documentId: UNFRAMED_RAG_DOCUMENT.id,
         enabled: true,
         embeddingClient,
         search: repository.search,

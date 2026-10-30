@@ -28,7 +28,7 @@ BEGIN
         'commercial_declined',
         'commercial_returned',
         'conversation_ended'
-      ));
+      )) NOT VALID;
   END IF;
 END $$;
 

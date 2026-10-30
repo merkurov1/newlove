@@ -1,6 +1,7 @@
 import type { RagRetrievalResult } from './types';
 
 export type UnframedEvidenceSource = {
+  documentId?: string;
   chunkId: string;
   heading: string;
   sectionPath: string[];
@@ -32,6 +33,7 @@ export function buildUnframedEvidenceSources(
   if (result.outcome !== 'relevant_results') return [];
 
   return result.hits.map((hit) => ({
+    documentId: hit.documentId,
     chunkId: hit.chunkId,
     heading: hit.heading,
     sectionPath: [...hit.sectionPath],

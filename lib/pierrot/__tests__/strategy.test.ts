@@ -251,6 +251,92 @@ describe('Pierrot proactive commercial decisions', () => {
     expect(result.links?.map((link) => link.href)).toEqual(['/flow', '/journal#issues']);
   });
 
+  it('answers a demonstrative question on each commercial surface with that surface’s offer', () => {
+    const postcard = plan({ message: 'What is this?', pathname: '/heartandangel' });
+    const book = plan({ message: 'What is this?', pathname: '/unframed' });
+    const journal = plan({ message: 'What is this?', pathname: '/journal' });
+
+    expect(postcard.offer?.id).toBe('heart_angel_postcard');
+    expect(postcard.cta?.href).toBe('/heartandangel/card#order');
+    expect(book.offer?.id).toBe('unframed');
+    expect(book.cta?.href).toBe('/unframed');
+    expect(journal.offer?.id).toBe('journal_flow');
+    expect(journal.cta?.href).toBe('/journal#subscribe');
+  });
+
+  it('treats “tell me more” on an offer page as qualified interest, once', () => {
+    const first = plan({ message: 'Tell me more.', pathname: '/unframed' });
+    const history = [
+      { role: 'user', content: 'Tell me more.' },
+      {
+        role: 'assistant',
+        content: 'It is a memoir.',
+        offerId: 'unframed',
+        commercialMarker: { offerId: 'unframed', action: 'introduced' },
+      },
+    ];
+    const repeat = plan({ message: 'Tell me more.', pathname: '/unframed', history });
+
+    expect(first.offer?.id).toBe('unframed');
+    expect(first.proactive).toBe(true);
+    expect(first.cta?.href).toBe('/unframed');
+    expect(repeat.offer).toBeNull();
+    expect(repeat.cta).toBeNull();
+  });
+
+  it('offers the Journal when a visitor asks to follow the writing', () => {
+    const result = plan({
+      message: 'I want to read more of your writing.',
+      pathname: '/',
+    });
+
+    expect(result.mode).toBe('offer');
+    expect(result.offer?.id).toBe('journal_flow');
+    expect(result.proactive).toBe(true);
+    expect(result.cta?.href).toBe('/journal#subscribe');
+  });
+
+  it('suggests continuity when a visitor says they love the work', () => {
+    const result = plan({
+      message: 'I love your work.',
+      pathname: '/',
+    });
+
+    expect(result.mode).toBe('offer');
+    expect(result.offer?.id).toBe('journal_flow');
+    expect(result.proactive).toBe(true);
+  });
+
+  it('does not offer a subscription off-page when the signed-in visitor is subscribed', () => {
+    const result = plan({
+      message: 'I want to read more of your writing.',
+      pathname: '/',
+      runtime: {
+        offerId: 'journal_flow',
+        available: true,
+        priceMinorUnits: null,
+        currency: 'GBP',
+        subscribed: true,
+        source: 'subscription',
+      },
+    });
+
+    expect(result.mode).toBe('model');
+    expect(result.offer).toBeNull();
+    expect(result.cta).toBeNull();
+    expect(result.useModel).toBe(true);
+  });
+
+  it('does not treat a negative reaction as interest', () => {
+    const result = plan({
+      message: 'I do not like it.',
+      pathname: '/heartandangel',
+    });
+
+    expect(result.mode).toBe('model');
+    expect(result.offer).toBeNull();
+  });
+
   it('does not let an Art Engine-adjacent page turn a general art question into a sale', () => {
     const result = plan({
       message: 'What is the difference between context and narrative?',

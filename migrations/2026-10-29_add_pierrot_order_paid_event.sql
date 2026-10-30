@@ -29,7 +29,7 @@ BEGIN
         'commercial_returned',
         'order_paid',
         'conversation_ended'
-      ));
+      )) NOT VALID;
   END IF;
 END $$;
 

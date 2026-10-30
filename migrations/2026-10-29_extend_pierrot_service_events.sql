@@ -16,6 +16,7 @@ BEGIN
         'assistant_replied',
         'assistant_failed',
         'intent_classified',
+        'offer_selected',
         'offer_viewed',
         'cta_shown',
         'navigation_proposed',
@@ -26,6 +27,7 @@ BEGIN
         'commercial_declined',
         'commercial_returned',
         'order_paid',
+        'checkout_started',
         'service_inquiry_started',
         'service_need_selected',
         'service_inquiry_qualified',
@@ -35,7 +37,7 @@ BEGIN
         'unframed_request_submitted',
         'unframed_purchase_confirmed',
         'conversation_ended'
-      ));
+      )) NOT VALID;
   END IF;
 END $$;
 
@@ -65,6 +67,7 @@ BEGIN
     'assistant_replied',
     'assistant_failed',
     'intent_classified',
+    'offer_selected',
     'offer_viewed',
     'cta_shown',
     'navigation_proposed',
@@ -75,6 +78,7 @@ BEGIN
     'commercial_declined',
     'commercial_returned',
     'order_paid',
+    'checkout_started',
     'service_inquiry_started',
     'service_need_selected',
     'service_inquiry_qualified',

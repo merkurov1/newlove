@@ -2,8 +2,9 @@
 
 **Date:** 2026-10-29  
 **Branch:** `phase-d2-unframed-rag`  
-**Deployed HEAD:** `1d3c2f7c Accept OpenRouter BGE model-id casing`  
-**Status:** Ingestion stopped before any database write. No commit, push or deploy was made after the attempt. `PIERROT_RAG_ENABLED` remains `false`.
+**First deployed HEAD:** `1d3c2f7c Accept OpenRouter BGE model-id casing`  
+**Fix commit:** `99803bf8 Handle PostgREST missing ingestion_version fallback`  
+**Status:** Resolved. Both blockers were fixed; production ingestion later completed successfully. See `docs/audits/phase-d2-production-ingestion-success.md`.
 
 ---
 
@@ -167,18 +168,86 @@ New tests cover:
 
 The live `knowledge_documents` table does not currently have an `ingestion_version` column, while the local migration file defines it.
 
-The deployed code handles this by writing `ingestion_version` into `metadata` when PostgreSQL reports `42703`. This is a schema/migration-history reconciliation issue, not the cause of the alias failure.
+The deployed code handled only PostgreSQL error `42703`. Production PostgREST returned `PGRST204` with a schema-cache message, so the fallback did not run. This became the second blocker.
 
 ---
 
-## 7. What is needed to complete ingestion
+## 7. Second attempt: PostgREST schema-cache failure
 
-1. Commit the local alias/provider fix.
-2. Push to `main` so Vercel deploys the fixed route.
-3. Optionally set `UNFRAMED_EMBEDDING_PROVIDER` in Vercel to pin one provider. Recommended before the final index is built.
-4. Re-run `preflight`.
-5. Re-run `ingest` with `INGEST_PAID_EMBEDDING`.
-6. Confirm the response reports `status: "ingested"` and `verify.status: "ok"`.
-7. Keep `PIERROT_RAG_ENABLED=false` until retrieval and access-control checks pass.
+After the alias fix was deployed, `ingest` was retried.
 
-No push or deploy was performed in this local fix.
+Result:
+
+```json
+{
+  "status": "failed",
+  "code": "database_failed"
+}
+```
+
+Post-attempt checks:
+
+| Field                 | Value   |
+| --------------------- | ------- |
+| Document count        | `0`     |
+| Chunk count           | `0`     |
+| Document present      | `false` |
+| Missing chunks        | `169`   |
+| Stale chunks          | `0`     |
+| `canIngest`           | `true`  |
+| `PIERROT_RAG_ENABLED` | `false` |
+
+No partial write occurred. The document upsert failed before any chunk rows were written.
+
+### Root cause
+
+PostgREST reports a missing column as:
+
+```json
+{
+  "code": "PGRST204",
+  "message": "Could not find the 'ingestion_version' column of 'knowledge_documents' in the schema cache"
+}
+```
+
+The fallback checked only `error.code === "42703"`.
+
+### Local fix
+
+Added:
+
+- `isMissingIngestionVersionColumn(error)` — accepts `42703` and `PGRST204`, but only when the message names `ingestion_version`;
+- `upsertKnowledgeDocument(store, document)` — retries without the top-level column and stores `ingestion_version` in `metadata`.
+
+Updated files:
+
+- `lib/knowledge/rag/supabaseStore.ts`
+- `lib/knowledge/rag/__tests__/rag.test.ts`
+
+New tests cover the `PGRST204` schema-cache error, unrelated missing columns, and the metadata retry.
+
+### Verification after the schema fix
+
+| Check               | Result                           |
+| ------------------- | -------------------------------- |
+| RAG suite           | 32 tests passed                  |
+| TypeScript          | `npx tsc --noEmit` — 0 errors    |
+| Production DB       | Still `0` documents / `0` chunks |
+| Production RAG flag | Still `false`                    |
+
+Committed as `99803bf8 Handle PostgREST missing ingestion_version fallback` and pushed to `main`.
+
+The Vercel deployment for `99803bf8` was **canceled by `ignoreCommand`** from `vercel.json`, not by a build failure. A follow-up commit is required to trigger a fresh production deployment.
+
+---
+
+## 8. What is needed to complete ingestion
+
+1. Trigger a fresh production deployment from the fixed commit.
+2. Optionally set `UNFRAMED_EMBEDDING_PROVIDER` in Vercel to pin one provider. Recommended before the final index is built.
+3. Re-run `preflight`.
+4. Re-run `ingest` with `INGEST_PAID_EMBEDDING`.
+5. Confirm the response reports `status: "ingested"` and `verify.status: "ok"`.
+6. Keep `PIERROT_RAG_ENABLED=false` until retrieval and access-control checks pass.
+
+No production ingestion has completed yet. The database remains empty.

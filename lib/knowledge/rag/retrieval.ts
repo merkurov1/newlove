@@ -1,5 +1,4 @@
 import {
-  UNFRAMED_RAG_DOCUMENT,
   UNFRAMED_RAG_MAX_QUERY_CHARS,
   UNFRAMED_RAG_TIMEOUT_MS,
   UNFRAMED_RAG_TOP_K,
@@ -31,6 +30,12 @@ export type RetrieveUnframedEvidenceInput = {
   scope: KnowledgeAccessClass;
   /** True only when the request carried a verified server-side owner identity. */
   ownerAuthorized: boolean;
+  /**
+   * Optional document scope. Omitted/null searches the whole owner Brain,
+   * which includes UNFRAMED and ingested articles. A concrete id preserves
+   * the original single-document UNFRAMED behaviour.
+   */
+  documentId?: string | null;
   enabled?: boolean;
   env?: RagEnvironment;
   embeddingClient?: EmbeddingClient;
@@ -208,13 +213,15 @@ export async function retrieveUnframedEvidence(
         modelId,
         dimensions,
         accessClass: input.scope,
-        documentId: UNFRAMED_RAG_DOCUMENT.id,
+        documentId: input.documentId ?? null,
         topK,
         minSimilarity: -1,
         signal: controller.signal,
       }),
       controller.signal
     );
+
+    const scopedDocumentId = input.documentId ?? null;
 
     const ordered = rows
       .filter(
@@ -224,7 +231,8 @@ export async function retrieveUnframedEvidence(
           typeof row.content === 'string' &&
           row.content.length > 0 &&
           Number.isFinite(row.similarity) &&
-          row.document_id === UNFRAMED_RAG_DOCUMENT.id
+          typeof row.document_id === 'string' &&
+          (scopedDocumentId === null || row.document_id === scopedDocumentId)
       )
       .sort((left, right) => right.similarity - left.similarity)
       .slice(0, topK);

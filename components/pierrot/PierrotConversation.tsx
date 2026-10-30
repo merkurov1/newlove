@@ -501,8 +501,8 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                 {message.ragOutcome && message.ragOutcome !== 'relevant_results' && (
                   <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.12em] text-[#A49A8C]">
                     {message.ragOutcome === 'unavailable'
-                      ? 'UNFRAMED retrieval is unavailable right now.'
-                      : 'No sufficiently relevant UNFRAMED passage was retrieved.'}
+                      ? 'Brain retrieval is unavailable right now.'
+                      : 'No sufficiently relevant Brain passage was retrieved.'}
                   </p>
                 )}
 

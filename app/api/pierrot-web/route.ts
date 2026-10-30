@@ -35,7 +35,11 @@ import {
   planPierrotResponse,
 } from '@/lib/pierrot/commercial';
 import { resolvePierrotPageContext } from '@/lib/pierrot/pageContext';
-import { derivePierrotCommercialState, mergePierrotCommercialStates } from '@/lib/pierrot/strategy';
+import {
+  derivePierrotCommercialState,
+  mergePierrotCommercialStates,
+  selectProactivePierrotOffer,
+} from '@/lib/pierrot/strategy';
 import { loadPierrotOfferRuntime } from '@/lib/pierrot/offerAvailability';
 import { recordPierrotCommercialAnalytics } from '@/lib/pierrot/commercialAnalytics';
 import { isServiceLeadIntent } from '@/lib/pierrot/serviceInquiry';
@@ -386,7 +390,22 @@ export async function POST(req: Request) {
       }
     }
 
-    const runtimeOfferId = intent.offerId ?? contextOfferId ?? previousOfferId;
+    // Load subscription/stock facts for the offer the planner is most likely
+    // to use, including an off-page proactive candidate. The planner re-checks
+    // with the verified runtime and will withhold the pitch if necessary.
+    const preliminaryProactive = ownerMode
+      ? null
+      : selectProactivePierrotOffer({
+          message: trimmedMessage,
+          intent,
+          pathname: requestedPathname,
+          state: commercialState,
+          runtime: null,
+          contextOfferId,
+        });
+
+    const runtimeOfferId =
+      intent.offerId ?? preliminaryProactive?.offerId ?? contextOfferId ?? previousOfferId;
     const offerRuntime =
       !ownerMode && (runtimeOfferId === 'heart_angel_postcard' || runtimeOfferId === 'journal_flow')
         ? await loadPierrotOfferRuntime({
@@ -569,7 +588,7 @@ export async function POST(req: Request) {
         const prefersReasoning =
           isAdmin && reasoningKeywords.some((keyword) => contextScan.includes(keyword));
 
-        // Owner-only UNFRAMED retrieval. Public conversations never enter this
+        // Owner-only Brain retrieval. Public conversations never enter this
         // branch. The mode is a client intent only; access is decided by the
         // verified server-side owner identity above.
         let generationSystemPrompt = systemPrompt;

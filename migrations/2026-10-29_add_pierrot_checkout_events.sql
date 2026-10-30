@@ -43,7 +43,7 @@ BEGIN
         'unframed_request_submitted',
         'unframed_purchase_confirmed',
         'conversation_ended'
-      ));
+      )) NOT VALID;
   END IF;
 END $$;
 
