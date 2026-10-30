@@ -190,6 +190,21 @@ function formatMessageTime(value?: string): string | null {
   }
 }
 
+function shouldShowMessageTime(message: {
+  role: string;
+  sequence?: number;
+  delivery?: string;
+}): boolean {
+  // Keep the normal AI transcript visually unchanged. Times are introduced
+  // only for human-mode messages (which have a server sequence or delivery
+  // state) and for Anton's own messages.
+  return (
+    message.role === 'human' ||
+    typeof message.sequence === 'number' ||
+    typeof message.delivery === 'string'
+  );
+}
+
 function deliveryLabel(delivery: 'sending' | 'sent' | 'failed'): string {
   const ru =
     typeof navigator !== 'undefined' &&
@@ -394,7 +409,8 @@ function PierrotEmptyState() {
 }
 
 export function PierrotMessageList({ className = '' }: { className?: string }) {
-  const { messages, isLoading, runAction, closeConversation } = usePierrot();
+  const { messages, isLoading, runAction, closeConversation, isHumanActive } =
+    usePierrot();
   const pathname = usePathname() || '/';
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldReduceMotion = usePrefersReducedMotion();
@@ -470,11 +486,12 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                     >
                       {message.content}
                     </div>
-                    {formatMessageTime(message.createdAt) && (
-                      <span className="mt-1 font-mono text-[8px] text-[#A49A8C]">
-                        {formatMessageTime(message.createdAt)}
-                      </span>
-                    )}
+                    {shouldShowMessageTime(message) &&
+                      formatMessageTime(message.createdAt) && (
+                        <span className="mt-1 font-mono text-[8px] text-[#A49A8C]">
+                          {formatMessageTime(message.createdAt)}
+                        </span>
+                      )}
                   </div>
                 ) : message.role === 'user' ? (
                   <div className="flex max-w-[88%] flex-col items-end sm:max-w-[78%]">
@@ -489,9 +506,10 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                       {message.content}
                     </div>
                     <div className="mt-1 flex items-center gap-2 font-mono text-[8px] text-[#A49A8C]">
-                      {formatMessageTime(message.createdAt) && (
-                        <span>{formatMessageTime(message.createdAt)}</span>
-                      )}
+                      {shouldShowMessageTime(message) &&
+                        formatMessageTime(message.createdAt) && (
+                          <span>{formatMessageTime(message.createdAt)}</span>
+                        )}
                       {message.delivery && (
                         <span
                           className={
@@ -511,11 +529,12 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                     "
                   >
                     <PierrotMarkdown content={message.content} />
-                    {formatMessageTime(message.createdAt) && (
-                      <span className="mt-1 block font-mono text-[8px] text-[#A49A8C]">
-                        {formatMessageTime(message.createdAt)}
-                      </span>
-                    )}
+                    {shouldShowMessageTime(message) &&
+                      formatMessageTime(message.createdAt) && (
+                        <span className="mt-1 block font-mono text-[8px] text-[#A49A8C]">
+                          {formatMessageTime(message.createdAt)}
+                        </span>
+                      )}
                   </div>
                 )}
 
@@ -526,7 +545,8 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   />
                 )}
 
-                {message.role === 'assistant' &&
+                {!isHumanActive &&
+                  message.role === 'assistant' &&
                   message.actions &&
                   message.actions.length > 0 && (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -562,7 +582,7 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   </div>
                 )}
 
-                {message.role === 'assistant' && message.cta && (
+                {!isHumanActive && message.role === 'assistant' && message.cta && (
                   <div className="mt-3">
                     {message.cta.kind === 'external' ? (
                       <a
@@ -632,7 +652,8 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   </div>
                 )}
 
-                {message.role === 'assistant' &&
+                {!isHumanActive &&
+                  message.role === 'assistant' &&
                   message.links &&
                   message.links.length > 0 && (
                   <nav
@@ -748,7 +769,8 @@ export function PierrotInput({
   placeholder?: string;
   className?: string;
 }) {
-  const { draft, draftCaret, isLoading, updateDraft, sendMessage } = usePierrot();
+  const { draft, draftCaret, isLoading, isHumanActive, updateDraft, sendMessage } =
+    usePierrot();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const caretRef = useRef<number | null>(null);
 
@@ -837,7 +859,7 @@ export function PierrotInput({
         readOnly={isLoading}
         aria-disabled={isLoading || undefined}
         data-pierrot-input
-        aria-label="Message Pierrot"
+        aria-label={isHumanActive ? 'Message Anton' : 'Message Pierrot'}
         style={{
           // Grow to 144px, then scroll internally. On a short keyboard-visible
           // viewport the 264px reserve keeps header + footer + a message row

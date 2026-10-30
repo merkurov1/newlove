@@ -71,7 +71,8 @@ import {
   createHumanAccessToken,
   createHumanRequest,
   buildHumanContextSummary,
-  expireHumanRequest,
+  declineHumanRequest,
+  getHumanPresenceByRequestId,
   getHumanPresenceForConversation,
   publicHumanState,
   recordHumanEvent,
@@ -81,6 +82,7 @@ import {
 import {
   getHumanCopy,
   humanLanguageFromDetected,
+  type HumanPresencePublicState,
 } from '@/lib/pierrot/humanPresenceShared';
 import {
   isHumanPresenceConfigured,
@@ -690,11 +692,15 @@ export async function POST(req: Request) {
         }
 
         if (created.status === 'active') {
-          const activeHuman = await getHumanPresenceForConversation(
-            pierrotStore,
-            conversationId,
-            sessionId
-          ).catch(() => null);
+          const activeHuman =
+            (await getHumanPresenceForConversation(
+              pierrotStore,
+              conversationId,
+              sessionId
+            ).catch(() => null)) ??
+            (await getHumanPresenceByRequestId(pierrotStore, created.requestId).catch(
+              () => null
+            ));
 
           return NextResponse.json(
             {
@@ -715,54 +721,74 @@ export async function POST(req: Request) {
             sessionId
           ).catch(() => null);
 
+          if (persisted?.request.status === 'active') {
+            return NextResponse.json(
+              {
+                error: 'Anton is currently handling this conversation.',
+                humanMode: true,
+                human: publicHumanState(persisted.request),
+                conversationId,
+                sessionId,
+              },
+              { status: 409 }
+            );
+          }
+
           let notificationFailed = false;
+          const notificationRequest = persisted?.request ?? {
+            id: created.requestId,
+            visitor_label: created.visitorLabel,
+            start_page: created.startPage,
+            context_summary: created.contextSummary,
+          };
 
           // Create is idempotent. The notification is sent only when this
           // request has no Telegram message yet, so pressing "call Anton"
           // repeatedly cannot spam his chat.
-          if (persisted && !persisted.request.telegram_message_id) {
-            const notification = await notifyHumanRequest({
-              id: persisted.request.id,
-              visitor_label: persisted.request.visitor_label,
-              start_page: persisted.request.start_page,
-              context_summary: persisted.request.context_summary,
-            });
+          if (!persisted?.request.telegram_message_id) {
+            const notification = await notifyHumanRequest(notificationRequest);
 
             if (notification) {
-              await setHumanRequestTelegramMessage(pierrotStore, persisted.request.id, {
-                chatId: notification.chatId,
-                messageId: notification.messageId,
-              }).catch(() => undefined);
+              await setHumanRequestTelegramMessage(
+                pierrotStore,
+                notificationRequest.id,
+                {
+                  chatId: notification.chatId,
+                  messageId: notification.messageId,
+                }
+              ).catch(() => undefined);
 
               await recordHumanEvent(pierrotStore, {
                 conversationId,
                 eventName: 'human_requested',
-                eventKey: `human_requested:${persisted.request.id}`,
+                eventKey: `human_requested:${notificationRequest.id}`,
                 payload: {
-                  request_id: persisted.request.id,
+                  request_id: notificationRequest.id,
                   language,
-                  has_context: Boolean(persisted.request.context_summary),
+                  has_context: Boolean(notificationRequest.context_summary),
                 },
               }).catch(() => undefined);
             } else {
               notificationFailed = true;
 
-              await expireHumanRequest(pierrotStore, persisted.request.id).catch(
-                () => undefined
-              );
+              await declineHumanRequest(
+                pierrotStore,
+                notificationRequest.id,
+                'system'
+              ).catch(() => undefined);
 
               await recordHumanEvent(pierrotStore, {
                 conversationId,
                 eventName: 'human_notification_failed',
-                eventKey: `human_notification_failed:${persisted.request.id}`,
-                payload: { request_id: persisted.request.id },
+                eventKey: `human_notification_failed:${notificationRequest.id}`,
+                payload: { request_id: notificationRequest.id },
               }).catch(() => undefined);
             }
           } else {
             await recordHumanEvent(pierrotStore, {
               conversationId,
               eventName: 'human_request_duplicate',
-              eventKey: `human_request_duplicate:${persisted?.request.id ?? created.requestId}`,
+              eventKey: `human_request_duplicate:${created.requestId}`,
               payload: { request_id: created.requestId },
             }).catch(() => undefined);
           }
@@ -775,7 +801,21 @@ export async function POST(req: Request) {
 
           await persistHumanReply(text);
 
-          const latest = notificationFailed ? null : persisted;
+          const fallbackHuman: HumanPresencePublicState = {
+            requestId: created.requestId,
+            status: 'pending',
+            visitorLabel: created.visitorLabel,
+            startPage: created.startPage,
+            language: created.language,
+            createdAt: created.createdAt || null,
+            expiresAt: created.expiresAt || null,
+            acceptedAt: null,
+            closedAt: null,
+            resolvedBy: null,
+          };
+          const humanState = persisted
+            ? publicHumanState(persisted.request)
+            : fallbackHuman;
 
           return NextResponse.json({
             reply: text,
@@ -784,8 +824,9 @@ export async function POST(req: Request) {
             userMessageId,
             assistantMessageId: humanAssistantId,
             recorded: canStoreTranscript,
-            ...(latest ? { human: publicHumanState(latest.request) } : {}),
-            ...(latest ? { humanToken: access.token } : {}),
+            ...(notificationFailed
+              ? {}
+              : { human: humanState, humanToken: access.token }),
           });
         }
       }
@@ -994,6 +1035,44 @@ export async function POST(req: Request) {
       }
     }
 
+    // Anton may accept while the model is generating. Re-check before the
+    // assistant turn is persisted or returned, otherwise an AI answer could
+    // land after the human takeover notice.
+    if (pierrotStore && canStoreMetadata) {
+      try {
+        const acceptedDuringGeneration = await getHumanPresenceForConversation(
+          pierrotStore,
+          conversationId,
+          sessionId
+        );
+
+        if (acceptedDuringGeneration?.request.status === 'active') {
+          await recordHumanEvent(pierrotStore, {
+            conversationId,
+            eventName: 'human_ai_blocked',
+            eventKey: `human_ai_blocked_after_generation:${userMessageId}`,
+            payload: {
+              request_id: acceptedDuringGeneration.request.id,
+              stage: 'post_generation',
+            },
+          }).catch(() => undefined);
+
+          return NextResponse.json(
+            {
+              error: 'Anton is currently handling this conversation.',
+              humanMode: true,
+              human: publicHumanState(acceptedDuringGeneration.request),
+              conversationId,
+              sessionId,
+            },
+            { status: 409 }
+          );
+        }
+      } catch (error) {
+        persistenceFailure(error, 'human_presence_post_generation');
+      }
+    }
+
     if (!ownerMode && pierrotStore) {
       try {
         await recordPierrotOfferShown(pierrotStore, {
@@ -1044,6 +1123,46 @@ export async function POST(req: Request) {
         });
       } catch (error) {
         persistenceFailure(error, 'assistant_message');
+      }
+    }
+
+    // Final race gate: acceptance may have committed between the post-
+    // generation check and the assistant insert. The browser must never
+    // receive an AI answer after the human takeover notice. The hidden
+    // assistant row is not returned to the visitor and is excluded from the
+    // human state response.
+    if (pierrotStore && canStoreMetadata) {
+      try {
+        const finalHuman = await getHumanPresenceForConversation(
+          pierrotStore,
+          conversationId,
+          sessionId
+        );
+
+        if (finalHuman?.request.status === 'active') {
+          await recordHumanEvent(pierrotStore, {
+            conversationId,
+            eventName: 'human_ai_blocked',
+            eventKey: `human_ai_blocked_after_store:${userMessageId}`,
+            payload: {
+              request_id: finalHuman.request.id,
+              stage: 'post_store',
+            },
+          }).catch(() => undefined);
+
+          return NextResponse.json(
+            {
+              error: 'Anton is currently handling this conversation.',
+              humanMode: true,
+              human: publicHumanState(finalHuman.request),
+              conversationId,
+              sessionId,
+            },
+            { status: 409 }
+          );
+        }
+      } catch (error) {
+        persistenceFailure(error, 'human_presence_post_store');
       }
     }
 

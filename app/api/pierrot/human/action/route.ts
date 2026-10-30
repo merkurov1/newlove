@@ -16,6 +16,7 @@ import {
   closedNotificationText,
   declinedNotificationText,
   editHumanRequestNotification,
+  expiredNotificationText,
   sendOwnerConfirmation,
 } from '@/lib/pierrot/humanPresenceTelegram';
 
@@ -83,45 +84,58 @@ export async function POST(req: Request) {
         await editHumanRequestNotification(
           result.telegramChatId,
           result.telegramMessageId,
-          declinedNotificationText(request.visitor_label, 'visitor'),
+          result.result === 'expired'
+            ? expiredNotificationText(request.visitor_label)
+            : declinedNotificationText(request.visitor_label, 'visitor'),
         ).catch(() => undefined);
       }
 
-      await recordHumanEvent(store, {
-        conversationId: request.conversation_id,
-        eventName: 'human_declined',
-        eventKey: `human_declined:${request.id}`,
-        payload: { resolved_by: 'visitor' },
-      }).catch(() => undefined);
+      if (result.result === 'declined' || result.result === 'already_declined') {
+        await recordHumanEvent(store, {
+          conversationId: request.conversation_id,
+          eventName: 'human_declined',
+          eventKey: `human_declined:${request.id}`,
+          payload: { resolved_by: 'visitor' },
+        }).catch(() => undefined);
+      } else if (result.result === 'expired') {
+        await recordHumanEvent(store, {
+          conversationId: request.conversation_id,
+          eventName: 'human_expired',
+          eventKey: `human_expired:${request.id}`,
+          payload: { request_id: request.id },
+        }).catch(() => undefined);
+      }
     }
 
     if (action === 'close' && request.status === 'active') {
       const result = await closeHumanSession(store, request.id, 'visitor');
 
-      if (
-        result.telegramChatId &&
-        (request.telegram_status_message_id || request.telegram_message_id)
-      ) {
-        await editHumanRequestNotification(
-          result.telegramChatId,
-          request.telegram_status_message_id ?? request.telegram_message_id ?? 0,
-          closedNotificationText(request.visitor_label, 'visitor'),
-        ).catch(() => undefined);
-      }
+      if (result.result === 'closed' || result.result === 'already_closed') {
+        if (
+          result.telegramChatId &&
+          (request.telegram_status_message_id || request.telegram_message_id)
+        ) {
+          await editHumanRequestNotification(
+            result.telegramChatId,
+            request.telegram_status_message_id ?? request.telegram_message_id ?? 0,
+            closedNotificationText(request.visitor_label, 'visitor'),
+          ).catch(() => undefined);
+        }
 
-      if (result.telegramChatId) {
-        await sendOwnerConfirmation(
-          result.telegramChatId,
-          `Visitor ended conversation ${request.visitor_label}. Piero has resumed.`,
-        ).catch(() => undefined);
-      }
+        if (result.result === 'closed' && result.telegramChatId) {
+          await sendOwnerConfirmation(
+            result.telegramChatId,
+            `Visitor ended conversation ${request.visitor_label}. Piero has resumed.`,
+          ).catch(() => undefined);
+        }
 
-      await recordHumanEvent(store, {
-        conversationId: request.conversation_id,
-        eventName: 'human_closed',
-        eventKey: `human_closed:${request.id}`,
-        payload: { closed_by: 'visitor' },
-      }).catch(() => undefined);
+        await recordHumanEvent(store, {
+          conversationId: request.conversation_id,
+          eventName: 'human_closed',
+          eventKey: `human_closed:${request.id}`,
+          payload: { closed_by: 'visitor' },
+        }).catch(() => undefined);
+      }
     }
 
     const updated = await getHumanPresenceByRequestId(store, request.id);

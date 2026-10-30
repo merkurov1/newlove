@@ -4,6 +4,9 @@
  * The detector is deliberately conservative: it looks for a request verb
  * (call / connect / speak / ask) near Anton's name, not for the name alone.
  * A question *about* Anton must never start a human takeover request.
+ *
+ * JavaScript's \b and \w are ASCII-only even with the u flag, so the patterns
+ * use Unicode property escapes and lookarounds around Cyrillic text.
  */
 
 export type HumanIntentResult = {
@@ -12,41 +15,49 @@ export type HumanIntentResult = {
   matched: string | null;
 };
 
-const ANTON = '(?:антон(?:а|у|ом|е)?|меркуров(?:а|у|ым|е)?)';
-const ANTON_EN = '(?:anton|mr\\.?\\s+merkurov|merkurov)';
+const NB = '(?<![\\p{L}\\p{N}])';
+const NE = '(?![\\p{L}\\p{N}])';
+const L = '[\\p{L}]';
 
-const RU_REQUEST_VERBS =
-  '(?:позов\\w*|позвать|вызов\\w*|вызвать|попроси\\w*|просить|соедин\\w*|связать\\w*|связаться|поговор\\w*|побеседов\\w*|пообща\\w*|переключ\\w*|переда\\w*|дай|дать|нужен|нужна|можно|хочу|хотел\\w*|хотелось)';
+const ANTON = `${NB}(?:антон(?:а|у|ом|е)?|меркуров(?:а|у|ым|е)?)${NE}`;
+const ANTON_EN = `${NB}(?:anton|mr\\.?\\s+merkurov|merkurov)${NE}`;
 
-const RU_AVAILABILITY =
-  '(?:подойд\\w*|подойти|приди|прийти|зайди|зайти|здесь|на\\s+связи|доступен|доступна|свободен|свободна|может|сможет)';
+const RU_REQUEST_VERBS = `${NB}(?:позов${L}*|позвать|вызов${L}*|вызвать|попроси${L}*|просить|соедин${L}*|связать${L}*|связаться|поговор${L}*|побеседов${L}*|пообща${L}*|переключ${L}*|переда${L}*|дай|дать|нужен|нужна|можно|хочу|хотел${L}*|хотелось)${NE}`;
+
+const RU_AVAILABILITY = `${NB}(?:подойд${L}*|подойти|приди|прийти|зайди|зайти|здесь|тут|на\\s+связи|на\\s+месте|доступен|доступна|свободен|свободна|может|сможет)${NE}`;
 
 const STRONG_RU = [
-  new RegExp(`\\b${RU_REQUEST_VERBS}\\b[\\s\\S]{0,80}\\b${ANTON}\\b`, 'u'),
-  new RegExp(`\\b${ANTON}\\b[\\s\\S]{0,80}\\b${RU_AVAILABILITY}\\b`, 'u'),
-  new RegExp(
-    `\\b(?:хочу|хотел\\w*|хотелось|можно|дай|дайте)\\b[\\s\\S]{0,60}\\b(?:поговор\\w*|побеседов\\w*|пообща\\w*|связаться|соедин\\w*)\\b[\\s\\S]{0,40}\\b${ANTON}\\b`,
-    'u',
-  ),
+  new RegExp(`${RU_REQUEST_VERBS}[\\s\\S]{0,80}${ANTON}`, 'u'),
+  new RegExp(`${ANTON}[\\s\\S]{0,80}${RU_AVAILABILITY}`, 'u'),
 ];
 
 const STRONG_EN = [
   new RegExp(
-    `\\b(?:call|invite|summon|bring|get|connect|speak|talk|chat|ask)\\b[\\s\\S]{0,80}\\b${ANTON_EN}\\b`,
+    `${NB}(?:call|invite|summon|bring|get|connect|speak|talk|chat|ask)${NE}[\\s\\S]{0,80}${ANTON_EN}`,
     'iu',
   ),
   new RegExp(
-    `\\b${ANTON_EN}\\b[\\s\\S]{0,60}\\b(?:here|available|around|free|join|come|online)\\b`,
+    `${ANTON_EN}[\\s\\S]{0,60}${NB}(?:here|available|around|free|join|come|online)${NE}`,
     'iu',
   ),
   new RegExp(
-    `\\b(?:let\\s+me|can\\s+i|may\\s+i|i\\s+(?:want|would\\s+like|need))\\b[\\s\\S]{0,60}\\b(?:speak|talk|chat|connect)\\b[\\s\\S]{0,40}\\b${ANTON_EN}\\b`,
+    `${ANTON_EN}[\\s\\S]{0,50}${NB}(?:call|speak|talk|chat|connect|reply)${NE}`,
+    'iu',
+  ),
+  new RegExp(
+    `${NB}(?:let\\s+me|can\\s+i|may\\s+i|i\\s+(?:want|would\\s+like|need))${NE}[\\s\\S]{0,60}${NB}(?:speak|talk|chat|connect)${NE}[\\s\\S]{0,40}${ANTON_EN}`,
     'iu',
   ),
 ];
 
-const EXPLICIT_RU = /^(?:позови|вызови|попроси)\s+(?:антона|антон|меркурова)\b/u;
-const EXPLICIT_EN = /^(?:call|invite|summon)\s+(?:anton|merkurov)\b/iu;
+const EXPLICIT_RU = new RegExp(
+  `^\\s*(?:позови|вызови|попроси)\\s+(?:антона|антон|меркурова)${NE}`,
+  'u',
+);
+const EXPLICIT_EN = new RegExp(
+  `^\\s*(?:call|invite|summon)\\s+(?:anton|merkurov)${NE}`,
+  'iu',
+);
 
 const NEGATIVE_RU =
   /(?:кто\s+такой|кто\s+такая|расскажи|расскажите|что\s+известно|биограф|о\s+жизни|про\s+антона|об\s+антоне)/u;
@@ -91,7 +102,11 @@ export function detectHumanPresenceIntent(text: string): HumanIntentResult {
     // "Расскажи про Антона" contains neither a request verb nor availability.
     // The negative guard protects unusual phrasings such as
     // "расскажи, кто такой Антон".
-    if (NEGATIVE_RU.test(normalized) && !/(?:позов|вызов|соедин|поговор|позвать|вызвать)/u.test(normalized)) {
+    if (
+      NEGATIVE_RU.test(normalized) &&
+      !/(?:позов|вызов|соедин|позвать|вызвать)/u.test(normalized) &&
+      !/(?:поговор|побеседов)[\p{L}]*\s+(?:с|со)\s+антон/u.test(normalized)
+    ) {
       return { requested: false, confidence: 'high', matched: null };
     }
 
@@ -101,7 +116,10 @@ export function detectHumanPresenceIntent(text: string): HumanIntentResult {
   const enMatch = firstMatch(STRONG_EN, normalized);
 
   if (enMatch) {
-    if (NEGATIVE_EN.test(normalized) && !/\b(?:speak|talk|chat)\s+(?:to|with)\s+anton\b/iu.test(normalized)) {
+    if (
+      NEGATIVE_EN.test(normalized) &&
+      !/\b(?:speak|talk|chat)\s+(?:to|with)\s+anton\b/iu.test(normalized)
+    ) {
       return { requested: false, confidence: 'high', matched: null };
     }
 
@@ -111,7 +129,7 @@ export function detectHumanPresenceIntent(text: string): HumanIntentResult {
   // A soft fallback: a short imperative that names Anton and asks for a
   // connection. This catches "Антон, можно?" without matching biographies.
   if (
-    /\bантон\b/u.test(normalized) &&
+    new RegExp(`${ANTON}`, 'u').test(normalized) &&
     /(?:можно|сможешь|сможете|пожалуйста|плиз|срочно)/u.test(normalized) &&
     normalized.length <= 80
   ) {
@@ -119,8 +137,8 @@ export function detectHumanPresenceIntent(text: string): HumanIntentResult {
   }
 
   if (
-    /\banton\b/iu.test(normalized) &&
-    /(?:please|can you|could you|now|urgent)/iu.test(normalized) &&
+    new RegExp(`${ANTON_EN}`, 'iu').test(normalized) &&
+    /(?:\bplease\b|\burgent\b|can you|could you|\bnow\b)/iu.test(normalized) &&
     normalized.length <= 90
   ) {
     return { requested: true, confidence: 'medium', matched: 'soft-en' };

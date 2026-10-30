@@ -12,6 +12,7 @@ import {
   buildHumanStateResponse,
   getHumanPresenceByToken,
   getHumanPresenceForConversation,
+  ensureHumanMessageLink,
   getHumanMessageLink,
   publicHumanSession,
   publicHumanState,
@@ -139,11 +140,44 @@ export async function POST(req: Request) {
     }
 
     let delivery: 'sent' | 'failed' = 'failed';
+    let shouldRelay = appended.inserted;
 
     if (!appended.inserted) {
-      const existing = await getHumanMessageLink(store, messageId);
-      delivery = existing?.delivery_status === 'sent' ? 'sent' : 'failed';
-    } else {
+      let existing = await getHumanMessageLink(store, messageId);
+
+      if (!existing && record.session) {
+        // The AI route may have persisted this message just before Anton
+        // accepted. Attach the delivery metadata and relay it exactly once.
+        const createdLink = await ensureHumanMessageLink(store, {
+          requestId: record.request.id,
+          sessionId: record.session.id,
+          conversationId: record.request.conversation_id,
+          messageId,
+          direction: 'visitor_to_telegram',
+        });
+
+        if (createdLink) {
+          shouldRelay = true;
+        } else {
+          existing = await getHumanMessageLink(store, messageId);
+        }
+      }
+
+      if (existing) {
+        const alreadySent =
+          existing.delivery_status === 'sent' || existing.telegram_message_id !== null;
+
+        delivery = alreadySent ? 'sent' : 'failed';
+
+        // Retry only a known failed delivery. A pending row may belong to an
+        // in-flight request; sending it again could duplicate the message.
+        if (!alreadySent && existing.delivery_status === 'failed') {
+          shouldRelay = true;
+        }
+      }
+    }
+
+    if (shouldRelay) {
       const ownerTelegramId =
         record.session?.owner_telegram_id ?? record.request.telegram_chat_id ?? null;
 
@@ -152,6 +186,7 @@ export async function POST(req: Request) {
           const sent = await sendVisitorMessageToOwner({
             ownerTelegramId,
             visitorLabel: record.request.visitor_label,
+            requestId: record.request.id,
             content,
             replyToMessageId: record.request.telegram_message_id,
           });
@@ -164,15 +199,21 @@ export async function POST(req: Request) {
               status: 'sent',
             }).catch(() => undefined);
           } else {
+            delivery = 'failed';
             await updateHumanMessageLink(store, messageId, {
               status: 'failed',
             }).catch(() => undefined);
           }
         } catch {
+          delivery = 'failed';
           await updateHumanMessageLink(store, messageId, {
             status: 'failed',
           }).catch(() => undefined);
         }
+      } else {
+        await updateHumanMessageLink(store, messageId, {
+          status: 'failed',
+        }).catch(() => undefined);
       }
 
       await recordHumanEvent(store, {
@@ -186,11 +227,19 @@ export async function POST(req: Request) {
       }).catch(() => undefined);
     }
 
-    const { data: stored } = await store
-      .from('pierrot_messages')
-      .select('created_at, message_index')
-      .eq('id', messageId)
-      .maybeSingle();
+    let stored: { created_at?: unknown; message_index?: unknown } | null = null;
+
+    try {
+      const result = await store
+        .from('pierrot_messages')
+        .select('created_at, message_index')
+        .eq('id', messageId)
+        .maybeSingle();
+
+      stored = result.data ?? null;
+    } catch {
+      // The message is already persisted; the timestamp is a convenience.
+    }
 
     return NextResponse.json(
       {

@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 
 export async function POST(req: Request) {
+  const limited = checkRateLimit(getClientIp(req), {
+    interval: 60 * 1000,
+    maxRequests: 30,
+    keyPrefix: 'temple-log-simple',
+  });
+  if (limited) return limited;
+
   try {
     const body = await req.json();
     const { event_type, message } = body || {};

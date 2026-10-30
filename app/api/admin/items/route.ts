@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -20,7 +21,16 @@ function getSupabaseAdmin() {
   });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  try {
+    await requireAdminFromRequest(request);
+  } catch {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 },
+    );
+  }
+
   try {
     const supabase = getSupabaseAdmin();
 

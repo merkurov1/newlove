@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import Stripe from 'stripe';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
+import { signUnframedToken } from '@/lib/unframed/access';
 import {
   normalizePierrotUnframedRef,
   pierrotConversationIdFromUnframedRef,
@@ -39,12 +40,25 @@ export async function GET(request: Request) {
     }
 
     if (session.payment_status === 'paid') {
+      const token = signUnframedToken('access', 60 * 60 * 24 * 365);
+
+      if (!token) {
+        console.error(
+          '[unframed/verify] Access token secret is not configured',
+        );
+        return NextResponse.json(
+          { error: 'Access configuration error' },
+          { status: 503 },
+        );
+      }
+
       const cookieStore = await cookies();
       cookieStore.set({
         name: 'unframed_access',
-        value: 'true',
+        value: token,
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
         path: '/',
         maxAge: 60 * 60 * 24 * 365,
       });

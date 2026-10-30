@@ -375,6 +375,23 @@ export default function BrainGraphClient() {
     setProgress(data.progress);
   };
 
+  const processRun = async (runId: string) => {
+    let guard = 0;
+
+    while (guard < 1000) {
+      guard += 1;
+      const result = await api<NextResponse>(
+        `/api/admin/brain/graph/runs/${runId}/next`,
+        { method: 'POST' }
+      );
+
+      setProgress(result.progress);
+      await refreshRun(runId);
+
+      if (result.state === 'done' || result.state === 'paused') break;
+    }
+  };
+
   const handleBuild = async () => {
     setBusy('build');
     setError(null);
@@ -407,25 +424,47 @@ export default function BrainGraphClient() {
         `Extracting ${created.run.total_documents} documents. Unchanged documents were skipped.`
       );
 
-      let guard = 0;
-
-      while (guard < 1000) {
-        guard += 1;
-        const result = await api<NextResponse>(
-          `/api/admin/brain/graph/runs/${created.run.id}/next`,
-          { method: 'POST' }
-        );
-
-        setProgress(result.progress);
-        await refreshRun(created.run.id);
-
-        if (result.state === 'done' || result.state === 'paused') break;
-      }
+      await processRun(created.run.id);
 
       setMessage('Graph extraction finished. Generate thematic summaries next.');
       await loadGraph();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Graph extraction failed.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleRetry = async () => {
+    if (!run) return;
+
+    setBusy('build');
+    setError(null);
+    setMessage(null);
+
+    try {
+      const data = await api<{
+        run: GraphRun;
+        jobs: GraphJob[];
+        progress: GraphProgress;
+        reset: number;
+      }>(`/api/admin/brain/graph/runs/${run.id}/retry`, {
+        method: 'POST',
+        body: '{}',
+      });
+
+      setRun(data.run);
+      setJobs(data.jobs || []);
+      setProgress(data.progress);
+      setMessage(`${data.reset} failed documents requeued.`);
+
+      await processRun(run.id);
+      setMessage('Graph extraction finished. Generate thematic summaries next.');
+      await loadGraph();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : 'Could not retry graph extraction.'
+      );
     } finally {
       setBusy(null);
     }
@@ -530,6 +569,17 @@ export default function BrainGraphClient() {
           >
             {busy === 'synthesize' ? 'Summarising…' : 'Generate summaries'}
           </button>
+
+          {run && (progress?.failed || 0) > 0 && (
+            <button
+              type="button"
+              onClick={handleRetry}
+              disabled={busy !== null}
+              className="border border-[#D9D3CD] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#625D58] transition hover:border-[#990F3D] hover:text-[#990F3D] disabled:opacity-40"
+            >
+              Retry failed
+            </button>
+          )}
         </div>
 
         <div className="mt-4 flex flex-wrap gap-1.5">

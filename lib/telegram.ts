@@ -175,8 +175,9 @@ export async function sendTelegramMessage(
       messageId: Number(result.result.message_id),
       chatId: Number(result.result.chat?.id ?? chatId),
     };
-  } catch (error) {
-    console.error('[telegram] Failed to send message:', error);
+  } catch {
+    // Never log the request URL: it contains the bot token.
+    console.error('[telegram] Failed to send message');
     return null;
   }
 }
@@ -216,8 +217,8 @@ export async function editTelegramMessage(
     const result = await response.json().catch(() => null);
 
     return response.ok && result?.ok === true;
-  } catch (error) {
-    console.error('[telegram] Failed to edit message:', error);
+  } catch {
+    console.error('[telegram] Failed to edit message');
     return false;
   }
 }

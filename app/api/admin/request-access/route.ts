@@ -1,11 +1,20 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 
 type Body = {
   email?: string;
 };
 
 export async function POST(request: Request) {
+  const limited = checkRateLimit(getClientIp(request), {
+    interval: 60 * 60 * 1000,
+    maxRequests: 5,
+    keyPrefix: 'access-request',
+  });
+
+  if (limited) return limited;
+
   try {
     const body: Body = await request.json();
     const email = body.email?.trim().toLowerCase();

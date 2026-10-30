@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSupabaseClient } from '@/lib/serverAuth';
+import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
 
 /**
  * GET /api/newsletter-jobs/[jobId]
@@ -13,6 +13,12 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { jobId: string } }
 ) {
+  try {
+    await requireAdminFromRequest(request);
+  } catch {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { jobId } = params;
 
   if (!jobId) {

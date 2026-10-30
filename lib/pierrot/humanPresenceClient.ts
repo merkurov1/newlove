@@ -78,6 +78,7 @@ async function postJson<T>(
   path: string,
   body: Record<string, unknown>,
   signal?: AbortSignal,
+  keepalive = false,
 ): Promise<HumanApiResult<T>> {
   if (typeof window === 'undefined' || typeof fetch !== 'function') {
     return { ok: false, status: 0, data: null };
@@ -89,6 +90,7 @@ async function postJson<T>(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       cache: 'no-store',
+      ...(keepalive ? { keepalive: true } : {}),
       ...(signal ? { signal } : {}),
     });
 
@@ -124,13 +126,18 @@ export function sendHumanPresenceMessage(input: {
   messageId: string;
   content: string;
 }): Promise<HumanApiResult<HumanPresenceMessageResponse>> {
-  return postJson<HumanPresenceMessageResponse>('/api/pierrot/human/message', {
-    ...(input.token ? { token: input.token } : {}),
-    ...(input.conversationId ? { conversationId: input.conversationId } : {}),
-    ...(input.sessionId ? { sessionId: input.sessionId } : {}),
-    messageId: input.messageId,
-    content: input.content,
-  });
+  return postJson<HumanPresenceMessageResponse>(
+    '/api/pierrot/human/message',
+    {
+      ...(input.token ? { token: input.token } : {}),
+      ...(input.conversationId ? { conversationId: input.conversationId } : {}),
+      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      messageId: input.messageId,
+      content: input.content,
+    },
+    undefined,
+    true,
+  );
 }
 
 export function humanPresenceAction(input: {
@@ -139,10 +146,15 @@ export function humanPresenceAction(input: {
   sessionId?: string | null;
   action: 'cancel' | 'close';
 }): Promise<HumanApiResult<HumanPresenceStateResponse>> {
-  return postJson<HumanPresenceStateResponse>('/api/pierrot/human/action', {
-    ...(input.token ? { token: input.token } : {}),
-    ...(input.conversationId ? { conversationId: input.conversationId } : {}),
-    ...(input.sessionId ? { sessionId: input.sessionId } : {}),
-    action: input.action,
-  });
+  return postJson<HumanPresenceStateResponse>(
+    '/api/pierrot/human/action',
+    {
+      ...(input.token ? { token: input.token } : {}),
+      ...(input.conversationId ? { conversationId: input.conversationId } : {}),
+      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      action: input.action,
+    },
+    undefined,
+    true,
+  );
 }

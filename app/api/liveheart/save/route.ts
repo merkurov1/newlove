@@ -2,14 +2,39 @@ import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { nanoid } from 'nanoid';
 import { createClient } from '../../../../lib/supabase/server';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+
+const MAX_DNA_BYTES = 100_000;
+const MAX_IMAGE_BYTES = 4_000_000;
 
 export async function POST(req: Request) {
+  const limited = checkRateLimit(getClientIp(req), {
+    interval: 60 * 60 * 1000,
+    maxRequests: 20,
+    keyPrefix: 'liveheart-save',
+  });
+  if (limited) return limited;
+
   try {
     const body = await req.json();
     const dna = body?.dna ?? null;
     const title = body?.title ?? null;
     const imageData: string | undefined = body?.imageData;
     if (!dna) return NextResponse.json({ error: 'Missing dna' }, { status: 400 });
+
+    if (
+      JSON.stringify(dna).length > MAX_DNA_BYTES ||
+      (typeof title === 'string' && title.length > 200)
+    ) {
+      return NextResponse.json({ error: 'Payload is too large' }, { status: 413 });
+    }
+
+    if (
+      typeof imageData === 'string' &&
+      imageData.length > MAX_IMAGE_BYTES
+    ) {
+      return NextResponse.json({ error: 'Image is too large' }, { status: 413 });
+    }
 
     const slug = nanoid(8);
 

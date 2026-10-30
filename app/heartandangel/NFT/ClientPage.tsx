@@ -642,11 +642,43 @@ export default function NFTLabPageClient() {
         setStatus(null);
 
         try {
+            // Choose the provider and signer first: the backend now requires
+            // proof of wallet control before issuing a claim voucher.
+            let rawProvider: any = null;
+            try {
+                if (onboardWallet && onboardWallet.provider) rawProvider = onboardWallet.provider;
+                else if (onboardWallet && typeof onboardWallet.getProvider === 'function') rawProvider = await onboardWallet.getProvider();
+            } catch (e) {
+                rawProvider = null;
+            }
+            if (!rawProvider) rawProvider = (window as any).ethereum;
+
+            const provider = new (ethers as any).BrowserProvider(rawProvider as any, 'any');
+            try { const net2 = await provider.getNetwork(); pushDebug('provider_network_claim', net2); } catch (e) { pushDebug('provider_network_claim_error', String(e)); }
+            try { await provider.send("eth_requestAccounts", []); } catch (e) { pushDebug('eth_requestAccounts_error', String(e)); }
+
+            const signerLocal = await provider.getSigner();
+            const claimAddress = await signerLocal.getAddress();
+            pushDebug('claim_signer_address', claimAddress);
+            setAddress(claimAddress);
+
+            const issuedAt = Date.now();
+            const proofMessage = [
+                'merkurov.love wallet verification',
+                `wallet: ${claimAddress.toLowerCase()}`,
+                `issued_at: ${issuedAt}`,
+            ].join('\n');
+            const walletSignature = await signerLocal.signMessage(proofMessage);
+
             // ask backend for signature voucher
             const res = await fetch("/api/generate-signature", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ wallet_address: address }),
+                body: JSON.stringify({
+                    wallet_address: claimAddress,
+                    issued_at: issuedAt,
+                    signature: walletSignature,
+                }),
             });
             if (!res.ok) {
                 const txt = await res.text();
@@ -655,19 +687,6 @@ export default function NFTLabPageClient() {
             const { signature } = await res.json();
             if (!signature) throw new Error("No signature returned (not eligible or server error)");
 
-            // use signer to call contract.claimForSubscriber(signature)
-            // choose provider: prefer onboard wallet.provider, fall back to getProvider(), then injected window.ethereum
-            let rawProvider2: any = null;
-            try {
-                if (onboardWallet && onboardWallet.provider) rawProvider2 = onboardWallet.provider;
-                else if (onboardWallet && typeof onboardWallet.getProvider === 'function') rawProvider2 = await onboardWallet.getProvider();
-            } catch (e) {
-                rawProvider2 = null;
-            }
-            if (!rawProvider2) rawProvider2 = (window as any).ethereum;
-            const provider = new (ethers as any).BrowserProvider(rawProvider2 as any, 'any');
-            try { const net2 = await provider.getNetwork(); pushDebug('provider_network_claim', net2); } catch (e) { pushDebug('provider_network_claim_error', String(e)); }
-            try { await provider.send("eth_requestAccounts", []); } catch (e) { pushDebug('eth_requestAccounts_error', String(e)); }
             // Ensure on Polygon
             try {
                 const chainHex = await (async () => {
@@ -688,8 +707,7 @@ export default function NFTLabPageClient() {
             } catch (e) {
                 // ignore
             }
-            const signerLocal = await provider.getSigner();
-            try { const sa = await signerLocal.getAddress(); pushDebug('claim_signer_address', sa); } catch (e) { pushDebug('claim_signer_error', String(e)); }
+
             const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, signerLocal);
             setStatus("Transaction signed, awaiting confirmation...");
             const tx = await contract.claimForSubscriber(signature);
@@ -699,7 +717,12 @@ export default function NFTLabPageClient() {
             await fetch("/api/mark-claimed", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ wallet_address: address, tx_hash: receipt.transactionHash }),
+                body: JSON.stringify({
+                    wallet_address: claimAddress,
+                    tx_hash: receipt.transactionHash,
+                    issued_at: issuedAt,
+                    signature: walletSignature,
+                }),
             });
 
             setStatus("Congratulations! Free claim complete.");
@@ -883,7 +906,7 @@ export default function NFTLabPageClient() {
     }
 
     return (
-        <main className="mx-auto max-w-4xl py-12 px-6">
+        <div className="mx-auto max-w-4xl py-12 px-6">
             <section className="text-center mb-10">
                 <h1 className="font-serif text-3xl md:text-5xl mb-4 text-black tracking-tight">THE IRREVERSIBLE CHOICE</h1>
                 <p className="font-mono text-base text-neutral-600 mb-2">Neutral Heart — a transmedia NFT experiment on Polygon.</p>
@@ -891,6 +914,6 @@ export default function NFTLabPageClient() {
                 <img src="https://bronze-main-tiger-8.mypinata.cloud/ipfs/bafybeihnx7kaue4ehbigi4koydoei43ojjykp2mhhh7xwx4qg3tntm5e5e" alt="Neutral Heart NFT" className="mx-auto rounded-lg shadow-lg w-64 h-64 object-cover mb-6" />
             </section>
             {/* ...existing code... */}
-        </main>
+        </div>
     );
 }

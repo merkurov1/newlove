@@ -73,6 +73,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS pierrot_human_requests_one_active_idx
 CREATE UNIQUE INDEX IF NOT EXISTS pierrot_human_requests_token_idx
   ON public.pierrot_human_requests (access_token_hash);
 
+CREATE INDEX IF NOT EXISTS pierrot_human_requests_telegram_idx
+  ON public.pierrot_human_requests (telegram_chat_id, telegram_message_id);
+
 -- ---------------------------------------------------------------------------
 -- 2. Active human sessions
 -- ---------------------------------------------------------------------------
@@ -565,6 +568,7 @@ DECLARE
   v_request public.pierrot_human_requests%ROWTYPE;
   v_session public.pierrot_human_sessions%ROWTYPE;
   v_busy public.pierrot_human_sessions%ROWTYPE;
+  v_conversation_id TEXT;
 BEGIN
   IF p_request_id IS NULL OR p_owner_telegram_id IS NULL OR p_owner_telegram_id <= 0 THEN
     RAISE EXCEPTION 'invalid_accept_arguments' USING ERRCODE = '22023';
@@ -577,6 +581,23 @@ BEGIN
   );
   PERFORM pg_advisory_xact_lock(
     hashtextextended('human:request:' || p_request_id::text, 0)
+  );
+
+  SELECT r.conversation_id
+  INTO v_conversation_id
+  FROM public.pierrot_human_requests r
+  WHERE r.id = p_request_id;
+
+  IF NOT FOUND THEN
+    RETURN QUERY SELECT
+      'not_found'::text, p_request_id, NULL::text, NULL::uuid,
+      NULL::text, NULL::text, NULL::text, NULL::timestamptz, NULL::text;
+    RETURN;
+  END IF;
+
+  -- Serialise acceptance with AI/human message appends for this conversation.
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended(v_conversation_id, 0)
   );
 
   SELECT *
@@ -850,6 +871,7 @@ AS $$
 DECLARE
   v_request public.pierrot_human_requests%ROWTYPE;
   v_session public.pierrot_human_sessions%ROWTYPE;
+  v_conversation_id TEXT;
 BEGIN
   IF p_request_id IS NULL OR p_closed_by NOT IN ('owner', 'visitor', 'system') THEN
     RAISE EXCEPTION 'invalid_close_arguments' USING ERRCODE = '22023';
@@ -857,6 +879,24 @@ BEGIN
 
   PERFORM pg_advisory_xact_lock(
     hashtextextended('human:request:' || p_request_id::text, 0)
+  );
+
+  SELECT r.conversation_id
+  INTO v_conversation_id
+  FROM public.pierrot_human_requests r
+  WHERE r.id = p_request_id;
+
+  IF NOT FOUND THEN
+    RETURN QUERY SELECT
+      'not_found'::text, p_request_id, NULL::text, NULL::uuid,
+      NULL::text, NULL::bigint, NULL::bigint;
+    RETURN;
+  END IF;
+
+  -- Serialise closure with message appends so an AI/human answer cannot be
+  -- committed after the closure notice.
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended(v_conversation_id, 0)
   );
 
   SELECT *
@@ -954,6 +994,7 @@ AS $$
 DECLARE
   v_request public.pierrot_human_requests%ROWTYPE;
   v_session public.pierrot_human_sessions%ROWTYPE;
+  v_conversation_id TEXT;
   v_sequence BIGINT;
   v_content TEXT;
   v_already BOOLEAN := FALSE;
@@ -979,6 +1020,22 @@ BEGIN
     hashtextextended('human:request:' || p_request_id::text, 0)
   );
 
+  SELECT r.conversation_id
+  INTO v_conversation_id
+  FROM public.pierrot_human_requests r
+  WHERE r.id = p_request_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'human_session_not_active' USING ERRCODE = 'P0002';
+  END IF;
+
+  -- Lock order is conversation -> request row everywhere a request may be
+  -- created or appended. This prevents a create/append deadlock while keeping
+  -- per-conversation message ordering serialised.
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended(v_conversation_id, 0)
+  );
+
   SELECT *
   INTO v_request
   FROM public.pierrot_human_requests r
@@ -998,10 +1055,6 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'human_session_not_active' USING ERRCODE = 'P0002';
   END IF;
-
-  PERFORM pg_advisory_xact_lock(
-    hashtextextended(v_request.conversation_id, 0)
-  );
 
   SELECT m.message_index, m.content
   INTO v_sequence, v_content

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { parseLot } from '@/lib/lots';
 import { downloadAndStoreImage, resolveUrl } from '@/lib/lots/images';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { assertSafePublicUrl } from '@/lib/flow/parseUrl';
 
 function isBlockedHtml(html: string): boolean {
   if (!html || html.length < 500) return true;
@@ -18,12 +20,32 @@ function isBlockedHtml(html: string): boolean {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { url } = body;
+    try {
+      await requireAdminFromRequest(req);
+    } catch {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
 
-    if (!url) {
+    const body = await req.json();
+    const rawUrl = body?.url;
+
+    if (!rawUrl || typeof rawUrl !== 'string') {
       return NextResponse.json(
         { error: 'URL is required' },
+        { status: 400 }
+      );
+    }
+
+    let url: string;
+
+    try {
+      url = assertSafePublicUrl(rawUrl).toString();
+    } catch {
+      return NextResponse.json(
+        { error: 'URL is not allowed' },
         { status: 400 }
       );
     }
@@ -111,8 +133,12 @@ export async function POST(req: Request) {
 
     for (const candidate of candidates.slice(0, 3)) {
       try {
-        const storedUrl = await downloadAndStoreImage(
+        const safeCandidate = assertSafePublicUrl(
           candidate.url,
+        ).toString();
+
+        const storedUrl = await downloadAndStoreImage(
+          safeCandidate,
           url,
           apiKey
         );
@@ -130,10 +156,13 @@ export async function POST(req: Request) {
     }
 
     if (!permanentImageUrl && lotData.imageUrl) {
-      permanentImageUrl = resolveUrl(
-        lotData.imageUrl,
-        url
-      );
+      try {
+        permanentImageUrl = assertSafePublicUrl(
+          resolveUrl(lotData.imageUrl, url),
+        ).toString();
+      } catch {
+        permanentImageUrl = '';
+      }
     }
 
     return NextResponse.json({

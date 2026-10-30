@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     const { data: existing, error: lookupError } = await store
       .from('subscribers')
       .select('id, isActive, confirmedAt, unsubscribedAt')
-      .ilike('email', email)
+      .eq('email', email)
       .maybeSingle();
 
     if (lookupError) {

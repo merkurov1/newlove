@@ -1,7 +1,17 @@
 import { NextResponse } from 'next/server';
 import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
-export async function GET() {
+export async function GET(request: Request) {
+  try {
+    await requireAdminFromRequest(request);
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: 'Unauthorized' },
+      { status: 401 },
+    );
+  }
+
   try {
     const testLetter = {
       title: 'Preview: newsletter HTML',

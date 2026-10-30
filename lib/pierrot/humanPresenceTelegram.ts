@@ -63,7 +63,13 @@ export function isHumanOwnerTelegramUser(userId: unknown): boolean {
 }
 
 export function isHumanPresenceConfigured(): boolean {
-  return getHumanOwnerTelegramId() !== null;
+  const hasBotToken = Boolean(
+    process.env.PIERROT_BOT_TOKEN ||
+      process.env.OSIRIS_BOT_TOKEN ||
+      process.env.TELEGRAM_BOT_TOKEN
+  );
+
+  return getHumanOwnerTelegramId() !== null && hasBotToken;
 }
 
 function requestNotificationText(request: {
@@ -191,12 +197,16 @@ export async function sendVisitorMessageToOwner(
   input: {
     ownerTelegramId: number;
     visitorLabel: string;
+    requestId?: string;
     content: string;
     replyToMessageId?: number | null;
   },
 ): Promise<TelegramSendResult | null> {
+  const ref = input.requestId
+    ? ` · <code>${escapeHtml(input.requestId.slice(0, 8))}</code>`
+    : '';
   const body = [
-    `<b>${escapeHtml(input.visitorLabel)}</b> · visitor`,
+    `<b>${escapeHtml(input.visitorLabel)}</b> · visitor${ref}`,
     '',
     escapeHtml(input.content),
   ].join('\n');

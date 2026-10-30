@@ -54,7 +54,22 @@ export async function GET(request: Request) {
         });
         data = resp.data;
         error = resp.error;
-        
+
+        // Defence in depth: the RPC must only return published articles and
+        // never author email addresses, even if the database function is
+        // still on its older definition.
+        if (Array.isArray(data)) {
+          data = data
+            .filter((row: any) => row?.published === true)
+            .map((row: any) => ({
+              ...row,
+              author:
+                row?.author && typeof row.author === 'object'
+                  ? { id: row.author.id, name: row.author.name }
+                  : row?.author,
+            }));
+        }
+
         // Применяем offset вручную, так как RPC не поддерживает .range()
         if (data && Array.isArray(data)) {
           data = data.slice(offset, offset + limit);

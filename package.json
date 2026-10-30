@@ -36,6 +36,7 @@
     "test:pierrot:viewport": "playwright test --config=tests/pierrot.playwright.config.ts",
     "test:attach-tags": "node scripts/test_attach_tags.js",
     "test:telegram-research": "jest lib/telegram-research --runInBand",
+    "security:verify": "node scripts/security/verify-supabase-exposure.mjs",
     "typecheck:telegram-research": "tsc -p tsconfig.telegram-research.json",
     "telegram:find": "bun run scripts/telegram-research/cli.ts find",
     "telegram:export": "bun run scripts/telegram-research/cli.ts export",
@@ -48,7 +49,8 @@
     "mint:transfer": "npx hardhat run --network polygon scripts/mint_and_transfer.js",
     "deploy:local": "node scripts/deploy_hardhat.js",
     "mint:local": "node scripts/mint_and_transfer.js",
-    "db:diag": "tsc db_diagnostics.ts && node db_diagnostics.js"
+    "db:diag": "tsc db_diagnostics.ts && node db_diagnostics.js",
+    "seo:check": "node --experimental-strip-types scripts/seo-check.ts"
   },
   "installConfig": {
     "scripts-prepend-node-path": true

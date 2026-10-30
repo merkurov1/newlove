@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 
@@ -29,6 +30,13 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const limited = checkRateLimit(getClientIp(req), {
+    interval: 60 * 1000,
+    maxRequests: 20,
+    keyPrefix: 'temple-log',
+  })
+  if (limited) return limited
+
   try {
     const body = await req.json()
     if (!body || typeof body !== 'object') {

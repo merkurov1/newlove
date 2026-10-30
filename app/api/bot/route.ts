@@ -235,7 +235,30 @@ bot.on(':photo', async (ctx: any) => {
 });
 
 // SERVER ENTRY
-const handleUpdate = webhookCallback(bot, 'std/http');
+//
+// A Telegram webhook is a public endpoint. Without secret_token validation an
+// attacker can POST a forged update with `from.id = MY_TELEGRAM_ID` and drive
+// owner-only commands. Enforcement is opt-in so an existing webhook keeps
+// working, but production must enable it together with setWebhook(secret_token).
+const enforceWebhookSecret =
+    process.env.TELEGRAM_BOT_WEBHOOK_ENFORCE_SECRET === '1' ||
+    process.env.TELEGRAM_WEBHOOK_ENFORCE_SECRET === '1';
+const webhookSecret = enforceWebhookSecret
+    ? process.env.TELEGRAM_WEBHOOK_SECRET
+    : undefined;
+
+if (process.env.TELEGRAM_WEBHOOK_SECRET && !enforceWebhookSecret) {
+    console.warn(
+        '[api/bot] TELEGRAM_WEBHOOK_SECRET is set but enforcement is off. ' +
+        'Register the webhook with secret_token and set TELEGRAM_WEBHOOK_ENFORCE_SECRET=1.'
+    );
+}
+
+const handleUpdate = webhookCallback(
+    bot,
+    'std/http',
+    webhookSecret ? { secretToken: webhookSecret } : undefined
+);
 export async function POST(req: Request) {
     try { return await handleUpdate(req); }
     catch (e) { return new Response('Error', { status: 500 }); }

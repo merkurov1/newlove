@@ -1,10 +1,31 @@
 import { NextResponse } from 'next/server';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
-// Server route: accept new whisper events from client, create DB row, and notify admin bot
+// Server route: accept new whisper events from the admin capture UI.
 export async function POST(req: Request) {
+  const limited = checkRateLimit(getClientIp(req), {
+    interval: 60 * 1000,
+    maxRequests: 20,
+    keyPrefix: 'whispers-create',
+  });
+  if (limited) return limited;
+
   try {
+    try {
+      await requireAdminFromRequest(req);
+    } catch {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await req.json();
     const { telegram_user_id, telegram_first_name, telegram_file_id, telegram_file_unique_id, storage_path } = body;
+
+    if (storage_path !== null && storage_path !== undefined) {
+      if (typeof storage_path !== 'string' || !/^whispers\/[A-Za-z0-9._-]{1,160}$/.test(storage_path)) {
+        return NextResponse.json({ ok: false, error: 'Invalid storage path.' }, { status: 400 });
+      }
+    }
 
     // server helpers from repo
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');

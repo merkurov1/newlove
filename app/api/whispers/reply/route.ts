@@ -1,8 +1,23 @@
 import { NextResponse } from 'next/server';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
-// Accept { whisperId, message } and send message to the original user via bot
+// Accept { whisperId, message } and send message to the original user via bot.
+// This is an owner-only moderation action.
 export async function POST(req: Request) {
+  const limited = checkRateLimit(getClientIp(req), {
+    interval: 60 * 1000,
+    maxRequests: 20,
+    keyPrefix: 'whispers-reply',
+  });
+  if (limited) return limited;
+
   try {
+    try {
+      await requireAdminFromRequest(req);
+    } catch {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    }
     // Support both JSON and form-encoded submissions (HTML forms send x-www-form-urlencoded)
     let whisperId: string | null = null;
     let message: string | null = null;

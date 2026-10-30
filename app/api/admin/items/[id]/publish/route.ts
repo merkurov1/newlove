@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,10 +10,25 @@ type RouteContext = {
   };
 };
 
+async function authorize(req: NextRequest): Promise<NextResponse | null> {
+  try {
+    await requireAdminFromRequest(req);
+    return null;
+  } catch {
+    return NextResponse.json(
+      { success: false, error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+}
+
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: RouteContext
 ) {
+  const denied = await authorize(req);
+  if (denied) return denied;
+
   try {
     const supabase = createClient({ useServiceRole: true });
 
@@ -50,6 +66,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: RouteContext
 ) {
+  const denied = await authorize(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json();
 

@@ -9,11 +9,7 @@ export const MEDIA_ANALYSIS_MAX_CHARS = 15_000;
 export const MEDIA_ANALYSIS_MAX_SEGMENTS = 6;
 export const MEDIA_QUOTE_CONTEXT_CHARS = 300;
 
-export const MEDIA_QUOTE_TYPES = [
-  'direct_quote',
-  'indirect_quote',
-  'mention',
-] as const;
+export const MEDIA_QUOTE_TYPES = ['direct_quote', 'indirect_quote', 'mention'] as const;
 export const MEDIA_ATTRIBUTIONS = ['anton_merkurov', 'other', 'unknown'] as const;
 export const MEDIA_EDITORIAL_ROLES = [
   'expert_comment',
@@ -217,7 +213,10 @@ export function verifyQuoteCandidate(input: {
   chunks: AnalysisChunk[];
   language: string | null;
 }): VerifiedMediaQuote | null {
-  const candidateText = input.candidate.quote_text.trim();
+  const candidateText = input.candidate.quote_text
+    .trim()
+    .replace(/^["'«»“”„]+|["'«»“”„]+$/g, '')
+    .trim();
 
   if (!candidateText) return null;
   if (input.candidate.attribution === 'other') return null;
@@ -240,17 +239,12 @@ export function verifyQuoteCandidate(input: {
       ? documentNormalized.map[endMapIndex] + 1
       : input.documentText.length;
 
-  if (
-    documentCharStart === undefined ||
-    documentCharEnd <= documentCharStart
-  ) {
+  if (documentCharStart === undefined || documentCharEnd <= documentCharStart) {
     return null;
   }
 
   // Use the exact source substring, never the model's normalized wording.
-  const exactText = input.documentText
-    .slice(documentCharStart, documentCharEnd)
-    .trim();
+  const exactText = input.documentText.slice(documentCharStart, documentCharEnd).trim();
 
   if (!exactText) return null;
 
@@ -259,9 +253,7 @@ export function verifyQuoteCandidate(input: {
   const end = start + exactText.length;
 
   const primaryChunk =
-    input.chunks.find(
-      (chunk) => chunk.char_start <= start && chunk.char_end > start
-    ) ||
+    input.chunks.find((chunk) => chunk.char_start <= start && chunk.char_end > start) ||
     input.chunks.find((chunk) => chunk.char_start >= start) ||
     null;
   const endChunk =
@@ -301,13 +293,10 @@ export function verifyQuoteCandidate(input: {
     endChunkId: endChunk?.id || null,
     chunkCharStart: primaryChunk ? start - primaryChunk.char_start : null,
     chunkCharEnd:
-      primaryChunk && end <= primaryChunk.char_end
-        ? end - primaryChunk.char_start
-        : null,
+      primaryChunk && end <= primaryChunk.char_end ? end - primaryChunk.char_start : null,
     attribution,
     attributionConfidence: clamp(
-      input.candidate.attribution_confidence ??
-        (attribution === 'anton_merkurov' ? 0.8 : 0.4)
+      input.candidate.attribution_confidence ?? (attribution === 'anton_merkurov' ? 0.8 : 0.4)
     ),
     attributionNote: input.candidate.attribution_note?.trim() || null,
     confidence,

@@ -148,7 +148,16 @@ function asNullableString(value: unknown): string | null {
 }
 
 function asNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isSafeInteger(value) ? value : null;
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value !== 0) {
+    return value;
+  }
+
+  if (typeof value === 'string' && /^-?\d+$/.test(value)) {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) && parsed !== 0 ? parsed : null;
+  }
+
+  return null;
 }
 
 function asStatus(value: unknown): HumanRequestStatus {
@@ -246,14 +255,9 @@ function requestFromRow(row: Record<string, unknown>): HumanRequestRow {
       row.resolved_by === 'system'
         ? row.resolved_by
         : null,
-    telegram_chat_id:
-      typeof row.telegram_chat_id === 'number' ? row.telegram_chat_id : null,
-    telegram_message_id:
-      typeof row.telegram_message_id === 'number' ? row.telegram_message_id : null,
-    telegram_status_message_id:
-      typeof row.telegram_status_message_id === 'number'
-        ? row.telegram_status_message_id
-        : null,
+    telegram_chat_id: asNumber(row.telegram_chat_id),
+    telegram_message_id: asNumber(row.telegram_message_id),
+    telegram_status_message_id: asNumber(row.telegram_status_message_id),
     created_at: asString(row.created_at),
     updated_at: asString(row.updated_at),
     expires_at: asString(row.expires_at),
@@ -269,8 +273,7 @@ function sessionFromRow(row: Record<string, unknown>): HumanSessionRow {
     id: asString(row.id),
     request_id: asString(row.request_id),
     conversation_id: asString(row.conversation_id),
-    owner_telegram_id:
-      typeof row.owner_telegram_id === 'number' ? row.owner_telegram_id : 0,
+    owner_telegram_id: asNumber(row.owner_telegram_id) ?? 0,
     status: row.status === 'closed' ? 'closed' : 'active',
     opened_at: asString(row.opened_at),
     closed_at: asNullableString(row.closed_at),
@@ -649,25 +652,29 @@ export async function loadHumanMessages(
     .eq('conversation_id', conversationId)
     .in('role', ['user', 'human'])
     .gte('created_at', since)
-    .order('message_index', { ascending: true })
+    .order('message_index', { ascending: false })
     .limit(safeLimit);
 
   if (error) throw error;
 
-  return (Array.isArray(data) ? data : [])
+  const rows = Array.isArray(data) ? [...data].reverse() : [];
+
+  return rows
     .filter(
       (row): row is {
         id: string;
         role: 'user' | 'human';
         content: string;
-        message_index: number;
+        message_index: number | string;
         created_at: string | null;
       } =>
         Boolean(row) &&
         typeof row.id === 'string' &&
         (row.role === 'user' || row.role === 'human') &&
         typeof row.content === 'string' &&
-        typeof row.message_index === 'number',
+        (typeof row.message_index === 'number' ||
+          (typeof row.message_index === 'string' &&
+            /^\d+$/.test(row.message_index))),
     )
     .map((row) => ({
       id: row.id as string,
@@ -719,6 +726,8 @@ export async function getHumanPresenceByTelegramMessage(
     .select('*')
     .eq('telegram_chat_id', ownerTelegramId)
     .eq('telegram_message_id', telegramMessageId)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (directError) throw directError;
@@ -793,6 +802,37 @@ export async function updateHumanMessageLink(
     .eq('message_id', messageId);
 
   if (error) throw error;
+}
+
+/**
+ * Attaches delivery metadata to a message that was already persisted by the
+ * normal AI route before Anton accepted (the accept/AI race). Returns true
+ * when this call created the link and the caller should relay the message.
+ */
+export async function ensureHumanMessageLink(
+  store: SupabaseClient,
+  input: {
+    requestId: string;
+    sessionId: string;
+    conversationId: string;
+    messageId: string;
+    direction: 'visitor_to_telegram' | 'telegram_to_visitor';
+  },
+): Promise<boolean> {
+  const { error } = await store.from('pierrot_human_message_links').insert({
+    request_id: input.requestId,
+    session_id: input.sessionId,
+    conversation_id: input.conversationId,
+    message_id: input.messageId,
+    direction: input.direction,
+    delivery_status: 'pending',
+  });
+
+  if (!error) return true;
+
+  if (error.code === '23505') return false;
+
+  throw error;
 }
 
 export async function getHumanMessageLink(

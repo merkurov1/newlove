@@ -63,6 +63,15 @@ function isTelegramAdmin(userId: number | undefined): boolean {
   return typeof userId === 'number' && allowedAdmins.has(String(userId));
 }
 
+function escapeTelegramHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 async function loadHistory(ids: ReturnType<typeof createTelegramPierrotIds>) {
   const store = createPierrotStore();
 
@@ -326,6 +335,19 @@ async function handleHumanCallback(
         ).catch(() => undefined);
       } else if (result.result === 'expired') {
         await editCallbackNotification(ctx, expiredNotificationText(label));
+
+        if (result.conversationId) {
+          await recordHumanEvent(store, {
+            conversationId: result.conversationId,
+            eventName: 'human_expired',
+            eventKey: `human_expired:${requestId}`,
+            payload: { request_id: requestId },
+          }).catch(() => undefined);
+        }
+      } else if (result.result === 'declined') {
+        await editCallbackNotification(ctx, declinedNotificationText(label, 'owner'));
+      } else if (result.result === 'closed') {
+        await editCallbackNotification(ctx, closedNotificationText(label, 'Anton'));
       } else {
         await ctx
           .reply(`Request ${label} is ${result.result.replace(/_/g, ' ')}.`)
@@ -379,9 +401,9 @@ async function handleHumanCallback(
       const lines = [
         `<b>PIEROT · HUMAN PRESENCE</b>`,
         '',
-        `<b>Visitor:</b> ${state.visitorLabel}`,
-        `<b>Status:</b> ${state.status}`,
-        `<b>Page:</b> <code>${state.startPage || '/'}</code>`,
+        `<b>Visitor:</b> ${escapeTelegramHtml(state.visitorLabel)}`,
+        `<b>Status:</b> ${escapeTelegramHtml(state.status)}`,
+        `<b>Page:</b> <code>${escapeTelegramHtml(state.startPage || '/')}</code>`,
       ];
 
       if (state.acceptedAt) lines.push(`<b>Accepted:</b> ${state.acceptedAt}`);
@@ -396,18 +418,21 @@ async function handleHumanCallback(
 
     if (result.result === 'closed' || result.result === 'already_closed') {
       await editCallbackNotification(ctx, closedNotificationText(label, 'Anton'));
-      await sendOwnerConfirmation(
-        owner,
-        `Conversation ${label} closed. Piero has resumed with the visitor.`
-      ).catch(() => undefined);
 
-      if (result.conversationId) {
-        await recordHumanEvent(store, {
-          conversationId: result.conversationId,
-          eventName: 'human_closed',
-          eventKey: `human_closed:${requestId}`,
-          payload: { closed_by: 'owner' },
-        }).catch(() => undefined);
+      if (result.result === 'closed') {
+        await sendOwnerConfirmation(
+          owner,
+          `Conversation ${label} closed. Piero has resumed with the visitor.`
+        ).catch(() => undefined);
+
+        if (result.conversationId) {
+          await recordHumanEvent(store, {
+            conversationId: result.conversationId,
+            eventName: 'human_closed',
+            eventKey: `human_closed:${requestId}`,
+            payload: { closed_by: 'owner' },
+          }).catch(() => undefined);
+        }
       }
     } else {
       await ctx
@@ -452,6 +477,14 @@ async function routeOwnerHumanText(ctx: Context): Promise<boolean> {
 
     if (!target) return false;
 
+    if (
+      target.session &&
+      target.session.owner_telegram_id !== owner
+    ) {
+      // A reply anchor must belong to the configured owner's session.
+      return true;
+    }
+
     if (target.request.status !== 'active' || target.session?.status !== 'active') {
       if (replyTo) {
         await ctx
@@ -492,11 +525,20 @@ async function routeOwnerHumanText(ctx: Context): Promise<boolean> {
     // Telegram may redeliver the exact update. The deterministic message id
     // makes the second append a no-op, so no duplicate reaches the visitor.
     return true;
-  } catch {
+  } catch (error) {
+    const code =
+      error && typeof error === 'object' && 'code' in error
+        ? String((error as { code?: unknown }).code)
+        : '';
+
     // A closed session can race with an incoming update. Do not fall through
     // to Piero after the owner has started a human conversation.
     await ctx
-      .reply('That conversation has ended. Piero is back with the visitor.')
+      .reply(
+        code === 'P0002'
+          ? 'That conversation has ended. Piero is back with the visitor.'
+          : 'The message could not be delivered. Please try again.'
+      )
       .catch(() => undefined);
     return true;
   }
@@ -525,6 +567,13 @@ async function handleEndCommand(ctx: Context): Promise<void> {
     }
 
     const result = await closeHumanSession(store, active.request.id, 'owner', owner);
+
+    if (result.result !== 'closed' && result.result !== 'already_closed') {
+      await ctx
+        .reply(`Request ${active.request.visitor_label} is ${result.result}.`)
+        .catch(() => undefined);
+      return;
+    }
 
     if (result.telegramChatId && (active.request.telegram_status_message_id || active.request.telegram_message_id)) {
       await editHumanRequestNotification(
@@ -583,10 +632,10 @@ async function handleStatusCommand(ctx: Context): Promise<void> {
         [
           '<b>PIEROT · HUMAN PRESENCE</b>',
           '',
-          `<b>Visitor:</b> ${state.visitorLabel}`,
-          `<b>Status:</b> ${state.status}`,
-          `<b>Page:</b> <code>${state.startPage || '/'}</code>`,
-          `<b>Opened:</b> ${state.acceptedAt || '—'}`,
+          `<b>Visitor:</b> ${escapeTelegramHtml(state.visitorLabel)}`,
+          `<b>Status:</b> ${escapeTelegramHtml(state.status)}`,
+          `<b>Page:</b> <code>${escapeTelegramHtml(state.startPage || '/')}</code>`,
+          `<b>Opened:</b> ${escapeTelegramHtml(state.acceptedAt || '—')}`,
           '',
           'Write here to reply. Use /end to finish.',
         ].join('\n'),

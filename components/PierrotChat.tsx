@@ -322,7 +322,7 @@ export default function PierrotChat() {
                       </div>
 
                       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-                        {canShowBrainMode && (
+                        {canShowBrainMode && !isHumanActive && (
                           <button
                             type="button"
                             onClick={toggleUnframedMode}
@@ -438,7 +438,7 @@ export default function PierrotChat() {
                         </div>
                       )}
 
-                      {isUnframedMode && (
+                      {isUnframedMode && !isHumanActive && (
                         <div className="mb-2 flex items-center gap-2 px-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[#8A8175]">
                           <span className="h-1.5 w-1.5 rounded-full bg-[#8CA18A]" />
                           <span>Private Brain mode · answers use your knowledge base</span>

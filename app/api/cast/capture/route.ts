@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -13,6 +14,13 @@ function isValidEmail(email: string) {
 }
 
 export async function POST(req: Request) {
+  const limited = checkRateLimit(getClientIp(req), {
+    interval: 60 * 60 * 1000,
+    maxRequests: 10,
+    keyPrefix: 'cast-capture',
+  });
+  if (limited) return limited;
+
   try {
     let body: any;
 

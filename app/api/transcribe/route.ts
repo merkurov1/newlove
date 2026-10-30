@@ -1,11 +1,25 @@
 import { NextResponse } from 'next/server';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { assertSafePublicUrl } from '@/lib/flow/parseUrl';
 
-// Transcription endpoint: given whisper id and public URL, perform transcription.
-// This implementation will use OpenAI Speech-to-Text if OPENAI_API_KEY is set.
-// You can replace this with whisper.cpp or another local whisper runtime.
-
+// Transcription endpoint: admin-only audio transcription for temple whispers.
+// This implementation uses OpenAI Speech-to-Text if OPENAI_API_KEY is set.
 export async function POST(req: Request) {
+  const limited = checkRateLimit(getClientIp(req), {
+    interval: 60 * 1000,
+    maxRequests: 10,
+    keyPrefix: 'transcribe',
+  });
+  if (limited) return limited;
+
   try {
+    try {
+      await requireAdminFromRequest(req);
+    } catch {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Accept either JSON or form-encoded requests (admin HTML form uses form-encoded)
     let whisperId: string | null = null;
     let url: string | null = null;
@@ -21,6 +35,14 @@ export async function POST(req: Request) {
       url = params.get('url');
     }
     if (!whisperId || !url) return NextResponse.json({ ok: false, error: 'missing', debug: { note: 'missing whisperId or url', provided: { whisperId, url } } }, { status: 400 });
+
+    let safeUrl: string;
+
+    try {
+      safeUrl = assertSafePublicUrl(url).toString();
+    } catch {
+      return NextResponse.json({ ok: false, error: 'Invalid audio URL' }, { status: 400 });
+    }
 
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const supabase = getServerSupabaseClient({ useServiceRole: true });
@@ -38,7 +60,7 @@ export async function POST(req: Request) {
       try {
         const form = new FormData();
         // fetch audio
-        const audioResp = await fetch(url as string);
+        const audioResp = await fetch(safeUrl);
         if (!audioResp.ok) {
           const bodyText = await audioResp.text().catch(() => 'no body');
           return NextResponse.json({ ok: false, error: `failed to fetch audio from url: ${audioResp.status}: ${bodyText}` }, { status: 502 });

@@ -7,6 +7,7 @@ import {
   buildHumanStateResponse,
   getHumanPresenceByToken,
   getHumanPresenceForConversation,
+  recordHumanEvent,
 } from '@/lib/pierrot/humanPresence';
 
 export const runtime = 'nodejs';
@@ -88,6 +89,15 @@ export async function POST(req: Request) {
         },
         { headers: NO_STORE },
       );
+    }
+
+    if (record.request.status === 'expired') {
+      await recordHumanEvent(store, {
+        conversationId: record.request.conversation_id,
+        eventName: 'human_expired',
+        eventKey: `human_expired:${record.request.id}`,
+        payload: { request_id: record.request.id },
+      }).catch(() => undefined);
     }
 
     const payload = await buildHumanStateResponse(store, record);
