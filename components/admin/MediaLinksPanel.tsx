@@ -460,7 +460,7 @@ export default function MediaLinksPanel() {
         <div className="flex items-center justify-between">
           <h3 className="font-serif text-2xl">Последние записи</h3>
 
-          <span className="text-xs text-gray-500">{records.length} / 200</span>
+          <span className="text-xs text-gray-500">{records.length} записей</span>
         </div>
 
         {records.length === 0 ? (
