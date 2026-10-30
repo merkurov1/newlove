@@ -10,6 +10,7 @@ const groups = [
       { href: '/admin', label: 'Обзор', icon: '↗' },
       { href: '/admin/flow-issues', label: 'Газета Flow', icon: '📰' },
       { href: '/admin/media', label: 'Медиа публикации', icon: '▦' },
+      { href: '/admin/media/intelligence', label: 'Media Intelligence', icon: '◔' },
       { href: '/flow', label: 'Стрим Flow', icon: '≋' },
     ],
   },
