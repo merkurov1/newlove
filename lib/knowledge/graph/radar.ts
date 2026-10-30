@@ -277,6 +277,35 @@ export async function runEditorialRadar(input: {
   }
 
   const clusterIndices = clusterQuestionVectors(questionVectors.map((question) => question.vector));
+
+  const documentIds = Array.from(
+    new Set(questionVectors.flatMap((question) => question.relatedDocuments.map((document) => document.id)))
+  );
+
+  if (documentIds.length > 0) {
+    const { data: docs } = await input.store.client
+      .from('knowledge_documents')
+      .select('id,title')
+      .in('id', documentIds)
+      .limit(1000);
+    const titles = new Map(
+      (Array.isArray(docs) ? docs : []).map((row) => [
+        String((row as { id: string }).id),
+        String((row as { title: string }).title),
+      ])
+    );
+
+    for (const question of questionVectors) {
+      question.relatedDocuments = question.relatedDocuments.map((document) => ({
+        ...document,
+        title: titles.get(document.id) || document.title,
+      }));
+      if (question.topDocumentId) {
+        question.topDocumentTitle = titles.get(question.topDocumentId) || question.topDocumentTitle;
+      }
+    }
+  }
+
   const clusters = clusterIndices
     .map((indices) => clusterSummary(indices.map((index) => questionVectors[index])))
     .sort((left, right) => right.questions.length - left.questions.length)

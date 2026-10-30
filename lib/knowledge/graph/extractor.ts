@@ -1,4 +1,4 @@
-import { graphChatJson } from './deepseek';
+import { graphChatJson, type GraphChatOptions } from './deepseek';
 import {
   clampConfidence,
   cleanEntityName,
@@ -22,10 +22,14 @@ import type {
 } from './types';
 
 export const BRAIN_GRAPH_EXTRACTOR_VERSION = 'brain-graph-v1';
-export const BRAIN_GRAPH_MAX_BATCH_CHARS = 16_000;
-export const BRAIN_GRAPH_MAX_BATCH_CHUNKS = 10;
+export const BRAIN_GRAPH_MAX_BATCH_CHARS = 12_000;
+export const BRAIN_GRAPH_MAX_BATCH_CHUNKS = 8;
 
-type ChatJson = (system: string, user: string) => Promise<unknown>;
+type ChatJson = (
+  system: string,
+  user: string,
+  options?: GraphChatOptions
+) => Promise<unknown>;
 
 const EXTRACTION_SYSTEM = [
   'You build a grounded knowledge graph for the owner’s private Brain.',
@@ -300,7 +304,9 @@ export async function extractDocumentGraph(
       })),
     };
 
-    const raw = await chatJson(EXTRACTION_SYSTEM, JSON.stringify(payload));
+    const raw = await chatJson(EXTRACTION_SYSTEM, JSON.stringify(payload), {
+      maxTokens: 8192,
+    });
     const parsed = parseBatch(raw, batch);
 
     entities.push(...parsed.entities);
