@@ -190,6 +190,7 @@ export async function searchMediaIntelligence(input: {
   embeddingClient?: EmbeddingClient;
   client?: SupabaseClient;
   chatJson?: (system: string, user: string) => Promise<unknown>;
+  answerMode?: 'llm' | 'none';
 }): Promise<MediaSearchResult> {
   const query = input.query.trim();
 
@@ -277,7 +278,7 @@ export async function searchMediaIntelligence(input: {
     };
   }
 
-  if (!isGraphLlmConfigured() && !input.chatJson) {
+  if (input.answerMode === 'none' || (!isGraphLlmConfigured() && !input.chatJson)) {
     return {
       summary: deterministicSummary(hits),
       facts: fallbackFacts(hits),

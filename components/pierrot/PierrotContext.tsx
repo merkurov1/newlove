@@ -348,6 +348,21 @@ function normalizeEvidenceSource(value: unknown): UnframedEvidenceSource | null 
     lineEnd: source.lineEnd,
     similarity: source.similarity,
     excerpt: source.excerpt,
+    outlet: typeof source.outlet === 'string' ? source.outlet : null,
+    canonicalUrl: typeof source.canonicalUrl === 'string' ? source.canonicalUrl : null,
+    quoteType:
+      source.quoteType === 'direct_quote' ||
+      source.quoteType === 'indirect_quote' ||
+      source.quoteType === 'mention'
+        ? source.quoteType
+        : undefined,
+    verificationStatus:
+      source.verificationStatus === 'verified' ||
+      source.verificationStatus === 'unverified' ||
+      source.verificationStatus === 'none'
+        ? source.verificationStatus
+        : undefined,
+    mediaRecordId: typeof source.mediaRecordId === 'string' ? source.mediaRecordId : undefined,
   };
 }
 
@@ -413,9 +428,7 @@ function normalizeMessage(value: unknown, index: number): PierrotMessage | null 
               : 'pierrot',
     createdAt: typeof message.createdAt === 'string' ? message.createdAt : undefined,
     delivery:
-      message.delivery === 'sending' ||
-      message.delivery === 'sent' ||
-      message.delivery === 'failed'
+      message.delivery === 'sending' || message.delivery === 'sent' || message.delivery === 'failed'
         ? message.delivery
         : undefined,
     sequence:
@@ -475,9 +488,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     null
   );
   const [humanPresence, setHumanPresence] = useState<HumanPresencePublicState | null>(null);
-  const [humanRestorePending, setHumanRestorePending] = useState(() =>
-    hasSavedHumanAccessToken()
-  );
+  const [humanRestorePending, setHumanRestorePending] = useState(() => hasSavedHumanAccessToken());
   const humanPresenceRef = useRef<HumanPresencePublicState | null>(null);
   const humanTokenRef = useRef<string | null>(null);
   const humanPollInFlightRef = useRef(false);
@@ -552,10 +563,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateMessage = useCallback(
-    (
-      id: string,
-      patch: Partial<Pick<PierrotMessage, 'delivery' | 'createdAt' | 'sequence'>>
-    ) => {
+    (id: string, patch: Partial<Pick<PierrotMessage, 'delivery' | 'createdAt' | 'sequence'>>) => {
       setMessages((current) => {
         const updated = current.map((message) =>
           message.id === id ? { ...message, ...patch } : message
@@ -683,20 +691,13 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
                 for (let index = 0; index < rest.length; index += 1) {
                   const sequence = rest[index].sequence;
 
-                  if (
-                    typeof sequence === 'number' &&
-                    sequence > incoming.sequence
-                  ) {
+                  if (typeof sequence === 'number' && sequence > incoming.sequence) {
                     insertAt = index;
                     break;
                   }
                 }
 
-                next = [
-                  ...rest.slice(0, insertAt),
-                  target,
-                  ...rest.slice(insertAt),
-                ];
+                next = [...rest.slice(0, insertAt), target, ...rest.slice(insertAt)];
               } else {
                 next = updatedList;
               }
@@ -727,11 +728,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
               }
             }
 
-            next = [
-              ...next.slice(0, insertAt),
-              incomingMessage,
-              ...next.slice(insertAt),
-            ];
+            next = [...next.slice(0, insertAt), incomingMessage, ...next.slice(insertAt)];
             ids.add(incoming.id);
           }
 
@@ -767,10 +764,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       if (request.status === 'closed') {
         humanNoticeRef.current = noticeKey;
         if (!noticeAlreadyPresent) {
-          appendHumanNotice(
-            request.resolvedBy === 'visitor' ? copy.ended : copy.closed,
-            noticeKey
-          );
+          appendHumanNotice(request.resolvedBy === 'visitor' ? copy.ended : copy.closed, noticeKey);
         }
         clearHumanAccessToken();
         humanTokenRef.current = null;
@@ -1259,10 +1253,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   );
 
   const sendHumanModeMessage = useCallback(
-    async (
-      text: string,
-      existing?: { id: string; createdAt?: string }
-    ) => {
+    async (text: string, existing?: { id: string; createdAt?: string }) => {
       const trimmed = text.trim();
 
       if (!trimmed) return;
@@ -1333,14 +1324,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
 
       appendHumanNotice(copy.sendFailed);
     },
-    [
-      appendHumanNotice,
-      appendMessage,
-      applyHumanState,
-      humanLanguage,
-      setHumanState,
-      updateMessage,
-    ]
+    [appendHumanNotice, appendMessage, applyHumanState, humanLanguage, setHumanState, updateMessage]
   );
 
   const cancelHumanRequest = useCallback(async () => {
@@ -1588,10 +1572,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         setPierrotConversationId(data.conversationId);
 
         if (data.human && isHumanRequestStatus(data.human.status)) {
-          if (
-            typeof data.humanToken === 'string' &&
-            typeof data.human.requestId === 'string'
-          ) {
+          if (typeof data.humanToken === 'string' && typeof data.human.requestId === 'string') {
             humanTokenRef.current = data.humanToken;
             saveHumanAccessToken(data.humanToken, data.human.requestId);
           }

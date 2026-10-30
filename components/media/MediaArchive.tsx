@@ -17,8 +17,7 @@ type TypeDef = {
 };
 
 type TimelineNode =
-  | { type: 'record'; record: MediaRecord }
-  | { type: 'series'; items: MediaRecord[] };
+  { type: 'record'; record: MediaRecord } | { type: 'series'; items: MediaRecord[] };
 
 const TYPES: TypeDef[] = [
   { id: 'all', label: 'All', kinds: null },
@@ -35,6 +34,17 @@ const KIND_LABEL: Record<Kind, string> = {
   radio: 'Radio',
   video: 'Video',
   column: 'Column',
+  blog: 'Blog',
+  profile: 'Profile',
+};
+
+const PRESENCE_LABEL: Record<Kind, string> = {
+  quote: 'Quoted expert',
+  mention: 'Mention',
+  interview: 'Interview',
+  radio: 'Radio',
+  video: 'Video',
+  column: 'Author column',
   blog: 'Blog',
   profile: 'Profile',
 };
@@ -60,10 +70,7 @@ const PRESTIGE = [
   'Эхо Москвы',
 ];
 
-const MONTHS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const PAGE_SIZE = 30;
 const SERIES_OUTLET = 'Новая газета';
@@ -92,10 +99,7 @@ export default function MediaArchive({ records, archives }: Props) {
 
   const paramsString = searchParams?.toString() ?? '';
 
-  const params = useMemo(
-    () => new URLSearchParams(paramsString),
-    [paramsString],
-  );
+  const params = useMemo(() => new URLSearchParams(paramsString), [paramsString]);
 
   const type = params.get('type') ?? 'all';
   const lang = params.get('lang') ?? '';
@@ -103,9 +107,35 @@ export default function MediaArchive({ records, archives }: Props) {
   const year = params.get('year') ?? '';
   const outlet = params.get('outlet') ?? '';
   const queryFromUrl = params.get('q') ?? '';
+  const quotesOnly = params.get('quotes') === '1';
 
   const [query, setQuery] = useState(queryFromUrl);
   const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE);
+  const [semanticQuery, setSemanticQuery] = useState('');
+  const [semanticResults, setSemanticResults] = useState<
+    Array<{
+      slug: string;
+      title: string;
+      outlet: string;
+      date: string;
+      lang: string;
+      kind: string;
+      topic: string;
+      summary: string;
+      url: string;
+      href: string;
+      quotes: Array<{
+        id: string;
+        text: string;
+        type: string;
+        language: string | null;
+        translation?: string | null;
+      }>;
+      related: Array<{ slug: string; title: string; outlet: string; relationType: string }>;
+    }>
+  >([]);
+  const [semanticLoading, setSemanticLoading] = useState(false);
+  const [semanticMessage, setSemanticMessage] = useState('');
 
   const updateUrl = useCallback(
     (patch: Record<string, string | null>) => {
@@ -117,19 +147,16 @@ export default function MediaArchive({ records, archives }: Props) {
       });
 
       const queryString = next.toString();
-      router.replace(
-        queryString ? `${pathname}?${queryString}` : pathname,
-        { scroll: false },
-      );
+      router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false });
     },
-    [params, pathname, router],
+    [params, pathname, router]
   );
 
   const toggleFilter = useCallback(
     (key: string, current: string, value: string) => {
       updateUrl({ [key]: current === value ? null : value });
     },
-    [updateUrl],
+    [updateUrl]
   );
 
   useEffect(() => {
@@ -148,16 +175,13 @@ export default function MediaArchive({ records, archives }: Props) {
 
   useEffect(() => {
     setVisibleLimit(PAGE_SIZE);
-  }, [type, lang, topic, year, outlet, queryFromUrl]);
+  }, [type, lang, topic, year, outlet, queryFromUrl, quotesOnly]);
 
   const stats = useMemo(() => {
     const outletCounts = new Map<string, number>();
 
     records.forEach((record) => {
-      outletCounts.set(
-        record.outlet,
-        (outletCounts.get(record.outlet) ?? 0) + 1,
-      );
+      outletCounts.set(record.outlet, (outletCounts.get(record.outlet) ?? 0) + 1);
     });
 
     const outlets = [...outletCounts.keys()].sort((a, b) => {
@@ -165,58 +189,105 @@ export default function MediaArchive({ records, archives }: Props) {
       const indexB = PRESTIGE.indexOf(b);
 
       if (indexA !== -1 || indexB !== -1) {
-        return (indexA === -1 ? 999 : indexA)
-          - (indexB === -1 ? 999 : indexB);
+        return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
       }
 
-      return (
-        (outletCounts.get(b) ?? 0) - (outletCounts.get(a) ?? 0)
-        || a.localeCompare(b)
-      );
+      return (outletCounts.get(b) ?? 0) - (outletCounts.get(a) ?? 0) || a.localeCompare(b);
     });
 
-    const years = records
-      .map((record) => Number(record.date.slice(0, 4)))
-      .filter(Number.isFinite);
+    const years = records.map((record) => Number(record.date.slice(0, 4))).filter(Number.isFinite);
 
     return {
       total: records.length,
       outlets,
       languages: [...new Set(records.map((record) => record.lang))].sort(),
-      topics: [...new Set(records.map((record) => record.topic))].sort(),
+      topics: [...new Set(records.map((record) => record.derivedTopic || record.topic))].sort(),
       minYear: years.length ? Math.min(...years) : new Date().getFullYear(),
       maxYear: years.length ? Math.max(...years) : new Date().getFullYear(),
     };
   }, [records]);
 
+  const collections = useMemo(() => {
+    const topics = ['Internet & Censorship', 'AI & Tech', 'Art & Culture', 'Fintech & Crypto'];
+    const byTopic = new Map<string, MediaRecord[]>();
+
+    for (const record of records) {
+      const topicName = record.derivedTopic || record.topic;
+      const list = byTopic.get(topicName) || [];
+      list.push(record);
+      byTopic.set(topicName, list);
+    }
+
+    return topics
+      .map((topicName) => ({
+        topic: topicName,
+        records: (byTopic.get(topicName) || [])
+          .sort((left, right) => {
+            const quoteOrder = (right.quoteCount || 0) - (left.quoteCount || 0);
+            return quoteOrder || right.date.localeCompare(left.date);
+          })
+          .slice(0, 3),
+      }))
+      .filter((collection) => collection.records.length > 0);
+  }, [records]);
+
+  const runSemanticSearch = useCallback(async () => {
+    const value = semanticQuery.trim();
+    if (!value) return;
+
+    setSemanticLoading(true);
+    setSemanticMessage('');
+
+    try {
+      const response = await fetch('/api/media/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: value,
+          filters: { topic, language: lang, outlet },
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Search is temporarily unavailable.');
+      }
+
+      setSemanticResults(Array.isArray(data.results) ? data.results : []);
+      setSemanticMessage(
+        data.summary ||
+          (Array.isArray(data.results) && data.results.length === 0
+            ? 'No publications match this question.'
+            : '')
+      );
+    } catch (error) {
+      setSemanticResults([]);
+      setSemanticMessage(
+        error instanceof Error ? error.message : 'Search is temporarily unavailable.'
+      );
+    } finally {
+      setSemanticLoading(false);
+    }
+  }, [lang, outlet, semanticQuery, topic]);
+
   const matches = useCallback(
     (record: MediaRecord, ignoreYear = false) => {
       const selectedType = TYPES.find((item) => item.id === type);
 
-      if (
-        selectedType?.kinds
-        && !selectedType.kinds.includes(record.kind)
-      ) {
+      if (selectedType?.kinds && !selectedType.kinds.includes(record.kind)) {
         return false;
       }
 
       if (lang && record.lang !== lang) return false;
-      if (topic && record.topic !== topic) return false;
+      if (topic && (record.derivedTopic || record.topic) !== topic) return false;
       if (outlet && record.outlet !== outlet) return false;
+      if (quotesOnly && !record.verifiedQuotes?.length) return false;
 
-      if (
-        !ignoreYear
-        && year
-        && record.date.slice(0, 4) !== year
-      ) {
+      if (!ignoreYear && year && record.date.slice(0, 4) !== year) {
         return false;
       }
 
-      const words = query
-        .trim()
-        .toLocaleLowerCase()
-        .split(/\s+/)
-        .filter(Boolean);
+      const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
 
       if (words.length) {
         const searchableText = [
@@ -225,9 +296,12 @@ export default function MediaArchive({ records, archives }: Props) {
           record.program ?? '',
           record.summary,
           record.topic,
+          record.derivedTopic ?? '',
+          (record.subtopics ?? []).join(' '),
           record.lang,
           record.date,
           KIND_LABEL[record.kind],
+          ...(record.verifiedQuotes ?? []).map((quote) => quote.text),
         ]
           .join(' ')
           .toLocaleLowerCase();
@@ -239,21 +313,23 @@ export default function MediaArchive({ records, archives }: Props) {
 
       return true;
     },
-    [type, lang, topic, outlet, year, query],
+    [type, lang, topic, outlet, year, query, quotesOnly]
   );
 
   const filtered = useMemo(
     () => records.filter((record) => matches(record)).sort(compareRecords),
-    [records, matches],
+    [records, matches]
   );
 
   const histogram = useMemo(() => {
     const counts = new Map<number, number>();
 
-    records.filter((record) => matches(record, true)).forEach((record) => {
-      const recordYear = Number(record.date.slice(0, 4));
-      counts.set(recordYear, (counts.get(recordYear) ?? 0) + 1);
-    });
+    records
+      .filter((record) => matches(record, true))
+      .forEach((record) => {
+        const recordYear = Number(record.date.slice(0, 4));
+        counts.set(recordYear, (counts.get(recordYear) ?? 0) + 1);
+      });
 
     const years: number[] = [];
 
@@ -275,21 +351,21 @@ export default function MediaArchive({ records, archives }: Props) {
   }, [records, matches, stats.minYear, stats.maxYear]);
 
   const activeFilters = Boolean(
-    queryFromUrl || lang || topic || year || outlet || type !== 'all',
+    queryFromUrl || lang || topic || year || outlet || type !== 'all' || quotesOnly
   );
 
   const resetFilters = () => {
     setQuery('');
+    setSemanticQuery('');
+    setSemanticResults([]);
+    setSemanticMessage('');
     setVisibleLimit(PAGE_SIZE);
     router.replace(pathname, { scroll: false });
   };
 
   const isOverview = !query.trim() && !outlet && type !== 'columns';
 
-  const visibleRecords = useMemo(
-    () => filtered.slice(0, visibleLimit),
-    [filtered, visibleLimit],
-  );
+  const visibleRecords = useMemo(() => filtered.slice(0, visibleLimit), [filtered, visibleLimit]);
 
   const groups = useMemo(() => {
     const byYear = new Map<string, MediaRecord[]>();
@@ -306,22 +382,17 @@ export default function MediaArchive({ records, archives }: Props) {
       .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
       .map(([recordYear, yearRecords]) => {
         const seriesItems = yearRecords.filter(
-          (record) =>
-            record.kind === 'column'
-            && record.outlet === SERIES_OUTLET,
+          (record) => record.kind === 'column' && record.outlet === SERIES_OUTLET
         );
 
-        const collapseSeries =
-          isOverview && seriesItems.length >= SERIES_MIN;
+        const collapseSeries = isOverview && seriesItems.length >= SERIES_MIN;
 
         const nodes: TimelineNode[] = [];
         let seriesAdded = false;
 
         yearRecords.forEach((record) => {
           const belongsToSeries =
-            collapseSeries
-            && record.kind === 'column'
-            && record.outlet === SERIES_OUTLET;
+            collapseSeries && record.kind === 'column' && record.outlet === SERIES_OUTLET;
 
           if (!belongsToSeries) {
             nodes.push({ type: 'record', record });
@@ -347,9 +418,9 @@ export default function MediaArchive({ records, archives }: Props) {
         <h1 className="ma-h1">Public record & commentary</h1>
 
         <p className="ma-lede">
-          A continuous record of analytical columns, international media citations, 
-          interviews, and public appearances tracing transformations in digital infrastructure, 
-          technology, and contemporary culture.
+          A continuous record of analytical columns, international media citations, interviews, and
+          public appearances tracing transformations in digital infrastructure, technology, and
+          contemporary culture.
         </p>
 
         <dl className="ma-stats">
@@ -378,9 +449,7 @@ export default function MediaArchive({ records, archives }: Props) {
               type="button"
               className="ma-outlet-btn"
               aria-pressed={outlet === publication}
-              onClick={() =>
-                toggleFilter('outlet', outlet, publication)
-              }
+              onClick={() => toggleFilter('outlet', outlet, publication)}
             >
               {publication}
             </button>
@@ -393,11 +462,7 @@ export default function MediaArchive({ records, archives }: Props) {
             {archives.map((archive, index) => (
               <span key={archive.url}>
                 {index > 0 && <span aria-hidden="true"> · </span>}
-                <a
-                  href={archive.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <a href={archive.url} target="_blank" rel="noopener noreferrer">
                   {archive.outlet} ↗
                 </a>
               </span>
@@ -406,12 +471,52 @@ export default function MediaArchive({ records, archives }: Props) {
         )}
       </header>
 
+      {collections.length > 0 && (
+        <section className="ma-collections" aria-label="Thematic collections">
+          <div className="ma-section-heading">
+            <span className="ma-eyebrow">Thematic collections</span>
+            <span className="ma-small-note">
+              Real publications, selected by topic and verified commentary
+            </span>
+          </div>
+          <div className="ma-collection-grid">
+            {collections.map((collection) => (
+              <article key={collection.topic} className="ma-collection">
+                <h2>{collection.topic}</h2>
+                <ol>
+                  {collection.records.map((record) => (
+                    <li key={record.slug}>
+                      <Link href={`/media/record/${encodeURIComponent(record.slug)}`}>
+                        {record.title}
+                      </Link>
+                      <span>
+                        {record.outlet} · {formatDate(record.date)}
+                        {record.verifiedQuotes?.length
+                          ? ` · ${record.verifiedQuotes.length} verified quote${
+                              record.verifiedQuotes.length === 1 ? '' : 's'
+                            }`
+                          : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <button
+                  type="button"
+                  className="ma-collection-more"
+                  onClick={() => updateUrl({ topic: collection.topic, q: null })}
+                >
+                  View topic →
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="ma-explorer" aria-label="Explore archive">
         <div className="ma-section-heading">
           <span className="ma-eyebrow">Browse by year</span>
-          <span className="ma-small-note">
-            Select a year to filter the archive
-          </span>
+          <span className="ma-small-note">Select a year to filter the archive</span>
         </div>
 
         <div className="ma-hist" role="group" aria-label="Records by year">
@@ -424,17 +529,10 @@ export default function MediaArchive({ records, archives }: Props) {
               disabled={count === 0}
               title={`${barYear}: ${count} records`}
               aria-label={`${barYear}: ${count} records`}
-              onClick={() =>
-                toggleFilter('year', year, String(barYear))
-              }
+              onClick={() => toggleFilter('year', year, String(barYear))}
             >
-              <span
-                className="ma-bar-fill"
-                style={{ height: `${height}%` }}
-              />
-              <span className="ma-bar-label">
-                {String(barYear).slice(2)}
-              </span>
+              <span className="ma-bar-fill" style={{ height: `${height}%` }} />
+              <span className="ma-bar-label">{String(barYear).slice(2)}</span>
             </button>
           ))}
         </div>
@@ -443,7 +541,9 @@ export default function MediaArchive({ records, archives }: Props) {
       <section className="ma-filters" aria-label="Filter media archive">
         <label className="ma-search">
           <span className="ma-sr">Search the media archive</span>
-          <span className="ma-search-icon" aria-hidden="true">⌕</span>
+          <span className="ma-search-icon" aria-hidden="true">
+            ⌕
+          </span>
           <input
             type="search"
             value={query}
@@ -492,9 +592,7 @@ export default function MediaArchive({ records, archives }: Props) {
                 type="button"
                 className="ma-chip ma-chip-small"
                 aria-pressed={lang === language}
-                onClick={() =>
-                  toggleFilter('lang', lang, language)
-                }
+                onClick={() => toggleFilter('lang', lang, language)}
               >
                 {language}
               </button>
@@ -511,9 +609,7 @@ export default function MediaArchive({ records, archives }: Props) {
                 type="button"
                 className="ma-chip ma-chip-small"
                 aria-pressed={topic === item}
-                onClick={() =>
-                  toggleFilter('topic', topic, item)
-                }
+                onClick={() => toggleFilter('topic', topic, item)}
               >
                 {item}
               </button>
@@ -521,26 +617,109 @@ export default function MediaArchive({ records, archives }: Props) {
           </div>
         </div>
 
+        <div className="ma-filter-block">
+          <span className="ma-filter-label">Evidence</span>
+          <div className="ma-chips" role="group" aria-label="Evidence">
+            <button
+              type="button"
+              className="ma-chip ma-chip-small"
+              aria-pressed={quotesOnly}
+              onClick={() => updateUrl({ quotes: quotesOnly ? null : '1' })}
+            >
+              Verified quotes
+            </button>
+          </div>
+        </div>
+
         <div className="ma-results-line">
           <p className="ma-count" aria-live="polite">
-            <strong>{filtered.length}</strong>
-            {' '}
-            {filtered.length === 1 ? 'record' : 'records'}
+            <strong>{filtered.length}</strong> {filtered.length === 1 ? 'record' : 'records'}
             {filtered.length > visibleRecords.length && (
               <span> · showing {visibleRecords.length}</span>
             )}
           </p>
 
           {activeFilters && (
-            <button
-              type="button"
-              className="ma-reset"
-              onClick={resetFilters}
-            >
+            <button type="button" className="ma-reset" onClick={resetFilters}>
               Clear filters ×
             </button>
           )}
         </div>
+      </section>
+
+      <section className="ma-semantic" aria-label="Semantic search">
+        <div className="ma-section-heading">
+          <span className="ma-eyebrow">Search by meaning</span>
+          <span className="ma-small-note">
+            Ask about a theme, quote or position. Results link to the original publication.
+          </span>
+        </div>
+        <form
+          className="ma-semantic-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void runSemanticSearch();
+          }}
+        >
+          <input
+            type="search"
+            value={semanticQuery}
+            onChange={(event) => setSemanticQuery(event.target.value)}
+            placeholder="e.g. comments about data centres, AI sovereignty, direct quotes"
+            aria-label="Semantic search query"
+          />
+          <button type="submit" disabled={semanticLoading || !semanticQuery.trim()}>
+            {semanticLoading ? 'Searching…' : 'Search'}
+          </button>
+        </form>
+
+        {semanticResults.length > 0 && (
+          <div className="ma-semantic-results" aria-live="polite">
+            <p className="ma-semantic-summary">{semanticMessage}</p>
+            <ol>
+              {semanticResults.map((result) => (
+                <li key={result.slug}>
+                  <div>
+                    <Link href={result.href}>{result.title}</Link>
+                    <span className="ma-semantic-meta">
+                      {result.outlet} · {result.date} ·{' '}
+                      {PRESENCE_LABEL[result.kind as Kind] || result.kind}
+                    </span>
+                  </div>
+                  {result.quotes.slice(0, 2).map((quote) => (
+                    <blockquote key={quote.id} className="ma-semantic-quote">
+                      <span className="ma-quote-label">
+                        {quote.type === 'direct_quote'
+                          ? 'Verified direct quote'
+                          : quote.type === 'indirect_quote'
+                            ? 'Verified paraphrase'
+                            : 'Verified mention'}
+                      </span>
+                      “{quote.text}”
+                      {quote.translation && (
+                        <span className="ma-quote-translation">{quote.translation}</span>
+                      )}
+                    </blockquote>
+                  ))}
+                  <a
+                    href={result.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ma-semantic-link"
+                  >
+                    Original publication ↗
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        {semanticMessage && semanticResults.length === 0 && (
+          <p className="ma-semantic-summary" role="status">
+            {semanticMessage}
+          </p>
+        )}
       </section>
 
       <section className="ma-timeline" aria-label="Media timeline">
@@ -549,11 +728,7 @@ export default function MediaArchive({ records, archives }: Props) {
             <p className="ma-empty-title">No matching records</p>
             <p>Try another search or clear the selected filters.</p>
             {activeFilters && (
-              <button
-                type="button"
-                className="ma-reset"
-                onClick={resetFilters}
-              >
+              <button type="button" className="ma-reset" onClick={resetFilters}>
                 Clear all filters
               </button>
             )}
@@ -569,9 +744,7 @@ export default function MediaArchive({ records, archives }: Props) {
               <div className="ma-year-head">
                 <h2 id={`heading-${group.year}`}>{group.year}</h2>
                 <span>
-                  {group.count}
-                  {' '}
-                  {group.count === 1 ? 'entry' : 'entries'}
+                  {group.count} {group.count === 1 ? 'entry' : 'entries'}
                 </span>
               </div>
 
@@ -579,20 +752,13 @@ export default function MediaArchive({ records, archives }: Props) {
                 {group.nodes.map((node, index) => {
                   if (node.type === 'series') {
                     return (
-                      <li
-                        key={`series-${group.year}-${index}`}
-                        className="ma-row"
-                      >
-                        <div className="ma-date">
-                          {node.items.length}×
-                        </div>
+                      <li key={`series-${group.year}-${index}`} className="ma-row">
+                        <div className="ma-date">{node.items.length}×</div>
 
                         <details className="ma-series">
                           <summary>
                             <span className="ma-meta">
-                              <span className="ma-outlet">
-                                {SERIES_OUTLET}
-                              </span>
+                              <span className="ma-outlet">{SERIES_OUTLET}</span>
                               <span>Author column series</span>
                             </span>
 
@@ -602,22 +768,15 @@ export default function MediaArchive({ records, archives }: Props) {
                             </span>
 
                             <span className="ma-sum">
-                              Internet policy, AI, platforms and
-                              digital culture.
+                              Internet policy, AI, platforms and digital culture.
                             </span>
                           </summary>
 
                           <ol className="ma-mini">
                             {node.items.map((column) => (
                               <li key={column.slug}>
-                                <time dateTime={column.date}>
-                                  {formatDate(column.date)}
-                                </time>
-                                <a
-                                  href={column.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
+                                <time dateTime={column.date}>{formatDate(column.date)}</time>
+                                <a href={column.url} target="_blank" rel="noopener noreferrer">
                                   {column.title}
                                   <span aria-hidden="true"> ↗</span>
                                 </a>
@@ -635,25 +794,17 @@ export default function MediaArchive({ records, archives }: Props) {
                     <li key={record.slug} className="ma-row">
                       <time className="ma-date" dateTime={record.date}>
                         {formatDate(record.date)}
-                        <span className="ma-full-date">
-                          {record.date.slice(0, 4)}
-                        </span>
+                        <span className="ma-full-date">{record.date.slice(0, 4)}</span>
                       </time>
 
                       <div className="ma-main">
                         <p className="ma-meta">
-                          <span className="ma-outlet">
-                            {record.outlet}
-                          </span>
+                          <span className="ma-outlet">{record.outlet}</span>
 
-                          {record.program && (
-                            <span>{record.program}</span>
-                          )}
+                          {record.program && <span>{record.program}</span>}
 
                           <span className="ma-tag">{record.lang}</span>
-                          <span className="ma-kind">
-                            {KIND_LABEL[record.kind]}
-                          </span>
+                          <span className="ma-kind">{PRESENCE_LABEL[record.kind]}</span>
                         </p>
 
                         <Link
@@ -663,20 +814,49 @@ export default function MediaArchive({ records, archives }: Props) {
                           {record.title}
                         </Link>
 
-                        {record.summary && (
-                          <p className="ma-sum">{record.summary}</p>
+                        {record.summary && <p className="ma-sum">{record.summary}</p>}
+
+                        {record.verifiedQuotes && record.verifiedQuotes.length > 0 && (
+                          <div className="ma-verified">
+                            {record.verifiedQuotes.slice(0, 2).map((quote) => (
+                              <blockquote key={quote.id} className="ma-verified-quote">
+                                <span className="ma-quote-label">
+                                  {quote.type === 'direct_quote'
+                                    ? 'Verified direct quote'
+                                    : quote.type === 'indirect_quote'
+                                      ? 'Verified paraphrase'
+                                      : 'Verified mention'}
+                                </span>
+                                “{quote.text}”
+                                {quote.translation && (
+                                  <span className="ma-quote-translation">{quote.translation}</span>
+                                )}
+                              </blockquote>
+                            ))}
+                          </div>
+                        )}
+
+                        {record.related && record.related.length > 0 && (
+                          <p className="ma-related">
+                            <span>Related:</span>{' '}
+                            {record.related.slice(0, 3).map((related, index) => (
+                              <span key={`${related.slug}-${related.relationType}`}>
+                                {index > 0 && ' · '}
+                                <Link href={`/media/record/${encodeURIComponent(related.slug)}`}>
+                                  {related.outlet}: {related.title}
+                                </Link>
+                              </span>
+                            ))}
+                          </p>
                         )}
 
                         <div className="ma-record-foot">
-                          <span>{record.topic}</span>
-                          <a
-                            href={record.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
+                          <span>{record.derivedTopic || record.topic}</span>
+                          <a href={record.url} target="_blank" rel="noopener noreferrer">
                             Original publication
                             <span className="ma-external" aria-hidden="true">
-                              {' '}↗
+                              {' '}
+                              ↗
                             </span>
                           </a>
                         </div>
@@ -698,9 +878,7 @@ export default function MediaArchive({ records, archives }: Props) {
               type="button"
               className="ma-load-button"
               onClick={() =>
-                setVisibleLimit((current) =>
-                  Math.min(current + PAGE_SIZE, filtered.length),
-                )
+                setVisibleLimit((current) => Math.min(current + PAGE_SIZE, filtered.length))
               }
             >
               Load {Math.min(PAGE_SIZE, filtered.length - visibleRecords.length)} more
@@ -1453,4 +1631,235 @@ const CSS = `
     transition: none !important;
   }
 }
+.ma-collections {
+  margin-top: 34px;
+  border-top: 1px solid var(--ma-line);
+  padding-top: 18px;
+}
+
+.ma-collection-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.ma-collection {
+  border: 1px solid var(--ma-line);
+  padding: 14px;
+  background: var(--ma-soft);
+}
+
+.ma-collection h2 {
+  margin: 0;
+  font-family: var(--ma-serif);
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.ma-collection ol {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.ma-collection li {
+  border-top: 1px solid var(--ma-line);
+  padding: 8px 0;
+}
+
+.ma-collection li a {
+  display: block;
+  color: var(--ma-fg);
+  font-size: 12px;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.ma-collection li a:hover {
+  color: var(--ma-accent);
+  text-decoration: underline;
+}
+
+.ma-collection li span {
+  display: block;
+  margin-top: 3px;
+  color: var(--ma-muted);
+  font-family: var(--ma-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ma-collection-more {
+  margin-top: 8px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ma-accent);
+  cursor: pointer;
+  font-family: var(--ma-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.ma-semantic {
+  margin-top: 28px;
+  border-top: 1px solid var(--ma-line);
+  padding-top: 18px;
+}
+
+.ma-semantic-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ma-semantic-form input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--ma-line);
+  background: #fff;
+  padding: 10px 12px;
+  color: var(--ma-fg);
+  font-size: 13px;
+}
+
+.ma-semantic-form button {
+  border: 1px solid var(--ma-fg);
+  background: var(--ma-fg);
+  color: #fff;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-family: var(--ma-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.ma-semantic-form button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ma-semantic-results {
+  margin-top: 14px;
+}
+
+.ma-semantic-summary {
+  color: var(--ma-muted);
+  font-size: 12px;
+}
+
+.ma-semantic-results ol {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.ma-semantic-results li {
+  border-top: 1px solid var(--ma-line);
+  padding: 12px 0;
+}
+
+.ma-semantic-results li > div a {
+  color: var(--ma-fg);
+  font-family: var(--ma-serif);
+  font-size: 19px;
+  text-decoration: none;
+}
+
+.ma-semantic-results li > div a:hover {
+  color: var(--ma-accent);
+  text-decoration: underline;
+}
+
+.ma-semantic-meta {
+  display: block;
+  margin-top: 3px;
+  color: var(--ma-muted);
+  font-family: var(--ma-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ma-semantic-quote,
+.ma-verified-quote {
+  margin: 8px 0 0;
+  border-left: 2px solid var(--ma-accent);
+  padding: 4px 0 4px 12px;
+  color: #3f3e39;
+  font-family: var(--ma-serif);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.ma-verified {
+  margin-top: 10px;
+}
+
+.ma-quote-label {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--ma-accent);
+  font-family: var(--ma-mono);
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.ma-quote-translation {
+  display: block;
+  margin-top: 3px;
+  color: var(--ma-muted);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 11px;
+}
+
+.ma-related {
+  margin: 8px 0 0;
+  color: var(--ma-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.ma-related a {
+  color: var(--ma-fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ma-related a:hover {
+  color: var(--ma-accent);
+}
+
+.ma-semantic-link {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--ma-muted);
+  font-family: var(--ma-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+@media (max-width: 900px) {
+  .ma-collection-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .ma-collection-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ma-semantic-form {
+    flex-direction: column;
+  }
+}
+
 `;

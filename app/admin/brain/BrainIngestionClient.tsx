@@ -624,6 +624,13 @@ export default function BrainIngestionClient() {
           </p>
         )}
 
+        {jobs.some((job) => job.error_code === 'embedding_auth_failed') && (
+          <p className="mt-4 border border-[#E7C9D2] bg-[#F8EAF0] px-3 py-2 text-sm text-[#8A1235]">
+            Embedding provider rejected the configured credentials. Set a valid OPENROUTER_API_KEY,
+            then use “Retry failed”. Queued URLs are preserved.
+          </p>
+        )}
+
         {message && !error && (
           <p className="mt-4 border border-[#E5E1DC] bg-[#F8F6F2] px-3 py-2 text-sm text-[#625D58]">
             {message}

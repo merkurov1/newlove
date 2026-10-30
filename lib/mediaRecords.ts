@@ -4,6 +4,9 @@ import {
   type Lang,
   type Kind,
   type Topic,
+  type PublicMediaQuote,
+  type PublicMediaRelation,
+  type PublicMediaQuoteType,
 } from '@/data/media';
 import { createClient } from '@/lib/supabase/server';
 
@@ -92,39 +95,29 @@ function dateFromCreatedAt(value: unknown): string | null {
   return parsed.toISOString().slice(0, 10);
 }
 
-function mapDatabaseRecord(
-  row: DatabaseMediaRecord,
-): MediaRecord | null {
+function mapDatabaseRecord(row: DatabaseMediaRecord): MediaRecord | null {
   if (row.status !== 'published') return null;
 
   const url = text(row.url, text(row.canonical_url));
   if (!url || !isValidUrl(url)) return null;
 
-  const metadata =
-    row.ai_metadata && typeof row.ai_metadata === 'object'
-      ? row.ai_metadata
-      : {};
+  const metadata = row.ai_metadata && typeof row.ai_metadata === 'object' ? row.ai_metadata : {};
 
-  const lang = VALID_LANGUAGES.includes(row.lang as Lang)
-    ? (row.lang as Lang)
-    : 'EN';
+  const lang = VALID_LANGUAGES.includes(row.lang as Lang) ? (row.lang as Lang) : 'EN';
 
-  const kind = VALID_KINDS.includes(row.kind as Kind)
-    ? (row.kind as Kind)
-    : 'mention';
+  const kind = VALID_KINDS.includes(row.kind as Kind) ? (row.kind as Kind) : 'mention';
 
   const topic = VALID_TOPICS.includes(row.topic as Topic)
     ? (row.topic as Topic)
     : 'Internet & Censorship';
 
   const publicationDate =
-    validDisplayDate(row.published_date) ??
-    validDisplayDate(metadata.original_date);
+    validDisplayDate(row.published_date) ?? validDisplayDate(metadata.original_date);
 
-  const timelineDate =
-    publicationDate ?? dateFromCreatedAt(row.created_at) ?? '1900';
+  const timelineDate = publicationDate ?? dateFromCreatedAt(row.created_at) ?? '1900';
 
   return {
+    id: text(row.id) || undefined,
     slug: text(metadata.slug, slugFromUrl(url)),
     title: text(row.title, 'Untitled publication'),
     outlet: text(row.outlet, 'Unknown publication'),
@@ -139,10 +132,119 @@ function mapDatabaseRecord(
           note: 'Publication date unavailable; timeline position uses archive creation date.',
         }
       : {}),
-    ...(text(metadata.program)
-      ? { program: text(metadata.program) }
-      : {}),
+    ...(text(metadata.program) ? { program: text(metadata.program) } : {}),
   };
+}
+
+const PUBLIC_QUOTE_TYPES: PublicMediaQuoteType[] = ['direct_quote', 'indirect_quote', 'mention'];
+
+async function enrichMediaRecords(recordsById: Map<string, MediaRecord>): Promise<void> {
+  const ids = [...recordsById.keys()];
+  if (ids.length === 0) return;
+
+  const supabase = await createClient({ useServiceRole: true });
+  const [documents, quotes, topics, relations] = await Promise.all([
+    supabase
+      .from('knowledge_documents')
+      .select('media_record_id,media_text_quality,language,chunk_count,media_coverage_status')
+      .in('media_record_id', ids)
+      .limit(1000),
+    supabase
+      .from('media_quotes')
+      .select(
+        'id,media_record_id,quote_text,quote_type,language,translation,translation_language,translation_status,verification_status,attribution,is_current,document_char_start'
+      )
+      .in('media_record_id', ids)
+      .eq('is_current', true)
+      .eq('verification_status', 'verified')
+      .order('document_char_start', { ascending: true })
+      .limit(2000),
+    supabase
+      .from('media_analysis_topics')
+      .select('media_record_id,primary_topic,subtopics,is_current')
+      .in('media_record_id', ids)
+      .eq('is_current', true)
+      .limit(1000),
+    supabase
+      .from('media_record_relations')
+      .select(
+        'source_media_record_id,target_media_record_id,relation_type,confidence,review_status,is_current'
+      )
+      .eq('is_current', true)
+      .eq('review_status', 'confirmed')
+      .limit(2000),
+  ]);
+
+  for (const row of documents.data || []) {
+    const record = recordsById.get(String(row.media_record_id));
+    if (record) record.textQuality = row.media_text_quality || null;
+  }
+
+  for (const row of quotes.data || []) {
+    const record = recordsById.get(String(row.media_record_id));
+    if (!record) continue;
+
+    const quoteType = row.quote_type as PublicMediaQuoteType;
+    if (!PUBLIC_QUOTE_TYPES.includes(quoteType)) continue;
+
+    const quote: PublicMediaQuote = {
+      id: String(row.id),
+      text: String(row.quote_text),
+      type: quoteType,
+      language: row.language || null,
+      ...(row.translation_status === 'verified' && row.translation
+        ? {
+            translation: row.translation,
+            translationLanguage: row.translation_language || null,
+          }
+        : {}),
+    };
+
+    record.verifiedQuotes = [...(record.verifiedQuotes || []), quote];
+    record.quoteCount = (record.quoteCount || 0) + 1;
+  }
+
+  for (const row of topics.data || []) {
+    const record = recordsById.get(String(row.media_record_id));
+    if (!record) continue;
+
+    if (
+      (
+        ['Internet & Censorship', 'AI & Tech', 'Art & Culture', 'Fintech & Crypto'] as string[]
+      ).includes(row.primary_topic)
+    ) {
+      record.derivedTopic = row.primary_topic as Topic;
+    }
+    record.subtopics = Array.isArray(row.subtopics) ? row.subtopics : [];
+  }
+
+  for (const row of relations.data || []) {
+    const sourceId = String(row.source_media_record_id);
+    const targetId = String(row.target_media_record_id);
+    const source = recordsById.get(sourceId);
+    const target = recordsById.get(targetId);
+
+    const add = (record: MediaRecord, other: MediaRecord) => {
+      const related: PublicMediaRelation = {
+        slug: other.slug,
+        title: other.title,
+        outlet: other.outlet,
+        url: other.url,
+        date: other.date,
+        relationType: String(row.relation_type),
+        confidence: Number(row.confidence) || 0,
+      };
+      const exists = (record.related || []).some(
+        (item) => item.slug === related.slug && item.relationType === related.relationType
+      );
+      if (!exists) record.related = [...(record.related || []), related];
+    };
+
+    if (source && target) {
+      add(source, target);
+      add(target, source);
+    }
+  }
 }
 
 function canonicalize(value: string): string {
@@ -166,6 +268,8 @@ export async function getMediaRecords(): Promise<MediaRecord[]> {
     merged.set(canonicalize(record.url), record);
   }
 
+  const dbRecordsById = new Map<string, MediaRecord>();
+
   try {
     const supabase = await createClient({ useServiceRole: true });
 
@@ -186,7 +290,7 @@ export async function getMediaRecords(): Promise<MediaRecord[]> {
           'summary',
           'status',
           'ai_metadata',
-        ].join(','),
+        ].join(',')
       )
       .eq('status', 'published')
       .order('created_at', { ascending: false })
@@ -196,9 +300,7 @@ export async function getMediaRecords(): Promise<MediaRecord[]> {
       console.error('[media] Supabase query failed:', error.message);
     } else {
       for (const rawRow of data ?? []) {
-        const record = mapDatabaseRecord(
-          rawRow as DatabaseMediaRecord,
-        );
+        const record = mapDatabaseRecord(rawRow as DatabaseMediaRecord);
 
         if (!record) continue;
 
@@ -207,8 +309,11 @@ export async function getMediaRecords(): Promise<MediaRecord[]> {
         // Published database records replace matching local entries.
         // New records are added without deleting the verified archive.
         merged.set(key, record);
+        if (record.id) dbRecordsById.set(record.id, record);
       }
     }
+
+    await enrichMediaRecords(dbRecordsById);
   } catch (error) {
     console.error('[media] Using local archive fallback:', error);
   }
@@ -218,4 +323,3 @@ export async function getMediaRecords(): Promise<MediaRecord[]> {
     return dateOrder || a.title.localeCompare(b.title);
   });
 }
-

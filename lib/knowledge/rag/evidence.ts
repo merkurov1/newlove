@@ -16,6 +16,11 @@ export type UnframedEvidenceSource = {
   lineEnd: number;
   similarity: number;
   excerpt: string;
+  outlet?: string | null;
+  canonicalUrl?: string | null;
+  quoteType?: 'direct_quote' | 'indirect_quote' | 'mention';
+  verificationStatus?: 'verified' | 'unverified' | 'none';
+  mediaRecordId?: string;
 };
 
 const DEFAULT_EXCERPT_CHARS = 280;

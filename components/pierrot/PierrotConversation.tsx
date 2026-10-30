@@ -7,6 +7,7 @@ import Markdown from 'markdown-to-jsx';
 import { motion } from 'framer-motion';
 import { ArrowUp, ArrowUpRight } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
+import type { UnframedEvidenceSource } from '@/lib/knowledge/rag/evidence';
 import usePrefersReducedMotion from '@/components/pierrot/usePrefersReducedMotion';
 import {
   createPierrotId,
@@ -35,6 +36,24 @@ function shouldCloseBeforeNavigation(href: string, pathname: string): boolean {
   } catch {
     return false;
   }
+}
+
+function mediaEvidenceLabel(source: UnframedEvidenceSource): string | null {
+  if (source.sourceType !== 'media_coverage') return null;
+
+  if (source.verificationStatus === 'none') {
+    return 'Media evidence — no verified quote';
+  }
+
+  if (source.verificationStatus !== 'verified') {
+    return 'Excerpt only — no verified quote';
+  }
+
+  if (source.quoteType === 'direct_quote') return 'Verified direct quote';
+  if (source.quoteType === 'indirect_quote') return 'Verified paraphrase';
+  if (source.quoteType === 'mention') return 'Verified mention';
+
+  return 'Verified media evidence';
 }
 
 function safeMarkdownUrl(value: string): string | null {
@@ -206,9 +225,7 @@ function shouldShowMessageTime(message: {
 }
 
 function deliveryLabel(delivery: 'sending' | 'sent' | 'failed'): string {
-  const ru =
-    typeof navigator !== 'undefined' &&
-    navigator.language?.toLowerCase().startsWith('ru');
+  const ru = typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('ru');
 
   if (delivery === 'sending') return ru ? 'отправка…' : 'sending…';
   if (delivery === 'failed') return ru ? 'не доставлено' : 'not delivered';
@@ -409,8 +426,7 @@ function PierrotEmptyState() {
 }
 
 export function PierrotMessageList({ className = '' }: { className?: string }) {
-  const { messages, isLoading, runAction, closeConversation, isHumanActive } =
-    usePierrot();
+  const { messages, isLoading, runAction, closeConversation, isHumanActive } = usePierrot();
   const pathname = usePathname() || '/';
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldReduceMotion = usePrefersReducedMotion();
@@ -486,12 +502,11 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                     >
                       {message.content}
                     </div>
-                    {shouldShowMessageTime(message) &&
-                      formatMessageTime(message.createdAt) && (
-                        <span className="mt-1 font-mono text-[8px] text-[#A49A8C]">
-                          {formatMessageTime(message.createdAt)}
-                        </span>
-                      )}
+                    {shouldShowMessageTime(message) && formatMessageTime(message.createdAt) && (
+                      <span className="mt-1 font-mono text-[8px] text-[#A49A8C]">
+                        {formatMessageTime(message.createdAt)}
+                      </span>
+                    )}
                   </div>
                 ) : message.role === 'user' ? (
                   <div className="flex max-w-[88%] flex-col items-end sm:max-w-[78%]">
@@ -506,15 +521,12 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                       {message.content}
                     </div>
                     <div className="mt-1 flex items-center gap-2 font-mono text-[8px] text-[#A49A8C]">
-                      {shouldShowMessageTime(message) &&
-                        formatMessageTime(message.createdAt) && (
-                          <span>{formatMessageTime(message.createdAt)}</span>
-                        )}
+                      {shouldShowMessageTime(message) && formatMessageTime(message.createdAt) && (
+                        <span>{formatMessageTime(message.createdAt)}</span>
+                      )}
                       {message.delivery && (
                         <span
-                          className={
-                            message.delivery === 'failed' ? 'text-[#8A1235]' : undefined
-                          }
+                          className={message.delivery === 'failed' ? 'text-[#8A1235]' : undefined}
                         >
                           {deliveryLabel(message.delivery)}
                         </span>
@@ -529,12 +541,11 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                     "
                   >
                     <PierrotMarkdown content={message.content} />
-                    {shouldShowMessageTime(message) &&
-                      formatMessageTime(message.createdAt) && (
-                        <span className="mt-1 block font-mono text-[8px] text-[#A49A8C]">
-                          {formatMessageTime(message.createdAt)}
-                        </span>
-                      )}
+                    {shouldShowMessageTime(message) && formatMessageTime(message.createdAt) && (
+                      <span className="mt-1 block font-mono text-[8px] text-[#A49A8C]">
+                        {formatMessageTime(message.createdAt)}
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -549,23 +560,23 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   message.role === 'assistant' &&
                   message.actions &&
                   message.actions.length > 0 && (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {message.actions.map((action) => (
-                      <button
-                        key={`${action.kind}-${action.label}`}
-                        type="button"
-                        onClick={() => handleAction(action)}
-                        disabled={isLoading && action.kind === 'prompt'}
-                        className={
-                          action.kind === 'navigate'
-                            ? `
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {message.actions.map((action) => (
+                        <button
+                          key={`${action.kind}-${action.label}`}
+                          type="button"
+                          onClick={() => handleAction(action)}
+                          disabled={isLoading && action.kind === 'prompt'}
+                          className={
+                            action.kind === 'navigate'
+                              ? `
                               inline-flex items-center rounded-full
                               bg-[#37332D] px-4 py-2 font-mono
                               text-[10px] uppercase tracking-[0.16em]
                               text-white transition hover:bg-[#201D1A]
                               disabled:opacity-40
                             `
-                            : `
+                              : `
                               inline-flex items-center rounded-full
                               border border-[#DDD3C5] px-4 py-2
                               font-mono text-[10px] uppercase
@@ -574,13 +585,13 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                               hover:text-[#37332D]
                               disabled:opacity-40
                             `
-                        }
-                      >
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                          }
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                 {!isHumanActive && message.role === 'assistant' && message.cta && (
                   <div className="mt-3">
@@ -656,27 +667,27 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   message.role === 'assistant' &&
                   message.links &&
                   message.links.length > 0 && (
-                  <nav
-                    aria-label="Pierrot navigation"
-                    className="mt-3 flex flex-wrap items-center gap-2"
-                  >
-                    {message.links.map((link) => (
-                      <Link
-                        key={link.href}
-                        href={
-                          link.href.startsWith('/unframed')
-                            ? appendPierrotUnframedAttribution(
-                                link.href,
-                                createPierrotUnframedRef(getPierrotConversationId())
-                              )
-                            : link.href
-                        }
-                        onClick={() => {
-                          if (shouldCloseBeforeNavigation(link.href, pathname)) {
-                            closeConversation();
+                    <nav
+                      aria-label="Pierrot navigation"
+                      className="mt-3 flex flex-wrap items-center gap-2"
+                    >
+                      {message.links.map((link) => (
+                        <Link
+                          key={link.href}
+                          href={
+                            link.href.startsWith('/unframed')
+                              ? appendPierrotUnframedAttribution(
+                                  link.href,
+                                  createPierrotUnframedRef(getPierrotConversationId())
+                                )
+                              : link.href
                           }
-                        }}
-                        className="
+                          onClick={() => {
+                            if (shouldCloseBeforeNavigation(link.href, pathname)) {
+                              closeConversation();
+                            }
+                          }}
+                          className="
                           inline-flex items-center rounded-full
                           border border-[#DDD3C5] px-4 py-2
                           font-mono text-[10px] uppercase
@@ -684,12 +695,12 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                           transition hover:border-[#B5AAA0]
                           hover:text-[#37332D]
                         "
-                      >
-                        {link.label}
-                      </Link>
-                    ))}
-                  </nav>
-                )}
+                        >
+                          {link.label}
+                        </Link>
+                      ))}
+                    </nav>
+                  )}
 
                 {message.ragOutcome && message.ragOutcome !== 'relevant_results' && (
                   <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.12em] text-[#A49A8C]">
@@ -718,18 +729,36 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                               {source.similarity.toFixed(3)}
                             </span>
                           </div>
+                          {mediaEvidenceLabel(source) && (
+                            <span className="mt-1 inline-flex rounded border border-[#D8C9B7] bg-white/70 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.1em] text-[#7A5A45]">
+                              {mediaEvidenceLabel(source)}
+                            </span>
+                          )}
                           <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[#A49A8C]">
                             {source.sourceDomain
                               ? `${source.sourceDomain} · `
                               : source.sourceClass
                                 ? `${source.sourceClass.replace(/_/g, ' ')} · `
                                 : ''}
-                            {source.heading} · {source.sectionPath.join(' / ')} · lines{' '}
-                            {source.lineStart}–{source.lineEnd}
+                            {source.publishedAt ? `${source.publishedAt} · ` : ''}
+                            {source.heading}
+                            {source.sourceType === 'media_coverage'
+                              ? ''
+                              : ` · ${source.sectionPath.join(' / ')} · lines ${source.lineStart}–${source.lineEnd}`}
                           </p>
                           <p className="mt-1.5 font-serif text-[12px] leading-relaxed text-[#625B50]">
                             {source.excerpt}
                           </p>
+                          {source.canonicalUrl && (
+                            <a
+                              href={source.canonicalUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-1 inline-flex font-mono text-[8px] uppercase tracking-[0.1em] text-[#8A6A4F] underline underline-offset-2"
+                            >
+                              Original publication ↗
+                            </a>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -769,8 +798,7 @@ export function PierrotInput({
   placeholder?: string;
   className?: string;
 }) {
-  const { draft, draftCaret, isLoading, isHumanActive, updateDraft, sendMessage } =
-    usePierrot();
+  const { draft, draftCaret, isLoading, isHumanActive, updateDraft, sendMessage } = usePierrot();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const caretRef = useRef<number | null>(null);
 

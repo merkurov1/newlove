@@ -65,6 +65,12 @@ import {
 } from '@/lib/knowledge/rag/evidence';
 import type { RagRetrievalOutcome } from '@/lib/knowledge/rag/types';
 import { isVerifiedOwnerCredential, isVerifiedOwnerUser } from '@/lib/knowledge/rag/authorization';
+import { isMediaArchiveQuery } from '@/lib/pierrot/mediaIntent';
+import {
+  retrieveMediaEvidence,
+  buildMediaEvidencePrompt,
+  buildMediaEvidenceSources,
+} from '@/lib/knowledge/rag/mediaEvidence';
 import { recordBrainRetrieval } from '@/lib/pierrot/brainAnalytics';
 import { detectHumanPresenceIntent } from '@/lib/pierrot/humanIntent';
 import {
@@ -84,10 +90,7 @@ import {
   humanLanguageFromDetected,
   type HumanPresencePublicState,
 } from '@/lib/pierrot/humanPresenceShared';
-import {
-  isHumanPresenceConfigured,
-  notifyHumanRequest,
-} from '@/lib/pierrot/humanPresenceTelegram';
+import { isHumanPresenceConfigured, notifyHumanRequest } from '@/lib/pierrot/humanPresenceTelegram';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -142,7 +145,7 @@ LINKS:
 `;
 
 type OwnerRagResponse = {
-  mode: 'unframed';
+  mode: 'unframed' | 'media';
   outcome: RagRetrievalOutcome;
   sources: UnframedEvidenceSource[];
 };
@@ -693,14 +696,10 @@ export async function POST(req: Request) {
 
         if (created.status === 'active') {
           const activeHuman =
-            (await getHumanPresenceForConversation(
-              pierrotStore,
-              conversationId,
-              sessionId
-            ).catch(() => null)) ??
-            (await getHumanPresenceByRequestId(pierrotStore, created.requestId).catch(
+            (await getHumanPresenceForConversation(pierrotStore, conversationId, sessionId).catch(
               () => null
-            ));
+            )) ??
+            (await getHumanPresenceByRequestId(pierrotStore, created.requestId).catch(() => null));
 
           return NextResponse.json(
             {
@@ -749,14 +748,10 @@ export async function POST(req: Request) {
             const notification = await notifyHumanRequest(notificationRequest);
 
             if (notification) {
-              await setHumanRequestTelegramMessage(
-                pierrotStore,
-                notificationRequest.id,
-                {
-                  chatId: notification.chatId,
-                  messageId: notification.messageId,
-                }
-              ).catch(() => undefined);
+              await setHumanRequestTelegramMessage(pierrotStore, notificationRequest.id, {
+                chatId: notification.chatId,
+                messageId: notification.messageId,
+              }).catch(() => undefined);
 
               await recordHumanEvent(pierrotStore, {
                 conversationId,
@@ -771,11 +766,9 @@ export async function POST(req: Request) {
             } else {
               notificationFailed = true;
 
-              await declineHumanRequest(
-                pierrotStore,
-                notificationRequest.id,
-                'system'
-              ).catch(() => undefined);
+              await declineHumanRequest(pierrotStore, notificationRequest.id, 'system').catch(
+                () => undefined
+              );
 
               await recordHumanEvent(pierrotStore, {
                 conversationId,
@@ -813,9 +806,7 @@ export async function POST(req: Request) {
             closedAt: null,
             resolvedBy: null,
           };
-          const humanState = persisted
-            ? publicHumanState(persisted.request)
-            : fallbackHuman;
+          const humanState = persisted ? publicHumanState(persisted.request) : fallbackHuman;
 
           return NextResponse.json({
             reply: text,
@@ -824,9 +815,7 @@ export async function POST(req: Request) {
             userMessageId,
             assistantMessageId: humanAssistantId,
             recorded: canStoreTranscript,
-            ...(notificationFailed
-              ? {}
-              : { human: humanState, humanToken: access.token }),
+            ...(notificationFailed ? {} : { human: humanState, humanToken: access.token }),
           });
         }
       }
@@ -909,7 +898,31 @@ export async function POST(req: Request) {
           try {
             const useBrainV2 = isBrainRetrievalV2Enabled();
 
-            if (useBrainV2) {
+            if (isMediaArchiveQuery(trimmedMessage)) {
+              const retrieval = await retrieveMediaEvidence({
+                query: trimmedMessage,
+                limit: 8,
+              });
+
+              ownerRag = {
+                mode: 'media',
+                outcome: retrieval.outcome,
+                sources: buildMediaEvidenceSources(retrieval),
+              };
+
+              const ragPrompt = buildMediaEvidencePrompt(retrieval);
+              usedRagContext = Boolean(ragPrompt);
+
+              if (ragPrompt) {
+                generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+              }
+
+              console.info('[Pierrot Media Intelligence]', {
+                status: retrieval.outcome,
+                publications: retrieval.hits.length,
+                fallback: retrieval.hits.some((hit) => hit.fallback),
+              });
+            } else if (useBrainV2) {
               const retrieval = await retrieveBrainEvidence({
                 query: trimmedMessage,
                 scope: 'owner',

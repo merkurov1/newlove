@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
-import { BrainUrlError } from '@/lib/knowledge/brain/url';
+import { BrainUrlError, normalizeSourceUrl } from '@/lib/knowledge/brain/url';
 import { createBrainStore } from '@/lib/knowledge/brain/store';
 import { classifyMediaPublication, normalizeMediaLanguage } from '@/lib/knowledge/media/classify';
 import { extractMediaPage } from '@/lib/knowledge/media/page';
@@ -111,6 +111,50 @@ function extractionSummary(page: Awaited<ReturnType<typeof extractMediaPage>>) {
     parser: page.article.diagnostics.parser,
     fetchedBytes: page.fetchedBytes,
     finalUrl: page.finalUrl,
+  };
+}
+
+function fallbackMetadata(inputUrl: string, body: Record<string, unknown>) {
+  let canonical = inputUrl;
+  try {
+    canonical = normalizeSourceUrl(inputUrl);
+  } catch {
+    // Keep the input URL for manual correction.
+  }
+
+  let host = 'Unknown publication';
+  try {
+    host = new URL(canonical).hostname.replace(/^www\./i, '').slice(0, 300);
+  } catch {
+    // Keep fallback outlet.
+  }
+
+  return {
+    url: inputUrl,
+    canonical_url: canonical,
+    title: clean(body.title, 500) || `Publication at ${host}`,
+    outlet: clean(body.outlet, 300) || host,
+    summary: clean(body.summary, 2000),
+    image_url: null,
+    published_date: validDate(body.published_date),
+  };
+}
+
+function blockedExtraction(error: HttpError) {
+  return {
+    quality: 'blocked',
+    coverageStatus: 'blocked',
+    extractionStatus: 'failed',
+    errorCode: error.message,
+    charCount: 0,
+    wordCount: 0,
+    chunkCount: 0,
+    languageDetected: null,
+    paywallDetected: false,
+    truncated: false,
+    parser: 'none',
+    fetchedBytes: 0,
+    finalUrl: null,
   };
 }
 
@@ -270,33 +314,40 @@ export async function POST(request: NextRequest) {
     }
 
     const store = createBrainStore();
-    let page: Awaited<ReturnType<typeof extractMediaPage>>;
+    let page: Awaited<ReturnType<typeof extractMediaPage>> | null = null;
+    let pageFailure: HttpError | null = null;
 
     try {
       page = await extractMediaPage(inputUrl);
     } catch (error) {
-      throw pageError(error);
+      pageFailure = pageError(error);
     }
 
+    const metadata = page?.metadata || fallbackMetadata(inputUrl, body);
+    const extraction = page
+      ? extractionSummary(page)
+      : blockedExtraction(pageFailure || new HttpError('Не удалось загрузить страницу.', 502));
+
     const ai = await classifyMediaPublication({
-      title: page.metadata.title,
-      outlet: page.metadata.outlet,
-      summary: page.metadata.summary,
-      url: page.metadata.canonical_url,
-      detectedLanguage: page.article.language,
+      title: metadata.title,
+      outlet: metadata.outlet,
+      summary: metadata.summary,
+      url: metadata.canonical_url,
+      detectedLanguage: page?.article.language,
     });
 
     const duplicate = store
-      ? await store.findMediaRecordByUrl(page.metadata.url, page.metadata.canonical_url)
+      ? await store.findMediaRecordByUrl(metadata.url, metadata.canonical_url)
       : null;
 
     if (action === 'parse') {
       return NextResponse.json({
         record: {
-          ...page.metadata,
+          ...metadata,
           ...ai,
         },
-        extraction: extractionSummary(page),
+        extraction,
+        warning: pageFailure?.message || null,
         duplicate: duplicate
           ? {
               id: duplicate.id,
@@ -308,8 +359,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const title = clean(body.title, 500) || page.metadata.title;
-    const outlet = clean(body.outlet, 300) || page.metadata.outlet;
+    const title = clean(body.title, 500) || metadata.title;
+    const outlet = clean(body.outlet, 300) || metadata.outlet;
 
     if (!title || !outlet) {
       return jsonError('Нужны заголовок публикации и название издания.', 400);
@@ -325,14 +376,11 @@ export async function POST(request: NextRequest) {
     );
 
     const requestedDate = validDate(body.published_date);
-    const publishedDate = requestedDate || page.metadata.published_date;
+    const publishedDate = requestedDate || metadata.published_date;
 
-    const summary = clean(
-      typeof body.summary === 'string' ? body.summary : page.metadata.summary,
-      2000
-    );
+    const summary = clean(typeof body.summary === 'string' ? body.summary : metadata.summary, 2000);
 
-    let imageUrl = page.metadata.image_url;
+    let imageUrl = metadata.image_url;
 
     if (typeof body.image_url === 'string' && body.image_url.trim()) {
       try {
@@ -359,8 +407,8 @@ export async function POST(request: NextRequest) {
       .from('media_archive_records')
       .upsert(
         {
-          url: page.metadata.url,
-          canonical_url: page.metadata.canonical_url,
+          url: metadata.url,
+          canonical_url: metadata.canonical_url,
           title,
           outlet,
           published_date: publishedDate,
@@ -377,17 +425,18 @@ export async function POST(request: NextRequest) {
             import_pending: false,
             source: 'media_record_save',
             extracted_at: now,
-            language_detected: page.article.language,
-            text_quality: page.quality.quality,
-            extraction_status: page.quality.extractionStatus,
-            coverage_status: page.quality.coverageStatus,
-            char_count: page.article.charCount,
-            word_count: page.article.wordCount,
-            chunk_count: page.chunking.chunks.length,
-            paywall_detected: page.article.diagnostics.paywallDetected,
-            truncated: page.article.diagnostics.truncated,
-            parser: page.article.diagnostics.parser,
-            final_url: page.finalUrl,
+            language_detected: page?.article.language || null,
+            text_quality: page?.quality.quality || 'blocked',
+            extraction_status: page?.quality.extractionStatus || 'failed',
+            coverage_status: page?.quality.coverageStatus || 'blocked',
+            char_count: page?.article.charCount || 0,
+            word_count: page?.article.wordCount || 0,
+            chunk_count: page?.chunking.chunks.length || 0,
+            paywall_detected: page?.article.diagnostics.paywallDetected || false,
+            truncated: page?.article.diagnostics.truncated || false,
+            parser: page?.article.diagnostics.parser || 'none',
+            final_url: page?.finalUrl || null,
+            extraction_error: pageFailure?.message || null,
           },
         },
         { onConflict: 'canonical_url' }
@@ -417,8 +466,8 @@ export async function POST(request: NextRequest) {
         const queued = await enqueueMediaCoverageJob({
           store,
           mediaRecordId: String(data.id),
-          inputUrl: page.metadata.url,
-          normalizedUrl: page.metadata.canonical_url,
+          inputUrl: metadata.url,
+          normalizedUrl: metadata.canonical_url,
           requestedBy: admin.id,
           source: 'media_record_save',
         });
@@ -441,7 +490,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       record: data,
-      extraction: extractionSummary(page),
+      extraction,
+      warning: pageFailure?.message || null,
       duplicate:
         duplicate && duplicate.id !== String(data.id)
           ? {

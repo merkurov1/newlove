@@ -454,20 +454,12 @@ function detectLanguage(value: string): string {
 function normalizeLanguageTag(value: string | null | undefined): string | null {
   if (!value) return null;
 
-  const tag = value
-    .trim()
-    .toLowerCase()
-    .replace(/_/g, '-')
-    .split('-')[0];
+  const tag = value.trim().toLowerCase().replace(/_/g, '-').split('-')[0];
 
   return /^[a-z]{2,3}$/.test(tag) ? tag : null;
 }
 
-function detectDocumentLanguage(
-  $: cheerio.CheerioAPI,
-  title: string,
-  text: string
-): string {
+function detectDocumentLanguage($: cheerio.CheerioAPI, title: string, text: string): string {
   return (
     normalizeLanguageTag($('html').attr('lang')) ??
     normalizeLanguageTag(metaContent($, ['meta[property="og:locale"]'])) ??
@@ -1018,7 +1010,12 @@ export function extractArticle(html: string, finalUrl: string): ExtractedArticle
 
   if (imageRaw) {
     try {
-      const candidate = new URL(imageRaw, canonicalUrl || finalUrl);
+      const lastProtocol = Math.max(
+        imageRaw.lastIndexOf('https://'),
+        imageRaw.lastIndexOf('http://')
+      );
+      const recovered = lastProtocol > 0 ? imageRaw.slice(lastProtocol) : imageRaw;
+      const candidate = new URL(recovered, canonicalUrl || finalUrl);
 
       if (
         ['http:', 'https:'].includes(candidate.protocol) &&

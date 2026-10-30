@@ -400,9 +400,12 @@ export async function retrieveBrainEvidence(
     const topSimilarity = diverse.length > 0 ? diverse[0].row.similarity : null;
     const explicitThreshold =
       plan.requestedSources.length > 0 || plan.specificDocument ? threshold * 0.8 : threshold;
+    const explicitSourceLookup = plan.requestedSources.length > 0;
     const usable = diverse.filter(
       (candidate) =>
-        candidate.row.similarity >= explicitThreshold || (candidate.row.lexical_score || 0) >= 0.15
+        explicitSourceLookup ||
+        candidate.row.similarity >= explicitThreshold ||
+        (candidate.row.lexical_score || 0) >= 0.15
     );
 
     if (usable.length === 0) {

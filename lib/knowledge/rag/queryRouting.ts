@@ -153,7 +153,10 @@ const ARTICLE_TERMS = [
   'публикация',
   'публикации',
   'column',
+  'columns',
   'колонка',
+  'колонки',
+  'колонок',
 ];
 
 function detectLanguage(text: string): 'ru' | 'en' | 'und' {
@@ -372,7 +375,8 @@ export function buildBrainQueryPlan(query: string): BrainQueryPlan {
     signals.push('specific_document');
   }
 
-  if (hasAny(normalizedQuery, PERSONAL_TERMS)) {
+  // "Новая газета колонки" is an article query, not a Substack query.
+  if (hasAny(normalizedQuery, PERSONAL_TERMS) && !hasAny(normalizedQuery, NOVAYA_TERMS)) {
     addSource('personal_writing', 'source:personal_writing');
     requestedDomains.push('substack.com');
   }

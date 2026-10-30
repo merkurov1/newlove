@@ -52,6 +52,17 @@ describe('Media extraction on common publishing patterns', () => {
     expect(article.publishedAt).toContain('2026-10-13');
   });
 
+  it('recovers a malformed duplicated og:image URL', () => {
+    const html = `<html lang="ru"><head><title>Image</title>
+      <meta property="og:image" content="https://novayagazeta.ruhttps://novayagazeta.ru/static/image.webp" />
+      <link rel="canonical" href="https://novayagazeta.ru/articles/test" /></head>
+      <body><article><p>${longBody}</p></article></body></html>`;
+
+    const article = extractArticle(html, 'https://novayagazeta.ru/articles/test');
+
+    expect(article.imageUrl).toBe('https://novayagazeta.ru/static/image.webp');
+  });
+
   it('detects French paywall language without trying to bypass it', () => {
     const html = `<html lang="fr"><head><title>Article réservé</title></head>
       <body><article><p>Cet article est réservé aux abonnés.</p></article></body></html>`;

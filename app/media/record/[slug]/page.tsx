@@ -2,11 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { JsonLd } from '@/components/seo/JsonLd';
-import {
-  articleJsonLd,
-  breadcrumbJsonLd,
-  creativeWorkJsonLd,
-} from '@/lib/structuredData';
+import { articleJsonLd, breadcrumbJsonLd, creativeWorkJsonLd } from '@/lib/structuredData';
 import { getMediaRecords } from '@/lib/mediaRecords';
 import { description, pageMetadata, truncate } from '@/lib/seo';
 
@@ -36,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const path = `/media/record/${encodeURIComponent(record.slug)}`;
   const summary = description(
     record.summary ||
-      `${record.title} — ${record.outlet}, ${record.date}. A media citation featuring Anton Merkurov.`,
+      `${record.title} — ${record.outlet}, ${record.date}. A media citation featuring Anton Merkurov.`
   );
 
   return pageMetadata({
@@ -61,6 +57,16 @@ export default async function MediaRecordPage({ params }: Props) {
     `${record.title} — a ${record.kind} published by ${record.outlet} on ${record.date}.`;
 
   const articleKinds = new Set(['column', 'blog', 'interview', 'radio', 'video']);
+  const presence: Record<string, string> = {
+    quote: 'Quoted expert',
+    mention: 'Mention',
+    interview: 'Interview',
+    radio: 'Radio',
+    video: 'Video',
+    column: 'Author column',
+    blog: 'Blog',
+    profile: 'Profile',
+  };
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] px-5 pb-24 pt-32 text-[#141210] sm:px-8 sm:pt-40">
@@ -72,7 +78,7 @@ export default async function MediaRecordPage({ params }: Props) {
                 headline: record.title,
                 description: summary,
                 datePublished: record.date,
-                section: record.topic,
+                section: record.derivedTopic || record.topic,
                 authorName: 'Anton Merkurov',
                 citation: record.url,
                 isBasedOn: record.url,
@@ -99,11 +105,18 @@ export default async function MediaRecordPage({ params }: Props) {
       />
 
       <article className="mx-auto max-w-3xl">
-        <nav aria-label="Breadcrumb" className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500">
+        <nav
+          aria-label="Breadcrumb"
+          className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500"
+        >
           <ol className="flex flex-wrap items-center gap-2">
-            <li><Link href="/">Home</Link></li>
+            <li>
+              <Link href="/">Home</Link>
+            </li>
             <li aria-hidden="true">/</li>
-            <li><Link href="/media">Media Archive</Link></li>
+            <li>
+              <Link href="/media">Media Archive</Link>
+            </li>
           </ol>
         </nav>
 
@@ -118,8 +131,9 @@ export default async function MediaRecordPage({ params }: Props) {
           <div className="mt-5 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500">
             <time dateTime={record.date}>{record.date}</time>
             <span>{record.lang}</span>
-            <span>{record.kind}</span>
-            <span>{record.topic}</span>
+            <span>{presence[record.kind] || record.kind}</span>
+            <span>{record.derivedTopic || record.topic}</span>
+            {record.subtopics?.length ? <span>{record.subtopics.join(' · ')}</span> : null}
           </div>
         </header>
 
@@ -133,6 +147,63 @@ export default async function MediaRecordPage({ params }: Props) {
         {record.note ? (
           <p className="mt-4 font-sans text-xs italic text-stone-500">{record.note}</p>
         ) : null}
+
+        {record.verifiedQuotes && record.verifiedQuotes.length > 0 && (
+          <section className="mt-10 border-t border-stone-300 pt-8">
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500">
+              Verified quotations
+            </h2>
+            <div className="mt-4 space-y-5">
+              {record.verifiedQuotes.map((quote) => (
+                <blockquote key={quote.id} className="border-l-2 border-[#A53A27] pl-4">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#A53A27]">
+                    {quote.type === 'direct_quote'
+                      ? 'Verified direct quote'
+                      : quote.type === 'indirect_quote'
+                        ? 'Verified paraphrase'
+                        : 'Verified mention'}
+                    {quote.language ? ` · ${quote.language}` : ''}
+                  </p>
+                  <p className="mt-2 font-serif text-lg leading-relaxed text-stone-800">
+                    “{quote.text}”
+                  </p>
+                  {quote.translation && (
+                    <p className="mt-2 border-t border-stone-200 pt-2 font-sans text-xs text-stone-500">
+                      {quote.translation}
+                      {quote.translationLanguage ? ` · ${quote.translationLanguage}` : ''}
+                    </p>
+                  )}
+                </blockquote>
+              ))}
+            </div>
+            <p className="mt-4 font-sans text-[10px] text-stone-500">
+              Only quotes confirmed by the archive editor are shown as direct speech.
+            </p>
+          </section>
+        )}
+
+        {record.related && record.related.length > 0 && (
+          <section className="mt-10 border-t border-stone-300 pt-8">
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500">
+              Related publications
+            </h2>
+            <ul className="mt-4 space-y-2">
+              {record.related.map((related) => (
+                <li key={`${related.slug}-${related.relationType}`} className="text-sm">
+                  <Link
+                    className="underline decoration-stone-300 underline-offset-4 hover:decoration-stone-900"
+                    href={`/media/record/${encodeURIComponent(related.slug)}`}
+                  >
+                    {related.outlet}: {related.title}
+                  </Link>
+                  <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.1em] text-stone-400">
+                    {related.relationType}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <div className="mt-12 border-t border-stone-300 pt-8">
           <a
@@ -150,7 +221,10 @@ export default async function MediaRecordPage({ params }: Props) {
         </div>
 
         <p className="mt-12">
-          <Link className="font-mono text-xs uppercase tracking-[0.18em] text-stone-600 hover:text-stone-950" href="/media">
+          <Link
+            className="font-mono text-xs uppercase tracking-[0.18em] text-stone-600 hover:text-stone-950"
+            href="/media"
+          >
             ← Back to the Media Archive
           </Link>
         </p>

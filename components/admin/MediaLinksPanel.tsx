@@ -63,6 +63,7 @@ type ApiResponse = {
     status: string;
     canonical_url: string;
   } | null;
+  warning?: string | null;
   coverage?: {
     status: string;
     runId?: string;
@@ -180,6 +181,7 @@ export default function MediaLinksPanel() {
           data.duplicate
             ? `Найдена существующая запись: ${data.duplicate.title} (${data.duplicate.status}).`
             : '',
+          data.warning ? `Внимание: ${data.warning}` : '',
           'Проверьте поля перед сохранением.',
         ]
           .filter(Boolean)
