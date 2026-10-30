@@ -64,7 +64,7 @@ export default function AllProjectsPage() {
   }, []);
 
   return (
-    <main className="min-h-[80vh] flex flex-col justify-between px-6 py-12 md:py-20 max-w-5xl mx-auto selection:bg-neutral-800 selection:text-neutral-100">
+    <div className="min-h-[80vh] flex flex-col justify-between px-6 py-12 md:py-20 max-w-5xl mx-auto selection:bg-neutral-800 selection:text-neutral-100">
       <div className="space-y-8">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-neutral-800 pb-6">
           <div>
@@ -136,6 +136,6 @@ export default function AllProjectsPage() {
         <span>total: {rawProjects.length} nodes</span>
         <span>randomized layout</span>
       </div>
-    </main>
+    </div>
   );
 }

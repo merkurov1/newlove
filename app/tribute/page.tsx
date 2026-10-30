@@ -246,7 +246,7 @@ export default function TributePage() {
   const style = getHeartStyle();
 
   return (
-    <main
+    <div
       className="relative flex min-h-[100dvh] w-full flex-col overflow-x-hidden bg-[#141210] font-sans text-stone-200"
       style={{
         backgroundImage:
@@ -452,6 +452,6 @@ export default function TributePage() {
           z-index: 1;
         }
       `}</style>
-    </main>
+    </div>
   );
 }

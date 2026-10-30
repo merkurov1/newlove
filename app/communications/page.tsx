@@ -184,7 +184,7 @@ export default function HistoryLecturePage() {
       </header>
 
       {/* --- CONTENT LOOP --- */}
-        <main className="max-w-6xl mx-auto">
+        <div className="max-w-6xl mx-auto">
         {LECTURE_DATA.map((sec, i) => {
           const Icon = sec.icon;
           return (
@@ -241,7 +241,7 @@ export default function HistoryLecturePage() {
           </section>
           );
         })}
-        </main>
+        </div>
 
       {/* --- FOOTER --- */}
       <footer className="py-24 px-6 text-center border-t border-zinc-900 bg-black">

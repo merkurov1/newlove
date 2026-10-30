@@ -14,7 +14,17 @@ import 'swiper/css/pagination';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import {
+  DEFAULT_OG_ALT,
+  DEFAULT_OG_IMAGE,
+  PERSON_NAME,
+  SITE_LOCALE,
+  SITE_NAME,
+  SITE_URL,
+  SOCIAL_HANDLE,
+} from '@/lib/seo';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { organizationJsonLd, personJsonLd, websiteJsonLd } from '@/lib/structuredData';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import PierrotChat from '@/components/PierrotChat';
@@ -37,67 +47,60 @@ export const viewport: Viewport = {
   themeColor: '#ffffff',
 };
 
-export const metadata: Metadata = sanitizeMetadata({
-  metadataBase: new URL('https://www.merkurov.love'),
+export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
 
   title: {
-    default: 'Anton Merkurov | Art x Love x Money',
-    template: '%s | Anton Merkurov',
+    default: 'Anton Merkurov — Art, Love & Money',
+    template: '%s',
   },
 
   description:
-    'Digital Strategist, Art Dealer, and Heritage Architect. The intersection of High-Tech and Old Money.',
+    'The official website of Anton Merkurov: art, heritage, advising, publishing and digital projects.',
 
+  applicationName: SITE_NAME,
   keywords: [
     'Anton Merkurov',
     'Антон Меркуров',
-    'Art Dealer',
-    'Digital Heritage',
-    'Investment Art',
-    'Soviet Avant-Garde',
-    'Merkurov Legacy',
-    'Global Nomad',
-    'Digital Strategy',
-    'Context Architecture',
+    'Sergey Merkurov',
+    'digital heritage',
+    'art dealer',
+    'Soviet avant-garde',
+    'art market',
+    'digital strategy',
   ],
 
-  authors: [
-    {
-      name: 'Anton Merkurov',
-      url: 'https://www.merkurov.love',
-    },
-  ],
-
-  creator: 'Anton Merkurov',
-  publisher: 'Anton Merkurov',
+  authors: [{ name: PERSON_NAME, url: SITE_URL }],
+  creator: PERSON_NAME,
+  publisher: PERSON_NAME,
   category: 'Art & Technology',
 
+  // No canonical and no og:url here: every page computes and owns its own URL.
   openGraph: {
-    title: 'Anton Merkurov | Art x Love x Money',
-    description: 'Digital Strategist, Art Dealer, and Heritage Architect.',
-    url: 'https://www.merkurov.love',
-    siteName: 'Anton Merkurov',
+    title: 'Anton Merkurov — Art, Love & Money',
+    description:
+      'The official website of Anton Merkurov: art, heritage, advising, publishing and digital projects.',
+    siteName: SITE_NAME,
+    locale: SITE_LOCALE,
+    type: 'website',
     images: [
       {
-        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png',
+        url: DEFAULT_OG_IMAGE,
         width: 1200,
         height: 630,
-        alt: 'Anton Merkurov - Unframed',
+        alt: DEFAULT_OG_ALT,
       },
     ],
-    locale: 'en_US',
-    type: 'website',
   },
 
   twitter: {
     card: 'summary_large_image',
-    title: 'Anton Merkurov | Art x Love x Money',
-    description: 'Digital Strategist, Art Dealer, and Heritage Architect.',
-    images: [
-      'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png',
-    ],
-    creator: '@merkurov',
-    site: '@merkurov',
+    title: 'Anton Merkurov — Art, Love & Money',
+    description:
+      'The official website of Anton Merkurov: art, heritage, advising, publishing and digital projects.',
+    images: [DEFAULT_OG_IMAGE],
+    creator: SOCIAL_HANDLE,
+    site: SOCIAL_HANDLE,
   },
 
   robots: {
@@ -123,15 +126,9 @@ export const metadata: Metadata = sanitizeMetadata({
   manifest: '/manifest.webmanifest',
 
   alternates: {
-    canonical: '/',
-    languages: {
-      'en-US': 'https://www.merkurov.love',
-      'ru-RU': 'https://www.merkurov.love',
-      'x-default': 'https://www.merkurov.love',
-    },
     types: {
-      'application/rss+xml': 'https://www.merkurov.love/flow/rss',
-      'application/feed+json': 'https://www.merkurov.love/flow/feed.json',
+      'application/rss+xml': `${SITE_URL}/feed.xml`,
+      'application/feed+json': `${SITE_URL}/flow/feed.json`,
     },
   },
 
@@ -143,116 +140,9 @@ export const metadata: Metadata = sanitizeMetadata({
     google: 'notranslate',
     'format-detection': 'telephone=no',
   },
-});
+};
 
 export const revalidate = 300;
-
-// --- STRUCTURED DATA: GOOGLE SEARCH CARD & KNOWLEDGE GRAPH ---
-
-const googleSearchCardSchema = {
-  '@context': 'https://schema.org',
-  '@graph': [
-    {
-      '@type': 'WebSite',
-      '@id': 'https://www.merkurov.love/#website',
-      url: 'https://www.merkurov.love',
-      name: 'Anton Merkurov',
-      alternateName: [
-        'Антон Меркуров',
-        'Anton Merkurov | Art x Love x Money',
-        'Merkurov Love',
-        'merkurov.love',
-      ],
-      description:
-        'Digital Strategist, Art Dealer, and Heritage Architect. The intersection of High-Tech and Old Money.',
-      publisher: {
-        '@id': 'https://www.merkurov.love/#person',
-      },
-      inLanguage: ['en-US', 'ru-RU'],
-      potentialAction: {
-        '@type': 'SearchAction',
-        target: {
-          '@type': 'EntryPoint',
-          urlTemplate: 'https://www.merkurov.love/flow?q={search_term_string}',
-        },
-        'query-input': 'required name=search_term_string',
-      },
-    },
-    {
-      '@type': 'Person',
-      '@id': 'https://www.merkurov.love/#person',
-      name: 'Anton Merkurov',
-      alternateName: ['Антон Меркуров', 'Merkurov'],
-      url: 'https://www.merkurov.love',
-      image: {
-        '@type': 'ImageObject',
-        '@id': 'https://www.merkurov.love/#person-image',
-        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png',
-        caption: 'Anton Merkurov',
-      },
-      jobTitle: 'Digital Strategist, Art Dealer & Heritage Architect',
-      description:
-        'Great-grandson of Sergey Merkurov. Expert in digital heritage, high-end art investment, and context architecture.',
-      sameAs: [
-        'https://twitter.com/merkurov',
-        'https://x.com/merkurov',
-        'https://t.me/merkurov',
-        'https://bsky.app/profile/merkurov.love',
-        'https://www.linkedin.com/in/merkurov',
-        'https://www.facebook.com/merkurov',
-        'https://en.wikipedia.org/wiki/Sergey_Merkurov',
-        'https://github.com/merkurov1',
-      ],
-      knowsAbout: [
-        'Art Market',
-        'Digital Heritage',
-        'Soviet Monumentalism',
-        'Contemporary Art',
-        'Blockchain Technology',
-        'Digital Strategy',
-        'Context Architecture',
-      ],
-      worksFor: {
-        '@type': 'Organization',
-        '@id': 'https://www.merkurov.love/#organization',
-      },
-      mainEntityOfPage: 'https://www.merkurov.love',
-    },
-    {
-      '@type': 'Organization',
-      '@id': 'https://www.merkurov.love/#organization',
-      name: 'Anton Merkurov Studio',
-      alternateName: ['Merkurov Studio', 'merkurov.love'],
-      url: 'https://www.merkurov.love',
-      logo: {
-        '@type': 'ImageObject',
-        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png',
-        width: 512,
-        height: 512,
-      },
-      founder: {
-        '@id': 'https://www.merkurov.love/#person',
-      },
-      sameAs: ['https://twitter.com/merkurov', 'https://t.me/merkurov'],
-    },
-    {
-      '@type': 'ProfilePage',
-      '@id': 'https://www.merkurov.love/#profilepage',
-      url: 'https://www.merkurov.love',
-      name: 'Anton Merkurov — Official Website & Archive',
-      isPartOf: {
-        '@id': 'https://www.merkurov.love/#website',
-      },
-      about: {
-        '@id': 'https://www.merkurov.love/#person',
-      },
-      mainEntity: {
-        '@id': 'https://www.merkurov.love/#person',
-      },
-      inLanguage: 'en-US',
-    },
-  ],
-};
 
 const getPublicProjects = unstable_cache(
   async () => {
@@ -341,12 +231,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="preconnect" href="https://txvkqcitalfbjytmnawq.supabase.co" />
         <link rel="dns-prefetch" href="https://txvkqcitalfbjytmnawq.supabase.co" />
 
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(googleSearchCardSchema),
-          }}
-        />
+        <JsonLd data={websiteJsonLd()} />
+        <JsonLd data={personJsonLd()} />
+        <JsonLd data={organizationJsonLd()} />
       </head>
 
       <body

@@ -71,7 +71,7 @@ export default function HeartAndAngelHub() {
   }, [isModalOpen]);
 
   return (
-    <main
+    <div
       className={`${sans.className} relative min-h-screen overflow-x-hidden bg-[#FAF8F5] text-[#141210] selection:bg-black selection:text-white`}
     >
       {/* ───────── HERO ───────── */}
@@ -92,9 +92,9 @@ export default function HeartAndAngelHub() {
         {/* Mobile */}
         <div className="flex min-h-[calc(100vh-70px)] flex-col justify-between bg-[#EAF2F8] px-5 pb-6 pt-20 md:hidden">
           <div className="space-y-1.5 text-center">
-            <h1 className={`${serif.className} text-2xl font-light tracking-wider text-zinc-900`}>
+            <p className={`${serif.className} text-2xl font-light tracking-wider text-zinc-900`}>
               Heart &amp; Angel
-            </h1>
+            </p>
             <p className={`${serif.className} text-xs font-light leading-relaxed tracking-wide text-zinc-600`}>
               The universal mythology for a fragmented world.
             </p>
@@ -432,7 +432,7 @@ export default function HeartAndAngelHub() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }
 

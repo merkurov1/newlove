@@ -87,7 +87,7 @@ export default function LetItGoAngel() {
   };
 
   return (
-    <main className={`relative w-full min-h-[100dvh] overflow-x-hidden ${skyGradient} select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 animate-fade-in transition-colors duration-1000`}>
+    <div className={`relative w-full min-h-[100dvh] overflow-x-hidden ${skyGradient} select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 animate-fade-in transition-colors duration-1000`}>
       <section className="sr-only" aria-labelledby="release-ritual-title">
         <h1 id="release-ritual-title">Let It Go — Heart &amp; Angel ritual</h1>
         <p>Release a burden into the sky and make room for lightness in the digital sanctuary.</p>
@@ -167,6 +167,6 @@ export default function LetItGoAngel() {
         .animate-fade-in { animation: fadeIn 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .animate-fly-away { animation: flyAway 6s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
       ` }} />
-    </main>
+    </div>
   );
 }

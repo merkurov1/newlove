@@ -143,7 +143,7 @@ export default function ServiceRequestClient() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAF8F5] px-6 py-20 text-[#111] selection:bg-black selection:text-white">
+    <div className="min-h-screen bg-[#FAF8F5] px-6 py-20 text-[#111] selection:bg-black selection:text-white">
       <div className="mx-auto max-w-2xl">
         <div className="flex items-center justify-between gap-4 border-b border-zinc-300/70 pb-5">
           <Link
@@ -318,6 +318,6 @@ export default function ServiceRequestClient() {
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }

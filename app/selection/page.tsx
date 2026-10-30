@@ -1,5 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { pageMetadata, ROUTE_COPY } from '@/lib/seo';
+import { breadcrumbJsonLd, collectionPageJsonLd } from '@/lib/structuredData';
 import Image from 'next/image';
 import './swiper-init';
 import CenteredHeader from '@/components/CenteredHeader';
@@ -7,27 +10,17 @@ import CenteredHeader from '@/components/CenteredHeader';
 export const dynamic = 'force-dynamic';
 
 // --- SEO METADATA & CANONICAL ---
-export const metadata: Metadata = {
-  title: "Selection & Chronicles | Anton Merkurov",
-  description: "Chronicles of silence & art. Curated selections and non-conformist masterworks by Anton Merkurov.",
-  alternates: {
-    canonical: "https://www.merkurov.love/selection",
+const copy = ROUTE_COPY['/selection'];
+
+export const metadata: Metadata = pageMetadata({
+  ...copy,
+  path: '/selection',
+  languages: {
+    'x-default': '/selection',
+    en: '/selection',
+    ru: '/selection',
   },
-  openGraph: {
-    title: "Selection & Chronicles | Anton Merkurov",
-    description: "Chronicles of silence & art. Curated selections and non-conformist masterworks by Anton Merkurov.",
-    url: "https://www.merkurov.love/selection",
-    siteName: "Anton Merkurov",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Selection & Chronicles | Anton Merkurov",
-    description: "Chronicles of silence & art. Curated selections and non-conformist masterworks by Anton Merkurov.",
-    creator: "@merkurov",
-    site: "@merkurov",
-  },
-};
+});
 
 export default async function SelectionPage() {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
@@ -122,6 +115,23 @@ export default async function SelectionPage() {
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#111] selection:bg-black selection:text-white relative overflow-x-hidden font-sans">
+      <JsonLd
+        data={collectionPageJsonLd({
+          path: '/selection',
+          name: 'Selection — curated art and chronicles',
+          description: copy.description,
+          items: (articlesToRender || []).slice(0, 100).map((article: any) => ({
+            name: [article.artist, article.title].filter(Boolean).join(' — ') || 'Artwork',
+            url: `/${article.slug}`,
+          })),
+        })}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Selection', path: '/selection' },
+        ])}
+      />
       
       {/* HEADER (narrow container like /advising) */}
       <div className="max-w-3xl mx-auto px-6 pt-36 md:pt-44 pb-16">

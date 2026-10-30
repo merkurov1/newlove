@@ -135,7 +135,7 @@ export default async function LotPage({ params }: { params: { id: string } }) {
         </div>
       </nav>
 
-      <main className="max-w-5xl mx-auto pt-24 pb-32 px-6 md:px-12">
+      <div className="max-w-5xl mx-auto pt-24 pb-32 px-6 md:px-12">
         
         {/* 1. THE VISUAL (IMAGE) */}
         <div className="relative w-full aspect-[3/4] md:aspect-[16/10] mb-12 md:mb-20 bg-zinc-900 group">
@@ -209,7 +209,7 @@ export default async function LotPage({ params }: { params: { id: string } }) {
             </div>
         </div>
 
-      </main>
+      </div>
       
       {/* FOOTER DECOR */}
       <footer className="w-full text-center py-8 text-[10px] text-gray-800 uppercase tracking-widest">

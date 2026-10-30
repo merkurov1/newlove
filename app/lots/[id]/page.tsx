@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
@@ -18,45 +19,47 @@ function getAuctionHouseName(lot: any): string {
   return lot.auction_house || "Auction House";
 }
 
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { description as seoDescription, pageMetadata, truncate } from '@/lib/seo';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbJsonLd } from '@/lib/structuredData';
 
-export async function generateMetadata({ params }: { params: { id: string } }) {
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const { data: lot } = await supabase
     .from('lots')
     .select('artist, title, image_path, ai_content')
     .eq('id', params.id)
     .maybeSingle();
 
-  if (!lot) return sanitizeMetadata({ title: 'Lot Not Found' });
+  const path = `/lots/${encodeURIComponent(params.id)}`;
+
+  if (!lot) {
+    return pageMetadata({
+      title: 'Lot not found | Curator Vault',
+      description: 'The requested auction lot could not be found in the Curator Vault.',
+      path,
+      noindex: true,
+    });
+  }
 
   const displayTitle = [lot.artist, lot.title].filter(Boolean).join(' — ');
-  const description =
+  const summary = seoDescription(
     lot.ai_content?.summary ||
-    `Artwork dossier for ${displayTitle}. Provenance, verification, and auction analysis on Curator Vault.`;
-  const url = `https://www.merkurov.love/lots/${encodeURIComponent(params.id)}`;
+      `Artwork dossier for ${displayTitle}. Provenance, verification and auction analysis on Curator Vault.`,
+  );
   const publicImg = lot.image_path
     ? lot.image_path.startsWith('http')
       ? lot.image_path
       : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/artifacts/${lot.image_path}`
-    : 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png';
+    : undefined;
 
-  return sanitizeMetadata({
-    title: `${displayTitle} | Curator Vault`,
-    description,
-    alternates: { canonical: url },
-    openGraph: {
-      title: `${displayTitle} | Curator Vault`,
-      description,
-      url,
-      images: [{ url: publicImg }],
-      type: 'article',
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: `${displayTitle} | Curator Vault`,
-      description,
-      images: [publicImg],
-    },
+  return pageMetadata({
+    title: truncate(`${displayTitle} | Curator Vault`, 60),
+    description: summary,
+    path,
+    type: 'article',
+    image: publicImg,
+    imageAlt: displayTitle,
+    authors: ['Anton Merkurov'],
   });
 }
 
@@ -93,6 +96,13 @@ export default async function LotDetailPage({ params }: { params: { id: string }
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(artworkSchema) }}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Curator Vault', path: '/lots' },
+          { name: [lot.artist, lot.title].filter(Boolean).join(' — ') || 'Lot', path: `/lots/${encodeURIComponent(params.id)}` },
+        ])}
       />
       <div className="min-h-screen bg-black text-white font-sans pt-24 sm:pt-32 pb-24 px-4 sm:px-8">
       <div className="max-w-6xl mx-auto space-y-12">

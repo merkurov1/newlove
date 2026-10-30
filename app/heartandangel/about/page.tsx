@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbJsonLd } from '@/lib/structuredData';
 
 export const metadata: Metadata = {
   title: 'About Heart & Angel | A Living Digital Mythology',
@@ -38,8 +40,15 @@ const aboutJsonLd = {
 
 export default function HeartAndAngelAboutPage() {
   return (
-    <main className="min-h-screen bg-[#FAF8F5] px-5 pb-20 pt-32 text-stone-900 sm:px-8 sm:pt-40">
+    <div className="min-h-screen bg-[#FAF8F5] px-5 pb-20 pt-32 text-stone-900 sm:px-8 sm:pt-40">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(aboutJsonLd) }} />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Heart & Angel', path: '/heartandangel' },
+          { name: 'About', path: '/heartandangel/about' },
+        ])}
+      />
       <article className="mx-auto max-w-3xl rounded-[2rem] border border-stone-200/80 bg-white/80 p-7 shadow-sm backdrop-blur-md sm:p-14">
         <Link href="/heartandangel" className="font-mono text-xs uppercase tracking-[.18em] text-stone-500 transition hover:text-stone-900">← Back to Heart &amp; Angel</Link>
         <p className="mt-12 font-mono text-xs uppercase tracking-[.24em] text-stone-400">The living world</p>
@@ -79,6 +88,6 @@ export default function HeartAndAngelAboutPage() {
           <Link href="/heartandangel/letitgo" className="rounded-full border border-stone-300 px-5 py-3 font-mono text-xs uppercase tracking-widest text-stone-700 transition hover:border-stone-900">Let It Go</Link>
         </nav>
       </article>
-    </main>
+    </div>
   );
 }

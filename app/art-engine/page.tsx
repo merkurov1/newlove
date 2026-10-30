@@ -1,30 +1,38 @@
 import React from 'react';
 import type { Metadata } from 'next';
 import ArtEngineClient from './ArtEngineClient';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { pageMetadata } from '@/lib/seo';
+import { breadcrumbJsonLd, creativeWorkJsonLd } from '@/lib/structuredData';
 
-export const metadata: Metadata = {
-  title: 'Art Engine // Intelligence Terminal — Anton Merkurov',
-  description: 'Institutional-grade art acquisition, liquidity analysis, and curatorial dossier synthesis.',
-  openGraph: {
-    title: 'Art Engine // Intelligence Terminal — Anton Merkurov',
-    description: 'Institutional-grade art acquisition, liquidity analysis, and curatorial dossier synthesis.',
-    url: 'https://www.merkurov.love/art-engine',
-    siteName: 'Anton Merkurov',
-    locale: 'en_US',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Art Engine // Intelligence Terminal — Anton Merkurov',
-    description: 'Institutional-grade art acquisition, liquidity analysis, and curatorial dossier synthesis.',
-  },
-  alternates: { canonical: 'https://www.merkurov.love/art-engine' },
-  robots: { index: true, follow: true },
-};
+const ART_ENGINE_DESCRIPTION =
+  'Institutional-grade art acquisition, liquidity analysis and curatorial dossier synthesis in the Merkurov Curator Engine.';
+
+export const metadata: Metadata = pageMetadata({
+  title: 'Curator Engine — Art Market Intelligence | Merkurov',
+  description: ART_ENGINE_DESCRIPTION,
+  path: '/art-engine',
+  languages: { 'x-default': '/art-engine', en: '/art-engine' },
+});
 
 export default function ArtEnginePage() {
   return (
-    <React.Suspense
+    <>
+      <JsonLd
+        data={creativeWorkJsonLd({
+          path: '/art-engine',
+          name: 'Curator Engine — Art Market Intelligence',
+          description: ART_ENGINE_DESCRIPTION,
+          genre: 'Art market research tool',
+        })}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Curator Engine', path: '/art-engine' },
+        ])}
+      />
+      <React.Suspense
       fallback={
         <div className="min-h-screen bg-white flex items-center justify-center font-mono text-xs uppercase tracking-widest text-gray-400">
           Initializing Terminal...
@@ -32,6 +40,7 @@ export default function ArtEnginePage() {
       }
     >
       <ArtEngineClient />
-    </React.Suspense>
+      </React.Suspense>
+    </>
   );
 }

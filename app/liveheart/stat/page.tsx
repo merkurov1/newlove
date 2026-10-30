@@ -130,7 +130,7 @@ export default async function StatisticsPage({ searchParams }: { searchParams?: 
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-6 -mt-8">
+      <div className="max-w-7xl mx-auto px-6 -mt-8">
         
         {/* BIG NUMBERS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
@@ -224,7 +224,7 @@ export default async function StatisticsPage({ searchParams }: { searchParams?: 
           })}
         </div>
 
-      </main>
+      </div>
     </div>
   );
 }

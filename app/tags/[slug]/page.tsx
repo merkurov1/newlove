@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { pageMetadata, description as seoDescription, truncate } from '@/lib/seo';
 import Image from 'next/image';
 import SafeImage from '@/components/SafeImage';
 import dynamic from 'next/dynamic';
@@ -72,12 +72,20 @@ async function getTagData(slug: string) {
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const tag = await getTagData(params.slug);
-  const meta = {
-    title: `Материалы по тегу: ${tag.name}`,
-    description: `Все статьи и проекты, отмеченные тегом "${tag.name}"`,
-    alternates: { canonical: `https://www.merkurov.love/tags/${encodeURIComponent(params.slug)}` },
-  };
-  return sanitizeMetadata(meta);
+  const path = `/tags/${encodeURIComponent(params.slug)}`;
+
+  return pageMetadata({
+    title: truncate(`Материалы по тегу: ${tag.name} | Anton Merkurov`, 60),
+    description: seoDescription(
+      `Все статьи, проекты и artworks, отмеченные тегом «${tag.name}», из архива Anton Merkurov.`,
+    ),
+    path,
+    languages: {
+      'x-default': path,
+      ru: path,
+      en: path,
+    },
+  });
 }
 
 export default async function TagPage({ params }: { params: { slug: string } }) {

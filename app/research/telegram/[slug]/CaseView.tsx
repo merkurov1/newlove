@@ -518,7 +518,7 @@ export default function TelegramCaseView({
       : '';
 
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-[#141210] selection:bg-[#141210] selection:text-[#FAF8F5]">
+    <div className="min-h-screen bg-[#FAF8F5] text-[#141210] selection:bg-[#141210] selection:text-[#FAF8F5]">
       <div className="mx-auto w-full max-w-7xl px-5 pb-24 pt-28 sm:px-8 md:pt-36 lg:px-12">
         <nav className="mb-10 flex items-center justify-between border-b border-stone-300/80 pb-4 font-mono text-[10px] uppercase tracking-[0.18em] text-stone-500">
           <Link href="/research" className="transition-colors hover:text-[#A8402C]">
@@ -832,6 +832,6 @@ export default function TelegramCaseView({
           </div>
         </footer>
       </div>
-    </main>
+    </div>
   );
 }

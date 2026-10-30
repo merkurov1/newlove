@@ -1,5 +1,8 @@
 import { headers } from 'next/headers';
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import type { Metadata } from 'next';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { pageMetadata, ROUTE_COPY } from '@/lib/seo';
+import { breadcrumbJsonLd, collectionPageJsonLd } from '@/lib/structuredData';
 import { createClient } from '@/lib/supabase/server';
 import SubscribeFormClient from '@/components/journal/SubscribeFormClient';
 import FrontPage, {
@@ -9,11 +12,16 @@ import FrontPage, {
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = sanitizeMetadata({
-  alternates: { canonical: 'https://www.merkurov.love/journal' },
-  title: 'Journal | Merkurov',
-  description:
-    'Chronicles of the unframed. Market intelligence and heritage architecture.',
+const journalCopy = ROUTE_COPY['/journal'];
+
+export const metadata: Metadata = pageMetadata({
+  ...journalCopy,
+  path: '/journal',
+  languages: {
+    'x-default': '/journal',
+    en: '/journal',
+    ru: '/journal',
+  },
 });
 
 const isEn = (value: unknown) =>
@@ -150,8 +158,27 @@ export default async function JournalPage() {
     .filter((i) => i.id !== ru?.id && i.id !== en?.id)
     .slice(0, 5);
 
+  const journalItems = issues.map((issue) => ({
+    name: issue.headline,
+    url: `/journal/${encodeURIComponent(issue.slug)}`,
+  }));
+
   return (
     <div className="min-h-screen bg-[#FDFBF7] font-sans text-[#111] selection:bg-black selection:text-white">
+      <JsonLd
+        data={collectionPageJsonLd({
+          path: '/journal',
+          name: 'Journal — Chronicles of the Unframed',
+          description: journalCopy.description,
+          items: journalItems,
+        })}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Journal', path: '/journal' },
+        ])}
+      />
       <FrontPage
         ru={ru}
         en={en}

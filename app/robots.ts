@@ -1,72 +1,55 @@
-// app/robots.ts
-import { MetadataRoute } from 'next';
+import type { MetadataRoute } from 'next';
+import { SITE_URL } from '@/lib/seo';
+
+/**
+ * Public content is open to search engines and AI crawlers. Only private
+ * application surfaces (admin, API, auth, drafts) are excluded.
+ */
+const PRIVATE_PATHS = [
+  '/admin',
+  '/admin/',
+  '/admin/*',
+  '/api',
+  '/api/',
+  '/api/*',
+  '/auth',
+  '/auth/',
+  '/auth/*',
+  '/draft',
+  '/draft/',
+  '/draft/*',
+  '/unframed/debug',
+  '/unframed/debug/*',
+];
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = 'https://www.merkurov.love';
-
-  const defaultDisallow = [
-    '/admin',
-    '/admin/*',
-    '/api/',
-    '/api/*',
-    '/auth/',
-    '/auth/*',
-    '/profile',
-    '/profile/*',
-    '/debug',
-    '/debug/*',
-    '/debug-auth',
-    '/debug-auth/*',
-    '/kit',
-    '/kit/*',
-    '/onboard',
-    '/onboard/*',
-    '/users',
-    '/users/*',
-    '/roles-demo',
-    '/roles-demo/*',
-    '/journal/*/full',
-    '/letters/*/full',
-    '/temple/whispers',
-    '/temple/whispers/*',
-  ];
-
   return {
     rules: [
       {
         userAgent: '*',
         allow: '/',
-        disallow: defaultDisallow,
+        disallow: PRIVATE_PATHS,
       },
-      {
-        userAgent: 'Googlebot',
-        allow: '/',
-        disallow: defaultDisallow,
-      },
-      {
-        userAgent: 'bingbot',
-        allow: '/',
-        disallow: defaultDisallow,
-      },
-      // AI Crawlers - Allow access to public content for LLM & AI Search indexing
       {
         userAgent: [
           'GPTBot',
+          'OAI-SearchBot',
           'ChatGPT-User',
-          'Claude-Web',
           'ClaudeBot',
+          'Claude-SearchBot',
+          'Claude-User',
           'PerplexityBot',
-          'Applebot',
-          'Applebot-Extended',
-          'anthropic-ai',
-          'cohere-ai',
           'Google-Extended',
+          'Applebot-Extended',
+          'CCBot',
+          'Googlebot',
+          'bingbot',
         ],
         allow: '/',
-        disallow: defaultDisallow,
+        disallow: PRIVATE_PATHS,
       },
     ],
-    sitemap: `${baseUrl}/sitemap.xml`,
-    host: baseUrl,
+    sitemap: `${SITE_URL}/sitemap.xml`,
+    host: SITE_URL,
   };
 }

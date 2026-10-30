@@ -12,9 +12,9 @@ export default function ServiceRequestPage() {
   return (
     <Suspense
       fallback={
-        <main className="flex min-h-screen items-center justify-center bg-[#FAF8F5] px-6">
+        <div className="flex min-h-screen items-center justify-center bg-[#FAF8F5] px-6">
           <p className="text-sm text-zinc-500">Loading request…</p>
-        </main>
+        </div>
       }
     >
       <ServiceRequestClient />

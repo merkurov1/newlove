@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import HeartPhysics from '@/components/HeartPhysics';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbJsonLd, visualArtworkJsonLd } from '@/lib/structuredData';
 
 const CALM_URL =
   'https://www.merkurov.love/heartandangel/calm';
@@ -14,7 +16,7 @@ export const metadata: Metadata = {
   title: 'Keep Calm — Digital Temple | Merkurov Love',
 
   description:
-    'Keep Calm is an interactive digital ritual for slowing down, finding balance and holding a fragile heart in motion.',
+    'Keep Calm is an interactive digital ritual for slowing down, finding balance and holding a fragile heart in motion inside the Heart & Angel world.',
 
   keywords: [
     'Keep Calm',
@@ -87,11 +89,31 @@ export const metadata: Metadata = {
 };
 
 export default function CalmPage() {
+  const CALM_DESCRIPTION =
+    'Keep Calm is an interactive digital ritual for slowing down, finding balance and holding a fragile heart in motion inside the Heart & Angel world.';
+
   return (
-    <main
-      aria-labelledby="calm-title"
-      className="min-h-[100dvh]"
-    >
+    <>
+      <JsonLd
+        data={visualArtworkJsonLd({
+          path: '/heartandangel/calm',
+          name: 'Heart & Angel — Keep Calm',
+          description: CALM_DESCRIPTION,
+          image:
+            'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Heart1.png',
+        })}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Heart & Angel', path: '/heartandangel' },
+          { name: 'Keep Calm', path: '/heartandangel/calm' },
+        ])}
+      />
+      <div
+        aria-labelledby="calm-title"
+        className="min-h-[100dvh]"
+      >
       <section className="sr-only">
         <h1 id="calm-title">
           Keep Calm
@@ -104,10 +126,11 @@ export default function CalmPage() {
         </p>
       </section>
 
-      <HeartPhysics
-        daemonUrl={DAEMON_IMAGE}
-        heartUrl={HEART_IMAGE}
-      />
-    </main>
+        <HeartPhysics
+          daemonUrl={DAEMON_IMAGE}
+          heartUrl={HEART_IMAGE}
+        />
+      </div>
+    </>
   );
 }

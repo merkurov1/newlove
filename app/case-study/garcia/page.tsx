@@ -49,7 +49,7 @@ export default function GarciaCaseStudy() {
   const activeEvent = SCRIPT_EVENTS.find(e => currentTime >= e.start && currentTime <= e.end);
 
   return (
-    <main className="fixed inset-0 z-[9999] w-full h-screen bg-black text-white overflow-hidden font-sans selection:bg-red-900 selection:text-white">
+    <div className="fixed inset-0 z-[9999] w-full h-screen bg-black text-white overflow-hidden font-sans selection:bg-red-900 selection:text-white">
       
       {/* ==========================================
           LAYER 0: THE ARTWORK (With Pulse)
@@ -245,6 +245,6 @@ export default function GarciaCaseStudy() {
           100% { transform: scale(1.15); }
         }
       `}</style>
-    </main>
+    </div>
   );
 }

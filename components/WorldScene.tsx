@@ -47,7 +47,7 @@ export default function WorldScene() {
 
   const nextHeartId = useRef(0);
   const mousePos = useRef<PointerPosition>({ x: 0, y: 0 });
-  const sceneRef = useRef<HTMLElement | null>(null);
+  const sceneRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     // Intentionally random: Angel / Daemon is a core World feature.
@@ -221,7 +221,7 @@ export default function WorldScene() {
   }, [fallingHearts.length]);
 
   return (
-    <main
+    <div
       ref={sceneRef}
       onPointerMove={handlePointerMove}
       className={`relative isolate w-full telegram-viewport overflow-hidden bg-gradient-to-b ${timeGradient} transition-colors duration-1000 select-none`}
@@ -516,6 +516,6 @@ export default function WorldScene() {
           animation: bounceSlow 4s ease-in-out infinite;
         }
       `}</style>
-    </main>
+    </div>
   );
 }

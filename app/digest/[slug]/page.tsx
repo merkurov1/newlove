@@ -1,4 +1,6 @@
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { pageMetadata, description as seoDescription, truncate } from '@/lib/seo';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { articleJsonLd, breadcrumbJsonLd } from '@/lib/structuredData';
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -41,9 +43,21 @@ async function getDigestBySlug(slug: string) {
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const digest = await getDigestBySlug(params.slug);
-  return sanitizeMetadata({
-    title: digest?.title || 'Дайджест не найден',
-    alternates: { canonical: `https://www.merkurov.love/digest/${encodeURIComponent(params.slug)}` },
+  const path = `/digest/${encodeURIComponent(params.slug)}`;
+  const contentText =
+    typeof digest.content === 'string'
+      ? digest.content.replace(/<[^>]+>/g, ' ')
+      : JSON.stringify(digest.content || '');
+
+  return pageMetadata({
+    title: truncate(digest?.title || 'Digest | Anton Merkurov', 60),
+    description: seoDescription(
+      contentText || `A digest by Anton Merkurov: ${digest?.title || 'selected notes and links'}.`,
+    ),
+    path,
+    type: 'article',
+    publishedTime: digest.created_at || undefined,
+    authors: ['Anton Merkurov'],
   });
 }
 
@@ -73,8 +87,26 @@ export default async function DigestPage({ params }: { params: { slug: string } 
   if (!valid) {
     return <div style={{background:'#f00',color:'#fff',padding:'2rem',fontWeight:'bold'}}>Ошибка: структура блоков некорректна!</div>;
   }
+  const digestPath = `/digest/${encodeURIComponent(params.slug)}`;
+
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
+      <JsonLd
+        data={articleJsonLd({
+          path: digestPath,
+          headline: digest.title || 'Digest',
+          description: seoDescription(`A digest by Anton Merkurov: ${digest.title || 'selected notes'}.`),
+          datePublished: digest.created_at || undefined,
+          section: 'Digest',
+        })}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Digest', path: digestPath },
+          { name: digest.title || 'Digest', path: digestPath },
+        ])}
+      />
       {/* Ссылка для возврата на главную страницу */}
       <Link href="/" className="text-blue-500 hover:text-blue-600 mb-6 inline-block">
         &larr; Назад ко всем дайджестам

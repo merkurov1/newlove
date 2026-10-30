@@ -122,7 +122,7 @@ export default function FlowJoinClient() {
   };
 
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-stone-900 pt-28 sm:pt-36 pb-16 px-4 sm:px-6 flex flex-col justify-between relative selection:bg-stone-900 selection:text-white font-sans">
+    <div className="min-h-screen bg-[#FAF8F5] text-stone-900 pt-28 sm:pt-36 pb-16 px-4 sm:px-6 flex flex-col justify-between relative selection:bg-stone-900 selection:text-white font-sans">
       {/* Тонкая минималистичная сетка галерейного фона */}
       <div className="absolute inset-0 bg-[radial-gradient(#e5e5e5_1px,transparent_1px)] [background-size:28px_28px] opacity-30 pointer-events-none" />
 
@@ -287,6 +287,6 @@ export default function FlowJoinClient() {
           LOBBY
         </Link>
       </footer>
-    </main>
+    </div>
   );
 }

@@ -94,7 +94,7 @@ export default function CardPageClient() {
   }, []);
 
   return (
-    <main
+    <div
       className={`${sans.className} min-h-screen overflow-x-hidden bg-[#FAF8F5] text-[#141210] selection:bg-black selection:text-white`}
     >
      
@@ -221,6 +221,6 @@ export default function CardPageClient() {
           Heart &amp; Angel
         </Link>
       </footer>
-    </main>
+    </div>
   );
 }

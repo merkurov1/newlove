@@ -38,7 +38,7 @@ export default async function ProfilePage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-black selection:text-white pt-36 md:pt-44 pb-24 px-6 relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-black selection:text-white pt-36 md:pt-44 pb-24 px-6 relative overflow-x-hidden">
       <div className="max-w-2xl mx-auto space-y-8">
         
         {/* Page Header */}
@@ -73,6 +73,6 @@ export default async function ProfilePage() {
         </div>
 
       </div>
-    </main>
+    </div>
   );
 }

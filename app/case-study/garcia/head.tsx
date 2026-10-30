@@ -4,7 +4,7 @@ export default function Head() {
   const image = "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1047.jpeg";
   const author = "Anton Merkurov / Merkurov";
   const keywords = "Aimée García, case study, art, provenance, auction, Lot 59, Merkurov";
-  const url = "https://merkurov.love/case-study/garcia";
+  const url = "https://www.merkurov.love/case-study/garcia";
 
   const jsonLd = {
     '@context': 'https://schema.org',

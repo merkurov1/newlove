@@ -36,7 +36,7 @@ export const metadata: Metadata = {
 
 export default function PivovarovCaseStudy() {
   return (
-    <main className="min-h-screen bg-black text-white font-sans">
+    <div className="min-h-screen bg-black text-white font-sans">
       <div className="max-w-6xl mx-auto px-8 py-20">
         {/* Header */}
         <header className="mb-16 opacity-0 animate-fadeIn" style={{ animationDelay: '0.05s', animationFillMode: 'forwards' }}>
@@ -211,6 +211,6 @@ export default function PivovarovCaseStudy() {
           </div>
         </footer>
       </div>
-    </main>
+    </div>
   );
 }

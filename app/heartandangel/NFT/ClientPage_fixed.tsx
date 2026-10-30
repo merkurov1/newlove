@@ -71,7 +71,7 @@ export default function NFTLabPageClient() {
 
   // Main render
   return (
-    <main>
+    <div>
       <div>
         {/* All content is now inside a single div for valid JSX parent */}
         <div className="p-6 rounded-xl shadow-lg bg-white border border-neutral-100 flex flex-col md:flex-row md:items-center gap-6">
@@ -251,6 +251,6 @@ export default function NFTLabPageClient() {
           </div>
         ) : null}
       </div>
-    </main>
+    </div>
   );
 }

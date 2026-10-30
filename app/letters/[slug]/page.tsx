@@ -162,7 +162,7 @@ export async function generateMetadata({ params }: PageProps) {
             })}.`
         : "Flow newspaper issue.";
 
-      const canonical = `${SITE}/letters/${encodeURIComponent(slug)}`;
+      const canonical = `${SITE}/journal/${encodeURIComponent(slug)}`;
       const ogImage = getIssueOgImage(issue.payload);
 
       return sanitizeMetadata({
@@ -209,7 +209,7 @@ export async function generateMetadata({ params }: PageProps) {
     const description = String(
       parseRichTextContent(letter.content || ""),
     ).slice(0, 160);
-    const canonical = `${SITE}/letters/${encodeURIComponent(slug)}`;
+    const canonical = `${SITE}/journal/${encodeURIComponent(slug)}`;
     const fallbackImage = `${SITE}/default-og.png`;
 
     return sanitizeMetadata({

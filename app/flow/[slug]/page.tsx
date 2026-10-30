@@ -262,7 +262,10 @@ export async function generateMetadata({
     const image = getMetadataImage(flowItem);
     const ogImage =
       image ||
-      `${site}/flow/${encodeURIComponent(decodedSlug)}/opengraph-image`;
+      `${site}/og?${new URLSearchParams({
+        title,
+        subtitle: 'Flow — Anton Merkurov',
+      }).toString()}`;
 
     return sanitizeMetadata({
       title,
@@ -1100,7 +1103,8 @@ export default async function FlowItemPage({ params }: PageProps) {
   const itemTitle = item.title?.trim() || 'Flow';
   const itemDescription = getDescription(item);
   const itemImage =
-    getMetadataImage(item) || `${itemUrl}/opengraph-image`;
+    getMetadataImage(item) ||
+    `${siteUrl}/og?${new URLSearchParams({ title: itemTitle, subtitle: 'Flow — Anton Merkurov' }).toString()}`;
 
   const flowArticleSchema = {
     '@context': 'https://schema.org',
@@ -1108,7 +1112,9 @@ export default async function FlowItemPage({ params }: PageProps) {
     headline: itemTitle,
     description: itemDescription,
     image: [itemImage],
-    datePublished: item.published_at || new Date().toISOString(),
+    datePublished: item.published_at || undefined,
+    dateModified: item.published_at || undefined,
+    inLanguage: item.lang || 'en',
     url: itemUrl,
     mainEntityOfPage: {
       '@type': 'WebPage',
@@ -1253,7 +1259,7 @@ export default async function FlowItemPage({ params }: PageProps) {
         }}
       />
 
-      <main className="min-h-screen bg-white px-5 pb-24 pt-20 text-stone-900 sm:px-8 sm:pt-24">
+      <div className="min-h-screen bg-white px-5 pb-24 pt-20 text-stone-900 sm:px-8 sm:pt-24">
         <article className="mx-auto max-w-3xl">
           <header className="mb-8 flex items-center justify-between gap-4 border-b border-stone-100 pb-5">
             <Link
@@ -1326,7 +1332,7 @@ export default async function FlowItemPage({ params }: PageProps) {
             />
           )}
         </article>
-      </main>
+      </div>
     </>
   );
 }

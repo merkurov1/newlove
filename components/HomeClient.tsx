@@ -77,7 +77,7 @@ export default function HomeClient() {
   }, [shuffleItems]);
 
   return (
-    <main className="min-h-screen w-full bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] flex flex-col justify-between px-5 sm:px-12 pt-32 md:pt-44 pb-12 antialiased relative overflow-x-hidden">
+    <div className="min-h-screen w-full bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] flex flex-col justify-between px-5 sm:px-12 pt-32 md:pt-44 pb-12 antialiased relative overflow-x-hidden">
       {/* Subtle Paper Grain Overlay */}
       <div
         className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay z-10"
@@ -149,6 +149,6 @@ export default function HomeClient() {
           </PierrotSectionLink>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

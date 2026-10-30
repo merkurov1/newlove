@@ -12,11 +12,11 @@ export default function PostcardSuccessPage() {
   return (
     <Suspense
       fallback={
-        <main className="flex min-h-screen items-center justify-center bg-[#FAF8F5] px-6 py-20">
+        <div className="flex min-h-screen items-center justify-center bg-[#FAF8F5] px-6 py-20">
           <p className="text-sm text-[#5B544C]" role="status">
             Checking your order…
           </p>
-        </main>
+        </div>
       }
     >
       <SuccessClient />

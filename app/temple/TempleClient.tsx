@@ -389,6 +389,10 @@ export default function TempleClient() {
       className={`relative w-full temple-screen telegram-viewport-min ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between px-4 sm:px-8 md:px-12 pt-4 pb-10 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
+      <h1 className="relative z-40 mx-auto w-full max-w-5xl px-4 pt-24 font-serif text-xs uppercase tracking-[0.3em] opacity-70 sm:pt-28">
+        The Sanctuary — Digital Temple
+      </h1>
+
       {!isTelegramApp && (
         <header className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 pt-24 sm:pt-28 pb-2">
           <div className="flex items-center">

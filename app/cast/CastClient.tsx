@@ -621,9 +621,13 @@ export default function CastClient() {
 
       <TempleTopBar backTo="temple" />
 
+      <h1 className="relative z-10 mx-auto mt-24 max-w-4xl px-6 font-serif text-xs uppercase tracking-[0.3em] text-amber-300/80 sm:mt-28">
+        The Cast — Psychological Protocol
+      </h1>
+
       {/* LANGUAGE SELECT */}
       {currentStep === 0 && (
-        <main className="relative z-10 flex min-h-[100dvh] flex-1 items-center justify-center px-6 pb-16 pt-32 sm:pt-36">
+        <div className="relative z-10 flex min-h-[100dvh] flex-1 items-center justify-center px-6 pb-16 pt-32 sm:pt-36">
           <div className="grid w-full max-w-4xl gap-6 md:grid-cols-2 md:gap-8 animate-in fade-in duration-700">
             {[
               {
@@ -679,14 +683,14 @@ export default function CastClient() {
               </div>
             ))}
           </div>
-        </main>
+        </div>
       )}
 
       {/* QUESTIONS */}
       {currentStep > 0 &&
         currentStep <= 10 &&
         language && (
-          <main className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-1 flex-col items-center justify-center px-6 pb-16 pt-32 sm:pt-36">
+          <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-1 flex-col items-center justify-center px-6 pb-16 pt-32 sm:pt-36">
             <div className="w-full">
               <div className="mb-5 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.22em] text-stone-500">
                 <span className="flex items-center gap-2">
@@ -760,12 +764,12 @@ export default function CastClient() {
                 </button>
               </div>
             </div>
-          </main>
+          </div>
         )}
 
       {/* RESULT */}
       {currentStep === 11 && (
-        <main className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-1 flex-col px-6 pb-20 pt-32 sm:pt-36">
+        <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-1 flex-col px-6 pb-20 pt-32 sm:pt-36">
           {loading ? (
             <div className="flex min-h-[60vh] flex-col items-center justify-center">
               <div
@@ -956,7 +960,7 @@ export default function CastClient() {
               </div>
             </>
           ) : null}
-        </main>
+        </div>
       )}
     </div>
   );

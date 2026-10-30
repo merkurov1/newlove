@@ -47,8 +47,19 @@ export default function SilenceClient() {
 
   if (loading)
     return (
-      <div className="min-h-screen bg-[#F2F0E9] flex items-center justify-center text-[#2C2C2C]">
-        <span className="font-serif animate-pulse text-xl">Loading Data...</span>
+      <div className="min-h-screen bg-[#F2F0E9] p-6 text-[#1C1917] md:p-12 font-serif">
+        <header className="mx-auto mb-12 max-w-4xl border-b border-[#1C1917]/10 pb-6">
+          <h1 className="mb-2 text-4xl font-bold tracking-tight md:text-6xl">
+            The Silence Index
+          </h1>
+          <p className="max-w-md text-sm italic text-[#57534E] md:text-base">
+            &ldquo;Volatility is a tax on the impatient. We track the ratio of Heritage (Gold,
+            Hermes) to Hype (BTC, Nvidia).&rdquo;
+          </p>
+        </header>
+        <p className="mx-auto max-w-4xl animate-pulse font-serif text-xl" role="status">
+          Loading the latest index…
+        </p>
       </div>
     );
 
@@ -91,7 +102,7 @@ export default function SilenceClient() {
       </div>
 
       {/* CHART AREA */}
-      <main className="max-w-5xl mx-auto h-[260px] sm:h-[320px] md:h-[500px] mb-12 md:mb-16 relative">
+      <div className="max-w-5xl mx-auto h-[260px] sm:h-[320px] md:h-[500px] mb-12 md:mb-16 relative">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
             <XAxis dataKey="date" hide={true} />
@@ -130,7 +141,7 @@ export default function SilenceClient() {
           High Sensitivity
         </div>
         <div className="absolute bottom-0 right-0 text-xs font-mono text-[#57534E]">T-30 Days</div>
-      </main>
+      </div>
 
       {/* INSIGHTS GRID */}
       <section className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 border-t border-[#1C1917]/10 pt-12">

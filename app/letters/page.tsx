@@ -12,12 +12,10 @@ const NewsletterBanner = nextDynamic(
 export const dynamic = 'force-dynamic';
 
 export const metadata = sanitizeMetadata({
-  alternates: {
-    canonical: 'https://www.merkurov.love/letters',
-  },
-  title: 'JOURNAL | Anton Merkurov',
+  title: 'Letters Archive | Anton Merkurov',
   description:
-    'Chronicles of the unframed. Notes on art, tech, and the void.',
+    'The complete archive of published letters and Flow issues by Anton Merkurov, including original postcards and long-form dispatches.',
+  alternates: { canonical: 'https://www.merkurov.love/journal' },
 });
 
 interface Props {
@@ -89,7 +87,7 @@ export default async function LettersPage({ searchParams }: Props) {
 
   return (
     <>
-      <main className="flex min-h-screen flex-col items-center bg-white px-4 pb-0 pt-16 text-black">
+      <div className="flex min-h-screen flex-col items-center bg-white px-4 pb-0 pt-16 text-black">
         <header className="mx-auto mb-12 w-full max-w-2xl text-center">
           <h1
             className="mb-2 text-4xl font-serif font-bold leading-tight tracking-wide md:text-5xl"
@@ -187,7 +185,7 @@ export default async function LettersPage({ searchParams }: Props) {
             </div>
           </div>
         </footer>
-      </main>
+      </div>
 
       <NewsletterBanner />
     </>

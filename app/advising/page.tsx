@@ -1,36 +1,45 @@
+import type { Metadata } from 'next';
 import AdvisingClient from './AdvisingClient';
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { pageMetadata, ROUTE_COPY } from '@/lib/seo';
+import { breadcrumbJsonLd, professionalServiceJsonLd } from '@/lib/structuredData';
 
-const OG_IMAGE = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Advising/IMG_1526.jpeg';
+const copy = ROUTE_COPY['/advising'];
 
-export const metadata = sanitizeMetadata({
-  alternates: { canonical: 'https://www.merkurov.love/advising' },
-  title: 'Anton Merkurov — Advising & High-Stakes Counsel',
-  description: 'Direct peer-to-peer counsel at the intersection of technology, culture, and capital for high-stakes environments.',
-  openGraph: {
-    title: 'Anton Merkurov — Advising & High-Stakes Counsel',
-    description: 'Direct peer-to-peer counsel at the intersection of technology, culture, and capital for high-stakes environments.',
-    url: 'https://www.merkurov.love/advising',
-    siteName: 'Anton Merkurov',
-    images: [
-      {
-        url: OG_IMAGE,
-        width: 1200,
-        height: 630,
-        alt: 'Anton Merkurov',
-      },
-    ],
-    locale: 'en_US',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Anton Merkurov — Advising & High-Stakes Counsel',
-    description: 'Direct peer-to-peer counsel at the intersection of technology, culture, and capital for high-stakes environments.',
-    images: [OG_IMAGE],
+export const metadata: Metadata = pageMetadata({
+  ...copy,
+  path: '/advising',
+  type: 'website',
+  languages: {
+    'x-default': '/advising',
+    en: '/advising',
+    ru: '/advising',
   },
 });
 
 export default function Page() {
-  return <AdvisingClient />;
+  return (
+    <>
+      <JsonLd
+        data={professionalServiceJsonLd({
+          path: '/advising',
+          name: 'Anton Merkurov — Advising & High-Stakes Counsel',
+          description: copy.description,
+          serviceType: [
+            'Digital strategy',
+            'Art market advisory',
+            'Heritage and archive strategy',
+            'Cultural communications',
+          ],
+        })}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Advising', path: '/advising' },
+        ])}
+      />
+      <AdvisingClient />
+    </>
+  );
 }

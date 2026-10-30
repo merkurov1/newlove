@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import FlowJoinClient from './FlowJoinClient';
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.merkurov.love';
 const imageUrl =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/artifacts/IMG_1542.jpeg';
 

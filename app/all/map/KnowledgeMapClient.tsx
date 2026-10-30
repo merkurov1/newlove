@@ -216,16 +216,16 @@ export default function KnowledgeMapClient() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-6xl px-6 py-16">
+      <div className="mx-auto max-w-6xl px-6 py-16">
         <p className="font-mono text-sm text-neutral-500">
           Loading knowledge map…
         </p>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-5 py-10 md:px-8">
+    <div className="mx-auto min-h-screen max-w-7xl px-5 py-10 md:px-8">
       <header className="border-b border-neutral-200 pb-6">
         
 
@@ -449,6 +449,6 @@ export default function KnowledgeMapClient() {
           </aside>
         </section>
       )}
-    </main>
+    </div>
   );
 }

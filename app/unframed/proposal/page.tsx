@@ -107,7 +107,7 @@ export default function ProposalPage() {
         </div>
       </header>
 
-      <main className="pt-28 pb-24 max-w-5xl mx-auto px-6">
+      <div className="pt-28 pb-24 max-w-5xl mx-auto px-6">
         
         {/* --- TITLE SECTION --- */}
         <section className="mb-6 text-center">
@@ -258,7 +258,7 @@ export default function ProposalPage() {
             </p>
         </section>
 
-      </main>
+      </div>
     </div>
   );
 }

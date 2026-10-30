@@ -357,6 +357,9 @@ export default function LiveHeartTV() {
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden touch-none select-none cursor-none">
+      <h1 className="absolute left-6 top-6 z-10 font-mono text-[10px] uppercase tracking-[0.3em] text-white/60">
+        LiveHeart TV
+      </h1>
       <canvas ref={canvasRef} className="block w-full h-full" />
 
       {/* Minimal Name UI at bottom center */}

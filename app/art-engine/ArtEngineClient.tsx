@@ -832,7 +832,7 @@ export default function ArtEngineClient() {
             </div>
 
             {activeTab === 'parser' && (
-              <main className="grid lg:grid-cols-12 gap-8 items-start">
+              <div className="grid lg:grid-cols-12 gap-8 items-start">
                 
                 {/* LEFT COLUMN: IMAGE & METADATA (ARTIST / TITLE) */}
                 <div className="lg:col-span-5 space-y-6">
@@ -1014,7 +1014,7 @@ export default function ArtEngineClient() {
                     </div>
                   )}
                 </div>
-              </main>
+              </div>
             )}
 
             {activeTab === 'vault' && (

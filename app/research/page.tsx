@@ -1,46 +1,54 @@
 import type { Metadata } from 'next';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { pageMetadata } from '@/lib/seo';
+import { breadcrumbJsonLd, collectionPageJsonLd } from '@/lib/structuredData';
 import Link from 'next/link';
 import { SubmitButton } from './submit-button';
 import { submitInquiry } from './actions';
 import { FileText, ArrowRight, ShieldAlert, Sparkles } from 'lucide-react';
 
-export const metadata: Metadata = {
-  title: 'The Merkurov Doctrine — Research | Anton Merkurov',
-  description:
-    'A forensic study: The Digital Decay — a chronicle and analysis (2010–2025) by Anton Merkurov.',
-  alternates: {
-    canonical: 'https://www.merkurov.love/research',
+const RESEARCH_DESCRIPTION =
+  'A forensic study of digital decay (2010–2025): the shift from content censorship to hardware and infrastructure control, with primary sources and forecasts.';
+
+export const metadata: Metadata = pageMetadata({
+  title: 'The Merkurov Doctrine — Research Archive',
+  description: RESEARCH_DESCRIPTION,
+  path: '/research',
+  image:
+    'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png',
+  imageAlt: 'The Merkurov Doctrine — research archive',
+  languages: {
+    'x-default': '/research',
+    en: '/research',
+    ru: '/research',
   },
-  openGraph: {
-    title: 'The Merkurov Doctrine — Research | Anton Merkurov',
-    description: 'A forensic study: The Digital Decay — a chronicle and analysis (2010–2025).',
-    url: 'https://www.merkurov.love/research',
-    siteName: 'Anton Merkurov',
-    images: [
-      {
-        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png',
-        width: 1200,
-        height: 630,
-        alt: 'The Merkurov Doctrine — Research',
-      },
-    ],
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'The Merkurov Doctrine — Research | Anton Merkurov',
-    description: 'A forensic study: The Digital Decay — a chronicle and analysis (2010–2025).',
-    creator: '@merkurov',
-    site: '@merkurov',
-  },
-};
+});
 
 export default function ResearchPage() {
   const pdfUrl =
     'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/The%20Merkurov%20Timeline%20of%20Digital%20Decay%20A%20Manifesto%20of%20Unheeded.pdf';
 
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
+      <JsonLd
+        data={collectionPageJsonLd({
+          path: '/research',
+          name: 'The Merkurov Doctrine — Research Archive',
+          description: RESEARCH_DESCRIPTION,
+          items: [
+            {
+              name: 'From Content Censorship to Hardware Hegemony',
+              url: '/research/novayagazeta2025',
+            },
+          ],
+        })}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Research', path: '/research' },
+        ])}
+      />
       <div className="max-w-4xl mx-auto px-6 pt-36 md:pt-44 pb-24">
         {/* HEADER */}
         <header className="mb-20 border-l-2 border-[#CC0000] pl-8">
@@ -242,6 +250,6 @@ export default function ResearchPage() {
           </div>
         </section>
       </div>
-    </main>
+    </div>
   );
 }

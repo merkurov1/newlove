@@ -1,23 +1,17 @@
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { pageMetadata } from '@/lib/seo';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbJsonLd, collectionPageJsonLd } from '@/lib/structuredData';
 
-export const metadata = sanitizeMetadata({
-  title: 'Curator Vault | Auction Lots',
-  description: 'Archive of artworks and auction lots curated by Anton Merkurov.',
-  alternates: { canonical: 'https://www.merkurov.love/lots' },
-  openGraph: {
-    title: 'Curator Vault | Auction Lots',
-    description: 'Archive of artworks and auction lots curated by Anton Merkurov.',
-    url: 'https://www.merkurov.love/lots',
-    siteName: 'Anton Merkurov',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Curator Vault | Auction Lots',
-    description: 'Archive of artworks and auction lots curated by Anton Merkurov.',
-  },
+const LOTS_DESCRIPTION =
+  'The Curator Vault: an archive of artworks and auction lots researched by Anton Merkurov, with provenance, estimates and market analysis.';
+
+export const metadata = pageMetadata({
+  title: 'Curator Vault — Auction Lots | Anton Merkurov',
+  description: LOTS_DESCRIPTION,
+  path: '/lots',
+  languages: { 'x-default': '/lots', en: '/lots' },
 });
 
 export const revalidate = 0; // Всегда свежие данные
@@ -39,6 +33,23 @@ export default async function LotsGalleryPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans pt-12 pb-24 px-6">
+      <JsonLd
+        data={collectionPageJsonLd({
+          path: '/lots',
+          name: 'Curator Vault — auction lots',
+          description: LOTS_DESCRIPTION,
+          items: (lots || []).slice(0, 200).map((lot: any) => ({
+            name: [lot.artist, lot.title].filter(Boolean).join(' — '),
+            url: `/lots/${encodeURIComponent(String(lot.id))}`,
+          })),
+        })}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Curator Vault', path: '/lots' },
+        ])}
+      />
       <div className="max-w-7xl mx-auto space-y-8">
         
         {/* HEADER */}

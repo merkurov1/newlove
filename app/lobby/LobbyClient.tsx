@@ -259,7 +259,7 @@ export default function LobbyClient() {
               </div>
 
               <blockquote className="text-lg md:text-xl text-[#111111] leading-relaxed">
-                “I have long been involved in preserving and studying Sergei
+                “I have long been involved in preserving and studying Sergey
                 Merkurov’s legacy, and I have never before encountered such
                 careful, even reverent, treatment of my great-grandfather’s
                 work. There is hope that this outstanding monument of Soviet

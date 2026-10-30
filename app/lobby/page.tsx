@@ -1,41 +1,39 @@
 import type { Metadata } from 'next';
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import LobbyClient from './LobbyClient';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { pageMetadata, ROUTE_COPY } from '@/lib/seo';
+import { breadcrumbJsonLd, profilePageJsonLd } from '@/lib/structuredData';
 
-const OG_IMAGE =
-  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png';
+const copy = ROUTE_COPY['/lobby'];
 
-export const metadata: Metadata = sanitizeMetadata({
-  title: 'Private Office & Access | Anton Merkurov',
-  description: 'Heritage Architecture for the Post-Digital Age.',
-  alternates: {
-    canonical: 'https://www.merkurov.love/lobby',
-  },
-  openGraph: {
-    title: 'Private Office & Access | Anton Merkurov',
-    description: 'Heritage Architecture for the Post-Digital Age.',
-    url: 'https://www.merkurov.love/lobby',
-    siteName: 'Anton Merkurov',
-    type: 'website',
-    images: [
-      {
-        url: OG_IMAGE,
-        width: 1200,
-        height: 630,
-        alt: 'Anton Merkurov — Private Office & Access',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Private Office & Access | Anton Merkurov',
-    description: 'Heritage Architecture for the Post-Digital Age.',
-    images: [OG_IMAGE],
-    creator: '@merkurov',
-    site: '@merkurov',
+export const metadata: Metadata = pageMetadata({
+  ...copy,
+  path: '/lobby',
+  type: 'profile',
+  languages: {
+    'x-default': '/lobby',
+    en: '/lobby',
+    ru: '/lobby',
   },
 });
 
 export default function LobbyPage() {
-  return <LobbyClient />;
+  return (
+    <>
+      <JsonLd
+        data={profilePageJsonLd({
+          path: '/lobby',
+          name: 'Private Office & Access — Anton Merkurov',
+          description: copy.description,
+        })}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Private Office', path: '/lobby' },
+        ])}
+      />
+      <LobbyClient />
+    </>
+  );
 }

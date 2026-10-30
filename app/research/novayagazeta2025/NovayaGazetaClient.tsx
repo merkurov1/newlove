@@ -343,7 +343,7 @@ export default function DeepResearchClient() {
         </div>
       </nav>
 
-      <main className="pt-32 px-4 md:px-8 max-w-5xl mx-auto">
+      <div className="pt-32 px-4 md:px-8 max-w-5xl mx-auto">
         <AnimatePresence mode="wait">
           <motion.div
             key={lang}
@@ -461,7 +461,7 @@ export default function DeepResearchClient() {
             </footer>
           </motion.div>
         </AnimatePresence>
-      </main>
+      </div>
     </div>
   );
 }

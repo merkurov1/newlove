@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { Kind, MediaRecord } from '@/data/media';
 
@@ -655,17 +656,12 @@ export default function MediaArchive({ records, archives }: Props) {
                           </span>
                         </p>
 
-                        <a
+                        <Link
                           className="ma-title"
-                          href={record.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          href={`/media/record/${encodeURIComponent(record.slug)}`}
                         >
                           {record.title}
-                          <span className="ma-external" aria-hidden="true">
-                            ↗
-                          </span>
-                        </a>
+                        </Link>
 
                         {record.summary && (
                           <p className="ma-sum">{record.summary}</p>
@@ -673,6 +669,16 @@ export default function MediaArchive({ records, archives }: Props) {
 
                         <div className="ma-record-foot">
                           <span>{record.topic}</span>
+                          <a
+                            href={record.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Original publication
+                            <span className="ma-external" aria-hidden="true">
+                              {' '}↗
+                            </span>
+                          </a>
                         </div>
                       </div>
                     </li>

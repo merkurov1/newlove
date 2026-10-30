@@ -177,7 +177,7 @@ export default function LoginPage() {
       </header>
 
       {/* Auth Card Container */}
-      <main className="relative z-20 my-auto mx-auto w-full max-w-md py-6">
+      <div className="relative z-20 my-auto mx-auto w-full max-w-md py-6">
         {/* Toggle Mode Tabs */}
         <div className="mb-6 flex rounded-full border border-stone-200 bg-stone-100/80 p-1 shadow-inner backdrop-blur-md">
           <Link
@@ -361,7 +361,7 @@ export default function LoginPage() {
             </form>
           )}
         </div>
-      </main>
+      </div>
 
       {/* Footer */}
       <footer className="relative z-20 mx-auto w-full max-w-4xl text-center font-mono text-[10px] uppercase tracking-[0.3em] text-stone-400">

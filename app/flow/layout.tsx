@@ -1,39 +1,17 @@
 import type { Metadata } from 'next';
+import { ROUTE_COPY, pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
-  title: 'Flow — Anton Merkurov',
-  description: 'Stream of thoughts, notes, media artifacts and signals by Anton Merkurov.',
-  alternates: {
-    canonical: 'https://www.merkurov.love/flow',
-    types: {
-      'application/rss+xml': 'https://www.merkurov.love/flow/rss',
-      'application/feed+json': 'https://www.merkurov.love/flow/feed.json',
-    },
+const copy = ROUTE_COPY['/flow'];
+
+export const metadata: Metadata = pageMetadata({
+  ...copy,
+  path: '/flow',
+  languages: {
+    'x-default': '/flow',
+    en: '/flow',
+    ru: '/flow',
   },
-  openGraph: {
-    title: 'Flow — Anton Merkurov',
-    description: 'Stream of thoughts, notes, media artifacts and signals by Anton Merkurov.',
-    url: 'https://www.merkurov.love/flow',
-    siteName: 'Anton Merkurov',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Flow — Anton Merkurov',
-    description: 'Stream of thoughts, notes, media artifacts and signals by Anton Merkurov.',
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-    },
-  },
-};
+});
 
 export default function FlowLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;

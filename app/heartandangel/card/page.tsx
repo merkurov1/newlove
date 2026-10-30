@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import CardPageClient from './CardPageClient';
 
-const SITE_URL = 'https://merkurov.love';
+const SITE_URL = 'https://www.merkurov.love';
 const PAGE_PATH = '/heartandangel/card';
 const PAGE_URL = `${SITE_URL}${PAGE_PATH}`;
 

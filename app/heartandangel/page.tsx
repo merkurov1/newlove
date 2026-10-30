@@ -1,42 +1,81 @@
 import type { Metadata } from 'next';
 import HeartAndAngelHub from '@/components/HeartAndAngelHub';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { pageMetadata, ROUTE_COPY } from '@/lib/seo';
+import {
+  breadcrumbJsonLd,
+  collectionPageJsonLd,
+  visualArtworkJsonLd,
+} from '@/lib/structuredData';
 
-export const metadata: Metadata = {
-  title: 'Heart & Angel | Anton Merkurov',
-  description:
-    'Heart & Angel is an ongoing multidisciplinary art project exploring the Angel, the Devil and the heart through painting, digital graphics, augmented reality and code.',
-  alternates: {
-    canonical: 'https://www.merkurov.love/heartandangel',
-  },
-  openGraph: {
-    title: 'Heart & Angel | Anton Merkurov',
+const copy = ROUTE_COPY['/heartandangel'];
+
+const works = [
+  {
+    path: '/heartandangel/world',
+    name: 'Heart & Angel — World',
     description:
-      'Heart & Angel is an ongoing multidisciplinary art project exploring the Angel, the Devil and the heart through painting, digital graphics, augmented reality and code.',
-    url: 'https://www.merkurov.love/heartandangel',
-    siteName: 'Anton Merkurov',
-    images: [
-      {
-        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png',
-        width: 1200,
-        height: 630,
-        alt: 'Heart & Angel',
-      },
-    ],
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Heart & Angel | Anton Merkurov',
-    description:
-      'Heart & Angel is an ongoing multidisciplinary art project exploring the Angel, the Devil and the heart through painting, digital graphics, augmented reality and code.',
-    creator: '@merkurov',
-    site: '@merkurov',
-    images: [
+      'An eternal digital landscape where time flows, angels and demons coexist, and ambient music fills the air.',
+    image:
       'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png',
-    ],
   },
-};
+  {
+    path: '/heartandangel/calm',
+    name: 'Heart & Angel — Keep Calm',
+    description:
+      'An interactive digital ritual for slowing down, finding balance and holding a fragile heart in motion.',
+    image:
+      'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Heart1.png',
+  },
+  {
+    path: '/heartandangel/letitgo',
+    name: 'Heart & Angel — Let It Go',
+    description:
+      'An interactive ritual for releasing digital burdens into the sky within the Heart & Angel world.',
+    image:
+      'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0919.png',
+  },
+];
+
+export const metadata: Metadata = pageMetadata({
+  ...copy,
+  path: '/heartandangel',
+  languages: {
+    'x-default': '/heartandangel',
+    en: '/heartandangel',
+    ru: '/heartandangel',
+  },
+});
 
 export default function HeartAndAngelPage() {
-  return <HeartAndAngelHub />;
+  return (
+    <>
+      <JsonLd
+        data={collectionPageJsonLd({
+          path: '/heartandangel',
+          name: 'Heart & Angel — A Living Digital Mythology',
+          description: copy.description,
+          items: works.map((work) => ({ name: work.name, url: work.path })),
+        })}
+      />
+      {works.map((work) => (
+        <JsonLd
+          key={work.path}
+          data={visualArtworkJsonLd({
+            path: work.path,
+            name: work.name,
+            description: work.description,
+            image: work.image,
+          })}
+        />
+      ))}
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Heart & Angel', path: '/heartandangel' },
+        ])}
+      />
+      <HeartAndAngelHub />
+    </>
+  );
 }

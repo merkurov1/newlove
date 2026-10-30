@@ -52,7 +52,7 @@ function formatStatus(value: string | null | undefined): string {
 
 export default function TelegramResearchIndexPage() {
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-[#141210]">
+    <div className="min-h-screen bg-[#FAF8F5] text-[#141210]">
       <div className="mx-auto w-full max-w-5xl px-6 pb-24 pt-36 md:pt-44">
         <nav className="mb-12 border-b border-stone-300/80 pb-4 font-mono text-[10px] uppercase tracking-[0.18em] text-stone-500">
           <Link href="/research" className="transition-colors hover:text-[#A8402C]">
@@ -124,6 +124,6 @@ export default function TelegramResearchIndexPage() {
           доступны только после серверной проверки роли ADMIN.
         </p>
       </div>
-    </main>
+    </div>
   );
 }

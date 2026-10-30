@@ -5,7 +5,7 @@ import { ArrowRight } from 'lucide-react';
 
 export default function AdvisingClient() {
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] antialiased relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] antialiased relative overflow-x-hidden">
       
       {/* Subtle Paper Grain Texture */}
       <div 
@@ -206,6 +206,6 @@ export default function AdvisingClient() {
         </footer>
 
       </div>
-    </main>
+    </div>
   );
 }

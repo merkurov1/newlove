@@ -1,24 +1,12 @@
 import type { Metadata } from 'next';
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = sanitizeMetadata({
-  title: 'LiveHeart — Imprint Your Chaos',
-  description: 'Create and share generative heart artifacts. Interact to generate a unique LiveHeart and save it to share.',
-  alternates: {
-    canonical: 'https://www.merkurov.love/liveheart',
-  },
-  openGraph: {
-    title: 'LiveHeart — Imprint Your Chaos',
-    description: 'Create and share generative heart artifacts. Interact to generate a unique LiveHeart and save it to share.',
-    url: 'https://www.merkurov.love/liveheart',
-    siteName: 'Anton Merkurov',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'LiveHeart — Imprint Your Chaos',
-    description: 'Create and share generative heart artifacts.',
-  },
+export const metadata: Metadata = pageMetadata({
+  title: 'LiveHeart — Imprint Your Chaos | Anton Merkurov',
+  description:
+    'Create and share generative heart artifacts. Interact with the LiveHeart engine to generate a unique digital heart and save it to your collection.',
+  path: '/liveheart',
+  languages: { 'x-default': '/liveheart', en: '/liveheart' },
 });
 
 export default function LiveHeartLayout({ children }: { children: React.ReactNode }) {

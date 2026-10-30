@@ -274,7 +274,7 @@ export default async function UserProfilePage({
   const role = profile.role?.trim() || null;
 
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-[#111111]">
+    <div className="min-h-screen bg-[#FAF8F5] text-[#111111]">
       <div className="mx-auto w-full max-w-3xl px-5 pb-24 pt-28 sm:px-8 sm:pt-32">
         <Link
           href="/heartandangel/world"
@@ -398,6 +398,6 @@ export default async function UserProfilePage({
           </section>
         )}
       </div>
-    </main>
+    </div>
   );
 }

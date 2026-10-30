@@ -955,7 +955,36 @@ export default function FlowPage() {
 
   return (
     <>
-      <main className="min-h-screen bg-white px-5 pb-24 pt-20 text-neutral-900 sm:px-8 sm:pt-24">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'CollectionPage',
+            '@id': 'https://www.merkurov.love/flow#collection',
+            url: 'https://www.merkurov.love/flow',
+            name: 'Flow — notes, signals and artifacts',
+            description:
+              'A stream of notes, links, images, video and signals selected by Anton Merkurov.',
+            isPartOf: { '@id': 'https://www.merkurov.love/#website' },
+            inLanguage: 'en',
+          }).replace(/</g, '\\u003c'),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'BreadcrumbList',
+            itemListElement: [
+              { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.merkurov.love' },
+              { '@type': 'ListItem', position: 2, name: 'Flow', item: 'https://www.merkurov.love/flow' },
+            ],
+          }).replace(/</g, '\\u003c'),
+        }}
+      />
+      <div className="min-h-screen bg-white px-5 pb-24 pt-20 text-neutral-900 sm:px-8 sm:pt-24">
         <div className="mx-auto max-w-2xl">
           <header className="mb-10 flex flex-col justify-between gap-3 border-b border-neutral-100 pb-6 sm:flex-row sm:items-baseline">
             <div>
@@ -1082,7 +1111,7 @@ export default function FlowPage() {
             </>
           )}
         </div>
-      </main>
+      </div>
 
       {editingId && (
         <NewPostModal

@@ -1,5 +1,5 @@
 import { safeData } from '@/lib/safeSerialize';
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { pageMetadata, description as seoDescription, truncate, DEFAULT_OG_IMAGE } from '@/lib/seo';
 import { notFound } from 'next/navigation';
 import Markdown from 'markdown-to-jsx';
 import Link from 'next/link';
@@ -137,18 +137,11 @@ function getStructuredData(
         '@id': `${baseUrl}/${content.slug}`,
       },
       publisher: {
-        '@type': 'Person',
-        name: 'Anton Merkurov',
-        logo: {
-          '@type': 'ImageObject',
-          url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png',
-          width: 512,
-          height: 512,
-        },
+        '@id': 'https://www.merkurov.love/#person',
       },
       articleSection: content.tags?.[0]?.name || 'Editorial',
       keywords: content.tags?.map((t: any) => t.name).join(', ') || '',
-      inLanguage: 'ru-RU',
+      inLanguage: content.lang || 'en',
     };
 
     breadcrumbSchema = {
@@ -164,7 +157,7 @@ function getStructuredData(
         {
           '@type': 'ListItem',
           position: 2,
-          name: 'Статьи',
+          name: 'Selection',
           item: `${baseUrl}/selection`,
         },
         {
@@ -220,7 +213,7 @@ function getStructuredData(
         name: content.title,
         description: description,
         url: `${baseUrl}/${content.slug}`,
-        image: previewImage ? [previewImage] : [],
+        image: previewImage ? [previewImage] : [DEFAULT_OG_IMAGE],
         author: {
           '@type': 'Person',
           name: 'Anton Merkurov',
@@ -228,7 +221,7 @@ function getStructuredData(
         },
         datePublished: content.publishedAt,
         dateModified: content.updatedAt || content.publishedAt,
-        inLanguage: 'ru-RU',
+        inLanguage: content.lang || 'en',
       };
     }
 
@@ -245,12 +238,6 @@ function getStructuredData(
         {
           '@type': 'ListItem',
           position: 2,
-          name: 'Проекты',
-          item: `${baseUrl}/projects`,
-        },
-        {
-          '@type': 'ListItem',
-          position: 3,
           name: content.title,
           item: `${baseUrl}/${content.slug}`,
         },
@@ -266,61 +253,47 @@ export async function generateMetadata({
 }: {
   params: { slug: string };
 }): Promise<Metadata> {
+  const path = `/${encodeURIComponent(params.slug)}`;
+
   try {
     const result = await getContent(params.slug);
     if (!result) {
-      return { title: 'Не найдено' };
+      return pageMetadata({
+        title: 'Page not found | Anton Merkurov',
+        description: 'The requested page could not be found on merkurov.love.',
+        path,
+        noindex: true,
+      });
     }
     const { type, content } = result;
     const previewImage = content.content ? await getFirstImage(content.content) : null;
-    const description = content.content
-      ? generateDescription(content.content)
-      : content.title || 'Описание недоступно';
-    const baseUrl = 'https://www.merkurov.love';
+    const summary = seoDescription(
+      content.content ? generateDescription(content.content) : content.title || 'Anton Merkurov',
+    );
+    const displayTitle = truncate(
+      type === 'article' && content.artist
+        ? [content.artist, content.title].filter(Boolean).join(' — ')
+        : content.title || 'Anton Merkurov',
+      60,
+    );
 
-    // Normalize preview image URL to avoid double-slashes which may confuse some crawlers
-    let normalizedPreview = previewImage || null;
-    try {
-      if (normalizedPreview && typeof normalizedPreview === 'string') {
-        normalizedPreview = normalizedPreview.replace(/([^:\/]\/)\//g, '$1');
-        // ensure absolute URL
-        if (!/^https?:\/\//i.test(normalizedPreview))
-          normalizedPreview = `${baseUrl}/${normalizedPreview.replace(/^\//, '')}`;
-      }
-    } catch (e) {
-      normalizedPreview = previewImage;
-    }
-
-    // Build full title for articles
-    const displayTitle = type === 'article' && content.artist
-      ? [content.artist, content.title].filter(Boolean).join(' — ')
-      : content.title;
-
-    const meta = {
+    return pageMetadata({
       title: displayTitle,
-      description: description,
-      alternates: { canonical: `${baseUrl}/${encodeURIComponent(content.slug)}` },
-      openGraph: {
-        title: displayTitle,
-        description: description,
-        url: `${baseUrl}/${content.slug}`,
-        images: normalizedPreview ? [{ url: normalizedPreview }] : [],
-        type: type === 'article' ? 'article' : 'website',
-      },
-      twitter: {
-        card: 'summary_large_image',
-        title: displayTitle,
-        description: description,
-        images: normalizedPreview ? [normalizedPreview] : [],
-      },
-    };
-
-    return sanitizeMetadata(meta);
-  } catch (error) {
-    return {
-      title: 'Ошибка загрузки',
-      description: 'Произошла ошибка при загрузке метаданных',
-    };
+      description: summary,
+      path,
+      type: type === 'article' ? 'article' : 'website',
+      image: previewImage || undefined,
+      imageAlt: displayTitle,
+      publishedTime: content.publishedAt || undefined,
+      modifiedTime: content.updatedAt || content.publishedAt || undefined,
+      authors: ['Anton Merkurov'],
+    });
+  } catch {
+    return pageMetadata({
+      title: 'Anton Merkurov — Art, Love & Money',
+      description: 'The official website of Anton Merkurov: art, heritage, advising and digital projects.',
+      path,
+    });
   }
 }
 

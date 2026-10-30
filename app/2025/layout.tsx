@@ -1,24 +1,14 @@
 import type { Metadata } from 'next';
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = sanitizeMetadata({
-  title: '2025 — Merkurov',
-  description: 'Year review 2025 — inventory, generative artifacts, and analytical reports by Anton Merkurov.',
-  alternates: {
-    canonical: 'https://www.merkurov.love/2025',
-  },
-  openGraph: {
-    title: '2025 — Merkurov',
-    description: 'Year review 2025 — inventory, generative artifacts, and analytical reports by Anton Merkurov.',
-    url: 'https://www.merkurov.love/2025',
-    siteName: 'Anton Merkurov',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: '2025 — Merkurov',
-    description: 'Year review 2025 — inventory, generative artifacts, and analytical reports.',
-  },
+const DESCRIPTION =
+  'Year review 2025: the inventory of generative artifacts, research reports, artworks and analytical projects by Anton Merkurov.';
+
+export const metadata: Metadata = pageMetadata({
+  title: '2025 — Year Review | Anton Merkurov',
+  description: DESCRIPTION,
+  path: '/2025',
+  languages: { 'x-default': '/2025', en: '/2025', ru: '/2025' },
 });
 
 export default function Layout2025({ children }: { children: React.ReactNode }) {

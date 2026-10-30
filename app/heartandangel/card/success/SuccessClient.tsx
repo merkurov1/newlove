@@ -84,7 +84,7 @@ export default function SuccessClient() {
   }, [sessionId]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#FAF8F5] px-6 py-20 text-[#141210]">
+    <div className="flex min-h-screen items-center justify-center bg-[#FAF8F5] px-6 py-20 text-[#141210]">
       <section className="w-full max-w-xl border-t border-[#D9D2C7] pt-10">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8A8176]">
           Heart &amp; Angel · Postcard
@@ -193,6 +193,6 @@ export default function SuccessClient() {
           </Link>
         </div>
       </section>
-    </main>
+    </div>
   );
 }

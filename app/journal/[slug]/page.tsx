@@ -1,9 +1,12 @@
+import type { Metadata } from 'next';
 import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import BlockRenderer from '@/components/BlockRenderer';
 import LetterCommentsClient from '@/components/journal/LetterCommentsClient';
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { description as seoDescription, pageMetadata, truncate } from '@/lib/seo';
+import { articleJsonLd, breadcrumbJsonLd } from '@/lib/structuredData';
 import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 
@@ -11,26 +14,34 @@ interface PageProps {
   params: Promise<{ slug: string }> | { slug: string };
 }
 
-export async function generateMetadata({ params }: PageProps) {
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const resolvedParams = params instanceof Promise ? await params : params;
   const slug = resolvedParams.slug;
-  
+  const path = `/journal/${encodeURIComponent(slug)}`;
+
   try {
     const supabase = createClient();
     const { data: letter } = await supabase
       .from('letters')
-      .select('title, content')
+      .select('title, content, publishedAt, createdAt, lang')
       .eq('slug', slug)
       .eq('published', true)
       .single();
 
-    if (!letter) return { title: 'Journal | Merkurov' };
+    if (!letter) {
+      return pageMetadata({
+        title: 'Journal — article not found | Anton Merkurov',
+        description: 'The requested journal article could not be found.',
+        path,
+        noindex: true,
+      });
+    }
 
-    let description = '';
+    let summary = '';
     try {
-      description = generateDescription(letter.content || '') || '';
+      summary = generateDescription(letter.content || '') || '';
     } catch {
-      description = '';
+      summary = '';
     }
 
     let imageUrl: string | null = null;
@@ -40,29 +51,28 @@ export async function generateMetadata({ params }: PageProps) {
       imageUrl = null;
     }
 
-    const site = 'https://www.merkurov.love';
-    const canonical = `${site.replace(/\/$/, '')}/journal/${encodeURIComponent(slug)}`;
+    const title = truncate(String(letter.title || 'Journal'), 60);
+    const summaryText = seoDescription(
+      summary || `A journal dispatch by Anton Merkurov: ${letter.title}.`,
+    );
 
-    return sanitizeMetadata({
-      title: letter.title,
-      description: (description || 'Read the full dispatch.').slice(0, 160),
-      openGraph: {
-        title: letter.title,
-        description: (description || '').slice(0, 160),
-        url: canonical,
-        type: 'article',
-        images: imageUrl ? [imageUrl] : undefined,
-      },
-      twitter: {
-        card: imageUrl ? 'summary_large_image' : 'summary',
-        title: letter.title,
-        description: (description || '').slice(0, 160),
-        images: imageUrl ? [imageUrl] : undefined,
-      },
-      alternates: { canonical },
+    return pageMetadata({
+      title,
+      description: summaryText,
+      path,
+      type: 'article',
+      image: imageUrl || undefined,
+      imageAlt: String(letter.title || 'Journal article'),
+      publishedTime: letter.publishedAt || letter.createdAt || undefined,
+      modifiedTime: letter.publishedAt || letter.createdAt || undefined,
+      authors: ['Anton Merkurov'],
     });
-  } catch (e) {
-    return { title: 'Journal | Merkurov' };
+  } catch {
+    return pageMetadata({
+      title: 'Journal | Anton Merkurov',
+      description: 'Essays, dispatches and market intelligence by Anton Merkurov.',
+      path,
+    });
   }
 }
 
@@ -96,8 +106,32 @@ export default async function LetterPage({ params }: PageProps) {
     blocks = [];
   }
 
+  const articlePath = `/journal/${encodeURIComponent(slug)}`;
+  const articleSummary =
+    seoDescription(
+      generateDescription(letter.content || '') ||
+        `A journal dispatch by Anton Merkurov: ${letter.title}.`,
+    );
+
   return (
-    <main className="min-h-screen bg-white text-zinc-900 selection:bg-black selection:text-white font-serif">
+    <div className="min-h-screen bg-white text-zinc-900 selection:bg-black selection:text-white font-serif">
+      <JsonLd
+        data={articleJsonLd({
+          path: articlePath,
+          headline: String(letter.title || 'Journal'),
+          description: articleSummary,
+          datePublished: letter.publishedAt || letter.createdAt || undefined,
+          dateModified: letter.publishedAt || letter.createdAt || undefined,
+          inLanguage: 'en',
+        })}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Journal', path: '/journal' },
+          { name: String(letter.title || 'Article'), path: articlePath },
+        ])}
+      />
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-zinc-100 py-4 px-6 md:px-12 flex justify-between items-center">
         <Link 
           href="/journal" 
@@ -154,6 +188,6 @@ export default async function LetterPage({ params }: PageProps) {
             </div>
         </section>
       </article>
-    </main>
+    </div>
   );
 }

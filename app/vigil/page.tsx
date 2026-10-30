@@ -475,13 +475,17 @@ export default function VigilPage() {
   };
 
   return (
-    <main
+    <div
       className={`relative w-full min-h-[100dvh] ${roomTheme.bg} ${roomTheme.text} font-sans overflow-x-hidden select-none flex flex-col justify-between p-6 pt-36 sm:px-12 sm:pb-12 sm:pt-36 md:p-12 transition-colors duration-1000`}
       style={{
         backgroundImage: roomTheme.vignette,
       }}
     >
       <TempleTopBar />
+
+      <h1 className="relative z-20 mx-auto w-full max-w-5xl px-2 pt-4 font-serif text-xs uppercase tracking-[0.3em] text-stone-400">
+        Vigil — Digital Temple
+      </h1>
 
       {/* Мягкое внутреннее свечение в темной комнате */}
       <div
@@ -744,6 +748,6 @@ export default function VigilPage() {
       </div>
 
       <div className="h-4" />
-    </main>
+    </div>
   );
 }

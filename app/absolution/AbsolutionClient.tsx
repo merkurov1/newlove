@@ -242,7 +242,7 @@ export default function AbsolutionClient() {
   };
 
   return (
-    <main
+    <div
       className={`relative flex min-h-[100dvh] w-full flex-col overflow-x-hidden ${roomTheme.bg} ${roomTheme.text} font-sans`}
       style={{
         backgroundImage:
@@ -463,6 +463,6 @@ export default function AbsolutionClient() {
           z-index: 1;
         }
       `}</style>
-    </main>
+    </div>
   );
 }

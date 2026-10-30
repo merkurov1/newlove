@@ -1,24 +1,33 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { pageMetadata, description as seoDescription, truncate } from '@/lib/seo';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { articleJsonLd, breadcrumbJsonLd } from '@/lib/structuredData';
 import Markdown from 'markdown-to-jsx';
 
 export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ params }: { params: { slug: string } }) {
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const article = await getArticle(params.slug);
+  const path = `/selection/${encodeURIComponent(params.slug)}`;
+
   if (!article) {
-    return sanitizeMetadata({
-      title: 'Not Found',
-      description: 'Article not found'
+    return pageMetadata({
+      title: 'Selection — artwork not found | Anton Merkurov',
+      description: 'The requested artwork from the Selection archive could not be found.',
+      path,
+      noindex: true,
     });
   }
 
   const artist = article.artist || '';
-  const title = article.title || '';
-  const fullTitle = [artist, title].filter(Boolean).join(' - ');
-  
-  // Extract first image for OpenGraph
+  const title = article.title || 'Selection';
+  const fullTitle = truncate([artist, title].filter(Boolean).join(' — '), 60);
+  const summary = seoDescription(
+    article.curatorNote || article.quote || `${title} by ${artist || 'Anton Merkurov'}.`,
+  );
+
   function extractFirstImage(content: any): string | null {
     if (!content) return null;
     try {
@@ -40,27 +49,14 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     return null;
   }
 
-  const previewImage = extractFirstImage(article.content);
-  const description = article.curatorNote || article.quote || `${artist} - ${title}`;
-  const baseUrl = 'https://www.merkurov.love';
-
-  return sanitizeMetadata({
-    title: fullTitle || 'Selection',
-    description: description.slice(0, 160),
-    alternates: { canonical: `${baseUrl}/selection/${encodeURIComponent(params.slug)}` },
-    openGraph: {
-      title: fullTitle,
-      description: description.slice(0, 160),
-      url: `${baseUrl}/${params.slug}`,
-      images: previewImage ? [{ url: previewImage }] : [],
-      type: 'article',
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: fullTitle,
-      description: description.slice(0, 160),
-      images: previewImage ? [previewImage] : [],
-    },
+  return pageMetadata({
+    title: fullTitle,
+    description: summary,
+    path,
+    type: 'article',
+    image: extractFirstImage(article.content) || undefined,
+    imageAlt: fullTitle,
+    authors: ['Anton Merkurov'],
   });
 }
 
@@ -127,9 +123,29 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
   }
 
   const previewImage = extractFirstImage(content);
+  const selectionPath = `/selection/${encodeURIComponent(params.slug)}`;
+  const selectionSummary = seoDescription(
+    curatorNote || quote || `${title || 'Artwork'} by ${artist || 'Anton Merkurov'}.`,
+  );
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center py-8 sm:py-16 px-4">
+      <JsonLd
+        data={articleJsonLd({
+          path: selectionPath,
+          headline: [artist, title].filter(Boolean).join(' — ') || 'Selection',
+          description: selectionSummary,
+          image: previewImage || undefined,
+          section: 'Selection',
+        })}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Selection', path: '/selection' },
+          { name: [artist, title].filter(Boolean).join(' — ') || 'Artwork', path: selectionPath },
+        ])}
+      />
       {/* Component 1: The Visual - Max width 1200px */}
       {previewImage && (
         <div className="w-full max-w-7xl mb-8 sm:mb-12 px-4">
@@ -146,10 +162,10 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
       
       {/* Component 2: The Header - Centered, max-width 800px */}
       <div className="w-full max-w-3xl text-center mb-8 sm:mb-12 px-4">
-        {artist && (
-          <h1 className="font-serif text-[1.75rem] sm:text-[2.5rem] text-black leading-tight mb-2">{artist}</h1>
-        )}
-        {title && (
+        <h1 className="font-serif text-[1.75rem] sm:text-[2.5rem] text-black leading-tight mb-2">
+          {artist || title}
+        </h1>
+        {artist && title && (
           <h2 className="font-serif italic text-[1.25rem] sm:text-[1.5rem] text-gray-700">{title}</h2>
         )}
       </div>

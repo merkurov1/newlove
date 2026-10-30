@@ -535,7 +535,7 @@ export default function UnframedPage() {
           TIMELINE
       ========================================================= */}
 
-      <main className="relative z-10 bg-[#050505]">
+      <div className="relative z-10 bg-[#050505]">
         {TIMELINE.map(
           (item, i) => (
             <TimelineSection
@@ -544,7 +544,7 @@ export default function UnframedPage() {
             />
           )
         )}
-      </main>
+      </div>
 
       {/* =========================================================
           FOOTER ASSET / ACCESS
@@ -1079,7 +1079,7 @@ export default function UnframedPage() {
             FOOTER
         ======================================================= */}
 
-        <footer className="py-12 text-center text-zinc-800 font-mono text-[10px] uppercase tracking-widest border-t border-zinc-900/50 flex flex-col gap-2 bg-black">
+        <div className="py-12 text-center text-zinc-800 font-mono text-[10px] uppercase tracking-widest border-t border-zinc-900/50 flex flex-col gap-2 bg-black">
           <span>
             Anton Merkurov / Unframed © 2026
           </span>
@@ -1087,7 +1087,7 @@ export default function UnframedPage() {
           <span>
             Moscow • London • Moscow • Ether
           </span>
-        </footer>
+        </div>
 
       </div>
     </div>

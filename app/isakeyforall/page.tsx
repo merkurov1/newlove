@@ -1,33 +1,42 @@
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbJsonLd, profilePageJsonLd } from '@/lib/structuredData';
 import HeroMotion from '@/components/advising/HeroMotion';
 import CenteredHeader from '@/components/CenteredHeader';
 import CaseStudyCard from '@/components/advising/CaseStudyCard';
 
-export const metadata = sanitizeMetadata({
-  title: 'Love is a Key for All | Anton Merkurov',
-  description: 'Anton Merkurov: Artist. Digital Architect. Humanist. Operating at the intersection of legacy and future.',
-  alternates: {
-    canonical: 'https://www.merkurov.love/isakeyforall',
-  },
-  openGraph: {
-    title: 'Love is a Key for All | Anton Merkurov',
-    description: 'Anton Merkurov: Artist. Digital Architect. Humanist. Operating at the intersection of legacy and future.',
-    url: 'https://www.merkurov.love/isakeyforall',
-    siteName: 'Anton Merkurov',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Love is a Key for All | Anton Merkurov',
-    description: 'Anton Merkurov: Artist. Digital Architect. Humanist. Operating at the intersection of legacy and future.',
-    creator: '@merkurov',
-    site: '@merkurov',
+const ABOUT_DESCRIPTION =
+  'Anton Merkurov: artist, digital architect and art dealer. The great-grandson of sculptor Sergey Merkurov, working between legacy and the future.';
+
+export const metadata: Metadata = pageMetadata({
+  title: 'Love Is a Key for All — About Anton Merkurov',
+  description: ABOUT_DESCRIPTION,
+  path: '/isakeyforall',
+  type: 'profile',
+  languages: {
+    'x-default': '/isakeyforall',
+    en: '/isakeyforall',
+    ru: '/isakeyforall',
   },
 });
 
 export default function IsAKeyForAllPage() {
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
+      <JsonLd
+        data={profilePageJsonLd({
+          path: '/isakeyforall',
+          name: 'Love Is a Key for All — Anton Merkurov',
+          description: ABOUT_DESCRIPTION,
+        })}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'About', path: '/isakeyforall' },
+        ])}
+      />
       <div className="max-w-3xl mx-auto px-6 pt-36 md:pt-44 pb-24">
         {/* Header: The Monument (motion) */}
         <CenteredHeader>
@@ -150,6 +159,6 @@ export default function IsAKeyForAllPage() {
           </section>
         </article>
       </div>
-    </main>
+    </div>
   );
 }
