@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowUpRight } from 'lucide-react';
-import PierrotComposer from '@/components/pierrot/PierrotComposer';
 import PierrotSectionLink from '@/components/pierrot/PierrotSectionLink';
 import type { PierrotSectionId } from '@/lib/pierrot/navigation';
 
@@ -150,8 +149,6 @@ export default function HomeClient() {
           </PierrotSectionLink>
         </div>
       </div>
-
-      <PierrotComposer />
     </main>
   );
 }
