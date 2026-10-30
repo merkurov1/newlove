@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
-import * as cheerio from 'cheerio';
-import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
-
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { BrainUrlError } from '@/lib/knowledge/brain/url';
+import { createBrainStore } from '@/lib/knowledge/brain/store';
+import { classifyMediaPublication, normalizeMediaLanguage } from '@/lib/knowledge/media/classify';
+import { extractMediaPage } from '@/lib/knowledge/media/page';
+import { enqueueMediaCoverageJob } from '@/lib/knowledge/media/queue';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -21,23 +21,15 @@ const KINDS = [
   'profile',
 ] as const;
 
-const TOPICS = [
-  'Internet & Censorship',
-  'AI & Tech',
-  'Art & Culture',
-  'Fintech & Crypto',
-] as const;
-
-const LANGUAGES = ['EN', 'RU', 'DE', 'PL', 'BS'] as const;
+const TOPICS = ['Internet & Censorship', 'AI & Tech', 'Art & Culture', 'Fintech & Crypto'] as const;
 
 type Kind = (typeof KINDS)[number];
 type Topic = (typeof TOPICS)[number];
-type Language = (typeof LANGUAGES)[number];
 
 class HttpError extends Error {
   constructor(
     message: string,
-    public status: number,
+    public status: number
   ) {
     super(message);
     this.name = 'HttpError';
@@ -54,10 +46,7 @@ function clean(value: unknown, max = 2000): string {
     .slice(0, max);
 }
 
-function isOneOf<T extends readonly string[]>(
-  values: T,
-  value: unknown,
-): value is T[number] {
+function isOneOf<T extends readonly string[]>(values: T, value: unknown): value is T[number] {
   return typeof value === 'string' && values.includes(value);
 }
 
@@ -68,17 +57,11 @@ function errorMessage(error: unknown): string {
 function authErrorStatus(error: unknown): number | null {
   const message = errorMessage(error).toLowerCase();
 
-  if (
-    message === 'unauthorized' ||
-    message.includes('not authenticated')
-  ) {
+  if (message === 'unauthorized' || message.includes('not authenticated')) {
     return 401;
   }
 
-  if (
-    message.includes('admin access required') ||
-    message.includes('forbidden')
-  ) {
+  if (message.includes('admin access required') || message.includes('forbidden')) {
     return 403;
   }
 
@@ -89,142 +72,46 @@ function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
-function isPrivateIPv4(ip: string): boolean {
-  const parts = ip.split('.').map(Number);
+function pageError(error: unknown): HttpError {
+  if (error instanceof BrainUrlError) {
+    const badInput = new Set([
+      'url_empty',
+      'url_invalid',
+      'protocol_unsupported',
+      'credentials_forbidden',
+      'private_host',
+      'host_missing',
+      'port_forbidden',
+      'url_too_long',
+    ]);
 
-  if (
-    parts.length !== 4 ||
-    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
-  ) {
-    return true;
+    return new HttpError(
+      badInput.has(error.code)
+        ? 'URL публикации недопустим или указывает на закрытый адрес.'
+        : 'Не удалось загрузить страницу источника.',
+      badInput.has(error.code) ? 400 : 502
+    );
   }
 
-  const [a, b] = parts;
-
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    a >= 224
-  );
+  return new HttpError('Не удалось извлечь публикацию из источника.', 502);
 }
 
-function isPrivateIPv6(ip: string): boolean {
-  const value = ip.toLowerCase().split('%')[0];
-
-  if (
-    value === '::' ||
-    value === '::1' ||
-    value.startsWith('fc') ||
-    value.startsWith('fd') ||
-    /^fe[89ab]/.test(value) ||
-    value.startsWith('ff')
-  ) {
-    return true;
-  }
-
-  const mapped = value.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-
-  if (mapped) {
-    return isPrivateIPv4(mapped[1]);
-  }
-
-  // IPv4-mapped IPv6 in hexadecimal form.
-  const hexMapped = value.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-
-  if (hexMapped) {
-    const high = parseInt(hexMapped[1], 16);
-    const low = parseInt(hexMapped[2], 16);
-
-    const ipv4 = [
-      (high >> 8) & 255,
-      high & 255,
-      (low >> 8) & 255,
-      low & 255,
-    ].join('.');
-
-    return isPrivateIPv4(ipv4);
-  }
-
-  // Conservatively reject IPv4-compatible and other unusual mapped forms.
-  if (value.startsWith('::')) return true;
-
-  return false;
-}
-
-function isPrivateAddress(ip: string): boolean {
-  const version = isIP(ip);
-
-  if (version === 4) return isPrivateIPv4(ip);
-  if (version === 6) return isPrivateIPv6(ip);
-
-  return true;
-}
-
-async function validatePublicUrl(input: string): Promise<URL> {
-  let url: URL;
-
-  try {
-    url = new URL(input);
-  } catch {
-    throw new HttpError('Укажите корректный URL публикации.', 400);
-  }
-
-  if (!['http:', 'https:'].includes(url.protocol)) {
-    throw new HttpError('Разрешены только HTTP и HTTPS ссылки.', 400);
-  }
-
-  if (url.username || url.password) {
-    throw new HttpError('URL с логином или паролем запрещён.', 400);
-  }
-
-  if (!url.hostname || url.hostname.endsWith('.')) {
-    throw new HttpError('Некорректное имя хоста.', 400);
-  }
-
-  const hostname = url.hostname.toLowerCase();
-
-  if (
-    hostname === 'localhost' ||
-    hostname.endsWith('.localhost') ||
-    hostname.endsWith('.local') ||
-    hostname === 'metadata.google.internal'
-  ) {
-    throw new HttpError('Этот адрес недоступен для парсинга.', 400);
-  }
-
-  if (isIP(hostname)) {
-    if (isPrivateAddress(hostname)) {
-      throw new HttpError('Приватные IP-адреса запрещены.', 400);
-    }
-  } else {
-    let addresses: Awaited<ReturnType<typeof lookup>>[];
-
-    try {
-      addresses = await lookup(hostname, { all: true, verbatim: true });
-    } catch {
-      throw new HttpError('Не удалось проверить адрес источника.', 400);
-    }
-
-    if (
-      addresses.length === 0 ||
-      addresses.some((address) => isPrivateAddress(address.address))
-    ) {
-      throw new HttpError(
-        'Источник разрешается в недопустимый IP-адрес.',
-        400,
-      );
-    }
-  }
-
-  url.hash = '';
-
-  return url;
+function extractionSummary(page: Awaited<ReturnType<typeof extractMediaPage>>) {
+  return {
+    quality: page.quality.quality,
+    coverageStatus: page.quality.coverageStatus,
+    extractionStatus: page.quality.extractionStatus,
+    errorCode: page.quality.errorCode,
+    charCount: page.article.charCount,
+    wordCount: page.article.wordCount,
+    chunkCount: page.chunking.chunks.length,
+    languageDetected: page.article.language,
+    paywallDetected: page.article.diagnostics.paywallDetected,
+    truncated: page.article.diagnostics.truncated,
+    parser: page.article.diagnostics.parser,
+    fetchedBytes: page.fetchedBytes,
+    finalUrl: page.finalUrl,
+  };
 }
 
 function validDate(value: unknown): string | null {
@@ -250,283 +137,14 @@ function validDate(value: unknown): string | null {
   return value;
 }
 
-function getMeta(
-  $: cheerio.CheerioAPI,
-  selectors: string[],
-): string {
-  for (const selector of selectors) {
-    const value = $(selector).first().attr('content')?.trim();
-
-    if (value) return value;
-  }
-
-  return '';
-}
-
-async function readLimitedHtml(
-  response: Response,
-  maxBytes = 1_000_000,
-): Promise<string> {
-  const contentLength = Number(response.headers.get('content-length') || 0);
-
-  if (contentLength > maxBytes) {
-    throw new HttpError('HTML-страница слишком большая для парсинга.', 413);
-  }
-
-  if (!response.body) {
-    throw new HttpError('Источник вернул пустую страницу.', 502);
-  }
-
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) break;
-
-      total += value.byteLength;
-
-      if (total > maxBytes) {
-        await reader.cancel();
-        throw new HttpError(
-          'HTML-страница превышает лимит размера.',
-          413,
-        );
-      }
-
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  const result = new Uint8Array(total);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-
-  return new TextDecoder('utf-8').decode(result);
-}
-
-async function extractMetadata(input: string) {
-  const url = await validatePublicUrl(input);
-
-  let response: Response;
-
-  try {
-    response = await fetch(url.toString(), {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (compatible; MerkurovMediaArchive/1.0)',
-        Accept: 'text/html,application/xhtml+xml',
-      },
-      signal: AbortSignal.timeout(10_000),
-      redirect: 'error',
-    });
-  } catch {
-    throw new HttpError(
-      'Не удалось загрузить страницу. Проверьте ссылку или попробуйте другой источник.',
-      502,
-    );
-  }
-
-  if (!response.ok) {
-    throw new HttpError(`Источник вернул HTTP ${response.status}.`, 502);
-  }
-
-  const contentType = response.headers.get('content-type') || '';
-
-  if (!contentType.toLowerCase().includes('text/html')) {
-    throw new HttpError('Источник не вернул HTML-страницу.', 415);
-  }
-
-  const html = await readLimitedHtml(response);
-  const $ = cheerio.load(html);
-
-  const title =
-    getMeta($, [
-      'meta[property="og:title"]',
-      'meta[name="og:title"]',
-      'meta[name="twitter:title"]',
-    ]) || clean($('title').first().text(), 500);
-
-  const summary = getMeta($, [
-    'meta[property="og:description"]',
-    'meta[name="description"]',
-    'meta[name="twitter:description"]',
-  ]);
-
-  const canonicalHref =
-    $('link[rel="canonical"]').first().attr('href')?.trim() || '';
-
-  let canonicalUrl = url.toString();
-
-  if (canonicalHref) {
-    try {
-      const candidate = new URL(canonicalHref, url);
-
-      if (
-        ['http:', 'https:'].includes(candidate.protocol) &&
-        !candidate.username &&
-        !candidate.password
-      ) {
-        candidate.hash = '';
-        canonicalUrl = candidate.toString();
-      }
-    } catch {
-      // Keep the original URL if canonical is malformed.
-    }
-  }
-
-  const image =
-    getMeta($, [
-      'meta[property="og:image"]',
-      'meta[name="twitter:image"]',
-    ]) || '';
-
-  let imageUrl: string | null = null;
-
-  if (image) {
-    try {
-      const candidate = new URL(image, url);
-
-      if (
-        ['http:', 'https:'].includes(candidate.protocol) &&
-        !candidate.username &&
-        !candidate.password
-      ) {
-        imageUrl = candidate.toString();
-      }
-    } catch {
-      imageUrl = null;
-    }
-  }
-
-  const rawDate =
-    getMeta($, [
-      'meta[property="article:published_time"]',
-      'meta[name="article:published_time"]',
-      'meta[name="date"]',
-      'meta[name="pubdate"]',
-      'meta[name="publishdate"]',
-    ]) ||
-    $('time[datetime]').first().attr('datetime') ||
-    '';
-
-  let publishedDate: string | null = null;
-
-  if (rawDate) {
-    const candidate = rawDate.slice(0, 10);
-    publishedDate = validDate(candidate);
-  }
-
-  return {
-    url: url.toString(),
-    canonical_url: canonicalUrl,
-    title: clean(title, 500),
-    outlet: url.hostname.replace(/^www\./i, ''),
-    summary: clean(summary, 2000),
-    image_url: imageUrl,
-    published_date: publishedDate,
-  };
-}
-
-function fallbackClassification() {
-  return {
-    lang: 'EN' as Language,
-    kind: 'mention' as Kind,
-    topic: 'Internet & Censorship' as Topic,
-    model: 'fallback',
-  };
-}
-
-async function classify(metadata: {
-  title: string;
-  outlet: string;
-  summary: string;
-  url: string;
-}) {
-  const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
-
-  if (!apiKey) return fallbackClassification();
-
-  try {
-    const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
-
-    const client = new OpenAI({
-      apiKey,
-      baseURL:
-        process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
-      timeout: 12_000,
-      maxRetries: 1,
-    });
-
-    const result = await client.chat.completions.create({
-      model,
-      temperature: 0,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content:
-            'Classify a media archive record. Return JSON only with fields lang, kind, topic. ' +
-            'lang must be EN, RU, DE, PL or BS. ' +
-            'kind must be quote, mention, interview, radio, video, column, blog or profile. ' +
-            'topic must be Internet & Censorship, AI & Tech, Art & Culture or Fintech & Crypto. ' +
-            'Infer only from supplied metadata. Do not invent facts. ' +
-            'Use mention if participation type is unclear. Choose the most relevant topic.',
-        },
-        {
-          role: 'user',
-          content: JSON.stringify(metadata),
-        },
-      ],
-    });
-
-    const raw = result.choices[0]?.message?.content || '{}';
-    const parsed: unknown = JSON.parse(raw);
-
-    if (!parsed || typeof parsed !== 'object') {
-      return fallbackClassification();
-    }
-
-    const data = parsed as Record<string, unknown>;
-
-    return {
-      lang: isOneOf(LANGUAGES, data.lang)
-        ? data.lang
-        : fallbackClassification().lang,
-      kind: isOneOf(KINDS, data.kind)
-        ? data.kind
-        : fallbackClassification().kind,
-      topic: isOneOf(TOPICS, data.topic)
-        ? data.topic
-        : fallbackClassification().topic,
-      model,
-    };
-  } catch (error) {
-    console.error('[media-records] DeepSeek classification failed:', error);
-    return fallbackClassification();
-  }
-}
-
 async function requireAdmin(request: NextRequest) {
   try {
-    await requireAdminFromRequest(request);
+    return await requireAdminFromRequest(request);
   } catch (error) {
     const status = authErrorStatus(error);
 
     if (status) {
-      throw new HttpError(
-        status === 401 ? 'Требуется авторизация.' : 'Недостаточно прав.',
-        status,
-      );
+      throw new HttpError(status === 401 ? 'Требуется авторизация.' : 'Недостаточно прав.', status);
     }
 
     throw error;
@@ -550,7 +168,66 @@ export async function GET(request: NextRequest) {
       throw new HttpError('Не удалось загрузить архив публикаций.', 500);
     }
 
-    return NextResponse.json({ records: data || [] });
+    const records = (data || []) as Array<Record<string, unknown>>;
+    const ids = records.map((row) => (typeof row.id === 'string' ? row.id : '')).filter(Boolean);
+    const store = createBrainStore();
+
+    if (!store || ids.length === 0) {
+      return NextResponse.json({ records });
+    }
+
+    const [documents, jobs] = await Promise.all([
+      store.listMediaCoverageDocuments(ids),
+      store.getLatestMediaJobsForRecords(ids),
+    ]);
+
+    const documentByRecord = new Map(
+      documents.map((document) => [document.mediaRecordId, document])
+    );
+    const latestJobByRecord = new Map<string, (typeof jobs)[number]>();
+
+    for (const job of jobs) {
+      if (job.media_record_id && !latestJobByRecord.has(job.media_record_id)) {
+        latestJobByRecord.set(job.media_record_id, job);
+      }
+    }
+
+    return NextResponse.json({
+      records: records.map((row) => {
+        const id = typeof row.id === 'string' ? row.id : '';
+        const document = documentByRecord.get(id) || null;
+        const job = latestJobByRecord.get(id) || null;
+
+        return {
+          ...row,
+          coverage: document
+            ? {
+                documentId: document.documentId,
+                coverageStatus: document.coverageStatus,
+                textQuality: document.textQuality,
+                extractionStatus: document.extractionStatus,
+                ingestionStatus: document.ingestionStatus,
+                chunkCount: document.chunkCount ?? 0,
+                sourceCharCount: document.sourceCharCount ?? 0,
+                language: document.language,
+                processedAt: document.processedAt,
+                contentHash: document.contentHash,
+                canonicalUrl: document.canonicalUrl,
+              }
+            : null,
+          latest_job: job
+            ? {
+                id: job.id,
+                runId: job.run_id,
+                status: job.status,
+                errorCode: job.error_code,
+                errorDetail: job.error_detail,
+                processedAt: job.processed_at,
+              }
+            : null,
+        };
+      }),
+    });
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonError(error.message, error.status);
@@ -564,7 +241,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdmin(request);
+    const admin = await requireAdmin(request);
 
     let body: Record<string, unknown>;
 
@@ -592,50 +269,70 @@ export async function POST(request: NextRequest) {
       return jsonError('Укажите URL публикации.', 400);
     }
 
-    const metadata = await extractMetadata(inputUrl);
+    const store = createBrainStore();
+    let page: Awaited<ReturnType<typeof extractMediaPage>>;
+
+    try {
+      page = await extractMediaPage(inputUrl);
+    } catch (error) {
+      throw pageError(error);
+    }
+
+    const ai = await classifyMediaPublication({
+      title: page.metadata.title,
+      outlet: page.metadata.outlet,
+      summary: page.metadata.summary,
+      url: page.metadata.canonical_url,
+      detectedLanguage: page.article.language,
+    });
+
+    const duplicate = store
+      ? await store.findMediaRecordByUrl(page.metadata.url, page.metadata.canonical_url)
+      : null;
 
     if (action === 'parse') {
-      const ai = await classify(metadata);
-
       return NextResponse.json({
         record: {
-          ...metadata,
+          ...page.metadata,
           ...ai,
         },
+        extraction: extractionSummary(page),
+        duplicate: duplicate
+          ? {
+              id: duplicate.id,
+              title: duplicate.title,
+              status: duplicate.status,
+              canonical_url: duplicate.canonical_url,
+            }
+          : null,
       });
     }
 
-    const title = clean(body.title, 500) || metadata.title;
-    const outlet = clean(body.outlet, 200) || metadata.outlet;
+    const title = clean(body.title, 500) || page.metadata.title;
+    const outlet = clean(body.outlet, 300) || page.metadata.outlet;
 
     if (!title || !outlet) {
-      return jsonError(
-        'Нужны заголовок публикации и название издания.',
-        400,
-      );
+      return jsonError('Нужны заголовок публикации и название издания.', 400);
     }
 
-    const kind: Kind = isOneOf(KINDS, body.kind)
-      ? body.kind
-      : 'mention';
+    const kind: Kind = isOneOf(KINDS, body.kind) ? body.kind : ai.kind;
 
-    const topic: Topic = isOneOf(TOPICS, body.topic)
-      ? body.topic
-      : 'Internet & Censorship';
+    const topic: Topic = isOneOf(TOPICS, body.topic) ? body.topic : ai.topic;
 
-    const lang: Language = isOneOf(LANGUAGES, body.lang)
-      ? body.lang
-      : 'EN';
-
-    const requestedDate = validDate(body.published_date);
-    const publishedDate = requestedDate || metadata.published_date;
-
-    const summary = clean(
-      typeof body.summary === 'string' ? body.summary : metadata.summary,
-      2000,
+    const lang = normalizeMediaLanguage(
+      typeof body.lang === 'string' ? body.lang : ai.lang,
+      ai.lang
     );
 
-    let imageUrl = metadata.image_url;
+    const requestedDate = validDate(body.published_date);
+    const publishedDate = requestedDate || page.metadata.published_date;
+
+    const summary = clean(
+      typeof body.summary === 'string' ? body.summary : page.metadata.summary,
+      2000
+    );
+
+    let imageUrl = page.metadata.image_url;
 
     if (typeof body.image_url === 'string' && body.image_url.trim()) {
       try {
@@ -654,8 +351,7 @@ export async function POST(request: NextRequest) {
     }
 
     const status = body.status === 'published' ? 'published' : 'draft';
-
-    const classificationModel = clean(body.model, 100) || 'manual-or-fallback';
+    const now = new Date().toISOString();
 
     const supabase = await createClient({ useServiceRole: true });
 
@@ -663,7 +359,8 @@ export async function POST(request: NextRequest) {
       .from('media_archive_records')
       .upsert(
         {
-          ...metadata,
+          url: page.metadata.url,
+          canonical_url: page.metadata.canonical_url,
           title,
           outlet,
           published_date: publishedDate,
@@ -674,11 +371,26 @@ export async function POST(request: NextRequest) {
           image_url: imageUrl,
           status,
           ai_metadata: {
-            model: classificationModel,
+            model: ai.model,
+            classification_error: ai.error,
             reviewed: true,
+            import_pending: false,
+            source: 'media_record_save',
+            extracted_at: now,
+            language_detected: page.article.language,
+            text_quality: page.quality.quality,
+            extraction_status: page.quality.extractionStatus,
+            coverage_status: page.quality.coverageStatus,
+            char_count: page.article.charCount,
+            word_count: page.article.wordCount,
+            chunk_count: page.chunking.chunks.length,
+            paywall_detected: page.article.diagnostics.paywallDetected,
+            truncated: page.article.diagnostics.truncated,
+            parser: page.article.diagnostics.parser,
+            final_url: page.finalUrl,
           },
         },
-        { onConflict: 'canonical_url' },
+        { onConflict: 'canonical_url' }
       )
       .select('*')
       .single();
@@ -687,16 +399,60 @@ export async function POST(request: NextRequest) {
       console.error('[media-records] Supabase save failed:', error);
 
       if (error.code === '23505') {
-        throw new HttpError(
-          'Публикация с таким URL уже существует.',
-          409,
-        );
+        throw new HttpError('Публикация с таким URL уже существует.', 409);
       }
 
       throw new HttpError('Не удалось сохранить публикацию.', 500);
     }
 
-    return NextResponse.json({ record: data });
+    let coverage: {
+      status: string;
+      runId?: string;
+      jobId?: string;
+      error?: string;
+    } | null = null;
+
+    if (store) {
+      try {
+        const queued = await enqueueMediaCoverageJob({
+          store,
+          mediaRecordId: String(data.id),
+          inputUrl: page.metadata.url,
+          normalizedUrl: page.metadata.canonical_url,
+          requestedBy: admin.id,
+          source: 'media_record_save',
+        });
+
+        coverage = {
+          status: queued.status,
+          runId: queued.runId,
+          jobId: queued.job.id,
+        };
+      } catch (queueError) {
+        console.error('[media-records] coverage enqueue failed', {
+          code: queueError instanceof Error ? queueError.message : 'media_coverage_enqueue_failed',
+        });
+        coverage = {
+          status: 'failed',
+          error: 'Публикация сохранена, но очередь извлечения не создана.',
+        };
+      }
+    }
+
+    return NextResponse.json({
+      record: data,
+      extraction: extractionSummary(page),
+      duplicate:
+        duplicate && duplicate.id !== String(data.id)
+          ? {
+              id: duplicate.id,
+              title: duplicate.title,
+              status: duplicate.status,
+              canonical_url: duplicate.canonical_url,
+            }
+          : null,
+      coverage,
+    });
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonError(error.message, error.status);
@@ -707,7 +463,7 @@ export async function POST(request: NextRequest) {
     if (authStatus) {
       return jsonError(
         authStatus === 401 ? 'Требуется авторизация.' : 'Недостаточно прав.',
-        authStatus,
+        authStatus
       );
     }
 

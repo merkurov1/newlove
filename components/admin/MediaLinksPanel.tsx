@@ -1,6 +1,8 @@
- 'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
+
+import MediaBulkImportPanel from '@/components/admin/MediaBulkImportPanel';
 
 type RecordStatus = 'draft' | 'published';
 
@@ -18,33 +20,79 @@ type MediaRecord = {
   image_url: string | null;
   status?: RecordStatus;
   ai_metadata?: Record<string, unknown>;
+  coverage?: {
+    documentId: string;
+    coverageStatus: string | null;
+    textQuality: string | null;
+    extractionStatus: string | null;
+    ingestionStatus: string | null;
+    chunkCount: number;
+    sourceCharCount: number;
+    language: string | null;
+    processedAt: string | null;
+  } | null;
+  latest_job?: {
+    id: string;
+    status: string;
+    errorCode: string | null;
+    errorDetail: string | null;
+    processedAt: string | null;
+  } | null;
+};
+
+type ExtractionSummary = {
+  quality?: string;
+  coverageStatus?: string;
+  extractionStatus?: string;
+  errorCode?: string | null;
+  charCount?: number;
+  wordCount?: number;
+  chunkCount?: number;
+  languageDetected?: string;
+  paywallDetected?: boolean;
+  truncated?: boolean;
 };
 
 type ApiResponse = {
   record?: MediaRecord;
   records?: MediaRecord[];
+  extraction?: ExtractionSummary;
+  duplicate?: {
+    id: string;
+    title: string;
+    status: string;
+    canonical_url: string;
+  } | null;
+  coverage?: {
+    status: string;
+    runId?: string;
+    jobId?: string;
+    error?: string;
+  } | null;
   error?: string;
 };
 
-const kinds = [
-  'quote',
-  'mention',
-  'interview',
-  'radio',
-  'video',
-  'column',
-  'blog',
-  'profile',
-];
+const kinds = ['quote', 'mention', 'interview', 'radio', 'video', 'column', 'blog', 'profile'];
 
-const topics = [
-  'Internet & Censorship',
-  'AI & Tech',
-  'Art & Culture',
-  'Fintech & Crypto',
-];
+const topics = ['Internet & Censorship', 'AI & Tech', 'Art & Culture', 'Fintech & Crypto'];
 
-const langs = ['EN', 'RU', 'DE', 'PL', 'BS'];
+const langs = [
+  'EN',
+  'RU',
+  'DE',
+  'PL',
+  'BS',
+  'FR',
+  'IT',
+  'ES',
+  'PT',
+  'NL',
+  'CS',
+  'TR',
+  'UK',
+  'SR',
+  'HR',
+];
 
 const inputClass =
   'w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-500';
@@ -82,9 +130,7 @@ export default function MediaLinksPanel() {
 
       setRecords(Array.isArray(data.records) ? data.records : []);
     } catch (error: unknown) {
-      setMessage(
-        getErrorMessage(error, 'Не удалось загрузить записи.'),
-      );
+      setMessage(getErrorMessage(error, 'Не удалось загрузить записи.'));
     }
   }
 
@@ -124,13 +170,23 @@ export default function MediaLinksPanel() {
       }
 
       setRecord(data.record);
+      const extraction = data.extraction;
       setMessage(
-        'Метаданные получены. Проверьте поля перед сохранением.',
+        [
+          'Метаданные и текст получены.',
+          extraction
+            ? `Качество: ${extraction.quality || '—'}, символов: ${extraction.charCount ?? 0}, chunks: ${extraction.chunkCount ?? 0}.`
+            : '',
+          data.duplicate
+            ? `Найдена существующая запись: ${data.duplicate.title} (${data.duplicate.status}).`
+            : '',
+          'Проверьте поля перед сохранением.',
+        ]
+          .filter(Boolean)
+          .join(' ')
       );
     } catch (error: unknown) {
-      setMessage(
-        getErrorMessage(error, 'Не удалось разобрать ссылку.'),
-      );
+      setMessage(getErrorMessage(error, 'Не удалось разобрать ссылку.'));
     } finally {
       setBusy(false);
     }
@@ -166,53 +222,46 @@ export default function MediaLinksPanel() {
 
       setRecord(null);
       setUrl('');
+      const coverageMessage = data.coverage
+        ? data.coverage.status === 'failed'
+          ? data.coverage.error || 'Очередь извлечения не создана.'
+          : `Очередь Knowledge: ${data.coverage.status}.`
+        : '';
       setMessage(
-        status === 'published'
-          ? 'Публикация сохранена и опубликована.'
-          : 'Черновик сохранён.',
+        [
+          status === 'published' ? 'Публикация сохранена и опубликована.' : 'Черновик сохранён.',
+          coverageMessage,
+        ]
+          .filter(Boolean)
+          .join(' ')
       );
 
       await loadRecords();
     } catch (error: unknown) {
-      setMessage(
-        getErrorMessage(error, 'Не удалось сохранить запись.'),
-      );
+      setMessage(getErrorMessage(error, 'Не удалось сохранить запись.'));
     } finally {
       setBusy(false);
     }
   }
 
-  function update<K extends keyof MediaRecord>(
-    field: K,
-    value: MediaRecord[K],
-  ): void {
-    setRecord(current =>
-      current ? { ...current, [field]: value } : current,
-    );
+  function update<K extends keyof MediaRecord>(field: K, value: MediaRecord[K]): void {
+    setRecord((current) => (current ? { ...current, [field]: value } : current));
   }
 
   return (
     <section className="space-y-6">
       <div className="border-b border-gray-200 pb-4">
-        <p className="text-xs uppercase tracking-[0.18em] text-gray-500">
-          Editorial archive
-        </p>
+        <p className="text-xs uppercase tracking-[0.18em] text-gray-500">Editorial archive</p>
 
-        <h2 className="mt-2 font-serif text-3xl text-gray-950">
-          Media publications
-        </h2>
+        <h2 className="mt-2 font-serif text-3xl text-gray-950">Media publications</h2>
 
         <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
-          Добавление интервью, цитирований, колонок и других
-          подтверждённых публикаций.
+          Добавление интервью, цитирований, колонок и других подтверждённых публикаций.
         </p>
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-5">
-        <label
-          htmlFor="media-publication-url"
-          className="mb-2 block text-sm font-medium"
-        >
+        <label htmlFor="media-publication-url" className="mb-2 block text-sm font-medium">
           URL публикации
         </label>
 
@@ -221,7 +270,7 @@ export default function MediaLinksPanel() {
             id="media-publication-url"
             className={inputClass}
             value={url}
-            onChange={event => setUrl(event.target.value)}
+            onChange={(event) => setUrl(event.target.value)}
             placeholder="https://publication.com/article"
             type="url"
             autoComplete="url"
@@ -238,11 +287,7 @@ export default function MediaLinksPanel() {
         </div>
 
         {message && (
-          <p
-            className="mt-3 text-sm text-gray-600"
-            role="status"
-            aria-live="polite"
-          >
+          <p className="mt-3 text-sm text-gray-600" role="status" aria-live="polite">
             {message}
           </p>
         )}
@@ -276,7 +321,7 @@ export default function MediaLinksPanel() {
             <input
               className={`${inputClass} mt-1`}
               value={record.title || ''}
-              onChange={event => update('title', event.target.value)}
+              onChange={(event) => update('title', event.target.value)}
             />
           </label>
 
@@ -285,7 +330,7 @@ export default function MediaLinksPanel() {
             <input
               className={`${inputClass} mt-1`}
               value={record.outlet || ''}
-              onChange={event => update('outlet', event.target.value)}
+              onChange={(event) => update('outlet', event.target.value)}
             />
           </label>
 
@@ -295,7 +340,7 @@ export default function MediaLinksPanel() {
               className={`${inputClass} mt-1`}
               type="url"
               value={record.url || ''}
-              onChange={event => update('url', event.target.value)}
+              onChange={(event) => update('url', event.target.value)}
             />
           </label>
 
@@ -305,9 +350,7 @@ export default function MediaLinksPanel() {
               className={`${inputClass} mt-1`}
               type="url"
               value={record.image_url || ''}
-              onChange={event =>
-                update('image_url', event.target.value || null)
-              }
+              onChange={(event) => update('image_url', event.target.value || null)}
             />
           </label>
 
@@ -317,7 +360,7 @@ export default function MediaLinksPanel() {
               className={`${inputClass} mt-1`}
               rows={3}
               value={record.summary || ''}
-              onChange={event => update('summary', event.target.value)}
+              onChange={(event) => update('summary', event.target.value)}
             />
           </label>
 
@@ -328,12 +371,7 @@ export default function MediaLinksPanel() {
                 className={`${inputClass} mt-1`}
                 type="date"
                 value={record.published_date || ''}
-                onChange={event =>
-                  update(
-                    'published_date',
-                    event.target.value || null,
-                  )
-                }
+                onChange={(event) => update('published_date', event.target.value || null)}
               />
             </label>
 
@@ -342,9 +380,9 @@ export default function MediaLinksPanel() {
               <select
                 className={`${inputClass} mt-1`}
                 value={record.lang || 'EN'}
-                onChange={event => update('lang', event.target.value)}
+                onChange={(event) => update('lang', event.target.value)}
               >
-                {langs.map(value => (
+                {langs.map((value) => (
                   <option key={value} value={value}>
                     {value}
                   </option>
@@ -357,9 +395,9 @@ export default function MediaLinksPanel() {
               <select
                 className={`${inputClass} mt-1`}
                 value={record.kind || 'mention'}
-                onChange={event => update('kind', event.target.value)}
+                onChange={(event) => update('kind', event.target.value)}
               >
-                {kinds.map(value => (
+                {kinds.map((value) => (
                   <option key={value} value={value}>
                     {value}
                   </option>
@@ -372,9 +410,9 @@ export default function MediaLinksPanel() {
               <select
                 className={`${inputClass} mt-1`}
                 value={record.topic || topics[0]}
-                onChange={event => update('topic', event.target.value)}
+                onChange={(event) => update('topic', event.target.value)}
               >
-                {topics.map(value => (
+                {topics.map((value) => (
                   <option key={value} value={value}>
                     {value}
                   </option>
@@ -414,21 +452,19 @@ export default function MediaLinksPanel() {
         </div>
       )}
 
+      <MediaBulkImportPanel />
+
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-serif text-2xl">Последние записи</h3>
 
-          <span className="text-xs text-gray-500">
-            {records.length} / 200
-          </span>
+          <span className="text-xs text-gray-500">{records.length} / 200</span>
         </div>
 
         {records.length === 0 ? (
-          <p className="border-b border-gray-200 py-4 text-sm text-gray-500">
-            Записей пока нет.
-          </p>
+          <p className="border-b border-gray-200 py-4 text-sm text-gray-500">Записей пока нет.</p>
         ) : (
-          records.map(item => (
+          records.map((item) => (
             <article
               key={item.id || item.canonical_url || item.url}
               className="flex items-start gap-4 border-b border-gray-200 py-4"
@@ -447,6 +483,8 @@ export default function MediaLinksPanel() {
                   {item.outlet || 'Издание не указано'}
                   {' · '}
                   {item.published_date || 'Дата не указана'}
+                  {' · '}
+                  {item.coverage?.language || item.lang || '—'}
                 </p>
 
                 <p className="mt-1 break-words font-serif text-lg">
@@ -461,11 +499,25 @@ export default function MediaLinksPanel() {
                 >
                   {item.url}
                 </a>
+
+                <p className="mt-2 text-[10px] uppercase tracking-wider text-gray-500">
+                  {item.coverage?.textQuality || 'not extracted'}
+                  {' · '}
+                  {item.coverage?.extractionStatus || item.latest_job?.status || 'pending'}
+                  {' · '}
+                  {item.coverage?.sourceCharCount ?? 0} chars
+                  {' · '}
+                  {item.coverage?.chunkCount ?? 0} chunks
+                  {' · '}
+                  {item.coverage?.ingestionStatus || 'not indexed'}
+                </p>
+
+                {item.latest_job?.errorDetail && (
+                  <p className="mt-1 text-[10px] text-red-700">{item.latest_job.errorDetail}</p>
+                )}
               </div>
 
-              <span className="shrink-0 text-xs text-gray-500">
-                {item.status || 'draft'}
-              </span>
+              <span className="shrink-0 text-xs text-gray-500">{item.status || 'draft'}</span>
             </article>
           ))
         )}

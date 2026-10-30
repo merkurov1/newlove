@@ -54,6 +54,8 @@ export type ExtractedArticle = {
   title: string;
   author: string | null;
   siteName: string | null;
+  description?: string | null;
+  imageUrl?: string | null;
   publishedAt: string | null;
   publishedAtSource: ArticlePublishedAtSource;
   language: string;
@@ -85,6 +87,20 @@ const PAYWALL_PATTERNS = [
   'материал доступен по подписке',
   'оформите подписку, чтобы читать',
   'чтобы читать дальше, оформите подписку',
+  'article réservé aux abonnés',
+  'réservé aux abonnés',
+  'cet article est réservé aux abonnés',
+  'il vous reste',
+  'pour lire la suite',
+  'nur für abonnenten',
+  'dieser artikel ist für abonnenten',
+  'weiterlesen mit abo',
+  'solo suscriptores',
+  'contenido exclusivo para suscriptores',
+  'para seguir leyendo',
+  'solo per abbonati',
+  'contenuto riservato agli abbonati',
+  'continua a leggere',
 ];
 
 const TRUNCATION_PATTERNS = [
@@ -101,6 +117,11 @@ const TRUNCATION_PATTERNS = [
   'читать полностью',
   'продолжить чтение',
   'материал доступен по подписке',
+  'lire la suite',
+  'pour lire la suite',
+  'weiterlesen',
+  'leer más',
+  'continua a leggere',
 ];
 
 const NOISE_SELECTORS = [
@@ -217,6 +238,27 @@ const CONTENT_ROOT_SELECTORS = [
   '.text-content',
   '.content',
   '#content',
+  '.article-content',
+  '.article__content',
+  '.article-body__content',
+  '.post__content',
+  '.post-body',
+  '.post-entry',
+  '.gh-content',
+  '.c-content',
+  '.c-article-body',
+  '.c-article-content',
+  '.article-text-content',
+  '.article__text-content',
+  '.story-content',
+  '.story__content',
+  '.news-text',
+  '.news__text',
+  '.text-block',
+  '[data-testid="article-body"]',
+  '[data-component="article-body"]',
+  '[data-qa="article-body"]',
+  '[data-article-body]',
 ];
 
 const SHORT_NOISE = new Set([
@@ -401,6 +443,39 @@ function detectLanguage(value: string): string {
   if (cyrillic > latin * 0.25) return 'ru';
   if (latin > 0) return 'en';
   return 'unknown';
+}
+
+/**
+ * Normalizes a BCP-47-like language tag to a short lower-case code.
+ * Media coverage frequently arrives in French, Italian, Spanish, German or
+ * Polish, so an explicit document language must win over the text heuristic
+ * (which only distinguishes Cyrillic from Latin).
+ */
+function normalizeLanguageTag(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  const tag = value
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, '-')
+    .split('-')[0];
+
+  return /^[a-z]{2,3}$/.test(tag) ? tag : null;
+}
+
+function detectDocumentLanguage(
+  $: cheerio.CheerioAPI,
+  title: string,
+  text: string
+): string {
+  return (
+    normalizeLanguageTag($('html').attr('lang')) ??
+    normalizeLanguageTag(metaContent($, ['meta[property="og:locale"]'])) ??
+    normalizeLanguageTag(
+      metaContent($, ['meta[http-equiv="content-language"]', 'meta[name="language"]'])
+    ) ??
+    detectLanguage(`${title}\n${text}`)
+  );
 }
 
 function detectPaywall(html: string): boolean {
@@ -925,6 +1000,38 @@ export function extractArticle(html: string, finalUrl: string): ExtractedArticle
       ? String((jsonLd.publisher as { name?: unknown }).name || '') || null
       : null);
 
+  const description = metaContent($, [
+    'meta[property="og:description"]',
+    'meta[name="description"]',
+    'meta[name="twitter:description"]',
+    'meta[property="twitter:description"]',
+  ]);
+
+  const imageRaw = metaContent($, [
+    'meta[property="og:image"]',
+    'meta[name="og:image"]',
+    'meta[name="twitter:image"]',
+    'meta[property="twitter:image"]',
+  ]);
+
+  let imageUrl: string | null = null;
+
+  if (imageRaw) {
+    try {
+      const candidate = new URL(imageRaw, canonicalUrl || finalUrl);
+
+      if (
+        ['http:', 'https:'].includes(candidate.protocol) &&
+        !candidate.username &&
+        !candidate.password
+      ) {
+        imageUrl = candidate.toString();
+      }
+    } catch {
+      imageUrl = null;
+    }
+  }
+
   const completeness = extractionCompleteness({
     wordCount,
     paragraphCount,
@@ -958,9 +1065,11 @@ export function extractArticle(html: string, finalUrl: string): ExtractedArticle
     title,
     author,
     siteName: siteName ? siteName.slice(0, 200) : null,
+    description: description ? description.slice(0, 2000) : null,
+    imageUrl,
     publishedAt,
     publishedAtSource,
-    language: detectLanguage(`${title}\n${text}`),
+    language: detectDocumentLanguage($, title, text),
     text,
     blocks,
     contentHash: sha256Hex(text),

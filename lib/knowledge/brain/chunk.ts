@@ -29,6 +29,16 @@ export type ArticleChunkingResult = {
   sectionCount: number;
 };
 
+export type ArticleChunkingOptions = {
+  /**
+   * Source type recorded in chunk metadata. Defaults to `article` so existing
+   * Brain ingestion keeps exactly the same output.
+   */
+  sourceType?: 'article' | 'media_coverage';
+  /** Stable Media Archive record id for media coverage chunks. */
+  mediaRecordId?: string | null;
+};
+
 function sha256(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
 }
@@ -206,10 +216,16 @@ function splitOversizedText(text: string, maxChars: number, overlapChars: number
   return ranges;
 }
 
-export function chunkArticle(article: ExtractedArticle, documentId: string): ArticleChunkingResult {
+export function chunkArticle(
+  article: ExtractedArticle,
+  documentId: string,
+  options: ArticleChunkingOptions = {}
+): ArticleChunkingResult {
   const { text: documentText, placed } = placeBlocks(article.blocks);
   const starts = lineStarts(documentText);
   const title = article.title || 'Untitled article';
+  const sourceType = options.sourceType ?? 'article';
+  const mediaRecordId = options.mediaRecordId ?? null;
 
   const sections = groupSections(title, placed);
   const chunks: ArticleChunk[] = [];
@@ -251,12 +267,13 @@ export function chunkArticle(article: ExtractedArticle, documentId: string): Art
       lineEnd: lineAt(starts, Math.max(charStart, charEnd - 1)),
       metadata: {
         section: (section.path.length > 0 ? section.path : [title]).join(' / '),
-        source_type: article.sourceType,
+        source_type: sourceType,
         source_domain: article.sourceDomain,
         language: article.language,
         publication_date: article.publishedAt,
         extraction_version: article.extractionVersion,
         chunker_version: ARTICLE_CHUNKER_VERSION,
+        ...(mediaRecordId ? { media_record_id: mediaRecordId } : {}),
       },
     });
   };
