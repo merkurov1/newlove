@@ -897,8 +897,11 @@ export async function POST(req: Request) {
         if (ownerMode) {
           try {
             const useBrainV2 = isBrainRetrievalV2Enabled();
+            const brainPlan = buildBrainQueryPlan(trimmedMessage);
+            const requestsManuscript = brainPlan.requestedSources.includes('manuscript');
+            const useMediaBranch = isMediaArchiveQuery(trimmedMessage) && !requestsManuscript;
 
-            if (isMediaArchiveQuery(trimmedMessage)) {
+            if (useMediaBranch) {
               const retrieval = await retrieveMediaEvidence({
                 query: trimmedMessage,
                 limit: 8,
@@ -928,6 +931,7 @@ export async function POST(req: Request) {
                 scope: 'owner',
                 ownerAuthorized: true,
                 enabled: true,
+                plan: brainPlan,
               });
 
               brainTrace = retrieval;

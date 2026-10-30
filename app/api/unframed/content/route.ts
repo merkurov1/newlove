@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import fs from 'fs/promises';
 import path from 'path';
+import { UNFRAMED_SOURCE_PATH } from '@/lib/knowledge/unframed';
 import { verifyUnframedToken } from '@/lib/unframed/access';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const filePath = path.join(process.cwd(), 'content', 'Unframed.markdown');
+    const filePath = path.join(process.cwd(), UNFRAMED_SOURCE_PATH);
     const fileContent = await fs.readFile(filePath, 'utf8');
 
     return NextResponse.json(

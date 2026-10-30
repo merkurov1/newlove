@@ -416,18 +416,47 @@ export default function VigilPage() {
       const nowISO =
         new Date().toISOString();
 
-      const { error: updateError } =
-        await supabase
-          .from('vigil_hearts')
-          .update({
-            owner_name: userName,
-            last_lit_at: nowISO,
-          })
-          .eq('id', FLAME_ID);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (updateError) {
-        throw updateError;
+      const response = await fetch(
+        '/api/vigil/claim',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token
+              ? {
+                  Authorization: `Bearer ${session.access_token}`,
+                }
+              : {}),
+          },
+          body: JSON.stringify({
+            id: FLAME_ID,
+            name: userName,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const payload = await response
+          .json()
+          .catch(() => null);
+
+        throw new Error(
+          payload?.error ||
+            `Vigil claim failed (${response.status})`
+        );
       }
+
+      const payload = await response
+        .json()
+        .catch(() => null);
+
+      const record = payload?.record as
+        | FlameData
+        | undefined;
 
       await logTempleEvent({
         message: `${userName} transmitted a spark`,
@@ -441,9 +470,14 @@ export default function VigilPage() {
           owner_name: null,
           last_lit_at: null,
         }),
-        owner_name: userName,
-        last_lit_at: nowISO,
+        ...(record ?? {}),
+        owner_name:
+          record?.owner_name ?? userName,
+        last_lit_at:
+          record?.last_lit_at ?? nowISO,
       }));
+
+      void calculateIntensity();
     } catch (error) {
       console.error(
         'Vigil ritual error:',
@@ -704,6 +738,21 @@ export default function VigilPage() {
                     'Checking status...'}
                 </span>
               </div>
+
+              {flameData?.owner_name && (
+                <div
+                  className="font-serif text-sm text-amber-200/90"
+                  aria-live="polite"
+                >
+                  {timeLeft ===
+                  'FLAME EXTINGUISHED'
+                    ? 'Last spark by'
+                    : 'Heart lit by'}{' '}
+                  <span className="font-semibold text-amber-100">
+                    {flameData.owner_name}
+                  </span>
+                </div>
+              )}
             </div>
 
             <button

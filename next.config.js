@@ -82,6 +82,7 @@ const nextConfig = {
     // its serverless bundle. Removed together with the route after indexing.
     outputFileTracingIncludes: {
       '/api/admin/knowledge/**': ['./app/unframed/Unframed.markdown'],
+      '/api/unframed/**': ['./app/unframed/Unframed.markdown'],
     },
     // Next 14: тот же эффект через experimental
     ...(nextMajor < 15 ? { serverComponentsExternalPackages: externalPackages } : {}),
