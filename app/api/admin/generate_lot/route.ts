@@ -68,20 +68,16 @@ Evidence rules:
 - Return ONLY raw valid JSON without markdown wrapping.
 `;
 
-const MODELS = [
-  'openai/gpt-4o-mini',
-  'google/gemini-2.0-flash-001',
-  'meta-llama/llama-3.3-70b-instruct',
-];
+const MODELS = [process.env.DEEPSEEK_MODEL || 'deepseek-chat'];
 
 export async function POST(req: Request) {
   try {
     await requireAdminFromRequest(req);
 
-    const apiKey = (process.env.OPENROUTER_API_KEY || '').trim();
+    const apiKey = (process.env.DEEPSEEK_API_KEY || '').trim();
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'OPENROUTER_API_KEY is missing' },
+        { error: 'DEEPSEEK_API_KEY is missing' },
         { status: 500 }
       );
     }
@@ -92,12 +88,8 @@ export async function POST(req: Request) {
     const wikiBiography = await fetchWikiBiography(artist);
 
     const openai = new OpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: apiKey,
-      defaultHeaders: {
-        'HTTP-Referer': 'https://merkurov.love',
-        'X-Title': 'Curator Engine',
-      },
+      baseURL: (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/+$/, ''),
+      apiKey,
     });
 
     const truncatedRawData = typeof rawData === 'string' ? rawData.slice(0, 30000) : rawData;
@@ -123,6 +115,7 @@ export async function POST(req: Request) {
             { role: 'system', content: SYSTEM_PROMPT },
             { role: 'user', content: `Analyze and enrich this lot dossier:\n\n${JSON.stringify(userPayload, null, 2)}` },
           ],
+          response_format: { type: 'json_object' },
           temperature: 0.2,
         });
 

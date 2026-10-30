@@ -26,14 +26,14 @@ export async function parseLotWithAI(url: string, rawText?: string) {
     }
   }
 
-  // 2. Берем ключ из google_API_key
-  const apiKey = process.env.google_API_key || process.env.GOOGLE_API_KEY;
+  // 2. Берем ключ DeepSeek
+  const apiKey = (process.env.DEEPSEEK_API_KEY || '').trim();
 
   if (!apiKey) {
-    throw new Error('Переменная окружения google_API_key не найдена в .env.local');
+    throw new Error('Переменная окружения DEEPSEEK_API_KEY не найдена.');
   }
 
-  // 3. Запрос к OpenRouter
+  // 3. Запрос к DeepSeek
   const prompt = `Извлеки структурированную информацию об аукционном лоте из текста. 
 Верни ТОЛЬКО валидный JSON в формате:
 {
@@ -50,20 +50,24 @@ export async function parseLotWithAI(url: string, rawText?: string) {
 Заголовок страницы: ${pageTitle}
 Текст: ${contentToAnalyze}`;
 
-  const openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const baseUrl = (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(
+    /\/+$/,
+    ''
+  );
+  const deepseekRes = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'anthropic/claude-3.5-sonnet',
+      model: (process.env.DEEPSEEK_MODEL || 'deepseek-chat').trim(),
       messages: [{ role: 'user', content: prompt }],
       response_format: { type: 'json_object' }
     })
   });
 
-  const aiData = await openRouterRes.json();
+  const aiData = await deepseekRes.json();
   const parsedJson = JSON.parse(aiData.choices?.[0]?.message?.content || '{}');
 
   return {

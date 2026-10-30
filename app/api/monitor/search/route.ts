@@ -1,11 +1,15 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const apiKey = (process.env.GOOGLE_API_KEY || '').trim();
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+const deepseekApiKey = (process.env.DEEPSEEK_API_KEY || '').trim();
+const deepseekModel = (process.env.DEEPSEEK_MODEL || 'deepseek-chat').trim();
+const deepseekBaseUrl = (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(
+  /\/+$/,
+  ''
+);
 
 function buildSiteFilter(source: string | undefined) {
   if (!source || source === 'invaluable') return 'site:invaluable.com';
@@ -136,16 +140,32 @@ export async function POST(req: Request) {
       debug.push(`Bing HTML failed: ${String(e?.message || e)}`);
     }
 
-    // If we have an AI key, try Gemini as a last resort (more expensive/fragile)
-    if (genAI) {
+    // If a DeepSeek key is available, use it as the last AI-assisted attempt.
+    if (deepseekApiKey) {
       try {
-        const modelName = (process.env.GOOGLE_GEMINI_MODEL || 'gemini-2.5-flash').trim();
-        debug.push(`Attempting Gemini model: ${modelName}`);
-        const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: 'application/json', temperature: 0.0 } });
-        const prompt = `ROLE: Auction Lot URL Extractor. TASK: Extract auction lot URLs from the text below. TARGET: ${siteFilter}. INPUT:\n\n`;
-        const result = await model.generateContent(prompt + "\n\n" + 'Please output JSON like {"links": [...]}');
-        const raw = result?.response ? await result.response.text() : String(result);
-        debug.push(`Gemini raw length: ${String(raw?.length || 0)}`);
+        debug.push(`Attempting DeepSeek model: ${deepseekModel}`);
+        const client = new OpenAI({
+          baseURL: deepseekBaseUrl,
+          apiKey: deepseekApiKey,
+        });
+        const completion = await client.chat.completions.create({
+          model: deepseekModel,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'ROLE: Auction Lot URL Extractor. Extract only auction lot URLs that belong to the requested target domain. Return JSON only.',
+            },
+            {
+              role: 'user',
+              content: `TARGET: ${siteFilter}\nARTIST: ${artist}\n\nReturn JSON in the form {"links": [...]} with the auction lot URLs you can establish.`,
+            },
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0,
+        });
+        const raw = completion?.choices?.[0]?.message?.content || '';
+        debug.push(`DeepSeek raw length: ${String(raw?.length || 0)}`);
         const cleaned = String(raw).replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
         let data: any = null;
         try { data = JSON.parse(cleaned); } catch (e) {
@@ -156,13 +176,13 @@ export async function POST(req: Request) {
         const pattern = defaultUrlPattern(source);
         const filtered = links.filter((l: string) => pattern.test(l));
         const unique = Array.from(new Set(filtered));
-        debug.push(`Gemini found ${unique.length} links`);
-        if (unique.length > 0) return NextResponse.json({ found: unique.length, links: unique, method: 'gemini', _debug: debug });
+        debug.push(`DeepSeek found ${unique.length} links`);
+        if (unique.length > 0) return NextResponse.json({ found: unique.length, links: unique, method: 'deepseek', _debug: debug });
       } catch (e: any) {
-        debug.push(`Gemini failed: ${String(e?.message || e)}`);
+        debug.push(`DeepSeek failed: ${String(e?.message || e)}`);
       }
     } else {
-      debug.push('Skipping Gemini: GOOGLE_API_KEY not set');
+      debug.push('Skipping DeepSeek: DEEPSEEK_API_KEY not set');
     }
 
     // DuckDuckGo fallback

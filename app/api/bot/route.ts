@@ -17,7 +17,12 @@ const bot = new Bot(token);
 const MY_ID = Number(env['MY_TELEGRAM_ID']);
 const CHANNEL_ID = env['CHANNEL_ID'];
 const GOOGLE_KEY = env['GOOGLE_KEY'];
-const MODEL_NAME = 'gemini-2.0-flash'; 
+const DEEPSEEK_KEY = env['DEEPSEEK_API_KEY'];
+const DEEPSEEK_MODEL = (env['DEEPSEEK_MODEL'] || 'deepseek-chat').trim();
+const DEEPSEEK_BASE_URL = (env['DEEPSEEK_BASE_URL'] || 'https://api.deepseek.com').replace(
+    /\/+$/,
+    ''
+);
 const RESEARCH_AGENT = 'deep-research-pro-preview-12-2025';
 
 // --- MEMORY ---
@@ -207,18 +212,29 @@ bot.on('message:text', async (ctx: any) => {
 
     const aiChatId = ctx.chat.id;
     await ctx.api.sendChatAction(aiChatId, 'typing').catch(() => {});
+
+    if (!DEEPSEEK_KEY) {
+        return ctx.reply('DeepSeek is not configured. Set DEEPSEEK_API_KEY.');
+    }
+
     try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GOOGLE_KEY}`;
-        const res = await fetch(url, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' },
+        const res = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${DEEPSEEK_KEY}`,
+            },
             body: JSON.stringify({
-                contents: [{ role: 'user', parts: [{ text }] }],
-                systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] }
-            }) 
+                model: DEEPSEEK_MODEL,
+                messages: [
+                    { role: 'system', content: SYSTEM_PROMPT },
+                    { role: 'user', content: text },
+                ],
+                temperature: 0.7,
+            }),
         });
         const data = await res.json();
-        const aiResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        const aiResponse = data?.choices?.[0]?.message?.content;
         if (aiResponse) await ctx.reply(aiResponse, { parse_mode: 'Markdown' });
     } catch (err: any) { await ctx.reply(`AI Error: ${err.message}`); }
 });

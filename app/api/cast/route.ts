@@ -10,12 +10,11 @@ const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const supabase = createClient(sbUrl, sbKey);
 
-const FREE_MODELS = [
-  'openrouter/free',
-  'meta-llama/llama-3.3-70b-instruct:free',
+const DEEPSEEK_MODELS = [process.env.DEEPSEEK_MODEL || 'deepseek-chat'];
+
+const OPENROUTER_DEEPSEEK_MODELS = [
+  'deepseek/deepseek-chat',
   'deepseek/deepseek-r1:free',
-  'qwen/qwen-2.5-72b-instruct:free',
-  'google/gemma-2-9b-it:free',
 ];
 
 const ALLOWED_ARCHETYPES = [
@@ -419,15 +418,18 @@ export async function POST(
   req: Request
 ) {
   try {
-    const apiKey = (
+    const deepseekKey = (
+      process.env.DEEPSEEK_API_KEY || ''
+    ).trim();
+    const openRouterKey = (
       process.env.OPENROUTER_API_KEY || ''
     ).trim();
 
-    if (!apiKey) {
+    if (!deepseekKey && !openRouterKey) {
       return NextResponse.json(
         {
           error:
-            'API Key missing.',
+            'DeepSeek API key missing.',
         },
         { status: 500 }
       );
@@ -560,17 +562,48 @@ export async function POST(
       userName,
     } = await resolveUser(req);
 
-    const openai = new OpenAI({
-      baseURL:
-        'https://openrouter.ai/api/v1',
-      apiKey,
-      defaultHeaders: {
-        'HTTP-Referer':
-          'https://merkurov.love',
-        'X-Title':
-          'Digital Temple Cast Protocol',
-      },
-    });
+    const attempts: Array<{
+      client: OpenAI;
+      model: string;
+    }> = [];
+
+    if (deepseekKey) {
+      const directClient = new OpenAI({
+        baseURL: (
+          process.env.DEEPSEEK_BASE_URL ||
+          'https://api.deepseek.com'
+        ).replace(/\/+$/, ''),
+        apiKey: deepseekKey,
+      });
+
+      for (const model of DEEPSEEK_MODELS) {
+        attempts.push({
+          client: directClient,
+          model,
+        });
+      }
+    }
+
+    if (openRouterKey) {
+      const routerClient = new OpenAI({
+        baseURL:
+          'https://openrouter.ai/api/v1',
+        apiKey: openRouterKey,
+        defaultHeaders: {
+          'HTTP-Referer':
+            'https://merkurov.love',
+          'X-Title':
+            'Digital Temple Cast Protocol',
+        },
+      });
+
+      for (const model of OPENROUTER_DEEPSEEK_MODELS) {
+        attempts.push({
+          client: routerClient,
+          model,
+        });
+      }
+    }
 
     const systemPrompt =
       buildSystemPrompt(lang);
@@ -592,12 +625,12 @@ export async function POST(
     let completion: any = null;
     let lastError: unknown = null;
 
-    for (const model of FREE_MODELS) {
+    for (const attempt of attempts) {
       try {
         completion =
-          await openai.chat.completions.create(
+          await attempt.client.chat.completions.create(
             {
-              model,
+              model: attempt.model,
               messages: [
                 {
                   role: 'system',
@@ -625,7 +658,7 @@ export async function POST(
         }
       } catch (error: any) {
         console.warn(
-          `[Cast] Model ${model} failed:`,
+          `[Cast] Model ${attempt.model} failed:`,
           error?.message || error
         );
 
@@ -637,7 +670,7 @@ export async function POST(
       throw (
         lastError ||
         new Error(
-          'All free models are currently unavailable.'
+          'DeepSeek models are currently unavailable.'
         )
       );
     }

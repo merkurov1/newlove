@@ -1,5 +1,4 @@
 import OpenAI from 'openai';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export type FlowAIItem = {
   id: string;
@@ -160,8 +159,6 @@ async function callOpenRouterDeepSeek(prompt: string): Promise<FlowAIResult> {
   const models = [
     'deepseek/deepseek-chat',
     'deepseek/deepseek-r1:free',
-    'openrouter/free',
-    'meta-llama/llama-3.3-70b-instruct:free',
   ];
 
   let lastError: unknown = null;
@@ -191,45 +188,6 @@ async function callOpenRouterDeepSeek(prompt: string): Promise<FlowAIResult> {
   throw lastError instanceof Error ? lastError : new Error('OpenRouter fallback failed.');
 }
 
-// 3. Google Gemini Fallback
-async function callGeminiFallback(prompt: string): Promise<FlowAIResult> {
-  const apiKey = (
-    process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.GOOGLE_KEY ||
-    process.env.google_API_key ||
-    ''
-  ).trim();
-
-  if (!apiKey) {
-    throw new Error('Gemini API key is not configured.');
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-  let lastError = null;
-
-  for (const modelName of models) {
-    try {
-      const model = genAI.getGenerativeModel({ model: modelName });
-      const res = await model.generateContent(prompt);
-      const text = sanitizeAiOutput(res.response.text() || '');
-
-      if (text) {
-        return {
-          content: text,
-          model: modelName,
-          provider: 'gemini',
-        };
-      }
-    } catch (err: any) {
-      lastError = err;
-    }
-  }
-
-  throw lastError || new Error('Gemini fallback failed.');
-}
-
 export async function generateFlowContext(item: FlowAIItem): Promise<FlowAIResult | null> {
   // Фотки не обрабатываем вообще
   if (item.type === 'photo') {
@@ -247,13 +205,10 @@ export async function generateFlowContext(item: FlowAIItem): Promise<FlowAIResul
   try {
     return await callOpenRouterDeepSeek(prompt);
   } catch (orError: any) {
-    console.warn('[flow-ai] OpenRouter fallback failed, trying Gemini:', orError?.message || orError);
-  }
-
-  try {
-    return await callGeminiFallback(prompt);
-  } catch (gemError: any) {
-    console.error('[flow-ai] All AI providers failed:', gemError?.message || gemError);
+    console.error(
+      '[flow-ai] All DeepSeek providers failed:',
+      orError?.message || orError
+    );
     return null;
   }
 }
