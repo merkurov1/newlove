@@ -246,6 +246,36 @@ export function createSupabaseBrainSearch(env: RagEnvironment = process.env): Br
   };
 }
 
+/**
+ * Public Flow retrieval. The RPC itself requires public_retrieval_allowed and
+ * an explicit document allowlist; the application also re-verifies every hit.
+ */
+export function createSupabaseFlowPublicSearch(
+  env: RagEnvironment = process.env
+): BrainSearch | null {
+  const store = createServiceClient(env);
+
+  if (!store) return null;
+
+  return async (input: BrainSearchInput): Promise<BrainSearchRow[]> => {
+    if (input.signal?.aborted) throw new KnowledgeDatabaseError('query_failed');
+
+    const { data, error } = await store.rpc('brain_search_flow_public', {
+      p_query_embedding: toPgVector(input.queryEmbedding),
+      p_model_id: input.modelId,
+      p_dimensions: input.dimensions,
+      p_query_text: input.queryText || null,
+      p_document_ids: input.documentIds || null,
+      p_match_count: input.matchCount ?? Math.max(input.topK, 24),
+      p_min_similarity: input.minSimilarity,
+    });
+
+    if (error) throw new KnowledgeDatabaseError('query_failed');
+
+    return parseBrainSearchRows(data);
+  };
+}
+
 export function createSupabaseKnowledgeRepository(
   env: RagEnvironment = process.env
 ): KnowledgeRepository | null {

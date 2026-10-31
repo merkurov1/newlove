@@ -75,6 +75,11 @@ export async function POST(req: NextRequest) {
           typeof body.ai_allowed === 'boolean'
             ? body.ai_allowed
             : true,
+
+        rag_allowed:
+          typeof body.rag_allowed === 'boolean'
+            ? body.rag_allowed
+            : true,
       })
       .select('*')
       .single();

@@ -571,18 +571,22 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                             action.kind === 'navigate'
                               ? `
                               inline-flex items-center rounded-full
-                              bg-[#37332D] px-4 py-2 font-mono
-                              text-[10px] uppercase tracking-[0.16em]
-                              text-white transition hover:bg-[#201D1A]
+                              bg-[#2B2723] px-4 py-2.5 font-mono
+                              text-[11px] font-medium uppercase tracking-[0.12em]
+                              text-[#FAF8F5] shadow-sm ring-1 ring-black/5
+                              transition hover:bg-[#171411]
+                              focus-visible:outline-none focus-visible:ring-2
+                              focus-visible:ring-[#B5AAA0] focus-visible:ring-offset-2
                               disabled:opacity-40
                             `
                               : `
                               inline-flex items-center rounded-full
-                              border border-[#DDD3C5] px-4 py-2
-                              font-mono text-[10px] uppercase
-                              tracking-[0.16em] text-[#625B50]
-                              transition hover:border-[#B5AAA0]
-                              hover:text-[#37332D]
+                              border border-[#C9BDAE] bg-white/90 px-4 py-2.5
+                              font-mono text-[11px] font-medium uppercase
+                              tracking-[0.12em] text-[#3F3A33] shadow-sm
+                              transition hover:border-[#9F9384] hover:bg-white
+                              focus-visible:outline-none focus-visible:ring-2
+                              focus-visible:ring-[#B5AAA0] focus-visible:ring-offset-2
                               disabled:opacity-40
                             `
                           }
@@ -609,9 +613,12 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                           closeConversation();
                         }}
                         className="
-                          inline-flex items-center rounded-full bg-[#37332D] px-4 py-2
-                          font-mono text-[10px] uppercase tracking-[0.16em] text-white
-                          transition hover:bg-[#201D1A]
+                          inline-flex items-center rounded-full bg-[#2B2723] px-4 py-2.5
+                          font-mono text-[11px] font-medium uppercase tracking-[0.12em]
+                          text-[#FAF8F5] shadow-sm ring-1 ring-black/5
+                          transition hover:bg-[#171411]
+                          focus-visible:outline-none focus-visible:ring-2
+                          focus-visible:ring-[#B5AAA0] focus-visible:ring-offset-2
                         "
                       >
                         {message.cta.label}
@@ -652,9 +659,12 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                           }
                         }}
                         className="
-                          inline-flex items-center rounded-full bg-[#37332D] px-4 py-2
-                          font-mono text-[10px] uppercase tracking-[0.16em] text-white
-                          transition hover:bg-[#201D1A]
+                          inline-flex items-center rounded-full bg-[#2B2723] px-4 py-2.5
+                          font-mono text-[11px] font-medium uppercase tracking-[0.12em]
+                          text-[#FAF8F5] shadow-sm ring-1 ring-black/5
+                          transition hover:bg-[#171411]
+                          focus-visible:outline-none focus-visible:ring-2
+                          focus-visible:ring-[#B5AAA0] focus-visible:ring-offset-2
                         "
                       >
                         {message.cta.label}
@@ -689,11 +699,12 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                           }}
                           className="
                           inline-flex items-center rounded-full
-                          border border-[#DDD3C5] px-4 py-2
-                          font-mono text-[10px] uppercase
-                          tracking-[0.16em] text-[#625B50]
-                          transition hover:border-[#B5AAA0]
-                          hover:text-[#37332D]
+                          border border-[#C9BDAE] bg-white/80 px-4 py-2.5
+                          font-mono text-[11px] font-medium uppercase
+                          tracking-[0.12em] text-[#3F3A33] shadow-sm
+                          transition hover:border-[#9F9384] hover:bg-white
+                          focus-visible:outline-none focus-visible:ring-2
+                          focus-visible:ring-[#B5AAA0] focus-visible:ring-offset-2
                         "
                         >
                           {link.label}
@@ -868,9 +879,10 @@ export function PierrotInput({
         submit();
       }}
       className={`
-        flex min-w-0 items-end gap-2 rounded-2xl border border-[#E3DACD]
-        bg-white/70 p-2 transition focus-within:border-[#B5AAA0]
-        focus-within:bg-white sm:p-2.5
+        flex min-w-0 items-end gap-2 rounded-[22px] border border-[#CFC1AF]
+        bg-white/85 p-2 shadow-[0_2px_12px_rgba(75,62,45,0.07)]
+        transition focus-within:border-[#A99B89] focus-within:bg-white
+        focus-within:shadow-[0_3px_16px_rgba(75,62,45,0.10)] sm:p-2.5
         ${className}
       `}
     >
@@ -910,12 +922,12 @@ export function PierrotInput({
         aria-label="Send message"
         className="
           flex h-9 w-9 shrink-0 items-center justify-center
-          rounded-xl bg-[#37332D] text-white transition
-          hover:bg-[#201D1A] active:scale-95
-          disabled:cursor-not-allowed disabled:opacity-20
+          rounded-full bg-[#2B2723] text-[#FAF8F5] shadow-sm
+          ring-1 ring-black/5 transition hover:bg-[#171411]
+          active:scale-95 disabled:cursor-not-allowed disabled:opacity-35
         "
       >
-        <ArrowUp size={16} strokeWidth={2.2} />
+        <ArrowUp size={17} strokeWidth={2.4} />
       </button>
     </form>
   );

@@ -6,6 +6,12 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { generateFlowContext } from '@/lib/flow/ai';
+import {
+  flowAiContextErrorPayload,
+  flowAiContextGeneratingPayload,
+  flowAiContextReadyPayload,
+} from '@/lib/flow/aiContext';
+import { isFlowAiRagEnabled } from '@/lib/knowledge/rag/flowRetrieval';
 
 export const dynamic =
   'force-dynamic';
@@ -72,7 +78,7 @@ export async function POST(
     } = await supabase
       .from('items')
       .select(
-        'id,type,title,body_md,source_url,metadata,lang,ai_allowed,status,visibility',
+        'id,type,title,body_md,source_url,metadata,lang,ai_allowed,rag_allowed,status,visibility',
       )
       .eq('id', id)
       .maybeSingle();
@@ -118,17 +124,13 @@ export async function POST(
       );
     }
 
+    const ragEnabled =
+      item.rag_allowed !== false && isFlowAiRagEnabled();
+
     await supabase
       .from('flow_ai_context')
       .upsert(
-        {
-          item_id: id,
-          status:
-            'generating',
-          error: null,
-          updated_at:
-            new Date().toISOString(),
-        },
+        flowAiContextGeneratingPayload(id, ragEnabled),
         {
           onConflict:
             'item_id',
@@ -148,6 +150,7 @@ export async function POST(
           metadata:
             item.metadata,
           lang: item.lang,
+          rag_allowed: item.rag_allowed,
         });
 
       if (!result) {
@@ -172,22 +175,7 @@ export async function POST(
           'flow_ai_context',
         )
         .upsert(
-          {
-            item_id: id,
-            content:
-              result.content,
-            model:
-              result.model,
-            provider:
-              result.provider || 'deepseek',
-            status:
-              'ready',
-            error: null,
-            generated_at:
-              new Date().toISOString(),
-            updated_at:
-              new Date().toISOString(),
-          },
+          flowAiContextReadyPayload(id, result),
           {
             onConflict:
               'item_id',
@@ -216,13 +204,7 @@ export async function POST(
           'flow_ai_context',
         )
         .upsert(
-          {
-            item_id: id,
-            status: 'error',
-            error: message,
-            updated_at:
-              new Date().toISOString(),
-          },
+          flowAiContextErrorPayload(id, message, ragEnabled),
           {
             onConflict:
               'item_id',

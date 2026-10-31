@@ -29,12 +29,12 @@ export default function PierrotComposer() {
       }}
       className="
         fixed z-40 flex h-11 w-11 items-center justify-center
-        rounded-full border border-[#E4DCCF] bg-[#F8F5EF]/95
-        font-serif text-[17px] font-medium text-[#625B50]
-        shadow-[0_4px_20px_rgba(75,62,45,0.10)] backdrop-blur-md
-        transition-colors duration-200 hover:border-[#CFC3B1]
-        hover:bg-white hover:text-[#3F3A33] active:scale-95
-        focus:outline-none focus:ring-2 focus:ring-[#CFC3B1]
+        rounded-full border border-[#D3C5B2] bg-[#F4EFE7]/95
+        font-serif text-[17px] font-semibold text-[#4A443D]
+        shadow-[0_4px_20px_rgba(75,62,45,0.13)] backdrop-blur-md
+        transition-colors duration-200 hover:border-[#B9AB98]
+        hover:bg-white hover:text-[#2F2B26] active:scale-95
+        focus:outline-none focus:ring-2 focus:ring-[#B9AB98]
         focus:ring-offset-2
       "
     >

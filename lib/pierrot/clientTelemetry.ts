@@ -89,9 +89,8 @@ export function rotatePierrotConversationId(): string {
 }
 
 /**
- * The compact notice in the chat states that saving is on and offers an
- * immediate opt-out. Absence of a stored decision therefore resolves to the
- * notified default; an explicit "denied" is never overwritten implicitly.
+ * No stored choice is NOT consent. Until the visitor explicitly allows saving,
+ * the state is `pending` and no transcript or client event is written.
  */
 export function getPierrotConsent(): PierrotConsent {
   const raw = readValue(CONSENT_KEY, 'local');
@@ -107,22 +106,19 @@ export function getPierrotConsent(): PierrotConsent {
         return { state: parsed.state, version: PIERROT_CONSENT_VERSION };
       }
     } catch {
-      // Fall through to the notified default.
+      // Fall through to pending.
     }
   }
 
-  const consent: PierrotConsent = {
-    state: 'granted',
+  return {
+    state: 'pending',
     version: PIERROT_CONSENT_VERSION,
   };
-
-  writeValue(CONSENT_KEY, JSON.stringify(consent), 'local');
-  return consent;
 }
 
 export function setPierrotConsent(state: PierrotConsentState): PierrotConsent {
   const consent: PierrotConsent = {
-    state: state === 'denied' ? 'denied' : 'granted',
+    state: state === 'denied' ? 'denied' : state === 'pending' ? 'pending' : 'granted',
     version: PIERROT_CONSENT_VERSION,
   };
 

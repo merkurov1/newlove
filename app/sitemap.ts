@@ -5,6 +5,10 @@ import { getMediaRecords } from '@/lib/mediaRecords';
 
 export const revalidate = 3600;
 
+// RSS/JSON feeds are discovery documents, not indexable pages. They are
+// advertised through <link rel="alternate"> metadata and deliberately kept
+// out of the sitemap.
+
 // TODO(anton): when separate RU/EN URLs exist, replace the same-URL hreflang
 // entries below with real counterpart URLs.
 const BILINGUAL_ROUTES = new Set([

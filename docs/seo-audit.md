@@ -155,8 +155,9 @@ Other systemic issues found:
   Applebot-Extended and CCBot.
 - `/llms.txt` and `/llms-full.txt` are generated from `data/media.ts`, Supabase
   journal/Flow data and the shared route list.
-- `/feed.xml` is the journal RSS feed; `<link rel="alternate">` is emitted by
-  `pageMetadata`.
+- `/feed.xml` is the canonical Journal RSS feed; `/rss.xml` permanently
+  redirects there, while `/flow/rss` is the separate Flow feed.
+  `<link rel="alternate">` is emitted by `pageMetadata`.
 - Markdown twins: `/path.md` and `Accept: text/markdown` are rewritten by
   `middleware.ts` to `/api/markdown`, which server-renders the page and converts
   the main content with Turndown.

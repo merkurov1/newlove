@@ -1,6 +1,12 @@
 import { createClient } from '@/lib/supabase/server';
 import { SITE_NAME, SITE_URL } from '@/lib/seo';
 
+/**
+ * Canonical Journal RSS feed.
+ *
+ * `/rss.xml` is a permanent alias to this document; `/flow/rss` is a separate
+ * feed for the Flow stream. Keep the self link on `/feed.xml`.
+ */
 export const revalidate = 1800;
 
 function escapeXml(value: string): string {

@@ -336,13 +336,114 @@ function getFlowUrl(slug?: string | null): string {
     : `${SITE_ORIGIN}/flow`;
 }
 
+export const FLOW_LINK_LABEL = '&gt;&gt;&gt;';
+
+function flowLinkHtml(flowUrl: string): string {
+  return `<a href="${escapeHtmlAttribute(flowUrl)}">${FLOW_LINK_LABEL}</a>`;
+}
+
+function sourceLinkHtml(sourceUrl: string): string {
+  return `<a href="${escapeHtmlAttribute(sourceUrl)}">Источник</a>`;
+}
+
+function unescapeHref(value: string): string {
+  return value.replace(/&amp;/g, '&');
+}
+
+function hrefMatches(href: string, target: string): boolean {
+  const normalized = normalizeUrl(unescapeHref(href));
+  const expected = normalizeUrl(target);
+
+  if (!normalized || !expected) return false;
+  if (normalized === expected) return true;
+
+  try {
+    const left = new URL(normalized);
+    const right = new URL(expected);
+    const host = (value: string) => value.toLowerCase().replace(/^www\./, '');
+    const path = (value: string) => value.replace(/\/+$/, '') || '/';
+
+    return (
+      host(left.hostname) === host(right.hostname) &&
+      path(left.pathname) === path(right.pathname) &&
+      left.search === right.search &&
+      left.hash === right.hash
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Deterministically restores the canonical Flow link and the publication
+ * source link after DeepSeek. The model may rewrite or remove them; code owns
+ * the visible label and destination.
+ */
+export function ensureTelegramLinks(
+  html: string,
+  flowUrl: string,
+  sourceUrl?: string | null
+): string {
+  const anchorPattern =
+    /<a\b[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>[\s\S]*?<\/a>/gi;
+  const canonicalFlow = flowLinkHtml(flowUrl);
+  let flowFound = false;
+
+  let result = html.replace(anchorPattern, (match, doubleHref: string, singleHref: string) => {
+    const href = doubleHref ?? singleHref ?? '';
+    if (!hrefMatches(href, flowUrl)) return match;
+
+    if (flowFound) return '';
+    flowFound = true;
+    return canonicalFlow;
+  });
+
+  if (!flowFound) {
+    result += `${result.trim() ? '\n\n' : ''}${canonicalFlow}`;
+  }
+
+  if (!sourceUrl) return result.replace(/\n{3,}/g, '\n\n').trim();
+
+  const canonicalSource = sourceLinkHtml(sourceUrl);
+  const sourceAnchorPattern =
+    /<a\b[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/a>/gi;
+  let sourceFound = false;
+
+  // A title may also link to the source. Only the canonical "Источник"
+  // label is replaced; the title link is left untouched.
+  result = result.replace(
+    sourceAnchorPattern,
+    (match, doubleHref: string, singleHref: string, inner: string) => {
+      const href = doubleHref ?? singleHref ?? '';
+      if (!hrefMatches(href, sourceUrl)) return match;
+
+      const visible = inner.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+      if (visible !== 'источник' && visible !== 'source') return match;
+
+      if (sourceFound) return '';
+      sourceFound = true;
+      return canonicalSource;
+    }
+  );
+
+  if (!sourceFound) {
+    if (result.includes(canonicalFlow)) {
+      result = result.replace(canonicalFlow, `${canonicalSource}\n\n${canonicalFlow}`);
+    } else {
+      result += `${result.trim() ? '\n\n' : ''}${canonicalSource}`;
+    }
+  }
+
+  return result.replace(/\n{3,}/g, '\n\n').trim();
+}
+
 /**
  * Formats a Flow item for Telegram.
  *
  * DeepSeek may adapt the text, but the application enforces the no-hashtag
  * rule and converts visible bare URLs to clickable labels afterward.
  */
-async function formatTelegramMessage(
+export async function formatTelegramMessage(
   title: string | null | undefined,
   bodyMd: string | null | undefined,
   flowUrl: string,
@@ -385,10 +486,16 @@ async function formatTelegramMessage(
 
   rawContent +=
     `${rawContent ? '\n\n' : ''}` +
-    `<a href="${escapeHtmlAttribute(safeFlowUrl)}">Читать на merkurov.love</a>`;
+    flowLinkHtml(safeFlowUrl);
 
-  const fallback = () =>
-    stripTelegramHashtags(linkifyBareUrls(rawContent));
+  const finalize = (value: string) =>
+    ensureTelegramLinks(
+      stripTelegramHashtags(linkifyBareUrls(value)),
+      safeFlowUrl,
+      cleanSourceUrl
+    );
+
+  const fallback = () => finalize(rawContent);
 
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey || !rawContent.trim()) return fallback();
@@ -409,8 +516,8 @@ async function formatTelegramMessage(
               `Adapt the supplied publication for Telegram in ${lang}. ` +
               `Preserve the author's voice, meaning, facts, and tone. ` +
               `Make only editorial changes needed for readability. ` +
-              `Do not add hashtags, emojis, calls to action, facts, or links. ` +
-              `Preserve every existing HTML link and its destination exactly. ` +
+              `Do not add hashtags, emojis, calls to action, facts, or new links. ` +
+              `Preserve every existing HTML link and its destination exactly; do not rewrite or remove the final Flow link or the publication source link. ` +
               `Use only these HTML tags: <b>, <i>, <code>, and <a>. ` +
               `Do not output raw URLs when a named clickable link is possible. ` +
               `Return only the final message, without commentary.`,
@@ -440,7 +547,7 @@ async function formatTelegramMessage(
       return fallback();
     }
 
-    return stripTelegramHashtags(linkifyBareUrls(formatted));
+    return finalize(formatted);
   } catch (error) {
     console.warn(
       '[crosspost:telegram] DeepSeek formatting fallback:',

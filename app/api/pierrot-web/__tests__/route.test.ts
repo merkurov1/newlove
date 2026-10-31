@@ -80,6 +80,7 @@ jest.mock('openai', () => {
 
 process.env.DEEPSEEK_API_KEY = 'test-deepseek-key';
 process.env.PIERROT_BRAIN_RETRIEVAL_V2 = 'false';
+process.env.PIERROT_RAG_ENABLED = 'true';
 
 // require (not a static import) so the jest.mock registrations above are in
 // effect before the route and its dependencies are loaded.
@@ -511,8 +512,36 @@ describe('POST /api/pierrot-web persistence', () => {
     expect(retrieval.retrieveUnframedEvidence.mock.calls[0][0]).toMatchObject({
       scope: 'owner',
       ownerAuthorized: true,
-      enabled: true,
     });
+  });
+
+  it('honours PIERROT_RAG_ENABLED=false and never calls retrieval', async () => {
+    process.env.PIERROT_RAG_ENABLED = 'false';
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: 'owner-1',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+
+    try {
+      const response = await POST(
+        makeRequest(
+          validBody({
+            mode: 'unframed',
+            message: 'What does UNFRAMED say about the archive?',
+          })
+        )
+      );
+      const json = (await response.json()) as {
+        rag?: { outcome?: string };
+      };
+
+      expect(response.status).toBe(200);
+      expect(retrieval.retrieveUnframedEvidence).not.toHaveBeenCalled();
+      expect(json.rag?.outcome).toBe('unavailable');
+    } finally {
+      process.env.PIERROT_RAG_ENABLED = 'true';
+    }
   });
 
   it('returns an honest no-match owner response without sources', async () => {
@@ -541,6 +570,33 @@ describe('POST /api/pierrot-web persistence', () => {
       sources: [],
     });
     expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('never grants owner mode through the legacy shared x-admin-key', async () => {
+    process.env.ADMIN_SECRET_KEY = 'shared-secret';
+
+    try {
+      const response = await POST(
+        new Request('http://localhost/api/pierrot-web', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-admin-key': 'shared-secret',
+          },
+          body: JSON.stringify(
+            validBody({
+              mode: 'unframed',
+              message: 'What does UNFRAMED say about the archive?',
+            })
+          ),
+        })
+      );
+
+      expect(response.status).toBe(403);
+      expect(retrieval.retrieveUnframedEvidence).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.ADMIN_SECRET_KEY;
+    }
   });
 
   it('rejects owner mode for a non-owner before persistence', async () => {

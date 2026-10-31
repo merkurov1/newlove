@@ -136,6 +136,10 @@ export async function PATCH(
       update.ai_allowed = body.ai_allowed;
     }
 
+    if (typeof body.rag_allowed === 'boolean') {
+      update.rag_allowed = body.rag_allowed;
+    }
+
     const { data: updated, error: updateError } =
       await supabase
         .from('items')

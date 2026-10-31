@@ -1,3 +1,7 @@
+import { assertServerOnly } from '@/lib/serverOnly';
+
+assertServerOnly('lib/pierrot/serverStore');
+
 import { createHash, randomUUID } from 'crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {

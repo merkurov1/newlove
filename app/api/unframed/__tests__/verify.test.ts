@@ -61,6 +61,7 @@ beforeEach(() => {
     },
   });
   process.env.STRIPE_SECRET_KEY = 'sk_test_123';
+  process.env.NEXTAUTH_SECRET = 'test-unframed-access-secret-32-chars';
 });
 
 describe('GET /api/unframed/verify', () => {

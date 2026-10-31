@@ -96,6 +96,15 @@ export function isPierrotRagEnabled(env: RagEnvironment = process.env): boolean 
 }
 
 /**
+ * Public Pierrot may use only documents explicitly marked with
+ * knowledge_documents.public_retrieval_allowed. It is a separate opt-in from
+ * owner retrieval and never falls back to owner scope.
+ */
+export function isPublicPierrotRagEnabled(env: RagEnvironment = process.env): boolean {
+  return (env.PIERROT_PUBLIC_RAG_ENABLED || '').trim().toLowerCase() === 'true';
+}
+
+/**
  * True when a response model id belongs to the verified UNFRAMED embedding
  * model, including OpenRouter provider-prefixed aliases.
  */

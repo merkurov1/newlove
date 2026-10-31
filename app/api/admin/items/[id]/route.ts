@@ -21,6 +21,7 @@ type UpdatePayload = {
   type?: string;
   source_url?: string | null;
   metadata?: Record<string, unknown>;
+  rag_allowed?: boolean;
 };
 
 function getSupabaseAdmin() {
@@ -365,6 +366,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     if (payload.metadata !== undefined) {
       update.metadata = payload.metadata;
+    }
+
+    if (typeof payload.rag_allowed === 'boolean') {
+      update.rag_allowed = payload.rag_allowed;
     }
 
     const shouldWriteSlug =

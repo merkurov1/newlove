@@ -43,6 +43,7 @@ export type Item = {
   body_md: string | null;
   source_url?: string | null;
   ai_allowed?: boolean;
+  rag_allowed?: boolean;
   metadata?: Record<string, unknown> | null;
   created_at?: string;
   updated_at?: string;

@@ -1,3 +1,7 @@
+import { assertServerOnly } from '@/lib/serverOnly';
+
+assertServerOnly('lib/pierrot/commercialAnalytics');
+
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PierrotCommercialPlan } from '@/lib/pierrot/commercial';
 import type { PierrotIntent } from '@/lib/pierrot/intents';

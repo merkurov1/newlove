@@ -23,7 +23,8 @@ const nextConfig = {
       // Old sitemap entries / renamed routes.
       { source: '/stat', destination: '/liveheart/stat', permanent: true },
       { source: '/projects', destination: '/all', permanent: true },
-      { source: '/rss.xml', destination: '/feed.xml', permanent: true },
+      // Feed aliases are handled by app/rss.xml/route.ts and
+      // app/flow/rss.xml/route.ts so they stay next to the feed handlers.
       { source: '/feed', destination: '/flow', permanent: true },
     ];
   },

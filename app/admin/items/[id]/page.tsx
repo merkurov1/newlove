@@ -11,6 +11,7 @@ type Item = {
   status: string;
   visibility: string;
   body_md: string;
+  rag_allowed?: boolean;
 };
 
 export default function AdminItemDetailPage({
@@ -49,6 +50,7 @@ export default function AdminItemDetailPage({
         visibility: item.visibility,
         status: item.status,
         body_md: item.body_md,
+        rag_allowed: item.rag_allowed !== false,
       }),
     });
 
@@ -118,6 +120,22 @@ export default function AdminItemDetailPage({
             <option value="archived">archived</option>
           </select>
         </div>
+
+        <label className="flex items-start gap-3 rounded-xl border p-3 text-sm">
+          <input
+            type="checkbox"
+            checked={item.rag_allowed !== false}
+            onChange={(e) => setItem({ ...item, rag_allowed: e.target.checked })}
+            className="mt-1"
+          />
+          <span>
+            <span className="block font-medium">Allow public Brain RAG</span>
+            <span className="block text-xs text-stone-500">
+              When disabled, AI context is generated from the item itself only.
+              Only explicitly public Brain documents can ever be used.
+            </span>
+          </span>
+        </label>
 
         <div>
           <label className="mb-1 block text-sm font-medium">Body</label>

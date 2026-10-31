@@ -7,6 +7,10 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { generateFlowContext } from '@/lib/flow/ai';
+import {
+  FLOW_AI_CONTEXT_PUBLIC_COLUMNS,
+  flowAiContextReadyPayload,
+} from '@/lib/flow/aiContext';
 import PierrotContextBlock from '@/components/flow/PierrotContextBlock';
 
 type PageProps = {
@@ -35,6 +39,7 @@ type FlowItem = {
   body_md: string | null;
   source_url: string | null;
   ai_allowed: boolean;
+  rag_allowed: boolean;
   metadata: Record<string, unknown> | null;
   published_at: string | null;
   bluesky_uri?: string | null;
@@ -238,7 +243,7 @@ export async function generateMetadata({
     const { data: item } = await supabase
       .from('items')
       .select(
-        'id,title,slug,lang,type,status,visibility,body_md,source_url,ai_allowed,metadata,published_at',
+        'id,title,slug,lang,type,status,visibility,body_md,source_url,ai_allowed,rag_allowed,metadata,published_at',
       )
       .eq('slug', decodedSlug)
       .eq('status', 'published')
@@ -993,7 +998,7 @@ export default async function FlowItemPage({ params }: PageProps) {
   const { data, error } = await supabase
     .from('items')
     .select(
-      'id,title,slug,lang,type,status,visibility,body_md,source_url,ai_allowed,metadata,published_at,bluesky_uri,telegram_message_id',
+      'id,title,slug,lang,type,status,visibility,body_md,source_url,ai_allowed,rag_allowed,metadata,published_at,bluesky_uri,telegram_message_id',
     )
     .eq('slug', decodedSlug)
     .eq('status', 'published')
@@ -1014,7 +1019,7 @@ export default async function FlowItemPage({ params }: PageProps) {
     error: contextError,
   } = await supabase
     .from('flow_ai_context')
-    .select('id,item_id,content,model,provider,status,generated_at')
+    .select(FLOW_AI_CONTEXT_PUBLIC_COLUMNS)
     .eq('item_id', item.id)
     .maybeSingle();
 
@@ -1045,6 +1050,7 @@ export default async function FlowItemPage({ params }: PageProps) {
         source_url: item.source_url,
         metadata: item.metadata,
         lang: item.lang || 'ru',
+        rag_allowed: item.rag_allowed,
       });
 
       if (generated?.content) {
@@ -1054,20 +1060,10 @@ export default async function FlowItemPage({ params }: PageProps) {
           await supabase
             .from('flow_ai_context')
             .upsert(
-              {
-                item_id: item.id,
-                content: generated.content,
-                model: generated.model,
-                provider: generated.provider || 'pierrot',
-                status: 'ready',
-                generated_at: now,
-                updated_at: now,
-              },
+              flowAiContextReadyPayload(item.id, generated),
               { onConflict: 'item_id' },
             )
-            .select(
-              'id,item_id,content,model,provider,status,generated_at',
-            )
+            .select(FLOW_AI_CONTEXT_PUBLIC_COLUMNS)
             .maybeSingle();
 
         if (saveError) {

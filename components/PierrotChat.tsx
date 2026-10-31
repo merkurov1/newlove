@@ -30,12 +30,12 @@ export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
         title="Pierrot"
         className="
           group relative flex h-10 w-10 shrink-0 items-center justify-center
-          rounded-full border border-[#E4DCCF] bg-[#F8F5EF] font-serif
-          text-[17px] font-medium text-[#625B50]
-          shadow-[0_2px_8px_rgba(75,62,45,0.04)]
-          transition-colors duration-200 hover:border-[#CFC3B1]
-          hover:bg-white hover:text-[#3F3A33] active:scale-95
-          focus:outline-none focus:ring-2 focus:ring-[#CFC3B1]
+          rounded-full border border-[#D3C5B2] bg-[#F4EFE7] font-serif
+          text-[17px] font-semibold text-[#4A443D]
+          shadow-[0_2px_10px_rgba(75,62,45,0.08)]
+          transition-colors duration-200 hover:border-[#B9AB98]
+          hover:bg-white hover:text-[#2F2B26] active:scale-95
+          focus:outline-none focus:ring-2 focus:ring-[#B9AB98]
           focus:ring-offset-2
         "
       >
@@ -58,9 +58,10 @@ export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
       aria-haspopup="dialog"
       className="
         group relative inline-flex items-center gap-2 rounded-full border
-        border-[#E4DCCF] bg-[#F8F5EF]/95 px-3.5 py-1.5 font-mono
-        text-[10px] uppercase tracking-[0.16em] text-[#625B50]
-        transition-colors hover:border-[#CFC3B1] hover:bg-white
+        border-[#D3C5B2] bg-[#F4EFE7]/95 px-3.5 py-1.5 font-mono
+        text-[10px] font-medium uppercase tracking-[0.16em] text-[#4A443D]
+        shadow-[0_2px_10px_rgba(75,62,45,0.07)] transition-colors
+        hover:border-[#B9AB98] hover:bg-white hover:text-[#2F2B26]
       "
     >
       <span className="h-1.5 w-1.5 rounded-full bg-[#8CA18A]" />

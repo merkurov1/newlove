@@ -531,6 +531,9 @@ body.telegram-app .temple-screen {
 .telegram-pierrot-trigger {
   right: auto;
   left: calc(0.75rem + max(env(safe-area-inset-left), var(--tg-safe-area-left, 0px)));
+  border-color: rgba(251, 191, 36, 0.38);
+  background: rgba(24, 21, 18, 0.88);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.32);
 }
 
 .telegram-nav-trigger:active {

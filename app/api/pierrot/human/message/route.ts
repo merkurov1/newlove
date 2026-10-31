@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { getClientIp } from '@/lib/rateLimit';
+import { checkPierrotRateLimit } from '@/lib/pierrot/rateLimit';
 import { isPierrotId } from '@/lib/pierrot/conversation';
 import {
   HUMAN_MAX_MESSAGE_LENGTH,
@@ -43,8 +44,9 @@ function errorResponse(message: string, status: number) {
  * response never contains Telegram credentials or message ids.
  */
 export async function POST(req: Request) {
-  const limited = checkRateLimit(getClientIp(req), {
-    interval: 60 * 1000,
+  const limited = await checkPierrotRateLimit({
+    identifier: getClientIp(req),
+    intervalMs: 60 * 1000,
     maxRequests: 40,
     keyPrefix: 'pierrot-human-message',
   });

@@ -14,6 +14,12 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+function databaseErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? code.slice(0, 40) : null;
+}
+
 function confirmationBaseUrl(req: NextRequest): string {
   return (
     process.env.NEXT_PUBLIC_APP_URL ||
@@ -84,6 +90,7 @@ export async function POST(req: NextRequest) {
       console.error('Subscribe lookup failed');
       await recordEvent('subscription_failed', `subscription_failed:${requestKey}`, {
         reason: 'lookup',
+        error_code: databaseErrorCode(lookupError),
       });
       return NextResponse.json({ error: 'Subscription unavailable' }, { status: 500 });
     }
@@ -121,6 +128,7 @@ export async function POST(req: NextRequest) {
         console.error('Subscribe insert failed');
         await recordEvent('subscription_failed', `subscription_failed:${requestKey}`, {
           reason: 'insert',
+          error_code: databaseErrorCode(insert.error),
         });
         return NextResponse.json({ error: 'Subscription unavailable' }, { status: 500 });
       }
@@ -144,6 +152,7 @@ export async function POST(req: NextRequest) {
         console.error('Subscribe update failed');
         await recordEvent('subscription_failed', `subscription_failed:${requestKey}`, {
           reason: 'update',
+          error_code: databaseErrorCode(updateError),
         });
         return NextResponse.json({ error: 'Subscription unavailable' }, { status: 500 });
       }
@@ -172,6 +181,7 @@ export async function POST(req: NextRequest) {
       console.error('Subscribe confirmation token insert failed');
       await recordEvent('subscription_failed', `subscription_failed:${requestKey}`, {
         reason: 'token',
+        error_code: databaseErrorCode(tokenError),
       });
       return NextResponse.json(
         { error: 'Confirmation could not be prepared. Please try again.' },
@@ -227,6 +237,7 @@ export async function POST(req: NextRequest) {
     console.error('Subscribe error:', error);
     await recordEvent('subscription_failed', `subscription_failed:${requestKey}`, {
       reason: 'unexpected',
+      error_code: databaseErrorCode(error),
     });
     return NextResponse.json({ error: 'Subscribe failed' }, { status: 500 });
   }

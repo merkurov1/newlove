@@ -89,9 +89,25 @@ export type ConversationSummary = {
   hasReply: boolean;
   lastMessageRole: 'user' | 'assistant' | null;
   ctaShown: string[];
+  offersViewed: string[];
   ctaClicked: string[];
   topics: string[];
   href: string;
+};
+
+export type SubscriberStats = {
+  total: number;
+  confirmed: number;
+  pending: number;
+  unsubscribed: number;
+};
+
+export type PierrotAttentionItem = {
+  id: string;
+  title: string;
+  reason: string;
+  href: string;
+  severity: 'low' | 'medium' | 'high';
 };
 
 export type FunnelStage = {
@@ -136,6 +152,35 @@ export type PierrotSnapshot = {
     qualifiedLeads: number;
     errors: number;
     unresolved: number;
+    answers: {
+      replied: number;
+      failed: number;
+    };
+    feedback: {
+      up: number;
+      down: number;
+    };
+    retrieval: {
+      attempts: number;
+      relevant: number;
+      noMatch: number;
+      unavailable: number;
+      errors: number;
+      contextUsed: number;
+      media: number;
+      documents: number;
+      chunks: number;
+      averageLatencyMs: number | null;
+    };
+    handover: {
+      requested: number;
+      accepted: number;
+      declined: number;
+      expired: number;
+      messagesSent: number;
+      messagesReceived: number;
+    };
+    subscribers: SubscriberStats;
   };
   volume: {
     conversations: number;
@@ -147,6 +192,7 @@ export type PierrotSnapshot = {
   };
   funnels: Record<'postcard' | 'journal' | 'art_engine' | 'unframed', FunnelStage[]>;
   conversations: ConversationSummary[];
+  attention: PierrotAttentionItem[];
   insights: Insight[];
   recommendations: Recommendation[];
   availableIntents: string[];
@@ -206,6 +252,18 @@ export function parseAnalyticsFilters(
 function payloadString(payload: Record<string, unknown> | null, key: string): string | null {
   const value = payload?.[key];
   return typeof value === 'string' ? value : null;
+}
+
+function payloadNumber(payload: Record<string, unknown> | null, key: string): number {
+  const value = payload?.[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function payloadCount(payload: Record<string, unknown> | null, countKey: string, listKey: string): number {
+  const explicit = payloadNumber(payload, countKey);
+  if (explicit > 0) return explicit;
+  const list = payload?.[listKey];
+  return Array.isArray(list) ? list.length : 0;
 }
 
 export function redactPersonalData(value: string): string {
@@ -271,6 +329,7 @@ type SnapshotInput = {
   subscriptionEvents: SubscriptionEventRow[];
   leads: LeadRow[];
   postcardOrders?: PostcardOrderRow[];
+  subscriberStats?: SubscriberStats;
   period: { from: string; to: string };
   filters: AnalyticsFilters;
 };
@@ -287,6 +346,7 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
     subscriptionEvents,
     leads,
     postcardOrders = [],
+    subscriberStats = { total: 0, confirmed: 0, pending: 0, unsubscribed: 0 },
     period,
     filters,
   } = input;
@@ -317,6 +377,7 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
     );
     const products = new Set<string>();
     const ctaShown = new Set<string>();
+    const offersViewed = new Set<string>();
     const ctaClicked = new Set<string>();
     const topics = new Set<string>();
     const outcomes = new Set<ConversationOutcome>();
@@ -330,11 +391,11 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
       const topic = payloadString(event.payload, 'topic');
 
       if (offerId) products.add(offerId);
-      if (
-        event.event_name === 'offer_shown' ||
-        event.event_name === 'offer_viewed' ||
-        event.event_name === 'cta_shown'
-      ) {
+      if (event.event_name === 'offer_viewed') {
+        if (offerId) offersViewed.add(offerId);
+      }
+
+      if (event.event_name === 'cta_shown') {
         if (offerId) ctaShown.add(offerId);
       }
       if (
@@ -391,6 +452,7 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
       hasReply,
       lastMessageRole: lastMessage?.role || null,
       ctaShown: Array.from(ctaShown),
+      offersViewed: Array.from(offersViewed),
       ctaClicked: Array.from(ctaClicked),
       topics: Array.from(topics),
       href: `/admin/pierrot?conversation=${encodeURIComponent(conversation.id)}`,
@@ -868,6 +930,174 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
     });
   }
 
+  const answerFeedback = { up: 0, down: 0 };
+  const feedbackByConversation = new Map<string, { up: number; down: number }>();
+
+  for (const event of filteredEvents) {
+    if (event.event_name !== 'answer_feedback') continue;
+    const rating = payloadString(event.payload, 'rating');
+    if (rating !== 'up' && rating !== 'down') continue;
+
+    answerFeedback[rating] += 1;
+    const current = feedbackByConversation.get(event.conversation_id) || { up: 0, down: 0 };
+    current[rating] += 1;
+    feedbackByConversation.set(event.conversation_id, current);
+  }
+
+  const retrievalEvents = filteredEvents.filter(
+    (event) => event.event_name === 'brain_retrieval'
+  );
+  let retrievalLatencyTotal = 0;
+  let retrievalLatencyCount = 0;
+  const retrieval = {
+    attempts: retrievalEvents.length,
+    relevant: 0,
+    noMatch: 0,
+    unavailable: 0,
+    errors: 0,
+    contextUsed: 0,
+    media: 0,
+    documents: 0,
+    chunks: 0,
+    averageLatencyMs: null as number | null,
+  };
+
+  for (const event of retrievalEvents) {
+    const outcome = payloadString(event.payload, 'outcome');
+    if (outcome === 'relevant_results') retrieval.relevant += 1;
+    if (outcome === 'no_match' || outcome === 'weak_match') retrieval.noMatch += 1;
+    if (outcome === 'unavailable' || outcome === 'disabled') retrieval.unavailable += 1;
+    if (outcome === 'error') retrieval.errors += 1;
+    if (event.payload?.used_context === true) retrieval.contextUsed += 1;
+    if (payloadString(event.payload, 'mode') === 'media') retrieval.media += 1;
+
+    retrieval.documents += payloadCount(event.payload, 'document_count', 'document_ids');
+    retrieval.chunks += payloadCount(event.payload, 'chunk_count', 'chunk_ids');
+    const latency = payloadNumber(event.payload, 'latency_ms');
+    if (latency > 0) {
+      retrievalLatencyTotal += latency;
+      retrievalLatencyCount += 1;
+    }
+  }
+
+  if (retrievalLatencyCount > 0) {
+    retrieval.averageLatencyMs = Math.round(retrievalLatencyTotal / retrievalLatencyCount);
+  }
+
+  const handover = {
+    requested: countEvent('human_requested'),
+    accepted: countEvent('human_accepted'),
+    declined: countEvent('human_declined'),
+    expired: countEvent('human_expired'),
+    messagesSent: countEvent('human_message_sent'),
+    messagesReceived: countEvent('human_message_received'),
+  };
+
+  const humanRequestedIds = new Set(
+    filteredEvents
+      .filter((event) => event.event_name === 'human_requested')
+      .map((event) => event.conversation_id)
+  );
+  const humanTerminalIds = new Set(
+    filteredEvents
+      .filter((event) =>
+        ['human_accepted', 'human_declined', 'human_expired', 'human_closed'].includes(
+          event.event_name
+        )
+      )
+      .map((event) => event.conversation_id)
+  );
+
+  const attention: PierrotAttentionItem[] = [];
+  const attentionSeen = new Set<string>();
+  const pushAttention = (item: PierrotAttentionItem) => {
+    if (attentionSeen.has(item.id)) return;
+    attentionSeen.add(item.id);
+    attention.push(item);
+  };
+
+  for (const summary of visible) {
+    if (summary.hasError) {
+      pushAttention({
+        id: `error:${summary.id}`,
+        title: 'Generation failed',
+        reason: 'At least one assistant generation failed in this conversation.',
+        href: summary.href,
+        severity: 'high',
+      });
+    }
+
+    if (
+      summary.latestIntent === 'unknown' ||
+      summary.latestIntent === 'uncertain'
+    ) {
+      pushAttention({
+        id: `intent:${summary.id}`,
+        title: 'Unresolved intent',
+        reason: `Latest intent: ${summary.latestIntent}.`,
+        href: summary.href,
+        severity: 'medium',
+      });
+    }
+
+    if (summary.lastMessageRole === 'user' && summary.outcomes.includes('none')) {
+      pushAttention({
+        id: `no-reply:${summary.id}`,
+        title: 'Visitor message without a reply',
+        reason: 'The transcript ends with a user message and no recorded outcome.',
+        href: summary.href,
+        severity: 'medium',
+      });
+    }
+
+    const feedback = feedbackByConversation.get(summary.id);
+    if (feedback && feedback.down > feedback.up) {
+      pushAttention({
+        id: `feedback:${summary.id}`,
+        title: 'Negative answer feedback',
+        reason: `${feedback.down} down / ${feedback.up} up.`,
+        href: summary.href,
+        severity: 'medium',
+      });
+    }
+
+    if (humanRequestedIds.has(summary.id) && !humanTerminalIds.has(summary.id)) {
+      pushAttention({
+        id: `human:${summary.id}`,
+        title: 'Human request awaits resolution',
+        reason: 'A human handover was requested but no terminal status is recorded.',
+        href: summary.href,
+        severity: 'high',
+      });
+    }
+  }
+
+  const retrievalFailureIds = new Set(
+    retrievalEvents
+      .filter((event) => {
+        const outcome = payloadString(event.payload, 'outcome');
+        return outcome === 'no_match' || outcome === 'weak_match' || outcome === 'unavailable';
+      })
+      .map((event) => event.conversation_id)
+  );
+
+  for (const summary of visible) {
+    if (retrievalFailureIds.has(summary.id)) {
+      pushAttention({
+        id: `retrieval:${summary.id}`,
+        title: 'Brain retrieval without evidence',
+        reason: 'No owner evidence was used; verify that the answer did not overclaim.',
+        href: summary.href,
+        severity: 'low',
+      });
+    }
+  }
+
+  attention.sort((left, right) => {
+    const rank = { high: 0, medium: 1, low: 2 };
+    return rank[left.severity] - rank[right.severity] || left.title.localeCompare(right.title);
+  });
+
   const availableIntents = Array.from(
     new Set(events.map((event) => payloadString(event.payload, 'intent')).filter(Boolean))
   ).sort() as string[];
@@ -888,6 +1118,14 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
       qualifiedLeads,
       errors,
       unresolved,
+      answers: {
+        replied: countEvent('assistant_replied'),
+        failed: countEvent('assistant_failed'),
+      },
+      feedback: answerFeedback,
+      retrieval,
+      handover,
+      subscribers: subscriberStats,
     },
     volume: {
       conversations: filtered.length,
@@ -899,6 +1137,7 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
     },
     funnels,
     conversations: visible,
+    attention,
     insights,
     recommendations,
     availableIntents,
@@ -997,6 +1236,41 @@ export async function loadPierrotDashboard(filters: AnalyticsFilters): Promise<P
       ),
     ]);
 
+  let subscriberStats: SubscriberStats = {
+    total: 0,
+    confirmed: 0,
+    pending: 0,
+    unsubscribed: 0,
+  };
+
+  try {
+    const subscribers = await fetchAll<{
+      isActive: boolean;
+      confirmedAt: string | null;
+      unsubscribedAt: string | null;
+    }>(
+      store,
+      'subscribers',
+      'isActive,confirmedAt,unsubscribedAt',
+      (q) => q.order('created_at', { ascending: false }),
+      5000
+    );
+
+    subscriberStats = {
+      total: subscribers.length,
+      confirmed: subscribers.filter(
+        (row) => row.isActive === true && Boolean(row.confirmedAt)
+      ).length,
+      pending: subscribers.filter(
+        (row) => row.isActive === false && !row.unsubscribedAt
+      ).length,
+      unsubscribed: subscribers.filter((row) => Boolean(row.unsubscribedAt)).length,
+    };
+  } catch {
+    // The subscription table may be temporarily unavailable; the rest of the
+    // dashboard remains useful and the metric stays at zero.
+  }
+
   return buildPierrotSnapshot({
     conversations,
     messages,
@@ -1004,6 +1278,7 @@ export async function loadPierrotDashboard(filters: AnalyticsFilters): Promise<P
     subscriptionEvents,
     leads,
     postcardOrders,
+    subscriberStats,
     period: { from: filters.from, to: filters.to },
     filters,
   });

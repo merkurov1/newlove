@@ -105,7 +105,7 @@ async function requestPierrot(input: {
     state: 'pending' | 'granted' | 'denied';
     version: string | null;
   } = {
-    state: 'granted',
+    state: 'pending',
     version: PIERROT_CONSENT_VERSION,
   };
   const store = createPierrotStore();
@@ -116,7 +116,7 @@ async function requestPierrot(input: {
 
       if (stored) {
         consent = {
-          state: stored.state === 'denied' ? 'denied' : 'granted',
+          state: stored.state,
           version: stored.version ?? PIERROT_CONSENT_VERSION,
         };
       }
@@ -239,7 +239,7 @@ async function sendWelcome(ctx: Context) {
       '',
       'I am Pierrot. Ask me anything, or choose a door.',
       '',
-      'I save this conversation privately for up to 90 days. /privacy off disables saving; /delete removes it.',
+      'I can save this conversation privately for up to 90 days. Send /privacy on to allow saving; /privacy off disables it. /delete removes the saved copy.',
     ].join('\n'),
     { reply_markup: welcomeKeyboard() }
   );
@@ -712,7 +712,7 @@ bot.command('privacy', async (ctx) => {
     return;
   }
 
-  let state: 'pending' | 'granted' | 'denied' = 'granted';
+  let state: 'pending' | 'granted' | 'denied' = 'pending';
 
   if (store) {
     try {
@@ -725,8 +725,8 @@ bot.command('privacy', async (ctx) => {
 
   await ctx.reply(
     [
-      `Saving is ${state === 'denied' ? 'off' : 'on'}.`,
-      'Use /privacy off or /privacy on to change it.',
+      `Saving is ${state === 'granted' ? 'on' : 'off'}.`,
+      'Use /privacy on to allow saving or /privacy off to disable it.',
       'Use /delete to remove the saved transcript.',
     ].join('\n')
   );

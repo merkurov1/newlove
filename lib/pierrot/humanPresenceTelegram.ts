@@ -1,3 +1,7 @@
+import { assertServerOnly } from '@/lib/serverOnly';
+
+assertServerOnly('lib/pierrot/humanPresenceTelegram');
+
 /**
  * Telegram presentation layer for PIERO HUMAN PRESENCE.
  *

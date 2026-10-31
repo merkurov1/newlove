@@ -286,4 +286,48 @@ describe('Pierrot Intelligence aggregation', () => {
 
     expect(new Date(normalized.from).getTime()).toBeGreaterThan(new Date('2026-07-01').getTime());
   });
+
+  it('keeps offer_viewed separate from cta_shown and reports retrieval, feedback and handover', () => {
+    const snapshot = buildPierrotSnapshot({
+      conversations: [conversation('r1')],
+      events: [
+        event('r1', 'offer_viewed', { offer_id: 'heart_angel_postcard' }),
+        event('r1', 'brain_retrieval', {
+          mode: 'brain_v2',
+          outcome: 'relevant_results',
+          used_context: true,
+          document_count: 2,
+          chunk_count: 3,
+          latency_ms: 40,
+        }),
+        event('r1', 'answer_feedback', { rating: 'down' }),
+        event('r1', 'human_requested', { request_id: 'request-1' }),
+        event('r1', 'assistant_replied', {}),
+      ],
+      messages: [
+        message('r1', 'user', 'What is in the archive?', 1),
+        message('r1', 'assistant', 'Here is what I found.', 2),
+      ],
+      subscriptionEvents: [],
+      leads: [],
+      period,
+      filters,
+    });
+
+    expect(snapshot.conversations[0].offersViewed).toEqual(['heart_angel_postcard']);
+    expect(snapshot.conversations[0].ctaShown).toEqual([]);
+    expect(snapshot.overview.retrieval).toMatchObject({
+      attempts: 1,
+      relevant: 1,
+      contextUsed: 1,
+      documents: 2,
+      chunks: 3,
+      averageLatencyMs: 40,
+    });
+    expect(snapshot.overview.feedback).toEqual({ up: 0, down: 1 });
+    expect(snapshot.overview.handover.requested).toBe(1);
+    expect(snapshot.overview.answers).toEqual({ replied: 1, failed: 0 });
+    expect(snapshot.attention.some((item) => item.id === 'human:r1')).toBe(true);
+    expect(snapshot.attention.some((item) => item.id === 'feedback:r1')).toBe(true);
+  });
 });

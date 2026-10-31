@@ -127,8 +127,9 @@ export const metadata: Metadata = {
 
   alternates: {
     types: {
+      // Site-wide RSS discovery points at the canonical Journal feed.
+      // Flow pages override this with their own RSS/JSON alternates.
       'application/rss+xml': `${SITE_URL}/feed.xml`,
-      'application/feed+json': `${SITE_URL}/flow/feed.json`,
     },
   },
 

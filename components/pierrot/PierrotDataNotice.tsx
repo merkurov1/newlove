@@ -14,11 +14,11 @@ type PierrotDataNoticeProps = {
 
 export default function PierrotDataNotice({ className = '' }: PierrotDataNoticeProps) {
   const { clearChat } = usePierrot();
-  const [state, setState] = useState<'granted' | 'denied'>('granted');
+  const [state, setState] = useState<'pending' | 'granted' | 'denied'>('pending');
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    setState(getPierrotConsent().state === 'denied' ? 'denied' : 'granted');
+    setState(getPierrotConsent().state);
   }, []);
 
   const toggle = () => {
@@ -51,7 +51,9 @@ export default function PierrotDataNotice({ className = '' }: PierrotDataNoticeP
       <p className="normal-case tracking-normal">
         {state === 'granted'
           ? 'Pierrot saves this conversation privately for up to 90 days.'
-          : 'Saving is off. Pierrot answers without keeping a transcript.'}
+          : state === 'denied'
+            ? 'Saving is off. Pierrot answers without keeping a transcript.'
+            : 'Saving is off until you allow it. Pierrot answers without keeping a transcript.'}
       </p>
 
       <div className="flex items-center gap-3">

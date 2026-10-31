@@ -225,6 +225,60 @@ function parseTimeRange(text: string): {
     return { ...range, wantsRecent: false, signal: 'last_month' };
   }
 
+  if (
+    hasAny(text, [
+      'last two months',
+      'past two months',
+      'last 2 months',
+      'последние два месяца',
+      'последние 2 месяца',
+      'за последние два месяца',
+      'за последние 2 месяца',
+    ])
+  ) {
+    return {
+      from: new Date(now.getTime() - 62 * 24 * 60 * 60 * 1000).toISOString(),
+      to: null,
+      wantsRecent: true,
+      signal: 'last_two_months',
+    };
+  }
+
+  if (
+    hasAny(text, [
+      'last three months',
+      'past three months',
+      'last 3 months',
+      'последние три месяца',
+      'последние 3 месяца',
+    ])
+  ) {
+    return {
+      from: new Date(now.getTime() - 92 * 24 * 60 * 60 * 1000).toISOString(),
+      to: null,
+      wantsRecent: true,
+      signal: 'last_three_months',
+    };
+  }
+
+  if (
+    hasAny(text, [
+      'last six months',
+      'past six months',
+      'last 6 months',
+      'полгода',
+      'последние шесть месяцев',
+      'последние 6 месяцев',
+    ])
+  ) {
+    return {
+      from: new Date(now.getTime() - 183 * 24 * 60 * 60 * 1000).toISOString(),
+      to: null,
+      wantsRecent: true,
+      signal: 'last_six_months',
+    };
+  }
+
   if (hasAny(text, ['recent', 'recently', 'latest', 'недавно', 'последние', 'свежие'])) {
     return {
       from: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString(),

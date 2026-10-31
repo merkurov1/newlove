@@ -11,6 +11,8 @@ export const metadata: Metadata = pageMetadata({
     en: '/flow',
     ru: '/flow',
   },
+  rssPath: '/flow/rss',
+  jsonFeedPath: '/flow/feed.json',
 });
 
 export default function FlowLayout({ children }: { children: React.ReactNode }) {

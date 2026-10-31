@@ -97,6 +97,10 @@ type PageMetadataInput = {
   keywords?: string[];
   noindex?: boolean;
   languages?: Record<string, string>;
+  /** RSS feed for this page's content. Defaults to the canonical Journal feed. */
+  rssPath?: string;
+  /** JSON Feed mirror, used by Flow pages. */
+  jsonFeedPath?: string;
 };
 
 /**
@@ -123,7 +127,8 @@ export function pageMetadata(input: PageMetadataInput): Metadata {
       canonical: url,
       ...(languages ? { languages } : {}),
       types: {
-        'application/rss+xml': absoluteUrl('/feed.xml'),
+        'application/rss+xml': absoluteUrl(input.rssPath || '/feed.xml'),
+        ...(input.jsonFeedPath ? { 'application/feed+json': absoluteUrl(input.jsonFeedPath) } : {}),
       },
     },
     authors: input.authors?.map((name) => ({ name, url: SITE_URL })),

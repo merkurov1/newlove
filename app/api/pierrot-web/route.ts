@@ -2,7 +2,8 @@ import { randomUUID } from 'crypto';
 import OpenAI from 'openai';
 import { NextResponse } from 'next/server';
 import { getCurrentUser, requireAdminFromRequest } from '@/lib/serverAuth';
-import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { getClientIp } from '@/lib/rateLimit';
+import { checkPierrotRateLimit } from '@/lib/pierrot/rateLimit';
 import { getSectionByRoute } from '@/lib/pierrot/navigation';
 import { buildPierrotContextPrompt } from '@/lib/pierrot/concepts';
 import {
@@ -49,16 +50,20 @@ import {
 import { isServiceLeadIntent } from '@/lib/pierrot/serviceInquiry';
 import { advanceStoredServiceInquiry } from '@/lib/pierrot/serviceInquiryStore';
 import { retrieveUnframedEvidence } from '@/lib/knowledge/rag/retrieval';
+import { retrieveBrainEvidence } from '@/lib/knowledge/rag/brainRetrieval';
+import { retrieveBrainEvidenceWithRefinement } from '@/lib/knowledge/rag/pierrotRetrieval';
 import {
-  retrieveBrainEvidence,
-  type BrainRetrievalResult,
-} from '@/lib/knowledge/rag/brainRetrieval';
-import { isBrainRetrievalV2Enabled } from '@/lib/knowledge/rag/config';
+  isBrainRetrievalV2Enabled,
+  isPierrotRagEnabled,
+  isPublicPierrotRagEnabled,
+} from '@/lib/knowledge/rag/config';
 import { buildBrainQueryPlan } from '@/lib/knowledge/rag/queryRouting';
 import {
+  buildPublicBrainEvidencePrompt,
   buildUnframedEvidencePrompt,
   buildUnframedUnavailablePrompt,
 } from '@/lib/knowledge/rag/pierrotContext';
+import { retrieveFlowPublicEvidence } from '@/lib/knowledge/rag/flowRetrieval';
 import {
   buildUnframedEvidenceSources,
   type UnframedEvidenceSource,
@@ -71,7 +76,10 @@ import {
   buildMediaEvidencePrompt,
   buildMediaEvidenceSources,
 } from '@/lib/knowledge/rag/mediaEvidence';
-import { recordBrainRetrieval } from '@/lib/pierrot/brainAnalytics';
+import {
+  recordPierrotRetrieval,
+  type PierrotRetrievalTraceInput,
+} from '@/lib/pierrot/brainAnalytics';
 import { detectHumanPresenceIntent } from '@/lib/pierrot/humanIntent';
 import {
   createHumanAccessToken,
@@ -119,7 +127,12 @@ COMMERCE:
 - Commercial CTA buttons and routes are chosen by code; do not fabricate links or checkout steps.
 
 IMPORTANT:
-- Detect the user's language and reply in the EXACT SAME language.
+- Detect the user's language and reply in the EXACT SAME language. If the visitor switches language, switch immediately.
+- Do not reintroduce yourself after the first turn and do not repeat the previous answer.
+- For a short follow-up, use the conversation history; ask one precise clarifying question only when the intent is genuinely ambiguous.
+- Do not turn the answer into a generic encyclopedia entry. Connect themes when the visitor asks for a connection.
+- Default to one to three short sentences. Use a list only when the visitor explicitly asks for a list, comparison or steps; never use more than one list.
+- If the available evidence is insufficient, say so in one sentence and offer one concrete next step.
 
 LINKS:
 - When mentioning a page of this site, use a markdown link, e.g. [Lobby](/lobby).
@@ -137,7 +150,11 @@ TONE & BEHAVIOR:
 - Razor-sharp, deeply informed in art history, context architecture, technology, and strategy.
 - Concise, profound, loyal, and clear.
 - Tailor answers to Anton's voice: high aesthetics, precision, no fluff.
-- Match Anton's language (Russian or English).
+- Match Anton's language (Russian or English). If he switches, switch immediately.
+- Do not reintroduce yourself or repeat the previous answer.
+- For a short follow-up, use the conversation history and the retrieved evidence; ask one precise clarification only when needed.
+- Distinguish what the sources state from your own interpretation. Never fill a retrieval gap with invented facts.
+- Default to one to three short sentences unless the question genuinely requires a structured answer; never use more than one list.
 
 LINKS:
 - When mentioning a page of this site, use a markdown link, e.g. [Lobby](/lobby).
@@ -145,7 +162,7 @@ LINKS:
 `;
 
 type OwnerRagResponse = {
-  mode: 'unframed' | 'media';
+  mode: 'unframed' | 'media' | 'public';
   outcome: RagRetrievalOutcome;
   sources: UnframedEvidenceSource[];
 };
@@ -194,8 +211,9 @@ export async function POST(req: Request) {
 
     // The Telegram adapter calls this route server-to-server. Its users share
     // the server egress IP, so it gets a per-Telegram-user bucket instead.
-    const limited = checkRateLimit(rateLimitKey, {
-      interval: 60 * 1000,
+    const limited = await checkPierrotRateLimit({
+      identifier: rateLimitKey,
+      intervalMs: 60 * 1000,
       maxRequests: isInternalRequest ? 60 : 20,
       keyPrefix: isInternalRequest ? 'pierrot-tg' : 'pierrot-web',
     });
@@ -260,54 +278,37 @@ export async function POST(req: Request) {
     const canStoreMetadata = consent.state !== 'denied';
     const pierrotStore = canStoreMetadata ? createPierrotStore() : null;
 
-    // Check if requester is Admin (Anton Merkurov)
-    let isAdmin = false;
+    // Owner-only manuscript retrieval requires a verified user identity.
+    // Shared service secrets and x-admin-key are deliberately not user
+    // identities and can never unlock owner Brain/manuscript scope.
     let currentUserId: string | null = null;
-    // Owner-only manuscript retrieval requires a verified server-side identity.
-    // The legacy shared x-admin-key below is deliberately not sufficient.
     let ragOwnerAuthorized = false;
+
     try {
       const user = await getCurrentUser();
       currentUserId = user?.id ?? null;
-      if (user?.role === 'ADMIN') {
-        isAdmin = true;
-      }
       if (isVerifiedOwnerUser(user)) {
         ragOwnerAuthorized = true;
       }
     } catch {
-      isAdmin = false;
+      ragOwnerAuthorized = false;
     }
 
-    // Verified Telegram Mini App administrator / other API credentials.
-    if (!isAdmin) {
+    // Verified Telegram Mini App initData / Bearer JWT. The dedicated
+    // "system-admin" service identity is excluded by isVerifiedOwnerCredential.
+    if (!ragOwnerAuthorized) {
       const hasVerifiableCredential =
         Boolean(req.headers.get('x-telegram-init-data')) ||
-        Boolean(req.headers.get('x-admin-secret')) ||
         Boolean(req.headers.get('authorization'));
 
       if (hasVerifiableCredential) {
         try {
           const admin = await requireAdminFromRequest(req);
-          isAdmin = admin.role === 'ADMIN';
-          // A dedicated service secret ("system-admin") is an existing admin
-          // credential, but it is not a user identity. Keep owner manuscript
-          // retrieval limited to verified user/admin sessions.
           if (isVerifiedOwnerCredential(admin)) ragOwnerAuthorized = true;
         } catch {
-          isAdmin = false;
+          ragOwnerAuthorized = false;
         }
       }
-    }
-
-    // Optional admin header fallback
-    const customAdminHeader = req.headers.get('x-admin-key');
-    if (
-      customAdminHeader &&
-      ((process.env.ADMIN_SECRET_KEY && customAdminHeader === process.env.ADMIN_SECRET_KEY) ||
-        (process.env.PIERO_API_SECRET && customAdminHeader === process.env.PIERO_API_SECRET))
-    ) {
-      isAdmin = true;
     }
 
     if (requestedOwnerMode && !ragOwnerAuthorized) {
@@ -539,7 +540,7 @@ export async function POST(req: Request) {
         };
 
     const systemPrompt =
-      (isAdmin ? PIERROT_PROMPT_OWNER : PIERROT_PROMPT_PUBLIC) +
+      (ragOwnerAuthorized ? PIERROT_PROMPT_OWNER : PIERROT_PROMPT_PUBLIC) +
       '\n\n' +
       contextPrompt +
       '\n\n' +
@@ -572,7 +573,7 @@ export async function POST(req: Request) {
         return NextResponse.json({
           reply: replay.content,
           provider: replay.provider || undefined,
-          ...(isAdmin ? { admin: true } : {}),
+          ...(ragOwnerAuthorized ? { admin: true } : {}),
           conversationId,
           sessionId,
           userMessageId,
@@ -840,7 +841,10 @@ export async function POST(req: Request) {
     let reply = '';
     let usedProvider = '';
     let ownerRag: OwnerRagResponse | null = null;
-    let brainTrace: BrainRetrievalResult | null = null;
+    let retrievalTrace: Omit<
+      PierrotRetrievalTraceInput,
+      'usedContext' | 'generationOk'
+    > | null = null;
     let usedRagContext = false;
 
     if (!useModel) {
@@ -887,14 +891,131 @@ export async function POST(req: Request) {
           .map((h) => h.content)
           .join(' ')}`.toLowerCase();
         const prefersReasoning =
-          isAdmin && reasoningKeywords.some((keyword) => contextScan.includes(keyword));
+          ragOwnerAuthorized && reasoningKeywords.some((keyword) => contextScan.includes(keyword));
 
         // Owner-only Brain retrieval. Public conversations never enter this
         // branch. The mode is a client intent only; access is decided by the
         // verified server-side owner identity above.
         let generationSystemPrompt = systemPrompt;
 
+        if (!ownerMode && isPublicPierrotRagEnabled()) {
+          try {
+            const retrieval = await retrieveFlowPublicEvidence(
+              {
+                title: trimmedMessage,
+                body_md: null,
+                metadata: null,
+                type: 'article',
+                lang: language,
+                source_url: null,
+              },
+              { enabled: true }
+            );
+
+            retrievalTrace = {
+              conversationId,
+              sessionId,
+              userMessageId,
+              mode: 'public_brain',
+              outcome: retrieval.status,
+              code: null,
+              selectedSources: Array.from(
+                new Set(retrieval.sourceRefs.map((ref) => ref.sourceType))
+              ),
+              documentIds: retrieval.documentIds,
+              chunkIds: retrieval.sourceRefs.map((ref) => ref.chunkId),
+              latencyMs: retrieval.latencyMs,
+              candidateCount:
+                typeof retrieval.diagnostics.candidateCount === 'number'
+                  ? retrieval.diagnostics.candidateCount
+                  : 0,
+              topSimilarity: retrieval.topSimilarity,
+              refined: false,
+              attempts: 1,
+            };
+
+            const ragPrompt = buildPublicBrainEvidencePrompt(retrieval);
+
+            if (ragPrompt) {
+              generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+              usedRagContext = true;
+              ownerRag = {
+                mode: 'public',
+                outcome: 'relevant_results',
+                sources: retrieval.sourceRefs.map((ref) => ({
+                  documentId: ref.documentId,
+                  documentTitle: ref.documentTitle,
+                  sourceType: ref.sourceType,
+                  sourceClass: ref.sourceType,
+                  sourceDomain: null,
+                  author: null,
+                  publishedAt: ref.publishedAt,
+                  chunkId: ref.chunkId,
+                  heading: ref.documentTitle,
+                  sectionPath: [],
+                  sectionIndex: 0,
+                  lineStart: 0,
+                  lineEnd: 0,
+                  similarity: ref.similarity,
+                  excerpt: ref.excerpt,
+                  canonicalUrl: ref.sourceUrl,
+                  verificationStatus: 'none',
+                })),
+              };
+            }
+          } catch {
+            retrievalTrace = {
+              conversationId,
+              sessionId,
+              userMessageId,
+              mode: 'public_brain',
+              outcome: 'unavailable',
+              code: 'unexpected_retrieval_error',
+              selectedSources: [],
+              documentIds: [],
+              chunkIds: [],
+              latencyMs: 0,
+              candidateCount: 0,
+              topSimilarity: null,
+              refined: false,
+              attempts: 0,
+            };
+          }
+        }
+
         if (ownerMode) {
+          const ragEnabled = isPierrotRagEnabled();
+
+          if (!ragEnabled) {
+            ownerRag = {
+              mode: 'unframed',
+              outcome: 'unavailable',
+              sources: [],
+            };
+            usedRagContext = false;
+            generationSystemPrompt = `${systemPrompt}\n\n${buildUnframedUnavailablePrompt(
+              'unavailable'
+            )}`;
+
+            retrievalTrace = {
+              conversationId,
+              sessionId,
+              userMessageId,
+              mode: 'disabled',
+              outcome: 'disabled',
+              code: 'feature_flag_disabled',
+              selectedSources: [],
+              documentIds: [],
+              chunkIds: [],
+              latencyMs: 0,
+              candidateCount: 0,
+              topSimilarity: null,
+              refined: false,
+              attempts: 0,
+            };
+
+            console.info('[Pierrot RAG] disabled by PIERROT_RAG_ENABLED');
+          } else {
           try {
             const useBrainV2 = isBrainRetrievalV2Enabled();
             const brainPlan = buildBrainQueryPlan(trimmedMessage);
@@ -902,10 +1023,29 @@ export async function POST(req: Request) {
             const useMediaBranch = isMediaArchiveQuery(trimmedMessage) && !requestsManuscript;
 
             if (useMediaBranch) {
+              const mediaStartedAt = Date.now();
               const retrieval = await retrieveMediaEvidence({
                 query: trimmedMessage,
                 limit: 8,
               });
+
+              retrievalTrace = {
+                conversationId,
+                sessionId,
+                userMessageId,
+                mode: 'media',
+                outcome: retrieval.outcome,
+                code: retrieval.code ?? null,
+                selectedSources: ['media_coverage'],
+                documentIds: Array.from(new Set(retrieval.hits.map((hit) => hit.documentId))),
+                chunkIds: retrieval.hits.map((hit) => hit.chunkId),
+                latencyMs: Date.now() - mediaStartedAt,
+                candidateCount: retrieval.hits.length,
+                topSimilarity: null,
+                refined: false,
+                attempts: 1,
+                mediaFallbackCount: retrieval.hits.filter((hit) => hit.fallback).length,
+              };
 
               ownerRag = {
                 mode: 'media',
@@ -914,7 +1054,8 @@ export async function POST(req: Request) {
               };
 
               const ragPrompt = buildMediaEvidencePrompt(retrieval);
-              usedRagContext = Boolean(ragPrompt);
+              usedRagContext =
+                retrieval.outcome === 'relevant_results' && retrieval.hits.length > 0;
 
               if (ragPrompt) {
                 generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
@@ -926,15 +1067,38 @@ export async function POST(req: Request) {
                 fallback: retrieval.hits.some((hit) => hit.fallback),
               });
             } else if (useBrainV2) {
-              const retrieval = await retrieveBrainEvidence({
+              const retrieval = await retrieveBrainEvidenceWithRefinement({
                 query: trimmedMessage,
-                scope: 'owner',
-                ownerAuthorized: true,
-                enabled: true,
                 plan: brainPlan,
+                topK: 8,
+                maxAttempts: 3,
+                retrieve: (attempt) =>
+                  retrieveBrainEvidence({
+                    query: attempt.query,
+                    scope: 'owner',
+                    ownerAuthorized: true,
+                    plan: attempt.plan,
+                    topK: attempt.topK,
+                  }),
               });
 
-              brainTrace = retrieval;
+              retrievalTrace = {
+                conversationId,
+                sessionId,
+                userMessageId,
+                mode: 'brain_v2',
+                outcome: retrieval.outcome,
+                code: retrieval.code ?? null,
+                selectedSources: retrieval.selectedSourceClasses,
+                documentIds: retrieval.documentIds,
+                chunkIds: retrieval.chunkIds,
+                latencyMs: retrieval.latencyMs,
+                candidateCount: retrieval.candidateCount,
+                topSimilarity: retrieval.topSimilarity,
+                refined: retrieval.refined,
+                attempts: retrieval.attempts,
+              };
+
               ownerRag = {
                 mode: 'unframed',
                 outcome: retrieval.outcome,
@@ -949,7 +1113,8 @@ export async function POST(req: Request) {
                   ? buildUnframedEvidencePrompt(retrieval)
                   : buildUnframedUnavailablePrompt(retrieval.outcome);
 
-              usedRagContext = Boolean(ragPrompt);
+              usedRagContext =
+                retrieval.outcome === 'relevant_results' && Boolean(ragPrompt);
 
               if (ragPrompt) {
                 generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
@@ -969,8 +1134,32 @@ export async function POST(req: Request) {
                 query: trimmedMessage,
                 scope: 'owner',
                 ownerAuthorized: true,
-                enabled: true,
               });
+
+              retrievalTrace = {
+                conversationId,
+                sessionId,
+                userMessageId,
+                mode: 'brain_v1',
+                outcome: retrieval.outcome,
+                code: retrieval.code ?? null,
+                selectedSources: Array.from(
+                  new Set(
+                    retrieval.hits
+                      .map((hit) => hit.sourceClass)
+                      .filter((value): value is string => Boolean(value))
+                  )
+                ),
+                documentIds: Array.from(
+                  new Set(retrieval.hits.map((hit) => hit.documentId))
+                ),
+                chunkIds: retrieval.hits.map((hit) => hit.chunkId),
+                latencyMs: retrieval.latencyMs,
+                candidateCount: retrieval.hits.length,
+                topSimilarity: retrieval.topSimilarity,
+                refined: false,
+                attempts: 1,
+              };
 
               ownerRag = {
                 mode: 'unframed',
@@ -986,7 +1175,8 @@ export async function POST(req: Request) {
                   ? buildUnframedEvidencePrompt(retrieval)
                   : buildUnframedUnavailablePrompt(retrieval.outcome);
 
-              usedRagContext = Boolean(ragPrompt);
+              usedRagContext =
+                retrieval.outcome === 'relevant_results' && Boolean(ragPrompt);
 
               if (ragPrompt) {
                 generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
@@ -1001,6 +1191,22 @@ export async function POST(req: Request) {
               });
             }
           } catch {
+            retrievalTrace = {
+              conversationId,
+              sessionId,
+              userMessageId,
+              mode: 'brain_v2',
+              outcome: 'unavailable',
+              code: 'unexpected_retrieval_error',
+              selectedSources: [],
+              documentIds: [],
+              chunkIds: [],
+              latencyMs: 0,
+              candidateCount: 0,
+              topSimilarity: null,
+              refined: false,
+              attempts: 0,
+            };
             ownerRag = {
               mode: 'unframed',
               outcome: 'unavailable',
@@ -1013,6 +1219,7 @@ export async function POST(req: Request) {
 
             // Never log query text, passages or provider/database details.
             console.warn('[Pierrot RAG] unavailable (unexpected)');
+          }
           }
         }
 
@@ -1036,12 +1243,9 @@ export async function POST(req: Request) {
           }
         }
 
-        if (brainTrace && pierrotStore) {
-          await recordBrainRetrieval(pierrotStore, {
-            conversationId,
-            sessionId,
-            userMessageId,
-            result: brainTrace,
+        if (retrievalTrace && pierrotStore) {
+          await recordPierrotRetrieval(pierrotStore, {
+            ...retrievalTrace,
             usedContext: usedRagContext,
             generationOk: false,
           });
@@ -1183,12 +1387,9 @@ export async function POST(req: Request) {
       }
     }
 
-    if (brainTrace && pierrotStore) {
-      await recordBrainRetrieval(pierrotStore, {
-        conversationId,
-        sessionId,
-        userMessageId,
-        result: brainTrace,
+    if (retrievalTrace && pierrotStore) {
+      await recordPierrotRetrieval(pierrotStore, {
+        ...retrievalTrace,
         usedContext: usedRagContext,
         generationOk: true,
       });
@@ -1197,7 +1398,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       reply: finalReply,
       provider: usedProvider || undefined,
-      ...(isAdmin ? { admin: true } : {}),
+      ...(ragOwnerAuthorized ? { admin: true } : {}),
       ...(ownerRag ? { rag: ownerRag } : {}),
       conversationId,
       sessionId,

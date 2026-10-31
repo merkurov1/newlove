@@ -26,11 +26,21 @@ function formatDate(value: string | null | undefined): string {
   }).format(new Date(value));
 }
 
-function Metric({ label, value, detail }: { label: string; value: number; detail?: string }) {
+function Metric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: number | string;
+  detail?: string;
+}) {
   return (
     <div className="border-t border-[#D9D3CD] py-4">
       <p className="text-xs text-[#746D66]">{label}</p>
-      <p className="mt-2 font-serif text-3xl text-[#211F1F]">{value.toLocaleString('en-GB')}</p>
+      <p className="mt-2 font-serif text-3xl text-[#211F1F]">
+        {typeof value === 'number' ? value.toLocaleString('en-GB') : value}
+      </p>
       {detail && <p className="mt-1 text-[11px] leading-relaxed text-[#89827B]">{detail}</p>}
     </div>
   );
@@ -484,7 +494,12 @@ export default async function PierrotIntelligencePage({
               <Metric
                 label="Confirmed subscriptions"
                 value={snapshot.overview.confirmedSubscriptions}
-                detail="subscription_confirmed events"
+                detail="subscription_confirmed events attributed to Pierrot"
+              />
+              <Metric
+                label="Subscriber catalogue"
+                value={snapshot.overview.subscribers.confirmed}
+                detail={`${snapshot.overview.subscribers.total} total · ${snapshot.overview.subscribers.pending} pending · ${snapshot.overview.subscribers.unsubscribed} unsubscribed`}
               />
               <Metric
                 label="Confirmed purchases"
@@ -516,7 +531,54 @@ export default async function PierrotIntelligencePage({
               />
             </div>
 
-            <div className="mt-4 grid gap-6 md:grid-cols-2">
+            <div className="mt-6 grid gap-x-8 gap-y-3 border-t border-[#EEE9E4] pt-5 sm:grid-cols-2 lg:grid-cols-4">
+              <Metric
+                label="Answers completed"
+                value={snapshot.overview.answers.replied}
+                detail="assistant_replied events"
+              />
+              <Metric
+                label="Answers failed"
+                value={snapshot.overview.answers.failed}
+                detail="assistant_failed events"
+              />
+              <Metric
+                label="Answer feedback"
+                value={snapshot.overview.feedback.up}
+                detail={`${snapshot.overview.feedback.down} down`}
+              />
+              <Metric
+                label="Handover requests"
+                value={snapshot.overview.handover.requested}
+                detail={`${snapshot.overview.handover.accepted} accepted · ${snapshot.overview.handover.declined} declined · ${snapshot.overview.handover.expired} expired`}
+              />
+              <Metric
+                label="Brain retrieval"
+                value={snapshot.overview.retrieval.attempts}
+                detail={`${snapshot.overview.retrieval.relevant} relevant · ${snapshot.overview.retrieval.noMatch} no match · ${snapshot.overview.retrieval.unavailable} unavailable`}
+              />
+              <Metric
+                label="Context used"
+                value={snapshot.overview.retrieval.contextUsed}
+                detail={`${snapshot.overview.retrieval.documents} documents · ${snapshot.overview.retrieval.chunks} chunks`}
+              />
+              <Metric
+                label="Media retrieval"
+                value={snapshot.overview.retrieval.media}
+                detail="Media Archive retrieval events"
+              />
+              <Metric
+                label="Retrieval latency"
+                value={
+                  snapshot.overview.retrieval.averageLatencyMs === null
+                    ? '—'
+                    : snapshot.overview.retrieval.averageLatencyMs
+                }
+                detail="average ms; — means no measured events"
+              />
+            </div>
+
+            <div className="mt-6 grid gap-6 md:grid-cols-2">
               <div>
                 <h3 className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#746D66]">
                   Intent distribution
@@ -606,6 +668,44 @@ export default async function PierrotIntelligencePage({
           </Section>
 
           <Section
+            title="Needs attention"
+            description="Deterministic flags from failures, unresolved intents, negative feedback, missing replies and open handover requests. Small samples remain directional."
+          >
+            {snapshot.attention.length === 0 ? (
+              <p className="text-sm text-[#89827B]">No conversations require attention in this window.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead>
+                    <tr className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#89827B]">
+                      <th className="pb-2 pr-3">Severity</th>
+                      <th className="pb-2 pr-3">Conversation</th>
+                      <th className="pb-2 pr-3">Reason</th>
+                      <th className="pb-2">Open</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {snapshot.attention.slice(0, 20).map((item) => (
+                      <tr key={item.id} className="border-t border-[#EEE9E4] align-top">
+                        <td className="py-3 pr-3 font-mono text-[10px] uppercase tracking-wider text-[#8B1E3F]">
+                          {item.severity}
+                        </td>
+                        <td className="py-3 pr-3">{item.title}</td>
+                        <td className="py-3 pr-3 text-[#625D58]">{item.reason}</td>
+                        <td className="py-3">
+                          <Link href={item.href} className="text-[#8B1E3F] underline">
+                            Open
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Section>
+
+          <Section
             title="Insights"
             description="Observed facts are separated from hypotheses. Price objections are not treated as proof that price caused an exit."
           >
@@ -649,7 +749,8 @@ export default async function PierrotIntelligencePage({
                 retention policy.
               </li>
               <li>
-                `purge_expired_pierrot_conversations()` remains the server-side cleanup function.
+                `purge_expired_pierrot_conversations()` runs from the scheduled
+                `/api/cron/pierrot-retention` job.
               </li>
               <li>
                 Exports and deletions require an authenticated ADMIN session; a hidden link is not

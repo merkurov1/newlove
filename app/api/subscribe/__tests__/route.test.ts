@@ -50,14 +50,17 @@ function makeStore(options: StoreOptions = {}) {
     from(table: string) {
       if (table === 'subscribers') {
         return {
-          select: () => ({
-            ilike: () => ({
-              maybeSingle: async () => ({
-                data: options.existing === undefined ? null : options.existing,
-                error: options.lookupError ?? null,
-              }),
-            }),
-          }),
+          select: () => {
+            const maybeSingle = async () => ({
+              data: options.existing === undefined ? null : options.existing,
+              error: options.lookupError ?? null,
+            });
+
+            return {
+              eq: () => ({ maybeSingle }),
+              ilike: () => ({ maybeSingle }),
+            };
+          },
           insert: (row: Record<string, unknown>) => {
             inserts.push(row);
             return {

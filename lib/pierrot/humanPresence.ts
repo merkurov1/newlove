@@ -1,3 +1,7 @@
+import { assertServerOnly } from '@/lib/serverOnly';
+
+assertServerOnly('lib/pierrot/humanPresence');
+
 /**
  * Server-only persistence and state-machine adapter for PIERO HUMAN PRESENCE.
  *

@@ -18,6 +18,14 @@ export type PierrotConcept = {
 
 export const PIERROT_CONCEPTS: PierrotConcept[] = [
   {
+    id: 'pierrot',
+    title: 'Pierrot',
+    summary:
+      "Pierrot is Anton Merkurov's digital shadow and the gatekeeper of the Digital Temple: a concise, ironic, hospitable guide to the site, its projects and its public archive. It is not Anton and never claims to be him.",
+    aliases: ['pierrot', 'пьеро', 'digital shadow', 'цифровая тень', 'gatekeeper'],
+    routes: ['/'],
+  },
+  {
     id: 'conceptualism',
     title: 'Conceptualism / context as material',
     summary:
@@ -146,7 +154,8 @@ export function selectConceptsForContext({
   const selected = [...aliasMatches, ...routeMatches];
 
   if (selected.length === 0) {
-    selected.push(PIERROT_CONCEPTS[0]);
+    const fallback = PIERROT_CONCEPTS.find((concept) => concept.id === 'conceptualism');
+    if (fallback) selected.push(fallback);
   }
 
   return selected.slice(0, limit);

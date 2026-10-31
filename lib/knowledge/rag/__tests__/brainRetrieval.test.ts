@@ -268,4 +268,14 @@ describe('Source-aware hybrid retrieval', () => {
     expect(result.ranking[0].similarity).toBeCloseTo(0.8);
     expect(result.plan.subject).toBe('ai');
   });
+
+  it('understands "last two months" and the Novaya Gazeta source filter', () => {
+    const plan = buildBrainQueryPlan('Что писал в Новой газете за последние два месяца?');
+
+    expect(plan.requestedDomains).toContain('novayagazeta.ru');
+    expect(plan.requestedSources).toContain('article');
+    expect(plan.wantsRecent).toBe(true);
+    expect(plan.publishedFrom).toBeTruthy();
+    expect(plan.signals).toContain('time:last_two_months');
+  });
 });
