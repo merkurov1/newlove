@@ -64,6 +64,8 @@ type CompleteFlowAI = (prompt: string) => Promise<{
   content: string;
   model: string;
   provider: string;
+  latencyMs?: number;
+  fallbackUsed?: boolean;
 }>;
 
 export type FlowAIProviderOverrides = {

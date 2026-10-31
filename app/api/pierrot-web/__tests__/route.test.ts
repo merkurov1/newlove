@@ -133,8 +133,10 @@ const mediaEvidence = require('@/lib/knowledge/rag/mediaEvidence') as {
     mockResolvedValueOnce: (value: unknown) => void;
   };
 };
-const { POST, callPierrotModel } = require('../route') as {
+const { POST } = require('../route') as {
   POST: (request: Request) => Promise<Response>;
+};
+const { callPierrotModel } = require('@/lib/pierrot/model') as {
   callPierrotModel: (
     systemPrompt: string,
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
