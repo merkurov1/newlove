@@ -279,6 +279,26 @@ async function finalizeRun(
   return { progress, runStatus };
 }
 
+export function graphRetryDelaySeconds(attempts: number): number {
+  const safeAttempts = Math.max(1, Math.trunc(attempts || 1));
+  return Math.min(900, 15 * 2 ** (safeAttempts - 1));
+}
+
+export function isPermanentGraphError(error: unknown, code: string): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  const httpStatus = typeof status === 'number' ? status : null;
+
+  if (httpStatus !== null && [400, 401, 402, 403, 404].includes(httpStatus)) return true;
+
+  return [
+    'document_not_found',
+    'document_has_no_chunks',
+    'deepseek_not_configured',
+    'deepseek_auth_failed',
+    'deepseek_payment_required',
+  ].includes(code);
+}
+
 export async function processNextGraphJob(input: {
   runId: string;
   store: BrainGraphStore;
@@ -302,7 +322,8 @@ export async function processNextGraphJob(input: {
     return { state: 'paused', progress, runStatus: run.status };
   }
 
-  const job = await store.claimNextJob(runId, input.workerId || `graph-${Date.now()}`);
+  const workerId = input.workerId || `graph-${Date.now()}`;
+  const job = await store.claimNextJob(runId, workerId);
 
   if (!job) {
     jobs = await store.getJobs(runId);
@@ -315,6 +336,8 @@ export async function processNextGraphJob(input: {
 
     return { state: 'waiting', progress, runStatus: 'running' };
   }
+
+  await store.heartbeatJob?.(job.id, workerId)?.catch(() => undefined);
 
   const chatJson = input.chatJson || graphChatJson;
   let skipped = false;
@@ -362,7 +385,9 @@ export async function processNextGraphJob(input: {
         throw new Error('document_has_no_chunks');
       }
 
+      await store.heartbeatJob?.(job.id, workerId)?.catch(() => undefined);
       const extraction = await extractDocumentGraph({ document, chunks }, chatJson);
+      await store.heartbeatJob?.(job.id, workerId)?.catch(() => undefined);
       const payload = buildGraphPayload(
         extraction,
         chunks.map((chunk) => ({ id: chunk.id, section_path: chunk.section_path }))
@@ -404,17 +429,32 @@ export async function processNextGraphJob(input: {
       });
     }
   } catch (error) {
-    const code = error instanceof Error ? error.message : 'graph_extraction_failed';
-    const canRetry = job.attempts < job.max_attempts;
+    const providerStatus = (error as { status?: unknown } | null)?.status;
+    const httpStatus = typeof providerStatus === 'number' ? providerStatus : null;
+    const rawCode = error instanceof Error ? error.message : 'graph_extraction_failed';
+    const code =
+      httpStatus === 401
+        ? 'deepseek_auth_failed'
+        : httpStatus === 402
+          ? 'deepseek_payment_required'
+          : rawCode;
+    const permanent = isPermanentGraphError(error, code);
+    const canRetry = !permanent && job.attempts < job.max_attempts;
+    const delaySeconds = graphRetryDelaySeconds(job.attempts);
 
     await store.updateJob(job.id, {
       status: canRetry ? 'queued' : 'failed',
+      retry_after: canRetry
+        ? new Date(Date.now() + delaySeconds * 1000).toISOString()
+        : null,
       error_code: code.startsWith('deepseek_') || code === 'document_has_no_chunks'
         ? code
         : 'graph_extraction_failed',
-      error_detail: canRetry
-        ? 'Transient extraction failure; the document was requeued.'
-        : 'Document extraction failed.',
+      error_detail: permanent
+        ? 'Permanent extraction error; automatic retries stopped.'
+        : canRetry
+          ? 'Transient extraction failure; the document was requeued with backoff.'
+          : 'Document extraction failed after the maximum number of attempts.',
       locked_at: null,
       worker_id: null,
       completed_at: canRetry ? null : new Date().toISOString(),
@@ -426,9 +466,9 @@ export async function processNextGraphJob(input: {
         contentHash: job.content_hash || '',
         extractorVersion,
         status: canRetry ? 'queued' : 'failed',
-        errorCode: 'graph_extraction_failed',
+        errorCode: code.slice(0, 120),
         errorDetail: canRetry
-          ? 'Transient extraction failure; the document was requeued.'
+          ? 'Transient extraction failure; the document was requeued with backoff.'
           : 'Document extraction failed.',
       });
     } catch {

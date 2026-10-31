@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
-import { BrainUrlError, normalizeSourceUrl } from '@/lib/knowledge/brain/url';
+import { normalizeSourceUrl } from '@/lib/knowledge/brain/url';
 import { createBrainStore } from '@/lib/knowledge/brain/store';
-import { classifyMediaPublication, normalizeMediaLanguage } from '@/lib/knowledge/media/classify';
-import { extractMediaPage } from '@/lib/knowledge/media/page';
+import { normalizeMediaLanguage } from '@/lib/knowledge/media/classify';
 import { enqueueMediaCoverageJob } from '@/lib/knowledge/media/queue';
+import { previewMediaSource, type MediaPreviewInput } from '@/lib/knowledge/media/sourcePreview';
+import { createBrainStorage } from '@/lib/knowledge/brain/storage';
+import { BrainSourceError } from '@/lib/knowledge/brain/sourceValidation';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+export const maxDuration = 120;
 
 const KINDS = [
   'quote',
@@ -70,92 +73,6 @@ function authErrorStatus(error: unknown): number | null {
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
-}
-
-function pageError(error: unknown): HttpError {
-  if (error instanceof BrainUrlError) {
-    const badInput = new Set([
-      'url_empty',
-      'url_invalid',
-      'protocol_unsupported',
-      'credentials_forbidden',
-      'private_host',
-      'host_missing',
-      'port_forbidden',
-      'url_too_long',
-    ]);
-
-    return new HttpError(
-      badInput.has(error.code)
-        ? 'URL публикации недопустим или указывает на закрытый адрес.'
-        : 'Не удалось загрузить страницу источника.',
-      badInput.has(error.code) ? 400 : 502
-    );
-  }
-
-  return new HttpError('Не удалось извлечь публикацию из источника.', 502);
-}
-
-function extractionSummary(page: Awaited<ReturnType<typeof extractMediaPage>>) {
-  return {
-    quality: page.quality.quality,
-    coverageStatus: page.quality.coverageStatus,
-    extractionStatus: page.quality.extractionStatus,
-    errorCode: page.quality.errorCode,
-    charCount: page.article.charCount,
-    wordCount: page.article.wordCount,
-    chunkCount: page.chunking.chunks.length,
-    languageDetected: page.article.language,
-    paywallDetected: page.article.diagnostics.paywallDetected,
-    truncated: page.article.diagnostics.truncated,
-    parser: page.article.diagnostics.parser,
-    fetchedBytes: page.fetchedBytes,
-    finalUrl: page.finalUrl,
-  };
-}
-
-function fallbackMetadata(inputUrl: string, body: Record<string, unknown>) {
-  let canonical = inputUrl;
-  try {
-    canonical = normalizeSourceUrl(inputUrl);
-  } catch {
-    // Keep the input URL for manual correction.
-  }
-
-  let host = 'Unknown publication';
-  try {
-    host = new URL(canonical).hostname.replace(/^www\./i, '').slice(0, 300);
-  } catch {
-    // Keep fallback outlet.
-  }
-
-  return {
-    url: inputUrl,
-    canonical_url: canonical,
-    title: clean(body.title, 500) || `Publication at ${host}`,
-    outlet: clean(body.outlet, 300) || host,
-    summary: clean(body.summary, 2000),
-    image_url: null,
-    published_date: validDate(body.published_date),
-  };
-}
-
-function blockedExtraction(error: HttpError) {
-  return {
-    quality: 'blocked',
-    coverageStatus: 'blocked',
-    extractionStatus: 'failed',
-    errorCode: error.message,
-    charCount: 0,
-    wordCount: 0,
-    chunkCount: 0,
-    languageDetected: null,
-    paywallDetected: false,
-    truncated: false,
-    parser: 'none',
-    fetchedBytes: 0,
-    finalUrl: null,
-  };
 }
 
 function validDate(value: unknown): string | null {
@@ -283,6 +200,151 @@ export async function GET(request: NextRequest) {
   }
 }
 
+const SOURCE_KINDS = ['url', 'pdf', 'txt', 'text'] as const;
+const SOURCE_FORMATS = ['url', 'pdf', 'txt', 'text'] as const;
+
+type SourceKind = (typeof SOURCE_KINDS)[number];
+type SourceFormat = (typeof SOURCE_FORMATS)[number];
+
+function isSourceKind(value: unknown): value is SourceKind {
+  return typeof value === 'string' && (SOURCE_KINDS as readonly string[]).includes(value);
+}
+
+function isSourceFormat(value: unknown): value is SourceFormat {
+  return typeof value === 'string' && (SOURCE_FORMATS as readonly string[]).includes(value);
+}
+
+function safeImageUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+
+  try {
+    const candidate = new URL(value.trim());
+    if (!['http:', 'https:'].includes(candidate.protocol)) return null;
+    if (candidate.username || candidate.password) return null;
+    return candidate.toString().slice(0, 2048);
+  } catch {
+    return null;
+  }
+}
+
+function extractionDiagnostics(value: unknown): Record<string, unknown> {
+  const source =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  const result: Record<string, unknown> = {};
+
+  for (const key of [
+    'quality',
+    'coverageStatus',
+    'extractionStatus',
+    'errorCode',
+    'charCount',
+    'wordCount',
+    'chunkCount',
+    'languageDetected',
+    'paywallDetected',
+    'truncated',
+    'parser',
+    'fetchedBytes',
+    'finalUrl',
+    'pageCount',
+    'skippedPages',
+    'sourceFormat',
+    'contentHash',
+    'sourceSha256',
+  ]) {
+    if (source[key] !== undefined) result[key] = source[key];
+  }
+
+  return result;
+}
+
+function previewInputFromBody(body: Record<string, unknown>): MediaPreviewInput {
+  const rawSource =
+    body.source && typeof body.source === 'object' && !Array.isArray(body.source)
+      ? (body.source as Record<string, unknown>)
+      : body;
+  const kindValue = rawSource.kind ?? body.sourceKind ?? (body.text ? 'text' : 'url');
+
+  if (!isSourceKind(kindValue)) {
+    throw new HttpError('Неизвестный способ загрузки текста.', 400);
+  }
+
+  return {
+    kind: kindValue,
+    url: clean(body.url, 2048) || clean(rawSource.url, 2048),
+    text: typeof rawSource.text === 'string' ? rawSource.text : undefined,
+    storagePath:
+      typeof rawSource.storagePath === 'string' ? rawSource.storagePath : null,
+    sourceSha256:
+      typeof rawSource.sourceSha256 === 'string' ? rawSource.sourceSha256 : null,
+    originalFilename:
+      typeof rawSource.originalFilename === 'string' ? rawSource.originalFilename : null,
+    mimeType: typeof rawSource.mimeType === 'string' ? rawSource.mimeType : null,
+    byteSize: Number.isFinite(Number(rawSource.byteSize)) ? Number(rawSource.byteSize) : null,
+    title: typeof body.title === 'string' ? body.title : null,
+    author: typeof body.author === 'string' ? body.author : null,
+    publishedAt:
+      typeof body.published_date === 'string' ? body.published_date : null,
+    language: typeof body.lang === 'string' ? body.lang : null,
+    summary: typeof body.summary === 'string' ? body.summary : null,
+    imageUrl: typeof body.image_url === 'string' ? body.image_url : null,
+    kindOverride: typeof body.kind === 'string' ? body.kind : null,
+    topic: typeof body.topic === 'string' ? body.topic : null,
+  };
+}
+
+function storedSourceFromBody(body: Record<string, unknown>): {
+  kind: SourceKind;
+  format: SourceFormat;
+  storagePath: string;
+  sourceSha256: string;
+  contentHash: string | null;
+  originalFilename: string | null;
+  mimeType: string | null;
+  byteSize: number | null;
+  pageCount: number | null;
+} {
+  const raw =
+    body.source && typeof body.source === 'object' && !Array.isArray(body.source)
+      ? (body.source as Record<string, unknown>)
+      : null;
+
+  if (!raw) {
+    throw new HttpError(
+      'Сначала выполните preview, чтобы сохранить источник без повторного скачивания.',
+      400
+    );
+  }
+
+  if (!isSourceKind(raw.kind)) throw new HttpError('Неизвестный способ загрузки.', 400);
+
+  const storagePath = clean(raw.storagePath, 1000);
+  const sourceSha256 = clean(raw.sourceSha256, 64);
+  const format = isSourceFormat(raw.format) ? raw.format : raw.kind;
+
+  if (!storagePath || !/^[a-f0-9]{64}$/.test(sourceSha256)) {
+    throw new HttpError('Некорректный источник текста. Повторите preview.', 400);
+  }
+
+  return {
+    kind: raw.kind,
+    format,
+    storagePath,
+    sourceSha256,
+    contentHash:
+      typeof raw.contentHash === 'string' && /^[a-f0-9]{64}$/.test(raw.contentHash)
+        ? raw.contentHash
+        : null,
+    originalFilename:
+      typeof raw.originalFilename === 'string' ? raw.originalFilename.slice(0, 300) : null,
+    mimeType: typeof raw.mimeType === 'string' ? raw.mimeType.slice(0, 120) : null,
+    byteSize: Number.isFinite(Number(raw.byteSize)) ? Number(raw.byteSize) : null,
+    pageCount: Number.isFinite(Number(raw.pageCount)) ? Number(raw.pageCount) : null,
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const admin = await requireAdmin(request);
@@ -303,157 +365,200 @@ export async function POST(request: NextRequest) {
 
     const action = body.action;
 
-    if (action !== 'parse' && action !== 'save') {
+    if (action !== 'preview' && action !== 'parse' && action !== 'save') {
       return jsonError('Неизвестное действие.', 400);
     }
 
-    const inputUrl = clean(body.url, 2048);
-
-    if (!inputUrl) {
-      return jsonError('Укажите URL публикации.', 400);
-    }
-
     const store = createBrainStore();
-    let page: Awaited<ReturnType<typeof extractMediaPage>> | null = null;
-    let pageFailure: HttpError | null = null;
+    const previewInput = previewInputFromBody(body);
 
-    try {
-      page = await extractMediaPage(inputUrl);
-    } catch (error) {
-      pageFailure = pageError(error);
-    }
+    if (action === 'preview' || action === 'parse') {
+      const preview = await previewMediaSource(previewInput);
+      const blockedCodes = new Set([
+        'http_status_401',
+        'http_status_402',
+        'http_status_403',
+        'http_status_451',
+        'response_too_large',
+        'paywall_detected',
+        'truncated_content',
+      ]);
+      const warning = blockedCodes.has(preview.extraction.errorCode || '')
+        ? 'Источник заблокировал серверное извлечение или отдал неполный preview. Это не считается полным текстом. Вставьте доступный вам текст вручную или загрузите PDF; исходная ссылка сохранится.'
+        : preview.extraction.paywallDetected
+          ? 'Источник отдал paywall/subscriber preview. Preview не считается полным текстом. Вставьте доступный вам текст вручную или загрузите PDF.'
+          : preview.extraction.truncated
+            ? 'Источник отдал только фрагмент статьи (truncation). Полный текст не индексируется как complete.'
+            : preview.extraction.quality === 'metadata_only'
+              ? 'Извлечён только metadata/subscriber preview; полный текст не получен. Публикацию можно сохранить, но для индексации вставьте текст вручную или загрузите PDF.'
+              : preview.extraction.quality !== 'full_text'
+                ? `Качество текста: ${preview.extraction.quality}. Проверьте preview перед сохранением.`
+                : null;
 
-    const metadata = page?.metadata || fallbackMetadata(inputUrl, body);
-    const extraction = page
-      ? extractionSummary(page)
-      : blockedExtraction(pageFailure || new HttpError('Не удалось загрузить страницу.', 502));
-
-    const ai = await classifyMediaPublication({
-      title: metadata.title,
-      outlet: metadata.outlet,
-      summary: metadata.summary,
-      url: metadata.canonical_url,
-      detectedLanguage: page?.article.language,
-    });
-
-    const duplicate = store
-      ? await store.findMediaRecordByUrl(metadata.url, metadata.canonical_url)
-      : null;
-
-    if (action === 'parse') {
       return NextResponse.json({
-        record: {
-          ...metadata,
-          ...ai,
-        },
-        extraction,
-        warning: pageFailure?.message || null,
-        duplicate: duplicate
-          ? {
-              id: duplicate.id,
-              title: duplicate.title,
-              status: duplicate.status,
-              canonical_url: duplicate.canonical_url,
-            }
-          : null,
+        record: preview.record,
+        source: preview.source,
+        extraction: preview.extraction,
+        duplicate: preview.duplicate,
+        warning,
       });
     }
 
-    const title = clean(body.title, 500) || metadata.title;
-    const outlet = clean(body.outlet, 300) || metadata.outlet;
+    const source = storedSourceFromBody(body);
+    const storage = createBrainStorage();
+
+    if (!storage) throw new HttpError('Приватное хранилище источников не настроено.', 503);
+
+    // Verify the captured source exists and matches its SHA-256. Do not fetch
+    // the publication again and do not re-extract it here.
+    try {
+      await storage.downloadVerified(source.storagePath, source.sourceSha256);
+    } catch (error) {
+      throw new HttpError(
+        error instanceof BrainSourceError
+          ? error.code
+          : 'Сохранённый источник недоступен. Повторите preview.',
+        409
+      );
+    }
+
+    const title = clean(body.title, 500);
+    const outlet = clean(body.outlet, 300);
 
     if (!title || !outlet) {
       return jsonError('Нужны заголовок публикации и название издания.', 400);
     }
 
-    const kind: Kind = isOneOf(KINDS, body.kind) ? body.kind : ai.kind;
+    const originalUrl = clean(body.url, 2048);
 
-    const topic: Topic = isOneOf(TOPICS, body.topic) ? body.topic : ai.topic;
+    if (!originalUrl) return jsonError('Укажите исходный URL публикации.', 400);
 
+    let canonicalUrl: string;
+
+    try {
+      canonicalUrl = normalizeSourceUrl(
+        typeof body.canonical_url === 'string' && body.canonical_url.trim()
+          ? body.canonical_url
+          : originalUrl
+      );
+    } catch {
+      return jsonError('URL публикации недопустим.', 400);
+    }
+
+    const supabase = await createClient({ useServiceRole: true });
+    const existing = store
+      ? await store.findMediaRecordByUrl(originalUrl, canonicalUrl).catch(() => null)
+      : null;
+
+    const kind: Kind = isOneOf(KINDS, body.kind)
+      ? body.kind
+      : isOneOf(KINDS, existing?.kind)
+        ? existing.kind
+        : 'mention';
+    const topic: Topic = isOneOf(TOPICS, body.topic)
+      ? body.topic
+      : isOneOf(TOPICS, existing?.topic)
+        ? existing.topic
+        : TOPICS[0];
     const lang = normalizeMediaLanguage(
-      typeof body.lang === 'string' ? body.lang : ai.lang,
-      ai.lang
+      typeof body.lang === 'string' ? body.lang : existing?.lang,
+      'EN'
     );
+    const publishedDate = validDate(body.published_date) || existing?.published_date || null;
+    const summary = clean(body.summary, 2000) || existing?.summary || '';
+    const author = clean(body.author, 300) || existing?.author || null;
+    const imageUrl = safeImageUrl(body.image_url) || existing?.image_url || null;
+    const status = body.status === 'published' ? 'published' : 'draft';
+    const diagnostics = extractionDiagnostics(
+      body.extraction ?? body.extraction_diagnostics
+    );
+    const now = new Date().toISOString();
 
-    const requestedDate = validDate(body.published_date);
-    const publishedDate = requestedDate || metadata.published_date;
+    const payload = {
+      url: originalUrl,
+      canonical_url: canonicalUrl,
+      title,
+      outlet,
+      author,
+      published_date: publishedDate,
+      lang,
+      kind,
+      topic,
+      summary,
+      image_url: imageUrl,
+      status,
+      source_format: source.format,
+      content_hash: source.contentHash,
+      source_path: source.storagePath,
+      source_sha256: source.sourceSha256,
+      extraction_diagnostics: diagnostics,
+      indexing_status: 'pending' as const,
+      indexing_error: null,
+      ai_metadata: {
+        reviewed: true,
+        import_pending: false,
+        source: 'media_source_save',
+        source_kind: source.kind,
+        source_format: source.format,
+        source_sha256: source.sourceSha256,
+        content_hash: source.contentHash,
+        source_path: source.storagePath,
+        extraction: diagnostics,
+        extracted_at: now,
+      },
+      updated_at: now,
+    };
 
-    const summary = clean(typeof body.summary === 'string' ? body.summary : metadata.summary, 2000);
+    let data: Record<string, unknown> | null = null;
+    let error: { code?: string; message?: string } | null = null;
 
-    let imageUrl = metadata.image_url;
+    if (existing) {
+      const result = await supabase
+        .from('media_archive_records')
+        .update(payload)
+        .eq('id', existing.id)
+        .select('*')
+        .single();
+      data = result.data as Record<string, unknown> | null;
+      error = result.error;
+    } else {
+      const result = await supabase
+        .from('media_archive_records')
+        .insert({ ...payload, created_at: now })
+        .select('*')
+        .single();
+      data = result.data as Record<string, unknown> | null;
+      error = result.error;
 
-    if (typeof body.image_url === 'string' && body.image_url.trim()) {
-      try {
-        const candidate = new URL(body.image_url.trim());
+      if (error?.code === '23505') {
+        const raced = store
+          ? await store.findMediaRecordByUrl(originalUrl, canonicalUrl).catch(() => null)
+          : null;
 
-        if (
-          ['http:', 'https:'].includes(candidate.protocol) &&
-          !candidate.username &&
-          !candidate.password
-        ) {
-          imageUrl = candidate.toString();
+        if (raced) {
+          const retry = await supabase
+            .from('media_archive_records')
+            .update(payload)
+            .eq('id', raced.id)
+            .select('*')
+            .single();
+          data = retry.data as Record<string, unknown> | null;
+          error = retry.error;
         }
-      } catch {
-        // Keep the image URL extracted from the source.
       }
     }
 
-    const status = body.status === 'published' ? 'published' : 'draft';
-    const now = new Date().toISOString();
+    if (error || !data) {
+      console.error('[media-records] source save failed:', error);
 
-    const supabase = await createClient({ useServiceRole: true });
-
-    const { data, error } = await supabase
-      .from('media_archive_records')
-      .upsert(
-        {
-          url: metadata.url,
-          canonical_url: metadata.canonical_url,
-          title,
-          outlet,
-          published_date: publishedDate,
-          lang,
-          kind,
-          topic,
-          summary,
-          image_url: imageUrl,
-          status,
-          ai_metadata: {
-            model: ai.model,
-            classification_error: ai.error,
-            reviewed: true,
-            import_pending: false,
-            source: 'media_record_save',
-            extracted_at: now,
-            language_detected: page?.article.language || null,
-            text_quality: page?.quality.quality || 'blocked',
-            extraction_status: page?.quality.extractionStatus || 'failed',
-            coverage_status: page?.quality.coverageStatus || 'blocked',
-            char_count: page?.article.charCount || 0,
-            word_count: page?.article.wordCount || 0,
-            chunk_count: page?.chunking.chunks.length || 0,
-            paywall_detected: page?.article.diagnostics.paywallDetected || false,
-            truncated: page?.article.diagnostics.truncated || false,
-            parser: page?.article.diagnostics.parser || 'none',
-            final_url: page?.finalUrl || null,
-            extraction_error: pageFailure?.message || null,
-          },
-        },
-        { onConflict: 'canonical_url' }
-      )
-      .select('*')
-      .single();
-
-    if (error) {
-      console.error('[media-records] Supabase save failed:', error);
-
-      if (error.code === '23505') {
+      if (error?.code === '23505') {
         throw new HttpError('Публикация с таким URL уже существует.', 409);
       }
 
       throw new HttpError('Не удалось сохранить публикацию.', 500);
     }
 
+    const mediaRecordId = String(data.id);
     let coverage: {
       status: string;
       runId?: string;
@@ -465,11 +570,21 @@ export async function POST(request: NextRequest) {
       try {
         const queued = await enqueueMediaCoverageJob({
           store,
-          mediaRecordId: String(data.id),
-          inputUrl: metadata.url,
-          normalizedUrl: metadata.canonical_url,
+          mediaRecordId,
+          inputUrl: originalUrl,
+          normalizedUrl: canonicalUrl,
           requestedBy: admin.id,
-          source: 'media_record_save',
+          source: 'media_source_save',
+          sourceFormat: source.format,
+          storagePath: source.storagePath,
+          sourceSha256: source.sourceSha256,
+          originalFilename: source.originalFilename,
+          mimeType: source.mimeType,
+          byteSize: source.byteSize,
+          pageCount: source.pageCount,
+          authorOverride: author,
+          publishedAtOverride: publishedDate,
+          languageOverride: lang,
         });
 
         coverage = {
@@ -477,35 +592,48 @@ export async function POST(request: NextRequest) {
           runId: queued.runId,
           jobId: queued.job.id,
         };
+
+        await supabase
+          .from('media_archive_records')
+          .update({
+            indexing_status: queued.status === 'already_queued' ? 'processing' : 'pending',
+            indexing_error: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', mediaRecordId);
       } catch (queueError) {
         console.error('[media-records] coverage enqueue failed', {
           code: queueError instanceof Error ? queueError.message : 'media_coverage_enqueue_failed',
         });
         coverage = {
           status: 'failed',
-          error: 'Публикация сохранена, но очередь извлечения не создана.',
+          error: 'Публикация сохранена, но очередь Knowledge не создана.',
         };
+
+        await supabase
+          .from('media_archive_records')
+          .update({
+            indexing_status: 'failed',
+            indexing_error: 'coverage_enqueue_failed',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', mediaRecordId);
       }
     }
 
     return NextResponse.json({
       record: data,
-      extraction,
-      warning: pageFailure?.message || null,
-      duplicate:
-        duplicate && duplicate.id !== String(data.id)
-          ? {
-              id: duplicate.id,
-              title: duplicate.title,
-              status: duplicate.status,
-              canonical_url: duplicate.canonical_url,
-            }
-          : null,
+      updated: Boolean(existing),
+      extraction: diagnostics,
       coverage,
     });
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonError(error.message, error.status);
+    }
+
+    if (error instanceof BrainSourceError) {
+      return jsonError(error.code, error.status);
     }
 
     const authStatus = authErrorStatus(error);

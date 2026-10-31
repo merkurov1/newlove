@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { authorizeKnowledgeAdmin } from '@/lib/knowledge/adminAuth';
+import { queueGraphForIngestionRun } from '@/lib/knowledge/brain/graphQueue';
 import { processNextBrainJob } from '@/lib/knowledge/brain/process';
 import { createBrainStore } from '@/lib/knowledge/brain/store';
 import { createOpenRouterEmbeddingClientFromEnv } from '@/lib/knowledge/rag/embeddings';
@@ -46,6 +47,8 @@ export async function POST(
   }
 
   const { id } = await params;
+  const body = await request.json().catch(() => ({}));
+  const autoGraph = !(body && typeof body === 'object' && body.autoGraph === false);
 
   try {
     const result = await processNextBrainJob({
@@ -54,6 +57,11 @@ export async function POST(
       embeddingClient,
       workerId: `admin-${Date.now()}`,
     });
+
+    if (result.state === 'done') {
+      const graph = await queueGraphForIngestionRun({ store, runId: id, enabled: autoGraph });
+      return json({ ...result, graph });
+    }
 
     return json(result);
   } catch (error) {

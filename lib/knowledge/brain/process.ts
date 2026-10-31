@@ -30,13 +30,27 @@ import {
   ARTICLE_EXTRACTION_VERSION,
   type ExtractedArticle,
 } from './extract';
+import { extractPdfDocument } from './pdfExtract';
+import { extractPlainTextDocument } from './textExtract';
+import {
+  BrainSourceError,
+  decodeUtf8Strict,
+  deriveFileDocumentId,
+  normalizePublishedAt,
+  sha256Hex,
+  validatePdfBuffer,
+  validateTxtBuffer,
+} from './sourceValidation';
+import { createBrainStorage, type BrainStorage } from './storage';
 import type {
   BrainArticleDocumentRow,
   BrainJobRow,
   BrainJobStatus,
   BrainRunStatus,
+  BrainSourceFormat,
   BrainSourceType,
   BrainStore,
+  DuplicateMatch,
   MediaArchivePatch,
   MediaArchiveRecord,
   MediaCoverageDocumentRow,
@@ -96,6 +110,8 @@ export type ProcessNextOptions = {
   extractArticle?: (html: string, finalUrl: string) => ExtractedArticle;
   /** Optional preloaded archive record for media coverage jobs. */
   mediaRecord?: MediaArchiveRecord | null;
+  /** Optional storage adapter, injectable for tests. */
+  storage?: BrainStorage | null;
 };
 
 export const MEDIA_COVERAGE_INGESTION_VERSION = 'media-coverage-ingestion-v1';
@@ -144,7 +160,14 @@ export function computeBrainProgress(jobs: BrainJobRow[]): BrainProgress {
   };
 }
 
+export function retryDelaySeconds(attempts: number): number {
+  const safeAttempts = Math.max(1, Math.trunc(attempts || 1));
+  return Math.min(900, 15 * 2 ** (safeAttempts - 1));
+}
+
 function isRetryable(error: unknown): boolean {
+  if (error instanceof BrainSourceError) return error.retryable;
+
   if (error instanceof BrainUrlError) {
     return [
       'fetch_timeout',
@@ -181,6 +204,8 @@ function isRetryable(error: unknown): boolean {
 }
 
 function errorCode(error: unknown): string {
+  if (error instanceof BrainSourceError) return error.code;
+
   if (error instanceof BrainUrlError) return error.code;
 
   if (error instanceof EmbeddingTimeoutError) return 'embedding_timeout';
@@ -244,6 +269,58 @@ function safeErrorDetail(code: string): string {
       return 'The embedding request failed.';
     case 'database_failed':
       return 'The knowledge database write failed.';
+    case 'storage_not_configured':
+      return 'Private source storage is not configured.';
+    case 'storage_path_invalid':
+    case 'storage_incoming_path_invalid':
+      return 'The private source path is invalid.';
+    case 'storage_download_failed':
+    case 'storage_incoming_missing':
+      return 'The original file could not be read from private storage.';
+    case 'storage_hash_mismatch':
+      return 'The stored file does not match its recorded SHA-256.';
+    case 'storage_upload_failed':
+    case 'storage_upload_url_failed':
+      return 'The original file could not be written to private storage.';
+    case 'brain_source_storage_missing':
+      return 'This job has no private source file.';
+    case 'pdf_signature_invalid':
+      return 'The file is not a valid PDF.';
+    case 'pdf_mime_invalid':
+      return 'The file MIME type does not match PDF.';
+    case 'txt_mime_invalid':
+      return 'The file MIME type does not match plain text.';
+    case 'pdf_empty':
+      return 'The PDF is empty.';
+    case 'pdf_no_text':
+      return 'The PDF contains no usable text pages.';
+    case 'pdf_ocr_required':
+      return 'The PDF appears to be scanned or image-only. OCR is required before indexing.';
+    case 'pdf_password_protected':
+      return 'The PDF is password-protected and cannot be read.';
+    case 'pdf_parse_failed':
+      return 'The PDF is damaged or unsupported.';
+    case 'pdf_text_too_large':
+      return 'The PDF contains too much text for this ingestion path.';
+    case 'txt_empty':
+      return 'The text file is empty after normalization.';
+    case 'txt_encoding_invalid':
+      return 'The text file is not valid UTF-8.';
+    case 'txt_binary_content':
+      return 'The file contains binary content and is not a plain text file.';
+    case 'source_text_empty':
+      return 'The pasted text is empty.';
+    case 'source_text_invalid':
+      return 'The pasted text contains invalid binary characters.';
+    case 'source_text_too_large':
+    case 'txt_too_large':
+    case 'pdf_too_large':
+      return 'The source exceeds the allowed size for its type.';
+    case 'source_title_too_long':
+    case 'source_author_too_long':
+    case 'source_language_invalid':
+    case 'source_date_invalid':
+      return 'The supplied metadata is invalid.';
     default:
       return code.startsWith('http_status_')
         ? `The page returned HTTP ${code.replace('http_status_', '')}.`
@@ -272,7 +349,7 @@ function extractionMetadata(
     language: article.language,
     published_at: article.publishedAt,
     published_at_source: article.publishedAtSource,
-    extraction_version: ARTICLE_EXTRACTION_VERSION,
+    extraction_version: article.extractionVersion,
     parser_version: ARTICLE_PARSER_VERSION,
     chunker_version: ARTICLE_CHUNKER_VERSION,
     extraction_status: article.status,
@@ -280,6 +357,20 @@ function extractionMetadata(
     ...extra,
   };
 }
+
+type ExtractedSourceInfo = {
+  sourceType: 'article' | 'pdf' | 'txt' | 'text';
+  sourceFormat: BrainSourceFormat;
+  sourcePath: string;
+  sourceSha256: string;
+  sourceUrl: string | null;
+  canonicalUrl: string | null;
+  normalizedUrl: string;
+  originalFilename?: string | null;
+  mimeType?: string | null;
+  pageCount?: number | null;
+  byteSize?: number | null;
+};
 
 function buildDocument(
   article: ExtractedArticle,
@@ -289,29 +380,33 @@ function buildDocument(
   chunkCount: number,
   sourceCharCount: number,
   previousContentHash: string | null,
-  change: 'inserted' | 'updated'
+  change: 'inserted' | 'updated',
+  source: ExtractedSourceInfo
 ): BrainArticleDocumentRow {
   const sourcePath =
-    article.canonicalUrl.length <= 500 ? article.canonicalUrl : `brain/article/${documentId}`;
+    source.sourcePath.length <= 500 ? source.sourcePath : `brain/source/${documentId}`;
 
   const manifestHash = sha256(
     JSON.stringify({
-      canonicalUrl: article.canonicalUrl,
+      sourceType: source.sourceType,
+      sourceFormat: source.sourceFormat,
+      sourceSha256: source.sourceSha256,
       contentHash: article.contentHash,
       parserVersion: ARTICLE_PARSER_VERSION,
       chunkerVersion: ARTICLE_CHUNKER_VERSION,
-      extractionVersion: ARTICLE_EXTRACTION_VERSION,
+      extractionVersion: article.extractionVersion,
       chunkCount,
     })
   );
 
   return {
     id: documentId,
-    title: article.title.slice(0, 200) || 'Untitled article',
+    title: article.title.slice(0, 200) || 'Untitled document',
     source_path: sourcePath,
-    source_sha256: article.contentHash,
+    source_sha256: source.sourceSha256,
     manifest_hash: manifestHash,
-    parser_version: ARTICLE_PARSER_VERSION,
+    parser_version:
+      article.sourceType === 'article' ? ARTICLE_PARSER_VERSION : article.extractionVersion,
     chunker_version: ARTICLE_CHUNKER_VERSION,
     ingestion_version: BRAIN_INGESTION_VERSION,
     embedding_model: embeddingClient.modelId,
@@ -321,10 +416,18 @@ function buildDocument(
     source_char_count: sourceCharCount,
     metadata: {
       ingestion_version: BRAIN_INGESTION_VERSION,
-      extraction_version: ARTICLE_EXTRACTION_VERSION,
-      parser_version: ARTICLE_PARSER_VERSION,
+      extraction_version: article.extractionVersion,
+      parser_version:
+        article.sourceType === 'article' ? ARTICLE_PARSER_VERSION : article.extractionVersion,
       chunker_version: ARTICLE_CHUNKER_VERSION,
-      source_type: 'article',
+      source_type: source.sourceType,
+      source_format: source.sourceFormat,
+      source_path: source.sourcePath,
+      source_sha256: source.sourceSha256,
+      original_filename: source.originalFilename || null,
+      mime_type: source.mimeType || null,
+      page_count: source.pageCount ?? null,
+      byte_size: source.byteSize ?? null,
       source_domain: article.sourceDomain,
       site_name: article.siteName,
       language: article.language,
@@ -334,10 +437,11 @@ function buildDocument(
       previous_content_hash: previousContentHash,
       extraction: article.diagnostics,
     },
-    source_type: 'article',
-    source_url: job.input_url.slice(0, 2048),
-    canonical_url: article.canonicalUrl,
-    normalized_url: job.normalized_url,
+    source_type: source.sourceType,
+    source_format: source.sourceFormat,
+    source_url: source.sourceUrl ? source.sourceUrl.slice(0, 2048) : null,
+    canonical_url: source.canonicalUrl,
+    normalized_url: source.normalizedUrl,
     content_hash: article.contentHash,
     language: article.language,
     author: article.author,
@@ -345,7 +449,161 @@ function buildDocument(
     extraction_status: article.status,
     ingestion_status: 'pending',
     processed_at: null,
+    original_filename: source.originalFilename || null,
+    mime_type: source.mimeType || null,
+    page_count: source.pageCount ?? null,
   };
+}
+
+function applySourceOverrides(article: ExtractedArticle, job: BrainJobRow): void {
+  if (job.title_override) article.title = job.title_override.slice(0, 200);
+  if (job.author_override !== null && job.author_override !== undefined) {
+    article.author = job.author_override.slice(0, 300);
+  }
+  if (job.published_at_override) {
+    try {
+      article.publishedAt = normalizePublishedAt(job.published_at_override);
+      article.publishedAtSource = article.publishedAt ? 'metadata' : null;
+    } catch {
+      // The job was validated at enqueue time; keep automatic metadata if a
+      // legacy row contains an invalid override.
+    }
+  }
+  if (job.language_override) article.language = job.language_override.slice(0, 16);
+}
+
+async function indexExtractedDocument(input: {
+  store: BrainStore;
+  job: BrainJobRow;
+  article: ExtractedArticle;
+  documentId: string;
+  existing: DuplicateMatch | null;
+  source: ExtractedSourceInfo;
+  embeddingClient: EmbeddingClient;
+  setStage: (stage: string) => Promise<void>;
+}): Promise<'completed' | 'duplicate' | 'failed'> {
+  const { store, job, article, documentId, existing, source, embeddingClient, setStage } = input;
+  const change: 'inserted' | 'updated' = existing ? 'updated' : 'inserted';
+  const previousContentHash = existing?.contentHash ?? null;
+  const chunking = chunkArticle(article, documentId, { sourceType: source.sourceType });
+
+  if (chunking.chunks.length === 0) {
+    await store.updateJob(job.id, {
+      status: 'failed',
+      canonical_url: source.canonicalUrl,
+      final_url: source.sourceUrl ? source.sourceUrl.slice(0, 2048) : null,
+      title: article.title,
+      language: article.language,
+      content_hash: article.contentHash,
+      extraction_status: article.status,
+      extraction_metadata: extractionMetadata(article, {
+        stage: 'done',
+        reason: 'no_chunks',
+        existing_document_preserved: Boolean(existing),
+        source_type: source.sourceType,
+        source_format: source.sourceFormat,
+      }),
+      error_code: 'no_chunks',
+      error_detail: 'The document produced no indexable chunks.',
+      retry_after: null,
+      processed_at: new Date().toISOString(),
+      locked_at: null,
+      worker_id: null,
+    });
+    return 'failed';
+  }
+
+  const embeddingInputs = chunking.chunks.map((chunk) => {
+    const path = chunk.sectionPath.join(' / ');
+    return path ? `${path}\n\n${chunk.content}` : chunk.content;
+  });
+
+  await setStage('embedding');
+  const embeddings = await embeddingClient.embed(embeddingInputs);
+
+  if (embeddings.length !== chunking.chunks.length) {
+    throw new Error('embedding_count_mismatch');
+  }
+
+  const document = buildDocument(
+    article,
+    job,
+    documentId,
+    embeddingClient,
+    chunking.chunks.length,
+    chunking.documentText.length,
+    previousContentHash,
+    change,
+    source
+  );
+
+  await setStage('storing');
+
+  const insertResult = existing
+    ? (await store.updateArticleDocument(document), { status: 'inserted' as const })
+    : await store.insertArticleDocument(document);
+
+  if (insertResult.status === 'duplicate') {
+    throw new Error('brain_document_race_retry');
+  }
+
+  const chunkRows: KnowledgeChunkWithEmbedding[] = chunking.chunks.map((chunk, index) => ({
+    id: chunk.id,
+    document_id: documentId,
+    chunk_index: chunk.chunkIndex,
+    content: chunk.content,
+    content_hash: chunk.contentHash,
+    heading: chunk.heading,
+    section_path: chunk.sectionPath,
+    section_index: chunk.sectionIndex,
+    char_start: chunk.charStart,
+    char_end: chunk.charEnd,
+    line_start: chunk.lineStart,
+    line_end: chunk.lineEnd,
+    embedding_model: embeddingClient.modelId,
+    embedding_dimensions: embeddingClient.dimensions,
+    access_class: 'owner',
+    metadata: chunk.metadata,
+    embedding: embeddings[index],
+  }));
+
+  await store.insertArticleChunks(chunkRows);
+  await store.deleteArticleChunksExcept(
+    documentId,
+    chunking.chunks.map((chunk) => chunk.id)
+  );
+  await store.completeArticleDocument(documentId, article.status);
+
+  await store.updateJob(job.id, {
+    status: 'completed',
+    canonical_url: source.canonicalUrl,
+    final_url: source.sourceUrl ? source.sourceUrl.slice(0, 2048) : null,
+    document_id: documentId,
+    title: article.title,
+    language: article.language,
+    content_hash: article.contentHash,
+    extraction_status: article.status,
+    extraction_metadata: extractionMetadata(article, {
+      stage: 'done',
+      chunks: chunking.chunks.length,
+      change,
+      previous_content_hash: previousContentHash,
+      source_type: source.sourceType,
+      source_format: source.sourceFormat,
+      page_count: source.pageCount ?? null,
+    }),
+    error_code: null,
+    error_detail:
+      change === 'updated'
+        ? 'Existing logical document updated because its content changed.'
+        : null,
+    retry_after: null,
+    processed_at: new Date().toISOString(),
+    locked_at: null,
+    worker_id: null,
+  });
+
+  return 'completed';
 }
 
 type MediaCoverageFailure = MediaQualityAssessment;
@@ -403,7 +661,12 @@ function buildMediaCoverageDocument(input: {
   const archiveCanonical = mediaRecord.canonical_url?.trim() || article.canonicalUrl;
   const archiveDate = mediaArchiveDate(mediaRecord);
   const publishedAt = mediaPublishedAt(mediaRecord, article);
-  const sourcePath = archiveCanonical.length <= 500 ? archiveCanonical : `media/${mediaRecord.id}`;
+  const sourcePath =
+    job.storage_path && job.storage_path.length <= 500
+      ? job.storage_path
+      : archiveCanonical.length <= 500
+        ? archiveCanonical
+        : `media/${mediaRecord.id}`;
   const diagnostics = mediaDiagnostics(article, {
     stage: 'done',
     change: input.change,
@@ -429,7 +692,11 @@ function buildMediaCoverageDocument(input: {
     id: documentId,
     title: (mediaRecord.title || article.title).slice(0, 200) || 'Untitled media coverage',
     source_path: sourcePath,
-    source_sha256: article.contentHash,
+    source_sha256: job.source_sha256 || article.contentHash,
+    source_format: job.source_format || 'url',
+    original_filename: job.original_filename || null,
+    mime_type: job.mime_type || null,
+    page_count: job.page_count ?? article.diagnostics.file?.pageCount ?? null,
     manifest_hash: manifestHash,
     parser_version: ARTICLE_PARSER_VERSION,
     chunker_version: ARTICLE_CHUNKER_VERSION,
@@ -445,6 +712,12 @@ function buildMediaCoverageDocument(input: {
       parser_version: ARTICLE_PARSER_VERSION,
       chunker_version: ARTICLE_CHUNKER_VERSION,
       source_type: 'media_coverage',
+      source_format: job.source_format || 'url',
+      source_path: sourcePath,
+      source_sha256: job.source_sha256 || article.contentHash,
+      original_filename: job.original_filename || null,
+      mime_type: job.mime_type || null,
+      page_count: job.page_count ?? article.diagnostics.file?.pageCount ?? null,
       media_record_id: mediaRecord.id,
       archive_title: mediaRecord.title,
       extracted_title: article.title,
@@ -470,7 +743,7 @@ function buildMediaCoverageDocument(input: {
     normalized_url: job.normalized_url,
     content_hash: article.contentHash,
     language: article.language,
-    author: article.author,
+    author: mediaRecord.author || article.author,
     published_at: publishedAt,
     extraction_status: quality.extractionStatus,
     ingestion_status: 'pending',
@@ -534,8 +807,17 @@ function buildMediaPlaceholderDocument(input: {
   return {
     id: documentId,
     title: (mediaRecord.title || 'Untitled media coverage').slice(0, 200),
-    source_path: canonical.length <= 500 ? canonical : `media/${mediaRecord.id}`,
-    source_sha256: emptyHash,
+    source_path:
+      job.storage_path && job.storage_path.length <= 500
+        ? job.storage_path
+        : canonical.length <= 500
+          ? canonical
+          : `media/${mediaRecord.id}`,
+    source_sha256: job.source_sha256 || emptyHash,
+    source_format: job.source_format || 'url',
+    original_filename: job.original_filename || null,
+    mime_type: job.mime_type || null,
+    page_count: job.page_count ?? null,
     manifest_hash: manifestHash,
     parser_version: ARTICLE_PARSER_VERSION,
     chunker_version: ARTICLE_CHUNKER_VERSION,
@@ -548,6 +830,12 @@ function buildMediaPlaceholderDocument(input: {
     metadata: {
       ingestion_version: MEDIA_COVERAGE_INGESTION_VERSION,
       source_type: 'media_coverage',
+      source_format: job.source_format || 'url',
+      source_path: job.storage_path || canonical,
+      source_sha256: job.source_sha256 || emptyHash,
+      original_filename: job.original_filename || null,
+      mime_type: job.mime_type || null,
+      page_count: job.page_count ?? null,
       media_record_id: mediaRecord.id,
       archive_title: mediaRecord.title,
       outlet: mediaRecord.outlet,
@@ -988,10 +1276,16 @@ export async function processNextBrainJob(options: ProcessNextOptions): Promise<
   const setStage = async (stage: string): Promise<void> => {
     job.extraction_metadata = { ...job.extraction_metadata, stage };
     await store.updateJob(job.id, { extraction_metadata: job.extraction_metadata });
+    await store.heartbeatJob?.(job.id, workerId)?.catch(() => undefined);
   };
 
   const sourceType: BrainSourceType =
-    job.source_type === 'media_coverage' ? 'media_coverage' : 'article';
+    job.source_type === 'media_coverage' ||
+    job.source_type === 'pdf' ||
+    job.source_type === 'txt' ||
+    job.source_type === 'text'
+      ? job.source_type
+      : 'article';
   let mediaRecord: MediaArchiveRecord | null = options.mediaRecord ?? null;
   let mediaDocumentId: string | null = null;
   let extractedArticle: ExtractedArticle | null = null;
@@ -1025,10 +1319,14 @@ export async function processNextBrainJob(options: ProcessNextOptions): Promise<
         canonicalUrl: archiveCanonical,
       });
 
-      if (existingMedia && existingMedia.sourceType !== 'media_coverage') {
-        // The URL was already ingested by the article pipeline. Link that
-        // document to the Media Archive instead of creating a duplicate or
-        // re-running embeddings.
+      if (
+        existingMedia &&
+        existingMedia.sourceType !== 'media_coverage' &&
+        !(job.storage_path && job.source_sha256)
+      ) {
+        // Legacy URL jobs may reuse the article document. New source-based
+        // jobs (captured HTML, manual text, PDF, TXT) must re-index the
+        // existing document instead of silently keeping its old content.
         const linked = await store.linkArticleDocumentToMedia(
           existingMedia.documentId,
           mediaRecord
@@ -1116,28 +1414,128 @@ export async function processNextBrainJob(options: ProcessNextOptions): Promise<
       };
     }
 
-    // A known URL is not skipped. Re-fetching is the only reliable way to
-    // detect that an article changed after it was first indexed.
-    await setStage('fetching');
-    const fetched = await fetchArticle(
-      (sourceType === 'media_coverage' ? mediaRecord?.url : null) ||
-        job.input_url ||
-        job.normalized_url
-    );
+    let fetched: SafeFetchResult | null = null;
+    let article: ExtractedArticle;
+    let canonicalUrl: string;
 
-    await setStage('extracting');
-    const article = extract(fetched.html, fetched.url);
-    extractedArticle = article;
+    if (
+      sourceType === 'article' ||
+      (sourceType === 'media_coverage' && !job.storage_path)
+    ) {
+      // Legacy media jobs may not have a stored source yet. New URL jobs use
+      // the HTML captured by preview and never download the page again.
+      await setStage('fetching');
+      fetched = await fetchArticle(
+        (sourceType === 'media_coverage' ? mediaRecord?.url : null) ||
+          job.input_url ||
+          job.normalized_url
+      );
 
-    let canonicalUrl = article.canonicalUrl;
+      await setStage('extracting');
+      article = extract(fetched.html, fetched.url);
+      extractedArticle = article;
+      canonicalUrl = article.canonicalUrl;
 
-    try {
-      canonicalUrl = normalizeSourceUrl(canonicalUrl);
-    } catch {
-      canonicalUrl = job.normalized_url;
+      try {
+        canonicalUrl = normalizeSourceUrl(canonicalUrl);
+      } catch {
+        canonicalUrl = job.normalized_url;
+      }
+
+      article.canonicalUrl = canonicalUrl;
+      applySourceOverrides(article, job);
+    } else {
+      await setStage('reading');
+      const storage = options.storage ?? createBrainStorage();
+
+      if (!storage) {
+        throw new BrainSourceError('storage_not_configured', undefined, { status: 503 });
+      }
+
+      if (!job.storage_path || !job.source_sha256) {
+        throw new Error('brain_source_storage_missing');
+      }
+
+      const buffer = await storage.downloadSource(job.storage_path);
+      const actualSha256 = sha256Hex(buffer);
+
+      if (actualSha256 !== job.source_sha256) {
+        throw new BrainSourceError('storage_hash_mismatch');
+      }
+
+      await setStage('extracting');
+      const storedFormat =
+        sourceType === 'media_coverage' ? job.source_format || 'url' : sourceType;
+
+      if (storedFormat === 'url') {
+        const html = decodeUtf8Strict(buffer);
+        const finalUrl =
+          (sourceType === 'media_coverage' ? mediaRecord?.url : null) ||
+          job.input_url ||
+          job.normalized_url;
+        fetched = {
+          url: finalUrl,
+          html,
+          status: 200,
+          contentType: 'text/html',
+          bytes: buffer.length,
+        };
+        article = extract(html, finalUrl);
+        extractedArticle = article;
+        canonicalUrl =
+          (sourceType === 'media_coverage' ? mediaRecord?.canonical_url : null) ||
+          article.canonicalUrl ||
+          job.normalized_url;
+        article.canonicalUrl = canonicalUrl;
+      } else if (storedFormat === 'pdf') {
+        validatePdfBuffer(buffer, job.mime_type);
+        article = await extractPdfDocument(buffer, {
+          sourceSha256: job.source_sha256,
+          filename: job.original_filename,
+          mimeType: job.mime_type,
+          byteSize: job.byte_size,
+          title: job.title_override,
+          author: job.author_override,
+          publishedAt: job.published_at_override,
+          language: job.language_override,
+        });
+        canonicalUrl =
+          (sourceType === 'media_coverage' ? mediaRecord?.canonical_url : null) ||
+          article.canonicalUrl ||
+          job.normalized_url;
+        article.canonicalUrl = canonicalUrl;
+      } else {
+        const rawText =
+          storedFormat === 'txt'
+            ? validateTxtBuffer(buffer, job.mime_type).text
+            : decodeUtf8Strict(buffer);
+
+        if (storedFormat === 'text' && rawText.includes('\u0000')) {
+          throw new BrainSourceError('source_text_invalid');
+        }
+
+        article = extractPlainTextDocument({
+          kind: storedFormat === 'txt' ? 'txt' : 'text',
+          rawText,
+          sourceSha256: job.source_sha256,
+          filename: job.original_filename,
+          mimeType: job.mime_type,
+          byteSize: job.byte_size ?? buffer.length,
+          title: job.title_override,
+          author: job.author_override,
+          publishedAt: job.published_at_override,
+          language: job.language_override,
+        });
+        canonicalUrl =
+          (sourceType === 'media_coverage' ? mediaRecord?.canonical_url : null) ||
+          article.canonicalUrl ||
+          job.normalized_url;
+        article.canonicalUrl = canonicalUrl;
+      }
+
+      extractedArticle = article;
+      applySourceOverrides(article, job);
     }
-
-    article.canonicalUrl = canonicalUrl;
 
     if (sourceType === 'media_coverage') {
       if (!mediaRecord) throw new Error('media_record_not_found');
@@ -1175,7 +1573,11 @@ export async function processNextBrainJob(options: ProcessNextOptions): Promise<
         canonicalUrl: archiveCanonical,
       });
 
-      if (refreshed && refreshed.sourceType !== 'media_coverage') {
+      if (
+        refreshed &&
+        refreshed.sourceType !== 'media_coverage' &&
+        !(job.storage_path && job.source_sha256)
+      ) {
         throw new Error('media_document_conflict');
       }
 
@@ -1278,10 +1680,11 @@ export async function processNextBrainJob(options: ProcessNextOptions): Promise<
             await setStage('storing');
 
             const insertResult = active
-              ? (await store.updateMediaCoverageDocument(document),
-                {
-                  status: 'inserted' as const,
-                })
+              ? (active.sourceType === 'media_coverage'
+                  ? (await store.updateMediaCoverageDocument(document),
+                    { status: 'inserted' as const })
+                  : (await store.updateLinkedArticleMediaDocument(document),
+                    { status: 'inserted' as const }))
               : await store.insertMediaCoverageDocument(document);
 
             if (insertResult.status === 'duplicate') {
@@ -1341,7 +1744,7 @@ export async function processNextBrainJob(options: ProcessNextOptions): Promise<
             await store.updateJob(job.id, {
               status: quality.jobStatus,
               canonical_url: archiveCanonical,
-              final_url: fetched.url.slice(0, 2048),
+              final_url: (fetched?.url || job.input_url).slice(0, 2048),
               document_id: documentId,
               title: mediaRecord.title,
               language: article.language,
@@ -1404,7 +1807,7 @@ export async function processNextBrainJob(options: ProcessNextOptions): Promise<
           }
         }
       }
-    } else {
+    } else if (sourceType === 'article') {
       await setStage('validating');
       const canonicalDuplicate = await store.findDuplicate({
         normalizedUrl: job.normalized_url,
@@ -1452,130 +1855,112 @@ export async function processNextBrainJob(options: ProcessNextOptions): Promise<
           } else {
             const updateExisting =
               existing ??
-              (contentDuplicate && contentDuplicate.ingestionStatus !== 'completed'
+              (contentDuplicate &&
+              contentDuplicate.ingestionStatus !== 'completed' &&
+              contentDuplicate.sourceType === 'article'
                 ? contentDuplicate
                 : null);
             const documentId =
-              updateExisting?.documentId ??
-              contentDuplicate?.documentId ??
-              deriveArticleDocumentId(canonicalUrl);
-            const change: 'inserted' | 'updated' = updateExisting ? 'updated' : 'inserted';
-            const previousContentHash = updateExisting?.contentHash ?? null;
-            const chunking = chunkArticle(article, documentId);
+              updateExisting?.documentId ?? deriveArticleDocumentId(canonicalUrl);
 
-            if (chunking.chunks.length === 0) {
-              await store.updateJob(job.id, {
-                status: 'failed',
-                canonical_url: canonicalUrl,
-                final_url: fetched.url.slice(0, 2048),
-                title: article.title,
-                language: article.language,
-                content_hash: article.contentHash,
-                extraction_status: article.status,
-                extraction_metadata: extractionMetadata(article, {
-                  stage: 'done',
-                  reason: 'no_chunks',
-                  existing_document_preserved: Boolean(updateExisting),
-                }),
-                error_code: 'no_chunks',
-                error_detail: 'The article produced no indexable chunks.',
-                retry_after: null,
-                processed_at: new Date().toISOString(),
-                locked_at: null,
-                worker_id: null,
-              });
-            } else {
-              const embeddingInputs = chunking.chunks.map((chunk) => {
-                const path = chunk.sectionPath.join(' / ');
-                return path ? `${path}\n\n${chunk.content}` : chunk.content;
-              });
-
-              await setStage('embedding');
-              const embeddings = await options.embeddingClient.embed(embeddingInputs);
-
-              if (embeddings.length !== chunking.chunks.length) {
-                throw new Error('embedding_count_mismatch');
-              }
-
-              const document = buildDocument(
-                article,
-                job,
-                documentId,
-                options.embeddingClient,
-                chunking.chunks.length,
-                chunking.documentText.length,
-                previousContentHash,
-                change
-              );
-
-              await setStage('storing');
-
-              const insertResult = updateExisting
-                ? (await store.updateArticleDocument(document), { status: 'inserted' as const })
-                : await store.insertArticleDocument(document);
-
-              if (insertResult.status === 'duplicate') {
-                // A concurrent worker won the insert race. Retry: the next pass
-                // will find the existing logical document and update it safely.
-                throw new Error('brain_document_race_retry');
-              }
-
-              const chunkRows: KnowledgeChunkWithEmbedding[] = chunking.chunks.map(
-                (chunk, index) => ({
-                  id: chunk.id,
-                  document_id: documentId,
-                  chunk_index: chunk.chunkIndex,
-                  content: chunk.content,
-                  content_hash: chunk.contentHash,
-                  heading: chunk.heading,
-                  section_path: chunk.sectionPath,
-                  section_index: chunk.sectionIndex,
-                  char_start: chunk.charStart,
-                  char_end: chunk.charEnd,
-                  line_start: chunk.lineStart,
-                  line_end: chunk.lineEnd,
-                  embedding_model: options.embeddingClient.modelId,
-                  embedding_dimensions: options.embeddingClient.dimensions,
-                  access_class: 'owner',
-                  metadata: chunk.metadata,
-                  embedding: embeddings[index],
-                })
-              );
-
-              await store.insertArticleChunks(chunkRows);
-              await store.deleteArticleChunksExcept(
-                documentId,
-                chunking.chunks.map((chunk) => chunk.id)
-              );
-              await store.completeArticleDocument(documentId, article.status);
-
-              await store.updateJob(job.id, {
-                status: 'completed',
-                canonical_url: canonicalUrl,
-                final_url: fetched.url.slice(0, 2048),
-                document_id: documentId,
-                title: article.title,
-                language: article.language,
-                content_hash: article.contentHash,
-                extraction_status: article.status,
-                extraction_metadata: extractionMetadata(article, {
-                  stage: 'done',
-                  chunks: chunking.chunks.length,
-                  change,
-                  previous_content_hash: previousContentHash,
-                }),
-                error_code: null,
-                error_detail:
-                  change === 'updated'
-                    ? 'Existing logical document updated because its content changed.'
-                    : null,
-                retry_after: null,
-                processed_at: new Date().toISOString(),
-                locked_at: null,
-                worker_id: null,
-              });
-            }
+            await indexExtractedDocument({
+              store,
+              job,
+              article,
+              documentId,
+              existing: updateExisting,
+              source: {
+                sourceType: 'article',
+                sourceFormat: 'url',
+                sourcePath:
+                  canonicalUrl.length <= 500 ? canonicalUrl : `brain/article/${documentId}`,
+                sourceSha256: article.contentHash,
+                sourceUrl: job.input_url,
+                canonicalUrl,
+                normalizedUrl: job.normalized_url,
+              },
+              embeddingClient: options.embeddingClient,
+              setStage,
+            });
           }
+        }
+      }
+    } else {
+      await setStage('validating');
+      const storagePath = job.storage_path;
+      const sourceSha256 = job.source_sha256;
+
+      if (!storagePath || !sourceSha256) {
+        throw new Error('brain_source_storage_missing');
+      }
+
+      const fileDuplicate = await store.findSourceDuplicate({
+        sourceSha256,
+        sourceTypes: [sourceType],
+      });
+      known = fileDuplicate;
+
+      if (
+        fileDuplicate &&
+        fileDuplicate.ingestionStatus === 'completed' &&
+        fileDuplicate.contentHash === article.contentHash
+      ) {
+        await markDuplicate(
+          store,
+          job,
+          fileDuplicate.documentId,
+          article.title,
+          null,
+          article.contentHash,
+          { reason: 'same_file', article }
+        );
+      } else {
+        const contentDuplicate = await store.findContentDuplicate({
+          contentHash: article.contentHash,
+          sourceTypes: ['article', 'pdf', 'txt', 'text'],
+          excludeDocumentId: fileDuplicate?.documentId ?? null,
+        });
+
+        if (
+          contentDuplicate &&
+          contentDuplicate.documentId !== fileDuplicate?.documentId &&
+          contentDuplicate.ingestionStatus === 'completed'
+        ) {
+          await markDuplicate(
+            store,
+            job,
+            contentDuplicate.documentId,
+            article.title,
+            null,
+            article.contentHash,
+            { reason: 'same_content', article }
+          );
+        } else {
+          const documentId =
+            fileDuplicate?.documentId ?? deriveFileDocumentId(sourceType, sourceSha256);
+
+          await indexExtractedDocument({
+            store,
+            job,
+            article,
+            documentId,
+            existing: fileDuplicate,
+            source: {
+              sourceType,
+              sourceFormat: sourceType,
+              sourcePath: storagePath,
+              sourceSha256,
+              sourceUrl: null,
+              canonicalUrl: null,
+              normalizedUrl: job.normalized_url,
+              originalFilename: job.original_filename,
+              mimeType: job.mime_type,
+              pageCount: job.page_count ?? article.diagnostics.file?.pageCount ?? null,
+              byteSize: job.byte_size,
+            },
+            embeddingClient: options.embeddingClient,
+            setStage,
+          });
         }
       }
     }
@@ -1583,7 +1968,7 @@ export async function processNextBrainJob(options: ProcessNextOptions): Promise<
     const code = errorCode(error);
     const retryable = isRetryable(error);
     const canRetry = retryable && job.attempts < job.max_attempts;
-    const delaySeconds = Math.min(120, Math.max(10, job.attempts * 15));
+    const delaySeconds = retryDelaySeconds(job.attempts);
 
     const extractedQuality = extractedArticle ? evaluateMediaTextQuality(extractedArticle) : null;
     const failure = extractedQuality

@@ -16,6 +16,8 @@ describe('Media Intelligence filters', () => {
       language: 'fr',
       outlet: 'Le Monde',
       status: 'published',
+      kind: 'interview',
+      role: 'quoted_expert',
       page: '3',
       pageSize: '999',
     });
@@ -27,6 +29,8 @@ describe('Media Intelligence filters', () => {
       language: 'FR',
       outlet: 'Le Monde',
       status: 'published',
+      kind: 'interview',
+      role: 'quoted_expert',
       page: 3,
       pageSize: 100,
     });
@@ -38,6 +42,8 @@ describe('Media Intelligence filters', () => {
       topic: 'Not a topic',
       language: 'a',
       status: 'archived',
+      kind: 'Interview!',
+      role: 'superhero',
       page: '-1',
       pageSize: '0',
     });
@@ -46,6 +52,8 @@ describe('Media Intelligence filters', () => {
     expect(filters.topic).toBeNull();
     expect(filters.language).toBeNull();
     expect(filters.status).toBeNull();
+    expect(filters.kind).toBeNull();
+    expect(filters.role).toBeNull();
     expect(filters.page).toBe(1);
     expect(filters.pageSize).toBe(20);
   });

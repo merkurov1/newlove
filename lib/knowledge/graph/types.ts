@@ -93,6 +93,7 @@ export type BrainGraphJob = {
   content_hash: string | null;
   attempts: number;
   max_attempts: number;
+  retry_after: string | null;
   error_code: string | null;
   error_detail: string | null;
   worker_id: string | null;

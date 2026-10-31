@@ -4,9 +4,11 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 });
 
 // sharp — нативный модуль, его нельзя бандлить webpack'ом.
+// pdf-parse/pdfjs-dist содержат worker и ESM-загрузчик, поэтому остаются
+// внешними серверными пакетами.
 // Ключ конфигурации зависит от мажорной версии Next.
 const nextMajor = parseInt(require('next/package.json').version.split('.')[0], 10);
-const externalPackages = ['sharp'];
+const externalPackages = ['sharp', 'pdf-parse', 'pdfjs-dist'];
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

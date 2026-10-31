@@ -7,6 +7,7 @@ import { extractArticle } from '../extract';
 import { deriveMediaCoverageDocumentId, processNextBrainJob } from '../process';
 import type { BrainJobRow, BrainStore, MediaArchiveRecord, MediaCoverageMatch } from '../store';
 import { BrainUrlError } from '../url';
+import { sha256Hex, sourcePathForStorage } from '../sourceValidation';
 
 const mediaRecord: MediaArchiveRecord = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -117,11 +118,12 @@ function fakeStore(
   existing: MediaCoverageMatch | null = null,
   options: {
     reprintCandidates?: Array<{ mediaRecordId: string; documentId: string }>;
-  } = {}
+  } = {},
+  jobOverrides: Partial<BrainJobRow> = {}
 ) {
   const state = {
-    job: job(),
-    jobs: [job()] as BrainJobRow[],
+    job: job(jobOverrides),
+    jobs: [job(jobOverrides)] as BrainJobRow[],
     mediaRecord: { ...mediaRecord },
     runStatus: 'running' as string,
     claimed: false,
@@ -171,6 +173,10 @@ function fakeStore(
     updateMediaCoverageDocument: jest.fn(async (document: Record<string, unknown>) => {
       state.documents.push(document);
       state.document = matchFromDocument(document);
+    }),
+    updateLinkedArticleMediaDocument: jest.fn(async (document: Record<string, unknown>) => {
+      state.documents.push({ ...document, source_type: 'article' });
+      state.document = matchFromDocument({ ...document, source_type: 'article' });
     }),
     updateMediaCoverageMetadata: jest.fn(async (_id: string, patch: Record<string, unknown>) => {
       if (state.document) {
@@ -231,6 +237,7 @@ async function run(
   store: BrainStore,
   options: {
     client?: EmbeddingClient;
+    storage?: Parameters<typeof processNextBrainJob>[0]['storage'];
     fetch?: (url: string) => Promise<{
       url: string;
       html: string;
@@ -246,6 +253,7 @@ async function run(
     embeddingClient: options.client ?? embeddingClient(),
     workerId: 'test-media-worker',
     mediaRecord,
+    storage: options.storage,
     fetchArticle:
       options.fetch ??
       (async (url) => ({
@@ -524,5 +532,83 @@ describe('Media coverage ingestion', () => {
     expect(state.job.error_detail).toBe('The page took too long to load.');
     expect(state.document?.coverageStatus).toBe('failed');
     expect(state.document?.ingestionStatus).toBe('pending');
+  });
+
+  it('uses captured HTML without fetching the page again', async () => {
+    const capturedHtml = html();
+    const buffer = Buffer.from(capturedHtml, 'utf8');
+    const sourceSha256 = sha256Hex(buffer);
+    const storagePath = sourcePathForStorage(sourceSha256, 'html');
+    const { store, state, raw } = fakeStore(null, {}, {
+      source_format: 'url',
+      storage_path: storagePath,
+      source_sha256: sourceSha256,
+      byte_size: buffer.length,
+    });
+    const fetch = jest.fn(async () => {
+      throw new Error('must not fetch a captured media source');
+    });
+
+    const result = await run(store, {
+      fetch,
+      storage: {
+        downloadSource: jest.fn(async () => buffer),
+      } as unknown as Parameters<typeof processNextBrainJob>[0]['storage'],
+    });
+
+    expect(result.state).toBe('processed');
+    expect(fetch).not.toHaveBeenCalled();
+    expect(state.job.status).toBe('completed');
+    expect(state.documents.at(-1)?.source_path).toBe(storagePath);
+    expect(state.documents.at(-1)?.source_sha256).toBe(sourceSha256);
+  });
+
+  it('re-indexes an already linked article document from a manual source instead of keeping stale text', async () => {
+    const existing: MediaCoverageMatch = {
+      documentId: 'doc_article_linked',
+      title: mediaRecord.title,
+      match: 'media_record_id',
+      ingestionStatus: 'completed',
+      contentHash: 'c'.repeat(64),
+      canonicalUrl: mediaRecord.canonical_url,
+      normalizedUrl: mediaRecord.canonical_url,
+      chunkCount: 3,
+      sourceCharCount: 3000,
+      sourceType: 'article',
+      mediaRecordId: mediaRecord.id,
+      extractionStatus: 'complete',
+      processedAt: new Date().toISOString(),
+      coverageStatus: 'completed',
+      coverageMethod: 'linked_article',
+      textQuality: 'full_text',
+      language: 'fr',
+    };
+    const manual = `# Manual media text\n\n${longText}\n\n${longText}`;
+    const buffer = Buffer.from(manual, 'utf8');
+    const sourceSha256 = sha256Hex(buffer);
+    const storagePath = sourcePathForStorage(sourceSha256, 'txt');
+    const { store, state, raw } = fakeStore(existing, {}, {
+      source_format: 'text',
+      storage_path: storagePath,
+      source_sha256: sourceSha256,
+      byte_size: buffer.length,
+    });
+    const fetch = jest.fn(async () => {
+      throw new Error('manual source must not fetch');
+    });
+
+    const result = await run(store, {
+      fetch,
+      storage: {
+        downloadSource: jest.fn(async () => buffer),
+      } as unknown as Parameters<typeof processNextBrainJob>[0]['storage'],
+    });
+
+    expect(result.state).toBe('processed');
+    expect(fetch).not.toHaveBeenCalled();
+    expect(state.job.status).toBe('completed');
+    expect(raw.updateLinkedArticleMediaDocument).toHaveBeenCalled();
+    expect(state.document?.documentId).toBe('doc_article_linked');
+    expect(state.job.document_id).toBe('doc_article_linked');
   });
 });

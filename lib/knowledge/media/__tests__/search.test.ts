@@ -18,6 +18,8 @@ const filters = {
   language: null,
   outlet: null,
   status: null,
+  kind: null,
+  role: null,
   page: 1,
   pageSize: 20,
 };

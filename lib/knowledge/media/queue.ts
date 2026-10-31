@@ -31,10 +31,28 @@ export async function enqueueMediaCoverageJob(input: {
   requestedBy?: string | null;
   runId?: string | null;
   source?: string;
+  sourceFormat?: 'url' | 'pdf' | 'txt' | 'text';
+  storagePath?: string | null;
+  sourceSha256?: string | null;
+  originalFilename?: string | null;
+  mimeType?: string | null;
+  byteSize?: number | null;
+  pageCount?: number | null;
+  titleOverride?: string | null;
+  authorOverride?: string | null;
+  publishedAtOverride?: string | null;
+  languageOverride?: string | null;
 }): Promise<EnqueueMediaCoverageResult> {
   const active = await input.store.findActiveMediaJob(input.mediaRecordId);
 
   if (active) {
+    await input.store
+      .updateMediaRecord(input.mediaRecordId, {
+        indexing_status: active.status === 'processing' ? 'processing' : 'pending',
+        indexing_error: null,
+      })
+      .catch(() => undefined);
+
     return {
       status: 'already_queued',
       run: null,
@@ -64,6 +82,17 @@ export async function enqueueMediaCoverageJob(input: {
       inputUrl: input.inputUrl,
       normalizedUrl,
       sourceType: 'media_coverage',
+      sourceFormat: input.sourceFormat || 'url',
+      storagePath: input.storagePath || null,
+      sourceSha256: input.sourceSha256 || null,
+      originalFilename: input.originalFilename || null,
+      mimeType: input.mimeType || null,
+      byteSize: input.byteSize ?? null,
+      pageCount: input.pageCount ?? null,
+      titleOverride: input.titleOverride || null,
+      authorOverride: input.authorOverride || null,
+      publishedAtOverride: input.publishedAtOverride || null,
+      languageOverride: input.languageOverride || null,
       mediaRecordId: input.mediaRecordId,
       requestedBy: input.requestedBy || null,
     },
@@ -72,6 +101,13 @@ export async function enqueueMediaCoverageJob(input: {
   const job = jobs[0];
 
   if (!job) throw new Error('media_coverage_job_create_failed');
+
+  await input.store
+    .updateMediaRecord(input.mediaRecordId, {
+      indexing_status: 'pending',
+      indexing_error: null,
+    })
+    .catch(() => undefined);
 
   return { status: 'queued', run, runId, job };
 }

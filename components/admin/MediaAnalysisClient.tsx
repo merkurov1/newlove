@@ -67,7 +67,16 @@ type Analysis = {
     role: string;
     confidence: number;
     evidence: string | null;
+    metadata?: { interaction_type?: string } | null;
   } | null;
+  entities: Array<{
+    id: string;
+    entity_type: 'person' | 'organization';
+    name: string;
+    role: string | null;
+    context: string | null;
+    confidence: number;
+  }>;
   relations: Relation[];
 };
 
@@ -143,7 +152,15 @@ function verificationClass(value: string): string {
   }
 }
 
-function QuoteCard({ quote, onSaved }: { quote: Quote; onSaved: () => Promise<void> }) {
+function QuoteCard({
+  quote,
+  canonicalUrl,
+  onSaved,
+}: {
+  quote: Quote;
+  canonicalUrl: string;
+  onSaved: () => Promise<void>;
+}) {
   const [verification, setVerification] = useState(quote.verification_status);
   const [attribution, setAttribution] = useState(quote.attribution);
   const [attributionNote, setAttributionNote] = useState(quote.attribution_note || '');
@@ -187,7 +204,10 @@ function QuoteCard({ quote, onSaved }: { quote: Quote; onSaved: () => Promise<vo
   }
 
   return (
-    <article className="rounded-xl border border-gray-200 bg-white p-5">
+    <article
+      id={`quote-${quote.id}`}
+      className="scroll-mt-24 rounded-xl border border-gray-200 bg-white p-5"
+    >
       <div className="flex flex-wrap items-center gap-2">
         <span
           className={`inline-flex border px-2 py-0.5 text-[10px] uppercase tracking-wider ${verificationClass(quote.verification_status)}`}
@@ -293,6 +313,20 @@ function QuoteCard({ quote, onSaved }: { quote: Quote; onSaved: () => Promise<vo
             <option value="rejected">rejected</option>
           </select>
         </label>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-3 text-[10px]">
+        <a
+          className="text-[#8B1E3F] underline"
+          href={canonicalUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Открыть оригинал публикации
+        </a>
+        <span className="font-mono text-gray-400">
+          document chars {quote.document_char_start}–{quote.document_char_end}
+        </span>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -471,6 +505,9 @@ export default function MediaAnalysisClient({ mediaRecordId }: { mediaRecordId: 
               <p className="mt-2 font-serif text-xl">{analysis.editorialRole?.role || 'unknown'}</p>
               <p className="mt-1 text-xs text-gray-500">
                 {analysis.editorialRole ? confidence(analysis.editorialRole.confidence) : '—'}
+                {analysis.editorialRole?.metadata?.interaction_type
+                  ? ` · ${analysis.editorialRole.metadata.interaction_type}`
+                  : ''}
               </p>
             </div>
             <div className="border border-gray-200 bg-white p-4">
@@ -505,8 +542,40 @@ export default function MediaAnalysisClient({ mediaRecordId }: { mediaRecordId: 
               </p>
             ) : (
               analysis.quotes.map((quote) => (
-                <QuoteCard key={quote.id} quote={quote} onSaved={load} />
+                <QuoteCard
+                  key={quote.id}
+                  quote={quote}
+                  canonicalUrl={data.mediaRecord.canonical_url}
+                  onSaved={load}
+                />
               ))
+            )}
+          </section>
+
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-serif text-2xl">Участники и организации</h2>
+              <span className="text-xs text-gray-500">{analysis.entities.length}</span>
+            </div>
+            {analysis.entities.length === 0 ? (
+              <p className="border-b border-gray-200 py-4 text-sm text-gray-500">
+                Участники не извлечены.
+              </p>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {analysis.entities.map((entity) => (
+                  <div key={entity.id} className="border border-gray-200 bg-white p-3">
+                    <p className="text-sm text-gray-900">{entity.name}</p>
+                    <p className="mt-1 text-[10px] uppercase tracking-wider text-gray-500">
+                      {entity.entity_type}
+                      {entity.role ? ` · ${entity.role}` : ''} · {confidence(entity.confidence)}
+                    </p>
+                    {entity.context && (
+                      <p className="mt-1 text-xs text-gray-500">{entity.context}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </section>
 
@@ -585,6 +654,7 @@ export default function MediaAnalysisClient({ mediaRecordId }: { mediaRecordId: 
                 {run.created_at.slice(0, 16).replace('T', ' ')} · {run.status} · {run.quote_count}{' '}
                 цитат · {run.relation_count} связей
                 {run.error_code ? ` · ${run.error_code}` : ''}
+                {run.error_detail ? ` · ${run.error_detail}` : ''}
               </p>
             ))}
           </section>

@@ -37,13 +37,40 @@ export async function POST(
   const force = Boolean(body && typeof body === 'object' && body.force === true);
 
   try {
+    const store = createMediaAnalysisStore();
+
+    if (!store) return json({ error: 'Media analysis database is not configured.' }, 503);
+
+    const active = await store.findActiveRun(id).catch(() => null);
+
+    if (active && active.status === 'processing') {
+      return json(
+        {
+          error: 'Analysis is already running for this publication.',
+          runId: active.id,
+          status: active.status,
+        },
+        409
+      );
+    }
+
+    if (active && active.status === 'pending') {
+      return json(
+        {
+          error: 'Analysis is already queued for this publication.',
+          runId: active.id,
+          status: active.status,
+        },
+        409
+      );
+    }
+
     const result = await runMediaAnalysis({
       mediaRecordId: id,
       force,
     });
 
-    const store = createMediaAnalysisStore();
-    const analysis = store ? await store.getCurrentAnalysis(id) : null;
+    const analysis = await store.getCurrentAnalysis(id);
 
     return json({
       status: 'ok',

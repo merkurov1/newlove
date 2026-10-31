@@ -8,5 +8,19 @@
       "main": true,
       "*": false
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/brain-worker",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/graph-worker",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/media-analysis-worker",
+      "schedule": "0 4 * * *"
+    }
+  ]
 }

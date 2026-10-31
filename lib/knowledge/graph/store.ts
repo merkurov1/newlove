@@ -266,6 +266,70 @@ export function createBrainGraphStore(env: RagEnvironment = process.env) {
       return Array.isArray(data) ? (data as unknown as BrainGraphRun[]) : [];
     },
 
+    async listRunningRuns(limit = 100): Promise<BrainGraphRun[]> {
+      const { data, error } = await store
+        .from('brain_graph_runs')
+        .select('*')
+        .eq('status', 'running')
+        .order('created_at', { ascending: true })
+        .limit(limit);
+
+      if (error) throw new Error('brain_graph_runs_query_failed');
+
+      return Array.isArray(data) ? (data as unknown as BrainGraphRun[]) : [];
+    },
+
+    async heartbeatJob(jobId: string, workerId: string): Promise<void> {
+      const { error } = await store
+        .from('brain_graph_jobs')
+        .update({
+          locked_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', jobId)
+        .eq('worker_id', workerId)
+        .eq('status', 'processing');
+
+      if (error) throw new Error('brain_graph_job_heartbeat_failed');
+    },
+
+    async recoverStaleJobs(staleSeconds = 900): Promise<number> {
+      const cutoff = new Date(Date.now() - staleSeconds * 1000).toISOString();
+      const { data, error } = await store
+        .from('brain_graph_jobs')
+        .select('id,attempts,max_attempts')
+        .eq('status', 'processing')
+        .or(`locked_at.is.null,locked_at.lt."${cutoff}"`)
+        .limit(500);
+
+      if (error) throw new Error('brain_graph_reclaim_query_failed');
+
+      const rows = Array.isArray(data)
+        ? (data as Array<{ id: string; attempts: number; max_attempts: number }>)
+        : [];
+
+      for (const row of rows) {
+        const exhausted = row.attempts >= row.max_attempts;
+
+        const { error: updateError } = await store
+          .from('brain_graph_jobs')
+          .update({
+            status: exhausted ? 'failed' : 'queued',
+            error_code: exhausted ? 'stale_worker' : null,
+            error_detail: exhausted ? 'Worker lease expired before completion.' : null,
+            worker_id: null,
+            locked_at: null,
+            retry_after: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', row.id);
+
+        if (updateError) throw new Error('brain_graph_reclaim_update_failed');
+      }
+
+      return rows.length;
+    },
+
     async updateRun(runId: string, patch: Partial<BrainGraphRun>): Promise<void> {
       const { error } = await store
         .from('brain_graph_runs')
@@ -341,7 +405,7 @@ export function createBrainGraphStore(env: RagEnvironment = process.env) {
         .select('id,attempts,max_attempts')
         .eq('run_id', runId)
         .eq('status', 'processing')
-        .lt('locked_at', cutoff)
+        .or(`locked_at.is.null,locked_at.lt."${cutoff}"`)
         .limit(500);
 
       if (error) throw new Error('brain_graph_reclaim_query_failed');
@@ -361,6 +425,7 @@ export function createBrainGraphStore(env: RagEnvironment = process.env) {
             error_detail: exhausted ? 'Worker stopped before completing this document.' : null,
             worker_id: null,
             locked_at: null,
+            retry_after: null,
             updated_at: new Date().toISOString(),
           })
           .eq('id', row.id);
@@ -377,6 +442,7 @@ export function createBrainGraphStore(env: RagEnvironment = process.env) {
         .update({
           status: 'queued',
           attempts: 0,
+          retry_after: null,
           error_code: null,
           error_detail: null,
           worker_id: null,

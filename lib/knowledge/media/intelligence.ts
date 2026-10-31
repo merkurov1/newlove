@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { graphChatJson } from '@/lib/knowledge/graph/deepseek';
 
-export const MEDIA_ANALYZER_VERSION = 'media-intelligence-v1';
+export const MEDIA_ANALYZER_VERSION = 'media-intelligence-v2';
 export const MEDIA_ANALYSIS_MAX_CHARS = 15_000;
 export const MEDIA_ANALYSIS_MAX_SEGMENTS = 6;
 export const MEDIA_QUOTE_CONTEXT_CHARS = 300;
@@ -27,11 +27,76 @@ export const MEDIA_ANALYSIS_TOPICS = [
   'Art & Culture',
   'Fintech & Crypto',
 ] as const;
+export const MEDIA_INTERACTION_TYPES = [
+  'interview',
+  'commentary',
+  'quoted_expert',
+  'profile',
+  'author',
+  'mention',
+  'republication',
+  'review',
+  'unknown',
+] as const;
 
 export type MediaQuoteType = (typeof MEDIA_QUOTE_TYPES)[number];
 export type MediaAttribution = (typeof MEDIA_ATTRIBUTIONS)[number];
 export type MediaEditorialRole = (typeof MEDIA_EDITORIAL_ROLES)[number];
 export type MediaAnalysisTopic = (typeof MEDIA_ANALYSIS_TOPICS)[number];
+export type MediaInteractionType = (typeof MEDIA_INTERACTION_TYPES)[number];
+export type MediaEntityType = 'person' | 'organization';
+
+const KIND_ROLE_FALLBACK: Record<
+  string,
+  { role: MediaEditorialRole; interactionType: MediaInteractionType }
+> = {
+  column: { role: 'author', interactionType: 'commentary' },
+  blog: { role: 'author', interactionType: 'commentary' },
+  interview: { role: 'interview', interactionType: 'interview' },
+  quote: { role: 'quoted_expert', interactionType: 'quoted_expert' },
+  profile: { role: 'profile', interactionType: 'profile' },
+  mention: { role: 'mention', interactionType: 'mention' },
+  video: { role: 'interview', interactionType: 'interview' },
+  radio: { role: 'interview', interactionType: 'interview' },
+  republication: { role: 'republication', interactionType: 'republication' },
+};
+
+/**
+ * Deterministic fallback for publications where the model could not establish
+ * an editorial role. It is marked with low confidence and an explicit evidence
+ * string, so it is never confused with a text-based conclusion.
+ */
+export function mediaRoleFromKind(kind: string | null | undefined): {
+  role: MediaEditorialRole;
+  interactionType: MediaInteractionType;
+  confidence: number;
+  evidence: string;
+} {
+  const fallback = KIND_ROLE_FALLBACK[(kind || '').toLowerCase()];
+
+  if (!fallback) {
+    return {
+      role: 'unknown',
+      interactionType: 'unknown',
+      confidence: 0.2,
+      evidence: 'Archive kind does not imply an explicit editorial role.',
+    };
+  }
+
+  return {
+    ...fallback,
+    confidence: 0.3,
+    evidence: `Fallback from archive publication kind: ${kind}.`,
+  };
+}
+
+export type AnalysisEntity = {
+  entityType: MediaEntityType;
+  name: string;
+  role: string | null;
+  context: string | null;
+  confidence: number;
+};
 
 export type AnalysisChunk = {
   id: string;
@@ -92,6 +157,8 @@ export type MediaAnalysisCandidate = {
     confidence: number;
     evidence: string | null;
   } | null;
+  interactionType: MediaInteractionType | null;
+  entities: AnalysisEntity[];
   rejectedCandidateCount: number;
   segments: number;
   textLength: number;
@@ -115,7 +182,7 @@ const quoteCandidateSchema = z
 
 const topicSchema = z
   .object({
-    primary_topic: z.enum(MEDIA_ANALYSIS_TOPICS),
+    primary_topic: z.string().min(1).max(80),
     subtopics: z.array(z.string().min(1).max(80)).max(8).optional().default([]),
     confidence: z.number().min(0).max(1).optional(),
   })
@@ -123,17 +190,31 @@ const topicSchema = z
 
 const roleSchema = z
   .object({
-    role: z.enum(MEDIA_EDITORIAL_ROLES),
+    role: z.string().min(1).max(80),
     confidence: z.number().min(0).max(1).optional(),
     evidence: z.string().max(2000).optional().nullable(),
   })
   .passthrough();
 
+const entitySchema = z
+  .object({
+    name: z.string().min(1).max(300),
+    role: z.string().max(300).optional().nullable(),
+    context: z.string().max(1000).optional().nullable(),
+    confidence: z.number().min(0).max(1).optional(),
+  })
+  .passthrough();
+
 const analysisSchema = z
   .object({
-    quotes: z.array(quoteCandidateSchema).max(40).optional().default([]),
-    topics: topicSchema.optional().nullable(),
-    editorial_role: roleSchema.optional().nullable(),
+    // Parse the envelope first and validate each item independently. A single
+    // unexpected label or malformed quote must not discard the whole article.
+    quotes: z.array(z.unknown()).max(40).optional().default([]),
+    topics: z.unknown().optional().nullable(),
+    editorial_role: z.unknown().optional().nullable(),
+    interaction_type: z.unknown().optional().nullable(),
+    participants: z.array(z.unknown()).max(40).optional().default([]),
+    organizations: z.array(z.unknown()).max(40).optional().default([]),
   })
   .passthrough();
 
@@ -143,6 +224,27 @@ function sha256(value: string): string {
 
 function clamp(value: number, min = 0, max = 1): number {
   return Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
+}
+
+function normalizeTopic(value: string): MediaAnalysisTopic | null {
+  const normalized = value.trim().toLowerCase();
+  return (
+    MEDIA_ANALYSIS_TOPICS.find((topic) => topic.toLowerCase() === normalized) || null
+  );
+}
+
+function normalizeRole(value: string): MediaEditorialRole {
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return (
+    MEDIA_EDITORIAL_ROLES.find((role) => role === normalized) || 'unknown'
+  );
+}
+
+function normalizeInteraction(value: string): MediaInteractionType {
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return (
+    MEDIA_INTERACTION_TYPES.find((item) => item === normalized) || 'unknown'
+  );
 }
 
 /**
@@ -324,12 +426,14 @@ export function buildQuoteExtractionPrompt(input: {
     'Only attribute a quote to anton_merkurov when the text clearly identifies Anton Merkurov as the speaker or source. If attribution is ambiguous, use unknown.',
     'Context is not a quote. Never turn a paraphrase into direct_quote.',
     'Translation is optional and must be stored separately; never replace the original wording.',
-    'Return JSON only: { "quotes": [{ "quote_text", "quote_type", "attribution", "attribution_confidence", "attribution_note", "confidence", "context_note", "translation", "translation_language" }], "topics": { "primary_topic", "subtopics", "confidence" }, "editorial_role": { "role", "confidence", "evidence" } }.',
+    'Return JSON only: { "quotes": [{ "quote_text", "quote_type", "attribution", "attribution_confidence", "attribution_note", "confidence", "context_note", "translation", "translation_language" }], "topics": { "primary_topic", "subtopics", "confidence" }, "editorial_role": { "role", "confidence", "evidence" }, "interaction_type": "interview|commentary|quoted_expert|profile|author|mention|republication|review|unknown", "participants": [{ "name", "role", "context", "confidence" }], "organizations": [{ "name", "role", "context", "confidence" }] }.',
     'Allowed quote_type: direct_quote, indirect_quote, mention.',
     'Allowed attribution: anton_merkurov, other, unknown.',
     'Allowed editorial_role: expert_comment, interview, quoted_expert, profile, author, mention, republication, unknown.',
     'Allowed primary_topic: Internet & Censorship, AI & Tech, Art & Culture, Fintech & Crypto.',
-    'If the text does not support a role or topic, return unknown / null rather than guessing.',
+    'Allowed interaction_type: interview, commentary, quoted_expert, profile, author, mention, republication, review, unknown.',
+    'Return participants and organizations with the exact names used in the publication. Do not infer participants who are not mentioned in the supplied text.',
+    'If the text does not support a role, topic or interaction type, return unknown / null rather than guessing.',
   ].join('\n');
 
   return {
@@ -377,6 +481,7 @@ export async function analyzeMediaDocument(input: {
   title: string;
   outlet: string;
   language: string | null;
+  kind?: string | null;
   chunks: AnalysisChunk[];
   chatJson?: ChatJson;
   maxChars?: number;
@@ -387,12 +492,46 @@ export async function analyzeMediaDocument(input: {
     throw new Error('media_analysis_no_text');
   }
 
-  const chatJson = input.chatJson || ((system, user) => graphChatJson(system, user));
+  const chatJson =
+    input.chatJson ||
+    ((system, user) =>
+      graphChatJson(system, user, {
+        // Participants, organizations and quotes can exceed the default
+        // 4096-token output budget. A truncated JSON response is retried by
+        // the queue instead of being stored as a partial analysis.
+        maxTokens: 8192,
+        timeoutMs: 120_000,
+      }));
   const segments = segmentText(documentText, input.maxChars);
   const candidates: QuoteCandidate[] = [];
   let topics: MediaAnalysisCandidate['topics'] = null;
   let editorialRole: MediaAnalysisCandidate['editorialRole'] = null;
+  let interactionType: MediaInteractionType | null = null;
+  const entities: AnalysisEntity[] = [];
+  const entityKeys = new Set<string>();
   let rejectedCandidateCount = 0;
+
+  const addEntities = (rows: unknown[], entityType: MediaEntityType) => {
+    for (const raw of rows) {
+      const parsed = entitySchema.safeParse(raw);
+      if (!parsed.success) continue;
+
+      const name = parsed.data.name.trim().slice(0, 300);
+      if (!name) continue;
+
+      const key = `${entityType}:${name.toLowerCase()}`;
+      if (entityKeys.has(key)) continue;
+
+      entityKeys.add(key);
+      entities.push({
+        entityType,
+        name,
+        role: parsed.data.role?.trim().slice(0, 300) || null,
+        context: parsed.data.context?.trim().slice(0, 1000) || null,
+        confidence: clamp(parsed.data.confidence ?? 0.6),
+      });
+    }
+  };
 
   for (let index = 0; index < segments.length; index += 1) {
     const prompt = buildQuoteExtractionPrompt({
@@ -410,26 +549,57 @@ export async function analyzeMediaDocument(input: {
       continue;
     }
 
-    candidates.push(...parsed.data.quotes);
+    for (const rawQuote of parsed.data.quotes) {
+      const quote = quoteCandidateSchema.safeParse(rawQuote);
+
+      if (!quote.success) {
+        rejectedCandidateCount += 1;
+        continue;
+      }
+
+      candidates.push(quote.data);
+    }
 
     if (!topics && parsed.data.topics) {
-      topics = {
-        primaryTopic: parsed.data.topics.primary_topic,
-        subtopics: parsed.data.topics.subtopics
-          .map((value) => value.trim())
-          .filter(Boolean)
-          .slice(0, 8),
-        confidence: clamp(parsed.data.topics.confidence ?? 0.6),
-      };
+      const parsedTopic = topicSchema.safeParse(parsed.data.topics);
+      const primaryTopic = parsedTopic.success
+        ? normalizeTopic(parsedTopic.data.primary_topic)
+        : null;
+
+      if (parsedTopic.success && primaryTopic) {
+        topics = {
+          primaryTopic,
+          subtopics: parsedTopic.data.subtopics
+            .map((value) => value.trim())
+            .filter(Boolean)
+            .slice(0, 8),
+          confidence: clamp(parsedTopic.data.confidence ?? 0.6),
+        };
+      }
     }
 
     if (!editorialRole && parsed.data.editorial_role) {
-      editorialRole = {
-        role: parsed.data.editorial_role.role,
-        confidence: clamp(parsed.data.editorial_role.confidence ?? 0.5),
-        evidence: parsed.data.editorial_role.evidence?.trim() || null,
-      };
+      const parsedRole = roleSchema.safeParse(parsed.data.editorial_role);
+
+      if (parsedRole.success) {
+        editorialRole = {
+          role: normalizeRole(parsedRole.data.role),
+          confidence: clamp(parsedRole.data.confidence ?? 0.5),
+          evidence: parsedRole.data.evidence?.trim() || null,
+        };
+      }
     }
+
+    if (
+      !interactionType &&
+      parsed.data.interaction_type &&
+      typeof parsed.data.interaction_type === 'string'
+    ) {
+      interactionType = normalizeInteraction(parsed.data.interaction_type);
+    }
+
+    addEntities(parsed.data.participants, 'person');
+    addEntities(parsed.data.organizations, 'organization');
   }
 
   const verified: VerifiedMediaQuote[] = [];
@@ -456,10 +626,36 @@ export async function analyzeMediaDocument(input: {
     verified.push(quote);
   }
 
+  const fallback = mediaRoleFromKind(input.kind);
+
+  if (!editorialRole || editorialRole.role === 'unknown') {
+    if (fallback.role !== 'unknown') {
+      editorialRole = {
+        role: fallback.role,
+        confidence: fallback.confidence,
+        evidence: editorialRole?.evidence
+          ? `${editorialRole.evidence} ${fallback.evidence}`
+          : fallback.evidence,
+      };
+    } else if (!editorialRole) {
+      editorialRole = {
+        role: fallback.role,
+        confidence: fallback.confidence,
+        evidence: fallback.evidence,
+      };
+    }
+  }
+
+  if (!interactionType || interactionType === 'unknown') {
+    interactionType = fallback.interactionType;
+  }
+
   return {
     quotes: verified.slice(0, 80),
     topics,
     editorialRole,
+    interactionType,
+    entities: entities.slice(0, 60),
     rejectedCandidateCount,
     segments: segments.length,
     textLength: documentText.length,

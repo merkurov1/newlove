@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { isMissingIngestionVersionColumn, toPgVector } from '@/lib/knowledge/rag/supabaseStore';
 import type { KnowledgeChunkWithEmbedding, KnowledgeDocumentRow } from '@/lib/knowledge/rag/types';
 import type { RagEnvironment } from '@/lib/knowledge/rag/config';
+import type { BrainSourceFormat, BrainSourceType } from './sourceTypes';
 
 export type BrainJobStatus =
   'queued' | 'processing' | 'completed' | 'duplicate' | 'partial' | 'failed' | 'cancelled';
@@ -10,7 +11,7 @@ export type BrainJobStatus =
 export type BrainRunStatus =
   'running' | 'paused' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelled';
 
-export type BrainSourceType = 'article' | 'media_coverage';
+export type { BrainSourceFormat, BrainSourceType } from './sourceTypes';
 
 export type MediaCoverageStatus =
   'pending' | 'processing' | 'completed' | 'failed' | 'partial' | 'blocked';
@@ -21,6 +22,11 @@ export type MediaArchiveRecord = {
   canonical_url: string;
   title: string;
   outlet: string;
+  author?: string | null;
+  source_format?: string | null;
+  content_hash?: string | null;
+  source_path?: string | null;
+  source_sha256?: string | null;
   published_date: string | null;
   lang: string;
   kind: string;
@@ -35,6 +41,13 @@ export type MediaArchiveRecord = {
 export type MediaArchivePatch = {
   title?: string;
   outlet?: string;
+  author?: string | null;
+  source_format?: string | null;
+  content_hash?: string | null;
+  source_path?: string | null;
+  source_sha256?: string | null;
+  indexing_status?: string | null;
+  indexing_error?: string | null;
   canonical_url?: string;
   url?: string;
   published_date?: string | null;
@@ -83,14 +96,26 @@ export type BrainJobRow = {
   updated_at: string;
   /** Defaults to `article` for jobs created before the Media Intelligence link. */
   source_type?: BrainSourceType;
+  source_format?: BrainSourceFormat;
+  storage_path?: string | null;
+  source_sha256?: string | null;
+  original_filename?: string | null;
+  mime_type?: string | null;
+  byte_size?: number | null;
+  page_count?: number | null;
+  title_override?: string | null;
+  author_override?: string | null;
+  published_at_override?: string | null;
+  language_override?: string | null;
   media_record_id?: string | null;
   requested_by?: string | null;
 };
 
 export type BrainArticleDocumentRow = KnowledgeDocumentRow & {
-  source_type: 'article';
-  source_url: string;
-  canonical_url: string;
+  source_type: 'article' | 'pdf' | 'txt' | 'text';
+  source_format: BrainSourceFormat;
+  source_url: string | null;
+  canonical_url: string | null;
   normalized_url: string;
   content_hash: string;
   language: string | null;
@@ -99,10 +124,17 @@ export type BrainArticleDocumentRow = KnowledgeDocumentRow & {
   extraction_status: string;
   ingestion_status: 'pending' | 'completed';
   processed_at: string | null;
+  original_filename?: string | null;
+  mime_type?: string | null;
+  page_count?: number | null;
 };
 
 export type MediaCoverageDocumentRow = KnowledgeDocumentRow & {
   source_type: 'media_coverage';
+  source_format?: BrainSourceFormat;
+  original_filename?: string | null;
+  mime_type?: string | null;
+  page_count?: number | null;
   source_url: string;
   canonical_url: string;
   normalized_url: string;
@@ -174,12 +206,13 @@ export type ArticleDocumentLookup = {
 export type DuplicateMatch = {
   documentId: string;
   title: string;
-  match: 'normalized_url' | 'canonical_url' | 'content_hash';
+  match: 'normalized_url' | 'canonical_url' | 'content_hash' | 'source_sha256';
   ingestionStatus: string | null;
   contentHash: string | null;
   canonicalUrl: string | null;
   normalizedUrl: string | null;
   chunkCount: number | null;
+  sourceType?: string | null;
 };
 
 export type MediaCoverageMatch = Omit<DuplicateMatch, 'match'> & {
@@ -251,7 +284,7 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       const { data, error } = await store
         .from('media_archive_records')
         .select(
-          'id,url,canonical_url,title,outlet,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at'
+          'id,url,canonical_url,title,outlet,author,source_format,content_hash,source_path,source_sha256,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at'
         )
         .eq('id', mediaRecordId)
         .maybeSingle();
@@ -266,7 +299,7 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       normalizedUrl: string
     ): Promise<MediaArchiveRecord | null> {
       const select =
-        'id,url,canonical_url,title,outlet,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at';
+        'id,url,canonical_url,title,outlet,author,source_format,content_hash,source_path,source_sha256,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at';
 
       for (const [column, value] of [
         ['canonical_url', normalizedUrl],
@@ -331,7 +364,7 @@ export function createBrainStore(env: RagEnvironment = process.env) {
           const { data: existing } = await store
             .from('media_archive_records')
             .select(
-              'id,url,canonical_url,title,outlet,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at'
+              'id,url,canonical_url,title,outlet,author,source_format,content_hash,source_path,source_sha256,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at'
             )
             .eq(column, value)
             .limit(1)
@@ -370,7 +403,7 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       const { data, error } = await store
         .from('media_archive_records')
         .select(
-          'id,url,canonical_url,title,outlet,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at'
+          'id,url,canonical_url,title,outlet,author,source_format,content_hash,source_path,source_sha256,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at'
         )
         .in('id', ids)
         .limit(1000);
@@ -754,6 +787,98 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       return null;
     },
 
+    async findSourceDuplicate(input: {
+      sourceSha256: string;
+      sourceTypes?: BrainSourceType[];
+      excludeDocumentId?: string | null;
+    }): Promise<DuplicateMatch | null> {
+      if (!/^[a-f0-9]{64}$/.test(input.sourceSha256)) return null;
+
+      let query = store
+        .from('knowledge_documents')
+        .select(
+          'id,title,ingestion_status,content_hash,canonical_url,normalized_url,chunk_count,source_sha256,source_type,media_record_id'
+        )
+        .eq('source_sha256', input.sourceSha256)
+        .in('source_type', input.sourceTypes || ['pdf', 'txt', 'text'])
+        .limit(1);
+
+      if (input.excludeDocumentId) query = query.neq('id', input.excludeDocumentId);
+
+      const { data } = await query.maybeSingle();
+
+      if (!data) return null;
+
+      const row = data as {
+        id: string;
+        title: string;
+        ingestion_status?: string | null;
+        content_hash?: string | null;
+        canonical_url?: string | null;
+        normalized_url?: string | null;
+        chunk_count?: number | null;
+        source_type?: string | null;
+      };
+
+      return {
+        documentId: String(row.id),
+        title: String(row.title),
+        match: 'source_sha256',
+        ingestionStatus: row.ingestion_status ?? null,
+        contentHash: row.content_hash ?? null,
+        canonicalUrl: row.canonical_url ?? null,
+        normalizedUrl: row.normalized_url ?? null,
+        chunkCount: row.chunk_count ?? null,
+        sourceType: row.source_type ?? null,
+      };
+    },
+
+    async findContentDuplicate(input: {
+      contentHash: string;
+      sourceTypes?: BrainSourceType[];
+      excludeDocumentId?: string | null;
+    }): Promise<DuplicateMatch | null> {
+      if (!/^[a-f0-9]{64}$/.test(input.contentHash)) return null;
+
+      let query = store
+        .from('knowledge_documents')
+        .select(
+          'id,title,ingestion_status,content_hash,canonical_url,normalized_url,chunk_count,source_type'
+        )
+        .eq('content_hash', input.contentHash)
+        .in('source_type', input.sourceTypes || ['article', 'pdf', 'txt', 'text'])
+        .limit(1);
+
+      if (input.excludeDocumentId) query = query.neq('id', input.excludeDocumentId);
+
+      const { data } = await query.maybeSingle();
+
+      if (!data) return null;
+
+      const row = data as {
+        id: string;
+        title: string;
+        ingestion_status?: string | null;
+        content_hash?: string | null;
+        canonical_url?: string | null;
+        normalized_url?: string | null;
+        chunk_count?: number | null;
+        source_type?: string | null;
+      };
+
+      return {
+        documentId: String(row.id),
+        title: String(row.title),
+        match: 'content_hash',
+        ingestionStatus: row.ingestion_status ?? null,
+        contentHash: row.content_hash ?? null,
+        canonicalUrl: row.canonical_url ?? null,
+        normalizedUrl: row.normalized_url ?? null,
+        chunkCount: row.chunk_count ?? null,
+        sourceType: row.source_type ?? null,
+      };
+    },
+
     async createRun(metadata: Record<string, unknown> = {}): Promise<BrainRunRow> {
       const { data, error } = await store
         .from('brain_ingestion_runs')
@@ -790,6 +915,105 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       return Array.isArray(data) ? (data as unknown as BrainRunRow[]) : [];
     },
 
+    async listRunningRuns(limit = 100): Promise<BrainRunRow[]> {
+      const { data, error } = await store
+        .from('brain_ingestion_runs')
+        .select('*')
+        .eq('status', 'running')
+        .order('created_at', { ascending: true })
+        .limit(limit);
+
+      if (error) throw new Error('brain_run_query_failed');
+
+      return Array.isArray(data) ? (data as unknown as BrainRunRow[]) : [];
+    },
+
+    async heartbeatJob(jobId: string, workerId: string): Promise<void> {
+      const { error } = await store
+        .from('brain_ingestion_jobs')
+        .update({
+          locked_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', jobId)
+        .eq('worker_id', workerId)
+        .eq('status', 'processing');
+
+      if (error) throw new Error('brain_job_heartbeat_failed');
+    },
+
+    /**
+     * Global recovery for leases that expired while a serverless worker was
+     * killed. It never deletes a job: an exhausted lease becomes `failed`, and
+     * a non-exhausted lease is returned to `queued` for the next worker.
+     */
+    async recoverStaleJobs(staleSeconds = 900): Promise<number> {
+      const cutoff = new Date(Date.now() - staleSeconds * 1000).toISOString();
+      const { data, error } = await store
+        .from('brain_ingestion_jobs')
+        .select('id,run_id,attempts,max_attempts,media_record_id,document_id')
+        .eq('status', 'processing')
+        .or(`locked_at.is.null,locked_at.lt."${cutoff}"`)
+        .limit(200);
+
+      if (error) throw new Error('brain_jobs_reclaim_query_failed');
+
+      const rows = Array.isArray(data)
+        ? (data as Array<{
+            id: string;
+            run_id: string;
+            attempts: number;
+            max_attempts: number;
+            media_record_id: string | null;
+            document_id: string | null;
+          }>)
+        : [];
+
+      for (const row of rows) {
+        const exhausted = row.attempts >= row.max_attempts;
+
+        const { error: updateError } = await store
+          .from('brain_ingestion_jobs')
+          .update({
+            status: exhausted ? 'failed' : 'queued',
+            error_code: exhausted ? 'stale_worker' : null,
+            error_detail: exhausted ? 'Worker lease expired before completion.' : null,
+            worker_id: null,
+            locked_at: null,
+            retry_after: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', row.id);
+
+        if (updateError) throw new Error('brain_jobs_reclaim_update_failed');
+
+        if (row.media_record_id && row.document_id) {
+          const { error: mediaError } = await store
+            .from('knowledge_documents')
+            .update({
+              media_coverage_status: exhausted ? 'failed' : 'pending',
+              extraction_status: exhausted ? 'failed' : null,
+              media_coverage_error_code: exhausted ? 'stale_worker' : null,
+              media_coverage_error_detail: exhausted
+                ? 'Worker lease expired before completion.'
+                : null,
+              media_coverage_diagnostics: {
+                stage: exhausted ? 'stale_worker' : 'retry_queued',
+                error_code: exhausted ? 'stale_worker' : null,
+              },
+              ...(exhausted ? { processed_at: new Date().toISOString() } : {}),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', row.document_id)
+            .not('media_record_id', 'is', null);
+
+          if (mediaError) throw new Error('brain_media_reclaim_update_failed');
+        }
+      }
+
+      return rows.length;
+    },
+
     async updateRun(runId: string, patch: Partial<BrainRunRow>): Promise<void> {
       const { error } = await store
         .from('brain_ingestion_runs')
@@ -805,6 +1029,17 @@ export function createBrainStore(env: RagEnvironment = process.env) {
         inputUrl: string;
         normalizedUrl: string;
         sourceType?: BrainSourceType;
+        sourceFormat?: BrainSourceFormat;
+        storagePath?: string | null;
+        sourceSha256?: string | null;
+        originalFilename?: string | null;
+        mimeType?: string | null;
+        byteSize?: number | null;
+        pageCount?: number | null;
+        titleOverride?: string | null;
+        authorOverride?: string | null;
+        publishedAtOverride?: string | null;
+        languageOverride?: string | null;
         mediaRecordId?: string | null;
         requestedBy?: string | null;
       }>
@@ -817,6 +1052,17 @@ export function createBrainStore(env: RagEnvironment = process.env) {
         normalized_url: job.normalizedUrl.slice(0, 2048),
         status: 'queued',
         source_type: job.sourceType || 'article',
+        source_format: job.sourceFormat || 'url',
+        storage_path: job.storagePath || null,
+        source_sha256: job.sourceSha256 || null,
+        original_filename: job.originalFilename?.slice(0, 300) || null,
+        mime_type: job.mimeType?.slice(0, 120) || null,
+        byte_size: job.byteSize ?? null,
+        page_count: job.pageCount ?? null,
+        title_override: job.titleOverride?.slice(0, 200) || null,
+        author_override: job.authorOverride?.slice(0, 300) || null,
+        published_at_override: job.publishedAtOverride || null,
+        language_override: job.languageOverride?.slice(0, 16) || null,
         media_record_id: job.mediaRecordId || null,
         requested_by: job.requestedBy?.slice(0, 200) || null,
       }));
@@ -1021,7 +1267,7 @@ export function createBrainStore(env: RagEnvironment = process.env) {
         .from('knowledge_documents')
         .update(document)
         .eq('id', document.id)
-        .eq('source_type', 'article');
+        .eq('source_type', document.source_type);
 
       if (error) throw new Error('brain_document_update_failed');
     },
@@ -1111,6 +1357,19 @@ export function createBrainStore(env: RagEnvironment = process.env) {
 
       if (error) throw new Error('brain_media_article_link_failed');
 
+      try {
+        await store
+          .from('media_archive_records')
+          .update({
+            indexing_status: coverageStatus,
+            indexing_error: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', mediaRecord.id);
+      } catch {
+        // Archive telemetry is best effort.
+      }
+
       return true;
     },
 
@@ -1118,6 +1377,24 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       const { error } = await store
         .from('knowledge_documents')
         .update(document)
+        .eq('id', document.id)
+        .eq('media_record_id', document.media_record_id);
+
+      if (error) throw new Error('brain_media_document_update_failed');
+    },
+
+    /**
+     * Updates a legacy article document that is already linked to a media
+     * record. The document id and link stay stable; only its indexed content
+     * and media provenance are replaced.
+     */
+    async updateLinkedArticleMediaDocument(
+      document: MediaCoverageDocumentRow
+    ): Promise<void> {
+      const { source_type: _sourceType, ...row } = document;
+      const { error } = await store
+        .from('knowledge_documents')
+        .update({ ...row, source_type: 'article' })
         .eq('id', document.id)
         .eq('media_record_id', document.media_record_id);
 
@@ -1138,6 +1415,34 @@ export function createBrainStore(env: RagEnvironment = process.env) {
         .not('media_record_id', 'is', null);
 
       if (error) throw new Error('brain_media_status_update_failed');
+
+      // Keep the Media Archive record's indexing state independent from its
+      // publication state. Failure to mirror telemetry must not break indexing.
+      const { data: document } = await store
+        .from('knowledge_documents')
+        .select('media_record_id')
+        .eq('id', documentId)
+        .maybeSingle();
+
+      const mediaRecordId =
+        document && typeof (document as { media_record_id?: unknown }).media_record_id === 'string'
+          ? String((document as { media_record_id: string }).media_record_id)
+          : null;
+
+      if (mediaRecordId) {
+        try {
+          await store
+            .from('media_archive_records')
+            .update({
+              indexing_status: patch.media_coverage_status,
+              indexing_error: patch.media_coverage_error_detail ?? null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', mediaRecordId);
+        } catch {
+          // Archive telemetry is best effort.
+        }
+      }
     },
 
     async updateMediaCoverageMetadata(
@@ -1261,7 +1566,7 @@ export function createBrainStore(env: RagEnvironment = process.env) {
         .from('knowledge_documents')
         .delete()
         .eq('id', documentId)
-        .eq('source_type', 'article');
+        .in('source_type', ['article', 'pdf', 'txt', 'text']);
 
       if (error) throw new Error('brain_document_delete_failed');
     },

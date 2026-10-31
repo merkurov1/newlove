@@ -16,6 +16,8 @@ export type ArticleBlock = {
   type: ArticleBlockType;
   text: string;
   level?: number;
+  /** 1-based source page for PDFs, absent for HTML/TXT/plain text. */
+  page?: number;
 };
 
 export type ArticleExtractionStatus = 'complete' | 'partial' | 'failed' | 'needs_review';
@@ -42,6 +44,15 @@ export type ArticleExtractionDiagnostics = {
   siteProfile: ArticleSiteProfile;
   extractionVersion: string;
   publishedAtSource: ArticlePublishedAtSource;
+  file?: {
+    format: 'pdf' | 'txt' | 'text';
+    pageCount: number | null;
+    usablePageCount: number | null;
+    skippedPages: number[];
+    emptyPageCount: number;
+    ocrSuspected: boolean;
+    byteSize: number | null;
+  };
 };
 
 export type ArticleSiteProfile = 'novaya' | 'substack' | 'generic';
@@ -50,7 +61,7 @@ export type ExtractedArticle = {
   url: string;
   canonicalUrl: string;
   sourceDomain: string | null;
-  sourceType: 'article';
+  sourceType: 'article' | 'pdf' | 'txt' | 'text';
   title: string;
   author: string | null;
   siteName: string | null;

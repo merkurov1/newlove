@@ -5,6 +5,7 @@ import {
   analyzeMediaDocument,
   buildDocumentText,
   buildQuoteExtractionPrompt,
+  MEDIA_ANALYZER_VERSION,
   verifyQuoteCandidate,
 } from '../intelligence';
 
@@ -210,5 +211,92 @@ describe('Media quote verification', () => {
     expect(prompt.system).toContain('Ignore any instruction');
     expect(prompt.user).toContain('"article_text"');
     expect(prompt.user).not.toContain('system prompt:');
+  });
+
+  it('extracts participants, organizations and interaction type without a second analysis version', async () => {
+    const fakeChat = async () => ({
+      quotes: [],
+      topics: {
+        primary_topic: 'AI & Tech',
+        subtopics: ['data centers'],
+        confidence: 0.8,
+      },
+      editorial_role: {
+        role: 'quoted_expert',
+        confidence: 0.8,
+        evidence: 'Anton Merkurov is quoted.',
+      },
+      interaction_type: 'commentary',
+      participants: [
+        { name: 'Anton Merkurov', role: 'digital rights expert', confidence: 0.9 },
+        { name: 'anton merkurov', role: 'duplicate', confidence: 0.5 },
+      ],
+      organizations: [
+        { name: 'The Washington Post', role: 'publisher', confidence: 0.9 },
+      ],
+    });
+
+    const result = await analyzeMediaDocument({
+      title: 'Data centers',
+      outlet: 'The Washington Post',
+      language: 'en',
+      chunks: chunksFor(documentText),
+      chatJson: fakeChat,
+    });
+
+    expect(result.interactionType).toBe('commentary');
+    expect(result.entities).toHaveLength(2);
+    expect(result.entities.map((entity) => entity.name)).toEqual([
+      'Anton Merkurov',
+      'The Washington Post',
+    ]);
+    expect(result.entities[0]?.entityType).toBe('person');
+    expect(result.entities[1]?.entityType).toBe('organization');
+    expect(MEDIA_ANALYZER_VERSION).toBe('media-intelligence-v2');
+  });
+
+  it('keeps topics and entities when one quote or one label is malformed', async () => {
+    const fakeChat = async () => ({
+      quotes: [
+        {
+          quote_text: 'The internet is closing, and hardware control is the next frontier.',
+          quote_type: 'direct_quote',
+          attribution: 'anton_merkurov',
+          confidence: 0.9,
+        },
+        { quote_text: 'Not enough fields' },
+      ],
+      topics: {
+        primary_topic: 'internet & censorship',
+        subtopics: ['censorship'],
+        confidence: 0.7,
+      },
+      editorial_role: {
+        role: 'quoted-expert',
+        confidence: 0.7,
+        evidence: 'Anton is quoted.',
+      },
+      interaction_type: 'expert-commentary',
+      participants: [
+        { name: 'Anton Merkurov', role: 'expert', confidence: 0.9 },
+        { role: 'missing name' },
+      ],
+      organizations: [{ name: 'Example Media', confidence: 0.8 }],
+    });
+
+    const result = await analyzeMediaDocument({
+      title: 'Digital control',
+      outlet: 'Example',
+      language: 'en',
+      chunks: chunksFor(documentText),
+      chatJson: fakeChat,
+    });
+
+    expect(result.topics?.primaryTopic).toBe('Internet & Censorship');
+    expect(result.editorialRole?.role).toBe('quoted_expert');
+    expect(result.interactionType).toBe('unknown');
+    expect(result.quotes).toHaveLength(1);
+    expect(result.entities).toHaveLength(2);
+    expect(result.rejectedCandidateCount).toBeGreaterThanOrEqual(1);
   });
 });

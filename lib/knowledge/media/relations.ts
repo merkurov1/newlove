@@ -20,6 +20,7 @@ export type RelationMedia = {
   id: string;
   title: string;
   outlet: string;
+  kind?: string | null;
   publishedDate: string | null;
   topic: string | null;
   subtopics: string[];
@@ -176,22 +177,25 @@ export function deriveMediaRelations(
       otherSubtopics.has(value)
     );
 
-    if (samePrimaryTopic) {
+    const titleOverlap = overlap(currentTokens, tokens(other.title));
+
+    // A broad topic alone is not evidence of a relationship. Require at least
+    // one shared subtopic or meaningful title overlap.
+    if (samePrimaryTopic && (sharedSubtopics.length > 0 || titleOverlap >= 0.35)) {
       push({
         targetMediaRecordId: other.id,
         relationType: 'same_topic',
         confidence: clamp(0.45 + sharedSubtopics.length * 0.1),
-        detectedBy: 'topic_overlap',
+        detectedBy: sharedSubtopics.length > 0 ? 'subtopic_overlap' : 'title_topic_overlap',
         reviewStatus: 'needs_review',
         evidence: {
           ...evidence,
           primary_topic: current.topic,
           shared_subtopics: sharedSubtopics,
+          title_overlap: clamp(titleOverlap),
         },
       });
     }
-
-    const titleOverlap = overlap(currentTokens, tokens(other.title));
 
     if (samePrimaryTopic && titleOverlap >= 0.5) {
       push({
@@ -201,6 +205,31 @@ export function deriveMediaRelations(
         detectedBy: 'title_topic_overlap',
         reviewStatus: 'needs_review',
         evidence: { ...evidence, title_overlap: clamp(titleOverlap) },
+      });
+    }
+
+    const editorialKinds = new Set(['interview', 'column', 'profile']);
+    const currentKind = (current.kind || '').toLowerCase();
+    const otherKind = (other.kind || '').toLowerCase();
+
+    if (
+      samePrimaryTopic &&
+      editorialKinds.has(currentKind) &&
+      editorialKinds.has(otherKind) &&
+      current.outlet.trim().toLowerCase() !== other.outlet.trim().toLowerCase()
+    ) {
+      push({
+        targetMediaRecordId: other.id,
+        relationType: 'related',
+        confidence: clamp(0.5 + sharedSubtopics.length * 0.1),
+        detectedBy: 'editorial_kind_topic',
+        reviewStatus: 'needs_review',
+        evidence: {
+          ...evidence,
+          primary_topic: current.topic,
+          current_kind: currentKind,
+          target_kind: otherKind,
+        },
       });
     }
 

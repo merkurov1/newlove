@@ -5,6 +5,7 @@ import {
   createMediaAnalysisStore,
   type MediaAnalysisRun,
 } from '@/lib/knowledge/media/analysisStore';
+import { mediaRoleFromKind } from '@/lib/knowledge/media/intelligence';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -75,6 +76,7 @@ export async function GET(
             .in('id', targetIds)
             .limit(200)
         : { data: [] };
+    const roleFallback = mediaRoleFromKind(input.mediaRecord.kind);
     const targetById = new Map(
       (targetRecords.data || []).map((row) => {
         const value = row as {
@@ -101,8 +103,27 @@ export async function GET(
                   ? chunkById.get(quote.chunk_id)?.content || null
                   : null,
             })),
-            topics: analysis.topics,
-            editorialRole: analysis.editorialRole,
+            topics:
+              analysis.topics ||
+              (input.mediaRecord.topic
+                ? {
+                    primary_topic: input.mediaRecord.topic,
+                    subtopics: [],
+                    confidence: 0.3,
+                    method: 'archive_topic',
+                  }
+                : null),
+            editorialRole:
+              analysis.editorialRole &&
+              (analysis.editorialRole as { role?: string }).role !== 'unknown'
+                ? analysis.editorialRole
+                : {
+                    role: roleFallback.role,
+                    confidence: roleFallback.confidence,
+                    evidence: roleFallback.evidence,
+                    metadata: { interaction_type: roleFallback.interactionType },
+                  },
+            entities: Array.isArray(analysis.entities) ? analysis.entities : [],
             relations: relationRows.map((relation) => {
               const targetId = String(
                 relation.source_media_record_id === id

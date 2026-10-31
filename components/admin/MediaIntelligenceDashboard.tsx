@@ -4,7 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
 type Section =
-  'overview' | 'timeline' | 'topics' | 'outlets' | 'quotes' | 'relations' | 'quality' | 'search';
+  | 'overview'
+  | 'timeline'
+  | 'topics'
+  | 'outlets'
+  | 'quotes'
+  | 'relations'
+  | 'roles'
+  | 'analysis'
+  | 'quality'
+  | 'search';
 
 type Filters = {
   from: string;
@@ -13,6 +22,8 @@ type Filters = {
   language: string;
   outlet: string;
   status: string;
+  kind: string;
+  role: string;
   page: number;
   pageSize: number;
 };
@@ -21,6 +32,8 @@ type FilterOptions = {
   topics: string[];
   languages: string[];
   outlets: string[];
+  kinds: string[];
+  roles: string[];
   range: { from: string | null; to: string | null };
 };
 
@@ -43,6 +56,22 @@ type Overview = {
   awaitingReviewPublications: number;
   missingDates: number;
   extractionErrors: number;
+  coverage: {
+    fullText: number;
+    partialText: number;
+    blocked: number;
+    missing: number;
+  };
+  analysis: {
+    eligible: number;
+    analyzed: number;
+    stale: number;
+    notAnalyzed: number;
+    queued: number;
+    failed: number;
+  };
+  roles: Array<{ role: string; count: number }>;
+  entities: Array<{ entity_type: string; name: string; count: number }>;
 };
 
 type Timeline = {
@@ -114,6 +143,7 @@ type Quotes = {
     media_record_id: string;
     title: string;
     outlet: string;
+    canonical_url: string | null;
     quote_text: string;
     quote_type: string;
     attribution: string;
@@ -186,6 +216,97 @@ type Quality = {
   }>;
 };
 
+type AnalysisData = {
+  counts: {
+    eligible: number;
+    analyzed: number;
+    stale: number;
+    not_analyzed: number;
+    pending: number;
+    processing: number;
+    failed: number;
+    not_eligible: number;
+  };
+  queue: {
+    pending: number;
+    processing: number;
+    completed: number;
+    failed: number;
+    cancelled: number;
+    oldestPendingAt: string | null;
+  };
+  rows: Array<{
+    id: string;
+    title: string;
+    outlet: string;
+    canonical_url: string | null;
+    effective_date: string | null;
+    kind: string;
+    language: string | null;
+    effective_topic: string | null;
+    media_text_quality: string | null;
+    chunk_count: number | null;
+    analysis_status: string;
+    latest_run_id: string | null;
+    latest_run_status: string | null;
+    latest_run_at: string | null;
+    error_code: string | null;
+    quote_count: number | null;
+    relation_count: number | null;
+    analyzer_version: string | null;
+    effective_role: string | null;
+  }>;
+  runs: Array<{
+    id: string;
+    media_record_id: string;
+    title: string | null;
+    outlet: string | null;
+    status: string;
+    attempt: number;
+    max_attempts: number;
+    error_code: string | null;
+    error_detail: string | null;
+    quote_count: number;
+    relation_count: number;
+    topic_count: number;
+    rejected_candidate_count: number;
+    analyzer_version: string;
+    requested_via: string;
+    created_at: string;
+    completed_at: string | null;
+  }>;
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+type RolesData = {
+  roles: Array<{
+    role: string;
+    publications: number;
+    confidence: number | null;
+    direct_quotes: number;
+  }>;
+  roleOutlets: Array<{ role: string; outlet: string; publications: number }>;
+  rolePublications: Array<{
+    id: string;
+    title: string;
+    outlet: string;
+    canonical_url: string | null;
+    effective_date: string | null;
+    role: string;
+    confidence: number | null;
+  }>;
+  entities: Array<{
+    entity_type: string;
+    name: string;
+    mentions: number;
+    publications: number;
+  }>;
+  entityTypes: Array<{ entity_type: string; count: number }>;
+  interactions: Array<{ interaction_type: string; publications: number }>;
+};
+
 type SearchResult = {
   summary: string;
   facts: Array<{
@@ -228,6 +349,8 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'outlets', label: 'Издания' },
   { id: 'quotes', label: 'Цитирование' },
   { id: 'relations', label: 'Связи' },
+  { id: 'roles', label: 'Роли и участники' },
+  { id: 'analysis', label: 'Анализ и очередь' },
   { id: 'quality', label: 'Качество данных' },
   { id: 'search', label: 'Семантический поиск' },
 ];
@@ -322,6 +445,8 @@ export default function MediaIntelligenceDashboard() {
     language: '',
     outlet: '',
     status: '',
+    kind: '',
+    role: '',
     page: 1,
     pageSize: 20,
   });
@@ -329,6 +454,8 @@ export default function MediaIntelligenceDashboard() {
     topics: [],
     languages: [],
     outlets: [],
+    kinds: [],
+    roles: [],
     range: { from: null, to: null },
   });
   const [data, setData] = useState<unknown>(null);
@@ -337,6 +464,10 @@ export default function MediaIntelligenceDashboard() {
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState<SearchResult | null>(null);
   const [searching, setSearching] = useState(false);
+  const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchMessage, setBatchMessage] = useState('');
+  const [queueBusy, setQueueBusy] = useState(false);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -347,6 +478,8 @@ export default function MediaIntelligenceDashboard() {
     if (filters.language) params.set('language', filters.language);
     if (filters.outlet) params.set('outlet', filters.outlet);
     if (filters.status) params.set('status', filters.status);
+    if (filters.kind) params.set('kind', filters.kind);
+    if (filters.role) params.set('role', filters.role);
     params.set('page', String(filters.page));
     params.set('pageSize', String(filters.pageSize));
 
@@ -415,6 +548,8 @@ export default function MediaIntelligenceDashboard() {
             language: filters.language,
             outlet: filters.outlet,
             status: filters.status,
+            kind: filters.kind,
+            role: filters.role,
           },
         }),
       });
@@ -430,6 +565,142 @@ export default function MediaIntelligenceDashboard() {
     }
   }
 
+  async function runBatch(
+    mode: 'all' | 'selected' | 'retry_failed',
+    options: { force?: boolean; run?: boolean } = {}
+  ): Promise<void> {
+    if (mode === 'selected' && selectedRecords.length === 0) {
+      setBatchMessage('Выберите хотя бы одну публикацию.');
+      return;
+    }
+
+    setBatchBusy(true);
+    setBatchMessage('');
+
+    try {
+      const response = await fetch('/api/admin/media/analysis/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode,
+          recordIds: mode === 'selected' ? selectedRecords : undefined,
+          force: Boolean(options.force),
+          run: Boolean(options.run),
+          limit: mode === 'all' ? 200 : selectedRecords.length,
+          maxJobs: 3,
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
+
+      if (!response.ok) throw new Error(json.error || 'Не удалось запустить анализ.');
+
+      const enqueued = json.enqueued || {};
+      const processed = json.processed;
+      const parts = [
+        `Eligible: ${enqueued.eligible ?? 0}`,
+        `queued: ${enqueued.queued ?? 0}`,
+        `already queued: ${enqueued.alreadyQueued ?? 0}`,
+        `up to date: ${enqueued.upToDate ?? 0}`,
+        `not eligible: ${enqueued.notEligible ?? 0}`,
+      ];
+
+      if (processed) {
+        parts.push(
+          `processed: ${processed.processed ?? 0}, retried: ${processed.retried ?? 0}, failed: ${processed.failed ?? 0}`
+        );
+      }
+
+      setBatchMessage(parts.join(' · '));
+      setSelectedRecords([]);
+
+      if (section === 'analysis') await load();
+    } catch (error) {
+      setBatchMessage(error instanceof Error ? error.message : 'Не удалось запустить анализ.');
+    } finally {
+      setBatchBusy(false);
+    }
+  }
+
+  async function processQueue(): Promise<void> {
+    setQueueBusy(true);
+    setBatchMessage('');
+
+    try {
+      const response = await fetch('/api/admin/media/analysis/worker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 3, maxDurationMs: 180000 }),
+      });
+      const json = await response.json().catch(() => ({}));
+
+      if (!response.ok) throw new Error(json.error || 'Очередь недоступна.');
+
+      const result = json.result || {};
+      setBatchMessage(
+        `Очередь: claimed ${result.claimed ?? 0} · processed ${result.processed ?? 0} · retried ${result.retried ?? 0} · failed ${result.failed ?? 0}`
+      );
+
+      if (section === 'analysis') await load();
+    } catch (error) {
+      setBatchMessage(error instanceof Error ? error.message : 'Очередь недоступна.');
+    } finally {
+      setQueueBusy(false);
+    }
+  }
+
+  async function rebuildRelations(): Promise<void> {
+    setQueueBusy(true);
+    setBatchMessage('');
+
+    try {
+      const response = await fetch('/api/admin/media/analysis/relations/rebuild', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 1000 }),
+      });
+      const json = await response.json().catch(() => ({}));
+
+      if (!response.ok) throw new Error(json.error || 'Не удалось пересобрать связи.');
+
+      const result = json.result || {};
+      setBatchMessage(
+        `Связи пересобраны: ${result.records ?? 0} публикаций · ${result.relations ?? 0} связей`
+      );
+
+      if (section === 'analysis' || section === 'relations') await load();
+    } catch (error) {
+      setBatchMessage(error instanceof Error ? error.message : 'Не удалось пересобрать связи.');
+    } finally {
+      setQueueBusy(false);
+    }
+  }
+
+  async function runAction(runId: string, action: 'retry' | 'cancel'): Promise<void> {
+    setBatchMessage('');
+
+    try {
+      const response = await fetch(`/api/admin/media/analysis/runs/${runId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const json = await response.json().catch(() => ({}));
+
+      if (!response.ok) throw new Error(json.error || 'Не удалось обновить запуск.');
+
+      setBatchMessage(action === 'retry' ? 'Запуск возвращён в очередь.' : 'Запуск отменён.');
+      await load();
+    } catch (error) {
+      setBatchMessage(error instanceof Error ? error.message : 'Не удалось обновить запуск.');
+    }
+  }
+
+  function toggleSelected(id: string): void {
+    setSelectedRecords((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
+  }
+
   const overview = data as Overview | null;
   const timeline = data as Timeline | null;
   const topics = data as Topics | null;
@@ -437,6 +708,8 @@ export default function MediaIntelligenceDashboard() {
   const quotes = data as Quotes | null;
   const relations = data as Relations | null;
   const quality = data as Quality | null;
+  const analysisData = data as AnalysisData | null;
+  const rolesData = data as RolesData | null;
 
   return (
     <div className="space-y-7">
@@ -460,7 +733,7 @@ export default function MediaIntelligenceDashboard() {
         </div>
       </header>
 
-      <section className="grid gap-3 border border-[#E5E1DC] bg-white/70 p-4 sm:grid-cols-2 lg:grid-cols-7">
+      <section className="grid gap-3 border border-[#E5E1DC] bg-white/70 p-4 sm:grid-cols-2 lg:grid-cols-9">
         <label className="text-[10px] uppercase tracking-wider text-[#89827B]">
           С
           <input
@@ -536,6 +809,48 @@ export default function MediaIntelligenceDashboard() {
             <option value="draft">draft</option>
           </select>
         </label>
+        <label className="text-[10px] uppercase tracking-wider text-[#89827B]">
+          Тип
+          <select
+            className={`${inputClass} mt-1`}
+            value={filters.kind}
+            onChange={(event) => updateFilter('kind', event.target.value)}
+          >
+            <option value="">Все</option>
+            {options.kinds.map((kind) => (
+              <option key={kind} value={kind}>
+                {kind}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-[10px] uppercase tracking-wider text-[#89827B]">
+          Роль
+          <select
+            className={`${inputClass} mt-1`}
+            value={filters.role}
+            onChange={(event) => updateFilter('role', event.target.value)}
+          >
+            <option value="">Все</option>
+            {(options.roles.length > 0
+              ? options.roles
+              : [
+                  'expert_comment',
+                  'interview',
+                  'quoted_expert',
+                  'profile',
+                  'author',
+                  'mention',
+                  'republication',
+                  'unknown',
+                ]
+            ).map((role) => (
+              <option key={role} value={role}>
+                {role}
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           type="button"
           className="self-end border border-[#D9D3CD] px-3 py-2 text-xs text-[#625D58] hover:border-[#990F3D]"
@@ -547,6 +862,8 @@ export default function MediaIntelligenceDashboard() {
               language: '',
               outlet: '',
               status: '',
+              kind: '',
+              role: '',
               page: 1,
               pageSize: 20,
             })
@@ -577,6 +894,69 @@ export default function MediaIntelligenceDashboard() {
         ))}
       </nav>
 
+      <section className="flex flex-wrap items-center gap-2 border border-[#E5E1DC] bg-white/70 p-3">
+        <button
+          type="button"
+          className="border border-[#990F3D] bg-[#990F3D] px-3 py-1.5 text-xs text-white disabled:opacity-40"
+          disabled={batchBusy}
+          onClick={() => void runBatch('all', { run: true })}
+        >
+          {batchBusy ? 'Запуск…' : 'Analyze all eligible (batch 3)'}
+        </button>
+        <button
+          type="button"
+          className="border border-[#D9D3CD] px-3 py-1.5 text-xs text-[#625D58] disabled:opacity-40"
+          disabled={batchBusy || selectedRecords.length === 0}
+          onClick={() => void runBatch('selected', { run: true })}
+        >
+          Analyze selected ({selectedRecords.length})
+        </button>
+        <button
+          type="button"
+          className="border border-[#D9D3CD] px-3 py-1.5 text-xs text-[#625D58] disabled:opacity-40"
+          disabled={batchBusy}
+          onClick={() => void runBatch('retry_failed', { run: true })}
+        >
+          Retry failed
+        </button>
+        <button
+          type="button"
+          className="border border-[#D9D3CD] px-3 py-1.5 text-xs text-[#625D58] disabled:opacity-40"
+          disabled={batchBusy}
+          onClick={() => void runBatch('all', { force: true, run: true })}
+        >
+          Force refresh (batch 3)
+        </button>
+        <button
+          type="button"
+          className="border border-[#D9D3CD] px-3 py-1.5 text-xs text-[#625D58] disabled:opacity-40"
+          disabled={queueBusy}
+          onClick={() => void processQueue()}
+        >
+          {queueBusy ? 'Обработка…' : 'Process queue'}
+        </button>
+        <button
+          type="button"
+          className="border border-[#D9D3CD] px-3 py-1.5 text-xs text-[#625D58] disabled:opacity-40"
+          disabled={queueBusy}
+          onClick={() => void rebuildRelations()}
+        >
+          Rebuild relations
+        </button>
+        <button
+          type="button"
+          className="border border-[#D9D3CD] px-3 py-1.5 text-xs text-[#625D58]"
+          onClick={() => void load()}
+        >
+          Обновить
+        </button>
+        {batchMessage && (
+          <span className="text-[11px] text-[#625D58]" role="status" aria-live="polite">
+            {batchMessage}
+          </span>
+        )}
+      </section>
+
       {error && <p className="border border-red-200 bg-red-50 p-3 text-xs text-red-800">{error}</p>}
 
       {section !== 'search' && loading && (
@@ -603,6 +983,78 @@ export default function MediaIntelligenceDashboard() {
                   detail={`${number(overview.awaitingReviewPublications)} публикаций`}
                 />
                 <Metric label="Без даты" value={number(overview.missingDates)} />
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <section className="space-y-3">
+                  <SectionTitle
+                    title="Покрытие Brain"
+                    description="Сколько публикаций имеют пригодный текст для анализа."
+                  />
+                  <div className="grid gap-x-6 sm:grid-cols-2">
+                    <Metric label="Full text" value={number(overview.coverage.fullText)} />
+                    <Metric label="Partial text" value={number(overview.coverage.partialText)} />
+                    <Metric label="Blocked / metadata" value={number(overview.coverage.blocked)} />
+                    <Metric label="Нет Brain document" value={number(overview.coverage.missing)} />
+                  </div>
+                </section>
+                <section className="space-y-3">
+                  <SectionTitle
+                    title="Аналитическое покрытие"
+                    description="Статус последнего анализа относительно текущего content hash и версии анализатора."
+                  />
+                  <div className="grid gap-x-6 sm:grid-cols-2">
+                    <Metric label="Eligible" value={number(overview.analysis.eligible)} />
+                    <Metric label="Analyzed" value={number(overview.analysis.analyzed)} />
+                    <Metric label="Stale" value={number(overview.analysis.stale)} />
+                    <Metric label="Not analyzed" value={number(overview.analysis.notAnalyzed)} />
+                    <Metric label="В очереди" value={number(overview.analysis.queued)} />
+                    <Metric label="Failed" value={number(overview.analysis.failed)} />
+                  </div>
+                </section>
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <section className="space-y-3">
+                  <SectionTitle title="Редакционные роли" />
+                  {overview.roles.length === 0 ? (
+                    <Empty>Роли ещё не извлечены.</Empty>
+                  ) : (
+                    <div className="space-y-2">
+                      {overview.roles.map((item) => (
+                        <Bar
+                          key={item.role}
+                          label={item.role}
+                          value={item.count}
+                          max={Math.max(...overview.roles.map((entry) => entry.count))}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </section>
+                <section className="space-y-3">
+                  <SectionTitle title="Участники и организации" />
+                  {overview.entities.length === 0 ? (
+                    <Empty>Участники ещё не извлечены.</Empty>
+                  ) : (
+                    <div className="space-y-2">
+                      {overview.entities.slice(0, 12).map((item) => (
+                        <p
+                          key={`${item.entity_type}-${item.name}`}
+                          className="flex justify-between border-b border-[#EEE9E4] py-2 text-xs"
+                        >
+                          <span className="truncate">
+                            {item.name}
+                            <span className="ml-2 text-[10px] uppercase text-[#89827B]">
+                              {item.entity_type}
+                            </span>
+                          </span>
+                          <span className="font-mono">{item.count}</span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </section>
               </div>
 
               <div className="grid gap-6 lg:grid-cols-2">
@@ -931,12 +1383,24 @@ export default function MediaIntelligenceDashboard() {
                           {percent(item.confidence * 100)}
                         </p>
                         <p className="mt-1 text-sm">“{item.quote_text}”</p>
-                        <Link
-                          className="mt-1 inline-flex text-[10px] text-[#8B1E3F] underline"
-                          href={`/admin/media/${item.media_record_id}/analysis`}
-                        >
-                          Проверить цитату
-                        </Link>
+                        <div className="mt-1 flex gap-3 text-[10px]">
+                          <Link
+                            className="inline-flex text-[#8B1E3F] underline"
+                            href={`/admin/media/${item.media_record_id}/analysis#quote-${item.id}`}
+                          >
+                            Проверить цитату и фрагмент
+                          </Link>
+                          {item.canonical_url && (
+                            <a
+                              className="inline-flex text-[#8B1E3F] underline"
+                              href={item.canonical_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              Оригинал
+                            </a>
+                          )}
+                        </div>
                       </article>
                     ))}
                     <Pager
@@ -1016,6 +1480,363 @@ export default function MediaIntelligenceDashboard() {
                     {item.subtopics.join(', ') || '—'}
                   </p>
                 ))}
+              </section>
+            </>
+          )}
+
+          {section === 'analysis' && analysisData && (
+            <>
+              <SectionTitle
+                title="Анализ и очередь"
+                description="Eligible-записи имеют полный или частичный текст и завершённую Brain ingestion. Повторный анализ неизменившегося текста пропускается по content hash и версии анализатора."
+              />
+              <div className="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-4">
+                <Metric label="Eligible" value={number(analysisData.counts.eligible)} />
+                <Metric label="Analyzed" value={number(analysisData.counts.analyzed)} />
+                <Metric label="Stale" value={number(analysisData.counts.stale)} />
+                <Metric label="Not analyzed" value={number(analysisData.counts.not_analyzed)} />
+                <Metric label="Queued" value={number(analysisData.counts.pending)} />
+                <Metric label="Processing" value={number(analysisData.counts.processing)} />
+                <Metric label="Failed" value={number(analysisData.counts.failed)} />
+                <Metric
+                  label="Без пригодного текста"
+                  value={number(analysisData.counts.not_eligible)}
+                />
+              </div>
+
+              <div className="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-4">
+                <Metric label="Всего runs" value={number(analysisData.queue.completed + analysisData.queue.pending + analysisData.queue.processing + analysisData.queue.failed + analysisData.queue.cancelled)} />
+                <Metric label="Pending" value={number(analysisData.queue.pending)} />
+                <Metric label="Processing" value={number(analysisData.queue.processing)} />
+                <Metric
+                  label="Oldest pending"
+                  value={analysisData.queue.oldestPendingAt ? date(analysisData.queue.oldestPendingAt.slice(0, 10)) : '—'}
+                />
+              </div>
+
+              <section className="space-y-3">
+                <SectionTitle title="Публикации и статус анализа" />
+                <div className="overflow-x-auto border border-[#E5E1DC] bg-white/70">
+                  <table className="w-full min-w-[1100px] text-left text-xs">
+                    <thead className="bg-[#F7F5F2] text-[#89827B]">
+                      <tr>
+                        <th className="px-2 py-2">Выбор</th>
+                        <th className="px-3 py-2">Публикация</th>
+                        <th className="px-3 py-2">Издание / дата</th>
+                        <th className="px-3 py-2">Текст</th>
+                        <th className="px-3 py-2">Роль</th>
+                        <th className="px-3 py-2">Статус</th>
+                        <th className="px-3 py-2">Цитат</th>
+                        <th className="px-3 py-2">Последний run</th>
+                        <th className="px-3 py-2">Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analysisData.rows.map((row) => (
+                        <tr key={row.id} className="border-t border-[#EEE9E4]">
+                          <td className="px-2 py-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedRecords.includes(row.id)}
+                              onChange={() => toggleSelected(row.id)}
+                              aria-label={`Выбрать ${row.title}`}
+                            />
+                          </td>
+                          <td className="max-w-[320px] px-3 py-2">
+                            <Link
+                              className="underline underline-offset-2"
+                              href={`/admin/media/${row.id}/analysis`}
+                            >
+                              {row.title}
+                            </Link>
+                            <div className="mt-1 flex gap-2 text-[10px] text-[#89827B]">
+                              {row.canonical_url && (
+                                <a
+                                  href={row.canonical_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="underline"
+                                >
+                                  Оригинал
+                                </a>
+                              )}
+                              <span>{row.effective_topic || '—'}</span>
+                              <span>{row.language || '—'}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            {row.outlet}
+                            <span className="block text-[10px] text-[#89827B]">
+                              {date(row.effective_date)} · {row.kind}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            {row.media_text_quality || 'missing'}
+                            <span className="block text-[10px] text-[#89827B]">
+                              {row.chunk_count ?? 0} chunks
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">{row.effective_role || '—'}</td>
+                          <td className="px-3 py-2">
+                            <span
+                              className={[
+                                'inline-flex border px-1.5 py-0.5 text-[9px] uppercase tracking-wider',
+                                row.analysis_status === 'analyzed'
+                                  ? 'border-green-200 bg-green-50 text-green-800'
+                                  : row.analysis_status === 'failed'
+                                    ? 'border-red-200 bg-red-50 text-red-800'
+                                    : row.analysis_status === 'stale'
+                                      ? 'border-amber-200 bg-amber-50 text-amber-800'
+                                      : 'border-gray-200 bg-gray-50 text-gray-600',
+                              ].join(' ')}
+                            >
+                              {row.analysis_status}
+                            </span>
+                            {row.error_code && (
+                              <span className="mt-1 block font-mono text-[9px] text-red-700">
+                                {row.error_code}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 font-mono">{row.quote_count ?? '—'}</td>
+                          <td className="px-3 py-2">
+                            {row.latest_run_at ? row.latest_run_at.slice(0, 16).replace('T', ' ') : '—'}
+                            {row.latest_run_status && (
+                              <span className="block text-[10px] text-[#89827B]">
+                                {row.latest_run_status}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {row.latest_run_id && row.latest_run_status === 'failed' && (
+                              <button
+                                type="button"
+                                className="border border-[#D9D3CD] px-2 py-1 text-[10px]"
+                                onClick={() => void runAction(row.latest_run_id as string, 'retry')}
+                              >
+                                Retry
+                              </button>
+                            )}
+                            {row.latest_run_id &&
+                              (row.latest_run_status === 'pending' ||
+                                row.latest_run_status === 'processing') && (
+                                <button
+                                  type="button"
+                                  className="border border-[#D9D3CD] px-2 py-1 text-[10px]"
+                                  onClick={() => void runAction(row.latest_run_id as string, 'cancel')}
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Pager
+                  page={filters.page}
+                  pageSize={filters.pageSize}
+                  total={analysisData.total}
+                  onPage={(page) => updateFilter('page', page)}
+                  onPageSize={(pageSize) => updateFilter('pageSize', pageSize)}
+                />
+              </section>
+
+              <section className="space-y-3">
+                <SectionTitle title="Последние аналитические запуски" />
+                {analysisData.runs.length === 0 ? (
+                  <Empty>Запусков ещё не было.</Empty>
+                ) : (
+                  <div className="overflow-x-auto border border-[#E5E1DC] bg-white/70">
+                    <table className="w-full min-w-[900px] text-left text-xs">
+                      <thead className="bg-[#F7F5F2] text-[#89827B]">
+                        <tr>
+                          <th className="px-3 py-2">Публикация</th>
+                          <th className="px-3 py-2">Статус</th>
+                          <th className="px-3 py-2">Attempt</th>
+                          <th className="px-3 py-2">Цитат</th>
+                          <th className="px-3 py-2">Связей</th>
+                          <th className="px-3 py-2">Версия</th>
+                          <th className="px-3 py-2">Источник</th>
+                          <th className="px-3 py-2">Ошибка</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analysisData.runs.map((run) => (
+                          <tr key={run.id} className="border-t border-[#EEE9E4]">
+                            <td className="max-w-[320px] px-3 py-2">
+                              <Link
+                                className="underline"
+                                href={`/admin/media/${run.media_record_id}/analysis`}
+                              >
+                                {run.title || run.media_record_id}
+                              </Link>
+                              <span className="block text-[10px] text-[#89827B]">
+                                {run.outlet || '—'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2">{run.status}</td>
+                            <td className="px-3 py-2 font-mono">
+                              {run.attempt}/{run.max_attempts}
+                            </td>
+                            <td className="px-3 py-2 font-mono">{run.quote_count}</td>
+                            <td className="px-3 py-2 font-mono">{run.relation_count}</td>
+                            <td className="px-3 py-2 font-mono">{run.analyzer_version}</td>
+                            <td className="px-3 py-2">{run.requested_via}</td>
+                            <td className="max-w-[260px] px-3 py-2 text-[10px] text-red-700">
+                              {run.error_code || '—'}
+                              {run.error_detail ? ` · ${run.error_detail}` : ''}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+
+          {section === 'roles' && rolesData && (
+            <>
+              <SectionTitle
+                title="Редакционные роли и участники"
+                description="Роль Антона в публикации, типы взаимодействия с изданием, участники и упомянутые организации."
+              />
+              <div className="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-4">
+                {rolesData.entityTypes.map((item) => (
+                  <Metric
+                    key={item.entity_type}
+                    label={item.entity_type === 'person' ? 'Участники' : 'Организации'}
+                    value={number(item.count)}
+                  />
+                ))}
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-3">
+                <section className="space-y-3">
+                  <SectionTitle title="Тип взаимодействия" />
+                  {rolesData.interactions.length === 0 ? (
+                    <Empty>Типы взаимодействия ещё не извлечены.</Empty>
+                  ) : (
+                    <div className="space-y-2">
+                      {rolesData.interactions.map((item) => (
+                        <Bar
+                          key={item.interaction_type}
+                          label={item.interaction_type}
+                          value={item.publications}
+                          max={Math.max(
+                            ...rolesData.interactions.map((entry) => entry.publications)
+                          )}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </section>
+                <section className="space-y-3">
+                  <SectionTitle title="Распределение ролей" />
+                  {rolesData.roles.length === 0 ? (
+                    <Empty>Роли ещё не извлечены.</Empty>
+                  ) : (
+                    rolesData.roles.map((item) => (
+                      <Bar
+                        key={item.role}
+                        label={item.role}
+                        value={item.publications}
+                        max={Math.max(...rolesData.roles.map((entry) => entry.publications))}
+                        right={`${item.publications} · ${percent((item.confidence ?? 0) * 100)} · ${item.direct_quotes} direct`}
+                      />
+                    ))
+                  )}
+                </section>
+                <section className="space-y-3">
+                  <SectionTitle title="Участники и организации" />
+                  {rolesData.entities.length === 0 ? (
+                    <Empty>Участники ещё не извлечены.</Empty>
+                  ) : (
+                    rolesData.entities.slice(0, 30).map((item) => (
+                      <p
+                        key={`${item.entity_type}-${item.name}`}
+                        className="flex justify-between border-b border-[#EEE9E4] py-2 text-xs"
+                      >
+                        <span className="truncate">
+                          {item.name}
+                          <span className="ml-2 text-[10px] uppercase text-[#89827B]">
+                            {item.entity_type}
+                          </span>
+                        </span>
+                        <span className="font-mono">
+                          {item.mentions} · {item.publications} публ.
+                        </span>
+                      </p>
+                    ))
+                  )}
+                </section>
+              </div>
+
+              <section className="space-y-3">
+                <SectionTitle title="Публикации по ролям" />
+                <div className="overflow-x-auto border border-[#E5E1DC] bg-white/70">
+                  <table className="w-full min-w-[800px] text-left text-xs">
+                    <thead className="bg-[#F7F5F2] text-[#89827B]">
+                      <tr>
+                        <th className="px-3 py-2">Роль</th>
+                        <th className="px-3 py-2">Публикация</th>
+                        <th className="px-3 py-2">Издание</th>
+                        <th className="px-3 py-2">Дата</th>
+                        <th className="px-3 py-2">Confidence</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rolesData.rolePublications.map((item) => (
+                        <tr key={`${item.role}-${item.id}`} className="border-t border-[#EEE9E4]">
+                          <td className="px-3 py-2">{item.role}</td>
+                          <td className="max-w-[360px] px-3 py-2">
+                            <Link
+                              className="underline"
+                              href={`/admin/media/${item.id}/analysis`}
+                            >
+                              {item.title}
+                            </Link>
+                            {item.canonical_url && (
+                              <a
+                                className="ml-2 text-[10px] text-[#8B1E3F] underline"
+                                href={item.canonical_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Оригинал
+                              </a>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">{item.outlet}</td>
+                          <td className="px-3 py-2">{date(item.effective_date)}</td>
+                          <td className="px-3 py-2 font-mono">
+                            {percent((item.confidence ?? 0) * 100)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <SectionTitle title="Издания по ролям" />
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {rolesData.roleOutlets.slice(0, 30).map((item) => (
+                    <p
+                      key={`${item.role}-${item.outlet}`}
+                      className="flex justify-between border-b border-[#EEE9E4] py-2 text-xs"
+                    >
+                      <span className="truncate">
+                        {item.role} · {item.outlet}
+                      </span>
+                      <span className="font-mono">{item.publications}</span>
+                    </p>
+                  ))}
+                </div>
               </section>
             </>
           )}

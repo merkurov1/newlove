@@ -5,6 +5,17 @@ export const MEDIA_INTELLIGENCE_TOPICS = [
   'Fintech & Crypto',
 ] as const;
 
+export const MEDIA_EDITORIAL_ROLES = [
+  'expert_comment',
+  'interview',
+  'quoted_expert',
+  'profile',
+  'author',
+  'mention',
+  'republication',
+  'unknown',
+] as const;
+
 export type MediaIntelligenceFilters = {
   from: string | null;
   to: string | null;
@@ -12,6 +23,8 @@ export type MediaIntelligenceFilters = {
   language: string | null;
   outlet: string | null;
   status: 'draft' | 'published' | null;
+  kind: string | null;
+  role: string | null;
   page: number;
   pageSize: number;
 };
@@ -49,6 +62,8 @@ export function parseMediaIntelligenceFilters(
   const language = first(params.language);
   const outlet = first(params.outlet);
   const status = first(params.status);
+  const kind = first(params.kind);
+  const role = first(params.role);
 
   return {
     from,
@@ -57,6 +72,8 @@ export function parseMediaIntelligenceFilters(
     language: language && LANGUAGE_PATTERN.test(language) ? language.toUpperCase() : null,
     outlet: outlet ? outlet.slice(0, 200) : null,
     status: status === 'draft' || status === 'published' ? status : null,
+    kind: kind && /^[a-z_]{2,40}$/.test(kind) ? kind : null,
+    role: role && (MEDIA_EDITORIAL_ROLES as readonly string[]).includes(role) ? role : null,
     page: boundedInt(first(params.page), 1, 1, 10_000),
     pageSize: boundedInt(first(params.pageSize), 20, 1, 100),
   };
@@ -74,6 +91,8 @@ export function mediaIntelligenceCacheKey(
     filters.language || '',
     filters.outlet || '',
     filters.status || '',
+    filters.kind || '',
+    filters.role || '',
     filters.page,
     filters.pageSize,
   ].join('|');
@@ -107,5 +126,21 @@ export function emptyOverview() {
     awaitingReviewPublications: 0,
     missingDates: 0,
     extractionErrors: 0,
+    coverage: {
+      fullText: 0,
+      partialText: 0,
+      blocked: 0,
+      missing: 0,
+    },
+    analysis: {
+      eligible: 0,
+      analyzed: 0,
+      stale: 0,
+      notAnalyzed: 0,
+      queued: 0,
+      failed: 0,
+    },
+    roles: [] as Array<{ role: string; count: number }>,
+    entities: [] as Array<{ entity_type: string; name: string; count: number }>,
   };
 }

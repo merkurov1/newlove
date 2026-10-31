@@ -59,4 +59,21 @@ describe('Media relation hypotheses', () => {
   it('does not create self-relations', () => {
     expect(deriveMediaRelations(base, [base])).toEqual([]);
   });
+
+  it('links interviews and columns on the same topic across outlets', () => {
+    const relations = deriveMediaRelations(
+      { ...base, kind: 'interview', title: 'Interview about internet control', quoteHashes: [] },
+      [
+        other({
+          kind: 'column',
+          outlet: 'Le Temps',
+          title: 'Column about internet control',
+          contentHash: 'd'.repeat(64),
+          quoteHashes: [],
+        }),
+      ]
+    );
+
+    expect(relations.some((relation) => relation.relationType === 'related')).toBe(true);
+  });
 });

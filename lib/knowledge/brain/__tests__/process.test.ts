@@ -5,6 +5,7 @@ import { EmbeddingProviderError } from '@/lib/knowledge/rag/errors';
 
 import { processNextBrainJob } from '../process';
 import { extractArticle } from '../extract';
+import { BrainUrlError } from '../url';
 import type { BrainJobRow, BrainStore } from '../store';
 
 const longText =
@@ -336,6 +337,71 @@ describe('Brain ingestion worker', () => {
     expect(state.job.status).toBe('queued');
     expect(state.job.error_code).toBe('embedding_failed');
     expect(state.job.retry_after).toBeTruthy();
+    expect(raw.insertArticleDocument).not.toHaveBeenCalled();
+  });
+
+  it('does not index the same job twice when two workers race', async () => {
+    const { store, state, raw } = fakeStore(job());
+
+    const [first, second] = await Promise.all([run(store), run(store)]);
+
+    expect([first.state, second.state]).toContain('processed');
+    expect(raw.insertArticleDocument).toHaveBeenCalledTimes(1);
+    expect(state.documents).toHaveLength(1);
+    expect(state.completed).toHaveLength(1);
+  });
+
+  it('marks permanent embedding authentication failures as failed without retry', async () => {
+    const { store, state, raw } = fakeStore(job());
+
+    const failingClient: EmbeddingClient = {
+      ...embeddingClient(),
+      embed: jest.fn(async () => {
+        throw new EmbeddingProviderError('request_failed', 401);
+      }),
+    };
+
+    await run(store, failingClient);
+
+    expect(state.job.status).toBe('failed');
+    expect(state.job.error_code).toBe('embedding_auth_failed');
+    expect(state.job.retry_after).toBeNull();
+    expect(raw.insertArticleDocument).not.toHaveBeenCalled();
+  });
+
+  it('marks permanent payment errors as failed without retry', async () => {
+    const { store, state } = fakeStore(job());
+
+    const failingClient: EmbeddingClient = {
+      ...embeddingClient(),
+      embed: jest.fn(async () => {
+        throw new EmbeddingProviderError('request_failed', 402);
+      }),
+    };
+
+    await run(store, failingClient);
+
+    expect(state.job.status).toBe('failed');
+    expect(state.job.error_code).toBe('embedding_payment_required');
+    expect(state.job.retry_after).toBeNull();
+  });
+
+  it('does not retry an upstream HTTP 402', async () => {
+    const { store, state, raw } = fakeStore(job());
+
+    await processNextBrainJob({
+      runId: 'run-1',
+      store,
+      embeddingClient: embeddingClient(),
+      workerId: 'test-worker',
+      fetchArticle: async () => {
+        throw new BrainUrlError('http_status_402');
+      },
+    });
+
+    expect(state.job.status).toBe('failed');
+    expect(state.job.error_code).toBe('http_status_402');
+    expect(state.job.retry_after).toBeNull();
     expect(raw.insertArticleDocument).not.toHaveBeenCalled();
   });
 });

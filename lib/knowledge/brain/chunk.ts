@@ -34,7 +34,7 @@ export type ArticleChunkingOptions = {
    * Source type recorded in chunk metadata. Defaults to `article` so existing
    * Brain ingestion keeps exactly the same output.
    */
-  sourceType?: 'article' | 'media_coverage';
+  sourceType?: 'article' | 'media_coverage' | 'pdf' | 'txt' | 'text';
   /** Stable Media Archive record id for media coverage chunks. */
   mediaRecordId?: string | null;
 };
@@ -246,6 +246,11 @@ export function chunkArticle(
     const charEnd = Math.min(end, charStart + trimmed.length);
     const contentHash = sha256(trimmed);
     const chunkIndex = chunks.length;
+    const pages = section.blocks
+      .map((entry) => entry.block.page)
+      .filter((page): page is number => typeof page === 'number' && Number.isFinite(page));
+    const pageStart = pages.length > 0 ? Math.min(...pages) : null;
+    const pageEnd = pages.length > 0 ? Math.max(...pages) : null;
 
     chunks.push({
       id: `chk_${sha256(
@@ -273,6 +278,7 @@ export function chunkArticle(
         publication_date: article.publishedAt,
         extraction_version: article.extractionVersion,
         chunker_version: ARTICLE_CHUNKER_VERSION,
+        ...(pageStart !== null ? { page_start: pageStart, page_end: pageEnd } : {}),
         ...(mediaRecordId ? { media_record_id: mediaRecordId } : {}),
       },
     });

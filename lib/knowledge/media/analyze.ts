@@ -13,6 +13,16 @@ function sha256(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
 }
 
+function isRetryableCode(code: string): boolean {
+  return (
+    code.startsWith('deepseek_') ||
+    code.startsWith('media_analysis_llm') ||
+    code.includes('timeout') ||
+    code.includes('rate_limit') ||
+    code === 'media_analysis_failed'
+  );
+}
+
 export type RunMediaAnalysisResult = {
   runId: string;
   skipped: boolean;
@@ -26,6 +36,8 @@ export async function runMediaAnalysis(input: {
   mediaRecordId: string;
   force?: boolean;
   model?: string;
+  /** Set when this run was atomically claimed from the queue. */
+  runId?: string;
 }): Promise<RunMediaAnalysisResult> {
   if (!isGraphLlmConfigured()) {
     throw new Error('media_analysis_not_configured');
@@ -52,11 +64,16 @@ export async function runMediaAnalysis(input: {
     process.env.DEEPSEEK_MODEL ||
     'deepseek-chat';
 
-  if (!input.force) {
+  if (!input.runId && !input.force) {
     const runs = await store.listRuns(input.mediaRecordId);
-    const latest = runs.find((run) => run.status === 'completed');
+    const latest = runs.find(
+      (run) =>
+        run.status === 'completed' &&
+        run.analyzer_version === MEDIA_ANALYZER_VERSION &&
+        run.content_hash === contentHash
+    );
 
-    if (latest && latest.content_hash === contentHash) {
+    if (latest) {
       return {
         runId: latest.id,
         skipped: true,
@@ -68,19 +85,28 @@ export async function runMediaAnalysis(input: {
     }
   }
 
-  const run = await store.createRun({
-    mediaRecordId: input.mediaRecordId,
-    documentId: loaded.document.id,
-    contentHash,
-    analyzerVersion: MEDIA_ANALYZER_VERSION,
-    model,
-  });
+  const run = input.runId
+    ? (await store.markRunProcessing(input.runId, {
+        contentHash,
+        analyzerVersion: MEDIA_ANALYZER_VERSION,
+        model,
+      }),
+      { id: input.runId })
+    : await store.createRun({
+        mediaRecordId: input.mediaRecordId,
+        documentId: loaded.document.id,
+        contentHash,
+        analyzerVersion: MEDIA_ANALYZER_VERSION,
+        model,
+        forceRefresh: Boolean(input.force),
+      });
 
   try {
     const result = await analyzeMediaDocument({
       title: loaded.mediaRecord.title,
       outlet: loaded.mediaRecord.outlet,
       language: loaded.document.language || loaded.mediaRecord.lang,
+      kind: loaded.mediaRecord.kind,
       chunks: loaded.chunks,
     });
 
@@ -89,6 +115,7 @@ export async function runMediaAnalysis(input: {
       id: loaded.mediaRecord.id,
       title: loaded.mediaRecord.title,
       outlet: loaded.mediaRecord.outlet,
+      kind: loaded.mediaRecord.kind,
       publishedDate: loaded.mediaRecord.published_date,
       topic: result.topics?.primaryTopic || loaded.mediaRecord.topic,
       subtopics: result.topics?.subtopics || [],
@@ -128,7 +155,9 @@ export async function runMediaAnalysis(input: {
     };
   } catch (error) {
     const code =
-      error instanceof Error && error.message.startsWith('media_analysis_')
+      error instanceof Error &&
+      (error.message.startsWith('media_analysis_') ||
+        error.message.startsWith('deepseek_'))
         ? error.message
         : 'media_analysis_failed';
 
@@ -136,7 +165,8 @@ export async function runMediaAnalysis(input: {
       .failRun(
         run.id,
         code,
-        error instanceof Error ? error.message.slice(0, 1000) : 'Media analysis failed'
+        error instanceof Error ? error.message.slice(0, 1000) : 'Media analysis failed',
+        { retryable: Boolean(input.runId) && isRetryableCode(code) }
       )
       .catch(() => undefined);
 

@@ -50,7 +50,8 @@
     "deploy:local": "node scripts/deploy_hardhat.js",
     "mint:local": "node scripts/mint_and_transfer.js",
     "db:diag": "tsc db_diagnostics.ts && node db_diagnostics.js",
-    "seo:check": "node --experimental-strip-types scripts/seo-check.ts"
+    "seo:check": "node --experimental-strip-types scripts/seo-check.ts",
+    "media:analyze": "tsx scripts/media-analysis-run.ts"
   },
   "installConfig": {
     "scripts-prepend-node-path": true
@@ -116,6 +117,7 @@
     "next": "14.2.5",
     "node-fetch": "^2.7.0",
     "openai": "^7.22.0",
+    "pdf-parse": "^2.4.5",
     "pg": "^8.11.0",
     "pino": "^10.1.0",
     "pino-pretty": "^9.2.0",

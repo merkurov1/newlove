@@ -269,6 +269,15 @@ export default function MediaPage() {
         </div>
       )}
 
+      <div className="flex justify-end">
+        <a
+          href="/admin/media/intelligence"
+          className="text-sm text-[#8B1E3F] underline underline-offset-2"
+        >
+          Media Intelligence →
+        </a>
+      </div>
+
       {/* Добавление и редактирование публикаций */}
       <MediaLinksPanel />
 

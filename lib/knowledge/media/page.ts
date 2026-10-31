@@ -29,6 +29,7 @@ export type MediaPageExtraction = {
   article: ExtractedArticle;
   quality: MediaQualityAssessment;
   chunking: ArticleChunkingResult;
+  html: string;
   fetchedBytes: number;
   finalUrl: string;
   contentType: string;
@@ -64,26 +65,25 @@ function outletFromArticle(article: ExtractedArticle, fallbackUrl: string): stri
 /**
  * Single safe fetch and full-text extraction for the Media Archive. It uses
  * the existing Brain URL guard, parser, chunker and quality evaluator. It does
- * not bypass paywalls and deliberately keeps the public page limits
- * (1 MB / 10 s) instead of relaxing them.
+ * not bypass paywalls. A 3 MB cap is enough for modern news pages while the
+ * parser still rejects subscriber previews as non-full text.
  */
-export async function extractMediaPage(inputUrl: string): Promise<MediaPageExtraction> {
-  const fetched = await fetchHtmlSafely(inputUrl, {
-    timeoutMs: 10_000,
-    maxBytes: 1_000_000,
-    maxRedirects: 5,
-    userAgent: 'Mozilla/5.0 (compatible; MerkurovMediaArchive/2.0)',
-  });
-
-  const article = extractArticle(fetched.html, fetched.url);
+export function extractMediaHtml(input: {
+  html: string;
+  finalUrl: string;
+  sourceUrl?: string;
+  fetchedBytes?: number;
+  contentType?: string;
+}): MediaPageExtraction {
+  const article = extractArticle(input.html, input.finalUrl);
   const canonicalUrl = safeCanonical(
     article.canonicalUrl,
-    safeCanonical(fetched.url, inputUrl)
+    safeCanonical(input.finalUrl, input.sourceUrl || input.finalUrl)
   );
   const outlet = outletFromArticle(article, canonicalUrl);
   const quality = evaluateMediaTextQuality(article);
   const chunking = chunkArticle(article, 'doc_media_preview');
-  const $ = cheerio.load(fetched.html);
+  const $ = cheerio.load(input.html);
   const description =
     article.description ||
     $('meta[name="description"]').first().attr('content')?.trim() ||
@@ -91,7 +91,7 @@ export async function extractMediaPage(inputUrl: string): Promise<MediaPageExtra
 
   return {
     metadata: {
-      url: fetched.url,
+      url: input.sourceUrl || input.finalUrl,
       canonical_url: canonicalUrl,
       title: clean(article.title, 500) || clean($('title').first().text(), 500),
       outlet,
@@ -102,8 +102,26 @@ export async function extractMediaPage(inputUrl: string): Promise<MediaPageExtra
     article,
     quality,
     chunking,
-    fetchedBytes: fetched.bytes,
-    finalUrl: fetched.url,
-    contentType: fetched.contentType,
+    html: input.html,
+    fetchedBytes: input.fetchedBytes ?? Buffer.byteLength(input.html, 'utf8'),
+    finalUrl: input.finalUrl,
+    contentType: input.contentType || 'text/html',
   };
+}
+
+export async function extractMediaPage(inputUrl: string): Promise<MediaPageExtraction> {
+  const fetched = await fetchHtmlSafely(inputUrl, {
+    timeoutMs: 15_000,
+    maxBytes: 3_000_000,
+    maxRedirects: 5,
+    userAgent: 'Mozilla/5.0 (compatible; MerkurovMediaArchive/2.0)',
+  });
+
+  return extractMediaHtml({
+    html: fetched.html,
+    finalUrl: fetched.url,
+    sourceUrl: inputUrl,
+    fetchedBytes: fetched.bytes,
+    contentType: fetched.contentType,
+  });
 }

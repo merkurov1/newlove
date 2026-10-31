@@ -168,6 +168,20 @@ export async function POST(
       );
     }
 
+    const storedSourcePath =
+      typeof record.source_path === 'string' &&
+      /^brain-sources\/[a-f0-9]{2}\/[a-f0-9]{64}\.(pdf|txt|html)$/.test(record.source_path)
+        ? record.source_path
+        : null;
+    const storedSourceSha =
+      typeof record.source_sha256 === 'string' && /^[a-f0-9]{64}$/.test(record.source_sha256)
+        ? record.source_sha256
+        : null;
+    const sourceFormat =
+      storedSourcePath && ['url', 'pdf', 'txt', 'text'].includes(String(record.source_format))
+        ? (record.source_format as 'url' | 'pdf' | 'txt' | 'text')
+        : 'url';
+
     const queued = await enqueueMediaCoverageJob({
       store,
       mediaRecordId: id,
@@ -175,6 +189,12 @@ export async function POST(
       normalizedUrl,
       requestedBy: auth.actor,
       source: 'media_coverage_manual',
+      sourceFormat,
+      storagePath: storedSourcePath,
+      sourceSha256: storedSourceSha,
+      authorOverride: record.author || null,
+      publishedAtOverride: record.published_date || null,
+      languageOverride: record.lang || null,
     });
 
     return json(

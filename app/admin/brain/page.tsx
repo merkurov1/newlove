@@ -22,11 +22,14 @@ export default async function BrainAdminPage() {
           Brain ingestion
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#746D66]">
-          Paste article URLs, analyze them for duplicates, then process the queue. A durable
-          Supabase queue fetches and extracts each article, stores full text and metadata, and
-          indexes it with the existing <code className="font-mono text-xs">baai/bge-m3</code>{' '}
-          embedding pipeline. Partial, failed or review-needed pages are never indexed silently.
-          Runs are resumable; use “Recheck existing” to update an article whose content changed.
+          Add a URL, PDF, TXT file or pasted text. Every source is validated, checked for
+          duplicates, previewed, extracted, normalized, chunked, embedded and written to the same{' '}
+          <code className="font-mono text-xs">knowledge_documents</code> /{' '}
+          <code className="font-mono text-xs">knowledge_chunks</code> index with{' '}
+          <code className="font-mono text-xs">baai/bge-m3</code>. Originals stay in the private{' '}
+          <code className="font-mono text-xs">brain-sources</code> bucket; scanned PDFs are
+          reported as requiring OCR instead of being indexed as successful text. Failed or partial
+          sources can be retried without deleting the existing document.
         </p>
       </header>
 
