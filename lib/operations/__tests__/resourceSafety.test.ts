@@ -7,7 +7,7 @@ import { assertCircuitClosed, recordCircuitFailure, recordCircuitSuccess } from 
 import { assertEnqueueLimit } from '../budgets';
 import { getQueueSnapshot } from '../budgets';
 import { acquireWorkerLock } from '../locks';
-import { workerLimits } from '../config';
+import { workerLimits, globalLimits } from '../config';
 
 function eventClient() {
   return {
@@ -33,6 +33,21 @@ describe('resource safety', () => {
     jest.restoreAllMocks();
   });
 
+  it('uses documented defaults when optional limit variables are unset', () => {
+    const previous = process.env.OPS_PIERROT_LLM_TIMEOUT_MS;
+    delete process.env.OPS_PIERROT_LLM_TIMEOUT_MS;
+
+    try {
+      const limits = globalLimits();
+
+      expect(limits.pierrotLlmTimeoutMs).toBe(25_000);
+      expect(limits.circuitFailureThreshold).toBe(3);
+      expect(limits.circuitCooldownSeconds).toBe(300);
+    } finally {
+      if (previous !== undefined) process.env.OPS_PIERROT_LLM_TIMEOUT_MS = previous;
+    }
+  });
+
   it('reads database control and falls back to environment when the table is missing', async () => {
     const client = {
       from: jest.fn(() =>
@@ -45,8 +60,7 @@ describe('resource safety', () => {
     expect(control.source).toBe('database');
   });
 
-  it('blocks all scopes when the global kill switch is on', async () => {
-    await expect(
+  it('blocks all scopes when the global kill switch is on', async () => {    await expect(
       assertWorkerEnabled('brain', {
         control: {
           workersEnabled: false,

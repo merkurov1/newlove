@@ -23,6 +23,12 @@ export type WorkerLimits = {
 
 function readInt(name: string, fallback: number, min: number, max: number): number {
   const raw = (process.env[name] || '').trim();
+
+  // An unset or blank variable must use the documented default. Number('')
+  // is 0, which would silently clamp every limit to its minimum (for example
+  // a 1-second LLM timeout and a one-failure circuit threshold).
+  if (!raw) return fallback;
+
   const value = Number(raw);
 
   if (!Number.isFinite(value)) return fallback;

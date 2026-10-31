@@ -211,6 +211,23 @@ describe('POST /api/pierrot/human/state', () => {
     expect(JSON.stringify(json)).not.toContain('123456789');
   });
 
+  it('passes a sequence watermark to the transcript query', async () => {
+    asMock(human.getHumanPresenceByToken).mockResolvedValue(record('active'));
+
+    await statePost(
+      makeRequest('/api/pierrot/human/state', {
+        token: 'A'.repeat(43),
+        afterSequence: 12,
+      })
+    );
+
+    expect(human.buildHumanStateResponse).toHaveBeenCalledWith(
+      { mocked: true },
+      expect.objectContaining({ request: expect.objectContaining({ status: 'active' }) }),
+      12
+    );
+  });
+
   it('does not expose a conversation when the session pair is wrong', async () => {
     const response = await statePost(
       makeRequest('/api/pierrot/human/state', {

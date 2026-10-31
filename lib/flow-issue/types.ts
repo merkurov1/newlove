@@ -50,6 +50,12 @@ export type IssueAI = {
   confidence?: number;
   role?: IssueAIRole;
   rationale?: string;
+  /** Provider that actually produced the analysis. */
+  provider?: "gemini" | "deepseek";
+  /** End-to-end provider latency in milliseconds. */
+  latencyMs?: number;
+  /** True when Gemini failed and DeepSeek produced the analysis. */
+  fallbackUsed?: boolean;
 };
 
 export type FlowItem = {

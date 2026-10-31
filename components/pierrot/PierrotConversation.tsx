@@ -776,9 +776,11 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   </details>
                 )}
 
-                {message.role === 'assistant' && <AnswerFeedback messageId={message.id} />}
+                {message.role === 'assistant' && !message.error && (
+                  <AnswerFeedback messageId={message.id} />
+                )}
 
-                {message.role === 'assistant' && message.provider && (
+                {message.role === 'assistant' && !message.error && message.provider && (
                   <span className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[#A49A8C]">
                     via {message.provider}
                   </span>

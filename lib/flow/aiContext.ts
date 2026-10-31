@@ -93,7 +93,15 @@ export function flowAiContextReadyPayload(
       sourceType: ref.sourceType,
       publishedAt: ref.publishedAt,
     })),
-    retrieval_diagnostics: result.retrievalDiagnostics,
+    retrieval_diagnostics: {
+      ...result.retrievalDiagnostics,
+      generation: {
+        provider: result.provider,
+        model: result.model,
+        latency_ms: result.generationLatencyMs ?? null,
+        fallback_used: result.fallbackUsed ?? false,
+      },
+    },
     generation_version: result.generationVersion,
   };
 }

@@ -4,7 +4,15 @@ import { globalLimits } from './config';
 import { recordOpsEvent } from './events';
 import { createOpsClient, isMissingOpsTable } from './store';
 
-export type CircuitDependency = 'embedding' | 'llm' | 'extraction' | 'email' | 'external';
+export type CircuitDependency =
+  | 'embedding'
+  | 'llm'
+  | 'pierrot_llm'
+  | 'gemini'
+  | 'openrouter'
+  | 'extraction'
+  | 'email'
+  | 'external';
 export type CircuitState = 'closed' | 'open' | 'half_open';
 
 type MemoryCircuit = {

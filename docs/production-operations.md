@@ -22,7 +22,8 @@ the limitations that remain after the audit.
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-only privileged access. Never expose to the browser |
 | `SUPABASE_URL` | Server-side Supabase URL |
 | `CRON_SECRET` | Bearer secret for every `/api/cron/*` endpoint |
-| `DEEPSEEK_API_KEY` | Pierrot chat, Brain graph extraction and Media Intelligence |
+| `GEMINI_API_KEY` | Primary model for Pierrot, Flow item context and Flow issue analysis |
+| `DEEPSEEK_API_KEY` | Automatic fallback for Pierrot/Flow; Brain graph and Media Intelligence |
 | `OPENROUTER_API_KEY` | `baai/bge-m3` embeddings (1024 dimensions) |
 | `TELEGRAM_BOT_TOKEN` / `PIERROT_BOT_TOKEN` | Telegram webhook / Pierrot adapter |
 | `TELEGRAM_WEBHOOK_SECRET` | Telegram webhook validation |
@@ -115,6 +116,12 @@ from information_schema.tables
 where table_schema = 'public'
 order by 1;
 ```
+
+AI provider change:
+
+- Pierrot, Flow item context and Flow issue analysis now use `gemini-3.5-flash`
+  first. DeepSeek Direct and the existing OpenRouter DeepSeek fallback remain
+  automatic. No new environment variables, cron jobs or workers were added.
 
 Fixes applied during the audit:
 
@@ -317,8 +324,9 @@ for current tariffs. The measurable volume drivers are:
 | Brain corpus | 137 documents / 758 chunks, all indexed chunks embedded | One embedding per new chunk |
 | Brain graph | 117 completed documents | One DeepSeek JSON extraction per document |
 | Media Intelligence | 179 completed runs / 115 publications | One DeepSeek JSON extraction per publication, plus quote relation rebuilds with no model call |
-| Flow AI context | 45 ready rows | One generation on the first public view of an item with no context, then cached in `flow_ai_context`; admin regeneration only on request |
-| Pierrot chat | Per visitor message | One DeepSeek completion; owner RAG adds one embedding per retrieval attempt (up to 3 refinements) |
+| Flow AI context | 45 ready rows | One Gemini generation after a new publication, or when an administrator clicks Regenerate; public pages read the saved row |
+| Flow Issue analysis | Per new/changed Item in an issue run | One Gemini JSON call; cached by `contentHash` + `ANALYSIS_VERSION`; DeepSeek only on Gemini failure |
+| Pierrot chat | Per visitor message | One Gemini completion; one DeepSeek/OpenRouter completion only on Gemini failure; owner RAG adds one embedding per retrieval attempt |
 | Public Flow/Pierrot RAG | 0 approved public documents | Zero retrieval cost until documents are approved |
 
 Practical controls already in place: owner RAG flag, public RAG flag, retrieval

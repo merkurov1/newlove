@@ -5,6 +5,10 @@ import {
   recordCircuitSuccess,
 } from '@/lib/operations/circuitBreaker';
 import { globalLimits } from '@/lib/operations/config';
+import {
+  generateGeminiText,
+  isGeminiConfigured,
+} from '@/lib/ai/gemini';
 
 import {
   isFlowAiRagEnabled,
@@ -15,6 +19,15 @@ import {
   type FlowSourceRef,
 } from '@/lib/knowledge/rag/flowRetrieval';
 import type { BrainSearchRow } from '@/lib/knowledge/rag/types';
+
+export class FlowAIGenerationError extends Error {
+  readonly code = 'flow_ai_generation_failed';
+
+  constructor(message = 'Flow AI generation failed.') {
+    super(message);
+    this.name = 'FlowAIGenerationError';
+  }
+}
 
 export type FlowAIItem = {
   id: string;
@@ -41,6 +54,10 @@ export type FlowAIResult = {
   generationVersion: string;
   retrievalLatencyMs: number | null;
   retrievalDiagnostics: Record<string, unknown>;
+  /** Total generation latency, including a fallback provider when used. */
+  generationLatencyMs?: number | null;
+  /** True when Gemini failed and DeepSeek/OpenRouter produced the result. */
+  fallbackUsed?: boolean;
 };
 
 type CompleteFlowAI = (prompt: string) => Promise<{
@@ -49,10 +66,18 @@ type CompleteFlowAI = (prompt: string) => Promise<{
   provider: string;
 }>;
 
+export type FlowAIProviderOverrides = {
+  gemini?: typeof generateGeminiText;
+  deepseek?: typeof callDeepSeekDirect;
+  openrouter?: typeof callOpenRouterDeepSeek;
+};
+
 export type FlowAIGenerationDeps = {
   ragEnabled?: boolean;
   retrieve?: typeof retrieveFlowPublicEvidence;
   complete?: CompleteFlowAI;
+  /** Test-only provider overrides; production uses the module defaults. */
+  providers?: FlowAIProviderOverrides;
 };
 
 function cleanText(value: unknown, max = 4000): string {
@@ -172,7 +197,12 @@ type ProviderResult = {
   content: string;
   model: string;
   provider: string;
+  latencyMs?: number;
+  fallbackUsed?: boolean;
 };
+
+const FLOW_SYSTEM_PROMPT =
+  'You are a high-level strategic analyst for an elite media and tech publication. Output bilingual micro-insights.';
 
 // 1. Direct DeepSeek API Call
 async function callDeepSeekDirect(prompt: string): Promise<ProviderResult> {
@@ -184,7 +214,10 @@ async function callDeepSeekDirect(prompt: string): Promise<ProviderResult> {
   await assertCircuitClosed('llm');
   const limits = globalLimits();
   const client = new OpenAI({
-    baseURL: 'https://api.deepseek.com',
+    baseURL: (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(
+      /\/+$/,
+      ''
+    ),
     apiKey,
     timeout: limits.flowLlmTimeoutMs,
     maxRetries: 0,
@@ -196,8 +229,7 @@ async function callDeepSeekDirect(prompt: string): Promise<ProviderResult> {
       messages: [
         {
           role: 'system',
-          content:
-            'You are a high-level strategic analyst for an elite media and tech publication. Output bilingual micro-insights.',
+          content: FLOW_SYSTEM_PROMPT,
         },
         {
           role: 'user',
@@ -255,7 +287,6 @@ async function callOpenRouterDeepSeek(prompt: string): Promise<ProviderResult> {
 
   const models = [
     'deepseek/deepseek-chat',
-    'deepseek/deepseek-r1:free',
   ];
 
   let lastError: unknown = null;
@@ -264,7 +295,10 @@ async function callOpenRouterDeepSeek(prompt: string): Promise<ProviderResult> {
     try {
       const completion = await client.chat.completions.create({
         model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [
+          { role: 'system', content: FLOW_SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
         temperature: 0.4,
         max_tokens: globalLimits().flowLlmMaxTokens,
       });
@@ -291,17 +325,62 @@ async function callOpenRouterDeepSeek(prompt: string): Promise<ProviderResult> {
   throw lastError instanceof Error ? lastError : new Error('OpenRouter fallback failed.');
 }
 
-async function completeWithFallback(prompt: string): Promise<ProviderResult> {
+async function completeWithFallback(
+  prompt: string,
+  providers: FlowAIProviderOverrides = {}
+): Promise<ProviderResult> {
+  const startedAt = Date.now();
+  let geminiFailed = false;
+  const geminiProvider = providers.gemini ?? generateGeminiText;
+
+  if (isGeminiConfigured()) {
+    try {
+      const gemini = await geminiProvider({
+        system: FLOW_SYSTEM_PROMPT,
+        prompt,
+        temperature: 0.4,
+        maxOutputTokens: globalLimits().flowLlmMaxTokens,
+        timeoutMs: globalLimits().flowLlmTimeoutMs,
+      });
+
+      return {
+        content: gemini.content,
+        model: gemini.model,
+        provider: gemini.provider,
+        latencyMs: Date.now() - startedAt,
+        fallbackUsed: false,
+      };
+    } catch (error) {
+      geminiFailed = true;
+      console.warn(
+        '[flow-ai] Gemini unavailable; trying DeepSeek:',
+        error instanceof Error ? error.message : 'gemini_request_failed'
+      );
+    }
+  }
+
   try {
-    return await callDeepSeekDirect(prompt);
-  } catch (dsError: any) {
+    const deepseek = await (providers.deepseek ?? callDeepSeekDirect)(prompt);
+    return {
+      ...deepseek,
+      latencyMs: Date.now() - startedAt,
+      fallbackUsed: geminiFailed,
+    };
+  } catch (dsError: unknown) {
+    const message = dsError instanceof Error ? dsError.message : String(dsError);
+
     console.warn(
       '[flow-ai] DeepSeek direct unavailable, trying fallbacks:',
-      dsError?.message || dsError
+      message
     );
   }
 
-  return callOpenRouterDeepSeek(prompt);
+  const openrouter = await (providers.openrouter ?? callOpenRouterDeepSeek)(prompt);
+  return {
+    ...openrouter,
+    latencyMs: Date.now() - startedAt,
+    fallbackUsed: true,
+  };
 }
 
 export async function generateFlowContext(
@@ -345,7 +424,9 @@ export async function generateFlowContext(
   const prompt = buildEnhancedAnalysisPrompt(item, evidence);
 
   try {
-    const completion = await (deps.complete ?? completeWithFallback)(prompt);
+    const completion = deps.complete
+      ? await deps.complete(prompt)
+      : await completeWithFallback(prompt, deps.providers);
 
     return {
       ...completion,
@@ -367,12 +448,23 @@ export async function generateFlowContext(
       generationVersion: evidence.length > 0 ? 'flow-ai-rag-v1' : 'flow-ai-v1',
       retrievalLatencyMs: retrieval?.latencyMs ?? null,
       retrievalDiagnostics: retrieval?.diagnostics ?? {},
+      generationLatencyMs: completion.latencyMs ?? null,
+      fallbackUsed: completion.fallbackUsed ?? false,
     };
-  } catch (orError: any) {
+  } catch (orError: unknown) {
+    const message = orError instanceof Error ? orError.message : String(orError);
+
     console.error(
       '[flow-ai] All DeepSeek providers failed:',
-      orError?.message || orError
+      message
     );
-    return null;
+
+    // A provider failure is not a successful skip. The admin route must be
+    // able to persist an `error` row and return a non-2xx response; returning
+    // null here previously made the endpoint report success while deleting the
+    // item's existing context.
+    throw new FlowAIGenerationError(
+      orError instanceof Error ? orError.message : 'Flow AI generation failed.'
+    );
   }
 }

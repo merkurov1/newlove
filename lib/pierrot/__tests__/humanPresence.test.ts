@@ -6,6 +6,8 @@ import {
   createHumanAccessToken,
   deriveTelegramHumanMessageId,
   hashHumanAccessToken,
+  humanSessionIdleMinutes,
+  isHumanSessionIdle,
   publicHumanState,
   visitorLabelForConversation,
   type HumanRequestRow,
@@ -128,5 +130,35 @@ describe('Telegram owner authorization', () => {
         process.env.PIERROT_OWNER_TELEGRAM_ID = previous;
       }
     }
+  });
+});
+
+describe('human session idle expiry', () => {
+  it('uses a bounded configurable idle window', () => {
+    expect(humanSessionIdleMinutes({} as unknown as NodeJS.ProcessEnv)).toBe(180);
+    expect(
+      humanSessionIdleMinutes({
+        PIERROT_HUMAN_SESSION_IDLE_MINUTES: '60',
+      } as unknown as NodeJS.ProcessEnv)
+    ).toBe(60);
+    expect(
+      humanSessionIdleMinutes({
+        PIERROT_HUMAN_SESSION_IDLE_MINUTES: '1',
+      } as unknown as NodeJS.ProcessEnv)
+    ).toBe(15);
+    expect(
+      humanSessionIdleMinutes({
+        PIERROT_HUMAN_SESSION_IDLE_MINUTES: '9999',
+      } as unknown as NodeJS.ProcessEnv)
+    ).toBe(1440);
+  });
+
+  it('treats old activity as idle and recent activity as live', () => {
+    const now = Date.parse('2026-10-31T12:00:00.000Z');
+
+    expect(isHumanSessionIdle('2026-10-31T09:00:00.000Z', now, 180)).toBe(true);
+    expect(isHumanSessionIdle('2026-10-31T11:30:00.000Z', now, 180)).toBe(false);
+    expect(isHumanSessionIdle(null, now, 180)).toBe(false);
+    expect(isHumanSessionIdle('not-a-date', now, 180)).toBe(false);
   });
 });

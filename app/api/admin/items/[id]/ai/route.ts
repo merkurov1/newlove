@@ -19,6 +19,10 @@ export const dynamic =
 export const runtime =
   'nodejs';
 
+// One DeepSeek call plus an optional fallback; keep enough room for
+// retrieval and persistence without allowing a runaway invocation.
+export const maxDuration = 60;
+
 type RouteContext = {
   params: Promise<{
     id: string;
@@ -78,7 +82,7 @@ export async function POST(
     } = await supabase
       .from('items')
       .select(
-        'id,type,title,body_md,source_url,metadata,lang,ai_allowed,rag_allowed,status,visibility',
+        'id,slug,type,title,body_md,source_url,metadata,lang,ai_allowed,rag_allowed,status,visibility',
       )
       .eq('id', id)
       .maybeSingle();
@@ -98,21 +102,6 @@ export async function POST(
     }
 
     if (
-      item.status !==
-        'published' ||
-      item.visibility !==
-        'public'
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            'Only public published items can receive Flow context.',
-        },
-        { status: 400 },
-      );
-    }
-
-    if (
       item.ai_allowed === false
     ) {
       return NextResponse.json(
@@ -124,10 +113,25 @@ export async function POST(
       );
     }
 
+    // Photos have no meaningful text analysis. Keep the endpoint idempotent:
+    // remove any stale row instead of calling the model.
+    if (item.type === 'photo') {
+      await supabase.from('flow_ai_context').delete().eq('item_id', id);
+
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        message: 'AI context is not generated for photo items.',
+      });
+    }
+
+    // Admins may prepare context before publishing. Public pages only read a
+    // ready row for a published/public item, and the public RLS policy enforces
+    // that boundary independently of this endpoint.
     const ragEnabled =
       item.rag_allowed !== false && isFlowAiRagEnabled();
 
-    await supabase
+    const { error: generatingError } = await supabase
       .from('flow_ai_context')
       .upsert(
         flowAiContextGeneratingPayload(id, ragEnabled),
@@ -136,6 +140,8 @@ export async function POST(
             'item_id',
         },
       );
+
+    if (generatingError) throw generatingError;
 
     try {
       const result =
@@ -154,6 +160,8 @@ export async function POST(
         });
 
       if (!result) {
+        // generateFlowContext returns null only for an intentional skip
+        // (photo). Provider failures now throw and are handled below.
         await supabase
           .from('flow_ai_context')
           .delete()
@@ -199,17 +207,21 @@ export async function POST(
           generationError,
         );
 
-      await supabase
-        .from(
-          'flow_ai_context',
-        )
+      const { error: errorSaveError } = await supabase
+        .from('flow_ai_context')
         .upsert(
           flowAiContextErrorPayload(id, message, ragEnabled),
           {
-            onConflict:
-              'item_id',
+            onConflict: 'item_id',
           },
         );
+
+      if (errorSaveError) {
+        console.error(
+          '[flow-ai] could not persist the error state:',
+          errorSaveError
+        );
+      }
 
       throw generationError;
     }

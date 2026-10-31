@@ -370,6 +370,97 @@ function humanRequestTtlSeconds(): number {
   return Math.min(Math.max(Math.round(configured * 60), 60), 3600);
 }
 
+export const HUMAN_SESSION_IDLE_MINUTES_DEFAULT = 180;
+
+/**
+ * An accepted human session has no explicit expiry column. It is closed
+ * lazily after a long period without activity so an abandoned Telegram
+ * conversation cannot keep routing Anton's plain-text replies to an old
+ * visitor forever.
+ */
+export function humanSessionIdleMinutes(env: NodeJS.ProcessEnv = process.env): number {
+  const configured = Number(env.PIERROT_HUMAN_SESSION_IDLE_MINUTES);
+
+  if (!Number.isFinite(configured) || configured <= 0) {
+    return HUMAN_SESSION_IDLE_MINUTES_DEFAULT;
+  }
+
+  return Math.min(Math.max(Math.round(configured), 15), 1440);
+}
+
+export function isHumanSessionIdle(
+  lastActivityAt: string | null | undefined,
+  now = Date.now(),
+  idleMinutes = humanSessionIdleMinutes()
+): boolean {
+  if (!lastActivityAt) return false;
+
+  const parsed = Date.parse(lastActivityAt);
+
+  if (!Number.isFinite(parsed)) return false;
+
+  return now - parsed >= idleMinutes * 60_000;
+}
+
+/**
+ * Applies lazy request expiry and lazy active-session idle closure in one
+ * place. All read paths use this so a stale takeover is never presented as a
+ * live connection.
+ */
+async function settleRequest(
+  store: SupabaseClient,
+  request: HumanRequestRow
+): Promise<HumanRequestRow> {
+  const pending = await expireIfDue(store, request);
+
+  if (pending.status !== 'active') return pending;
+
+  const idleMinutes = humanSessionIdleMinutes();
+  const lastActivity = pending.updated_at || pending.accepted_at || pending.created_at;
+
+  if (!isHumanSessionIdle(lastActivity, Date.now(), idleMinutes)) return pending;
+
+  // Defensive fallback for deployments where the append RPC predates the
+  // request.updated_at refresh.
+  try {
+    const { data, error } = await store
+      .from('pierrot_messages')
+      .select('created_at')
+      .eq('conversation_id', pending.conversation_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data && typeof data.created_at === 'string') {
+      if (!isHumanSessionIdle(data.created_at, Date.now(), idleMinutes)) return pending;
+    }
+  } catch {
+    // If activity cannot be checked, fall back to the request timestamp.
+  }
+
+  try {
+    const closed = await closeHumanSession(store, pending.id, 'system');
+
+    if (
+      closed.result === 'closed' ||
+      closed.result === 'already_closed' ||
+      closed.result === 'forbidden'
+    ) {
+      return {
+        ...pending,
+        status: 'closed',
+        resolved_by: 'system',
+        closed_at: pending.closed_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    }
+  } catch {
+    // Expiry is best effort; a lookup must not fail because of it.
+  }
+
+  return pending;
+}
+
 export async function createHumanRequest(
   store: SupabaseClient,
   input: {
@@ -430,7 +521,7 @@ export async function getHumanPresenceByToken(
   if (error) throw error;
   if (!data) return null;
 
-  const request = await expireIfDue(store, requestFromRow(data));
+  const request = await settleRequest(store, requestFromRow(data));
   const [session, conversationSessionId] = await Promise.all([
     loadSessionForRequest(store, request.id),
     loadConversationSessionId(store, request.conversation_id),
@@ -469,7 +560,7 @@ export async function getHumanPresenceForConversation(
   if (error) throw error;
   if (!data) return null;
 
-  const request = await expireIfDue(store, requestFromRow(data));
+  const request = await settleRequest(store, requestFromRow(data));
   const session = await loadSessionForRequest(store, request.id);
 
   return {
@@ -500,7 +591,7 @@ export async function getHumanPresenceByRequestId(
 
   if (!request) return null;
 
-  const refreshed = await expireIfDue(store, request);
+  const refreshed = await settleRequest(store, request);
   const [session, conversationSessionId] = await Promise.all([
     loadSessionForRequest(store, refreshed.id),
     loadConversationSessionId(store, refreshed.conversation_id),
@@ -646,11 +737,12 @@ export async function loadHumanMessages(
   conversationId: string,
   sinceIso: string,
   limit = 100,
+  afterSequence?: number,
 ): Promise<HumanPresenceMessage[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 100);
   const since = new Date(new Date(sinceIso).getTime() - 15_000).toISOString();
 
-  const { data, error } = await store
+  let query = store
     .from('pierrot_messages')
     .select('id, role, content, message_index, created_at')
     .eq('conversation_id', conversationId)
@@ -658,6 +750,16 @@ export async function loadHumanMessages(
     .gte('created_at', since)
     .order('message_index', { ascending: false })
     .limit(safeLimit);
+
+  if (
+    typeof afterSequence === 'number' &&
+    Number.isSafeInteger(afterSequence) &&
+    afterSequence >= 0
+  ) {
+    query = query.gt('message_index', afterSequence);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw error;
 
@@ -704,9 +806,47 @@ export async function getActiveHumanSessionForOwner(
   if (!data) return null;
 
   const session = sessionFromRow(data);
-  const request = await loadRequestById(store, session.request_id);
+  const stored = await loadRequestById(store, session.request_id);
 
-  if (!request || request.status !== 'active') return null;
+  if (!stored) return null;
+
+  const request = await settleRequest(store, stored);
+
+  if (request.status !== 'active') return null;
+
+  return {
+    request,
+    session,
+    conversationSessionId: await loadConversationSessionId(store, request.conversation_id),
+  };
+}
+
+/**
+ * Unambiguous fallback for an owner's plain-text reply that was not sent as a
+ * Telegram Reply. Returns a request only when exactly one pending request was
+ * notified to this owner. With several candidates it returns null instead of
+ * guessing and delivering to the wrong visitor.
+ */
+export async function getPendingHumanRequestForOwner(
+  store: SupabaseClient,
+  ownerTelegramId: number,
+): Promise<HumanPresenceRecord | null> {
+  const { data, error } = await store
+    .from('pierrot_human_requests')
+    .select('*')
+    .eq('telegram_chat_id', ownerTelegramId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(2);
+
+  if (error) throw error;
+  if (!Array.isArray(data) || data.length !== 1) return null;
+
+  const request = await expireIfDue(store, requestFromRow(data[0]));
+
+  if (request.status !== 'pending') return null;
+
+  const session = await loadSessionForRequest(store, request.id);
 
   return {
     request,
@@ -755,12 +895,13 @@ export async function getHumanPresenceByTelegramMessage(
 
   if (!request) return null;
 
-  const session = await loadSessionForRequest(store, request.id);
+  const settled = await settleRequest(store, request);
+  const session = await loadSessionForRequest(store, settled.id);
 
   return {
-    request,
+    request: settled,
     session,
-    conversationSessionId: await loadConversationSessionId(store, request.conversation_id),
+    conversationSessionId: await loadConversationSessionId(store, settled.conversation_id),
   };
 }
 
@@ -943,11 +1084,18 @@ export function publicHumanSession(
 export async function buildHumanStateResponse(
   store: SupabaseClient,
   record: HumanPresenceRecord,
+  afterSequence?: number,
 ): Promise<HumanPresenceStateResponse> {
   let messages: HumanPresenceMessage[] = [];
 
   try {
-    messages = await loadHumanMessages(store, record.request.conversation_id, record.request.created_at);
+    messages = await loadHumanMessages(
+      store,
+      record.request.conversation_id,
+      record.request.created_at,
+      100,
+      afterSequence,
+    );
   } catch {
     // State must remain available even if the transcript query fails.
   }

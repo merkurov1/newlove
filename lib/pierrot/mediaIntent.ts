@@ -93,3 +93,30 @@ export function isMediaArchiveQuery(text: string): boolean {
 
   return MEDIA_TERMS.filter((term) => normalized.includes(term)).length >= 2;
 }
+
+const LATEST_TERMS = [
+  'последн',
+  'свеж',
+  'недавн',
+  'новые',
+  'новых',
+  'новейш',
+  'latest',
+  'recent',
+  'newest',
+  'last',
+];
+
+/**
+ * True for "what did the press write recently / latest coverage" style
+ * questions. These still need the Media Archive but are ordered by date
+ * instead of semantic similarity.
+ */
+export function isLatestMediaQuery(text: string): boolean {
+  const normalized = normalize(text);
+
+  if (!normalized) return false;
+  if (!isMediaArchiveQuery(normalized)) return false;
+
+  return LATEST_TERMS.some((term) => normalized.includes(term));
+}

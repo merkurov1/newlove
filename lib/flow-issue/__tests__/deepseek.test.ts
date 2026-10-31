@@ -99,6 +99,7 @@ describe("Flow issue AI analysis", () => {
 
   beforeEach(() => {
     mockCreate.mockReset();
+    delete process.env.GEMINI_API_KEY;
     process.env.DEEPSEEK_API_KEY = "test-key";
   });
 
@@ -235,11 +236,95 @@ describe("Flow issue AI analysis", () => {
   });
 });
 
+describe("Flow issue Gemini primary and DeepSeek fallback", () => {
+  const originalGeminiKey = process.env.GEMINI_API_KEY;
+  const originalFetch = global.fetch;
+
+  function geminiResponse(payload: unknown) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify(payload) }],
+            },
+          },
+        ],
+      }),
+    } as Response;
+  }
+
+  beforeEach(() => {
+    mockCreate.mockReset();
+    process.env.GEMINI_API_KEY = "test-gemini";
+    process.env.DEEPSEEK_API_KEY = "test-deepseek";
+    process.env.OPS_CIRCUIT_FAILURE_THRESHOLD = "5";
+    global.fetch = jest.fn() as unknown as typeof fetch;
+  });
+
+  afterAll(() => {
+    global.fetch = originalFetch;
+    if (originalGeminiKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = originalGeminiKey;
+  });
+
+  it("uses Gemini and writes the actual model into the cache", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      geminiResponse(validAnalysis({ topic: "gemini-topic" })),
+    );
+
+    const supabase = fakeSupabase();
+    const result = await classifyNewItems(supabase.client, [item()]);
+
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(result.get("item-1")?.model).toBe("gemini-3.5-flash");
+    expect(result.get("item-1")?.provider).toBe("gemini");
+    expect(result.get("item-1")?.fallbackUsed).toBe(false);
+    expect(result.get("item-1")?.topic).toBe("gemini-topic");
+    expect(supabase.updates).toHaveLength(1);
+  });
+
+  it("falls back to DeepSeek when Gemini returns invalid schema data", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      geminiResponse({ lang: "en" }),
+    );
+    mockCreate.mockResolvedValueOnce(aiResponse(validAnalysis({ topic: "deepseek-topic" })));
+
+    const supabase = fakeSupabase();
+    const result = await classifyNewItems(supabase.client, [item()]);
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(result.get("item-1")?.model).toBe("deepseek-chat");
+    expect(result.get("item-1")?.provider).toBe("deepseek");
+    expect(result.get("item-1")?.fallbackUsed).toBe(true);
+    expect(result.get("item-1")?.topic).toBe("deepseek-topic");
+    expect(supabase.updates).toHaveLength(1);
+  });
+
+  it("falls back to DeepSeek on Gemini 429 without retrying Gemini", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      json: async () => ({ error: { message: "quota exceeded" } }),
+    } as Response);
+    mockCreate.mockResolvedValueOnce(aiResponse(validAnalysis()));
+
+    const result = await classifyNewItems(fakeSupabase().client, [item()]);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(result.get("item-1")?.model).toBe("deepseek-chat");
+  });
+});
+
 describe("Flow issue translation privacy", () => {
   const originalKey = process.env.DEEPSEEK_API_KEY;
 
   beforeEach(() => {
     mockCreate.mockReset();
+    delete process.env.GEMINI_API_KEY;
     process.env.DEEPSEEK_API_KEY = "test-key";
   });
 

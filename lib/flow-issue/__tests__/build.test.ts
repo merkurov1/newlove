@@ -116,15 +116,19 @@ function payloadIds(payload: IssuePayload): string[] {
 
 describe("buildIssuePayload", () => {
   const originalKey = process.env.DEEPSEEK_API_KEY;
+  const originalGeminiKey = process.env.GEMINI_API_KEY;
 
   beforeAll(() => {
     // No network calls: cached analyses cover every item in these tests.
     delete process.env.DEEPSEEK_API_KEY;
+    delete process.env.GEMINI_API_KEY;
   });
 
   afterAll(() => {
     if (originalKey === undefined) delete process.env.DEEPSEEK_API_KEY;
     else process.env.DEEPSEEK_API_KEY = originalKey;
+    if (originalGeminiKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = originalGeminiKey;
   });
 
   it("builds Russian and English issues from the same source records", async () => {

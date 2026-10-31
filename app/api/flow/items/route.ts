@@ -3,10 +3,12 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { FLOW_ITEMS_CACHE_TAG, getCachedFlowItems } from '@/lib/flow/items-cash';
+import { ensurePublishedFlowContext } from '@/lib/flow/publishedContext';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+export const maxDuration = 60;
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -144,11 +146,14 @@ export async function POST(req: Request) {
       }
     }
 
+    const aiContext = await ensurePublishedFlowContext(supabase, item);
+
     return NextResponse.json(
       {
         success: true,
         item,
         crosspost: crosspostResult,
+        aiContext,
       },
       { status: 201 }
     );

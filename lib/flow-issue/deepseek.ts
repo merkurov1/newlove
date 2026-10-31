@@ -1,6 +1,10 @@
 import OpenAI from "openai";
 import { z } from "zod";
 import {
+  generateGeminiText,
+  isGeminiConfigured,
+} from "@/lib/ai/gemini";
+import {
   ANALYSIS_VERSION,
   AnalysisResponseSchema,
   HEURISTIC_MODEL,
@@ -38,6 +42,10 @@ const TRANSLATION_BUDGET_MS = 20_000;
 export { heuristicLanguage };
 
 export function hasAIConfiguration(): boolean {
+  return Boolean(process.env.GEMINI_API_KEY || process.env.DEEPSEEK_API_KEY);
+}
+
+function hasDeepSeekConfiguration(): boolean {
   return Boolean(process.env.DEEPSEEK_API_KEY);
 }
 
@@ -75,44 +83,55 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
     : new Error("DeepSeek request failed");
 }
 
-async function analyzeOnce(item: FlowItem) {
-  const material = buildAnalysisInput(item);
+const ANALYSIS_SYSTEM_PROMPT = [
+  "You are an exacting editor analyzing one item from a personal intellectual stream.",
+  "Return JSON only. Do not rewrite the item, do not summarize it as marketing copy, and do not invent facts.",
+  "Scores are integers from 0 to 5. 0 means the quality is absent; 5 means exceptional. Do not reward length, recency, fame, or provocative wording by themselves.",
+  "editorialValue: overall substantive importance of the item.",
+  "originality: how distinctive the observation, argument, or selection is.",
+  "specificity: concrete detail, evidence, examples, names, numbers, or precision.",
+  "readerValue: what a thoughtful reader actually gains from spending time with it.",
+  "confidence: 0–1 confidence in this analysis given only the supplied material.",
+  "topic: a short reusable subject label (not a headline). subtopic: optional narrower label.",
+  "summary: one factual sentence about what the item contains. thesis: the central claim or observation, if one exists.",
+  "contextRequired: what a reader needs to know that the item itself does not explain. Empty string if none.",
+  "role: lead for substantial original work that could carry an issue; supporting for a worthwhile item that cannot carry it; link for an external link whose title/metadata make it worth reading; visual for a photo/caption worth showing; omit for weak, repetitive, low-value, or unintelligible material.",
+  "Distinguish the author's own observation from an external source.",
+  "about_flow is only for items specifically about the Flow project itself.",
+  "For links and videos, judge only the supplied title and metadata. You have not read or watched the source; never claim its contents.",
+  "For photos, assess only the supplied caption and metadata. You cannot see the image; never infer unseen visual details.",
+  "Return exactly these keys: lang, kind, topic, subtopic, summary, thesis, editorialValue, originality, specificity, readerValue, contextRequired, confidence, role, rationale.",
+  "lang must be exactly one of: ru, en, other. kind must be exactly one of: about_flow, world, other.",
+  "role must be exactly one of: lead, supporting, link, visual, omit.",
+  "Never return null for a string field; use an empty string when a descriptive value is absent.",
+  "rationale: one concise sentence explaining the scores, grounded only in the supplied material.",
+].join(" ");
 
+function analysisUserPrompt(item: FlowItem): string {
+  return JSON.stringify({
+    type: item.type,
+    material: buildAnalysisInput(item),
+  });
+}
+
+type AnalyzedItem = {
+  response: z.infer<typeof AnalysisResponseSchema>;
+  model: string;
+  provider: "gemini" | "deepseek";
+  latencyMs: number;
+  fallbackUsed: boolean;
+};
+
+async function analyzeWithDeepSeek(
+  item: FlowItem,
+): Promise<z.infer<typeof AnalysisResponseSchema>> {
   const response = await client().chat.completions.create({
     model: MODEL,
     response_format: { type: "json_object" },
     temperature: 0,
     messages: [
-      {
-        role: "system",
-        content: [
-          "You are an exacting editor analyzing one item from a personal intellectual stream.",
-          "Return JSON only. Do not rewrite the item, do not summarize it as marketing copy, and do not invent facts.",
-          "Scores are integers from 0 to 5. 0 means the quality is absent; 5 means exceptional. Do not reward length, recency, fame, or provocative wording by themselves.",
-          "editorialValue: overall substantive importance of the item.",
-          "originality: how distinctive the observation, argument, or selection is.",
-          "specificity: concrete detail, evidence, examples, names, numbers, or precision.",
-          "readerValue: what a thoughtful reader actually gains from spending time with it.",
-          "confidence: 0–1 confidence in this analysis given only the supplied material.",
-          "topic: a short reusable subject label (not a headline). subtopic: optional narrower label.",
-          "summary: one factual sentence about what the item contains. thesis: the central claim or observation, if one exists.",
-          "contextRequired: what a reader needs to know that the item itself does not explain. Empty string if none.",
-          "role: lead for substantial original work that could carry an issue; supporting for a worthwhile item that cannot carry it; link for an external link whose title/metadata make it worth reading; visual for a photo/caption worth showing; omit for weak, repetitive, low-value, or unintelligible material.",
-          "Distinguish the author's own observation from an external source.",
-          "about_flow is only for items specifically about the Flow project itself.",
-          "For links and videos, judge only the supplied title and metadata. You have not read or watched the source; never claim its contents.",
-          "For photos, assess only the supplied caption and metadata. You cannot see the image; never infer unseen visual details.",
-          "Return exactly these keys: lang, kind, topic, subtopic, summary, thesis, editorialValue, originality, specificity, readerValue, contextRequired, confidence, role, rationale.",
-          "rationale: one concise sentence explaining the scores, grounded only in the supplied material.",
-        ].join(" "),
-      },
-      {
-        role: "user",
-        content: JSON.stringify({
-          type: item.type,
-          material,
-        }),
-      },
+      { role: "system", content: ANALYSIS_SYSTEM_PROMPT },
+      { role: "user", content: analysisUserPrompt(item) },
     ],
   });
 
@@ -121,6 +140,53 @@ async function analyzeOnce(item: FlowItem) {
   if (!raw) throw new Error("DeepSeek returned an empty analysis");
 
   return AnalysisResponseSchema.parse(JSON.parse(raw));
+}
+
+async function analyzeOnce(item: FlowItem): Promise<AnalyzedItem> {
+  const userPrompt = analysisUserPrompt(item);
+  let geminiError: unknown = null;
+
+  if (isGeminiConfigured()) {
+    try {
+      const gemini = await generateGeminiText({
+        system: ANALYSIS_SYSTEM_PROMPT,
+        prompt: userPrompt,
+        temperature: 0,
+        maxOutputTokens: 900,
+        timeoutMs: TIMEOUT_MS,
+        responseMimeType: "application/json",
+      });
+
+      const response = AnalysisResponseSchema.parse(
+        JSON.parse(gemini.content),
+      );
+
+      return {
+        response,
+        model: gemini.model,
+        provider: "gemini",
+        latencyMs: gemini.latencyMs,
+        fallbackUsed: false,
+      };
+    } catch (error) {
+      geminiError = error;
+      console.warn(
+        "[flow-issue] Gemini analysis unavailable; trying DeepSeek:",
+        error instanceof Error ? error.message : "gemini_request_failed",
+      );
+    }
+  }
+
+  const startedAt = Date.now();
+  const response = await withRetry(() => analyzeWithDeepSeek(item));
+
+  return {
+    response,
+    model: MODEL,
+    provider: "deepseek",
+    latencyMs: Date.now() - startedAt,
+    fallbackUsed: Boolean(geminiError),
+  };
 }
 
 async function persistAnalysis(
@@ -195,7 +261,7 @@ export async function classifyNewItems(
 
   if (!hasAIConfiguration()) {
     console.warn(
-      "[flow-issue] DEEPSEEK_API_KEY is not configured; using local heuristic analysis for this issue",
+      "[flow-issue] No AI provider is configured; using local heuristic analysis for this issue",
     );
 
     for (const item of pending) {
@@ -233,13 +299,16 @@ export async function classifyNewItems(
     const outcomes = await Promise.all(
       batch.map(async (item) => {
         try {
-          const response = await withRetry(() => analyzeOnce(item));
+          const analyzed = await analyzeOnce(item);
           const material = buildAnalysisInput(item);
           const analysis: IssueAI = {
             schemaVersion: ANALYSIS_VERSION,
-            ...normalizeAnalysis(response),
+            ...normalizeAnalysis(analyzed.response),
             contentHash: contentHash(material),
-            model: MODEL,
+            model: analyzed.model,
+            provider: analyzed.provider,
+            latencyMs: analyzed.latencyMs,
+            fallbackUsed: analyzed.fallbackUsed,
             at: new Date().toISOString(),
           };
 
@@ -272,15 +341,17 @@ export async function classifyNewItems(
       const item = batch[batchIndex];
       result.set(item.id, heuristicAnalysis(item));
       console.warn(
-        "[flow-issue] DeepSeek analysis fallback",
+        "[flow-issue] AI analysis fallback",
         item.id,
-        outcome.error,
+        outcome.error instanceof Error
+          ? outcome.error.message
+          : "analysis_failed",
       );
     }
 
     if (failed.length === batch.length) {
       console.warn(
-        "[flow-issue] DeepSeek unavailable; using heuristic analysis for the rest of this run",
+        "[flow-issue] No AI provider available; using heuristic analysis for the rest of this run",
       );
       aiAvailable = false;
     }
@@ -345,7 +416,8 @@ export async function translateIssueEntries<T extends TranslatableIssueEntry>(
 ): Promise<T[]> {
   const result: T[] = [...entries];
 
-  if (!hasAIConfiguration()) return result;
+  // Translation remains on DeepSeek, independently of the analysis provider.
+  if (!hasDeepSeekConfiguration()) return result;
 
   let cursor = 0;
   const startedAt = Date.now();

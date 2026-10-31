@@ -76,6 +76,8 @@ import {
   buildMediaEvidencePrompt,
   buildMediaEvidenceSources,
 } from '@/lib/knowledge/rag/mediaEvidence';
+import { classifyPierrotFailure, logPierrotFailure } from '@/lib/pierrot/errors';
+import { pierrotErrorCopy, type PierrotErrorLanguage } from '@/lib/pierrot/errorContracts';
 import {
   recordPierrotRetrieval,
   type PierrotRetrievalTraceInput,
@@ -105,10 +107,32 @@ import {
   recordCircuitSuccess,
 } from '@/lib/operations/circuitBreaker';
 import { globalLimits } from '@/lib/operations/config';
+import {
+  generateGeminiText,
+  isGeminiConfigured,
+} from '@/lib/ai/gemini';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
+
+const RETRIEVAL_TIMEOUT_MS = 8_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+function errorLanguage(language: string): PierrotErrorLanguage {
+  return language === 'en' ? 'en' : 'ru';
+}
 
 const PIERROT_PROMPT_PUBLIC = `
 IDENTITY:
@@ -184,7 +208,7 @@ async function callDeepSeek(
     throw new Error('DEEPSEEK_API_KEY is not configured.');
   }
 
-  await assertCircuitClosed('llm');
+  await assertCircuitClosed('pierrot_llm');
   const limits = globalLimits();
   const client = new OpenAI({
     baseURL: 'https://api.deepseek.com',
@@ -208,7 +232,7 @@ async function callDeepSeek(
       throw new Error('DeepSeek returned empty response.');
     }
 
-    await recordCircuitSuccess('llm');
+    await recordCircuitSuccess('pierrot_llm');
     return reply.trim();
   } catch (error) {
     const status = (error as { status?: unknown } | null)?.status;
@@ -216,7 +240,7 @@ async function callDeepSeek(
       typeof status === 'number' && [400, 401, 402, 403, 404].includes(status);
 
     await recordCircuitFailure({
-      dependency: 'llm',
+      dependency: 'pierrot_llm',
       errorCode:
         error instanceof Error ? error.message.slice(0, 120) : 'deepseek_request_failed',
       permanent,
@@ -226,7 +250,163 @@ async function callDeepSeek(
   }
 }
 
+async function callOpenRouterDeepSeek(
+  systemPrompt: string,
+  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+  isReasoning: boolean = false
+): Promise<string> {
+  const apiKey = (process.env.OPENROUTER_API_KEY || '').trim();
+  if (!apiKey) {
+    throw new Error('OPENROUTER_API_KEY is not configured.');
+  }
+
+  await assertCircuitClosed('openrouter');
+  const limits = globalLimits();
+  const client = new OpenAI({
+    baseURL: 'https://openrouter.ai/api/v1',
+    apiKey,
+    timeout: limits.pierrotLlmTimeoutMs,
+    maxRetries: 0,
+    defaultHeaders: {
+      'HTTP-Referer': 'https://merkurov.love',
+      'X-Title': 'Merkurov Pierrot',
+    },
+  });
+
+  try {
+    const completion = await client.chat.completions.create({
+      model: isReasoning ? 'deepseek/deepseek-r1-0528' : 'deepseek/deepseek-chat',
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
+      temperature: isReasoning ? undefined : 0.7,
+      max_tokens: limits.pierrotLlmMaxTokens,
+    });
+
+    const reply = completion.choices[0]?.message?.content;
+    if (!reply) {
+      throw new Error('OpenRouter returned an empty response.');
+    }
+
+    await recordCircuitSuccess('openrouter');
+    return reply.trim();
+  } catch (error) {
+    const status = (error as { status?: unknown } | null)?.status;
+    const permanent =
+      typeof status === 'number' && [400, 401, 402, 403, 404].includes(status);
+
+    await recordCircuitFailure({
+      dependency: 'openrouter',
+      errorCode:
+        error instanceof Error ? error.message.slice(0, 120) : 'openrouter_request_failed',
+      permanent,
+    });
+
+    throw error;
+  }
+}
+
+export type PierrotModelResult = {
+  reply: string;
+  provider: 'gemini' | 'deepseek' | 'openrouter';
+  model: string;
+  latencyMs: number;
+  fallbackUsed: boolean;
+};
+
+/**
+ * Gemini -> DeepSeek Direct -> OpenRouter DeepSeek.
+ *
+ * The same system prompt, conversation history, RAG context and output format
+ * are passed to every provider. A provider failure never reaches the visitor
+ * until every fallback has failed.
+ */
+export async function callPierrotModel(
+  systemPrompt: string,
+  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+  isReasoning: boolean = false
+): Promise<PierrotModelResult> {
+  const startedAt = Date.now();
+  let geminiFailed = false;
+
+  if (isGeminiConfigured()) {
+    try {
+      const gemini = await generateGeminiText({
+        system: systemPrompt,
+        messages: messages.flatMap((message) => {
+          if (message.role !== 'user' && message.role !== 'assistant') return [];
+
+          const content =
+            typeof message.content === 'string'
+              ? message.content
+              : JSON.stringify(message.content);
+
+          return [
+            {
+              role: message.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+              content,
+            },
+          ];
+        }),
+        temperature: 0.7,
+        maxOutputTokens: globalLimits().pierrotLlmMaxTokens,
+        timeoutMs: globalLimits().pierrotLlmTimeoutMs,
+      });
+
+      return {
+        reply: gemini.content,
+        provider: 'gemini',
+        model: gemini.model,
+        latencyMs: Date.now() - startedAt,
+        fallbackUsed: false,
+      };
+    } catch (error) {
+      geminiFailed = true;
+      console.warn(
+        '[Pierrot AI] Gemini unavailable; trying DeepSeek:',
+        error instanceof Error ? error.message : 'gemini_request_failed'
+      );
+    }
+  }
+
+  let deepseekError: unknown = null;
+
+  try {
+    const reply = await callDeepSeek(systemPrompt, messages, isReasoning);
+
+    return {
+      reply,
+      provider: 'deepseek',
+      model: isReasoning ? 'deepseek-reasoner' : 'deepseek-chat',
+      latencyMs: Date.now() - startedAt,
+      fallbackUsed: geminiFailed,
+    };
+  } catch (error) {
+    deepseekError = error;
+    console.warn(
+      '[Pierrot AI] DeepSeek direct unavailable; trying OpenRouter:',
+      error instanceof Error ? error.message : 'deepseek_request_failed'
+    );
+  }
+
+  try {
+    const reply = await callOpenRouterDeepSeek(systemPrompt, messages, isReasoning);
+
+    return {
+      reply,
+      provider: 'openrouter',
+      model: isReasoning ? 'deepseek/deepseek-r1-0528' : 'deepseek/deepseek-chat',
+      latencyMs: Date.now() - startedAt,
+      fallbackUsed: true,
+    };
+  } catch {
+    throw deepseekError instanceof Error
+      ? deepseekError
+      : new Error('All AI providers are unavailable.');
+  }
+}
+
 export async function POST(req: Request) {
+  const requestStartedAt = Date.now();
+
   try {
     const internalSecret = process.env.PIERO_API_SECRET || process.env.ADMIN_SECRET_KEY;
     const isInternalRequest = Boolean(
@@ -867,6 +1047,9 @@ export async function POST(req: Request) {
 
     let reply = '';
     let usedProvider = '';
+    let usedModel = '';
+    let generationLatencyMs = 0;
+    let fallbackUsed = false;
     let ownerRag: OwnerRagResponse | null = null;
     let retrievalTrace: Omit<
       PierrotRetrievalTraceInput,
@@ -880,8 +1063,6 @@ export async function POST(req: Request) {
 
     if (useModel) {
       try {
-        // DeepSeek only. No OpenRouter/Gemini fallback: a failed request
-        // returns a clear 500 rather than silently switching providers.
         const reasoningKeywords = [
           'code',
           'код',
@@ -924,8 +1105,106 @@ export async function POST(req: Request) {
         // branch. The mode is a client intent only; access is decided by the
         // verified server-side owner identity above.
         let generationSystemPrompt = systemPrompt;
+        const brainPlan = buildBrainQueryPlan(trimmedMessage);
+        const requestsManuscript = brainPlan.requestedSources.includes('manuscript');
+        const useMediaBranch = isMediaArchiveQuery(trimmedMessage) && !requestsManuscript;
 
-        if (!ownerMode && isPublicPierrotRagEnabled()) {
+        // Media coverage is available to both the owner and public visitors.
+        // Public retrieval is metadata/verified-quote only; semantic media
+        // chunks remain owner-scoped.
+        if (useMediaBranch) {
+          const mediaStartedAt = Date.now();
+          let mediaRetrieval: Awaited<ReturnType<typeof retrieveMediaEvidence>> | null = null;
+
+          try {
+            mediaRetrieval = await withTimeout(
+              retrieveMediaEvidence({
+                query: trimmedMessage,
+                limit: 8,
+                ownerAccess: ownerMode,
+              }),
+              RETRIEVAL_TIMEOUT_MS
+            );
+          } catch {
+            mediaRetrieval = null;
+          }
+
+          if (!mediaRetrieval) {
+            retrievalTrace = {
+              conversationId,
+              sessionId,
+              userMessageId,
+              mode: 'media',
+              outcome: 'unavailable',
+              code: 'retrieval_timeout',
+              selectedSources: ['media_coverage'],
+              documentIds: [],
+              chunkIds: [],
+              latencyMs: Date.now() - mediaStartedAt,
+              candidateCount: 0,
+              topSimilarity: null,
+              refined: false,
+              attempts: 1,
+              mediaFallbackCount: 0,
+            };
+
+            ownerRag = {
+              mode: 'media',
+              outcome: 'unavailable',
+              sources: [],
+            };
+            usedRagContext = false;
+            generationSystemPrompt = `${systemPrompt}\n\n${buildMediaEvidencePrompt({
+              outcome: 'unavailable',
+              hits: [],
+            })}`;
+
+            console.warn('[Pierrot Media Intelligence] retrieval timed out');
+          } else {
+            retrievalTrace = {
+              conversationId,
+              sessionId,
+              userMessageId,
+              mode: 'media',
+              outcome: mediaRetrieval.outcome,
+              code: mediaRetrieval.code ?? null,
+              selectedSources: ['media_coverage'],
+              documentIds: Array.from(
+                new Set(mediaRetrieval.hits.map((hit) => hit.documentId))
+              ),
+              chunkIds: mediaRetrieval.hits.map((hit) => hit.chunkId),
+              latencyMs: Date.now() - mediaStartedAt,
+              candidateCount: mediaRetrieval.hits.length,
+              topSimilarity: null,
+              refined: false,
+              attempts: 1,
+              mediaFallbackCount: mediaRetrieval.hits.filter((hit) => hit.fallback).length,
+            };
+
+            ownerRag = {
+              mode: 'media',
+              outcome: mediaRetrieval.outcome,
+              sources: buildMediaEvidenceSources(mediaRetrieval),
+            };
+
+            const ragPrompt = buildMediaEvidencePrompt(mediaRetrieval);
+            usedRagContext =
+              mediaRetrieval.outcome === 'relevant_results' &&
+              mediaRetrieval.hits.length > 0;
+
+            if (ragPrompt) {
+              generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+            }
+
+            console.info('[Pierrot Media Intelligence]', {
+              status: mediaRetrieval.outcome,
+              publications: mediaRetrieval.hits.length,
+              fallback: mediaRetrieval.hits.some((hit) => hit.fallback),
+            });
+          }
+        }
+
+        if (!useMediaBranch && !ownerMode && isPublicPierrotRagEnabled()) {
           try {
             const retrieval = await retrieveFlowPublicEvidence(
               {
@@ -1010,7 +1289,7 @@ export async function POST(req: Request) {
           }
         }
 
-        if (ownerMode) {
+        if (!useMediaBranch && ownerMode) {
           const ragEnabled = isPierrotRagEnabled();
 
           if (!ragEnabled) {
@@ -1045,55 +1324,8 @@ export async function POST(req: Request) {
           } else {
           try {
             const useBrainV2 = isBrainRetrievalV2Enabled();
-            const brainPlan = buildBrainQueryPlan(trimmedMessage);
-            const requestsManuscript = brainPlan.requestedSources.includes('manuscript');
-            const useMediaBranch = isMediaArchiveQuery(trimmedMessage) && !requestsManuscript;
 
-            if (useMediaBranch) {
-              const mediaStartedAt = Date.now();
-              const retrieval = await retrieveMediaEvidence({
-                query: trimmedMessage,
-                limit: 8,
-              });
-
-              retrievalTrace = {
-                conversationId,
-                sessionId,
-                userMessageId,
-                mode: 'media',
-                outcome: retrieval.outcome,
-                code: retrieval.code ?? null,
-                selectedSources: ['media_coverage'],
-                documentIds: Array.from(new Set(retrieval.hits.map((hit) => hit.documentId))),
-                chunkIds: retrieval.hits.map((hit) => hit.chunkId),
-                latencyMs: Date.now() - mediaStartedAt,
-                candidateCount: retrieval.hits.length,
-                topSimilarity: null,
-                refined: false,
-                attempts: 1,
-                mediaFallbackCount: retrieval.hits.filter((hit) => hit.fallback).length,
-              };
-
-              ownerRag = {
-                mode: 'media',
-                outcome: retrieval.outcome,
-                sources: buildMediaEvidenceSources(retrieval),
-              };
-
-              const ragPrompt = buildMediaEvidencePrompt(retrieval);
-              usedRagContext =
-                retrieval.outcome === 'relevant_results' && retrieval.hits.length > 0;
-
-              if (ragPrompt) {
-                generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
-              }
-
-              console.info('[Pierrot Media Intelligence]', {
-                status: retrieval.outcome,
-                publications: retrieval.hits.length,
-                fallback: retrieval.hits.some((hit) => hit.fallback),
-              });
-            } else if (useBrainV2) {
+            if (useBrainV2) {
               const retrieval = await retrieveBrainEvidenceWithRefinement({
                 query: trimmedMessage,
                 plan: brainPlan,
@@ -1250,9 +1482,19 @@ export async function POST(req: Request) {
           }
         }
 
-        reply = await callDeepSeek(generationSystemPrompt, openAiMessages, prefersReasoning);
-        usedProvider = 'deepseek';
+        const generated = await callPierrotModel(
+          generationSystemPrompt,
+          openAiMessages,
+          prefersReasoning
+        );
+        reply = generated.reply;
+        usedProvider = generated.provider;
+        usedModel = generated.model;
+        generationLatencyMs = generated.latencyMs;
+        fallbackUsed = generated.fallbackUsed;
       } catch (aiError) {
+        const failure = classifyPierrotFailure(aiError, { aborted: req.signal.aborted });
+
         if (pierrotStore && canStoreTranscript) {
           try {
             await recordPierrotEvent(pierrotStore, {
@@ -1262,7 +1504,8 @@ export async function POST(req: Request) {
               eventKey: `assistant_failed:${userMessageId}`,
               payload: {
                 message_id: userMessageId,
-                code: 'ai_unavailable',
+                code: failure.code,
+                http_status: failure.httpStatus,
               },
             });
           } catch (error) {
@@ -1278,8 +1521,30 @@ export async function POST(req: Request) {
           });
         }
 
-        console.error('[Pierrot Web Error]:', aiError);
-        return NextResponse.json({ error: 'The ether is disrupted.' }, { status: 500 });
+        logPierrotFailure({
+          operation: 'pierrot_web_generate',
+          failure,
+          latencyMs: Date.now() - startedAt,
+          error: aiError,
+          provider: usedProvider || 'gemini',
+          dependency: 'pierrot_llm',
+        });
+
+        return NextResponse.json(
+          {
+            error: pierrotErrorCopy(errorLanguage(language), failure.code),
+            code: failure.code,
+            ...(failure.retryAfterSeconds
+              ? { retryAfter: failure.retryAfterSeconds }
+              : {}),
+          },
+          {
+            status: failure.httpStatus,
+            ...(failure.retryAfterSeconds
+              ? { headers: { 'Retry-After': String(failure.retryAfterSeconds) } }
+              : {}),
+          }
+        );
       }
     }
 
@@ -1365,6 +1630,9 @@ export async function POST(req: Request) {
             message_id: assistantMessageId,
             in_reply_to: userMessageId,
             provider: usedProvider,
+            model: usedModel,
+            fallback_used: fallbackUsed,
+            generation_latency_ms: generationLatencyMs,
             length: reply.length,
             latency_ms: Date.now() - startedAt,
           },
@@ -1425,6 +1693,9 @@ export async function POST(req: Request) {
     return NextResponse.json({
       reply: finalReply,
       provider: usedProvider || undefined,
+      model: usedModel || undefined,
+      latencyMs: generationLatencyMs || undefined,
+      fallbackUsed: usedProvider ? fallbackUsed : undefined,
       ...(ragOwnerAuthorized ? { admin: true } : {}),
       ...(ownerRag ? { rag: ownerRag } : {}),
       conversationId,
@@ -1434,8 +1705,23 @@ export async function POST(req: Request) {
       recorded: canStoreTranscript,
       ...responseExtras,
     });
-  } catch (error: any) {
-    console.error('[Pierrot Web Error]:', error);
-    return NextResponse.json({ error: 'The ether is disrupted.' }, { status: 500 });
+  } catch (error: unknown) {
+    const failure = classifyPierrotFailure(error, { aborted: req.signal.aborted });
+
+    logPierrotFailure({
+      operation: 'pierrot_web_request',
+      failure,
+      latencyMs: Date.now() - requestStartedAt,
+      error,
+    });
+
+    return NextResponse.json(
+      {
+        error: pierrotErrorCopy('en', failure.code),
+        code: failure.code,
+        ...(failure.retryAfterSeconds ? { retryAfter: failure.retryAfterSeconds } : {}),
+      },
+      { status: failure.httpStatus }
+    );
   }
 }

@@ -12,6 +12,22 @@ type Item = {
   visibility: string;
   body_md: string;
   rag_allowed?: boolean;
+  ai_allowed?: boolean;
+};
+
+type AiContext = {
+  id: string;
+  item_id: string;
+  content: string | null;
+  model: string | null;
+  provider: string | null;
+  status: 'pending' | 'generating' | 'ready' | 'error';
+  error: string | null;
+  generated_at: string | null;
+  updated_at: string;
+  rag_enabled: boolean;
+  retrieval_status: string;
+  generation_version: string;
 };
 
 export default function AdminItemDetailPage({
@@ -20,14 +36,18 @@ export default function AdminItemDetailPage({
   params: { id: string };
 }) {
   const [item, setItem] = useState<Item | null>(null);
+  const [aiContext, setAiContext] = useState<AiContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [aiMessage, setAiMessage] = useState('');
 
   useEffect(() => {
     async function load() {
       const res = await fetch(`/api/admin/items/${params.id}`);
       const json = await res.json();
       setItem(json.item);
+      setAiContext(json.aiContext ?? null);
       setLoading(false);
     }
     load();
@@ -62,7 +82,55 @@ export default function AdminItemDetailPage({
       return;
     }
 
+    if (json.aiContext?.context) {
+      setAiContext(json.aiContext.context as AiContext);
+      setAiMessage('AI context generated after publication.');
+    } else if (json.aiContext?.status === 'error') {
+      setAiMessage(json.aiContext.error ?? 'AI context generation failed after publication.');
+    }
+
     alert('Saved');
+  }
+
+  async function handleGenerateAi() {
+    if (!item) return;
+
+    setGenerating(true);
+    setAiMessage('');
+
+    try {
+      const res = await fetch(`/api/admin/items/${params.id}/ai`, {
+        method: 'POST',
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        // The endpoint persists an error row. Reload it so the admin sees the
+        // real status/error instead of the previous ready content.
+        try {
+          const latest = await fetch(`/api/admin/items/${params.id}`);
+          const latestJson = await latest.json();
+          setAiContext(latestJson.aiContext ?? null);
+        } catch {
+          // Keep the error message even if the refresh fails.
+        }
+
+        setAiMessage(json.error ?? 'AI generation failed');
+        return;
+      }
+
+      if (json.context) {
+        setAiContext(json.context as AiContext);
+        setAiMessage('AI context generated and saved.');
+      } else {
+        setAiContext(null);
+        setAiMessage(json.message ?? 'AI context skipped for this item.');
+      }
+    } catch (error) {
+      setAiMessage(error instanceof Error ? error.message : 'AI generation failed');
+    } finally {
+      setGenerating(false);
+    }
   }
 
   if (loading) {
@@ -136,6 +204,73 @@ export default function AdminItemDetailPage({
             </span>
           </span>
         </label>
+
+        <section className="rounded-xl border p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Flow AI context</h2>
+              <p className="mt-1 text-xs text-stone-500">
+                One DeepSeek request per click. Public Flow reads only the saved
+                result; generated_at updates on every regeneration.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleGenerateAi}
+              disabled={generating || item.type === 'photo' || item.ai_allowed === false}
+              className="rounded-xl bg-black px-4 py-2 text-sm text-white disabled:opacity-40"
+            >
+              {generating
+                ? 'Generating...'
+                : aiContext
+                  ? 'Regenerate AI context'
+                  : 'Generate AI context'}
+            </button>
+          </div>
+
+          {item.type === 'photo' && (
+            <p className="mt-3 text-xs text-stone-500">
+              Photo items do not receive AI context by design.
+            </p>
+          )}
+          {item.ai_allowed === false && (
+            <p className="mt-3 text-xs text-[#990F3D]">
+              AI context is disabled for this item (`ai_allowed=false`).
+            </p>
+          )}
+          {aiMessage && (
+            <p className="mt-3 rounded-lg bg-stone-100 px-3 py-2 text-xs text-stone-700">
+              {aiMessage}
+            </p>
+          )}
+
+          {aiContext && (
+            <div className="mt-4 space-y-2 border-t pt-4 text-xs text-stone-600">
+              <p>
+                status: <strong>{aiContext.status}</strong>
+                {' · '}model: {aiContext.model ?? '—'}
+                {' · '}provider: {aiContext.provider ?? '—'}
+              </p>
+              <p>
+                generated_at: {aiContext.generated_at ?? '—'}
+                {' · '}retrieval: {aiContext.retrieval_status}
+                {' · '}version: {aiContext.generation_version}
+              </p>
+              {aiContext.error && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-red-700">
+                  {aiContext.error}
+                </p>
+              )}
+              {aiContext.content ? (
+                <div className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-stone-50 p-3 font-serif text-sm leading-relaxed">
+                  {aiContext.content}
+                </div>
+              ) : (
+                <p>No saved content yet.</p>
+              )}
+            </div>
+          )}
+        </section>
 
         <div>
           <label className="mb-1 block text-sm font-medium">Body</label>

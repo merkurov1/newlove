@@ -106,6 +106,7 @@ export function fetchHumanPresenceState(input: {
   token?: string | null;
   conversationId?: string | null;
   sessionId?: string | null;
+  afterSequence?: number | null;
   signal?: AbortSignal;
 }): Promise<HumanApiResult<HumanPresenceStateResponse>> {
   return postJson<HumanPresenceStateResponse>(
@@ -114,6 +115,9 @@ export function fetchHumanPresenceState(input: {
       ...(input.token ? { token: input.token } : {}),
       ...(input.conversationId ? { conversationId: input.conversationId } : {}),
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      ...(typeof input.afterSequence === 'number' && input.afterSequence >= 0
+        ? { afterSequence: input.afterSequence }
+        : {}),
     },
     input.signal,
   );

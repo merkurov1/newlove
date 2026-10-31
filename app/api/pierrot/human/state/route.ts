@@ -46,6 +46,13 @@ export async function POST(req: Request) {
   const token = isHumanAccessToken(rawToken) ? rawToken : null;
   const conversationId = body?.conversationId;
   const sessionId = body?.sessionId;
+  const rawAfterSequence = body?.afterSequence;
+  const afterSequence =
+    typeof rawAfterSequence === 'number' &&
+    Number.isSafeInteger(rawAfterSequence) &&
+    rawAfterSequence >= 0
+      ? rawAfterSequence
+      : undefined;
 
   if (!token && (!isPierrotId(conversationId) || !isPierrotId(sessionId))) {
     return NextResponse.json(
@@ -102,7 +109,7 @@ export async function POST(req: Request) {
       }).catch(() => undefined);
     }
 
-    const payload = await buildHumanStateResponse(store, record);
+    const payload = await buildHumanStateResponse(store, record, afterSequence);
 
     return NextResponse.json(payload, { headers: NO_STORE });
   } catch {

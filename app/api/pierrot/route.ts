@@ -20,6 +20,7 @@ import {
   getActiveHumanSessionForOwner,
   getHumanPresenceByRequestId,
   getHumanPresenceByTelegramMessage,
+  getPendingHumanRequestForOwner,
   publicHumanState,
   recordHumanEvent,
 } from '@/lib/pierrot/humanPresence';
@@ -33,6 +34,7 @@ import {
   isHumanOwnerTelegramUser,
   sendOwnerConfirmation,
 } from '@/lib/pierrot/humanPresenceTelegram';
+import { planOwnerHumanRouting } from '@/lib/pierrot/humanRouting';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -281,7 +283,7 @@ async function acceptHumanRequestReplacingActive(
   requestId: string,
   owner: number
 ) {
-  let result = await acceptHumanRequest(store, requestId, owner);
+  const result = await acceptHumanRequest(store, requestId, owner);
 
   if (result.result !== 'owner_busy') return result;
 
@@ -513,15 +515,24 @@ async function routeOwnerHumanText(ctx: Context): Promise<boolean> {
 
   try {
     const replyTo = ctx.message?.reply_to_message?.message_id;
-    let target = replyTo
+    const replyTarget = replyTo
       ? await getHumanPresenceByTelegramMessage(store, owner, replyTo)
       : null;
+    const activeTarget = replyTarget
+      ? null
+      : await getActiveHumanSessionForOwner(store, owner);
 
-    if (!target) {
-      target = await getActiveHumanSessionForOwner(store, owner);
-    }
+    // A plain message with no Reply and no active session is still a valid
+    // answer to the only notification waiting for this owner. With several
+    // pending requests the lookup returns null instead of guessing.
+    const pendingTarget =
+      replyTarget || activeTarget ? null : await getPendingHumanRequestForOwner(store, owner);
 
-    if (!target) return false;
+    const plan = planOwnerHumanRouting({ replyTarget, activeTarget, pendingTarget });
+
+    if (!plan) return false;
+
+    let target = plan.target;
 
     if (
       target.session &&
@@ -531,10 +542,10 @@ async function routeOwnerHumanText(ctx: Context): Promise<boolean> {
       return true;
     }
 
-    // Replying directly to a pending notification is an explicit acceptance.
-    // This is the natural Telegram gesture and avoids the silent dead end
-    // where the owner types a reply but it is routed nowhere.
-    if (target.request.status === 'pending' && replyTo) {
+    // Sending any text in response to a pending request is an explicit
+    // acceptance. This covers both Telegram Reply and the single-pending
+    // fallback above, so a natural "just type back" gesture never dead-ends.
+    if (plan.autoAccept) {
       const accepted = await acceptHumanRequestReplacingActive(
         store,
         target.request.id,

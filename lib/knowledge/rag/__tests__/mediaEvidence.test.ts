@@ -1,10 +1,74 @@
 /** @jest-environment node */
 
-import {
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import type { MediaEvidenceResult } from '../mediaEvidence';
+
+jest.mock('@/lib/mediaRecords', () => ({
+  getMediaRecords: jest.fn(),
+}));
+
+jest.mock('@/lib/knowledge/media/search', () => ({
+  searchMediaIntelligence: jest.fn(),
+}));
+
+const {
   buildMediaEvidencePrompt,
   buildMediaEvidenceSources,
-  type MediaEvidenceResult,
-} from '../mediaEvidence';
+  retrieveMediaEvidence,
+} = require('../mediaEvidence') as typeof import('../mediaEvidence');
+
+const mediaRecords = require('@/lib/mediaRecords') as {
+  getMediaRecords: {
+    mockResolvedValue: (value: unknown) => void;
+    mock: { calls: unknown[][] };
+  };
+};
+const mediaSearch = require('@/lib/knowledge/media/search') as {
+  searchMediaIntelligence: {
+    mockResolvedValue: (value: unknown) => void;
+    mock: { calls: unknown[][] };
+  };
+};
+
+const records = [
+  {
+    id: 'media-old',
+    slug: 'old',
+    title: 'Older interview',
+    outlet: 'Le Monde',
+    url: 'https://example.com/old',
+    date: '2026-09-01',
+    lang: 'FR',
+    kind: 'interview',
+    topic: 'Internet & Censorship',
+    summary: 'An interview about digital control.',
+  },
+  {
+    id: 'media-new',
+    slug: 'new',
+    title: 'Latest press mention',
+    outlet: 'Новая газета',
+    url: 'https://example.com/new',
+    date: '2026-10-24',
+    lang: 'RU',
+    kind: 'mention',
+    topic: 'Internet & Censorship',
+    summary: 'A recent mention of Anton Merkurov.',
+  },
+];
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mediaRecords.getMediaRecords.mockResolvedValue(records);
+  mediaSearch.searchMediaIntelligence.mockResolvedValue({
+    results: [],
+    summary: '',
+    facts: [],
+    interpretation: [],
+    insufficient: true,
+    count: 0,
+  });
+});
 
 const result: MediaEvidenceResult = {
   outcome: 'relevant_results',
@@ -66,5 +130,29 @@ describe('Pierrot media evidence', () => {
       quoteType: 'direct_quote',
       verificationStatus: 'verified',
     });
+  });
+
+  it('orders latest-coverage questions by date without a semantic call', async () => {
+    const response = await retrieveMediaEvidence({
+      query: 'Какие последние СМИ меня цитировали?',
+      limit: 8,
+      ownerAccess: true,
+    });
+
+    expect(response.outcome).toBe('relevant_results');
+    expect(response.hits.map((hit) => hit.date)).toEqual(['2026-10-24', '2026-09-01']);
+    expect(response.hits[0].outlet).toBe('Новая газета');
+    expect(mediaSearch.searchMediaIntelligence).not.toHaveBeenCalled();
+  });
+
+  it('never sends public media questions through the owner semantic index', async () => {
+    await retrieveMediaEvidence({
+      query: 'What did the press write about digital control?',
+      limit: 8,
+      ownerAccess: false,
+    });
+
+    expect(mediaSearch.searchMediaIntelligence).not.toHaveBeenCalled();
+    expect(mediaRecords.getMediaRecords).toHaveBeenCalled();
   });
 });

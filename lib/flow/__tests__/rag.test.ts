@@ -436,6 +436,17 @@ describe('Flow AI RAG prompt and result metadata', () => {
     expect(refs[0]?.sourceUrl).toBeNull();
   });
 
+  it('throws when every provider fails instead of reporting a successful skip', async () => {
+    await expect(
+      generateFlowContext(item, {
+        ragEnabled: false,
+        complete: async () => {
+          throw new Error('provider down');
+        },
+      })
+    ).rejects.toThrow('provider down');
+  });
+
   it('does not expose retrieval provenance columns to public pages', () => {
     expect(FLOW_AI_CONTEXT_PUBLIC_COLUMNS).not.toContain('source_refs');
     expect(FLOW_AI_CONTEXT_PUBLIC_COLUMNS).not.toContain('source_document_ids');

@@ -56,6 +56,11 @@ import {
   type BrainLanguage,
 } from '@/lib/pierrot/brain';
 import {
+  normalizePierrotErrorCode,
+  pierrotErrorCopy,
+  type PierrotErrorLanguage,
+} from '@/lib/pierrot/errorContracts';
+import {
   isPierrotOfferId,
   isVerifiedPierrotInternalDestination,
   normalizePierrotOfferCta,
@@ -99,6 +104,7 @@ export type PierrotMessage = {
   createdAt?: string;
   delivery?: PierrotDeliveryState;
   sequence?: number;
+  error?: boolean;
 };
 
 type PierrotContextValue = {
@@ -135,13 +141,32 @@ type PierrotContextValue = {
 
 const PierrotContext = createContext<PierrotContextValue | null>(null);
 
-const STORAGE_KEY = 'pierrot_chat_history_v2';
-const ARRIVAL_STORAGE_KEY = 'pierrot_navigation_arrival_v1';
+const STORAGE_KEY = 'pierrot_chat_history_v2';const ARRIVAL_STORAGE_KEY = 'pierrot_navigation_arrival_v1';
 const ONBOARDING_STORAGE_KEY = 'pierrot_onboarding_v1';
 const BRAIN_UNLOCK_STORAGE_KEY = 'pierrot_brain_unlocked_v1';
 const INTRO_DELAY_MS = 420;
 const ONBOARDING_FIRST_NUDGE_MS = 10_000;
 const ONBOARDING_SECOND_NUDGE_MS = 10_000;
+
+type PierrotWebResponse = {
+  reply?: unknown;
+  provider?: unknown;
+  admin?: unknown;
+  actions?: unknown;
+  links?: unknown;
+  cta?: unknown;
+  commercialMarker?: unknown;
+  rag?: unknown;
+  offerId?: unknown;
+  conversationId?: unknown;
+  sessionId?: unknown;
+  human?: unknown;
+  humanToken?: unknown;
+  humanMode?: unknown;
+  error?: unknown;
+  code?: unknown;
+  retryAfter?: unknown;
+};
 
 const PIERROT_ONBOARDING_LINKS: PierrotMessageLink[] = [
   { label: 'Anton Merkurov', href: '/' },
@@ -435,6 +460,7 @@ function normalizeMessage(value: unknown, index: number): PierrotMessage | null 
       typeof message.sequence === 'number' && Number.isFinite(message.sequence)
         ? message.sequence
         : undefined,
+    error: message.error === true ? true : undefined,
   };
 }
 
@@ -661,7 +687,23 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      setHumanState(request);
+      // A closed session must never look live in the browser, even if the
+      // request row still says "active" during a partial write.
+      let effectiveRequest = request;
+
+      if (
+        request.status === 'active' &&
+        payload.session &&
+        payload.session.status !== 'active'
+      ) {
+        effectiveRequest = {
+          ...request,
+          status: 'closed',
+          closedAt: payload.session.closedAt ?? request.closedAt,
+        };
+      }
+
+      setHumanState(effectiveRequest);
 
       if (payload.messages.length > 0) {
         setMessages((current) => {
@@ -737,7 +779,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      const noticeKey = `${request.requestId}:${request.status}`;
+      const noticeKey = `${effectiveRequest.requestId}:${effectiveRequest.status}`;
 
       if (humanNoticeRef.current === noticeKey) return;
 
@@ -746,7 +788,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       );
       const copy = getHumanCopy(humanLanguage());
 
-      if (request.status === 'active') {
+      if (effectiveRequest.status === 'active') {
         humanNoticeRef.current = noticeKey;
 
         // Stop any AI answer that was already in flight when Anton accepted,
@@ -761,22 +803,11 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (request.status === 'closed') {
-        humanNoticeRef.current = noticeKey;
-        if (!noticeAlreadyPresent) {
-          appendHumanNotice(request.resolvedBy === 'visitor' ? copy.ended : copy.closed, noticeKey);
-        }
-        clearHumanAccessToken();
-        humanTokenRef.current = null;
-        setHumanState(null);
-        return;
-      }
-
-      if (request.status === 'declined') {
+      if (effectiveRequest.status === 'closed') {
         humanNoticeRef.current = noticeKey;
         if (!noticeAlreadyPresent) {
           appendHumanNotice(
-            request.resolvedBy === 'visitor' ? copy.cancelled : copy.declined,
+            effectiveRequest.resolvedBy === 'visitor' ? copy.ended : copy.closed,
             noticeKey
           );
         }
@@ -786,7 +817,21 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (request.status === 'expired') {
+      if (effectiveRequest.status === 'declined') {
+        humanNoticeRef.current = noticeKey;
+        if (!noticeAlreadyPresent) {
+          appendHumanNotice(
+            effectiveRequest.resolvedBy === 'visitor' ? copy.cancelled : copy.declined,
+            noticeKey
+          );
+        }
+        clearHumanAccessToken();
+        humanTokenRef.current = null;
+        setHumanState(null);
+        return;
+      }
+
+      if (effectiveRequest.status === 'expired') {
         humanNoticeRef.current = noticeKey;
         if (!noticeAlreadyPresent) appendHumanNotice(copy.expired, noticeKey);
         clearHumanAccessToken();
@@ -930,10 +975,19 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       humanPollInFlightRef.current = true;
 
       try {
+        const afterSequence = messagesRef.current.reduce(
+          (max, message) =>
+            typeof message.sequence === 'number' && message.sequence > max
+              ? message.sequence
+              : max,
+          0
+        );
+
         const result = await fetchHumanPresenceState({
           token: humanTokenRef.current,
           conversationId: getPierrotConversationId(),
           sessionId: getPierrotSessionId(),
+          afterSequence: afterSequence > 0 ? afterSequence : undefined,
         });
 
         if (!cancelled && result.ok && result.data) {
@@ -1468,7 +1522,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       const timeoutId = window.setTimeout(() => {
         timedOut = true;
         controller.abort();
-      }, 35000);
+      }, 50000);
 
       const previousMessages = messagesRef.current;
       const userMessage: PierrotMessage = {
@@ -1516,9 +1570,10 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
             history: previousMessages
               .filter(
                 (message) =>
-                  message.role === 'user' ||
-                  message.role === 'assistant' ||
-                  message.role === 'human'
+                  !message.error &&
+                  (message.role === 'user' ||
+                    message.role === 'assistant' ||
+                    message.role === 'human')
               )
               .map(({ role, content, offerId, commercialMarker }) => ({
                 // Anton's human turns become assistant context so Piero can
@@ -1532,13 +1587,15 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
           signal: controller.signal,
         });
 
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => null)) as PierrotWebResponse | null;
 
         // The server refuses to run the AI while Anton is present. Switch the
         // same message into the human transport instead of showing an error.
-        if (response.status === 409 && data?.humanMode) {
+        if (response.status === 409 && data?.humanMode === true) {
           const serverHuman =
-            data.human && isHumanRequestStatus(data.human.status)
+            data.human &&
+            typeof data.human === 'object' &&
+            isHumanRequestStatus((data.human as Record<string, unknown>).status)
               ? (data.human as HumanPresencePublicState)
               : null;
 
@@ -1564,21 +1621,50 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (!response.ok) {
-          throw new Error(data.error || `Error ${response.status}`);
+          const requestError = new Error(
+            typeof data?.error === 'string' && data.error
+              ? data.error
+              : `Request failed with status ${response.status}`
+          ) as Error & { code?: string | null; status?: number; retryAfter?: number };
+
+          requestError.name = 'PierrotHttpError';
+          requestError.code = normalizePierrotErrorCode(data?.code);
+          requestError.status = response.status;
+          requestError.retryAfter =
+            typeof data?.retryAfter === 'number' ? data.retryAfter : undefined;
+
+          throw requestError;
         }
 
         if (requestIdRef.current !== requestId) return;
 
-        setPierrotConversationId(data.conversationId);
+        if (!data || typeof data.reply !== 'string' || !data.reply.trim()) {
+          const emptyError = new Error('Pierrot returned no readable answer.') as Error & {
+            code?: string;
+          };
+          emptyError.name = 'PierrotEmptyResponse';
+          emptyError.code = 'INVALID_RESPONSE';
+          throw emptyError;
+        }
 
-        if (data.human && isHumanRequestStatus(data.human.status)) {
-          if (typeof data.humanToken === 'string' && typeof data.human.requestId === 'string') {
+        if (typeof data.conversationId === 'string') {
+          setPierrotConversationId(data.conversationId);
+        }
+
+        if (
+          data.human &&
+          typeof data.human === 'object' &&
+          isHumanRequestStatus((data.human as Record<string, unknown>).status)
+        ) {
+          const humanState = data.human as HumanPresencePublicState;
+
+          if (typeof data.humanToken === 'string' && typeof humanState.requestId === 'string') {
             humanTokenRef.current = data.humanToken;
-            saveHumanAccessToken(data.humanToken, data.human.requestId);
+            saveHumanAccessToken(data.humanToken, humanState.requestId);
           }
 
           applyHumanState({
-            request: data.human as HumanPresencePublicState,
+            request: humanState,
             session: null,
             conversationId:
               typeof data.conversationId === 'string'
@@ -1619,10 +1705,10 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
 
         appendMessage({
           role: 'assistant',
-          content: data.reply || 'Silence.',
+          content: typeof data.reply === 'string' ? data.reply : '',
           author: 'pierrot',
           createdAt: new Date().toISOString(),
-          provider: data.provider,
+          provider: typeof data.provider === 'string' ? data.provider : undefined,
           actions: responseActions.length > 0 ? responseActions : undefined,
           links: responseLinks.length > 0 ? responseLinks : undefined,
           offerId:
@@ -1640,13 +1726,41 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
 
         if (isAbort && !timedOut) return;
 
-        console.error('[Pierrot] Chat error:', error);
+        const typedError = error as {
+          code?: string | null;
+          status?: number;
+          retryAfter?: number;
+        };
+        const status = typedError.status;
+        let code = normalizePierrotErrorCode(typedError.code);
+
+        if (!code && timedOut) code = 'AI_TIMEOUT';
+        if (!code && isAbort) code = 'NETWORK_ERROR';
+        if (!code && typeof status === 'number') {
+          code =
+            status === 429
+              ? 'AI_RATE_LIMITED'
+              : status === 504
+                ? 'AI_TIMEOUT'
+                : status >= 500
+                  ? 'AI_UNAVAILABLE'
+                  : 'AI_FAILED';
+        }
+        if (!code) code = 'NETWORK_ERROR';
+
+        const language: PierrotErrorLanguage = humanLanguage() === 'en' ? 'en' : 'ru';
+
+        console.warn('[Pierrot] Chat request failed', {
+          status: typeof status === 'number' ? status : 0,
+          code,
+        });
 
         appendMessage({
           role: 'assistant',
-          content: timedOut
-            ? 'The response is taking too long. Please try again.'
-            : 'The connection was interrupted. Please try again.',
+          author: 'pierrot',
+          content: pierrotErrorCopy(language, code),
+          createdAt: new Date().toISOString(),
+          error: true,
           meta: { kind: 'chat' },
         });
       } finally {
@@ -1662,11 +1776,14 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     [
       appendBrainExamples,
       appendMessage,
+      applyHumanState,
       canUseUnframedMode,
       cancelOnboarding,
       currentBrainLanguage,
       draft,
       executeNavigation,
+      hasChosenUnframedMode,
+      humanLanguage,
       introduceSection,
       isUnframedMode,
       pathname,

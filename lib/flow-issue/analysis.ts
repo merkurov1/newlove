@@ -12,7 +12,7 @@ import type {
  * Bump this when the prompt, fields, or score semantics change. Cached
  * analyses with a different version are recomputed, never silently reused.
  */
-export const ANALYSIS_VERSION = 2;
+export const ANALYSIS_VERSION = 3;
 
 export const HEURISTIC_MODEL = "heuristic-fallback";
 
@@ -48,6 +48,9 @@ const CachedAnalysisSchema = AnalysisResponseSchema.extend({
   contentHash: z.string().min(1),
   model: z.string().min(1),
   at: z.string().min(1),
+  provider: z.enum(["gemini", "deepseek"]).optional(),
+  latencyMs: z.number().nonnegative().optional(),
+  fallbackUsed: z.boolean().optional(),
 });
 
 const STOP_WORDS = new Set([

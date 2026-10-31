@@ -6,14 +6,16 @@ import remarkGfm from 'remark-gfm';
 import { notFound } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
-import { generateFlowContext } from '@/lib/flow/ai';
 import {
   FLOW_AI_CONTEXT_PUBLIC_COLUMNS,
-  flowAiContextReadyPayload,
 } from '@/lib/flow/aiContext';
 import PierrotContextBlock from '@/components/flow/PierrotContextBlock';
 
-export const maxDuration = 60;
+// A ready `flow_ai_context` row is written by the admin endpoint. Render the
+// page per request so a regeneration is visible immediately, without creating
+// a second generation path for public traffic.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -1056,65 +1058,9 @@ export default async function FlowItemPage({ params }: PageProps) {
 
   let context = (contextData as AIContext | null) ?? null;
 
-  // Flow AI context is part of the public Flow experience: generate it on the
-  // first public view when it is missing, then persist it so later views are
-  // cache reads. Owner knowledge can never enter this path because
-  // generateFlowContext uses the public-only retrieval allowlist.
-  const shouldGenerateContext =
-    item.ai_allowed !== false &&
-    item.type !== 'photo' &&
-    item.status === 'published' &&
-    item.visibility === 'public' &&
-    !contextError &&
-    !contextData;
-
-  if (shouldGenerateContext) {
-    try {
-      const generated = await generateFlowContext({
-        id: item.id,
-        type: item.type,
-        title: item.title,
-        body_md: item.body_md,
-        source_url: item.source_url,
-        metadata: item.metadata,
-        lang: item.lang || 'ru',
-        rag_allowed: item.rag_allowed,
-      });
-
-      if (generated?.content) {
-        const now = new Date().toISOString();
-
-        const { data: savedContext, error: saveError } = await supabase
-          .from('flow_ai_context')
-          .upsert(flowAiContextReadyPayload(item.id, generated), {
-            onConflict: 'item_id',
-          })
-          .select(FLOW_AI_CONTEXT_PUBLIC_COLUMNS)
-          .maybeSingle();
-
-        if (saveError) {
-          console.warn('[flow/item] Could not save AI context:', saveError);
-        }
-
-        context = savedContext
-          ? (savedContext as AIContext)
-          : {
-              id: 'generated',
-              item_id: item.id,
-              content: generated.content,
-              model: generated.model,
-              provider: generated.provider || 'pierrot',
-              status: 'ready',
-              generated_at: now,
-            };
-      }
-    } catch (genError) {
-      console.warn(
-        '[flow/item] On-demand Pierrot context generation failed:',
-        genError
-      );
-    }
-  }
+  // Public Flow only reads a ready context written by the admin endpoint.
+  // Generation must never run on a page view; see
+  // app/api/admin/items/[id]/ai/route.ts.
 
   const siteUrl = 'https://www.merkurov.love';
   const itemUrl =

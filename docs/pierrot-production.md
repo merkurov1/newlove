@@ -13,6 +13,14 @@
   `knowledge_documents.public_retrieval_allowed = true`.
 - Manuscripts and `personal_writing` are never public-retrievable.
 
+## Model providers
+
+Pierrot uses `gemini-3.5-flash` as the primary model and falls back
+automatically to DeepSeek Direct, then OpenRouter DeepSeek. The same system
+prompt, history and RAG evidence are preserved across providers. Owner
+authorization, retrieval boundaries and the non-streaming response contract are
+unchanged. See `docs/gemini-integration.md`.
+
 ## Retrieval quality
 
 Owner retrieval now uses deterministic refinement:

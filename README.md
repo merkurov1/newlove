@@ -85,7 +85,8 @@ Start with [`.env.example`](./.env.example). The core variables currently docume
 | `SUPABASE_SERVICE_ROLE_KEY`       | Privileged server-side Supabase access; **never expose to the browser**                                                     |
 | `TELEGRAM_WEBHOOK_SECRET`         | Secret used to validate configured Telegram webhook requests                                                                |
 | `TELEGRAM_WEBHOOK_ENFORCE_SECRET` | Set to `1` only after the webhook is registered with `secret_token` matching `TELEGRAM_WEBHOOK_SECRET`; otherwise leave off |
-| `DEEPSEEK_API_KEY`                | DeepSeek key used by Pierrot, Brain graph extraction, Flow AI and Media Intelligence                                        |
+| `GEMINI_API_KEY`                  | Primary Gemini key for Pierrot, Flow item context and Flow issue analysis                                                  |
+| `DEEPSEEK_API_KEY`                | DeepSeek key used as the automatic fallback and by graph/media intelligence                                                |
 | `OPENROUTER_API_KEY`              | Server-only embeddings key (`baai/bge-m3`, 1024 dimensions)                                                                 |
 | `CRON_SECRET`                     | Bearer secret required by every `/api/cron/*` worker route                                                                  |
 | `PIERROT_RAG_ENABLED`             | Owner Brain retrieval flag; `true` in production for verified owners                                                        |
@@ -185,6 +186,7 @@ Deployment and migration instructions may apply only to particular legacy or fea
 - [Media source ingestion](./docs/media-source-ingestion.md)
 - [Pierrot production readiness](./docs/pierrot-production.md)
 - [Flow public RAG](./docs/flow-ai-rag.md)
+- [Gemini integration](./docs/gemini-integration.md)
 - [Production operations](./docs/production-operations.md)
 - Operations dashboard: `/admin/operations` (admin-only)
 

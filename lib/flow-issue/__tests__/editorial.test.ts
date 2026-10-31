@@ -1,4 +1,5 @@
 import {
+  ANALYSIS_VERSION,
   HEURISTIC_MODEL,
   heuristicAnalysis,
 } from "../analysis";
@@ -17,7 +18,7 @@ function analysis(overrides: Partial<IssueAI> = {}): IssueAI {
     kind: "world",
     model: "test-model",
     at: "2026-10-01T00:00:00.000Z",
-    schemaVersion: 2,
+    schemaVersion: ANALYSIS_VERSION,
     contentHash: "test",
     topic: "general",
     subtopic: "",

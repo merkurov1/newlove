@@ -38,14 +38,38 @@ with `400` even if an administrator tries to approve them.
 - per item: `items.rag_allowed = false` (admin item page checkbox) generates
   context from the item itself only.
 
-Existing `flow_ai_context` rows are never regenerated automatically. When a
-public Flow item has no context yet, the first public view generates it once
-and persists the ready row; all later views read the stored row. If generation
-fails, the page falls back to item-only presentation and retries on a later
-view. The admin AI endpoint can still regenerate one item explicitly.
+Public pages never call the model. They read only a `ready` row from
+`flow_ai_context`.
+
+Context is generated automatically once after publication (admin PATCH or
+Flow item POST) through `ensurePublishedFlowContext()`, and can also be
+regenerated explicitly by an administrator:
+
+```text
+POST /api/admin/items/<item-id>/ai
+Authorization: admin session, admin Bearer JWT or Telegram initData
+```
+
+The admin item page has **Generate AI context** / **Regenerate AI context**.
+Each action makes one Gemini attempt and, only on failure, one DeepSeek attempt;
+the OpenRouter DeepSeek fallback remains available. It then:
+
+- writes `status = generating` before the call;
+- on success writes `status = ready`, `content`, `model`, `provider`,
+  `generated_at` and public-only provenance;
+- on failure writes `status = error` with the error message and returns `500`;
+- on a photo item returns `skipped` without calling the model.
+
+Existing rows never block explicit regeneration: the endpoint always upserts
+by `item_id`, so an administrator can refresh a stale or failed item.
+Automatic post-publish generation is skipped when a row already exists. No
+batch, cron or public-page trigger regenerates items.
 
 Generation is bounded by the shared LLM timeout, token budget and circuit
-breaker, so an outage fails fast instead of hanging page rendering.
+breaker. Gemini is primary; DeepSeek Direct and OpenRouter DeepSeek are the
+automatic fallbacks. A provider failure is thrown, persisted as `error`, and is
+never reported as a successful skip. The actual provider, model, latency and
+fallback flag are stored in `retrieval_diagnostics.generation`.
 
 ## Retrieval workflow
 
@@ -96,6 +120,45 @@ interpretation only: previous-material connections, thematic continuity,
 recurring ideas, historical context, authorial concepts, cultural/technological
 parallels and the item's place in Flow. It explicitly forbids retelling,
 long quotation, bibliographies and invented sources.
+
+## Recovery notes (2026-10-31)
+
+The endpoint appeared to return HTTP 200 while saving nothing. Two independent
+causes were found:
+
+1. `generateFlowContext()` swallowed provider failures and returned `null`.
+   The route interpreted `null` as “intentionally skipped”, deleted the row and
+   returned `{ success: true, skipped: true }`.
+2. The OpenRouter fallback still targeted `deepseek/deepseek-r1:free`, which
+   OpenRouter no longer serves (404).
+3. `readInt()` in `lib/operations/config.ts` parsed an unset variable as `''`
+   → `Number('')` → `0`, then clamped it to the minimum. With no
+   `OPS_FLOW_LLM_TIMEOUT_MS` configured, the Flow LLM timeout silently became
+   **1 second**, which is why the direct DeepSeek request timed out. The same
+   bug reduced the Flow token budget to its minimum (100 tokens) and made the
+   circuit-breaker failure threshold **1** instead of 3.
+
+Fixes:
+
+- blank/unset limit variables now use documented defaults (`readInt` returns
+  the fallback before parsing);
+- provider failures now throw `FlowAIGenerationError`; the route persists
+  `status = error` and returns `500`;
+- the fallback list contains only the available `deepseek/deepseek-chat`;
+- the admin endpoint allows draft/private items so context can be prepared
+  before publishing;
+- `DEEPSEEK_BASE_URL` is honoured for controlled testing and self-hosted
+  OpenAI-compatible endpoints;
+- the admin item page exposes the saved status, content, model, provider,
+  generation time and error, with a regeneration button.
+
+Verified end-to-end against the real Supabase project with the real route:
+unauthorized `401`, first generation saved `ready`, regeneration changed
+`content` and `generated_at`, a forced provider failure saved `error` and
+returned `500`, recovery returned to `ready`, photo items were skipped, and a
+published Flow page rendered the saved context. The successful-provider test
+used an OpenAI-compatible local stub because the production DeepSeek key is a
+Vercel secret that cannot be read from the sandbox.
 
 ## Runtime safety
 

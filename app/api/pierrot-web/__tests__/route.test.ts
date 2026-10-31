@@ -40,6 +40,18 @@ jest.mock('@/lib/knowledge/rag/pierrotContext', () => {
   };
 });
 
+jest.mock('@/lib/knowledge/rag/mediaEvidence', () => {
+  const actual = jest.requireActual('@/lib/knowledge/rag/mediaEvidence') as Record<
+    string,
+    unknown
+  >;
+
+  return {
+    ...actual,
+    retrieveMediaEvidence: jest.fn(),
+  };
+});
+
 jest.mock('@/lib/rateLimit', () => ({
   checkRateLimit: jest.fn(() => null),
   getClientIp: jest.fn(() => 'test-client'),
@@ -102,6 +114,11 @@ const retrieval = require('@/lib/knowledge/rag/retrieval') as {
 };
 const circuitBreaker = require('@/lib/operations/circuitBreaker') as {
   resetCircuitBreakerState: () => void;
+  recordCircuitFailure: (input: {
+    dependency: 'llm' | 'pierrot_llm';
+    errorCode: string;
+    client: null;
+  }) => Promise<void>;
 };
 const serviceInquiryStore = require('@/lib/pierrot/serviceInquiryStore') as {
   advanceStoredServiceInquiry: {
@@ -109,8 +126,26 @@ const serviceInquiryStore = require('@/lib/pierrot/serviceInquiryStore') as {
     mockResolvedValue: (value: unknown) => void;
   };
 };
-const { POST } = require('../route') as {
+const mediaEvidence = require('@/lib/knowledge/rag/mediaEvidence') as {
+  retrieveMediaEvidence: {
+    mock: { calls: unknown[][] };
+    mockResolvedValue: (value: unknown) => void;
+    mockResolvedValueOnce: (value: unknown) => void;
+  };
+};
+const { POST, callPierrotModel } = require('../route') as {
   POST: (request: Request) => Promise<Response>;
+  callPierrotModel: (
+    systemPrompt: string,
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+    isReasoning?: boolean
+  ) => Promise<{
+    reply: string;
+    provider: string;
+    model: string;
+    latencyMs: number;
+    fallbackUsed: boolean;
+  }>;
 };
 
 const mockCreate = asMock(OpenAIModule.__createMock);
@@ -146,6 +181,8 @@ function validBody(overrides: Record<string, unknown> = {}): Record<string, unkn
 beforeEach(() => {
   jest.clearAllMocks();
   circuitBreaker.resetCircuitBreakerState();
+  // Legacy tests exercise the DeepSeek path with a mocked OpenAI client.
+  delete process.env.GEMINI_API_KEY;
   mockRecord.length = 0;
 
   asMock(pierrotStore.createPierrotStore).mockReturnValue({ mocked: true });
@@ -177,6 +214,10 @@ beforeEach(() => {
     hits: [],
     latencyMs: 1,
     topSimilarity: null,
+  });
+  mediaEvidence.retrieveMediaEvidence.mockResolvedValue({
+    outcome: 'no_match',
+    hits: [],
   });
 
   mockCreate.mockReset();
@@ -439,16 +480,20 @@ describe('POST /api/pierrot-web persistence', () => {
     const response = await POST(makeRequest(validBody()));
     const json = await response.json();
 
-    expect(response.status).toBe(500);
-    expect(json).toEqual({ error: 'The ether is disrupted.' });
+    expect(response.status).toBe(502);
+    expect(json).toMatchObject({
+      code: 'AI_FAILED',
+      error: expect.any(String),
+    });
 
     const failureCall = asMock(pierrotStore.recordPierrotEvent).mock.calls.find(
       (call) => (call[1] as { eventName?: string }).eventName === 'assistant_failed'
     ) as [unknown, { payload?: unknown }] | undefined;
 
-    expect(failureCall?.[1].payload).toEqual({
+    expect(failureCall?.[1].payload).toMatchObject({
       message_id: userMessageId,
-      code: 'ai_unavailable',
+      code: 'AI_FAILED',
+      http_status: 502,
     });
     expect(JSON.stringify(failureCall?.[1])).not.toContain('SECRET');
     expect(JSON.stringify(json)).not.toContain('SECRET');
@@ -649,5 +694,243 @@ describe('POST /api/pierrot-web persistence', () => {
     expect(json.recorded).toBe(false);
     expect(pierrotStore.createPierrotStore).not.toHaveBeenCalled();
     expect(pierrotStore.appendPierrotMessage).not.toHaveBeenCalled();
+  });
+
+  it('returns a distinct timeout contract instead of a generic network error', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const timeoutError = new Error('Request timed out.') as Error & { name: string };
+    timeoutError.name = 'APIConnectionTimeoutError';
+    mockCreate.mockRejectedValue(timeoutError);
+
+    try {
+      const response = await POST(makeRequest(validBody()));
+      const json = (await response.json()) as { code?: string; error?: string };
+
+      expect(response.status).toBe(504);
+      expect(json.code).toBe('AI_TIMEOUT');
+      expect(json.error).toBeTruthy();
+      expect(json.error).not.toContain('timed out');
+      expect(json.error).not.toContain('Request');
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('keeps background LLM failures from opening the Pierrot chat circuit', async () => {
+    for (let index = 0; index < 3; index += 1) {
+      await circuitBreaker.recordCircuitFailure({
+        dependency: 'llm',
+        errorCode: 'background_timeout',
+        client: null,
+      });
+    }
+
+    const response = await POST(makeRequest(validBody()));
+    expect(response.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+
+    for (let index = 0; index < 3; index += 1) {
+      await circuitBreaker.recordCircuitFailure({
+        dependency: 'pierrot_llm',
+        errorCode: 'chat_timeout',
+        client: null,
+      });
+    }
+
+    const blocked = await POST(makeRequest(validBody()));
+    const blockedJson = (await blocked.json()) as { code?: string; retryAfter?: number };
+
+    expect(blocked.status).toBe(503);
+    expect(blockedJson.code).toBe('AI_TEMPORARILY_UNAVAILABLE');
+    expect(blockedJson.retryAfter).toBeGreaterThan(0);
+  });
+
+  it('uses Media Intelligence for latest coverage questions', async () => {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: 'owner-1',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+    mediaEvidence.retrieveMediaEvidence.mockResolvedValueOnce({
+      outcome: 'relevant_results',
+      hits: [
+        {
+          mediaRecordId: 'media-1',
+          documentId: 'doc-1',
+          chunkId: 'chunk-1',
+          title: 'Digital control',
+          outlet: 'Le Monde',
+          date: '2026-10-13',
+          language: 'fr',
+          canonicalUrl: 'https://example.com/article',
+          topic: 'Internet & Censorship',
+          textQuality: 'full_text',
+          excerpt: 'A publication excerpt.',
+          quotes: [],
+          verificationStatus: 'unverified',
+          similarity: 0.8,
+          fallback: false,
+        },
+      ],
+    });
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          message: 'Какие последние СМИ меня цитировали?',
+          mode: 'unframed',
+        })
+      )
+    );
+    const json = (await response.json()) as {
+      rag?: { mode?: string; outcome?: string; sources?: Array<{ canonicalUrl?: string }> };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.rag?.mode).toBe('media');
+    expect(json.rag?.outcome).toBe('relevant_results');
+    expect(json.rag?.sources?.[0]?.canonicalUrl).toBe('https://example.com/article');
+    expect(mediaEvidence.retrieveMediaEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: 'Какие последние СМИ меня цитировали?',
+        ownerAccess: true,
+      })
+    );
+  });
+
+  it('uses public-safe media evidence for a public latest-coverage question', async () => {
+    mediaEvidence.retrieveMediaEvidence.mockResolvedValueOnce({
+      outcome: 'relevant_results',
+      hits: [
+        {
+          mediaRecordId: 'media-1',
+          documentId: 'doc-1',
+          chunkId: 'chunk-1',
+          title: 'Digital control',
+          outlet: 'Le Monde',
+          date: '2026-10-13',
+          language: 'fr',
+          canonicalUrl: 'https://example.com/article',
+          topic: 'Internet & Censorship',
+          textQuality: 'full_text',
+          excerpt: 'A publication excerpt.',
+          quotes: [],
+          verificationStatus: 'none',
+          similarity: null,
+          fallback: true,
+        },
+      ],
+    });
+
+    const response = await POST(
+      makeRequest(validBody({ message: 'What are the latest media publications?' }))
+    );
+    const json = (await response.json()) as { rag?: { mode?: string } };
+
+    expect(response.status).toBe(200);
+    expect(json.rag?.mode).toBe('media');
+    expect(mediaEvidence.retrieveMediaEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({ ownerAccess: false })
+    );
+  });
+});
+
+
+describe('Pierrot model provider failover', () => {
+  const originalFetch = global.fetch;
+  const originalGeminiKey = process.env.GEMINI_API_KEY;
+
+  function geminiResponse(text: string) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text }] } }],
+      }),
+    } as Response;
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    circuitBreaker.resetCircuitBreakerState();
+    process.env.GEMINI_API_KEY = 'test-gemini';
+    process.env.DEEPSEEK_API_KEY = 'test-deepseek';
+    process.env.OPENROUTER_API_KEY = '';
+    process.env.OPS_CIRCUIT_FAILURE_THRESHOLD = '5';
+    global.fetch = jest.fn() as unknown as typeof fetch;
+    mockCreate.mockReset();
+  });
+
+  afterAll(() => {
+    global.fetch = originalFetch;
+    if (originalGeminiKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = originalGeminiKey;
+  });
+
+  it('uses Gemini first and preserves the system prompt and history', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(geminiResponse('gemini reply'));
+
+    const result = await callPierrotModel('system prompt', [
+      { role: 'user', content: 'hello' },
+    ]);
+
+    expect(result).toMatchObject({
+      reply: 'gemini reply',
+      provider: 'gemini',
+      model: 'gemini-3.5-flash',
+      fallbackUsed: false,
+    });
+    expect(mockCreate).not.toHaveBeenCalled();
+
+    const body = JSON.parse(String((global.fetch as jest.Mock).mock.calls[0][1].body));
+    expect(body.systemInstruction.parts[0].text).toBe('system prompt');
+    expect(body.contents[0].parts[0].text).toBe('hello');
+  });
+
+  it('falls back to DeepSeek Direct on Gemini 429', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      json: async () => ({ error: { message: 'quota exceeded' } }),
+    } as Response);
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: 'deepseek reply' } }],
+    });
+
+    const result = await callPierrotModel('system prompt', [
+      { role: 'user', content: 'hello' },
+    ]);
+
+    expect(result).toMatchObject({
+      reply: 'deepseek reply',
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      fallbackUsed: true,
+    });
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns to Gemini after the circuit recovers', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: async () => ({ error: { message: 'down' } }),
+      } as Response)
+      .mockResolvedValueOnce(geminiResponse('gemini again'));
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: 'deepseek first' } }],
+    });
+
+    const first = await callPierrotModel('system prompt', [
+      { role: 'user', content: 'hello' },
+    ]);
+    expect(first.provider).toBe('deepseek');
+
+    circuitBreaker.resetCircuitBreakerState();
+    const second = await callPierrotModel('system prompt', [
+      { role: 'user', content: 'hello' },
+    ]);
+    expect(second.provider).toBe('gemini');
   });
 });
