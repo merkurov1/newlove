@@ -28,15 +28,18 @@ export class RagConfigurationError extends Error {
 export class EmbeddingProviderError extends Error {
   readonly code: RagErrorCode;
   readonly status: number | null;
+  readonly retryAfterSeconds: number | null;
 
   constructor(
     reason: 'request_failed' | 'invalid_response' | 'empty_response',
-    status: number | null = null
+    status: number | null = null,
+    retryAfterSeconds: number | null = null
   ) {
     super(`embedding_provider reason=${reason}${status === null ? '' : ` status=${status}`}`);
     this.name = 'EmbeddingProviderError';
     this.code = reason === 'request_failed' ? 'embedding_provider' : 'embedding_transport';
     this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 

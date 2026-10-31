@@ -5,12 +5,14 @@ import { computeBrainProgress, type BrainProgress } from '@/lib/knowledge/brain/
 import { createBrainStore } from '@/lib/knowledge/brain/store';
 import { enqueueMediaCoverageJob } from '@/lib/knowledge/media/queue';
 import { parseMediaBulkBody, planMediaBulkInputs } from '@/lib/knowledge/media/bulk';
+import { assertEnqueueLimit, assertQueueCapacity } from '@/lib/operations/budgets';
+import { maxEnqueuePerRequest } from '@/lib/operations/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const MAX_URLS = 200;
+const MAX_URLS = maxEnqueuePerRequest();
 
 type BulkRow = {
   input: string;
@@ -91,6 +93,14 @@ export async function POST(request: Request) {
 
   if (inputs.length === 0) {
     return json({ error: 'Provide at least one URL.' }, 400);
+  }
+
+  try {
+    assertEnqueueLimit(inputs.length);
+    await assertQueueCapacity('brain');
+  } catch (error) {
+    const code = error instanceof Error ? error.message : 'queue_limit_reached';
+    return json({ error: code }, code.startsWith('queue_limit') ? 429 : 503);
   }
 
   const rows: BulkRow[] = [];

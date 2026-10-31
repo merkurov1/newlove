@@ -75,18 +75,18 @@ describe('Telegram Pierrot uses the single conversation window', () => {
   it('opens the same window as the web, with avatar, name, reset and close', async () => {
     render(app());
 
-    expect(screen.getByRole('button', { name: 'Open Pierrot' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Open Pierrot/ })).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Open World, Temple and rituals navigation' })
     ).toBeInTheDocument();
 
-    const launcher = screen.getByRole('button', {
-      name: 'Open Pierrot conversation',
-    });
-    expect(launcher.style.bottom).toContain('56px');
+    // The single header P control replaces the retired floating launcher.
+    expect(
+      screen.queryByRole('button', { name: 'Open Pierrot conversation' })
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('Merkurov')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Pierrot' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Open Pierrot/ }));
 
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('Pierrot')).toBeInTheDocument();
@@ -97,30 +97,26 @@ describe('Telegram Pierrot uses the single conversation window', () => {
     expect(
       screen.queryByRole('button', { name: 'Open World, Temple and rituals navigation' })
     ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Open Pierrot conversation' })
-    ).not.toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close Pierrot' }));
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: 'Open Pierrot' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Open Pierrot/ })).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Open World, Temple and rituals navigation' })
     ).toBeInTheDocument();
   });
 
-  it('opens the same window from the home launcher, above Telegram navigation', async () => {
+  it('does not render a duplicate floating Pierrot launcher in Telegram', async () => {
     render(app());
 
-    const launcher = screen.getByRole('button', {
-      name: 'Open Pierrot conversation',
-    });
-    expect(launcher.style.bottom).toContain('56px');
+    expect(
+      screen.queryByRole('button', { name: 'Open Pierrot conversation' })
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(launcher);
+    fireEvent.click(screen.getByRole('button', { name: /^Open Pierrot/ }));
 
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('textbox', { name: 'Message Pierrot' })).toBeInTheDocument();
@@ -130,6 +126,8 @@ describe('Telegram Pierrot uses the single conversation window', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: 'Open Pierrot conversation' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Open Pierrot conversation' })
+    ).not.toBeInTheDocument();
   });
 });

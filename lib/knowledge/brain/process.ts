@@ -160,9 +160,12 @@ export function computeBrainProgress(jobs: BrainJobRow[]): BrainProgress {
   };
 }
 
-export function retryDelaySeconds(attempts: number): number {
+export function retryDelaySeconds(attempts: number, random: number = Math.random()): number {
   const safeAttempts = Math.max(1, Math.trunc(attempts || 1));
-  return Math.min(900, 15 * 2 ** (safeAttempts - 1));
+  const base = Math.min(900, 15 * 2 ** (safeAttempts - 1));
+  const jitter = 0.85 + Math.min(0.999, Math.max(0, random)) * 0.3;
+
+  return Math.max(1, Math.min(900, Math.round(base * jitter)));
 }
 
 function isRetryable(error: unknown): boolean {
@@ -1968,7 +1971,11 @@ export async function processNextBrainJob(options: ProcessNextOptions): Promise<
     const code = errorCode(error);
     const retryable = isRetryable(error);
     const canRetry = retryable && job.attempts < job.max_attempts;
-    const delaySeconds = retryDelaySeconds(job.attempts);
+    const retryAfter =
+      error instanceof BrainUrlError || error instanceof EmbeddingProviderError
+        ? error.retryAfterSeconds
+        : null;
+    const delaySeconds = retryAfter ?? retryDelaySeconds(job.attempts);
 
     const extractedQuality = extractedArticle ? evaluateMediaTextQuality(extractedArticle) : null;
     const failure = extractedQuality

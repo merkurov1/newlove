@@ -7,6 +7,16 @@ import {
   type MediaAnalysisStore,
 } from '@/lib/knowledge/media/analysisStore';
 import { MEDIA_ANALYZER_VERSION } from '@/lib/knowledge/media/intelligence';
+import { assertEnqueueLimit, getQueueSnapshot } from '@/lib/operations/budgets';
+import {
+  assertCircuitClosed,
+  circuitIsOpen,
+  recordCircuitFailure,
+  recordCircuitSuccess,
+} from '@/lib/operations/circuitBreaker';
+import { workerLimits, maxEnqueuePerRequest } from '@/lib/operations/config';
+import { beginWorkerInvocation } from '@/lib/operations/guard';
+import { recordOpsEvent } from '@/lib/operations/events';
 
 export type MediaAnalysisEnqueueMode = 'all' | 'selected' | 'retry_failed';
 
@@ -28,6 +38,8 @@ export type MediaAnalysisBatchResult = {
   failed: number;
   retried: number;
   skipped: number;
+  stoppedBy?: 'drained' | 'max_jobs' | 'time_budget' | 'circuit_open';
+  skippedReason?: string;
   results: Array<
     | ({ mediaRecordId: string; runId: string; status: 'completed' } & RunMediaAnalysisResult)
     | { mediaRecordId: string; runId: string; status: 'failed'; error: string }
@@ -80,13 +92,38 @@ export async function enqueueMediaAnalyses(input: {
   limit?: number;
   requestedBy?: string | null;
   store?: MediaAnalysisStore | null;
+  skipGuard?: boolean;
 }): Promise<MediaAnalysisEnqueueResult> {
   const store = input.store === undefined ? createMediaAnalysisStore() : input.store;
 
   if (!store) throw new Error('media_analysis_database_unavailable');
 
-  const limit = Math.min(Math.max(input.limit || 100, 1), 2000);
+  const limit = Math.min(
+    Math.max(input.limit || maxEnqueuePerRequest(), 1),
+    maxEnqueuePerRequest()
+  );
+  assertEnqueueLimit(limit);
+  const skipGuard = input.skipGuard ?? input.store !== undefined;
   let candidates: MediaAnalysisEligibleInput[] = [];
+
+  const assertCapacity = async () => {
+    if (skipGuard) return;
+
+    const snapshot = await getQueueSnapshot('media');
+    if (snapshot.queued + candidates.length > snapshot.maxQueue) {
+      await recordOpsEvent({
+        event: 'queue_limit_reached',
+        scope: 'media',
+        severity: 'warning',
+        details: {
+          queued: snapshot.queued,
+          requested: candidates.length,
+          max_queue: snapshot.maxQueue,
+        },
+      });
+      throw new Error('queue_limit_reached:media');
+    }
+  };
 
   if (input.mode === 'retry_failed') {
     const recent = await store.listRecentRuns(1000);
@@ -130,6 +167,7 @@ export async function enqueueMediaAnalyses(input: {
         alreadyQueuedRecordIds: [],
       };
 
+      await assertCapacity();
       await enqueueCandidates(store, candidates, input, result);
       result.queued = result.queuedRecordIds.length;
       result.alreadyQueued = result.alreadyQueuedRecordIds.length;
@@ -149,6 +187,7 @@ export async function enqueueMediaAnalyses(input: {
     alreadyQueuedRecordIds: [],
   };
 
+  await assertCapacity();
   await enqueueCandidates(store, candidates, input, result);
   result.queued = result.queuedRecordIds.length;
   result.alreadyQueued = result.alreadyQueuedRecordIds.length;
@@ -238,11 +277,15 @@ export async function processMediaAnalysisBatch(input: {
 
   if (!store) throw new Error('media_analysis_database_unavailable');
 
+  const limits = workerLimits('media');
   const workerId =
     input.workerId || `media-analysis-${input.trigger || 'admin'}-${Date.now().toString(36)}`;
-  const limit = Math.min(Math.max(input.limit || 3, 1), 40);
-  const maxDurationMs = Math.min(Math.max(input.maxDurationMs || 240_000, 10_000), 280_000);
-  const startedAt = Date.now();
+  const limit = Math.min(Math.max(input.limit || limits.maxJobs, 1), limits.maxJobs);
+  const maxDurationMs = Math.min(
+    Math.max(input.maxDurationMs || limits.maxDurationMs, 10_000),
+    limits.maxDurationMs
+  );
+  const skipGuard = input.store !== undefined;
   const result: MediaAnalysisBatchResult = {
     workerId,
     claimed: 0,
@@ -250,59 +293,123 @@ export async function processMediaAnalysisBatch(input: {
     failed: 0,
     retried: 0,
     skipped: 0,
+    stoppedBy: 'drained',
     results: [],
   };
 
-  while (result.claimed < limit && Date.now() - startedAt < maxDurationMs) {
-    const run = await store.claimNextRun(workerId);
+  const guard = await beginWorkerInvocation({
+    scope: 'media',
+    trigger: input.trigger || 'admin',
+    workerId,
+    maxDurationMs,
+    skipGuard,
+  });
 
-    if (!run) break;
+  if (!guard.ok) {
+    result.skippedReason = guard.reason;
+    return result;
+  }
 
-    result.claimed += 1;
+  try {
+    while (result.claimed < limit) {
+      if (guard.remainingMs() < 5_000) {
+        result.stoppedBy = 'time_budget';
+        break;
+      }
 
-    const timer = setInterval(() => {
-      void store.heartbeatRun(run.id).catch(() => undefined);
-    }, 60_000);
+      if (result.claimed >= limits.maxLlmCalls) {
+        result.stoppedBy = 'max_jobs';
+        break;
+      }
 
-    try {
-      const analysis = await runAnalysis({
-        mediaRecordId: run.media_record_id,
-        runId: run.id,
-        force: run.force_refresh,
-        model: run.model || undefined,
-      });
+      if (!skipGuard) {
+        try {
+          await assertCircuitClosed('llm');
+        } catch {
+          result.stoppedBy = 'circuit_open';
+          await recordOpsEvent({
+            event: 'worker_skipped',
+            scope: 'media',
+            workerId,
+            severity: 'warning',
+            details: { reason: 'circuit_open', dependency: 'llm' },
+          });
+          break;
+        }
+      }
 
-      result.processed += 1;
-      result.results.push({
-        ...analysis,
-        mediaRecordId: run.media_record_id,
-        runId: run.id,
-        status: 'completed',
-      });
-    } catch (error) {
-      const code = error instanceof Error ? error.message : 'media_analysis_failed';
-      const retried = isRetryableError(code) && run.attempt < run.max_attempts;
+      const run = await store.claimNextRun(workerId);
 
-      // Safety net for errors raised before runMediaAnalysis could persist them
-      // (for example a missing document or an invalid input).
-      await store
-        .failRun(run.id, code, error instanceof Error ? error.message : 'Media analysis failed', {
-          retryable: retried,
-        })
-        .catch(() => undefined);
+      if (!run) break;
 
-      if (retried) result.retried += 1;
-      else result.failed += 1;
+      result.claimed += 1;
 
-      result.results.push({
-        mediaRecordId: run.media_record_id,
-        runId: run.id,
-        status: 'failed',
-        error: code,
-      });
-    } finally {
-      clearInterval(timer);
+      const timer = setInterval(() => {
+        void store.heartbeatRun(run.id).catch(() => undefined);
+      }, 60_000);
+
+      if (typeof timer.unref === 'function') timer.unref();
+
+      try {
+        const analysis = await runAnalysis({
+          mediaRecordId: run.media_record_id,
+          runId: run.id,
+          force: run.force_refresh,
+          model: run.model || undefined,
+        });
+
+        result.processed += 1;
+        result.results.push({
+          ...analysis,
+          mediaRecordId: run.media_record_id,
+          runId: run.id,
+          status: 'completed',
+        });
+
+        if (!skipGuard) {
+          await recordCircuitSuccess('llm');
+        }
+      } catch (error) {
+        const code = error instanceof Error ? error.message : 'media_analysis_failed';
+        const retried = isRetryableError(code) && run.attempt < run.max_attempts;
+
+        if (!skipGuard && !circuitIsOpen(error)) {
+          await recordCircuitFailure({
+            dependency: 'llm',
+            errorCode: code,
+            permanent: !retried,
+          });
+        }
+
+        // Safety net for errors raised before runMediaAnalysis could persist them
+        // (for example a missing document or an invalid input).
+        await store
+          .failRun(run.id, code, error instanceof Error ? error.message : 'Media analysis failed', {
+            retryable: retried,
+          })
+          .catch(() => undefined);
+
+        if (retried) result.retried += 1;
+        else result.failed += 1;
+
+        result.results.push({
+          mediaRecordId: run.media_record_id,
+          runId: run.id,
+          status: 'failed',
+          error: code,
+        });
+      } finally {
+        clearInterval(timer);
+      }
     }
+  } finally {
+    await guard.finish({
+      status: result.failed > 0 ? 'completed_with_errors' : 'completed',
+      processed: result.processed,
+      failed: result.failed,
+      stoppedBy: result.stoppedBy,
+      errorCode: result.failed > 0 ? 'media_analysis_errors' : null,
+    });
   }
 
   return result;

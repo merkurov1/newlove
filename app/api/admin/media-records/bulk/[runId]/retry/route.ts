@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { authorizeKnowledgeAdmin } from '@/lib/knowledge/adminAuth';
 import { computeBrainProgress } from '@/lib/knowledge/brain/process';
 import { createBrainStore } from '@/lib/knowledge/brain/store';
+import { assertQueueCapacity } from '@/lib/operations/budgets';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,6 +33,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
     const run = await store.getRun(runId);
 
     if (!run) return json({ error: 'Run not found.' }, 404);
+
+    await assertQueueCapacity('brain');
 
     const reset = await store.resetFailedJobs(runId);
     await store.updateRun(runId, { status: 'running', completed_at: null });

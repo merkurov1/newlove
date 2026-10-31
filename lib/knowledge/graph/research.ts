@@ -4,10 +4,12 @@ import { clampConfidence } from './normalize';
 import type { BrainGraphStore } from './store';
 import type {
   BrainCitation,
+  BrainDocumentForGraph,
   BrainEntityType,
   BrainResearchAnswer,
 } from './types';
 import { retrieveBrainEvidence } from '@/lib/knowledge/rag/brainRetrieval';
+import { buildBrainQueryPlan } from '@/lib/knowledge/rag/queryRouting';
 import { retrieveUnframedEvidence } from '@/lib/knowledge/rag/retrieval';
 
 type ChatJson = (system: string, user: string) => Promise<unknown>;
@@ -68,6 +70,158 @@ function asksAboutGaps(question: string): boolean {
   return /(not explored|under[- ]?explored|missing|gap|insufficient|not written|haven't written|have not written|не раскрыт|не исследован|недостаточно|пробел|не писал|не освещ|чего не хватает)/i.test(
     question
   );
+}
+
+export type PublicationInventorySource = 'novaya';
+
+export type PublicationInventory = {
+  source: PublicationInventorySource;
+  label: string;
+  documents: BrainDocumentForGraph[];
+  count: number;
+  totalChunks: number;
+};
+
+function documentDomain(document: BrainDocumentForGraph): string {
+  const candidates = [
+    document.canonical_url,
+    document.source_url,
+    typeof document.metadata?.source_domain === 'string'
+      ? document.metadata.source_domain
+      : null,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    try {
+      return new URL(candidate).hostname.toLowerCase().replace(/^www\./, '');
+    } catch {
+      // Continue to the next candidate.
+    }
+  }
+
+  return '';
+}
+
+export function detectPublicationInventoryQuestion(
+  question: string
+): PublicationInventorySource | null {
+  const text = normalize(question);
+  const asksNovaya =
+    text.includes('новой газет') ||
+    text.includes('новую газет') ||
+    text.includes('новая газета') ||
+    text.includes('novaya gazeta') ||
+    text.includes('novayagazeta');
+
+  if (!asksNovaya) return null;
+
+  const asksCount = /(?:сколько|how many)/i.test(text);
+  const asksList =
+    /(?:найти|найди|покажи|перечисли|выведи|list|find|show)/i.test(text) &&
+    /(?:все|all)/i.test(text);
+  const namesPublications =
+    /(?:колонк|стат|публикац|материал|заметк|текст|columns?|articles?|publications?|pieces?)/i.test(
+      text
+    );
+
+  return asksCount || (asksList && namesPublications) ? 'novaya' : null;
+}
+
+export function selectPublicationInventory(
+  source: PublicationInventorySource,
+  documents: BrainDocumentForGraph[],
+  range?: { from?: string | null; to?: string | null }
+): PublicationInventory {
+  const from = range?.from ? Date.parse(range.from) : null;
+  const to = range?.to ? Date.parse(range.to) : null;
+  const seen = new Set<string>();
+  const selected: BrainDocumentForGraph[] = [];
+
+  for (const document of documents) {
+    if (source === 'novaya') {
+      if (document.source_type !== 'article') continue;
+
+      const domain = documentDomain(document);
+      if (domain !== 'novayagazeta.ru' && domain !== 'novayagazeta.eu') continue;
+    }
+
+    if (from !== null || to !== null) {
+      const published = document.published_at ? Date.parse(document.published_at) : NaN;
+
+      if (!Number.isFinite(published)) continue;
+      if (from !== null && published < from) continue;
+      if (to !== null && published > to) continue;
+    }
+
+    const key = document.canonical_url || document.source_url || document.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    selected.push(document);
+  }
+
+  selected.sort((left, right) => {
+    const leftDate = left.published_at ? Date.parse(left.published_at) : 0;
+    const rightDate = right.published_at ? Date.parse(right.published_at) : 0;
+    return rightDate - leftDate || left.title.localeCompare(right.title);
+  });
+
+  return {
+    source,
+    label: source === 'novaya' ? 'Новая газета' : source,
+    documents: selected,
+    count: selected.length,
+    totalChunks: selected.reduce((sum, document) => sum + document.chunk_count, 0),
+  };
+}
+
+export function inventoryAnswer(
+  inventory: PublicationInventory,
+  question: string,
+  range?: { from?: string | null; to?: string | null }
+): string {
+  const ru = /[\u0400-\u04FF]/.test(question);
+  const lines: string[] = [];
+  const period =
+    range?.from || range?.to
+      ? `${range.from ? range.from.slice(0, 10) : '…'} — ${
+          range.to ? range.to.slice(0, 10) : '…'
+        }`
+      : null;
+
+  if (ru) {
+    lines.push(
+      `В индексированном Brain сейчас ${inventory.count} уникальных материалов «${inventory.label}» (${inventory.totalChunks} chunks).`
+    );
+    lines.push(
+      'Считаю только source_type=article по домену novayagazeta.ru/.eu; дубликаты media_coverage исключены.'
+    );
+    if (period) lines.push(`Период публикаций: ${period}.`);
+    lines.push('');
+    lines.push('Список:');
+  } else {
+    lines.push(
+      `The indexed Brain currently contains ${inventory.count} unique ${inventory.label} articles (${inventory.totalChunks} chunks).`
+    );
+    lines.push(
+      'Only source_type=article documents on novayagazeta.ru/.eu are counted; media_coverage duplicates are excluded.'
+    );
+    if (period) lines.push(`Publication period: ${period}.`);
+    lines.push('');
+    lines.push('List:');
+  }
+
+  inventory.documents.forEach((document, index) => {
+    const date = document.published_at ? document.published_at.slice(0, 10) : 'date not set';
+    lines.push(`${index + 1}. ${date} — ${document.title.slice(0, 240)}`);
+  });
+
+  if (inventory.count === 0) {
+    lines.push(ru ? 'Материалов по этому фильтру не найдено.' : 'No documents matched this filter.');
+  }
+
+  return lines.join('\n');
 }
 
 const RESEARCH_SYSTEM = [
@@ -190,11 +344,76 @@ export async function answerBrainResearchQuestion(input: {
     .slice(0, 10)
     .map((entry) => entry.summary);
 
+  const graphRelationships = matchedRelationships.map((relationship) => {
+    const source = entityById.get(relationship.source_entity_id);
+    const target = entityById.get(relationship.target_entity_id);
+    const document = documentById.get(relationship.provenance_document_id);
+
+    return {
+      source: source?.canonical_name || relationship.source_entity_id,
+      target: target?.canonical_name || relationship.target_entity_id,
+      relation: relationship.relation_type,
+      confidence: Number(relationship.confidence),
+      inference: Boolean(relationship.inference),
+      document_id: relationship.provenance_document_id,
+      document_title: document?.title || null,
+      chunk_id: relationship.provenance_chunk_id,
+      evidence: relationship.evidence,
+    };
+  });
+
+  const inventorySource = detectPublicationInventoryQuestion(question);
+
+  if (inventorySource) {
+    const inventoryPlan = buildBrainQueryPlan(question);
+    const inventory = selectPublicationInventory(inventorySource, documents, {
+      from: inventoryPlan.publishedFrom,
+      to: inventoryPlan.publishedTo,
+    });
+    const answer = inventoryAnswer(inventory, question, {
+      from: inventoryPlan.publishedFrom,
+      to: inventoryPlan.publishedTo,
+    });
+
+    return {
+      answer,
+      citations: inventory.documents.map((document) => ({
+        documentId: document.id,
+        documentTitle: document.title,
+        chunkId: '',
+        heading: document.title,
+        sectionPath: [],
+        similarity: null,
+        publishedAt: document.published_at,
+        sourceType: document.source_type,
+      })),
+      entities: matchedEntities.slice(0, 20).map((entity) => ({
+        id: entity.id,
+        name: entity.canonical_name,
+        type: entity.entity_type,
+        description: entity.description,
+      })),
+      relationships: graphRelationships.slice(0, 40),
+      retrieval: {
+        outcome: 'relevant_results',
+        documentIds: inventory.documents.map((document) => document.id),
+        chunkIds: [],
+        latencyMs: 0,
+      },
+      graphContext: {
+        matchedEntities: matchedEntities.length,
+        matchedRelationships: graphRelationships.length,
+        summaries: matchedSummaries.length,
+      },
+      caveat:
+        'This count describes the indexed Brain corpus, not the publication’s complete archive. media_coverage duplicates are excluded.',
+    };
+  }
+
   let retrieval: Awaited<ReturnType<typeof retrieveUnframedEvidence>> = await retrieveBrainEvidence({
     query: question,
     scope: 'owner',
     ownerAuthorized: true,
-    enabled: true,
   });
 
   if (retrieval.outcome === 'unavailable') {
@@ -202,7 +421,6 @@ export async function answerBrainResearchQuestion(input: {
       query: question,
       scope: 'owner',
       ownerAuthorized: true,
-      enabled: true,
     });
   }
 
@@ -248,24 +466,6 @@ export async function answerBrainResearchQuestion(input: {
       summary.scope_type === 'document' &&
       retrieval.hits.some((hit) => (summary.document_ids || []).includes(hit.documentId))
   );
-
-  const graphRelationships = matchedRelationships.map((relationship) => {
-    const source = entityById.get(relationship.source_entity_id);
-    const target = entityById.get(relationship.target_entity_id);
-    const document = documentById.get(relationship.provenance_document_id);
-
-    return {
-      source: source?.canonical_name || relationship.source_entity_id,
-      target: target?.canonical_name || relationship.target_entity_id,
-      relation: relationship.relation_type,
-      confidence: Number(relationship.confidence),
-      inference: Boolean(relationship.inference),
-      document_id: relationship.provenance_document_id,
-      document_title: document?.title || null,
-      chunk_id: relationship.provenance_chunk_id,
-      evidence: relationship.evidence,
-    };
-  });
 
   const raw = await chatJson(
     RESEARCH_SYSTEM,

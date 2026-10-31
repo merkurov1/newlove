@@ -100,6 +100,9 @@ const retrieval = require('@/lib/knowledge/rag/retrieval') as {
     mock: { calls: unknown[][] };
   };
 };
+const circuitBreaker = require('@/lib/operations/circuitBreaker') as {
+  resetCircuitBreakerState: () => void;
+};
 const serviceInquiryStore = require('@/lib/pierrot/serviceInquiryStore') as {
   advanceStoredServiceInquiry: {
     mock: { calls: unknown[][] };
@@ -142,6 +145,7 @@ function validBody(overrides: Record<string, unknown> = {}): Record<string, unkn
 
 beforeEach(() => {
   jest.clearAllMocks();
+  circuitBreaker.resetCircuitBreakerState();
   mockRecord.length = 0;
 
   asMock(pierrotStore.createPierrotStore).mockReturnValue({ mocked: true });

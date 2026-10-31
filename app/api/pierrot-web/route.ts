@@ -99,6 +99,12 @@ import {
   type HumanPresencePublicState,
 } from '@/lib/pierrot/humanPresenceShared';
 import { isHumanPresenceConfigured, notifyHumanRequest } from '@/lib/pierrot/humanPresenceTelegram';
+import {
+  assertCircuitClosed,
+  recordCircuitFailure,
+  recordCircuitSuccess,
+} from '@/lib/operations/circuitBreaker';
+import { globalLimits } from '@/lib/operations/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -178,25 +184,46 @@ async function callDeepSeek(
     throw new Error('DEEPSEEK_API_KEY is not configured.');
   }
 
+  await assertCircuitClosed('llm');
+  const limits = globalLimits();
   const client = new OpenAI({
     baseURL: 'https://api.deepseek.com',
     apiKey,
+    timeout: limits.pierrotLlmTimeoutMs,
+    maxRetries: 0,
   });
 
   const model = isReasoning ? 'deepseek-reasoner' : 'deepseek-chat';
 
-  const completion = await client.chat.completions.create({
-    model,
-    messages: [{ role: 'system', content: systemPrompt }, ...messages],
-    temperature: isReasoning ? undefined : 0.7,
-  });
+  try {
+    const completion = await client.chat.completions.create({
+      model,
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
+      temperature: isReasoning ? undefined : 0.7,
+      max_tokens: limits.pierrotLlmMaxTokens,
+    });
 
-  const reply = completion.choices[0]?.message?.content;
-  if (!reply) {
-    throw new Error('DeepSeek returned empty response.');
+    const reply = completion.choices[0]?.message?.content;
+    if (!reply) {
+      throw new Error('DeepSeek returned empty response.');
+    }
+
+    await recordCircuitSuccess('llm');
+    return reply.trim();
+  } catch (error) {
+    const status = (error as { status?: unknown } | null)?.status;
+    const permanent =
+      typeof status === 'number' && [400, 401, 402, 403, 404].includes(status);
+
+    await recordCircuitFailure({
+      dependency: 'llm',
+      errorCode:
+        error instanceof Error ? error.message.slice(0, 120) : 'deepseek_request_failed',
+      permanent,
+    });
+
+    throw error;
   }
-
-  return reply.trim();
 }
 
 export async function POST(req: Request) {

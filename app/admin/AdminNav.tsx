@@ -11,6 +11,7 @@ const groups = [
       { href: '/admin/flow-issues', label: 'Газета Flow', icon: '📰' },
       { href: '/admin/media', label: 'Медиа публикации', icon: '▦' },
       { href: '/admin/media/intelligence', label: 'Media Intelligence', icon: '◔' },
+      { href: '/admin/operations', label: 'Operations', icon: '⚙' },
       { href: '/flow', label: 'Стрим Flow', icon: '≋' },
     ],
   },

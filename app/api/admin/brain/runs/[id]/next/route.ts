@@ -5,6 +5,7 @@ import { queueGraphForIngestionRun } from '@/lib/knowledge/brain/graphQueue';
 import { processNextBrainJob } from '@/lib/knowledge/brain/process';
 import { createBrainStore } from '@/lib/knowledge/brain/store';
 import { createOpenRouterEmbeddingClientFromEnv } from '@/lib/knowledge/rag/embeddings';
+import { beginWorkerInvocation } from '@/lib/operations/guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,30 +33,41 @@ export async function POST(
 
   if (!store) return json({ error: 'Knowledge database is not configured.' }, 503);
 
-  let embeddingClient;
-
-  try {
-    embeddingClient = createOpenRouterEmbeddingClientFromEnv(process.env);
-  } catch {
-    return json(
-      {
-        error:
-          'Embedding is not configured. Set UNFRAMED_EMBEDDING_MODEL=baai/bge-m3 and OPENROUTER_API_KEY.',
-      },
-      503
-    );
-  }
-
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   const autoGraph = !(body && typeof body === 'object' && body.autoGraph === false);
+  const workerId = `admin-brain-next-${Date.now()}`;
+  const guard = await beginWorkerInvocation({
+    scope: 'brain',
+    trigger: 'admin',
+    workerId,
+    maxDurationMs: 240_000,
+  });
+
+  if (!guard.ok) {
+    return json({ status: 'skipped', reason: guard.reason }, 200);
+  }
 
   try {
+    let embeddingClient;
+
+    try {
+      embeddingClient = createOpenRouterEmbeddingClientFromEnv(process.env);
+    } catch {
+      return json(
+        {
+          error:
+            'Embedding is not configured. Set UNFRAMED_EMBEDDING_MODEL=baai/bge-m3 and OPENROUTER_API_KEY.',
+        },
+        503
+      );
+    }
+
     const result = await processNextBrainJob({
       runId: id,
       store,
       embeddingClient,
-      workerId: `admin-${Date.now()}`,
+      workerId,
     });
 
     if (result.state === 'done') {
@@ -80,5 +92,7 @@ export async function POST(
       },
       message === 'brain_run_not_found' ? 404 : 500
     );
+  } finally {
+    await guard.finish({ status: 'completed' });
   }
 }

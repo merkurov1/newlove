@@ -69,6 +69,7 @@ function UnreadStatus() {
 function renderApp() {
   return render(
     <PierrotProvider>
+      <Header />
       <HomeClient />
       <PierrotChat />
       <OpenChatButton />
@@ -81,6 +82,7 @@ function renderApp() {
 function renderLobbyApp() {
   return render(
     <PierrotProvider>
+      <Header />
       <LobbyClient />
       <PierrotChat />
       <OpenChatButton />
@@ -115,6 +117,7 @@ describe('Pierrot conversational navigation', () => {
     global.fetch = fetchMock as unknown as typeof fetch;
 
     window.sessionStorage.clear();
+    window.sessionStorage.setItem('pierrot_onboarding_v1', '1');
     window.localStorage.clear();
   });
 
@@ -122,23 +125,19 @@ describe('Pierrot conversational navigation', () => {
     renderApp();
 
     expect(screen.queryByRole('textbox', { name: 'Message Pierrot' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Pierrot conversation' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Open Pierrot/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
 
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('textbox', { name: 'Message Pierrot' })).toBeInTheDocument();
     expect(within(dialog).getByText('Structure is the antidote to chaos.')).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Open Pierrot conversation' })
-    ).not.toBeInTheDocument();
-
     fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: 'Open Pierrot conversation' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Open Pierrot/ })).toBeInTheDocument();
   });
 
   it('keeps the site header and shows the Pierrot identity inside the window', async () => {
@@ -160,10 +159,10 @@ describe('Pierrot conversational navigation', () => {
     expect(screen.getByText('Merkurov')).toBeInTheDocument();
   });
 
-  it('opens the same window from the homepage launcher', async () => {
+  it('opens the same window from the site header P control', async () => {
     renderApp();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Pierrot conversation' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Open Pierrot/ }));
 
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('textbox', { name: 'Message Pierrot' })).toBeInTheDocument();
@@ -173,7 +172,7 @@ describe('Pierrot conversational navigation', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: 'Open Pierrot conversation' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Open Pierrot/ })).toBeInTheDocument();
   });
 
   it('sends a short message from the Pierrot window', async () => {

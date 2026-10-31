@@ -11,11 +11,13 @@ import net from 'node:net';
 
 export class BrainUrlError extends Error {
   readonly code: string;
+  readonly retryAfterSeconds: number | null;
 
-  constructor(code: string) {
+  constructor(code: string, retryAfterSeconds: number | null = null) {
     super(code);
     this.name = 'BrainUrlError';
     this.code = code;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -51,6 +53,18 @@ const TRACKING_PREFIXES = ['utm_', 'mtm_', 'pk_', 'piwik_', 'ga_'];
 function isTrackingParam(name: string): boolean {
   const lower = name.toLowerCase();
   return TRACKING_PARAMS.has(lower) || TRACKING_PREFIXES.some((prefix) => lower.startsWith(prefix));
+}
+
+function retryAfterSeconds(value: string | null): number | null {
+  if (!value) return null;
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds > 0) return Math.min(3600, Math.ceil(seconds));
+
+  const date = Date.parse(value);
+  if (!Number.isFinite(date)) return null;
+
+  return Math.max(0, Math.min(3600, Math.ceil((date - Date.now()) / 1000)));
 }
 
 function stripBrackets(value: string): string {
@@ -403,7 +417,10 @@ export async function fetchHtmlSafely(
     }
 
     if (response.status < 200 || response.status >= 300) {
-      throw new BrainUrlError(`http_status_${response.status}`);
+      throw new BrainUrlError(
+        `http_status_${response.status}`,
+        retryAfterSeconds(response.headers.get('retry-after'))
+      );
     }
 
     const contentType = response.headers.get('content-type') || '';

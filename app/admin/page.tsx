@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getServerSupabaseClient } from "@/lib/serverAuth";
+import { loadAdminRagOverview } from "@/lib/analytics/adminRagOverview";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,7 @@ export default async function AdminDashboard() {
     recentMediaResult,
     recentItemsResult,
     recentLettersResult,
+    ragOverview,
   ] = await Promise.all([
     countRows(supabase, "users"),
     countRows(supabase, "subscribers", (q) => q.eq("isActive", true)),
@@ -144,6 +146,10 @@ export default async function AdminDashboard() {
       .neq("kind", "issue")
       .order("createdAt", { ascending: false })
       .limit(5),
+    loadAdminRagOverview(supabase).catch((error) => {
+      console.error("[admin] RAG overview failed:", error);
+      return null;
+    }),
   ]);
 
   const metrics: CountResult[] = [
@@ -259,6 +265,135 @@ export default async function AdminDashboard() {
           ))}
         </div>
       </section>
+
+      {ragOverview && (
+        <Section title="RAG / Brain" href="/admin/brain">
+          <div className="mb-4 flex flex-wrap items-center gap-2 font-mono text-[9px] uppercase tracking-[0.14em] text-[#89827B]">
+            <span>Window: last {ragOverview.retrieval.attempts} retrieval events</span>
+            <span>·</span>
+            <Link href="/admin/media/intelligence" className="underline hover:text-[#990F3D]">
+              Media Intelligence
+            </Link>
+            <span>·</span>
+            <Link href="/admin/pierrot" className="underline hover:text-[#990F3D]">
+              Pierrot
+            </Link>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="border-t border-[#D9D3CD] pt-3">
+              <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#89827B]">
+                Brain corpus
+              </p>
+              <p className="mt-2 font-serif text-3xl">{ragOverview.documents.total}</p>
+              <p className="mt-1 text-xs text-[#746D66]">
+                documents · {ragOverview.documents.chunks} chunks ·{' '}
+                {ragOverview.documents.embeddedChunks} embedded
+              </p>
+              <p className="mt-2 text-[10px] leading-relaxed text-[#89827B]">
+                {ragOverview.documents.bySourceType
+                  .map((item) => `${item.key} ${item.value}`)
+                  .join(" · ") || "no indexed documents"}
+              </p>
+            </div>
+
+            <div className="border-t border-[#D9D3CD] pt-3">
+              <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#89827B]">
+                Ingestion queue
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[#625D58]">
+                queued <strong className="text-[#211F1F]">{ragOverview.queues.brain.queued}</strong> ·{" "}
+                processing <strong>{ragOverview.queues.brain.processing}</strong> · failed{" "}
+                <strong className={ragOverview.queues.brain.failed > 0 ? "text-[#990F3D]" : ""}>
+                  {ragOverview.queues.brain.failed}
+                </strong>
+              </p>
+              <p className="mt-1 text-xs text-[#89827B]">
+                {ragOverview.queues.brain.completed} completed · {ragOverview.queues.brain.skipped} skipped
+              </p>
+              <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[#A29B94]">
+                oldest queued:{" "}
+                {ragOverview.queues.brain.oldestQueuedAt
+                  ? new Date(ragOverview.queues.brain.oldestQueuedAt).toLocaleString("ru-RU")
+                  : "—"}
+              </p>
+            </div>
+
+            <div className="border-t border-[#D9D3CD] pt-3">
+              <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#89827B]">
+                Graph / media analysis
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[#625D58]">
+                graph queued <strong>{ragOverview.queues.graph.queued}</strong> · processing{" "}
+                <strong>{ragOverview.queues.graph.processing}</strong> · failed{" "}
+                <strong className={ragOverview.queues.graph.failed > 0 ? "text-[#990F3D]" : ""}>
+                  {ragOverview.queues.graph.failed}
+                </strong>
+              </p>
+              <p className="mt-1 text-xs text-[#89827B]">
+                media analysis pending {ragOverview.queues.mediaAnalysis.queued} · processing{" "}
+                {ragOverview.queues.mediaAnalysis.processing} · failed{" "}
+                {ragOverview.queues.mediaAnalysis.failed}
+              </p>
+              <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[#A29B94]">
+                oldest graph queued:{" "}
+                {ragOverview.queues.graph.oldestQueuedAt
+                  ? new Date(ragOverview.queues.graph.oldestQueuedAt).toLocaleDateString("ru-RU")
+                  : "—"}
+              </p>
+            </div>
+
+            <div className="border-t border-[#D9D3CD] pt-3">
+              <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#89827B]">
+                Retrieval · 30 days
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[#625D58]">
+                attempts <strong className="text-[#211F1F]">{ragOverview.retrieval.attempts}</strong> · relevant{" "}
+                <strong>{ragOverview.retrieval.relevant}</strong> · no match{" "}
+                <strong>{ragOverview.retrieval.noMatch}</strong>
+              </p>
+              <p className="mt-1 text-xs text-[#89827B]">
+                unavailable {ragOverview.retrieval.unavailable} · errors {ragOverview.retrieval.errors} ·
+                media {ragOverview.retrieval.media} · context used {ragOverview.retrieval.contextUsed}
+              </p>
+              <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[#A29B94]">
+                avg latency:{" "}
+                {ragOverview.retrieval.averageLatencyMs === null
+                  ? "—"
+                  : `${ragOverview.retrieval.averageLatencyMs} ms`}{" "}
+                · last:{" "}
+                {ragOverview.retrieval.lastAt
+                  ? new Date(ragOverview.retrieval.lastAt).toLocaleDateString("ru-RU")
+                  : "—"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 border-t border-[#EEE9E4] pt-3 text-[10px] text-[#89827B] sm:grid-cols-2 lg:grid-cols-4">
+            <p>
+              Media records: <strong>{ragOverview.media.records}</strong> · linked docs{" "}
+              <strong>{ragOverview.media.withDocument}</strong>
+            </p>
+            <p>
+              Quotes: <strong>{ragOverview.media.quotes}</strong> · topics{" "}
+              <strong>{ragOverview.media.topics}</strong>
+            </p>
+            <p>
+              Entities: <strong>{ragOverview.media.entities}</strong> · relations{" "}
+              <strong>{ragOverview.media.relations}</strong>
+            </p>
+            <p>
+              Retrieval sources:{" "}
+              {ragOverview.retrieval.sources.length > 0
+                ? ragOverview.retrieval.sources
+                    .slice(0, 4)
+                    .map((item) => `${item.key} ${item.value}`)
+                    .join(" · ")
+                : "—"}
+            </p>
+          </div>
+        </Section>
+      )}
 
       {/* Main Content Sections: Flow Issues, Media, Flow Posts, Letters */}
       <div className="grid grid-cols-1 gap-10 xl:grid-cols-2">

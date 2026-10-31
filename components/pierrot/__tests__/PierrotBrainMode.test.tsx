@@ -48,50 +48,46 @@ describe('Pierrot Brain reveal', () => {
     global.fetch = jest.fn() as unknown as typeof fetch;
   });
 
-  it('reveals the Brain control only after the owner phrase', async () => {
+  it('exposes Brain by default to a verified owner', async () => {
     render(
       <PierrotProvider>
         <Probe />
       </PierrotProvider>
     );
 
-    expect(screen.getByTestId('unlocked')).toHaveTextContent('false');
-
-    fireEvent.click(screen.getByRole('button', { name: 'phrase' }));
-
     await waitFor(() => {
       expect(screen.getByTestId('unlocked')).toHaveTextContent('true');
-      expect(screen.getByTestId('messages')).toHaveTextContent('Мозг доступен');
+      expect(screen.getByTestId('mode')).toHaveTextContent('true');
     });
 
-    expect(screen.getByTestId('mode')).toHaveTextContent('false');
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('shows five example questions when the Brain control is pressed', async () => {
+  it('shows five example questions when Brain is toggled on', async () => {
     render(
       <PierrotProvider>
         <Probe />
       </PierrotProvider>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'phrase' }));
-
     await waitFor(() => {
       expect(screen.getByTestId('unlocked')).toHaveTextContent('true');
+      expect(screen.getByTestId('mode')).toHaveTextContent('true');
     });
 
+    // Brain starts on for the owner; turn it off and on to request the examples.
+    fireEvent.click(screen.getByRole('button', { name: 'toggle' }));
     fireEvent.click(screen.getByRole('button', { name: 'toggle' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('mode')).toHaveTextContent('true');
-      expect(screen.getByTestId('messages')).toHaveTextContent('Пять вопросов');
+      expect(screen.getByTestId('messages')).toHaveTextContent('Five questions worth starting with');
     });
 
-    expect(screen.getByTestId('actions')).toHaveTextContent('Главные темы');
-    expect(screen.getByTestId('actions')).toHaveTextContent('Связи между текстами');
-    expect(screen.getByTestId('actions')).toHaveTextContent('Противоречия');
-    expect(screen.getByTestId('actions')).toHaveTextContent('Моя позиция');
-    expect(screen.getByTestId('actions')).toHaveTextContent('Открытые вопросы');
+    expect(screen.getByTestId('actions')).toHaveTextContent('Main themes');
+    expect(screen.getByTestId('actions')).toHaveTextContent('Connections');
+    expect(screen.getByTestId('actions')).toHaveTextContent('Contradictions');
+    expect(screen.getByTestId('actions')).toHaveTextContent('My position');
+    expect(screen.getByTestId('actions')).toHaveTextContent('Open questions');
   });
 });

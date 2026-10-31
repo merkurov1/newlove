@@ -38,9 +38,14 @@ with `400` even if an administrator tries to approve them.
 - per item: `items.rag_allowed = false` (admin item page checkbox) generates
   context from the item itself only.
 
-Existing `flow_ai_context` rows are never regenerated automatically. A public
-page generates context only when no row exists, as before. The admin AI
-endpoint can regenerate one item explicitly.
+Existing `flow_ai_context` rows are never regenerated automatically. When a
+public Flow item has no context yet, the first public view generates it once
+and persists the ready row; all later views read the stored row. If generation
+fails, the page falls back to item-only presentation and retries on a later
+view. The admin AI endpoint can still regenerate one item explicitly.
+
+Generation is bounded by the shared LLM timeout, token budget and circuit
+breaker, so an outage fails fast instead of hanging page rendering.
 
 ## Retrieval workflow
 
@@ -91,6 +96,14 @@ interpretation only: previous-material connections, thematic continuity,
 recurring ideas, historical context, authorial concepts, cultural/technological
 parallels and the item's place in Flow. It explicitly forbids retelling,
 long quotation, bibliographies and invented sources.
+
+## Runtime safety
+
+Flow context generation passes through the shared LLM circuit breaker and
+request budget (`OPS_FLOW_LLM_TIMEOUT_MS`, `OPS_FLOW_LLM_MAX_TOKENS`). If the
+LLM dependency is open, generation fails honestly and the public page falls
+back to item-only presentation. Public retrieval remains behind
+`FLOW_AI_RAG_ENABLED` and the explicit document allowlist.
 
 ## Apply
 

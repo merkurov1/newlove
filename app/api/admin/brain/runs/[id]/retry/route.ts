@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { authorizeKnowledgeAdmin } from '@/lib/knowledge/adminAuth';
 import { computeBrainProgress } from '@/lib/knowledge/brain/process';
 import { createBrainStore } from '@/lib/knowledge/brain/store';
+import { assertQueueCapacity } from '@/lib/operations/budgets';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,10 +18,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await authorizeKnowledgeAdmin(request);
 
   if (!auth.ok) return json({ error: 'Unauthorized' }, 401);
@@ -35,6 +33,8 @@ export async function POST(
     const run = await store.getRun(id);
 
     if (!run) return json({ error: 'Run not found.' }, 404);
+
+    await assertQueueCapacity('brain');
 
     const reset = await store.resetFailedJobs(id);
 

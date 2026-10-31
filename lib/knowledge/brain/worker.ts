@@ -7,6 +7,13 @@ import {
 import { getGraphModel, isGraphLlmConfigured } from '@/lib/knowledge/graph/deepseek';
 import { processNextGraphJob } from '@/lib/knowledge/graph/pipeline';
 import { createBrainGraphStore } from '@/lib/knowledge/graph/store';
+import { beginWorkerInvocation } from '@/lib/operations/guard';
+import { workerLimits } from '@/lib/operations/config';
+import {
+  assertCircuitClosed,
+  recordCircuitFailure,
+  recordCircuitSuccess,
+} from '@/lib/operations/circuitBreaker';
 
 import { queueGraphForIngestionRun } from './graphQueue';
 import { processNextBrainJob } from './process';
@@ -18,6 +25,15 @@ import {
   type WorkerTelemetry,
   type WorkerTrigger,
 } from './workerTelemetry';
+
+export type WorkerStoppedBy =
+  | 'drained'
+  | 'max_jobs'
+  | 'time_budget'
+  | 'error'
+  | 'disabled'
+  | 'lock_conflict'
+  | 'budget_exhausted';
 
 export type WorkerResult = {
   scope: WorkerScope;
@@ -31,7 +47,7 @@ export type WorkerResult = {
   graphRunsQueued: number;
   startedAt: string;
   finishedAt: string;
-  stoppedBy: 'drained' | 'max_jobs' | 'time_budget' | 'error';
+  stoppedBy: WorkerStoppedBy;
   errors: string[];
 };
 
@@ -40,36 +56,77 @@ function clamp(value: number | undefined, min: number, max: number, fallback: nu
   return Math.min(max, Math.max(min, Math.trunc(value as number)));
 }
 
-function remainingMs(startedAt: number, budgetMs: number): number {
-  return budgetMs - (Date.now() - startedAt);
+function skippedWorkerResult(input: {
+  scope: WorkerScope;
+  workerId: string;
+  trigger: WorkerTrigger;
+  startedAt: string;
+  stoppedBy: WorkerStoppedBy;
+  error: string;
+}): WorkerResult {
+  return {
+    scope: input.scope,
+    workerId: input.workerId,
+    trigger: input.trigger,
+    status: 'skipped',
+    processed: 0,
+    claimed: 0,
+    failed: 0,
+    runsTouched: 0,
+    graphRunsQueued: 0,
+    startedAt: input.startedAt,
+    finishedAt: new Date().toISOString(),
+    stoppedBy: input.stoppedBy,
+    errors: [input.error],
+  };
 }
 
-export async function runBrainWorker(input: {
-  trigger?: WorkerTrigger;
-  maxJobs?: number;
-  maxDurationMs?: number;
-  store?: BrainStore | null;
-  embeddingClient?: EmbeddingClient | null;
-  processNext?: typeof processNextBrainJob;
-  queueGraph?: typeof queueGraphForIngestionRun;
-  telemetry?: WorkerTelemetry | null;
-} = {}): Promise<WorkerResult> {
+function guardStoppedBy(reason: string): WorkerStoppedBy {
+  if (reason === 'budget_exhausted') return 'budget_exhausted';
+  if (reason === 'lock_conflict' || reason === 'lock_unavailable') return 'lock_conflict';
+  return 'disabled';
+}
+
+export async function runBrainWorker(
+  input: {
+    trigger?: WorkerTrigger;
+    maxJobs?: number;
+    maxDurationMs?: number;
+    store?: BrainStore | null;
+    embeddingClient?: EmbeddingClient | null;
+    processNext?: typeof processNextBrainJob;
+    queueGraph?: typeof queueGraphForIngestionRun;
+    telemetry?: WorkerTelemetry | null;
+    skipGuard?: boolean;
+  } = {}
+): Promise<WorkerResult> {
   const startedAt = Date.now();
   const startedIso = new Date(startedAt).toISOString();
   const workerId = `brain-worker-${randomUUID()}`;
   const trigger = input.trigger || 'admin';
-  const maxJobs = clamp(
-    input.maxJobs,
-    1,
-    20,
-    Number(process.env.BRAIN_WORKER_MAX_JOBS) || 5
-  );
-  const budgetMs = clamp(
-    input.maxDurationMs,
-    30_000,
-    270_000,
-    Number(process.env.BRAIN_WORKER_MAX_DURATION_MS) || 240_000
-  );
+  const limits = workerLimits('brain');
+  const maxJobs = clamp(input.maxJobs, 1, 20, limits.maxJobs);
+  const budgetMs = clamp(input.maxDurationMs, 30_000, 270_000, limits.maxDurationMs);
+  const skipGuard = input.skipGuard ?? input.store !== undefined;
+  const guard = await beginWorkerInvocation({
+    scope: 'brain',
+    trigger,
+    workerId,
+    maxDurationMs: budgetMs,
+    skipGuard,
+  });
+
+  if (!guard.ok) {
+    return skippedWorkerResult({
+      scope: 'brain',
+      workerId,
+      trigger,
+      startedAt: startedIso,
+      stoppedBy: guardStoppedBy(guard.reason),
+      error: guard.message,
+    });
+  }
+
   const telemetry = input.telemetry === undefined ? createWorkerTelemetry() : input.telemetry;
   const telemetryId = telemetry
     ? await telemetry.startWorkerRun({
@@ -85,6 +142,7 @@ export async function runBrainWorker(input: {
   let failed = 0;
   let runsTouched = 0;
   let graphRunsQueued = 0;
+  let embeddingCalls = 0;
   const errors: string[] = [];
   let stoppedBy: WorkerResult['stoppedBy'] = 'drained';
 
@@ -106,11 +164,29 @@ export async function runBrainWorker(input: {
     const processNext = input.processNext || processNextBrainJob;
     const queueGraph = input.queueGraph || queueGraphForIngestionRun;
 
-    await store.recoverStaleJobs(
-      Number(process.env.BRAIN_WORKER_LEASE_SECONDS) || 900
-    );
+    if (!input.embeddingClient) {
+      await assertCircuitClosed('embedding');
+    }
 
-    const runs = await store.listRunningRuns(100);
+    const budgetedEmbeddingClient: EmbeddingClient = {
+      ...embeddingClient,
+      embed: async (texts, signal) => {
+        embeddingCalls += texts.length;
+
+        if (embeddingCalls > limits.maxEmbeddings) {
+          throw new Error('embedding_budget_exhausted');
+        }
+
+        return embeddingClient.embed(texts, signal);
+      },
+    };
+
+    await store.recoverStaleJobs(Number(process.env.BRAIN_WORKER_LEASE_SECONDS) || 900);
+
+    const runs =
+      typeof store.listRecoverableRuns === 'function'
+        ? await store.listRecoverableRuns(100)
+        : await store.listRunningRuns(100);
 
     outer: for (const run of runs) {
       if (processed >= maxJobs) {
@@ -118,15 +194,19 @@ export async function runBrainWorker(input: {
         break;
       }
 
-      if (remainingMs(startedAt, budgetMs) < 10_000) {
+      if (guard.remainingMs() < 10_000) {
         stoppedBy = 'time_budget';
         break;
       }
 
       runsTouched += 1;
 
+      if (run.status !== 'running') {
+        await store.updateRun(run.id, { status: 'running', completed_at: null });
+      }
+
       while (processed < maxJobs) {
-        if (remainingMs(startedAt, budgetMs) < 10_000) {
+        if (guard.remainingMs() < 10_000) {
           stoppedBy = 'time_budget';
           break outer;
         }
@@ -134,7 +214,7 @@ export async function runBrainWorker(input: {
         const result = await processNext({
           runId: run.id,
           store,
-          embeddingClient,
+          embeddingClient: budgetedEmbeddingClient,
           workerId,
         });
 
@@ -147,6 +227,18 @@ export async function runBrainWorker(input: {
             if (result.job.error_detail) {
               errors.push(`${result.job.error_code || 'job_error'}: ${result.job.error_detail}`);
             }
+
+            if (result.job.error_code?.startsWith('embedding_')) {
+              await recordCircuitFailure({
+                dependency: 'embedding',
+                errorCode: result.job.error_code,
+                permanent: ['embedding_auth_failed', 'embedding_payment_required'].includes(
+                  result.job.error_code
+                ),
+              });
+            }
+          } else if (result.job.status === 'completed') {
+            await recordCircuitSuccess('embedding');
           }
           continue;
         }
@@ -189,6 +281,14 @@ export async function runBrainWorker(input: {
       });
     }
 
+    await guard.finish({
+      status: 'failed',
+      processed,
+      failed,
+      stoppedBy: 'error',
+      errorCode: code,
+    });
+
     throw error;
   }
 
@@ -209,9 +309,22 @@ export async function runBrainWorker(input: {
       runs_touched: runsTouched,
       error_code: errors.length > 0 ? 'worker_errors' : null,
       error_detail: errors.length > 0 ? errors.slice(0, 5).join(' | ').slice(0, 1000) : null,
-      metadata: { stoppedBy, graphRunsQueued },
+      metadata: {
+        stoppedBy,
+        graphRunsQueued,
+        embeddingCalls,
+        externalHttpCalls: processed,
+      },
     });
   }
+
+  await guard.finish({
+    status,
+    processed,
+    failed,
+    stoppedBy,
+    errorCode: errors.length > 0 ? 'worker_errors' : null,
+  });
 
   return {
     scope: 'brain',
@@ -230,31 +343,45 @@ export async function runBrainWorker(input: {
   };
 }
 
-export async function runGraphWorker(input: {
-  trigger?: WorkerTrigger;
-  maxJobs?: number;
-  maxDurationMs?: number;
-  store?: ReturnType<typeof createBrainGraphStore>;
-  processNext?: typeof processNextGraphJob;
-  graphConfigured?: boolean;
-  telemetry?: WorkerTelemetry | null;
-} = {}): Promise<WorkerResult> {
+export async function runGraphWorker(
+  input: {
+    trigger?: WorkerTrigger;
+    maxJobs?: number;
+    maxDurationMs?: number;
+    store?: ReturnType<typeof createBrainGraphStore>;
+    processNext?: typeof processNextGraphJob;
+    graphConfigured?: boolean;
+    telemetry?: WorkerTelemetry | null;
+    skipGuard?: boolean;
+  } = {}
+): Promise<WorkerResult> {
   const startedAt = Date.now();
   const startedIso = new Date(startedAt).toISOString();
   const workerId = `graph-worker-${randomUUID()}`;
   const trigger = input.trigger || 'admin';
-  const maxJobs = clamp(
-    input.maxJobs,
-    1,
-    10,
-    Number(process.env.BRAIN_GRAPH_WORKER_MAX_JOBS) || 5
-  );
-  const budgetMs = clamp(
-    input.maxDurationMs,
-    30_000,
-    270_000,
-    Number(process.env.BRAIN_GRAPH_WORKER_MAX_DURATION_MS) || 240_000
-  );
+  const limits = workerLimits('graph');
+  const maxJobs = clamp(input.maxJobs, 1, 10, limits.maxJobs);
+  const budgetMs = clamp(input.maxDurationMs, 30_000, 270_000, limits.maxDurationMs);
+  const skipGuard = input.skipGuard ?? input.store !== undefined;
+  const guard = await beginWorkerInvocation({
+    scope: 'graph',
+    trigger,
+    workerId,
+    maxDurationMs: budgetMs,
+    skipGuard,
+  });
+
+  if (!guard.ok) {
+    return skippedWorkerResult({
+      scope: 'graph',
+      workerId,
+      trigger,
+      startedAt: startedIso,
+      stoppedBy: guardStoppedBy(guard.reason),
+      error: guard.message,
+    });
+  }
+
   const telemetry = input.telemetry === undefined ? createWorkerTelemetry() : input.telemetry;
   const telemetryId = telemetry
     ? await telemetry.startWorkerRun({
@@ -283,11 +410,12 @@ export async function runGraphWorker(input: {
 
     const processNext = input.processNext || processNextGraphJob;
 
-    await store.recoverStaleJobs(
-      Number(process.env.BRAIN_GRAPH_WORKER_LEASE_SECONDS) || 900
-    );
+    await store.recoverStaleJobs(Number(process.env.BRAIN_GRAPH_WORKER_LEASE_SECONDS) || 900);
 
-    const runs = await store.listRunningRuns(100);
+    const runs =
+      typeof store.listRecoverableRuns === 'function'
+        ? await store.listRecoverableRuns(100)
+        : await store.listRunningRuns(100);
 
     outer: for (const run of runs) {
       if (processed >= maxJobs) {
@@ -295,15 +423,19 @@ export async function runGraphWorker(input: {
         break;
       }
 
-      if (remainingMs(startedAt, budgetMs) < 10_000) {
+      if (guard.remainingMs() < 10_000) {
         stoppedBy = 'time_budget';
         break;
       }
 
       runsTouched += 1;
 
+      if (run.status !== 'running') {
+        await store.updateRun(run.id, { status: 'running', completed_at: null });
+      }
+
       while (processed < maxJobs) {
-        if (remainingMs(startedAt, budgetMs) < 10_000) {
+        if (guard.remainingMs() < 10_000) {
           stoppedBy = 'time_budget';
           break outer;
         }
@@ -352,6 +484,14 @@ export async function runGraphWorker(input: {
       });
     }
 
+    await guard.finish({
+      status: 'failed',
+      processed,
+      failed,
+      stoppedBy: 'error',
+      errorCode: code,
+    });
+
     throw error;
   }
 
@@ -372,9 +512,21 @@ export async function runGraphWorker(input: {
       runs_touched: runsTouched,
       error_code: errors.length > 0 ? 'worker_errors' : null,
       error_detail: errors.length > 0 ? errors.slice(0, 5).join(' | ').slice(0, 1000) : null,
-      metadata: { stoppedBy },
+      metadata: {
+        stoppedBy,
+        llmCalls: processed,
+        externalHttpCalls: processed,
+      },
     });
   }
+
+  await guard.finish({
+    status,
+    processed,
+    failed,
+    stoppedBy,
+    errorCode: errors.length > 0 ? 'worker_errors' : null,
+  });
 
   return {
     scope: 'graph',

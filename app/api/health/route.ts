@@ -42,15 +42,18 @@ export async function GET() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     );
 
-    // Check Supabase connection
+    // Check Supabase connection through a table that is intentionally
+    // readable by the anon role. `users` is protected by RLS and has no anon
+    // grant, so it cannot be used as a connectivity probe.
     try {
       const supabase = createClient();
-      const { data, error } = await supabase
-        .from('users')
+      const { error } = await supabase
+        .from('letters')
         .select('id')
+        .eq('published', true)
         .limit(1)
         .maybeSingle();
-      
+
       checks.supabase = !error;
       checks.database = !error;
     } catch (e) {

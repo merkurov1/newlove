@@ -44,9 +44,10 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const value = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
-  const mode = typeof value.mode === 'string' && MODES.has(value.mode as MediaAnalysisEnqueueMode)
-    ? (value.mode as MediaAnalysisEnqueueMode)
-    : 'selected';
+  const mode =
+    typeof value.mode === 'string' && MODES.has(value.mode as MediaAnalysisEnqueueMode)
+      ? (value.mode as MediaAnalysisEnqueueMode)
+      : 'selected';
   const ids = recordIds(value.recordIds);
 
   if (mode === 'selected' && ids.length === 0) {
@@ -83,11 +84,12 @@ export async function POST(request: Request) {
 
     console.error('[Media analysis batch]', { code, mode });
 
+    if (code.startsWith('queue_limit') || code.startsWith('enqueue_limit')) {
+      return json({ error: code }, 429);
+    }
+
     if (code === 'media_analysis_not_configured') {
-      return json(
-        { error: 'DEEPSEEK_API_KEY is not configured; analysis cannot run.' },
-        503
-      );
+      return json({ error: 'DEEPSEEK_API_KEY is not configured; analysis cannot run.' }, 503);
     }
 
     if (code === 'media_analysis_database_unavailable') {

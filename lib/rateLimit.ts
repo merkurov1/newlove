@@ -11,14 +11,19 @@ interface RateLimitStore {
 const store: RateLimitStore = {};
 
 // Cleanup old entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  Object.keys(store).forEach((key) => {
-    if (store[key].resetTime < now) {
-      delete store[key];
-    }
-  });
-}, 5 * 60 * 1000);
+const cleanup = setInterval(
+  () => {
+    const now = Date.now();
+    Object.keys(store).forEach((key) => {
+      if (store[key].resetTime < now) {
+        delete store[key];
+      }
+    });
+  },
+  5 * 60 * 1000
+);
+
+if (typeof cleanup.unref === 'function') cleanup.unref();
 
 interface RateLimitOptions {
   interval: number; // milliseconds
@@ -32,10 +37,7 @@ interface RateLimitOptions {
  * @param options - Rate limit configuration
  * @returns null if allowed, NextResponse with 429 if rate limited
  */
-export function checkRateLimit(
-  identifier: string,
-  options: RateLimitOptions
-): NextResponse | null {
+export function checkRateLimit(identifier: string, options: RateLimitOptions): NextResponse | null {
   const { interval, maxRequests, keyPrefix = 'rl' } = options;
   const key = `${keyPrefix}:${identifier}`;
   const now = Date.now();
@@ -82,15 +84,15 @@ export function checkRateLimit(
 export function getClientIp(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for');
   const realIp = request.headers.get('x-real-ip');
-  
+
   if (forwarded) {
     return forwarded.split(',')[0].trim();
   }
-  
+
   if (realIp) {
     return realIp;
   }
-  
+
   return 'unknown';
 }
 

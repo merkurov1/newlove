@@ -38,11 +38,16 @@ Worker entry points:
 | `POST /api/admin/media/analysis/batch` | enqueue `all`, `selected` or `retry_failed` |
 | `POST /api/admin/media/analysis/worker` | process a small batch |
 | `POST /api/admin/media/analysis/runs/[id]` | `retry` or `cancel` a run |
-| `GET/POST /api/cron/media-analysis-worker` | daily Vercel cron / external scheduler |
+| `GET/POST /api/cron/media-analysis-worker` | external scheduler / manual invocation |
 
 The admin dashboard buttons enqueue and process at most three jobs per click.
 This keeps each request inside the platform function limit and avoids a large
-single DeepSeek bill.
+single DeepSeek bill. The worker also passes through the shared queue, budget
+and circuit-breaker guard; a missing ops migration makes it return `skipped`
+instead of running unprotected.
+
+`vercel.json` currently has no cron entries. Configure an external scheduler or
+run the worker from the dashboard. See `docs/production-operations.md`.
 
 ## Versioning
 
@@ -129,6 +134,18 @@ and source chunk.
 Countries are inferred only from explicit `ai_metadata.country`, a documented
 outlet mapping, or a country-code TLD. Language is never used as evidence of a
 country.
+
+## Production snapshot (2026-10-31)
+
+- 223 archive records, 124 linked Brain documents;
+- 179 completed analysis runs, 1 failed;
+- 143 current quotes, 63 current topics, 476 current entities, 264 current
+  relations;
+- no active/stale media-analysis leases.
+
+The admin Overview now exposes these counts in the **RAG / Brain** panel next
+to queue health, so coverage can be checked without opening the full
+Intelligence dashboard.
 
 ## Apply
 

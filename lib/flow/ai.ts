@@ -1,4 +1,10 @@
 import OpenAI from 'openai';
+import {
+  assertCircuitClosed,
+  recordCircuitFailure,
+  recordCircuitSuccess,
+} from '@/lib/operations/circuitBreaker';
+import { globalLimits } from '@/lib/operations/config';
 
 import {
   isFlowAiRagEnabled,
@@ -175,38 +181,58 @@ async function callDeepSeekDirect(prompt: string): Promise<ProviderResult> {
     throw new Error('DEEPSEEK_API_KEY is not configured.');
   }
 
+  await assertCircuitClosed('llm');
+  const limits = globalLimits();
   const client = new OpenAI({
     baseURL: 'https://api.deepseek.com',
     apiKey,
+    timeout: limits.flowLlmTimeoutMs,
+    maxRetries: 0,
   });
 
-  const completion = await client.chat.completions.create({
-    model: 'deepseek-chat',
-    messages: [
-      {
-        role: 'system',
-        content:
-          'You are a high-level strategic analyst for an elite media and tech publication. Output bilingual micro-insights.',
-      },
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ],
-    temperature: 0.4,
-  });
+  try {
+    const completion = await client.chat.completions.create({
+      model: 'deepseek-chat',
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a high-level strategic analyst for an elite media and tech publication. Output bilingual micro-insights.',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      temperature: 0.4,
+      max_tokens: limits.flowLlmMaxTokens,
+    });
 
-  const content = sanitizeAiOutput(completion.choices?.[0]?.message?.content || '');
+    const content = sanitizeAiOutput(completion.choices?.[0]?.message?.content || '');
 
-  if (!content) {
-    throw new Error('DeepSeek returned empty content.');
+    if (!content) {
+      throw new Error('DeepSeek returned empty content.');
+    }
+
+    await recordCircuitSuccess('llm');
+    return {
+      content,
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+    };
+  } catch (error) {
+    const status = (error as { status?: unknown } | null)?.status;
+    const permanent =
+      typeof status === 'number' && [400, 401, 402, 403, 404].includes(status);
+
+    await recordCircuitFailure({
+      dependency: 'llm',
+      errorCode: error instanceof Error ? error.message.slice(0, 120) : 'deepseek_request_failed',
+      permanent,
+    });
+
+    throw error;
   }
-
-  return {
-    content,
-    model: 'deepseek-chat',
-    provider: 'deepseek',
-  };
 }
 
 // 2. OpenRouter DeepSeek Fallback
@@ -219,6 +245,8 @@ async function callOpenRouterDeepSeek(prompt: string): Promise<ProviderResult> {
   const client = new OpenAI({
     baseURL: 'https://openrouter.ai/api/v1',
     apiKey,
+    timeout: globalLimits().flowLlmTimeoutMs,
+    maxRetries: 0,
     defaultHeaders: {
       'HTTP-Referer': 'https://merkurov.love',
       'X-Title': 'Merkurov Flow Context',
@@ -238,11 +266,13 @@ async function callOpenRouterDeepSeek(prompt: string): Promise<ProviderResult> {
         model,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.4,
+        max_tokens: globalLimits().flowLlmMaxTokens,
       });
 
       const content = sanitizeAiOutput(completion.choices?.[0]?.message?.content || '');
 
       if (content) {
+        await recordCircuitSuccess('llm');
         return {
           content,
           model,
@@ -251,6 +281,10 @@ async function callOpenRouterDeepSeek(prompt: string): Promise<ProviderResult> {
       }
     } catch (err) {
       lastError = err;
+      await recordCircuitFailure({
+        dependency: 'llm',
+        errorCode: err instanceof Error ? err.message.slice(0, 120) : 'openrouter_request_failed',
+      });
     }
   }
 

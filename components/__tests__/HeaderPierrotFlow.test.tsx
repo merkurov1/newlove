@@ -35,7 +35,7 @@ describe('Header Pierrot and Flow controls', () => {
     render(app());
 
     expect(screen.queryByRole('button', { name: 'Create Flow post' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Pierrot' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Open Pierrot/ })).toBeInTheDocument();
   });
 
   it('shows the Flow composer to an admin and keeps Pierrot next to it', () => {
@@ -50,6 +50,6 @@ describe('Header Pierrot and Flow controls', () => {
     render(app());
 
     expect(screen.getByRole('button', { name: 'Create Flow post' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Pierrot' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Open Pierrot/ })).toBeInTheDocument();
   });
 });

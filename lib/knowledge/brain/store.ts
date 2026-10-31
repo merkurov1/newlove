@@ -928,6 +928,55 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       return Array.isArray(data) ? (data as unknown as BrainRunRow[]) : [];
     },
 
+    /**
+     * A terminal run status must not hide queued work. A run can be marked
+     * completed_with_errors while new jobs were still queued; those jobs remain
+     * recoverable unless the run was explicitly paused or cancelled.
+     */
+    async listRecoverableRuns(limit = 100): Promise<BrainRunRow[]> {
+      const { data: rpcData, error: rpcError } = await store.rpc(
+        'brain_list_recoverable_runs',
+        { p_limit: limit }
+      );
+
+      if (!rpcError) {
+        return Array.isArray(rpcData) ? (rpcData as unknown as BrainRunRow[]) : [];
+      }
+
+      const { data: activeJobs, error: jobsError } = await store
+        .from('brain_ingestion_jobs')
+        .select('run_id')
+        .in('status', ['queued', 'processing'])
+        .order('created_at', { ascending: true })
+        .limit(Math.max(100, limit * 20));
+
+      if (jobsError) throw new Error('brain_jobs_query_failed');
+
+      const runIds = Array.from(
+        new Set(
+          (Array.isArray(activeJobs) ? activeJobs : [])
+            .map((row) => String((row as { run_id?: unknown }).run_id || ''))
+            .filter(Boolean)
+        )
+      ).slice(0, limit);
+
+      if (runIds.length === 0) return [];
+
+      const { data: runs, error: runsError } = await store
+        .from('brain_ingestion_runs')
+        .select('*')
+        .in('id', runIds)
+        .order('created_at', { ascending: true })
+        .limit(limit);
+
+      if (runsError) throw new Error('brain_run_query_failed');
+
+      return (Array.isArray(runs) ? runs : []).filter((row) => {
+        const status = String((row as { status?: unknown }).status || '');
+        return status !== 'paused' && status !== 'cancelled';
+      }) as unknown as BrainRunRow[];
+    },
+
     async heartbeatJob(jobId: string, workerId: string): Promise<void> {
       const { error } = await store
         .from('brain_ingestion_jobs')

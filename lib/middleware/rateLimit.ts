@@ -10,19 +10,21 @@ interface RateLimitConfig {
 const ipMap = new Map<string, { count: number; last: number }>();
 
 // Cleanup old entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, entry] of ipMap.entries()) {
-    if (now - entry.last > 5 * 60 * 1000) {
-      ipMap.delete(ip);
+const cleanup = setInterval(
+  () => {
+    const now = Date.now();
+    for (const [ip, entry] of ipMap.entries()) {
+      if (now - entry.last > 5 * 60 * 1000) {
+        ipMap.delete(ip);
+      }
     }
-  }
-}, 5 * 60 * 1000);
+  },
+  5 * 60 * 1000
+);
 
-export function withRateLimit(
-  handler: Function,
-  config: RateLimitConfig = {}
-) {
+if (typeof cleanup.unref === 'function') cleanup.unref();
+
+export function withRateLimit(handler: Function, config: RateLimitConfig = {}) {
   const {
     maxRequests = 60, // 60 requests per minute default
     windowMs = 60 * 1000, // 1 minute
@@ -33,16 +35,16 @@ export function withRateLimit(
     const ip = req.headers.get('x-forwarded-for') || req.ip || 'unknown';
     const now = Date.now();
     const entry = ipMap.get(ip) || { count: 0, last: now };
-    
+
     // Reset counter if window expired
     if (now - entry.last > windowMs) {
       entry.count = 0;
       entry.last = now;
     }
-    
+
     entry.count++;
     ipMap.set(ip, entry);
-    
+
     // Check if limit exceeded
     if (entry.count > maxRequests) {
       return NextResponse.json(
@@ -58,7 +60,7 @@ export function withRateLimit(
         }
       );
     }
-    
+
     return handler(req, ...args);
   };
 }

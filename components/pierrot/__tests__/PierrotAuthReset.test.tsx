@@ -42,6 +42,7 @@ describe('Pierrot auth lifecycle', () => {
   beforeEach(() => {
     mockAuth = { user: { id: 'admin-1' }, isLoading: false };
     window.sessionStorage.clear();
+    window.sessionStorage.setItem('pierrot_onboarding_v1', '1');
     window.localStorage.clear();
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,

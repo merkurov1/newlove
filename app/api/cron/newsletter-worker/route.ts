@@ -1,12 +1,13 @@
+import { NextResponse } from 'next/server';
+import { createId } from '@paralleldrive/cuid2';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
+import { sendNewsletterToSubscriber } from '@/lib/newsletter/sendNewsletterToSubscriber';
+import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
+import { filterSubscribersByLang } from '@/lib/newsletter/language';
+import { beginWorkerInvocation } from '@/lib/operations/guard';
+import { workerLimits } from '@/lib/operations/config';
 
-import { NextResponse } from "next/server";
-import { createId } from "@paralleldrive/cuid2";
-import { getServerSupabaseClient } from "@/lib/serverAuth";
-import { sendNewsletterToSubscriber } from "@/lib/newsletter/sendNewsletterToSubscriber";
-import { renderNewsletterEmail } from "@/emails/NewsletterEmail";
-import { filterSubscribersByLang } from "@/lib/newsletter/language";
-
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const maxDuration = 60;
 
@@ -18,7 +19,7 @@ interface NewsletterLog {
   id: string;
   job_id: string;
   subscriber_id: string;
-  status: "sent" | "failed" | "bounced" | "skipped";
+  status: 'sent' | 'failed' | 'bounced' | 'skipped';
   error_message?: string;
   provider_id?: string | null;
   provider_response?: unknown;
@@ -34,476 +35,469 @@ export async function POST(request: Request) {
 }
 
 async function handleWorker(request: Request) {
-  const authHeader = request.headers.get("authorization");
+  const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const supabase = getServerSupabaseClient({
-    useServiceRole: true,
+  const limits = workerLimits('newsletter');
+  const guard = await beginWorkerInvocation({
+    scope: 'newsletter',
+    trigger: 'cron',
+    workerId: `newsletter-${Date.now().toString(36)}`,
+    maxDurationMs: limits.maxDurationMs,
   });
 
+  if (!guard.ok) {
+    return NextResponse.json({ status: 'skipped', reason: guard.reason }, { status: 200 });
+  }
+
   try {
-    const { data: pendingJobs, error: jobsError } = await supabase
-      .from("newsletter_jobs")
-      .select("*")
-      .eq("status", "pending")
-      .order("created_at", { ascending: true })
-      .limit(1);
+    const supabase = getServerSupabaseClient({
+      useServiceRole: true,
+    });
 
-    if (jobsError) {
-      console.error("[Newsletter Worker] Job lookup failed:", jobsError);
+    try {
+      const { data: pendingJobs, error: jobsError } = await supabase
+        .from('newsletter_jobs')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true })
+        .limit(1);
 
-      return NextResponse.json(
-        { error: "Database error" },
-        { status: 500 },
-      );
-    }
+      if (jobsError) {
+        console.error('[Newsletter Worker] Job lookup failed:', jobsError);
 
-    if (!pendingJobs?.length) {
-      return NextResponse.json({
-        message: "No pending jobs",
-        processed: 0,
-      });
-    }
+        return NextResponse.json({ error: 'Database error' }, { status: 500 });
+      }
 
-    const job = pendingJobs[0];
+      if (!pendingJobs?.length) {
+        return NextResponse.json({
+          message: 'No pending jobs',
+          processed: 0,
+        });
+      }
 
-    // Atomically claim the job so two workers cannot process it together.
-    const { data: claimedJob, error: claimError } = await supabase
-      .from("newsletter_jobs")
-      .update({
-        status: "processing",
-        started_at: new Date().toISOString(),
-      })
-      .eq("id", job.id)
-      .eq("status", "pending")
-      .select("id")
-      .maybeSingle();
+      const job = pendingJobs[0];
 
-    if (claimError || !claimedJob) {
-      return NextResponse.json(
-        { message: "Job was already claimed", processed: 0 },
-        { status: 409 },
-      );
-    }
-
-    const { data: letter, error: letterError } = await supabase
-      .from("letters")
-      .select(
-        "id,title,slug,content,published,kind,lang,html_email,text_email,status,sent_at,sentAt",
-      )
-      .eq("id", job.letter_id)
-      .maybeSingle();
-
-    if (letterError || !letter) {
-      await supabase
-        .from("newsletter_jobs")
+      // Atomically claim the job so two workers cannot process it together.
+      const { data: claimedJob, error: claimError } = await supabase
+        .from('newsletter_jobs')
         .update({
-          status: "failed",
-          error_message: "Letter not found",
-          completed_at: new Date().toISOString(),
+          status: 'processing',
+          started_at: new Date().toISOString(),
         })
-        .eq("id", job.id);
+        .eq('id', job.id)
+        .eq('status', 'pending')
+        .select('id')
+        .maybeSingle();
 
-      return NextResponse.json(
-        { error: "Letter not found" },
-        { status: 404 },
-      );
-    }
+      if (claimError || !claimedJob) {
+        return NextResponse.json(
+          { message: 'Job was already claimed', processed: 0 },
+          { status: 409 }
+        );
+      }
 
-    if (!letter.published) {
-      await supabase
-        .from("newsletter_jobs")
-        .update({
-          status: "failed",
-          error_message: "Cannot send an unpublished letter",
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", job.id);
+      const { data: letter, error: letterError } = await supabase
+        .from('letters')
+        .select(
+          'id,title,slug,content,published,kind,lang,html_email,text_email,status,sent_at,sentAt'
+        )
+        .eq('id', job.letter_id)
+        .maybeSingle();
 
-      return NextResponse.json(
-        { error: "Letter is not published" },
-        { status: 409 },
-      );
-    }
-
-    if (letter.kind === "issue" && letter.status !== "published") {
-      await supabase
-        .from("newsletter_jobs")
-        .update({
-          status: "failed",
-          error_message: "Cannot send an unpublished Flow issue",
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", job.id);
-
-      return NextResponse.json(
-        { error: "Issue is not published" },
-        { status: 409 },
-      );
-    }
-
-    // Never send the same Flow issue twice.
-    if (letter.kind === "issue" && letter.sent_at) {
-      await supabase
-        .from("newsletter_jobs")
-        .update({
-          status: "failed",
-          error_message: "This issue has already been sent",
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", job.id);
-
-      return NextResponse.json(
-        { error: "Issue has already been sent" },
-        { status: 409 },
-      );
-    }
-
-    const { data: allSubscribers, error: subsError } = await supabase
-      .from("subscribers")
-      .select("id,email,locale")
-      .eq("isActive", true);
-
-    if (subsError) {
-      await supabase
-        .from("newsletter_jobs")
-        .update({
-          status: "failed",
-          error_message: "Failed to fetch subscribers",
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", job.id);
-
-      return NextResponse.json(
-        { error: "Failed to fetch subscribers" },
-        { status: 500 },
-      );
-    }
-
-    const subscribers = filterSubscribersByLang(
-      allSubscribers || [],
-      letter.lang,
-    );
-
-    if (!subscribers?.length) {
-      const langLabel = letter.lang === "en" ? "англоязычных" : "русскоязычных";
-      const noSubsMsg = `Нет активных ${langLabel} подписчиков`;
-
-      await supabase
-        .from("newsletter_jobs")
-        .update({
-          status: "failed",
-          total_count: 0,
-          sent_count: 0,
-          failed_count: 0,
-          error_message: noSubsMsg,
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", job.id);
-
-      return NextResponse.json(
-        { error: noSubsMsg, processed: 0 },
-        { status: 409 },
-      );
-    }
-
-    await supabase
-      .from("newsletter_jobs")
-      .update({ total_count: subscribers.length })
-      .eq("id", job.id);
-
-    let emailHtml = "";
-
-    if (letter.kind === "issue") {
-      emailHtml = letter.html_email || "";
-
-      if (!emailHtml.trim()) {
+      if (letterError || !letter) {
         await supabase
-          .from("newsletter_jobs")
+          .from('newsletter_jobs')
           .update({
-            status: "failed",
-            error_message: "Flow issue has no stored email HTML",
+            status: 'failed',
+            error_message: 'Letter not found',
             completed_at: new Date().toISOString(),
           })
-          .eq("id", job.id);
+          .eq('id', job.id);
 
-        return NextResponse.json(
-          { error: "Issue email snapshot is missing" },
-          { status: 409 },
-        );
-      }
-    } else {
-      try {
-        emailHtml = renderNewsletterEmail(letter, "") || "";
-      } catch (error) {
-        console.error(
-          "[Newsletter Worker] Email rendering failed:",
-          error,
-        );
+        return NextResponse.json({ error: 'Letter not found' }, { status: 404 });
       }
 
-      if (!emailHtml.trim()) {
+      if (!letter.published) {
         await supabase
-          .from("newsletter_jobs")
+          .from('newsletter_jobs')
           .update({
-            status: "failed",
-            error_message: "Could not render newsletter email",
+            status: 'failed',
+            error_message: 'Cannot send an unpublished letter',
             completed_at: new Date().toISOString(),
           })
-          .eq("id", job.id);
+          .eq('id', job.id);
 
-        return NextResponse.json(
-          { error: "Could not render newsletter email" },
-          { status: 500 },
+        return NextResponse.json({ error: 'Letter is not published' }, { status: 409 });
+      }
+
+      if (letter.kind === 'issue' && letter.status !== 'published') {
+        await supabase
+          .from('newsletter_jobs')
+          .update({
+            status: 'failed',
+            error_message: 'Cannot send an unpublished Flow issue',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', job.id);
+
+        return NextResponse.json({ error: 'Issue is not published' }, { status: 409 });
+      }
+
+      // Never send the same Flow issue twice.
+      if (letter.kind === 'issue' && letter.sent_at) {
+        await supabase
+          .from('newsletter_jobs')
+          .update({
+            status: 'failed',
+            error_message: 'This issue has already been sent',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', job.id);
+
+        return NextResponse.json({ error: 'Issue has already been sent' }, { status: 409 });
+      }
+
+      const { data: allSubscribers, error: subsError } = await supabase
+        .from('subscribers')
+        .select('id,email,locale')
+        .eq('isActive', true);
+
+      if (subsError) {
+        await supabase
+          .from('newsletter_jobs')
+          .update({
+            status: 'failed',
+            error_message: 'Failed to fetch subscribers',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', job.id);
+
+        return NextResponse.json({ error: 'Failed to fetch subscribers' }, { status: 500 });
+      }
+
+      let subscribers = filterSubscribersByLang(allSubscribers || [], letter.lang);
+
+      const { data: sentLogs } = await supabase
+        .from('newsletter_logs')
+        .select('subscriber_id')
+        .eq('job_id', job.id)
+        .in('status', ['sent', 'skipped', 'failed']);
+
+      if (Array.isArray(sentLogs) && sentLogs.length > 0) {
+        const alreadyProcessed = new Set(sentLogs.map((row) => String(row.subscriber_id)));
+        subscribers = subscribers.filter(
+          (subscriber) => !alreadyProcessed.has(String(subscriber.id))
         );
       }
-    }
 
-    const letterObj = {
-      id: letter.id,
-      title: letter.title,
-      content: letter.content,
-      html: emailHtml,
-      text: letter.kind === "issue" ? letter.text_email || "" : "",
-      kind: letter.kind || "letter",
-    };
+      if (!subscribers?.length) {
+        const langLabel = letter.lang === 'en' ? 'англоязычных' : 'русскоязычных';
+        const noSubsMsg = `Нет активных ${langLabel} подписчиков`;
 
-    let sentCount = 0;
-    let failedCount = 0;
-    let skippedCount = 0;
+        await supabase
+          .from('newsletter_jobs')
+          .update({
+            status: 'failed',
+            total_count: 0,
+            sent_count: 0,
+            failed_count: 0,
+            error_message: noSubsMsg,
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', job.id);
 
-    for (let i = 0; i < subscribers.length; i += BATCH_SIZE) {
-      const batch = subscribers.slice(i, i + BATCH_SIZE);
-      const logs: NewsletterLog[] = [];
+        return NextResponse.json({ error: noSubsMsg, processed: 0 }, { status: 409 });
+      }
 
-      for (const subscriber of batch) {
+      await supabase
+        .from('newsletter_jobs')
+        .update({ total_count: subscribers.length })
+        .eq('id', job.id);
+
+      let emailHtml = '';
+
+      if (letter.kind === 'issue') {
+        emailHtml = letter.html_email || '';
+
+        if (!emailHtml.trim()) {
+          await supabase
+            .from('newsletter_jobs')
+            .update({
+              status: 'failed',
+              error_message: 'Flow issue has no stored email HTML',
+              completed_at: new Date().toISOString(),
+            })
+            .eq('id', job.id);
+
+          return NextResponse.json({ error: 'Issue email snapshot is missing' }, { status: 409 });
+        }
+      } else {
         try {
-          const token = createId();
-          const now = new Date();
-          const expiresAt = new Date(
-            now.getTime() + 7 * 24 * 60 * 60 * 1000,
-          );
+          emailHtml = renderNewsletterEmail(letter, '') || '';
+        } catch (error) {
+          console.error('[Newsletter Worker] Email rendering failed:', error);
+        }
 
-          const { error: tokenError } = await supabase
-            .from("subscriber_tokens")
-            .insert({
+        if (!emailHtml.trim()) {
+          await supabase
+            .from('newsletter_jobs')
+            .update({
+              status: 'failed',
+              error_message: 'Could not render newsletter email',
+              completed_at: new Date().toISOString(),
+            })
+            .eq('id', job.id);
+
+          return NextResponse.json({ error: 'Could not render newsletter email' }, { status: 500 });
+        }
+      }
+
+      const letterObj = {
+        id: letter.id,
+        title: letter.title,
+        content: letter.content,
+        html: emailHtml,
+        text: letter.kind === 'issue' ? letter.text_email || '' : '',
+        kind: letter.kind || 'letter',
+      };
+
+      let sentCount = 0;
+      let failedCount = 0;
+      let skippedCount = 0;
+      let processedEmails = 0;
+
+      for (let i = 0; i < subscribers.length; i += BATCH_SIZE) {
+        const batch = subscribers.slice(i, i + BATCH_SIZE);
+        const logs: NewsletterLog[] = [];
+
+        for (const subscriber of batch) {
+          if (guard.remainingMs() < 5_000 || processedEmails >= limits.maxExternalHttp) {
+            if (logs.length > 0) {
+              await supabase.from('newsletter_logs').insert(logs);
+            }
+
+            await supabase
+              .from('newsletter_jobs')
+              .update({
+                status: 'pending',
+                sent_count: sentCount,
+                failed_count: failedCount + skippedCount,
+                error_message:
+                  'Batch budget reached; remaining recipients continue in the next invocation.',
+              })
+              .eq('id', job.id);
+
+            return NextResponse.json({
+              message: 'Batch budget reached',
+              jobId: job.id,
+              sent: sentCount,
+              failed: failedCount,
+              skipped: skippedCount,
+              remaining: subscribers.length - processedEmails,
+              status: 202,
+            });
+          }
+
+          processedEmails += 1;
+
+          try {
+            const token = createId();
+            const now = new Date();
+            const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+            const { error: tokenError } = await supabase.from('subscriber_tokens').insert({
               subscriber_id: subscriber.id,
-              type: "unsubscribe",
+              type: 'unsubscribe',
               token,
               created_at: now.toISOString(),
               expires_at: expiresAt.toISOString(),
             });
 
-          // Do not send a newsletter without a valid unsubscribe token.
-          if (tokenError) {
-            throw new Error(
-              `Could not create unsubscribe token: ${tokenError.message}`,
-            );
-          }
+            // Do not send a newsletter without a valid unsubscribe token.
+            if (tokenError) {
+              throw new Error(`Could not create unsubscribe token: ${tokenError.message}`);
+            }
 
-          const result = await sendNewsletterToSubscriber(
-            subscriber,
-            letterObj,
-            {
+            const result = await sendNewsletterToSubscriber(subscriber, letterObj, {
               token,
               skipTokenInsert: true,
-            },
-          );
-
-          if (result.status === "sent") {
-            sentCount++;
-
-            logs.push({
-              id: createId(),
-              job_id: job.id,
-              subscriber_id: subscriber.id,
-              status: "sent",
-              provider_id: result.providerResponse?.id || null,
-              provider_response: result.providerResponse || null,
-              sent_at: new Date().toISOString(),
             });
-          } else if (result.status === "skipped") {
-            // Skipped is not a successful delivery.
-            skippedCount++;
 
-            logs.push({
-              id: createId(),
-              job_id: job.id,
-              subscriber_id: subscriber.id,
-              status: "skipped",
-              error_message:
-                "Email was skipped and was not delivered.",
-              provider_response: result,
-              sent_at: new Date().toISOString(),
-            });
-          } else {
+            if (result.status === 'sent') {
+              sentCount++;
+
+              logs.push({
+                id: createId(),
+                job_id: job.id,
+                subscriber_id: subscriber.id,
+                status: 'sent',
+                provider_id: result.providerResponse?.id || null,
+                provider_response: result.providerResponse || null,
+                sent_at: new Date().toISOString(),
+              });
+            } else if (result.status === 'skipped') {
+              // Skipped is not a successful delivery.
+              skippedCount++;
+
+              logs.push({
+                id: createId(),
+                job_id: job.id,
+                subscriber_id: subscriber.id,
+                status: 'skipped',
+                error_message: 'Email was skipped and was not delivered.',
+                provider_response: result,
+                sent_at: new Date().toISOString(),
+              });
+            } else {
+              failedCount++;
+
+              logs.push({
+                id: createId(),
+                job_id: job.id,
+                subscriber_id: subscriber.id,
+                status: 'failed',
+                error_message: result.error || 'Unknown send error',
+                provider_response: result.providerDetails || null,
+                sent_at: new Date().toISOString(),
+              });
+            }
+          } catch (error) {
             failedCount++;
 
             logs.push({
               id: createId(),
               job_id: job.id,
               subscriber_id: subscriber.id,
-              status: "failed",
-              error_message: result.error || "Unknown send error",
-              provider_response: result.providerDetails || null,
+              status: 'failed',
+              error_message: error instanceof Error ? error.message : String(error),
               sent_at: new Date().toISOString(),
             });
           }
-        } catch (error) {
-          failedCount++;
 
-          logs.push({
-            id: createId(),
-            job_id: job.id,
-            subscriber_id: subscriber.id,
-            status: "failed",
-            error_message:
-              error instanceof Error ? error.message : String(error),
-            sent_at: new Date().toISOString(),
-          });
+          await new Promise((resolve) => setTimeout(resolve, EMAIL_DELAY_MS));
         }
 
-        await new Promise((resolve) =>
-          setTimeout(resolve, EMAIL_DELAY_MS),
-        );
-      }
+        if (logs.length) {
+          const { error: logError } = await supabase.from('newsletter_logs').insert(logs);
 
-      if (logs.length) {
-        const { error: logError } = await supabase
-          .from("newsletter_logs")
-          .insert(logs);
+          if (logError) {
+            console.error('[Newsletter Worker] Log insert failed:', logError);
 
-        if (logError) {
-          console.error(
-            "[Newsletter Worker] Log insert failed:",
-            logError,
-          );
+            // If we cannot persist delivery logs, do not silently report
+            // the entire job as completed.
+            await supabase
+              .from('newsletter_jobs')
+              .update({
+                status: 'failed',
+                error_message: `Could not persist newsletter logs: ${logError.message}`,
+                sent_count: sentCount,
+                failed_count: failedCount + skippedCount,
+                completed_at: new Date().toISOString(),
+              })
+              .eq('id', job.id);
 
-          // If we cannot persist delivery logs, do not silently report
-          // the entire job as completed.
-          await supabase
-            .from("newsletter_jobs")
-            .update({
-              status: "failed",
-              error_message: `Could not persist newsletter logs: ${logError.message}`,
-              sent_count: sentCount,
-              failed_count: failedCount + skippedCount,
-              completed_at: new Date().toISOString(),
-            })
-            .eq("id", job.id);
+            return NextResponse.json(
+              {
+                error: 'Could not persist newsletter logs',
+                jobId: job.id,
+                sent: sentCount,
+                failed: failedCount,
+                skipped: skippedCount,
+              },
+              { status: 500 }
+            );
+          }
+        }
 
-          return NextResponse.json(
-            {
-              error: "Could not persist newsletter logs",
-              jobId: job.id,
-              sent: sentCount,
-              failed: failedCount,
-              skipped: skippedCount,
-            },
-            { status: 500 },
-          );
+        await supabase
+          .from('newsletter_jobs')
+          .update({
+            sent_count: sentCount,
+            failed_count: failedCount + skippedCount,
+          })
+          .eq('id', job.id);
+
+        if (i + BATCH_SIZE < subscribers.length) {
+          await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
         }
       }
 
-      await supabase
-        .from("newsletter_jobs")
+      const completedAt = new Date().toISOString();
+
+      if (letter.kind === 'issue' && sentCount > 0) {
+        // Canonical send marker for Flow issues.
+        await supabase
+          .from('letters')
+          .update({ sent_at: completedAt })
+          .eq('id', letter.id)
+          .is('sent_at', null);
+      } else if (letter.kind !== 'issue' && sentCount > 0) {
+        // Preserve the existing field for ordinary letters.
+        await supabase.from('letters').update({ sentAt: completedAt }).eq('id', letter.id);
+      }
+
+      const jobStatus = sentCount > 0 ? 'completed' : 'failed';
+      const summary =
+        sentCount === 0
+          ? 'No emails were delivered. Check failed/skipped logs and email configuration.'
+          : failedCount > 0 || skippedCount > 0
+            ? 'Finished with some failed or skipped recipients.'
+            : null;
+
+      const { error: finishError } = await supabase
+        .from('newsletter_jobs')
         .update({
+          status: jobStatus,
           sent_count: sentCount,
           failed_count: failedCount + skippedCount,
+          error_message: summary,
+          completed_at: completedAt,
         })
-        .eq("id", job.id);
+        .eq('id', job.id);
 
-      if (i + BATCH_SIZE < subscribers.length) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, BATCH_DELAY_MS),
+      if (finishError) {
+        console.error('[Newsletter Worker] Could not finalize job:', finishError);
+
+        return NextResponse.json(
+          {
+            error: 'Could not finalize newsletter job',
+            jobId: job.id,
+            sent: sentCount,
+            failed: failedCount,
+            skipped: skippedCount,
+          },
+          { status: 500 }
         );
       }
-    }
 
-    const completedAt = new Date().toISOString();
-
-    if (letter.kind === "issue" && sentCount > 0) {
-      // Canonical send marker for Flow issues.
-      await supabase
-        .from("letters")
-        .update({ sent_at: completedAt })
-        .eq("id", letter.id)
-        .is("sent_at", null);
-    } else if (letter.kind !== "issue" && sentCount > 0) {
-      // Preserve the existing field for ordinary letters.
-      await supabase
-        .from("letters")
-        .update({ sentAt: completedAt })
-        .eq("id", letter.id);
-    }
-
-    const jobStatus = sentCount > 0 ? "completed" : "failed";
-    const summary =
-      sentCount === 0
-        ? "No emails were delivered. Check failed/skipped logs and email configuration."
-        : failedCount > 0 || skippedCount > 0
-          ? "Finished with some failed or skipped recipients."
-          : null;
-
-    const { error: finishError } = await supabase
-      .from("newsletter_jobs")
-      .update({
-        status: jobStatus,
-        sent_count: sentCount,
-        failed_count: failedCount + skippedCount,
-        error_message: summary,
-        completed_at: completedAt,
-      })
-      .eq("id", job.id);
-
-    if (finishError) {
-      console.error(
-        "[Newsletter Worker] Could not finalize job:",
-        finishError,
-      );
+      return NextResponse.json({
+        message: jobStatus === 'completed' ? 'Job completed' : 'Job failed',
+        jobId: job.id,
+        letterId: job.letter_id,
+        totalSubscribers: subscribers.length,
+        sent: sentCount,
+        failed: failedCount,
+        skipped: skippedCount,
+        successRate:
+          subscribers.length > 0 ? `${((sentCount / subscribers.length) * 100).toFixed(2)}%` : '0%',
+      });
+    } catch (error) {
+      console.error('[Newsletter Worker] Unexpected error:', error);
 
       return NextResponse.json(
         {
-          error: "Could not finalize newsletter job",
-          jobId: job.id,
-          sent: sentCount,
-          failed: failedCount,
-          skipped: skippedCount,
+          error: 'Worker failed',
+          details: error instanceof Error ? error.message : String(error),
         },
-        { status: 500 },
+        { status: 500 }
       );
     }
-
-    return NextResponse.json({
-      message: jobStatus === "completed" ? "Job completed" : "Job failed",
-      jobId: job.id,
-      letterId: job.letter_id,
-      totalSubscribers: subscribers.length,
-      sent: sentCount,
-      failed: failedCount,
-      skipped: skippedCount,
-      successRate:
-        subscribers.length > 0
-          ? `${((sentCount / subscribers.length) * 100).toFixed(2)}%`
-          : "0%",
-    });
-  } catch (error) {
-    console.error("[Newsletter Worker] Unexpected error:", error);
-
-    return NextResponse.json(
-      {
-        error: "Worker failed",
-        details:
-          error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+  } finally {
+    await guard.finish({ status: 'completed' });
   }
 }

@@ -13,6 +13,8 @@ import {
 } from '@/lib/flow/aiContext';
 import PierrotContextBlock from '@/components/flow/PierrotContextBlock';
 
+export const maxDuration = 60;
+
 type PageProps = {
   params: Promise<{ slug: string }>;
 };
@@ -231,6 +233,31 @@ function getSiteName(item: FlowItem): string {
   return 'Flow';
 }
 
+/**
+ * Flow items are often photos, links or reposts with no meaningful title.
+ * Falling back to the literal string "Flow" gives every such page the same
+ * <title>. Use the source/date/slug to keep metadata unique while preserving
+ * a real editorial title when one exists.
+ */
+function getFlowSeoTitle(item: FlowItem, slug: string): string {
+  const explicit = item.title?.trim() || getMetadataString(item.metadata, 'title');
+  const generic =
+    !explicit ||
+    /^(flow|untitled|post|photo|image)$/i.test(explicit) ||
+    /^anton merkurov\s*[|—]\s*art x love x money$/i.test(explicit);
+
+  if (!generic) return explicit;
+
+  const date = formatDate(item.published_at);
+  const site = getSiteName(item);
+
+  if (site && site !== 'Flow') {
+    return `Flow — ${site}${date ? `, ${date}` : ''}`;
+  }
+
+  return date ? `Flow — ${date}` : `Flow — ${slug}`;
+}
+
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
@@ -255,10 +282,7 @@ export async function generateMetadata({
     }
 
     const flowItem = item as FlowItem;
-    const title =
-      flowItem.title?.trim() ||
-      getMetadataString(flowItem.metadata, 'title') ||
-      getSiteName(flowItem);
+    const title = getFlowSeoTitle(flowItem, decodedSlug);
 
     const description = getDescription(flowItem);
     const site = 'https://www.merkurov.love';
@@ -1032,6 +1056,10 @@ export default async function FlowItemPage({ params }: PageProps) {
 
   let context = (contextData as AIContext | null) ?? null;
 
+  // Flow AI context is part of the public Flow experience: generate it on the
+  // first public view when it is missing, then persist it so later views are
+  // cache reads. Owner knowledge can never enter this path because
+  // generateFlowContext uses the public-only retrieval allowlist.
   const shouldGenerateContext =
     item.ai_allowed !== false &&
     item.type !== 'photo' &&
@@ -1056,21 +1084,16 @@ export default async function FlowItemPage({ params }: PageProps) {
       if (generated?.content) {
         const now = new Date().toISOString();
 
-        const { data: savedContext, error: saveError } =
-          await supabase
-            .from('flow_ai_context')
-            .upsert(
-              flowAiContextReadyPayload(item.id, generated),
-              { onConflict: 'item_id' },
-            )
-            .select(FLOW_AI_CONTEXT_PUBLIC_COLUMNS)
-            .maybeSingle();
+        const { data: savedContext, error: saveError } = await supabase
+          .from('flow_ai_context')
+          .upsert(flowAiContextReadyPayload(item.id, generated), {
+            onConflict: 'item_id',
+          })
+          .select(FLOW_AI_CONTEXT_PUBLIC_COLUMNS)
+          .maybeSingle();
 
         if (saveError) {
-          console.warn(
-            '[flow/item] Could not save AI context:',
-            saveError,
-          );
+          console.warn('[flow/item] Could not save AI context:', saveError);
         }
 
         context = savedContext
@@ -1088,7 +1111,7 @@ export default async function FlowItemPage({ params }: PageProps) {
     } catch (genError) {
       console.warn(
         '[flow/item] On-demand Pierrot context generation failed:',
-        genError,
+        genError
       );
     }
   }
@@ -1096,7 +1119,7 @@ export default async function FlowItemPage({ params }: PageProps) {
   const siteUrl = 'https://www.merkurov.love';
   const itemUrl =
     `${siteUrl}/flow/${encodeURIComponent(decodedSlug)}`;
-  const itemTitle = item.title?.trim() || 'Flow';
+  const itemTitle = getFlowSeoTitle(item, decodedSlug);
   const itemDescription = getDescription(item);
   const itemImage =
     getMetadataImage(item) ||

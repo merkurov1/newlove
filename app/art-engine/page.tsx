@@ -18,6 +18,10 @@ export const metadata: Metadata = pageMetadata({
 export default function ArtEnginePage() {
   return (
     <>
+      {/* Server-rendered page heading: the interactive terminal is client-only,
+          so without this the initial HTML has no h1 for crawlers and assistive
+          technology. The visible terminal heading is an h2. */}
+      <h1 className="sr-only">Curator Engine — Art Market Intelligence</h1>
       <JsonLd
         data={creativeWorkJsonLd({
           path: '/art-engine',

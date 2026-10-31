@@ -1,6 +1,7 @@
 import { createBrainGraphStore } from '@/lib/knowledge/graph/store';
 import { createGraphRun } from '@/lib/knowledge/graph/pipeline';
 import { getGraphModel, isGraphLlmConfigured } from '@/lib/knowledge/graph/deepseek';
+import { assertEnqueueLimit, assertQueueCapacity } from '@/lib/operations/budgets';
 import type { BrainStore } from './store';
 
 export type GraphQueueResult =
@@ -78,6 +79,9 @@ export async function queueGraphForIngestionRun(input: {
       });
       return { status: 'skipped', reason: 'documents_missing' };
     }
+
+    assertEnqueueLimit(documents.length);
+    await assertQueueCapacity('graph');
 
     const result = await createGraphRun({
       store: graphStore,

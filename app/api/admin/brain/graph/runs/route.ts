@@ -3,10 +3,8 @@ import { NextResponse } from 'next/server';
 import { authorizeKnowledgeAdmin } from '@/lib/knowledge/adminAuth';
 import { getGraphModel, isGraphLlmConfigured } from '@/lib/knowledge/graph/deepseek';
 import { createGraphRun } from '@/lib/knowledge/graph/pipeline';
-import {
-  computeGraphProgress,
-  createBrainGraphStore,
-} from '@/lib/knowledge/graph/store';
+import { computeGraphProgress, createBrainGraphStore } from '@/lib/knowledge/graph/store';
+import { assertEnqueueLimit, assertQueueCapacity } from '@/lib/operations/budgets';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -68,6 +66,10 @@ export async function POST(request: Request) {
     const selected = documentIds
       ? documents.filter((document) => documentIds.includes(document.id))
       : documents;
+
+    assertEnqueueLimit(selected.length);
+    await assertQueueCapacity('graph');
+
     const result = await createGraphRun({
       store,
       documents: selected,
@@ -81,7 +83,16 @@ export async function POST(request: Request) {
         run: null,
         jobs: [],
         skippedDocumentIds: result.skippedDocumentIds,
-        progress: { total: 0, queued: 0, processing: 0, completed: 0, skipped: 0, failed: 0, cancelled: 0, done: true },
+        progress: {
+          total: 0,
+          queued: 0,
+          processing: 0,
+          completed: 0,
+          skipped: 0,
+          failed: 0,
+          cancelled: 0,
+          done: true,
+        },
         message: 'The graph is already up to date for this extractor version.',
       });
     }
@@ -94,9 +105,12 @@ export async function POST(request: Request) {
       progress: computeGraphProgress(result.jobs),
     });
   } catch (error) {
-    console.error('[Brain graph run]', {
-      code: error instanceof Error ? error.message : 'graph_run_failed',
-    });
+    const code = error instanceof Error ? error.message : 'graph_run_failed';
+    console.error('[Brain graph run]', { code });
+
+    if (code.startsWith('enqueue_limit') || code.startsWith('queue_limit')) {
+      return json({ error: code }, 429);
+    }
 
     return json({ error: 'Could not create the graph extraction run.' }, 503);
   }

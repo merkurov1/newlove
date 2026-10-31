@@ -4,12 +4,14 @@ import { authorizeKnowledgeAdmin } from '@/lib/knowledge/adminAuth';
 import { computeBrainProgress, type BrainProgress } from '@/lib/knowledge/brain/process';
 import { createBrainStore } from '@/lib/knowledge/brain/store';
 import { tryNormalizeSourceUrl } from '@/lib/knowledge/brain/url';
+import { assertEnqueueLimit, assertQueueCapacity } from '@/lib/operations/budgets';
+import { maxEnqueuePerRequest } from '@/lib/operations/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const MAX_URLS = 200;
+const MAX_URLS = maxEnqueuePerRequest();
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -95,6 +97,14 @@ export async function POST(request: Request) {
     (body as Record<string, unknown>).recheckExisting === true;
 
   if (inputs.length === 0) return json({ error: 'Provide at least one URL.' }, 400);
+
+  try {
+    assertEnqueueLimit(inputs.length);
+    await assertQueueCapacity('brain');
+  } catch (error) {
+    const code = error instanceof Error ? error.message : 'queue_limit_reached';
+    return json({ error: code }, code.startsWith('queue_limit') ? 429 : 503);
+  }
 
   let documents: Awaited<ReturnType<typeof store.listArticleDocuments>>;
   let activeJobs: Awaited<ReturnType<typeof store.findActiveJobsByUrls>>;

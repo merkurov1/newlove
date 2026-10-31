@@ -265,6 +265,52 @@ async function editCallbackNotification(
   ).catch(() => undefined);
 }
 
+type PierrotStore = NonNullable<ReturnType<typeof createPierrotStore>>;
+
+/**
+ * Accepting a new request replaces the owner's previous live conversation.
+ *
+ * The database allows only one active session per owner. Without this
+ * replacement an abandoned session blocks every future request with
+ * `owner_busy`, and the owner's next Telegram message is silently routed to
+ * the old visitor. Closing the old session on an explicit accept keeps the
+ * invariant and makes the new request usable.
+ */
+async function acceptHumanRequestReplacingActive(
+  store: PierrotStore,
+  requestId: string,
+  owner: number
+) {
+  let result = await acceptHumanRequest(store, requestId, owner);
+
+  if (result.result !== 'owner_busy') return result;
+
+  const active = await getActiveHumanSessionForOwner(store, owner);
+
+  if (!active || active.request.id === requestId) return result;
+
+  const closed = await closeHumanSession(store, active.request.id, 'owner', owner);
+
+  if (closed.result === 'closed') {
+    await recordHumanEvent(store, {
+      conversationId: active.request.conversation_id,
+      eventName: 'human_closed',
+      eventKey: `human_closed:${active.request.id}`,
+      payload: { closed_by: 'owner', reason: 'replaced' },
+    }).catch(() => undefined);
+
+    if (active.request.telegram_chat_id && active.request.telegram_message_id) {
+      await editHumanRequestNotification(
+        active.request.telegram_chat_id,
+        active.request.telegram_message_id,
+        closedNotificationText(active.request.visitor_label, 'Anton')
+      ).catch(() => undefined);
+    }
+  }
+
+  return acceptHumanRequest(store, requestId, owner);
+}
+
 async function handleHumanCallback(
   ctx: Context,
   action: 'accept' | 'decline' | 'status' | 'end',
@@ -290,7 +336,7 @@ async function handleHumanCallback(
 
   try {
     if (action === 'accept') {
-      const result = await acceptHumanRequest(store, requestId, owner);
+      const result = await acceptHumanRequestReplacingActive(store, requestId, owner);
       const label = result.visitorLabel || '#unknown';
 
       if (result.result === 'accepted') {
@@ -483,6 +529,40 @@ async function routeOwnerHumanText(ctx: Context): Promise<boolean> {
     ) {
       // A reply anchor must belong to the configured owner's session.
       return true;
+    }
+
+    // Replying directly to a pending notification is an explicit acceptance.
+    // This is the natural Telegram gesture and avoids the silent dead end
+    // where the owner types a reply but it is routed nowhere.
+    if (target.request.status === 'pending' && replyTo) {
+      const accepted = await acceptHumanRequestReplacingActive(
+        store,
+        target.request.id,
+        owner
+      );
+
+      if (accepted.result === 'accepted' || accepted.result === 'already_active') {
+        target = (await getHumanPresenceByRequestId(store, target.request.id)) ?? target;
+
+        if (target.request.telegram_chat_id && target.request.telegram_message_id) {
+          await editHumanRequestNotification(
+            target.request.telegram_chat_id,
+            target.request.telegram_message_id,
+            acceptedNotificationText(target.request.visitor_label),
+            target.request.id,
+            true
+          ).catch(() => undefined);
+        }
+      } else {
+        await ctx
+          .reply(
+            accepted.result === 'expired'
+              ? `Conversation ${target.request.visitor_label} expired. Piero is back with the visitor.`
+              : `Conversation ${target.request.visitor_label} could not be started (${accepted.result}).`
+          )
+          .catch(() => undefined);
+        return true;
+      }
     }
 
     if (target.request.status !== 'active' || target.session?.status !== 'active') {

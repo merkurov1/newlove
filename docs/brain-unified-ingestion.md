@@ -157,10 +157,29 @@ It is additive and idempotent. It adds:
 
 It does not recreate tables, delete documents or chunks, or rewrite the manuscript.
 
-## 12. Tests
+## 12. Research inventory questions
+
+Brain Research answers publication-inventory questions deterministically, not
+from top-K chunks:
+
+- «найти все мои колонки в новой газете»;
+- «сколько я написал колонок в новую газету»;
+- equivalent English phrasing.
+
+The detector is `detectPublicationInventoryQuestion()`. The selector keeps
+`source_type = article` on `novayagazeta.ru/.eu`, deduplicates by canonical URL,
+removes `media_coverage` mirrors, applies the parsed date range, and lists every
+matching document. The answer explicitly says that the count reflects the
+indexed Brain corpus rather than the publication's complete archive.
+
+The admin Overview also shows a read-only **RAG / Brain** panel: corpus counts,
+embedded chunks, ingestion/graph/media queue health and 30-day retrieval
+outcomes. It never returns passages, queries or owner text.
+
+## 13. Tests
 
 ```bash
-npx jest lib/knowledge/brain --runInBand
+npx jest lib/knowledge/brain lib/knowledge/graph --runInBand
 npx tsc --noEmit
 ```
 

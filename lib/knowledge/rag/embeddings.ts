@@ -43,6 +43,18 @@ function isAbortError(error: unknown): boolean {
   );
 }
 
+function retryAfterSeconds(value: string | null): number | null {
+  if (!value) return null;
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds > 0) return Math.min(3600, Math.ceil(seconds));
+
+  const date = Date.parse(value);
+  if (!Number.isFinite(date)) return null;
+
+  return Math.max(0, Math.min(3600, Math.ceil((date - Date.now()) / 1000)));
+}
+
 function parseEmbeddingResponse(
   payload: unknown,
   expectedCount: number,
@@ -180,7 +192,11 @@ export function createOpenRouterEmbeddingClient(
       });
 
       if (!response.ok) {
-        throw new EmbeddingProviderError('request_failed', response.status);
+        throw new EmbeddingProviderError(
+          'request_failed',
+          response.status,
+          retryAfterSeconds(response.headers.get('retry-after'))
+        );
       }
 
       const payload = await response.json().catch(() => null);

@@ -4,6 +4,7 @@ import { authorizeKnowledgeAdmin } from '@/lib/knowledge/adminAuth';
 import { getGraphModel, isGraphLlmConfigured } from '@/lib/knowledge/graph/deepseek';
 import { processNextGraphJob } from '@/lib/knowledge/graph/pipeline';
 import { createBrainGraphStore } from '@/lib/knowledge/graph/store';
+import { beginWorkerInvocation } from '@/lib/operations/guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,13 +37,24 @@ export async function POST(
   if (!store) return json({ error: 'Knowledge database is not configured.' }, 503);
 
   const { id } = await params;
+  const workerId = `admin-graph-next-${Date.now()}`;
+  const guard = await beginWorkerInvocation({
+    scope: 'graph',
+    trigger: 'admin',
+    workerId,
+    maxDurationMs: 240_000,
+  });
+
+  if (!guard.ok) {
+    return json({ status: 'skipped', reason: guard.reason }, 200);
+  }
 
   try {
     const result = await processNextGraphJob({
       runId: id,
       store,
       model: getGraphModel(),
-      workerId: `admin-graph-${Date.now()}`,
+      workerId,
     });
 
     return json(result);
@@ -62,5 +74,7 @@ export async function POST(
       },
       message === 'brain_graph_run_not_found' ? 404 : 500
     );
+  } finally {
+    await guard.finish({ status: 'completed' });
   }
 }

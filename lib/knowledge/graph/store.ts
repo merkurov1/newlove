@@ -279,6 +279,50 @@ export function createBrainGraphStore(env: RagEnvironment = process.env) {
       return Array.isArray(data) ? (data as unknown as BrainGraphRun[]) : [];
     },
 
+    async listRecoverableRuns(limit = 100): Promise<BrainGraphRun[]> {
+      const { data: rpcData, error: rpcError } = await store.rpc(
+        'graph_list_recoverable_runs',
+        { p_limit: limit }
+      );
+
+      if (!rpcError) {
+        return Array.isArray(rpcData) ? (rpcData as unknown as BrainGraphRun[]) : [];
+      }
+
+      const { data: activeJobs, error: jobsError } = await store
+        .from('brain_graph_jobs')
+        .select('run_id')
+        .in('status', ['queued', 'processing'])
+        .order('created_at', { ascending: true })
+        .limit(Math.max(100, limit * 20));
+
+      if (jobsError) throw new Error('brain_graph_jobs_query_failed');
+
+      const runIds = Array.from(
+        new Set(
+          (Array.isArray(activeJobs) ? activeJobs : [])
+            .map((row) => String((row as { run_id?: unknown }).run_id || ''))
+            .filter(Boolean)
+        )
+      ).slice(0, limit);
+
+      if (runIds.length === 0) return [];
+
+      const { data: runs, error: runsError } = await store
+        .from('brain_graph_runs')
+        .select('*')
+        .in('id', runIds)
+        .order('created_at', { ascending: true })
+        .limit(limit);
+
+      if (runsError) throw new Error('brain_graph_runs_query_failed');
+
+      return (Array.isArray(runs) ? runs : []).filter((row) => {
+        const status = String((row as { status?: unknown }).status || '');
+        return status !== 'paused' && status !== 'cancelled';
+      }) as unknown as BrainGraphRun[];
+    },
+
     async heartbeatJob(jobId: string, workerId: string): Promise<void> {
       const { error } = await store
         .from('brain_graph_jobs')
@@ -434,6 +478,42 @@ export function createBrainGraphStore(env: RagEnvironment = process.env) {
       }
 
       return rows.length;
+    },
+
+    async getJob(jobId: string): Promise<BrainGraphJob | null> {
+      const { data, error } = await store
+        .from('brain_graph_jobs')
+        .select('*')
+        .eq('id', jobId)
+        .maybeSingle();
+
+      if (error) throw new Error('brain_graph_job_query_failed');
+
+      return (data as unknown as BrainGraphJob) || null;
+    },
+
+    async resetJob(jobId: string): Promise<BrainGraphJob | null> {
+      const { data, error } = await store
+        .from('brain_graph_jobs')
+        .update({
+          status: 'queued',
+          attempts: 0,
+          retry_after: null,
+          error_code: null,
+          error_detail: null,
+          worker_id: null,
+          locked_at: null,
+          completed_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', jobId)
+        .in('status', ['failed', 'skipped', 'cancelled'])
+        .select('*')
+        .maybeSingle();
+
+      if (error) throw new Error('brain_graph_job_retry_failed');
+
+      return (data as unknown as BrainGraphJob) || null;
     },
 
     async resetFailedJobs(runId: string): Promise<number> {

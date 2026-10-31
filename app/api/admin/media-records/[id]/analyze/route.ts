@@ -3,13 +3,19 @@ import { NextResponse } from 'next/server';
 import { authorizeKnowledgeAdmin } from '@/lib/knowledge/adminAuth';
 import { createMediaAnalysisStore } from '@/lib/knowledge/media/analysisStore';
 import { runMediaAnalysis } from '@/lib/knowledge/media/analyze';
+import { assertWorkerBudget } from '@/lib/operations/budgets';
+import {
+  assertCircuitClosed,
+  recordCircuitFailure,
+  recordCircuitSuccess,
+} from '@/lib/operations/circuitBreaker';
+import { assertWorkerEnabled } from '@/lib/operations/control';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 180;
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -21,10 +27,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await authorizeKnowledgeAdmin(request);
 
   if (!auth.ok) return json({ error: 'Unauthorized' }, 401);
@@ -37,6 +40,10 @@ export async function POST(
   const force = Boolean(body && typeof body === 'object' && body.force === true);
 
   try {
+    await assertWorkerEnabled('media');
+    await assertWorkerBudget('media');
+    await assertCircuitClosed('llm');
+
     const store = createMediaAnalysisStore();
 
     if (!store) return json({ error: 'Media analysis database is not configured.' }, 503);
@@ -70,6 +77,8 @@ export async function POST(
       force,
     });
 
+    await recordCircuitSuccess('llm');
+
     const analysis = await store.getCurrentAnalysis(id);
 
     return json({
@@ -79,6 +88,19 @@ export async function POST(
     });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'media_analysis_failed';
+
+    if (code.startsWith('circuit_open')) {
+      await recordCircuitFailure({ dependency: 'llm', errorCode: code });
+      return json({ error: 'The LLM circuit is open. Try again after cooldown.' }, 503);
+    }
+
+    if (code === 'worker_kill_switch_enabled' || code.startsWith('worker_disabled')) {
+      return json({ error: code }, 423);
+    }
+
+    if (code.startsWith('worker_budget_exhausted')) {
+      return json({ error: code }, 429);
+    }
 
     if (code === 'media_analysis_not_configured') {
       return json(

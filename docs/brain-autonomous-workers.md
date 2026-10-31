@@ -11,6 +11,12 @@ Both workers are short, bounded HTTP invocations:
 - `/api/cron/brain-worker`
 - `/api/cron/graph-worker`
 - `/api/admin/brain/worker` (manual, admin-authenticated)
+- `POST /api/admin/operations` with `action: "run_batch"` (unified manual controls)
+
+Every production invocation also passes through the resource-safety guard in
+`lib/operations/guard.ts`: kill switch, per-scope enable flag, global worker
+lock, queue/budget checks and circuit breaker. If the ops migration is missing,
+the guard returns a skipped result rather than running unbounded work.
 
 Each invocation:
 
@@ -54,16 +60,21 @@ Verified limits:
 - More frequent expressions are rejected at deploy time.
 - Vercel Cron does not retry a failed invocation.
 
-Therefore `vercel.json` uses only Hobby-safe daily schedules:
+**Current state:** `vercel.json` has no `crons` entries. The resource-safety
+change deliberately removed automatic scheduling so that AI spend and queue
+draining stay under operator control. The endpoints remain available and
+protected.
 
-```json
-"crons": [
-  { "path": "/api/cron/brain-worker", "schedule": "0 3 * * *" },
-  { "path": "/api/cron/graph-worker", "schedule": "30 3 * * *" }
-]
-```
+For production, use one of:
 
-This is a safety net, not the primary 5-minute scheduler. For frequent processing on Hobby use the Supabase `pg_cron + pg_net` tick below, an existing external scheduler, or upgrade to Vercel Pro and change the schedules to `*/5 * * * *` (Pro supports per-minute cron).
+- an external scheduler every 5–15 minutes calling both worker endpoints;
+- the optional Supabase `pg_cron + pg_net` tick below;
+- manual operations through `/admin/brain` or `/api/admin/operations`;
+- Vercel Pro with `*/5 * * * *` schedules.
+
+Vercel Hobby allows at most two daily cron jobs. Do not configure four entries
+on Hobby; the deployment will be rejected. See
+`docs/production-operations.md` for the current runbook.
 
 ## 4. Optional Supabase pg_cron tick
 
@@ -171,15 +182,21 @@ The Brain admin page shows this panel and buttons:
 - **Run both** — both, with split time budgets;
 - existing pause / resume / retry / cancel controls remain.
 
-## 9. Migration
+## 9. Migrations
 
-Apply:
+Apply, in order:
 
 ```text
 migrations/2026-11-06_autonomous_brain_worker.sql
+migrations/2026-11-11_resource_safety.sql
 ```
 
-It adds:
+`2026-11-11_resource_safety.sql` adds `worker_locks`, `ops_runtime_settings`,
+`ops_events`, `ops_circuit_breakers`, `claim_worker_lock`,
+`brain_list_recoverable_runs`, `graph_list_recoverable_runs` and
+`ops_scheduler_status`. It does not schedule anything.
+
+The first migration adds:
 
 - `brain_graph_jobs.retry_after`;
 - graph claim index and recovery lease indexes;

@@ -85,10 +85,26 @@ Start with [`.env.example`](./.env.example). The core variables currently docume
 | `SUPABASE_SERVICE_ROLE_KEY`       | Privileged server-side Supabase access; **never expose to the browser**                                                     |
 | `TELEGRAM_WEBHOOK_SECRET`         | Secret used to validate configured Telegram webhook requests                                                                |
 | `TELEGRAM_WEBHOOK_ENFORCE_SECRET` | Set to `1` only after the webhook is registered with `secret_token` matching `TELEGRAM_WEBHOOK_SECRET`; otherwise leave off |
-| `DEEPSEEK_API_KEY`                | DeepSeek key used by Pierrot web and the Telegram bot (the only chat provider)                                              |
+| `DEEPSEEK_API_KEY`                | DeepSeek key used by Pierrot, Brain graph extraction, Flow AI and Media Intelligence                                        |
+| `OPENROUTER_API_KEY`              | Server-only embeddings key (`baai/bge-m3`, 1024 dimensions)                                                                 |
+| `CRON_SECRET`                     | Bearer secret required by every `/api/cron/*` worker route                                                                  |
+| `PIERROT_RAG_ENABLED`             | Owner Brain retrieval flag; `true` in production for verified owners                                                        |
+| `PIERROT_PUBLIC_RAG_ENABLED`      | Public-only Pierrot/Flow retrieval; default `false`, enabled only after document approval                                   |
+| `FLOW_AI_RAG_ENABLED`             | Public Flow AI context retrieval; defaults to `true`                                                                        |
+| `BRAIN_AUTO_GRAPH`                | Queue graph extraction after a completed Brain ingestion run                                                                |
 | `PIERO_API_SECRET`                | Server-to-server secret for the Telegram adapter's internal requests; never expose to the browser                           |
 | `TELEGRAM_ALLOWED_USER_IDS`       | Telegram user IDs allowed by the relevant bot workflow                                                                      |
 | `NEXT_PUBLIC_SITE_NAME`           | Optional display name                                                                                                       |
+
+Worker budgets, AI model overrides (`BRAIN_GRAPH_MODEL`, `MEDIA_ANALYSIS_MODEL`),
+similarity floors and kill switches (`OPS_KILL_SWITCH`, `OPS_WORKERS_ENABLED`,
+`OPS_<SCOPE>_ENABLED`) are documented in
+[`docs/production-operations.md`](./docs/production-operations.md). The
+canonical implementation is `lib/operations/config.ts`.
+
+`vercel.json` intentionally contains no cron entries at the moment. Queues are
+processed by an external scheduler or explicitly from the admin operations API;
+see the scheduling section of the production operations guide.
 
 Individual features may require additional variables (for example, email delivery, payment processing, or AI providers). Check the relevant implementation and deployment documentation before configuring them.
 
@@ -147,6 +163,7 @@ The production site is hosted on Vercel.
 
 Relevant deployment notes:
 
+- [Production operations and deployment checklist](./docs/production-operations.md) — environment variables, migration parity, queue recovery, post-deploy smoke tests and known limitations.
 - [Vercel environment setup](./VERCEL_ENV_SETUP.md)
 - [Prisma migration notes](./VERCEL_PRISMA_MIGRATION.md)
 - [Render migration notes](./RENDER_MIGRATION.md)
@@ -162,6 +179,14 @@ Deployment and migration instructions may apply only to particular legacy or fea
 - [Migration guide](./docs/MIGRATION-GUIDE.md)
 - [Migration cheatsheet](./docs/MIGRATION-CHEATSHEET.md)
 - [Admin media checks](./docs/ADMIN_MEDIA_CHECK.md)
+- [Unified Brain ingestion](./docs/brain-unified-ingestion.md)
+- [Autonomous Brain and Graph workers](./docs/brain-autonomous-workers.md)
+- [Media Intelligence](./docs/media-intelligence.md)
+- [Media source ingestion](./docs/media-source-ingestion.md)
+- [Pierrot production readiness](./docs/pierrot-production.md)
+- [Flow public RAG](./docs/flow-ai-rag.md)
+- [Production operations](./docs/production-operations.md)
+- Operations dashboard: `/admin/operations` (admin-only)
 
 More notes live in `docs/` and the repository root. Some documents describe historical implementation work; check dates and current source before treating them as operational instructions.
 

@@ -643,9 +643,9 @@ export default function ArtEngineClient() {
                 <span className="font-mono text-xs tracking-[0.3em] uppercase text-gray-400 font-semibold block">
                   Institutional Art Advisory & Market Intelligence
                 </span>
-                <h1 className="text-5xl md:text-7xl font-serif font-light text-[#111] tracking-tight">
+                <h2 className="text-5xl md:text-7xl font-serif font-light text-[#111] tracking-tight">
                   Art Intelligence Terminal
-                </h1>
+                </h2>
                 <p className="font-serif italic text-gray-600 text-lg md:text-xl pt-2 leading-relaxed">
                   Professional-grade terminal engineered for art dealers, family offices, and private banking art-lending specialists.
                 </p>

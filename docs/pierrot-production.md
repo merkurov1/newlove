@@ -72,8 +72,9 @@ REQUESTED -> TELEGRAM NOTIFIED -> ACCEPTED / DECLINED / EXPIRED
 - Telegram defaults to `pending`; `/privacy on` grants saving, `/privacy off`
   denies it.
 - `/api/cron/pierrot-retention` runs the existing
-  `purge_expired_pierrot_conversations()` RPC daily at 05:00 and removes stale
-  rate-limit buckets.
+  `purge_expired_pierrot_conversations()` RPC and removes stale rate-limit
+  buckets. It must be called by an external scheduler; `vercel.json` currently
+  has no cron entries.
 - Rate limiting is cross-instance through `pierrot_rate_limit()`; the in-memory
   limiter remains only as a fallback. Raw IPs/Telegram ids are hashed before
   storage.
@@ -90,6 +91,11 @@ Retrieval events now include:
 - media fallback count.
 
 No query text, passages, visitor text or email is stored in these payloads.
+
+The admin Overview now also shows a compact **RAG / Brain** panel: corpus by
+source type, embedded chunks, ingestion/graph/media queue health, retrieval
+outcomes and latency over 30 days. It exposes counts only, never query text or
+passages.
 
 The admin dashboard now shows:
 
@@ -109,6 +115,22 @@ used by `/api/subscribe` succeeds.
 Postcard runtime availability is read from the `postcards` catalogue and the
 order route requires `available=true` and a positive integer price. The
 production catalogue currently has `postcard_1` available at £29.
+
+## Brain Research inventory questions
+
+Questions such as «найти все мои колонки в новой газете» or «сколько я написал
+колонок в новую газету» are answered deterministically from
+`knowledge_documents`, not from top-K retrieval. The inventory path:
+
+- detects a publication inventory question;
+- filters `source_type = article` on `novayagazeta.ru/.eu`;
+- removes duplicate URLs and `media_coverage` mirrors;
+- applies an explicit date range when the question contains one;
+- lists every matching document with its date.
+
+It returns a caveat stating that the count describes the indexed Brain corpus,
+not the publication's complete archive. The same function is unit-tested in
+`lib/knowledge/graph/__tests__/researchInventory.test.ts`.
 
 ## Operational settings
 

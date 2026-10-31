@@ -1,8 +1,10 @@
 import { graphChatJson } from './deepseek';
 import {
-  BRAIN_GRAPH_EXTRACTOR_VERSION,
-  extractDocumentGraph,
-} from './extractor';
+  assertCircuitClosed,
+  recordCircuitFailure,
+  recordCircuitSuccess,
+} from '@/lib/operations/circuitBreaker';
+import { BRAIN_GRAPH_EXTRACTOR_VERSION, extractDocumentGraph } from './extractor';
 import {
   clampConfidence,
   cleanEntityName,
@@ -11,11 +13,7 @@ import {
   relationshipId,
   safeText,
 } from './normalize';
-import {
-  computeGraphProgress,
-  graphRunStatus,
-  type BrainGraphStore,
-} from './store';
+import { computeGraphProgress, graphRunStatus, type BrainGraphStore } from './store';
 import type {
   BrainDocumentForGraph,
   BrainEntityType,
@@ -86,9 +84,7 @@ export async function createGraphRun(input: {
 }> {
   const extractorVersion = input.extractorVersion || BRAIN_GRAPH_EXTRACTOR_VERSION;
   const extractions = await input.store.listDocumentExtractions();
-  const byDocument = new Map(
-    extractions.map((row) => [String(row.document_id), row])
-  );
+  const byDocument = new Map(extractions.map((row) => [String(row.document_id), row]));
   const needs: Array<{ documentId: string; contentHash: string }> = [];
   const skippedDocumentIds: string[] = [];
 
@@ -132,7 +128,10 @@ export async function createGraphRun(input: {
   return { run, jobs, skippedDocumentIds };
 }
 
-export function buildGraphPayload(extraction: DocumentExtraction, chunks: Array<{ id: string; section_path: string[] }>) {
+export function buildGraphPayload(
+  extraction: DocumentExtraction,
+  chunks: Array<{ id: string; section_path: string[] }>
+) {
   const chunkById = new Map(chunks.map((chunk) => [chunk.id, chunk]));
   const entities = new Map<
     string,
@@ -168,9 +167,10 @@ export function buildGraphPayload(extraction: DocumentExtraction, chunks: Array<
     entities.set(id, {
       id,
       entity_type: type,
-      canonical_name: existing && existing.canonical_name.length > canonical.length
-        ? existing.canonical_name
-        : canonical,
+      canonical_name:
+        existing && existing.canonical_name.length > canonical.length
+          ? existing.canonical_name
+          : canonical,
       normalized_name: normalized,
       description: existing?.description || description,
       aliases: Array.from(new Set([...(existing?.aliases || []), ...aliases])).slice(0, 10),
@@ -279,9 +279,12 @@ async function finalizeRun(
   return { progress, runStatus };
 }
 
-export function graphRetryDelaySeconds(attempts: number): number {
+export function graphRetryDelaySeconds(attempts: number, random: number = Math.random()): number {
   const safeAttempts = Math.max(1, Math.trunc(attempts || 1));
-  return Math.min(900, 15 * 2 ** (safeAttempts - 1));
+  const base = Math.min(900, 15 * 2 ** (safeAttempts - 1));
+  const jitter = 0.85 + Math.min(0.999, Math.max(0, random)) * 0.3;
+
+  return Math.max(1, Math.min(900, Math.round(base * jitter)));
 }
 
 export function isPermanentGraphError(error: unknown, code: string): boolean {
@@ -339,7 +342,25 @@ export async function processNextGraphJob(input: {
 
   await store.heartbeatJob?.(job.id, workerId)?.catch(() => undefined);
 
-  const chatJson = input.chatJson || graphChatJson;
+  const chatJson =
+    input.chatJson ||
+    (async (system: string, user: string) => {
+      await assertCircuitClosed('llm');
+      try {
+        const result = await graphChatJson(system, user);
+        await recordCircuitSuccess('llm');
+        return result;
+      } catch (error) {
+        const status = (error as { status?: unknown } | null)?.status;
+        const permanent = typeof status === 'number' && [400, 401, 402, 403, 404].includes(status);
+        await recordCircuitFailure({
+          dependency: 'llm',
+          errorCode: error instanceof Error ? error.message.slice(0, 120) : 'graph_llm_failed',
+          permanent,
+        });
+        throw error;
+      }
+    });
   let skipped = false;
   let entityCount = 0;
   let relationshipCount = 0;
@@ -444,12 +465,11 @@ export async function processNextGraphJob(input: {
 
     await store.updateJob(job.id, {
       status: canRetry ? 'queued' : 'failed',
-      retry_after: canRetry
-        ? new Date(Date.now() + delaySeconds * 1000).toISOString()
-        : null,
-      error_code: code.startsWith('deepseek_') || code === 'document_has_no_chunks'
-        ? code
-        : 'graph_extraction_failed',
+      retry_after: canRetry ? new Date(Date.now() + delaySeconds * 1000).toISOString() : null,
+      error_code:
+        code.startsWith('deepseek_') || code === 'document_has_no_chunks'
+          ? code
+          : 'graph_extraction_failed',
       error_detail: permanent
         ? 'Permanent extraction error; automatic retries stopped.'
         : canRetry
