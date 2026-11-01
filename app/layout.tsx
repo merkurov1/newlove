@@ -275,6 +275,24 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Analytics />
         <SpeedInsights />
 
+        {process.env.NODE_ENV === 'production' && (
+          <>
+            {/* Google tag (gtag.js) — production traffic only. */}
+            <Script
+              src="https://www.googletagmanager.com/gtag/js?id=G-J1F4ZTK9ND"
+              strategy="afterInteractive"
+            />
+            <Script id="google-analytics" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', 'G-J1F4ZTK9ND');
+              `}
+            </Script>
+          </>
+        )}
+
         {/* Загружаем Telegram Web App асинхронно, чтобы исключить Forced Reflow при первой загрузке */}
         <Script src="https://telegram.org/js/telegram-web-app.js" strategy="lazyOnload" />
 
