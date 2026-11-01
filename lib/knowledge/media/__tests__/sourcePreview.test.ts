@@ -344,4 +344,23 @@ describe('Media Archive source preview', () => {
     expect(result.duplicate?.coverage?.documentId).toBe('doc_media_existing');
     expect(result.duplicate?.coverage?.coverageStatus).toBe('completed');
   });
+
+  it('can parse a URL without writing the original source to private storage', async () => {
+    const storage = fakeStorage();
+    const storeSourceBuffer = storage.storeSourceBuffer as unknown as jest.Mock;
+    const result = await previewMediaSource(
+      { kind: 'url', url: WAPO_URL },
+      {
+        ...deps(async () => pageFixture()),
+        storage,
+        persistSource: false,
+      }
+    );
+
+    expect(storeSourceBuffer).not.toHaveBeenCalled();
+    expect(result.source).toBeNull();
+    expect(result.extraction.contentHash).toHaveLength(64);
+    expect(result.extraction.sourceSha256).toHaveLength(64);
+    expect(result.record.title).toContain('Ukrainian attacks');
+  });
 });

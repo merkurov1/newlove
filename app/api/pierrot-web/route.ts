@@ -102,6 +102,19 @@ import {
 } from '@/lib/pierrot/humanPresenceShared';
 import { isHumanPresenceConfigured, notifyHumanRequest } from '@/lib/pierrot/humanPresenceTelegram';
 import { callPierrotModel } from '@/lib/pierrot/model';
+import {
+  confirmPendingUrlCandidate,
+  consumePendingUrlCandidate,
+  extractFirstUrl,
+  formatUrlPreview,
+  isUrlConfirmation,
+  isUrlInput,
+  loadPendingUrlCandidate,
+  pendingUrlError,
+  previewUrlForPierrot,
+  savePendingUrlCandidate,
+} from '@/lib/pierrot/urlIntake';
+import { detectOwnerTool, runOwnerTool } from '@/lib/pierrot/ownerTools';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -826,6 +839,207 @@ export async function POST(req: Request) {
         });
       } catch (error) {
         persistenceFailure(error, 'commercial_analytics');
+      }
+    }
+
+    // Owner-only deterministic tools. These use the same server-side loaders as
+    // the existing admin pages and never expose another UI or chat.
+    if (ownerMode && ragOwnerAuthorized) {
+      const ownerLanguage: 'ru' | 'en' = language === 'en' ? 'en' : 'ru';
+
+      const persistOwnerReply = async (text: string, extra: Record<string, unknown> = {}) => {
+        let finalText = text.slice(0, PIERROT_MAX_MESSAGE_LENGTH);
+
+        if (pierrotStore && canStoreTranscript) {
+          try {
+            const stored = await appendPierrotMessage(pierrotStore, {
+              conversationId,
+              sessionId,
+              messageId: assistantMessageId,
+              role: 'assistant',
+              content: finalText,
+              provider: null,
+            });
+
+            if (!stored.inserted && stored.content) finalText = stored.content;
+
+            await recordPierrotEvent(pierrotStore, {
+              conversationId,
+              sessionId,
+              eventName: 'assistant_replied',
+              eventKey: `assistant_replied:${assistantMessageId}`,
+              payload: {
+                message_id: assistantMessageId,
+                in_reply_to: userMessageId,
+                provider: null,
+                deterministic: true,
+                length: finalText.length,
+                ...extra,
+              },
+            });
+          } catch (error) {
+            persistenceFailure(error, 'owner_tool_reply');
+          }
+        }
+
+        return NextResponse.json({
+          reply: finalText,
+          admin: true,
+          conversationId,
+          sessionId,
+          userMessageId,
+          assistantMessageId,
+          recorded: canStoreTranscript,
+          ...extra,
+        });
+      };
+
+      const pending = pierrotStore
+        ? await loadPendingUrlCandidate(pierrotStore, conversationId).catch(() => null)
+        : null;
+      const confirmation = pending ? isUrlConfirmation(trimmedMessage) : null;
+
+      if (pending && confirmation) {
+        const ageMs = Date.now() - Date.parse(pending.createdAt);
+        const expired = !Number.isFinite(ageMs) || ageMs > 30 * 60 * 1000;
+
+        if (expired) {
+          await consumePendingUrlCandidate({
+            store: pierrotStore!,
+            conversationId,
+            eventKey: pending.eventKey,
+            payload: pending.payload,
+            reason: 'expired',
+          }).catch(() => undefined);
+
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Предыдущий разбор ссылки устарел. Пришлите ссылку заново.'
+              : 'The previous link preview has expired. Send the link again.'
+          );
+        }
+
+        if (confirmation === 'no') {
+          await consumePendingUrlCandidate({
+            store: pierrotStore!,
+            conversationId,
+            eventKey: pending.eventKey,
+            payload: pending.payload,
+            reason: 'declined',
+          }).catch(() => undefined);
+
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Не добавляю. Материал остался только в контексте этого диалога.'
+              : 'I will not add it. The material remains only in this conversation.'
+          );
+        }
+
+        const result = await confirmPendingUrlCandidate({
+          candidate: pending.candidate,
+          requestedBy: currentUserId || 'pierrot-owner',
+          language: ownerLanguage,
+        });
+
+        if (result.status !== 'failed') {
+          await consumePendingUrlCandidate({
+            store: pierrotStore!,
+            conversationId,
+            eventKey: pending.eventKey,
+            payload: pending.payload,
+            reason: 'confirmed',
+          }).catch(() => undefined);
+        }
+
+        return persistOwnerReply(result.message, {
+          brain_url_status: result.status,
+          ...(result.documentId ? { brain_document_id: result.documentId } : {}),
+          ...(result.runId ? { brain_run_id: result.runId } : {}),
+        });
+      }
+
+      if (isUrlInput(trimmedMessage)) {
+        if (!pierrotStore) {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Хранилище диалога недоступно, поэтому не могу сохранить подтверждение. Пришлите ссылку позже.'
+              : 'Conversation storage is unavailable, so I cannot keep the confirmation context. Send the link later.'
+          );
+        }
+
+        if (pending) {
+          await consumePendingUrlCandidate({
+            store: pierrotStore,
+            conversationId,
+            eventKey: pending.eventKey,
+            payload: pending.payload,
+            reason: 'superseded',
+          }).catch(() => undefined);
+        }
+
+        const extractedUrl = extractFirstUrl(trimmedMessage);
+
+        if (!extractedUrl) {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Не вижу полный URL. Пришлите ссылку целиком.'
+              : 'I cannot see a complete URL. Send the full link.'
+          );
+        }
+
+        try {
+          const preview = await previewUrlForPierrot(extractedUrl);
+          let storedPending = false;
+
+          if (preview.canAdd) {
+            try {
+              await savePendingUrlCandidate({
+                store: pierrotStore,
+                conversationId,
+                sessionId,
+                preview,
+              });
+              storedPending = true;
+            } catch (error) {
+              persistenceFailure(error, 'brain_url_pending');
+            }
+          }
+
+          const text = formatUrlPreview(preview, ownerLanguage);
+
+          return persistOwnerReply(
+            preview.canAdd && storedPending
+              ? text
+              : preview.canAdd
+                ? `${text}\n\n${
+                    ownerLanguage === 'ru'
+                      ? 'Не удалось сохранить контекст подтверждения. Пришлите ссылку заново.'
+                      : 'I could not save the confirmation context. Send the link again.'
+                  }`
+                : text,
+            {
+              brain_url_preview: true,
+              brain_url_kind: preview.materialKind,
+              brain_url_pipeline: preview.pipeline,
+            }
+          );
+        } catch (error) {
+          const failure = pendingUrlError(error, ownerLanguage);
+
+          return persistOwnerReply(failure.message, {
+            code: failure.code,
+          });
+        }
+      }
+
+      const ownerTool = detectOwnerTool(trimmedMessage);
+
+      if (ownerTool) {
+        const text = await runOwnerTool(ownerTool, ownerLanguage);
+
+        return persistOwnerReply(text, {
+          owner_tool: ownerTool.kind,
+        });
       }
     }
 

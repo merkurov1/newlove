@@ -13,6 +13,10 @@ const route = fs.readFileSync(
   path.join(process.cwd(), 'app', 'api', 'admin', 'media-records', 'route.ts'),
   'utf8'
 );
+const saveHelper = fs.readFileSync(
+  path.join(process.cwd(), 'lib', 'knowledge', 'media', 'savePreview.ts'),
+  'utf8'
+);
 
 describe('Media Archive source migration', () => {
   it('adds independent indexing status and source metadata', () => {
@@ -37,6 +41,7 @@ describe('Media Archive source migration', () => {
     expect(route).toContain('downloadVerified');
     expect(route).toContain('storedSourceFromBody');
     expect(route).not.toContain('extractMediaPage');
-    expect(route).toContain('enqueueMediaCoverageJob');
+    expect(route).toContain('saveMediaPreview');
+    expect(saveHelper).toContain('enqueueMediaCoverageJob');
   });
 });

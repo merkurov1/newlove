@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata = sanitizeMetadata({
   robots: { index: false, follow: false },
-  title: 'Brain editorial radar',
+  title: 'Editorial Radar',
 });
 
 export default async function BrainRadarPage() {
@@ -19,7 +19,7 @@ export default async function BrainRadarPage() {
           Owner only
         </p>
         <h1 className="mt-2 font-serif text-3xl tracking-tight text-[#211F1F] sm:text-4xl">
-          Editorial radar
+          Editorial Radar
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#746D66]">
           Recurring visitor questions, questions with weak or missing knowledge, and concrete

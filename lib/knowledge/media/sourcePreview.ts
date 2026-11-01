@@ -106,6 +106,8 @@ export type MediaPreviewDeps = {
   extractPdf?: typeof extractPdfDocument;
   extractText?: typeof extractPlainTextDocument;
   classify?: typeof classifyMediaPublication;
+  /** When false, the source is parsed but not written to private storage. */
+  persistSource?: boolean;
 };
 
 export type MediaPreviewResult = {
@@ -404,15 +406,22 @@ export async function previewMediaSource(
     metadataImage = page.metadata.image_url;
     metadataPublishedDate = page.metadata.published_date;
     mimeType = 'text/html';
-    const stored = await storage.storeSourceBuffer(
-      Buffer.from(page.html, 'utf8'),
-      'html',
-      'text/html'
-    );
-    sourcePath = stored.sourcePath;
-    sourceSha256 = stored.sourceSha256;
-    byteSize = stored.byteSize;
-    contentHash = page.article.contentHash;
+    if (deps.persistSource === false) {
+      sourcePath = '';
+      sourceSha256 = sha256Hex(Buffer.from(page.html, 'utf8'));
+      byteSize = Buffer.byteLength(page.html, 'utf8');
+      contentHash = page.article.contentHash;
+    } else {
+      const stored = await storage.storeSourceBuffer(
+        Buffer.from(page.html, 'utf8'),
+        'html',
+        'text/html'
+      );
+      sourcePath = stored.sourcePath;
+      sourceSha256 = stored.sourceSha256;
+      byteSize = stored.byteSize;
+      contentHash = page.article.contentHash;
+    }
   } else if (input.kind === 'text') {
     const validated = validatePastedText(input.text);
     const stored = await storage.storeSourceBuffer(validated.bytes, 'txt', 'text/plain');
@@ -523,17 +532,19 @@ export async function previewMediaSource(
   const chunking = chunkArticle(article, 'doc_media_preview', {
     sourceType: 'media_coverage',
   });
-  const source: MediaSourceDescriptor = {
-    kind: input.kind,
-    format: sourceFormatFor(input.kind),
-    storagePath: sourcePath,
-    sourceSha256,
-    contentHash,
-    originalFilename,
-    mimeType,
-    byteSize,
-    pageCount,
-  };
+  const source: MediaSourceDescriptor | null = sourcePath
+    ? {
+        kind: input.kind,
+        format: sourceFormatFor(input.kind),
+        storagePath: sourcePath,
+        sourceSha256,
+        contentHash,
+        originalFilename,
+        mimeType,
+        byteSize,
+        pageCount,
+      }
+    : null;
   const duplicateRecord = await store.findMediaRecordByUrl(record.url, record.canonical_url);
   const duplicateCoverage = duplicateRecord
     ? await store.findMediaCoverageDocument({
@@ -546,7 +557,7 @@ export async function previewMediaSource(
     record,
     source,
     extraction: extractionFor(article, quality, chunking.chunks.length, {
-      format: source.format,
+      format: sourceFormatFor(input.kind),
       contentHash,
       sourceSha256,
       fetchedBytes,

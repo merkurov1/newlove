@@ -361,7 +361,79 @@ export default function FlowIssueAdmin() {
         </div>
       )}
 
-      {/* SECTION 1: Архив и управление существующими выпусками */}
+      {/* SECTION 1: Сборка нового выпуска */}
+      <section className="mb-10 border border-[#1C1A1B]/15 bg-white p-5 sm:p-7">
+        <h2 className="mb-6 font-serif text-2xl">Собрать новый выпуск</h2>
+
+        <div className="grid gap-6 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block font-mono text-xs uppercase tracking-wider">
+              Язык выпуска
+            </span>
+
+            <select
+              value={lang}
+              onChange={(event) => setLang(event.target.value as IssueLang)}
+              disabled={loading}
+              className="w-full rounded-none border border-[#1C1A1B]/25 bg-white px-3 py-3 text-sm outline-none focus:border-[#990F3D]"
+            >
+              <option value="ru">Русский</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+
+          <div className="hidden sm:block" />
+
+          <label className="block">
+            <span className="mb-2 block font-mono text-xs uppercase tracking-wider">
+              Период с
+            </span>
+
+            <input
+              type="datetime-local"
+              value={periodStart}
+              onChange={(event) => setPeriodStart(event.target.value)}
+              disabled={loading}
+              className="w-full rounded-none border border-[#1C1A1B]/25 bg-white px-3 py-3 text-sm outline-none focus:border-[#990F3D]"
+            />
+
+            <span className="mt-2 block text-xs leading-5 text-[#1C1A1B]/55">
+              Если оставить пустым, сервер определит начало периода по предыдущему выпуску.
+            </span>
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block font-mono text-xs uppercase tracking-wider">
+              Период по
+            </span>
+
+            <input
+              type="datetime-local"
+              value={periodEnd}
+              onChange={(event) => setPeriodEnd(event.target.value)}
+              disabled={loading}
+              className="w-full rounded-none border border-[#1C1A1B]/25 bg-white px-3 py-3 text-sm outline-none focus:border-[#990F3D]"
+            />
+          </label>
+        </div>
+
+        <div className="mt-7 flex flex-wrap items-center gap-4">
+          <button
+            type="button"
+            onClick={createIssue}
+            disabled={loading || Boolean(publishingId) || Boolean(sendingId) || !periodEnd}
+            className="inline-flex min-h-12 items-center justify-center bg-[#990F3D] px-6 py-3 text-sm font-medium text-white transition hover:bg-[#7E0C33] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? "Собираю выпуск…" : "Собрать выпуск"}
+          </button>
+
+          <p className="text-xs leading-5 text-[#1C1A1B]/55">
+            Сначала создаётся черновик. Вы сможете проверить все версии до публикации и отправки.
+          </p>
+        </div>
+      </section>
+
+      {/* SECTION 2: Архив и управление существующими выпусками */}
       <section className="mb-12 border border-[#1C1A1B]/15 bg-white p-5 sm:p-7">
         <div className="mb-5 flex items-center justify-between border-b border-[#EAE6E1] pb-3">
           <h2 className="font-serif text-2xl">Архив выпусков</h2>
@@ -505,78 +577,6 @@ export default function FlowIssueAdmin() {
             </table>
           </div>
         )}
-      </section>
-
-      {/* SECTION 2: Сборка нового выпуска */}
-      <section className="mb-10 border border-[#1C1A1B]/15 bg-white p-5 sm:p-7">
-        <h2 className="mb-6 font-serif text-2xl">Собрать новый выпуск</h2>
-
-        <div className="grid gap-6 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-2 block font-mono text-xs uppercase tracking-wider">
-              Язык выпуска
-            </span>
-
-            <select
-              value={lang}
-              onChange={(event) => setLang(event.target.value as IssueLang)}
-              disabled={loading}
-              className="w-full rounded-none border border-[#1C1A1B]/25 bg-white px-3 py-3 text-sm outline-none focus:border-[#990F3D]"
-            >
-              <option value="ru">Русский</option>
-              <option value="en">English</option>
-            </select>
-          </label>
-
-          <div className="hidden sm:block" />
-
-          <label className="block">
-            <span className="mb-2 block font-mono text-xs uppercase tracking-wider">
-              Период с
-            </span>
-
-            <input
-              type="datetime-local"
-              value={periodStart}
-              onChange={(event) => setPeriodStart(event.target.value)}
-              disabled={loading}
-              className="w-full rounded-none border border-[#1C1A1B]/25 bg-white px-3 py-3 text-sm outline-none focus:border-[#990F3D]"
-            />
-
-            <span className="mt-2 block text-xs leading-5 text-[#1C1A1B]/55">
-              Если оставить пустым, сервер определит начало периода по предыдущему выпуску.
-            </span>
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block font-mono text-xs uppercase tracking-wider">
-              Период по
-            </span>
-
-            <input
-              type="datetime-local"
-              value={periodEnd}
-              onChange={(event) => setPeriodEnd(event.target.value)}
-              disabled={loading}
-              className="w-full rounded-none border border-[#1C1A1B]/25 bg-white px-3 py-3 text-sm outline-none focus:border-[#990F3D]"
-            />
-          </label>
-        </div>
-
-        <div className="mt-7 flex flex-wrap items-center gap-4">
-          <button
-            type="button"
-            onClick={createIssue}
-            disabled={loading || Boolean(publishingId) || Boolean(sendingId) || !periodEnd}
-            className="inline-flex min-h-12 items-center justify-center bg-[#990F3D] px-6 py-3 text-sm font-medium text-white transition hover:bg-[#7E0C33] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {loading ? "Собираю выпуск…" : "Собрать выпуск"}
-          </button>
-
-          <p className="text-xs leading-5 text-[#1C1A1B]/55">
-            Сначала создаётся черновик. Вы сможете проверить все версии до публикации и отправки.
-          </p>
-        </div>
       </section>
 
       {/* SECTION 3: Предпросмотр созданного выпуска */}

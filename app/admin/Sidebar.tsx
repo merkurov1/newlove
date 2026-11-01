@@ -5,21 +5,24 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const navItems = [
-  { href: '/admin', label: 'Панель' },
-  { href: '/admin/flow-issues', label: 'Выпуски Flow' },
-  { href: '/admin/selection', label: 'Selection' },
+  { href: '/admin', label: 'Обзор' },
+  { href: '/admin/flow-issues', label: 'Газета Flow' },
+  { href: '/admin/operations', label: 'Operations' },
   { href: '/admin/projects', label: 'Проекты' },
-  { href: '/admin/letters', label: 'Письма' },
   { href: '/admin/postcards', label: 'Открытки' },
-  { href: '/admin/pierrot/offers', label: 'Правила Pierrot' },
-  { href: '/admin/observatory', label: 'Observatory' },
-  { href: '/admin/users', label: 'Пользователи' },
-  { href: '/admin/media', label: 'Медиа' },
-  { href: '/admin/banners', label: 'Баннеры' },
+  { href: '/admin/newsletter-jobs', label: 'Логи доставки' },
+  { href: '/admin/users', label: 'Пользователи и подписчики' },
+  { href: '/admin/brain/radar', label: 'Editorial Radar' },
+  { href: '/admin/brain', label: 'Brain Injection' },
 ];
 
 export default function Sidebar() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
+  const activeHref = navItems
+    .map((item) => item.href)
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((left, right) => right.length - left.length)[0];
+
   return (
     <aside className="w-64 min-h-screen bg-white border-r border-gray-200 flex flex-col">
       <div className="p-8 pb-4 flex flex-col items-center border-b border-gray-100">
@@ -34,12 +37,7 @@ export default function Sidebar() {
       <nav className="flex-1 mt-6">
         <ul className="space-y-1 px-2">
           {navItems.map((item) => {
-            const isActive =
-              item.href === '/admin'
-                ? pathname === item.href
-                : pathname
-                  ? pathname.startsWith(item.href)
-                  : false;
+            const isActive = activeHref === item.href;
             return (
               <li key={item.href}>
                 <Link

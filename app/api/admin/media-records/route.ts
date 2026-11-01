@@ -3,31 +3,14 @@ import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { normalizeSourceUrl } from '@/lib/knowledge/brain/url';
 import { createBrainStore } from '@/lib/knowledge/brain/store';
-import { normalizeMediaLanguage } from '@/lib/knowledge/media/classify';
-import { enqueueMediaCoverageJob } from '@/lib/knowledge/media/queue';
 import { previewMediaSource, type MediaPreviewInput } from '@/lib/knowledge/media/sourcePreview';
+import { saveMediaPreview, MediaSaveError } from '@/lib/knowledge/media/savePreview';
 import { createBrainStorage } from '@/lib/knowledge/brain/storage';
 import { BrainSourceError } from '@/lib/knowledge/brain/sourceValidation';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 120;
-
-const KINDS = [
-  'quote',
-  'mention',
-  'interview',
-  'radio',
-  'video',
-  'column',
-  'blog',
-  'profile',
-] as const;
-
-const TOPICS = ['Internet & Censorship', 'AI & Tech', 'Art & Culture', 'Fintech & Crypto'] as const;
-
-type Kind = (typeof KINDS)[number];
-type Topic = (typeof TOPICS)[number];
 
 class HttpError extends Error {
   constructor(
@@ -49,9 +32,6 @@ function clean(value: unknown, max = 2000): string {
     .slice(0, max);
 }
 
-function isOneOf<T extends readonly string[]>(values: T, value: unknown): value is T[number] {
-  return typeof value === 'string' && values.includes(value);
-}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Неизвестная ошибка.';
@@ -445,190 +425,40 @@ export async function POST(request: NextRequest) {
       return jsonError('URL публикации недопустим.', 400);
     }
 
-    const supabase = await createClient({ useServiceRole: true });
-    const existing = store
-      ? await store.findMediaRecordByUrl(originalUrl, canonicalUrl).catch(() => null)
-      : null;
-
-    const kind: Kind = isOneOf(KINDS, body.kind)
-      ? body.kind
-      : isOneOf(KINDS, existing?.kind)
-        ? existing.kind
-        : 'mention';
-    const topic: Topic = isOneOf(TOPICS, body.topic)
-      ? body.topic
-      : isOneOf(TOPICS, existing?.topic)
-        ? existing.topic
-        : TOPICS[0];
-    const lang = normalizeMediaLanguage(
-      typeof body.lang === 'string' ? body.lang : existing?.lang,
-      'EN'
-    );
-    const publishedDate = validDate(body.published_date) || existing?.published_date || null;
-    const summary = clean(body.summary, 2000) || existing?.summary || '';
-    const author = clean(body.author, 300) || existing?.author || null;
-    const imageUrl = safeImageUrl(body.image_url) || existing?.image_url || null;
-    const status = body.status === 'published' ? 'published' : 'draft';
-    const diagnostics = extractionDiagnostics(
+    const extraction = extractionDiagnostics(
       body.extraction ?? body.extraction_diagnostics
     );
-    const now = new Date().toISOString();
 
-    const payload = {
+    const result = await saveMediaPreview({
       url: originalUrl,
-      canonical_url: canonicalUrl,
+      canonicalUrl,
       title,
       outlet,
-      author,
-      published_date: publishedDate,
-      lang,
-      kind,
-      topic,
-      summary,
-      image_url: imageUrl,
-      status,
-      source_format: source.format,
-      content_hash: source.contentHash,
-      source_path: source.storagePath,
-      source_sha256: source.sourceSha256,
-      extraction_diagnostics: diagnostics,
-      indexing_status: 'pending' as const,
-      indexing_error: null,
-      ai_metadata: {
-        reviewed: true,
-        import_pending: false,
-        source: 'media_source_save',
-        source_kind: source.kind,
-        source_format: source.format,
-        source_sha256: source.sourceSha256,
-        content_hash: source.contentHash,
-        source_path: source.storagePath,
-        extraction: diagnostics,
-        extracted_at: now,
-      },
-      updated_at: now,
-    };
-
-    let data: Record<string, unknown> | null = null;
-    let error: { code?: string; message?: string } | null = null;
-
-    if (existing) {
-      const result = await supabase
-        .from('media_archive_records')
-        .update(payload)
-        .eq('id', existing.id)
-        .select('*')
-        .single();
-      data = result.data as Record<string, unknown> | null;
-      error = result.error;
-    } else {
-      const result = await supabase
-        .from('media_archive_records')
-        .insert({ ...payload, created_at: now })
-        .select('*')
-        .single();
-      data = result.data as Record<string, unknown> | null;
-      error = result.error;
-
-      if (error?.code === '23505') {
-        const raced = store
-          ? await store.findMediaRecordByUrl(originalUrl, canonicalUrl).catch(() => null)
-          : null;
-
-        if (raced) {
-          const retry = await supabase
-            .from('media_archive_records')
-            .update(payload)
-            .eq('id', raced.id)
-            .select('*')
-            .single();
-          data = retry.data as Record<string, unknown> | null;
-          error = retry.error;
-        }
-      }
-    }
-
-    if (error || !data) {
-      console.error('[media-records] source save failed:', error);
-
-      if (error?.code === '23505') {
-        throw new HttpError('Публикация с таким URL уже существует.', 409);
-      }
-
-      throw new HttpError('Не удалось сохранить публикацию.', 500);
-    }
-
-    const mediaRecordId = String(data.id);
-    let coverage: {
-      status: string;
-      runId?: string;
-      jobId?: string;
-      error?: string;
-    } | null = null;
-
-    if (store) {
-      try {
-        const queued = await enqueueMediaCoverageJob({
-          store,
-          mediaRecordId,
-          inputUrl: originalUrl,
-          normalizedUrl: canonicalUrl,
-          requestedBy: admin.id,
-          source: 'media_source_save',
-          sourceFormat: source.format,
-          storagePath: source.storagePath,
-          sourceSha256: source.sourceSha256,
-          originalFilename: source.originalFilename,
-          mimeType: source.mimeType,
-          byteSize: source.byteSize,
-          pageCount: source.pageCount,
-          authorOverride: author,
-          publishedAtOverride: publishedDate,
-          languageOverride: lang,
-        });
-
-        coverage = {
-          status: queued.status,
-          runId: queued.runId,
-          jobId: queued.job.id,
-        };
-
-        await supabase
-          .from('media_archive_records')
-          .update({
-            indexing_status: queued.status === 'already_queued' ? 'processing' : 'pending',
-            indexing_error: null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', mediaRecordId);
-      } catch (queueError) {
-        console.error('[media-records] coverage enqueue failed', {
-          code: queueError instanceof Error ? queueError.message : 'media_coverage_enqueue_failed',
-        });
-        coverage = {
-          status: 'failed',
-          error: 'Публикация сохранена, но очередь Knowledge не создана.',
-        };
-
-        await supabase
-          .from('media_archive_records')
-          .update({
-            indexing_status: 'failed',
-            indexing_error: 'coverage_enqueue_failed',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', mediaRecordId);
-      }
-    }
+      author: clean(body.author, 300) || null,
+      publishedDate: validDate(body.published_date),
+      lang: typeof body.lang === 'string' ? body.lang : null,
+      kind: typeof body.kind === 'string' ? body.kind : null,
+      topic: typeof body.topic === 'string' ? body.topic : null,
+      summary: clean(body.summary, 2000),
+      imageUrl: safeImageUrl(body.image_url),
+      status: body.status === 'published' ? 'published' : 'draft',
+      source,
+      extraction: body.extraction ?? body.extraction_diagnostics ?? null,
+      requestedBy: admin.id,
+    });
 
     return NextResponse.json({
-      record: data,
-      updated: Boolean(existing),
-      extraction: diagnostics,
-      coverage,
+      record: result.record,
+      updated: result.updated,
+      extraction,
+      coverage: result.coverage,
     });
   } catch (error) {
     if (error instanceof HttpError) {
+      return jsonError(error.message, error.status);
+    }
+
+    if (error instanceof MediaSaveError) {
       return jsonError(error.message, error.status);
     }
 

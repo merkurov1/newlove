@@ -9,35 +9,26 @@ const groups = [
     links: [
       { href: '/admin', label: 'Обзор', icon: '↗' },
       { href: '/admin/flow-issues', label: 'Газета Flow', icon: '📰' },
-      { href: '/admin/media', label: 'Медиа публикации', icon: '▦' },
-      { href: '/admin/media/intelligence', label: 'Media Intelligence', icon: '◔' },
       { href: '/admin/operations', label: 'Operations', icon: '⚙' },
-      { href: '/flow', label: 'Стрим Flow', icon: '≋' },
     ],
   },
   {
     title: 'Издательство',
     links: [
-      { href: '/admin/letters', label: 'Архив писем', icon: '✉' },
-      { href: '/admin/newsletter-jobs', label: 'Логи доставки', icon: '↗' },
       { href: '/admin/projects', label: 'Проекты', icon: '◇' },
       { href: '/admin/postcards', label: 'Открытки', icon: '▧' },
+      { href: '/admin/newsletter-jobs', label: 'Логи доставки', icon: '↗' },
     ],
   },
   {
     title: 'Аудитория',
-    links: [{ href: '/admin/users', label: 'Пользователи & Подписчики', icon: '○' }],
+    links: [{ href: '/admin/users', label: 'Пользователи и подписчики', icon: '○' }],
   },
   {
-    title: 'Pierrot',
+    title: 'Intelligence',
     links: [
-      { href: '/admin/observatory', label: 'Observatory', icon: '◉' },
-      { href: '/admin/pierrot', label: 'Pierrot Intelligence', icon: '◐' },
-      { href: '/admin/pierrot/offers', label: 'Offer policy', icon: '◇' },
-      { href: '/admin/brain', label: 'Brain ingestion', icon: '◇' },
-      { href: '/admin/brain/graph', label: 'Knowledge graph', icon: '◎' },
-      { href: '/admin/brain/research', label: 'Brain research', icon: '⌕' },
-      { href: '/admin/brain/radar', label: 'Editorial radar', icon: '◈' },
+      { href: '/admin/brain/radar', label: 'Editorial Radar', icon: '◈' },
+      { href: '/admin/brain', label: 'Brain Injection', icon: '◇' },
     ],
   },
 ];
@@ -45,10 +36,14 @@ const groups = [
 export default function AdminNav() {
   const pathname = usePathname() ?? '';
 
+  const activeHref = groups
+    .flatMap((group) => group.links)
+    .map((link) => link.href)
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((left, right) => right.length - left.length)[0];
+
   function isActive(href: string) {
-    return href === '/admin'
-      ? pathname === href
-      : pathname === href || pathname.startsWith(`${href}/`);
+    return activeHref === href;
   }
 
   return (
