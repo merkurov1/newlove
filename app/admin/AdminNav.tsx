@@ -49,7 +49,7 @@ export default function AdminNav() {
   return (
     <nav
       aria-label="Admin navigation"
-      className="w-full shrink-0 lg:sticky lg:top-8 lg:w-[224px] lg:self-start"
+      className="w-full shrink-0 lg:sticky lg:top-28 lg:w-[224px] lg:self-start"
     >
       <div className="border-b border-[#E5E1DC] pb-4 lg:border-b-0">
         <Link

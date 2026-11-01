@@ -41,7 +41,7 @@ export default async function AdminLayout({
         lineHeight: 1.55,
       }}
     >
-      <div className="mx-auto grid max-w-[1680px] grid-cols-1 gap-6 px-4 pb-12 pt-24 sm:px-6 lg:grid-cols-[224px_minmax(0,1fr)] lg:gap-10 lg:px-10 lg:pt-10">
+      <div className="mx-auto grid max-w-[1680px] grid-cols-1 gap-6 px-4 pb-12 pt-28 sm:px-6 lg:grid-cols-[224px_minmax(0,1fr)] lg:gap-10 lg:px-10 lg:pt-28">
         <AdminNav />
         <main className="min-w-0">{children}</main>
       </div>
