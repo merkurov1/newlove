@@ -1,21 +1,68 @@
+import { createHash } from 'node:crypto';
 
 import { publishToBluesky } from '@/lib/bluesky';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+
+import {
+  normalizeFlowItem,
+  type FlowContent,
+  type FlowItemInput,
+} from './content';
+import {
+  FLOW_LINK_LABEL,
+  ensureTelegramLinks,
+  formatTelegramMessage,
+  publishTelegramContent,
+  type TelegramPublishResult,
+  type TelegramPublisherDeps,
+  type TelegramResumeState,
+} from './telegram';
+
+export {
+  FLOW_LINK_LABEL,
+  ensureTelegramLinks,
+  formatTelegramMessage,
+};
 
 type UnknownRecord = Record<string, unknown>;
 
-export type CrosspostPayload = {
-  id: string;
-  title?: string | null;
-  type?: string | null;
-  body_md?: string | null;
-  source_url?: string | null;
-  slug?: string | null;
-  lang?: string;
+export type CrosspostChannel = 'telegram' | 'bluesky';
+
+export type CrosspostChannelStatus =
+  | 'pending'
+  | 'publishing'
+  | 'published'
+  | 'failed'
+  | 'skipped';
+
+export type CrosspostChannelState = {
+  status: CrosspostChannelStatus;
+  externalId: string | null;
+  externalUri: string | null;
+  messageIds: number[];
+  chatId: string | null;
+  attempts: number;
+  lastError: string | null;
+  uncertain: boolean;
+  contentHash: string | null;
+  startedAt: string | null;
+  updatedAt: string | null;
+  publishedAt: string | null;
+  textPartsSent: number;
+  sentImageUrls: string[];
+};
+
+export type CrosspostState = {
+  channels: Partial<Record<CrosspostChannel, CrosspostChannelState>>;
+  attemptedAt: string | null;
+  contentHash: string | null;
+  imageCount: number;
+};
+
+export type CrosspostPayload = FlowItemInput & {
   imageUrl?: string | null;
   imageUrls?: string[] | null;
   youtubeUrl?: string | null;
-  metadata?: UnknownRecord | null;
   description?: string | null;
 };
 
@@ -25,19 +72,53 @@ export type CrosspostResult = {
     messageId: number;
     chatId: string;
     bot: 'pierrot' | 'osiris' | 'default';
+    messageIds?: number[];
   } | null;
   osirisWebhook?: { ok: boolean; status?: number; error?: string } | null;
   pierrotWebhook?: { ok: boolean; status?: number; error?: string } | null;
+  channels?: Partial<Record<CrosspostChannel, CrosspostChannelState>>;
+  attemptedChannels?: CrosspostChannel[];
+};
+
+export type CrosspostOptions = {
+  channels?: CrosspostChannel[];
+  retryFailed?: boolean;
+  force?: boolean;
+  retryUncertain?: boolean;
+  deps?: CrosspostDeps;
+};
+
+export type CrosspostDeps = {
+  supabase?: SupabaseClient | null;
+  fetch?: typeof fetch;
+  publishTelegram?: (
+    content: FlowContent,
+    options: { resume?: TelegramResumeState; deps?: TelegramPublisherDeps }
+  ) => Promise<TelegramPublishResult>;
+  publishBluesky?: (payload: CrosspostPayload) => Promise<{ uri: string; cid: string } | null>;
+  now?: () => Date;
 };
 
 const SITE_ORIGIN = 'https://www.merkurov.love';
+const PUBLISHING_LOCK_MS = 15 * 60 * 1000;
+const CHANNELS: CrosspostChannel[] = ['telegram', 'bluesky'];
 
-function getSupabaseAdmin() {
+function getSupabaseAdmin(): SupabaseClient | null {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) return null;
+
+  // Unit tests set placeholder credentials. Never let a test wait on a
+  // non-existent Supabase host; tests that need persistence inject a fake
+  // client through `deps.supabase`.
+  if (
+    process.env.NODE_ENV === 'test' &&
+    /(?:^https?:\/\/)?test\.supabase\.co/i.test(url)
+  ) {
+    return null;
+  }
 
   return createClient(url, serviceRoleKey, {
     auth: {
@@ -51,760 +132,497 @@ function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-function escapeHtmlAttribute(text: string): string {
-  return escapeHtml(text)
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+function readNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.round(value)
+    : 0;
 }
 
-/**
- * Converts a site-relative or absolute HTTP(S) URL to an absolute URL.
- * Invalid protocols and malformed URLs are rejected.
- */
-function normalizeUrl(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  try {
-    const url = new URL(trimmed, SITE_ORIGIN);
-
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-      return null;
-    }
-
-    return url.toString();
-  } catch {
-    return null;
-  }
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string' && Boolean(entry))
+    : [];
 }
 
-/**
- * Remove hashtags from visible message text without changing URLs
- * or HTML attributes.
- */
-function stripTelegramHashtags(html: string): string {
-  return html
-    .split(/(<[^>]*>)/g)
-    .map((part) => {
-      if (part.startsWith('<') && part.endsWith('>')) return part;
-
-      return part
-        .replace(/(^|[\s([{])#[\p{L}\p{N}_]+/gu, '$1')
-        .replace(/[ \t]{2,}/g, ' ');
-    })
-    .join('')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+function messageIdArray(value: unknown): number[] {
+  return Array.isArray(value)
+    ? value.filter(
+        (entry): entry is number =>
+          typeof entry === 'number' && Number.isSafeInteger(entry) && entry > 0
+      )
+    : [];
 }
 
-/**
- * Convert visible bare URLs to clickable domain labels.
- * Existing HTML tags and link destinations are preserved.
- */
-function linkifyBareUrls(html: string): string {
-  return html
-    .split(/(<[^>]*>)/g)
-    .map((part) => {
-      if (part.startsWith('<') && part.endsWith('>')) return part;
+function hashContent(content: FlowContent): string {
+  const source = [
+    content.canonicalUrl,
+    content.title,
+    content.body,
+    content.sourceUrl ?? '',
+    content.images.map((image) => image.url).join(','),
+    content.videos.map((video) => video.url).join(','),
+    content.links.map((link) => link.url).join(','),
+  ].join('|');
 
-      return part.replace(
-        /https?:\/\/[^\s<>"']+/gi,
-        (rawUrl) => {
-          const trailing = rawUrl.match(/[.,!?;:)\]]+$/)?.[0] ?? '';
-          const candidate = trailing
-            ? rawUrl.slice(0, -trailing.length)
-            : rawUrl;
-
-          const url = normalizeUrl(candidate);
-          if (!url) return rawUrl;
-
-          let label = 'Открыть ссылку';
-
-          try {
-            label = new URL(url).hostname.replace(/^www\./i, '');
-          } catch {
-            // Keep the generic label if URL parsing fails.
-          }
-
-          return (
-            `<a href="${escapeHtmlAttribute(url)}">` +
-            `${escapeHtml(label)}</a>${trailing}`
-          );
-        }
-      );
-    })
-    .join('');
+  return createHash('sha256').update(source).digest('hex');
 }
 
-/**
- * Converts common Markdown used in Flow into Telegram HTML.
- * Visible text is escaped; Markdown links become named clickable links.
- */
-function markdownToTelegramHtml(markdown: string): string {
-  const links: string[] = [];
-
-  let text = markdown
-    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
-    .replace(
-      /\[([^\]]+)\]\(([^)]+)\)/g,
-      (_match, label: string, rawUrl: string) => {
-        const url = normalizeUrl(rawUrl);
-        if (!url) return label;
-
-        const token = `FLOWLINKTOKEN${links.length}END`;
-        links.push(
-          `<a href="${escapeHtmlAttribute(url)}">${escapeHtml(label)}</a>`
-        );
-        return token;
-      }
-    );
-
-  text = escapeHtml(text);
-
-  text = text
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([\s\S]+?)\*\*/g, '<b>$1</b>')
-    .replace(/__([\s\S]+?)__/g, '<b>$1</b>')
-    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>')
-    .replace(/(^|[^_])_([^_\n]+)_/g, '$1<i>$2</i>');
-
-  links.forEach((link, index) => {
-    text = text.replace(`FLOWLINKTOKEN${index}END`, link);
-  });
-
-  return text.trim();
+function emptyChannel(status: CrosspostChannelStatus): CrosspostChannelState {
+  return {
+    status,
+    externalId: null,
+    externalUri: null,
+    messageIds: [],
+    chatId: null,
+    attempts: 0,
+    lastError: null,
+    uncertain: false,
+    contentHash: null,
+    startedAt: null,
+    updatedAt: null,
+    publishedAt: null,
+    textPartsSent: 0,
+    sentImageUrls: [],
+  };
 }
 
-/**
- * Supports legacy single-image fields and arrays of image objects or URLs.
- */
-function collectImageUrls(
-  item: CrosspostPayload,
-  metadata: UnknownRecord
-): string[] {
-  const candidates: unknown[] = [];
-
-  if (Array.isArray(item.imageUrls)) {
-    candidates.push(...item.imageUrls);
-  }
-
-  if (item.imageUrl) {
-    candidates.push(item.imageUrl);
-  }
-
-  const singleImageKeys = [
-    'public_url',
-    'publicUrl',
-    'image',
-    'image_url',
-    'imageUrl',
-    'og_image',
-    'ogImage',
-    'thumbnail_url',
-    'thumbnailUrl',
-  ];
-
-  for (const key of singleImageKeys) {
-    if (metadata[key]) candidates.push(metadata[key]);
-  }
-
-  const preview = metadata.link_preview ?? metadata.linkPreview;
-
-  if (isRecord(preview)) {
-    candidates.push(
-      preview.image,
-      preview.image_url,
-      preview.imageUrl,
-      preview.thumbnail,
-      preview.thumbnail_url
-    );
-  }
-
-  const previews = Array.isArray(metadata.link_previews)
-    ? metadata.link_previews
-    : Array.isArray(metadata.linkPreviews)
-      ? metadata.linkPreviews
-      : [];
-
-  for (const p of previews) {
-    if (isRecord(p)) {
-      candidates.push(
-        p.image,
-        p.image_url,
-        p.imageUrl,
-        p.thumbnail,
-        p.thumbnail_url
-      );
-    }
-  }
-
-  const images = metadata.images;
-
-  if (Array.isArray(images)) {
-    for (const image of images) {
-      if (typeof image === 'string') {
-        candidates.push(image);
-        continue;
-      }
-
-      if (!isRecord(image)) continue;
-
-      candidates.push(
-        image.url,
-        image.public_url,
-        image.publicUrl,
-        image.image_url,
-        image.imageUrl,
-        image.src,
-        image.path
-      );
-    }
-  }
-
-  const unique: string[] = [];
-  const seen = new Set<string>();
-
-  for (const candidate of candidates) {
-    const url = normalizeUrl(candidate);
-    if (!url || seen.has(url)) continue;
-
-    seen.add(url);
-    unique.push(url);
-  }
-
-  // Bluesky supports up to four images in a single image embed.
-  return unique.slice(0, 4);
-}
-
-function getYouTubeUrl(
-  item: CrosspostPayload,
-  metadata: UnknownRecord
-): string | null {
-  const direct = normalizeUrl(item.youtubeUrl);
-  if (direct) return direct;
-
-  const youtube = metadata.youtube;
-
-  if (isRecord(youtube) && typeof youtube.video_id === 'string') {
-    return `https://www.youtube.com/watch?v=${encodeURIComponent(youtube.video_id)}`;
-  }
-
-  const candidates = [
-    metadata.youtube_url,
-    metadata.youtubeUrl,
-    metadata.video_url,
-    metadata.videoUrl,
-    item.source_url,
-  ];
-
-  for (const candidate of candidates) {
-    const url = normalizeUrl(candidate);
-    if (!url) continue;
-
-    try {
-      const parsed = new URL(url);
-      const host = parsed.hostname.toLowerCase();
-
-      if (
-        host === 'youtu.be' ||
-        host.endsWith('.youtu.be') ||
-        host === 'youtube.com' ||
-        host.endsWith('.youtube.com')
-      ) {
-        return url;
-      }
-    } catch {
-      // Continue checking other candidates.
-    }
-  }
-
-  return null;
-}
-
-function getFlowUrl(slug?: string | null): string {
-  return slug
-    ? `${SITE_ORIGIN}/flow/${encodeURIComponent(slug)}`
-    : `${SITE_ORIGIN}/flow`;
-}
-
-export const FLOW_LINK_LABEL = '&gt;&gt;&gt;';
-
-function flowLinkHtml(flowUrl: string): string {
-  return `<a href="${escapeHtmlAttribute(flowUrl)}">${FLOW_LINK_LABEL}</a>`;
-}
-
-function sourceLinkHtml(sourceUrl: string): string {
-  return `<a href="${escapeHtmlAttribute(sourceUrl)}">Источник</a>`;
-}
-
-function unescapeHref(value: string): string {
-  return value.replace(/&amp;/g, '&');
-}
-
-function hrefMatches(href: string, target: string): boolean {
-  const normalized = normalizeUrl(unescapeHref(href));
-  const expected = normalizeUrl(target);
-
-  if (!normalized || !expected) return false;
-  if (normalized === expected) return true;
-
-  try {
-    const left = new URL(normalized);
-    const right = new URL(expected);
-    const host = (value: string) => value.toLowerCase().replace(/^www\./, '');
-    const path = (value: string) => value.replace(/\/+$/, '') || '/';
-
-    return (
-      host(left.hostname) === host(right.hostname) &&
-      path(left.pathname) === path(right.pathname) &&
-      left.search === right.search &&
-      left.hash === right.hash
-    );
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Deterministically restores the canonical Flow link and the publication
- * source link after DeepSeek. The model may rewrite or remove them; code owns
- * the visible label and destination.
- */
-export function ensureTelegramLinks(
-  html: string,
-  flowUrl: string,
-  sourceUrl?: string | null
-): string {
-  const anchorPattern =
-    /<a\b[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>[\s\S]*?<\/a>/gi;
-  const canonicalFlow = flowLinkHtml(flowUrl);
-  let flowFound = false;
-
-  let result = html.replace(anchorPattern, (match, doubleHref: string, singleHref: string) => {
-    const href = doubleHref ?? singleHref ?? '';
-    if (!hrefMatches(href, flowUrl)) return match;
-
-    if (flowFound) return '';
-    flowFound = true;
-    return canonicalFlow;
-  });
-
-  if (!flowFound) {
-    result += `${result.trim() ? '\n\n' : ''}${canonicalFlow}`;
-  }
-
-  if (!sourceUrl) return result.replace(/\n{3,}/g, '\n\n').trim();
-
-  const canonicalSource = sourceLinkHtml(sourceUrl);
-  const sourceAnchorPattern =
-    /<a\b[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/a>/gi;
-  let sourceFound = false;
-
-  // A title may also link to the source. Only the canonical "Источник"
-  // label is replaced; the title link is left untouched.
-  result = result.replace(
-    sourceAnchorPattern,
-    (match, doubleHref: string, singleHref: string, inner: string) => {
-      const href = doubleHref ?? singleHref ?? '';
-      if (!hrefMatches(href, sourceUrl)) return match;
-
-      const visible = inner.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
-      if (visible !== 'источник' && visible !== 'source') return match;
-
-      if (sourceFound) return '';
-      sourceFound = true;
-      return canonicalSource;
-    }
-  );
-
-  if (!sourceFound) {
-    if (result.includes(canonicalFlow)) {
-      result = result.replace(canonicalFlow, `${canonicalSource}\n\n${canonicalFlow}`);
-    } else {
-      result += `${result.trim() ? '\n\n' : ''}${canonicalSource}`;
-    }
-  }
-
-  return result.replace(/\n{3,}/g, '\n\n').trim();
-}
-
-/**
- * Formats a Flow item for Telegram.
- *
- * DeepSeek may adapt the text, but the application enforces the no-hashtag
- * rule and converts visible bare URLs to clickable labels afterward.
- */
-export async function formatTelegramMessage(
-  title: string | null | undefined,
-  bodyMd: string | null | undefined,
-  flowUrl: string,
-  lang = 'ru',
-  sourceUrl?: string | null
-): Promise<string> {
-  const cleanTitle = (title || '').trim();
-  const rawBody = (bodyMd || '').trim();
-  const cleanSourceUrl = normalizeUrl(sourceUrl);
-  const safeFlowUrl = normalizeUrl(flowUrl) || `${SITE_ORIGIN}/flow`;
-
-  const cleanBody = markdownToTelegramHtml(rawBody);
-
-  const isRedundantTitle =
-    !cleanTitle ||
-    cleanTitle.toLowerCase() === rawBody.toLowerCase() ||
-    rawBody.toLowerCase().startsWith(cleanTitle.toLowerCase());
-
-  let rawContent = '';
-
-  if (!isRedundantTitle && cleanTitle) {
-    if (cleanSourceUrl) {
-      rawContent +=
-        `<b><a href="${escapeHtmlAttribute(cleanSourceUrl)}">` +
-        `${escapeHtml(cleanTitle)}</a></b>\n\n`;
-    } else {
-      rawContent += `<b>${escapeHtml(cleanTitle)}</b>\n\n`;
-    }
-  }
-
-  if (cleanBody) {
-    rawContent += cleanBody;
-  }
-
-  if (cleanSourceUrl) {
-    rawContent +=
-      `${rawContent ? '\n\n' : ''}` +
-      `<a href="${escapeHtmlAttribute(cleanSourceUrl)}">Источник</a>`;
-  }
-
-  rawContent +=
-    `${rawContent ? '\n\n' : ''}` +
-    flowLinkHtml(safeFlowUrl);
-
-  const finalize = (value: string) =>
-    ensureTelegramLinks(
-      stripTelegramHashtags(linkifyBareUrls(value)),
-      safeFlowUrl,
-      cleanSourceUrl
-    );
-
-  const fallback = () => finalize(rawContent);
-
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey || !rawContent.trim()) return fallback();
-
-  try {
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          {
-            role: 'system',
-            content:
-              `Adapt the supplied publication for Telegram in ${lang}. ` +
-              `Preserve the author's voice, meaning, facts, and tone. ` +
-              `Make only editorial changes needed for readability. ` +
-              `Do not add hashtags, emojis, calls to action, facts, or new links. ` +
-              `Preserve every existing HTML link and its destination exactly; do not rewrite or remove the final Flow link or the publication source link. ` +
-              `Use only these HTML tags: <b>, <i>, <code>, and <a>. ` +
-              `Do not output raw URLs when a named clickable link is possible. ` +
-              `Return only the final message, without commentary.`,
-          },
-          {
-            role: 'user',
-            content: rawContent.slice(0, 2500),
-          },
-        ],
-        temperature: 0.2,
-      }),
-      signal: AbortSignal.timeout(7000),
-    });
-
-    if (!response.ok) {
-      console.warn(
-        '[crosspost:telegram] DeepSeek returned HTTP',
-        response.status
-      );
-      return fallback();
-    }
-
-    const data = await response.json();
-    const formatted = data.choices?.[0]?.message?.content?.trim();
-
-    if (typeof formatted !== 'string' || !formatted) {
-      return fallback();
-    }
-
-    return finalize(formatted);
-  } catch (error) {
-    console.warn(
-      '[crosspost:telegram] DeepSeek formatting fallback:',
-      error
-    );
-
-    return fallback();
-  }
-}
-
-/**
- * Publishes a Flow item to Telegram.
- * Short text is attached to an image or album; long text is sent separately.
- */
-async function publishTelegram(
-  item: CrosspostPayload,
-  imageUrls: string[]
-): Promise<CrosspostResult['telegram']> {
-  const pierrotToken = process.env.PIERROT_BOT_TOKEN;
-  const osirisToken = process.env.OSIRIS_BOT_TOKEN;
-  const defaultToken = process.env.TELEGRAM_BOT_TOKEN;
-
-  const botToken = pierrotToken || osirisToken || defaultToken;
-  const rawChannelId =
-    process.env.TELEGRAM_CHANNEL_ID ||
-    process.env.PIERROT_CHANNEL_ID ||
-    process.env.OSIRIS_CHANNEL_ID;
-
-  if (!botToken || !rawChannelId) {
-    console.info(
-      '[crosspost:telegram] Skipped: bot token or channel ID is not configured.'
-    );
+function normalizeChannelState(value: unknown): CrosspostChannelState | null {
+  if (!isRecord(value)) return null;
+
+  const status = readString(value.status);
+  if (
+    status !== 'pending' &&
+    status !== 'publishing' &&
+    status !== 'published' &&
+    status !== 'failed' &&
+    status !== 'skipped'
+  ) {
     return null;
   }
 
-  const channelId =
-    rawChannelId.startsWith('@') || rawChannelId.startsWith('-')
-      ? rawChannelId
-      : `@${rawChannelId}`;
+  return {
+    status,
+    externalId: readString(value.externalId ?? value.external_id),
+    externalUri: readString(value.externalUri ?? value.external_uri ?? value.uri),
+    messageIds: messageIdArray(value.messageIds ?? value.message_ids),
+    chatId: readString(value.chatId ?? value.chat_id),
+    attempts: readNumber(value.attempts),
+    lastError: readString(value.lastError ?? value.last_error),
+    uncertain: value.uncertain === true,
+    contentHash: readString(value.contentHash ?? value.content_hash),
+    startedAt: readString(value.startedAt ?? value.started_at),
+    updatedAt: readString(value.updatedAt ?? value.updated_at),
+    publishedAt: readString(value.publishedAt ?? value.published_at),
+    textPartsSent: readNumber(value.textPartsSent ?? value.text_parts_sent),
+    sentImageUrls: stringArray(value.sentImageUrls ?? value.sent_image_urls),
+  };
+}
 
-  const bot: 'pierrot' | 'osiris' | 'default' = pierrotToken
-    ? 'pierrot'
-    : osirisToken
-      ? 'osiris'
-      : 'default';
+/**
+ * Reads both the new `crosspost.channels` shape and the legacy production
+ * shape (`crosspost.telegram`, `crosspost.bluesky`, top-level IDs).
+ */
+export function readCrosspostState(
+  item: CrosspostPayload,
+  now = new Date()
+): CrosspostState {
+  const metadata = isRecord(item.metadata) ? item.metadata : {};
+  const legacy = isRecord(metadata.crosspost) ? metadata.crosspost : {};
+  const rawChannels = isRecord(legacy.channels) ? legacy.channels : {};
 
-  const rawSourceUrl =
-    item.source_url ||
-    (isRecord(item.metadata?.link_preview)
-      ? item.metadata.link_preview.url
-      : null) ||
-    (isRecord(item.metadata?.linkPreview)
-      ? item.metadata.linkPreview.url
-      : null);
+  const channels: CrosspostState['channels'] = {};
 
-  const sourceUrl = normalizeUrl(rawSourceUrl);
-  const flowUrl = getFlowUrl(item.slug);
+  const telegramState = normalizeChannelState(rawChannels.telegram);
+  const blueskyState = normalizeChannelState(rawChannels.bluesky);
 
-  const formattedText = await formatTelegramMessage(
-    item.title,
-    item.body_md,
-    flowUrl,
-    item.lang || 'ru',
-    sourceUrl
+  if (telegramState) {
+    channels.telegram = telegramState;
+  } else {
+    const legacyTelegram = isRecord(legacy.telegram) ? legacy.telegram : null;
+    const id =
+      legacyTelegram?.messageId ??
+      legacyTelegram?.message_id ??
+      metadata.telegram_message_id ??
+      item.telegram_message_id;
+
+    if (id !== null && id !== undefined && String(id).trim()) {
+      channels.telegram = {
+        ...emptyChannel('published'),
+        externalId: String(id),
+        messageIds: [Number(id)].filter((value) => Number.isSafeInteger(value)),
+        chatId: readString(
+          legacyTelegram?.chatId ??
+            legacyTelegram?.chat_id ??
+            metadata.telegram_channel_id
+        ),
+        publishedAt:
+          readString(legacy.attempted_at) ??
+          readString(legacy.crossposted_at) ??
+          now.toISOString(),
+        updatedAt:
+          readString(legacy.attempted_at) ??
+          readString(legacy.crossposted_at) ??
+          now.toISOString(),
+      };
+    }
+  }
+
+  if (blueskyState) {
+    channels.bluesky = blueskyState;
+  } else {
+    const legacyBluesky = isRecord(legacy.bluesky) ? legacy.bluesky : null;
+    const uri =
+      readString(legacyBluesky?.uri) ??
+      readString(metadata.bluesky_uri) ??
+      readString(item.bluesky_uri);
+
+    if (uri) {
+      channels.bluesky = {
+        ...emptyChannel('published'),
+        externalId: readString(legacyBluesky?.cid) ?? readString(metadata.bluesky_cid),
+        externalUri: uri,
+        publishedAt:
+          readString(legacy.attempted_at) ??
+          readString(legacy.crossposted_at) ??
+          now.toISOString(),
+        updatedAt:
+          readString(legacy.attempted_at) ??
+          readString(legacy.crossposted_at) ??
+          now.toISOString(),
+      };
+    }
+  }
+
+  return {
+    channels,
+    attemptedAt: readString(legacy.attempted_at ?? legacy.crossposted_at),
+    contentHash: readString(legacy.content_hash),
+    imageCount: readNumber(legacy.image_count),
+  };
+}
+
+function isFreshPublishing(
+  state: CrosspostChannelState | undefined,
+  now: Date
+): boolean {
+  if (!state || state.status !== 'publishing') return false;
+  const started = state.startedAt ?? state.updatedAt;
+  if (!started) return true;
+
+  const timestamp = Date.parse(started);
+  if (!Number.isFinite(timestamp)) return true;
+
+  return now.getTime() - timestamp < PUBLISHING_LOCK_MS;
+}
+
+export function selectChannels(
+  state: CrosspostState,
+  options: CrosspostOptions = {},
+  now = new Date()
+): CrosspostChannel[] {
+  const requested =
+    Array.isArray(options.channels) && options.channels.length > 0
+      ? CHANNELS.filter((channel) => options.channels?.includes(channel))
+      : CHANNELS;
+
+  if (options.retryFailed) {
+    return requested.filter((channel) => {
+      const channelState = state.channels[channel];
+      if (channelState?.status !== 'failed') return false;
+      if (channelState.uncertain && !options.retryUncertain && !options.force) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  return requested.filter((channel) => {
+    const channelState = state.channels[channel];
+
+    if (!channelState) return true;
+    if (options.force) return true;
+    if (channelState.status === 'published') return false;
+    if (isFreshPublishing(channelState, now)) return false;
+    if (channelState.uncertain && !options.retryUncertain) return false;
+
+    return true;
+  });
+}
+
+function stateForPublishing(
+  previous: CrosspostChannelState | undefined,
+  contentHash: string,
+  now: Date
+): CrosspostChannelState {
+  const timestamp = now.toISOString();
+
+  return {
+    ...(previous ?? emptyChannel('pending')),
+    status: 'publishing',
+    attempts: (previous?.attempts ?? 0) + 1,
+    lastError: null,
+    uncertain: false,
+    contentHash,
+    startedAt: timestamp,
+    updatedAt: timestamp,
+    // Keep confirmed deliveries from a previous partial run, so a retry only
+    // sends the missing text parts / images.
+    textPartsSent: previous?.textPartsSent ?? 0,
+    sentImageUrls: previous?.sentImageUrls ?? [],
+  };
+}
+
+function stateForTelegram(
+  previous: CrosspostChannelState | undefined,
+  result: TelegramPublishResult,
+  contentHash: string,
+  now: Date
+): CrosspostChannelState {
+  const timestamp = now.toISOString();
+  const previousMessageIds = previous?.messageIds ?? [];
+  const messageIds = Array.from(
+    new Set([...previousMessageIds, ...result.messageIds])
+  );
+  const sentImages = Array.from(
+    new Set([...(previous?.sentImageUrls ?? []), ...result.sentImageUrls])
   );
 
-  const photoUrl = imageUrls[0] ?? null;
-  const hasImages = imageUrls.length > 0;
+  const status: CrosspostChannelStatus = result.skipped
+    ? 'skipped'
+    : result.ok
+      ? 'published'
+      : 'failed';
 
-  // Keep some margin for Telegram's 1024-character caption limit.
-  const CAPTION_LIMIT = 900;
-  const useSeparateText = formattedText.length > CAPTION_LIMIT;
+  return {
+    status,
+    externalId:
+      messageIds.length > 0
+        ? String(messageIds[0])
+        : previous?.externalId ?? null,
+    externalUri: previous?.externalUri ?? null,
+    messageIds,
+    chatId: result.chatId ?? previous?.chatId ?? null,
+    attempts: previous?.attempts ?? 1,
+    lastError: result.ok ? null : result.error ?? 'Telegram publish failed.',
+    uncertain: !result.ok && Boolean(result.uncertain),
+    contentHash,
+    startedAt: previous?.startedAt ?? timestamp,
+    updatedAt: timestamp,
+    publishedAt:
+      status === 'published'
+        ? previous?.publishedAt ?? timestamp
+        : previous?.publishedAt ?? null,
+    textPartsSent: result.textPartsSent,
+    sentImageUrls: sentImages,
+  };
+}
 
-  async function sendMessage(
-    withPhoto: boolean,
-    parseMode: 'HTML' | undefined,
-    messageText = formattedText,
-    includeCaption = true
-  ): Promise<any> {
-    const usePhoto = withPhoto && Boolean(photoUrl);
-    const endpoint = usePhoto ? 'sendPhoto' : 'sendMessage';
+function stateForBluesky(
+  previous: CrosspostChannelState | undefined,
+  result: { uri: string; cid: string } | null,
+  contentHash: string,
+  now: Date
+): CrosspostChannelState {
+  const timestamp = now.toISOString();
 
-    const payload: Record<string, unknown> = {
-      chat_id: channelId,
-      ...(usePhoto
-        ? {
-            photo: photoUrl,
-            ...(includeCaption
-              ? { caption: messageText.slice(0, 1024) }
-              : {}),
-          }
-        : {
-            text: messageText.slice(0, 4096),
-            link_preview_options: { is_disabled: true },
-          }),
-      ...(parseMode ? { parse_mode: parseMode } : {}),
-    };
-
-    const response = await fetch(
-      `https://api.telegram.org/bot${botToken}/${endpoint}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(15000),
-      }
-    );
-
-    return response.json();
-  }
-
-  // Send a native Telegram album when there are multiple images.
-  if (imageUrls.length > 1) {
-    const media = imageUrls.slice(0, 10).map((url, index) => ({
-      type: 'photo',
-      media: url,
-      ...(index === 0 && !useSeparateText
-        ? {
-            caption: formattedText,
-            parse_mode: 'HTML',
-          }
-        : {}),
-    }));
-
-    try {
-      const groupRes = await fetch(
-        `https://api.telegram.org/bot${botToken}/sendMediaGroup`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: channelId, media }),
-          signal: AbortSignal.timeout(15000),
-        }
-      );
-
-      const groupData = await groupRes.json();
-
-      if (
-        groupData.ok &&
-        Array.isArray(groupData.result) &&
-        groupData.result.length > 0
-      ) {
-        const firstMessage = groupData.result[0];
-
-        if (useSeparateText) {
-          const textData = await sendMessage(false, 'HTML', formattedText);
-
-          if (!textData.ok) {
-            console.error(
-              '[crosspost:telegram] Album sent, but text delivery failed:',
-              textData.description
-            );
-          }
-        }
-
-        console.info('[crosspost:telegram] Published media group album:', {
-          channelId,
-          messageId: firstMessage.message_id,
-          photoCount: media.length,
-          textSentSeparately: useSeparateText,
-        });
-
-        return {
-          messageId: firstMessage.message_id,
-          chatId: String(firstMessage.chat.id),
-          bot,
-        };
-      }
-
-      console.warn(
-        '[crosspost:telegram] sendMediaGroup failed; falling back:',
-        groupData.description
-      );
-    } catch (groupError) {
-      console.warn(
-        '[crosspost:telegram] sendMediaGroup exception; falling back:',
-        groupError
-      );
-    }
-  }
-
-  try {
-    let data: any;
-
-    if (hasImages && useSeparateText) {
-      // Send the image without a caption, then send the complete text.
-      data = await sendMessage(true, undefined, '', false);
-
-      if (data.ok && data.result) {
-        const textData = await sendMessage(false, 'HTML', formattedText);
-
-        if (!textData.ok) {
-          console.error(
-            '[crosspost:telegram] Photo sent, but text delivery failed:',
-            textData.description
-          );
-        }
-      }
-    } else {
-      data = await sendMessage(hasImages, 'HTML', formattedText);
-    }
-
-    if (
-      !data?.ok &&
-      typeof data?.description === 'string' &&
-      data.description.includes("can't parse entities")
-    ) {
-      console.warn(
-        '[crosspost:telegram] HTML parsing failed; retrying without HTML.'
-      );
-
-      data = await sendMessage(
-        hasImages && !useSeparateText,
-        undefined,
-        formattedText,
-        !useSeparateText
-      );
-    }
-
-    if (!data?.ok || !data.result) {
-      console.error('[crosspost:telegram] Send failed:', {
-        status: data?.error_code,
-        description: data?.description,
-      });
-      return null;
-    }
-
-    console.info('[crosspost:telegram] Published:', {
-      channelId,
-      messageId: data.result.message_id,
-      usedPhoto: Boolean(data.result.photo),
-      textSentSeparately: useSeparateText,
-    });
-
+  if (!result) {
     return {
-      messageId: data.result.message_id,
-      chatId: String(data.result.chat.id),
-      bot,
+      ...(previous ?? emptyChannel('failed')),
+      status: 'failed',
+      attempts: previous?.attempts ?? 1,
+      lastError: previous?.lastError ?? 'Bluesky publish failed.',
+      uncertain: false,
+      contentHash,
+      startedAt: previous?.startedAt ?? timestamp,
+      updatedAt: timestamp,
     };
-  } catch (error) {
-    console.error('[crosspost:telegram] Exception:', error);
-    return null;
+  }
+
+  return {
+    status: 'published',
+    externalId: result.cid,
+    externalUri: result.uri,
+    messageIds: [],
+    chatId: null,
+    attempts: previous?.attempts ?? 1,
+    lastError: null,
+    uncertain: false,
+    contentHash,
+    startedAt: previous?.startedAt ?? timestamp,
+    updatedAt: timestamp,
+    publishedAt: previous?.publishedAt ?? timestamp,
+    textPartsSent: 0,
+    sentImageUrls: [],
+  };
+}
+
+async function persistState(
+  supabase: SupabaseClient | null,
+  itemId: string | null,
+  fallbackMetadata: UnknownRecord,
+  state: CrosspostState,
+  content: FlowContent
+): Promise<void> {
+  if (!supabase || !itemId) return;
+
+  let metadata = fallbackMetadata;
+
+  try {
+    const { data } = await supabase
+      .from('items')
+      .select('metadata,bluesky_uri,telegram_message_id')
+      .eq('id', itemId)
+      .maybeSingle();
+
+    if (isRecord(data?.metadata)) metadata = data.metadata;
+  } catch {
+    // Use the payload metadata if the fresh read is unavailable.
+  }
+
+  const previousCrosspost = isRecord(metadata.crosspost)
+    ? metadata.crosspost
+    : {};
+  const telegram = state.channels.telegram;
+  const bluesky = state.channels.bluesky;
+
+  const updatedMetadata: UnknownRecord = {
+    ...metadata,
+    crosspost: {
+      ...previousCrosspost,
+      ...state,
+      channels: state.channels,
+      telegram:
+        telegram?.status === 'published'
+          ? {
+              messageId: telegram.messageIds[0] ?? Number(telegram.externalId),
+              messageIds: telegram.messageIds,
+              chatId: telegram.chatId,
+              bot: previousCrosspost.telegram && isRecord(previousCrosspost.telegram)
+                ? previousCrosspost.telegram.bot
+                : undefined,
+            }
+          : previousCrosspost.telegram ?? null,
+      bluesky:
+        bluesky?.status === 'published'
+          ? {
+              uri: bluesky.externalUri,
+              cid: bluesky.externalId,
+            }
+          : previousCrosspost.bluesky ?? null,
+    },
+  };
+
+  const fullUpdate: Record<string, unknown> = {
+    metadata: updatedMetadata,
+  };
+
+  if (bluesky?.status === 'published' && bluesky.externalUri) {
+    updatedMetadata.bluesky_uri = bluesky.externalUri;
+    updatedMetadata.bluesky_cid = bluesky.externalId;
+    fullUpdate.bluesky_uri = bluesky.externalUri;
+    fullUpdate.bluesky_cid = bluesky.externalId;
+  }
+
+  if (telegram?.status === 'published' && telegram.messageIds.length > 0) {
+    updatedMetadata.telegram_message_id = telegram.messageIds[0];
+    updatedMetadata.telegram_channel_id = telegram.chatId;
+    fullUpdate.telegram_message_id = telegram.messageIds[0];
+    if (telegram.chatId) fullUpdate.telegram_channel_id = telegram.chatId;
+  }
+
+  const { error } = await supabase
+    .from('items')
+    .update(fullUpdate)
+    .eq('id', itemId);
+
+  if (error) {
+    console.warn(
+      '[crosspost] Could not update all columns; retrying metadata only:',
+      error.message
+    );
+
+    const { error: metadataError } = await supabase
+      .from('items')
+      .update({ metadata: updatedMetadata })
+      .eq('id', itemId);
+
+    if (metadataError) {
+      console.error(
+        '[crosspost] Failed to persist crosspost metadata:',
+        metadataError.message
+      );
+    }
   }
 }
 
 /**
- * Sends the publication event to a configured external webhook.
+ * The existing distributions table has `pending/posted/failed` statuses, while
+ * the public state uses `publishing/published`. Mirror the durable fields into
+ * it when available, but keep metadata as the canonical state that supports
+ * the in-progress phase without a schema migration.
  */
+async function mirrorDistributions(
+  supabase: SupabaseClient | null,
+  itemId: string | null,
+  state: CrosspostState
+): Promise<void> {
+  if (!supabase || !itemId) return;
+
+  for (const channel of CHANNELS) {
+    const channelState = state.channels[channel];
+    if (!channelState) continue;
+
+    const status =
+      channelState.status === 'published'
+        ? 'posted'
+        : channelState.status === 'failed'
+          ? 'failed'
+          : channelState.status === 'skipped'
+            ? null
+            : 'pending';
+
+    if (!status) continue;
+
+    const { error } = await supabase.from('distributions').upsert(
+      {
+        item_id: itemId,
+        channel,
+        status,
+        external_id: channelState.externalUri ?? channelState.externalId,
+        payload_hash: channelState.contentHash,
+        attempts: channelState.attempts,
+        last_error: channelState.lastError,
+        posted_at: channelState.publishedAt,
+      },
+      { onConflict: 'item_id,channel' }
+    );
+
+    if (error) {
+      console.warn(
+        '[crosspost] distributions mirror skipped:',
+        channel,
+        error.message
+      );
+    }
+  }
+}
+
 async function dispatchWebhook(
   webhookUrl: string | undefined,
   apiKey: string | undefined,
-  payload: CrosspostPayload
+  payload: CrosspostPayload,
+  deps: CrosspostDeps
 ): Promise<{ ok: boolean; status?: number; error?: string } | null> {
   if (!webhookUrl) return null;
 
+  const fetcher = deps.fetch ?? fetch;
+
   try {
-    const response = await fetch(webhookUrl, {
+    const response = await fetcher(webhookUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -821,189 +639,206 @@ async function dispatchWebhook(
     if (!response.ok) {
       const responseText = await response.text().catch(() => '');
       console.warn('[crosspost:webhook] Non-success response:', {
-        url: webhookUrl,
         status: response.status,
         body: responseText.slice(0, 500),
       });
     }
 
-    return {
-      ok: response.ok,
-      status: response.status,
-    };
+    return { ok: response.ok, status: response.status };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Network error';
 
-    console.warn('[crosspost:webhook] Dispatch failed:', {
-      url: webhookUrl,
-      error: message,
-    });
+    console.warn('[crosspost:webhook] Dispatch failed:', message);
 
-    return {
-      ok: false,
-      error: message,
-    };
+    return { ok: false, error: message };
   }
 }
 
 /**
- * Crossposts a published Flow item to Bluesky, Telegram, and configured webhooks.
- * Each channel runs independently so a failure on one channel does not block others.
+ * Crosspost a Flow item to Telegram and Bluesky independently.
+ *
+ * - A failure in one channel never blocks the other.
+ * - Already-published channels are not reposted.
+ * - Retries send only the failed channel and resume partially delivered text
+ *   parts/images.
+ * - Timeout results are marked `uncertain` and are not retried automatically;
+ *   an explicit `force` retry is required to avoid a duplicate.
  */
 export async function crosspostFlowItem(
-  item: CrosspostPayload
+  item: CrosspostPayload,
+  options: CrosspostOptions = {}
 ): Promise<CrosspostResult> {
-  const metadata: UnknownRecord = isRecord(item.metadata) ? item.metadata : {};
-  const imageUrls = collectImageUrls(item, metadata);
-  const youtubeUrl = getYouTubeUrl(item, metadata);
+  const deps = options.deps ?? {};
+  const supabase =
+    deps.supabase === undefined ? getSupabaseAdmin() : deps.supabase;
+  const now = deps.now ?? (() => new Date());
+  const startedAt = now();
 
-  const payload: CrosspostPayload = {
-    ...item,
-    imageUrl: imageUrls[0] ?? null,
-    imageUrls,
-    youtubeUrl,
-    metadata,
-    description:
-      item.description ||
-      (typeof metadata.description === 'string' ? metadata.description : null),
+  let content: FlowContent;
+
+  try {
+    content = normalizeFlowItem(item);
+  } catch (error) {
+    console.error('[crosspost] Content normalization failed:', error);
+    return {
+      channels: {},
+      attemptedChannels: [],
+    };
+  }
+
+  const contentHash = hashContent(content);
+  const previousState = readCrosspostState(item, startedAt);
+  const channelsToAttempt = selectChannels(previousState, options, startedAt);
+
+  if (channelsToAttempt.length === 0) {
+    return {
+      bluesky: null,
+      telegram: null,
+      channels: previousState.channels,
+      attemptedChannels: [],
+    };
+  }
+
+  const state: CrosspostState = {
+    channels: { ...previousState.channels },
+    attemptedAt: startedAt.toISOString(),
+    contentHash,
+    imageCount: content.images.length,
   };
 
-  console.info('[crosspost] Starting publication:', {
-    itemId: item.id,
-    type: item.type || 'unknown',
-    imageCount: imageUrls.length,
-    hasYouTube: Boolean(youtubeUrl),
-    hasSourceUrl: Boolean(item.source_url),
-  });
-
-  const [blueskyResult, telegramResult, osirisResult, pierrotResult] =
-    await Promise.all([
-      publishToBluesky({
-        title: payload.title,
-        type: payload.type,
-        body_md: payload.body_md,
-        source_url: payload.source_url,
-        slug: payload.slug,
-        lang: payload.lang,
-        imageUrl: payload.imageUrl,
-        imageUrls,
-        youtubeUrl,
-        metadata,
-        description: payload.description,
-      }).catch((error) => {
-        console.error('[crosspost:bluesky] Publish failed:', error);
-        return null;
-      }),
-
-      publishTelegram(payload, imageUrls).catch((error) => {
-        console.error('[crosspost:telegram] Publish failed:', error);
-        return null;
-      }),
-
-      dispatchWebhook(
-        process.env.OSIRIS_WEBHOOK_URL || process.env.OSIRIS_API_URL,
-        process.env.OSIRIS_API_KEY,
-        payload
-      ),
-
-      dispatchWebhook(
-        process.env.PIERROT_WEBHOOK_URL,
-        process.env.PIERROT_API_KEY,
-        payload
-      ),
-    ]);
-
-  const result: CrosspostResult = {
-    bluesky: blueskyResult,
-    telegram: telegramResult,
-    osirisWebhook: osirisResult,
-    pierrotWebhook: pierrotResult,
-  };
-
-  // Persist results for visibility and later diagnostics.
-  const supabase = getSupabaseAdmin();
-
-  if (supabase && item.id) {
-    const previousCrosspost = isRecord(metadata.crosspost)
-      ? metadata.crosspost
-      : {};
-
-    const updatedMetadata: UnknownRecord = {
-      ...metadata,
-      bluesky_uri:
-        blueskyResult?.uri ??
-        (typeof metadata.bluesky_uri === 'string' ? metadata.bluesky_uri : null),
-      bluesky_cid:
-        blueskyResult?.cid ??
-        (typeof metadata.bluesky_cid === 'string' ? metadata.bluesky_cid : null),
-      telegram_message_id:
-        telegramResult?.messageId ??
-        metadata.telegram_message_id ??
-        null,
-      telegram_channel_id:
-        telegramResult?.chatId ??
-        metadata.telegram_channel_id ??
-        null,
-      crosspost: {
-        ...previousCrosspost,
-        telegram: telegramResult,
-        bluesky: blueskyResult,
-        osiris: osirisResult,
-        pierrot: pierrotResult,
-        image_count: imageUrls.length,
-        attempted_at: new Date().toISOString(),
-      },
-    };
-
-    const fullUpdate: Record<string, unknown> = {
-      metadata: updatedMetadata,
-    };
-
-    if (blueskyResult) {
-      fullUpdate.bluesky_uri = blueskyResult.uri;
-      fullUpdate.bluesky_cid = blueskyResult.cid;
-    }
-
-    if (telegramResult) {
-      fullUpdate.telegram_message_id = telegramResult.messageId;
-      fullUpdate.telegram_channel_id = telegramResult.chatId;
-    }
-
-    const { error: updateError } = await supabase
-      .from('items')
-      .update(fullUpdate)
-      .eq('id', item.id);
-
-    if (updateError) {
-      console.warn(
-        '[crosspost] Could not update all columns; retrying metadata only:',
-        updateError.message
-      );
-
-      const { error: metadataError } = await supabase
-        .from('items')
-        .update({ metadata: updatedMetadata })
-        .eq('id', item.id);
-
-      if (metadataError) {
-        console.error(
-          '[crosspost] Failed to persist crosspost metadata:',
-          metadataError.message
-        );
-      }
-    }
-  } else {
-    console.info(
-      '[crosspost] Supabase persistence skipped: admin credentials or item ID missing.'
+  for (const channel of channelsToAttempt) {
+    state.channels[channel] = stateForPublishing(
+      previousState.channels[channel],
+      contentHash,
+      startedAt
     );
   }
 
+  // Persist the in-progress phase first: a second request or a crash cannot
+  // silently start another publication for the same channel.
+  await persistState(
+    supabase,
+    content.id,
+    content.metadata,
+    state,
+    content
+  );
+
+  const [telegramResult, blueskyResult, osirisResult, pierrotResult] =
+    await Promise.all([
+      channelsToAttempt.includes('telegram')
+        ? (deps.publishTelegram ?? publishTelegramContent)(content, {
+            resume: {
+              textParts: previousState.channels.telegram?.textPartsSent ?? 0,
+              imageUrls: previousState.channels.telegram?.sentImageUrls ?? [],
+            },
+          }).catch((error): TelegramPublishResult => ({
+            ok: false,
+            messageIds: [],
+            textPartsSent: previousState.channels.telegram?.textPartsSent ?? 0,
+            sentImageUrls: previousState.channels.telegram?.sentImageUrls ?? [],
+            failedImages: 0,
+            error:
+              error instanceof Error
+                ? error.message.slice(0, 300)
+                : 'Telegram publish failed.',
+            uncertain: true,
+          }))
+        : Promise.resolve(null),
+
+      channelsToAttempt.includes('bluesky')
+        ? (deps.publishBluesky ?? publishToBluesky)({
+            ...item,
+            metadata: content.metadata,
+            title: content.title,
+            body_md: content.body,
+            source_url: content.sourceUrl,
+            type: content.rawType,
+            lang: content.language,
+            imageUrls: content.images.map((image) => image.url),
+          }).catch((error) => {
+            console.error('[crosspost:bluesky] Publish failed:', error);
+            return null;
+          })
+        : Promise.resolve(null),
+
+      options.retryFailed
+        ? Promise.resolve(null)
+        : dispatchWebhook(
+            process.env.OSIRIS_WEBHOOK_URL || process.env.OSIRIS_API_URL,
+            process.env.OSIRIS_API_KEY,
+            { ...item, metadata: content.metadata },
+            deps
+          ),
+
+      options.retryFailed
+        ? Promise.resolve(null)
+        : dispatchWebhook(
+            process.env.PIERROT_WEBHOOK_URL,
+            process.env.PIERROT_API_KEY,
+            { ...item, metadata: content.metadata },
+            deps
+          ),
+    ]);
+
+  const finishedAt = now();
+
+  if (telegramResult) {
+    state.channels.telegram = stateForTelegram(
+      state.channels.telegram,
+      telegramResult,
+      contentHash,
+      finishedAt
+    );
+  }
+
+  if (channelsToAttempt.includes('bluesky')) {
+    state.channels.bluesky = stateForBluesky(
+      state.channels.bluesky,
+      blueskyResult,
+      contentHash,
+      finishedAt
+    );
+  }
+
+  await persistState(
+    supabase,
+    content.id,
+    content.metadata,
+    state,
+    content
+  );
+  await mirrorDistributions(supabase, content.id, state);
+
+  const result: CrosspostResult = {
+    bluesky:
+      state.channels.bluesky?.status === 'published'
+        ? {
+            uri: state.channels.bluesky.externalUri ?? '',
+            cid: state.channels.bluesky.externalId ?? '',
+          }
+        : null,
+    telegram:
+      state.channels.telegram?.status === 'published' &&
+      state.channels.telegram.messageIds.length > 0
+        ? {
+            messageId: state.channels.telegram.messageIds[0],
+            chatId: state.channels.telegram.chatId ?? '',
+            bot: telegramResult?.bot ?? 'default',
+            messageIds: state.channels.telegram.messageIds,
+          }
+        : null,
+    osirisWebhook: osirisResult,
+    pierrotWebhook: pierrotResult,
+    channels: state.channels,
+    attemptedChannels: channelsToAttempt,
+  };
+
   console.info('[crosspost] Finished:', {
-    itemId: item.id,
-    bluesky: Boolean(blueskyResult),
-    telegram: Boolean(telegramResult),
-    osirisWebhook: osirisResult?.ok ?? null,
-    pierrotWebhook: pierrotResult?.ok ?? null,
+    itemId: content.id,
+    attemptedChannels: channelsToAttempt,
+    telegram: state.channels.telegram?.status ?? 'not_attempted',
+    bluesky: state.channels.bluesky?.status ?? 'not_attempted',
   });
 
   return result;

@@ -6,6 +6,7 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { generateFlowContext } from '@/lib/flow/ai';
+import { invalidateFlowCache } from '@/lib/flow/items-cash';
 import {
   flowAiContextErrorPayload,
   flowAiContextGeneratingPayload,
@@ -117,6 +118,7 @@ export async function POST(
     // remove any stale row instead of calling the model.
     if (item.type === 'photo') {
       await supabase.from('flow_ai_context').delete().eq('item_id', id);
+      invalidateFlowCache();
 
       return NextResponse.json({
         success: true,
@@ -166,6 +168,7 @@ export async function POST(
           .from('flow_ai_context')
           .delete()
           .eq('item_id', id);
+        invalidateFlowCache();
 
         return NextResponse.json({
           success: true,
@@ -195,6 +198,8 @@ export async function POST(
       if (saveError) {
         throw saveError;
       }
+
+      invalidateFlowCache();
 
       return NextResponse.json({
         success: true,

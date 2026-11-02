@@ -195,7 +195,7 @@ CRITICAL CONSTRAINTS:
 - Do NOT mention that you are an AI or language model.`;
 }
 
-type ProviderResult = {
+export type ProviderResult = {
   content: string;
   model: string;
   provider: string;
@@ -383,6 +383,19 @@ async function completeWithFallback(
     latencyMs: Date.now() - startedAt,
     fallbackUsed: true,
   };
+}
+
+/**
+ * Shared text generation entry point for other Flow adapters (for example the
+ * Bluesky summary). It keeps the existing provider order and circuit breaker.
+ */
+export async function generateFlowAIText(
+  prompt: string,
+  deps: Pick<FlowAIGenerationDeps, 'complete' | 'providers'> = {}
+): Promise<ProviderResult> {
+  return deps.complete
+    ? await deps.complete(prompt)
+    : await completeWithFallback(prompt, deps.providers);
 }
 
 export async function generateFlowContext(

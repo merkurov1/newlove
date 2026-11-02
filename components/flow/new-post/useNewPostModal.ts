@@ -731,6 +731,11 @@ export function useNewPostModal({
         delete metadata.image;
         delete metadata.public_url;
         delete metadata.image_url;
+        delete metadata.imageUrl;
+        delete metadata.og_image;
+        delete metadata.ogImage;
+        delete metadata.thumbnail_url;
+        delete metadata.thumbnailUrl;
       }
 
       if (youtubeMetadata) {
@@ -769,11 +774,26 @@ export function useNewPostModal({
                 ? "link"
                 : "note";
 
-      const postTitle =
-        (isEditing && title.trim() ? title.trim() : null) ||
-        linkPreviews[0]?.title ||
-        youtubeMetadata?.title ||
-        null;
+      // The composer has no separate title field. A stored title is kept when
+      // it was authored manually; generated titles are recalculated by the
+      // server from the edited content instead of becoming stale.
+      const titleSource =
+        item?.metadata && typeof item.metadata === 'object'
+          ? item.metadata.title_source
+          : null;
+      const titleWasGenerated =
+        titleSource === 'body' ||
+        titleSource === 'generated' ||
+        titleSource === 'fallback' ||
+        titleSource === 'link' ||
+        titleSource === 'youtube' ||
+        titleSource === 'image';
+
+      const postTitle = isEditing
+        ? titleWasGenerated
+          ? null
+          : title.trim() || null
+        : linkPreviews[0]?.title || youtubeMetadata?.title || null;
 
       const payload = {
         title: postTitle,

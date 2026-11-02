@@ -4,28 +4,58 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import NewPostModal from '@/components/flow/NewPostModal';
 
-type YouTubeMetadata = {
-  video_id?: string;
-  title?: string;
-  author_name?: string | null;
-  thumbnail_url?: string;
+type FlowImage = {
+  url: string;
+  alt: string | null;
+  caption: string | null;
+};
+
+type FlowVideo = {
+  url: string;
+  provider: 'youtube' | 'other';
+  videoId: string | null;
+  title: string | null;
+  thumbnail: string | null;
+  author: string | null;
+};
+
+type FlowLink = {
+  url: string;
+  title: string | null;
+  description: string | null;
+  image: string | null;
+  siteName: string | null;
+  domain: string | null;
+  inBody: boolean;
 };
 
 type FlowItem = {
   id: string;
-  title: string | null;
+  title: string;
   slug: string | null;
   lang: string;
   type: string;
+  contentType: string;
   status: string;
   visibility: string;
   body_md?: string | null;
+  bodyText?: string;
+  bodyExcerpt?: string;
+  bodyTruncated?: boolean;
+  showTitle?: boolean;
+  description?: string;
   source_url?: string | null;
-  metadata?: Record<string, unknown> | null;
+  canonicalUrl?: string;
+  sourceName?: string;
+  images?: FlowImage[];
+  videos?: FlowVideo[];
+  links?: FlowLink[];
   published_at?: string | null;
   created_at?: string | null;
+  updated_at?: string | null;
   bluesky_uri?: string | null;
   telegram_message_id?: string | number | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 type FlowResponse = {
@@ -34,144 +64,10 @@ type FlowResponse = {
   error?: string;
 };
 
-type LinkPreviewData = {
-  url: string;
-  title?: string | null;
-  description?: string | null;
-  image?: string | null;
-  site_name?: string | null;
-};
-
 const PAGE_SIZE = 10;
 
 function itemHref(item: FlowItem) {
   return item.slug ? `/flow/${encodeURIComponent(item.slug)}` : '/flow';
-}
-
-function getString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function getRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function getSiteName(item: FlowItem) {
-  const savedName = getString(item.metadata?.site_name);
-  if (savedName) return savedName;
-
-  if (!item.source_url) return '';
-
-  try {
-    return new URL(item.source_url).hostname.replace(/^www\./, '');
-  } catch {
-    return item.source_url;
-  }
-}
-
-function getYouTube(item: FlowItem): YouTubeMetadata | null {
-  return getRecord(item.metadata?.youtube) as YouTubeMetadata | null;
-}
-
-function getYouTubeThumbnail(item: FlowItem) {
-  const youtube = getYouTube(item);
-
-  if (youtube?.thumbnail_url) return youtube.thumbnail_url;
-
-  return youtube?.video_id
-    ? `https://i.ytimg.com/vi/${encodeURIComponent(youtube.video_id)}/hqdefault.jpg`
-    : null;
-}
-
-function getPhotoUrls(item: FlowItem): string[] {
-  const meta = item.metadata ?? {};
-  const urls: string[] = [];
-
-  if (Array.isArray(meta.images)) {
-    for (const value of meta.images) {
-      const url =
-        getString(value) ||
-        getString(getRecord(value)?.url) ||
-        getString(getRecord(value)?.public_url);
-
-      if (url) urls.push(url);
-    }
-  }
-
-  for (const key of ['public_url', 'image', 'image_url', 'og_image']) {
-    const url = getString(meta[key]);
-    if (url) urls.push(url);
-  }
-
-  return [...new Set(urls)];
-}
-
-function isYouTubeUrl(value: string) {
-  try {
-    const hostname = new URL(value).hostname.replace(/^www\./, '').toLowerCase();
-    return (
-      hostname === 'youtube.com' ||
-      hostname.endsWith('.youtube.com') ||
-      hostname === 'youtu.be'
-    );
-  } catch {
-    return /(?:youtube\.com|youtu\.be)/i.test(value);
-  }
-}
-
-function getLinkPreviewData(item: FlowItem): LinkPreviewData[] {
-  const meta = item.metadata ?? {};
-  const candidates: LinkPreviewData[] = [];
-
-  const addPreview = (value: unknown) => {
-    const preview = getRecord(value);
-    if (!preview) return;
-
-    const url = getString(preview.url);
-    if (!url) return;
-
-    candidates.push({
-      url,
-      title: getString(preview.title),
-      description: getString(preview.description),
-      image: getString(preview.image),
-      site_name: getString(preview.site_name),
-    });
-  };
-
-  if (Array.isArray(meta.link_previews)) {
-    meta.link_previews.forEach(addPreview);
-  }
-
-  addPreview(meta.link_preview);
-
-  const sourceUrl = getString(item.source_url);
-  if (sourceUrl && !isYouTubeUrl(sourceUrl)) {
-    const alreadyPresent = candidates.some((preview) => preview.url === sourceUrl);
-
-    if (!alreadyPresent) {
-      candidates.push({
-        url: sourceUrl,
-        title:
-          (item.title && item.title !== sourceUrl ? item.title : null) ||
-          getSiteName(item) ||
-          sourceUrl,
-        description: getString(meta.description),
-        image: getString(meta.og_image) || getString(meta.image),
-        site_name: getSiteName(item),
-      });
-    }
-  }
-
-  const seen = new Set<string>();
-
-  return candidates.filter((preview) => {
-    if (seen.has(preview.url)) return false;
-    seen.add(preview.url);
-    return true;
-  });
 }
 
 function formatDate(value?: string | null) {
@@ -188,115 +84,27 @@ function formatDate(value?: string | null) {
   }).format(date);
 }
 
-function plainText(value: string | null | undefined) {
-  if (!value) return '';
-
-  return value
-    .replace(/```[\s\S]*?```/g, '')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/^#{1,6}\s+/gm, '')
-    .replace(/^>\s?/gm, '')
-    .replace(/[*_~`]/g, '')
-    .trim();
-}
-
 function getTelegramUrl(item: FlowItem): string | null {
-  const msgId =
-    item.telegram_message_id ||
-    (getRecord(item.metadata)?.telegram_message_id as string | number | undefined);
-
-  if (msgId) {
-    return `https://t.me/unframed_am/${msgId}`;
+  if (item.telegram_message_id) {
+    return `https://t.me/unframed_am/${item.telegram_message_id}`;
   }
+
   return null;
 }
 
 function getBlueskyUrl(item: FlowItem): string | null {
   const uri =
     item.bluesky_uri ||
-    (getString(getRecord(item.metadata)?.bluesky_uri) as string | null);
+    (typeof item.metadata?.bluesky_uri === 'string'
+      ? item.metadata.bluesky_uri
+      : null);
 
-  if (uri && typeof uri === 'string') {
-    const rkey = uri.split('/').pop();
-    if (rkey) {
-      return `https://bsky.app/profile/merkurov.love/post/${encodeURIComponent(rkey)}`;
-    }
-  }
-  return null;
-}
+  if (!uri) return null;
 
-function normalizeForComparison(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, '')
-    .trim();
-}
-
-function getTitleAndBodyDisplay(item: FlowItem) {
-  const rawTitle = (item.title || '').trim();
-  const rawBody = plainText(item.body_md).trim();
-
-  if (!rawTitle) {
-    return { title: null, body: rawBody || null };
-  }
-
-  if (!rawBody) {
-    return { title: rawTitle, body: null };
-  }
-
-  const normTitle = normalizeForComparison(rawTitle);
-  const normBody = normalizeForComparison(rawBody);
-
-  // If title is redundant with body (e.g. title === body or body starts with title)
-  if (
-    normTitle === normBody ||
-    normBody.startsWith(normTitle) ||
-    normTitle.startsWith(normBody)
-  ) {
-    return { title: null, body: rawBody };
-  }
-
-  // Also check first line of body
-  const firstLine = rawBody.split(/\r?\n/)[0]?.trim() || '';
-  const firstLineNorm = normalizeForComparison(firstLine);
-  if (
-    firstLineNorm &&
-    (firstLineNorm === normTitle ||
-      normTitle.startsWith(firstLineNorm) ||
-      firstLineNorm.startsWith(normTitle))
-  ) {
-    return { title: null, body: rawBody };
-  }
-
-  return { title: rawTitle, body: rawBody };
-}
-
-function isDuplicateOfLink(
-  text: string | null | undefined,
-  preview: LinkPreviewData | null | undefined,
-): boolean {
-  if (!text || !text.trim() || !preview) return false;
-  const cleanT = text.trim();
-  const cleanUrl = (preview.url || '').trim();
-
-  // If text is literally the URL itself
-  if (cleanT === cleanUrl) return true;
-
-  const previewTitle = (preview.title || '').trim();
-  if (!previewTitle) return false;
-
-  const normT = normalizeForComparison(cleanT);
-  const normP = normalizeForComparison(previewTitle);
-
-  if (!normT || !normP) return false;
-
-  // Exact match or one starts with the other
-  if (normT === normP || normT.startsWith(normP) || normP.startsWith(normT)) {
-    return true;
-  }
-
-  return false;
+  const rkey = uri.split('/').pop();
+  return rkey
+    ? `https://bsky.app/profile/merkurov.love/post/${encodeURIComponent(rkey)}`
+    : null;
 }
 
 function EntryDate({ item }: { item: FlowItem }) {
@@ -327,11 +135,34 @@ function EntryMeta({
   onDelete: () => void;
 }) {
   const tgUrl = getTelegramUrl(item);
+  const bskyUrl = getBlueskyUrl(item);
 
   return (
     <div className="mb-3 flex items-center justify-between gap-4">
       <div className="flex items-center gap-2.5 font-mono text-[11px] text-neutral-400">
         <EntryDate item={item} />
+        {bskyUrl && (
+          <a
+            href={bskyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition hover:text-neutral-900"
+            aria-label="Open on Bluesky"
+          >
+            bsky ↗
+          </a>
+        )}
+        {tgUrl && (
+          <a
+            href={tgUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition hover:text-neutral-900"
+            aria-label="Open on Telegram"
+          >
+            tg ↗
+          </a>
+        )}
       </div>
 
       {admin && <AdminControls onEdit={onEdit} onDelete={onDelete} />}
@@ -374,18 +205,10 @@ function LinkCard({
   preview,
   itemHref: href,
 }: {
-  preview: LinkPreviewData;
+  preview: FlowLink;
   itemHref: string;
 }) {
-  let domain = preview.site_name || '';
-
-  if (!domain) {
-    try {
-      domain = new URL(preview.url).hostname.replace(/^www\./, '');
-    } catch {
-      domain = preview.url;
-    }
-  }
+  const domain = preview.siteName || preview.domain || '';
 
   return (
     <div className="group/card flex items-stretch overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50/40 transition hover:border-neutral-300 hover:bg-neutral-50">
@@ -395,7 +218,7 @@ function LinkCard({
             href={href}
             className="text-[15px] font-medium leading-snug text-neutral-900 group-hover/card:text-neutral-700"
           >
-            {preview.title || preview.url}
+            {preview.title || domain || preview.url}
           </Link>
 
           {preview.description && (
@@ -439,18 +262,10 @@ function CompactLinkRow({
   preview,
   itemHref: href,
 }: {
-  preview: LinkPreviewData;
+  preview: FlowLink;
   itemHref: string;
 }) {
-  let domain = preview.site_name || '';
-
-  if (!domain) {
-    try {
-      domain = new URL(preview.url).hostname.replace(/^www\./, '');
-    } catch {
-      domain = preview.url;
-    }
-  }
+  const domain = preview.siteName || preview.domain || '';
 
   return (
     <div className="group/row flex items-center justify-between gap-3 p-3 transition hover:bg-neutral-100/50">
@@ -476,7 +291,7 @@ function CompactLinkRow({
             href={href}
             className="block truncate text-[13px] font-medium leading-tight text-neutral-900 group-hover/row:text-neutral-700"
           >
-            {preview.title || preview.url}
+            {preview.title || domain || preview.url}
           </Link>
         </div>
       </div>
@@ -496,49 +311,54 @@ function CompactLinkRow({
 }
 
 function GalleryGrid({
-  urls,
-  title,
-  alt,
+  images,
   itemHref: href,
 }: {
-  urls: string[];
-  title: string | null;
-  alt: string | null;
+  images: FlowImage[];
   itemHref: string;
 }) {
-  const count = urls.length;
-  if (count === 0) return null;
+  if (images.length === 0) return null;
 
-  if (count === 1) {
+  const altFor = (image: FlowImage, index: number) =>
+    image.caption || image.alt || `Image ${index + 1}`;
+
+  if (images.length === 1) {
+    const image = images[0];
+
     return (
-      <div className="mb-4">
+      <figure className="mb-4">
         <Link
           href={href}
           className="inline-block max-w-full overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50 transition hover:border-neutral-300"
         >
           <img
-            src={urls[0]}
-            alt={alt || title || 'Attached image'}
+            src={image.url}
+            alt={altFor(image, 0)}
             loading="lazy"
             className="block max-h-[520px] w-auto max-w-full object-cover"
           />
         </Link>
-      </div>
+        {(image.caption || image.alt) && (
+          <figcaption className="mt-2 text-xs italic text-neutral-500">
+            {image.caption || image.alt}
+          </figcaption>
+        )}
+      </figure>
     );
   }
 
-  if (count === 2) {
+  if (images.length === 2) {
     return (
       <div className="mb-4 grid grid-cols-2 gap-2.5 sm:gap-3">
-        {urls.slice(0, 2).map((url, index) => (
+        {images.slice(0, 2).map((image, index) => (
           <Link
-            key={`${url}-${index}`}
+            key={`${image.url}-${index}`}
             href={href}
             className="block overflow-hidden rounded-2xl bg-neutral-100 transition hover:opacity-95"
           >
             <img
-              src={url}
-              alt={alt || (title ? `${title} — image ${index + 1}` : '')}
+              src={image.url}
+              alt={altFor(image, index)}
               loading="lazy"
               className="block aspect-[4/3] w-full object-cover"
             />
@@ -548,7 +368,7 @@ function GalleryGrid({
     );
   }
 
-  if (count === 3) {
+  if (images.length === 3) {
     return (
       <div className="mb-4 space-y-2.5 sm:space-y-3">
         <Link
@@ -556,22 +376,22 @@ function GalleryGrid({
           className="block overflow-hidden rounded-2xl bg-neutral-100 transition hover:opacity-95"
         >
           <img
-            src={urls[0]}
-            alt={alt || (title ? `${title} — image 1` : '')}
+            src={images[0].url}
+            alt={altFor(images[0], 0)}
             loading="lazy"
             className="block aspect-[16/9] w-full object-cover"
           />
         </Link>
         <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-          {urls.slice(1, 3).map((url, index) => (
+          {images.slice(1, 3).map((image, index) => (
             <Link
-              key={`${url}-${index}`}
+              key={`${image.url}-${index}`}
               href={href}
               className="block overflow-hidden rounded-2xl bg-neutral-100 transition hover:opacity-95"
             >
               <img
-                src={url}
-                alt={alt || (title ? `${title} — image ${index + 2}` : '')}
+                src={image.url}
+                alt={altFor(image, index + 1)}
                 loading="lazy"
                 className="block aspect-[4/3] w-full object-cover"
               />
@@ -582,23 +402,23 @@ function GalleryGrid({
     );
   }
 
-  // 4 or more
-  const displayPhotos = urls.slice(0, 4);
-  const remaining = count - 4;
+  const displayPhotos = images.slice(0, 4);
+  const remaining = images.length - 4;
 
   return (
     <div className="mb-4 grid grid-cols-2 gap-2.5 sm:gap-3">
-      {displayPhotos.map((url, index) => {
+      {displayPhotos.map((image, index) => {
         const isLastWithMore = index === 3 && remaining > 0;
+
         return (
           <Link
-            key={`${url}-${index}`}
+            key={`${image.url}-${index}`}
             href={href}
             className="relative block overflow-hidden rounded-2xl bg-neutral-100 transition hover:opacity-95"
           >
             <img
-              src={url}
-              alt={alt || (title ? `${title} — image ${index + 1}` : '')}
+              src={image.url}
+              alt={altFor(image, index)}
               loading="lazy"
               className="block aspect-square w-full object-cover"
             />
@@ -616,6 +436,63 @@ function GalleryGrid({
   );
 }
 
+function VideoCards({ videos }: { videos: FlowVideo[] }) {
+  if (videos.length === 0) return null;
+
+  return (
+    <div className="mb-4 space-y-3">
+      {videos.map((video, index) => (
+        <Link
+          key={`${video.url}-${index}`}
+          href={video.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group flex items-center gap-4 rounded-2xl border border-neutral-200/60 bg-neutral-50/50 p-3 transition hover:border-neutral-300 hover:bg-neutral-50 sm:p-3.5"
+        >
+          {video.thumbnail && (
+            <div className="relative w-32 shrink-0 overflow-hidden rounded-xl bg-neutral-200 sm:w-40">
+              <img
+                src={video.thumbnail}
+                alt=""
+                loading="lazy"
+                className="block aspect-video h-auto w-full object-cover"
+              />
+              <span className="absolute inset-0 flex items-center justify-center bg-black/10 transition group-hover:bg-black/20">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900/80 text-white shadow backdrop-blur-sm">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="ml-0.5 h-3.5 w-3.5"
+                    aria-hidden="true"
+                  >
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </span>
+              </span>
+            </div>
+          )}
+
+          <div className="min-w-0 flex-1">
+            <span className="line-clamp-2 text-sm font-medium leading-snug text-neutral-900">
+              {video.title || 'Watch video'}
+            </span>
+
+            {video.author && (
+              <span className="mt-1 block text-xs text-neutral-500">
+                {video.author}
+              </span>
+            )}
+
+            <span className="mt-2 inline-block font-mono text-[10px] tracking-wider text-neutral-400">
+              {video.provider === 'youtube' ? 'youtube.com' : 'video'} ↗
+            </span>
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 function Entry({
   item,
   admin,
@@ -628,33 +505,14 @@ function Entry({
   onDelete: () => void;
 }) {
   const href = itemHref(item);
-  const youtube = getYouTube(item);
-  const youtubeThumbnail = youtube ? getYouTubeThumbnail(item) : null;
-  const photoUrls = getPhotoUrls(item);
-  const linkPreviews = getLinkPreviewData(item);
-  const display = getTitleAndBodyDisplay(item);
-
-  const linkImages = new Set(
-    linkPreviews.map((preview) => preview.image).filter(Boolean),
-  );
-
-  const visiblePhotoUrls = photoUrls.filter(
-    (url) => url !== youtubeThumbnail && !linkImages.has(url),
-  );
-
-  const singlePreview = linkPreviews.length === 1 ? linkPreviews[0] : null;
-
-  const showTitle =
-    display.title &&
-    (!singlePreview || !isDuplicateOfLink(display.title, singlePreview));
-
-  const showBody =
-    display.body &&
-    (!singlePreview || !isDuplicateOfLink(display.body, singlePreview));
+  const images = item.images ?? [];
+  const videos = item.videos ?? [];
+  const links = (item.links ?? []).filter((link) => !link.inBody);
+  const body = item.bodyExcerpt ?? item.bodyText ?? '';
+  const showTitle = Boolean(item.showTitle && item.title);
 
   return (
     <article className="group border-b border-neutral-100 py-8 first:pt-0 last:border-b-0">
-      {/* Meta header */}
       <EntryMeta
         item={item}
         admin={admin}
@@ -662,95 +520,46 @@ function Entry({
         onDelete={onDelete}
       />
 
-      {/* Title (rendered only when it doesn't duplicate the body or single link card) */}
       {showTitle && (
         <h2 className="mb-2 text-lg font-medium leading-snug text-neutral-900 sm:text-xl">
           <Link href={href} className="transition hover:text-neutral-600">
-            {display.title}
+            {item.title}
           </Link>
         </h2>
       )}
 
-      {/* Text body (rendered only when it doesn't duplicate the single link preview) */}
-      {showBody && (
+      {body && (
         <div className="mb-4">
           <Link href={href} className="block">
             <p className="whitespace-pre-line font-serif text-[16px] leading-[1.7] text-neutral-800 sm:text-[17px]">
-              {display.body}
+              {body}
             </p>
           </Link>
+
+          {item.bodyTruncated && (
+            <Link
+              href={href}
+              className="mt-2 inline-block font-mono text-[10px] uppercase tracking-[0.18em] text-neutral-400 transition hover:text-neutral-900"
+            >
+              Read full →
+            </Link>
+          )}
         </div>
       )}
 
-      {/* YouTube card */}
-      {youtube && (
-        <div className="mb-4">
-          <Link
-            href={href}
-            className="flex items-center gap-4 rounded-2xl border border-neutral-200/60 bg-neutral-50/50 p-3 transition hover:border-neutral-300 hover:bg-neutral-50 sm:p-3.5"
-          >
-            {youtubeThumbnail && (
-              <div className="relative w-32 shrink-0 overflow-hidden rounded-xl bg-neutral-200 sm:w-40">
-                <img
-                  src={youtubeThumbnail}
-                  alt=""
-                  loading="lazy"
-                  className="block aspect-video h-auto w-full object-cover"
-                />
-                <span className="absolute inset-0 flex items-center justify-center bg-black/10 transition group-hover:bg-black/20">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900/80 text-white shadow backdrop-blur-sm">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                      className="ml-0.5 h-3.5 w-3.5"
-                      aria-hidden="true"
-                    >
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </span>
-                </span>
-              </div>
-            )}
+      <VideoCards videos={videos} />
 
-            <div className="min-w-0 flex-1">
-              <span className="line-clamp-2 text-sm font-medium leading-snug text-neutral-900">
-                {youtube.title || 'Watch video'}
-              </span>
+      <GalleryGrid images={images} itemHref={href} />
 
-              {youtube.author_name && (
-                <span className="mt-1 block text-xs text-neutral-500">
-                  {youtube.author_name}
-                </span>
-              )}
-
-              <span className="mt-2 inline-block font-mono text-[10px] tracking-wider text-neutral-400">
-                youtube.com ↗
-              </span>
-            </div>
-          </Link>
-        </div>
-      )}
-
-      {/* Attached images - Creative and adaptive gallery */}
-      {visiblePhotoUrls.length > 0 && (
-        <GalleryGrid
-          urls={visiblePhotoUrls}
-          title={display.title}
-          alt={getString(item.metadata?.alt)}
-          itemHref={href}
-        />
-      )}
-
-      {/* Web link cards - single rich card or compact curated list */}
-      {linkPreviews.length === 1 && (
+      {links.length === 1 && (
         <div className="mt-3">
-          <LinkCard preview={linkPreviews[0]} itemHref={href} />
+          <LinkCard preview={links[0]} itemHref={href} />
         </div>
       )}
 
-      {linkPreviews.length > 1 && (
-        <div className="mt-3 overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50/40 divide-y divide-neutral-200/50">
-          {linkPreviews.map((preview) => (
+      {links.length > 1 && (
+        <div className="mt-3 divide-y divide-neutral-200/50 overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50/40">
+          {links.map((preview) => (
             <CompactLinkRow
               key={preview.url}
               preview={preview}
@@ -822,7 +631,7 @@ export default function FlowPage() {
       const offset = reset ? 0 : itemsRef.current.length;
       const response = await fetch(
         `/api/flow/items?limit=${PAGE_SIZE}&offset=${offset}`,
-        { cache: 'no-store' },
+        { cache: 'no-store' }
       );
 
       const json = (await response.json().catch(() => ({}))) as FlowResponse;
@@ -841,8 +650,8 @@ export default function FlowPage() {
             ...incoming.filter(
               (incomingItem) =>
                 !itemsRef.current.some(
-                  (existingItem) => existingItem.id === incomingItem.id,
-                ),
+                  (existingItem) => existingItem.id === incomingItem.id
+                )
             ),
           ];
 
@@ -855,7 +664,7 @@ export default function FlowPage() {
 
       console.error('[flow] failed to load items:', error);
       setLoadError(
-        error instanceof Error ? error.message : 'Could not load Flow.',
+        error instanceof Error ? error.message : 'Could not load Flow.'
       );
     } finally {
       isFetchingRef.current = false;
@@ -881,7 +690,7 @@ export default function FlowPage() {
 
   const deleteItem = useCallback(async (item: FlowItem) => {
     const confirmed = window.confirm(
-      `Delete “${item.title || 'this post'}”? This cannot be undone.`,
+      `Delete “${item.title || 'this post'}”? This cannot be undone.`
     );
 
     if (!confirmed) return;
@@ -897,7 +706,7 @@ export default function FlowPage() {
       }
 
       const nextItems = itemsRef.current.filter(
-        (entry) => entry.id !== item.id,
+        (entry) => entry.id !== item.id
       );
 
       itemsRef.current = nextItems;
@@ -906,7 +715,7 @@ export default function FlowPage() {
     } catch (error) {
       console.error('[flow] delete failed:', error);
       window.alert(
-        error instanceof Error ? error.message : 'Failed to delete item.',
+        error instanceof Error ? error.message : 'Failed to delete item.'
       );
     }
   }, []);
@@ -941,7 +750,7 @@ export default function FlowPage() {
           void loadItems(false);
         }
       },
-      { rootMargin: '360px 0px', threshold: 0 },
+      { rootMargin: '360px 0px', threshold: 0 }
     );
 
     observer.observe(target);
@@ -978,8 +787,18 @@ export default function FlowPage() {
             '@context': 'https://schema.org',
             '@type': 'BreadcrumbList',
             itemListElement: [
-              { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.merkurov.love' },
-              { '@type': 'ListItem', position: 2, name: 'Flow', item: 'https://www.merkurov.love/flow' },
+              {
+                '@type': 'ListItem',
+                position: 1,
+                name: 'Home',
+                item: 'https://www.merkurov.love',
+              },
+              {
+                '@type': 'ListItem',
+                position: 2,
+                name: 'Flow',
+                item: 'https://www.merkurov.love/flow',
+              },
             ],
           }).replace(/</g, '\\u003c'),
         }}
@@ -992,7 +811,7 @@ export default function FlowPage() {
                 Flow
               </h1>
               <p className="mt-1 font-serif text-sm text-neutral-400">
-                Stream of thoughts, media & signals
+                Stream of thoughts, media &amp; signals
               </p>
             </div>
             <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider text-neutral-400">
@@ -1014,17 +833,11 @@ export default function FlowPage() {
                 Telegram ↗
               </a>
               <span className="text-neutral-200">·</span>
-              <a
-                href="/flow/rss"
-                className="transition hover:text-neutral-900"
-              >
+              <a href="/flow/rss" className="transition hover:text-neutral-900">
                 RSS ↗
               </a>
               <span className="text-neutral-200">·</span>
-              <Link
-                href="/journal"
-                className="transition hover:text-neutral-900"
-              >
+              <Link href="/journal" className="transition hover:text-neutral-900">
                 Journal ↗
               </Link>
             </div>

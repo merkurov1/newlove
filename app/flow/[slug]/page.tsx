@@ -1,53 +1,30 @@
-
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { notFound } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
+
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import {
-  FLOW_AI_CONTEXT_PUBLIC_COLUMNS,
-} from '@/lib/flow/aiContext';
+  type FlowContent,
+  type FlowImage,
+  type FlowLink,
+  type FlowVideo,
+  normalizeFlowItem,
+} from '@/lib/flow/content';
+import {
+  resolveFlowMetadataFromContent,
+  type FlowSocialMetadata,
+} from '@/lib/flow/metadata';
+import { getCachedFlowItem } from '@/lib/flow/items-cash';
 import PierrotContextBlock from '@/components/flow/PierrotContextBlock';
 
-// A ready `flow_ai_context` row is written by the admin endpoint. Render the
-// page per request so a regeneration is visible immediately, without creating
-// a second generation path for public traffic.
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+// Publication data and its ready AI context share one tagged cache entry.
+// Edits, deletes and AI context generation invalidate the same tag.
+export const revalidate = 3600;
 
 type PageProps = {
   params: Promise<{ slug: string }>;
-};
-
-type YouTubeMetadata = {
-  video_id?: string;
-  title?: string;
-  author_name?: string | null;
-  author_url?: string | null;
-  thumbnail_url?: string;
-  thumbnail_width?: number | null;
-  thumbnail_height?: number | null;
-  provider_name?: string;
-};
-
-type FlowItem = {
-  id: string;
-  title: string | null;
-  slug: string | null;
-  lang: string;
-  type: string;
-  status: string;
-  visibility: string;
-  body_md: string | null;
-  source_url: string | null;
-  ai_allowed: boolean;
-  rag_allowed: boolean;
-  metadata: Record<string, unknown> | null;
-  published_at: string | null;
-  bluesky_uri?: string | null;
-  telegram_message_id?: string | number | null;
 };
 
 type AIContext = {
@@ -60,204 +37,24 @@ type AIContext = {
   generated_at: string | null;
 };
 
-function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SITE_URL = 'https://www.merkurov.love';
 
-  if (!url || !serviceRoleKey) {
-    throw new Error('Supabase server environment variables are missing.');
-  }
+async function loadContent(slug: string): Promise<FlowContent | null> {
+  const bundle = await getCachedFlowItem(slug);
+  if (!bundle) return null;
 
-  return createClient(url, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
+  return normalizeFlowItem(bundle.item as any, {
+    media: bundle.media as any,
   });
 }
 
-function getMetadataString(
-  metadata: Record<string, unknown> | null | undefined,
-  key: string,
-): string | null {
-  const value = metadata?.[key];
-  return typeof value === 'string' && value.trim()
-    ? value.trim()
-    : null;
-}
-
-function getYouTubeMetadata(item: FlowItem): YouTubeMetadata | null {
-  const value = item.metadata?.youtube;
-
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null;
-  }
-
-  return value as YouTubeMetadata;
-}
-
-function getYouTubeVideoId(item: FlowItem): string | null {
-  const youtube = getYouTubeMetadata(item);
-
-  if (
-    youtube?.video_id &&
-    /^[A-Za-z0-9_-]{6,20}$/.test(youtube.video_id)
-  ) {
-    return youtube.video_id;
-  }
-
-  if (item.source_url) {
-    try {
-      const url = new URL(item.source_url);
-
-      if (
-        url.hostname === 'youtu.be' ||
-        url.hostname === 'www.youtu.be'
-      ) {
-        const id = url.pathname.split('/').filter(Boolean)[0];
-
-        if (id && /^[A-Za-z0-9_-]{6,20}$/.test(id)) {
-          return id;
-        }
+function imageDimensions(metadata: FlowSocialMetadata) {
+  return metadata.imageWidth && metadata.imageHeight
+    ? {
+        width: metadata.imageWidth,
+        height: metadata.imageHeight,
       }
-
-      const queryId = url.searchParams.get('v');
-
-      if (queryId && /^[A-Za-z0-9_-]{6,20}$/.test(queryId)) {
-        return queryId;
-      }
-
-      const pathMatch = url.pathname.match(
-        /^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]{6,20})/,
-      );
-
-      if (pathMatch?.[1]) {
-        return pathMatch[1];
-      }
-    } catch {
-      // Ignore malformed URLs.
-    }
-  }
-
-  return null;
-}
-
-function getDedicatedImages(item: FlowItem): string[] {
-  const metadata = item.metadata ?? {};
-  const youtube = getYouTubeMetadata(item);
-
-  const candidates: unknown[] = [
-    ...(Array.isArray(metadata.images) ? metadata.images : []),
-    metadata.public_url,
-    metadata.image,
-    metadata.image_url,
-    metadata.og_image,
-  ];
-
-  const urls = candidates
-    .map((value) => {
-      if (typeof value === 'string') return value.trim();
-
-      if (
-        value &&
-        typeof value === 'object' &&
-        'url' in value &&
-        typeof value.url === 'string'
-      ) {
-        return value.url.trim();
-      }
-
-      return '';
-    })
-    .filter((url) => /^https?:\/\//i.test(url));
-
-  // A YouTube thumbnail belongs to the video preview,
-  // not to the attached-image gallery.
-  const images = [...new Set(urls)];
-
-  if (youtube?.thumbnail_url) {
-    return images.filter((url) => url !== youtube.thumbnail_url);
-  }
-
-  return images;
-}
-
-function getMetadataImage(item: FlowItem): string | null {
-  const images = getDedicatedImages(item);
-
-  return (
-    images[0] ||
-    getYouTubeMetadata(item)?.thumbnail_url ||
-    null
-  );
-}
-
-function getDescription(item: FlowItem): string {
-  const metadata = item.metadata ?? {};
-  const metadataDescription = getMetadataString(
-    metadata,
-    'description',
-  );
-
-  if (metadataDescription) {
-    return metadataDescription.slice(0, 160);
-  }
-
-  const body = (item.body_md ?? '')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/[#>*_`~]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  return (
-    body || 'A publication from Flow by Anton Merkurov.'
-  ).slice(0, 160);
-}
-
-function getSiteName(item: FlowItem): string {
-  const metadata = item.metadata ?? {};
-  const explicit = getMetadataString(metadata, 'site_name');
-
-  if (explicit) return explicit;
-
-  if (item.source_url) {
-    try {
-      return new URL(item.source_url).hostname.replace(
-        /^www\./,
-        '',
-      );
-    } catch {
-      // Ignore malformed URLs.
-    }
-  }
-
-  return 'Flow';
-}
-
-/**
- * Flow items are often photos, links or reposts with no meaningful title.
- * Falling back to the literal string "Flow" gives every such page the same
- * <title>. Use the source/date/slug to keep metadata unique while preserving
- * a real editorial title when one exists.
- */
-function getFlowSeoTitle(item: FlowItem, slug: string): string {
-  const explicit = item.title?.trim() || getMetadataString(item.metadata, 'title');
-  const generic =
-    !explicit ||
-    /^(flow|untitled|post|photo|image)$/i.test(explicit) ||
-    /^anton merkurov\s*[|—]\s*art x love x money$/i.test(explicit);
-
-  if (!generic) return explicit;
-
-  const date = formatDate(item.published_at);
-  const site = getSiteName(item);
-
-  if (site && site !== 'Flow') {
-    return `Flow — ${site}${date ? `, ${date}` : ''}`;
-  }
-
-  return date ? `Flow — ${date}` : `Flow — ${slug}`;
+    : {};
 }
 
 export async function generateMetadata({
@@ -267,69 +64,64 @@ export async function generateMetadata({
   const decodedSlug = decodeURIComponent(slug);
 
   try {
-    const supabase = getSupabaseAdmin();
+    const content = await loadContent(decodedSlug);
 
-    const { data: item } = await supabase
-      .from('items')
-      .select(
-        'id,title,slug,lang,type,status,visibility,body_md,source_url,ai_allowed,rag_allowed,metadata,published_at',
-      )
-      .eq('slug', decodedSlug)
-      .eq('status', 'published')
-      .eq('visibility', 'public')
-      .maybeSingle();
-
-    if (!item) {
-      return { title: 'Flow | Anton Merkurov' };
+    if (!content) {
+      return sanitizeMetadata({
+        title: 'Flow | Anton Merkurov',
+        metadataBase: new URL(SITE_URL),
+      });
     }
 
-    const flowItem = item as FlowItem;
-    const title = getFlowSeoTitle(flowItem, decodedSlug);
-
-    const description = getDescription(flowItem);
-    const site = 'https://www.merkurov.love';
-    const canonical =
-      `${site}/flow/${encodeURIComponent(decodedSlug)}`;
-    const image = getMetadataImage(flowItem);
-    const ogImage =
-      image ||
-      `${site}/og?${new URLSearchParams({
-        title,
-        subtitle: 'Flow — Anton Merkurov',
-      }).toString()}`;
+    const metadata = resolveFlowMetadataFromContent(content);
+    const type =
+      content.contentType === 'article' ||
+      content.contentType === 'note' ||
+      content.contentType === 'quote'
+        ? 'article'
+        : 'website';
 
     return sanitizeMetadata({
-      title,
-      description,
+      metadataBase: new URL(SITE_URL),
+      title: metadata.title,
+      description: metadata.description,
       alternates: {
-        canonical,
+        canonical: metadata.canonicalUrl,
         types: {
-          'application/rss+xml':
-            'https://www.merkurov.love/flow/rss',
-          'application/feed+json':
-            'https://www.merkurov.love/flow/feed.json',
+          'application/rss+xml': `${SITE_URL}/flow/rss`,
+          'application/feed+json': `${SITE_URL}/flow/feed.json`,
         },
       },
       openGraph: {
-        title,
-        description,
-        url: canonical,
+        title: metadata.title,
+        description: metadata.description,
+        url: metadata.canonicalUrl,
         siteName: 'Anton Merkurov',
-        type: flowItem.type === 'article' ? 'article' : 'website',
+        locale: metadata.language === 'ru' ? 'ru_RU' : 'en_US',
+        type,
+        ...(type === 'article'
+          ? {
+              publishedTime: metadata.publishedAt ?? undefined,
+              modifiedTime: metadata.updatedAt ?? metadata.publishedAt ?? undefined,
+              authors: ['Anton Merkurov'],
+            }
+          : {}),
         images: [
           {
-            url: ogImage,
-            width: 1200,
-            height: 630,
-            alt: title,
+            url: metadata.previewImage,
+            alt: metadata.imageAlt,
+            ...(metadata.imageType ? { type: metadata.imageType } : {}),
+            ...imageDimensions(metadata),
           },
         ],
       },
       twitter: {
         card: 'summary_large_image',
-        title,
-        description,
-        images: [ogImage],
+        title: metadata.title,
+        description: metadata.description,
+        images: [metadata.previewImage],
+        site: '@merkurov',
+        creator: '@merkurov',
       },
       robots: {
         index: true,
@@ -341,18 +133,27 @@ export async function generateMetadata({
 
     return sanitizeMetadata({
       title: 'Flow | Anton Merkurov',
+      metadataBase: new URL(SITE_URL),
     });
   }
 }
 
-function formatDate(value: string | null) {
+function formatDate(value: string | null): string {
   if (!value) return '';
 
-  return new Date(value).toLocaleDateString('en-GB', {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return date.toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
   });
+}
+
+function estimateReadingTime(text: string): string {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return `${Math.max(1, Math.ceil(words / 170))} min read`;
 }
 
 function MarkdownBody({ body }: { body: string }) {
@@ -382,9 +183,7 @@ function MarkdownBody({ body }: { body: string }) {
             </p>
           ),
           strong: ({ children }) => (
-            <strong className="font-medium text-stone-950">
-              {children}
-            </strong>
+            <strong className="font-medium text-stone-950">{children}</strong>
           ),
           em: ({ children }) => <em className="italic">{children}</em>,
           blockquote: ({ children }) => (
@@ -393,9 +192,7 @@ function MarkdownBody({ body }: { body: string }) {
             </blockquote>
           ),
           a: ({ href, children }) => {
-            const isInternal =
-              href?.startsWith('/') ||
-              href?.includes('merkurov.love');
+            const isInternal = href?.startsWith('/') || href?.includes('merkurov.love');
 
             if (isInternal && href) {
               return (
@@ -444,9 +241,7 @@ function MarkdownBody({ body }: { body: string }) {
               {children}
             </ol>
           ),
-          hr: () => (
-            <hr className="my-9 border-0 border-t border-stone-200" />
-          ),
+          hr: () => <hr className="my-9 border-0 border-t border-stone-200" />,
           code: ({ children }) => (
             <code className="bg-stone-100 px-1 py-0.5 font-mono text-[0.85em]">
               {children}
@@ -460,238 +255,67 @@ function MarkdownBody({ body }: { body: string }) {
   );
 }
 
-function getLinkPreviewData(item: FlowItem) {
-  const meta = item.metadata ?? {};
-
-  const lp = (
-    meta.link_preview && typeof meta.link_preview === 'object'
-      ? meta.link_preview
-      : null
-  ) as Record<string, unknown> | null;
-
-  const candidateUrl =
-    (lp && getMetadataString(lp, 'url')) ||
-    (item.source_url &&
-    !item.source_url.includes('youtube.com') &&
-    !item.source_url.includes('youtu.be')
-      ? item.source_url
-      : null);
-
-  if (!candidateUrl) return null;
-
-  let hostname = '';
-
-  try {
-    hostname = new URL(candidateUrl).hostname.replace(/^www\./, '');
-  } catch {
-    return null;
-  }
-
-  const site =
-    (lp && getMetadataString(lp, 'site_name')) ||
-    hostname ||
-    getSiteName(item);
-
-  const title =
-    (lp && getMetadataString(lp, 'title')) ||
-    (item.title !== candidateUrl ? item.title : null) ||
-    site;
-
-  const description =
-    (lp && getMetadataString(lp, 'description')) ||
-    getMetadataString(meta, 'description');
-
-  const image =
-    (lp && getMetadataString(lp, 'image')) ||
-    getMetadataString(meta, 'image');
-
-  return {
-    url: candidateUrl,
-    site,
-    title,
-    description,
-    image,
-  };
-}
-
-function getTelegramUrl(item: FlowItem): string | null {
-  const msgId =
-    item.telegram_message_id ||
-    (item.metadata?.telegram_message_id as string | number | undefined);
-
-  if (msgId) {
-    return `https://t.me/unframed_am/${msgId}`;
-  }
-  return null;
-}
-
-function getBlueskyUrl(item: FlowItem): string | null {
-  const uri =
-    item.bluesky_uri ||
-    (typeof item.metadata?.bluesky_uri === 'string'
-      ? item.metadata.bluesky_uri
-      : null);
-
-  if (uri) {
-    const rkey = uri.split('/').pop();
-    if (rkey) {
-      return `https://bsky.app/profile/merkurov.love/post/${encodeURIComponent(rkey)}`;
-    }
-  }
-  return null;
-}
-
-function normalizeForComparison(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, '')
-    .trim();
-}
-
-function getTitleAndBodyDisplay(item: FlowItem) {
-  const rawTitle = (item.title || '').trim();
-  const rawBody = (item.body_md || '').trim();
-
-  if (!rawTitle) {
-    return { title: null, body: rawBody || null };
-  }
-
-  if (!rawBody) {
-    return { title: rawTitle, body: null };
-  }
-
-  const normTitle = normalizeForComparison(rawTitle);
-  const normBody = normalizeForComparison(rawBody);
-
-  // If title is redundant with body
-  if (
-    normTitle === normBody ||
-    normBody.startsWith(normTitle) ||
-    normTitle.startsWith(normBody)
-  ) {
-    return { title: null, body: rawBody };
-  }
-
-  const firstLine = rawBody.split(/\r?\n/)[0]?.trim() || '';
-  const firstLineNorm = normalizeForComparison(firstLine);
-  if (
-    firstLineNorm &&
-    (firstLineNorm === normTitle ||
-      normTitle.startsWith(firstLineNorm) ||
-      firstLineNorm.startsWith(normTitle))
-  ) {
-    return { title: null, body: rawBody };
-  }
-
-  return { title: rawTitle, body: rawBody };
-}
-
-type Archetype = 'video' | 'visual_story' | 'curated_links' | 'short_note' | 'article';
-
-function detectArchetype(
-  item: FlowItem,
-  videoId: string | null,
-  images: string[],
-  linkCount: number,
-): Archetype {
-  if (videoId) return 'video';
-  if (images.length >= 2 || item.type === 'photo') return 'visual_story';
-  if (linkCount >= 2 || (item.type === 'link' && linkCount > 0)) return 'curated_links';
-
-  const body = item.body_md || '';
-  if (item.type === 'article' || body.length > 350 || body.includes('\n#') || body.includes('\n\n')) {
-    return 'article';
-  }
-
-  return 'short_note';
-}
-
-function estimateReadingTime(text: string): string {
-  const words = text.trim().split(/\s+/).filter(Boolean).length;
-  const minutes = Math.max(1, Math.ceil(words / 170));
-  return `${minutes} min read`;
-}
-
-function isDuplicateOfLink(
-  text: string | null | undefined,
-  preview: { title?: string | null; url?: string | null } | null | undefined,
-): boolean {
-  if (!text || !text.trim() || !preview) return false;
-  const cleanT = text.trim();
-  const cleanUrl = (preview.url || '').trim();
-
-  // If text is literally the URL itself
-  if (cleanT === cleanUrl) return true;
-
-  const previewTitle = (preview.title || '').trim();
-  if (!previewTitle) return false;
-
-  const normT = normalizeForComparison(cleanT);
-  const normP = normalizeForComparison(previewTitle);
-
-  if (!normT || !normP) return false;
-
-  // Exact match or one starts with the other
-  if (normT === normP || normT.startsWith(normP) || normP.startsWith(normT)) {
-    return true;
-  }
-
-  return false;
-}
-
-function SmartGallery({
-  images,
-  caption,
+function ImageFigure({
+  image,
+  index,
+  className,
+  imageClassName,
 }: {
-  images: string[];
-  caption: string | null;
+  image: FlowImage;
+  index: number;
+  className?: string;
+  imageClassName?: string;
 }) {
+  const caption = image.caption ?? image.alt;
+
+  return (
+    <figure className={className}>
+      <a
+        href={image.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block overflow-hidden rounded-2xl bg-stone-100"
+      >
+        <img
+          src={image.url}
+          alt={caption || `Image ${index + 1}`}
+          loading={index === 0 ? 'eager' : 'lazy'}
+          className={imageClassName}
+        />
+      </a>
+      {caption && (
+        <figcaption className="mt-2 text-center font-serif text-xs italic text-stone-500">
+          {caption}
+        </figcaption>
+      )}
+    </figure>
+  );
+}
+
+function SmartGallery({ images }: { images: FlowImage[] }) {
   if (images.length === 0) return null;
 
   if (images.length === 1) {
     return (
-      <figure className="my-6">
-        <a
-          href={images[0]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block overflow-hidden rounded-2xl bg-stone-100"
-        >
-          <img
-            src={images[0]}
-            alt={caption || 'Attached image'}
-            loading="eager"
-            className="mx-auto max-h-[78vh] w-auto max-w-full object-contain"
-          />
-        </a>
-        {caption && (
-          <figcaption className="mt-2.5 text-center font-serif text-xs italic text-stone-500">
-            {caption}
-          </figcaption>
-        )}
-      </figure>
+      <ImageFigure
+        image={images[0]}
+        index={0}
+        className="my-6"
+        imageClassName="mx-auto max-h-[78vh] w-auto max-w-full object-contain"
+      />
     );
   }
 
   if (images.length === 2) {
     return (
       <div className="my-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-        {images.map((url, i) => (
-          <figure key={`${url}-${i}`}>
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block overflow-hidden rounded-2xl bg-stone-100"
-            >
-              <img
-                src={url}
-                alt={caption || `Image ${i + 1}`}
-                loading={i === 0 ? 'eager' : 'lazy'}
-                className="aspect-[4/3] w-full object-cover transition duration-300 hover:scale-[1.01]"
-              />
-            </a>
-          </figure>
+        {images.map((image, index) => (
+          <ImageFigure
+            key={`${image.url}-${index}`}
+            image={image}
+            index={index}
+            imageClassName="aspect-[4/3] w-full object-cover transition duration-300 hover:scale-[1.01]"
+          />
         ))}
       </div>
     );
@@ -700,38 +324,19 @@ function SmartGallery({
   if (images.length === 3) {
     return (
       <div className="my-6 space-y-3 sm:space-y-4">
-        <figure>
-          <a
-            href={images[0]}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block overflow-hidden rounded-2xl bg-stone-100"
-          >
-            <img
-              src={images[0]}
-              alt={caption || 'Featured image'}
-              loading="eager"
-              className="aspect-[16/10] w-full object-cover transition duration-300 hover:scale-[1.01]"
-            />
-          </a>
-        </figure>
+        <ImageFigure
+          image={images[0]}
+          index={0}
+          imageClassName="aspect-[16/10] w-full object-cover transition duration-300 hover:scale-[1.01]"
+        />
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          {images.slice(1, 3).map((url, i) => (
-            <figure key={`${url}-${i}`}>
-              <a
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block overflow-hidden rounded-2xl bg-stone-100"
-              >
-                <img
-                  src={url}
-                  alt={caption || `Image ${i + 2}`}
-                  loading="lazy"
-                  className="aspect-[4/3] w-full object-cover transition duration-300 hover:scale-[1.01]"
-                />
-              </a>
-            </figure>
+          {images.slice(1, 3).map((image, index) => (
+            <ImageFigure
+              key={`${image.url}-${index}`}
+              image={image}
+              index={index + 1}
+              imageClassName="aspect-[4/3] w-full object-cover transition duration-300 hover:scale-[1.01]"
+            />
           ))}
         </div>
       </div>
@@ -740,54 +345,86 @@ function SmartGallery({
 
   return (
     <div className="my-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-      {images.map((url, i) => (
-        <figure key={`${url}-${i}`}>
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block overflow-hidden rounded-2xl bg-stone-100"
-          >
-            <img
-              src={url}
-              alt={caption || `Image ${i + 1}`}
-              loading={i === 0 ? 'eager' : 'lazy'}
-              className="aspect-square w-full object-cover transition duration-300 hover:scale-[1.01]"
-            />
-          </a>
+      {images.map((image, index) => (
+        <ImageFigure
+          key={`${image.url}-${index}`}
+          image={image}
+          index={index}
+          imageClassName="aspect-square w-full object-cover transition duration-300 hover:scale-[1.01]"
+        />
+      ))}
+    </div>
+  );
+}
+
+function VideoBlock({ videos }: { videos: FlowVideo[] }) {
+  if (videos.length === 0) return null;
+
+  return (
+    <div className="my-6 space-y-4">
+      {videos.map((video, index) => (
+        <figure key={`${video.url}-${index}`}>
+          {video.embedUrl ? (
+            <div className="overflow-hidden rounded-2xl bg-black">
+              <div className="aspect-video">
+                <iframe
+                  src={video.embedUrl}
+                  title={video.title || 'YouTube video'}
+                  className="h-full w-full"
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              </div>
+            </div>
+          ) : (
+            <a
+              href={video.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block rounded-2xl border border-stone-200 p-4 transition hover:bg-stone-50"
+            >
+              {video.thumbnail && (
+                <img
+                  src={video.thumbnail}
+                  alt={video.title ?? ''}
+                  loading={index === 0 ? 'eager' : 'lazy'}
+                  className="mb-3 aspect-video w-full rounded-xl object-cover"
+                />
+              )}
+              <span className="font-serif text-lg text-stone-900">
+                {video.title ?? video.url}
+              </span>
+            </a>
+          )}
+          {video.title && video.embedUrl && (
+            <figcaption className="mt-2 text-center font-serif text-sm text-stone-600">
+              {video.title}
+            </figcaption>
+          )}
         </figure>
       ))}
     </div>
   );
 }
 
-function SmartLinks({
-  previews,
-}: {
-  previews: Array<{
-    url: string;
-    site: string;
-    title: string;
-    description: string | null;
-    image: string | null;
-  }>;
-}) {
-  if (previews.length === 0) return null;
+function SmartLinks({ links }: { links: FlowLink[] }) {
+  if (links.length === 0) return null;
 
   return (
     <div className="my-6 divide-y divide-stone-200/70 overflow-hidden rounded-2xl border border-stone-200/80 bg-stone-50/40">
-      {previews.map((preview) => (
+      {links.map((link) => (
         <a
-          key={preview.url}
-          href={preview.url}
+          key={link.url}
+          href={link.url}
           target="_blank"
           rel="noopener noreferrer"
           className="group flex min-w-0 items-center justify-between gap-4 p-4 transition hover:bg-stone-100/50"
         >
           <div className="flex min-w-0 items-center gap-4">
-            {preview.image ? (
+            {link.image ? (
               <img
-                src={preview.image}
+                src={link.image}
                 alt=""
                 loading="lazy"
                 className="h-14 w-14 shrink-0 rounded-xl bg-stone-200 object-cover"
@@ -800,16 +437,16 @@ function SmartLinks({
 
             <div className="min-w-0 flex-1">
               <span className="block font-mono text-[10px] uppercase tracking-wider text-stone-400">
-                {preview.site}
+                {link.siteName || link.domain}
               </span>
 
               <span className="mt-0.5 block truncate font-serif text-[16px] font-medium leading-snug text-stone-900 transition group-hover:text-stone-600 sm:text-[17px]">
-                {preview.title}
+                {link.title || link.siteName || link.url}
               </span>
 
-              {preview.description && (
+              {link.description && (
                 <span className="mt-1 line-clamp-1 block text-xs leading-relaxed text-stone-500">
-                  {preview.description}
+                  {link.description}
                 </span>
               )}
             </div>
@@ -827,273 +464,107 @@ function SmartLinks({
   );
 }
 
-function SmartFlowContent({
-  item,
-  archetype,
-  display,
-  videoId,
-  dedicatedImages,
-  linkPreviews,
-  photoCaption,
-}: {
-  item: FlowItem;
-  archetype: Archetype;
-  display: { title: string | null; body: string | null };
-  videoId: string | null;
-  dedicatedImages: string[];
-  linkPreviews: Array<{
-    url: string;
-    site: string;
-    title: string;
-    description: string | null;
-    image: string | null;
-  }>;
-  photoCaption: string | null;
-}) {
-  const singlePreview = linkPreviews.length === 1 ? linkPreviews[0] : null;
+function FlowHero({ content }: { content: FlowContent }) {
+  const links = content.links.filter((link) => !link.inBody);
+  const videosFirst = content.contentType === 'video' && content.videos.length > 0;
+  const imagesFirst = content.contentType === 'photo' && content.images.length > 0;
 
-  const showTitle =
-    display.title &&
-    (!singlePreview || !isDuplicateOfLink(display.title, singlePreview));
-
-  const showBody =
-    display.body &&
-    (!singlePreview || !isDuplicateOfLink(display.body, singlePreview));
-
-  if (archetype === 'short_note') {
-    return (
-      <div className="space-y-6">
-        {showTitle && (
-          <h1 className="font-serif text-2xl font-medium leading-snug text-stone-900 sm:text-3xl">
-            {display.title}
-          </h1>
-        )}
-
-        {showBody && (
-          <div className="py-4 sm:py-6">
-            <p className="whitespace-pre-line font-serif text-2xl font-light leading-[1.65] text-stone-900 sm:text-3xl">
-              {display.body}
-            </p>
-          </div>
-        )}
-
-        {dedicatedImages.length > 0 && (
-          <SmartGallery images={dedicatedImages} caption={photoCaption} />
-        )}
-
-        {linkPreviews.length > 0 && (
-          <SmartLinks previews={linkPreviews} />
-        )}
-      </div>
-    );
-  }
-
-  if (archetype === 'visual_story') {
-    return (
-      <div className="space-y-6">
-        <SmartGallery images={dedicatedImages} caption={photoCaption} />
-
-        {showTitle && (
-          <h1 className="font-serif text-2xl font-light text-stone-900 sm:text-3xl">
-            {display.title}
-          </h1>
-        )}
-
-        {showBody && display.body && <MarkdownBody body={display.body} />}
-
-        {linkPreviews.length > 0 && (
-          <SmartLinks previews={linkPreviews} />
-        )}
-      </div>
-    );
-  }
-
-  if (archetype === 'video') {
-    return (
-      <div className="space-y-6">
-        {videoId && (
-          <div className="overflow-hidden rounded-2xl bg-black">
-            <div className="aspect-video">
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${videoId}`}
-                title={item.title || 'YouTube video'}
-                className="h-full w-full"
-                loading="lazy"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-            </div>
-          </div>
-        )}
-
-        {showTitle && (
-          <h1 className="font-serif text-2xl font-light text-stone-900 sm:text-3xl">
-            {display.title}
-          </h1>
-        )}
-
-        {showBody && display.body && <MarkdownBody body={display.body} />}
-
-        {dedicatedImages.length > 0 && (
-          <SmartGallery images={dedicatedImages} caption={photoCaption} />
-        )}
-
-        {linkPreviews.length > 0 && (
-          <SmartLinks previews={linkPreviews} />
-        )}
-      </div>
-    );
-  }
-
-  if (archetype === 'curated_links') {
-    return (
-      <div className="space-y-6">
-        {showTitle && (
-          <h1 className="font-serif text-2xl font-light text-stone-900 sm:text-3xl">
-            {display.title}
-          </h1>
-        )}
-
-        {showBody && display.body && (
-          <div className="pb-2">
-            <MarkdownBody body={display.body} />
-          </div>
-        )}
-
-        <SmartLinks previews={linkPreviews} />
-
-        {dedicatedImages.length > 0 && (
-          <SmartGallery images={dedicatedImages} caption={photoCaption} />
-        )}
-      </div>
-    );
-  }
-
-  // article (default)
   return (
-    <div className="space-y-7">
-      {showTitle && (
+    <div className="space-y-6">
+      {videosFirst && <VideoBlock videos={content.videos} />}
+      {imagesFirst && <SmartGallery images={content.images} />}
+
+      {content.showTitle && (
         <h1 className="font-serif text-3xl font-light leading-[1.25] text-stone-900 sm:text-4xl lg:text-5xl">
-          {display.title}
+          {content.title}
         </h1>
       )}
 
-      {dedicatedImages.length === 1 && (
-        <SmartGallery images={dedicatedImages} caption={photoCaption} />
-      )}
+      {content.body && <MarkdownBody body={content.body} />}
 
-      {showBody && display.body && <MarkdownBody body={display.body} />}
+      {!imagesFirst && <SmartGallery images={content.images} />}
+      {!videosFirst && <VideoBlock videos={content.videos} />}
 
-      {dedicatedImages.length > 1 && (
-        <SmartGallery images={dedicatedImages} caption={photoCaption} />
-      )}
+      <SmartLinks links={links} />
 
-      {linkPreviews.length > 0 && (
-        <SmartLinks previews={linkPreviews} />
-      )}
-
-      {!videoId &&
-        dedicatedImages.length === 0 &&
-        linkPreviews.length === 0 &&
-        !showBody &&
-        !showTitle && (
-          <p className="text-sm text-stone-400">
-            No content.
-          </p>
+      {!content.body &&
+        content.images.length === 0 &&
+        content.videos.length === 0 &&
+        links.length === 0 &&
+        !content.showTitle && (
+          <p className="text-sm text-stone-400">No content.</p>
         )}
     </div>
   );
-}
-
-function AIContextBlock({
-  context,
-  defaultLang = 'ru',
-}: {
-  context: AIContext | null;
-  defaultLang?: string;
-}) {
-  return <PierrotContextBlock context={context} defaultLang={defaultLang} />;
 }
 
 export default async function FlowItemPage({ params }: PageProps) {
   const { slug } = await params;
   const decodedSlug = decodeURIComponent(slug);
 
-  const supabase = getSupabaseAdmin();
+  const content = await loadContent(decodedSlug);
+  if (!content) notFound();
 
-  const { data, error } = await supabase
-    .from('items')
-    .select(
-      'id,title,slug,lang,type,status,visibility,body_md,source_url,ai_allowed,rag_allowed,metadata,published_at,bluesky_uri,telegram_message_id',
-    )
-    .eq('slug', decodedSlug)
-    .eq('status', 'published')
-    .eq('visibility', 'public')
-    .maybeSingle();
+  const bundle = await getCachedFlowItem(decodedSlug);
+  const context = (bundle?.aiContext as AIContext | null) ?? null;
+  const metadata = resolveFlowMetadataFromContent(content);
 
-  if (error) {
-    console.error('[flow/item] Supabase error:', error);
-    notFound();
-  }
+  const typeLabels: Record<string, string> = {
+    note: 'Note',
+    article: 'Article',
+    photo: 'Photo',
+    video: 'Video',
+    link: 'Link',
+    quote: 'Quote',
+    mixed: 'Post',
+  };
 
-  const item = data as FlowItem | null;
+  const readingTime =
+    content.bodyText.length > 350
+      ? estimateReadingTime(content.bodyText)
+      : null;
 
-  if (!item) notFound();
+  const tgUrl =
+    typeof bundle?.item.telegram_message_id === 'number' ||
+    typeof bundle?.item.telegram_message_id === 'string'
+      ? `https://t.me/unframed_am/${bundle.item.telegram_message_id}`
+      : null;
 
-  const {
-    data: contextData,
-    error: contextError,
-  } = await supabase
-    .from('flow_ai_context')
-    .select(FLOW_AI_CONTEXT_PUBLIC_COLUMNS)
-    .eq('item_id', item.id)
-    .maybeSingle();
+  const blueskyUri =
+    typeof bundle?.item.bluesky_uri === 'string'
+      ? bundle.item.bluesky_uri
+      : typeof content.metadata.bluesky_uri === 'string'
+        ? content.metadata.bluesky_uri
+        : null;
+  const bskyUrl = blueskyUri
+    ? `https://bsky.app/profile/merkurov.love/post/${encodeURIComponent(
+        blueskyUri.split('/').pop() ?? ''
+      )}`
+    : null;
 
-  if (contextError) {
-    console.warn(
-      '[flow/item] AI context unavailable:',
-      contextError,
-    );
-  }
-
-  let context = (contextData as AIContext | null) ?? null;
-
-  // Public Flow only reads a ready context written by the admin endpoint.
-  // Generation must never run on a page view; see
-  // app/api/admin/items/[id]/ai/route.ts.
-
-  const siteUrl = 'https://www.merkurov.love';
-  const itemUrl =
-    `${siteUrl}/flow/${encodeURIComponent(decodedSlug)}`;
-  const itemTitle = getFlowSeoTitle(item, decodedSlug);
-  const itemDescription = getDescription(item);
-  const itemImage =
-    getMetadataImage(item) ||
-    `${siteUrl}/og?${new URLSearchParams({ title: itemTitle, subtitle: 'Flow — Anton Merkurov' }).toString()}`;
-
-  const flowArticleSchema = {
+  const articleSchema = {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
-    headline: itemTitle,
-    description: itemDescription,
-    image: [itemImage],
-    datePublished: item.published_at || undefined,
-    dateModified: item.published_at || undefined,
-    inLanguage: item.lang || 'en',
-    url: itemUrl,
+    headline: metadata.title,
+    description: metadata.description,
+    image: [metadata.previewImage],
+    datePublished: metadata.publishedAt ?? undefined,
+    dateModified: metadata.updatedAt ?? metadata.publishedAt ?? undefined,
+    inLanguage: content.language,
+    url: metadata.canonicalUrl,
     mainEntityOfPage: {
       '@type': 'WebPage',
-      '@id': itemUrl,
+      '@id': metadata.canonicalUrl,
     },
     author: {
       '@type': 'Person',
       name: 'Anton Merkurov',
-      url: siteUrl,
+      url: SITE_URL,
     },
     publisher: {
       '@type': 'Person',
       name: 'Anton Merkurov',
-      url: siteUrl,
+      url: SITE_URL,
     },
   };
 
@@ -1101,106 +572,15 @@ export default async function FlowItemPage({ params }: PageProps) {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      {
-        '@type': 'ListItem',
-        position: 1,
-        name: 'Home',
-        item: siteUrl,
-      },
-      {
-        '@type': 'ListItem',
-        position: 2,
-        name: 'Flow',
-        item: `${siteUrl}/flow`,
-      },
+      { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
+      { '@type': 'ListItem', position: 2, name: 'Flow', item: `${SITE_URL}/flow` },
       {
         '@type': 'ListItem',
         position: 3,
-        name: itemTitle,
-        item: itemUrl,
+        name: metadata.title,
+        item: metadata.canonicalUrl,
       },
     ],
-  };
-
-  const videoId = getYouTubeVideoId(item);
-  const dedicatedImages = getDedicatedImages(item);
-  const photoCaption =
-    getMetadataString(item.metadata, 'alt') ||
-    (item.type === 'photo' ? item.title : null);
-
-  const linkPreviews = (() => {
-    const metadata = item.metadata ?? {};
-
-    const raw = Array.isArray(metadata.link_previews)
-      ? metadata.link_previews
-      : metadata.link_preview
-        ? [metadata.link_preview]
-        : [];
-
-    const previews = raw
-      .filter(
-        (value): value is Record<string, unknown> =>
-          Boolean(value) &&
-          typeof value === 'object' &&
-          !Array.isArray(value),
-      )
-      .map((preview) => {
-        const url = getMetadataString(preview, 'url');
-        if (!url) return null;
-
-        let hostname: string;
-        try {
-          hostname = new URL(url).hostname.replace(/^www\./, '');
-        } catch {
-          return null;
-        }
-
-        return {
-          url,
-          site: getMetadataString(preview, 'site_name') || hostname,
-          title: getMetadataString(preview, 'title') || hostname,
-          description: getMetadataString(preview, 'description'),
-          image: getMetadataString(preview, 'image'),
-        };
-      })
-      .filter(
-        (preview): preview is NonNullable<typeof preview> =>
-          preview !== null,
-      );
-
-    if (previews.length === 0) {
-      const legacy = getLinkPreviewData(item);
-      if (legacy) previews.push(legacy);
-    }
-
-    const seen = new Set<string>();
-    return previews.filter((preview) => {
-      if (seen.has(preview.url)) return false;
-      seen.add(preview.url);
-      return true;
-    });
-  })();
-
-  const display = getTitleAndBodyDisplay(item);
-  const archetype = detectArchetype(
-    item,
-    videoId,
-    dedicatedImages,
-    linkPreviews.length,
-  );
-  const readingTime =
-    archetype === 'article' && item.body_md
-      ? estimateReadingTime(item.body_md)
-      : null;
-  const tgUrl = getTelegramUrl(item);
-  const bskyUrl = getBlueskyUrl(item);
-
-  const archetypeLabels: Record<Archetype, string> = {
-    short_note: 'Note',
-    article: 'Article',
-    visual_story: 'Visual Story',
-    curated_links: 'Digest',
-    video: 'Video',
   };
 
   return (
@@ -1208,19 +588,13 @@ export default async function FlowItemPage({ params }: PageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(flowArticleSchema).replace(
-            /</g,
-            '\\u003c',
-          ),
+          __html: JSON.stringify(articleSchema).replace(/</g, '\\u003c'),
         }}
       />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbSchema).replace(
-            /</g,
-            '\\u003c',
-          ),
+          __html: JSON.stringify(breadcrumbSchema).replace(/</g, '\\u003c'),
         }}
       />
 
@@ -1236,7 +610,7 @@ export default async function FlowItemPage({ params }: PageProps) {
 
             <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider text-stone-400">
               <a
-                href="https://bsky.app/profile/merkurov.love"
+                href={bskyUrl || 'https://bsky.app/profile/merkurov.love'}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition hover:text-stone-900"
@@ -1253,24 +627,24 @@ export default async function FlowItemPage({ params }: PageProps) {
                 Telegram ↗
               </a>
               <span className="text-stone-200">·</span>
-              <Link
-                href="/journal"
-                className="transition hover:text-stone-900"
-              >
+              <Link href="/journal" className="transition hover:text-stone-900">
                 Journal ↗
               </Link>
             </div>
           </header>
 
           <div className="mb-6 flex flex-wrap items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
-            <span>{archetypeLabels[archetype]}</span>
+            <span>{typeLabels[content.contentType] ?? 'Post'}</span>
 
-            {item.published_at && (
+            {content.publishedAt && (
               <>
                 <span>·</span>
-                <span>{formatDate(item.published_at)}</span>
+                <span>{formatDate(content.publishedAt)}</span>
               </>
             )}
+
+            <span>·</span>
+            <span>{content.language.toUpperCase()}</span>
 
             {readingTime && (
               <>
@@ -1280,20 +654,12 @@ export default async function FlowItemPage({ params }: PageProps) {
             )}
           </div>
 
-          <SmartFlowContent
-            item={item}
-            archetype={archetype}
-            display={display}
-            videoId={videoId}
-            dedicatedImages={dedicatedImages}
-            linkPreviews={linkPreviews}
-            photoCaption={photoCaption}
-          />
+          <FlowHero content={content} />
 
-          {item.type !== 'photo' && (
-            <AIContextBlock
+          {content.contentType !== 'photo' && (
+            <PierrotContextBlock
               context={context}
-              defaultLang={item.lang || 'ru'}
+              defaultLang={content.language}
             />
           )}
         </article>

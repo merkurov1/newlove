@@ -1,12 +1,23 @@
-
 import { BskyAgent, RichText } from '@atproto/api';
 import sharp from 'sharp';
 
+import {
+  graphemeLength,
+  normalizeFlowItem,
+  truncateGraphemes,
+  type FlowItemInput,
+} from '@/lib/flow/content';
+import {
+  buildBlueskySummaryPrompt,
+  composeBlueskyPost,
+  BLUESKY_MAX_GRAPHEMES,
+} from '@/lib/flow/blueskyPost';
+import { resolveFlowMetadataFromContent } from '@/lib/flow/metadata';
+import { generateFlowAIText } from '@/lib/flow/ai';
+
 let cachedAgent: BskyAgent | null = null;
 
-const IMAGE_LIMIT = 2_000_000;
 const THUMB_LIMIT = 950_000;
-const MAX_IMAGES = 4;
 
 type LinkPreview = {
   url?: string;
@@ -15,17 +26,10 @@ type LinkPreview = {
   image?: string;
 };
 
-type PublishInput = {
-  title?: string | null;
-  type?: string | null;
-  body_md?: string | null;
-  source_url?: string | null;
-  slug?: string | null;
-  lang?: string;
+type PublishInput = FlowItemInput & {
   imageUrl?: string | null;
-  imageUrls?: string[];
+  imageUrls?: string[] | null;
   youtubeUrl?: string | null;
-  metadata?: Record<string, unknown> | null;
   description?: string | null;
 };
 
@@ -36,15 +40,10 @@ async function getBlueskyAgent(): Promise<BskyAgent> {
   const password = process.env.BLUESKY_PASSWORD;
 
   if (!identifier || !password) {
-    throw new Error(
-      'BLUESKY_IDENTIFIER or BLUESKY_PASSWORD is missing.',
-    );
+    throw new Error('BLUESKY_IDENTIFIER or BLUESKY_PASSWORD is missing.');
   }
 
-  const agent = new BskyAgent({
-    service: 'https://bsky.social',
-  });
-
+  const agent = new BskyAgent({ service: 'https://bsky.social' });
   await agent.login({ identifier, password });
   cachedAgent = agent;
 
@@ -56,93 +55,36 @@ function validUrl(value: unknown): string | null {
 
   try {
     const url = new URL(value.trim());
-
-    if (!['http:', 'https:'].includes(url.protocol)) {
-      return null;
-    }
-
-    return url.toString();
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : null;
   } catch {
     return null;
   }
 }
 
-function flowUrl(slug?: string | null): string | null {
-  if (!slug?.trim()) return null;
+function cleanSummary(value: string | null | undefined): string | null {
+  if (!value?.trim()) return null;
 
-  return (
-    'https://www.merkurov.love/flow/' +
-    encodeURIComponent(slug.trim())
-  );
-}
-
-function cleanMarkdown(value: string): string {
-  return value
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
-    .replace(
-      /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
-      '$1 ($2)',
-    )
-    .replace(/\x60{3}[\s\S]*?\x60{3}/g, '')
-    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
-    .replace(/^\s*>\s?/gm, '')
-    .replace(/(\*\*|__)(.*?)\1/g, '$2')
-    .replace(/(\*|_)(.*?)\1/g, '$2')
-    .replace(/~~(.*?)~~/g, '$1')
-    .replace(/\x60([^\x60]+)\x60/g, '$1')
+  const clean = value
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/^["'«»“”]+|["'«»“”]+$/g, '')
+    .replace(/#[\p{L}\p{N}_]+/gu, '')
+    .replace(/https?:\/\/[^\s<>"']+/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
-}
 
-function truncateText(value: string, limit = 275): string {
-  const Segmenter = (Intl as any).Segmenter;
-
-  const parts: string[] = Segmenter
-    ? Array.from(
-        new Segmenter(undefined, {
-          granularity: 'grapheme',
-        }).segment(value),
-        (part: any) => part.segment,
-      )
-    : Array.from(value);
-
-  if (parts.length <= limit) return value;
-
-  return parts.slice(0, limit - 1).join('').trimEnd() + '…';
-}
-
-function getPreviews(
-  metadata?: Record<string, unknown> | null,
-): LinkPreview[] {
-  if (!metadata) return [];
-
-  const value = Array.isArray(metadata.link_previews)
-    ? metadata.link_previews
-    : metadata.link_preview
-      ? [metadata.link_preview]
-      : [];
-
-  return value.filter(
-    (entry): entry is LinkPreview =>
-      Boolean(entry && typeof entry === 'object'),
-  );
+  return clean || null;
 }
 
 /**
- * Download and normalize images before uploading them to Bluesky.
- * EXIF rotation is applied and output is converted to JPEG.
+ * Download and normalize an image before uploading it to Bluesky.
  */
 async function uploadImage(
   agent: BskyAgent,
   imageUrl: string,
-  maxBytes: number,
+  maxBytes: number
 ): Promise<any | null> {
   const url = validUrl(imageUrl);
-
-  if (!url) {
-    console.warn('[bluesky:image] Invalid image URL.');
-    return null;
-  }
+  if (!url) return null;
 
   try {
     const response = await fetch(url, {
@@ -155,58 +97,31 @@ async function uploadImage(
     });
 
     if (!response.ok) {
-      console.warn(
-        '[bluesky:image] Image request failed:',
-        response.status,
-        url,
-      );
+      console.warn('[bluesky:image] Image request failed:', response.status);
       return null;
     }
 
-    const contentType = (
-      response.headers.get('content-type') || ''
-    )
+    const contentType = (response.headers.get('content-type') || '')
       .split(';')[0]
       .toLowerCase();
 
-    if (!contentType.startsWith('image/')) {
-      console.warn(
-        '[bluesky:image] URL did not return an image:',
-        contentType,
-      );
-      return null;
-    }
+    if (!contentType.startsWith('image/')) return null;
 
-    const declaredSize = Number(
-      response.headers.get('content-length') || 0,
-    );
-
-    if (declaredSize > 15_000_000) {
-      console.warn('[bluesky:image] Source exceeds 15 MB.');
-      return null;
-    }
+    const declaredSize = Number(response.headers.get('content-length') || 0);
+    if (declaredSize > 15_000_000) return null;
 
     const source = Buffer.from(await response.arrayBuffer());
-
-    if (!source.length || source.length > 15_000_000) {
-      console.warn('[bluesky:image] Empty or oversized image.');
-      return null;
-    }
+    if (!source.length || source.length > 15_000_000) return null;
 
     let normalized: Buffer | null = null;
 
-    const attempts = [
+    for (const attempt of [
       { width: 2000, quality: 86 },
       { width: 1800, quality: 78 },
       { width: 1500, quality: 70 },
       { width: 1200, quality: 62 },
-    ];
-
-    for (const attempt of attempts) {
-      const output = await sharp(source, {
-        animated: false,
-        failOn: 'none',
-      })
+    ]) {
+      const output = await sharp(source, { animated: false, failOn: 'none' })
         .rotate()
         .resize({
           width: attempt.width,
@@ -214,10 +129,7 @@ async function uploadImage(
           fit: 'inside',
           withoutEnlargement: true,
         })
-        .jpeg({
-          quality: attempt.quality,
-          mozjpeg: true,
-        })
+        .jpeg({ quality: attempt.quality, mozjpeg: true })
         .toBuffer();
 
       if (output.length <= maxBytes) {
@@ -226,22 +138,10 @@ async function uploadImage(
       }
     }
 
-    if (!normalized) {
-      console.warn(
-        '[bluesky:image] Unable to compress image within the size limit.',
-      );
-      return null;
-    }
+    if (!normalized) return null;
 
-    const uploaded = await agent.uploadBlob(
-      new Uint8Array(normalized),
-      { encoding: 'image/jpeg' },
-    );
-
-    console.info('[bluesky:image] Image uploaded:', {
-      bytes: normalized.length,
-      limit: maxBytes,
-      host: new URL(url).hostname,
+    const uploaded = await agent.uploadBlob(new Uint8Array(normalized), {
+      encoding: 'image/jpeg',
     });
 
     return uploaded.data?.blob || null;
@@ -251,232 +151,101 @@ async function uploadImage(
   }
 }
 
-export async function publishToBluesky({
-  title,
-  type,
-  body_md,
-  source_url,
-  slug,
-  imageUrl,
-  imageUrls,
-  youtubeUrl,
-  metadata,
-  description,
-}: PublishInput): Promise<{ uri: string; cid: string } | null> {
+async function summarizeForBluesky(
+  content: ReturnType<typeof normalizeFlowItem>
+): Promise<string | null> {
+  if (!content.bodyText.trim()) return null;
+
+  const available = BLUESKY_MAX_GRAPHEMES - graphemeLength(content.canonicalUrl) - 4;
+  if (graphemeLength(content.bodyText) <= available) return null;
+
+  try {
+    const generated = await generateFlowAIText(
+      buildBlueskySummaryPrompt(content)
+    );
+    return cleanSummary(generated.content);
+  } catch (error) {
+    console.warn(
+      '[bluesky] Summary generation failed; using local fallback:',
+      error instanceof Error ? error.message : error
+    );
+    return null;
+  }
+}
+
+/**
+ * Publish one short Bluesky post with a meaningful summary and the canonical
+ * Flow URL. The Flow link is also used as an external embed so every platform
+ * shows the same editorial card.
+ */
+export async function publishToBluesky(
+  input: PublishInput
+): Promise<{ uri: string; cid: string } | null> {
   try {
     const agent = await getBlueskyAgent();
 
-    const postType = (type || 'note').toLowerCase();
-    const pageUrl = flowUrl(slug);
-    const previews = getPreviews(metadata);
-    const firstPreview = previews[0];
+    const content = normalizeFlowItem(input, {
+      media: Array.isArray((input as any).media) ? (input as any).media : [],
+    });
 
-    const cleanTitle = (title || '').trim();
-    const cleanBody = cleanMarkdown(body_md || '');
+    const summary = await summarizeForBluesky(content);
+    const post = composeBlueskyPost({
+      title: content.showTitle ? content.title : null,
+      bodyText: content.bodyText,
+      language: content.language,
+      flowUrl: content.canonicalUrl,
+      summary,
+    });
 
-    const images = Array.from(
-      new Set(
-        [
-          ...(Array.isArray(imageUrls) ? imageUrls : []),
-          ...(imageUrl ? [imageUrl] : []),
-        ]
-          .map(validUrl)
-          .filter((url): url is string => Boolean(url)),
-      ),
-    ).slice(0, MAX_IMAGES);
+    const richText = new RichText({ text: post.text });
+    richText.detectFacetsWithoutResolution();
 
-    const youtube = validUrl(youtubeUrl) ||
-      validUrl((metadata?.youtube as any)?.url) ||
-      (
-        typeof (metadata?.youtube as any)?.video_id === 'string'
-          ? 'https://www.youtube.com/watch?v=' +
-            (metadata?.youtube as any).video_id
-          : null
-      );
-
-    const isVideo = postType === 'video' || Boolean(youtube);
-    const externalLink =
-      validUrl(firstPreview?.url) ||
-      validUrl(source_url);
-
-    // Explicit user photo uploads (from composer image picker) vs automatic link OG thumbnails
-    const hasExplicitUserImages = Boolean(
-      (Array.isArray(metadata?.images) && (metadata?.images as any[]).length > 0) ||
-      metadata?.public_url ||
-      metadata?.image_url
-    );
-
-    // If an external link is present and no explicit photos were attached by user,
-    // Bluesky should display an external rich link card instead of raw image blobs.
-    const useImageEmbed =
-      images.length > 0 && !isVideo && !(externalLink && !hasExplicitUserImages);
-
-    let cardUrl: string | null;
-
-    if (isVideo) {
-      cardUrl = youtube;
-    } else if (externalLink) {
-      cardUrl = externalLink;
-    } else {
-      cardUrl = pageUrl;
+    if (richText.graphemeLength > BLUESKY_MAX_GRAPHEMES) {
+      console.warn('[bluesky] Post still exceeds the grapheme limit; refusing.');
+      return null;
     }
 
-    const isRedundantTitle =
-      !cleanTitle ||
-      cleanTitle.toLowerCase() === cleanBody.toLowerCase() ||
-      cleanBody.toLowerCase().startsWith(cleanTitle.toLowerCase());
+    const metadata = resolveFlowMetadataFromContent(content);
+    const thumb = metadata.previewImage
+      ? await uploadImage(agent, metadata.previewImage, THUMB_LIMIT)
+      : null;
 
-    const textParts = [
-      isRedundantTitle ? null : cleanTitle,
-      cleanBody,
-    ].filter(Boolean);
-
-    let postText = textParts.join('\n\n');
-
-    // If user uploaded images and also provided an external link, append external link to text
-    if (useImageEmbed && externalLink && !postText.includes(externalLink)) {
-      postText = postText ? postText + '\n\n' + externalLink : externalLink;
-    }
-
-    // With native image attachments or external card, append Flow link if space permits
-    if (
-      pageUrl &&
-      !postText.includes(pageUrl) &&
-      (useImageEmbed || !cardUrl || cardUrl !== pageUrl)
-    ) {
-      postText = postText
-        ? postText + '\n\n' + pageUrl
-        : pageUrl;
-    }
-
-    const finalText = truncateText(
-      postText || cleanTitle || 'Flow | Anton Merkurov',
-    );
-
-    const richText = new RichText({ text: finalText });
-    await richText.detectFacets(agent);
-
-    let embed: any;
-
-    if (useImageEmbed) {
-      const uploadedImages: Array<{
-        image: any;
-        alt: string;
-      }> = [];
-
-      for (let index = 0; index < images.length; index += 1) {
-        const blob = await uploadImage(
-          agent,
-          images[index],
-          IMAGE_LIMIT,
-        );
-
-        if (blob) {
-          uploadedImages.push({
-            image: blob,
-            alt:
-              cleanTitle ||
-              'Flow image ' + (index + 1),
-          });
-        }
-      }
-
-      if (uploadedImages.length > 0) {
-        embed = {
-          $type: 'app.bsky.embed.images',
-          images: uploadedImages,
-        };
-      } else {
-        console.warn(
-          '[bluesky] No attached image uploaded; using a link card fallback.',
-        );
-      }
-    }
-
-    if (!embed && cardUrl) {
-      const youtubeMeta = metadata?.youtube as any;
-
-      const cardTitle = (
-        firstPreview?.title ||
-        (isVideo && youtubeMeta?.title) ||
-        cleanTitle ||
-        cleanBody.slice(0, 100) ||
-        'Flow | Anton Merkurov'
-      ).slice(0, 200);
-
-      const cardDescription = (
-        firstPreview?.description ||
-        description ||
-        cleanBody ||
-        (isVideo
-          ? 'Watch on YouTube.'
-          : 'Read on merkurov.love.')
-      ).slice(0, 300);
-
-      const thumbnailUrl =
-        validUrl(firstPreview?.image) ||
-        (isVideo
-          ? validUrl(youtubeMeta?.thumbnail_url) ||
-            validUrl(youtubeMeta?.thumbnail)
-          : null) ||
-        (images.length > 0 ? images[0] : null);
-
-      let thumb: any = null;
-
-      if (thumbnailUrl) {
-        thumb = await uploadImage(
-          agent,
-          thumbnailUrl,
-          THUMB_LIMIT,
-        );
-      }
-
-      embed = {
-        $type: 'app.bsky.embed.external',
-        external: {
-          uri: cardUrl,
-          title: cardTitle,
-          description: cardDescription,
-          ...(thumb ? { thumb } : {}),
-        },
-      };
-    }
+    const embed = {
+      $type: 'app.bsky.embed.external',
+      external: {
+        uri: metadata.canonicalUrl,
+        title: truncateGraphemes(metadata.title, 200).trim(),
+        description: truncateGraphemes(metadata.description, 300).trim(),
+        ...(thumb ? { thumb } : {}),
+      },
+    };
 
     const record: any = {
       $type: 'app.bsky.feed.post',
       text: richText.text,
       createdAt: new Date().toISOString(),
-      ...(richText.facets?.length
-        ? { facets: richText.facets }
-        : {}),
-      ...(embed ? { embed } : {}),
+      ...(richText.facets?.length ? { facets: richText.facets } : {}),
+      embed,
     };
 
     const result = await agent.post(record);
 
     console.info('[bluesky] Published:', {
-      type: postType,
-      embedType: embed?.$type || 'none',
-      imageCount:
-        embed?.$type === 'app.bsky.embed.images'
-          ? embed.images.length
-          : 0,
       uri: result.uri,
+      usedSummary: Boolean(summary),
+      graphemes: richText.graphemeLength,
+      facets: richText.facets?.length ?? 0,
+      embedType: embed.$type,
     });
 
-    return {
-      uri: result.uri,
-      cid: result.cid,
-    };
+    return { uri: result.uri, cid: result.cid };
   } catch (error) {
     console.error('[bluesky] Publish failed:', error);
     return null;
   }
 }
 
-export async function deleteFromBluesky(
-  uri: string,
-): Promise<boolean> {
+export async function deleteFromBluesky(uri: string): Promise<boolean> {
   try {
     if (!uri) return false;
 

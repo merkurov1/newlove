@@ -1,8 +1,24 @@
 
-import { unstable_cache } from 'next/cache';
+import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 
 export const FLOW_ITEMS_CACHE_TAG = 'flow-items';
+
+/**
+ * Invalidate the public list, feed, item pages and metadata together.
+ * Tag invalidation is the primary mechanism; revalidatePath covers route-level
+ * ISR caches so an edit is visible immediately after the admin action.
+ */
+export function invalidateFlowCache(): void {
+  revalidateTag(FLOW_ITEMS_CACHE_TAG);
+
+  try {
+    revalidatePath('/flow');
+    revalidatePath('/flow/[slug]', 'page');
+  } catch {
+    // revalidatePath is only available inside a Next.js request context.
+  }
+}
 
 function getSupabaseAdmin() {
   const url =
@@ -54,6 +70,8 @@ const readCachedFlowItems = unstable_cache(
           'visibility',
           'body_md',
           'published_at',
+          'created_at',
+          'updated_at',
           'source_url',
           'metadata',
           'bluesky_uri',
@@ -175,5 +193,110 @@ export async function getCachedFlowFeedItems(
   lang: string | null,
 ): Promise<CachedFlowFeedResult> {
   return readCachedFlowFeed(limit, lang);
+}
+
+export type FlowItemBundle = {
+  item: Record<string, unknown>;
+  media: Record<string, unknown>[];
+  aiContext: Record<string, unknown> | null;
+};
+
+const FLOW_ITEM_FIELDS = [
+  'id',
+  'title',
+  'slug',
+  'lang',
+  'type',
+  'status',
+  'visibility',
+  'body_md',
+  'source_url',
+  'ai_allowed',
+  'rag_allowed',
+  'metadata',
+  'published_at',
+  'created_at',
+  'updated_at',
+  'bluesky_uri',
+  'telegram_message_id',
+].join(',');
+
+/**
+ * Publication data and its ready AI context share one cache entry. The admin
+ * AI endpoint invalidates the same tag, so generating context does not make
+ * the public page uncacheable or stale.
+ */
+const readCachedFlowItem = unstable_cache(
+  async (slug: string): Promise<FlowItemBundle | null> => {
+    const supabase = getSupabaseAdmin();
+
+    const { data: item, error } = await supabase
+      .from('items')
+      .select(FLOW_ITEM_FIELDS)
+      .eq('slug', slug)
+      .eq('status', 'published')
+      .eq('visibility', 'public')
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to load Flow item: ${error.message}`);
+    }
+
+    if (!item) return null;
+
+    const itemId = String(
+      (item as unknown as Record<string, unknown>).id ?? ''
+    );
+
+    let media: Record<string, unknown>[] = [];
+    let aiContext: Record<string, unknown> | null = null;
+
+    if (itemId) {
+      const mediaResult = await supabase
+        .from('media')
+        .select('id,item_id,storage_key,mime,width,height,alt,created_at')
+        .eq('item_id', itemId);
+
+      if (mediaResult.error) {
+        console.warn('[flow/item] media unavailable:', mediaResult.error.message);
+      } else {
+        media = (mediaResult.data ?? []) as unknown as Record<string, unknown>[];
+      }
+
+      const contextResult = await supabase
+        .from('flow_ai_context')
+        .select('id,item_id,content,model,provider,status,generated_at')
+        .eq('item_id', itemId)
+        .maybeSingle();
+
+      if (contextResult.error) {
+        console.warn(
+          '[flow/item] AI context unavailable:',
+          contextResult.error.message
+        );
+      } else {
+        aiContext =
+          (contextResult.data as unknown as Record<string, unknown> | null) ??
+          null;
+      }
+    }
+
+    return {
+      item: item as unknown as Record<string, unknown>,
+      media,
+      aiContext,
+    };
+  },
+  ['flow-public-item-v2'],
+  {
+    revalidate: 3600,
+    tags: [FLOW_ITEMS_CACHE_TAG],
+  }
+);
+
+export async function getCachedFlowItem(
+  slug: string,
+): Promise<FlowItemBundle | null> {
+  return readCachedFlowItem(slug);
 }
 

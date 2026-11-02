@@ -1,8 +1,11 @@
-import { revalidateTag } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
-import { FLOW_ITEMS_CACHE_TAG } from '@/lib/flow/items-cash';
+import { invalidateFlowCache } from '@/lib/flow/items-cash';
+import {
+  isTechnicalText,
+  normalizeFlowItem,
+} from '@/lib/flow/content';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -212,11 +215,79 @@ export async function PATCH(
       );
     }
 
-    const updatePayload: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
+    let nextMetadata: Record<string, unknown> =
+      existing.metadata &&
+      typeof existing.metadata === 'object' &&
+      !Array.isArray(existing.metadata)
+        ? existing.metadata
+        : {};
+
+    if (body.metadata !== undefined) {
+      if (
+        !body.metadata ||
+        typeof body.metadata !== 'object' ||
+        Array.isArray(body.metadata)
+      ) {
+        return NextResponse.json(
+          { error: 'metadata must be an object.' },
+          { status: 400 },
+        );
+      }
+
+      // The composer sends the complete metadata document. Replacing it (not
+      // merging) makes image/link removal actually remove legacy fields.
+      nextMetadata = body.metadata;
+    }
+
+    const nextTitleInput =
+      body.title !== undefined ? body.title : existing.title;
+    const nextBody =
+      body.body_md !== undefined ? body.body_md : existing.body_md;
+    const nextType = body.type !== undefined ? body.type : existing.type;
+    const nextSourceUrl =
+      body.source_url !== undefined ? body.source_url : existing.source_url;
+    const nextStatus = body.status !== undefined ? body.status : existing.status;
+    const nextVisibility =
+      body.visibility !== undefined ? body.visibility : existing.visibility;
+
+    const resolved = normalizeFlowItem({
+      ...existing,
+      title: nextTitleInput,
+      body_md: nextBody,
+      type: nextType,
+      source_url: nextSourceUrl,
+      status: nextStatus,
+      visibility: nextVisibility,
+      metadata: nextMetadata,
+    });
+
+    const titleIsManual =
+      typeof body.title === 'string' && !isTechnicalText(body.title);
+
+    nextMetadata = {
+      ...nextMetadata,
+      title_source: titleIsManual ? 'manual' : resolved.titleSource,
+      ...(titleIsManual
+        ? { generated_title: undefined }
+        : { generated_title: resolved.title }),
     };
 
-    if (body.title !== undefined) updatePayload.title = body.title;
+    const updatePayload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+      metadata: nextMetadata,
+    };
+
+    const shouldWriteResolvedTitle =
+      body.title !== undefined ||
+      isTechnicalText(existing.title) ||
+      nextStatus === 'published';
+
+    if (shouldWriteResolvedTitle) {
+      updatePayload.title = titleIsManual
+        ? String(body.title).trim()
+        : resolved.title;
+    }
+
     if (body.slug !== undefined) updatePayload.slug = body.slug;
     if (body.lang !== undefined) updatePayload.lang = body.lang;
     if (body.type !== undefined) updatePayload.type = body.type;
@@ -236,24 +307,6 @@ export async function PATCH(
     }
     if (body.source_url !== undefined) {
       updatePayload.source_url = body.source_url;
-    }
-
-    if (body.metadata !== undefined) {
-      if (
-        !body.metadata ||
-        typeof body.metadata !== 'object' ||
-        Array.isArray(body.metadata)
-      ) {
-        return NextResponse.json(
-          { error: 'metadata must be an object.' },
-          { status: 400 },
-        );
-      }
-
-      updatePayload.metadata = {
-        ...(existing.metadata || {}),
-        ...body.metadata,
-      };
     }
 
     const { data: updatedItem, error: updateError } = await supabase
@@ -277,7 +330,7 @@ export async function PATCH(
 
     // The public feed is cached by tag; invalidate immediately after the
     // database write, before waiting on external crossposting.
-    revalidateTag(FLOW_ITEMS_CACHE_TAG);
+    invalidateFlowCache();
 
     const wasPublished =
       existing.status === 'published' &&
@@ -292,6 +345,8 @@ export async function PATCH(
         // Ленивый импорт: sharp не грузится на этапе сборки.
         const { crosspostFlowItem } = await import('@/lib/flow/crosspost');
         await crosspostFlowItem(updatedItem);
+        // Crossposting stores channel state in metadata.
+        invalidateFlowCache();
       } catch (crosspostError) {
         console.error(
           '[api/flow/items/[id]:PATCH] crosspost error:',
@@ -407,7 +462,7 @@ export async function DELETE(
       );
     }
 
-    revalidateTag(FLOW_ITEMS_CACHE_TAG);
+    invalidateFlowCache();
 
     return NextResponse.json({ success: true });
   } catch (error) {

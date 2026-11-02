@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { normalizeFlowItem } from '@/lib/flow/content';
+import { invalidateFlowCache } from '@/lib/flow/items-cash';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,7 +100,7 @@ export async function POST(req: NextRequest) {
       error: itemError,
     } = await supabase
       .from('items')
-      .select('id,type,status,visibility,lang,metadata')
+      .select('id,title,body_md,type,status,visibility,lang,metadata')
       .eq('id', itemId.trim())
       .maybeSingle();
 
@@ -166,11 +168,20 @@ export async function POST(req: NextRequest) {
 
     const publicUrl = publicData.publicUrl;
 
-    const metadata = {
-      ...(existingItem.metadata &&
-      typeof existingItem.metadata === 'object'
+    const previousMetadata =
+      existingItem.metadata &&
+      typeof existingItem.metadata === 'object' &&
+      !Array.isArray(existingItem.metadata)
         ? existingItem.metadata
-        : {}),
+        : {};
+
+    const previousImages = Array.isArray(previousMetadata.images)
+      ? previousMetadata.images
+      : [];
+
+    const metadata = {
+      ...previousMetadata,
+      images: [...previousImages, publicUrl],
       public_url: publicUrl,
       storage_key: storageKey,
       filename,
@@ -178,6 +189,13 @@ export async function POST(req: NextRequest) {
       size: file.size,
       alt: filename,
     };
+
+    const content = normalizeFlowItem({
+      ...existingItem,
+      type: 'photo',
+      source_url: null,
+      metadata,
+    });
 
     const {
       data: mediaRow,
@@ -219,9 +237,15 @@ export async function POST(req: NextRequest) {
       .from('items')
       .update({
         type: 'photo',
-        title: filename.slice(0, 160),
+        title: content.title,
         source_url: null,
-        metadata,
+        metadata: {
+          ...metadata,
+          title_source: content.titleSource,
+          ...(content.titleSource === 'manual'
+            ? { generated_title: undefined }
+            : { generated_title: content.title }),
+        },
         lang:
           typeof lang === 'string' && lang.trim()
             ? lang.trim()
@@ -254,6 +278,8 @@ export async function POST(req: NextRequest) {
         { status: 500 },
       );
     }
+
+    invalidateFlowCache();
 
     return NextResponse.json(
       {

@@ -1,8 +1,14 @@
-import { revalidateTag } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
-import { FLOW_ITEMS_CACHE_TAG, getCachedFlowItems } from '@/lib/flow/items-cash';
+import {
+  getCachedFlowItems,
+  invalidateFlowCache,
+} from '@/lib/flow/items-cash';
+import {
+  normalizeFlowItem,
+  type FlowItemInput,
+} from '@/lib/flow/content';
 import { ensurePublishedFlowContext } from '@/lib/flow/publishedContext';
 
 export const runtime = 'nodejs';
@@ -57,14 +63,45 @@ export async function GET(req: Request) {
 
     const result = await getCachedFlowItems(limit, offset);
 
-    return NextResponse.json(result, {
-      status: 200,
-      headers: {
-        // Браузер не хранит ответ самостоятельно.
-        // Кэширование выполняется на стороне Next.js.
-        'Cache-Control': 'no-store',
-      },
+    // The database snapshot is cached; normalization is cheap and guarantees
+    // every client receives the same title/image/link decisions as the page,
+    // feeds and social cards.
+    const items = result.items.map((item) => {
+      const normalized = normalizeFlowItem(item as FlowItemInput);
+
+      return {
+        ...item,
+        title: normalized.title,
+        titleSource: normalized.titleSource,
+        contentType: normalized.contentType,
+        description: normalized.description,
+        bodyText: normalized.bodyText,
+        bodyExcerpt: normalized.bodyExcerpt,
+        bodyTruncated: normalized.bodyTruncated,
+        showTitle: normalized.showTitle,
+        titleIsRedundant: normalized.titleIsRedundant,
+        images: normalized.images,
+        videos: normalized.videos,
+        links: normalized.links,
+        canonicalUrl: normalized.canonicalUrl,
+        sourceName: normalized.sourceName,
+        imageAlt: normalized.imageAlt,
+        language: normalized.language,
+        version: normalized.version,
+      };
     });
+
+    return NextResponse.json(
+      { ...result, items },
+      {
+        status: 200,
+        headers: {
+          // Браузер не хранит ответ самостоятельно.
+          // Кэширование выполняется на стороне Next.js.
+          'Cache-Control': 'no-store',
+        },
+      }
+    );
   } catch (error) {
     console.error('[api/flow/items] GET error:', error);
 
@@ -92,7 +129,6 @@ export async function POST(req: Request) {
 
     const supabase = getSupabaseAdmin();
     const now = new Date().toISOString();
-    const slug = body.slug || generateSlug(body.title, body.body_md);
 
     const allowedTypes = ['note', 'article', 'link', 'photo', 'video', 'quote'];
 
@@ -105,21 +141,43 @@ export async function POST(req: Request) {
 
     const visibility = allowedVisibilities.includes(body.visibility) ? body.visibility : 'public';
 
+    const inputMetadata =
+      body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
+        ? body.metadata
+        : {};
+
+    const content = normalizeFlowItem({
+      title: body.title,
+      body_md: body.body_md,
+      source_url: body.source_url,
+      type: itemType,
+      lang: body.lang || 'ru',
+      metadata: inputMetadata,
+    });
+
+    const slug = body.slug || generateSlug(content.title, body.body_md);
+
+    const metadata = {
+      ...inputMetadata,
+      title_source: content.titleSource,
+      ...(content.titleSource === 'manual'
+        ? { generated_title: undefined }
+        : { generated_title: content.title }),
+    };
+
     const { data: item, error } = await supabase
       .from('items')
       .insert({
-        title: body.title || null,
+        // A published item always has a title, including a neutral fallback.
+        title: content.title,
         slug,
         lang: body.lang || 'ru',
         type: itemType,
         status,
         visibility,
         body_md: body.body_md || null,
-        source_url: body.source_url || null,
-        metadata:
-          body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
-            ? body.metadata
-            : {},
+        source_url: body.source_url || content.sourceUrl || null,
+        metadata,
         published_at: status === 'published' ? body.published_at || now : null,
       })
       .select()
@@ -132,7 +190,7 @@ export async function POST(req: Request) {
     }
 
     // Сбрасываем публичную ленту после успешной записи.
-    revalidateTag(FLOW_ITEMS_CACHE_TAG);
+    invalidateFlowCache();
 
     let crosspostResult = null;
 
@@ -141,6 +199,8 @@ export async function POST(req: Request) {
         // Ленивый импорт: sharp не грузится на этапе сборки.
         const { crosspostFlowItem } = await import('@/lib/flow/crosspost');
         crosspostResult = await crosspostFlowItem(item);
+        // Crossposting stores channel state in metadata.
+        invalidateFlowCache();
       } catch (crosspostError) {
         console.error('[api/flow/items] crosspost error:', crosspostError);
       }

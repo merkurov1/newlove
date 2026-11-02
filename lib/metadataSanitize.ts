@@ -96,6 +96,24 @@ export function sanitizeMetadata(input: any): Metadata {
       if (typeof input.openGraph.siteName === 'string') og.siteName = input.openGraph.siteName.trim();
       if (typeof input.openGraph.locale === 'string') og.locale = input.openGraph.locale.trim();
       if (typeof input.openGraph.type === 'string') og.type = input.openGraph.type.trim();
+      if (typeof input.openGraph.publishedTime === 'string') {
+        og.publishedTime = input.openGraph.publishedTime.trim();
+      }
+      if (typeof input.openGraph.modifiedTime === 'string') {
+        og.modifiedTime = input.openGraph.modifiedTime.trim();
+      }
+      if (Array.isArray(input.openGraph.authors)) {
+        og.authors = input.openGraph.authors.filter(
+          (author: unknown): author is string =>
+            typeof author === 'string' && Boolean(author.trim())
+        );
+      }
+      if (Array.isArray(input.openGraph.tags)) {
+        og.tags = input.openGraph.tags.filter(
+          (tag: unknown): tag is string =>
+            typeof tag === 'string' && Boolean(tag.trim())
+        );
+      }
 
       if (Array.isArray(input.openGraph.images)) {
         og.images = input.openGraph.images
@@ -107,6 +125,7 @@ export function sanitizeMetadata(input: any): Metadata {
                 width: typeof img.width === 'number' ? img.width : undefined,
                 height: typeof img.height === 'number' ? img.height : undefined,
                 alt: typeof img.alt === 'string' ? img.alt : undefined,
+                type: typeof img.type === 'string' ? img.type : undefined,
               };
             }
             return null;

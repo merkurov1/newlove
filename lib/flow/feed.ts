@@ -1,4 +1,12 @@
-import { getLinkPreviews } from '@/lib/flow-issue/metadata';
+import {
+  markdownToPlainText,
+  normalizeFlowItem,
+  truncatePlainText,
+  type FlowContent,
+} from './content';
+import { resolveFlowMetadataFromContent } from './metadata';
+
+export { markdownToPlainText };
 
 /**
  * Reader-facing feed for the Flow stream.
@@ -132,23 +140,7 @@ export function toIsoDate(value: unknown): string | null {
 /* Text helpers                                                        */
 /* ------------------------------------------------------------------ */
 
-export function markdownToPlainText(value: string): string {
-  return (
-    value
-      .replace(/```[\s\S]*?```/g, ' ')
-      .replace(/`([^`]*)`/g, '$1')
-      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/^\s{0,3}(?:#{1,6}|>|[-*+]|\d+\.)\s+/gm, '')
-      // Markdown table borders and cells do not survive as plain text.
-      .replace(/^\s*\|?[\s:|\-]*-[\s:|\-]*$/gm, ' ')
-      .replace(/\s*\|\s*/g, ' ')
-      .replace(/[*_~`]+/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
-}
+/* markdownToPlainText is implemented in the shared Content Resolver. */
 
 export function truncate(value: string, maxLength: number): string {
   if (value.length <= maxLength) return value;
@@ -277,6 +269,7 @@ const TYPE_LABELS: Record<string, TypeLabel> = {
   photo: { ru: 'Фото', en: 'Photo' },
   video: { ru: 'Видео', en: 'Video' },
   quote: { ru: 'Цитата', en: 'Quote' },
+  mixed: { ru: 'Запись', en: 'Post' },
 };
 
 const FALLBACK_LABEL: TypeLabel = {
@@ -284,289 +277,95 @@ const FALLBACK_LABEL: TypeLabel = {
   en: 'Post',
 };
 
-type YouTubeInfo = {
-  videoId: string | null;
-  title: string | null;
-  thumbnail: string | null;
-};
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function readString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
 function typeLabelFor(type: string, language: 'ru' | 'en'): string {
   return (TYPE_LABELS[type] ?? FALLBACK_LABEL)[language];
 }
 
-function languageFor(item: Record<string, unknown>): 'ru' | 'en' {
-  return readString(item.lang) === 'en' ? 'en' : 'ru';
-}
-
-function youtubeFor(item: Record<string, unknown>): YouTubeInfo {
-  const metadata = asRecord(item.metadata) ?? {};
-  const youtube = asRecord(metadata.youtube);
-
-  let videoId = readString(youtube?.video_id);
-  const thumbnail = absoluteUrl(readString(youtube?.thumbnail_url));
-
-  if (!videoId) {
-    const sourceUrl = readString(item.source_url);
-
-    if (sourceUrl) {
-      videoId = youtubeIdFromUrl(sourceUrl);
-    }
-  }
-
-  return {
-    videoId,
-    title: readString(youtube?.title),
-    thumbnail: thumbnail ?? youtubeThumbnail(videoId),
-  };
-}
-
-function youtubeIdFromUrl(value: string): string | null {
-  try {
-    const url = new URL(value);
-
-    const host = url.hostname.replace(/^www\./, '').toLowerCase();
-
-    if (host === 'youtu.be') {
-      return url.pathname.split('/').filter(Boolean)[0] ?? null;
-    }
-
-    if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
-      const queryId = url.searchParams.get('v');
-      if (queryId) return queryId;
-
-      const match = url.pathname.match(/^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]+)/);
-
-      return match?.[1] ?? null;
-    }
-  } catch {
-    // Ignore malformed URLs.
-  }
-
-  return null;
-}
-
-function youtubeThumbnail(videoId: string | null): string | null {
-  return videoId ? `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg` : null;
-}
-
-function collectImages(item: Record<string, unknown>): string[] {
-  const metadata = asRecord(item.metadata) ?? {};
-  const candidates: unknown[] = [];
-
-  if (Array.isArray(metadata.images)) {
-    candidates.push(...metadata.images);
-  }
-
-  for (const key of ['public_url', 'image', 'image_url', 'og_image']) {
-    candidates.push(metadata[key]);
-  }
-
-  for (const preview of getLinkPreviews(metadata)) {
-    candidates.push(preview.image);
-    candidates.push(preview.image_url);
-  }
-
-  const urls = candidates
-    .map((value) => {
-      if (typeof value === 'string') return value;
-
-      const record = asRecord(value);
-
-      return readString(record?.url) ?? readString(record?.public_url);
-    })
-    .map((value) => absoluteUrl(value))
-    .filter((value): value is string => Boolean(value));
-
-  return [...new Set(urls)];
-}
-
-function permalinkFor(item: Record<string, unknown>): string {
-  const slug = readString(item.slug);
-
-  if (slug) {
-    return `${FLOW_SITE_URL}/flow/${encodeURIComponent(slug)}`;
-  }
-
-  const sourceUrl = sourceUrlFor(item);
-
-  return sourceUrl || `${FLOW_SITE_URL}${FLOW_HOME_PATH}`;
-}
-
-function sourceUrlFor(item: Record<string, unknown>): string | null {
-  const metadata = asRecord(item.metadata) ?? {};
-  const preview = getLinkPreviews(metadata)[0] ?? null;
-
+function feedImageFor(
+  content: FlowContent,
+  previewImage: string
+): string | null {
   return (
-    absoluteUrl(readString(metadata.canonical_url)) ??
-    absoluteUrl(readString(preview?.url)) ??
-    absoluteUrl(readString(item.source_url))
+    content.images[0]?.url ??
+    content.videos.find((video) => video.thumbnail)?.thumbnail ??
+    content.links.find((link) => link.image)?.image ??
+    previewImage ??
+    null
   );
 }
 
-function sourceNameFor(item: Record<string, unknown>): string {
-  const metadata = asRecord(item.metadata) ?? {};
-  const preview = getLinkPreviews(metadata)[0] ?? null;
-
-  const explicit =
-    readString(preview?.site_name) ?? readString(metadata.site_name) ?? readString(metadata.domain);
-
-  if (explicit) return explicit;
-
-  const sourceUrl = sourceUrlFor(item);
-
-  if (sourceUrl) {
-    try {
-      return new URL(sourceUrl).hostname.replace(/^www\./, '');
-    } catch {
-      // Ignore malformed URLs.
-    }
-  }
-
-  return 'Flow';
-}
-
-function titleFor(item: Record<string, unknown>, language: 'ru' | 'en', label: string): string {
-  const metadata = asRecord(item.metadata) ?? {};
-  const preview = getLinkPreviews(metadata)[0] ?? null;
-  const youtube = youtubeFor(item);
-  const body = readString(item.body_md) ?? '';
-
-  const candidates = [
-    readString(item.title),
-    readString(metadata.title),
-    youtube.title,
-    readString(preview?.title),
-    readString(metadata.alt),
-    readString(metadata.caption),
-    truncate(markdownToPlainText(body).split(/(?<=[.!?…])\s+/)[0] || '', 90),
-  ];
-
-  for (const candidate of candidates) {
-    if (candidate) return candidate;
-  }
-
-  const date = parseFeedDate(item.published_at);
-
-  return date ? `${label} · ${date.toISOString().slice(0, 10)}` : label;
-}
-
-function summaryFor(item: Record<string, unknown>, title: string): string {
-  const metadata = asRecord(item.metadata) ?? {};
-  const preview = getLinkPreviews(metadata)[0] ?? null;
-  const body = readString(item.body_md) ?? '';
-
-  const candidates = [
-    readString(metadata.description),
-    readString(preview?.description),
-    markdownToPlainText(body),
-  ];
-
-  for (const candidate of candidates) {
-    if (candidate) return truncate(candidate, 300);
-  }
-
-  return truncate(title, 300);
-}
-
-function captionFor(item: Record<string, unknown>): string | null {
-  const metadata = asRecord(item.metadata) ?? {};
-
-  return readString(metadata.caption) ?? readString(metadata.alt) ?? null;
-}
-
 /**
- * Convert a raw `items` row into a feed entry.
- *
- * `renderMarkdown` is injected so the pure XML layer stays testable without
- * pulling the markdown renderer (an ESM React pipeline) into unit tests.
+ * Convert a raw `items` row into a feed entry through the shared Content
+ * Resolver. `renderMarkdown` is injected so the pure XML layer stays testable
+ * without pulling the ESM React markdown pipeline into unit tests.
  */
 export function toFeedEntry(
   item: Record<string, unknown>,
   renderMarkdown: (markdown: string) => string
 ): FlowFeedEntry {
-  const language = languageFor(item);
-  const type = readString(item.type) ?? 'note';
-  const label = typeLabelFor(type, language);
-  const title = titleFor(item, language, label);
-  const url = permalinkFor(item);
-  const body = readString(item.body_md) ?? '';
-  const bodyHtml = body ? renderMarkdown(body) : '';
-  const preview = getLinkPreviews(asRecord(item.metadata) ?? {})[0] ?? null;
-  const sourceUrl = sourceUrlFor(item);
-  const sourceName = sourceNameFor(item);
-  const images = collectImages(item);
-  const caption = captionFor(item);
-  const youtube = youtubeFor(item);
-  const videoId = youtube.videoId;
+  const content = normalizeFlowItem(item);
+  const metadata = resolveFlowMetadataFromContent(content);
+  const language = content.language;
+  const label = typeLabelFor(content.contentType, language);
+  const url = content.canonicalUrl;
+  const bodyHtml = content.body ? renderMarkdown(content.body) : '';
   const publishedAt =
-    toIsoDate(item.published_at) ?? toIsoDate(item.created_at) ?? new Date().toISOString();
+    toIsoDate(content.publishedAt) ??
+    toIsoDate(content.updatedAt) ??
+    new Date().toISOString();
 
   const html: string[] = [];
 
-  if (type === 'video' && videoId) {
-    const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
-
-    if (youtube.thumbnail) {
+  for (const video of content.videos) {
+    if (video.thumbnail) {
       html.push(
-        `<p><a href="${escapeXml(watchUrl)}"><img src="${escapeXml(
-          youtube.thumbnail
-        )}" alt="${escapeXml(title)}" /></a></p>`
+        `<p><a href="${escapeXml(video.url)}"><img src="${escapeXml(
+          video.thumbnail
+        )}" alt="${escapeXml(video.title ?? metadata.title)}" /></a></p>`
       );
     }
 
     html.push(
-      `<p><a href="${escapeXml(watchUrl)}">${
+      `<p><a href="${escapeXml(video.url)}">${
         language === 'ru' ? 'Смотреть' : 'Watch'
-      } on YouTube</a></p>`
+      }${video.provider === 'youtube' ? ' on YouTube' : ''}</a></p>`
     );
-  } else if (images.length) {
-    const figureHref = type === 'link' && sourceUrl ? sourceUrl : url;
-    const limit = type === 'photo' ? 6 : 1;
-
-    images.slice(0, limit).forEach((image, index) => {
-      const figcaption =
-        index === 0 && caption ? `<figcaption>${escapeXml(caption)}</figcaption>` : '';
-
-      html.push(
-        `<figure><a href="${escapeXml(figureHref)}"><img src="${escapeXml(image)}" alt="${escapeXml(
-          caption ?? title
-        )}" /></a>${figcaption}</figure>`
-      );
-    });
   }
 
-  if (type === 'link') {
-    if (preview) {
-      const previewUrl = absoluteUrl(readString(preview.url)) ?? sourceUrl;
-      const previewTitle = readString(preview.title) ?? sourceName;
-      const previewDescription = readString(preview.description);
+  for (const image of content.images) {
+    const caption = image.caption ?? image.alt;
 
-      html.push(
-        `<p><strong>${
-          previewUrl
-            ? `<a href="${escapeXml(previewUrl)}">${escapeXml(previewTitle)}</a>`
-            : escapeXml(previewTitle)
-        }</strong>${
-          previewDescription ? `<br />${escapeXml(previewDescription)}` : ''
-        }<br /><em>${escapeXml(sourceName)}</em></p>`
-      );
-    } else if (sourceUrl) {
-      html.push(
-        `<p>${language === 'ru' ? 'Источник' : 'Source'}: <a href="${escapeXml(
-          sourceUrl
-        )}">${escapeXml(sourceName)}</a></p>`
-      );
-    }
+    html.push(
+      `<figure><a href="${escapeXml(url)}"><img src="${escapeXml(
+        image.url
+      )}" alt="${escapeXml(caption ?? metadata.title)}" /></a>${
+        caption ? `<figcaption>${escapeXml(caption)}</figcaption>` : ''
+      }</figure>`
+    );
+  }
+
+  for (const link of content.links) {
+    // Do not repeat a URL that is already visible in the body.
+    if (link.inBody) continue;
+
+    const title = link.title ?? link.siteName ?? link.domain ?? link.url;
+    const description = link.description;
+
+    html.push(
+      `<p><strong><a href="${escapeXml(link.url)}">${escapeXml(
+        title
+      )}</a></strong>${
+        description ? `<br />${escapeXml(description)}` : ''
+      }${
+        link.siteName ? `<br /><em>${escapeXml(link.siteName)}</em>` : ''
+      }</p>${
+        link.image
+          ? `<p><a href="${escapeXml(link.url)}"><img src="${escapeXml(
+              link.image
+            )}" alt="${escapeXml(title)}" /></a></p>`
+          : ''
+      }`
+    );
   }
 
   if (bodyHtml) html.push(bodyHtml);
@@ -578,25 +377,28 @@ export function toFeedEntry(
   );
 
   const contentHtml = html.join('\n');
-  const plainBody = markdownToPlainText(body);
+  const summary = truncate(metadata.description, 300);
+  const image = feedImageFor(content, metadata.previewImage);
 
   return {
-    id: readString(item.id) ?? url,
-    title,
+    id: content.id ?? url,
+    title: metadata.title,
     url,
-    summary: summaryFor(item, title),
+    summary,
     contentHtml,
-    contentText: truncate(plainBody || summaryFor(item, title), 4000),
+    contentText: content.bodyText || summary,
     publishedAt,
-    updatedAt: toIsoDate(item.updated_at),
+    updatedAt: toIsoDate(content.updatedAt),
     language,
-    type,
+    type: content.contentType,
     typeLabel: label,
-    image: images[0] ?? youtube.thumbnail,
+    image,
     tags: [
       label,
       language === 'ru' ? 'Русский' : 'English',
-      ...(type === 'link' && sourceName !== 'Flow' ? [sourceName] : []),
+      ...(content.sourceName && content.sourceName !== 'Flow'
+        ? [content.sourceName]
+        : []),
     ],
   };
 }

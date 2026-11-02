@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { invalidateFlowCache } from '@/lib/flow/items-cash';
 import type { CrosspostPayload } from '@/lib/flow/crosspost';
 
 export const runtime = 'nodejs';
@@ -175,20 +176,48 @@ export async function POST(req: Request) {
       };
     }
 
+    const requestedChannels = Array.isArray(body.channels)
+      ? body.channels.filter(
+          (channel): channel is 'telegram' | 'bluesky' =>
+            channel === 'telegram' || channel === 'bluesky'
+        )
+      : undefined;
+
     // Ленивый импорт: sharp и прочие тяжёлые зависимости не грузятся при сборке.
     const { crosspostFlowItem } = await import('@/lib/flow/crosspost');
 
     // Каждый канал обрабатывается независимо внутри crosspostFlowItem.
-    const result = await crosspostFlowItem(payload);
+    const result = await crosspostFlowItem(payload, {
+      channels: requestedChannels,
+      retryFailed: body.retryFailed === true,
+      force: body.force === true,
+      retryUncertain: body.retryUncertain === true,
+    });
+
+    invalidateFlowCache();
+
+    const telegramState = result.channels?.telegram;
+    const blueskyState = result.channels?.bluesky;
 
     const channels = {
       bluesky: {
-        success: Boolean(result.bluesky),
-        uri: result.bluesky?.uri ?? null,
+        success: blueskyState?.status === 'published',
+        status: blueskyState?.status ?? 'not_attempted',
+        uri: result.bluesky?.uri ?? blueskyState?.externalUri ?? null,
+        error: blueskyState?.lastError ?? null,
+        attempts: blueskyState?.attempts ?? 0,
       },
       telegram: {
-        success: Boolean(result.telegram),
-        messageId: result.telegram?.messageId ?? null,
+        success: telegramState?.status === 'published',
+        status: telegramState?.status ?? 'not_attempted',
+        messageId:
+          result.telegram?.messageId ??
+          telegramState?.messageIds[0] ??
+          null,
+        messageIds: telegramState?.messageIds ?? [],
+        error: telegramState?.lastError ?? null,
+        attempts: telegramState?.attempts ?? 0,
+        uncertain: telegramState?.uncertain ?? false,
       },
       osirisWebhook: {
         configured:
@@ -222,6 +251,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: publishedSomewhere,
       itemId: payload.id,
+      attemptedChannels: result.attemptedChannels ?? [],
       channels,
       result,
     });

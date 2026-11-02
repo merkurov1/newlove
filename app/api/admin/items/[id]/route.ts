@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { revalidateTag } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
-import { FLOW_ITEMS_CACHE_TAG } from '@/lib/flow/items-cash';
+import { invalidateFlowCache } from '@/lib/flow/items-cash';
+import {
+  isTechnicalText,
+  normalizeFlowItem,
+} from '@/lib/flow/content';
 import { ensurePublishedFlowContext } from '@/lib/flow/publishedContext';
 
 export const runtime = 'nodejs';
@@ -50,21 +53,13 @@ function getSupabaseAdmin() {
 function slugify(value: string) {
   return value
     .toLowerCase()
-    .trim()
-    .replace(/[^\\p{L}\\p{N}\\s-]/gu, '')
-    .replace(/\\s+/g, '-')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 100);
-}
-
-function deriveTitle(body: string, fallback: string) {
-  const first = body
-    .split(/\\r?\\n/)
-    .map((line) => line.replace(/^#{1,6}\\s+/, '').trim())
-    .find(Boolean);
-
-  return first?.slice(0, 160) || fallback.trim().slice(0, 160) || 'Untitled';
 }
 
 function errorMessage(error: unknown) {
@@ -205,7 +200,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     }
 
     // Invalidate cached public Flow pages after deletion.
-    revalidateTag(FLOW_ITEMS_CACHE_TAG);
+    invalidateFlowCache();
 
     return NextResponse.json(
       {
@@ -282,19 +277,50 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     const nextBody = payload.body_md !== undefined ? payload.body_md : (existing.body_md ?? '');
 
-    let nextTitle = payload.title !== undefined ? payload.title.trim() : (existing.title ?? '');
+    let nextMetadata: Record<string, unknown> =
+      payload.metadata !== undefined
+        ? payload.metadata
+        : existing.metadata &&
+            typeof existing.metadata === 'object' &&
+            !Array.isArray(existing.metadata)
+          ? existing.metadata
+          : {};
 
-    if (nextStatus === 'published' && !nextTitle) {
-      const metadata = payload.metadata ?? existing.metadata ?? {};
+    const resolved = normalizeFlowItem({
+      ...existing,
+      title: payload.title !== undefined ? payload.title : existing.title,
+      body_md: nextBody,
+      type: nextType,
+      lang: nextLang,
+      source_url:
+        payload.source_url !== undefined
+          ? payload.source_url
+          : existing.source_url,
+      status: nextStatus,
+      metadata: nextMetadata,
+    });
 
-      nextTitle = String(
-        metadata.title ?? metadata.alt ?? payload.source_url ?? existing.source_url ?? ''
-      ).trim();
+    const titleIsManual =
+      typeof payload.title === 'string' && !isTechnicalText(payload.title);
 
-      if (!nextTitle) {
-        nextTitle = deriveTitle(nextBody, '');
-      }
-    }
+    let nextTitle =
+      typeof payload.title === 'string' && titleIsManual
+        ? payload.title.trim()
+        : isTechnicalText(existing.title)
+          ? resolved.title
+          : payload.title !== undefined
+            ? resolved.title
+            : existing.title ?? resolved.title;
+
+    if (!nextTitle) nextTitle = resolved.title;
+
+    nextMetadata = {
+      ...nextMetadata,
+      title_source: titleIsManual ? 'manual' : resolved.titleSource,
+      ...(titleIsManual
+        ? { generated_title: undefined }
+        : { generated_title: nextTitle }),
+    };
 
     let nextSlug = existing.slug ?? '';
 
@@ -362,7 +388,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       status: nextStatus,
     };
 
-    if (payload.title !== undefined || nextStatus === 'published') {
+    if (
+      payload.title !== undefined ||
+      nextStatus === 'published' ||
+      isTechnicalText(existing.title)
+    ) {
       update.title = nextTitle;
     }
 
@@ -382,9 +412,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       update.source_url = payload.source_url;
     }
 
-    if (payload.metadata !== undefined) {
-      update.metadata = payload.metadata;
-    }
+    update.metadata = nextMetadata;
 
     if (typeof payload.rag_allowed === 'boolean') {
       update.rag_allowed = payload.rag_allowed;
@@ -438,7 +466,22 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     // Invalidate cached public Flow pages after update.
-    revalidateTag(FLOW_ITEMS_CACHE_TAG);
+    invalidateFlowCache();
+
+    const wasPublished =
+      existing.status === 'published' && existing.visibility === 'public';
+    const isNowPublished =
+      data.status === 'published' && data.visibility === 'public';
+
+    if (!wasPublished && isNowPublished) {
+      try {
+        const { crosspostFlowItem } = await import('@/lib/flow/crosspost');
+        await crosspostFlowItem(data);
+        invalidateFlowCache();
+      } catch (crosspostError) {
+        console.error('[admin/items/:id] crosspost error:', crosspostError);
+      }
+    }
 
     // Context is generated automatically when an item becomes public for the
     // first time. Existing rows are never regenerated by this path.

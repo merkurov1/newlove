@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { normalizeFlowItem } from '@/lib/flow/content';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +39,30 @@ export async function POST(req: NextRequest) {
     const draftSlug =
       `draft-${crypto.randomUUID()}`;
 
+    const inputMetadata =
+      body.metadata &&
+      typeof body.metadata === 'object' &&
+      !Array.isArray(body.metadata)
+        ? body.metadata
+        : {};
+
+    const content = normalizeFlowItem({
+      title: body.title,
+      body_md: body.body_md,
+      source_url: body.source_url,
+      type,
+      lang,
+      metadata: inputMetadata,
+    });
+
+    const metadata = {
+      ...inputMetadata,
+      title_source: content.titleSource,
+      ...(content.titleSource === 'manual'
+        ? { generated_title: undefined }
+        : { generated_title: content.title }),
+    };
+
     const {
       data: item,
       error,
@@ -50,10 +75,9 @@ export async function POST(req: NextRequest) {
         lang,
         slug: draftSlug,
 
-        title:
-          typeof body.title === 'string'
-            ? body.title.trim()
-            : '',
+        // Drafts also keep a resolved title so publishing never depends on a
+        // separate fallback implementation.
+        title: content.title,
 
         body_md:
           typeof body.body_md === 'string'
@@ -63,13 +87,9 @@ export async function POST(req: NextRequest) {
         source_url:
           typeof body.source_url === 'string'
             ? body.source_url
-            : null,
+            : content.sourceUrl,
 
-        metadata:
-          body.metadata &&
-          typeof body.metadata === 'object'
-            ? body.metadata
-            : {},
+        metadata,
 
         ai_allowed:
           typeof body.ai_allowed === 'boolean'
