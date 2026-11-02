@@ -8,9 +8,8 @@ import {
 import { resolveFlowMetadataFromContent } from '@/lib/flow/metadata';
 
 export const runtime = 'edge';
-export const contentType = 'image/png';
 
-export const size = {
+const size = {
   width: 1200,
   height: 630,
 };
