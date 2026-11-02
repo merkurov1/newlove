@@ -208,6 +208,10 @@ export async function POST(req: Request) {
 
     const aiContext = await ensurePublishedFlowContext(supabase, item);
 
+    // AI context is generated after the first cache invalidation. Refresh the
+    // tagged item snapshot again so the public page immediately shows it.
+    invalidateFlowCache();
+
     return NextResponse.json(
       {
         success: true,

@@ -6,6 +6,7 @@ import {
   isTechnicalText,
   normalizeFlowItem,
 } from '@/lib/flow/content';
+import { ensurePublishedFlowContext } from '@/lib/flow/publishedContext';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -355,9 +356,18 @@ export async function PATCH(
       }
     }
 
+    const aiContext = isNowPublished
+      ? await ensurePublishedFlowContext(supabase, updatedItem)
+      : null;
+
+    if (aiContext && aiContext.status !== 'skipped') {
+      invalidateFlowCache();
+    }
+
     return NextResponse.json({
       success: true,
       item: updatedItem,
+      aiContext,
     });
   } catch (error) {
     console.error('[api/flow/items/[id]:PATCH] error:', error);
