@@ -304,6 +304,7 @@ const COMMERCIAL_EVENT_NAMES = [
   'intent_classified',
   'order_paid',
   'purchase_completed',
+  'donation_completed',
   'unframed_purchase_confirmed',
 ] as const;
 

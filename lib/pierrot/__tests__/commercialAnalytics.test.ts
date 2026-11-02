@@ -16,6 +16,7 @@ const storeModule = require('@/lib/pierrot/serverStore') as {
 const {
   recordPierrotCommercialAnalytics,
   recordPierrotOfferShown,
+  recordPierrotDonationCompleted,
   recordPierrotPurchaseCompleted,
 } = require('../commercialAnalytics') as {
   recordPierrotCommercialAnalytics: (
@@ -38,6 +39,18 @@ const {
       plan: ReturnType<typeof import('../commercial').planPierrotResponse>;
     }
   ) => Promise<void>;
+  recordPierrotDonationCompleted: (
+    store: unknown,
+    input: {
+      conversationId: string;
+      eventKey: string;
+      offerId?: string;
+      providerSessionId?: string | null;
+      amountTotal?: number | null;
+      currency?: string | null;
+      source: 'tribute_webhook';
+    }
+  ) => Promise<boolean>;
   recordPierrotPurchaseCompleted: (
     store: unknown,
     input: {
@@ -199,5 +212,40 @@ describe('Pierrot commercial analytics', () => {
       currency: 'usd',
       source: 'unframed_webhook',
     });
+  });
+
+  it('records a confirmed donation separately from a product purchase', async () => {
+    const { recordPierrotEventByConversationId } = require('@/lib/pierrot/serverStore') as {
+      recordPierrotEventByConversationId: { mockClear: () => void; mock: { calls: unknown[][] } };
+    };
+
+    recordPierrotEventByConversationId.mockClear();
+
+    await recordPierrotDonationCompleted({} as never, {
+      conversationId: base.conversationId,
+      eventKey: 'donation_completed:cs_tribute',
+      offerId: 'temple_tribute',
+      providerSessionId: 'cs_tribute',
+      amountTotal: 2000,
+      currency: 'usd',
+      source: 'tribute_webhook',
+    });
+
+    const [, event] = recordPierrotEventByConversationId.mock.calls[0] as [
+      unknown,
+      { eventName: string; payload: Record<string, unknown> },
+    ];
+
+    expect(event.eventName).toBe('donation_completed');
+    expect(event.payload).toMatchObject({
+      offer_id: 'temple_tribute',
+      provider_session_id: 'cs_tribute',
+      amount_total: 2000,
+      currency: 'usd',
+      source: 'tribute_webhook',
+    });
+    expect(event.payload).not.toHaveProperty('donor_name');
+    expect(event.payload).not.toHaveProperty('message');
+    expect(JSON.stringify(event.payload)).not.toContain('@');
   });
 });

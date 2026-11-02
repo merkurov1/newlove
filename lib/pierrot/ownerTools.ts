@@ -5,12 +5,21 @@ import { loadObservatorySnapshot, parseObservatoryFilters } from '@/lib/analytic
 import { loadOperationsSnapshot } from '@/lib/operations/dashboard';
 import { createBrainGraphStore } from '@/lib/knowledge/graph/store';
 import { answerBrainResearchQuestion } from '@/lib/knowledge/graph/research';
+import { detectCommercialQuestion } from '@/lib/pierrot/commercialQuestion';
+import { answerPierrotCommercialQuestion } from '@/lib/pierrot/commercialIntelligence';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 assertServerOnly('lib/pierrot/ownerTools');
 
 export type OwnerToolKind =
-  'stats' | 'rag' | 'brain' | 'graph' | 'research' | 'diagnostics' | 'analytics';
+  | 'stats'
+  | 'rag'
+  | 'brain'
+  | 'graph'
+  | 'research'
+  | 'diagnostics'
+  | 'analytics'
+  | 'commercial';
 
 export type OwnerToolRequest = {
   kind: OwnerToolKind;
@@ -27,12 +36,25 @@ function normalize(value: string): string {
  */
 export function detectOwnerTool(message: string): OwnerToolRequest | null {
   const text = normalize(message);
-  const command = text.match(/^\/(stats|rag|brain|graph|research|diag|analytics)\b/);
+  const command = text.match(
+    /^\/(stats|rag|brain|graph|research|diag|analytics|commercial|revenue)\b/
+  );
 
   if (command) {
     const kind: OwnerToolKind =
-      command[1] === 'diag' ? 'diagnostics' : (command[1] as OwnerToolKind);
+      command[1] === 'diag'
+        ? 'diagnostics'
+        : command[1] === 'revenue'
+          ? 'commercial'
+          : (command[1] as OwnerToolKind);
     return { kind, query: message.trim() };
+  }
+
+  // Commercial performance questions must be recognised before generic
+  // statistics, but after explicit slash commands. Detection itself is pure;
+  // the financial data is only loaded inside the verified owner branch.
+  if (detectCommercialQuestion(message)) {
+    return { kind: 'commercial', query: message.trim() };
   }
 
   if (
@@ -414,6 +436,21 @@ export async function runOwnerTool(
         return await formatDiagnostics(language);
       case 'analytics':
         return await formatAnalytics(language);
+      case 'commercial': {
+        const store = getServerSupabaseClient({ useServiceRole: true });
+        const answer = await answerPierrotCommercialQuestion({
+          question: request.query,
+          language,
+          store,
+        });
+
+        return (
+          answer ||
+          (language === 'ru'
+            ? 'Не распознал коммерческий вопрос. Спросите, например: «Сколько мы заработали за последнюю неделю?»'
+            : 'I did not recognise a commercial question. Try: “How much did we earn last week?”')
+        );
+      }
     }
   } catch (error) {
     console.error('[Pierrot owner tool]', {

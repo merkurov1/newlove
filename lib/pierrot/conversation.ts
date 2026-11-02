@@ -56,6 +56,7 @@ export const PIERROT_SERVER_EVENTS = [
   'commercial_returned',
   'order_paid',
   'purchase_completed',
+  'donation_completed',
   'checkout_started',
   'service_inquiry_started',
   'service_need_selected',

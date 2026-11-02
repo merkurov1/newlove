@@ -105,16 +105,19 @@ export function buildUnframedUnavailablePrompt(
   if (outcome === 'unavailable') {
     return [
       'BRAIN_RETRIEVAL_UNAVAILABLE',
-      'Brain retrieval is currently unavailable. Do not present claims about the owner’s work as if they were grounded in retrieved passages.',
-      'If the question is about the manuscript or an ingested article, say that retrieval is unavailable and answer only from clearly labelled general knowledge, or ask the owner to try again.',
+      'Brain retrieval is currently unavailable. This is a retrieval limitation, not evidence that the owner has no biography or no relevant work.',
+      'For a biographical or identity question, still use the structured owner profile, the public identity anchor, the conversation history and any other supplied context. Name only the specific evidence that is unavailable.',
+      'If the question concerns the manuscript or an ingested article, do not present claims as if they were grounded in retrieved passages. Do not invent facts, quotations, page numbers, chapters or source references.',
+      'Do not turn a retrieval failure into the sentence “there is no biography” or “I have no information about you”.',
     ].join('\n');
   }
 
   return [
     'BRAIN_EVIDENCE_INSUFFICIENT',
-    'No sufficiently relevant Brain passage was retrieved for this question.',
-    'If the question concerns the owner’s manuscript, book or ingested articles, say that the available evidence is insufficient. Do not invent facts, quotations, page numbers, chapters, or source references.',
-    'Do not claim that the book definitively lacks an answer; only say that the retrieved evidence does not establish it.',
+    'No sufficiently relevant Brain passage was retrieved for this exact question. This does not prove that the owner has no biography or no relevant material.',
+    'For a biographical or identity question, use the structured owner profile, the public identity anchor and the conversation history before identifying a gap. Name only the specific detail that the retrieved evidence does not establish.',
+    'If the question concerns the owner’s manuscript, book or ingested articles, say that the available evidence is insufficient. Do not invent facts, quotations, page numbers, chapters or source references.',
+    'Do not claim that the book or the owner’s life definitively lacks an answer; only say that the retrieved evidence does not establish it.',
   ].join('\n');
 }
 

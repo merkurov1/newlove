@@ -137,7 +137,11 @@ async function requestPierrot(input: {
   }
 
   if (isTelegramAdmin(input.userId) && internalSecret) {
+    // The shared backend verifies this against the same allowed-user list and
+    // the server-to-server secret. x-admin-key is retained for compatibility
+    // but is not an owner credential.
     headers['x-admin-key'] = internalSecret;
+    headers['x-telegram-owner-id'] = String(input.userId);
   }
 
   const response = await fetch(`${siteUrl}/api/pierrot-web`, {

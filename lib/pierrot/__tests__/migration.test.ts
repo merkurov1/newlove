@@ -60,6 +60,14 @@ const analyticsViewsMigration = fs.readFileSync(
   path.join(process.cwd(), 'migrations', '2026-10-30_create_pierrot_analytics_views.sql'),
   'utf8'
 );
+const commercialIntelligenceMigration = fs.readFileSync(
+  path.join(process.cwd(), 'migrations', '2026-11-02_pierrot_commercial_intelligence.sql'),
+  'utf8'
+);
+const commercialViewsReadonlyMigration = fs.readFileSync(
+  path.join(process.cwd(), 'migrations', '2026-11-02_pierrot_commercial_views_readonly.sql'),
+  'utf8'
+);
 
 describe('Pierrot conversation migration security', () => {
   it('enables RLS on every transcript table', () => {
@@ -247,5 +255,36 @@ describe('Pierrot conversation migration security', () => {
     expect(analyticsViewsMigration).toContain(
       'REVOKE ALL ON public.pierrot_v_events FROM PUBLIC, anon, authenticated'
     );
+  });
+
+  it('adds donation attribution and financial views without touching existing events', () => {
+    expect(commercialIntelligenceMigration).toContain("'donation_completed'");
+    expect(commercialIntelligenceMigration).toContain("'temple_tribute'");
+    expect(commercialIntelligenceMigration).toContain(
+      'CREATE OR REPLACE VIEW public.pierrot_v_donations'
+    );
+    expect(commercialIntelligenceMigration).toContain(
+      'CREATE OR REPLACE VIEW public.pierrot_v_postcard_sales'
+    );
+    expect(commercialIntelligenceMigration).toContain(
+      'CREATE OR REPLACE VIEW public.pierrot_v_tribute_donations'
+    );
+    expect(commercialIntelligenceMigration).toContain(
+      'CREATE OR REPLACE VIEW public.pierrot_v_subscription_conversions'
+    );
+    expect(commercialIntelligenceMigration).toContain('security_invoker = true');
+    expect(commercialIntelligenceMigration).toContain(
+      'REVOKE ALL ON public.pierrot_v_donations FROM PUBLIC, anon, authenticated'
+    );
+    expect(commercialIntelligenceMigration).toContain(
+      'GRANT SELECT ON public.pierrot_v_donations TO service_role'
+    );
+    expect(commercialIntelligenceMigration).not.toMatch(
+      /DELETE\s+FROM\s+public\.pierrot_events/i
+    );
+    expect(commercialIntelligenceMigration).not.toMatch(/DROP\s+TABLE/i);
+
+    expect(commercialViewsReadonlyMigration).toContain('REVOKE ALL ON TABLE public.%I');
+    expect(commercialViewsReadonlyMigration).toContain('GRANT SELECT ON TABLE public.%I');
   });
 });

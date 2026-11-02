@@ -79,6 +79,20 @@ const DEFAULT_POLICIES: Record<PierrotOfferId, PierrotOfferPolicy> = {
     allowProactive: false,
     recommendationCopy: null,
   },
+  temple_tribute: {
+    offerId: 'temple_tribute',
+    enabled: true,
+    priority: 15,
+    // A donation is introduced at most once in a conversation and only in a
+    // Temple context or after an explicit tribute/donation signal.
+    maxShowsPerConversation: 1,
+    cooldownTurns: 8,
+    cooldownSeconds: 600,
+    minInterestScore: 3,
+    requiresRepeatedEngagement: false,
+    allowProactive: true,
+    recommendationCopy: null,
+  },
 };
 
 function clampInteger(value: unknown, fallback: number, min: number, max: number): number {

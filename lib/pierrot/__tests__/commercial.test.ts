@@ -201,6 +201,26 @@ describe('Pierrot commercial planner', () => {
     expect(result.ctaShown).toBe(false);
   });
 
+  it('offers the Temple Tribute as a donation with the existing checkout', () => {
+    const result = plan('How can I make a Temple Tribute donation?', undefined);
+
+    expect(result.offer?.id).toBe('temple_tribute');
+    expect(result.reply).toContain('donation');
+    expect(result.reply).toContain('not a product');
+    expect(result.cta).toMatchObject({
+      href: '/tribute',
+      purpose: 'donate',
+    });
+  });
+
+  it('does not turn the donation into a priced product', () => {
+    const result = plan('How much is the Temple Tribute?');
+
+    expect(result.offer?.id).toBe('temple_tribute');
+    expect(result.reply).toContain('donor chooses');
+    expect(result.reply).not.toContain('$');
+  });
+
   it('resolves a demonstrative question on the postcard page', () => {
     const result = planPierrotResponse({
       intent: classifyPierrotIntent('How much is this?'),

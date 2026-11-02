@@ -66,10 +66,13 @@ const PURCHASE_TERMS = [
   'order',
   'checkout',
   'pay for',
+  'donate',
   'купить',
   'заказать',
   'оплатить',
   'покупа',
+  'пожертвовать',
+  'подношение',
 ];
 
 const PRICE_TERMS = ['how much', 'price', 'cost', 'costs', 'сколько стоит', 'цена', 'стоимость'];

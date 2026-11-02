@@ -50,6 +50,18 @@ the limitations that remain after the audit.
 | `FLOW_AI_RAG_ENABLED` | `true` | Global switch for public Flow context generation |
 | `FLOW_AI_RAG_MIN_SIMILARITY` | `0.34` | Public retrieval floor |
 
+### Pierrot autonomous web search (optional)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PIERROT_WEB_SEARCH_ENABLED` | `false` | Enables deterministic Exa search for current/factual questions |
+| `EXA_API_KEY` | — | Server-only Exa Search key. Never use a `NEXT_PUBLIC_*` name |
+| `PIERROT_WEB_SEARCH_TIMEOUT_MS` | `6000` | Per-search timeout; clamped to 1000–10000 ms |
+| `PIERROT_WEB_SEARCH_MAX_RESULTS` | `5` | Result count; clamped to 1–6 |
+
+Both the flag and the key are required. If either is missing, Pierrot continues
+with model knowledge and Brain only. See `docs/pierrot-production.md`.
+
 ### Workers and throttles
 
 | Variable | Default | Purpose |

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { confirmPostcardCheckoutSession } from '@/lib/postcards/paymentConfirmation';
+import { confirmTributeCheckoutSession } from '@/lib/tributes/paymentConfirmation';
 import {
   normalizePierrotUnframedRef,
   pierrotConversationIdFromUnframedRef,
@@ -164,7 +165,9 @@ export async function POST(req: Request) {
     /*
      * TRIBUTES
      *
-     * Only Tribute sessions are allowed to enter `tributes`.
+     * Only Tribute sessions are allowed to enter `tributes`. The helper
+     * deliberately separates the donation from product purchases and records
+     * a dedicated `donation_completed` event only for a verified paid session.
      */
     if (metadata.type !== 'tribute_v1') {
       console.log(`Ignoring Stripe session ${session.id}: unsupported payment type`);
@@ -175,9 +178,10 @@ export async function POST(req: Request) {
       });
     }
 
-    // A Tribute is successful only after Stripe confirms payment.
-    if (session.payment_status !== 'paid') {
-      console.log(`Ignoring unpaid Tribute session ${session.id}: ${session.payment_status}`);
+    const outcome = await confirmTributeCheckoutSession(supabaseAdmin, session);
+
+    if (outcome.status === 'ignored') {
+      console.log(`Ignoring ${outcome.reason} Tribute session ${session.id}`);
 
       return NextResponse.json({
         received: true,
@@ -185,24 +189,7 @@ export async function POST(req: Request) {
       });
     }
 
-    /*
-     * Idempotency:
-     * The database has a UNIQUE index on
-     * tributes.stripe_session_id.
-     */
-    const { data: existingTribute, error: lookupError } = await supabaseAdmin
-      .from('tributes')
-      .select('id')
-      .eq('stripe_session_id', session.id)
-      .maybeSingle();
-
-    if (lookupError) {
-      console.error('Tribute idempotency lookup error:', lookupError);
-
-      return NextResponse.json({ error: 'DB lookup error' }, { status: 500 });
-    }
-
-    if (existingTribute) {
+    if (outcome.status === 'duplicate') {
       console.log(`Tribute ${session.id} already exists; webhook acknowledged`);
 
       return NextResponse.json({
@@ -211,42 +198,10 @@ export async function POST(req: Request) {
       });
     }
 
-    const amountCents = session.amount_total || 0;
-    const currency = session.currency || 'usd';
+    if (outcome.status === 'rejected') {
+      console.error(`Tribute session ${session.id} rejected: ${outcome.code}`);
 
-    const donorName = typeof metadata.donor_name === 'string' ? metadata.donor_name : 'Anonymous';
-
-    const message = typeof metadata.message === 'string' ? metadata.message : '';
-
-    console.log(`Processing Tribute ${session.id}: ${donorName}, ${amountCents} cents`);
-
-    const { error: insertError } = await supabaseAdmin.from('tributes').insert({
-      amount_cents: amountCents,
-      currency,
-      provider: 'stripe',
-      status: 'succeeded',
-      donor_name: donorName,
-      message,
-      stripe_session_id: session.id,
-    });
-
-    if (insertError) {
-      /*
-       * If a concurrent webhook inserted this session first,
-       * PostgreSQL returns a unique-constraint violation.
-       */
-      if (insertError.code === '23505') {
-        console.log(`Tribute ${session.id} was inserted concurrently; acknowledging duplicate`);
-
-        return NextResponse.json({
-          received: true,
-          duplicate: true,
-        });
-      }
-
-      console.error('Supabase Tribute insert error:', insertError);
-
-      // Return 500 so Stripe retries the webhook.
+      // Return 500 so Stripe retries a transient database failure.
       return NextResponse.json({ error: 'DB Error' }, { status: 500 });
     }
 

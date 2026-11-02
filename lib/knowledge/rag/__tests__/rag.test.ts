@@ -8,7 +8,11 @@ import {
   UNFRAMED_SOURCE_PATH,
 } from '../../unframed';
 import type { C4Question } from '../../evaluation/c4/types';
-import { isVerifiedOwnerCredential, isVerifiedOwnerUser } from '../authorization';
+import {
+  isVerifiedOwnerCredential,
+  isVerifiedOwnerUser,
+  isVerifiedTelegramOwnerRequest,
+} from '../authorization';
 import {
   isPierrotRagEnabled,
   isSupportedEmbeddingResponseModel,
@@ -161,6 +165,47 @@ describe('RAG configuration', () => {
     expect(isVerifiedOwnerCredential({ id: 'system-admin', role: 'ADMIN' })).toBe(false);
     expect(isVerifiedOwnerCredential({ role: 'ADMIN' })).toBe(false);
     expect(isVerifiedOwnerCredential({ id: 'u1', role: 'USER' })).toBe(false);
+  });
+
+  it('requires both the internal request secret and the Telegram owner allowlist', () => {
+    const allowed = ['12345'];
+
+    expect(
+      isVerifiedTelegramOwnerRequest({
+        internalRequest: true,
+        telegramOwnerId: '12345',
+        allowedUserIds: allowed,
+      })
+    ).toBe(true);
+
+    expect(
+      isVerifiedTelegramOwnerRequest({
+        internalRequest: false,
+        telegramOwnerId: '12345',
+        allowedUserIds: allowed,
+      })
+    ).toBe(false);
+    expect(
+      isVerifiedTelegramOwnerRequest({
+        internalRequest: true,
+        telegramOwnerId: '99999',
+        allowedUserIds: allowed,
+      })
+    ).toBe(false);
+    expect(
+      isVerifiedTelegramOwnerRequest({
+        internalRequest: true,
+        telegramOwnerId: 'not-a-number',
+        allowedUserIds: allowed,
+      })
+    ).toBe(false);
+    expect(
+      isVerifiedTelegramOwnerRequest({
+        internalRequest: true,
+        telegramOwnerId: '12345',
+        allowedUserIds: [],
+      })
+    ).toBe(false);
   });
 
   it('requires an explicit verified embedding model', () => {

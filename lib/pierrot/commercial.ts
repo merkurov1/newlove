@@ -313,6 +313,29 @@ function advisingReply(language: 'ru' | 'en' | 'und'): string {
     : 'Advising is a separate track. Formats are a retainer, special projects and private sessions. No public price is listed; use the existing Advising contact.';
 }
 
+function templeTributeReply(
+  intent: PierrotIntent,
+  language: 'ru' | 'en' | 'und'
+): string {
+  const ru = isRu(language);
+
+  if (intent.topic === 'price' || intent.topic === 'price_objection') {
+    return ru
+      ? 'Сумму Temple Tribute выбирает сам человек; это пожертвование, а не покупка товара. Оплата идёт через существующий Stripe-чекаут в USD.'
+      : 'The donor chooses the Temple Tribute amount; it is a donation, not a product purchase. Payment uses the existing Stripe checkout in USD.';
+  }
+
+  if (intent.name === 'purchase_intent') {
+    return ru
+      ? 'Temple Tribute — добровольное пожертвование в поддержку Digital Altar. Сумму выбираете вы; оплата проходит через существующий Stripe-чекаут в USD.'
+      : 'A Temple Tribute is a voluntary donation supporting the Digital Altar. You choose the amount; payment runs through the existing Stripe checkout in USD.';
+  }
+
+  return ru
+    ? 'Temple Tribute — добровольное пожертвование в поддержку Digital Altar, а не товар или подписка. Сумму выбирает человек; существующий Stripe-чекаут работает в USD.'
+    : 'A Temple Tribute is a voluntary donation supporting the Digital Altar, not a product or subscription. The donor chooses the amount; the existing Stripe checkout is in USD.';
+}
+
 function unframedReply(intent: PierrotIntent, language: 'ru' | 'en' | 'und'): string {
   const ru = isRu(language);
 
@@ -386,6 +409,10 @@ function offerReply(
 
   if (offerId === 'advising') {
     return { reply: advisingReply(language), unavailable: false, cta };
+  }
+
+  if (offerId === 'temple_tribute') {
+    return { reply: templeTributeReply(intent, language), unavailable: false, cta };
   }
 
   return {

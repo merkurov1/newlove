@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase-browser';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import TempleTopBar from '@/components/TempleTopBar';
+import { readPierrotTributeAttribution } from '@/lib/pierrot/orderAttribution';
 
 const HEART_VIDEO =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-5300087847065473569.mp4';
@@ -156,6 +157,10 @@ export default function TributePage() {
           ? localStorage.getItem('temple_user') || 'Pilgrim'
           : 'Pilgrim';
 
+      const pierrotAttribution = readPierrotTributeAttribution(
+        typeof window !== 'undefined' ? window.location.search : null
+      );
+
       const res = await fetch('/api/tribute/checkout', {
         method: 'POST',
         headers: {
@@ -166,6 +171,7 @@ export default function TributePage() {
           currency: 'usd',
           donor_name: donorName,
           message: 'Fuel for the Temple',
+          ...(pierrotAttribution ? { pierrotAttribution } : {}),
         }),
       });
 

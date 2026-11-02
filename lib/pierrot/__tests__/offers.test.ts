@@ -96,6 +96,21 @@ describe('Pierrot verified offer catalogue', () => {
     expect(offer.cta.purpose).toBe('request_access');
   });
 
+  it('keeps the Temple Tribute as a donation, not a product sale', () => {
+    const offer = getPierrotOfferById('temple_tribute');
+
+    expect(offer.kind).toBe('donation');
+    expect(offer.cta).toMatchObject({
+      href: '/tribute',
+      purpose: 'donate',
+      kind: 'internal',
+    });
+    expect(offer.facts.map((fact) => fact.value).join(' ')).toContain(
+      'not a product'
+    );
+    expect(offer.availability.status).toBe('public');
+  });
+
   it('rejects fabricated or tampered destinations', () => {
     expect(isVerifiedPierrotInternalDestination('/lobby')).toBe(true);
     expect(isVerifiedPierrotInternalDestination('/journal#subscribe')).toBe(true);

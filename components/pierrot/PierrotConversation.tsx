@@ -20,9 +20,11 @@ import { getPierrotConversationId, trackPierrotEvent } from '@/lib/pierrot/clien
 import {
   appendPierrotPostcardAttribution,
   appendPierrotSubscriptionAttribution,
+  appendPierrotTributeAttribution,
   appendPierrotUnframedAttribution,
   createPierrotPostcardRef,
   createPierrotSubscriptionRef,
+  createPierrotTributeRef,
   createPierrotUnframedRef,
 } from '@/lib/pierrot/orderAttribution';
 
@@ -641,7 +643,12 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                                     message.cta.href,
                                     createPierrotUnframedRef(getPierrotConversationId())
                                   )
-                                : message.cta.href
+                                : message.cta.offerId === 'temple_tribute'
+                                  ? appendPierrotTributeAttribution(
+                                      message.cta.href,
+                                      createPierrotTributeRef(getPierrotConversationId())
+                                    )
+                                  : message.cta.href
                         }
                         onClick={() => {
                           trackPierrotEvent('offer_action_clicked', createPierrotId(), {
@@ -780,11 +787,15 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   <AnswerFeedback messageId={message.id} />
                 )}
 
-                {message.role === 'assistant' && !message.error && message.provider && (
-                  <span className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[#A49A8C]">
-                    via {message.provider}
-                  </span>
-                )}
+                {message.role === 'assistant' &&
+                  !message.error &&
+                  (message.provider || message.answerSources) && (
+                    <span className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[#A49A8C]">
+                      {message.answerSources?.label}
+                      {message.answerSources && message.provider ? ' · ' : ''}
+                      {message.provider ? `via ${message.provider}` : ''}
+                    </span>
+                  )}
               </motion.article>
             ))}
 

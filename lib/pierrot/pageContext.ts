@@ -16,6 +16,7 @@ export type PierrotPageSurface =
   | 'journal'
   | 'flow'
   | 'flow_join'
+  | 'temple'
   | 'other';
 
 export type PierrotPageContext = {
@@ -115,6 +116,16 @@ export function resolvePierrotPageContext(pathname?: string | null): PierrotPage
       contextOfferId: 'heart_angel_postcard',
       allowProactive: true,
       label: 'Heart & Angel',
+    };
+  }
+
+  if (matches(normalized, '/temple') || matches(normalized, '/tribute')) {
+    return {
+      pathname: normalized,
+      surface: 'temple',
+      contextOfferId: 'temple_tribute',
+      allowProactive: true,
+      label: 'Heart & Angel Temple',
     };
   }
 

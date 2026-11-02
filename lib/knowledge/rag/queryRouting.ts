@@ -140,12 +140,43 @@ const BIOGRAPHY_TERMS = [
   'biography',
   'biographical',
   'биография',
+  'биографии',
+  'биографию',
+  'биографией',
   'биографический',
   'about me',
+  'about myself',
+  'who am i',
+  'my background',
+  'my biography',
+  'what do you know about me',
+  'tell me about myself',
+  'who is anton',
+  'who is anton merkurov',
+  'about anton',
+  'about anton merkurov',
+  'anton merkurov biography',
   'обо мне',
+  'про меня',
+  'расскажи про меня',
+  'расскажи обо мне',
+  'что ты обо мне знаешь',
   'моя жизнь',
   'мое прошлое',
+  'моя биография',
+  'какая у меня биография',
   'кто я',
+  'кто такой антон',
+  'кто такой антон меркуров',
+  'кто такой меркуров',
+  'про антона',
+  'об антоне',
+  'чем я занимаюсь',
+  'что я делаю',
+  'мои взгляды',
+  'как менялись мои взгляды',
+  'мои проекты',
+  'моя работа',
 ];
 const RESEARCH_TERMS = [
   'research',
@@ -159,11 +190,27 @@ const RESEARCH_TERMS = [
 const ARTICLE_TERMS = [
   'article',
   'articles',
+  'publication',
+  'publications',
+  'published',
+  'what have i published',
+  'my publications',
   'статья',
   'статьи',
   'статьях',
   'публикация',
   'публикации',
+  'публикаций',
+  'публиковал',
+  'публиковала',
+  'публиковать',
+  'мои публикации',
+  'что я публиковал',
+  'что я публиковала',
+  'как менялись мои взгляды',
+  'мои взгляды',
+  'how have my views changed',
+  'my views',
   'column',
   'columns',
   'колонка',
@@ -279,7 +326,18 @@ function parseTimeRange(text: string): {
     };
   }
 
-  if (hasAny(text, ['recent', 'recently', 'latest', 'недавно', 'последние', 'свежие'])) {
+  if (
+    hasAny(text, [
+      'recent',
+      'recently',
+      'latest',
+      'недавно',
+      'последние',
+      'последнее время',
+      'в последнее время',
+      'свежие',
+    ])
+  ) {
     return {
       from: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString(),
       to: null,
@@ -345,6 +403,24 @@ const LEXICAL_STOP_WORDS = new Set([
   'your',
   'что',
   'я',
+  'меня',
+  'мне',
+  'обо',
+  'ты',
+  'тебя',
+  'твой',
+  'твоя',
+  'твои',
+  'кто',
+  'такой',
+  'такая',
+  'какой',
+  'какая',
+  'какие',
+  'занимаюсь',
+  'занимается',
+  'делаю',
+  'делаешь',
   'писал',
   'писала',
   'пишу',
@@ -502,15 +578,25 @@ export function buildBrainQueryPlan(query: string): BrainQueryPlan {
     'what did i write about',
     'what do i write about',
     'what do i write',
+    'what have i published',
+    'what did i publish',
+    'my publications',
     'my writing',
     'my articles',
     'my texts',
+    'my views',
+    'how have my views changed',
     'themes across',
     'main themes',
     'о чем я пишу',
     'о чем я писал',
     'что я писал',
     'что я пишу',
+    'что я публиковал',
+    'что я публиковала',
+    'мои публикации',
+    'как менялись мои взгляды',
+    'мои взгляды',
     'мои статьи',
     'мои тексты',
     'главные темы',
@@ -615,6 +701,15 @@ export function classifyBrainDocument(input: BrainDocumentClassInput): BrainSour
   if (sourceType === 'personal_writing') return 'personal_writing';
   if (sourceType === 'other') return 'other';
 
+  // The owner profile is currently stored as a plain text document. Its title
+  // is the explicit signal; other text uploads remain `other`.
+  if (
+    (sourceType === 'txt' || sourceType === 'text') &&
+    /(биограф|профил|about|biography|anton merkurov|антон меркуров)/i.test(title)
+  ) {
+    return 'biography';
+  }
+
   if (domain.includes('heartandangel') || domain.includes('heart-and-angel')) {
     return 'art_project';
   }
@@ -676,6 +771,8 @@ export function resolveBrainSourceFilters(plan: BrainQueryPlan): BrainSourceFilt
     } else if (source === 'biography') {
       sourceTypes.add('biography');
       sourceTypes.add('manuscript');
+      sourceTypes.add('txt');
+      sourceTypes.add('text');
       sourceClasses.add('manuscript');
     } else if (source === 'research') {
       sourceTypes.add('research');

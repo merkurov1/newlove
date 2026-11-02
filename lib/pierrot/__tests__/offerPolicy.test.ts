@@ -8,12 +8,16 @@ describe('Pierrot offer policy', () => {
     const postcard = getPierrotOfferPolicy('heart_angel_postcard');
     const journal = getPierrotOfferPolicy('journal_flow');
     const advising = getPierrotOfferPolicy('advising');
+    const tribute = getPierrotOfferPolicy('temple_tribute');
 
     expect(postcard.maxShowsPerConversation).toBe(3);
     expect(postcard.cooldownTurns).toBeGreaterThan(0);
     expect(journal.requiresRepeatedEngagement).toBe(true);
     expect(journal.maxShowsPerConversation).toBeLessThan(postcard.maxShowsPerConversation);
     expect(advising.allowProactive).toBe(false);
+    expect(tribute.maxShowsPerConversation).toBe(1);
+    expect(tribute.allowProactive).toBe(true);
+    expect(tribute.minInterestScore).toBeGreaterThanOrEqual(3);
   });
 
   it('allows owner overrides through PIERROT_OFFER_POLICY_JSON', () => {

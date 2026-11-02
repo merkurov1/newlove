@@ -115,6 +115,10 @@ export async function confirmPostcardCheckoutSession(
   }
 
   if (COMPLETED_STATUSES.includes(order.status)) {
+    // A retry may arrive after the order was marked PAID but before the
+    // analytics write succeeded. The event key is idempotent, so this is a
+    // safe backfill and still produces exactly one attributable purchase.
+    await recordConfirmedOrderAttribution(supabase, session, orderId);
     return { status: 'duplicate', orderId, orderStatus: order.status };
   }
 

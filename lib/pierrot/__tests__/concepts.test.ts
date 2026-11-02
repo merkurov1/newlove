@@ -22,6 +22,20 @@ describe('Pierrot canonical concepts', () => {
     );
   });
 
+  it('adds the canonical project anchors to an identity question', () => {
+    const concepts = selectConceptsForContext({
+      pathname: '/isakeyforall',
+      message: 'Who is Anton Merkurov?',
+    });
+    const ids = concepts.map((concept) => concept.id);
+
+    expect(ids[0]).toBe('anton-merkurov');
+    expect(ids).toEqual(
+      expect.arrayContaining(['heart-and-angel', 'unframed', 'heritage', 'media'])
+    );
+    expect(concepts.find((concept) => concept.id === 'unframed')?.summary).toContain('memoir');
+  });
+
   it('falls back to conceptualism instead of returning an empty context', () => {
     expect(selectConceptsForContext({ pathname: '/unknown', message: 'hello' })[0]?.id).toBe(
       'conceptualism'

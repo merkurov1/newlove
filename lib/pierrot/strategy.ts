@@ -55,7 +55,12 @@ export type PierrotProactiveOffer = {
   score: number;
 };
 
-const PROACTIVE_OFFER_IDS: PierrotOfferId[] = ['heart_angel_postcard', 'unframed', 'journal_flow'];
+const PROACTIVE_OFFER_IDS: PierrotOfferId[] = [
+  'heart_angel_postcard',
+  'unframed',
+  'journal_flow',
+  'temple_tribute',
+];
 
 type WeightedTerm = { term: string; weight: number };
 
@@ -201,6 +206,24 @@ const JOURNAL_TERMS: WeightedTerm[] = [
   { term: 'рассылк', weight: 1.5 },
 ];
 
+const TRIBUTE_TERMS: WeightedTerm[] = [
+  { term: 'temple tribute', weight: 3 },
+  { term: 'tribute', weight: 2.5 },
+  { term: 'donation', weight: 2.75 },
+  { term: 'donate', weight: 2.75 },
+  { term: 'digital altar', weight: 2.5 },
+  { term: 'altar', weight: 1.5 },
+  { term: 'support the temple', weight: 3 },
+  { term: 'support the work', weight: 1.5 },
+  { term: 'пожертвован', weight: 2.75 },
+  { term: 'пожертвовать', weight: 2.75 },
+  { term: 'подношение', weight: 2.5 },
+  { term: 'цифровой алтарь', weight: 2.5 },
+  { term: 'алтарь', weight: 1.5 },
+  { term: 'поддержать храм', weight: 3 },
+  { term: 'поддержать проект', weight: 1.5 },
+];
+
 const REASONS: Record<PierrotOfferId, Array<{ angle: string; reason: string }>> = {
   heart_angel_postcard: [
     {
@@ -255,6 +278,13 @@ const REASONS: Record<PierrotOfferId, Array<{ angle: string; reason: string }>> 
   ],
   art_engine: [],
   advising: [],
+  temple_tribute: [
+    {
+      angle: 'support',
+      reason:
+        'The Temple Tribute is the existing way to support the Digital Altar; the donor chooses the amount, and it is not a product purchase.',
+    },
+  ],
 };
 
 const EVENT_NAMES = new Set([
@@ -269,6 +299,7 @@ const EVENT_NAMES = new Set([
   'intent_classified',
   'order_paid',
   'purchase_completed',
+  'donation_completed',
   'unframed_purchase_confirmed',
 ]);
 
@@ -499,6 +530,13 @@ export function derivePierrotCommercialState({
       continue;
     }
 
+    if (name === 'donation_completed' && isPierrotOfferId(offerId)) {
+      // Suppress another fundraising prompt in this conversation. This does
+      // not classify the donation as a product purchase anywhere else.
+      purchased.add(offerId);
+      continue;
+    }
+
     if (name === 'unframed_purchase_confirmed') {
       purchased.add('unframed');
     }
@@ -604,7 +642,9 @@ export function scorePierrotOfferInterest(
         ? UNFRAMED_TERMS
         : offerId === 'journal_flow'
           ? JOURNAL_TERMS
-          : [];
+          : offerId === 'temple_tribute'
+            ? TRIBUTE_TERMS
+            : [];
 
   const text = message.trim().toLowerCase();
   const matched: string[] = [];
@@ -809,6 +849,15 @@ export function selectProactivePierrotOffer({
   if (!candidate) return null;
 
   const { offerId } = candidate;
+
+  // Donations are never generic fundraising. A Tribute may be introduced only
+  // on the Temple/Tribute surface or when the visitor explicitly raises a
+  // tribute or donation.
+  if (offerId === 'temple_tribute') {
+    const explicitDonationSignal = scorePierrotOfferInterest(message, 'temple_tribute').score > 0;
+
+    if (page.surface !== 'temple' && !explicitDonationSignal) return null;
+  }
 
   if (state.declinedOfferIds.includes(offerId)) return null;
   if (state.purchasedOfferIds.includes(offerId)) return null;

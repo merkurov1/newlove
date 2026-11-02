@@ -13,10 +13,12 @@ export const PIERROT_POSTCARD_REF_PARAM = 'pierrot';
 const REF_PREFIX = 'pcard_';
 const SUBSCRIPTION_REF_PREFIX = 'psub_';
 const UNFRAMED_REF_PREFIX = 'punf_';
+const TRIBUTE_REF_PREFIX = 'ptri_';
 const ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
 const REF_PATTERN = /^pcard_[A-Za-z0-9_-]{8,64}$/;
 const SUBSCRIPTION_REF_PATTERN = /^psub_[A-Za-z0-9_-]{8,64}$/;
 const UNFRAMED_REF_PATTERN = /^punf_[A-Za-z0-9_-]{8,64}$/;
+const TRIBUTE_REF_PATTERN = /^ptri_[A-Za-z0-9_-]{8,64}$/;
 const MAX_REF_LENGTH = REF_PREFIX.length + 64;
 
 export function createPierrotPostcardRef(conversationId: unknown): string | null {
@@ -162,4 +164,59 @@ export function appendPierrotUnframedAttribution(href: string, ref: unknown): st
   return `${base}${separator}${PIERROT_POSTCARD_REF_PARAM}=${encodeURIComponent(
     normalizedRef
   )}${hash}`;
+}
+
+export function createPierrotTributeRef(conversationId: unknown): string | null {
+  if (typeof conversationId !== 'string' || !ID_PATTERN.test(conversationId)) {
+    return null;
+  }
+
+  return `${TRIBUTE_REF_PREFIX}${conversationId}`;
+}
+
+export function normalizePierrotTributeRef(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+
+  if (trimmed.length > MAX_REF_LENGTH || !TRIBUTE_REF_PATTERN.test(trimmed)) {
+    return null;
+  }
+
+  return trimmed;
+}
+
+export function pierrotConversationIdFromTributeRef(value: unknown): string | null {
+  const ref = normalizePierrotTributeRef(value);
+
+  return ref ? ref.slice(TRIBUTE_REF_PREFIX.length) : null;
+}
+
+export function appendPierrotTributeAttribution(href: string, ref: unknown): string {
+  const normalizedRef = normalizePierrotTributeRef(ref);
+
+  if (!normalizedRef) return href;
+
+  if (!href.startsWith('/') || href.startsWith('//')) return href;
+
+  const hashIndex = href.indexOf('#');
+  const base = hashIndex === -1 ? href : href.slice(0, hashIndex);
+  const hash = hashIndex === -1 ? '' : href.slice(hashIndex);
+  const separator = base.includes('?') ? '&' : '?';
+
+  return `${base}${separator}${PIERROT_POSTCARD_REF_PARAM}=${encodeURIComponent(
+    normalizedRef
+  )}${hash}`;
+}
+
+export function readPierrotTributeAttribution(search: string | null | undefined): string | null {
+  if (!search) return null;
+
+  try {
+    const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+
+    return normalizePierrotTributeRef(params.get(PIERROT_POSTCARD_REF_PARAM));
+  } catch {
+    return null;
+  }
 }

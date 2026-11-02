@@ -15,14 +15,21 @@ export const PIERROT_OFFER_IDS = [
   'art_engine',
   'advising',
   'unframed',
+  'temple_tribute',
 ] as const;
 
 export type PierrotOfferId = (typeof PIERROT_OFFER_IDS)[number];
 
-export type PierrotOfferKind = 'product' | 'subscription' | 'access' | 'service' | 'publication';
+export type PierrotOfferKind =
+  | 'product'
+  | 'subscription'
+  | 'access'
+  | 'service'
+  | 'publication'
+  | 'donation';
 
 export type PierrotOfferCtaPurpose =
-  'order' | 'subscribe' | 'request_access' | 'learn_more' | 'contact';
+  'order' | 'subscribe' | 'request_access' | 'learn_more' | 'contact' | 'donate';
 
 export type PierrotOfferCta = {
   offerId: PierrotOfferId;
@@ -82,7 +89,9 @@ export const PIERROT_VERIFIED_INTERNAL_ROUTES = new Set<string>(
     '/unframed',
     '/unframed/book',
     '/unframed/proposal',
+    '/isakeyforall',
     '/temple',
+    '/tribute',
   ].map((route) => normalizePathname(route))
 );
 
@@ -510,6 +519,74 @@ export const PIERROT_OFFERS: PierrotOffer[] = [
       'Print, signed or limited editions',
       'Shipping and delivery terms',
       'Whether the private reader checkout is fully operational end-to-end',
+    ],
+  },
+  {
+    id: 'temple_tribute',
+    title: 'Heart & Angel Temple Tribute',
+    kind: 'donation',
+    route: '/tribute',
+    aliases: [
+      'temple tribute',
+      'tribute',
+      'donation',
+      'donate',
+      'пожертвование',
+      'пожертвовать',
+      'подношение',
+      'храм',
+    ],
+    summary:
+      'A voluntary donation supporting the Digital Altar through the existing Temple Tribute Stripe checkout.',
+    facts: [
+      {
+        key: 'nature',
+        value:
+          'A Temple Tribute is a donation, not a product, subscription, book or postcard purchase.',
+        source: '/tribute and /api/tribute/checkout',
+      },
+      {
+        key: 'amount',
+        value:
+          'The donor chooses the amount. The existing Tribute checkout accepts an arbitrary USD amount of at least one dollar.',
+        source: '/tribute and /api/tribute/checkout',
+      },
+      {
+        key: 'currency',
+        value: 'The existing Tribute flow is denominated in USD and processed by Stripe.',
+        source: '/api/tribute/checkout',
+      },
+      {
+        key: 'purpose',
+        value:
+          'The public Tribute page describes the donation as support for the Digital Altar and the Temple.',
+        source: '/tribute',
+      },
+      {
+        key: 'checkout',
+        value:
+          'Payment uses the existing Stripe checkout at /api/tribute/checkout; a completed donation is recorded only after Stripe confirms payment.',
+        source: '/api/tribute/checkout and /api/stripe/webhook',
+      },
+    ],
+    availability: {
+      status: 'public',
+      note:
+        'The existing Tribute page and Stripe checkout are the source of truth. No target, recurring plan, tax treatment or delivery is implied.',
+      verifier: 'none',
+    },
+    cta: {
+      offerId: 'temple_tribute',
+      label: 'Open the Temple Tribute',
+      href: '/tribute',
+      kind: 'internal',
+      purpose: 'donate',
+    },
+    unknowns: [
+      'Tax receipt treatment',
+      'Whether donations are recurring',
+      'How the funds are allocated internally',
+      'Whether any donation target exists',
     ],
   },
 ];

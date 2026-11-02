@@ -4,17 +4,22 @@ import { describe, expect, it } from '@jest/globals';
 import {
   appendPierrotPostcardAttribution,
   appendPierrotSubscriptionAttribution,
+  appendPierrotTributeAttribution,
   appendPierrotUnframedAttribution,
   createPierrotPostcardRef,
   createPierrotSubscriptionRef,
+  createPierrotTributeRef,
   createPierrotUnframedRef,
   normalizePierrotPostcardRef,
   normalizePierrotSubscriptionRef,
+  normalizePierrotTributeRef,
   normalizePierrotUnframedRef,
   pierrotConversationIdFromRef,
   pierrotConversationIdFromSubscriptionRef,
+  pierrotConversationIdFromTributeRef,
   pierrotConversationIdFromUnframedRef,
   readPierrotPostcardAttribution,
+  readPierrotTributeAttribution,
 } from '../orderAttribution';
 
 const conversationId = '11111111-1111-4111-8111-111111111111';
@@ -80,5 +85,20 @@ describe('Pierrot postcard order attribution', () => {
       'https://evil.example'
     );
     expect(appendPierrotPostcardAttribution('//evil.example', ref)).toBe('//evil.example');
+  });
+
+  it('creates a separate opaque Tribute reference for the existing donation flow', () => {
+    const ref = createPierrotTributeRef(conversationId);
+    const href = appendPierrotTributeAttribution('/tribute', ref);
+
+    expect(ref).toBe(`ptri_${conversationId}`);
+    expect(normalizePierrotTributeRef(ref)).toBe(ref);
+    expect(pierrotConversationIdFromTributeRef(ref)).toBe(conversationId);
+    expect(href).toBe(`/tribute?pierrot=ptri_${conversationId}`);
+    expect(readPierrotTributeAttribution(`?pierrot=${ref}`)).toBe(ref);
+
+    expect(normalizePierrotTributeRef(`pcard_${conversationId}`)).toBeNull();
+    expect(normalizePierrotTributeRef('ptri_hello@example.com')).toBeNull();
+    expect(readPierrotTributeAttribution('?pierrot=hello@example.com')).toBeNull();
   });
 });

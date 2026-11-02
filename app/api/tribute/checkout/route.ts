@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import {
+  normalizePierrotTributeRef,
+  pierrotConversationIdFromTributeRef,
+} from '@/lib/pierrot/orderAttribution';
+import { createPierrotStore, recordPierrotEventByConversationId } from '@/lib/pierrot/serverStore';
 
 const stripe = new Stripe(
   process.env.STRIPE_SECRET_KEY || '',
@@ -47,6 +52,12 @@ export async function POST(req: Request) {
       body?.message,
       '',
       500
+    );
+
+    // Opaque attribution only. It is validated against the same convention as
+    // the other commercial paths and never controls the amount or status.
+    const pierrotAttribution = normalizePierrotTributeRef(
+      body?.pierrotAttribution
     );
 
     if (!Number.isFinite(amount) || amount < 1) {
@@ -107,8 +118,39 @@ export async function POST(req: Request) {
           type: 'tribute_v1',
           donor_name: donorName,
           message,
+          ...(pierrotAttribution
+            ? { pierrotAttribution }
+            : {}),
         },
       });
+
+    // Initiation only. A donation is confirmed exclusively by the verified
+    // Stripe webhook after `payment_status === 'paid'`.
+    const pierrotConversationId =
+      pierrotConversationIdFromTributeRef(pierrotAttribution);
+
+    if (pierrotConversationId) {
+      try {
+        const store = createPierrotStore();
+
+        if (store) {
+          await recordPierrotEventByConversationId(store, {
+            conversationId: pierrotConversationId,
+            eventName: 'checkout_started',
+            eventKey: `checkout_started:${session.id}`,
+            payload: {
+              offer_id: 'temple_tribute',
+              product_id: 'temple_tribute',
+              provider_session_id: session.id,
+              amount_total: amountCents,
+              currency: 'usd',
+            },
+          });
+        }
+      } catch {
+        // Analytics must never interrupt a donation checkout.
+      }
+    }
 
     return NextResponse.json({
       url: session.url,

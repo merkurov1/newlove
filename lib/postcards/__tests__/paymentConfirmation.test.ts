@@ -7,6 +7,7 @@ import { createPierrotPostcardRef } from '@/lib/pierrot/orderAttribution';
 
 jest.mock('@/lib/pierrot/serverStore', () => ({
   recordPierrotEvent: jest.fn(async () => true),
+  recordPierrotEventByConversationId: jest.fn(async () => true),
 }));
 
 type MockFn = {
@@ -16,6 +17,7 @@ type MockFn = {
 
 const serverStore = require('@/lib/pierrot/serverStore') as {
   recordPierrotEvent: MockFn;
+  recordPierrotEventByConversationId: MockFn;
 };
 
 const { confirmPostcardCheckoutSession } = require('../paymentConfirmation') as {
@@ -156,7 +158,7 @@ describe('existing postcard payment confirmation', () => {
     expect(serverStore.recordPierrotEvent).not.toHaveBeenCalled();
   });
 
-  it('acknowledges a repeated webhook without downgrading or re-recording', async () => {
+  it('acknowledges a repeated webhook without downgrading the order and retries the same idempotent attribution keys', async () => {
     const { store, updates } = makeStore({
       order: { id: 'order-1', status: 'PAID' },
     });
@@ -169,7 +171,25 @@ describe('existing postcard payment confirmation', () => {
       orderStatus: 'PAID',
     });
     expect(updates).toHaveLength(0);
-    expect(serverStore.recordPierrotEvent).not.toHaveBeenCalled();
+
+    const orderEvent = serverStore.recordPierrotEvent.mock.calls[0]?.[1] as {
+      eventName: string;
+      eventKey: string;
+    };
+    const purchaseEvent =
+      serverStore.recordPierrotEventByConversationId.mock.calls[0]?.[1] as {
+        eventName: string;
+        eventKey: string;
+      };
+
+    expect(orderEvent).toMatchObject({
+      eventName: 'order_paid',
+      eventKey: `order_paid:${sessionId}`,
+    });
+    expect(purchaseEvent).toMatchObject({
+      eventName: 'purchase_completed',
+      eventKey: `purchase_completed:${sessionId}`,
+    });
   });
 
   it('rejects a missing order id before touching the database', async () => {

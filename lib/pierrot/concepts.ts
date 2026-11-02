@@ -26,6 +26,30 @@ export const PIERROT_CONCEPTS: PierrotConcept[] = [
     routes: ['/'],
   },
   {
+    id: 'anton-merkurov',
+    title: 'Anton Merkurov — public identity',
+    summary:
+      'Anton Merkurov is a media expert, publicist, artist and art dealer, and the great-grandson of sculptor Sergey Merkurov. His public work includes Heart & Angel (from 2015), the memoir UNFRAMED, the Heritage Archive, the Media Archive and merkurov.love; his columns and commentary include publications in Novaya Gazeta. Public biography: /isakeyforall.',
+    aliases: [
+      'anton merkurov',
+      'антон меркуров',
+      'антона',
+      'антоне',
+      'антону',
+      'who is anton',
+      'кто такой антон',
+      'biography',
+      'биография',
+      'about anton',
+      'про антона',
+      'об антоне',
+      'про меня',
+      'обо мне',
+      'who am i',
+    ],
+    routes: ['/isakeyforall'],
+  },
+  {
     id: 'conceptualism',
     title: 'Conceptualism / context as material',
     summary:
@@ -152,13 +176,27 @@ export function selectConceptsForContext({
   }
 
   const selected = [...aliasMatches, ...routeMatches];
+  const identityQuestion = selected.some((concept) => concept.id === 'anton-merkurov');
+
+  // A biography or "my projects" question needs the public project anchors,
+  // not just the person summary. These are the same canonical concepts used
+  // everywhere else; no extra biographical prose is introduced.
+  if (identityQuestion) {
+    for (const id of ['heart-and-angel', 'unframed', 'heritage', 'media', 'advising']) {
+      const concept = PIERROT_CONCEPTS.find((candidate) => candidate.id === id);
+
+      if (concept && !selected.some((candidate) => candidate.id === concept.id)) {
+        selected.push(concept);
+      }
+    }
+  }
 
   if (selected.length === 0) {
     const fallback = PIERROT_CONCEPTS.find((concept) => concept.id === 'conceptualism');
     if (fallback) selected.push(fallback);
   }
 
-  return selected.slice(0, limit);
+  return selected.slice(0, identityQuestion ? Math.max(limit, 6) : limit);
 }
 
 export function buildPierrotContextPrompt({

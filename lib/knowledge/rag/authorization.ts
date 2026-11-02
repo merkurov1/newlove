@@ -29,3 +29,30 @@ export function isVerifiedOwnerCredential(admin: RagOwnerIdentity | null | undef
 
   return admin.id !== 'system-admin';
 }
+
+/**
+ * Telegram webhook requests reach the shared Pierrot backend server-to-server.
+ * They cannot carry Mini App initData, so the existing allowed-user list and
+ * the shared internal secret are used together. Neither header alone is
+ * sufficient, and the legacy `x-admin-key` remains non-authoritative.
+ */
+export function isVerifiedTelegramOwnerRequest(input: {
+  internalRequest: boolean;
+  telegramOwnerId: string | null | undefined;
+  allowedUserIds?: string[] | null;
+}): boolean {
+  if (!input.internalRequest) return false;
+
+  const ownerId = typeof input.telegramOwnerId === 'string' ? input.telegramOwnerId.trim() : '';
+
+  if (!/^\d+$/.test(ownerId)) return false;
+
+  const allowed = Array.isArray(input.allowedUserIds)
+    ? input.allowedUserIds
+    : (process.env.TELEGRAM_ALLOWED_USER_IDS || '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+
+  return allowed.includes(ownerId);
+}

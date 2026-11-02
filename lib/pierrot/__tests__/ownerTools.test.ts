@@ -24,9 +24,25 @@ describe('Pierrot owner tool routing', () => {
     expect(detectOwnerTool('Аналитика Pierrot за неделю')?.kind).toBe('analytics');
   });
 
+  it('routes commercial performance questions to the commercial analyst', () => {
+    expect(detectOwnerTool('Сколько мы заработали?')?.kind).toBe('commercial');
+    expect(detectOwnerTool('Сколько продаж пришло благодаря Пьеро?')?.kind).toBe(
+      'commercial'
+    );
+    expect(detectOwnerTool('Почему так мало?')?.kind).toBe('commercial');
+    expect(detectOwnerTool('Сколько новых подписчиков Flow?')?.kind).toBe('commercial');
+    expect(detectOwnerTool('Сколько пожертвований получил Temple?')?.kind).toBe(
+      'commercial'
+    );
+    expect(detectOwnerTool('Пьеро, как у нас дела?')?.kind).toBe('commercial');
+    expect(detectOwnerTool('/commercial')?.kind).toBe('commercial');
+  });
+
   it('does not hijack ordinary questions', () => {
     expect(detectOwnerTool('Сколько стоит открытка?')).toBeNull();
     expect(detectOwnerTool('Расскажи о выставке')).toBeNull();
     expect(detectOwnerTool('Что ты думаешь о мозге?')).toBeNull();
+    expect(detectOwnerTool('How do I order a postcard?')).toBeNull();
+    expect(detectOwnerTool('Сколько подписчиков?')?.kind).toBe('stats');
   });
 });

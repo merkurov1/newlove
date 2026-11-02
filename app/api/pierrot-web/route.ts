@@ -69,7 +69,20 @@ import {
   type UnframedEvidenceSource,
 } from '@/lib/knowledge/rag/evidence';
 import type { RagRetrievalOutcome } from '@/lib/knowledge/rag/types';
-import { isVerifiedOwnerCredential, isVerifiedOwnerUser } from '@/lib/knowledge/rag/authorization';
+import { decideWebSearch } from '@/lib/knowledge/web/searchDecision';
+import { searchWebEvidence } from '@/lib/knowledge/web/exaSearch';
+import {
+  buildBrainWebSynthesisPrompt,
+  buildPublicWebSources,
+  buildWebEvidencePrompt,
+  composeReplyWithWebSources,
+} from '@/lib/knowledge/web/webContext';
+import {
+  buildPierrotAnswerSources,
+  type PierrotAnswerSources,
+  type WebSearchResult,
+} from '@/lib/knowledge/web/types';
+import { isVerifiedOwnerCredential, isVerifiedOwnerUser, isVerifiedTelegramOwnerRequest } from '@/lib/knowledge/rag/authorization';
 import { isMediaArchiveQuery } from '@/lib/pierrot/mediaIntent';
 import {
   retrieveMediaEvidence,
@@ -115,6 +128,13 @@ import {
   savePendingUrlCandidate,
 } from '@/lib/pierrot/urlIntake';
 import { detectOwnerTool, runOwnerTool } from '@/lib/pierrot/ownerTools';
+import {
+  buildPierrotIdentityGuidance,
+  buildPierrotOwnerProfileContext,
+  buildPierrotPerspectivePrompt,
+  normalizePierrotOwnerProfile,
+  type PierrotOwnerProfile,
+} from '@/lib/pierrot/perspective';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -170,7 +190,7 @@ IMPORTANT:
 
 LINKS:
 - When mentioning a page of this site, use a markdown link, e.g. [Lobby](/lobby).
-- Allowed internal routes: /, /heartandangel, /heartandangel/card, /lobby, /journal, /flow, /flow/join, /advising, /media, /heritage, /selection, /art-engine, /unframed, /unframed/book, /unframed/proposal.
+- Allowed internal routes: /, /heartandangel, /heartandangel/card, /lobby, /journal, /flow, /flow/join, /advising, /media, /heritage, /selection, /art-engine, /unframed, /unframed/book, /unframed/proposal, /isakeyforall, /temple, /tribute.
 - Never link to admin or unknown pages.
 `;
 
@@ -192,7 +212,7 @@ TONE & BEHAVIOR:
 
 LINKS:
 - When mentioning a page of this site, use a markdown link, e.g. [Lobby](/lobby).
-- Allowed internal routes: /, /heartandangel, /heartandangel/card, /lobby, /journal, /flow, /flow/join, /advising, /media, /heritage, /selection, /art-engine, /unframed, /unframed/book, /unframed/proposal.
+- Allowed internal routes: /, /heartandangel, /heartandangel/card, /lobby, /journal, /flow, /flow/join, /advising, /media, /heritage, /selection, /art-engine, /unframed, /unframed/book, /unframed/proposal, /isakeyforall, /temple, /tribute.
 `;
 
 type OwnerRagResponse = {
@@ -287,15 +307,38 @@ export async function POST(req: Request) {
     // identities and can never unlock owner Brain/manuscript scope.
     let currentUserId: string | null = null;
     let ragOwnerAuthorized = false;
+    let ownerProfile: PierrotOwnerProfile | null = null;
 
     try {
       const user = await getCurrentUser();
       currentUserId = user?.id ?? null;
       if (isVerifiedOwnerUser(user)) {
         ragOwnerAuthorized = true;
+        ownerProfile = normalizePierrotOwnerProfile(user?.profile);
       }
     } catch {
       ragOwnerAuthorized = false;
+    }
+
+    // Telegram webhook requests are server-to-server. They use the existing
+    // allowlisted Telegram owner id together with the internal secret; the
+    // message text is never an authentication factor.
+    if (!ragOwnerAuthorized) {
+      const telegramOwnerId = req.headers.get('x-telegram-owner-id');
+
+      if (
+        isVerifiedTelegramOwnerRequest({
+          internalRequest: isInternalRequest,
+          telegramOwnerId,
+        })
+      ) {
+        ragOwnerAuthorized = true;
+        currentUserId = currentUserId || (telegramOwnerId ? `telegram-${telegramOwnerId}` : null);
+        ownerProfile = normalizePierrotOwnerProfile({
+          name: 'Anton Merkurov',
+          username: telegramOwnerId ? `telegram-${telegramOwnerId}` : null,
+        });
+      }
     }
 
     // Verified Telegram Mini App initData / Bearer JWT. The dedicated
@@ -308,7 +351,11 @@ export async function POST(req: Request) {
       if (hasVerifiableCredential) {
         try {
           const admin = await requireAdminFromRequest(req);
-          if (isVerifiedOwnerCredential(admin)) ragOwnerAuthorized = true;
+          if (isVerifiedOwnerCredential(admin)) {
+            ragOwnerAuthorized = true;
+            currentUserId = currentUserId || admin.id;
+            ownerProfile = normalizePierrotOwnerProfile(admin.profile);
+          }
         } catch {
           ragOwnerAuthorized = false;
         }
@@ -543,12 +590,27 @@ export async function POST(req: Request) {
           },
         };
 
-    const systemPrompt =
-      (ragOwnerAuthorized ? PIERROT_PROMPT_OWNER : PIERROT_PROMPT_PUBLIC) +
-      '\n\n' +
-      contextPrompt +
-      '\n\n' +
-      commercialPrompt;
+    const perspective = ownerMode ? 'personal' : 'public';
+    const ownerProfileContext =
+      perspective === 'personal'
+        ? buildPierrotOwnerProfileContext(ownerProfile)
+        : null;
+    const identityGuidance = buildPierrotIdentityGuidance(
+      perspective,
+      trimmedMessage,
+      ownerProfile
+    );
+
+    const systemPrompt = [
+      perspective === 'personal' ? PIERROT_PROMPT_OWNER : PIERROT_PROMPT_PUBLIC,
+      buildPierrotPerspectivePrompt(perspective),
+      ownerProfileContext,
+      contextPrompt,
+      commercialPrompt,
+      identityGuidance,
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join('\n\n');
 
     const assistantMessageId = createAssistantMessageId(conversationId, userMessageId);
     const startedAt = Date.now();
@@ -1043,6 +1105,18 @@ export async function POST(req: Request) {
       }
     }
 
+    // Autonomous web routing is deterministic and independent of Brain. This
+    // point is after every early return (replay, human takeover, owner tools),
+    // so a search is only started for a turn that will actually be generated.
+    // The promise starts before Brain retrieval so both run in parallel; a web
+    // failure can never block the normal answer.
+    const webDecision = useModel
+      ? decideWebSearch({ message: trimmedMessage, history: normalizedHistory })
+      : null;
+    const webSearchPromise: Promise<WebSearchResult | null> = webDecision?.shouldSearch
+      ? searchWebEvidence({ query: webDecision.query }).catch(() => null)
+      : Promise.resolve(null);
+
     let reply = '';
     let usedProvider = '';
     let usedModel = '';
@@ -1054,6 +1128,8 @@ export async function POST(req: Request) {
       'usedContext' | 'generationOk'
     > | null = null;
     let usedRagContext = false;
+    let usedWebContext = false;
+    let webSearchResult: WebSearchResult | null = null;
 
     if (!useModel) {
       reply = plan.reply || 'Silence.';
@@ -1480,6 +1556,21 @@ export async function POST(req: Request) {
           }
         }
 
+        // Web evidence was requested in parallel with Brain. Awaiting it here
+        // keeps the normal answer available even when Brain or Exa failed.
+        webSearchResult = await webSearchPromise;
+
+        const webPrompt = buildWebEvidencePrompt(webSearchResult);
+
+        if (webPrompt) {
+          generationSystemPrompt = `${generationSystemPrompt}\n\n${webPrompt}`;
+          usedWebContext = webSearchResult?.outcome === 'relevant_results';
+
+          if (usedWebContext && usedRagContext) {
+            generationSystemPrompt = `${generationSystemPrompt}\n\n${buildBrainWebSynthesisPrompt()}`;
+          }
+        }
+
         const generated = await callPierrotModel(
           generationSystemPrompt,
           openAiMessages,
@@ -1598,7 +1689,23 @@ export async function POST(req: Request) {
       }
     }
 
+    const webSources =
+      useModel && usedWebContext && webSearchResult?.outcome === 'relevant_results'
+        ? webSearchResult.sources
+        : [];
+    const webUsed = webSources.length > 0;
+    const brainUsed = usedRagContext;
+    const answerSources: PierrotAnswerSources = buildPierrotAnswerSources({
+      brain: brainUsed,
+      web: webUsed,
+    });
+
     reply = (reply || 'Silence.').slice(0, PIERROT_MAX_MESSAGE_LENGTH);
+
+    if (webUsed) {
+      reply = composeReplyWithWebSources(reply, webSources, PIERROT_MAX_MESSAGE_LENGTH);
+    }
+
     let finalReply = reply;
 
     if (pierrotStore && canStoreTranscript) {
@@ -1633,6 +1740,9 @@ export async function POST(req: Request) {
             generation_latency_ms: generationLatencyMs,
             length: reply.length,
             latency_ms: Date.now() - startedAt,
+            answer_sources: answerSources.mode,
+            web_outcome: webSearchResult?.outcome ?? null,
+            web_source_count: webSources.length,
           },
         });
       } catch (error) {
@@ -1696,6 +1806,16 @@ export async function POST(req: Request) {
       fallbackUsed: usedProvider ? fallbackUsed : undefined,
       ...(ragOwnerAuthorized ? { admin: true } : {}),
       ...(ownerRag ? { rag: ownerRag } : {}),
+      ...(useModel ? { answerSources } : {}),
+      ...(webSearchResult
+        ? {
+            web: {
+              outcome: webSearchResult.outcome,
+              ...(webSearchResult.code ? { code: webSearchResult.code } : {}),
+              sources: webUsed ? buildPublicWebSources(webSearchResult) : [],
+            },
+          }
+        : {}),
       conversationId,
       sessionId,
       userMessageId,

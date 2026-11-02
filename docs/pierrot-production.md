@@ -21,6 +21,38 @@ prompt, history and RAG evidence are preserved across providers. Owner
 authorization, retrieval boundaries and the non-streaming response contract are
 unchanged. See `docs/gemini-integration.md`.
 
+## Autonomous web search
+
+Web evidence is an independent third source, added through Exa Search
+(`POST https://api.exa.ai/search`). It is server-only and never replaces Brain
+retrieval or the existing Gemini/DeepSeek chain.
+
+- `PIERROT_WEB_SEARCH_ENABLED=true` and `EXA_API_KEY` are both required. If
+  either is missing, chat continues normally with model knowledge and Brain.
+- The decision to search is deterministic (`lib/knowledge/web/searchDecision.ts`)
+  and makes no extra LLM call. Greetings, casual messages, writing tasks,
+  short follow-ups, and questions about Anton's own texts stay off the web
+  path. Current events, explicit verification and general factual lookups
+  search. A question that needs both the owner's archive and current external
+  evidence runs Brain and Exa in parallel.
+- Only the user's external research query is sent to Exa. Brain passages,
+  private manuscript text, unpublished columns, owner-only material and the
+  conversation history are never part of the Exa request.
+- Results are bounded (default 5, maximum 6), deduplicated by URL, time-limited
+  (default 6 s, maximum 10 s) and reduced to a bounded text budget. The full
+  extracted text remains on the server; the browser receives only short
+  excerpts. A failed search never prevents a normal answer.
+- Search results are untrusted data. The generation prompt delimits them as
+  JSON and instructs the model to ignore instructions found inside a page, to
+  synthesize rather than copy snippets, and never to invent URLs, dates or
+  quotations. The deterministic Sources section is built only from URLs Exa
+  actually returned.
+- The response includes an informational `answerSources` indicator (`MODEL`,
+  `BRAIN`, `WEB`, `BRAIN + WEB`). It is not a user-controlled search mode.
+  No web results are ingested into Brain and no background/cron search exists.
+
+Relevant modules: `lib/knowledge/web/{config,exaSearch,searchDecision,webContext,types}.ts`.
+
 ## Retrieval quality
 
 Owner retrieval now uses deterministic refinement:
@@ -146,11 +178,17 @@ not the publication's complete archive. The same function is unit-tested in
 PIERROT_RAG_ENABLED=true
 PIERROT_PUBLIC_RAG_ENABLED=false
 PIERROT_BRAIN_RETRIEVAL_V2=true
+PIERROT_WEB_SEARCH_ENABLED=true
+EXA_API_KEY=...
+# Optional: PIERROT_WEB_SEARCH_TIMEOUT_MS=6000
+# Optional: PIERROT_WEB_SEARCH_MAX_RESULTS=5
 CRON_SECRET=...
 ```
 
 `PIERROT_RAG_ENABLED` is configured in Vercel Production. The public flag stays
-off until explicitly approved public documents exist.
+off until explicitly approved public documents exist. Web search requires both
+`PIERROT_WEB_SEARCH_ENABLED=true` and a server-side `EXA_API_KEY`; the key must
+never be prefixed with `NEXT_PUBLIC_`.
 
 ## Tests
 

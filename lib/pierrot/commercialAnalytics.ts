@@ -231,3 +231,41 @@ export async function recordPierrotPurchaseCompleted(
     return false;
   }
 }
+
+export type PierrotDonationConfirmationInput = {
+  conversationId: string;
+  eventKey: string;
+  offerId?: string;
+  providerSessionId?: string | null;
+  amountTotal?: number | null;
+  currency?: string | null;
+  source: 'tribute_webhook';
+};
+
+/**
+ * A donation is deliberately a separate event from purchase_completed. It is
+ * written only after Stripe confirms a paid Tribute session. No donor name,
+ * email or message is stored.
+ */
+export async function recordPierrotDonationCompleted(
+  store: SupabaseClient,
+  input: PierrotDonationConfirmationInput
+): Promise<boolean> {
+  try {
+    return await recordPierrotEventByConversationId(store, {
+      conversationId: input.conversationId,
+      eventName: 'donation_completed',
+      eventKey: input.eventKey,
+      payload: {
+        offer_id: input.offerId ?? 'temple_tribute',
+        provider_session_id: input.providerSessionId ?? null,
+        amount_total: input.amountTotal ?? null,
+        currency: input.currency ?? null,
+        source: input.source,
+        completed_at: new Date().toISOString(),
+      },
+    });
+  } catch {
+    return false;
+  }
+}

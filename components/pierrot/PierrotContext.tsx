@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthContext';
 import type { UnframedEvidenceSource } from '@/lib/knowledge/rag/evidence';
+import type { PierrotAnswerSources } from '@/lib/knowledge/web/types';
 import type { RagRetrievalOutcome } from '@/lib/knowledge/rag/types';
 import {
   PIERROT_SECTIONS,
@@ -100,6 +101,7 @@ export type PierrotMessage = {
   meta?: PierrotMessageMeta;
   evidence?: UnframedEvidenceSource[];
   ragOutcome?: RagRetrievalOutcome;
+  answerSources?: PierrotAnswerSources;
   author?: 'visitor' | 'pierrot' | 'anton' | 'system';
   createdAt?: string;
   delivery?: PierrotDeliveryState;
@@ -157,6 +159,8 @@ type PierrotWebResponse = {
   cta?: unknown;
   commercialMarker?: unknown;
   rag?: unknown;
+  answerSources?: unknown;
+  web?: unknown;
   offerId?: unknown;
   conversationId?: unknown;
   sessionId?: unknown;
@@ -334,6 +338,25 @@ function normalizeRagOutcome(value: unknown): RagRetrievalOutcome | undefined {
   return undefined;
 }
 
+function normalizeAnswerSources(value: unknown): PierrotAnswerSources | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+
+  const record = value as Record<string, unknown>;
+  const mode = record.mode;
+
+  if (mode !== 'model' && mode !== 'brain' && mode !== 'web' && mode !== 'brain+web') {
+    return undefined;
+  }
+
+  return {
+    mode,
+    label: mode === 'brain+web' ? 'BRAIN + WEB' : (mode.toUpperCase() as 'MODEL' | 'BRAIN' | 'WEB'),
+    model: record.model !== false,
+    brain: record.brain === true,
+    web: record.web === true,
+  };
+}
+
 function normalizeEvidenceSource(value: unknown): UnframedEvidenceSource | null {
   if (!value || typeof value !== 'object') return null;
 
@@ -438,6 +461,7 @@ function normalizeMessage(value: unknown, index: number): PierrotMessage | null 
     meta: normalizeMeta(message.meta),
     evidence: evidence.length > 0 ? evidence : undefined,
     ragOutcome: normalizeRagOutcome(message.ragOutcome),
+    answerSources: normalizeAnswerSources(message.answerSources),
     author:
       message.author === 'visitor' ||
       message.author === 'pierrot' ||
@@ -1697,6 +1721,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
         const ragPayload =
           data.rag && typeof data.rag === 'object' ? (data.rag as Record<string, unknown>) : null;
         const responseRagOutcome = normalizeRagOutcome(ragPayload?.outcome);
+        const responseAnswerSources = normalizeAnswerSources(data.answerSources);
         const responseEvidence = Array.isArray(ragPayload?.sources)
           ? ragPayload.sources
               .map(normalizeEvidenceSource)
@@ -1717,6 +1742,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
           commercialMarker: responseMarker,
           evidence: responseEvidence.length > 0 ? responseEvidence : undefined,
           ragOutcome: responseRagOutcome,
+          answerSources: responseAnswerSources,
           meta: { kind: 'chat' },
         });
       } catch (error: unknown) {

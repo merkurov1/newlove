@@ -55,6 +55,15 @@ describe('Pierrot page context', () => {
       surface: 'unframed_proposal',
       allowProactive: false,
     });
+    expect(resolvePierrotPageContext('/temple')).toMatchObject({
+      surface: 'temple',
+      contextOfferId: 'temple_tribute',
+      allowProactive: true,
+    });
+    expect(resolvePierrotPageContext('/tribute')).toMatchObject({
+      surface: 'temple',
+      contextOfferId: 'temple_tribute',
+    });
     expect(resolvePierrotPageContext('/lobby')).toMatchObject({
       surface: 'other',
       contextOfferId: null,
@@ -181,6 +190,22 @@ describe('Pierrot proactive commercial decisions', () => {
     expect(result.cta).toBeNull();
     expect(result.offerSelected).toBe(false);
     expect(result.proactive).toBe(false);
+  });
+
+  it('introduces the Tribute only in a Temple context, without generic fundraising', () => {
+    const temple = plan({
+      message: 'What is this?',
+      pathname: '/temple',
+    });
+    const unrelated = plan({
+      message: 'Tell me about your work.',
+      pathname: '/heartandangel',
+    });
+
+    expect(temple.offer?.id).toBe('temple_tribute');
+    expect(temple.cta?.href).toBe('/tribute');
+    expect(temple.mode).toBe('offer');
+    expect(unrelated.offer?.id).not.toBe('temple_tribute');
   });
 
   it('introduces UNFRAMED for a personal-history conversation', () => {
