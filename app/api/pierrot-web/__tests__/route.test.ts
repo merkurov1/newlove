@@ -1705,3 +1705,154 @@ describe('Pierrot intelligence regressions', () => {
     expect(json.sourceStatus?.brain).toBe('not_requested');
   });
 });
+
+describe('Pierrot identity attribution', () => {
+  const visitorId = '44444444-4444-4444-8444-444444444444';
+
+  function ensureIdentity() {
+    const call = asMock(pierrotStore.ensurePierrotConversation).mock.calls[0]?.[1] as
+      { identity?: Record<string, unknown> } | undefined;
+
+    return call?.identity;
+  }
+
+  it('attributes a public-page conversation to a signed-in owner', async () => {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+
+    const response = await POST(makeRequest(validBody({ message: 'Hello Pierrot' })));
+    expect(response.status).toBe(200);
+    expect(ensureIdentity()).toMatchObject({
+      type: 'owner',
+      userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      source: 'supabase_session',
+      visitorId: null,
+    });
+  });
+
+  it('attributes /admin/pierrot to the same verified owner', async () => {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          message: 'Hello Pierrot',
+          context: { pathname: '/admin/pierrot' },
+        })
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(ensureIdentity()).toMatchObject({
+      type: 'owner',
+      source: 'supabase_session',
+    });
+  });
+
+  it('attributes an anonymous visitor and ignores client owner flags', async () => {
+    const response = await POST(
+      makeRequest(
+        validBody({
+          message: 'Hello Pierrot',
+          visitorId,
+          is_owner: true,
+          owner: true,
+          identity_type: 'owner',
+          user_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        })
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(ensureIdentity()).toMatchObject({
+      type: 'visitor',
+      visitorId,
+      userId: null,
+      source: 'visitor_local_storage',
+    });
+  });
+
+  it('does not make a visitor owner by opening /admin', async () => {
+    const response = await POST(
+      makeRequest(
+        validBody({
+          message: 'Hello Pierrot',
+          visitorId,
+          context: { pathname: '/admin/pierrot' },
+        })
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(ensureIdentity()).toMatchObject({
+      type: 'visitor',
+      userId: null,
+    });
+  });
+
+  it('keeps a Telegram owner attribution through the internal adapter', async () => {
+    process.env.PIERO_API_SECRET = 'identity-secret';
+    process.env.TELEGRAM_ALLOWED_USER_IDS = '12345';
+
+    try {
+      const response = await POST(
+        new Request('http://localhost/api/pierrot-web', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-pierrot-internal': 'identity-secret',
+            'x-telegram-user-id': '12345',
+            'x-telegram-owner-id': '12345',
+          },
+          body: JSON.stringify(validBody({ message: 'Расскажи про меня' })),
+        })
+      );
+
+      expect(response.status).toBe(200);
+      expect(ensureIdentity()).toMatchObject({
+        type: 'owner',
+        userId: null,
+        source: 'telegram_owner',
+      });
+    } finally {
+      delete process.env.PIERO_API_SECRET;
+      delete process.env.TELEGRAM_ALLOWED_USER_IDS;
+    }
+  });
+
+  it('does not carry owner identity into a later anonymous conversation', async () => {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+    await POST(makeRequest(validBody({ message: 'Owner turn' })));
+
+    jest.clearAllMocks();
+    asMock(pierrotStore.createPierrotStore).mockReturnValue({ mocked: true });
+    asMock(pierrotStore.ensurePierrotConversation).mockImplementation(async () => undefined);
+    asMock(pierrotStore.appendPierrotMessage).mockImplementation(async (...args: unknown[]) => {
+      const input = args[1] as { role: string; content: string };
+      return { sequence: input.role === 'user' ? 1 : 2, content: input.content, inserted: true };
+    });
+    asMock(pierrotStore.recordPierrotEvent).mockResolvedValue(true);
+    asMock(pierrotStore.findPierrotAssistantReply).mockResolvedValue(null);
+    asMock(pierrotStore.conversationBelongsToSession).mockResolvedValue(true);
+    asMock(pierrotStore.persistenceFailure).mockImplementation(() => undefined);
+    asMock(serverAuth.getCurrentUser).mockResolvedValue(null);
+
+    const response = await POST(makeRequest(validBody({ message: 'Anonymous turn', visitorId })));
+    expect(response.status).toBe(200);
+    expect(ensureIdentity()).toMatchObject({
+      type: 'visitor',
+      userId: null,
+    });
+  });
+});

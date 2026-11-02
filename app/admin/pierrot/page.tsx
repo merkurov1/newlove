@@ -110,6 +110,12 @@ function ConversationRow({ item }: { item: ConversationSummary }) {
         </Link>
         <p className="mt-1 text-[10px] text-[#A29B94]">{formatDate(item.startedAt)}</p>
       </td>
+      <td className="py-3 pr-3 text-xs">
+        <span className="font-mono text-[9px] uppercase tracking-wider">{item.identityType}</span>
+        {item.identitySource && (
+          <p className="mt-1 text-[9px] text-[#A29B94]">{item.identitySource}</p>
+        )}
+      </td>
       <td className="py-3 pr-3 text-xs">{item.language.toUpperCase()}</td>
       <td className="py-3 pr-3 text-xs">
         <span className="font-mono text-[10px] text-[#746D66]">{item.latestIntent || '—'}</span>
@@ -235,6 +241,19 @@ function FilterForm({ filters }: { filters: ReturnType<typeof parseAnalyticsFilt
           <option value="ru">RU</option>
           <option value="en">EN</option>
           <option value="und">und</option>
+        </select>
+      </label>
+      <label className="text-[10px] uppercase tracking-wider text-[#746D66]">
+        Identity
+        <select
+          name="identity"
+          defaultValue={filters.identity || 'all'}
+          className="mt-1 block w-full border border-[#D9D3CD] px-2 py-1.5 text-xs"
+        >
+          <option value="all">All identities</option>
+          <option value="visitor">Visitor only</option>
+          <option value="owner">Owner only</option>
+          <option value="unknown">Unknown only</option>
         </select>
       </label>
       <label className="text-[10px] uppercase tracking-wider text-[#746D66]">
@@ -378,7 +397,7 @@ export default async function PierrotIntelligencePage({
           {transcript && (
             <Section
               title={`Transcript ${transcript.conversation.id.slice(-10)}`}
-              description={`${transcript.conversation.language.toUpperCase()} · ${transcript.conversation.start_page} · started ${formatDate(
+              description={`${transcript.conversation.identity_type || 'unknown'} · ${transcript.conversation.language.toUpperCase()} · ${transcript.conversation.start_page} · started ${formatDate(
                 transcript.conversation.started_at
               )} · retention policy applies`}
             >
@@ -477,6 +496,39 @@ export default async function PierrotIntelligencePage({
               </div>
             </Section>
           )}
+
+          <Section
+            title="Identity attribution"
+            description="Owner is proven only by a server-verified credential. Visitor is an anonymous first-party pseudonym. Unknown is kept separate and is never folded into visitor totals."
+          >
+            <div className="grid gap-x-8 sm:grid-cols-2 lg:grid-cols-4">
+              <Metric
+                label="Owner conversations"
+                value={snapshot.identity.ownerConversations}
+                detail={`${snapshot.identity.ownerSessions} sessions · excluded from visitor metrics`}
+              />
+              <Metric
+                label="Visitor conversations"
+                value={snapshot.identity.visitorConversations}
+                detail={`${snapshot.identity.visitorSessions} sessions · ${snapshot.identity.uniqueVisitors} unique visitors`}
+              />
+              <Metric
+                label="Unknown conversations"
+                value={snapshot.identity.unknownConversations}
+                detail={`${snapshot.identity.unknownSessions} sessions · not counted as visitors`}
+              />
+              <Metric
+                label="New / returning visitors"
+                value={`${snapshot.identity.newVisitors ?? '—'} / ${snapshot.identity.returningVisitors ?? '—'}`}
+                detail={`${snapshot.identity.repeatVisitorSessions} visitor(s) with repeat sessions · ${snapshot.identity.conversationsPerVisitor ?? '—'} conversations per visitor`}
+              />
+            </div>
+            <p className="mt-4 text-xs leading-relaxed text-[#89827B]">
+              Historical conversations without a server-verified identity remain Unknown. A visit to
+              /admin, a null user_id, an IP address or a session without owner authentication is not
+              accepted as proof.
+            </p>
+          </Section>
 
           <Section
             title="Overview"
@@ -650,6 +702,7 @@ export default async function PierrotIntelligencePage({
                   <thead>
                     <tr className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#89827B]">
                       <th className="pb-2 pr-3">Conversation</th>
+                      <th className="pb-2 pr-3">Identity</th>
                       <th className="pb-2 pr-3">Lang</th>
                       <th className="pb-2 pr-3">Intent / page</th>
                       <th className="pb-2 pr-3">Products</th>
@@ -672,7 +725,9 @@ export default async function PierrotIntelligencePage({
             description="Deterministic flags from failures, unresolved intents, negative feedback, missing replies and open handover requests. Small samples remain directional."
           >
             {snapshot.attention.length === 0 ? (
-              <p className="text-sm text-[#89827B]">No conversations require attention in this window.</p>
+              <p className="text-sm text-[#89827B]">
+                No conversations require attention in this window.
+              </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[720px] text-left text-sm">

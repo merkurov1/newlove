@@ -27,7 +27,9 @@ import {
   getPierrotConsent,
   getPierrotConversationId,
   getPierrotSessionId,
+  getPierrotVisitorId,
   rotatePierrotConversationId,
+  rotatePierrotVisitorId,
   setPierrotConversationId,
   setPierrotSessionId,
   trackPierrotEvent,
@@ -1581,6 +1583,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
             ...(hasChosenUnframedMode ? { mode: isUnframedMode ? 'unframed' : 'site' } : {}),
             conversationId: getPierrotConversationId(),
             sessionId: getPierrotSessionId(),
+            visitorId: getPierrotVisitorId(),
             userMessageId: userMessage.id,
             consent: getPierrotConsent(),
             context: {
@@ -1928,6 +1931,9 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     if (lastAuthUserIdRef.current === userId) return;
 
     lastAuthUserIdRef.current = userId;
+    // Do not let the next anonymous user of this browser profile inherit the
+    // previous authenticated identity's visitor history.
+    rotatePierrotVisitorId();
     clearChat('user_closed');
   }, [authUser?.id, clearChat, isAuthLoading]);
 

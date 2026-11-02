@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/serverAuth';
 import { getClientIp } from '@/lib/rateLimit';
 import { checkPierrotRateLimit } from '@/lib/pierrot/rateLimit';
 import {
@@ -17,6 +18,7 @@ import {
   persistenceFailure,
   recordPierrotEvent,
 } from '@/lib/pierrot/serverStore';
+import { isPierrotUserId, resolvePierrotIdentity } from '@/lib/pierrot/identity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,6 +46,7 @@ export async function POST(req: Request) {
   const {
     conversationId,
     sessionId,
+    visitorId: rawVisitorId,
     eventName,
     eventKey: rawEventKey,
     payload: rawPayload,
@@ -75,6 +78,27 @@ export async function POST(req: Request) {
   const store = createPierrotStore();
   if (!store) return noContent();
 
+  let ownerAuthorized = false;
+  let ownerUserId: string | null = null;
+
+  try {
+    const user = await getCurrentUser();
+    if (user?.role === 'ADMIN') {
+      ownerAuthorized = true;
+      ownerUserId = isPierrotUserId(user.id) ? user.id : null;
+    }
+  } catch {
+    ownerAuthorized = false;
+  }
+
+  const identity = resolvePierrotIdentity({
+    ownerAuthorized,
+    ownerUserId,
+    ownerSource: 'supabase_session',
+    visitorId: rawVisitorId,
+    visitorAllowed: consent.state === 'granted',
+  });
+
   const startPage = sanitizePierrotPathname(
     context && typeof context === 'object' ? context.pathname : undefined
   );
@@ -91,6 +115,7 @@ export async function POST(req: Request) {
       language: 'und',
       consentState: consent.state,
       consentVersion: consent.version,
+      identity,
     });
 
     await recordPierrotEvent(store, {

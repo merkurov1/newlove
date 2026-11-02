@@ -139,6 +139,11 @@ import {
   savePendingUrlCandidate,
 } from '@/lib/pierrot/urlIntake';
 import { detectOwnerTool, runOwnerTool } from '@/lib/pierrot/ownerTools';
+import {
+  isPierrotUserId,
+  resolvePierrotIdentity,
+  type PierrotIdentitySource,
+} from '@/lib/pierrot/identity';
 import { understandPierrotQuery, type PierrotQueryPlan } from '@/lib/pierrot/queryUnderstanding';
 import {
   buildSourceStatuses,
@@ -269,6 +274,7 @@ export async function POST(req: Request) {
       conversationId: rawConversationId,
       sessionId: rawSessionId,
       userMessageId: rawUserMessageId,
+      visitorId: rawVisitorId,
       consent: rawConsent,
       mode: rawMode,
     } = body;
@@ -325,12 +331,16 @@ export async function POST(req: Request) {
     let currentUserId: string | null = null;
     let ragOwnerAuthorized = false;
     let ownerProfile: PierrotOwnerProfile | null = null;
+    let ownerIdentitySource: PierrotIdentitySource | null = null;
+    let ownerIdentityUserId: string | null = null;
 
     try {
       const user = await getCurrentUser();
       currentUserId = user?.id ?? null;
       if (isVerifiedOwnerUser(user)) {
         ragOwnerAuthorized = true;
+        ownerIdentitySource = 'supabase_session';
+        ownerIdentityUserId = user?.id ?? null;
         ownerProfile = normalizePierrotOwnerProfile(user?.profile);
       }
     } catch {
@@ -350,6 +360,8 @@ export async function POST(req: Request) {
         })
       ) {
         ragOwnerAuthorized = true;
+        ownerIdentitySource = 'telegram_owner';
+        ownerIdentityUserId = null;
         currentUserId = currentUserId || (telegramOwnerId ? `telegram-${telegramOwnerId}` : null);
         ownerProfile = normalizePierrotOwnerProfile({
           name: 'Anton Merkurov',
@@ -370,6 +382,12 @@ export async function POST(req: Request) {
           const admin = await requireAdminFromRequest(req);
           if (isVerifiedOwnerCredential(admin)) {
             ragOwnerAuthorized = true;
+            ownerIdentitySource = req.headers.get('x-telegram-init-data')
+              ? 'telegram_init_data'
+              : req.headers.get('authorization')
+                ? 'bearer_jwt'
+                : 'supabase_session';
+            ownerIdentityUserId = isPierrotUserId(admin.id) ? admin.id : null;
             currentUserId = currentUserId || admin.id;
             ownerProfile = normalizePierrotOwnerProfile(admin.profile);
           }
@@ -378,6 +396,17 @@ export async function POST(req: Request) {
         }
       }
     }
+
+    // Identity is resolved only from server-verified credentials and a
+    // consented first-party visitor pseudonym. Client-provided identity flags
+    // (is_owner, identity_type, user_id) are never read.
+    const identity = resolvePierrotIdentity({
+      ownerAuthorized: ragOwnerAuthorized,
+      ownerUserId: ownerIdentityUserId,
+      ownerSource: ownerIdentitySource,
+      visitorId: rawVisitorId,
+      visitorAllowed: consent.state === 'granted',
+    });
 
     if (requestedOwnerMode && !ragOwnerAuthorized) {
       return NextResponse.json({ error: 'Owner mode is not available.' }, { status: 403 });
@@ -434,6 +463,7 @@ export async function POST(req: Request) {
           language,
           consentState: consent.state,
           consentVersion: consent.version,
+          identity,
         });
 
         await recordPierrotEvent(pierrotStore, {

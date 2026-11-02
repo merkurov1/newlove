@@ -22,6 +22,15 @@ describe('Pierrot owner tool routing', () => {
     expect(detectOwnerTool('Проведи brain research по теме')?.kind).toBe('research');
     expect(detectOwnerTool('Покажи диагностику workers')?.kind).toBe('diagnostics');
     expect(detectOwnerTool('Аналитика Pierrot за неделю')?.kind).toBe('analytics');
+    expect(detectOwnerTool('Сколько реальных посетителей общалось со мной за неделю?')?.kind).toBe(
+      'analytics'
+    );
+    expect(detectOwnerTool('Сколько сессий пока невозможно классифицировать?')?.kind).toBe(
+      'analytics'
+    );
+    expect(detectOwnerTool('Какие диалоги принадлежат мне и должны быть исключены?')?.kind).toBe(
+      'analytics'
+    );
   });
 
   it('routes commercial performance questions to the commercial analyst', () => {

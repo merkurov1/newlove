@@ -11,6 +11,7 @@ import {
 
 const SESSION_KEY = 'pierrot_session_id_v1';
 const CONVERSATION_KEY = 'pierrot_conversation_id_v1';
+const VISITOR_KEY = 'pierrot_visitor_id_v1';
 const CONSENT_KEY = 'pierrot_consent_v1';
 
 const memory = new Map<string, string>();
@@ -67,6 +68,37 @@ export function getPierrotSessionId(): string {
 
 export function getPierrotConversationId(): string {
   return getOrCreateId(CONVERSATION_KEY);
+}
+
+/**
+ * A random first-party visitor pseudonym. It is created only after explicit
+ * storage consent, lives across sessions on this browser profile, and is never
+ * derived from IP, email, fingerprint or any account identity.
+ *
+ * The two reads around the write make concurrent tabs converge on the value
+ * that is actually stored instead of keeping two different aliases in memory.
+ */
+export function getPierrotVisitorId(): string | null {
+  if (getPierrotConsent().state !== 'granted') return null;
+
+  const existing = readValue(VISITOR_KEY, 'local');
+  if (isPierrotId(existing)) return existing;
+
+  const created = createPierrotId();
+  writeValue(VISITOR_KEY, created, 'local');
+
+  const stored = readValue(VISITOR_KEY, 'local');
+  return isPierrotId(stored) ? stored : created;
+}
+
+/**
+ * Called only when the authenticated identity changes (sign-in, sign-out or a
+ * different account). A new alias prevents the next anonymous user of the same
+ * browser profile from inheriting the previous user's visitor history.
+ */
+export function rotatePierrotVisitorId(): string | null {
+  removeValue(VISITOR_KEY, 'local');
+  return getPierrotVisitorId();
 }
 
 /**
@@ -160,6 +192,7 @@ export function trackPierrotEvent(
   const request = postJson('/api/pierrot/events', 'POST', {
     conversationId: getPierrotConversationId(),
     sessionId: getPierrotSessionId(),
+    visitorId: getPierrotVisitorId(),
     eventName,
     eventKey,
     payload,

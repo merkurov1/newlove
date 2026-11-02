@@ -2,6 +2,7 @@ import { assertServerOnly } from '@/lib/serverOnly';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { loadAdminRagOverview } from '@/lib/analytics/adminRagOverview';
 import { loadObservatorySnapshot, parseObservatoryFilters } from '@/lib/analytics/observatory';
+import { loadPierrotIdentityMetrics } from '@/lib/analytics/pierrotIdentity';
 import { loadOperationsSnapshot } from '@/lib/operations/dashboard';
 import { createBrainGraphStore } from '@/lib/knowledge/graph/store';
 import { answerBrainResearchQuestion } from '@/lib/knowledge/graph/research';
@@ -94,7 +95,15 @@ export function detectOwnerTool(
   }
 
   if (
-    /(analytics|аналитик|observatory|обсерватор|media intelligence|медиа.*аналитик|media archive|медиа архив)/i.test(
+    /(analytics|аналитик|observatory|обсерватор|media intelligence|медиа.*аналитик|media archive|медиа архив|реальн[а-яё]*\s+посетител|уникальн[а-яё]*\s+посетител|нов[а-яё]*\s+и\s+вернувш|visitor|unknown|неизвестн[а-яё]*\s+сесси|сесси[а-яё]*.*классифиц|мои\s+диалог|диалог[а-яё]*\s+принадлеж)/i.test(
+      text
+    )
+  ) {
+    return { kind: 'analytics', query: message.trim() };
+  }
+
+  if (
+    /(какие\s+вопросы\s+чаще\s+задавали|какие\s+вопросы\s+задавали|что\s+спрашивали|какие\s+ответы\s+получали\s+отрицательн)/i.test(
       text
     )
   ) {
@@ -380,9 +389,10 @@ async function formatDiagnostics(language: 'ru' | 'en'): Promise<string> {
 async function formatAnalytics(language: 'ru' | 'en'): Promise<string> {
   const filters = parseObservatoryFilters({ preset: '7d' });
   const store = getServerSupabaseClient({ useServiceRole: true });
-  const [snapshot, rag] = await Promise.all([
+  const [snapshot, rag, identity] = await Promise.all([
     loadObservatorySnapshot(filters),
     loadAdminRagOverview(store),
+    loadPierrotIdentityMetrics(store, filters.from, filters.to),
   ]);
   const topics = snapshot.interest.topTopics
     .slice(0, 5)
@@ -391,6 +401,9 @@ async function formatAnalytics(language: 'ru' | 'en'): Promise<string> {
   if (language === 'en') {
     return [
       'Pierrot analytics · 7 days',
+      `Identity: owner ${identity.ownerConversations} conversations · visitor ${identity.visitorConversations} · unknown ${identity.unknownConversations}`,
+      `Visitors: ${identity.uniqueVisitors} unique · ${identity.newVisitors ?? '—'} new · ${identity.returningVisitors ?? '—'} returning · ${identity.conversationsPerVisitor ?? '—'} conversations per visitor`,
+      `Owner tests excluded from visitor totals: ${identity.ownerTestsExcluded}. Unknown is never counted as visitor.`,
       `Conversations: today ${snapshot.overview.conversationsToday} · week ${snapshot.overview.conversationsThisWeek} · month ${snapshot.overview.conversationsThisMonth}`,
       `Period: ${snapshot.overview.totalConversations.value} conversations · ${snapshot.overview.totalMessages.value} messages · ${snapshot.overview.activeConversations} active`,
       `Quality: ${snapshot.intelligence.retrievalFailures} retrieval failures · ${snapshot.intelligence.unansweredQuestions} unanswered · ${snapshot.intelligence.assistantFailures} assistant failures`,
@@ -407,6 +420,9 @@ async function formatAnalytics(language: 'ru' | 'en'): Promise<string> {
 
   return [
     'Аналитика Pierrot · 7 дней',
+    `Identity: owner ${identity.ownerConversations} диалогов · visitor ${identity.visitorConversations} · unknown ${identity.unknownConversations}`,
+    `Посетители: ${identity.uniqueVisitors} уникальных · ${identity.newVisitors ?? '—'} новых · ${identity.returningVisitors ?? '—'} вернувшихся · ${identity.conversationsPerVisitor ?? '—'} диалогов на посетителя`,
+    `Тесты владельца исключены из visitor-метрик: ${identity.ownerTestsExcluded}. Unknown не считается посетителем.`,
     `Диалоги: сегодня ${snapshot.overview.conversationsToday} · неделя ${snapshot.overview.conversationsThisWeek} · месяц ${snapshot.overview.conversationsThisMonth}`,
     `Период: ${snapshot.overview.totalConversations.value} диалогов · ${snapshot.overview.totalMessages.value} сообщений · ${snapshot.overview.activeConversations} активных`,
     `Качество: ${snapshot.intelligence.retrievalFailures} ошибок retrieval · ${snapshot.intelligence.unansweredQuestions} без ответа · ${snapshot.intelligence.assistantFailures} ошибок ассистента`,

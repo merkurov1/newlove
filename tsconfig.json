@@ -36,5 +36,5 @@
     "**/*.jsx",
     ".next/types/**/*.ts"
 , "tailwind.config.js"  ],
-  "exclude": ["node_modules", "tests", "app/liveheart/SharedArtifact.tsx"]
+  "exclude": ["node_modules", "tests", "**/__tests__/**", "app/liveheart/SharedArtifact.tsx"]
 }

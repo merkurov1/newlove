@@ -9,6 +9,7 @@ import {
   type PierrotConsentState,
   type PierrotEventName,
 } from '@/lib/pierrot/conversation';
+import { isMissingIdentityColumn, type PierrotIdentity } from '@/lib/pierrot/identity';
 
 /**
  * Server-only persistence adapter for Pierrot Intelligence.
@@ -39,6 +40,7 @@ export type PierrotConversationInput = {
   language: 'ru' | 'en' | 'und';
   consentState: PierrotConsentState;
   consentVersion: string | null;
+  identity?: PierrotIdentity;
 };
 
 function retentionExpiry(): string {
@@ -60,31 +62,61 @@ function warn(operation: string, error: unknown): void {
  * that are safe to update on subsequent messages. Start page, referrer and
  * started_at are never overwritten.
  */
+function identityColumns(identity: PierrotIdentity | undefined): Record<string, unknown> {
+  if (!identity) return {};
+
+  return {
+    identity_type: identity.type,
+    visitor_id: identity.type === 'visitor' ? identity.visitorId : null,
+    user_id: identity.type === 'owner' ? identity.userId : null,
+    identity_verified_at:
+      identity.type === 'owner' ? (identity.verifiedAt ?? new Date().toISOString()) : null,
+    identity_source: identity.source,
+  };
+}
+
 export async function ensurePierrotConversation(
   store: SupabaseClient,
   input: PierrotConversationInput
 ): Promise<void> {
   const now = new Date().toISOString();
   const expiresAt = retentionExpiry();
+  const identity = input.identity;
+  const baseInsert = {
+    id: input.id,
+    session_id: input.sessionId,
+    start_page: input.startPage,
+    referrer: input.referrer,
+    language: input.language,
+    consent_state: input.consentState,
+    consent_version: input.consentVersion,
+    status: 'active',
+    started_at: now,
+    updated_at: now,
+    expires_at: expiresAt,
+  };
 
-  const { error: insertError } = await store.from('pierrot_conversations').upsert(
-    {
-      id: input.id,
-      session_id: input.sessionId,
-      start_page: input.startPage,
-      referrer: input.referrer,
-      language: input.language,
-      consent_state: input.consentState,
-      consent_version: input.consentVersion,
-      status: 'active',
-      started_at: now,
-      updated_at: now,
-      expires_at: expiresAt,
-    },
-    { onConflict: 'id', ignoreDuplicates: true }
-  );
+  const insertResult = await store
+    .from('pierrot_conversations')
+    .upsert(
+      { ...baseInsert, ...identityColumns(identity) },
+      { onConflict: 'id', ignoreDuplicates: true }
+    );
 
-  if (insertError) throw insertError;
+  if (insertResult.error) {
+    if (!identity || !isMissingIdentityColumn(insertResult.error)) {
+      throw insertResult.error;
+    }
+
+    // Before the manual migration the new columns do not exist. Attribution
+    // stays unknown, but the chat must continue to work.
+    const legacyInsert = await store.from('pierrot_conversations').upsert(baseInsert, {
+      onConflict: 'id',
+      ignoreDuplicates: true,
+    });
+
+    if (legacyInsert.error) throw legacyInsert.error;
+  }
 
   const update: Record<string, unknown> = {
     status: 'active',
@@ -104,13 +136,54 @@ export async function ensurePierrotConversation(
   // "und" in that case.
   if (input.language !== 'und') update.language = input.language;
 
-  const { error: updateError } = await store
-    .from('pierrot_conversations')
-    .update(update)
-    .eq('id', input.id)
-    .eq('session_id', input.sessionId);
+  const attribution = identityColumns(identity);
 
-  if (updateError) throw updateError;
+  if (identity?.type === 'owner') {
+    // Owner verification is an upgrade and may replace a previous visitor
+    // pseudonym. The owner's private visitor id is never retained.
+    Object.assign(update, attribution);
+  } else if (identity?.type === 'visitor') {
+    Object.assign(update, attribution);
+  }
+
+  const applyUpdate = async (payload: Record<string, unknown>, conditional: boolean) => {
+    let query = store
+      .from('pierrot_conversations')
+      .update(payload)
+      .eq('id', input.id)
+      .eq('session_id', input.sessionId);
+
+    // A visitor or anonymous signal must never overwrite an already verified
+    // owner conversation. Owner updates above deliberately skip this guard.
+    if (conditional) query = query.neq('identity_type', 'owner');
+
+    return query;
+  };
+
+  const updateResult = await applyUpdate(
+    update,
+    identity?.type !== 'owner' && Object.keys(attribution).length > 0
+  );
+
+  if (updateResult.error) {
+    if (!isMissingIdentityColumn(updateResult.error)) throw updateResult.error;
+
+    const legacyUpdate = {
+      status: update.status,
+      updated_at: update.updated_at,
+      expires_at: update.expires_at,
+      ...(update.consent_state ? { consent_state: update.consent_state } : {}),
+      ...(update.consent_version ? { consent_version: update.consent_version } : {}),
+      ...(update.language ? { language: update.language } : {}),
+    };
+    const legacyResult = await store
+      .from('pierrot_conversations')
+      .update(legacyUpdate)
+      .eq('id', input.id)
+      .eq('session_id', input.sessionId);
+
+    if (legacyResult.error) throw legacyResult.error;
+  }
 }
 
 export type AppendPierrotMessageInput = {

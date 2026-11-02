@@ -331,3 +331,54 @@ describe('Pierrot Intelligence aggregation', () => {
     expect(snapshot.attention.some((item) => item.id === 'feedback:r1')).toBe(true);
   });
 });
+
+describe('Pierrot identity filtering', () => {
+  const conversations = [
+    conversation('owner-1', { identity_type: 'owner', identity_source: 'supabase_session' }),
+    conversation('visitor-1', {
+      identity_type: 'visitor',
+      visitor_id: 'visitor-11111111',
+      identity_source: 'visitor_local_storage',
+    }),
+    conversation('unknown-1'),
+  ];
+
+  it('keeps owner and unknown out of visitor-filtered conversations', () => {
+    const snapshot = buildPierrotSnapshot({
+      conversations,
+      messages: [],
+      events: [],
+      subscriptionEvents: [],
+      leads: [],
+      period,
+      filters: { ...period, identity: 'visitor' },
+    });
+
+    expect(snapshot.overview.conversationsStarted).toBe(1);
+    expect(snapshot.conversations.map((item) => item.id)).toEqual(['visitor-1']);
+    expect(snapshot.identity).toMatchObject({
+      ownerConversations: 1,
+      visitorConversations: 1,
+      unknownConversations: 1,
+      uniqueVisitors: 1,
+      ownerTestsExcluded: 1,
+    });
+  });
+
+  it('keeps the identity breakdown independent of the selected filter', () => {
+    const snapshot = buildPierrotSnapshot({
+      conversations,
+      messages: [],
+      events: [],
+      subscriptionEvents: [],
+      leads: [],
+      period,
+      filters: { ...period, identity: 'unknown' },
+    });
+
+    expect(snapshot.overview.conversationsStarted).toBe(1);
+    expect(snapshot.conversations.map((item) => item.id)).toEqual(['unknown-1']);
+    expect(snapshot.identity.visitorConversations).toBe(1);
+    expect(snapshot.identity.unknownConversations).toBe(1);
+  });
+});

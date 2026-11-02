@@ -1,5 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
+import {
+  loadPriorVisitorIds,
+  summarizePierrotIdentity,
+  type PierrotIdentityMetrics,
+} from '@/lib/analytics/pierrotIdentity';
+import {
+  isMissingIdentityColumn,
+  normalizeStoredIdentityType,
+  type PierrotIdentityType,
+} from '@/lib/pierrot/identity';
 
 export type PierrotProduct =
   'heart_angel_postcard' | 'journal_flow' | 'art_engine' | 'unframed' | 'advising';
@@ -14,6 +24,7 @@ export type AnalyticsFilters = {
   product?: string;
   outcome?: string;
   error?: boolean;
+  identity?: PierrotIdentityType | 'all';
   q?: string;
   limit?: number;
 };
@@ -24,9 +35,15 @@ export type ConversationRow = {
   status: string;
   language: string;
   start_page: string;
+  referrer?: string | null;
   started_at: string;
   updated_at?: string | null;
   ended_at?: string | null;
+  identity_type?: string | null;
+  visitor_id?: string | null;
+  user_id?: string | null;
+  identity_source?: string | null;
+  identity_verified_at?: string | null;
 };
 
 export type MessageRow = {
@@ -82,6 +99,8 @@ export type ConversationSummary = {
   language: string;
   status: string;
   startPage: string;
+  identityType: PierrotIdentityType;
+  identitySource: string | null;
   latestIntent: string | null;
   products: string[];
   outcomes: ConversationOutcome[];
@@ -142,6 +161,7 @@ export type Recommendation = {
 export type PierrotSnapshot = {
   period: { from: string; to: string };
   filters: AnalyticsFilters;
+  identity: PierrotIdentityMetrics;
   overview: {
     conversationsStarted: number;
     conversationsWithReplies: number;
@@ -245,6 +265,9 @@ export function parseAnalyticsFilters(
     intent: value('intent') || undefined,
     product: value('product') || undefined,
     outcome: value('outcome') || undefined,
+    identity: ['owner', 'visitor', 'unknown'].includes(String(value('identity')))
+      ? (String(value('identity')) as PierrotIdentityType)
+      : 'all',
     error: value('error') === '1',
     q: value('q')?.trim().slice(0, 120) || undefined,
     limit: Number.isFinite(limitRaw) ? Math.min(200, Math.max(20, limitRaw)) : 100,
@@ -349,6 +372,7 @@ type SnapshotInput = {
   leads: LeadRow[];
   postcardOrders?: PostcardOrderRow[];
   subscriberStats?: SubscriberStats;
+  priorVisitorIds?: Set<string> | null;
   period: { from: string; to: string };
   filters: AnalyticsFilters;
 };
@@ -366,9 +390,12 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
     leads,
     postcardOrders = [],
     subscriberStats = { total: 0, confirmed: 0, pending: 0, unsubscribed: 0 },
+    priorVisitorIds = null,
     period,
     filters,
   } = input;
+
+  const identity = summarizePierrotIdentity(conversations, priorVisitorIds);
 
   const messagesByConversation = new Map<string, MessageRow[]>();
   const eventsByConversation = new Map<string, EventRow[]>();
@@ -464,6 +491,8 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
       language: conversation.language,
       status: conversation.status,
       startPage: conversation.start_page,
+      identityType: normalizeStoredIdentityType(conversation.identity_type),
+      identitySource: conversation.identity_source ?? null,
       latestIntent,
       products: Array.from(products),
       outcomes: Array.from(outcomes),
@@ -481,6 +510,13 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
   const q = filters.q?.toLowerCase();
 
   const filtered = summaries.filter((summary) => {
+    if (
+      filters.identity &&
+      filters.identity !== 'all' &&
+      summary.identityType !== filters.identity
+    ) {
+      return false;
+    }
     if (filters.language && summary.language !== filters.language) return false;
     if (filters.intent && summary.latestIntent !== filters.intent) return false;
     if (filters.product) {
@@ -1137,6 +1173,7 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
   return {
     period,
     filters,
+    identity,
     overview: {
       conversationsStarted: filtered.length,
       conversationsWithReplies: filtered.filter((summary) => summary.hasReply).length,
@@ -1200,72 +1237,99 @@ async function fetchAll<T>(
   return rows;
 }
 
+async function fetchConversationRows(
+  store: SupabaseClient,
+  filters: AnalyticsFilters
+): Promise<ConversationRow[]> {
+  try {
+    return await fetchAll<ConversationRow>(
+      store,
+      'pierrot_conversations',
+      'id, session_id, status, language, start_page, referrer, started_at, updated_at, ended_at, identity_type, visitor_id, user_id, identity_source, identity_verified_at',
+      (q) =>
+        q
+          .gte('started_at', filters.from)
+          .lte('started_at', filters.to)
+          .order('started_at', { ascending: false })
+    );
+  } catch (error) {
+    if (!isMissingIdentityColumn(error)) throw error;
+
+    const legacy = await fetchAll<ConversationRow>(
+      store,
+      'pierrot_conversations',
+      'id, session_id, status, language, start_page, referrer, started_at, updated_at, ended_at',
+      (q) =>
+        q
+          .gte('started_at', filters.from)
+          .lte('started_at', filters.to)
+          .order('started_at', { ascending: false })
+    );
+
+    return legacy.map((row) => ({ ...row, identity_type: 'unknown' }));
+  }
+}
+
 export async function loadPierrotDashboard(filters: AnalyticsFilters): Promise<PierrotSnapshot> {
   const store = getServerSupabaseClient({ useServiceRole: true });
 
-  const [conversations, messages, events, subscriptionEvents, leads, postcardOrders] =
-    await Promise.all([
-      fetchAll<ConversationRow>(
-        store,
-        'pierrot_conversations',
-        'id, session_id, status, language, start_page, started_at, updated_at, ended_at',
-        (q) =>
-          q
-            .gte('started_at', filters.from)
-            .lte('started_at', filters.to)
-            .order('started_at', { ascending: false })
-      ),
-      fetchAll<MessageRow>(
-        store,
-        'pierrot_messages',
-        'id, conversation_id, role, content, message_index, provider, created_at',
-        (q) =>
-          q
-            .gte('created_at', filters.from)
-            .lte('created_at', filters.to)
-            .order('created_at', { ascending: true })
-      ),
-      fetchAll<EventRow>(
-        store,
-        'pierrot_events',
-        'conversation_id, event_name, event_key, payload, created_at',
-        (q) =>
-          q
-            .gte('created_at', filters.from)
-            .lte('created_at', filters.to)
-            .order('created_at', { ascending: true })
-      ),
-      fetchAll<SubscriptionEventRow>(
-        store,
-        'subscription_events',
-        'event_name, event_key, subscriber_id, conversation_id, payload, created_at',
-        (q) =>
-          q
-            .gte('created_at', filters.from)
-            .lte('created_at', filters.to)
-            .order('created_at', { ascending: true })
-      ),
-      fetchAll<LeadRow>(
-        store,
-        'art_service_leads',
-        'id, conversation_id, status, need_type, stage, timeline, summary, created_at, submitted_at',
-        (q) =>
-          q
-            .gte('created_at', filters.from)
-            .lte('created_at', filters.to)
-            .order('created_at', { ascending: true })
-      ),
-      fetchAll<PostcardOrderRow>(
-        store,
-        'postcard_orders',
-        'id, status, amount, createdAt, updatedAt',
-        (q) =>
-          q
-            .gte('createdAt', filters.from)
-            .lte('createdAt', filters.to)
-            .order('createdAt', { ascending: false })
-      ),
-    ]);
+  const [conversations, priorVisitorIds] = await Promise.all([
+    fetchConversationRows(store, filters),
+    loadPriorVisitorIds(store, filters.from),
+  ]);
+
+  const [messages, events, subscriptionEvents, leads, postcardOrders] = await Promise.all([
+    fetchAll<MessageRow>(
+      store,
+      'pierrot_messages',
+      'id, conversation_id, role, content, message_index, provider, created_at',
+      (q) =>
+        q
+          .gte('created_at', filters.from)
+          .lte('created_at', filters.to)
+          .order('created_at', { ascending: true })
+    ),
+    fetchAll<EventRow>(
+      store,
+      'pierrot_events',
+      'conversation_id, event_name, event_key, payload, created_at',
+      (q) =>
+        q
+          .gte('created_at', filters.from)
+          .lte('created_at', filters.to)
+          .order('created_at', { ascending: true })
+    ),
+    fetchAll<SubscriptionEventRow>(
+      store,
+      'subscription_events',
+      'event_name, event_key, subscriber_id, conversation_id, payload, created_at',
+      (q) =>
+        q
+          .gte('created_at', filters.from)
+          .lte('created_at', filters.to)
+          .order('created_at', { ascending: true })
+    ),
+    fetchAll<LeadRow>(
+      store,
+      'art_service_leads',
+      'id, conversation_id, status, need_type, stage, timeline, summary, created_at, submitted_at',
+      (q) =>
+        q
+          .gte('created_at', filters.from)
+          .lte('created_at', filters.to)
+          .order('created_at', { ascending: true })
+    ),
+    fetchAll<PostcardOrderRow>(
+      store,
+      'postcard_orders',
+      'id, status, amount, createdAt, updatedAt',
+      (q) =>
+        q
+          .gte('createdAt', filters.from)
+          .lte('createdAt', filters.to)
+          .order('createdAt', { ascending: false })
+    ),
+  ]);
 
   let subscriberStats: SubscriberStats = {
     total: 0,
@@ -1307,6 +1371,7 @@ export async function loadPierrotDashboard(filters: AnalyticsFilters): Promise<P
     leads,
     postcardOrders,
     subscriberStats,
+    priorVisitorIds,
     period: { from: filters.from, to: filters.to },
     filters,
   });
@@ -1325,13 +1390,33 @@ export async function loadConversationTranscript(
 ): Promise<ConversationTranscript | null> {
   const store = getServerSupabaseClient({ useServiceRole: true });
 
-  const { data: conversation, error } = await store
+  const identitySelect =
+    'id, status, language, start_page, referrer, started_at, updated_at, ended_at, identity_type, visitor_id, user_id, identity_source, identity_verified_at';
+  const legacySelect =
+    'id, status, language, start_page, referrer, started_at, updated_at, ended_at';
+
+  let conversation: Record<string, unknown> | null = null;
+  const first = await store
     .from('pierrot_conversations')
-    .select('id, status, language, start_page, started_at, updated_at, ended_at')
+    .select(identitySelect)
     .eq('id', conversationId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (first.error) {
+    if (!isMissingIdentityColumn(first.error)) throw first.error;
+
+    const fallback = await store
+      .from('pierrot_conversations')
+      .select(legacySelect)
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    if (fallback.error) throw fallback.error;
+    conversation = (fallback.data as Record<string, unknown> | null) ?? null;
+  } else {
+    conversation = (first.data as Record<string, unknown> | null) ?? null;
+  }
+
   if (!conversation) return null;
 
   const [messages, events, subscriptionEvents, lead] = await Promise.all([
