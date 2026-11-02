@@ -26,14 +26,10 @@ describe('Pierrot owner tool routing', () => {
 
   it('routes commercial performance questions to the commercial analyst', () => {
     expect(detectOwnerTool('Сколько мы заработали?')?.kind).toBe('commercial');
-    expect(detectOwnerTool('Сколько продаж пришло благодаря Пьеро?')?.kind).toBe(
-      'commercial'
-    );
+    expect(detectOwnerTool('Сколько продаж пришло благодаря Пьеро?')?.kind).toBe('commercial');
     expect(detectOwnerTool('Почему так мало?')?.kind).toBe('commercial');
     expect(detectOwnerTool('Сколько новых подписчиков Flow?')?.kind).toBe('commercial');
-    expect(detectOwnerTool('Сколько пожертвований получил Temple?')?.kind).toBe(
-      'commercial'
-    );
+    expect(detectOwnerTool('Сколько пожертвований получил Temple?')?.kind).toBe('commercial');
     expect(detectOwnerTool('Пьеро, как у нас дела?')?.kind).toBe('commercial');
     expect(detectOwnerTool('/commercial')?.kind).toBe('commercial');
   });
@@ -44,5 +40,11 @@ describe('Pierrot owner tool routing', () => {
     expect(detectOwnerTool('Что ты думаешь о мозге?')).toBeNull();
     expect(detectOwnerTool('How do I order a postcard?')).toBeNull();
     expect(detectOwnerTool('Сколько подписчиков?')?.kind).toBe('stats');
+  });
+
+  it('does not treat biography as a graph request', () => {
+    expect(detectOwnerTool('Расскажи мою биографию')).toBeNull();
+    expect(detectOwnerTool('What is my biography?')).toBeNull();
+    expect(detectOwnerTool('Покажи граф знаний')?.kind).toBe('graph');
   });
 });

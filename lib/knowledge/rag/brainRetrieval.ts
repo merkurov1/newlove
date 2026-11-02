@@ -60,6 +60,12 @@ export type BrainRetrievalRanking = {
   combinedScore: number;
 };
 
+export type BrainRetrievalTimings = {
+  embeddingMs: number;
+  searchMs: number;
+  rankingMs: number;
+};
+
 export type BrainRetrievalResult = RagRetrievalResult & {
   plan: BrainQueryPlan;
   method: 'hybrid_v2';
@@ -69,6 +75,7 @@ export type BrainRetrievalResult = RagRetrievalResult & {
   documentIds: string[];
   chunkIds: string[];
   ranking: BrainRetrievalRanking[];
+  timings?: BrainRetrievalTimings;
 };
 
 function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -108,7 +115,8 @@ function emptyResult(
   startedAt: number,
   outcome: RagRetrievalResult['outcome'],
   code?: RagUnavailableCode,
-  topSimilarity: number | null = null
+  topSimilarity: number | null = null,
+  timings?: BrainRetrievalTimings
 ): BrainRetrievalResult {
   const filters = resolveBrainSourceFilters(plan);
 
@@ -126,6 +134,7 @@ function emptyResult(
     documentIds: [],
     chunkIds: [],
     ranking: [],
+    ...(timings ? { timings } : {}),
   };
 }
 
@@ -251,6 +260,7 @@ export async function retrieveBrainEvidence(
   const timeoutMs = Math.max(1, Math.trunc(input.timeoutMs ?? BRAIN_RAG_TIMEOUT_MS));
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timings: BrainRetrievalTimings = { embeddingMs: 0, searchMs: 0, rankingMs: 0 };
   const filters = input.documentId
     ? {
         sourceClasses: [],
@@ -273,44 +283,66 @@ export async function retrieveBrainEvidence(
       return emptyResult(plan, startedAt, 'unavailable', 'embedding_dimension_mismatch');
     }
 
-    const vectors = await withAbort(
-      embeddingClient.embed([query], controller.signal),
-      controller.signal
-    );
+    const embeddingStartedAt = Date.now();
+    let vectors: number[][] = [];
+
+    try {
+      vectors = await withAbort(
+        embeddingClient.embed([query], controller.signal),
+        controller.signal
+      );
+    } finally {
+      timings.embeddingMs = Date.now() - embeddingStartedAt;
+    }
 
     if (!Array.isArray(vectors) || vectors.length !== 1) {
-      return emptyResult(plan, startedAt, 'unavailable', 'embedding_failed');
+      return emptyResult(plan, startedAt, 'unavailable', 'embedding_failed', null, timings);
     }
 
     const queryVector = vectors[0];
 
     if (!Array.isArray(queryVector) || queryVector.length !== dimensions) {
-      return emptyResult(plan, startedAt, 'unavailable', 'embedding_dimension_mismatch');
+      return emptyResult(
+        plan,
+        startedAt,
+        'unavailable',
+        'embedding_dimension_mismatch',
+        null,
+        timings
+      );
     }
 
-    const rows = await withAbort(
-      search({
-        queryEmbedding: queryVector,
-        modelId,
-        dimensions,
-        accessClass: input.scope,
-        documentId: input.documentId ?? null,
-        documentIds: input.documentId ? [input.documentId] : null,
-        topK,
-        matchCount: Math.max(BRAIN_RAG_CANDIDATE_LIMIT, topK),
-        minSimilarity: -1,
-        queryText: plan.lexicalQuery || plan.originalQuery,
-        sourceTypes: filters.sourceTypes,
-        sourceDomains: filters.sourceDomains,
-        authors: filters.authors,
-        languages: null,
-        publishedFrom: plan.publishedFrom,
-        publishedTo: plan.publishedTo,
-        signal: controller.signal,
-      }),
-      controller.signal
-    );
+    const searchStartedAt = Date.now();
+    let rows: Awaited<ReturnType<BrainSearch>> = [];
 
+    try {
+      rows = await withAbort(
+        search({
+          queryEmbedding: queryVector,
+          modelId,
+          dimensions,
+          accessClass: input.scope,
+          documentId: input.documentId ?? null,
+          documentIds: input.documentId ? [input.documentId] : null,
+          topK,
+          matchCount: Math.max(BRAIN_RAG_CANDIDATE_LIMIT, topK),
+          minSimilarity: -1,
+          queryText: plan.lexicalQuery || plan.originalQuery,
+          sourceTypes: filters.sourceTypes,
+          sourceDomains: filters.sourceDomains,
+          authors: filters.authors,
+          languages: null,
+          publishedFrom: plan.publishedFrom,
+          publishedTo: plan.publishedTo,
+          signal: controller.signal,
+        }),
+        controller.signal
+      );
+    } finally {
+      timings.searchMs = Date.now() - searchStartedAt;
+    }
+
+    const rankingStartedAt = Date.now();
     const scopedDocumentId = input.documentId ?? null;
     const ranked = rows
       .filter(
@@ -366,7 +398,8 @@ export async function retrieveBrainEvidence(
       );
 
     if (ranked.length === 0) {
-      return emptyResult(plan, startedAt, 'no_match');
+      timings.rankingMs = Date.now() - rankingStartedAt;
+      return emptyResult(plan, startedAt, 'no_match', undefined, null, timings);
     }
 
     const maxPerDocument =
@@ -408,9 +441,11 @@ export async function retrieveBrainEvidence(
         (candidate.row.lexical_score || 0) >= 0.15
     );
 
+    timings.rankingMs = Date.now() - rankingStartedAt;
+
     if (usable.length === 0) {
       return {
-        ...emptyResult(plan, startedAt, 'weak_match', undefined, topSimilarity),
+        ...emptyResult(plan, startedAt, 'weak_match', undefined, topSimilarity, timings),
         candidateCount: ranked.length,
       };
     }
@@ -433,6 +468,7 @@ export async function retrieveBrainEvidence(
       candidateCount: ranked.length,
       documentIds: Array.from(new Set(hits.map((hit) => hit.documentId))),
       chunkIds: hits.map((hit) => hit.chunkId),
+      timings,
       ranking: usable.slice(0, topK).map((candidate) => ({
         chunkId: candidate.row.chunk_id,
         documentId: candidate.row.document_id,
@@ -444,7 +480,7 @@ export async function retrieveBrainEvidence(
       })),
     };
   } catch (error) {
-    return emptyResult(plan, startedAt, 'unavailable', errorCode(error));
+    return emptyResult(plan, startedAt, 'unavailable', errorCode(error), null, timings);
   } finally {
     clearTimeout(timer);
   }

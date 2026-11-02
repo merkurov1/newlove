@@ -41,10 +41,7 @@ jest.mock('@/lib/knowledge/rag/pierrotContext', () => {
 });
 
 jest.mock('@/lib/knowledge/rag/mediaEvidence', () => {
-  const actual = jest.requireActual('@/lib/knowledge/rag/mediaEvidence') as Record<
-    string,
-    unknown
-  >;
+  const actual = jest.requireActual('@/lib/knowledge/rag/mediaEvidence') as Record<string, unknown>;
 
   return {
     ...actual,
@@ -54,6 +51,11 @@ jest.mock('@/lib/knowledge/rag/mediaEvidence', () => {
 
 jest.mock('@/lib/knowledge/web/exaSearch', () => ({
   searchWebEvidence: jest.fn(),
+}));
+
+jest.mock('@/lib/knowledge/rag/documentLookup', () => ({
+  findBrainDocumentByTitle: jest.fn(),
+  loadBrainDocumentChunks: jest.fn(),
 }));
 
 jest.mock('@/lib/rateLimit', () => ({
@@ -135,6 +137,20 @@ const mediaEvidence = require('@/lib/knowledge/rag/mediaEvidence') as {
     mock: { calls: unknown[][] };
     mockResolvedValue: (value: unknown) => void;
     mockResolvedValueOnce: (value: unknown) => void;
+  };
+};
+const documentLookup = jest.requireMock('@/lib/knowledge/rag/documentLookup') as {
+  findBrainDocumentByTitle: {
+    mock: { calls: unknown[][] };
+    mockResolvedValue: (value: unknown) => void;
+    mockResolvedValueOnce: (value: unknown) => void;
+    mockReset: () => void;
+  };
+  loadBrainDocumentChunks: {
+    mock: { calls: unknown[][] };
+    mockResolvedValue: (value: unknown) => void;
+    mockResolvedValueOnce: (value: unknown) => void;
+    mockReset: () => void;
   };
 };
 const webSearch = jest.requireMock('@/lib/knowledge/web/exaSearch') as {
@@ -240,6 +256,10 @@ beforeEach(() => {
     sources: [],
     latencyMs: 1,
   });
+  documentLookup.findBrainDocumentByTitle.mockReset();
+  documentLookup.findBrainDocumentByTitle.mockResolvedValue(null);
+  documentLookup.loadBrainDocumentChunks.mockReset();
+  documentLookup.loadBrainDocumentChunks.mockResolvedValue([]);
 
   mockCreate.mockReset();
   mockCreate.mockImplementation(async () => {
@@ -866,9 +886,7 @@ describe('Pierrot perspective and biography context', () => {
   }
 
   it('answers public identity questions in the third person and never exposes the owner profile', async () => {
-    const response = await POST(
-      makeRequest(validBody({ message: 'Who is Anton Merkurov?' }))
-    );
+    const response = await POST(makeRequest(validBody({ message: 'Who is Anton Merkurov?' })));
 
     expect(response.status).toBe(200);
 
@@ -883,9 +901,7 @@ describe('Pierrot perspective and biography context', () => {
   });
 
   it('keeps public project questions in the third person', async () => {
-    const response = await POST(
-      makeRequest(validBody({ message: 'Расскажи о проектах Антона' }))
-    );
+    const response = await POST(makeRequest(validBody({ message: 'Расскажи о проектах Антона' })));
 
     expect(response.status).toBe(200);
 
@@ -1206,7 +1222,8 @@ describe('Pierrot autonomous web search', () => {
         makeRequest(
           validBody({
             mode: 'unframed',
-            message: 'What is happening in the contemporary art market?',
+            message:
+              'What does UNFRAMED say about what is happening in the contemporary art market?',
           })
         )
       );
@@ -1368,9 +1385,7 @@ describe('Pierrot model provider failover', () => {
   it('uses Gemini first and preserves the system prompt and history', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce(geminiResponse('gemini reply'));
 
-    const result = await callPierrotModel('system prompt', [
-      { role: 'user', content: 'hello' },
-    ]);
+    const result = await callPierrotModel('system prompt', [{ role: 'user', content: 'hello' }]);
 
     expect(result).toMatchObject({
       reply: 'gemini reply',
@@ -1395,9 +1410,7 @@ describe('Pierrot model provider failover', () => {
       choices: [{ message: { content: 'deepseek reply' } }],
     });
 
-    const result = await callPierrotModel('system prompt', [
-      { role: 'user', content: 'hello' },
-    ]);
+    const result = await callPierrotModel('system prompt', [{ role: 'user', content: 'hello' }]);
 
     expect(result).toMatchObject({
       reply: 'deepseek reply',
@@ -1420,15 +1433,275 @@ describe('Pierrot model provider failover', () => {
       choices: [{ message: { content: 'deepseek first' } }],
     });
 
-    const first = await callPierrotModel('system prompt', [
-      { role: 'user', content: 'hello' },
-    ]);
+    const first = await callPierrotModel('system prompt', [{ role: 'user', content: 'hello' }]);
     expect(first.provider).toBe('deepseek');
 
     circuitBreaker.resetCircuitBreakerState();
-    const second = await callPierrotModel('system prompt', [
-      { role: 'user', content: 'hello' },
-    ]);
+    const second = await callPierrotModel('system prompt', [{ role: 'user', content: 'hello' }]);
     expect(second.provider).toBe('gemini');
+  });
+});
+
+describe('Pierrot intelligence regressions', () => {
+  function owner() {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: 'owner-1',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN', name: 'Anton Merkurov' },
+    });
+  }
+
+  function systemPrompt(): string {
+    const call = asMock(mockCreate).mock.calls[0][0] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+
+    return call.messages.find((message) => message.role === 'system')?.content || '';
+  }
+
+  function weeklyDocument() {
+    return {
+      id: 'doc_text_450a71a0b1d4a21295a3aaac6b7c9c76',
+      title: 'Anton Merkurov — Weekly Review',
+      sourceType: 'text',
+      publishedAt: null,
+      accessClass: 'owner',
+      chunkCount: 9,
+      match: 'partial',
+      score: 55,
+    };
+  }
+
+  function weeklyChunks() {
+    return [
+      {
+        chunkId: 'chk_weekly_1',
+        documentId: 'doc_text_450a71a0b1d4a21295a3aaac6b7c9c76',
+        documentTitle: 'Anton Merkurov — Weekly Review',
+        sourceType: 'text',
+        sourceClass: 'other',
+        sourceDomain: null,
+        author: null,
+        language: 'en',
+        publishedAt: null,
+        content: 'The week marked a transition from tools to infrastructure.',
+        heading: '1. General assessment',
+        sectionPath: [],
+        sectionIndex: 0,
+        lineStart: 1,
+        lineEnd: 2,
+        similarity: 0.99,
+        lexicalScore: 1,
+        combinedScore: 0.99,
+      },
+    ];
+  }
+
+  it('routs a named Weekly Review document to Brain, never to Commercial', async () => {
+    owner();
+    documentLookup.findBrainDocumentByTitle.mockResolvedValueOnce(weeklyDocument());
+    documentLookup.loadBrainDocumentChunks.mockResolvedValueOnce(weeklyChunks());
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Найди Weekly Review' }))
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      rag?: { outcome?: string; sources?: unknown[] };
+      owner_tool?: string;
+      sourceStatus?: { brain?: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(documentLookup.findBrainDocumentByTitle).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Weekly Review', scope: 'owner' })
+    );
+    expect(json.owner_tool).toBeUndefined();
+    expect(json.rag?.outcome).toBe('relevant_results');
+    expect(json.sourceStatus?.brain).toBe('success');
+    expect(json.reply).not.toContain('Attributed to Pierrot');
+    expect(json.reply).not.toContain('Period:');
+    expect(systemPrompt()).toContain('MOCKED_EVIDENCE_PROMPT');
+  });
+
+  it('reports a missing named document honestly instead of substituting statistics', async () => {
+    owner();
+    documentLookup.findBrainDocumentByTitle.mockResolvedValueOnce(null);
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Найди Weekly Review' }))
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      owner_tool?: string;
+      sourceStatus?: { brain?: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(json.owner_tool).toBeUndefined();
+    expect(json.reply).toContain('Weekly Review');
+    expect(json.reply).toMatch(/не найден|could not find/i);
+    expect(json.reply).not.toContain('Period:');
+    expect(json.sourceStatus?.brain).toBe('empty');
+  });
+
+  it('applies an explicit correction across messages without pinning Commercial', async () => {
+    owner();
+    documentLookup.findBrainDocumentByTitle.mockResolvedValue(weeklyDocument());
+    documentLookup.loadBrainDocumentChunks.mockResolvedValue(weeklyChunks());
+
+    const first = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Найди Weekly Review' }))
+    );
+    expect(first.status).toBe(200);
+
+    owner();
+    const second = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Я имею в виду документ в Brain, а не коммерческую статистику',
+          history: [{ role: 'user', content: 'Найди Weekly Review' }],
+        })
+      )
+    );
+    const json = (await second.json()) as {
+      reply?: string;
+      owner_tool?: string;
+      rag?: { outcome?: string };
+    };
+
+    expect(second.status).toBe(200);
+    expect(json.owner_tool).toBeUndefined();
+    expect(json.rag?.outcome).toBe('relevant_results');
+    expect(json.reply).not.toContain('Attributed to Pierrot');
+    expect(documentLookup.findBrainDocumentByTitle).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses biography retrieval without Graph Stats or invented characteristics', async () => {
+    owner();
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Расскажи мою биографию' }))
+    );
+    const json = (await response.json()) as {
+      rag?: { outcome?: string };
+      sourceStatus?: { brain?: string };
+      owner_tool?: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(json.owner_tool).toBeUndefined();
+    expect(json.rag?.outcome).toBe('no_match');
+    expect(json.sourceStatus?.brain).toBe('empty');
+    expect(systemPrompt()).toContain('IDENTITY QUESTION GUIDANCE');
+    expect(systemPrompt()).not.toContain('Knowledge Graph status');
+  });
+
+  it('does not claim media results when web is unavailable and media is empty', async () => {
+    owner();
+    mediaEvidence.retrieveMediaEvidence.mockResolvedValueOnce({
+      outcome: 'no_match',
+      hits: [],
+    });
+    webSearch.searchWebEvidence.mockResolvedValueOnce({
+      outcome: 'unavailable',
+      query: 'СМИ',
+      sources: [],
+      latencyMs: 5,
+      code: 'missing_api_key',
+    });
+    mockCreate.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content:
+              'Вот публикации: Le Monde и Telegram-канал @fake. Ссылка: https://fake.example/story',
+          },
+        },
+      ],
+    });
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Найди СМИ и каналы, которые цитировали меня за последний месяц',
+        })
+      )
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      sourceStatus?: { media?: string; web?: string };
+      web?: { outcome?: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.reply).not.toContain('fake.example');
+    expect(json.reply).not.toContain('Le Monde');
+    expect(json.reply).toContain('Внешний поиск');
+    expect(json.sourceStatus?.media).toBe('empty');
+    expect(json.sourceStatus?.web).toBe('unavailable');
+    expect(json.web?.outcome).toBe('unavailable');
+  });
+
+  it('marks a Brain timeout and discloses the limitation', async () => {
+    owner();
+    retrieval.retrieveUnframedEvidence.mockResolvedValueOnce({
+      outcome: 'unavailable',
+      hits: [],
+      latencyMs: 2500,
+      topSimilarity: null,
+      code: 'timeout',
+    });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Как у меня дела за последнюю неделю?' }))
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      sourceStatus?: { brain?: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.sourceStatus?.brain).toBe('timeout');
+    expect(json.reply).toContain('Brain');
+  });
+
+  it('uses project context for an iOS question without Analytics', async () => {
+    owner();
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Как продвигается моё iOS-приложение?' }))
+    );
+    const json = (await response.json()) as {
+      owner_tool?: string;
+      sourceStatus?: { brain?: string; analytics?: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(json.owner_tool).toBeUndefined();
+    expect(json.sourceStatus?.brain).not.toBe('not_requested');
+    expect(json.sourceStatus?.analytics).toBeUndefined();
+    expect(retrieval.retrieveUnframedEvidence).toHaveBeenCalled();
+  });
+
+  it('answers a general factual question without personal Brain context', async () => {
+    owner();
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Кто такой Махатма Ганди?' }))
+    );
+    const json = (await response.json()) as {
+      sourceStatus?: { brain?: string };
+      owner_tool?: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(retrieval.retrieveUnframedEvidence).not.toHaveBeenCalled();
+    expect(json.owner_tool).toBeUndefined();
+    expect(json.sourceStatus?.brain).toBe('not_requested');
   });
 });

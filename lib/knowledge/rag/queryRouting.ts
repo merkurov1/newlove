@@ -256,6 +256,63 @@ function parseTimeRange(text: string): {
     return { ...range, wantsRecent: false, signal: `year:${yearMatch[1]}` };
   }
 
+  if (hasAny(text, ['сегодня', 'today'])) {
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    return {
+      from: start.toISOString(),
+      to: now.toISOString(),
+      wantsRecent: true,
+      signal: 'today',
+    };
+  }
+
+  if (
+    hasAny(text, [
+      'на этой неделе',
+      'за эту неделю',
+      'эта неделя',
+      'за последнюю неделю',
+      'последнюю неделю',
+      'this week',
+      'past week',
+      'last 7 days',
+      'последние 7 дней',
+    ])
+  ) {
+    return {
+      from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+      to: now.toISOString(),
+      wantsRecent: true,
+      signal: 'this_week',
+    };
+  }
+
+  if (hasAny(text, ['прошлую неделю', 'за прошлую неделю', 'previous week', 'last week'])) {
+    return {
+      from: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+      to: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+      wantsRecent: false,
+      signal: 'previous_week',
+    };
+  }
+
+  if (
+    hasAny(text, [
+      'за последний месяц',
+      'последний месяц',
+      'последние 30 дней',
+      'last 30 days',
+      'past month',
+    ])
+  ) {
+    return {
+      from: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      to: now.toISOString(),
+      wantsRecent: true,
+      signal: 'last_30_days',
+    };
+  }
+
   if (hasAny(text, ['last year', 'в прошлом году', 'прошлый год'])) {
     const range = yearRange(now.getUTCFullYear() - 1);
     return { ...range, wantsRecent: false, signal: 'last_year' };

@@ -57,7 +57,12 @@ import {
   isPierrotRagEnabled,
   isPublicPierrotRagEnabled,
 } from '@/lib/knowledge/rag/config';
-import { buildBrainQueryPlan } from '@/lib/knowledge/rag/queryRouting';
+import { buildBrainQueryPlan, classifyBrainDocument } from '@/lib/knowledge/rag/queryRouting';
+import {
+  findBrainDocumentByTitle,
+  loadBrainDocumentChunks,
+  type BrainDocumentMatch,
+} from '@/lib/knowledge/rag/documentLookup';
 import {
   buildPublicBrainEvidencePrompt,
   buildUnframedEvidencePrompt,
@@ -68,13 +73,15 @@ import {
   buildUnframedEvidenceSources,
   type UnframedEvidenceSource,
 } from '@/lib/knowledge/rag/evidence';
-import type { RagRetrievalOutcome } from '@/lib/knowledge/rag/types';
+import type { RagRetrievalOutcome, RetrievedChunk } from '@/lib/knowledge/rag/types';
+import type { BrainRetrievalResult } from '@/lib/knowledge/rag/brainRetrieval';
 import { decideWebSearch } from '@/lib/knowledge/web/searchDecision';
 import { searchWebEvidence } from '@/lib/knowledge/web/exaSearch';
 import {
   buildBrainWebSynthesisPrompt,
   buildPublicWebSources,
   buildWebEvidencePrompt,
+  buildWebStatusPrompt,
   composeReplyWithWebSources,
 } from '@/lib/knowledge/web/webContext';
 import {
@@ -82,7 +89,11 @@ import {
   type PierrotAnswerSources,
   type WebSearchResult,
 } from '@/lib/knowledge/web/types';
-import { isVerifiedOwnerCredential, isVerifiedOwnerUser, isVerifiedTelegramOwnerRequest } from '@/lib/knowledge/rag/authorization';
+import {
+  isVerifiedOwnerCredential,
+  isVerifiedOwnerUser,
+  isVerifiedTelegramOwnerRequest,
+} from '@/lib/knowledge/rag/authorization';
 import { isMediaArchiveQuery } from '@/lib/pierrot/mediaIntent';
 import {
   retrieveMediaEvidence,
@@ -128,6 +139,12 @@ import {
   savePendingUrlCandidate,
 } from '@/lib/pierrot/urlIntake';
 import { detectOwnerTool, runOwnerTool } from '@/lib/pierrot/ownerTools';
+import { understandPierrotQuery, type PierrotQueryPlan } from '@/lib/pierrot/queryUnderstanding';
+import {
+  buildSourceStatuses,
+  guardAnswerEvidence,
+  type EvidenceSourceStatuses,
+} from '@/lib/pierrot/evidence';
 import {
   buildPierrotIdentityGuidance,
   buildPierrotOwnerProfileContext,
@@ -396,6 +413,10 @@ export async function POST(req: Request) {
       }
     }
 
+    const queryPlan: PierrotQueryPlan = understandPierrotQuery(trimmedMessage, {
+      history: normalizedHistory,
+    });
+
     const openAiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
       normalizedHistory.map((h) => ({
         role: h.role === 'assistant' ? 'assistant' : 'user',
@@ -592,9 +613,7 @@ export async function POST(req: Request) {
 
     const perspective = ownerMode ? 'personal' : 'public';
     const ownerProfileContext =
-      perspective === 'personal'
-        ? buildPierrotOwnerProfileContext(ownerProfile)
-        : null;
+      perspective === 'personal' ? buildPierrotOwnerProfileContext(ownerProfile) : null;
     const identityGuidance = buildPierrotIdentityGuidance(
       perspective,
       trimmedMessage,
@@ -904,6 +923,13 @@ export async function POST(req: Request) {
       }
     }
 
+    // Exact document state is kept outside the owner-tool block because the
+    // model still has to read the found chunks later in the generation branch.
+    let documentLookup: BrainDocumentMatch | null = null;
+    let documentChunks: RetrievedChunk[] = [];
+    let documentLookupStatus:
+      'not_requested' | 'found' | 'found_empty' | 'not_found' | 'unavailable' = 'not_requested';
+
     // Owner-only deterministic tools. These use the same server-side loaders as
     // the existing admin pages and never expose another UI or chat.
     if (ownerMode && ragOwnerAuthorized) {
@@ -953,6 +979,7 @@ export async function POST(req: Request) {
           assistantMessageId,
           recorded: canStoreTranscript,
           ...extra,
+          ...(extra.source_status ? { sourceStatus: extra.source_status } : {}),
         });
       };
 
@@ -1094,7 +1121,104 @@ export async function POST(req: Request) {
         }
       }
 
-      const ownerTool = detectOwnerTool(trimmedMessage);
+      // A named document is a metadata lookup, not a commercial/status tool.
+      // It is resolved before detectOwnerTool so "Weekly Review" can never be
+      // swallowed by the commercial analyst.
+      if (queryPlan.intent === 'document_lookup') {
+        const requestedTitle = queryPlan.documentTitle;
+
+        if (!requestedTitle) {
+          documentLookupStatus = 'not_found';
+
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Уточните точное название документа — я найду его в Brain по названию и метаданным.'
+              : 'Give me the exact document title and I will look it up in Brain by title and metadata.',
+            {
+              brain_document_lookup: 'title_missing',
+              source_status: {
+                brain: 'empty',
+                media: 'not_requested',
+                web: 'not_requested',
+              },
+            }
+          );
+        }
+
+        try {
+          const found = await findBrainDocumentByTitle({
+            title: requestedTitle,
+            scope: 'owner',
+          });
+
+          if (!found) {
+            documentLookupStatus = 'not_found';
+
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? `Документ «${requestedTitle}» в Brain пока не найден. Я не буду подменять его коммерческой статистикой или другим источником.`
+                : `I could not find “${requestedTitle}” in Brain yet. I will not substitute commercial statistics or another source.`,
+              {
+                brain_document_lookup: 'not_found',
+                document_title_requested: requestedTitle,
+                source_status: {
+                  brain: 'empty',
+                  media: 'not_requested',
+                  web: 'not_requested',
+                },
+              }
+            );
+          }
+
+          documentLookup = found;
+          documentLookupStatus = 'found';
+          documentChunks = await loadBrainDocumentChunks({
+            document: found,
+            scope: 'owner',
+          });
+
+          if (documentChunks.length === 0) {
+            documentLookupStatus = 'found_empty';
+
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? `Документ «${found.title}» найден, но его текст ещё не извлечён. Пока я не могу его пересказать.`
+                : `The document “${found.title}” exists, but its text has not been extracted yet. I cannot summarise it honestly.`,
+              {
+                brain_document_lookup: 'found_empty',
+                document_title_requested: requestedTitle,
+                document_title_matched: found.title,
+                document_match_type: found.match,
+                brain_document_id: found.id,
+                source_status: {
+                  brain: 'empty',
+                  media: 'not_requested',
+                  web: 'not_requested',
+                },
+              }
+            );
+          }
+        } catch {
+          documentLookupStatus = 'unavailable';
+
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? `Brain сейчас недоступен, поэтому документ «${requestedTitle}» не удалось проверить. Я не буду отвечать вместо него другим источником.`
+              : `Brain is currently unavailable, so I could not verify “${requestedTitle}”. I will not answer with a different source instead.`,
+            {
+              brain_document_lookup: 'unavailable',
+              document_title_requested: requestedTitle,
+              source_status: {
+                brain: 'unavailable',
+                media: 'not_requested',
+                web: 'not_requested',
+              },
+            }
+          );
+        }
+      }
+
+      const ownerTool = detectOwnerTool(trimmedMessage, { queryPlan });
 
       if (ownerTool) {
         const text = await runOwnerTool(ownerTool, ownerLanguage);
@@ -1113,8 +1237,22 @@ export async function POST(req: Request) {
     const webDecision = useModel
       ? decideWebSearch({ message: trimmedMessage, history: normalizedHistory })
       : null;
-    const webSearchPromise: Promise<WebSearchResult | null> = webDecision?.shouldSearch
-      ? searchWebEvidence({ query: webDecision.query }).catch(() => null)
+    const webSuppressedIntent =
+      queryPlan.intent === 'document_lookup' ||
+      queryPlan.intent === 'biography' ||
+      queryPlan.intent === 'commercial' ||
+      queryPlan.intent === 'analytics' ||
+      queryPlan.intent === 'knowledge_graph';
+    const webRequested = Boolean(
+      useModel &&
+      webDecision &&
+      !webSuppressedIntent &&
+      (queryPlan.sources.web || webDecision.shouldSearch)
+    );
+    const webSearchPromise: Promise<WebSearchResult | null> = webRequested
+      ? searchWebEvidence({
+          query: webDecision?.shouldSearch ? webDecision.query : trimmedMessage,
+        }).catch(() => null)
       : Promise.resolve(null);
 
     let reply = '';
@@ -1123,13 +1261,13 @@ export async function POST(req: Request) {
     let generationLatencyMs = 0;
     let fallbackUsed = false;
     let ownerRag: OwnerRagResponse | null = null;
-    let retrievalTrace: Omit<
-      PierrotRetrievalTraceInput,
-      'usedContext' | 'generationOk'
-    > | null = null;
+    let retrievalTrace: Omit<PierrotRetrievalTraceInput, 'usedContext' | 'generationOk'> | null =
+      null;
     let usedRagContext = false;
     let usedWebContext = false;
     let webSearchResult: WebSearchResult | null = null;
+    let mediaOutcome: { outcome: string; code?: string | null } | null = null;
+    let brainOutcome: { outcome: string; code?: string | null } | null = null;
 
     if (!useModel) {
       reply = plan.reply || 'Silence.';
@@ -1181,7 +1319,10 @@ export async function POST(req: Request) {
         let generationSystemPrompt = systemPrompt;
         const brainPlan = buildBrainQueryPlan(trimmedMessage);
         const requestsManuscript = brainPlan.requestedSources.includes('manuscript');
-        const useMediaBranch = isMediaArchiveQuery(trimmedMessage) && !requestsManuscript;
+        const useMediaBranch =
+          queryPlan.intent !== 'document_lookup' &&
+          (queryPlan.intent === 'media_mentions' || isMediaArchiveQuery(trimmedMessage)) &&
+          !requestsManuscript;
 
         // Media coverage is available to both the owner and public visitors.
         // Public retrieval is metadata/verified-quote only; semantic media
@@ -1196,6 +1337,7 @@ export async function POST(req: Request) {
                 query: trimmedMessage,
                 limit: 8,
                 ownerAccess: ownerMode,
+                publishedFrom: queryPlan.period?.from ?? null,
               }),
               RETRIEVAL_TIMEOUT_MS
             );
@@ -1204,6 +1346,11 @@ export async function POST(req: Request) {
           }
 
           if (!mediaRetrieval) {
+            const mediaElapsed = Date.now() - mediaStartedAt;
+            mediaOutcome = {
+              outcome: 'unavailable',
+              code: mediaElapsed >= RETRIEVAL_TIMEOUT_MS - 100 ? 'timeout' : 'retrieval_error',
+            };
             retrievalTrace = {
               conversationId,
               sessionId,
@@ -1235,6 +1382,7 @@ export async function POST(req: Request) {
 
             console.warn('[Pierrot Media Intelligence] retrieval timed out');
           } else {
+            mediaOutcome = { outcome: mediaRetrieval.outcome, code: mediaRetrieval.code ?? null };
             retrievalTrace = {
               conversationId,
               sessionId,
@@ -1243,9 +1391,7 @@ export async function POST(req: Request) {
               outcome: mediaRetrieval.outcome,
               code: mediaRetrieval.code ?? null,
               selectedSources: ['media_coverage'],
-              documentIds: Array.from(
-                new Set(mediaRetrieval.hits.map((hit) => hit.documentId))
-              ),
+              documentIds: Array.from(new Set(mediaRetrieval.hits.map((hit) => hit.documentId))),
               chunkIds: mediaRetrieval.hits.map((hit) => hit.chunkId),
               latencyMs: Date.now() - mediaStartedAt,
               candidateCount: mediaRetrieval.hits.length,
@@ -1263,8 +1409,7 @@ export async function POST(req: Request) {
 
             const ragPrompt = buildMediaEvidencePrompt(mediaRetrieval);
             usedRagContext =
-              mediaRetrieval.outcome === 'relevant_results' &&
-              mediaRetrieval.hits.length > 0;
+              mediaRetrieval.outcome === 'relevant_results' && mediaRetrieval.hits.length > 0;
 
             if (ragPrompt) {
               generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
@@ -1292,6 +1437,7 @@ export async function POST(req: Request) {
               { enabled: true }
             );
 
+            brainOutcome = { outcome: retrieval.status };
             retrievalTrace = {
               conversationId,
               sessionId,
@@ -1344,6 +1490,7 @@ export async function POST(req: Request) {
               };
             }
           } catch {
+            brainOutcome = { outcome: 'unavailable', code: 'unexpected_retrieval_error' };
             retrievalTrace = {
               conversationId,
               sessionId,
@@ -1363,10 +1510,91 @@ export async function POST(req: Request) {
           }
         }
 
-        if (!useMediaBranch && ownerMode) {
+        if (!useMediaBranch && documentLookup && documentChunks.length > 0) {
+          const documentStartedAt = Date.now();
+          const documentPlan = {
+            ...brainPlan,
+            publishedFrom: null,
+            publishedTo: null,
+            specificDocument: true,
+          };
+          const documentResult: BrainRetrievalResult = {
+            outcome: 'relevant_results',
+            hits: documentChunks,
+            latencyMs: Date.now() - documentStartedAt,
+            topSimilarity: 0.99,
+            plan: documentPlan,
+            method: 'hybrid_v2',
+            selectedSourceClasses: Array.from(
+              new Set(
+                documentChunks
+                  .map((hit) => hit.sourceClass)
+                  .filter((value): value is NonNullable<typeof value> => Boolean(value))
+              )
+            ) as BrainRetrievalResult['selectedSourceClasses'],
+            selectedSourceDomains: [],
+            candidateCount: documentChunks.length,
+            documentIds: [documentLookup.id],
+            chunkIds: documentChunks.map((hit) => hit.chunkId),
+            ranking: documentChunks.map((hit) => ({
+              chunkId: hit.chunkId,
+              documentId: hit.documentId,
+              documentTitle: hit.documentTitle || documentLookup.title,
+              sourceClass:
+                (hit.sourceClass as BrainRetrievalResult['selectedSourceClasses'][number]) ||
+                'other',
+              similarity: hit.similarity,
+              lexicalScore: hit.lexicalScore || 0,
+              combinedScore: hit.combinedScore || hit.similarity,
+            })),
+            timings: { embeddingMs: 0, searchMs: 0, rankingMs: 0 },
+          };
+
+          brainOutcome = { outcome: 'relevant_results' };
+          retrievalTrace = {
+            conversationId,
+            sessionId,
+            userMessageId,
+            mode: 'brain_document',
+            outcome: 'relevant_results',
+            code: null,
+            selectedSources: documentResult.selectedSourceClasses,
+            documentIds: documentResult.documentIds,
+            chunkIds: documentResult.chunkIds,
+            latencyMs: documentResult.latencyMs,
+            candidateCount: documentChunks.length,
+            topSimilarity: 0.99,
+            refined: false,
+            attempts: 1,
+            timings: documentResult.timings,
+            documentTitleRequested: queryPlan.documentTitle,
+            documentTitleMatched: documentLookup.title,
+            documentMatchType: documentLookup.match,
+          };
+          ownerRag = {
+            mode: 'unframed',
+            outcome: 'relevant_results',
+            sources: buildUnframedEvidenceSources(documentResult),
+          };
+
+          const ragPrompt = buildUnframedEvidencePrompt(documentResult);
+          usedRagContext = Boolean(ragPrompt);
+
+          if (ragPrompt) {
+            generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+          }
+
+          console.info('[Pierrot Brain document]', {
+            status: 'relevant_results',
+            match: documentLookup.match,
+            chunks: documentChunks.length,
+            document_id: documentLookup.id,
+          });
+        } else if (!useMediaBranch && ownerMode && queryPlan.sources.brain) {
           const ragEnabled = isPierrotRagEnabled();
 
           if (!ragEnabled) {
+            brainOutcome = { outcome: 'unavailable', code: 'feature_flag_disabled' };
             ownerRag = {
               mode: 'unframed',
               outcome: 'unavailable',
@@ -1396,163 +1624,164 @@ export async function POST(req: Request) {
 
             console.info('[Pierrot RAG] disabled by PIERROT_RAG_ENABLED');
           } else {
-          try {
-            const useBrainV2 = isBrainRetrievalV2Enabled();
+            try {
+              const useBrainV2 = isBrainRetrievalV2Enabled();
 
-            if (useBrainV2) {
-              const retrieval = await retrieveBrainEvidenceWithRefinement({
-                query: trimmedMessage,
-                plan: brainPlan,
-                topK: 8,
-                maxAttempts: 3,
-                retrieve: (attempt) =>
-                  retrieveBrainEvidence({
-                    query: attempt.query,
-                    scope: 'owner',
-                    ownerAuthorized: true,
-                    plan: attempt.plan,
-                    topK: attempt.topK,
-                  }),
-              });
+              if (useBrainV2) {
+                const retrieval = await retrieveBrainEvidenceWithRefinement({
+                  query: trimmedMessage,
+                  plan: brainPlan,
+                  topK: 8,
+                  maxAttempts: 3,
+                  retrieve: (attempt) =>
+                    retrieveBrainEvidence({
+                      query: attempt.query,
+                      scope: 'owner',
+                      ownerAuthorized: true,
+                      plan: attempt.plan,
+                      topK: attempt.topK,
+                    }),
+                });
 
+                brainOutcome = { outcome: retrieval.outcome, code: retrieval.code ?? null };
+                retrievalTrace = {
+                  conversationId,
+                  sessionId,
+                  userMessageId,
+                  mode: 'brain_v2',
+                  outcome: retrieval.outcome,
+                  code: retrieval.code ?? null,
+                  selectedSources: retrieval.selectedSourceClasses,
+                  documentIds: retrieval.documentIds,
+                  chunkIds: retrieval.chunkIds,
+                  latencyMs: retrieval.latencyMs,
+                  candidateCount: retrieval.candidateCount,
+                  topSimilarity: retrieval.topSimilarity,
+                  refined: retrieval.refined,
+                  attempts: retrieval.attempts,
+                  timings: retrieval.timings ?? null,
+                };
+
+                ownerRag = {
+                  mode: 'unframed',
+                  outcome: retrieval.outcome,
+                  sources:
+                    retrieval.outcome === 'relevant_results'
+                      ? buildUnframedEvidenceSources(retrieval)
+                      : [],
+                };
+
+                const ragPrompt =
+                  retrieval.outcome === 'relevant_results'
+                    ? buildUnframedEvidencePrompt(retrieval)
+                    : buildUnframedUnavailablePrompt(retrieval.outcome);
+
+                usedRagContext = retrieval.outcome === 'relevant_results' && Boolean(ragPrompt);
+
+                if (ragPrompt) {
+                  generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+                }
+
+                console.info('[Pierrot RAG v2]', {
+                  status: retrieval.outcome,
+                  intent: retrieval.plan.intent,
+                  selected_sources: retrieval.selectedSourceClasses,
+                  chunks: retrieval.hits.length,
+                  documents: retrieval.documentIds.length,
+                  latency_ms: retrieval.latencyMs,
+                  code: retrieval.code ?? null,
+                });
+              } else {
+                const retrieval = await retrieveUnframedEvidence({
+                  query: trimmedMessage,
+                  scope: 'owner',
+                  ownerAuthorized: true,
+                });
+
+                brainOutcome = { outcome: retrieval.outcome, code: retrieval.code ?? null };
+                retrievalTrace = {
+                  conversationId,
+                  sessionId,
+                  userMessageId,
+                  mode: 'brain_v1',
+                  outcome: retrieval.outcome,
+                  code: retrieval.code ?? null,
+                  selectedSources: Array.from(
+                    new Set(
+                      retrieval.hits
+                        .map((hit) => hit.sourceClass)
+                        .filter((value): value is string => Boolean(value))
+                    )
+                  ),
+                  documentIds: Array.from(new Set(retrieval.hits.map((hit) => hit.documentId))),
+                  chunkIds: retrieval.hits.map((hit) => hit.chunkId),
+                  latencyMs: retrieval.latencyMs,
+                  candidateCount: retrieval.hits.length,
+                  topSimilarity: retrieval.topSimilarity,
+                  refined: false,
+                  attempts: 1,
+                  timings: null,
+                };
+
+                ownerRag = {
+                  mode: 'unframed',
+                  outcome: retrieval.outcome,
+                  sources:
+                    retrieval.outcome === 'relevant_results'
+                      ? buildUnframedEvidenceSources(retrieval)
+                      : [],
+                };
+
+                const ragPrompt =
+                  retrieval.outcome === 'relevant_results'
+                    ? buildUnframedEvidencePrompt(retrieval)
+                    : buildUnframedUnavailablePrompt(retrieval.outcome);
+
+                usedRagContext = retrieval.outcome === 'relevant_results' && Boolean(ragPrompt);
+
+                if (ragPrompt) {
+                  generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+                }
+
+                console.info('[Pierrot RAG v1]', {
+                  status: retrieval.outcome,
+                  scope: 'owner',
+                  chunks: retrieval.hits.length,
+                  latency_ms: retrieval.latencyMs,
+                  code: retrieval.code ?? null,
+                });
+              }
+            } catch {
+              brainOutcome = { outcome: 'unavailable', code: 'unexpected_retrieval_error' };
               retrievalTrace = {
                 conversationId,
                 sessionId,
                 userMessageId,
                 mode: 'brain_v2',
-                outcome: retrieval.outcome,
-                code: retrieval.code ?? null,
-                selectedSources: retrieval.selectedSourceClasses,
-                documentIds: retrieval.documentIds,
-                chunkIds: retrieval.chunkIds,
-                latencyMs: retrieval.latencyMs,
-                candidateCount: retrieval.candidateCount,
-                topSimilarity: retrieval.topSimilarity,
-                refined: retrieval.refined,
-                attempts: retrieval.attempts,
-              };
-
-              ownerRag = {
-                mode: 'unframed',
-                outcome: retrieval.outcome,
-                sources:
-                  retrieval.outcome === 'relevant_results'
-                    ? buildUnframedEvidenceSources(retrieval)
-                    : [],
-              };
-
-              const ragPrompt =
-                retrieval.outcome === 'relevant_results'
-                  ? buildUnframedEvidencePrompt(retrieval)
-                  : buildUnframedUnavailablePrompt(retrieval.outcome);
-
-              usedRagContext =
-                retrieval.outcome === 'relevant_results' && Boolean(ragPrompt);
-
-              if (ragPrompt) {
-                generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
-              }
-
-              console.info('[Pierrot RAG v2]', {
-                status: retrieval.outcome,
-                intent: retrieval.plan.intent,
-                selected_sources: retrieval.selectedSourceClasses,
-                chunks: retrieval.hits.length,
-                documents: retrieval.documentIds.length,
-                latency_ms: retrieval.latencyMs,
-                code: retrieval.code ?? null,
-              });
-            } else {
-              const retrieval = await retrieveUnframedEvidence({
-                query: trimmedMessage,
-                scope: 'owner',
-                ownerAuthorized: true,
-              });
-
-              retrievalTrace = {
-                conversationId,
-                sessionId,
-                userMessageId,
-                mode: 'brain_v1',
-                outcome: retrieval.outcome,
-                code: retrieval.code ?? null,
-                selectedSources: Array.from(
-                  new Set(
-                    retrieval.hits
-                      .map((hit) => hit.sourceClass)
-                      .filter((value): value is string => Boolean(value))
-                  )
-                ),
-                documentIds: Array.from(
-                  new Set(retrieval.hits.map((hit) => hit.documentId))
-                ),
-                chunkIds: retrieval.hits.map((hit) => hit.chunkId),
-                latencyMs: retrieval.latencyMs,
-                candidateCount: retrieval.hits.length,
-                topSimilarity: retrieval.topSimilarity,
+                outcome: 'unavailable',
+                code: 'unexpected_retrieval_error',
+                selectedSources: [],
+                documentIds: [],
+                chunkIds: [],
+                latencyMs: 0,
+                candidateCount: 0,
+                topSimilarity: null,
                 refined: false,
-                attempts: 1,
+                attempts: 0,
               };
-
               ownerRag = {
                 mode: 'unframed',
-                outcome: retrieval.outcome,
-                sources:
-                  retrieval.outcome === 'relevant_results'
-                    ? buildUnframedEvidenceSources(retrieval)
-                    : [],
+                outcome: 'unavailable',
+                sources: [],
               };
+              usedRagContext = false;
+              generationSystemPrompt = `${systemPrompt}\n\n${buildUnframedUnavailablePrompt(
+                'unavailable'
+              )}`;
 
-              const ragPrompt =
-                retrieval.outcome === 'relevant_results'
-                  ? buildUnframedEvidencePrompt(retrieval)
-                  : buildUnframedUnavailablePrompt(retrieval.outcome);
-
-              usedRagContext =
-                retrieval.outcome === 'relevant_results' && Boolean(ragPrompt);
-
-              if (ragPrompt) {
-                generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
-              }
-
-              console.info('[Pierrot RAG v1]', {
-                status: retrieval.outcome,
-                scope: 'owner',
-                chunks: retrieval.hits.length,
-                latency_ms: retrieval.latencyMs,
-                code: retrieval.code ?? null,
-              });
+              // Never log query text, passages or provider/database details.
+              console.warn('[Pierrot RAG] unavailable (unexpected)');
             }
-          } catch {
-            retrievalTrace = {
-              conversationId,
-              sessionId,
-              userMessageId,
-              mode: 'brain_v2',
-              outcome: 'unavailable',
-              code: 'unexpected_retrieval_error',
-              selectedSources: [],
-              documentIds: [],
-              chunkIds: [],
-              latencyMs: 0,
-              candidateCount: 0,
-              topSimilarity: null,
-              refined: false,
-              attempts: 0,
-            };
-            ownerRag = {
-              mode: 'unframed',
-              outcome: 'unavailable',
-              sources: [],
-            };
-            usedRagContext = false;
-            generationSystemPrompt = `${systemPrompt}\n\n${buildUnframedUnavailablePrompt(
-              'unavailable'
-            )}`;
-
-            // Never log query text, passages or provider/database details.
-            console.warn('[Pierrot RAG] unavailable (unexpected)');
-          }
           }
         }
 
@@ -1561,6 +1790,7 @@ export async function POST(req: Request) {
         webSearchResult = await webSearchPromise;
 
         const webPrompt = buildWebEvidencePrompt(webSearchResult);
+        const webStatusPrompt = webRequested ? buildWebStatusPrompt(webSearchResult) : null;
 
         if (webPrompt) {
           generationSystemPrompt = `${generationSystemPrompt}\n\n${webPrompt}`;
@@ -1569,6 +1799,12 @@ export async function POST(req: Request) {
           if (usedWebContext && usedRagContext) {
             generationSystemPrompt = `${generationSystemPrompt}\n\n${buildBrainWebSynthesisPrompt()}`;
           }
+        }
+
+        // A failed or empty search must be visible to the model as a status,
+        // not silently omitted. Otherwise it invents the missing results.
+        if (webStatusPrompt) {
+          generationSystemPrompt = `${generationSystemPrompt}\n\n${webStatusPrompt}`;
         }
 
         const generated = await callPierrotModel(
@@ -1623,9 +1859,7 @@ export async function POST(req: Request) {
           {
             error: pierrotErrorCopy(errorLanguage(language), failure.code),
             code: failure.code,
-            ...(failure.retryAfterSeconds
-              ? { retryAfter: failure.retryAfterSeconds }
-              : {}),
+            ...(failure.retryAfterSeconds ? { retryAfter: failure.retryAfterSeconds } : {}),
           },
           {
             status: failure.httpStatus,
@@ -1695,12 +1929,36 @@ export async function POST(req: Request) {
         : [];
     const webUsed = webSources.length > 0;
     const brainUsed = usedRagContext;
+    const requestedSources = {
+      brain: Boolean(brainOutcome),
+      media: Boolean(mediaOutcome),
+      web: webRequested,
+    };
+    const sourceStatus: EvidenceSourceStatuses = buildSourceStatuses({
+      brain: brainOutcome,
+      media: mediaOutcome,
+      web: webSearchResult,
+      requested: requestedSources,
+    });
+    const allowedExternalUrls = [
+      ...(webUsed ? webSources.map((source) => source.url) : []),
+      ...(ownerRag?.sources ?? []).map((source) => source.canonicalUrl),
+    ];
+    const evidenceGuard = guardAnswerEvidence({
+      reply: (reply || 'Silence.').slice(0, PIERROT_MAX_MESSAGE_LENGTH),
+      statuses: sourceStatus,
+      requested: requestedSources,
+      allowedExternalUrls,
+      language: language === 'en' ? 'en' : 'ru',
+      intent: queryPlan.intent,
+    });
+
+    reply = evidenceGuard.reply.slice(0, PIERROT_MAX_MESSAGE_LENGTH);
+
     const answerSources: PierrotAnswerSources = buildPierrotAnswerSources({
       brain: brainUsed,
       web: webUsed,
     });
-
-    reply = (reply || 'Silence.').slice(0, PIERROT_MAX_MESSAGE_LENGTH);
 
     if (webUsed) {
       reply = composeReplyWithWebSources(reply, webSources, PIERROT_MAX_MESSAGE_LENGTH);
@@ -1742,7 +2000,18 @@ export async function POST(req: Request) {
             latency_ms: Date.now() - startedAt,
             answer_sources: answerSources.mode,
             web_outcome: webSearchResult?.outcome ?? null,
+            web_code: webSearchResult?.code ?? null,
             web_source_count: webSources.length,
+            source_status: sourceStatus,
+            evidence_warnings: evidenceGuard.violations,
+            brain_timings: retrievalTrace?.timings ?? null,
+            ...(retrievalTrace?.documentTitleRequested
+              ? {
+                  document_title_requested: retrievalTrace.documentTitleRequested,
+                  document_title_matched: retrievalTrace.documentTitleMatched ?? null,
+                  document_match_type: retrievalTrace.documentMatchType ?? null,
+                }
+              : {}),
           },
         });
       } catch (error) {
@@ -1814,6 +2083,14 @@ export async function POST(req: Request) {
               ...(webSearchResult.code ? { code: webSearchResult.code } : {}),
               sources: webUsed ? buildPublicWebSources(webSearchResult) : [],
             },
+          }
+        : {}),
+      ...(useModel
+        ? {
+            sourceStatus,
+            ...(evidenceGuard.violations.length > 0
+              ? { evidenceWarnings: evidenceGuard.violations }
+              : {}),
           }
         : {}),
       conversationId,

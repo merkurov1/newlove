@@ -11,11 +11,8 @@ jest.mock('@/lib/knowledge/media/search', () => ({
   searchMediaIntelligence: jest.fn(),
 }));
 
-const {
-  buildMediaEvidencePrompt,
-  buildMediaEvidenceSources,
-  retrieveMediaEvidence,
-} = require('../mediaEvidence') as typeof import('../mediaEvidence');
+const { buildMediaEvidencePrompt, buildMediaEvidenceSources, retrieveMediaEvidence } =
+  require('../mediaEvidence') as typeof import('../mediaEvidence');
 
 const mediaRecords = require('@/lib/mediaRecords') as {
   getMediaRecords: {
@@ -143,6 +140,18 @@ describe('Pierrot media evidence', () => {
     expect(response.hits.map((hit) => hit.date)).toEqual(['2026-10-24', '2026-09-01']);
     expect(response.hits[0].outlet).toBe('Новая газета');
     expect(mediaSearch.searchMediaIntelligence).not.toHaveBeenCalled();
+  });
+
+  it('filters latest coverage by the requested period', async () => {
+    const response = await retrieveMediaEvidence({
+      query: 'Какие последние СМИ меня цитировали за последний месяц?',
+      limit: 8,
+      ownerAccess: true,
+      publishedFrom: '2026-10-03T00:00:00.000Z',
+    });
+
+    expect(response.outcome).toBe('relevant_results');
+    expect(response.hits.map((hit) => hit.mediaRecordId)).toEqual(['media-new']);
   });
 
   it('never sends public media questions through the owner semantic index', async () => {

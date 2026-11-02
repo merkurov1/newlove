@@ -67,9 +67,10 @@ function validDate(year: number, month: number, day: number): boolean {
 }
 
 function iso(year: number, month: number, day: number): string {
-  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(
-    day
-  ).padStart(2, '0')}`;
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(
+    2,
+    '0'
+  )}`;
 }
 
 function currentYear(now: Date, timezone: string): number {
@@ -129,9 +130,7 @@ export function parseCustomPeriod(
   const text = normalize(message);
   const fallbackYear = currentYear(now, timezone);
 
-  const isoRange = text.match(
-    /(\d{4})-(\d{2})-(\d{2})[^\d]{0,24}(\d{4})-(\d{2})-(\d{2})/
-  );
+  const isoRange = text.match(/(\d{4})-(\d{2})-(\d{2})[^\d]{0,24}(\d{4})-(\d{2})-(\d{2})/);
 
   if (isoRange) {
     const first = {
@@ -274,10 +273,48 @@ export function detectCommercialQuestion(
   const now = options.now ?? new Date();
   const timezone = options.timezone ?? 'Europe/London';
 
-  const weeklyReview =
-    /(как у нас дела|итоги недели|недельн[а-яё]*\s+отчет|weekly review|weekly report|how are we doing)/.test(
+  // "Не коммерческую статистику, а документ в Brain" is an explicit
+  // correction away from the commercial tool, not a commercial request.
+  if (
+    /(weekly\s*review|документ|document|в\s+brain|in\s+brain)/.test(text) &&
+    /(не\s+то|стоп|не\s+коммерческ|not\s+commercial)/.test(text)
+  ) {
+    return null;
+  }
+
+  const personalContext =
+    /(мои\s+взгляд|моих\s+взгляд|мои\s+текст|моих\s+текст|мои\s+стать|мои\s+запис|моя\s+биограф|мою\s+биограф|мои\s+публикац|мои\s+проект|моя\s+работ|обо\s+мне|про\s+меня|my\s+views?|my\s+texts?|my\s+writing|my\s+articles?|my\s+publications?|my\s+biography|my\s+projects?|my\s+work|about\s+me)/.test(
       text
     );
+
+  // A revenue/sales word is unambiguous even inside a personal question
+  // ("сколько мои тексты принесли"). Without one, personal material must not
+  // be turned into a commercial report.
+  const explicitCommercial =
+    /(продаж|выручк|доход|прибыл|заработ|донат|пожертвован|подписчик|коммерческ|commercial|revenue|sales|donation|donations|subscriber|attributed|order_paid|checkout)/.test(
+      text
+    );
+
+  if (personalContext && !explicitCommercial) {
+    return null;
+  }
+
+  const commercialContext =
+    explicitCommercial ||
+    /(бизнес|business|метрик|metrics|конверс|conversion|маркет|marketing|pierrot\s+(sales|revenue)|пьеро.*(прода|заработ|принес))/.test(
+      text
+    );
+
+  // "Weekly Review" is a document title as often as a commercial report.
+  // Treat it as commercial only with an explicit commercial or reporting
+  // context; a bare "Найди Weekly Review" must continue to Brain lookup.
+  const weeklyReviewPhrase =
+    /(итоги\s+недели|недельн[а-яё]*\s+отчет|weekly\s+review|weekly\s+report)/.test(text);
+  const weeklyReview =
+    /(как\s+у\s+нас\s+дела|how\s+are\s+we\s+doing)/.test(text) ||
+    (weeklyReviewPhrase &&
+      (commercialContext ||
+        /(продаж|выручк|доход|заработ|revenue|sales|бизнес|business)/.test(text)));
 
   const wantsWhy =
     /(почему\s+так\s+мало|почему\s+.*не\s+покупа|почему\s+.*(плохо|низк|мало)|что\s+происходит\s+с\s+продаж|why\s+.*(so little|not buy|low|poorly)|what.*happening.*sales)/.test(
@@ -325,11 +362,18 @@ export function detectCommercialQuestion(
       text
     );
 
-  const wantsRecommendations =
-    /(что\s+мне\s+делать|что\s+делать|what\s+should\s+i\s+do|recommend|рекоменд)/.test(text);
-
-  const wantsComparison =
+  const wantsComparisonRaw =
     /(сравни|сравнить|compare|изменилось|what\s+changed|динамик|trend|по\s+сравнению)/.test(text);
+  const wantsComparison =
+    wantsComparisonRaw &&
+    (commercialContext ||
+      /(недел|week|месяц|month|продаж|sales|revenue|доход|выручк|подписчик|донат)/.test(text));
+
+  const wantsRecommendationsRaw =
+    /(что\s+мне\s+делать|что\s+делать|what\s+should\s+i\s+do|recommend|рекоменд)/.test(text);
+  const wantsRecommendations =
+    wantsRecommendationsRaw &&
+    (commercialContext || weeklyReview || /(недел|week|месяц|month)/.test(text));
 
   const genericCommercial =
     /(коммерческ|commercial|monetization|монетизац|зарабатыва|business result)/.test(text);
@@ -344,6 +388,7 @@ export function detectCommercialQuestion(
     !wantsDonations &&
     !wantsRevenue &&
     !wantsSales &&
+    !wantsAttribution &&
     !wantsRecommendations &&
     !wantsComparison &&
     !genericCommercial

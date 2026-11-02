@@ -7,19 +7,13 @@ import { createBrainGraphStore } from '@/lib/knowledge/graph/store';
 import { answerBrainResearchQuestion } from '@/lib/knowledge/graph/research';
 import { detectCommercialQuestion } from '@/lib/pierrot/commercialQuestion';
 import { answerPierrotCommercialQuestion } from '@/lib/pierrot/commercialIntelligence';
+import type { PierrotQueryPlan } from '@/lib/pierrot/queryUnderstanding';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 assertServerOnly('lib/pierrot/ownerTools');
 
 export type OwnerToolKind =
-  | 'stats'
-  | 'rag'
-  | 'brain'
-  | 'graph'
-  | 'research'
-  | 'diagnostics'
-  | 'analytics'
-  | 'commercial';
+  'stats' | 'rag' | 'brain' | 'graph' | 'research' | 'diagnostics' | 'analytics' | 'commercial';
 
 export type OwnerToolRequest = {
   kind: OwnerToolKind;
@@ -34,7 +28,10 @@ function normalize(value: string): string {
  * Explicit owner commands only. Ordinary questions about the site, art or
  * books must continue through the normal Pierrot answer path.
  */
-export function detectOwnerTool(message: string): OwnerToolRequest | null {
+export function detectOwnerTool(
+  message: string,
+  options: { queryPlan?: Pick<PierrotQueryPlan, 'intent'> } = {}
+): OwnerToolRequest | null {
   const text = normalize(message);
   const command = text.match(
     /^\/(stats|rag|brain|graph|research|diag|analytics|commercial|revenue)\b/
@@ -49,6 +46,10 @@ export function detectOwnerTool(message: string): OwnerToolRequest | null {
           : (command[1] as OwnerToolKind);
     return { kind, query: message.trim() };
   }
+
+  // A named document must reach Brain lookup before any status/commercial
+  // shortcut. Explicit slash commands above remain the deliberate exception.
+  if (options.queryPlan?.intent === 'document_lookup') return null;
 
   // Commercial performance questions must be recognised before generic
   // statistics, but after explicit slash commands. Detection itself is pure;
@@ -71,7 +72,11 @@ export function detectOwnerTool(message: string): OwnerToolRequest | null {
     return { kind: 'diagnostics', query: message.trim() };
   }
 
-  if (/(knowledge\s*graph|граф\s*знаний|граф|graph\s*(status|state)|состояни.*граф)/i.test(text)) {
+  if (
+    /(knowledge\s*graph|граф\s*знаний|(?:^|[^а-яё])граф(?:$|[^а-яё])|graph\s*(status|state)|состояни.*граф)/i.test(
+      text
+    )
+  ) {
     return { kind: 'graph', query: message.trim() };
   }
 

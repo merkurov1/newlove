@@ -9,11 +9,7 @@ import type { BrainRetrievalResult } from '@/lib/knowledge/rag/brainRetrieval';
 import { recordPierrotEvent } from '@/lib/pierrot/serverStore';
 
 export type PierrotRetrievalMode =
-  | 'brain_v2'
-  | 'brain_v1'
-  | 'media'
-  | 'public_brain'
-  | 'disabled';
+  'brain_v2' | 'brain_v1' | 'brain_document' | 'media' | 'public_brain' | 'disabled';
 
 export type PierrotRetrievalTraceInput = {
   conversationId: string;
@@ -33,6 +29,14 @@ export type PierrotRetrievalTraceInput = {
   refined?: boolean;
   attempts?: number;
   mediaFallbackCount?: number;
+  timings?: {
+    embeddingMs: number;
+    searchMs: number;
+    rankingMs: number;
+  } | null;
+  documentTitleRequested?: string | null;
+  documentTitleMatched?: string | null;
+  documentMatchType?: 'exact' | 'partial' | null;
 };
 
 export type BrainRetrievalTraceInput = {
@@ -72,6 +76,10 @@ export function buildPierrotRetrievalPayload(
     refined: Boolean(input.refined),
     attempts: input.attempts ?? 1,
     media_fallback_count: input.mediaFallbackCount ?? null,
+    brain_timings: input.timings ?? null,
+    document_title_requested: input.documentTitleRequested ?? null,
+    document_title_matched: input.documentTitleMatched ?? null,
+    document_match_type: input.documentMatchType ?? null,
   };
 }
 

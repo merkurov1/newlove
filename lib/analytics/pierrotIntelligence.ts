@@ -160,6 +160,8 @@ export type PierrotSnapshot = {
       up: number;
       down: number;
     };
+    feedbackByTool: Array<{ key: string; value: number; up: number; down: number }>;
+    feedbackByIntent: Array<{ key: string; value: number; up: number; down: number }>;
     retrieval: {
       attempts: number;
       relevant: number;
@@ -259,7 +261,11 @@ function payloadNumber(payload: Record<string, unknown> | null, key: string): nu
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
-function payloadCount(payload: Record<string, unknown> | null, countKey: string, listKey: string): number {
+function payloadCount(
+  payload: Record<string, unknown> | null,
+  countKey: string,
+  listKey: string
+): number {
   const explicit = payloadNumber(payload, countKey);
   if (explicit > 0) return explicit;
   const list = payload?.[listKey];
@@ -320,6 +326,19 @@ function toSorted(map: Map<string, number>): Array<{ key: string; value: number 
   return Array.from(map.entries())
     .map(([key, value]) => ({ key, value }))
     .sort((a, b) => b.value - a.value || a.key.localeCompare(b.key));
+}
+
+function feedbackRows(
+  map: Map<string, { up: number; down: number }>
+): Array<{ key: string; value: number; up: number; down: number }> {
+  return Array.from(map.entries())
+    .map(([key, counts]) => ({
+      key,
+      value: counts.up + counts.down,
+      up: counts.up,
+      down: counts.down,
+    }))
+    .sort((left, right) => right.value - left.value || left.key.localeCompare(right.key));
 }
 
 type SnapshotInput = {
@@ -932,6 +951,8 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
 
   const answerFeedback = { up: 0, down: 0 };
   const feedbackByConversation = new Map<string, { up: number; down: number }>();
+  const feedbackByTool = new Map<string, { up: number; down: number }>();
+  const feedbackByIntent = new Map<string, { up: number; down: number }>();
 
   for (const event of filteredEvents) {
     if (event.event_name !== 'answer_feedback') continue;
@@ -942,11 +963,22 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
     const current = feedbackByConversation.get(event.conversation_id) || { up: 0, down: 0 };
     current[rating] += 1;
     feedbackByConversation.set(event.conversation_id, current);
+
+    const trace =
+      event.payload?.trace && typeof event.payload.trace === 'object'
+        ? (event.payload.trace as Record<string, unknown>)
+        : null;
+    const tool = payloadString(trace, 'owner_tool') || 'model';
+    const intent = payloadString(trace, 'intent') || 'unknown';
+    const toolCounts = feedbackByTool.get(tool) || { up: 0, down: 0 };
+    toolCounts[rating] += 1;
+    feedbackByTool.set(tool, toolCounts);
+    const intentCounts = feedbackByIntent.get(intent) || { up: 0, down: 0 };
+    intentCounts[rating] += 1;
+    feedbackByIntent.set(intent, intentCounts);
   }
 
-  const retrievalEvents = filteredEvents.filter(
-    (event) => event.event_name === 'brain_retrieval'
-  );
+  const retrievalEvents = filteredEvents.filter((event) => event.event_name === 'brain_retrieval');
   let retrievalLatencyTotal = 0;
   let retrievalLatencyCount = 0;
   const retrieval = {
@@ -1027,10 +1059,7 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
       });
     }
 
-    if (
-      summary.latestIntent === 'unknown' ||
-      summary.latestIntent === 'uncertain'
-    ) {
+    if (summary.latestIntent === 'unknown' || summary.latestIntent === 'uncertain') {
       pushAttention({
         id: `intent:${summary.id}`,
         title: 'Unresolved intent',
@@ -1123,6 +1152,8 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
         failed: countEvent('assistant_failed'),
       },
       feedback: answerFeedback,
+      feedbackByTool: feedbackRows(feedbackByTool),
+      feedbackByIntent: feedbackRows(feedbackByIntent),
       retrieval,
       handover,
       subscribers: subscriberStats,
@@ -1258,12 +1289,9 @@ export async function loadPierrotDashboard(filters: AnalyticsFilters): Promise<P
 
     subscriberStats = {
       total: subscribers.length,
-      confirmed: subscribers.filter(
-        (row) => row.isActive === true && Boolean(row.confirmedAt)
-      ).length,
-      pending: subscribers.filter(
-        (row) => row.isActive === false && !row.unsubscribedAt
-      ).length,
+      confirmed: subscribers.filter((row) => row.isActive === true && Boolean(row.confirmedAt))
+        .length,
+      pending: subscribers.filter((row) => row.isActive === false && !row.unsubscribedAt).length,
       unsubscribed: subscribers.filter((row) => Boolean(row.unsubscribedAt)).length,
     };
   } catch {

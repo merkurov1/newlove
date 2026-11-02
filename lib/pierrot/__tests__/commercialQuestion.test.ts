@@ -41,6 +41,34 @@ describe('Pierrot commercial question detection', () => {
     expect(detectCommercialQuestion('How do I donate?')).toBeNull();
   });
 
+  it('does not hijack a document named Weekly Review', () => {
+    expect(detectCommercialQuestion('Найди Weekly Review', { now, timezone })).toBeNull();
+    expect(
+      detectCommercialQuestion('Не то! Найди Weekly Review в Brain', { now, timezone })
+    ).toBeNull();
+    expect(
+      detectCommercialQuestion('Я имею в виду документ в Brain, а не коммерческую статистику', {
+        now,
+        timezone,
+      })
+    ).toBeNull();
+  });
+
+  it('does not hijack personal views or manuscript work', () => {
+    expect(detectCommercialQuestion('Как изменились мои взгляды?', { now, timezone })).toBeNull();
+    expect(detectCommercialQuestion('Что мне делать с рукописью?', { now, timezone })).toBeNull();
+  });
+
+  it('still recognises an explicitly commercial weekly report', () => {
+    const question = detectCommercialQuestion('Сделай weekly review продаж и выручки за неделю', {
+      now,
+      timezone,
+    });
+
+    expect(question?.commercial).toBe(true);
+    expect(question?.weeklyReview).toBe(true);
+  });
+
   it('combines revenue, diagnosis and recommendation in one question', () => {
     const question = detectCommercialQuestion(
       'Сколько мы заработали, почему так мало и что мне делать?',

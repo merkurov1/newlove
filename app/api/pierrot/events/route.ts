@@ -105,12 +105,74 @@ export async function POST(req: Request) {
       },
     });
 
+    // Feedback is useful only when it points at the answer that caused it.
+    // The client now sends the server assistant message id, but older clients
+    // and retries may still send a valid-but-unknown id. In that case the
+    // lookup returns nothing and the event is stored unchanged.
+    let storedPayload: Record<string, unknown> = payload;
+
+    if (eventName === 'answer_feedback' && typeof payload.message_id === 'string') {
+      const messageId = payload.message_id;
+      const { data: replyEvent } = await store
+        .from('pierrot_events')
+        .select('payload')
+        .eq('conversation_id', conversationId)
+        .eq('event_name', 'assistant_replied')
+        .eq('event_key', `assistant_replied:${messageId}`)
+        .maybeSingle();
+
+      const replyPayload =
+        replyEvent?.payload && typeof replyEvent.payload === 'object'
+          ? (replyEvent.payload as Record<string, unknown>)
+          : null;
+
+      if (replyPayload) {
+        let brainPayload: Record<string, unknown> | null = null;
+
+        if (typeof replyPayload.in_reply_to === 'string') {
+          const { data: brainEvent } = await store
+            .from('pierrot_events')
+            .select('payload')
+            .eq('conversation_id', conversationId)
+            .eq('event_name', 'brain_retrieval')
+            .eq('event_key', `brain_retrieval:${replyPayload.in_reply_to}`)
+            .maybeSingle();
+
+          brainPayload =
+            brainEvent?.payload && typeof brainEvent.payload === 'object'
+              ? (brainEvent.payload as Record<string, unknown>)
+              : null;
+        }
+
+        storedPayload = {
+          ...payload,
+          trace: {
+            intent: replyPayload.intent ?? null,
+            owner_tool: replyPayload.owner_tool ?? null,
+            deterministic: replyPayload.deterministic === true,
+            provider: replyPayload.provider ?? null,
+            answer_sources: replyPayload.answer_sources ?? null,
+            web_outcome: replyPayload.web_outcome ?? null,
+            web_code: replyPayload.web_code ?? null,
+            web_source_count: replyPayload.web_source_count ?? null,
+            source_status: replyPayload.source_status ?? null,
+            evidence_warnings: replyPayload.evidence_warnings ?? null,
+            brain_outcome: brainPayload?.outcome ?? null,
+            brain_code: brainPayload?.code ?? null,
+            brain_timings: brainPayload?.brain_timings ?? null,
+            document_title_matched: brainPayload?.document_title_matched ?? null,
+            document_match_type: brainPayload?.document_match_type ?? null,
+          },
+        };
+      }
+    }
+
     await recordPierrotEvent(store, {
       conversationId,
       sessionId,
       eventName,
       eventKey: `${eventName}:${eventKey}`,
-      payload,
+      payload: storedPayload,
     });
 
     if (eventName === 'conversation_ended') {

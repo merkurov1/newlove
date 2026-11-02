@@ -278,6 +278,47 @@ describe('Pierrot conversational navigation', () => {
     expect(within(dialog).queryByText(/\/heartandangel/)).not.toBeInTheDocument();
   });
 
+  it('links answer feedback to the server assistant message id', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        reply: 'A traceable answer.',
+        assistantMessageId: 'a_serverMessageId1234567890',
+      }),
+    });
+
+    window.localStorage.setItem(
+      'pierrot_consent_v1',
+      JSON.stringify({ state: 'granted', version: '2026-10-29' })
+    );
+
+    renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
+
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByRole('textbox', { name: 'Message Pierrot' });
+
+    fireEvent.change(input, { target: { value: 'hi' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    const feedback = await within(dialog).findByRole('button', {
+      name: 'Not a useful answer',
+    });
+    fireEvent.click(feedback);
+
+    await waitFor(() => {
+      const feedbackCall = fetchMock.mock.calls.find(([url, init]) => {
+        if (typeof url !== 'string' || !url.includes('/api/pierrot/events')) return false;
+        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
+        return body?.eventName === 'answer_feedback';
+      });
+
+      expect(feedbackCall).toBeDefined();
+      const body = JSON.parse(String(feedbackCall?.[1]?.body));
+      expect(body.payload.message_id).toBe('a_serverMessageId1234567890');
+    });
+  });
+
   it('does not turn an unsafe markdown URL into a link', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,

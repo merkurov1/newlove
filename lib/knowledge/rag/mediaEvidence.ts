@@ -159,13 +159,30 @@ function recordToHit(record: MediaRecord): MediaEvidenceHit {
   };
 }
 
+function withinPeriod(record: MediaRecord, from: string | null | undefined): boolean {
+  if (!from) return true;
+
+  const boundary = Date.parse(from);
+  const value = Date.parse(record.date);
+
+  if (!Number.isFinite(boundary) || !Number.isFinite(value)) return true;
+
+  return value >= boundary;
+}
+
+function filterByPeriod(records: MediaRecord[], from: string | null | undefined): MediaRecord[] {
+  return from ? records.filter((record) => withinPeriod(record, from)) : records;
+}
+
 export async function retrieveMediaEvidence(input: {
   query: string;
   limit?: number;
   ownerAccess?: boolean;
+  publishedFrom?: string | null;
 }): Promise<MediaEvidenceResult> {
   const query = input.query.trim();
   const limit = Math.min(Math.max(input.limit ?? 8, 1), 12);
+  const publishedFrom = input.publishedFrom ?? null;
 
   if (!query) return { outcome: 'no_match', hits: [] };
 
@@ -176,7 +193,7 @@ export async function retrieveMediaEvidence(input: {
   // date and never looks like a semantic near-miss.
   if (latest) {
     try {
-      const records = await getMediaRecords();
+      const records = filterByPeriod(await getMediaRecords(), publishedFrom);
       const matches = latestRecords(records, limit);
 
       return matches.length > 0
@@ -209,13 +226,15 @@ export async function retrieveMediaEvidence(input: {
         },
       });
 
-      if (result.results.length > 0) {
+      const withinResults = result.results.filter(
+        (hit) => !publishedFrom || !hit.publishedDate || hit.publishedDate >= publishedFrom
+      );
+
+      if (withinResults.length > 0) {
         return {
           outcome: 'relevant_results',
-          hits: result.results.map((hit) => {
-            const verified = hit.quotes.filter(
-              (quote) => quote.verificationStatus === 'verified'
-            );
+          hits: withinResults.map((hit) => {
+            const verified = hit.quotes.filter((quote) => quote.verificationStatus === 'verified');
 
             return {
               mediaRecordId: hit.mediaRecordId,
@@ -253,7 +272,7 @@ export async function retrieveMediaEvidence(input: {
     }
   }
 
-  const records = await getMediaRecords();
+  const records = filterByPeriod(await getMediaRecords(), publishedFrom);
   let matches = lexicalRecords(records, query);
 
   if (matches.length === 0 && latest) {

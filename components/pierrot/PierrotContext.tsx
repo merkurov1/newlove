@@ -143,7 +143,8 @@ type PierrotContextValue = {
 
 const PierrotContext = createContext<PierrotContextValue | null>(null);
 
-const STORAGE_KEY = 'pierrot_chat_history_v2';const ARRIVAL_STORAGE_KEY = 'pierrot_navigation_arrival_v1';
+const STORAGE_KEY = 'pierrot_chat_history_v2';
+const ARRIVAL_STORAGE_KEY = 'pierrot_navigation_arrival_v1';
 const ONBOARDING_STORAGE_KEY = 'pierrot_onboarding_v1';
 const BRAIN_UNLOCK_STORAGE_KEY = 'pierrot_brain_unlocked_v1';
 const INTRO_DELAY_MS = 420;
@@ -164,6 +165,7 @@ type PierrotWebResponse = {
   offerId?: unknown;
   conversationId?: unknown;
   sessionId?: unknown;
+  assistantMessageId?: unknown;
   human?: unknown;
   humanToken?: unknown;
   humanMode?: unknown;
@@ -715,11 +717,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       // request row still says "active" during a partial write.
       let effectiveRequest = request;
 
-      if (
-        request.status === 'active' &&
-        payload.session &&
-        payload.session.status !== 'active'
-      ) {
+      if (request.status === 'active' && payload.session && payload.session.status !== 'active') {
         effectiveRequest = {
           ...request,
           status: 'closed',
@@ -1001,9 +999,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       try {
         const afterSequence = messagesRef.current.reduce(
           (max, message) =>
-            typeof message.sequence === 'number' && message.sequence > max
-              ? message.sequence
-              : max,
+            typeof message.sequence === 'number' && message.sequence > max ? message.sequence : max,
           0
         );
 
@@ -1729,6 +1725,10 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
           : [];
 
         appendMessage({
+          // The server id is the join key for answer_feedback, retrieval and
+          // assistant_replied events. A fresh local id would make feedback
+          // impossible to trace back to the answer that caused it.
+          ...(typeof data.assistantMessageId === 'string' ? { id: data.assistantMessageId } : {}),
           role: 'assistant',
           content: typeof data.reply === 'string' ? data.reply : '',
           author: 'pierrot',

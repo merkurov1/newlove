@@ -21,11 +21,23 @@ type Retrieve = (input: {
   topK?: number;
 }) => Promise<BrainRetrievalResult>;
 
+function aggregateTimings(results: BrainRetrievalResult[]) {
+  return results.reduce(
+    (total, result) => ({
+      embeddingMs: total.embeddingMs + (result.timings?.embeddingMs ?? 0),
+      searchMs: total.searchMs + (result.timings?.searchMs ?? 0),
+      rankingMs: total.rankingMs + (result.timings?.rankingMs ?? 0),
+    }),
+    { embeddingMs: 0, searchMs: 0, rankingMs: 0 }
+  );
+}
+
 function resultWithHits(
   base: BrainRetrievalResult,
   hits: RetrievedChunk[],
   attemptLog: BrainRetrievalAttempt[],
-  latencyMs: number
+  latencyMs: number,
+  timings = base.timings
 ): RefinedBrainRetrievalResult {
   const documentIds = Array.from(new Set(hits.map((hit) => hit.documentId)));
   const chunkIds = hits.map((hit) => hit.chunkId);
@@ -42,7 +54,9 @@ function resultWithHits(
     outcome: hits.length > 0 ? 'relevant_results' : base.outcome,
     hits,
     latencyMs,
-    topSimilarity: hits.length > 0 ? Math.max(...hits.map((hit) => hit.similarity)) : base.topSimilarity,
+    ...(timings ? { timings } : {}),
+    topSimilarity:
+      hits.length > 0 ? Math.max(...hits.map((hit) => hit.similarity)) : base.topSimilarity,
     documentIds,
     chunkIds,
     selectedSourceClasses:
@@ -121,7 +135,12 @@ export async function retrieveBrainEvidenceWithRefinement(input: {
   const maxAttempts = Math.min(Math.max(input.maxAttempts ?? 3, 1), 4);
   const started = Date.now();
 
-  const run = async (label: BrainRetrievalAttempt['label'], query: string, plan: BrainQueryPlan, topK?: number) => {
+  const run = async (
+    label: BrainRetrievalAttempt['label'],
+    query: string,
+    plan: BrainQueryPlan,
+    topK?: number
+  ) => {
     const result = await input.retrieve({ query, plan, topK });
     attempts.push({
       label,
@@ -155,7 +174,8 @@ export async function retrieveBrainEvidenceWithRefinement(input: {
         broadened,
         mergeHits(results),
         attempts,
-        Date.now() - started
+        Date.now() - started,
+        aggregateTimings(results)
       );
     }
   }
@@ -174,7 +194,13 @@ export async function retrieveBrainEvidenceWithRefinement(input: {
     const lexical = await run('lexical', input.plan.lexicalQuery, lexicalPlan, input.topK);
 
     if (lexical.outcome === 'relevant_results' && lexical.hits.length > 0) {
-      return resultWithHits(lexical, mergeHits(results), attempts, Date.now() - started);
+      return resultWithHits(
+        lexical,
+        mergeHits(results),
+        attempts,
+        Date.now() - started,
+        aggregateTimings(results)
+      );
     }
   }
 
@@ -187,16 +213,17 @@ export async function retrieveBrainEvidenceWithRefinement(input: {
     );
 
     if (broader.outcome === 'relevant_results' && broader.hits.length > 0) {
-      return resultWithHits(broader, mergeHits(results), attempts, Date.now() - started);
+      return resultWithHits(
+        broader,
+        mergeHits(results),
+        attempts,
+        Date.now() - started,
+        aggregateTimings(results)
+      );
     }
   }
 
   const last = results[results.length - 1] || first;
 
-  return resultWithHits(
-    last,
-    [],
-    attempts,
-    Date.now() - started
-  );
+  return resultWithHits(last, [], attempts, Date.now() - started, aggregateTimings(results));
 }

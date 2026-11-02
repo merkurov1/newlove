@@ -152,6 +152,41 @@ export function buildWebEvidencePrompt(
 }
 
 /**
+ * Status-aware instruction for every requested external search, including the
+ * unsuccessful ones. Without this block the model sees no evidence and no
+ * status, which is exactly how an unavailable source turns into an invented
+ * citation.
+ */
+export function buildWebStatusPrompt(result: WebSearchResult | null): string | null {
+  if (!result) {
+    return [
+      'WEB_SEARCH_STATUS: unavailable',
+      'The external web search was requested but did not complete.',
+      'Do not say that you searched the web, found publications, channels, quotes, dates or links. Do not invent any URL or source. Say plainly that external verification is unavailable and answer only from other supplied evidence, labelled as such.',
+    ].join('\n');
+  }
+
+  if (result.outcome === 'unavailable') {
+    return [
+      'WEB_SEARCH_STATUS: unavailable',
+      `Reason code: ${result.code || 'unknown'}.`,
+      'The external web search did not return usable data.',
+      'Do not claim that you found external publications, channels, quotes, dates or links. Do not invent a source, outlet, author, URL or citation. If the question depends on the external web, say that verification is unavailable.',
+    ].join('\n');
+  }
+
+  if (result.outcome === 'no_results') {
+    return [
+      'WEB_SEARCH_STATUS: empty',
+      'The external web search completed and returned zero usable results.',
+      'Do not describe this as a source outage, and do not invent results. Say that no verified external results were found for this query.',
+    ].join('\n');
+  }
+
+  return null;
+}
+
+/**
  * Added only when both Brain and Web contributed evidence. It keeps the two
  * sources distinct instead of blending Anton's previous statements into
  * external reporting (or the reverse).
