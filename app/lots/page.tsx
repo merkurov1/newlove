@@ -25,6 +25,7 @@ export default async function LotsGalleryPage() {
   const { data: lots, error } = await supabase
     .from('lots')
     .select('id, artist, title, year, medium, estimate, image_path, source_url, created_at, auction_house')
+    .eq('status', 'published')
     .order('created_at', { ascending: false });
 
   if (error) {

@@ -42,6 +42,7 @@ export default function ArtEngineClient() {
   const [imgError, setImgError] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
   const [copyStatus, setCopyStatus] = useState(false);
+  const [ingestion, setIngestion] = useState<any>(null);
 
   // Vault Gallery State
   const [lots, setLots] = useState<any[]>([]);
@@ -49,7 +50,8 @@ export default function ArtEngineClient() {
   const [lotsError, setLotsError] = useState('');
   const [activeTab, setActiveTab] = useState<'parser' | 'vault'>('parser');
 
-  // Fetch Lots for Vault
+  // Fetch Lots for Vault. The browser client no longer reads `lots` directly:
+  // after the RLS hardening the Vault is served by an admin-only API route.
   const fetchLots = useCallback(async () => {
     setLoadingLots(true);
     setLotsError('');
@@ -58,18 +60,27 @@ export default function ArtEngineClient() {
       setLoadingLots(false);
       return;
     }
-    const { data, error } = await supabase
-      .from('lots')
-      .select('id, artist, title, year, medium, estimate, image_path, source_url, auction_house, created_at')
-      .order('created_at', { ascending: false })
-      .limit(18);
 
-    if (!error && data) {
-      setLots(data);
-    } else if (error) {
+    try {
+      const res = await authFetch('/api/admin/art-engine/lots?limit=18');
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setLots([]);
+        setLotsError(
+          res.status === 401 || res.status === 403
+            ? 'Admin access is required to open the secure vault.'
+            : data?.error || 'Unable to load the secure vault.',
+        );
+      } else {
+        setLots(Array.isArray(data?.lots) ? data.lots : []);
+      }
+    } catch {
+      setLots([]);
       setLotsError('Unable to load the secure vault.');
+    } finally {
+      setLoadingLots(false);
     }
-    setLoadingLots(false);
   }, [user]);
 
   useEffect(() => {
@@ -215,9 +226,13 @@ export default function ArtEngineClient() {
       alert('Enter a valid HTTP or HTTPS auction URL');
       return null;
     }
+
     setParsing(true);
     setImgError(false);
     setIsSaved(false);
+    setOutput(null);
+    setShowRawJson(false);
+    setIngestion({ status: 'extracting', warnings: [], errors: [] });
 
     try {
       const res = await authFetch('/api/admin/parse-url', {
@@ -233,21 +248,49 @@ export default function ArtEngineClient() {
         throw new Error(`Server response error (${res.status}): ${responseText.slice(0, 100)}`);
       }
 
-      if (!res.ok) throw new Error(data.details || data.error || `Server status ${res.status}`);
-
-      const bestImage = data.image_url || data.extracted?.imageUrl || '';
-      let bestTitle = data.title || data.extracted?.title || '';
-      let bestArtist = data.artist || data.extracted?.artist || '';
-      const extractedSpecs = data.extracted?.specs || data.specs || {};
-      const sourceDesc = data.extracted?.description || data.description || '';
-
-      if (!bestArtist && bestTitle) {
-        const knownArtists = ['Banksy', 'Andy Warhol', 'KAWS', 'Damien Hirst', 'Pablo Picasso', 'Jean-Michel Basquiat'];
-        const matched = knownArtists.find(a => bestTitle.toLowerCase().includes(a.toLowerCase()));
-        if (matched) bestArtist = matched;
+      if (!res.ok) {
+        setIngestion({
+          status: 'failed',
+          attempt_id: data?.attempt_id || null,
+          warnings: data?.warnings || [],
+          errors: data?.errors || [data?.error || `Server status ${res.status}`],
+        });
+        throw new Error(data.details || data.error || `Server status ${res.status}`);
       }
 
-      const rawDataObj = data.extracted || data;
+      const lot = data.lot || {};
+      const extracted = data.extracted || {};
+      const bestImage =
+        data.image_url ||
+        data.imageUrl ||
+        extracted.image_url ||
+        '';
+      const bestTitle = lot.title || extracted.title || data.title || '';
+      const bestArtist = lot.artist || extracted.artist || data.artist || '';
+      const extractedSpecs = data.specs || {
+        medium: extracted.medium || lot.medium || '',
+        dimensions: extracted.dimensions || lot.dimensions || '',
+        estimate: extracted.estimate || lot.estimate || '',
+        date: extracted.auction_date || lot.auction_date || lot.year || '',
+        provenance: Array.isArray(extracted.provenance)
+          ? extracted.provenance.join('\n')
+          : extracted.provenance || lot.provenance || '',
+        lot_number: extracted.lot_number || lot.external_id || '',
+        auction_house: extracted.auction_house || lot.auction_house || '',
+        signature: extracted.signature || '',
+      };
+      const sourceDesc = extracted.description || data.description || '';
+
+      setIngestion({
+        status: data.status || 'ready',
+        lot_id: data.lot_id || null,
+        attempt_id: data.attempt_id || null,
+        parser: data.parser || null,
+        warnings: data.warnings || [],
+        errors: data.errors || [],
+        missing_fields: data.missing_fields || [],
+        vault_persisted: data.vault_persisted !== false,
+      });
 
       setInput(prev => ({
         ...prev,
@@ -256,24 +299,34 @@ export default function ArtEngineClient() {
         image_url: bestImage || prev.image_url,
         source_description: sourceDesc || prev.source_description,
         specs: { ...prev.specs, ...extractedSpecs },
-        raw: JSON.stringify(rawDataObj, null, 2)
+        raw: JSON.stringify(data.extracted || data.lot || data, null, 2)
       }));
 
-      return { 
-        bestArtist, 
-        bestTitle, 
-        bestImage, 
+      if (data.lot_id) {
+        fetchLots();
+      }
+
+      return {
+        bestArtist,
+        bestTitle,
+        bestImage,
         sourceDescription: sourceDesc,
         specs: extractedSpecs,
-        rawData: rawDataObj 
+        rawData: data.extracted || data.lot || data,
+        lotId: data.lot_id || null,
       };
 
-    } catch (e: any) { 
+    } catch (e: any) {
       const msg = e?.message || 'Parse error';
-      alert(`Parse failed: ${msg}`); 
+      setIngestion((prev: any) => ({
+        ...(prev || {}),
+        status: 'failed',
+        errors: [...(prev?.errors || []), msg],
+      }));
+      alert(`Parse failed: ${msg}`);
       return null;
-    } finally { 
-      setParsing(false); 
+    } finally {
+      setParsing(false);
     }
   };
 
@@ -346,6 +399,7 @@ export default function ArtEngineClient() {
       const res = await authFetch('/api/admin/save-lot', {
         method: 'POST',
         body: JSON.stringify({
+          lot_id: ingestion?.lot_id || null,
           artist: artistToSend,
           title: titleToSend,
           link: input.link,
@@ -386,26 +440,10 @@ export default function ArtEngineClient() {
     if (!input.link) return alert('Provide an auction link');
     setAutoProcessing(true);
     setIsSaved(false);
-    
-    const parseResult = await handleAutoParse();
-    if (!parseResult) return setAutoProcessing(false);
 
-    const aiResult = await generate({
-      artist: parseResult.bestArtist,
-      title: parseResult.bestTitle,
-      specs: parseResult.specs,
-      sourceDescription: parseResult.sourceDescription,
-      rawData: parseResult.rawData
-    });
-    if (!aiResult) return setAutoProcessing(false);
-
-    await saveToVault(aiResult, {
-      artist: parseResult.bestArtist,
-      title: parseResult.bestTitle,
-      image_url: parseResult.bestImage,
-      specs: parseResult.specs,
-      sourceDescription: parseResult.sourceDescription
-    });
+    // Stage 1 intentionally stops at ingestion. Research and essay generation
+    // are separate stages and must never run implicitly from a URL paste.
+    await handleAutoParse();
 
     setAutoProcessing(false);
   };
@@ -424,6 +462,16 @@ export default function ArtEngineClient() {
   const getInitials = (name?: string) => {
     if (!name) return 'CE';
     return name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+  };
+
+  const ingestionTone = (status?: string) => {
+    if (status === 'ready') return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+    if (status === 'partial') return 'bg-amber-50 text-amber-800 border-amber-200';
+    if (status === 'failed') return 'bg-rose-50 text-rose-800 border-rose-200';
+    if (status === 'extracting' || status === 'queued') {
+      return 'bg-blue-50 text-blue-800 border-blue-200';
+    }
+    return 'bg-gray-50 text-gray-600 border-gray-200';
   };
 
   return (
@@ -787,6 +835,17 @@ export default function ArtEngineClient() {
                     className="w-full bg-white border border-gray-200 pl-4 pr-10 py-3.5 text-xs text-black focus:outline-none focus:border-black transition font-mono placeholder:text-gray-400 break-all rounded-2xl shadow-sm"
                     value={input.link}
                     onChange={(e: any) => setInput({...input, link: e.target.value})}
+                    onKeyDown={(e: any) => {
+                      if (
+                        e.key === 'Enter' &&
+                        input.link &&
+                        !parsing &&
+                        !autoProcessing
+                      ) {
+                        e.preventDefault();
+                        handleOneClickPipeline();
+                      }
+                    }}
                   />
                   <button 
                     onClick={handlePasteClipboard}
@@ -799,20 +858,12 @@ export default function ArtEngineClient() {
 
                 {/* Action Buttons */}
                 <div className="flex items-center gap-2.5 shrink-0">
-                  <button 
-                    onClick={handleAutoParse} 
-                    disabled={parsing || autoProcessing || !input.link} 
-                    className="bg-white hover:bg-gray-50 text-black px-6 py-3.5 text-xs font-mono uppercase tracking-wider transition disabled:opacity-40 border border-gray-200 font-bold rounded-2xl shadow-sm whitespace-nowrap"
-                  >
-                    {parsing ? 'Parsing...' : 'Parse'}
-                  </button>
-                  
                   <button
                     onClick={handleOneClickPipeline}
                     disabled={parsing || loading || saving || autoProcessing || !input.link}
                     className="bg-black hover:bg-gray-800 text-white px-6 py-3.5 text-xs font-mono uppercase tracking-widest transition disabled:opacity-40 shadow-sm font-bold rounded-2xl whitespace-nowrap"
                   >
-                    {autoProcessing ? 'Executing...' : '⚡ Full Pipeline'}
+                    {autoProcessing || parsing ? 'Ingesting...' : 'Ingest to Vault'}
                   </button>
 
                   {/* Vault Selector Button */}
@@ -830,6 +881,65 @@ export default function ArtEngineClient() {
 
               </div>
             </div>
+
+            {ingestion && (
+              <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-5 rounded-3xl shadow-sm space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`text-[10px] font-mono uppercase tracking-widest border px-3 py-1 rounded-full ${ingestionTone(ingestion.status)}`}>
+                    {ingestion.status || 'unknown'}
+                  </span>
+                  {ingestion.parser?.name && (
+                    <span className="text-[10px] font-mono text-gray-500">
+                      {ingestion.parser.name}
+                      {ingestion.parser.version ? ` v${ingestion.parser.version}` : ''}
+                      {ingestion.parser.house ? ` · ${ingestion.parser.house}` : ''}
+                    </span>
+                  )}
+                  {ingestion.lot_id && (
+                    <Link href={`/art-engine/lots/${ingestion.lot_id}`} className="text-[10px] font-mono text-black underline">
+                      Open Vault record →
+                    </Link>
+                  )}
+                  {ingestion.attempt_id && (
+                    <span className="text-[10px] font-mono text-gray-400">
+                      attempt {String(ingestion.attempt_id).slice(0, 8)}
+                    </span>
+                  )}
+                </div>
+
+                {ingestion.vault_persisted === false && (
+                  <p className="text-[11px] font-mono text-amber-800 bg-amber-50 border border-amber-200 p-3 rounded-xl">
+                    Extraction was saved, but the Vault JSON column is not available yet. Apply the Art Engine SQL migration to enable attempt state and research history.
+                  </p>
+                )}
+
+                {ingestion.missing_fields?.length > 0 && (
+                  <p className="text-[11px] font-mono text-gray-500">
+                    Missing: {ingestion.missing_fields.join(', ')}. Nothing was guessed.
+                  </p>
+                )}
+
+                {ingestion.warnings?.length > 0 && (
+                  <div className="space-y-1">
+                    {ingestion.warnings.map((warning: string, index: number) => (
+                      <p key={`w-${index}`} className="text-[11px] font-mono text-amber-700">
+                        ! {warning}
+                      </p>
+                    ))}
+                  </div>
+                )}
+
+                {ingestion.errors?.length > 0 && (
+                  <div className="space-y-1">
+                    {ingestion.errors.map((error: string, index: number) => (
+                      <p key={`e-${index}`} className="text-[11px] font-mono text-rose-700">
+                        × {error}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {activeTab === 'parser' && (
               <div className="grid lg:grid-cols-12 gap-8 items-start">
@@ -1070,6 +1180,18 @@ export default function ArtEngineClient() {
                               <div className="flex justify-between items-start text-gray-400 font-mono text-[10px] uppercase tracking-wider mb-2 gap-2">
                                 <span className="truncate">{lot.auction_house || 'AUCTION'}</span>
                                 <span className="text-black font-bold shrink-0">{lot.estimate}</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 mb-2">
+                                {lot.ingestion_status && (
+                                  <span className={`text-[9px] font-mono uppercase tracking-wider border px-2 py-0.5 rounded-full ${ingestionTone(lot.ingestion_status)}`}>
+                                    {lot.ingestion_status}
+                                  </span>
+                                )}
+                                {lot.warnings?.length > 0 && (
+                                  <span className="text-[9px] font-mono uppercase tracking-wider border border-amber-200 bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full">
+                                    {lot.warnings.length} warning{lot.warnings.length === 1 ? '' : 's'}
+                                  </span>
+                                )}
                               </div>
                               <h2 className="text-xl font-serif text-[#111] group-hover:underline">{lot.artist}</h2>
                               <p className="text-xs text-gray-600 italic mt-1">{lot.title} {lot.year && `(${lot.year})`}</p>

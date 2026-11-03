@@ -178,8 +178,13 @@ export async function POST(req: Request) {
 
     const requestedChannels = Array.isArray(body.channels)
       ? body.channels.filter(
-          (channel): channel is 'telegram' | 'bluesky' =>
-            channel === 'telegram' || channel === 'bluesky'
+          (
+            channel
+          ): channel is 'telegram' | 'bluesky' | 'facebook' | 'threads' =>
+            channel === 'telegram' ||
+            channel === 'bluesky' ||
+            channel === 'facebook' ||
+            channel === 'threads'
         )
       : undefined;
 
@@ -198,14 +203,19 @@ export async function POST(req: Request) {
 
     const telegramState = result.channels?.telegram;
     const blueskyState = result.channels?.bluesky;
+    const facebookState = result.channels?.facebook;
+    const threadsState = result.channels?.threads;
 
     const channels = {
       bluesky: {
         success: blueskyState?.status === 'published',
         status: blueskyState?.status ?? 'not_attempted',
         uri: result.bluesky?.uri ?? blueskyState?.externalUri ?? null,
+        externalId: blueskyState?.externalId ?? null,
+        externalUri: blueskyState?.externalUri ?? null,
         error: blueskyState?.lastError ?? null,
         attempts: blueskyState?.attempts ?? 0,
+        uncertain: blueskyState?.uncertain ?? false,
       },
       telegram: {
         success: telegramState?.status === 'published',
@@ -215,9 +225,45 @@ export async function POST(req: Request) {
           telegramState?.messageIds[0] ??
           null,
         messageIds: telegramState?.messageIds ?? [],
+        externalId: telegramState?.externalId ?? null,
+        externalUri: telegramState?.externalUri ?? null,
         error: telegramState?.lastError ?? null,
         attempts: telegramState?.attempts ?? 0,
         uncertain: telegramState?.uncertain ?? false,
+      },
+      facebook: {
+        success: facebookState?.status === 'published',
+        status: facebookState?.status ?? 'not_attempted',
+        externalId: facebookState?.externalId ?? null,
+        externalUri: facebookState?.externalUri ?? null,
+        postId:
+          facebookState?.status === 'published'
+            ? result.facebook?.id ?? facebookState.externalId ?? null
+            : null,
+        url:
+          facebookState?.status === 'published'
+            ? result.facebook?.url ?? facebookState.externalUri ?? null
+            : null,
+        error: facebookState?.lastError ?? null,
+        attempts: facebookState?.attempts ?? 0,
+        uncertain: facebookState?.uncertain ?? false,
+      },
+      threads: {
+        success: threadsState?.status === 'published',
+        status: threadsState?.status ?? 'not_attempted',
+        externalId: threadsState?.externalId ?? null,
+        externalUri: threadsState?.externalUri ?? null,
+        postId:
+          threadsState?.status === 'published'
+            ? result.threads?.id ?? threadsState.externalId ?? null
+            : null,
+        url:
+          threadsState?.status === 'published'
+            ? result.threads?.url ?? threadsState.externalUri ?? null
+            : null,
+        error: threadsState?.lastError ?? null,
+        attempts: threadsState?.attempts ?? 0,
+        uncertain: threadsState?.uncertain ?? false,
       },
       osirisWebhook: {
         configured:
@@ -240,6 +286,8 @@ export async function POST(req: Request) {
     const publishedSomewhere =
       channels.bluesky.success ||
       channels.telegram.success ||
+      channels.facebook.success ||
+      channels.threads.success ||
       channels.osirisWebhook.success === true ||
       channels.pierrotWebhook.success === true;
 

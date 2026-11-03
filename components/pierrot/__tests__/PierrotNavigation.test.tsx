@@ -244,6 +244,77 @@ describe('Pierrot conversational navigation', () => {
     expect(link).toHaveAttribute('href', '/lobby');
   });
 
+  it('renders headings, quotes, lists, tables and code with readable structure', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        reply: [
+          '# Heading',
+          '',
+          '> A quoted observation.',
+          '',
+          '- First item',
+          '- Second item',
+          '',
+          '| Source | Date |',
+          '| --- | --- |',
+          '| Journal | 2026 |',
+          '',
+          '```js',
+          'const longValue = "a very long code line that should scroll inside the message";',
+          '```',
+          '',
+          '[Read more](https://example.com/story)',
+        ].join('\n'),
+      }),
+    });
+
+    renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
+
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByRole('textbox', { name: 'Message Pierrot' });
+
+    fireEvent.change(input, { target: { value: 'hi' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(chatFetchCalls()).toHaveLength(1);
+    });
+
+    expect(await within(dialog).findByRole('heading', { name: 'Heading' })).toBeInTheDocument();
+    expect(within(dialog).getByText('A quoted observation.').closest('blockquote')).toBeTruthy();
+    expect(within(dialog).getByText('First item').tagName).toBe('LI');
+    expect(within(dialog).getByRole('table')).toBeInTheDocument();
+    expect(within(dialog).getByRole('columnheader', { name: 'Source' })).toBeInTheDocument();
+    expect(within(dialog).getByText(/const longValue/).tagName).toBe('CODE');
+    expect(within(dialog).getByRole('link', { name: 'Read more' })).toHaveAttribute(
+      'href',
+      'https://example.com/story'
+    );
+  });
+
+  it('does not load remote markdown images, but keeps their alt text', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        reply: '![Diagram](https://tracker.example/pixel.png)',
+      }),
+    });
+
+    renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
+
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByRole('textbox', { name: 'Message Pierrot' });
+
+    fireEvent.change(input, { target: { value: 'hi' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(await within(dialog).findByText('[Diagram]')).toBeInTheDocument();
+    expect(dialog.querySelector('img[src*="tracker.example"]')).toBeNull();
+  });
+
   it('turns known routes in assistant prose into clickable links', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,

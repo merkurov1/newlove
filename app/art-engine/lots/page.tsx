@@ -28,10 +28,27 @@ export default async function LotsPage() {
     redirect('/art-engine?access=required');
   }
 
-  const { data: lots, error } = await supabase
+  let lots: any[] | null = null;
+  let error: any = null;
+
+  const withVault = await supabase
     .from('lots')
-    .select('id, artist, title, year, medium, dimensions, estimate, image_path, source_url, auction_house, ai_content, created_at')
+    .select('id, artist, title, year, medium, dimensions, estimate, image_path, source_url, auction_house, ai_content, status, vault, created_at')
     .order('created_at', { ascending: false });
+
+  if (withVault.error) {
+    // Deploy-safe fallback for environments where the Vault SQL migration has
+    // not been applied yet.
+    const withoutVault = await supabase
+      .from('lots')
+      .select('id, artist, title, year, medium, dimensions, estimate, image_path, source_url, auction_house, ai_content, status, created_at')
+      .order('created_at', { ascending: false });
+
+    lots = withoutVault.data;
+    error = withoutVault.error;
+  } else {
+    lots = withVault.data;
+  }
 
   if (error) {
     return (
@@ -70,6 +87,8 @@ export default async function LotsPage() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
           {lots?.map((lot) => {
             const ai = (lot.ai_content || {}) as Record<string, any>;
+            const vault = (lot.vault || {}) as Record<string, any>;
+            const ingestion = vault.ingestion || {};
             const publicImg = lot.image_path?.startsWith('http')
               ? lot.image_path
               : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/artifacts/${lot.image_path}`;
@@ -100,8 +119,25 @@ export default async function LotsPage() {
                       <span>{lot.auction_house || 'AUCTION'}</span>
                       <span className="text-neutral-700">{lot.estimate || ai.estimate_raw || 'ON REQUEST'}</span>
                     </div>
-                    <h2 className="text-xl font-serif text-neutral-900 group-hover:underline break-words">{lot.artist || 'Unknown Artist'}</h2>
-                    <p className="text-sm text-neutral-600 italic mt-1 leading-snug break-words">{lot.title || 'Untitled'} {lot.year && `(${lot.year})`}</p>
+                    <h2 className="text-xl font-serif text-neutral-900 group-hover:underline break-words">{lot.artist || 'Artist not extracted'}</h2>
+                    <p className="text-sm text-neutral-600 italic mt-1 leading-snug break-words">{lot.title || 'Title not extracted'} {lot.year && `(${lot.year})`}</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5 text-[9px] font-mono uppercase tracking-wider">
+                      {ingestion.status && (
+                        <span className="border border-neutral-200 px-2 py-1 text-neutral-600">
+                          Ingestion: {ingestion.status}
+                        </span>
+                      )}
+                      {ingestion.parser && (
+                        <span className="border border-neutral-200 px-2 py-1 text-neutral-400">
+                          {ingestion.parser}{ingestion.parser_version ? ` v${ingestion.parser_version}` : ''}
+                        </span>
+                      )}
+                      {Array.isArray(ingestion.warnings) && ingestion.warnings.length > 0 && (
+                        <span className="border border-amber-200 bg-amber-50 px-2 py-1 text-amber-800">
+                          {ingestion.warnings.length} warning{ingestion.warnings.length === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </div>
                     {(ai.source_confidence || ai.source_description) && (
                       <div className="mt-3 flex flex-wrap gap-2 text-[9px] font-mono uppercase tracking-wider">
                         {ai.source_confidence && <span className="border border-neutral-200 px-2 py-1 text-neutral-500">Source: {ai.source_confidence}</span>}

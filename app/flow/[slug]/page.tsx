@@ -17,6 +17,7 @@ import {
   type FlowSocialMetadata,
 } from '@/lib/flow/metadata';
 import { getCachedFlowItem } from '@/lib/flow/items-cash';
+import { readDistributionUrl } from '@/lib/flow/distribution';
 import PierrotContextBlock from '@/components/flow/PierrotContextBlock';
 
 // Publication data and its ready AI context share one tagged cache entry.
@@ -542,6 +543,13 @@ export default async function FlowItemPage({ params }: PageProps) {
       )}`
     : null;
 
+  const facebookUrl =
+    readDistributionUrl(bundle?.item.metadata, 'facebook') ??
+    readDistributionUrl(content.metadata, 'facebook');
+  const threadsUrl =
+    readDistributionUrl(bundle?.item.metadata, 'threads') ??
+    readDistributionUrl(content.metadata, 'threads');
+
   const articleSchema = {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
@@ -627,6 +635,32 @@ export default async function FlowItemPage({ params }: PageProps) {
                 Telegram ↗
               </a>
               <span className="text-stone-200">·</span>
+              {facebookUrl && (
+                <>
+                  <a
+                    href={facebookUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="transition hover:text-stone-900"
+                  >
+                    Facebook ↗
+                  </a>
+                  <span className="text-stone-200">·</span>
+                </>
+              )}
+              {threadsUrl && (
+                <>
+                  <a
+                    href={threadsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="transition hover:text-stone-900"
+                  >
+                    Threads ↗
+                  </a>
+                  <span className="text-stone-200">·</span>
+                </>
+              )}
               <Link href="/journal" className="transition hover:text-stone-900">
                 Journal ↗
               </Link>

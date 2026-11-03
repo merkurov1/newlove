@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { HouseParser } from "../house-parser";
+import { extractLotDetails } from "../extract-detail";
 import type { LotData } from "../types";
 
 export class BonhamsParser extends HouseParser {
@@ -11,6 +12,7 @@ export class BonhamsParser extends HouseParser {
     url: string
   ): LotData {
     const $ = cheerio.load(html);
+    const details = extractLotDetails($);
     const parseErrors: string[] = [];
 
     const title = this.normalizeText(
@@ -30,7 +32,8 @@ export class BonhamsParser extends HouseParser {
 
     const lotNumber = this.normalizeText(
       $(".lot-number").first().text() ||
-        $('[data-testid="lot-number"]').first().text()
+        $('[data-testid="lot-number"]').first().text() ||
+        details.lotNumber
     );
 
     const estimateText = this.normalizeText(
@@ -52,12 +55,14 @@ export class BonhamsParser extends HouseParser {
 
     const medium = this.normalizeText(
       $(".medium").first().text() ||
-        $('[data-testid="medium"]').first().text()
+        $('[data-testid="medium"]').first().text() ||
+        details.medium
     );
 
     const dimensions = this.normalizeText(
       $(".dimensions").first().text() ||
-        $('[data-testid="dimensions"]').first().text()
+        $('[data-testid="dimensions"]').first().text() ||
+        details.dimensions
     );
 
     const imageUrl =
@@ -80,9 +85,15 @@ export class BonhamsParser extends HouseParser {
       lotNumber,
       title,
       artist,
-      year: this.parseYear(title),
+      year: details.year || this.parseYear(title),
       medium,
       dimensions,
+      signature: details.signature,
+      description: details.description,
+      provenance: details.provenance,
+      exhibitions: details.exhibitions,
+      literature: details.literature,
+      auctionDate: details.auctionDate,
       estimate: this.parseEstimate(estimateText),
       price: this.parsePrice(priceText),
       sold:
@@ -100,6 +111,8 @@ export class BonhamsParser extends HouseParser {
         : [],
       url,
       source: "house-parser",
+      parserName: "bonhams",
+      parserVersion: this.version,
       confidence: 0.8,
       raw: {
         lotNumber,
@@ -108,6 +121,11 @@ export class BonhamsParser extends HouseParser {
         soldText,
         medium,
         dimensions,
+        signature: details.signature,
+        provenance: details.provenance,
+        exhibitions: details.exhibitions,
+        literature: details.literature,
+        auctionDate: details.auctionDate,
       },
       parseErrors,
     };

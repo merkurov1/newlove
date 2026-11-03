@@ -28,6 +28,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     .from('lots')
     .select('artist, title, image_path, ai_content')
     .eq('id', params.id)
+    .eq('status', 'published')
     .maybeSingle();
 
   const path = `/lots/${encodeURIComponent(params.id)}`;
@@ -68,6 +69,7 @@ export default async function LotDetailPage({ params }: { params: { id: string }
     .from('lots')
     .select('*')
     .eq('id', params.id)
+    .eq('status', 'published')
     .maybeSingle();
 
   if (error || !lot) notFound();

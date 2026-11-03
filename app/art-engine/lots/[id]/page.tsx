@@ -153,6 +153,8 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
   }
 
   const ai = lot.ai_content || {};
+  const vault = lot.vault || {};
+  const ingestion = vault.ingestion || null;
   const auctionHouse = getAuctionHouseName(lot);
   const publicImg = lot.image_path?.startsWith('http')
     ? lot.image_path
@@ -173,14 +175,6 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
           </div>
 
           <div className="flex flex-wrap gap-4 items-center">
-            {/* Исправленная ссылка с учетом префикса /art-engine */}
-            <Link 
-              href={`/art-engine/lots/${lot.id}/assets`}
-              className="bg-neutral-800 text-white px-3 py-1.5 hover:bg-neutral-700 transition uppercase tracking-widest font-mono text-[10px] flex items-center gap-1.5"
-            >
-              ⚡ Generate Assets
-            </Link>
-            <span className="text-neutral-300">•</span>
             <button 
               onClick={handleCopyPermalink} 
               className="text-neutral-600 hover:text-neutral-900 transition underline underline-offset-4 cursor-pointer"
@@ -249,6 +243,82 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
                 </span>
               </div>
             </div>
+
+            {ingestion && (
+              <div className="bg-white border border-neutral-200 p-6 space-y-3 font-mono text-xs shadow-sm">
+                <div className="flex justify-between items-center border-b border-neutral-100 pb-2">
+                  <span className="text-[10px] text-neutral-400 uppercase tracking-widest">
+                    Ingestion
+                  </span>
+                  <span className="text-neutral-900 uppercase tracking-wider">
+                    {ingestion.status || 'unknown'}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-4">
+                  <span className="text-neutral-500">PARSER</span>
+                  <span className="text-neutral-800 text-right">
+                    {ingestion.parser || '—'}
+                    {ingestion.parser_version ? ` v${ingestion.parser_version}` : ''}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-4">
+                  <span className="text-neutral-500">HOUSE</span>
+                  <span className="text-neutral-800 text-right">{ingestion.house || auctionHouse}</span>
+                </div>
+
+                {ingestion.attempt_id && (
+                  <div className="flex justify-between gap-4">
+                    <span className="text-neutral-500">ATTEMPT</span>
+                    <span className="text-neutral-800 text-right">
+                      {String(ingestion.attempt_id).slice(0, 8)}
+                    </span>
+                  </div>
+                )}
+
+                {ingestion.image?.originalUrl && (
+                  <div className="pt-2 border-t border-neutral-100">
+                    <a
+                      href={ingestion.image.originalUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] text-neutral-600 underline break-all"
+                    >
+                      Original auction image ↗
+                    </a>
+                    <p className="mt-1 text-[10px] text-neutral-400">
+                      Availability: {ingestion.image.availability || 'unknown'}
+                      {ingestion.image.width && ingestion.image.height
+                        ? ` · ${ingestion.image.width}×${ingestion.image.height}`
+                        : ''}
+                    </p>
+                  </div>
+                )}
+
+                {Array.isArray(ingestion.missing_fields) && ingestion.missing_fields.length > 0 && (
+                  <p className="text-[10px] text-amber-700">
+                    Missing: {ingestion.missing_fields.join(', ')}
+                  </p>
+                )}
+
+                {Array.isArray(ingestion.warnings) && ingestion.warnings.length > 0 && (
+                  <div className="space-y-1 pt-2 border-t border-neutral-100">
+                    {ingestion.warnings.map((warning: string, index: number) => (
+                      <p key={index} className="text-[10px] text-amber-700">! {warning}</p>
+                    ))}
+                  </div>
+                )}
+
+                {Array.isArray(ingestion.errors) && ingestion.errors.length > 0 && (
+                  <div className="space-y-1 pt-2 border-t border-neutral-100">
+                    {ingestion.errors.map((error: string, index: number) => (
+                      <p key={index} className="text-[10px] text-rose-700">× {error}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* RIGHT COLUMN: TEXT DOSSIER & ESSAY */}

@@ -101,7 +101,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         .not('slug', 'is', null)
         .limit(1000),
       supabase.from('Tag').select('slug,name').limit(500),
-      supabase.from('lots').select('id,created_at').limit(1000),
+      supabase
+        .from('lots')
+        .select('id,created_at')
+        .eq('status', 'published')
+        .limit(1000),
       getMediaRecords().catch(() => []),
     ]);
 

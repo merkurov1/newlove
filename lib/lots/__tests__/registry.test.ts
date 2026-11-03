@@ -1,97 +1,118 @@
-import * as cheerio from "cheerio";
-import { HouseParser } from "../house-parser";
-import type { LotData } from "../types";
+import { ParserRegistry, parserRegistry } from '../registry';
 
-export class BonhamsParser extends HouseParser {
-  readonly houseId = "bonhams";
-  readonly matches = ["bonhams"];
+const HOUSE_HTML = `<!doctype html>
+<html>
+  <head>
+    <meta property="og:title" content="GENERIC OG TITLE" />
+    <meta property="og:image" content="https://images.example.com/og.jpg" />
+    <script type="application/ld+json">
+      {
+        "@type": "VisualArtwork",
+        "name": "JSON-LD TITLE",
+        "creator": { "name": "JSON-LD ARTIST" },
+        "artMedium": "Oil on canvas",
+        "image": "https://images.example.com/jsonld.jpg",
+        "offers": { "lowPrice": 1000, "highPrice": 2000, "priceCurrency": "GBP" }
+      }
+    </script>
+  </head>
+  <body>
+    <h1 class="lot-title">HOUSE TITLE</h1>
+    <div class="lot-detail__title">HOUSE TITLE</div>
+    <div class="artist-name">HOUSE ARTIST</div>
+    <div class="lot-artist-name">HOUSE ARTIST</div>
+    <div class="artist-title">HOUSE ARTIST</div>
+    <div class="lot-detail__artist">HOUSE ARTIST</div>
+    <div class="lot-number">LOT 42</div>
+    <div class="estimate">£4,000 – £6,000</div>
+    <div class="lot-estimate">£4,000 – £6,000</div>
+    <div class="medium">Oil on canvas</div>
+    <div class="dimensions">100 x 80 cm</div>
+    <div class="lot-image"><img src="https://images.example.com/house.jpg" /></div>
+  </body>
+</html>`;
 
-  parse(html: string, url: string): LotData {
-    const $ = cheerio.load(html);
-    const parseErrors: string[] = [];
+const JSON_LD_ONLY_HTML = `<!doctype html>
+<html>
+  <head>
+    <script type="application/ld+json">
+      {
+        "@type": "VisualArtwork",
+        "name": "JSON ONLY TITLE",
+        "creator": { "name": "JSON ONLY ARTIST" },
+        "artMedium": "Acrylic on canvas",
+        "dateCreated": "1968",
+        "image": "https://images.example.com/json-only.jpg"
+      }
+    </script>
+  </head>
+  <body><div class="page-empty"></div></body>
+</html>`;
 
-    const title = this.normalizeText(
-      $(".lot-title").first().text() ||
-        $('[data-testid="lot-title"]').first().text() ||
-        $("h1").first().text() ||
-        null
-    );
+describe('ParserRegistry', () => {
+  const registry = new ParserRegistry();
 
-    const artist = this.normalizeText(
-      $(".artist-name").first().text() ||
-        $(".maker-name").first().text() ||
-        $('[data-testid="artist"]').first().text() ||
-        null
-    );
+  it.each([
+    ['christies', 'https://www.christies.com/en/lot/lot-123'],
+    ['sothebys', 'https://www.sothebys.com/en/buy/auction/2026/example/123'],
+    ['phillips', 'https://www.phillips.com/detail/example/123'],
+    ['bonhams', 'https://www.bonhams.com/auction/123/lot/42/example/'],
+  ])('uses the %s house parser instead of generic JSON-LD', (house, url) => {
+    const result = registry.parse(HOUSE_HTML, url);
 
-    const lotNumber = this.normalizeText(
-      $(".lot-number").first().text() ||
-        $('[data-testid="lot-number"]').first().text() ||
-        null
-    );
+    expect(result.parserName).toBe(house);
+    expect(result.parserVersion).toBeTruthy();
+    expect(result.source).toBe('house-parser');
+    expect(result.title).toBe('HOUSE TITLE');
+    expect(result.artist).toBe('HOUSE ARTIST');
+    expect(result.lotNumber).toBe('LOT 42');
+    expect(result.medium).toBe('Oil on canvas');
+    expect(result.dimensions).toBe('100 x 80 cm');
+    expect(result.auctionHouse).toBe(house);
+    expect(result.imageUrl).toBe('https://images.example.com/og.jpg');
+    expect(result.imageCandidates?.some((candidate) => candidate.url.includes('house.jpg') || candidate.url.includes('og.jpg'))).toBe(true);
+    expect(result.confidence).toBeGreaterThanOrEqual(0.8);
+  });
 
-    const estimateText = this.normalizeText(
-      $(".estimate").first().text() ||
-        $('[data-testid="estimate"]').first().text() ||
-        null
-    );
+  it('fills missing house fields from JSON-LD without overwriting house data', () => {
+    const result = registry.parse(JSON_LD_ONLY_HTML, 'https://www.christies.com/en/lot/lot-123');
 
-    const priceText = this.normalizeText(
-      $(".sale-price").first().text() ||
-        $('[data-testid="sale-price"]').first().text() ||
-        null
-    );
+    expect(result.parserName).toBe('christies');
+    expect(result.source).toBe('house-parser');
+    expect(result.title).toBe('JSON ONLY TITLE');
+    expect(result.artist).toBe('JSON ONLY ARTIST');
+    expect(result.medium).toBe('Acrylic on canvas');
+    expect(result.year).toBe(1968);
+  });
 
-    const soldText = this.normalizeText(
-      $(".sale-status").first().text() ||
-        $('[data-testid="sale-status"]').first().text() ||
-        null
-    );
+  it('uses the generic fallback for an unknown auction house', () => {
+    const result = registry.parse(HOUSE_HTML, 'https://example.com/lot/42');
 
-    const medium = this.normalizeText($(".medium").first().text() || null);
-    const dimensions = this.normalizeText($(".dimensions").first().text() || null);
+    expect(result.auctionHouse).toBe('unknown');
+    expect(result.source === 'fallback' || result.source === 'generic-json-ld').toBe(true);
+    expect(result.imageUrl).toContain('images.example.com');
+    expect(result.warnings?.length).toBeGreaterThan(0);
+  });
 
-    const imageUrl =
-      $('meta[property="og:image"]').attr("content") ||
-      $('meta[name="twitter:image"]').attr("content") ||
-      $("img").first().attr("src") ||
-      null;
+  it('detects the four supported houses', () => {
+    expect(registry.detectHouse('https://www.christies.com/lot')).toBe('christies');
+    expect(registry.detectHouse('https://www.sothebys.com/lot')).toBe('sothebys');
+    expect(registry.detectHouse('https://www.phillips.com/lot')).toBe('phillips');
+    expect(registry.detectHouse('https://www.bonhams.com/lot')).toBe('bonhams');
+    expect(registry.detectHouse('https://example.com/lot')).toBe('unknown');
+  });
 
-    if (!title) parseErrors.push("title not found");
-    if (!artist) parseErrors.push("artist not found");
+  it('exports a shared registry for the ingestion route', () => {
+    expect(parserRegistry).toBeInstanceOf(ParserRegistry);
+  });
 
-    return {
-      auctionHouse: this.houseId,
-      lotNumber,
-      title,
-      artist,
-      year: this.parseYear(title ?? undefined),
-      medium,
-      dimensions,
-      estimate: this.parseEstimate(estimateText ?? undefined),
-      price: priceText
-        ? {
-            raw: priceText,
-            currency: this.detectCurrency(priceText),
-            realized: this.parseNumber(priceText) ?? undefined,
-          }
-        : null,
-      sold: soldText !== null ? /sold|sale/i.test(soldText) : priceText !== null,
-      imageUrl,
-      imageCandidates: imageUrl ? [{ url: imageUrl, source: "bonhams" }] : [],
-      url,
-      source: "house-parser",
-      confidence: 0.8,
-      raw: { lotNumber, estimateText, priceText, soldText, medium, dimensions },
-      parseErrors,
-    };
-  }
-}
+  it('does not merge by artist/title alone into a new work (identity is a later stage)', () => {
+    // Guardrail: Stage 1 must not silently group lots. This test documents that
+    // the parser itself performs no identity merging.
+    const first = registry.parse(HOUSE_HTML, 'https://www.christies.com/en/lot/lot-1');
+    const second = registry.parse(HOUSE_HTML, 'https://www.sothebys.com/en/lot/lot-2');
 
-describe('BonhamsParser', () => {
-  it('instantiates correctly and matches bonhams', () => {
-    const parser = new BonhamsParser();
-    expect(parser.houseId).toBe('bonhams');
-    expect(parser.matches).toContain('bonhams');
+    expect(first.title).toBe(second.title);
+    expect(first.url).not.toBe(second.url);
   });
 });

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import NewPostModal from '@/components/flow/NewPostModal';
+import { readDistributionUrl } from '@/lib/flow/distribution';
 
 type FlowImage = {
   url: string;
@@ -136,6 +137,8 @@ function EntryMeta({
 }) {
   const tgUrl = getTelegramUrl(item);
   const bskyUrl = getBlueskyUrl(item);
+  const facebookUrl = readDistributionUrl(item.metadata, 'facebook');
+  const threadsUrl = readDistributionUrl(item.metadata, 'threads');
 
   return (
     <div className="mb-3 flex items-center justify-between gap-4">
@@ -161,6 +164,28 @@ function EntryMeta({
             aria-label="Open on Telegram"
           >
             tg ↗
+          </a>
+        )}
+        {facebookUrl && (
+          <a
+            href={facebookUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition hover:text-neutral-900"
+            aria-label="Open on Facebook"
+          >
+            fb ↗
+          </a>
+        )}
+        {threadsUrl && (
+          <a
+            href={threadsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition hover:text-neutral-900"
+            aria-label="Open on Threads"
+          >
+            threads ↗
           </a>
         )}
       </div>

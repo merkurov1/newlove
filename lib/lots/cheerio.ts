@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { extractLotDetails } from "./extract-detail";
 import type { LotData, ImageCandidate } from "./types";
 
 function normalizeText(value?: string | null): string | null {
@@ -60,10 +61,16 @@ export function parseLotDom(
   houseName?: string
 ): Partial<LotData> {
   const $ = cheerio.load(html);
+  const details = extractLotDetails($);
   const result: Partial<LotData> = {};
   const candidates: ImageCandidate[] = [];
 
-  const host = new URL(url).hostname.toLowerCase();
+  let host = "";
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    host = "";
+  }
 
   if (host.includes("sothebys.com")) {
     result.house = "Sotheby's";
@@ -165,11 +172,27 @@ export function parseLotDom(
     );
   }
 
+  // Fill catalogue fields that the house-specific DOM selectors did not
+  // provide. Existing house values always win.
   if (!result.title) {
     result.title =
+      details.title ||
       normalizeText($("h1").first().text()) ||
       normalizeText($("h2").first().text());
   }
+
+  if (!result.artist) result.artist = details.artist;
+  if (!result.year) result.year = details.year;
+  if (!result.medium) result.medium = details.medium;
+  if (!result.dimensions) result.dimensions = details.dimensions;
+  if (!result.signature) result.signature = details.signature;
+  if (!result.description) result.description = details.description;
+  if (!result.lotNumber) result.lotNumber = details.lotNumber;
+  if (!result.auctionDate) result.auctionDate = details.auctionDate;
+
+  if (!result.provenance?.length) result.provenance = details.provenance;
+  if (!result.exhibitions?.length) result.exhibitions = details.exhibitions;
+  if (!result.literature?.length) result.literature = details.literature;
 
   $("main img, article img, .lot-image img").each((_, el) => {
     const src = $(el).attr("src") || $(el).attr("data-src");

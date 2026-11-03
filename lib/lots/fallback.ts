@@ -1,33 +1,32 @@
 import * as cheerio from "cheerio";
 import { HouseParser } from "./house-parser";
+import { extractLotDetails } from "./extract-detail";
 import type { LotData } from "./types";
 
 export class GenericFallbackParser extends HouseParser {
-  readonly houseId = "unknown";
+  readonly houseId = "unknown" as const;
   readonly matches: string[] = [];
 
   parse(html: string, url: string): LotData {
     const $ = cheerio.load(html);
+    const details = extractLotDetails($);
     const rootText = $.root().text();
 
     const title =
       this.normalizeText(
-        $('meta[property="og:title"]').attr("content")
+        $('meta[property="og:title"]').attr("content"),
       ) ||
       this.normalizeText(
-        $('meta[name="twitter:title"]').attr("content")
+        $('meta[name="twitter:title"]').attr("content"),
       ) ||
+      details.title ||
       this.normalizeText($("h1").first().text()) ||
       this.normalizeText($("title").first().text());
 
     const artist =
-      this.normalizeText(
-        $('meta[name="artist"]').attr("content")
-      ) ||
-      this.normalizeText(
-        $('meta[property="artist"]').attr("content")
-      ) ||
-      this.extractArtistFromText(rootText);
+      details.artist ||
+      this.normalizeText($('meta[name="artist"]').attr("content")) ||
+      this.normalizeText($('meta[property="artist"]').attr("content"));
 
     const estimateText =
       this.extractByLabel(rootText, "estimate") ||
@@ -43,7 +42,16 @@ export class GenericFallbackParser extends HouseParser {
       auctionHouse: "unknown",
       title,
       artist,
-      year: this.parseYear(title),
+      year: details.year || this.parseYear(title),
+      medium: details.medium,
+      dimensions: details.dimensions,
+      signature: details.signature,
+      description: details.description,
+      provenance: details.provenance,
+      exhibitions: details.exhibitions,
+      literature: details.literature,
+      auctionDate: details.auctionDate,
+      lotNumber: details.lotNumber,
       estimate: this.parseEstimate(estimateText),
       imageUrl,
       imageCandidates: imageUrl
@@ -51,53 +59,33 @@ export class GenericFallbackParser extends HouseParser {
         : [],
       url,
       source: "fallback",
+      parserName: "generic-fallback",
+      parserVersion: this.version,
       confidence: 0.25,
-      warnings: [
-        "House-specific parser unavailable; generic fallback used.",
-      ],
       raw: {
-        estimateText,
+        title,
+        artist,
         imageUrl,
+        estimateText,
+        provenance: details.provenance,
+        exhibitions: details.exhibitions,
+        literature: details.literature,
       },
-      parseErrors: title
-        ? []
-        : ["title not found in fallback parser"],
+      parseErrors: title ? [] : ["title not found in fallback parser"],
     };
-  }
-
-  private extractArtistFromText(
-    text: string
-  ): string | null {
-    const patterns = [
-      /by\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})/i,
-      /artist\s*[:\-]\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})/i,
-      /maker\s*[:\-]\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})/i,
-    ];
-
-    for (const pattern of patterns) {
-      const match = text.match(pattern);
-
-      if (match?.[1]) {
-        return match[1].trim();
-      }
-    }
-
-    return null;
   }
 
   private extractByLabel(
     text: string,
-    label: string
+    label: string,
   ): string | null {
     const match = text.match(
       new RegExp(
         `${label}\\s*[:\\-]?\\s*([\\$£€\\d,\\.\\s–-]+)`,
-        "i"
-      )
+        "i",
+      ),
     );
 
-    return match?.[1]
-      ? match[1].trim()
-      : null;
+    return match?.[1] ? match[1].trim() : null;
   }
 }

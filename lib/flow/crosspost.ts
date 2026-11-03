@@ -1,6 +1,18 @@
 import { createHash } from 'node:crypto';
 
 import { publishToBluesky } from '@/lib/bluesky';
+import {
+  isFacebookConfigured,
+  publishToFacebook,
+} from '@/lib/meta/facebook';
+import {
+  isThreadsConfigured,
+  publishToThreads,
+} from '@/lib/meta/threads';
+import type {
+  MetaPublishResult,
+  MetaResumeState,
+} from '@/lib/meta/types';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import {
@@ -26,7 +38,7 @@ export {
 
 type UnknownRecord = Record<string, unknown>;
 
-export type CrosspostChannel = 'telegram' | 'bluesky';
+export type CrosspostChannel = 'telegram' | 'bluesky' | 'facebook' | 'threads';
 
 export type CrosspostChannelStatus =
   | 'pending'
@@ -50,6 +62,12 @@ export type CrosspostChannelState = {
   publishedAt: string | null;
   textPartsSent: number;
   sentImageUrls: string[];
+  /**
+   * Meta-specific delivery phase. `container_created` means a Threads
+   * publishing container exists but the publication is not confirmed. It is
+   * never treated as published.
+   */
+  phase: 'container_created' | 'published' | null;
 };
 
 export type CrosspostState = {
@@ -74,6 +92,8 @@ export type CrosspostResult = {
     bot: 'pierrot' | 'osiris' | 'default';
     messageIds?: number[];
   } | null;
+  facebook?: { id: string; url: string | null } | null;
+  threads?: { id: string; url: string | null } | null;
   osirisWebhook?: { ok: boolean; status?: number; error?: string } | null;
   pierrotWebhook?: { ok: boolean; status?: number; error?: string } | null;
   channels?: Partial<Record<CrosspostChannel, CrosspostChannelState>>;
@@ -96,12 +116,47 @@ export type CrosspostDeps = {
     options: { resume?: TelegramResumeState; deps?: TelegramPublisherDeps }
   ) => Promise<TelegramPublishResult>;
   publishBluesky?: (payload: CrosspostPayload) => Promise<{ uri: string; cid: string } | null>;
+  publishFacebook?: (
+    payload: CrosspostPayload,
+    options?: { resume?: MetaResumeState }
+  ) => Promise<MetaPublishResult>;
+  publishThreads?: (
+    payload: CrosspostPayload,
+    options?: { resume?: MetaResumeState }
+  ) => Promise<MetaPublishResult>;
   now?: () => Date;
 };
 
 const SITE_ORIGIN = 'https://www.merkurov.love';
 const PUBLISHING_LOCK_MS = 15 * 60 * 1000;
-const CHANNELS: CrosspostChannel[] = ['telegram', 'bluesky'];
+
+/** Every supported channel, in the order the admin interface displays them. */
+export const CHANNELS: CrosspostChannel[] = [
+  'telegram',
+  'bluesky',
+  'facebook',
+  'threads',
+];
+
+/**
+ * Channels attempted when the caller does not pass an explicit list. Telegram
+ * and Bluesky keep their historical default. Meta channels are added only when
+ * they are configured (or when a publisher is injected in tests), so an
+ * unconfigured deployment behaves exactly as before.
+ */
+function defaultRequestedChannels(deps: CrosspostDeps): CrosspostChannel[] {
+  const channels: CrosspostChannel[] = ['telegram', 'bluesky'];
+
+  if (deps.publishFacebook || isFacebookConfigured()) {
+    channels.push('facebook');
+  }
+
+  if (deps.publishThreads || isThreadsConfigured()) {
+    channels.push('threads');
+  }
+
+  return channels;
+}
 
 function getSupabaseAdmin(): SupabaseClient | null {
   const url =
@@ -187,6 +242,7 @@ function emptyChannel(status: CrosspostChannelStatus): CrosspostChannelState {
     publishedAt: null,
     textPartsSent: 0,
     sentImageUrls: [],
+    phase: null,
   };
 }
 
@@ -219,7 +275,12 @@ function normalizeChannelState(value: unknown): CrosspostChannelState | null {
     publishedAt: readString(value.publishedAt ?? value.published_at),
     textPartsSent: readNumber(value.textPartsSent ?? value.text_parts_sent),
     sentImageUrls: stringArray(value.sentImageUrls ?? value.sent_image_urls),
+    phase: normalizeMetaPhase(value.phase),
   };
+}
+
+function normalizeMetaPhase(value: unknown): CrosspostChannelState['phase'] {
+  return value === 'container_created' || value === 'published' ? value : null;
 }
 
 /**
@@ -297,6 +358,74 @@ export function readCrosspostState(
     }
   }
 
+  const facebookState = normalizeChannelState(rawChannels.facebook);
+  if (facebookState) {
+    channels.facebook = facebookState;
+  } else {
+    const legacyFacebook = isRecord(legacy.facebook) ? legacy.facebook : null;
+    const id =
+      readString(legacyFacebook?.id) ??
+      readString(legacyFacebook?.postId) ??
+      readString(legacyFacebook?.post_id) ??
+      readString(metadata.facebook_post_id);
+    const url =
+      readString(legacyFacebook?.url) ??
+      readString(legacyFacebook?.uri) ??
+      readString(metadata.facebook_url) ??
+      readString(metadata.facebook_uri);
+
+    if (id || url) {
+      channels.facebook = {
+        ...emptyChannel('published'),
+        externalId: id,
+        externalUri: url,
+        phase: 'published',
+        publishedAt:
+          readString(legacy.attempted_at) ??
+          readString(legacy.crossposted_at) ??
+          now.toISOString(),
+        updatedAt:
+          readString(legacy.attempted_at) ??
+          readString(legacy.crossposted_at) ??
+          now.toISOString(),
+      };
+    }
+  }
+
+  const threadsState = normalizeChannelState(rawChannels.threads);
+  if (threadsState) {
+    channels.threads = threadsState;
+  } else {
+    const legacyThreads = isRecord(legacy.threads) ? legacy.threads : null;
+    const id =
+      readString(legacyThreads?.id) ??
+      readString(legacyThreads?.postId) ??
+      readString(legacyThreads?.post_id) ??
+      readString(metadata.threads_post_id);
+    const url =
+      readString(legacyThreads?.url) ??
+      readString(legacyThreads?.uri) ??
+      readString(metadata.threads_url) ??
+      readString(metadata.threads_uri);
+
+    if (id || url) {
+      channels.threads = {
+        ...emptyChannel('published'),
+        externalId: id,
+        externalUri: url,
+        phase: 'published',
+        publishedAt:
+          readString(legacy.attempted_at) ??
+          readString(legacy.crossposted_at) ??
+          now.toISOString(),
+        updatedAt:
+          readString(legacy.attempted_at) ??
+          readString(legacy.crossposted_at) ??
+          now.toISOString(),
+      };
+    }
+  }
+
   return {
     channels,
     attemptedAt: readString(legacy.attempted_at ?? legacy.crossposted_at),
@@ -327,7 +456,16 @@ export function selectChannels(
   const requested =
     Array.isArray(options.channels) && options.channels.length > 0
       ? CHANNELS.filter((channel) => options.channels?.includes(channel))
-      : CHANNELS;
+      : // Callers that do not specify channels retain the historical
+        // Telegram + Bluesky default, extended with any Meta state already
+        // present on the item. crosspostFlowItem passes an explicit list when
+        // Meta credentials are configured.
+        CHANNELS.filter(
+          (channel) =>
+            channel === 'telegram' ||
+            channel === 'bluesky' ||
+            Boolean(state.channels[channel])
+        );
 
   if (options.retryFailed) {
     return requested.filter((channel) => {
@@ -418,6 +556,7 @@ function stateForTelegram(
         : previous?.publishedAt ?? null,
     textPartsSent: result.textPartsSent,
     sentImageUrls: sentImages,
+    phase: null,
   };
 }
 
@@ -457,6 +596,51 @@ function stateForBluesky(
     publishedAt: previous?.publishedAt ?? timestamp,
     textPartsSent: 0,
     sentImageUrls: [],
+    phase: null,
+  };
+}
+
+function stateForMeta(
+  previous: CrosspostChannelState | undefined,
+  result: MetaPublishResult,
+  channel: 'facebook' | 'threads',
+  contentHash: string,
+  now: Date
+): CrosspostChannelState {
+  const timestamp = now.toISOString();
+  const status: CrosspostChannelStatus = result.skipped
+    ? 'skipped'
+    : result.ok
+      ? 'published'
+      : 'failed';
+
+  return {
+    ...(previous ?? emptyChannel(status)),
+    status,
+    externalId: result.externalId ?? previous?.externalId ?? null,
+    externalUri: result.externalUri ?? previous?.externalUri ?? null,
+    messageIds: previous?.messageIds ?? [],
+    chatId: previous?.chatId ?? null,
+    attempts: previous?.attempts ?? 1,
+    lastError: result.ok
+      ? null
+      : result.error ??
+        (channel === 'facebook'
+          ? 'Facebook publish failed.'
+          : 'Threads publish failed.'),
+    uncertain: !result.ok && Boolean(result.uncertain),
+    contentHash,
+    startedAt: previous?.startedAt ?? timestamp,
+    updatedAt: timestamp,
+    publishedAt:
+      status === 'published'
+        ? previous?.publishedAt ?? timestamp
+        : previous?.publishedAt ?? null,
+    textPartsSent: previous?.textPartsSent ?? 0,
+    sentImageUrls: previous?.sentImageUrls ?? [],
+    phase:
+      result.phase ??
+      (status === 'published' ? 'published' : previous?.phase ?? null),
   };
 }
 
@@ -488,6 +672,8 @@ async function persistState(
     : {};
   const telegram = state.channels.telegram;
   const bluesky = state.channels.bluesky;
+  const facebook = state.channels.facebook;
+  const threads = state.channels.threads;
 
   const updatedMetadata: UnknownRecord = {
     ...metadata,
@@ -513,6 +699,20 @@ async function persistState(
               cid: bluesky.externalId,
             }
           : previousCrosspost.bluesky ?? null,
+      facebook:
+        facebook?.status === 'published'
+          ? {
+              id: facebook.externalId,
+              url: facebook.externalUri,
+            }
+          : previousCrosspost.facebook ?? null,
+      threads:
+        threads?.status === 'published'
+          ? {
+              id: threads.externalId,
+              url: threads.externalUri,
+            }
+          : previousCrosspost.threads ?? null,
     },
   };
 
@@ -532,6 +732,19 @@ async function persistState(
     updatedMetadata.telegram_channel_id = telegram.chatId;
     fullUpdate.telegram_message_id = telegram.messageIds[0];
     if (telegram.chatId) fullUpdate.telegram_channel_id = telegram.chatId;
+  }
+
+  // Facebook and Threads do not have dedicated item columns. Keep flat
+  // metadata aliases for compatibility with external readers, while
+  // `crosspost.channels` remains the canonical state.
+  if (facebook?.status === 'published') {
+    updatedMetadata.facebook_post_id = facebook.externalId;
+    updatedMetadata.facebook_url = facebook.externalUri;
+  }
+
+  if (threads?.status === 'published') {
+    updatedMetadata.threads_post_id = threads.externalId;
+    updatedMetadata.threads_url = threads.externalUri;
   }
 
   const { error } = await supabase
@@ -655,14 +868,16 @@ async function dispatchWebhook(
 }
 
 /**
- * Crosspost a Flow item to Telegram and Bluesky independently.
+ * Crosspost a Flow item to Telegram, Bluesky, Facebook Page and Threads
+ * independently.
  *
- * - A failure in one channel never blocks the other.
+ * - A failure in one channel never blocks the others.
  * - Already-published channels are not reposted.
  * - Retries send only the failed channel and resume partially delivered text
  *   parts/images.
  * - Timeout results are marked `uncertain` and are not retried automatically;
- *   an explicit `force` retry is required to avoid a duplicate.
+ *   an explicit `retryUncertain` (or `force`) retry is required to avoid a
+ *   duplicate.
  */
 export async function crosspostFlowItem(
   item: CrosspostPayload,
@@ -688,12 +903,22 @@ export async function crosspostFlowItem(
 
   const contentHash = hashContent(content);
   const previousState = readCrosspostState(item, startedAt);
-  const channelsToAttempt = selectChannels(previousState, options, startedAt);
+  const requestedChannels =
+    Array.isArray(options.channels) && options.channels.length > 0
+      ? CHANNELS.filter((channel) => options.channels?.includes(channel))
+      : defaultRequestedChannels(deps);
+  const channelsToAttempt = selectChannels(
+    previousState,
+    { ...options, channels: requestedChannels },
+    startedAt
+  );
 
   if (channelsToAttempt.length === 0) {
     return {
       bluesky: null,
       telegram: null,
+      facebook: null,
+      threads: null,
       channels: previousState.channels,
       attemptedChannels: [],
     };
@@ -724,8 +949,14 @@ export async function crosspostFlowItem(
     content
   );
 
-  const [telegramResult, blueskyResult, osirisResult, pierrotResult] =
-    await Promise.all([
+  const [
+    telegramResult,
+    blueskyResult,
+    facebookResult,
+    threadsResult,
+    osirisResult,
+    pierrotResult,
+  ] = await Promise.all([
       channelsToAttempt.includes('telegram')
         ? (deps.publishTelegram ?? publishTelegramContent)(content, {
             resume: {
@@ -760,6 +991,72 @@ export async function crosspostFlowItem(
             console.error('[crosspost:bluesky] Publish failed:', error);
             return null;
           })
+        : Promise.resolve(null),
+
+      channelsToAttempt.includes('facebook')
+        ? (deps.publishFacebook ?? publishToFacebook)(
+            {
+              ...item,
+              metadata: content.metadata,
+              title: content.title,
+              body_md: content.body,
+              source_url: content.sourceUrl,
+              type: content.rawType,
+              lang: content.language,
+              imageUrls: content.images.map((image) => image.url),
+            },
+            {
+              resume: {
+                externalId: previousState.channels.facebook?.externalId ?? null,
+                externalUri: previousState.channels.facebook?.externalUri ?? null,
+                uncertain: previousState.channels.facebook?.uncertain ?? false,
+                phase: previousState.channels.facebook?.phase ?? null,
+              },
+            }
+          ).catch((error): MetaPublishResult => ({
+            ok: false,
+            uncertain: true,
+            externalId: previousState.channels.facebook?.externalId ?? null,
+            externalUri: previousState.channels.facebook?.externalUri ?? null,
+            error:
+              error instanceof Error
+                ? error.message.slice(0, 300)
+                : 'Facebook publish failed.',
+            phase: previousState.channels.facebook?.phase ?? null,
+          }))
+        : Promise.resolve(null),
+
+      channelsToAttempt.includes('threads')
+        ? (deps.publishThreads ?? publishToThreads)(
+            {
+              ...item,
+              metadata: content.metadata,
+              title: content.title,
+              body_md: content.body,
+              source_url: content.sourceUrl,
+              type: content.rawType,
+              lang: content.language,
+              imageUrls: content.images.map((image) => image.url),
+            },
+            {
+              resume: {
+                externalId: previousState.channels.threads?.externalId ?? null,
+                externalUri: previousState.channels.threads?.externalUri ?? null,
+                uncertain: previousState.channels.threads?.uncertain ?? false,
+                phase: previousState.channels.threads?.phase ?? null,
+              },
+            }
+          ).catch((error): MetaPublishResult => ({
+            ok: false,
+            uncertain: true,
+            externalId: previousState.channels.threads?.externalId ?? null,
+            externalUri: previousState.channels.threads?.externalUri ?? null,
+            error:
+              error instanceof Error
+                ? error.message.slice(0, 300)
+                : 'Threads publish failed.',
+            phase: previousState.channels.threads?.phase ?? null,
+          }))
         : Promise.resolve(null),
 
       options.retryFailed
@@ -801,6 +1098,26 @@ export async function crosspostFlowItem(
     );
   }
 
+  if (facebookResult) {
+    state.channels.facebook = stateForMeta(
+      state.channels.facebook,
+      facebookResult,
+      'facebook',
+      contentHash,
+      finishedAt
+    );
+  }
+
+  if (threadsResult) {
+    state.channels.threads = stateForMeta(
+      state.channels.threads,
+      threadsResult,
+      'threads',
+      contentHash,
+      finishedAt
+    );
+  }
+
   await persistState(
     supabase,
     content.id,
@@ -828,6 +1145,20 @@ export async function crosspostFlowItem(
             messageIds: state.channels.telegram.messageIds,
           }
         : null,
+    facebook:
+      state.channels.facebook?.status === 'published'
+        ? {
+            id: state.channels.facebook.externalId ?? '',
+            url: state.channels.facebook.externalUri ?? null,
+          }
+        : null,
+    threads:
+      state.channels.threads?.status === 'published'
+        ? {
+            id: state.channels.threads.externalId ?? '',
+            url: state.channels.threads.externalUri ?? null,
+          }
+        : null,
     osirisWebhook: osirisResult,
     pierrotWebhook: pierrotResult,
     channels: state.channels,
@@ -839,6 +1170,8 @@ export async function crosspostFlowItem(
     attemptedChannels: channelsToAttempt,
     telegram: state.channels.telegram?.status ?? 'not_attempted',
     bluesky: state.channels.bluesky?.status ?? 'not_attempted',
+    facebook: state.channels.facebook?.status ?? 'not_attempted',
+    threads: state.channels.threads?.status ?? 'not_attempted',
   });
 
   return result;

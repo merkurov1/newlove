@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { HouseParser } from "../house-parser";
+import { extractLotDetails } from "../extract-detail";
 import type { LotData } from "../types";
 
 export class PhillipsParser extends HouseParser {
@@ -11,6 +12,7 @@ export class PhillipsParser extends HouseParser {
     url: string
   ): LotData {
     const $ = cheerio.load(html);
+    const details = extractLotDetails($);
     const parseErrors: string[] = [];
 
     const title = this.normalizeText(
@@ -29,7 +31,8 @@ export class PhillipsParser extends HouseParser {
 
     const lotNumber = this.normalizeText(
       $(".lot-number").first().text() ||
-        $('[data-test="lot-number"]').first().text()
+        $('[data-test="lot-number"]').first().text() ||
+        details.lotNumber
     );
 
     const estimateText = this.normalizeText(
@@ -51,12 +54,14 @@ export class PhillipsParser extends HouseParser {
 
     const medium = this.normalizeText(
       $(".medium").first().text() ||
-        $('[data-test="medium"]').first().text()
+        $('[data-test="medium"]').first().text() ||
+        details.medium
     );
 
     const dimensions = this.normalizeText(
       $(".dimensions").first().text() ||
-        $('[data-test="dimensions"]').first().text()
+        $('[data-test="dimensions"]').first().text() ||
+        details.dimensions
     );
 
     const imageUrl =
@@ -79,9 +84,15 @@ export class PhillipsParser extends HouseParser {
       lotNumber,
       title,
       artist,
-      year: this.parseYear(title),
+      year: details.year || this.parseYear(title),
       medium,
       dimensions,
+      signature: details.signature,
+      description: details.description,
+      provenance: details.provenance,
+      exhibitions: details.exhibitions,
+      literature: details.literature,
+      auctionDate: details.auctionDate,
       estimate: this.parseEstimate(estimateText),
       price: this.parsePrice(priceText),
       sold:
@@ -99,6 +110,8 @@ export class PhillipsParser extends HouseParser {
         : [],
       url,
       source: "house-parser",
+      parserName: "phillips",
+      parserVersion: this.version,
       confidence: 0.8,
       raw: {
         lotNumber,
@@ -107,6 +120,11 @@ export class PhillipsParser extends HouseParser {
         soldText,
         medium,
         dimensions,
+        signature: details.signature,
+        provenance: details.provenance,
+        exhibitions: details.exhibitions,
+        literature: details.literature,
+        auctionDate: details.auctionDate,
       },
       parseErrors,
     };

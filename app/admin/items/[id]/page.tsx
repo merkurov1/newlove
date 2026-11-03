@@ -1,6 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+
+import {
+  FLOW_DISTRIBUTION_CHANNELS as DISTRIBUTION_CHANNELS,
+  readDistributionState,
+  type FlowDistributionChannel as DistributionChannel,
+  type FlowDistributionState as ChannelState,
+} from '@/lib/flow/distribution';
 
 type Item = {
   id: string;
@@ -13,7 +20,169 @@ type Item = {
   body_md: string;
   rag_allowed?: boolean;
   ai_allowed?: boolean;
+  metadata?: Record<string, unknown> | null;
 };
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: 'ожидает',
+  publishing: 'публикуется',
+  published: 'опубликовано',
+  failed: 'ошибка',
+  skipped: 'пропущено',
+  not_attempted: 'не отправлялось',
+};
+
+function statusClass(status: string): string {
+  if (status === 'published') return 'bg-emerald-100 text-emerald-700';
+  if (status === 'failed') return 'bg-red-100 text-red-700';
+  if (status === 'publishing') return 'bg-amber-100 text-amber-700';
+  return 'bg-stone-100 text-stone-600';
+}
+
+function DistributionPanel({
+  item,
+  onChanged,
+}: {
+  item: Item;
+  onChanged: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState<DistributionChannel | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function retry(channel: DistributionChannel, uncertain: boolean) {
+    if (uncertain) {
+      const confirmed = window.confirm(
+        'Результат предыдущей публикации неизвестен. Повторная отправка может создать дубликат. Продолжить?'
+      );
+      if (!confirmed) return;
+    }
+
+    setBusy(channel);
+    setMessage(null);
+
+    try {
+      const res = await fetch('/api/flow/crosspost', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: item.id,
+          channels: [channel],
+          retryUncertain: uncertain,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (
+        !res.ok ||
+        (json.success === false && !json.channels?.[channel])
+      ) {
+        throw new Error(json.error ?? 'Не удалось выполнить публикацию.');
+      }
+
+      const state = json.channels?.[channel] as ChannelState | undefined;
+      const status = state?.status ?? 'not_attempted';
+
+      setMessage(
+        `${DISTRIBUTION_CHANNELS.find((entry) => entry.key === channel)?.label ?? channel}: ${
+          STATUS_LABELS[status] ?? status
+        }${state?.lastError ? ` — ${state.lastError}` : ''}`
+      );
+
+      await onChanged();
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : 'Не удалось выполнить публикацию.'
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="rounded-xl border p-4">
+      <div>
+        <h2 className="text-lg font-semibold">Публикация во внешние каналы</h2>
+        <p className="mt-1 text-xs text-stone-500">
+          Каждый канал публикуется независимо. Уже опубликованный канал повторно
+          не отправляется, а неопределённый результат требует явного подтверждения.
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        {DISTRIBUTION_CHANNELS.map(({ key, label }) => {
+          const state = readDistributionState(item.metadata, key);
+          const status = state?.status ?? 'not_attempted';
+          const uncertain = Boolean(state?.uncertain);
+          const canRetry =
+            status !== 'published' && status !== 'publishing' && busy === null;
+
+          return (
+            <div key={key} className="rounded-lg border p-3 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-stone-800">{label}</span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusClass(status)}`}
+                >
+                  {STATUS_LABELS[status] ?? status}
+                  {uncertain ? ' · ?' : ''}
+                </span>
+              </div>
+
+              <div className="mt-1 text-stone-500">
+                attempts: {state?.attempts ?? 0}
+              </div>
+
+              {state?.externalUri && (
+                <a
+                  href={state.externalUri}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-block text-[#990F3D] hover:underline"
+                >
+                  Открыть публикацию ↗
+                </a>
+              )}
+
+              {!state?.externalUri && state?.externalId && (
+                <div className="mt-1 break-all text-stone-500">
+                  id: {state.externalId}
+                </div>
+              )}
+
+              {state?.lastError && (
+                <p className="mt-2 rounded bg-red-50 px-2 py-1 text-red-700">
+                  {state.lastError}
+                </p>
+              )}
+
+              {canRetry && (
+                <button
+                  type="button"
+                  onClick={() => void retry(key, uncertain)}
+                  disabled={busy !== null}
+                  className="mt-2 rounded-lg border px-2.5 py-1.5 text-stone-700 transition hover:bg-stone-50 disabled:opacity-40"
+                >
+                  {busy === key
+                    ? 'Отправка...'
+                    : uncertain
+                      ? 'Повторить с подтверждением'
+                      : 'Повторить'}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {message && (
+        <p className="mt-3 rounded-lg bg-stone-100 px-3 py-2 text-xs text-stone-700">
+          {message}
+        </p>
+      )}
+    </section>
+  );
+}
 
 type AiContext = {
   id: string;
@@ -42,16 +211,25 @@ export default function AdminItemDetailPage({
   const [generating, setGenerating] = useState(false);
   const [aiMessage, setAiMessage] = useState('');
 
+  const load = useCallback(
+    async (silent = false) => {
+      if (!silent) setLoading(true);
+
+      try {
+        const res = await fetch(`/api/admin/items/${params.id}`);
+        const json = await res.json();
+        setItem(json.item);
+        setAiContext(json.aiContext ?? null);
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [params.id]
+  );
+
   useEffect(() => {
-    async function load() {
-      const res = await fetch(`/api/admin/items/${params.id}`);
-      const json = await res.json();
-      setItem(json.item);
-      setAiContext(json.aiContext ?? null);
-      setLoading(false);
-    }
-    load();
-  }, [params.id]);
+    void load();
+  }, [load]);
 
   async function handleSave() {
     if (!item) return;
@@ -271,6 +449,8 @@ export default function AdminItemDetailPage({
             </div>
           )}
         </section>
+
+        <DistributionPanel item={item} onChanged={() => load(true)} />
 
         <div>
           <label className="mb-1 block text-sm font-medium">Body</label>

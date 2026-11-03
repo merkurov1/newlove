@@ -88,7 +88,7 @@ function PierrotMarkdown({ content }: { content: string }) {
         overrides: {
           p: {
             component: 'p',
-            props: { className: 'mb-2 last:mb-0' },
+            props: { className: 'mb-3 last:mb-0' },
           },
           strong: {
             component: 'strong',
@@ -117,8 +117,8 @@ function PierrotMarkdown({ content }: { content: string }) {
                     onClick={() => {
                       if (shouldCloseBeforeNavigation(safe, pathname)) closeConversation();
                     }}
-                    className="underline decoration-[#CFC3B1] underline-offset-4 transition-colors hover:decoration-[#37332D]"
                     {...props}
+                    className="text-[#3F3A33] underline decoration-[#A5764F] decoration-1 underline-offset-4 transition-colors hover:text-[#111111] hover:decoration-[#6B4F37]"
                   >
                     {children}
                   </Link>
@@ -130,8 +130,8 @@ function PierrotMarkdown({ content }: { content: string }) {
                   href={safe}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="underline decoration-[#CFC3B1] underline-offset-4 transition-colors hover:decoration-[#37332D]"
                   {...props}
+                  className="text-[#3F3A33] underline decoration-[#A5764F] decoration-1 underline-offset-4 transition-colors hover:text-[#111111] hover:decoration-[#6B4F37]"
                 >
                   {children}
                 </a>
@@ -140,54 +140,110 @@ function PierrotMarkdown({ content }: { content: string }) {
           },
           ul: {
             component: 'ul',
-            props: { className: 'my-2 list-disc space-y-1 pl-5' },
+            props: {
+              className: 'my-3 list-disc space-y-1.5 pl-5 marker:text-[#B08A5A]',
+            },
           },
           ol: {
             component: 'ol',
-            props: { className: 'my-2 list-decimal space-y-1 pl-5' },
+            props: {
+              className: 'my-3 list-decimal space-y-1.5 pl-5 marker:text-[#B08A5A]',
+            },
           },
           li: {
             component: 'li',
-            props: { className: 'pl-0.5' },
+            props: { className: 'pl-0.5 [&>p]:mb-1 [&>p:last-child]:mb-0' },
           },
           code: {
             component: 'code',
             props: {
               className:
-                'rounded bg-black/[0.05] px-1 py-0.5 font-mono text-[0.88em] text-[#37332D]',
+                'rounded-[3px] bg-[#EEE8DE] px-1 py-0.5 font-mono text-[0.86em] text-[#4A3E33]',
             },
           },
           pre: {
             component: 'pre',
             props: {
               className:
-                'my-3 overflow-x-auto rounded-xl bg-[#F1ECE3] p-3 font-mono text-xs leading-relaxed',
+                'my-4 max-w-full overflow-x-auto rounded-lg border border-[#E4DCCF] bg-[#F7F3EC] p-3.5 font-mono text-[12px] leading-[1.65] text-[#37332D] sm:text-[13px] [&>code]:bg-transparent [&>code]:p-0 [&>code]:text-[#37332D]',
             },
           },
           blockquote: {
             component: 'blockquote',
             props: {
-              className: 'my-3 border-l-2 border-[#CFC3B1] pl-3 italic text-[#625B50]',
+              className:
+                'my-4 border-l-2 border-[#B08A5A]/70 bg-[#F7F3EC]/60 px-4 py-2.5 italic text-[#5B544A]',
             },
           },
           hr: {
             component: 'hr',
-            props: { className: 'my-4 border-[#E4DCCF]' },
+            props: { className: 'my-5 border-[#E4DCCF]' },
           },
           h1: {
             component: 'h1',
-            props: { className: 'mb-2 mt-4 font-serif text-xl text-[#111111]' },
+            props: {
+              className:
+                'mb-2 mt-5 font-serif text-xl font-normal leading-snug text-[#111111] first:mt-0',
+            },
           },
           h2: {
             component: 'h2',
-            props: { className: 'mb-2 mt-4 font-serif text-lg text-[#111111]' },
+            props: {
+              className:
+                'mb-2 mt-5 font-serif text-lg font-normal leading-snug text-[#111111] first:mt-0',
+            },
           },
           h3: {
             component: 'h3',
-            props: { className: 'mb-2 mt-3 font-serif text-base text-[#111111]' },
+            props: {
+              className:
+                'mb-1.5 mt-4 font-serif text-base font-normal leading-snug text-[#111111] first:mt-0',
+            },
+          },
+          h4: {
+            component: 'h4',
+            props: {
+              className:
+                'mb-1 mt-3.5 font-serif text-[15px] font-normal leading-snug text-[#111111] first:mt-0',
+            },
+          },
+          table: {
+            component: ({ children }: { children?: React.ReactNode }) => (
+              <div className="my-4 w-full overflow-x-auto">
+                <table className="w-full min-w-[340px] table-auto border-collapse text-left text-[13px] leading-relaxed sm:text-[13.5px]">
+                  {children}
+                </table>
+              </div>
+            ),
+          },
+          thead: {
+            component: 'thead',
+            props: { className: 'bg-[#FBF8F2]' },
+          },
+          tr: {
+            component: 'tr',
+            props: { className: 'align-top' },
+          },
+          th: {
+            component: 'th',
+            props: {
+              className:
+                'break-words border-b border-[#D9D0C3] px-2.5 py-2 font-mono text-[9px] font-medium uppercase tracking-[0.08em] text-[#7D7468]',
+            },
+          },
+          td: {
+            component: 'td',
+            props: {
+              className:
+                'break-words border-b border-[#EEE8DE] px-2.5 py-2 align-top text-[#4D463D]',
+            },
           },
           img: {
-            component: () => null,
+            // Markdown images are intentionally not rendered: the message
+            // contract has no verified image payload and remote images can be
+            // used as tracking pixels. The alt text remains readable.
+            component: ({ alt }: { alt?: string }) =>
+              alt ? <span className="font-mono text-[11px] text-[#8A8175]">[{alt}]</span> : null,
           },
         },
       }}
@@ -286,31 +342,36 @@ function AnswerFeedback({ messageId }: { messageId: string }) {
   };
 
   return (
-    <div className="mt-3 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.12em] text-[#A49A8C]">
-      <span>Was this useful?</span>
+    <div className="mt-4 flex items-center gap-1.5 font-mono text-[8.5px] uppercase tracking-[0.14em] text-[#8F8578]">
+      <span className="mr-0.5 normal-case tracking-[0.06em]">Was this useful?</span>
       <button
         type="button"
         aria-label="Useful answer"
+        aria-pressed={rating === 'up'}
         onClick={() => submit('up')}
         disabled={rating !== null}
-        className={`border px-1.5 py-0.5 transition ${
+        className={`rounded-full px-2 py-0.5 transition ${
           rating === 'up'
-            ? 'border-[#8CA18A] text-[#4F6B4D]'
-            : 'border-[#DDD3C5] hover:border-[#8CA18A]'
-        } disabled:opacity-50`}
+            ? 'bg-[#EEF3EC] text-[#4F6B4D]'
+            : 'text-[#8F8578] hover:bg-[#F4EFE7] hover:text-[#4F6B4D]'
+        } disabled:cursor-default`}
       >
         Yes
       </button>
+      <span aria-hidden="true" className="text-[#D5CCBF]">
+        /
+      </span>
       <button
         type="button"
         aria-label="Not a useful answer"
+        aria-pressed={rating === 'down'}
         onClick={() => submit('down')}
         disabled={rating !== null}
-        className={`border px-1.5 py-0.5 transition ${
+        className={`rounded-full px-2 py-0.5 transition ${
           rating === 'down'
-            ? 'border-[#C9A0AA] text-[#8A1235]'
-            : 'border-[#DDD3C5] hover:border-[#C9A0AA]'
-        } disabled:opacity-50`}
+            ? 'bg-[#F8EAF0] text-[#8A1235]'
+            : 'text-[#8F8578] hover:bg-[#F8EAF0] hover:text-[#8A1235]'
+        } disabled:cursor-default`}
       >
         No
       </button>
@@ -477,7 +538,7 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                 initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: shouldReduceMotion ? 0 : 0.16 }}
-                className={`flex flex-col ${
+                className={`flex min-w-0 flex-col ${
                   message.role === 'user'
                     ? 'items-end'
                     : message.role === 'system'
@@ -511,13 +572,13 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                     )}
                   </div>
                 ) : message.role === 'user' ? (
-                  <div className="flex max-w-[88%] flex-col items-end sm:max-w-[78%]">
+                  <div className="flex max-w-[86%] flex-col items-end sm:max-w-[74%]">
                     <div
                       className="
-                        whitespace-pre-wrap break-words
-                        rounded-2xl rounded-br-sm bg-[#ECE5D9] px-4 py-2.5
-                        font-serif text-[15px] leading-[1.65] text-[#37332D]
-                        sm:text-[16px]
+                        whitespace-pre-wrap break-words rounded-[18px] rounded-br-[7px]
+                        border border-[#D8CCBA]/70 bg-[#EAE2D5] px-3.5 py-2.5
+                        font-serif text-[14.5px] leading-[1.65] text-[#37332D]
+                        sm:px-4 sm:text-[15.5px]
                       "
                     >
                       {message.content}
@@ -538,8 +599,8 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                 ) : (
                   <div
                     className="
-                      max-w-[96%] break-words font-serif text-[16px]
-                      leading-[1.75] text-[#2F2B26] sm:text-[17px]
+                      min-w-0 max-w-[94%] break-words font-serif text-[15.5px]
+                      leading-[1.8] text-[#2F2B26] sm:max-w-[92%] sm:text-[16.5px]
                     "
                   >
                     <PierrotMarkdown content={message.content} />
@@ -562,7 +623,7 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   message.role === 'assistant' &&
                   message.actions &&
                   message.actions.length > 0 && (
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[#EDE7DE] pt-3">
                       {message.actions.map((action) => (
                         <button
                           key={`${action.kind}-${action.label}`}
@@ -573,9 +634,9 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                             action.kind === 'navigate'
                               ? `
                               inline-flex items-center rounded-full
-                              bg-[#2B2723] px-4 py-2.5 font-mono
-                              text-[11px] font-medium uppercase tracking-[0.12em]
-                              text-[#FAF8F5] shadow-sm ring-1 ring-black/5
+                              bg-[#2B2723] px-3.5 py-2 font-mono
+                              text-[10px] font-medium uppercase tracking-[0.12em]
+                              text-[#FAF8F5] shadow-none ring-1 ring-black/5
                               transition hover:bg-[#171411]
                               focus-visible:outline-none focus-visible:ring-2
                               focus-visible:ring-[#B5AAA0] focus-visible:ring-offset-2
@@ -583,10 +644,10 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                             `
                               : `
                               inline-flex items-center rounded-full
-                              border border-[#C9BDAE] bg-white/90 px-4 py-2.5
-                              font-mono text-[11px] font-medium uppercase
-                              tracking-[0.12em] text-[#3F3A33] shadow-sm
-                              transition hover:border-[#9F9384] hover:bg-white
+                              border border-[#D9CDBC] bg-transparent px-3.5 py-2
+                              font-mono text-[10px] font-medium uppercase
+                              tracking-[0.12em] text-[#5B544A]
+                              transition hover:border-[#A99B89] hover:bg-[#F7F3EC]
                               focus-visible:outline-none focus-visible:ring-2
                               focus-visible:ring-[#B5AAA0] focus-visible:ring-offset-2
                               disabled:opacity-40
@@ -600,7 +661,7 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   )}
 
                 {!isHumanActive && message.role === 'assistant' && message.cta && (
-                  <div className="mt-3">
+                  <div className="mt-4">
                     {message.cta.kind === 'external' ? (
                       <a
                         href={message.cta.href}
@@ -615,9 +676,9 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                           closeConversation();
                         }}
                         className="
-                          inline-flex items-center rounded-full bg-[#2B2723] px-4 py-2.5
-                          font-mono text-[11px] font-medium uppercase tracking-[0.12em]
-                          text-[#FAF8F5] shadow-sm ring-1 ring-black/5
+                          inline-flex items-center rounded-full bg-[#2B2723] px-4 py-2
+                          font-mono text-[10px] font-medium uppercase tracking-[0.12em]
+                          text-[#FAF8F5] shadow-none ring-1 ring-black/5
                           transition hover:bg-[#171411]
                           focus-visible:outline-none focus-visible:ring-2
                           focus-visible:ring-[#B5AAA0] focus-visible:ring-offset-2
@@ -666,9 +727,9 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                           }
                         }}
                         className="
-                          inline-flex items-center rounded-full bg-[#2B2723] px-4 py-2.5
-                          font-mono text-[11px] font-medium uppercase tracking-[0.12em]
-                          text-[#FAF8F5] shadow-sm ring-1 ring-black/5
+                          inline-flex items-center rounded-full bg-[#2B2723] px-4 py-2
+                          font-mono text-[10px] font-medium uppercase tracking-[0.12em]
+                          text-[#FAF8F5] shadow-none ring-1 ring-black/5
                           transition hover:bg-[#171411]
                           focus-visible:outline-none focus-visible:ring-2
                           focus-visible:ring-[#B5AAA0] focus-visible:ring-offset-2
@@ -686,7 +747,7 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   message.links.length > 0 && (
                     <nav
                       aria-label="Pierrot navigation"
-                      className="mt-3 flex flex-wrap items-center gap-2"
+                      className="mt-4 flex flex-wrap items-center gap-2 border-t border-[#EDE7DE] pt-3"
                     >
                       {message.links.map((link) => (
                         <Link
@@ -706,10 +767,10 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                           }}
                           className="
                           inline-flex items-center rounded-full
-                          border border-[#C9BDAE] bg-white/80 px-4 py-2.5
-                          font-mono text-[11px] font-medium uppercase
-                          tracking-[0.12em] text-[#3F3A33] shadow-sm
-                          transition hover:border-[#9F9384] hover:bg-white
+                          border border-[#D9CDBC] bg-transparent px-3.5 py-1.5
+                          font-mono text-[9.5px] font-medium uppercase
+                          tracking-[0.12em] text-[#5B544A]
+                          transition hover:border-[#A99B89] hover:bg-[#F7F3EC]
                           focus-visible:outline-none focus-visible:ring-2
                           focus-visible:ring-[#B5AAA0] focus-visible:ring-offset-2
                         "
@@ -721,7 +782,7 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                   )}
 
                 {message.ragOutcome && message.ragOutcome !== 'relevant_results' && (
-                  <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.12em] text-[#A49A8C]">
+                  <p className="mt-3 border-l border-[#D9CDBC] pl-2.5 font-mono text-[9px] leading-relaxed tracking-[0.04em] text-[#8A8175]">
                     {message.ragOutcome === 'unavailable'
                       ? 'Brain retrieval is unavailable right now.'
                       : 'No sufficiently relevant Brain passage was retrieved.'}
@@ -729,30 +790,30 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                 )}
 
                 {message.evidence && message.evidence.length > 0 && (
-                  <details className="mt-3 rounded-xl border border-[#E4DCCF] bg-[#F8F5EF]/70 px-3 py-2">
-                    <summary className="cursor-pointer select-none font-mono text-[9px] uppercase tracking-[0.14em] text-[#7D7468]">
+                  <details className="mt-4 w-full border-t border-[#E4DCCF] pt-2">
+                    <summary className="cursor-pointer select-none font-mono text-[8.5px] uppercase tracking-[0.14em] text-[#8A8175] transition-colors hover:text-[#5B544A]">
                       Sources · {message.evidence.length}
                     </summary>
-                    <ul className="mt-2 space-y-3">
+                    <ul className="mt-2.5 space-y-3">
                       {message.evidence.map((source) => (
                         <li
                           key={source.chunkId}
-                          className="border-t border-[#E9E1D5] pt-2 first:border-0 first:pt-0"
+                          className="border-t border-[#E9E1D5] pt-2.5 first:border-0 first:pt-0"
                         >
                           <div className="flex items-start justify-between gap-3">
-                            <span className="font-sans text-[11px] font-semibold leading-snug text-[#4D463D]">
+                            <span className="font-sans text-[11.5px] font-semibold leading-snug text-[#4D463D]">
                               {source.documentTitle || source.heading}
                             </span>
-                            <span className="shrink-0 font-mono text-[9px] text-[#9C9284]">
+                            <span className="shrink-0 font-mono text-[8.5px] text-[#9C9284]">
                               {source.similarity.toFixed(3)}
                             </span>
                           </div>
                           {mediaEvidenceLabel(source) && (
-                            <span className="mt-1 inline-flex rounded border border-[#D8C9B7] bg-white/70 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.1em] text-[#7A5A45]">
+                            <span className="mt-1 inline-flex rounded-[3px] border border-[#D8C9B7] bg-transparent px-1.5 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.1em] text-[#7A5A45]">
                               {mediaEvidenceLabel(source)}
                             </span>
                           )}
-                          <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[#A49A8C]">
+                          <p className="mt-0.5 font-mono text-[8px] uppercase leading-relaxed tracking-[0.08em] text-[#A49A8C]">
                             {source.sourceDomain
                               ? `${source.sourceDomain} · `
                               : source.sourceClass
@@ -764,7 +825,7 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                               ? ''
                               : ` · ${source.sectionPath.join(' / ')} · lines ${source.lineStart}–${source.lineEnd}`}
                           </p>
-                          <p className="mt-1.5 font-serif text-[12px] leading-relaxed text-[#625B50]">
+                          <p className="mt-1.5 font-serif text-[12px] leading-[1.65] text-[#625B50]">
                             {source.excerpt}
                           </p>
                           {source.canonicalUrl && (
@@ -772,7 +833,7 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                               href={source.canonicalUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="mt-1 inline-flex font-mono text-[8px] uppercase tracking-[0.1em] text-[#8A6A4F] underline underline-offset-2"
+                              className="mt-1 inline-flex font-mono text-[8px] uppercase tracking-[0.1em] text-[#8A6A4F] underline decoration-[#B08A5A]/50 underline-offset-2 hover:text-[#5B3F2A]"
                             >
                               Original publication ↗
                             </a>
@@ -790,7 +851,7 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                 {message.role === 'assistant' &&
                   !message.error &&
                   (message.provider || message.answerSources) && (
-                    <span className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[#A49A8C]">
+                    <span className="mt-1 font-mono text-[8px] uppercase tracking-[0.14em] text-[#B0A79B]">
                       {message.answerSources?.label}
                       {message.answerSources && message.provider ? ' · ' : ''}
                       {message.provider ? `via ${message.provider}` : ''}

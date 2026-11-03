@@ -9,6 +9,12 @@ export abstract class HouseParser {
   abstract readonly houseId: AuctionHouse;
   abstract readonly matches: string[];
 
+  /**
+   * Bump this whenever extraction behaviour changes so Vault attempts remain
+   * attributable to the parser that produced them.
+   */
+  readonly version: string = "1.1.0";
+
   abstract parse(html: string, url: string): LotData;
 
   supports(url: string): boolean {
