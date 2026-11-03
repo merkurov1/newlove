@@ -1525,6 +1525,23 @@ describe('Pierrot intelligence regressions', () => {
     expect(systemPrompt()).toContain('MOCKED_EVIDENCE_PROMPT');
   });
 
+  it('routes “Найди в RAG рецепты еды” to Brain search, not RAG statistics', async () => {
+    owner();
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Найди в RAG рецепты еды' }))
+    );
+    const json = (await response.json()) as {
+      owner_tool?: string;
+      sourceStatus?: { brain?: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.owner_tool).toBeUndefined();
+    expect(retrieval.retrieveUnframedEvidence).toHaveBeenCalled();
+    expect(json.sourceStatus?.brain).not.toBe('not_requested');
+  });
+
   it('reports a missing named document honestly instead of substituting statistics', async () => {
     owner();
     documentLookup.findBrainDocumentByTitle.mockResolvedValueOnce(null);

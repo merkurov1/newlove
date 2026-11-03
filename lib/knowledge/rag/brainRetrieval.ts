@@ -431,14 +431,14 @@ export async function retrieveBrainEvidence(
     }
 
     const topSimilarity = diverse.length > 0 ? diverse[0].row.similarity : null;
+    // An explicitly requested source narrows the search scope; it does not
+    // make every chunk in that source relevant. The candidate still has to
+    // pass a (slightly relaxed) relevance threshold.
     const explicitThreshold =
       plan.requestedSources.length > 0 || plan.specificDocument ? threshold * 0.8 : threshold;
-    const explicitSourceLookup = plan.requestedSources.length > 0;
     const usable = diverse.filter(
       (candidate) =>
-        explicitSourceLookup ||
-        candidate.row.similarity >= explicitThreshold ||
-        (candidate.row.lexical_score || 0) >= 0.15
+        candidate.row.similarity >= explicitThreshold || (candidate.row.lexical_score || 0) >= 0.15
     );
 
     timings.rankingMs = Date.now() - rankingStartedAt;

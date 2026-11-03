@@ -6,17 +6,29 @@ import { crosspostFlowItem, type CrosspostChannelState, type CrosspostPayload } 
 import type { MetaPublishResult } from '@/lib/meta/types';
 
 const NOW = new Date('2026-11-03T12:00:00.000Z');
-const originalMetaCrosspostEnabled = process.env.META_CROSSPOST_ENABLED;
+const originalFacebookCrosspostEnabled =
+  process.env.META_FACEBOOK_CROSSPOST_ENABLED;
+const originalThreadsCrosspostEnabled =
+  process.env.META_THREADS_CROSSPOST_ENABLED;
 
 beforeEach(() => {
-  process.env.META_CROSSPOST_ENABLED = 'true';
+  delete process.env.META_FACEBOOK_CROSSPOST_ENABLED;
+  process.env.META_THREADS_CROSSPOST_ENABLED = 'true';
 });
 
 afterEach(() => {
-  if (originalMetaCrosspostEnabled === undefined) {
-    delete process.env.META_CROSSPOST_ENABLED;
+  if (originalFacebookCrosspostEnabled === undefined) {
+    delete process.env.META_FACEBOOK_CROSSPOST_ENABLED;
   } else {
-    process.env.META_CROSSPOST_ENABLED = originalMetaCrosspostEnabled;
+    process.env.META_FACEBOOK_CROSSPOST_ENABLED =
+      originalFacebookCrosspostEnabled;
+  }
+
+  if (originalThreadsCrosspostEnabled === undefined) {
+    delete process.env.META_THREADS_CROSSPOST_ENABLED;
+  } else {
+    process.env.META_THREADS_CROSSPOST_ENABLED =
+      originalThreadsCrosspostEnabled;
   }
 });
 
@@ -127,10 +139,14 @@ function fakeSupabase() {
 }
 
 describe('Facebook and Threads crossposting', () => {
-  it('does not publish Facebook or Threads when crossposting is disabled', async () => {
-    delete process.env.META_CROSSPOST_ENABLED;
-    const publishFacebook = jest.fn(async () => publishedMeta('fb-disabled', null));
-    const publishThreads = jest.fn(async () => publishedMeta('th-disabled', null));
+  it('publishes Facebook by default while Threads remains disabled', async () => {
+    delete process.env.META_THREADS_CROSSPOST_ENABLED;
+    const publishFacebook = jest.fn(async () =>
+      publishedMeta('fb-default', 'https://www.facebook.com/page-1/posts/default')
+    );
+    const publishThreads = jest.fn(async () =>
+      publishedMeta('th-disabled', null)
+    );
 
     const result = await crosspostFlowItem(payload(), {
       channels: ['facebook', 'threads'],
@@ -142,10 +158,10 @@ describe('Facebook and Threads crossposting', () => {
       },
     });
 
-    expect(result.attemptedChannels).toEqual([]);
-    expect(publishFacebook).not.toHaveBeenCalled();
+    expect(result.attemptedChannels).toEqual(['facebook']);
+    expect(publishFacebook).toHaveBeenCalledTimes(1);
     expect(publishThreads).not.toHaveBeenCalled();
-    expect(result.channels?.facebook).toBeUndefined();
+    expect(result.channels?.facebook?.status).toBe('published');
     expect(result.channels?.threads).toBeUndefined();
   });
 

@@ -139,37 +139,44 @@ export const CHANNELS: CrosspostChannel[] = [
 ];
 
 /**
- * Facebook Page and Threads crossposting is disabled unless explicitly
- * enabled. Their adapters remain in the codebase and existing published state
- * remains readable; only new publications are blocked.
+ * Facebook Page crossposting is enabled by default. Threads remains opt-in.
+ * Their adapters stay in the codebase; existing published state remains
+ * readable regardless of these switches.
  */
-function metaCrosspostEnabled(): boolean {
-  return process.env.META_CROSSPOST_ENABLED === 'true';
+function facebookCrosspostEnabled(): boolean {
+  return process.env.META_FACEBOOK_CROSSPOST_ENABLED !== 'false';
+}
+
+function threadsCrosspostEnabled(): boolean {
+  return process.env.META_THREADS_CROSSPOST_ENABLED === 'true';
 }
 
 function channelEnabled(channel: CrosspostChannel): boolean {
-  return (
-    channel === 'telegram' ||
-    channel === 'bluesky' ||
-    metaCrosspostEnabled()
-  );
+  if (channel === 'telegram' || channel === 'bluesky') return true;
+  if (channel === 'facebook') return facebookCrosspostEnabled();
+
+  return threadsCrosspostEnabled();
 }
 
 /**
  * Channels attempted when the caller does not pass an explicit list. Telegram
- * and Bluesky keep their historical default. Meta channels are added only when
- * crossposting is enabled and they are configured (or injected in tests).
+ * and Bluesky keep their historical default. Facebook is added when configured;
+ * Threads only when explicitly enabled.
  */
 function defaultRequestedChannels(deps: CrosspostDeps): CrosspostChannel[] {
   const channels: CrosspostChannel[] = ['telegram', 'bluesky'];
 
-  if (!metaCrosspostEnabled()) return channels;
-
-  if (deps.publishFacebook || isFacebookConfigured()) {
+  if (
+    facebookCrosspostEnabled() &&
+    (deps.publishFacebook || isFacebookConfigured())
+  ) {
     channels.push('facebook');
   }
 
-  if (deps.publishThreads || isThreadsConfigured()) {
+  if (
+    threadsCrosspostEnabled() &&
+    (deps.publishThreads || isThreadsConfigured())
+  ) {
     channels.push('threads');
   }
 

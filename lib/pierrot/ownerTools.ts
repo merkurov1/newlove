@@ -66,7 +66,7 @@ export function detectOwnerTool(
   }
 
   if (
-    /(диагностик|diagnostic|воркер|worker|operations|операц|health|сбой|очеред|queue|scheduler)/i.test(
+    /(диагностик|diagnostic|воркер|worker|operations|операц|health|сбой|очеред|queue|scheduler|состояни[а-яё]*\s+систем|system\s+status)/i.test(
       text
     )
   ) {

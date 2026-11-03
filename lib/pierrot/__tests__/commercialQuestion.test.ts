@@ -34,6 +34,12 @@ describe('Pierrot commercial question detection', () => {
     }
   });
 
+  it('recognises sales questions phrased as “продал” and “купили”', () => {
+    expect(detectCommercialQuestion('Много продал?', { now, timezone })).not.toBeNull();
+    expect(detectCommercialQuestion('Сколько купили открыток?', { now, timezone })).not.toBeNull();
+    expect(detectCommercialQuestion('Сколько продаж UNFRAMED?', { now, timezone })).not.toBeNull();
+  });
+
   it('does not hijack ordinary product questions', () => {
     expect(detectCommercialQuestion('Сколько стоит открытка?')).toBeNull();
     expect(detectCommercialQuestion('Tell me about UNFRAMED')).toBeNull();

@@ -1,7 +1,8 @@
 # Отчёт: Meta Crossposting (Facebook Pages + Threads)
 
-> Текущее состояние: новый кросспост в Facebook и Threads отключён.
-> Включение — только через `META_CROSSPOST_ENABLED=true`.
+> Текущее состояние: кросспост в Facebook включён, Threads отключён.
+> Facebook: `META_FACEBOOK_CROSSPOST_ENABLED=true`.
+> Threads: `META_THREADS_CROSSPOST_ENABLED=false`.
 
 ## 1. Изменённые файлы
 
@@ -79,8 +80,9 @@
 Добавлены в `.env.example`:
 
 ```env
-# Facebook Page / Threads crossposting is disabled by default.
-META_CROSSPOST_ENABLED=false
+# Facebook Page crossposting is enabled by default; Threads is opt-in.
+META_FACEBOOK_CROSSPOST_ENABLED=true
+META_THREADS_CROSSPOST_ENABLED=false
 
 META_GRAPH_API_VERSION=v26.0
 META_FACEBOOK_PAGE_ID=

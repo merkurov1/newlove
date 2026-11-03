@@ -124,7 +124,7 @@ function DistributionPanel({
           const state = readDistributionState(item.metadata, key);
           const status = state?.status ?? 'not_attempted';
           const uncertain = Boolean(state?.uncertain);
-          const metaDisabled = key === 'facebook' || key === 'threads';
+          const metaDisabled = key === 'threads';
           const canRetry =
             !metaDisabled &&
             status !== 'published' &&

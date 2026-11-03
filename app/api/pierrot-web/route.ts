@@ -138,13 +138,14 @@ import {
   previewUrlForPierrot,
   savePendingUrlCandidate,
 } from '@/lib/pierrot/urlIntake';
-import { detectOwnerTool, runOwnerTool } from '@/lib/pierrot/ownerTools';
+import { runOwnerTool } from '@/lib/pierrot/ownerTools';
+import { buildPierrotExecutionPlan } from '@/lib/pierrot/executionPlan';
 import {
   isPierrotUserId,
   resolvePierrotIdentity,
   type PierrotIdentitySource,
 } from '@/lib/pierrot/identity';
-import { understandPierrotQuery, type PierrotQueryPlan } from '@/lib/pierrot/queryUnderstanding';
+import type { PierrotQueryPlan } from '@/lib/pierrot/queryUnderstanding';
 import {
   buildSourceStatuses,
   guardAnswerEvidence,
@@ -442,9 +443,11 @@ export async function POST(req: Request) {
       }
     }
 
-    const queryPlan: PierrotQueryPlan = understandPierrotQuery(trimmedMessage, {
+    const executionPlan = buildPierrotExecutionPlan(trimmedMessage, {
       history: normalizedHistory,
+      ownerMode,
     });
+    const queryPlan: PierrotQueryPlan = executionPlan.queryPlan;
 
     const openAiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
       normalizedHistory.map((h) => ({
@@ -1248,7 +1251,7 @@ export async function POST(req: Request) {
         }
       }
 
-      const ownerTool = detectOwnerTool(trimmedMessage, { queryPlan });
+      const ownerTool = executionPlan.ownerTool;
 
       if (ownerTool) {
         const text = await runOwnerTool(ownerTool, ownerLanguage);
@@ -2029,6 +2032,10 @@ export async function POST(req: Request) {
             length: reply.length,
             latency_ms: Date.now() - startedAt,
             answer_sources: answerSources.mode,
+            operation: executionPlan.operation,
+            tool: executionPlan.tool,
+            fallback_policy: executionPlan.fallbackPolicy,
+            requires_web: executionPlan.requiresWeb,
             web_outcome: webSearchResult?.outcome ?? null,
             web_code: webSearchResult?.code ?? null,
             web_source_count: webSources.length,

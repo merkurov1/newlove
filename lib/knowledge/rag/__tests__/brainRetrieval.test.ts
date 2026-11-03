@@ -279,3 +279,26 @@ describe('Source-aware hybrid retrieval', () => {
     expect(plan.signals).toContain('time:last_two_months');
   });
 });
+
+describe('Explicit source relevance', () => {
+  it('does not accept every chunk from an explicit source without a relevance signal', async () => {
+    const result = await retrieve(
+      [
+        row({
+          chunk_id: 'chk_weak_manuscript',
+          document_id: 'doc_unframed_manuscript',
+          document_title: 'UNFRAMED',
+          source_type: 'manuscript',
+          source_domain: null,
+          author: null,
+          similarity: 0.1,
+          lexical_score: 0,
+        }),
+      ],
+      'What does UNFRAMED say about autonomy?'
+    );
+
+    expect(result.outcome).not.toBe('relevant_results');
+    expect(result.hits).toEqual([]);
+  });
+});

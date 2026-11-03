@@ -270,7 +270,7 @@ const CORRECTION_TERMS = [
 ];
 
 const FOLLOW_UP_PATTERN =
-  /^(а|и|но|and|but|so)?\s*(подробнее|дальше|продолжай|еще|ещё|more|continue|go on|почему|why|как|how|what about|а что|и что)\b/i;
+  /^(?:а\s+)?(?:теперь|за|есть|только)(?=\s|$)|^(?:а|и|но|and|but|so)?\s*(?:подробнее|дальше|продолжай|еще|ещё|more|continue|go on|почему|why|как|how|what about|а что|и что|and now|and for)(?=\s|$)/i;
 
 function isCorrection(text: string): boolean {
   return hasAny(text, CORRECTION_TERMS);
@@ -404,6 +404,14 @@ function classifyIntent(input: {
   ) {
     signals.push('project:context');
     return { intent: 'project', signals };
+  }
+
+  if (
+    /(найди|поищи|найти|искать|find|search|покажи|show)/i.test(text) &&
+    /(brain|rag|стать|публикац|документ|запис|текст|article|document|recipe|рецепт)/i.test(text)
+  ) {
+    signals.push('search:request');
+    return { intent: 'personal_analysis', signals };
   }
 
   const manuscriptMarker =

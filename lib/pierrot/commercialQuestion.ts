@@ -353,7 +353,7 @@ export function detectCommercialQuestion(
     );
 
   const wantsSales =
-    /(продаж|\bsales\b|\bsold\b|покупок|покупки|сколько\s+заказов|how many orders|продан)/.test(
+    /(продаж|\bsales\b|\bsold\b|покупок|покупки|сколько\s+заказов|how many orders|продан|продал|продали|купил|купили|приобрел|приобрели)/.test(
       text
     );
 

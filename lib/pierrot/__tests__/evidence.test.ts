@@ -119,3 +119,27 @@ describe('answer evidence guard', () => {
     expect(result.violations).toContain('source_limitation_disclosed');
   });
 });
+
+describe('extended source statuses', () => {
+  it('keeps permission denied separate from unavailable and empty', () => {
+    expect(
+      buildSourceStatuses({
+        brain: { outcome: 'unavailable', code: 'unauthorized_scope' },
+        requested: requested({ brain: true }),
+      }).brain
+    ).toBe('permission_denied');
+  });
+
+  it('discloses permission denial without claiming the data is absent', () => {
+    const result = guardAnswerEvidence({
+      reply: 'Общий ответ.',
+      statuses: { brain: 'permission_denied', media: 'not_requested', web: 'not_requested' },
+      requested: requested({ brain: true }),
+      language: 'ru',
+      intent: 'biography',
+    });
+
+    expect(result.reply).toContain('недоступен');
+    expect(result.reply).not.toContain('нет информации');
+  });
+});

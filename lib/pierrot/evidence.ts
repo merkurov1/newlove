@@ -8,7 +8,14 @@
  */
 
 export type SourceStatus =
-  'success' | 'empty' | 'unavailable' | 'timeout' | 'error' | 'not_requested';
+  | 'success'
+  | 'empty'
+  | 'unavailable'
+  | 'timeout'
+  | 'error'
+  | 'permission_denied'
+  | 'partial'
+  | 'not_requested';
 
 export type EvidenceSourceStatuses = {
   brain: SourceStatus;
@@ -43,6 +50,7 @@ export function brainStatusFromOutcome(
   if (outcome === 'disabled') return 'unavailable';
   if (outcome === 'unavailable') {
     if (isTimeoutCode(code)) return 'timeout';
+    if (code === 'unauthorized_scope') return 'permission_denied';
     if (code === 'database_unavailable' || code === 'missing_configuration') return 'unavailable';
     return 'error';
   }
