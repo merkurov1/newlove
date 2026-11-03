@@ -67,7 +67,7 @@ Private / excluded from the index: `/admin/*`, `/api/*`, `/auth/*`, `/login`,
 | `/selection` | Selection & Chronicles \| Anton Merkurov | 100 chars | `/selection` | none | none | yes |
 | `/feed` | none (inherits root) | none | none | none | none | no |
 | `/tags` | Tags \| Anton Merkurov | 32 chars | `/tags` | none | none | no |
-| `/lots` | Curator Vault \| Auction Lots | 68 chars | `/lots` | none | none | no |
+| `/lots` | Art Engine Vault \| Auction Lots | 68 chars | `/lots` | none | none | no |
 | `/stat` | — | — | — | — | — | **404 in sitemap** |
 | `/projects` | — | — | — | — | — | **404 in sitemap** |
 
@@ -122,9 +122,9 @@ Other systemic issues found:
 | `/silence` | The Silence Index — Heritage vs Noise \| Anton Merkurov | 155 | self | `/og?title=…` | CreativeWork, Breadcrumb | yes |
 | `/tags` | Tags — Browse the Archive by Topic \| Anton Merkurov | 133 | self | `/og?title=…` | CollectionPage, Breadcrumb | yes |
 | `/tags/[slug]` | tag name, ≤60 | tag description, ≥120 | self | `/og?title=…` | site entities, Breadcrumb | yes |
-| `/lots` | Curator Vault — Auction Lots \| Anton Merkurov | 144 | self | `/og?title=…` | CollectionPage, Breadcrumb | yes |
+| `/lots` | Art Engine Vault — Auction Lots \| Anton Merkurov | 144 | self | `/og?title=…` | CollectionPage, Breadcrumb | yes |
 | `/lots/[id]` | artist — title, ≤60 | lot summary, ≥120 | self | lot image or `/og` | VisualArtwork, Breadcrumb | yes |
-| `/art-engine` | Curator Engine — Art Market Intelligence \| Merkurov | 148 | self | `/og?title=…` | CreativeWork, Breadcrumb | yes |
+| `/art-engine` | Art Engine — Art Market Intelligence \| Merkurov | 148 | self | `/og?title=…` | CreativeWork, Breadcrumb | yes |
 | `/case-study/*` | case-study title | case-study summary | self | artwork | Article (garcia) / page entities | yes |
 | `/communications` | History of Communication — Visual Lecture | 132 | self | `/og?title=…` | CreativeWork, Breadcrumb | yes |
 | `/2025` | 2025 — Year Review \| Anton Merkurov | 126 | self | `/og?title=…` | site entities | yes |

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     description:
       "Case Study 003 — Viktor Pivovarov, Untitled (1985). Investment memorandum and curator analysis: provenance, deconstruction, and financial logic.",
     url: 'https://www.merkurov.love/case-study/pivovarov',
-    siteName: 'Merkurov Curator Engine',
+    siteName: 'Merkurov Art Engine',
     images: [
       {
         url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1039.jpeg',
@@ -119,7 +119,7 @@ export default function PivovarovCaseStudy() {
                   </div>
                 </div>
 
-                <div className="mt-6 opacity-60 text-xs font-mono">The Curator Engine / Merkurov OS</div>
+                <div className="mt-6 opacity-60 text-xs font-mono">The Art Engine / Merkurov OS</div>
               </div>
             </aside>
           </div>
@@ -206,7 +206,7 @@ export default function PivovarovCaseStudy() {
         {/* Footer */}
         <footer className="mt-20 border-t border-gray-900 pt-8 text-sm opacity-0 animate-fadeIn" style={{ animationDelay: '0.42s', animationFillMode: 'forwards' }}>
           <div className="flex items-center justify-between">
-            <div className="font-mono">The Curator Engine</div>
+            <div className="font-mono">The Art Engine</div>
             <div className="font-mono">Merkurov OS</div>
           </div>
         </footer>

@@ -6,10 +6,10 @@ import { pageMetadata } from '@/lib/seo';
 import { breadcrumbJsonLd, creativeWorkJsonLd } from '@/lib/structuredData';
 
 const ART_ENGINE_DESCRIPTION =
-  'Institutional-grade art acquisition, liquidity analysis and curatorial dossier synthesis in the Merkurov Curator Engine.';
+  'Institutional-grade art acquisition, liquidity analysis and curatorial dossier synthesis in the Merkurov Art Engine.';
 
 export const metadata: Metadata = pageMetadata({
-  title: 'Curator Engine — Art Market Intelligence | Merkurov',
+  title: 'Art Engine — Art Market Intelligence | Merkurov',
   description: ART_ENGINE_DESCRIPTION,
   path: '/art-engine',
   languages: { 'x-default': '/art-engine', en: '/art-engine' },
@@ -21,11 +21,11 @@ export default function ArtEnginePage() {
       {/* Server-rendered page heading: the interactive terminal is client-only,
           so without this the initial HTML has no h1 for crawlers and assistive
           technology. The visible terminal heading is an h2. */}
-      <h1 className="sr-only">Curator Engine — Art Market Intelligence</h1>
+      <h1 className="sr-only">Art Engine — Art Market Intelligence</h1>
       <JsonLd
         data={creativeWorkJsonLd({
           path: '/art-engine',
-          name: 'Curator Engine — Art Market Intelligence',
+          name: 'Art Engine — Art Market Intelligence',
           description: ART_ENGINE_DESCRIPTION,
           genre: 'Art market research tool',
         })}
@@ -33,7 +33,7 @@ export default function ArtEnginePage() {
       <JsonLd
         data={breadcrumbJsonLd([
           { name: 'Home', path: '/' },
-          { name: 'Curator Engine', path: '/art-engine' },
+          { name: 'Art Engine', path: '/art-engine' },
         ])}
       />
       <React.Suspense

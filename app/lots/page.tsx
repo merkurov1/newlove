@@ -5,10 +5,10 @@ import { JsonLd } from '@/components/seo/JsonLd';
 import { breadcrumbJsonLd, collectionPageJsonLd } from '@/lib/structuredData';
 
 const LOTS_DESCRIPTION =
-  'The Curator Vault: an archive of artworks and auction lots researched by Anton Merkurov, with provenance, estimates and market analysis.';
+  'The Art Engine Vault: an archive of artworks and auction lots researched by Anton Merkurov, with provenance, estimates and market analysis.';
 
 export const metadata = pageMetadata({
-  title: 'Curator Vault — Auction Lots | Anton Merkurov',
+  title: 'Art Engine Vault — Auction Lots | Anton Merkurov',
   description: LOTS_DESCRIPTION,
   path: '/lots',
   languages: { 'x-default': '/lots', en: '/lots' },
@@ -37,7 +37,7 @@ export default async function LotsGalleryPage() {
       <JsonLd
         data={collectionPageJsonLd({
           path: '/lots',
-          name: 'Curator Vault — auction lots',
+          name: 'Art Engine Vault — auction lots',
           description: LOTS_DESCRIPTION,
           items: (lots || []).slice(0, 200).map((lot: any) => ({
             name: [lot.artist, lot.title].filter(Boolean).join(' — '),
@@ -48,7 +48,7 @@ export default async function LotsGalleryPage() {
       <JsonLd
         data={breadcrumbJsonLd([
           { name: 'Home', path: '/' },
-          { name: 'Curator Vault', path: '/lots' },
+          { name: 'Art Engine Vault', path: '/lots' },
         ])}
       />
       <div className="max-w-7xl mx-auto space-y-8">
@@ -56,7 +56,7 @@ export default async function LotsGalleryPage() {
         {/* HEADER */}
         <div className="flex justify-between items-end border-b border-zinc-800 pb-6">
           <div>
-            <span className="text-xs font-mono text-emerald-400 uppercase tracking-widest">CURATOR VAULT ARCHIVE</span>
+            <span className="text-xs font-mono text-emerald-400 uppercase tracking-widest">ART ENGINE VAULT ARCHIVE</span>
             <h1 className="text-3xl font-serif text-white mt-1">Cataloged Artifacts</h1>
           </div>
           <span className="text-xs font-mono text-zinc-500">{lots?.length || 0} RECORDS INDEXED</span>

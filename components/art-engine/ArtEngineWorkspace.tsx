@@ -297,7 +297,7 @@ export default function ArtEngineWorkspace({
               Art Engine / private workspace
             </p>
             <h1 className="mt-1 font-serif text-3xl font-light tracking-tight text-[#211F1F] sm:text-4xl">
-              Curator Engine
+              Art Engine
             </h1>
           </div>
 

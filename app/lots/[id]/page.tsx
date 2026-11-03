@@ -35,8 +35,8 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 
   if (!lot) {
     return pageMetadata({
-      title: 'Lot not found | Curator Vault',
-      description: 'The requested auction lot could not be found in the Curator Vault.',
+      title: 'Lot not found | Art Engine Vault',
+      description: 'The requested auction lot could not be found in the Art Engine Vault.',
       path,
       noindex: true,
     });
@@ -45,7 +45,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   const displayTitle = [lot.artist, lot.title].filter(Boolean).join(' — ');
   const summary = seoDescription(
     lot.ai_content?.summary ||
-      `Artwork dossier for ${displayTitle}. Provenance, verification and auction analysis on Curator Vault.`,
+      `Artwork dossier for ${displayTitle}. Provenance, verification and auction analysis on Art Engine Vault.`,
   );
   const publicImg = lot.image_path
     ? lot.image_path.startsWith('http')
@@ -54,7 +54,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     : undefined;
 
   return pageMetadata({
-    title: truncate(`${displayTitle} | Curator Vault`, 60),
+    title: truncate(`${displayTitle} | Art Engine Vault`, 60),
     description: summary,
     path,
     type: 'article',
@@ -102,7 +102,7 @@ export default async function LotDetailPage({ params }: { params: { id: string }
       <JsonLd
         data={breadcrumbJsonLd([
           { name: 'Home', path: '/' },
-          { name: 'Curator Vault', path: '/lots' },
+          { name: 'Art Engine Vault', path: '/lots' },
           { name: [lot.artist, lot.title].filter(Boolean).join(' — ') || 'Lot', path: `/lots/${encodeURIComponent(params.id)}` },
         ])}
       />
@@ -166,7 +166,7 @@ export default async function LotDetailPage({ params }: { params: { id: string }
             {/* TITLE & ARTIST HEADER */}
             <div className="border-b border-zinc-800 pb-8 space-y-3">
               <span className="text-xs font-mono text-emerald-400 uppercase tracking-widest block">
-                CURATOR DOSSIER
+                ART ENGINE DOSSIER
               </span>
               <h1 className="font-serif text-3xl sm:text-5xl text-white leading-tight">
                 {lot.artist}

@@ -84,7 +84,7 @@ const SECTIONS: { heading: string; url: string; description: string }[] = [
       'Direct counsel on digital strategy, art-market positioning and heritage architecture.',
   },
   {
-    heading: 'Curator Engine',
+    heading: 'Art Engine',
     url: `${SITE_URL}/art-engine`,
     description:
       'Art-market intelligence terminal for acquisition research, liquidity analysis and curatorial dossiers.',

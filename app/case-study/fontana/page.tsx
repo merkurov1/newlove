@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     title: 'Lucio Fontana: The White Absolute (1968) // Private Analysis',
     description: 'Why this 1968 white slashed canvas is the \'Zero Point\' of value. Deep dive into liquidity, purity, and Milan-NY arbitrage.',
     url: 'https://www.merkurov.love/case-study/fontana',
-    siteName: 'Merkurov Curator Engine',
+    siteName: 'Merkurov Art Engine',
     images: [
       {
         url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1022.jpeg',
@@ -313,7 +313,7 @@ export default function FontanaCaseStudy() {
         </p>
         <div className="max-w-2xl mx-auto text-[9px] text-gray-400 leading-relaxed font-sans border-t border-gray-100 pt-8">
             <p>
-                DISCLAIMER: This document is an independent market analysis produced by the Curator Engine. 
+                DISCLAIMER: This document is an independent market analysis produced by the Art Engine.
                 It does not constitute a solicitation to buy securities. Art market values are historical estimates. 
                 Past performance of 'White Fontanas' does not guarantee future liquidity. 
                 You are buying a void in the canvas, not a bond.
