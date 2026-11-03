@@ -1,11 +1,24 @@
 /** @jest-environment node */
 
-import { describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 import { crosspostFlowItem, type CrosspostChannelState, type CrosspostPayload } from '../crosspost';
 import type { MetaPublishResult } from '@/lib/meta/types';
 
 const NOW = new Date('2026-11-03T12:00:00.000Z');
+const originalMetaCrosspostEnabled = process.env.META_CROSSPOST_ENABLED;
+
+beforeEach(() => {
+  process.env.META_CROSSPOST_ENABLED = 'true';
+});
+
+afterEach(() => {
+  if (originalMetaCrosspostEnabled === undefined) {
+    delete process.env.META_CROSSPOST_ENABLED;
+  } else {
+    process.env.META_CROSSPOST_ENABLED = originalMetaCrosspostEnabled;
+  }
+});
 
 function payload(overrides: Record<string, unknown> = {}): CrosspostPayload {
   return {
@@ -114,6 +127,28 @@ function fakeSupabase() {
 }
 
 describe('Facebook and Threads crossposting', () => {
+  it('does not publish Facebook or Threads when crossposting is disabled', async () => {
+    delete process.env.META_CROSSPOST_ENABLED;
+    const publishFacebook = jest.fn(async () => publishedMeta('fb-disabled', null));
+    const publishThreads = jest.fn(async () => publishedMeta('th-disabled', null));
+
+    const result = await crosspostFlowItem(payload(), {
+      channels: ['facebook', 'threads'],
+      deps: {
+        supabase: null,
+        now: () => NOW,
+        publishFacebook,
+        publishThreads,
+      },
+    });
+
+    expect(result.attemptedChannels).toEqual([]);
+    expect(publishFacebook).not.toHaveBeenCalled();
+    expect(publishThreads).not.toHaveBeenCalled();
+    expect(result.channels?.facebook).toBeUndefined();
+    expect(result.channels?.threads).toBeUndefined();
+  });
+
   it('publishes both Meta channels independently and stores their IDs', async () => {
     const publishFacebook = jest.fn(async () =>
       publishedMeta('fb-1', 'https://www.facebook.com/page-1/posts/1')

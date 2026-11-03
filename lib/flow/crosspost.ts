@@ -139,13 +139,31 @@ export const CHANNELS: CrosspostChannel[] = [
 ];
 
 /**
+ * Facebook Page and Threads crossposting is disabled unless explicitly
+ * enabled. Their adapters remain in the codebase and existing published state
+ * remains readable; only new publications are blocked.
+ */
+function metaCrosspostEnabled(): boolean {
+  return process.env.META_CROSSPOST_ENABLED === 'true';
+}
+
+function channelEnabled(channel: CrosspostChannel): boolean {
+  return (
+    channel === 'telegram' ||
+    channel === 'bluesky' ||
+    metaCrosspostEnabled()
+  );
+}
+
+/**
  * Channels attempted when the caller does not pass an explicit list. Telegram
  * and Bluesky keep their historical default. Meta channels are added only when
- * they are configured (or when a publisher is injected in tests), so an
- * unconfigured deployment behaves exactly as before.
+ * crossposting is enabled and they are configured (or injected in tests).
  */
 function defaultRequestedChannels(deps: CrosspostDeps): CrosspostChannel[] {
   const channels: CrosspostChannel[] = ['telegram', 'bluesky'];
+
+  if (!metaCrosspostEnabled()) return channels;
 
   if (deps.publishFacebook || isFacebookConfigured()) {
     channels.push('facebook');
@@ -455,16 +473,19 @@ export function selectChannels(
 ): CrosspostChannel[] {
   const requested =
     Array.isArray(options.channels) && options.channels.length > 0
-      ? CHANNELS.filter((channel) => options.channels?.includes(channel))
+      ? CHANNELS.filter(
+          (channel) =>
+            options.channels?.includes(channel) && channelEnabled(channel)
+        )
       : // Callers that do not specify channels retain the historical
-        // Telegram + Bluesky default, extended with any Meta state already
-        // present on the item. crosspostFlowItem passes an explicit list when
-        // Meta credentials are configured.
+        // Telegram + Bluesky default. Meta state remains readable but is not
+        // republished while Meta crossposting is disabled.
         CHANNELS.filter(
           (channel) =>
-            channel === 'telegram' ||
-            channel === 'bluesky' ||
-            Boolean(state.channels[channel])
+            channelEnabled(channel) &&
+            (channel === 'telegram' ||
+              channel === 'bluesky' ||
+              Boolean(state.channels[channel]))
         );
 
   if (options.retryFailed) {

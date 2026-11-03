@@ -124,8 +124,12 @@ function DistributionPanel({
           const state = readDistributionState(item.metadata, key);
           const status = state?.status ?? 'not_attempted';
           const uncertain = Boolean(state?.uncertain);
+          const metaDisabled = key === 'facebook' || key === 'threads';
           const canRetry =
-            status !== 'published' && status !== 'publishing' && busy === null;
+            !metaDisabled &&
+            status !== 'published' &&
+            status !== 'publishing' &&
+            busy === null;
 
           return (
             <div key={key} className="rounded-lg border p-3 text-xs">
@@ -179,6 +183,12 @@ function DistributionPanel({
                       ? 'Повторить с подтверждением'
                       : 'Повторить'}
                 </button>
+              )}
+
+              {metaDisabled && status !== 'published' && (
+                <p className="mt-2 text-stone-500">
+                  Кросспост отключён
+                </p>
               )}
             </div>
           );
