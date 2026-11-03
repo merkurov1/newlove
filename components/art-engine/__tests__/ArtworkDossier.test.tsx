@@ -77,12 +77,56 @@ const detail: ArtworkDetail = {
     provenance: ['Private collection'],
     exhibitions: [],
     literature: [],
+    artist_dates: '1903–1970',
+    lot_essay: null,
+    catalogue_note: null,
+    condition_report: null,
+    condition_report_status: 'unknown',
   },
+  extraction: {
+    title: 'Untitled',
+    artist: 'Mark Rothko',
+    artistDates: '1903–1970',
+    auctionHouse: "Sotheby's",
+    year: 1967,
+    medium: 'paper mounted on canvas',
+    dimensions: '102.9 by 66 cm.',
+    signature: null,
+    description: 'A catalogue note.',
+    lotEssay: null,
+    catalogueNote: null,
+    conditionReport: null,
+    conditionReportStatus: 'unknown',
+    provenance: ['Private collection'],
+    exhibitions: [],
+    literature: [],
+    lotNumber: '5',
+    auctionDate: '2026-11-12',
+    estimate: { raw: '10,000,000 – 15,000,000', currency: 'USD' },
+    price: null,
+    currency: 'USD',
+  },
+  wikipedia: null,
+  editorial: null,
+  publication: null,
 };
+
+function renderDossier() {
+  return render(
+    <ArtworkDossier
+      detail={detail}
+      action={null}
+      onFindWikipedia={() => {}}
+      onGenerateEssay={() => {}}
+      onRegenerateEssay={() => {}}
+      onPublish={() => {}}
+    />,
+  );
+}
 
 describe('ArtworkDossier', () => {
   it('renders the Selection-like artwork record with service metadata', () => {
-    render(<ArtworkDossier detail={detail} />);
+    renderDossier();
 
     expect(screen.getByRole('heading', { name: 'Mark Rothko' })).toBeInTheDocument();
     expect(screen.getByText(/Untitled/)).toBeInTheDocument();
@@ -93,7 +137,7 @@ describe('ArtworkDossier', () => {
   });
 
   it('does not render the retired Investment Memorandum presentation', () => {
-    render(<ArtworkDossier detail={detail} />);
+    renderDossier();
 
     expect(screen.queryByText(/Investment Memorandum/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Synthesize Curatorial Dossier/i)).not.toBeInTheDocument();

@@ -35,6 +35,28 @@ import {
   sendOwnerConfirmation,
 } from '@/lib/pierrot/humanPresenceTelegram';
 import { planOwnerHumanRouting } from '@/lib/pierrot/humanRouting';
+import {
+  largestTelegramPhoto,
+  transcribeTelegramVoice,
+  uploadTelegramPhoto,
+} from '@/lib/telegram/files';
+import {
+  clearTelegramFlowMode,
+  getTelegramFlowMode,
+  isTelegramFlowMode,
+  setTelegramFlowMode,
+  TELEGRAM_FLOW_MODES,
+  telegramFlowModeLabel,
+  type TelegramFlowMode,
+} from '@/lib/telegram/flowState';
+import { crosspostSummary, publishTelegramFlowItem } from '@/lib/telegram/flowPublish';
+import {
+  getNotificationPreferences,
+  isNotificationOwner,
+  setNotificationPreference,
+  TELEGRAM_NOTIFICATION_CATEGORIES,
+  type TelegramNotificationCategory,
+} from '@/lib/telegram/notifications';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -262,13 +284,9 @@ async function editCallbackNotification(
 
   if (!chatId || !messageId) return;
 
-  await editHumanRequestNotification(
-    chatId,
-    messageId,
-    text,
-    requestId,
-    keepActiveControls
-  ).catch(() => undefined);
+  await editHumanRequestNotification(chatId, messageId, text, requestId, keepActiveControls).catch(
+    () => undefined
+  );
 }
 
 type PierrotStore = NonNullable<ReturnType<typeof createPierrotStore>>;
@@ -346,12 +364,7 @@ async function handleHumanCallback(
       const label = result.visitorLabel || '#unknown';
 
       if (result.result === 'accepted') {
-        await editCallbackNotification(
-          ctx,
-          acceptedNotificationText(label),
-          requestId,
-          true
-        );
+        await editCallbackNotification(ctx, acceptedNotificationText(label), requestId, true);
 
         await sendOwnerConfirmation(
           owner,
@@ -371,12 +384,7 @@ async function handleHumanCallback(
           }).catch(() => undefined);
         }
       } else if (result.result === 'already_active') {
-        await editCallbackNotification(
-          ctx,
-          acceptedNotificationText(label),
-          requestId,
-          true
-        );
+        await editCallbackNotification(ctx, acceptedNotificationText(label), requestId, true);
       } else if (result.result === 'owner_busy') {
         await sendOwnerConfirmation(
           owner,
@@ -522,9 +530,7 @@ async function routeOwnerHumanText(ctx: Context): Promise<boolean> {
     const replyTarget = replyTo
       ? await getHumanPresenceByTelegramMessage(store, owner, replyTo)
       : null;
-    const activeTarget = replyTarget
-      ? null
-      : await getActiveHumanSessionForOwner(store, owner);
+    const activeTarget = replyTarget ? null : await getActiveHumanSessionForOwner(store, owner);
 
     // A plain message with no Reply and no active session is still a valid
     // answer to the only notification waiting for this owner. With several
@@ -538,10 +544,7 @@ async function routeOwnerHumanText(ctx: Context): Promise<boolean> {
 
     let target = plan.target;
 
-    if (
-      target.session &&
-      target.session.owner_telegram_id !== owner
-    ) {
+    if (target.session && target.session.owner_telegram_id !== owner) {
       // A reply anchor must belong to the configured owner's session.
       return true;
     }
@@ -550,11 +553,7 @@ async function routeOwnerHumanText(ctx: Context): Promise<boolean> {
     // acceptance. This covers both Telegram Reply and the single-pending
     // fallback above, so a natural "just type back" gesture never dead-ends.
     if (plan.autoAccept) {
-      const accepted = await acceptHumanRequestReplacingActive(
-        store,
-        target.request.id,
-        owner
-      );
+      const accepted = await acceptHumanRequestReplacingActive(store, target.request.id, owner);
 
       if (accepted.result === 'accepted' || accepted.result === 'already_active') {
         target = (await getHumanPresenceByRequestId(store, target.request.id)) ?? target;
@@ -670,7 +669,10 @@ async function handleEndCommand(ctx: Context): Promise<void> {
       return;
     }
 
-    if (result.telegramChatId && (active.request.telegram_status_message_id || active.request.telegram_message_id)) {
+    if (
+      result.telegramChatId &&
+      (active.request.telegram_status_message_id || active.request.telegram_message_id)
+    ) {
       await editHumanRequestNotification(
         result.telegramChatId,
         active.request.telegram_status_message_id ?? active.request.telegram_message_id ?? 0,
@@ -763,11 +765,372 @@ async function handleHumanHelpCommand(ctx: Context): Promise<void> {
     .catch(() => undefined);
 }
 
+function flowModesKeyboard(): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+
+  for (const entry of TELEGRAM_FLOW_MODES) {
+    keyboard.text(`${entry.label} — ${entry.description}`, `flow:mode:${entry.mode}`).row();
+  }
+
+  return keyboard;
+}
+
+async function handleFlowCommand(ctx: Context): Promise<void> {
+  if (!isTelegramAdmin(ctx.from?.id)) {
+    await ctx.reply('Flow publishing is available to the owner account.').catch(() => undefined);
+    return;
+  }
+
+  await ctx
+    .reply(
+      [
+        '<b>Publish to Flow</b>',
+        '',
+        'Choose a mode. The next message is published immediately — no draft and no confirmation step.',
+        'Use /cancel to leave this mode.',
+      ].join('\n'),
+      { parse_mode: 'HTML', reply_markup: flowModesKeyboard() }
+    )
+    .catch(() => undefined);
+}
+
+async function handleFlowModeSelection(ctx: Context, mode: TelegramFlowMode): Promise<void> {
+  const userId = ctx.from?.id;
+  const chatId = ctx.chat?.id;
+
+  if (!isTelegramAdmin(userId) || typeof userId !== 'number' || typeof chatId !== 'number') {
+    await ctx.answerCallbackQuery({ text: 'Unauthorized' }).catch(() => undefined);
+    return;
+  }
+
+  const store = createPierrotStore();
+
+  if (!store) {
+    await ctx.answerCallbackQuery({ text: 'Storage is unavailable' }).catch(() => undefined);
+    return;
+  }
+
+  try {
+    await setTelegramFlowMode(store, { userId, chatId, mode });
+  } catch {
+    await ctx.answerCallbackQuery({ text: 'Could not start this mode' }).catch(() => undefined);
+    await ctx.reply('Flow publishing is temporarily unavailable.').catch(() => undefined);
+    return;
+  }
+
+  await ctx.answerCallbackQuery().catch(() => undefined);
+
+  const instructions: Record<TelegramFlowMode, string> = {
+    note: 'Send the note text. It will be published immediately.',
+    link: 'Send a message containing the link and any commentary.',
+    article: 'Send the article text. It will be published immediately.',
+    media: 'Send a photo with an optional caption.',
+  };
+
+  await ctx
+    .reply(
+      [
+        `<b>${escapeTelegramHtml(telegramFlowModeLabel(mode))} mode</b>`,
+        '',
+        instructions[mode],
+        '',
+        'Use /cancel to stop.',
+      ].join('\n'),
+      { parse_mode: 'HTML' }
+    )
+    .catch(() => undefined);
+}
+
+async function handleCancelCommand(ctx: Context): Promise<void> {
+  const userId = ctx.from?.id;
+  const chatId = ctx.chat?.id;
+  const store = createPierrotStore();
+
+  if (store && typeof userId === 'number' && typeof chatId === 'number') {
+    await clearTelegramFlowMode(store, { userId, chatId }).catch(() => undefined);
+  }
+
+  await ctx
+    .reply('Flow mode cancelled. Ordinary Pierrot conversation is active again.')
+    .catch(() => undefined);
+}
+
+function flowPublishedKeyboard(url: string, title: string): InlineKeyboard {
+  const share = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(title)}`;
+
+  return new InlineKeyboard()
+    .url('Open publication', url)
+    .url('Share', share)
+    .row()
+    .text('Publish another', 'flow:again');
+}
+
+async function sendFlowPublishResult(
+  ctx: Context,
+  result: Awaited<ReturnType<typeof publishTelegramFlowItem>>
+): Promise<void> {
+  if (!result.ok) {
+    await ctx
+      .reply(`Flow was not published: ${escapeTelegramHtml(result.error)}`, { parse_mode: 'HTML' })
+      .catch(() => undefined);
+    return;
+  }
+
+  const title = typeof result.item.title === 'string' ? result.item.title : 'Flow item';
+  const crosspost = crosspostSummary(result.crosspost);
+  const lines = [
+    '<b>Published to Flow</b>',
+    '',
+    `<b>${escapeTelegramHtml(title)}</b>`,
+    `<a href="${escapeTelegramHtml(result.url)}">Open publication</a>`,
+  ];
+
+  if (result.duplicate) {
+    lines.push('', 'This Telegram update was already published; no duplicate was created.');
+  }
+
+  if (crosspost) {
+    lines.push('', `<b>Crosspost</b>`, escapeTelegramHtml(crosspost));
+  }
+
+  await ctx
+    .reply(lines.join('\n'), {
+      parse_mode: 'HTML',
+      reply_markup: flowPublishedKeyboard(result.url, title),
+      link_preview_options: { is_disabled: true },
+    })
+    .catch(async () => {
+      await ctx.reply(`${title}\n${result.url}`).catch(() => undefined);
+    });
+}
+
+async function handleFlowText(ctx: Context, text: string): Promise<boolean> {
+  const userId = ctx.from?.id;
+  const chatId = ctx.chat?.id;
+  const messageId = ctx.message?.message_id;
+  const store = createPierrotStore();
+
+  if (
+    !store ||
+    typeof userId !== 'number' ||
+    typeof chatId !== 'number' ||
+    typeof messageId !== 'number'
+  ) {
+    return false;
+  }
+
+  let mode: TelegramFlowMode | null = null;
+
+  try {
+    mode = await getTelegramFlowMode(store, { userId, chatId });
+  } catch {
+    return false;
+  }
+
+  if (!mode) return false;
+
+  const result = await publishTelegramFlowItem({
+    store,
+    userId,
+    chatId,
+    messageId,
+    mode,
+    text,
+    username: ctx.from?.username ?? null,
+    firstName: ctx.from?.first_name ?? null,
+  });
+
+  if (result.ok) {
+    await clearTelegramFlowMode(store, { userId, chatId }).catch(() => undefined);
+  }
+
+  await sendFlowPublishResult(ctx, result);
+  return true;
+}
+
+async function handleFlowPhoto(ctx: Context): Promise<boolean> {
+  const userId = ctx.from?.id;
+  const chatId = ctx.chat?.id;
+  const messageId = ctx.message?.message_id;
+  const store = createPierrotStore();
+
+  if (
+    !store ||
+    typeof userId !== 'number' ||
+    typeof chatId !== 'number' ||
+    typeof messageId !== 'number'
+  ) {
+    return false;
+  }
+
+  let mode: TelegramFlowMode | null = null;
+
+  try {
+    mode = await getTelegramFlowMode(store, { userId, chatId });
+  } catch {
+    return false;
+  }
+
+  if (mode !== 'media') {
+    await ctx
+      .reply(
+        'To publish a photo, open /flow and choose Media. Visual analysis is not enabled for ordinary Pierrot chat.'
+      )
+      .catch(() => undefined);
+    return true;
+  }
+
+  const photo = largestTelegramPhoto(ctx.message?.photo);
+
+  if (!photo) {
+    await ctx.reply('That photo is too large or unsupported.').catch(() => undefined);
+    return true;
+  }
+
+  const imageUrl = await uploadTelegramPhoto(store, {
+    fileId: photo.file_id,
+    chatId,
+  });
+
+  if (!imageUrl) {
+    await ctx
+      .reply('The photo could not be uploaded. Try a smaller JPEG or PNG.')
+      .catch(() => undefined);
+    return true;
+  }
+
+  const result = await publishTelegramFlowItem({
+    store,
+    userId,
+    chatId,
+    messageId,
+    mode,
+    text: ctx.message?.caption ?? '',
+    imageUrl,
+    username: ctx.from?.username ?? null,
+    firstName: ctx.from?.first_name ?? null,
+  });
+
+  if (result.ok) {
+    await clearTelegramFlowMode(store, { userId, chatId }).catch(() => undefined);
+  }
+
+  await sendFlowPublishResult(ctx, result);
+  return true;
+}
+
+async function notificationSettingsView(
+  store: NonNullable<ReturnType<typeof createPierrotStore>>,
+  userId: number
+): Promise<{ text: string; keyboard: InlineKeyboard }> {
+  const preferences = await getNotificationPreferences(store, userId);
+  const keyboard = new InlineKeyboard();
+
+  for (const entry of TELEGRAM_NOTIFICATION_CATEGORIES) {
+    keyboard
+      .text(
+        `${preferences[entry.category] ? '✅' : '⬜'} ${entry.label}`,
+        `notif:toggle:${entry.category}`
+      )
+      .row();
+  }
+
+  return {
+    text: [
+      '<b>Pierrot notifications</b>',
+      '',
+      'Only the owner account can receive administrative notifications.',
+      'Tap a category to enable or disable it.',
+    ].join('\n'),
+    keyboard,
+  };
+}
+
+async function handleSettingsCommand(ctx: Context): Promise<void> {
+  const userId = ctx.from?.id;
+
+  if (typeof userId !== 'number' || !isNotificationOwner(userId)) {
+    await ctx
+      .reply('Notification settings are available to the owner account.')
+      .catch(() => undefined);
+    return;
+  }
+
+  const store = createPierrotStore();
+
+  if (!store) {
+    await ctx.reply('Notification settings are temporarily unavailable.').catch(() => undefined);
+    return;
+  }
+
+  const view = await notificationSettingsView(store, userId).catch(() => null);
+
+  if (!view) {
+    await ctx.reply('Notification settings are temporarily unavailable.').catch(() => undefined);
+    return;
+  }
+
+  await ctx
+    .reply(view.text, { parse_mode: 'HTML', reply_markup: view.keyboard })
+    .catch(() => undefined);
+}
+
+async function handleNotificationToggle(
+  ctx: Context,
+  category: TelegramNotificationCategory
+): Promise<void> {
+  const userId = ctx.from?.id;
+
+  if (typeof userId !== 'number' || !isNotificationOwner(userId)) {
+    await ctx.answerCallbackQuery({ text: 'Unauthorized' }).catch(() => undefined);
+    return;
+  }
+
+  const store = createPierrotStore();
+
+  if (!store) {
+    await ctx.answerCallbackQuery({ text: 'Unavailable' }).catch(() => undefined);
+    return;
+  }
+
+  const preferences = await getNotificationPreferences(store, userId).catch(() => null);
+
+  if (!preferences) {
+    await ctx.answerCallbackQuery({ text: 'Unavailable' }).catch(() => undefined);
+    return;
+  }
+
+  const enabled = !preferences[category];
+
+  try {
+    await setNotificationPreference(store, { userId, category, enabled });
+  } catch {
+    await ctx.answerCallbackQuery({ text: 'Could not save' }).catch(() => undefined);
+    return;
+  }
+
+  const view = await notificationSettingsView(store, userId).catch(() => null);
+
+  await ctx.answerCallbackQuery({ text: enabled ? 'Enabled' : 'Disabled' }).catch(() => undefined);
+
+  if (view) {
+    await ctx
+      .editMessageText(view.text, {
+        parse_mode: 'HTML',
+        reply_markup: view.keyboard,
+      })
+      .catch(() => undefined);
+  }
+}
+
 bot.command('start', (ctx) => sendWelcome(ctx));
 bot.command('help', (ctx) => sendWelcome(ctx));
+bot.command('flow', (ctx) => handleFlowCommand(ctx));
+bot.command('cancel', (ctx) => handleCancelCommand(ctx));
 bot.command('end', (ctx) => handleEndCommand(ctx));
 bot.command('status', (ctx) => handleStatusCommand(ctx));
 bot.command('human', (ctx) => handleHumanHelpCommand(ctx));
+bot.command('settings', (ctx) => handleSettingsCommand(ctx));
 
 bot.command('privacy', async (ctx) => {
   const ids = createTelegramPierrotIds(ctx.chat.id, 'privacy');
@@ -863,7 +1226,126 @@ bot.on('message:text', async (ctx) => {
 
   if (handledAsHuman) return;
 
+  const handledAsFlow = await handleFlowText(ctx, text);
+
+  if (handledAsFlow) return;
+
   await handleText(ctx, text, String(ctx.message.message_id));
+});
+
+bot.on('message:photo', async (ctx) => {
+  await handleFlowPhoto(ctx);
+});
+
+bot.on('message:voice', async (ctx) => {
+  const voice = ctx.message?.voice;
+
+  if (!voice?.file_id) return;
+
+  const transcript = await transcribeTelegramVoice({
+    fileId: voice.file_id,
+    mime: voice.mime_type ?? null,
+  });
+
+  if (!transcript) {
+    await ctx
+      .reply('Voice transcription is not available right now. Send text instead.')
+      .catch(() => undefined);
+    return;
+  }
+
+  await ctx.api.sendChatAction(ctx.chat.id, 'typing').catch(() => undefined);
+  await handleText(ctx, transcript, String(ctx.message.message_id));
+});
+
+bot.on('message:document', async (ctx) => {
+  const document = ctx.message?.document;
+  const mime = document?.mime_type ?? '';
+  const userId = ctx.from?.id;
+  const chatId = ctx.chat?.id;
+  const messageId = ctx.message?.message_id;
+  const store = createPierrotStore();
+
+  if (
+    !document?.file_id ||
+    !store ||
+    typeof userId !== 'number' ||
+    typeof chatId !== 'number' ||
+    typeof messageId !== 'number'
+  ) {
+    return;
+  }
+
+  let mode: TelegramFlowMode | null = null;
+
+  try {
+    mode = await getTelegramFlowMode(store, { userId, chatId });
+  } catch {
+    return;
+  }
+
+  if (mode === 'media' && mime.startsWith('image/')) {
+    const imageUrl = await uploadTelegramPhoto(store, {
+      fileId: document.file_id,
+      chatId,
+      mime,
+    });
+
+    if (!imageUrl) {
+      await ctx.reply('That image document could not be uploaded.').catch(() => undefined);
+      return;
+    }
+
+    const result = await publishTelegramFlowItem({
+      store,
+      userId,
+      chatId,
+      messageId,
+      mode,
+      text: ctx.message?.caption ?? '',
+      imageUrl,
+      username: ctx.from?.username ?? null,
+      firstName: ctx.from?.first_name ?? null,
+    });
+
+    if (result.ok) {
+      await clearTelegramFlowMode(store, { userId, chatId }).catch(() => undefined);
+    }
+
+    await sendFlowPublishResult(ctx, result);
+    return;
+  }
+
+  await ctx
+    .reply('Only text, links, photos, voice and supported image documents are accepted here.')
+    .catch(() => undefined);
+});
+
+bot.callbackQuery(/^flow:mode:(note|link|article|media)$/, async (ctx) => {
+  const mode = ctx.match?.[1];
+
+  if (!isTelegramFlowMode(mode)) {
+    await ctx.answerCallbackQuery({ text: 'Invalid mode' }).catch(() => undefined);
+    return;
+  }
+
+  await handleFlowModeSelection(ctx, mode);
+});
+
+bot.callbackQuery('flow:again', async (ctx) => {
+  await ctx.answerCallbackQuery().catch(() => undefined);
+  await handleFlowCommand(ctx);
+});
+
+bot.callbackQuery(/^notif:toggle:(human_requests|flow|art_engine|pierrot|system)$/, async (ctx) => {
+  const category = ctx.match?.[1] as TelegramNotificationCategory | undefined;
+
+  if (!category) {
+    await ctx.answerCallbackQuery({ text: 'Invalid category' }).catch(() => undefined);
+    return;
+  }
+
+  await handleNotificationToggle(ctx, category);
 });
 
 bot.callbackQuery(/^hp:(accept|decline|status|end):([0-9a-fA-F-]{36})$/, async (ctx) => {
@@ -906,8 +1388,25 @@ if (process.env.TELEGRAM_WEBHOOK_SECRET && !enforceWebhookSecret) {
   );
 }
 
-export const POST = webhookCallback(
+const telegramWebhook = webhookCallback(
   bot,
   'std/http',
   webhookSecret ? { secretToken: webhookSecret } : undefined
 );
+
+export async function POST(request: Request) {
+  if (enforceWebhookSecret && !webhookSecret) {
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: 'Telegram webhook secret is not configured.',
+      }),
+      {
+        status: 503,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      }
+    );
+  }
+
+  return telegramWebhook(request);
+}

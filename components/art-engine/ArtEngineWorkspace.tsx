@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
 import ArtEngineComposer from './ArtEngineComposer';
 import ArtworkDossier from './ArtworkDossier';
+import PublishPreview from './PublishPreview';
 import VaultPanel from './VaultPanel';
 import useComposerOffset from './useComposerOffset';
 import type {
@@ -50,10 +51,7 @@ function domainOf(url: string): string {
   }
 }
 
-function failedAttemptFromResponse(
-  url: string,
-  data: any,
-): AttemptSummary {
+function failedAttemptFromResponse(url: string, data: any): AttemptSummary {
   return {
     id: String(data?.attempt_id || 'unknown'),
     url,
@@ -76,11 +74,7 @@ function failedAttemptFromResponse(
   };
 }
 
-export default function ArtEngineWorkspace({
-  authFetch,
-}: {
-  authFetch: AuthFetch;
-}) {
+export default function ArtEngineWorkspace({ authFetch }: { authFetch: AuthFetch }) {
   const [tab, setTab] = useState<'workspace' | 'vault'>('workspace');
   const [url, setUrl] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -89,6 +83,13 @@ export default function ArtEngineWorkspace({
   const [selectedAttempt, setSelectedAttempt] = useState<AttemptSummary | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [storageNotice, setStorageNotice] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<{
+    tone: 'success' | 'info' | 'error';
+    message: string;
+  } | null>(null);
+  const [action, setAction] = useState<string | null>(null);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
   const [vaultLots, setVaultLots] = useState<VaultLot[]>([]);
   const [vaultAttempts, setVaultAttempts] = useState<AttemptSummary[]>([]);
   const [vaultLoading, setVaultLoading] = useState(true);
@@ -124,15 +125,11 @@ export default function ArtEngineWorkspace({
         setVaultError(
           lotsResponse.status === 401 || attemptsResponse.status === 401
             ? 'Admin access is required to open the Vault.'
-            : lotsData?.error ||
-                attemptsData?.error ||
-                'Unable to load the Vault.',
+            : lotsData?.error || attemptsData?.error || 'Unable to load the Vault.'
         );
       } else {
         setVaultLots(Array.isArray(lotsData?.lots) ? lotsData.lots : []);
-        setVaultAttempts(
-          Array.isArray(attemptsData?.attempts) ? attemptsData.attempts : [],
-        );
+        setVaultAttempts(Array.isArray(attemptsData?.attempts) ? attemptsData.attempts : []);
       }
     } catch {
       setVaultLots([]);
@@ -168,7 +165,7 @@ export default function ArtEngineWorkspace({
         setNotice('Unable to open this Vault record.');
       }
     },
-    [authFetch, scrollToTop],
+    [authFetch, scrollToTop]
   );
 
   useEffect(() => {
@@ -187,10 +184,141 @@ export default function ArtEngineWorkspace({
     }
   }, [loadLot]);
 
+  const runWikipedia = async (lotId: string, silent = false, force = false) => {
+    setAction('wikipedia');
+
+    try {
+      const response = await authFetch(`/api/admin/art-engine/lots/${lotId}/wikipedia`, {
+        method: 'POST',
+        body: JSON.stringify({ force }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        if (!silent) {
+          setActionNotice({
+            tone: 'error',
+            message: data?.error || data?.warnings?.[0] || 'Wikipedia lookup failed.',
+          });
+        }
+        return;
+      }
+
+      await loadLot(lotId);
+
+      if (!silent) {
+        setActionNotice({
+          tone: data.status === 'found' ? 'success' : 'info',
+          message:
+            data.status === 'found'
+              ? `Wikipedia context attached: ${data.wikipedia?.title}.`
+              : data.warnings?.[0] || 'No confident Wikipedia match was found.',
+        });
+      }
+    } catch {
+      if (!silent) {
+        setActionNotice({
+          tone: 'error',
+          message: 'Wikipedia lookup failed.',
+        });
+      }
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const generateEssay = async (regenerate: boolean, lotId: string) => {
+    setAction(regenerate ? 'regenerate' : 'essay');
+
+    try {
+      const response = await authFetch(`/api/admin/art-engine/lots/${lotId}/essay`, {
+        method: 'POST',
+        body: JSON.stringify({ regenerate }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setActionNotice({
+          tone: 'error',
+          message: data?.details || data?.error || 'Essay generation failed.',
+        });
+        return;
+      }
+
+      await loadLot(lotId);
+      setActionNotice({
+        tone: 'success',
+        message: regenerate
+          ? `Essay version ${data.version} generated and saved.`
+          : `Essay version ${data.version} generated and saved.`,
+      });
+    } catch {
+      setActionNotice({
+        tone: 'error',
+        message: 'Essay generation failed.',
+      });
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const confirmPublish = async () => {
+    if (!detail) return;
+
+    const lotId = detail.lot.id;
+    const isUpdate =
+      detail.publication?.status === 'published' || detail.publication?.status === 'update_pending';
+
+    setAction('publish');
+    setPublishError(null);
+
+    try {
+      const response = await authFetch(`/api/admin/art-engine/lots/${lotId}/publish`, {
+        method: 'POST',
+        body: JSON.stringify({
+          confirm: true,
+          imageRightsConfirmed: true,
+          mode: isUpdate ? 'update' : 'create',
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const message = data?.error || 'Publication failed.';
+        setPublishError(message);
+        setActionNotice({
+          tone: 'error',
+          message,
+        });
+        return;
+      }
+
+      setPublishOpen(false);
+      await loadLot(lotId);
+      await loadVault();
+      setActionNotice({
+        tone: 'success',
+        message: data.unchanged
+          ? 'This version is already published in Selection.'
+          : data.updated
+            ? 'Selection article updated.'
+            : 'Published to Selection.',
+      });
+    } catch {
+      setPublishError('Publication failed.');
+      setActionNotice({
+        tone: 'error',
+        message: 'Publication failed.',
+      });
+    } finally {
+      setAction(null);
+    }
+  };
+
   const handleSubmit = async () => {
     const trimmed = url.trim();
 
-    if (!trimmed || processing) return;
+    if (!trimmed || processing || action) return;
 
     let parsed: URL;
     try {
@@ -207,6 +335,7 @@ export default function ArtEngineWorkspace({
     setSelectedAttempt(null);
     setNotice(null);
     setStorageNotice(null);
+    setActionNotice(null);
     setTab('workspace');
 
     try {
@@ -228,23 +357,25 @@ export default function ArtEngineWorkspace({
 
       if (data.vault_persisted === false) {
         setStorageNotice(
-          'Extraction succeeded, but Vault JSON storage is not available yet. Apply migrations/2026-11-03_art_engine_vault.sql to persist attempt state and research history.',
+          'Extraction succeeded, but Vault JSON storage is not available yet. Apply migrations/2026-11-03_art_engine_vault.sql to persist attempt state and research history.'
         );
       }
 
       if (data.lot_id) {
-        const detailResponse = await authFetch(
-          `/api/admin/art-engine/lots/${data.lot_id}`,
-        );
+        const detailResponse = await authFetch(`/api/admin/art-engine/lots/${data.lot_id}`);
         const detailData = await detailResponse.json().catch(() => ({}));
 
         if (detailResponse.ok) {
-          setDetail(detailData as ArtworkDetail);
+          const loaded = detailData as ArtworkDetail;
+          setDetail(loaded);
           setSelectedAttempt(null);
+
+          if (loaded.lot?.artist && loaded.wikipedia?.status !== 'found') {
+            void runWikipedia(loaded.lot.id, true);
+          }
         } else {
           setNotice(
-            detailData?.error ||
-              'The lot was saved, but the Vault detail could not be loaded.',
+            detailData?.error || 'The lot was saved, but the Vault detail could not be loaded.'
           );
         }
       } else {
@@ -291,12 +422,9 @@ export default function ArtEngineWorkspace({
   return (
     <div className="relative pb-[calc(10.5rem+env(safe-area-inset-bottom))]">
       <div ref={topRef} className="mx-auto max-w-7xl scroll-mt-28 px-4 sm:px-6">
-        <header className="flex flex-col gap-4 border-b border-[#E4DCCF] pb-4 pt-2 sm:flex-row sm:items-end sm:justify-between">
+        <header className="flex flex-col gap-4 pb-4 pt-2 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#9A9083]">
-              Art Engine / private workspace
-            </p>
-            <h1 className="mt-1 font-serif text-3xl font-light tracking-tight text-[#211F1F] sm:text-4xl">
+            <h1 className="font-serif text-3xl font-light tracking-tight text-[#211F1F] sm:text-4xl">
               Art Engine
             </h1>
           </div>
@@ -356,6 +484,27 @@ export default function ArtEngineWorkspace({
           </div>
         )}
 
+        {actionNotice && (
+          <div
+            className={`mt-4 flex items-start gap-3 rounded-2xl border px-4 py-3 ${
+              actionNotice.tone === 'error'
+                ? 'border-[#E7C3BE] bg-[#FCF3F2] text-[#8B4038]'
+                : actionNotice.tone === 'success'
+                  ? 'border-[#CFE0CC] bg-[#F2F7F1] text-[#4F6B4D]'
+                  : 'border-[#E4DCCF] bg-[#F8F5EF] text-[#625B50]'
+            }`}
+          >
+            <p className="font-mono text-[10px] leading-relaxed">{actionNotice.message}</p>
+            <button
+              type="button"
+              onClick={() => setActionNotice(null)}
+              className="ml-auto shrink-0 font-mono text-[9px] uppercase tracking-[0.12em] underline underline-offset-4"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {tab === 'vault' ? (
           <VaultPanel
             lots={vaultLots}
@@ -369,7 +518,17 @@ export default function ArtEngineWorkspace({
             onRefresh={loadVault}
           />
         ) : detail ? (
-          <ArtworkDossier detail={detail} />
+          <ArtworkDossier
+            detail={detail}
+            action={action}
+            onFindWikipedia={() => void runWikipedia(detail.lot.id, false, true)}
+            onGenerateEssay={() => void generateEssay(false, detail.lot.id)}
+            onRegenerateEssay={() => void generateEssay(true, detail.lot.id)}
+            onPublish={() => {
+              setPublishError(null);
+              setPublishOpen(true);
+            }}
+          />
         ) : selectedAttempt ? (
           <FailedAttemptDetail
             attempt={selectedAttempt}
@@ -398,9 +557,21 @@ export default function ArtEngineWorkspace({
         }}
         onSubmit={handleSubmit}
         status={status}
-        processing={processing}
+        processing={processing || action !== null}
         bottomOffset={bottomOffset}
       />
+
+      {publishOpen && detail && (
+        <PublishPreview
+          detail={detail}
+          publishing={action === 'publish'}
+          error={publishError}
+          onClose={() => {
+            if (action !== 'publish') setPublishOpen(false);
+          }}
+          onConfirm={() => void confirmPublish()}
+        />
+      )}
     </div>
   );
 }
@@ -431,9 +602,8 @@ function EmptyWorkspace({
         </h2>
 
         <p className="mx-auto mt-4 max-w-lg font-serif text-base italic leading-relaxed text-[#6B6358] sm:text-lg">
-          Christie’s, Sotheby’s, Phillips and Bonhams. The original auction
-          image, catalogue data, extraction status and warnings stay in one
-          place.
+          Christie’s, Sotheby’s, Phillips and Bonhams. The original auction image, catalogue data,
+          extraction status and warnings stay in one place.
         </p>
 
         <div className="mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 font-mono text-[9px] uppercase tracking-[0.14em] text-[#8A8175]">
@@ -470,7 +640,9 @@ function EmptyWorkspace({
                 onClick={() => onOpenLot(lot.id)}
                 className="rounded-xl border border-[#E4DCCF] bg-white px-4 py-3 text-left transition hover:border-[#CFC3B1] hover:shadow-sm"
               >
-                <span className={`inline-flex rounded-full border px-2 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] ${statusTone(lot.ingestion_status)}`}>
+                <span
+                  className={`inline-flex rounded-full border px-2 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] ${statusTone(lot.ingestion_status)}`}
+                >
                   {lot.ingestion_status || 'legacy'}
                 </span>
                 <p className="mt-2 truncate font-serif text-base text-[#211F1F]">
@@ -488,13 +660,7 @@ function EmptyWorkspace({
   );
 }
 
-function ProcessingState({
-  status,
-  url,
-}: {
-  status: IngestionStatus | 'idle';
-  url: string;
-}) {
+function ProcessingState({ status, url }: { status: IngestionStatus | 'idle'; url: string }) {
   return (
     <div className="mx-auto flex min-h-[50vh] max-w-2xl flex-col items-center justify-center py-16 text-center">
       <Loader2 size={22} className="animate-spin text-[#8A8175]" />
@@ -508,20 +674,13 @@ function ProcessingState({
         {url}
       </p>
       <p className="mt-5 max-w-sm font-serif text-sm italic leading-relaxed text-[#6B6358]">
-        The parser is preserving the auction house’s own data. Missing fields
-        stay missing.
+        The parser is preserving the auction house’s own data. Missing fields stay missing.
       </p>
     </div>
   );
 }
 
-function FailedAttemptDetail({
-  attempt,
-  onBack,
-}: {
-  attempt: AttemptSummary;
-  onBack: () => void;
-}) {
+function FailedAttemptDetail({ attempt, onBack }: { attempt: AttemptSummary; onBack: () => void }) {
   return (
     <article className="mx-auto max-w-2xl py-10 sm:py-14">
       <button
@@ -534,7 +693,9 @@ function FailedAttemptDetail({
       </button>
 
       <div className="mt-6 border-b border-[#E4DCCF] pb-5">
-        <span className={`inline-flex rounded-full border px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.14em] ${statusTone(attempt.status)}`}>
+        <span
+          className={`inline-flex rounded-full border px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.14em] ${statusTone(attempt.status)}`}
+        >
           {attempt.status}
         </span>
         <h1 className="mt-4 font-serif text-3xl font-light text-[#211F1F]">
@@ -550,17 +711,11 @@ function FailedAttemptDetail({
           <dt className="font-mono text-[8px] uppercase tracking-[0.16em] text-[#9A9083]">
             Domain
           </dt>
-          <dd className="font-mono text-[10px] text-[#4A443D]">
-            {domainOf(attempt.url)}
-          </dd>
+          <dd className="font-mono text-[10px] text-[#4A443D]">{domainOf(attempt.url)}</dd>
         </div>
         <div className="grid grid-cols-[7rem_1fr] gap-4 py-2.5">
-          <dt className="font-mono text-[8px] uppercase tracking-[0.16em] text-[#9A9083]">
-            When
-          </dt>
-          <dd className="font-mono text-[10px] text-[#4A443D]">
-            {dateTime(attempt.created_at)}
-          </dd>
+          <dt className="font-mono text-[8px] uppercase tracking-[0.16em] text-[#9A9083]">When</dt>
+          <dd className="font-mono text-[10px] text-[#4A443D]">{dateTime(attempt.created_at)}</dd>
         </div>
         <div className="grid grid-cols-[7rem_1fr] gap-4 py-2.5">
           <dt className="font-mono text-[8px] uppercase tracking-[0.16em] text-[#9A9083]">
@@ -576,18 +731,14 @@ function FailedAttemptDetail({
             <dt className="font-mono text-[8px] uppercase tracking-[0.16em] text-[#9A9083]">
               HTTP
             </dt>
-            <dd className="font-mono text-[10px] text-[#4A443D]">
-              {attempt.http_status}
-            </dd>
+            <dd className="font-mono text-[10px] text-[#4A443D]">{attempt.http_status}</dd>
           </div>
         )}
       </dl>
 
       {attempt.error_message && (
         <div className="mt-6 rounded-2xl border border-[#E7C3BE] bg-[#FCF3F2] px-4 py-3">
-          <p className="font-mono text-[8px] uppercase tracking-[0.16em] text-[#8B4038]">
-            Error
-          </p>
+          <p className="font-mono text-[8px] uppercase tracking-[0.16em] text-[#8B4038]">Error</p>
           <p className="mt-1.5 font-mono text-[10px] leading-relaxed text-[#8B4038]">
             {attempt.error_message}
           </p>
@@ -597,7 +748,10 @@ function FailedAttemptDetail({
       {attempt.warnings.length > 0 && (
         <div className="mt-5 space-y-1.5">
           {attempt.warnings.map((warning, index) => (
-            <p key={`${warning}-${index}`} className="font-mono text-[9px] leading-relaxed text-[#8A5A2B]">
+            <p
+              key={`${warning}-${index}`}
+              className="font-mono text-[9px] leading-relaxed text-[#8A5A2B]"
+            >
               ! {warning}
             </p>
           ))}

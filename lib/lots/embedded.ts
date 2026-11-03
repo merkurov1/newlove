@@ -1,3 +1,9 @@
+import * as cheerio from "cheerio";
+import {
+  parseArtistDatesFromLines,
+  parseCatalogueLines,
+} from "./extract-detail";
+
 /**
  * Some auction houses render the lot header as a JavaScript object rather than
  * semantic HTML. Christie's, for example, embeds:
@@ -58,6 +64,31 @@ export function extractBalancedJson(
   return null;
 }
 
+function htmlLines(value: unknown): string[] {
+  if (typeof value !== "string" || !value.trim()) return [];
+
+  const $ = cheerio.load(`<div id="art-engine-embedded">${value}</div>`);
+  const root = $("#art-engine-embedded");
+
+  root.find("br").replaceWith("\n");
+  root.find("p, div, li").each((_, element) => {
+    $(element).append("\n");
+  });
+
+  return root
+    .text()
+    .replace(/\r/g, "")
+    .replace(/\u00a0/g, " ")
+    .split(/\n+/g)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+function htmlText(value: unknown): string | null {
+  const lines = htmlLines(value);
+  return lines.length ? lines.join("\n") : null;
+}
+
 export interface EmbeddedLotHeader {
   title: string | null;
   artist: string | null;
@@ -110,12 +141,27 @@ export function extractChristiesEmbeddedLot(
 export interface EmbeddedSothebysLot {
   title: string | null;
   artist: string | null;
+  artistDates: string | null;
   lotNumber: string | null;
   estimateLow: number | null;
   estimateHigh: number | null;
   estimateRaw: string | null;
   currency: string | null;
   imageUrl: string | null;
+  description: string | null;
+  signature: string | null;
+  medium: string | null;
+  dimensions: string | null;
+  year: number | null;
+  provenance: string[];
+  exhibitions: string[];
+  literature: string[];
+  catalogueNote: string | null;
+  conditionReportStatus:
+    | "available"
+    | "unavailable"
+    | "login-required"
+    | "unknown";
 }
 
 export function extractSothebysEmbeddedLot(
@@ -183,9 +229,24 @@ export function extractSothebysEmbeddedLot(
         ? firstImage.renditions[0]
         : null;
 
+    const descriptionLines = htmlLines(lot.description);
+    const catalogue = parseCatalogueLines(descriptionLines);
+    const conditionType = String(lot.condition?.__typename || "");
+
+    const conditionReportStatus:
+      | "available"
+      | "unavailable"
+      | "login-required"
+      | "unknown" = /BehindLogin/i.test(conditionType)
+      ? "login-required"
+      : lot.condition
+        ? "available"
+        : "unknown";
+
     return {
       title: clean(lot.title),
       artist: clean(lot.creatorsDisplayTitle),
+      artistDates: parseArtistDatesFromLines(descriptionLines),
       lotNumber: clean(lot.lotNumber?.lotDisplayNumber),
       estimateLow: Number.isFinite(low) ? low : null,
       estimateHigh: Number.isFinite(high) ? high : null,
@@ -195,6 +256,16 @@ export function extractSothebysEmbeddedLot(
           : null,
       currency: clean(auction.currency || auction.currencyV2),
       imageUrl: clean(rendition?.url),
+      description: descriptionLines.length ? descriptionLines.join("\n") : null,
+      signature: catalogue.signature,
+      medium: catalogue.medium,
+      dimensions: catalogue.dimensions,
+      year: catalogue.year,
+      provenance: htmlLines(lot.provenance),
+      exhibitions: htmlLines(lot.exhibition),
+      literature: htmlLines(lot.literature),
+      catalogueNote: htmlText(lot.catalogueNote),
+      conditionReportStatus,
     };
   } catch {
     return null;

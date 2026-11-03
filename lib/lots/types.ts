@@ -88,6 +88,14 @@ export interface LotData {
   price?: NormalizedPrice | null;
   sold?: boolean | null;
   description?: string | null;
+  lotEssay?: string | null;
+  catalogueNote?: string | null;
+  conditionReport?: string | null;
+  conditionReportStatus?:
+    | "available"
+    | "unavailable"
+    | "login-required"
+    | "unknown";
   provenance?: string[];
   exhibitions?: string[];
   literature?: string[];

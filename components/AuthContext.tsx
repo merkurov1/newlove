@@ -1,11 +1,7 @@
 'use client';
 
 import React from 'react';
-import type {
-  AuthChangeEvent,
-  Session,
-  User,
-} from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase-browser';
 import { useRouter } from 'next/navigation';
 
@@ -37,8 +33,7 @@ const initialAuthContext: AuthContextType = {
   refreshProfile: async () => {},
 };
 
-const AuthContext =
-  React.createContext<AuthContextType>(initialAuthContext);
+const AuthContext = React.createContext<AuthContextType>(initialAuthContext);
 
 export function AuthProvider(props: React.PropsWithChildren) {
   const [user, setUser] = React.useState<User | null>(null);
@@ -63,10 +58,7 @@ export function AuthProvider(props: React.PropsWithChildren) {
     async (userId: string, force = false): Promise<void> => {
       if (!userId) return;
 
-      if (
-        !force &&
-        loadedProfileForUserRef.current === userId
-      ) {
+      if (!force && loadedProfileForUserRef.current === userId) {
         return;
       }
 
@@ -115,7 +107,7 @@ export function AuthProvider(props: React.PropsWithChildren) {
         }
       }
     },
-    [supabase],
+    [supabase]
   );
 
   const refreshProfile = React.useCallback(async (): Promise<void> => {
@@ -153,19 +145,12 @@ export function AuthProvider(props: React.PropsWithChildren) {
         });
 
         if (!response.ok) {
-          throw new Error(
-            `Failed to load user roles: ${response.status}`,
-          );
+          throw new Error(`Failed to load user roles: ${response.status}`);
         }
 
         const result: unknown = await response.json();
 
-        if (
-          !result ||
-          typeof result !== 'object' ||
-          !('user' in result) ||
-          !('roles' in result)
-        ) {
+        if (!result || typeof result !== 'object' || !('user' in result) || !('roles' in result)) {
           if (active) {
             setRoles([]);
           }
@@ -179,19 +164,12 @@ export function AuthProvider(props: React.PropsWithChildren) {
 
         // Не принимаем роли из ответа, если они относятся
         // к другому пользователю или сессия уже сменилась.
-        if (
-          !active ||
-          activeUserIdRef.current !== userId ||
-          payload.user?.id !== userId
-        ) {
+        if (!active || activeUserIdRef.current !== userId || payload.user?.id !== userId) {
           return;
         }
 
         const nextRoles = Array.isArray(payload.roles)
-          ? payload.roles.filter(
-              (role: unknown): role is string =>
-                typeof role === 'string',
-            )
+          ? payload.roles.filter((role: unknown): role is string => typeof role === 'string')
           : [];
 
         setRoles(nextRoles);
@@ -244,10 +222,7 @@ export function AuthProvider(props: React.PropsWithChildren) {
       // Даём обработчику auth-события завершиться до
       // обращения к таблице profiles.
       void Promise.resolve().then(() => {
-        if (
-          mounted &&
-          activeUserIdRef.current === nextUserId
-        ) {
+        if (mounted && activeUserIdRef.current === nextUserId) {
           return fetchProfile(nextUserId);
         }
       });
@@ -255,12 +230,10 @@ export function AuthProvider(props: React.PropsWithChildren) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(
-      (_event: AuthChangeEvent, nextSession: Session | null) => {
-        authEventReceivedRef.current = true;
-        applySession(nextSession);
-      },
-    );
+    } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, nextSession: Session | null) => {
+      authEventReceivedRef.current = true;
+      applySession(nextSession);
+    });
 
     const getInitialSession = async (): Promise<void> => {
       try {
@@ -306,17 +279,14 @@ export function AuthProvider(props: React.PropsWithChildren) {
           : '/art-engine';
 
       const safePath =
-        requestedPath.startsWith('/') &&
-        !requestedPath.startsWith('//')
+        requestedPath.startsWith('/') && !requestedPath.startsWith('//')
           ? requestedPath
           : '/art-engine';
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/login?next=${encodeURIComponent(
-            safePath,
-          )}`,
+          redirectTo: `${window.location.origin}/login?next=${encodeURIComponent(safePath)}`,
         },
       });
 
@@ -329,13 +299,8 @@ export function AuthProvider(props: React.PropsWithChildren) {
 
   const signInWithPasskey = React.useCallback(async (): Promise<void> => {
     try {
-      if (
-        typeof window === 'undefined' ||
-        !window.PublicKeyCredential
-      ) {
-        throw new Error(
-          'WebAuthn is not supported by this browser.',
-        );
+      if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+        throw new Error('WebAuthn is not supported by this browser.');
       }
 
       // Passkey API может отсутствовать в текущих типах Supabase.
@@ -346,9 +311,7 @@ export function AuthProvider(props: React.PropsWithChildren) {
       };
 
       if (typeof auth.signInWithPasskey !== 'function') {
-        throw new Error(
-          'Passkey sign-in is not available in the installed Supabase client.',
-        );
+        throw new Error('Passkey sign-in is not available in the installed Supabase client.');
       }
 
       const { error } = await auth.signInWithPasskey();
@@ -364,6 +327,20 @@ export function AuthProvider(props: React.PropsWithChildren) {
     const { error } = await supabase.auth.signOut();
 
     if (error) throw error;
+
+    // Clear server-side HttpOnly session cookies as well. The browser client
+    // clears its local session; the server endpoint closes the SSR session and
+    // removes legacy duplicate cookies.
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+      });
+    } catch {
+      // Local sign-out already succeeded; the next server request will still
+      // fail if the cookie is no longer accepted by Supabase.
+    }
 
     activeUserIdRef.current = null;
     loadedProfileForUserRef.current = null;
@@ -400,14 +377,10 @@ export function AuthProvider(props: React.PropsWithChildren) {
       signInWithPasskey,
       signOut,
       refreshProfile,
-    ],
+    ]
   );
 
-  return (
-    <AuthContext.Provider value={value}>
-      {props.children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{props.children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => React.useContext(AuthContext);

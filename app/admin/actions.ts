@@ -64,7 +64,7 @@ async function verifyAdmin() {
     .getAll()
     .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
     .join('; ');
-    
+
   const req = new Request('http://localhost', { headers: { cookie: cookieHeader } });
   const user = await requireAdminFromRequest(req);
   return { user };
@@ -457,48 +457,39 @@ export async function updateProfile(prevState: any, formData: any) {
 export async function adminUpdateUserRole(userId: any, role: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
-  if (!userId || !role) throw new Error('User ID и Role обязательны.');
 
-  const { error } = await supabase.auth.admin.updateUserById(userId, { user_metadata: { role } });
+  if (typeof userId !== 'string' || !userId) throw new Error('User ID is required.');
+
+  const normalizedRole = String(role).toUpperCase() === 'ADMIN' ? 'ADMIN' : 'USER';
+
+  // public.users.role is the authoritative application role. The auth
+  // metadata is mirrored only for UI convenience and must never be trusted by
+  // server authorization.
+  const { error } = await supabase
+    .from('users')
+    .upsert(
+      { id: userId, role: normalizedRole, updated_at: new Date().toISOString() },
+      { onConflict: 'id' }
+    );
+
   if (error) {
-    console.error('adminUpdateUserRole error (auth):', error);
-    return { status: 'error', message: error.message };
+    console.error('adminUpdateUserRole error (users):', error);
+    return { status: 'error', message: 'Role update failed.' };
   }
 
   try {
-    const { data: userRow } = await supabase
-      .from('users')
-      .select('user_metadata,email')
-      .eq('id', userId)
-      .maybeSingle();
-    const existingMeta = (userRow && userRow.user_metadata) || {};
-    const mergedMeta = { ...existingMeta, role };
-    if (userRow) {
-      await supabase.from('users').update({ user_metadata: mergedMeta }).eq('id', userId);
-    }
+    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+    const existingMeta =
+      authUser?.user?.user_metadata && typeof authUser.user.user_metadata === 'object'
+        ? authUser.user.user_metadata
+        : {};
 
-    if (String(role).toUpperCase() === 'SUBSCRIBER') {
-      const email = userRow?.email || null;
-      if (email) {
-        const { data: existingSub } = await supabase
-          .from('subscribers')
-          .select('id')
-          .eq('email', email)
-          .maybeSingle();
-
-        if (existingSub) {
-          await supabase
-            .from('subscribers')
-            .update({ userId, isActive: true })
-            .eq('id', existingSub.id);
-        } else {
-          const insertPayload = { id: createId(), email, userId, isActive: true };
-          await supabase.from('subscribers').insert(insertPayload);
-        }
-      }
-    }
-  } catch (syncErr) {
-    console.warn('adminUpdateUserRole: failed to sync users/subscribers tables', syncErr);
+    await supabase.auth.admin.updateUserById(userId, {
+      user_metadata: { ...existingMeta, role: normalizedRole },
+    });
+  } catch {
+    // The canonical role is already saved. Metadata mirroring is cosmetic.
+    console.warn('adminUpdateUserRole: auth metadata mirror failed');
   }
 
   revalidatePath('/admin/users');
@@ -719,7 +710,8 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
     if (String(code) === '42501') {
       return {
         status: 'error',
-        message: 'Права на запись в базу отсутствуют. Проверьте SUPABASE_SERVICE_ROLE_KEY и привилегии.',
+        message:
+          'Права на запись в базу отсутствуют. Проверьте SUPABASE_SERVICE_ROLE_KEY и привилегии.',
         code,
         details: error,
       };
@@ -850,7 +842,7 @@ export async function createLetter(formData: any) {
 
   const parsedTags = parseTagNames(tagsString);
   await upsertTagsAndLink(supabase, 'letter', letterId, parsedTags);
-  
+
   try {
     for (const t of parsedTags || []) {
       const slug = slugifyTag(t);
@@ -978,22 +970,16 @@ export async function deleteLetter(formData: any) {
         const svc = getServerSupabaseClient({ useServiceRole: true });
         const retry = await svc.from('letters').delete().eq('id', id);
         if (retry.error) {
-          throw new Error(
-            'Ошибка при удалении письма: permission denied for table letters.'
-          );
+          throw new Error('Ошибка при удалении письма: permission denied for table letters.');
         }
         error = null;
       } catch (e: any) {
-        throw new Error(
-          'Не удалось удалить письмо: ' + (e?.message || String(e))
-        );
+        throw new Error('Не удалось удалить письмо: ' + (e?.message || String(e)));
       }
     }
 
     if (error) {
-      throw new Error(
-        'Ошибка при удалении письма: ' + (error.message || String(error))
-      );
+      throw new Error('Ошибка при удалении письма: ' + (error.message || String(error)));
     }
 
     revalidatePath('/admin/letters');
@@ -1095,7 +1081,10 @@ export async function sendLetter(prevState: any, formData: any) {
       .limit(SEND_LIMIT);
 
     if (subsErr || !allSubs || allSubs.length === 0) {
-      return { status: 'error', message: 'There are no active subscribers to receive this letter.' };
+      return {
+        status: 'error',
+        message: 'There are no active subscribers to receive this letter.',
+      };
     }
 
     const { filterSubscribersByLang } = await import('@/lib/newsletter/language');
@@ -1103,7 +1092,10 @@ export async function sendLetter(prevState: any, formData: any) {
 
     if (!subs || subs.length === 0) {
       const langLabel = letter.lang === 'en' ? 'English' : 'Russian';
-      return { status: 'error', message: `There are no active ${langLabel} subscribers to receive this letter.` };
+      return {
+        status: 'error',
+        message: `There are no active ${langLabel} subscribers to receive this letter.`,
+      };
     }
 
     let sent = 0;

@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import { ArrowUpRight, Loader2 } from 'lucide-react';
+import Markdown from 'markdown-to-jsx';
 import type { ArtworkDetail } from './types';
 
 function formatDate(value?: string | null): string {
@@ -43,8 +45,55 @@ function SpecRow({
   );
 }
 
-export default function ArtworkDossier({ detail }: { detail: ArtworkDetail }) {
-  const { lot, vault, extracted, attempts } = detail;
+function stageTone(
+  state: 'done' | 'active' | 'pending' | 'error',
+): string {
+  if (state === 'done') return 'border-[#CFE0CC] bg-[#F2F7F1] text-[#4F6B4D]';
+  if (state === 'active') return 'border-[#D8C8AF] bg-[#FFF9EC] text-[#7A5A28]';
+  if (state === 'error') return 'border-[#E7C3BE] bg-[#FCF3F2] text-[#8B4038]';
+  return 'border-[#E4DCCF] bg-[#F8F5EF] text-[#8A8175]';
+}
+
+function Stage({
+  label,
+  value,
+  state,
+}: {
+  label: string;
+  value: string;
+  state: 'done' | 'active' | 'pending' | 'error';
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="font-mono text-[8px] uppercase tracking-[0.16em] text-[#9A9083]">
+        {label}
+      </p>
+      <p
+        className={`mt-1 inline-flex max-w-full truncate rounded-full border px-2 py-1 font-mono text-[8px] uppercase tracking-[0.12em] ${stageTone(state)}`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+export default function ArtworkDossier({
+  detail,
+  action,
+  onFindWikipedia,
+  onGenerateEssay,
+  onRegenerateEssay,
+  onPublish,
+}: {
+  detail: ArtworkDetail;
+  action: string | null;
+  onFindWikipedia: () => void;
+  onGenerateEssay: () => void;
+  onRegenerateEssay: () => void;
+  onPublish: () => void;
+}) {
+  const { lot, vault, extracted, attempts, wikipedia, editorial, publication } =
+    detail;
   const ingestion = vault.ingestion || {};
   const image =
     vault.image?.publicUrl ||
@@ -59,6 +108,29 @@ export default function ArtworkDossier({ detail }: { detail: ArtworkDetail }) {
       ? extracted.provenance
       : lines(lot.provenance);
   const isPartial = status === 'partial' || warnings.length > 0 || missing.length > 0;
+  const essay = editorial?.current || null;
+  const isPublished =
+    publication?.status === 'published' ||
+    publication?.status === 'update_pending';
+  const publishLabel = isPublished ? 'Update Publication' : 'Publish to Selection';
+  const canPublish = Boolean(
+    essay?.curatorial_essay &&
+      image &&
+      lot.artist &&
+      lot.title,
+  );
+  const researchLabel =
+    wikipedia?.status === 'found'
+      ? wikipedia.title || 'Wikipedia found'
+      : wikipedia?.status === 'ambiguous'
+        ? 'Ambiguous'
+        : wikipedia?.status === 'unavailable'
+          ? 'Unavailable'
+          : wikipedia?.status === 'not_found'
+            ? 'Not found'
+            : wikipedia?.status === 'skipped'
+              ? 'Skipped'
+              : 'Not run';
 
   return (
     <article className="pb-10">
@@ -77,6 +149,202 @@ export default function ArtworkDossier({ detail }: { detail: ArtworkDetail }) {
           </div>
         </div>
       )}
+
+      <section className="mb-6 rounded-2xl border border-[#E4DCCF] bg-[#FBF9F5] p-4 sm:p-5">
+        <div className="flex flex-col gap-4 border-b border-[#E4DCCF] pb-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="grid flex-1 grid-cols-2 gap-4 sm:grid-cols-5">
+            <Stage
+              label="Parsing"
+              value={status === 'ready' ? 'Ready' : status === 'partial' ? 'Partial' : status}
+              state={status === 'ready' ? 'done' : status === 'failed' ? 'error' : 'active'}
+            />
+            <Stage
+              label="Research"
+              value={researchLabel}
+              state={
+                wikipedia?.status === 'found'
+                  ? 'done'
+                  : wikipedia?.status === 'ambiguous' ||
+                      wikipedia?.status === 'unavailable'
+                    ? 'error'
+                    : wikipedia?.status === 'not_found'
+                      ? 'active'
+                      : 'pending'
+              }
+            />
+            <Stage
+              label="Essay"
+              value={essay ? `v${essay.version} draft` : editorial?.last_error ? 'Failed' : 'Not generated'}
+              state={essay ? 'done' : editorial?.last_error ? 'error' : 'pending'}
+            />
+            <Stage
+              label="Vault"
+              value={`Saved${ingestion.extracted_at ? ` · ${formatDate(ingestion.extracted_at)}` : ''}`}
+              state="done"
+            />
+            <Stage
+              label="Selection"
+              value={
+                publication?.status === 'update_pending'
+                  ? 'Update pending'
+                  : publication?.status === 'published'
+                    ? 'Published'
+                    : 'Unpublished'
+              }
+              state={
+                publication?.status === 'published'
+                  ? 'done'
+                  : publication?.status === 'update_pending'
+                    ? 'active'
+                    : 'pending'
+              }
+            />
+          </div>
+        </div>
+
+        <p className="mt-3 font-mono text-[8px] leading-relaxed text-[#8A8175]">
+          Parsing, Wikipedia and essay drafts are saved to Vault automatically.
+          Nothing is published until you confirm.
+        </p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onFindWikipedia}
+            disabled={action !== null || !lot.artist}
+            className="rounded-full border border-[#D8C8AF] bg-white px-3.5 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-[#625B50] transition hover:border-[#B9AB98] hover:text-[#211F1F] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {action === 'wikipedia' ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Loader2 size={12} className="animate-spin" /> Researching
+              </span>
+            ) : wikipedia?.status === 'found' ? (
+              'Refresh Wikipedia'
+            ) : (
+              'Find Wikipedia'
+            )}
+          </button>
+
+          {essay ? (
+            <button
+              type="button"
+              onClick={onRegenerateEssay}
+              disabled={action !== null || !lot.artist || !lot.title}
+              className="rounded-full border border-[#D8C8AF] bg-white px-3.5 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-[#625B50] transition hover:border-[#B9AB98] hover:text-[#211F1F] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {action === 'regenerate' ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Loader2 size={12} className="animate-spin" /> Regenerating
+                </span>
+              ) : (
+                'Regenerate Essay'
+              )}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onGenerateEssay}
+              disabled={action !== null || !lot.artist || !lot.title}
+              className="rounded-full bg-[#2B2723] px-3.5 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-[#FAF8F5] transition hover:bg-[#171411] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {action === 'essay' ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Loader2 size={12} className="animate-spin" /> Writing
+                </span>
+              ) : (
+                'Generate Essay'
+              )}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onPublish}
+            disabled={action !== null || !canPublish}
+            title={
+              canPublish
+                ? undefined
+                : 'An essay and an original image are required before publication.'
+            }
+            className="rounded-full bg-[#2B2723] px-3.5 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-[#FAF8F5] transition hover:bg-[#171411] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {action === 'publish' ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Loader2 size={12} className="animate-spin" /> Publishing
+              </span>
+            ) : (
+              publishLabel
+            )}
+          </button>
+
+          {publication?.slug &&
+            (publication.status === 'published' ||
+              publication.status === 'update_pending') && (
+            <a
+              href={`/${publication.slug}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-full border border-[#CFE0CC] bg-[#F2F7F1] px-3 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-[#4F6B4D] hover:border-[#8CA18A]"
+            >
+              View Selection <ArrowUpRight size={11} />
+            </a>
+          )}
+
+          {wikipedia?.status === 'found' && wikipedia.url && (
+            <a
+              href={wikipedia.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-full border border-[#E4DCCF] bg-white px-3 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-[#625B50] hover:border-[#CFC3B1] hover:text-[#211F1F]"
+            >
+              Wikipedia <ArrowUpRight size={11} />
+            </a>
+          )}
+
+          {editorial?.last_error && (
+            <span className="font-mono text-[9px] leading-relaxed text-[#8B4038]">
+              Essay error: {editorial.last_error}
+            </span>
+          )}
+        </div>
+
+        {wikipedia && wikipedia.status !== 'found' && wikipedia.warnings.length > 0 && (
+          <div className="mt-3 space-y-1 border-t border-[#E4DCCF] pt-3">
+            {wikipedia.warnings.map((warning, index) => (
+              <p key={`${warning}-${index}`} className="font-mono text-[9px] leading-relaxed text-[#8A5A2B]">
+                ! {warning}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {wikipedia?.status === 'ambiguous' && wikipedia.candidates?.length ? (
+          <div className="mt-3 border-t border-[#E4DCCF] pt-3">
+            <p className="font-mono text-[8px] uppercase tracking-[0.14em] text-[#9A9083]">
+              Possible Wikipedia matches — not attached
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {wikipedia.candidates.slice(0, 3).map((candidate) => (
+                <li key={candidate.title} className="font-mono text-[9px] text-[#625B50]">
+                  {candidate.url ? (
+                    <a
+                      href={candidate.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline decoration-[#B9AB98] underline-offset-2"
+                    >
+                      {candidate.title}
+                    </a>
+                  ) : (
+                    candidate.title
+                  )}
+                  {candidate.description ? ` — ${candidate.description}` : ''}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </section>
 
       <div className="bg-white">
         {image ? (
@@ -114,16 +382,105 @@ export default function ArtworkDossier({ detail }: { detail: ArtworkDetail }) {
           {lot.artist || 'Artist not extracted'}
         </h1>
 
+        {(detail.extraction.artistDates || extracted.artist_dates) && (
+          <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.16em] text-[#8A8175]">
+            {detail.extraction.artistDates || extracted.artist_dates}
+          </p>
+        )}
+
         <h2 className="mt-2 font-serif text-[1.25rem] italic leading-snug text-[#4A443D] sm:text-[1.55rem]">
           {lot.title || 'Title not extracted'}
           {lot.year ? <span className="not-italic text-[#8A8175]"> ({lot.year})</span> : null}
         </h2>
       </div>
 
+      {essay?.curatorial_essay && (
+        <div className="mx-auto max-w-2xl px-4 pt-8 sm:px-6 sm:pt-10">
+          <div className="border-t border-[#D9CEC0] pt-6">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="font-mono text-[9px] uppercase tracking-[0.18em] text-[#9A9083]">
+                Curatorial essay
+              </h3>
+              <span className="font-mono text-[8px] uppercase tracking-[0.14em] text-[#8A8175]">
+                v{essay.version}
+                {essay.model ? ` · ${essay.model}` : ''}
+              </span>
+            </div>
+            <div className="prose prose-sm mt-4 max-w-none font-serif text-[1rem] leading-[1.8] text-[#37332D] sm:prose-base sm:text-[1.08rem]">
+              <Markdown>{essay.curatorial_essay}</Markdown>
+            </div>
+            {essay.sources_used.length > 0 && (
+              <div className="mt-5 border-t border-[#ECE6DC] pt-3">
+                <p className="font-mono text-[8px] uppercase tracking-[0.14em] text-[#9A9083]">
+                  Sources used
+                </p>
+                <ul className="mt-1.5 space-y-1">
+                  {essay.sources_used.map((source) => (
+                    <li key={source} className="break-all font-mono text-[9px] text-[#625B50]">
+                      {source}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {wikipedia?.status === 'found' && wikipedia.extract && (
+        <div className="mx-auto max-w-2xl px-4 pt-8 sm:px-6 sm:pt-10">
+          <details className="group rounded-xl border border-[#E4DCCF] bg-[#FBF9F5] p-4">
+            <summary className="cursor-pointer list-none font-mono text-[9px] uppercase tracking-[0.16em] text-[#625B50] marker:hidden">
+              Artist context · Wikipedia
+              <span className="ml-2 text-[#9A9083] group-open:hidden">+</span>
+              <span className="ml-2 hidden text-[#9A9083] group-open:inline">−</span>
+            </summary>
+            <p className="mt-3 max-h-64 overflow-y-auto whitespace-pre-line font-serif text-sm leading-relaxed text-[#4A443D]">
+              {wikipedia.extract}
+            </p>
+            {wikipedia.url && (
+              <a
+                href={wikipedia.url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-block font-mono text-[9px] uppercase tracking-[0.12em] text-[#625B50] underline decoration-[#B9AB98] underline-offset-2"
+              >
+                Wikipedia article ↗
+              </a>
+            )}
+          </details>
+        </div>
+      )}
+
       {extracted.description && (
         <div className="mx-auto max-w-2xl px-4 pt-8 sm:px-6 sm:pt-10">
-          <p className="whitespace-pre-line font-serif text-[1rem] leading-[1.75] text-[#37332D] sm:text-[1.08rem]">
+          <h3 className="font-mono text-[9px] uppercase tracking-[0.18em] text-[#9A9083]">
+            Auction house description
+          </h3>
+          <p className="mt-3 whitespace-pre-line font-serif text-[1rem] leading-[1.75] text-[#37332D] sm:text-[1.08rem]">
             {extracted.description}
+          </p>
+        </div>
+      )}
+
+      {extracted.lot_essay && (
+        <div className="mx-auto max-w-2xl px-4 pt-8 sm:px-6 sm:pt-10">
+          <h3 className="font-mono text-[9px] uppercase tracking-[0.18em] text-[#9A9083]">
+            Lot essay
+          </h3>
+          <p className="mt-3 whitespace-pre-line font-serif text-[1rem] leading-[1.75] text-[#37332D] sm:text-[1.08rem]">
+            {extracted.lot_essay}
+          </p>
+        </div>
+      )}
+
+      {extracted.catalogue_note && (
+        <div className="mx-auto max-w-2xl px-4 pt-8 sm:px-6 sm:pt-10">
+          <h3 className="font-mono text-[9px] uppercase tracking-[0.18em] text-[#9A9083]">
+            Catalogue note
+          </h3>
+          <p className="mt-3 whitespace-pre-line font-serif text-[1rem] leading-[1.75] text-[#37332D] sm:text-[1.08rem]">
+            {extracted.catalogue_note}
           </p>
         </div>
       )}
@@ -194,6 +551,26 @@ export default function ArtworkDossier({ detail }: { detail: ArtworkDetail }) {
                   ))}
                 </ul>
               </section>
+            )}
+          </div>
+        </div>
+      )}
+
+      {(extracted.condition_report ||
+        extracted.condition_report_status === 'login-required') && (
+        <div className="mx-auto max-w-2xl px-4 pt-8 sm:px-6 sm:pt-10">
+          <div className="border-t border-[#D9CEC0] pt-6">
+            <h3 className="font-mono text-[9px] uppercase tracking-[0.18em] text-[#9A9083]">
+              Condition
+            </h3>
+            {extracted.condition_report ? (
+              <p className="mt-2 whitespace-pre-line font-serif text-sm leading-relaxed text-[#4A443D]">
+                {extracted.condition_report}
+              </p>
+            ) : (
+              <p className="mt-2 font-serif text-sm italic leading-relaxed text-[#625B50]">
+                The auction house provides the condition report on request / behind login.
+              </p>
             )}
           </div>
         </div>

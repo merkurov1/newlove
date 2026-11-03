@@ -49,39 +49,12 @@ export async function GET(req: Request) {
     try {
       const { getServerSupabaseClient } = await import('@/lib/serverAuth');
       const svc = getServerSupabaseClient({ useServiceRole: true });
-      const roleResult = await (svc as any)
-        .from('user_roles')
-        .select('role_id,roles(name)')
-        .eq('user_id', user.id);
+      const profileResult = await svc.from('users').select('role').eq('id', user.id).maybeSingle();
 
-      if (!roleResult.error && Array.isArray(roleResult.data)) {
-        roles = roleResult.data.flatMap((row: any) => {
-          const roleList = row.roles;
-
-          if (Array.isArray(roleList)) {
-            return roleList.map((entry: any) => String(entry.name).toUpperCase());
-          }
-
-          return roleList?.name ? [String(roleList.name).toUpperCase()] : [];
-        });
-      }
-
-      // serverAuth reads the authoritative users.role column. Expose the same
-      // ADMIN signal to the interface; the browser value only controls UI
-      // visibility, never server authorization.
-      const profileResult = await (svc as any)
-        .from('users')
-        .select('role')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (profileResult?.data?.role === 'ADMIN') {
-        isAdmin = true;
-
-        if (!roles.includes('ADMIN')) roles = [...roles, 'ADMIN'];
-      }
+      isAdmin = String(profileResult?.data?.role || '').toUpperCase() === 'ADMIN';
+      roles = [isAdmin ? 'ADMIN' : 'USER'];
     } catch {
-      // Role enrichment is best-effort; authentication itself already succeeded.
+      roles = ['USER'];
     }
 
     return NextResponse.json({

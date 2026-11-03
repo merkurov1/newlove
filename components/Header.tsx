@@ -14,7 +14,9 @@ export default function Header() {
   const auth = useAuth() as any;
   const user = auth?.user;
   const profile = auth?.profile;
-  const roles = auth?.roles || profile?.roles || user?.user_metadata?.roles || [];
+  // Server-verified roles only. user_metadata/app_metadata are intentionally
+  // not trusted for administrative UI visibility.
+  const roles = Array.isArray(auth?.roles) ? auth.roles : [];
   const isLoading = auth?.isLoading;
   const signOut = auth?.signOut;
 
@@ -115,19 +117,11 @@ export default function Header() {
 
   const userInitials = userName ? userName.substring(0, 2).toUpperCase() : 'AM';
 
-  const roleStr =
-    profile?.role ||
-    profile?.user_role ||
-    user?.user_metadata?.role ||
-    user?.app_metadata?.role ||
-    '';
-
   const rolesArr = Array.isArray(roles) ? roles : [roles];
 
-  const isAdmin =
-    user?.email === 'merkurov@gmail.com' ||
-    rolesArr.some((r: unknown) => typeof r === 'string' && r.toUpperCase() === 'ADMIN') ||
-    (typeof roleStr === 'string' && roleStr.toUpperCase() === 'ADMIN');
+  const isAdmin = rolesArr.some(
+    (r: unknown) => typeof r === 'string' && r.toUpperCase() === 'ADMIN'
+  );
 
   const isOwner =
     !user ||
@@ -187,7 +181,17 @@ export default function Header() {
               </button>
             ) : (
               <Link
-                href="/login"
+                href={`/login?next=${encodeURIComponent(normalizedPath || '/')}`}
+                onClick={() => {
+                  try {
+                    localStorage.setItem(
+                      'login_redirect_path',
+                      window.location.pathname + window.location.search
+                    );
+                  } catch {
+                    // Login still works without the optional return path.
+                  }
+                }}
                 className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-full bg-stone-900 text-white text-[10px] sm:text-xs font-bold uppercase tracking-[0.18em] hover:bg-stone-800 transition-all shadow-sm shrink-0"
               >
                 Sign In

@@ -19,8 +19,7 @@ type SupabaseAuthUser = { id: string; email?: string | null };
  */
 async function userFromBearer(token: string): Promise<SupabaseAuthUser | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const anonKey =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
 
   if (!url || !anonKey) return null;
 
@@ -42,38 +41,11 @@ async function userFromBearer(token: string): Promise<SupabaseAuthUser | null> {
 async function resolveRole(userId: string): Promise<'ADMIN' | 'USER'> {
   const svc = getServerSupabaseClient({ useServiceRole: true });
 
-  const { data: profile } = await svc
-    .from('users')
-    .select('role')
-    .eq('id', userId)
-    .maybeSingle();
+  const { data: profile } = await svc.from('users').select('role').eq('id', userId).maybeSingle();
 
-  if (String(profile?.role || '').toUpperCase() === 'ADMIN') {
-    return 'ADMIN';
-  }
-
-  const { data: assignments } = await svc
-    .from('user_roles')
-    .select('role_id, roles(name)')
-    .eq('user_id', userId);
-
-  if (Array.isArray(assignments)) {
-    const hasAdmin = assignments.some((row: any) => {
-      const related: any = row?.roles;
-
-      if (Array.isArray(related)) {
-        return related.some(
-          (role: any) => String(role?.name || '').toUpperCase() === 'ADMIN',
-        );
-      }
-
-      return String(related?.name || '').toUpperCase() === 'ADMIN';
-    });
-
-    if (hasAdmin) return 'ADMIN';
-  }
-
-  return 'USER';
+  // public.users.role is the single authoritative server-side role source.
+  // Legacy user_roles assignments are not consulted here.
+  return String(profile?.role || '').toUpperCase() === 'ADMIN' ? 'ADMIN' : 'USER';
 }
 
 export async function GET(request: Request) {
@@ -96,14 +68,11 @@ export async function GET(request: Request) {
 
     const role = await resolveRole(user.id);
 
-    return NextResponse.json(
-      { role },
-      { status: 200, headers: { 'Cache-Control': 'no-store' } },
-    );
+    return NextResponse.json({ role }, { status: 200, headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error(
       '[api/user/role] role lookup failed',
-      error instanceof Error ? error.message : error,
+      error instanceof Error ? error.message : error
     );
 
     return NextResponse.json({ role: 'ANON' }, { status: 200 });

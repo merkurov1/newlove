@@ -71,6 +71,20 @@ export function mergeLotData(
     description: hasText(primary.description)
       ? primary.description
       : fallback.description,
+    lotEssay: hasText(primary.lotEssay)
+      ? primary.lotEssay
+      : fallback.lotEssay,
+    catalogueNote: hasText(primary.catalogueNote)
+      ? primary.catalogueNote
+      : fallback.catalogueNote,
+    conditionReport: hasText(primary.conditionReport)
+      ? primary.conditionReport
+      : fallback.conditionReport,
+    conditionReportStatus:
+      primary.conditionReportStatus &&
+      primary.conditionReportStatus !== "unknown"
+        ? primary.conditionReportStatus
+        : fallback.conditionReportStatus,
     lotNumber: hasText(primary.lotNumber)
       ? primary.lotNumber
       : fallback.lotNumber,

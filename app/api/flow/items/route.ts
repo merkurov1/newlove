@@ -1,15 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
-import {
-  getCachedFlowItems,
-  invalidateFlowCache,
-} from '@/lib/flow/items-cash';
-import {
-  normalizeFlowItem,
-  type FlowItemInput,
-} from '@/lib/flow/content';
-import { ensurePublishedFlowContext } from '@/lib/flow/publishedContext';
+import { getCachedFlowItems, invalidateFlowCache } from '@/lib/flow/items-cash';
+import { normalizeFlowItem, type FlowItemInput } from '@/lib/flow/content';
+import { createFlowItem } from '@/lib/flow/publish';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,21 +26,6 @@ function getSupabaseAdmin() {
       detectSessionInUrl: false,
     },
   });
-}
-
-function generateSlug(title?: string | null, bodyMd?: string | null): string {
-  const source = (title?.trim() || bodyMd?.split(/\r?\n/)[0]?.trim() || 'post').slice(0, 50);
-
-  const base = source
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\u0400-\u04ff]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-
-  const idSuffix = Math.random().toString(36).substring(2, 7);
-
-  return base ? `${base}-${idSuffix}` : `flow-${Date.now().toString(36)}`;
 }
 
 // GET: публичная лента с серверным кэшированием.
@@ -128,96 +107,33 @@ export async function POST(req: Request) {
     }
 
     const supabase = getSupabaseAdmin();
-    const now = new Date().toISOString();
-
-    const allowedTypes = ['note', 'article', 'link', 'photo', 'video', 'quote'];
-
-    const itemType = allowedTypes.includes(body.type) ? body.type : 'article';
-
-    const allowedStatuses = ['draft', 'published', 'archived'];
-    const allowedVisibilities = ['public', 'private'];
-
-    const status = allowedStatuses.includes(body.status) ? body.status : 'published';
-
-    const visibility = allowedVisibilities.includes(body.visibility) ? body.visibility : 'public';
-
-    const inputMetadata =
-      body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
-        ? body.metadata
-        : {};
-
-    const content = normalizeFlowItem({
+    const publication = await createFlowItem(supabase, {
       title: body.title,
       body_md: body.body_md,
       source_url: body.source_url,
-      type: itemType,
-      lang: body.lang || 'ru',
-      metadata: inputMetadata,
+      type: body.type,
+      lang: body.lang,
+      status: body.status,
+      visibility: body.visibility,
+      metadata: body.metadata,
+      slug: typeof body.slug === 'string' ? body.slug : null,
+      published_at: typeof body.published_at === 'string' ? body.published_at : null,
     });
 
-    const slug = body.slug || generateSlug(content.title, body.body_md);
+    if (!publication.ok) {
+      console.error('[api/flow/items] insert error:', publication.details);
 
-    const metadata = {
-      ...inputMetadata,
-      title_source: content.titleSource,
-      ...(content.titleSource === 'manual'
-        ? { generated_title: undefined }
-        : { generated_title: content.title }),
-    };
-
-    const { data: item, error } = await supabase
-      .from('items')
-      .insert({
-        // A published item always has a title, including a neutral fallback.
-        title: content.title,
-        slug,
-        lang: body.lang || 'ru',
-        type: itemType,
-        status,
-        visibility,
-        body_md: body.body_md || null,
-        source_url: body.source_url || content.sourceUrl || null,
-        metadata,
-        published_at: status === 'published' ? body.published_at || now : null,
-      })
-      .select()
-      .single();
-
-    if (error || !item) {
-      console.error('[api/flow/items] insert error:', error);
-
-      return NextResponse.json({ error: 'Failed to create item.' }, { status: 500 });
+      return NextResponse.json({ error: publication.error }, { status: publication.status });
     }
 
-    // Сбрасываем публичную ленту после успешной записи.
-    invalidateFlowCache();
-
-    let crosspostResult = null;
-
-    if (item.status === 'published' && item.visibility === 'public') {
-      try {
-        // Ленивый импорт: sharp не грузится на этапе сборки.
-        const { crosspostFlowItem } = await import('@/lib/flow/crosspost');
-        crosspostResult = await crosspostFlowItem(item);
-        // Crossposting stores channel state in metadata.
-        invalidateFlowCache();
-      } catch (crosspostError) {
-        console.error('[api/flow/items] crosspost error:', crosspostError);
-      }
-    }
-
-    const aiContext = await ensurePublishedFlowContext(supabase, item);
-
-    // AI context is generated after the first cache invalidation. Refresh the
-    // tagged item snapshot again so the public page immediately shows it.
     invalidateFlowCache();
 
     return NextResponse.json(
       {
         success: true,
-        item,
-        crosspost: crosspostResult,
-        aiContext,
+        item: publication.item,
+        crosspost: publication.crosspost,
+        aiContext: publication.aiContext,
       },
       { status: 201 }
     );

@@ -163,8 +163,11 @@ export interface VaultListRow {
   status: string | null;
   created_at: string | null;
   ingestion_status: string | null;
+  wikipedia_status: string | null;
   editorial_status: string | null;
+  essay_version: number | null;
   publication_status: string | null;
+  publication_url: string | null;
   warnings: string[];
   missing_fields: string[];
 }
@@ -192,8 +195,13 @@ export function sanitizeVaultRow(row: Record<string, any>): VaultListRow {
     status: row.status || null,
     created_at: row.created_at || null,
     ingestion_status: ingestion?.status || null,
+    wikipedia_status: vault?.wikipedia?.status || null,
     editorial_status: vault?.editorial?.status || null,
+    essay_version: vault?.editorial?.current?.version || null,
     publication_status: vault?.publication?.status || null,
+    publication_url: vault?.publication?.slug
+      ? `/${vault.publication.slug}`
+      : null,
     warnings: ingestion?.warnings || [],
     missing_fields: ingestion?.missing_fields || [],
   };

@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import useIsTelegram from '@/components/useIsTelegram';
 import TelegramNavigation from '@/components/telegram/TelegramNavigation';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
+import { resolveTelegramStartParam } from '@/lib/telegram/miniAppRoutes';
 
 const RITUAL_ROUTES = [
   '/temple',
@@ -33,18 +34,45 @@ type TelegramInset = {
   left?: number;
 };
 
+type TelegramThemeParams = {
+  bg_color?: string;
+  text_color?: string;
+  hint_color?: string;
+  link_color?: string;
+  button_color?: string;
+  button_text_color?: string;
+  secondary_bg_color?: string;
+  header_bg_color?: string;
+  bottom_bar_bg_color?: string;
+};
+
 type TelegramWebApp = {
   initData?: string;
+  initDataUnsafe?: {
+    start_param?: string;
+  };
   viewportHeight?: number;
   viewportStableHeight?: number;
   safeAreaInset?: TelegramInset;
   contentSafeAreaInset?: TelegramInset;
+  themeParams?: TelegramThemeParams;
+  isExpanded?: boolean;
   ready?: () => void;
   expand?: () => void;
+  requestFullscreen?: () => void;
+  exitFullscreen?: () => void;
+  disableVerticalSwipes?: () => void;
+  close?: () => void;
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
+  setBottomBarColor?: (color: string) => void;
   onEvent?: (event: string, handler: () => void) => void;
   offEvent?: (event: string, handler: () => void) => void;
+  HapticFeedback?: {
+    impactOccurred?: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
+    notificationOccurred?: (type: 'error' | 'success' | 'warning') => void;
+    selectionChanged?: () => void;
+  };
   BackButton?: {
     show?: () => void;
     hide?: () => void;
@@ -102,6 +130,38 @@ function syncSafeArea(tg: TelegramWebApp) {
   setPixelVariable('--tg-safe-area-left', Math.max(safe.left || 0, content.left || 0));
 }
 
+function applyTelegramTheme(tg: TelegramWebApp) {
+  if (typeof document === 'undefined') return;
+
+  const theme = tg.themeParams || {};
+  const variables: Array<[string, string | undefined]> = [
+    ['--tg-theme-bg-color', theme.bg_color],
+    ['--tg-theme-text-color', theme.text_color],
+    ['--tg-theme-hint-color', theme.hint_color],
+    ['--tg-theme-link-color', theme.link_color],
+    ['--tg-theme-button-color', theme.button_color],
+    ['--tg-theme-button-text-color', theme.button_text_color],
+    ['--tg-theme-secondary-bg-color', theme.secondary_bg_color],
+    ['--tg-theme-header-bg-color', theme.header_bg_color],
+    ['--tg-theme-bottom-bar-bg-color', theme.bottom_bar_bg_color],
+  ];
+
+  for (const [name, value] of variables) {
+    if (value) document.documentElement.style.setProperty(name, value);
+  }
+
+  const colorScheme = theme.bg_color ? 'telegram-theme' : 'site-theme';
+  document.documentElement.dataset.telegramTheme = colorScheme;
+}
+
+function haptic(tg: TelegramWebApp, style: 'light' | 'medium' = 'light') {
+  try {
+    tg.HapticFeedback?.impactOccurred?.(style);
+  } catch {
+    /* Haptic feedback is optional. */
+  }
+}
+
 function syncViewport(tg: TelegramWebApp) {
   if (typeof document === 'undefined') return;
 
@@ -125,6 +185,7 @@ export default function TelegramMiniApp() {
   const router = useRouter();
   const isTelegram = useIsTelegram();
   const { mode, closeConversation } = usePierrot();
+  const startParamHandledRef = useRef(false);
 
   useEffect(() => {
     const ritual = isRitualRoute(pathname);
@@ -165,6 +226,24 @@ export default function TelegramMiniApp() {
       /* Telegram methods are optional. */
     }
 
+    // Fullscreen is optional. If Telegram or the platform does not support it,
+    // the expanded viewport remains the graceful fallback.
+    if (!tg.isExpanded) {
+      try {
+        tg.requestFullscreen?.();
+      } catch {
+        /* Telegram methods are optional. */
+      }
+    }
+
+    try {
+      tg.disableVerticalSwipes?.();
+    } catch {
+      /* Telegram methods are optional. */
+    }
+
+    applyTelegramTheme(tg);
+
     // Keep the native Telegram chrome aligned with the dark Temple frame.
     try {
       tg.setHeaderColor?.('#141210');
@@ -174,6 +253,12 @@ export default function TelegramMiniApp() {
 
     try {
       tg.setBackgroundColor?.('#141210');
+    } catch {
+      /* Telegram methods are optional. */
+    }
+
+    try {
+      tg.setBottomBarColor?.('#141210');
     } catch {
       /* Telegram methods are optional. */
     }
@@ -190,6 +275,7 @@ export default function TelegramMiniApp() {
     };
 
     const handleTheme = () => {
+      applyTelegramTheme(tg);
       syncSafeArea(tg);
       syncViewport(tg);
     };
@@ -226,9 +312,23 @@ export default function TelegramMiniApp() {
   }, [isTelegram]);
 
   useEffect(() => {
+    if (!isTelegram || startParamHandledRef.current) return;
+
+    const tg = getTelegramWebApp();
+    const target = resolveTelegramStartParam(tg?.initDataUnsafe?.start_param);
+
+    startParamHandledRef.current = true;
+
+    if (target && target !== pathname) {
+      router.replace(target);
+    }
+  }, [isTelegram, pathname, router]);
+
+  useEffect(() => {
     if (!isTelegram) return;
 
-    const backButton = getTelegramWebApp()?.BackButton;
+    const tg = getTelegramWebApp();
+    const backButton = tg?.BackButton;
 
     if (!backButton) return;
 
@@ -236,6 +336,8 @@ export default function TelegramMiniApp() {
     const isConversationOpen = mode !== 'site';
 
     const handleBack = () => {
+      if (tg) haptic(tg);
+
       if (isConversationOpen) {
         closeConversation();
         return;
@@ -246,7 +348,16 @@ export default function TelegramMiniApp() {
         return;
       }
 
-      router.push(WORLD_ROUTE);
+      if (pathname !== '/lobby') {
+        router.push('/lobby');
+        return;
+      }
+
+      try {
+        tg?.close?.();
+      } catch {
+        router.push(WORLD_ROUTE);
+      }
     };
 
     try {

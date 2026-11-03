@@ -53,6 +53,114 @@ export interface IngestionState {
   image?: ArtworkImage | null;
 }
 
+export interface NormalizedExtraction {
+  title: string | null;
+  artist: string | null;
+  artistDates: string | null;
+  auctionHouse: string | null;
+  year: number | null;
+  medium: string | null;
+  dimensions: string | null;
+  signature: string | null;
+  description: string | null;
+  lotEssay: string | null;
+  catalogueNote: string | null;
+  conditionReport: string | null;
+  conditionReportStatus: string;
+  provenance: string[];
+  exhibitions: string[];
+  literature: string[];
+  lotNumber: string | null;
+  auctionDate: string | null;
+  estimate: {
+    raw?: string | null;
+    currency?: string | null;
+    min?: number | null;
+    max?: number | null;
+  } | null;
+  price: {
+    raw?: string | null;
+    currency?: string | null;
+    realized?: number | null;
+  } | null;
+  currency: string | null;
+}
+
+export interface WikipediaCandidate {
+  title: string;
+  url: string | null;
+  description: string | null;
+  score: number;
+}
+
+export interface WikipediaState {
+  status:
+    | 'idle'
+    | 'found'
+    | 'not_found'
+    | 'ambiguous'
+    | 'unavailable'
+    | 'skipped';
+  artist: string;
+  query?: string | null;
+  title?: string | null;
+  url?: string | null;
+  language?: string | null;
+  extract?: string | null;
+  description?: string | null;
+  retrieved_at?: string | null;
+  match_score?: number | null;
+  candidates?: WikipediaCandidate[];
+  warnings: string[];
+}
+
+export interface EditorialDraft {
+  version: number;
+  title?: string | null;
+  artist?: string | null;
+  year?: string | null;
+  medium?: string | null;
+  dimensions?: string | null;
+  signed?: string | null;
+  auction_house?: string | null;
+  auction_date?: string | null;
+  lot_number?: string | null;
+  estimate?: string | null;
+  price_realized?: string | null;
+  currency?: string | null;
+  curatorial_essay: string;
+  quote?: string | null;
+  specs?: string | null;
+  provenance: string[];
+  exhibitions: string[];
+  literature: string[];
+  sources_used: string[];
+  warnings: string[];
+  model?: string | null;
+  prompt_version?: string | null;
+  generated_at: string;
+}
+
+export interface EditorialView {
+  status: string;
+  current: EditorialDraft | null;
+  history_count: number;
+  last_error: string | null;
+  last_attempt_at: string | null;
+  updated_at: string | null;
+}
+
+export interface PublicationView {
+  status: string;
+  article_id: string | null;
+  slug: string | null;
+  version: number | null;
+  published_at: string | null;
+  approved_at: string | null;
+  update_pending: boolean;
+  history_count: number;
+}
+
 export interface AttemptSummary {
   id: string;
   url: string;
@@ -88,8 +196,11 @@ export interface VaultLot {
   status: string | null;
   created_at: string | null;
   ingestion_status: string | null;
+  wikipedia_status: string | null;
   editorial_status: string | null;
+  essay_version: number | null;
   publication_status: string | null;
+  publication_url: string | null;
   warnings: string[];
   missing_fields: string[];
 }
@@ -104,6 +215,11 @@ export interface ExtractedDossier {
   provenance: string[];
   exhibitions: string[];
   literature: string[];
+  artist_dates: string | null;
+  lot_essay: string | null;
+  catalogue_note: string | null;
+  condition_report: string | null;
+  condition_report_status: string;
 }
 
 export interface ArtworkDetail {
@@ -133,6 +249,10 @@ export interface ArtworkDetail {
   };
   attempts: AttemptSummary[];
   extracted: ExtractedDossier;
+  extraction: NormalizedExtraction;
+  wikipedia: WikipediaState | null;
+  editorial: EditorialView | null;
+  publication: PublicationView | null;
 }
 
 export type VaultFilter = 'all' | 'ready' | 'partial' | 'failed' | 'attention';

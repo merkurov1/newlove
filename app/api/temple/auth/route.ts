@@ -1,67 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import crypto from 'crypto'
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit'
 import { signSession } from '@/lib/session'
+import { verifyTelegramInitData } from '@/lib/telegram/initData'
 
 export const dynamic = 'force-dynamic'
-
-/**
- * Validates the data received from the Telegram Mini App.
- * https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app
- */
-function verifyTelegramInitData(initData: string, botToken: string): boolean {
-  if (!initData || !botToken) return false
-
-  try {
-    const urlParams = new URLSearchParams(initData)
-    const hash = urlParams.get('hash')
-
-    if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) return false
-
-    const authDateRaw = urlParams.get('auth_date')
-
-    if (!authDateRaw || !/^\d+$/.test(authDateRaw)) return false
-
-    const authDate = Number(authDateRaw)
-    const now = Math.floor(Date.now() / 1000)
-
-    // Reject stale or future-dated initData (one day, like serverAuth).
-    if (
-      !Number.isSafeInteger(authDate) ||
-      authDate > now + 60 ||
-      now - authDate > 24 * 60 * 60
-    ) {
-      return false
-    }
-
-    urlParams.delete('hash')
-
-    const dataCheckString = Array.from(urlParams.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, value]) => `${key}=${value}`)
-      .join('\n')
-
-    const secretKey = crypto
-      .createHmac('sha256', 'WebAppData')
-      .update(botToken)
-      .digest()
-
-    const calculatedHash = crypto
-      .createHmac('sha256', secretKey)
-      .update(dataCheckString)
-      .digest('hex')
-
-    const expected = Buffer.from(calculatedHash, 'hex')
-    const received = Buffer.from(hash.toLowerCase(), 'hex')
-
-    if (expected.length !== received.length) return false
-
-    return crypto.timingSafeEqual(expected, received)
-  } catch {
-    return false
-  }
-}
 
 export async function POST(req: Request) {
   const limited = checkRateLimit(getClientIp(req), {
@@ -90,27 +33,15 @@ export async function POST(req: Request) {
 
     // A body-supplied id/username is not an identity. Only verified initData
     // may create a session.
-    if (!initData || !verifyTelegramInitData(initData, botToken)) {
+    const verified = verifyTelegramInitData(initData, botToken)
+
+    if (!verified.ok) {
       return NextResponse.json({ error: 'Invalid Telegram InitData' }, { status: 401 })
     }
 
-    let telegramUser: { id?: number | string; username?: string; first_name?: string } | null = null
-
-    try {
-      const userStr = new URLSearchParams(initData).get('user')
-      telegramUser = userStr ? JSON.parse(userStr) : null
-    } catch {
-      telegramUser = null
-    }
-
-    const id = String(telegramUser?.id || '')
-
-    if (!/^\d+$/.test(id)) {
-      return NextResponse.json({ error: 'No User ID found' }, { status: 400 })
-    }
-
-    const username = typeof telegramUser?.username === 'string' ? telegramUser.username : ''
-    const first_name = typeof telegramUser?.first_name === 'string' ? telegramUser.first_name : ''
+    const id = verified.user.id
+    const username = verified.user.username ?? ''
+    const first_name = verified.user.firstName ?? ''
 
     const { error: upsertError } = await supabaseAdmin
       .from('temple_users')

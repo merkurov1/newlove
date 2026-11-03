@@ -38,6 +38,7 @@
     "test:telegram-research": "jest lib/telegram-research --runInBand",
     "security:verify": "node scripts/security/verify-supabase-exposure.mjs",
     "typecheck:telegram-research": "tsc -p tsconfig.telegram-research.json",
+    "telegram:configure": "node scripts/telegram/configure-bot.mjs",
     "telegram:find": "bun run scripts/telegram-research/cli.ts find",
     "telegram:export": "bun run scripts/telegram-research/cli.ts export",
     "telegram:stats": "bun run scripts/telegram-research/cli.ts stats",

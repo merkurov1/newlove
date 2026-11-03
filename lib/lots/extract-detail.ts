@@ -8,6 +8,15 @@ export interface LotDetailFields {
   dimensions?: string | null;
   signature?: string | null;
   description?: string | null;
+  lotEssay?: string | null;
+  catalogueNote?: string | null;
+  conditionReport?: string | null;
+  conditionReportStatus?:
+    | "available"
+    | "unavailable"
+    | "login-required"
+    | "unknown";
+  artistDates?: string | null;
   lotNumber?: string | null;
   auctionDate?: string | null;
   provenance: string[];
@@ -40,6 +49,18 @@ const LABELS = {
     "catalogue",
     "catalogues",
     "literature:",
+  ],
+  lotEssay: ["lot essay", "catalogue essay", "essay", "lot essay:"],
+  catalogueNote: [
+    "catalogue note",
+    "catalogue notes",
+    "lot note",
+    "lot notes",
+  ],
+  conditionReport: [
+    "condition report",
+    "condition notes",
+    "condition",
   ],
   signature: ["signed", "signature", "signed and dated", "signed/dated"],
   medium: ["medium", "materials", "technique", "media"],
@@ -100,7 +121,9 @@ function blockText($: Cheerio.CheerioAPI, element: unknown): string {
 }
 
 function splitItems(value?: string | null): string[] {
-  const text = normalizeText(value);
+  if (!value) return [];
+
+  const text = value.replace(/\r/g, '').trim();
   if (!text) return [];
 
   const byLine = text
@@ -385,10 +408,46 @@ function readSection(
   return nextContent($, node);
 }
 
+function conditionStatusFromText(
+  value?: string | null,
+): LotDetailFields["conditionReportStatus"] {
+  const text = normalizeLabel(value);
+  if (!text) return "unknown";
+
+  if (
+    /contact|login|log in|available on request|request|not available|withheld/i.test(
+      text,
+    )
+  ) {
+    return "login-required";
+  }
+
+  return "available";
+}
+
+export function parseArtistDatesFromLines(lines: string[]): string | null {
+  for (const line of lines) {
+    const dateRange = line.match(
+      /\b(?:b\.|born\s+)?((?:18|19|20)\d{2})\s*[-–—]\s*((?:18|19|20)\d{2})\b/i,
+    );
+    if (dateRange) return `${dateRange[1]}–${dateRange[2]}`;
+
+    const born = line.match(/\b(?:b\.|born)\s*((?:18|19|20)\d{2})\b/i);
+    if (born) return `b. ${born[1]}`;
+  }
+
+  return null;
+}
+
 function domDetails($: Cheerio.CheerioAPI): LotDetailFields {
   const provenance = splitItems(readSection($, LABELS.provenance));
   const exhibitions = splitItems(readSection($, LABELS.exhibitions));
   const literature = splitItems(readSection($, LABELS.literature));
+  const lotEssay = normalizeText(readSection($, LABELS.lotEssay));
+  const catalogueNote = normalizeText(readSection($, LABELS.catalogueNote));
+  const conditionText = normalizeText(
+    readSection($, LABELS.conditionReport),
+  );
   const signature = normalizeText(readSection($, LABELS.signature));
   const medium = normalizeText(readSection($, LABELS.medium));
   const dimensions = normalizeText(readSection($, LABELS.dimensions));
@@ -399,6 +458,10 @@ function domDetails($: Cheerio.CheerioAPI): LotDetailFields {
     provenance,
     exhibitions,
     literature,
+    lotEssay,
+    catalogueNote,
+    conditionReport: conditionText,
+    conditionReportStatus: conditionStatusFromText(conditionText),
     signature,
     medium,
     dimensions,
@@ -481,7 +544,7 @@ function parseDescriptionText(value?: string | null): {
   };
 }
 
-function parseCatalogueLines(lines: string[]): {
+export function parseCatalogueLines(lines: string[]): {
   signature: string | null;
   medium: string | null;
   dimensions: string | null;
@@ -504,8 +567,10 @@ function parseCatalogueLines(lines: string[]): {
 
     if (
       !dimensions &&
-      /\d+(?:[.,]\d+)?\s*(?:x|×|by)\s*\d+(?:[.,]\d+)?/i.test(line) &&
-      /\b(?:cm|in|mm|inches|centimetres|centimeters)\b/i.test(line)
+      new RegExp(
+        `\\d+(?:[.,]\\d+)?(?:\\s*[${FRACTION_CHARS}])?\\s*(?:x|×|by)\\s*\\d+(?:[.,]\\d+)?(?:\\s*[${FRACTION_CHARS}])?\\s*(?:cm|in|mm|inches|centimetres|centimeters)`,
+        'i',
+      ).test(line)
     ) {
       dimensions = line;
     }
@@ -542,21 +607,30 @@ export function extractLotDetails(
   const json = jsonLdDetails(jsonLdValues || readJsonLd($));
   const dom = domDetails($);
 
-  const catalogue = parseCatalogueLines([
+  const catalogueLines = [
     ...linesFromText(readSection($, LABELS.details)),
     ...metaDescriptionLines($),
-  ]);
+  ];
+  const catalogue = parseCatalogueLines(catalogueLines);
   const descriptionCatalogue = parseDescriptionText(json.description);
 
   return {
     title: json.title || null,
     artist: json.artist || null,
+    artistDates:
+      parseArtistDatesFromLines(catalogueLines) ||
+      parseArtistDatesFromLines(linesFromText(json.description)) ||
+      null,
     year:
       json.year ||
       descriptionCatalogue.year ||
       catalogue.year ||
       null,
     description: json.description || null,
+    lotEssay: dom.lotEssay || null,
+    catalogueNote: dom.catalogueNote || null,
+    conditionReport: dom.conditionReport || null,
+    conditionReportStatus: dom.conditionReportStatus || "unknown",
     medium:
       json.medium ||
       dom.medium ||

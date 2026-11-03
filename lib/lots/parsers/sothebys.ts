@@ -77,16 +77,35 @@ export class SothebysParser extends HouseParser {
     );
 
     const medium = this.normalizeText(
-      $(".medium").first().text() ||
+      embedded?.medium ||
+        $(".medium").first().text() ||
         $('[data-testid="medium"]').first().text() ||
         details.medium
     );
 
     const dimensions = this.normalizeText(
-      $(".dimensions").first().text() ||
+      embedded?.dimensions ||
+        $(".dimensions").first().text() ||
         $('[data-testid="dimensions"]').first().text() ||
         details.dimensions
     );
+
+    const signature =
+      embedded?.signature || details.signature;
+    const description =
+      embedded?.description || details.description;
+    const provenance =
+      embedded?.provenance.length
+        ? embedded.provenance
+        : details.provenance;
+    const exhibitions =
+      embedded?.exhibitions.length
+        ? embedded.exhibitions
+        : details.exhibitions;
+    const literature =
+      embedded?.literature.length
+        ? embedded.literature
+        : details.literature;
 
     const imageUrl =
       embedded?.imageUrl ||
@@ -122,14 +141,22 @@ export class SothebysParser extends HouseParser {
       lotNumber,
       title,
       artist,
-      year: details.year || this.parseYear(title),
+      year: embedded?.year || details.year || this.parseYear(title),
       medium,
       dimensions,
-      signature: details.signature,
-      description: details.description,
-      provenance: details.provenance,
-      exhibitions: details.exhibitions,
-      literature: details.literature,
+      signature,
+      description,
+      lotEssay: details.lotEssay,
+      catalogueNote: embedded?.catalogueNote || details.catalogueNote,
+      conditionReport: details.conditionReport,
+      conditionReportStatus:
+        embedded?.conditionReportStatus ||
+        details.conditionReportStatus ||
+        "unknown",
+      artistDates: embedded?.artistDates || details.artistDates,
+      provenance,
+      exhibitions,
+      literature,
       auctionDate: details.auctionDate,
       currency: embedded?.currency || undefined,
       estimate,
@@ -159,12 +186,14 @@ export class SothebysParser extends HouseParser {
         soldText,
         medium,
         dimensions,
-        signature: details.signature,
-        provenance: details.provenance,
-        exhibitions: details.exhibitions,
-        literature: details.literature,
+        signature,
+        provenance,
+        exhibitions,
+        literature,
         auctionDate: details.auctionDate,
         embedded_header: Boolean(embedded),
+        embedded_catalogue_note: Boolean(embedded?.catalogueNote),
+        embedded_condition_status: embedded?.conditionReportStatus || null,
       },
       parseErrors,
     };

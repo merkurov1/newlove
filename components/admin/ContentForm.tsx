@@ -16,14 +16,25 @@ interface ContentFormProps {
 
 function parseBlocks(raw: any): EditorJsBlock[] {
   if (!raw) return [];
-  let arr = Array.isArray(raw) ? raw : (() => { try { return JSON.parse(raw); } catch { return []; } })();
-  return arr.filter((block: any) => block && typeof block.type === 'string' && block.data && typeof block.data === 'object');
+  let arr = Array.isArray(raw)
+    ? raw
+    : (() => {
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return [];
+        }
+      })();
+  return arr.filter(
+    (block: any) =>
+      block && typeof block.type === 'string' && block.data && typeof block.data === 'object'
+  );
 }
 
 export default function ContentForm({ initialData, saveAction, type }: ContentFormProps) {
   const safeInitial = initialData && typeof initialData === 'object' ? initialData : {};
   const isEditing = !!safeInitial && !!safeInitial.id;
-  
+
   const [title, setTitle] = useState(safeInitial.title || '');
   const [artist, setArtist] = useState(safeInitial.artist || '');
   const [curatorNote, setCuratorNote] = useState(safeInitial.curatorNote || '');
@@ -37,42 +48,55 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   const [slugError, setSlugError] = useState('');
   const [isCheckingSlug, setIsCheckingSlug] = useState(false);
   const [, setUser] = useState<any>(null);
-  const [, setRole] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
     const getUser = async () => {
       const { data } = await supabase.auth.getUser();
       setUser(data.user);
-      setRole(data.user?.user_metadata?.role || null);
     };
     getUser();
     const { data: listener } = supabase.auth.onAuthStateChange(() => getUser());
-    return () => { try { listener?.subscription?.unsubscribe?.(); } catch {} };
+    return () => {
+      try {
+        listener?.subscription?.unsubscribe?.();
+      } catch {}
+    };
   }, []);
 
-  const [tags, setTags] = useState<string[]>(() => (safeInitial.tags || []).map((t: any) => t.name));
+  const [tags, setTags] = useState<string[]>(() =>
+    (safeInitial.tags || []).map((t: any) => t.name)
+  );
 
-  const checkSlugUniqueness = useCallback(async (slugToCheck: string) => {
-    if (!slugToCheck) return;
+  const checkSlugUniqueness = useCallback(
+    async (slugToCheck: string) => {
+      if (!slugToCheck) return;
 
-    setIsCheckingSlug(true);
-    setSlugError('');
+      setIsCheckingSlug(true);
+      setSlugError('');
 
-    try {
-      const slugType = /letter/i.test(type) ? 'letter' : /project/i.test(type) ? 'project' : 'article';
-      const response = await fetch(`/api/admin/validate-slug?slug=${encodeURIComponent(slugToCheck)}&type=${slugType}${isEditing ? `&excludeId=${safeInitial.id}` : ''}`);
-      const data = await response.json();
-      
-      if (!data.available) {
-        setSlugError('Slug is already in use. Please modify.');
+      try {
+        const slugType = /letter/i.test(type)
+          ? 'letter'
+          : /project/i.test(type)
+            ? 'project'
+            : 'article';
+        const response = await fetch(
+          `/api/admin/validate-slug?slug=${encodeURIComponent(slugToCheck)}&type=${slugType}${isEditing ? `&excludeId=${safeInitial.id}` : ''}`
+        );
+        const data = await response.json();
+
+        if (!data.available) {
+          setSlugError('Slug is already in use. Please modify.');
+        }
+      } catch (err) {
+        console.error('Slug validation error:', err);
+      } finally {
+        setIsCheckingSlug(false);
       }
-    } catch (err) {
-      console.error('Slug validation error:', err);
-    } finally {
-      setIsCheckingSlug(false);
-    }
-  }, [isEditing, safeInitial.id, type]);
+    },
+    [isEditing, safeInitial.id, type]
+  );
 
   useEffect(() => {
     if (!slugManuallyEdited && (artist.trim() || title.trim())) {
@@ -94,7 +118,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
     setSlug(newSlug);
     setSlugManuallyEdited(true);
     setSlugError('');
-    
+
     if (newSlug.trim()) {
       checkSlugUniqueness(newSlug);
     }
@@ -106,7 +130,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       if (!block.type || typeof block.type !== 'string') return false;
       if (!block.data || typeof block.data !== 'object') return false;
       if (block.type === 'richText' && typeof block.data.html !== 'string') return false;
-      if (block.type === 'gallery' && (!Array.isArray(block.data.images))) return false;
+      if (block.type === 'gallery' && !Array.isArray(block.data.images)) return false;
       if (block.type === 'image' && typeof block.data.url !== 'string') return false;
       if (block.type === 'code' && typeof block.data.code !== 'string') return false;
       if (block.type === 'columns') {
@@ -128,18 +152,18 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
     try {
       const res = await fetch('/api/user/role', { credentials: 'same-origin' });
       if (!res.ok) {
-          e.preventDefault();
-          setError('Authorization check failed. Please try again.');
-          setIsCheckingSlug(false);
-          return;
+        e.preventDefault();
+        setError('Authorization check failed. Please try again.');
+        setIsCheckingSlug(false);
+        return;
       }
       const body = await res.json();
-      const serverRole = (body && body.role) ? String(body.role).toUpperCase() : 'ANON';
+      const serverRole = body && body.role ? String(body.role).toUpperCase() : 'ANON';
       if (serverRole !== 'ADMIN') {
-          e.preventDefault();
-          setError('Access denied: Administrator privileges required.');
-          setIsCheckingSlug(false);
-          return;
+        e.preventDefault();
+        setError('Access denied: Administrator privileges required.');
+        setIsCheckingSlug(false);
+        return;
       }
     } catch (err) {
       console.error('Server role verification error:', err);
@@ -179,7 +203,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
 
     try {
       setError('Transmitting test dispatch...');
-      
+
       const response = await fetch('/api/admin/letters/test-send', {
         method: 'POST',
         headers: {
@@ -204,17 +228,20 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   }
 
   return (
-    <form 
-      action={saveAction} 
-      className="bg-white/80 backdrop-blur-2xl border border-zinc-200/80 p-8 sm:p-12 space-y-8 font-sans max-w-5xl mx-auto rounded-3xl shadow-sm" 
+    <form
+      action={saveAction}
+      className="bg-white/80 backdrop-blur-2xl border border-zinc-200/80 p-8 sm:p-12 space-y-8 font-sans max-w-5xl mx-auto rounded-3xl shadow-sm"
       onSubmit={handleSubmit}
     >
       {isEditing && <input type="hidden" name="id" value={safeInitial.id} />}
-      
+
       {type !== 'выпуск' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label htmlFor="artist" className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2">
+            <label
+              htmlFor="artist"
+              className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2"
+            >
               Artist
             </label>
             <input
@@ -228,7 +255,10 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
             />
           </div>
           <div>
-            <label htmlFor="title" className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2">
+            <label
+              htmlFor="title"
+              className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2"
+            >
               Artwork Title *
             </label>
             <input
@@ -244,10 +274,13 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
           </div>
         </div>
       )}
-      
+
       {type === 'выпуск' && (
         <div>
-          <label htmlFor="title" className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2">
+          <label
+            htmlFor="title"
+            className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2"
+          >
             Edition Title *
           </label>
           <input
@@ -266,7 +299,10 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       {type !== 'выпуск' && (
         <>
           <div>
-            <label htmlFor="curatorNote" className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2">
+            <label
+              htmlFor="curatorNote"
+              className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2"
+            >
               Curator&apos;s Note
             </label>
             <div className="border border-zinc-200 bg-white p-2 rounded-2xl shadow-sm">
@@ -283,7 +319,10 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label htmlFor="quote" className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2">
+              <label
+                htmlFor="quote"
+                className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2"
+              >
                 Artist Statement / Quote
               </label>
               <textarea
@@ -296,7 +335,10 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
               />
             </div>
             <div>
-              <label htmlFor="specs" className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2">
+              <label
+                htmlFor="specs"
+                className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2"
+              >
                 Specs &amp; Provenance
               </label>
               <div className="border border-zinc-200 bg-white p-2 rounded-2xl shadow-sm">
@@ -316,13 +358,14 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label htmlFor="slug" className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400">
+          <label
+            htmlFor="slug"
+            className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400"
+          >
             URL Slug *
           </label>
           {!slugManuallyEdited && (
-            <span className="font-mono text-[10px] text-zinc-400">
-              [Auto-generated]
-            </span>
+            <span className="font-mono text-[10px] text-zinc-400">[Auto-generated]</span>
           )}
           {isCheckingSlug && (
             <span className="font-mono text-[10px] text-zinc-900 animate-pulse">
@@ -338,7 +381,9 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
           value={slug}
           onChange={handleSlugChange}
           className={`w-full bg-white border px-4 py-3.5 text-xs font-mono text-zinc-900 focus:bg-white focus:outline-none transition rounded-2xl shadow-sm ${
-            slugError ? 'border-rose-600 focus:border-rose-600' : 'border-zinc-200 focus:border-black'
+            slugError
+              ? 'border-rose-600 focus:border-rose-600'
+              : 'border-zinc-200 focus:border-black'
           }`}
         />
         {slugError && <p className="mt-2 font-mono text-xs text-rose-600">{slugError}</p>}
@@ -378,7 +423,10 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
             onChange={(e: ChangeEvent<HTMLInputElement>) => setPublished(e.target.checked)}
             className="h-4 w-4 rounded border-zinc-300 text-black focus:ring-0 cursor-pointer"
           />
-          <label htmlFor="published" className="font-mono text-xs uppercase tracking-wider text-zinc-800 cursor-pointer select-none">
+          <label
+            htmlFor="published"
+            className="font-mono text-xs uppercase tracking-wider text-zinc-800 cursor-pointer select-none"
+          >
             Publish to Live Archive
           </label>
         </div>
@@ -388,16 +436,16 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       </div>
 
       <div className="space-y-3 pt-2">
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-mono text-xs uppercase tracking-widest py-4 transition-all rounded-full shadow-sm flex items-center justify-center cursor-pointer"
         >
           {isEditing ? 'Save Changes' : `Create ${type}`}
         </button>
-        
+
         {type === 'выпуск' && (
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={handleTestSend}
             disabled={!title || !content.length}
             className="w-full border border-zinc-300 hover:border-black text-zinc-900 bg-white font-mono text-xs uppercase tracking-widest py-4 transition-all rounded-full disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer shadow-sm"

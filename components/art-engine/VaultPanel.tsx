@@ -2,11 +2,7 @@
 
 import React from 'react';
 import { RefreshCw } from 'lucide-react';
-import type {
-  AttemptSummary,
-  VaultFilter,
-  VaultLot,
-} from './types';
+import type { AttemptSummary, VaultFilter, VaultLot } from './types';
 
 function statusTone(status?: string | null): string {
   if (status === 'ready') {
@@ -44,9 +40,7 @@ function imageUrl(imagePath?: string | null): string | null {
   if (!imagePath) return null;
   if (/^https?:\/\//i.test(imagePath)) return imagePath;
   const base = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
-  return base
-    ? `${base}/storage/v1/object/public/artifacts/${imagePath}`
-    : null;
+  return base ? `${base}/storage/v1/object/public/artifacts/${imagePath}` : null;
 }
 
 const FILTERS: Array<{ id: VaultFilter; label: string }> = [
@@ -87,7 +81,10 @@ export default function VaultPanel({
       return (
         status === 'partial' ||
         (lot.warnings?.length || 0) > 0 ||
-        (lot.missing_fields?.length || 0) > 0
+        (lot.missing_fields?.length || 0) > 0 ||
+        lot.publication_status === 'update_pending' ||
+        lot.wikipedia_status === 'ambiguous' ||
+        lot.wikipedia_status === 'unavailable'
       );
     }
     return true;
@@ -108,18 +105,17 @@ export default function VaultPanel({
       (lot) =>
         lot.ingestion_status === 'partial' ||
         (lot.warnings?.length || 0) > 0 ||
-        (lot.missing_fields?.length || 0) > 0,
-    ).length +
-    attempts.filter((attempt) => attempt.status === 'failed').length;
+        (lot.missing_fields?.length || 0) > 0 ||
+        lot.publication_status === 'update_pending' ||
+        lot.wikipedia_status === 'ambiguous' ||
+        lot.wikipedia_status === 'unavailable'
+    ).length + attempts.filter((attempt) => attempt.status === 'failed').length;
 
   return (
     <div className="pb-10">
-      <div className="flex flex-col gap-4 border-b border-[#E4DCCF] pb-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-[#9A9083]">
-            Private workspace
-          </p>
-          <h2 className="mt-1 font-serif text-3xl text-[#211F1F]">Vault</h2>
+          <h2 className="font-serif text-3xl text-[#211F1F]">Vault</h2>
           <p className="mt-1 max-w-xl font-serif text-sm leading-relaxed text-[#6B6358]">
             Every processed lot and every parser attempt. Failed attempts are kept.
           </p>
@@ -234,12 +230,30 @@ export default function VaultPanel({
                             {lot.title || 'Title not extracted'}
                             {lot.year ? ` (${lot.year})` : ''}
                           </p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {lot.wikipedia_status === 'found' && (
+                              <span className="rounded-full border border-[#CFE0CC] bg-[#F2F7F1] px-1.5 py-0.5 font-mono text-[7px] uppercase tracking-[0.1em] text-[#4F6B4D]">
+                                Research
+                              </span>
+                            )}
+                            {lot.essay_version && (
+                              <span className="rounded-full border border-[#D8C8AF] bg-[#FFF9EC] px-1.5 py-0.5 font-mono text-[7px] uppercase tracking-[0.1em] text-[#7A5A28]">
+                                Essay v{lot.essay_version}
+                              </span>
+                            )}
+                            {(lot.publication_status === 'published' ||
+                              lot.publication_status === 'update_pending') && (
+                              <span className="rounded-full border border-[#CFE0CC] bg-[#F2F7F1] px-1.5 py-0.5 font-mono text-[7px] uppercase tracking-[0.1em] text-[#4F6B4D]">
+                                {lot.publication_status === 'published'
+                                  ? 'Published'
+                                  : 'Update pending'}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-[#F0EBE3] pt-2 font-mono text-[8px] uppercase tracking-[0.12em] text-[#8A8175]">
-                          <span className="truncate">
-                            {lot.auction_house || 'Auction'}
-                          </span>
+                          <span className="truncate">{lot.auction_house || 'Auction'}</span>
                           {warningCount > 0 && (
                             <span className="text-[#8A5A2B]">
                               {warningCount} warning{warningCount === 1 ? '' : 's'}

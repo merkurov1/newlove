@@ -1,31 +1,50 @@
 export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  try {
-    // Prefer server service-role client for article retrieval
-    const articleId = params.id;
-    let supabase = null;
-    try {
-      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-      supabase = getServerSupabaseClient({ useServiceRole: true });
-    } catch (e) {
-      const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-      supabase = (await getUserAndSupabaseForRequest(request))?.supabase;
-    }
-    if (!supabase) return NextResponse.json({ error: 'Article not found' }, { status: 404 });
+import {
+  getServerSupabaseClient,
+  requireAdminFromRequest,
+} from '@/lib/serverAuth';
+import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 
-  const { data: article, error } = await supabase.from('articles').select('*').eq('id', articleId).maybeSingle();
-    if (error || !article) {
-      if (process.env.NODE_ENV === 'development') console.error('Error fetching article', error);
+export async function GET(request: Request, { params }: { params: { id: string } }) {
+  const articleId = params.id;
+
+  if (!articleId || articleId.length > 200) {
+    return NextResponse.json({ error: 'Article not found' }, { status: 404 });
+  }
+
+  let isAdmin = false;
+
+  try {
+    await requireAdminFromRequest(request);
+    isAdmin = true;
+  } catch {
+    isAdmin = false;
+  }
+
+  try {
+    const supabase = isAdmin
+      ? getServerSupabaseClient({ useServiceRole: true })
+      : (await getUserAndSupabaseForRequest(request)).supabase;
+
+    if (!supabase) {
       return NextResponse.json({ error: 'Article not found' }, { status: 404 });
     }
-    return NextResponse.json(article);
-  } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error fetching article:', error);
+
+    let query = supabase.from('articles').select('*').eq('id', articleId);
+
+    if (!isAdmin) query = query.eq('published', true);
+
+    const { data: article, error } = await query.maybeSingle();
+
+    if (error || !article) {
+      return NextResponse.json({ error: 'Article not found' }, { status: 404 });
     }
-    return new Response(JSON.stringify({ error: 'Article not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+
+    return NextResponse.json(article);
+  } catch {
+    return NextResponse.json({ error: 'Article not found' }, { status: 404 });
   }
 }
-

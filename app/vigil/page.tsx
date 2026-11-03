@@ -716,7 +716,7 @@ export default function VigilPage() {
                     <span>
                       Please{' '}
                       <Link
-                        href="/login"
+                        href="/login?next=%2Fvigil"
                         className="underline hover:opacity-80"
                       >
                         sign in

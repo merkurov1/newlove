@@ -163,7 +163,12 @@ export default function LoungeInterface({ initialMessages, session: propSession 
       <div className="flex flex-col items-center justify-center h-[calc(100vh-10rem)] text-center">
         <h2 className="text-2xl font-semibold mb-4">Присоединяйтесь к обсуждению</h2>
         <p className="mb-6 text-gray-600">Чтобы отправлять сообщения, пожалуйста, войдите.</p>
-        <Link href="/login" className="px-6 py-3 bg-gray-900 text-white font-semibold rounded-lg hover:bg-gray-700">Войти</Link>
+        <Link
+          href="/login?next=%2Flobby"
+          className="px-6 py-3 bg-gray-900 text-white font-semibold rounded-lg hover:bg-gray-700"
+        >
+          Войти
+        </Link>
       </div>
     );
   }

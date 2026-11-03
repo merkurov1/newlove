@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { findLotById } from '@/lib/art-engine/repository';
 import { normalizeVault } from '@/lib/art-engine/vault';
-import {
-  extractAttemptDossier,
-  summarizeAttempt,
-} from '@/lib/art-engine/attempts';
+import { summarizeAttempt } from '@/lib/art-engine/attempts';
+import { extractionFromLotRow } from '@/lib/art-engine/extraction';
 import { listParseAttemptsForLot } from '@/lib/lots/db';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 function publicImageUrl(imagePath: string | null | undefined): string | null {
   if (!imagePath) return null;
@@ -64,7 +64,27 @@ export async function GET(
   const latestWithResult = rawAttempts.find(
     (attempt) => attempt?.payload?.result,
   );
-  const extracted = extractAttemptDossier(latestWithResult);
+  const extraction = extractionFromLotRow(
+    lot,
+    vault,
+    latestWithResult?.payload?.result,
+  );
+  const extracted = {
+    description: extraction.description,
+    signature: extraction.signature,
+    lot_number: extraction.lotNumber,
+    auction_date: extraction.auctionDate,
+    estimate_raw: extraction.estimate?.raw || null,
+    price_realized_raw: extraction.price?.raw || null,
+    provenance: extraction.provenance,
+    exhibitions: extraction.exhibitions,
+    literature: extraction.literature,
+    artist_dates: extraction.artistDates,
+    lot_essay: extraction.lotEssay,
+    catalogue_note: extraction.catalogueNote,
+    condition_report: extraction.conditionReport,
+    condition_report_status: extraction.conditionReportStatus,
+  };
 
   // Deploy-safe fallback: older lots were ingested before the `vault` column
   // existed. Their latest parser attempt still carries enough state for the
@@ -149,6 +169,34 @@ export async function GET(
       ingestion: ingestion || null,
       image: fallbackImage || null,
     },
+    extraction,
+    wikipedia: vault.wikipedia || null,
+    editorial: vault.editorial
+      ? {
+          status: vault.editorial.status || 'idle',
+          current: vault.editorial.current || null,
+          history_count: Array.isArray(vault.editorial.history)
+            ? vault.editorial.history.length
+            : 0,
+          last_error: vault.editorial.last_error || null,
+          last_attempt_at: vault.editorial.last_attempt_at || null,
+          updated_at: vault.editorial.updated_at || null,
+        }
+      : null,
+    publication: vault.publication
+      ? {
+          status: vault.publication.status || 'unpublished',
+          article_id: vault.publication.article_id || null,
+          slug: vault.publication.slug || null,
+          version: vault.publication.version ?? null,
+          published_at: vault.publication.published_at || null,
+          approved_at: vault.publication.approved_at || null,
+          update_pending: Boolean(vault.publication.update_pending),
+          history_count: Array.isArray(vault.publication.history)
+            ? vault.publication.history.length
+            : 0,
+        }
+      : null,
     attempts,
     extracted,
   });

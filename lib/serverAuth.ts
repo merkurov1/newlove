@@ -6,6 +6,7 @@ import {
 } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import crypto from 'crypto';
+import { verifyTelegramInitData } from '@/lib/telegram/initData';
 
 type ServerAuthOptions = {
   useServiceRole?: boolean;
@@ -18,9 +19,6 @@ export interface AuthenticatedUser {
   profile: any;
   user?: any;
 }
-
-const TELEGRAM_INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60;
-const TELEGRAM_FUTURE_CLOCK_TOLERANCE_SECONDS = 60;
 
 /**
  * Constant-time comparison for secrets of equal length.
@@ -74,7 +72,7 @@ export function getServerSupabaseClient(
 }
 
 /**
- * Verifies Telegram Mini App initData.
+ * Verifies Telegram Mini App initData with the shared server verifier.
  *
  * Access is denied when:
  * - the bot token is missing;
@@ -90,110 +88,21 @@ function verifyTelegramWebAppData(
     process.env.OSIRIS_BOT_TOKEN ||
     process.env.TELEGRAM_BOT_TOKEN;
 
-  const allowedUserIds = (
-    process.env.TELEGRAM_ALLOWED_USER_IDS || ''
-  )
+  const allowedUserIds = (process.env.TELEGRAM_ALLOWED_USER_IDS || '')
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean);
 
-  if (
-    !botToken ||
-    !telegramInitData ||
-    allowedUserIds.length === 0
-  ) {
-    return null;
-  }
+  if (!botToken || allowedUserIds.length === 0) return null;
 
-  try {
-    const urlParams = new URLSearchParams(telegramInitData);
-    const receivedHash = urlParams.get('hash');
+  const verified = verifyTelegramInitData(telegramInitData, botToken);
 
-    if (
-      !receivedHash ||
-      !/^[a-f0-9]{64}$/i.test(receivedHash)
-    ) {
-      return null;
-    }
+  if (!verified.ok) return null;
 
-    // auth_date is mandatory and must be recent.
-    const authDateRaw = urlParams.get('auth_date');
+  // No allowlist means no Telegram Mini App administrator access.
+  if (!allowedUserIds.includes(verified.user.id)) return null;
 
-    if (!authDateRaw || !/^\d+$/.test(authDateRaw)) {
-      return null;
-    }
-
-    const authDate = Number(authDateRaw);
-    const now = Math.floor(Date.now() / 1000);
-
-    if (
-      !Number.isSafeInteger(authDate) ||
-      authDate > now + TELEGRAM_FUTURE_CLOCK_TOLERANCE_SECONDS ||
-      now - authDate > TELEGRAM_INIT_DATA_MAX_AGE_SECONDS
-    ) {
-      return null;
-    }
-
-    // Build the Telegram Web App data-check string.
-    urlParams.delete('hash');
-
-    const dataCheckString = Array.from(urlParams.entries())
-      .map(([key, value]) => [key, value] as const)
-      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
-      .map(([key, value]) => `${key}=${value}`)
-      .join('\n');
-
-    // Telegram Web Apps signature verification.
-    const secretKey = crypto
-      .createHmac('sha256', 'WebAppData')
-      .update(botToken)
-      .digest();
-
-    const calculatedHash = crypto
-      .createHmac('sha256', secretKey)
-      .update(dataCheckString)
-      .digest('hex');
-
-    if (!safeEqual(calculatedHash, receivedHash.toLowerCase())) {
-      return null;
-    }
-
-    const userParam = urlParams.get('user');
-
-    if (!userParam) {
-      return null;
-    }
-
-    const userData = JSON.parse(userParam);
-
-    if (
-      !userData ||
-      (typeof userData.id !== 'number' &&
-        typeof userData.id !== 'string')
-    ) {
-      return null;
-    }
-
-    const userId = String(userData.id);
-
-    if (!/^\d+$/.test(userId)) {
-      return null;
-    }
-
-    // No allowlist means no Telegram Mini App administrator access.
-    if (!allowedUserIds.includes(userId)) {
-      return null;
-    }
-
-    return { userId };
-  } catch (error) {
-    console.error(
-      '[serverAuth] Telegram initData verification failed.',
-      error,
-    );
-
-    return null;
-  }
+  return { userId: verified.user.id };
 }
 
 /**

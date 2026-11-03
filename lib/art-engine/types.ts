@@ -1,4 +1,8 @@
-import type { ImageMetadata, LotData } from '@/lib/lots/types';
+import type {
+  ImageCandidate,
+  ImageMetadata,
+  LotData,
+} from '@/lib/lots/types';
 
 export type IngestionStatus =
   | 'queued'
@@ -19,7 +23,8 @@ export type EditorialStatus =
   | 'draft'
   | 'review'
   | 'approved'
-  | 'rejected';
+  | 'rejected'
+  | 'failed';
 
 export type PublicationStatus =
   | 'unpublished'
@@ -46,6 +51,84 @@ export interface IngestionState {
   image?: ImageMetadata | null;
   raw_excerpt_chars?: number | null;
   content_hash?: string | null;
+}
+
+export interface NormalizedExtraction {
+  title: string | null;
+  artist: string | null;
+  artistDates: string | null;
+  auctionHouse: string | null;
+  year: number | null;
+  medium: string | null;
+  dimensions: string | null;
+  signature: string | null;
+  description: string | null;
+  lotEssay: string | null;
+  catalogueNote: string | null;
+  conditionReport: string | null;
+  conditionReportStatus:
+    | 'available'
+    | 'unavailable'
+    | 'login-required'
+    | 'unknown';
+  provenance: string[];
+  exhibitions: string[];
+  literature: string[];
+  lotNumber: string | null;
+  auctionDate: string | null;
+  estimate: {
+    raw?: string | null;
+    currency?: string | null;
+    min?: number | null;
+    max?: number | null;
+  } | null;
+  price: {
+    raw?: string | null;
+    currency?: string | null;
+    realized?: number | null;
+  } | null;
+  currency: string | null;
+}
+
+export interface LotExtractionState {
+  schema_version: 1;
+  normalized: NormalizedExtraction;
+  raw?: Record<string, any> | null;
+  imageCandidates?: ImageCandidate[];
+  parser?: string | null;
+  parserVersion?: string | null;
+  sourceUrl?: string | null;
+  extractedAt?: string | null;
+  warnings?: string[];
+  errors?: string[];
+}
+
+export interface WikipediaCandidate {
+  title: string;
+  url: string | null;
+  description: string | null;
+  score: number;
+}
+
+export interface WikipediaState {
+  status:
+    | 'idle'
+    | 'found'
+    | 'not_found'
+    | 'ambiguous'
+    | 'unavailable'
+    | 'skipped';
+  artist: string;
+  query?: string | null;
+  title?: string | null;
+  url?: string | null;
+  language?: string | null;
+  extract?: string | null;
+  description?: string | null;
+  retrieved_at?: string | null;
+  match_score?: number | null;
+  candidates?: WikipediaCandidate[];
+  warnings: string[];
 }
 
 export interface IdentityCandidate {
@@ -152,6 +235,8 @@ export interface EditorialState {
   current?: EditorialDraft | null;
   history?: Array<EditorialDraft & { archived_at: string }>;
   rejected_reason?: string | null;
+  last_error?: string | null;
+  last_attempt_at?: string | null;
   updated_at?: string | null;
 }
 
@@ -177,6 +262,8 @@ export interface AuditEvent {
 export interface VaultState {
   schema_version: 1;
   ingestion?: IngestionState;
+  extraction?: LotExtractionState;
+  wikipedia?: WikipediaState;
   identity?: IdentityState;
   research?: ResearchState;
   editorial?: EditorialState;

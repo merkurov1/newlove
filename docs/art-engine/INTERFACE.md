@@ -36,6 +36,23 @@ modal is `z-9999`). On small screens the composer reserves right-side space for
 the Pierrot trigger. It respects `env(safe-area-inset-bottom/right)` and is
 lifted by the visual-viewport keyboard gap on iOS.
 
+## Editorial workflow
+
+The opened Vault record exposes five real stages: Parsing, Research, Essay,
+Vault and Selection. Their states come from `lots.vault`, not from a decorative
+stepper.
+
+- Parsing is saved automatically by `/api/admin/parse-url`.
+- Research stores a verified Wikipedia article in `lots.vault.wikipedia`.
+- Essay stores DeepSeek (Gemini fallback) drafts and versions in
+  `lots.vault.editorial`.
+- Vault depth is shown as saved state; no duplicate save button is needed.
+- Selection is manual: preview, image-rights confirmation, then
+  `/api/admin/art-engine/lots/[id]/publish`.
+
+Publication creates or updates the existing `articles` row. Repeating the same
+version is idempotent; a newer essay version requires **Update Publication**.
+
 ## Screenshots
 
 All screenshots are in `docs/art-engine/screenshots/`.
@@ -52,15 +69,14 @@ All screenshots are in `docs/art-engine/screenshots/`.
 - `after-desktop-guest.png`, `after-mobile-guest.png`.
 
 Screenshots use a mocked admin session and the dedicated `ADMIN_API_SECRET`
-header for visual verification only. The live ingestion path was tested with a
-real Christie's lot; the UI reached `ready`, showed the extracted catalogue
-data and surfaced the pending `2026-11-03_art_engine_vault.sql` migration
-warning.
+header for visual verification only. Live ingestion was tested with real
+Christie's and Sotheby's lots. The `lots.vault` / `parse_logs.payload`
+migration is now applied.
 
 ## Verification
 
-- `npx tsc --noEmit` — passes.
-- `npx jest lib/lots lib/art-engine --runInBand` — 23 tests pass.
+- Targeted Art Engine `tsc` — passes.
+- `npx jest lib/lots lib/art-engine --runInBand` — 40 tests pass.
 - `npx jest components/art-engine --runInBand --forceExit` — 5 tests pass.
 - Playwright checks: desktop 1440×1000, tablet 834×1112, mobile 390×844.
 - Composer Enter submission, processing state, Vault opening, failed-attempt

@@ -1,5 +1,6 @@
 import UsersClient from '@/components/UsersClient';
-import { getServerSupabaseClient } from '@/lib/serverAuth';
+import { getServerSupabaseClient, requireAdmin } from '@/lib/serverAuth';
+import { redirect } from 'next/navigation';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
 export const metadata = sanitizeMetadata({
@@ -17,13 +18,32 @@ interface UserItem {
 }
 
 export default async function UsersPage() {
+  try {
+    await requireAdmin();
+  } catch {
+    redirect('/403');
+  }
+
   // Получаем клиент Supabase с правами администратора (service role)
   const supabase = (getServerSupabaseClient as any)({ useServiceRole: true });
-  
+
   const { data, error } = await supabase.auth.admin.listUsers();
-  
+
   if (error) {
     throw new Error(error.message);
+  }
+
+  const ids = (data?.users || []).map((u: any) => u.id);
+  const appRoles = new Map<string, string>();
+
+  if (ids.length > 0) {
+    const { data: rows } = await supabase.from('users').select('id,role,name').in('id', ids);
+
+    for (const row of rows || []) {
+      if (typeof row.id === 'string') {
+        appRoles.set(row.id, String(row.role || 'USER').toUpperCase());
+      }
+    }
   }
 
   // Преобразуем пользователей с явной типизацией
@@ -32,7 +52,7 @@ export default async function UsersPage() {
     name: u.user_metadata?.name || u.email?.split('@')[0] || 'User',
     email: u.email || '',
     image: u.user_metadata?.image || '',
-    role: u.user_metadata?.role || 'USER',
+    role: appRoles.get(u.id) === 'ADMIN' ? 'ADMIN' : 'USER',
     _count: { articles: 0, projects: 0 },
   }));
 

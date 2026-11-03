@@ -22,6 +22,7 @@ import {
   rawHtmlExcerpt,
   toExtractedSpecs,
 } from '@/lib/art-engine/ingest';
+import { buildLotExtractionState } from '@/lib/art-engine/extraction';
 import { fetchAuctionHtml, HtmlFetchError } from '@/lib/art-engine/fetchHtml';
 import { findLotBySourceUrl, upsertLot } from '@/lib/art-engine/repository';
 import type { ImageCandidate, ImageMetadata, LotData } from '@/lib/lots/types';
@@ -272,7 +273,15 @@ export async function POST(req: Request) {
 
     const rowSourceUrl = existing?.source_url || sourceUrl;
 
+    const extraction = buildLotExtractionState(lotData, {
+      imageCandidates: collectImageCandidates(lotData),
+      warnings,
+      errors,
+      sourceUrl: rowSourceUrl,
+    });
+
     const vault = mergeVault(existing?.vault, {
+      extraction,
       ingestion: buildIngestionState({
         status,
         attemptId,
@@ -391,11 +400,16 @@ export async function POST(req: Request) {
       },
       extracted: {
         artist: lotData.artist || '',
+        artist_dates: lotData.artistDates || '',
         title: lotData.title || '',
         year: lotData.year || null,
         medium: lotData.medium || '',
         dimensions: lotData.dimensions || '',
         signature: lotData.signature || '',
+        lot_essay: lotData.lotEssay || '',
+        catalogue_note: lotData.catalogueNote || '',
+        condition_report: lotData.conditionReport || '',
+        condition_report_status: lotData.conditionReportStatus || 'unknown',
         lot_number: lotData.lotNumber || '',
         estimate: lotData.estimate?.raw || '',
         price_realized: lotData.price?.raw || '',

@@ -74,6 +74,19 @@ export function normalizeVault(value: unknown): VaultState {
           ...value.research,
         }
       : undefined,
+    extraction: isRecord(value.extraction)
+      ? (value.extraction as VaultState['extraction'])
+      : undefined,
+    wikipedia: isRecord(value.wikipedia)
+      ? {
+          status: value.wikipedia.status || 'idle',
+          artist: String(value.wikipedia.artist || ''),
+          warnings: Array.isArray(value.wikipedia.warnings)
+            ? value.wikipedia.warnings
+            : [],
+          ...value.wikipedia,
+        }
+      : undefined,
     editorial: isRecord(value.editorial)
       ? (value.editorial as VaultState['editorial'])
       : undefined,
@@ -134,6 +147,11 @@ export function mergeVault(
     ...patch,
     schema_version: 1,
     ingestion,
+    extraction:
+      patch.extraction !== undefined ? patch.extraction : base.extraction,
+    wikipedia: patch.wikipedia
+      ? { ...(base.wikipedia || {}), ...patch.wikipedia }
+      : base.wikipedia,
     identity: patch.identity
       ? { ...(base.identity || {}), ...patch.identity }
       : base.identity,

@@ -276,6 +276,22 @@ const handleUpdate = webhookCallback(
     webhookSecret ? { secretToken: webhookSecret } : undefined
 );
 export async function POST(req: Request) {
+    if (enforceWebhookSecret && !webhookSecret) {
+        return new Response(
+            JSON.stringify({
+                ok: false,
+                error: 'Telegram webhook secret is not configured.',
+            }),
+            {
+                status: 503,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-store',
+                },
+            }
+        );
+    }
+
     try { return await handleUpdate(req); }
     catch (e) { return new Response('Error', { status: 500 }); }
 }

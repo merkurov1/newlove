@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 
-const TELEGRAM_DETECTION_INTERVAL_MS = 200;
-const TELEGRAM_DETECTION_ATTEMPTS = 100;
+// The SDK is loaded with next/script lazyOnload. Detect it promptly, but do
+// not poll for the whole lifetime of the page.
+const TELEGRAM_DETECTION_INTERVAL_MS = 50;
+const TELEGRAM_DETECTION_ATTEMPTS = 60;
 
 /**
  * The Telegram SDK can also be loaded in a regular browser. Only the

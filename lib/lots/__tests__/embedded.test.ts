@@ -54,6 +54,14 @@ describe('embedded auction-house lot headers', () => {
                 lowEstimate: { amount: '40000' },
                 highEstimate: { amount: '60000' },
               },
+              description:
+                '<p>Alma Thomas</p><p>1891 - 1978</p><p><em>Untitled (Etude in Green)</em></p><p>signed (lower right)</p><p>acrylic and watercolor on paper</p><p>22 ⅜ by 30 in.</p><p>Executed in 1970.</p>',
+              provenance:
+                '<p>Private collection, Washington, D.C.</p><p>Thence by descent</p>',
+              exhibition: '<p>Washington, D.C., Howard University, 1971.</p>',
+              literature: '<p>Exhibition catalogue, 1971, illustrated.</p>',
+              catalogueNote: '<p>A catalogue note.</p>',
+              condition: { __typename: 'ConditionBehindLogin' },
               'media({"imageSizes":["ExtraSmall","Small","Medium","Large","ExtraLarge","ExtraExtraLarge"]})':
                 {
                   images: [
@@ -78,7 +86,7 @@ describe('embedded auction-house lot headers', () => {
 
     const html = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(nextData)}</script>`;
 
-    expect(extractSothebysEmbeddedLot(html)).toEqual({
+    expect(extractSothebysEmbeddedLot(html)).toMatchObject({
       title: 'Untitled (Etude in Green)',
       artist: 'Alma Thomas',
       lotNumber: '102',
@@ -87,6 +95,15 @@ describe('embedded auction-house lot headers', () => {
       estimateRaw: '40,000 – 60,000',
       currency: 'USD',
       imageUrl: 'https://images.example.com/alma.jpg',
+      artistDates: '1891–1978',
+      signature: 'signed (lower right)',
+      medium: 'acrylic and watercolor on paper',
+      dimensions: '22 ⅜ by 30 in.',
+      year: 1970,
+      provenance: ['Private collection, Washington, D.C.', 'Thence by descent'],
+      exhibitions: ['Washington, D.C., Howard University, 1971.'],
+      literature: ['Exhibition catalogue, 1971, illustrated.'],
+      conditionReportStatus: 'login-required',
     });
   });
 });

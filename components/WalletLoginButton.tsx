@@ -26,11 +26,28 @@ export default function WalletAuthButton({ onAuthenticated }: { onAuthenticated?
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
 
-      // Формируем сообщение для подписи (SIWE standard)
+      const nonceResponse = await fetch('/api/auth/wallet/nonce', { method: 'POST' });
+      const nonceData = await nonceResponse.json().catch(() => ({}));
+      if (!nonceResponse.ok || typeof nonceData.nonce !== 'string') {
+        throw new Error(nonceData.error || 'Wallet sign-in is unavailable.');
+      }
+
+      // SIWE message with a server-issued single-use nonce.
       const domain = window.location.host;
       const statement = 'Sign in to Merkurov Private Sanctuary';
       const issuedAt = new Date().toISOString();
-      const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\n${statement}\n\nIssued At: ${issuedAt}`;
+      const message = [
+        `${domain} wants you to sign in with your Ethereum account:`,
+        address,
+        '',
+        statement,
+        '',
+        `URI: ${window.location.origin}`,
+        'Version: 1',
+        'Chain ID: 1',
+        `Nonce: ${nonceData.nonce}`,
+        `Issued At: ${issuedAt}`,
+      ].join('\n');
 
       const signature = await signer.signMessage(message);
 

@@ -1,31 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
-// load helper dynamically to avoid build-time interop problems
-import { requireAdminFromRequest } from '@/lib/serverAuth';
+
+import { getCurrentUser, getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
+
+export const dynamic = 'force-dynamic';
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     await requireAdminFromRequest(req);
-  } catch (e) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch {
+    let authenticated = false;
+
+    try {
+      authenticated = Boolean(await getCurrentUser());
+    } catch {
+      authenticated = false;
+    }
+
+    return NextResponse.json(
+      { error: authenticated ? 'Forbidden' : 'Unauthorized' },
+      { status: authenticated ? 403 : 401 }
+    );
   }
 
   const { id } = params;
-  // Try to perform deletion via Supabase
-  try {
-  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-  const { supabase } = await getUserAndSupabaseForRequest(req as Request);
-    if (supabase) {
-      const { error } = await supabase.from('subscribers').delete().eq('id', id).limit(1);
-      if (error) {
-        console.error('Supabase delete error', error);
-        return NextResponse.json({ error: 'Deletion failed' }, { status: 500 });
-      }
-      return NextResponse.json({ success: true });
-    }
-  } catch (e) {
-    console.error('Error deleting subscriber', e);
+
+  if (!id || id.length > 200) {
+    return NextResponse.json({ error: 'Invalid subscriber id' }, { status: 400 });
   }
 
-  // Fallback: return success for now
-  return NextResponse.json({ success: true });
+  try {
+    const store = getServerSupabaseClient({ useServiceRole: true });
+    const { error } = await store.from('subscribers').delete().eq('id', id).limit(1);
+
+    if (error) {
+      console.error('[api/subscribers/delete] deletion failed');
+      return NextResponse.json({ error: 'Deletion failed' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch {
+    console.error('[api/subscribers/delete] unexpected error');
+    return NextResponse.json({ error: 'Deletion failed' }, { status: 500 });
+  }
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 // Minimal, secure endpoint to set HttpOnly cookies for Supabase session after OAuth redirect.
 // Accepts { access_token, refresh_token, expires_at } in POST body.
@@ -11,6 +12,24 @@ export async function POST(req: Request) {
 
     if (!accessToken)
       return NextResponse.json({ ok: false, error: 'no access_token' }, { status: 400 });
+
+    // The body is client-controlled. Verify the token with Supabase before
+    // turning it into an HttpOnly server cookie.
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+
+    if (!supabaseUrl || !anonKey) {
+      return NextResponse.json({ ok: false, error: 'auth_unavailable' }, { status: 503 });
+    }
+
+    const verifier = createClient(supabaseUrl, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    const { data: verified, error: verifyError } = await verifier.auth.getUser(accessToken);
+
+    if (verifyError || !verified.user) {
+      return NextResponse.json({ ok: false, error: 'invalid_session' }, { status: 401 });
+    }
 
     // In production require a same-origin Referer/Origin to mitigate abuse.
     try {
