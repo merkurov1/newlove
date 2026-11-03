@@ -48,6 +48,7 @@ export function brainStatusFromOutcome(
   if (outcome === 'relevant_results') return 'success';
   if (outcome === 'no_match' || outcome === 'weak_match') return 'empty';
   if (outcome === 'disabled') return 'unavailable';
+  if (outcome === 'partial_results') return 'partial';
   if (outcome === 'unavailable') {
     if (isTimeoutCode(code)) return 'timeout';
     if (code === 'unauthorized_scope') return 'permission_denied';
@@ -102,13 +103,28 @@ function statusCopy(
 ): string {
   if (language === 'en') {
     if (source === 'brain') {
-      if (status === 'empty') return 'No confirmed Brain material was found for this request.';
+      if (status === 'empty')
+        return 'The Brain search completed, but no relevant material was found.';
       if (status === 'timeout')
-        return 'Brain retrieval timed out, so this answer is not grounded in your archive.';
+        return 'The Brain search did not finish in time. This does not mean the material is absent from the archive.';
+      if (status === 'permission_denied')
+        return 'This Brain scope is not available to the current account.';
+      if (status === 'partial')
+        return 'Only part of the Brain search completed, so the evidence may be incomplete.';
+      if (status === 'error')
+        return 'The Brain search failed technically; this is not evidence that the material is absent.';
       return 'Brain is currently unavailable, so this answer is not grounded in your archive.';
     }
     if (source === 'media') {
       if (status === 'empty') return 'No Media Archive publication matched this request.';
+      if (status === 'permission_denied')
+        return 'This part of the Media Archive is not available to the current account.';
+      if (status === 'partial')
+        return 'Only part of the Media Archive search completed, so the results may be incomplete.';
+      if (status === 'timeout')
+        return 'The Media Archive search timed out; no absence of coverage is implied.';
+      if (status === 'error')
+        return 'The Media Archive search failed technically; no absence of coverage is implied.';
       return 'The Media Archive is currently unavailable, so publications and links are unverified.';
     }
     if (status === 'empty') return 'The external web search returned no verified results.';
@@ -118,14 +134,27 @@ function statusCopy(
   }
 
   if (source === 'brain') {
-    if (status === 'empty')
-      return 'В материалах Brain не нашлось подтверждённого контекста по этому запросу.';
+    if (status === 'empty') return 'Поиск по Brain завершён, но подходящих материалов не найдено.';
     if (status === 'timeout')
-      return 'Brain не успел ответить, поэтому ответ не опирается на твой архив.';
-    return 'Brain сейчас недоступен, поэтому ответ не опирается на твой архив.';
+      return 'Поиск в Brain не завершился вовремя. Это не означает, что материалов в архиве нет.';
+    if (status === 'permission_denied')
+      return 'Этот раздел Brain недоступен для текущего аккаунта; закрытые документы не раскрываются.';
+    if (status === 'partial')
+      return 'Поиск по Brain завершился частично, поэтому доказательства могут быть неполными.';
+    if (status === 'error')
+      return 'Поиск по Brain завершился технической ошибкой; это не означает, что материалов нет.';
+    return 'Сейчас не удалось подключиться к Brain, поэтому ответ не опирается на твой архив.';
   }
   if (source === 'media') {
-    if (status === 'empty') return 'В Media Archive не нашлось публикации по этому запросу.';
+    if (status === 'empty') return 'Поиск по Media Archive завершён, но публикаций не найдено.';
+    if (status === 'permission_denied')
+      return 'Этот раздел Media Archive недоступен для текущего аккаунта.';
+    if (status === 'partial')
+      return 'Поиск по Media Archive завершился частично, поэтому результаты могут быть неполными.';
+    if (status === 'timeout')
+      return 'Поиск по Media Archive не завершился вовремя; это не означает, что публикаций нет.';
+    if (status === 'error')
+      return 'Поиск по Media Archive завершился технической ошибкой; это не означает, что публикаций нет.';
     return 'Media Archive сейчас недоступен, поэтому публикации и ссылки не проверены.';
   }
   if (status === 'empty') return 'Внешний поиск не нашёл подтверждённых результатов.';

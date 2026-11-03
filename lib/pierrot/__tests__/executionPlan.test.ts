@@ -30,6 +30,47 @@ describe('Pierrot execution plan routing', () => {
     expect(plan.operation).toBe('brain.stats');
   });
 
+  it.each([
+    'Последние тексты из Новой газеты',
+    'Покажи последние публикации',
+    'Найди мои статьи про ИИ',
+    'Что я писал про регулирование интернета?',
+    'Все материалы о Sotheby’s',
+    'Покажи публикации за последнюю неделю',
+    'Найди тексты, где я упоминал Vitalik',
+    'Что у меня есть в Brain про искусство?',
+    'Найди все рецепты',
+    'Что нового в моём архиве?',
+  ])('routes “%s” to brain.search', (query) => {
+    const plan = buildPierrotExecutionPlan(query, { ownerMode: true });
+    expect(plan.operation).toBe('brain.search');
+  });
+
+  it('keeps an explicit internet request on web search', () => {
+    const plan = buildPierrotExecutionPlan('Найди последние новости о Sotheby’s в интернете', {
+      ownerMode: true,
+    });
+    expect(plan.operation).toBe('web.search');
+  });
+
+  it('routes “Покажи последние материалы из Media Archive” to media.search', () => {
+    const plan = buildPierrotExecutionPlan('Покажи последние материалы из Media Archive', {
+      ownerMode: true,
+    });
+    expect(plan.operation).toBe('media.search');
+    expect(plan.tool).toBe('media');
+  });
+
+  it('keeps explicit Media Archive statistics on media.stats', () => {
+    const plan = buildPierrotExecutionPlan('Статистика Media Archive', { ownerMode: true });
+    expect(plan.operation).toBe('media.stats');
+  });
+
+  it('asks for scope when a publication count is ambiguous', () => {
+    const plan = buildPierrotExecutionPlan('Сколько у меня публикаций?', { ownerMode: true });
+    expect(plan.operation).toBe('clarify.publications');
+  });
+
   it('routes “Много продал?” to Commercial', () => {
     const plan = buildPierrotExecutionPlan('Много продал?', { ownerMode: true });
     expect(plan.operation).toBe('commercial.report');

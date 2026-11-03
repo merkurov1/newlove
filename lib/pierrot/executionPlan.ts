@@ -14,6 +14,7 @@ export type PierrotOperation =
   | 'system.stats'
   | 'web.search'
   | 'brain_web.search'
+  | 'clarify.publications'
   | 'general';
 
 export type PierrotFallbackPolicy =
@@ -39,7 +40,7 @@ const SEARCH_VERBS =
 const STATS_TERMS =
   /(статистик|stats|statistics|состояни|status|state|индекс|index|очеред|queue|сколько\s+(документ|фрагмент|chunk|chunks|источник)|health|диагностик|diagnostic)/i;
 const MEDIA_STATS_TERMS =
-  /(media\s+(stats|statistics|status)|статистик[а-яё]*\s+(медиа|сми)|состояни[а-яё]*\s+(медиа|сми))/i;
+  /(media\s+(archive\s+)?(stats|statistics|status)|статистик[а-яё]*\s+(медиа|сми|media)|состояни[а-яё]*\s+(медиа|сми|media)|сколько[^?.!]*(медиа|media|сми|публикац))/i;
 
 function searchQueryFor(message: string, followUp: boolean): string {
   if (!followUp) return message.trim();
@@ -174,8 +175,13 @@ export function buildPierrotExecutionPlan(
       resolved.ownerOnly = true;
       resolved.fallbackPolicy = 'no_source_substitution';
     } else if (ownerTool.kind === 'analytics') {
-      resolved.operation = mediaStats ? 'media.stats' : 'analytics.report';
-      resolved.tool = mediaStats ? 'media' : 'analytics';
+      const mediaSearch = queryPlan.intent === 'media_mentions' && !mediaStats;
+      resolved.operation = mediaStats
+        ? 'media.stats'
+        : mediaSearch
+          ? 'media.search'
+          : 'analytics.report';
+      resolved.tool = mediaStats || mediaSearch ? 'media' : 'analytics';
       resolved.ownerOnly = true;
       resolved.fallbackPolicy = 'no_source_substitution';
     } else if (ownerTool.kind === 'rag' || ownerTool.kind === 'brain') {
@@ -212,6 +218,17 @@ export function buildPierrotExecutionPlan(
     resolved.tool = 'brain';
     resolved.ownerOnly = true;
     resolved.fallbackPolicy = 'no_source_substitution';
+  }
+
+  if (
+    options.ownerMode &&
+    resolved.operation === 'general' &&
+    /сколько\s+(?:у\s+меня\s+)?публикац/i.test(message)
+  ) {
+    resolved.operation = 'clarify.publications';
+    resolved.tool = 'clarify';
+    resolved.ownerOnly = true;
+    resolved.fallbackPolicy = 'none';
   }
 
   return {

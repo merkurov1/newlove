@@ -47,7 +47,16 @@ export const UNFRAMED_RAG_INGESTION_VERSION = 'unframed-rag-ingestion-v1';
 /** Source-aware Brain retrieval v2 (additive; the v1 function remains). */
 export const BRAIN_RAG_TOP_K = 8;
 export const BRAIN_RAG_CANDIDATE_LIMIT = 40;
-export const BRAIN_RAG_TIMEOUT_MS = 2_500;
+/**
+ * Brain budgets are split. Production measurement on 2026-11-03:
+ * embedding ~599 ms, Supabase hybrid search ~1,900 ms. The old single 2,500 ms
+ * budget left almost no room for search after embedding.
+ */
+export const BRAIN_RAG_EMBEDDING_TIMEOUT_MS = 3_000;
+export const BRAIN_RAG_SEARCH_TIMEOUT_MS = 5_000;
+export const BRAIN_RAG_TOTAL_TIMEOUT_MS = 9_000;
+/** Backward-compatible alias for callers that still use one budget. */
+export const BRAIN_RAG_TIMEOUT_MS = 9_000;
 export const BRAIN_RAG_MAX_QUERY_CHARS = 2_000;
 export const BRAIN_RAG_PROVISIONAL_MIN_SIMILARITY = 0.32;
 

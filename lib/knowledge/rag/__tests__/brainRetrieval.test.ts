@@ -302,3 +302,30 @@ describe('Explicit source relevance', () => {
     expect(result.hits).toEqual([]);
   });
 });
+
+describe('Recent publication ordering', () => {
+  it('orders recent-source results by published_at rather than similarity alone', async () => {
+    const result = await retrieve(
+      [
+        row({
+          chunk_id: 'chk_old',
+          document_id: 'doc_old',
+          document_title: 'Older article',
+          published_at: '2024-01-01T00:00:00.000Z',
+          similarity: 0.92,
+        }),
+        row({
+          chunk_id: 'chk_new',
+          document_id: 'doc_new',
+          document_title: 'Newest article',
+          published_at: '2026-10-30T00:00:00.000Z',
+          similarity: 0.86,
+        }),
+      ],
+      'Show my latest articles'
+    );
+
+    expect(result.outcome).toBe('relevant_results');
+    expect(result.hits[0]?.documentId).toBe('doc_new');
+  });
+});

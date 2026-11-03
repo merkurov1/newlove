@@ -116,6 +116,8 @@ describe('answer evidence guard', () => {
     });
 
     expect(result.reply).toContain('Brain');
+    expect(result.reply).toContain('не завершился вовремя');
+    expect(result.reply).toContain('не означает, что материалов в архиве нет');
     expect(result.violations).toContain('source_limitation_disclosed');
   });
 });

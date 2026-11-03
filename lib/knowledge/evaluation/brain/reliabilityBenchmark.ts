@@ -48,6 +48,99 @@ const VERIFIED: ReliabilityBenchmarkQuery[] = BRAIN_EVALUATION_QUESTIONS.map((qu
     : 'Return an explicit no-answer or insufficient-evidence response.',
 }));
 
+const VERIFIED_EXTRA: ReliabilityBenchmarkQuery[] = [
+  {
+    id: 'verified:exact-agents-language',
+    question: 'Найди статью «Агенты ухватились за язык»',
+    language: 'ru',
+    category: 'exact_document',
+    expectedSourceClasses: ['article'],
+    expectedDocumentIds: ['doc_article_d94db17b590415578c09971b541e4629'],
+    answerability: 'answerable',
+    expectedFailureBehavior: null,
+  },
+  {
+    id: 'verified:exact-clouds',
+    question: 'Найди статью «Облака-то на земле!»',
+    language: 'ru',
+    category: 'exact_document',
+    expectedSourceClasses: ['article'],
+    expectedDocumentIds: ['doc_article_7fcf98aa488fe852b0490371a447c761'],
+    answerability: 'answerable',
+    expectedFailureBehavior: null,
+  },
+  {
+    id: 'verified:exact-personal-data',
+    question: 'Найди статью «Персональные сданные»',
+    language: 'ru',
+    category: 'exact_document',
+    expectedSourceClasses: ['article'],
+    expectedDocumentIds: ['doc_article_1aece5b9b1a47828b245001cf727bad2'],
+    answerability: 'answerable',
+    expectedFailureBehavior: null,
+  },
+  {
+    id: 'verified:exact-default-checkbox',
+    question: 'Найди статью «Галочка по умолчанию»',
+    language: 'ru',
+    category: 'exact_document',
+    expectedSourceClasses: ['article'],
+    expectedDocumentIds: ['doc_article_b433ffc0d504b25d430f8ea5c2a26b10'],
+    answerability: 'answerable',
+    expectedFailureBehavior: null,
+  },
+  {
+    id: 'verified:exact-focus-context',
+    question: 'Найди пост «Фокус и контекст»',
+    language: 'ru',
+    category: 'exact_document',
+    expectedSourceClasses: ['personal_writing'],
+    expectedDocumentIds: ['doc_article_83bec0d58cbf762d0b1a316d7b9648d9'],
+    answerability: 'answerable',
+    expectedFailureBehavior: null,
+  },
+  {
+    id: 'verified:exact-narrative-identity',
+    question: 'Найди пост «Нарративная идентичность»',
+    language: 'ru',
+    category: 'exact_document',
+    expectedSourceClasses: ['personal_writing'],
+    expectedDocumentIds: ['doc_article_e9908c33960fa8ce5fae6550c612e8ba'],
+    answerability: 'answerable',
+    expectedFailureBehavior: null,
+  },
+  {
+    id: 'verified:exact-weekly-review',
+    question: 'Найди документ «Anton Merkurov — Weekly Review»',
+    language: 'ru',
+    category: 'exact_document',
+    expectedSourceClasses: ['other'],
+    expectedDocumentIds: ['doc_text_450a71a0b1d4a21295a3aaac6b7c9c76'],
+    answerability: 'answerable',
+    expectedFailureBehavior: null,
+  },
+  {
+    id: 'verified:exact-unframed-title',
+    question: 'Найди документ «UNFRAMED»',
+    language: 'ru',
+    category: 'exact_document',
+    expectedSourceClasses: ['manuscript'],
+    expectedDocumentIds: ['doc_unframed_manuscript'],
+    answerability: 'answerable',
+    expectedFailureBehavior: null,
+  },
+  {
+    id: 'verified:food-recipes',
+    question: 'Найди все рецепты',
+    language: 'ru',
+    category: 'personal_notes',
+    expectedSourceClasses: ['other'],
+    expectedDocumentIds: ['doc_txt_594d44051198dad211982311a1c59470'],
+    answerability: 'answerable',
+    expectedFailureBehavior: null,
+  },
+];
+
 const PENDING: ReliabilityBenchmarkQuery[] = [
   [
     'biography-early-life',
@@ -190,7 +283,7 @@ export const PIERROT_RELIABILITY_BENCHMARK: ReliabilityBenchmarkQuery[] = [...VE
 
 export const PIERROT_RELIABILITY_BENCHMARK_STATS = {
   total: PIERROT_RELIABILITY_BENCHMARK.length,
-  verified: VERIFIED.length,
+  verified: VERIFIED.length + VERIFIED_EXTRA.length,
   pendingGroundTruth: PENDING.length,
 };
 

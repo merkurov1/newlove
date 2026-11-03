@@ -27,6 +27,10 @@ jest.mock('@/lib/knowledge/rag/retrieval', () => ({
   retrieveUnframedEvidence: jest.fn(),
 }));
 
+jest.mock('@/lib/knowledge/rag/pierrotRetrieval', () => ({
+  retrieveBrainEvidenceWithRefinement: jest.fn(),
+}));
+
 jest.mock('@/lib/knowledge/rag/pierrotContext', () => {
   const actual = jest.requireActual('@/lib/knowledge/rag/pierrotContext') as Record<
     string,
@@ -115,6 +119,14 @@ const retrieval = require('@/lib/knowledge/rag/retrieval') as {
   retrieveUnframedEvidence: {
     mockResolvedValueOnce: (value: unknown) => void;
     mockResolvedValue: (value: unknown) => void;
+    mock: { calls: unknown[][] };
+  };
+};
+const brainRetrieval = require('@/lib/knowledge/rag/pierrotRetrieval') as {
+  retrieveBrainEvidenceWithRefinement: {
+    mockResolvedValueOnce: (value: unknown) => void;
+    mockResolvedValue: (value: unknown) => void;
+    mockReset: () => void;
     mock: { calls: unknown[][] };
   };
 };
@@ -1540,6 +1552,246 @@ describe('Pierrot intelligence regressions', () => {
     expect(json.owner_tool).toBeUndefined();
     expect(retrieval.retrieveUnframedEvidence).toHaveBeenCalled();
     expect(json.sourceStatus?.brain).not.toBe('not_requested');
+  });
+
+  it('sends “Последние тексты из Новой газеты” through Brain v2 and returns real evidence', async () => {
+    owner();
+    process.env.PIERROT_BRAIN_RETRIEVAL_V2 = 'true';
+
+    try {
+      brainRetrieval.retrieveBrainEvidenceWithRefinement.mockResolvedValueOnce({
+        outcome: 'relevant_results',
+        hits: [
+          {
+            chunkId: 'chk_novaya_recent',
+            documentId: 'doc_article_novaya_recent',
+            documentTitle: 'Агенты ухватились за язык — Новая газета',
+            sourceType: 'article',
+            sourceClass: 'article',
+            sourceDomain: 'novayagazeta.ru',
+            author: 'Антон Меркуров',
+            language: 'ru',
+            publishedAt: '2026-10-28T12:41:00.000Z',
+            content: 'Фрагмент статьи о языковых агентах.',
+            heading: 'Введение',
+            sectionPath: [],
+            sectionIndex: 0,
+            lineStart: 1,
+            lineEnd: 2,
+            similarity: 0.82,
+            lexicalScore: 0.41,
+            combinedScore: 0.79,
+          },
+        ],
+        latencyMs: 40,
+        topSimilarity: 0.82,
+        plan: {
+          originalQuery: 'Последние тексты из Новой газеты',
+          normalizedQuery: 'последние тексты из новой газеты',
+          lexicalQuery: 'последние тексты из',
+          subject: 'последние тексты из',
+          language: 'ru',
+          intent: 'source_lookup',
+          requestedSources: ['article'],
+          requestedDomains: ['novayagazeta.ru', 'novayagazeta.eu'],
+          requestedAuthors: [],
+          publishedFrom: '2025-11-03T00:00:00.000Z',
+          publishedTo: null,
+          wantsOverview: false,
+          wantsRecent: true,
+          specificDocument: false,
+          confidence: 0.74,
+          signals: ['source:novaya', 'time:recent'],
+        },
+        method: 'hybrid_v2',
+        selectedSourceClasses: ['article'],
+        selectedSourceDomains: ['novayagazeta.ru'],
+        candidateCount: 2,
+        documentIds: ['doc_article_novaya_recent'],
+        chunkIds: ['chk_novaya_recent'],
+        ranking: [],
+        attempts: 1,
+        refined: false,
+        attemptLog: [
+          {
+            label: 'original',
+            query: 'Последние тексты из Новой газеты',
+            outcome: 'relevant_results',
+            hitCount: 1,
+          },
+        ],
+        timings: { embeddingMs: 10, searchMs: 20, rankingMs: 10 },
+      });
+
+      const response = await POST(
+        makeRequest(validBody({ mode: 'unframed', message: 'Последние тексты из Новой газеты' }))
+      );
+      const json = (await response.json()) as {
+        rag?: { outcome?: string };
+        sourceStatus?: { brain?: string };
+        owner_tool?: string;
+      };
+
+      expect(response.status).toBe(200);
+      expect(json.owner_tool).toBeUndefined();
+      expect(json.rag?.outcome).toBe('relevant_results');
+      expect(json.sourceStatus?.brain).toBe('success');
+      expect(brainRetrieval.retrieveBrainEvidenceWithRefinement).toHaveBeenCalledWith(
+        expect.objectContaining({ query: 'Последние тексты из Новой газеты' })
+      );
+      expect(systemPrompt()).toContain('MOCKED_EVIDENCE_PROMPT');
+    } finally {
+      process.env.PIERROT_BRAIN_RETRIEVAL_V2 = 'false';
+    }
+  });
+
+  it('keeps the previous topic when a follow-up only adds a date', async () => {
+    owner();
+    process.env.PIERROT_BRAIN_RETRIEVAL_V2 = 'true';
+
+    try {
+      brainRetrieval.retrieveBrainEvidenceWithRefinement.mockResolvedValueOnce({
+        outcome: 'no_match',
+        hits: [],
+        latencyMs: 20,
+        topSimilarity: null,
+        plan: {
+          originalQuery: 'А за 2025 год?',
+          normalizedQuery: 'а за 2025 год',
+          lexicalQuery: '2025 год',
+          subject: '2025 год',
+          language: 'ru',
+          intent: 'source_lookup',
+          requestedSources: ['article'],
+          requestedDomains: [],
+          requestedAuthors: [],
+          publishedFrom: '2025-01-01T00:00:00.000Z',
+          publishedTo: '2025-12-31T23:59:59.999Z',
+          wantsOverview: false,
+          wantsRecent: false,
+          specificDocument: false,
+          confidence: 0.6,
+          signals: ['follow_up', 'year:2025'],
+        },
+        method: 'hybrid_v2',
+        selectedSourceClasses: ['article'],
+        selectedSourceDomains: [],
+        candidateCount: 0,
+        documentIds: [],
+        chunkIds: [],
+        ranking: [],
+        attempts: 1,
+        refined: false,
+        attemptLog: [],
+        timings: { embeddingMs: 5, searchMs: 10, rankingMs: 5 },
+      });
+
+      const response = await POST(
+        makeRequest(
+          validBody({
+            mode: 'unframed',
+            message: 'А за 2025 год?',
+            history: [{ role: 'user', content: 'Найди статьи о Sotheby’s' }],
+          })
+        )
+      );
+
+      expect(response.status).toBe(200);
+      const call = brainRetrieval.retrieveBrainEvidenceWithRefinement.mock.calls[0]?.[0] as {
+        query?: string;
+      };
+      expect(call.query).toContain('Sotheby');
+      expect(call.query).toContain('2025');
+    } finally {
+      process.env.PIERROT_BRAIN_RETRIEVAL_V2 = 'false';
+    }
+  });
+
+  it('discloses a Brain timeout without saying the archive has no recipes', async () => {
+    owner();
+    process.env.PIERROT_BRAIN_RETRIEVAL_V2 = 'true';
+
+    try {
+      brainRetrieval.retrieveBrainEvidenceWithRefinement.mockResolvedValueOnce({
+        outcome: 'unavailable',
+        code: 'timeout',
+        timeoutStage: 'search',
+        hits: [],
+        latencyMs: 60,
+        topSimilarity: null,
+        plan: {
+          originalQuery: 'Найди все рецепты',
+          normalizedQuery: 'найди все рецепты',
+          lexicalQuery: 'найди все рецепты',
+          subject: 'найди все рецепты',
+          language: 'ru',
+          intent: 'general',
+          requestedSources: [],
+          requestedDomains: [],
+          requestedAuthors: [],
+          publishedFrom: null,
+          publishedTo: null,
+          wantsOverview: false,
+          wantsRecent: false,
+          specificDocument: false,
+          confidence: 0.42,
+          signals: [],
+        },
+        method: 'hybrid_v2',
+        selectedSourceClasses: [],
+        selectedSourceDomains: [],
+        candidateCount: 0,
+        documentIds: [],
+        chunkIds: [],
+        ranking: [],
+        attempts: 1,
+        refined: false,
+        attemptLog: [
+          {
+            label: 'original',
+            query: 'Найди все рецепты',
+            outcome: 'unavailable',
+            hitCount: 0,
+          },
+        ],
+        timings: { embeddingMs: 10, searchMs: 50, rankingMs: 0 },
+      });
+
+      const response = await POST(
+        makeRequest(validBody({ mode: 'unframed', message: 'Найди все рецепты' }))
+      );
+      const json = (await response.json()) as {
+        reply?: string;
+        sourceStatus?: { brain?: string };
+      };
+
+      expect(response.status).toBe(200);
+      expect(json.sourceStatus?.brain).toBe('timeout');
+      expect(json.reply).toContain('не завершился вовремя');
+      expect(json.reply).not.toMatch(/рецептов\s+(нет|не\s+найдено)/i);
+    } finally {
+      process.env.PIERROT_BRAIN_RETRIEVAL_V2 = 'false';
+    }
+  });
+
+  it('asks for scope before counting “публикации”', async () => {
+    owner();
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Сколько у меня публикаций?' }))
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      owner_tool?: string;
+      sourceStatus?: { brain?: string; media?: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(json.owner_tool).toBe('clarify');
+    expect(json.reply).toContain('Уточни');
+    expect(json.sourceStatus?.brain).toBe('not_requested');
+    expect(json.sourceStatus?.media).toBe('not_requested');
   });
 
   it('reports a missing named document honestly instead of substituting statistics', async () => {

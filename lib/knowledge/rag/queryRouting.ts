@@ -123,6 +123,34 @@ const PERSONAL_TERMS = [
   'мой блог',
   'мой канал',
 ];
+const FOOD_TERMS = [
+  'рецепт',
+  'рецепты',
+  'рецептов',
+  'рецепта',
+  'рецепте',
+  'блюдо',
+  'блюда',
+  'блюд',
+  'кулинар',
+  'кулинария',
+  'кулинарный',
+  'готовить',
+  'приготовить',
+  'приготовление',
+  'еда',
+  'еды',
+  'еде',
+  'food',
+  'recipe',
+  'recipes',
+  'cooking',
+  'cook',
+  'meal',
+  'dish',
+  'dishes',
+];
+
 const ART_PROJECT_TERMS = [
   'heart & angel',
   'heart and angel',
@@ -604,6 +632,10 @@ export function buildBrainQueryPlan(query: string): BrainQueryPlan {
     requestedDomains.push('substack.com');
   }
 
+  if (hasAny(normalizedQuery, FOOD_TERMS)) {
+    signals.push('topic:food');
+  }
+
   if (hasAny(normalizedQuery, ART_PROJECT_TERMS)) {
     addSource('art_project', 'source:art_project');
   }
@@ -797,6 +829,10 @@ export function classifyBrainDocument(input: BrainDocumentClassInput): BrainSour
  * source_type article/manuscript, so personal writing is article + a domain
  * filter and biography can use the manuscript as a memoir fallback.
  */
+export function isFoodQuery(plan: BrainQueryPlan): boolean {
+  return plan.signals.includes('topic:food');
+}
+
 export function resolveBrainSourceFilters(plan: BrainQueryPlan): BrainSourceFilters {
   if (plan.requestedSources.length === 0) {
     return {

@@ -53,11 +53,16 @@ import { retrieveUnframedEvidence } from '@/lib/knowledge/rag/retrieval';
 import { retrieveBrainEvidence } from '@/lib/knowledge/rag/brainRetrieval';
 import { retrieveBrainEvidenceWithRefinement } from '@/lib/knowledge/rag/pierrotRetrieval';
 import {
+  BRAIN_RAG_TOTAL_TIMEOUT_MS,
   isBrainRetrievalV2Enabled,
   isPierrotRagEnabled,
   isPublicPierrotRagEnabled,
 } from '@/lib/knowledge/rag/config';
-import { buildBrainQueryPlan, classifyBrainDocument } from '@/lib/knowledge/rag/queryRouting';
+import {
+  buildBrainQueryPlan,
+  classifyBrainDocument,
+  isFoodQuery,
+} from '@/lib/knowledge/rag/queryRouting';
 import {
   findBrainDocumentByTitle,
   loadBrainDocumentChunks,
@@ -163,7 +168,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const RETRIEVAL_TIMEOUT_MS = 8_000;
+const RETRIEVAL_TIMEOUT_MS = 12_000;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -448,6 +453,17 @@ export async function POST(req: Request) {
       ownerMode,
     });
     const queryPlan: PierrotQueryPlan = executionPlan.queryPlan;
+    const previousUserMessage = [...normalizedHistory]
+      .reverse()
+      .find((item) => item.role === 'user')?.content;
+    // A short follow-up ("А за 2025 год?", "А теперь все рецепты недели")
+    // inherits the topic but not the old intent verbatim. Give retrieval the
+    // previous user turn plus the current sanitized request, capped so history
+    // cannot grow the query without bound.
+    const retrievalQuery =
+      executionPlan.requiresConversationContext && previousUserMessage
+        ? `${previousUserMessage} ${executionPlan.searchQuery}`.trim().slice(0, 1_000)
+        : trimmedMessage;
 
     const openAiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
       normalizedHistory.map((h) => ({
@@ -532,6 +548,7 @@ export async function POST(req: Request) {
       sectionRoute: section?.route,
       message: trimmedMessage,
     });
+    const foodQuery = isFoodQuery(buildBrainQueryPlan(trimmedMessage));
 
     const previousOfferId = normalizePreviousOfferId(history);
     const intent = classifyPierrotIntent(trimmedMessage);
@@ -1251,6 +1268,22 @@ export async function POST(req: Request) {
         }
       }
 
+      if (executionPlan.operation === 'clarify.publications') {
+        return persistOwnerReply(
+          ownerLanguage === 'ru'
+            ? 'Уточни, что считать публикациями: твои тексты в Brain или публикации о тебе в Media Archive?'
+            : 'Should I count your own texts in Brain, or coverage about you in the Media Archive?',
+          {
+            owner_tool: 'clarify',
+            source_status: {
+              brain: 'not_requested',
+              media: 'not_requested',
+              web: 'not_requested',
+            },
+          }
+        );
+      }
+
       const ownerTool =
         executionPlan.operation === 'brain.stats' && executionPlan.ownerTool?.kind === 'stats'
           ? { kind: 'brain' as const, query: executionPlan.ownerTool.query }
@@ -1353,10 +1386,15 @@ export async function POST(req: Request) {
         // branch. The mode is a client intent only; access is decided by the
         // verified server-side owner identity above.
         let generationSystemPrompt = systemPrompt;
-        const brainPlan = buildBrainQueryPlan(trimmedMessage);
+        const brainPlan = buildBrainQueryPlan(retrievalQuery);
         const requestsManuscript = brainPlan.requestedSources.includes('manuscript');
+        const explicitBrainQuery = /\b(?:brain|rag)\b|баз[ае]\s+знаний|knowledge base/i.test(
+          trimmedMessage
+        );
         const useMediaBranch =
           queryPlan.intent !== 'document_lookup' &&
+          !explicitBrainQuery &&
+          !foodQuery &&
           (queryPlan.intent === 'media_mentions' || isMediaArchiveQuery(trimmedMessage)) &&
           !requestsManuscript;
 
@@ -1370,7 +1408,7 @@ export async function POST(req: Request) {
           try {
             mediaRetrieval = await withTimeout(
               retrieveMediaEvidence({
-                query: trimmedMessage,
+                query: retrievalQuery,
                 limit: 8,
                 ownerAccess: ownerMode,
                 publishedFrom: queryPlan.period?.from ?? null,
@@ -1665,10 +1703,11 @@ export async function POST(req: Request) {
 
               if (useBrainV2) {
                 const retrieval = await retrieveBrainEvidenceWithRefinement({
-                  query: trimmedMessage,
+                  query: retrievalQuery,
                   plan: brainPlan,
                   topK: 8,
                   maxAttempts: 3,
+                  totalTimeoutMs: BRAIN_RAG_TOTAL_TIMEOUT_MS,
                   retrieve: (attempt) =>
                     retrieveBrainEvidence({
                       query: attempt.query,
@@ -1676,6 +1715,7 @@ export async function POST(req: Request) {
                       ownerAuthorized: true,
                       plan: attempt.plan,
                       topK: attempt.topK,
+                      timeoutMs: attempt.timeoutMs,
                     }),
                 });
 
@@ -1696,6 +1736,7 @@ export async function POST(req: Request) {
                   refined: retrieval.refined,
                   attempts: retrieval.attempts,
                   timings: retrieval.timings ?? null,
+                  timeoutStage: retrieval.timeoutStage ?? null,
                 };
 
                 ownerRag = {
@@ -1710,7 +1751,7 @@ export async function POST(req: Request) {
                 const ragPrompt =
                   retrieval.outcome === 'relevant_results'
                     ? buildUnframedEvidencePrompt(retrieval)
-                    : buildUnframedUnavailablePrompt(retrieval.outcome);
+                    : buildUnframedUnavailablePrompt(retrieval.outcome, retrieval.code);
 
                 usedRagContext = retrieval.outcome === 'relevant_results' && Boolean(ragPrompt);
 
@@ -1771,7 +1812,7 @@ export async function POST(req: Request) {
                 const ragPrompt =
                   retrieval.outcome === 'relevant_results'
                     ? buildUnframedEvidencePrompt(retrieval)
-                    : buildUnframedUnavailablePrompt(retrieval.outcome);
+                    : buildUnframedUnavailablePrompt(retrieval.outcome, retrieval.code);
 
                 usedRagContext = retrieval.outcome === 'relevant_results' && Boolean(ragPrompt);
 
@@ -1819,6 +1860,16 @@ export async function POST(req: Request) {
               console.warn('[Pierrot RAG] unavailable (unexpected)');
             }
           }
+        }
+
+        if (ownerMode && foodQuery && (ownerRag?.sources.length || 0) > 0) {
+          generationSystemPrompt = `${generationSystemPrompt}\n\n${[
+            'FOOD_QUERY_MODE',
+            'The retrieved personal archive evidence contains recipe fragments.',
+            'List the recipes and food fragments that are actually present, with their ingredients and steps.',
+            'Do not claim that the archive has no recipes when recipe evidence is attached.',
+            'If a recipe is incomplete, state exactly which part is present and which part is missing.',
+          ].join('\n')}`;
         }
 
         // Web evidence was requested in parallel with Brain. Awaiting it here
@@ -2045,6 +2096,7 @@ export async function POST(req: Request) {
             source_status: sourceStatus,
             evidence_warnings: evidenceGuard.violations,
             brain_timings: retrievalTrace?.timings ?? null,
+            timeout_stage: retrievalTrace?.timeoutStage ?? null,
             ...(retrievalTrace?.documentTitleRequested
               ? {
                   document_title_requested: retrievalTrace.documentTitleRequested,

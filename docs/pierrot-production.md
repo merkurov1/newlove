@@ -172,6 +172,26 @@ It returns a caveat stating that the count describes the indexed Brain corpus,
 not the publication's complete archive. The same function is unit-tested in
 `lib/knowledge/graph/__tests__/researchInventory.test.ts`.
 
+## Food and recipe retrieval
+
+The owner's 2018/2019 TXT archive contains many recipe instructions, but the
+chunks are short and often lose a pure vector-similarity race to one-line
+markers such as «Рецепт недели:» or «Приятного аппетита!». The owner Brain
+retrieval now has a deterministic food fallback:
+
+- detects recipe/food terms in the query plan (`topic:food`);
+- reads only `access_class='owner'` chunks (never public scope);
+- ranks chunks by cooking verbs, ingredients and content length;
+- drops one-line markers and false positives such as «победа» or «сковорода»
+  used as a metaphor;
+- allows up to six chunks from the same archive document so a list of recipes
+  is not reduced to one marker.
+
+The fallback runs only for owner mode. Public Pierrot still cannot read these
+documents because `public_retrieval_allowed=false`. To expose recipes publicly,
+the owner must explicitly approve those documents; the code will not flip the
+flag automatically.
+
 ## Operational settings
 
 ```env

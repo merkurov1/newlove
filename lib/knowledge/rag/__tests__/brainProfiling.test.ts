@@ -61,6 +61,29 @@ describe('Brain retrieval profiling', () => {
     expect(result.timings?.rankingMs).toBeGreaterThanOrEqual(0);
   });
 
+  it('attributes a stalled SQL search to the search stage', async () => {
+    const result = await retrieveBrainEvidence({
+      query: 'weekly review',
+      scope: 'owner',
+      ownerAuthorized: true,
+      enabled: true,
+      timeoutMs: 60,
+      env,
+      embeddingClient: embeddingClient(),
+      search: jest.fn(
+        () =>
+          new Promise<BrainSearchRow[]>(() => {
+            // Intentionally never resolves; the search-stage abort is the exit.
+          })
+      ),
+    });
+
+    expect(result.outcome).toBe('unavailable');
+    expect(result.code).toBe('timeout');
+    expect(result.timeoutStage).toBe('search');
+    expect(result.timings?.searchMs).toBeGreaterThanOrEqual(10);
+  });
+
   it('records the embedding stage when the overall timeout aborts it', async () => {
     const search: BrainSearch = jest.fn(async () => [row()]);
     const result = await retrieveBrainEvidence({
@@ -86,6 +109,7 @@ describe('Brain retrieval profiling', () => {
     expect(result.outcome).toBe('unavailable');
     expect(result.code).toBe('timeout');
     expect(result.timings?.embeddingMs).toBeGreaterThanOrEqual(10);
+    expect(result.timeoutStage).toBe('embedding');
     expect(search).not.toHaveBeenCalled();
   });
 });

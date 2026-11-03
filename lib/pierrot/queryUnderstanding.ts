@@ -384,7 +384,7 @@ function classifyIntent(input: {
   }
 
   const personalMarker =
-    /(мои\s+текст|моих\s+текст|моим\s+текст|моими\s+текст|мои\s+стать|мои\s+запис|моей\s+биографии|мои\s+проект|моя\s+работ|my\s+texts|my\s+writing|my\s+articles|my\s+work|my\s+brain|в\s+brain|in\s+brain)/i.test(
+    /(мои\s+текст|моих\s+текст|моим\s+текст|моими\s+текст|мои\s+стать|мои\s+запис|моей\s+биографии|мои\s+проект|моя\s+работ|my\s+texts|my\s+writing|my\s+articles|my\s+work|my\s+brain|my\s+archive|мой\s+архив|моем\s+архиве|моём\s+архиве|в\s+brain|in\s+brain)/i.test(
       text
     );
   const externalMarker =
@@ -415,7 +415,7 @@ function classifyIntent(input: {
   }
 
   const manuscriptMarker =
-    /(unframed|manuscript|рукопис|мемуар|memoir|my\s+book|моя\s+книга|мои\s+книги|substack|новая\s+газета|novaya\s+gazeta|heart\s*&\s*angel|heartandangel|my\s+essays|мои\s+эссе)/i.test(
+    /(unframed|manuscript|рукопис|мемуар|memoir|my\s+book|моя\s+книга|мои\s+книги|substack|новая\s+газета|новой\s+газет|новую\s+газет|novaya\s+gazeta|heart\s*&\s*angel|heartandangel|my\s+essays|мои\s+эссе)/i.test(
       text
     );
   const publicationMarker =
@@ -434,6 +434,18 @@ function classifyIntent(input: {
     )
   ) {
     signals.push('personal:current_state');
+    return { intent: 'personal_analysis', signals };
+  }
+
+  if (
+    /(последн|нов|все|мои|свеж)[а-яё]*\s+(текст|публикац|стат|материал|запис)/i.test(text) ||
+    /(текст|публикац|стат|материал|запис)[а-яё]*.*(новая\s+газета|новой\s+газет|новую\s+газет|novaya|substack|sotheby|christie|архив|archive)/i.test(
+      text
+    ) ||
+    /(все|последние|новые)\s+(материалы|записи|тексты)/i.test(text) ||
+    /(что\s+нового\s+в\s+мо[её]м\s+архиве|what.s\s+new\s+in\s+my\s+archive)/i.test(text)
+  ) {
+    signals.push('personal:publications');
     return { intent: 'personal_analysis', signals };
   }
 

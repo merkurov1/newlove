@@ -115,6 +115,27 @@ describe('Pierrot Brain retrieval refinement', () => {
     expect(retrieve.mock.calls.length).toBeLessThanOrEqual(3);
   });
 
+  it('shares one end-to-end budget across refinement attempts', async () => {
+    const plan = buildBrainQueryPlan('What have I written in Novaya Gazeta about AI?');
+    const retrieve: any = jest.fn(async ({ timeoutMs }: { timeoutMs?: number }) => {
+      expect(timeoutMs).toBeGreaterThan(0);
+      expect(timeoutMs).toBeLessThanOrEqual(30);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return result('no_match', [], { plan });
+    });
+
+    const refined = await retrieveBrainEvidenceWithRefinement({
+      query: plan.originalQuery,
+      plan,
+      retrieve,
+      maxAttempts: 3,
+      totalTimeoutMs: 30,
+    });
+
+    expect(refined.outcome).toBe('no_match');
+    expect(retrieve.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
   it('does not retry an unavailable retrieval', async () => {
     const plan = buildBrainQueryPlan('What is in the archive?');
     const retrieve: any = jest.fn(async () =>

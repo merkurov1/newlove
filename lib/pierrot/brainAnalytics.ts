@@ -37,6 +37,7 @@ export type PierrotRetrievalTraceInput = {
   documentTitleRequested?: string | null;
   documentTitleMatched?: string | null;
   documentMatchType?: 'exact' | 'partial' | null;
+  timeoutStage?: 'embedding' | 'search' | 'ranking' | null;
 };
 
 export type BrainRetrievalTraceInput = {
@@ -80,6 +81,7 @@ export function buildPierrotRetrievalPayload(
     document_title_requested: input.documentTitleRequested ?? null,
     document_title_matched: input.documentTitleMatched ?? null,
     document_match_type: input.documentMatchType ?? null,
+    timeout_stage: input.timeoutStage ?? null,
   };
 }
 

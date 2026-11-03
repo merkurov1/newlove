@@ -15,6 +15,8 @@ type EvidenceBlock = {
   line_start: number;
   line_end: number;
   similarity: number;
+  lexical_score?: number;
+  combined_score?: number;
   text: string;
 };
 
@@ -67,6 +69,12 @@ export function buildUnframedEvidencePrompt(
       line_start: hit.lineStart,
       line_end: hit.lineEnd,
       similarity: Number(hit.similarity.toFixed(4)),
+      ...(typeof hit.lexicalScore === 'number'
+        ? { lexical_score: Number(hit.lexicalScore.toFixed(4)) }
+        : {}),
+      ...(typeof hit.combinedScore === 'number'
+        ? { combined_score: Number(hit.combinedScore.toFixed(4)) }
+        : {}),
       text: hit.content,
     };
     const serialized = JSON.stringify(block);
@@ -87,7 +95,7 @@ export function buildUnframedEvidencePrompt(
     'Answer the owner’s actual question directly and conversationally, not as an academic report.',
     'Synthesize several passages when that is what the evidence requires, and preserve the author’s terminology and distinctions.',
     'Use the passages only as evidence for factual claims. Clearly separate what a source states from your own interpretation.',
-    'When citing, use the document_title and source_domain fields where present. For the manuscript, name UNFRAMED. Do not invent publication dates, editors, page numbers, article titles, links or quotations.',
+    'When citing, use the document_title, source_domain, published_at, lexical_score and combined_score fields where present. For the manuscript, name UNFRAMED. Do not invent publication dates, editors, page numbers, article titles, links or quotations.',
     'If the passages do not establish an answer, say that the available Brain evidence is insufficient. Do not fill gaps with general knowledge unless you label it as such.',
     'EVIDENCE_JSON:',
     JSON.stringify(evidence),
@@ -100,9 +108,27 @@ export function buildUnframedEvidencePrompt(
  * into a claim that the book has no answer.
  */
 export function buildUnframedUnavailablePrompt(
-  outcome: Exclude<RagRetrievalOutcome, 'relevant_results'>
+  outcome: Exclude<RagRetrievalOutcome, 'relevant_results'>,
+  code?: string | null
 ): string {
   if (outcome === 'unavailable') {
+    if (code === 'timeout' || code === 'embedding_timeout') {
+      return [
+        'BRAIN_RETRIEVAL_TIMEOUT',
+        'Brain retrieval did not finish before its deadline. This is a timeout, not evidence that the archive has no matching material.',
+        'Tell the owner explicitly that the Brain search did not complete. Do not say that no recipes, articles or documents exist.',
+        'Do not present claims as if they were grounded in retrieved passages. Do not invent facts, quotations, page numbers, chapters or source references.',
+      ].join('\n');
+    }
+
+    if (code === 'unauthorized_scope') {
+      return [
+        'BRAIN_RETRIEVAL_PERMISSION_DENIED',
+        'This Brain scope is not available to the current account. This is a permission boundary, not evidence that the material does not exist.',
+        'Do not reveal or paraphrase owner-only documents. Do not claim that the archive lacks the material.',
+      ].join('\n');
+    }
+
     return [
       'BRAIN_RETRIEVAL_UNAVAILABLE',
       'Brain retrieval is currently unavailable. This is a retrieval limitation, not evidence that the owner has no biography or no relevant work.',
@@ -121,15 +147,12 @@ export function buildUnframedUnavailablePrompt(
   ].join('\n');
 }
 
-
 /**
  * Public Pierrot evidence is drawn only from documents explicitly approved for
  * public retrieval. This prompt must never describe owner scope, the manuscript
  * or private columns.
  */
-export function buildPublicBrainEvidencePrompt(
-  result: FlowPublicRetrievalResult
-): string | null {
+export function buildPublicBrainEvidencePrompt(result: FlowPublicRetrievalResult): string | null {
   if (result.status !== 'relevant' || result.sourceRefs.length === 0) return null;
 
   const evidence = result.sourceRefs.slice(0, 5).map((ref) => ({
