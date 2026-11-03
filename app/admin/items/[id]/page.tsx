@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import {
@@ -106,6 +107,15 @@ function DistributionPanel({
         <p className="mt-1 text-xs text-stone-500">
           Каждый канал публикуется независимо. Уже опубликованный канал повторно
           не отправляется, а неопределённый результат требует явного подтверждения.
+        </p>
+        <p className="mt-1 text-xs text-stone-500">
+          Threads:{' '}
+          <Link
+            href="/admin/meta/threads"
+            className="text-[#990F3D] hover:underline"
+          >
+            подключить или обновить токен ↗
+          </Link>
         </p>
       </div>
 

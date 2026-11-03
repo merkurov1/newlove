@@ -17,6 +17,7 @@ const groups = [
     links: [
       { href: '/admin/projects', label: 'Проекты', icon: '◇' },
       { href: '/admin/postcards', label: 'Открытки', icon: '▧' },
+      { href: '/admin/meta/threads', label: 'Threads OAuth', icon: '◎' },
       { href: '/admin/newsletter-jobs', label: 'Логи доставки', icon: '↗' },
     ],
   },
