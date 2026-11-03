@@ -1251,7 +1251,10 @@ export async function POST(req: Request) {
         }
       }
 
-      const ownerTool = executionPlan.ownerTool;
+      const ownerTool =
+        executionPlan.operation === 'brain.stats' && executionPlan.ownerTool?.kind === 'stats'
+          ? { kind: 'brain' as const, query: executionPlan.ownerTool.query }
+          : executionPlan.ownerTool;
 
       if (ownerTool) {
         const text = await runOwnerTool(ownerTool, ownerLanguage);
