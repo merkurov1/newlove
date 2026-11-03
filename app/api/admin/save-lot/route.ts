@@ -300,7 +300,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       lot_id: saved.lot.id,
-      redirect_url: `/art-engine/lots/${saved.lot.id}`,
+      redirect_url: `/art-engine?lot=${encodeURIComponent(saved.lot.id)}`,
       warnings,
       image_availability: imageMeta?.availability || 'missing',
     });

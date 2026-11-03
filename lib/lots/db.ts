@@ -135,6 +135,73 @@ export async function logParseResult(payload: ParseLogPayload): Promise<void> {
   await finishParseAttempt(attemptId, payload);
 }
 
+export async function listParseAttemptsForLot(input: {
+  lotId: string;
+  urls?: string[];
+  attemptIds?: string[];
+  limit?: number;
+}): Promise<any[]> {
+  const numericLimit = Number(input.limit ?? 30);
+  const safeLimit = Number.isFinite(numericLimit)
+    ? Math.max(1, Math.min(Math.trunc(numericLimit), 100))
+    : 30;
+  const urls = Array.from(new Set((input.urls || []).filter(Boolean)));
+  const attemptIds = Array.from(
+    new Set((input.attemptIds || []).filter(Boolean)),
+  );
+
+  const withPayload =
+    'id,url,status,error_message,house,parsed_title,execution_time_ms,created_at,payload';
+
+  try {
+    const supabase = getSupabase();
+    let query = supabase
+      .from('parse_logs')
+      .select(withPayload)
+      .order('created_at', { ascending: false })
+      .limit(safeLimit);
+
+    if (attemptIds.length) {
+      query = query.in('id', attemptIds);
+    } else if (urls.length) {
+      query = query.in('url', urls);
+    } else {
+      query = query.contains('payload', { lot_id: input.lotId });
+    }
+
+    const { data, error } = await query;
+
+    if (!error) return data || [];
+
+    if (isMissingPayloadColumn(error)) {
+      let retry = supabase
+        .from('parse_logs')
+        .select(
+          'id,url,status,error_message,house,parsed_title,execution_time_ms,created_at',
+        )
+        .order('created_at', { ascending: false })
+        .limit(safeLimit);
+
+      if (attemptIds.length) {
+        retry = retry.in('id', attemptIds);
+      } else if (urls.length) {
+        retry = retry.in('url', urls);
+      } else {
+        return [];
+      }
+
+      const result = await retry;
+      return result.data || [];
+    }
+
+    console.warn('[Parser DB Log] Failed to list lot attempts:', error);
+    return [];
+  } catch (error) {
+    console.warn('[Parser DB Log] Failed to list lot attempts:', error);
+    return [];
+  }
+}
+
 export async function listRecentAttempts(limit = 20): Promise<any[]> {
   try {
     const numericLimit = Number(limit);

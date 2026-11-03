@@ -86,7 +86,7 @@ export async function upsertLot(
 
     if (!retry.error && retry.data) {
       warnings.push(
-        'Vault storage is not available yet: apply the Art Engine SQL migration to enable attempt state and research history.',
+        'Vault storage is not available yet: apply migrations/2026-11-03_art_engine_vault.sql (the separate RLS migration does not add the vault column).',
       );
 
       return {
@@ -131,7 +131,7 @@ export async function updateLotById(
 
     if (!retry.error && retry.data) {
       warnings.push(
-        'Vault storage is not available yet: apply the Art Engine SQL migration to enable attempt state and research history.',
+        'Vault storage is not available yet: apply migrations/2026-11-03_art_engine_vault.sql (the separate RLS migration does not add the vault column).',
       );
 
       return {

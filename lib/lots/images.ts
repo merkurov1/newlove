@@ -6,6 +6,8 @@ import type { ImageMetadata } from './types';
 assertServerOnly('lib/lots/images');
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15 MB
+const MIN_IMAGE_BYTES = 5_000;
+const MIN_IMAGE_DIMENSION = 200;
 
 export interface StoredImageResult {
   publicUrl: string;
@@ -62,11 +64,19 @@ async function findExistingImage(hash: string): Promise<StoredImageResult | null
 
       if (!res.ok) continue;
 
+      const bytes = Number(res.headers.get('content-length') || 0);
+
+      // Remove 1×1 placeholders and other failed mirrors left by older runs.
+      if (bytes > 0 && bytes < MIN_IMAGE_BYTES) {
+        await supabase.storage.from('artifacts').remove([fileName]);
+        continue;
+      }
+
       return {
         publicUrl: data.publicUrl,
         storedPath: fileName,
         mimeType: res.headers.get('content-type') || `image/${ext}`,
-        bytes: Number(res.headers.get('content-length') || 0),
+        bytes,
         sha256: '',
         fetchedAt: new Date().toISOString(),
       };
@@ -205,6 +215,23 @@ export async function downloadAndStoreImageDetailed(
   if (buffer.byteLength > MAX_IMAGE_BYTES) {
     throw new Error('The source image is larger than 15 MB');
   }
+  if (buffer.byteLength < MIN_IMAGE_BYTES) {
+    throw new Error(
+      `The source image is too small (${buffer.byteLength} bytes).`,
+    );
+  }
+
+  const dimensions = await readImageDimensions(buffer);
+
+  if (
+    dimensions.width &&
+    dimensions.height &&
+    Math.min(dimensions.width, dimensions.height) < MIN_IMAGE_DIMENSION
+  ) {
+    throw new Error(
+      `The source image is too small (${dimensions.width}×${dimensions.height}).`,
+    );
+  }
 
   let mimeType = rawContentType.split(';')[0].trim().toLowerCase();
   if (!mimeType.startsWith('image/')) {
@@ -234,8 +261,6 @@ export async function downloadAndStoreImageDetailed(
   if (!publicUrlData?.publicUrl) {
     throw new Error('Failed to get public URL from Supabase Storage');
   }
-
-  const dimensions = await readImageDimensions(buffer);
 
   return {
     publicUrl: publicUrlData.publicUrl,
