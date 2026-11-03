@@ -543,9 +543,6 @@ export default async function FlowItemPage({ params }: PageProps) {
       )}`
     : null;
 
-  const facebookUrl =
-    readDistributionUrl(bundle?.item.metadata, 'facebook') ??
-    readDistributionUrl(content.metadata, 'facebook');
   const threadsUrl =
     readDistributionUrl(bundle?.item.metadata, 'threads') ??
     readDistributionUrl(content.metadata, 'threads');
@@ -635,19 +632,6 @@ export default async function FlowItemPage({ params }: PageProps) {
                 Telegram ↗
               </a>
               <span className="text-stone-200">·</span>
-              {facebookUrl && (
-                <>
-                  <a
-                    href={facebookUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="transition hover:text-stone-900"
-                  >
-                    Facebook ↗
-                  </a>
-                  <span className="text-stone-200">·</span>
-                </>
-              )}
               {threadsUrl && (
                 <>
                   <a

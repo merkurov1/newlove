@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import NewPostModal from '@/components/flow/NewPostModal';
-import { readDistributionUrl } from '@/lib/flow/distribution';
 
 type FlowImage = {
   url: string;
@@ -85,29 +84,6 @@ function formatDate(value?: string | null) {
   }).format(date);
 }
 
-function getTelegramUrl(item: FlowItem): string | null {
-  if (item.telegram_message_id) {
-    return `https://t.me/unframed_am/${item.telegram_message_id}`;
-  }
-
-  return null;
-}
-
-function getBlueskyUrl(item: FlowItem): string | null {
-  const uri =
-    item.bluesky_uri ||
-    (typeof item.metadata?.bluesky_uri === 'string'
-      ? item.metadata.bluesky_uri
-      : null);
-
-  if (!uri) return null;
-
-  const rkey = uri.split('/').pop();
-  return rkey
-    ? `https://bsky.app/profile/merkurov.love/post/${encodeURIComponent(rkey)}`
-    : null;
-}
-
 function EntryDate({ item }: { item: FlowItem }) {
   const value = item.published_at || item.created_at;
   const date = formatDate(value);
@@ -135,59 +111,10 @@ function EntryMeta({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const tgUrl = getTelegramUrl(item);
-  const bskyUrl = getBlueskyUrl(item);
-  const facebookUrl = readDistributionUrl(item.metadata, 'facebook');
-  const threadsUrl = readDistributionUrl(item.metadata, 'threads');
-
   return (
     <div className="mb-3 flex items-center justify-between gap-4">
       <div className="flex items-center gap-2.5 font-mono text-[11px] text-neutral-400">
         <EntryDate item={item} />
-        {bskyUrl && (
-          <a
-            href={bskyUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition hover:text-neutral-900"
-            aria-label="Open on Bluesky"
-          >
-            bsky ↗
-          </a>
-        )}
-        {tgUrl && (
-          <a
-            href={tgUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition hover:text-neutral-900"
-            aria-label="Open on Telegram"
-          >
-            tg ↗
-          </a>
-        )}
-        {facebookUrl && (
-          <a
-            href={facebookUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition hover:text-neutral-900"
-            aria-label="Open on Facebook"
-          >
-            fb ↗
-          </a>
-        )}
-        {threadsUrl && (
-          <a
-            href={threadsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition hover:text-neutral-900"
-            aria-label="Open on Threads"
-          >
-            threads ↗
-          </a>
-        )}
       </div>
 
       {admin && <AdminControls onEdit={onEdit} onDelete={onDelete} />}

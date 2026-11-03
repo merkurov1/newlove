@@ -354,37 +354,144 @@ export default function ArtEngineClient() {
       <div className={user ? 'pt-24 sm:pt-28 pb-0' : 'max-w-7xl mx-auto pt-28 pb-24 px-6 md:px-12 space-y-8'}>
         
         {!isLoadingUser && !user ? (
-          /* COMPACT ACCESS GATE FOR UNAUTHENTICATED USERS */
-          <div className="mx-auto flex min-h-[58vh] max-w-2xl flex-col items-center justify-center px-4 py-16 text-center">
-            <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-[#9A9083]">
-              Private workspace
-            </span>
-            <h2 className="mt-3 font-serif text-4xl font-light tracking-tight text-[#211F1F] sm:text-6xl">
-              Art Engine
-            </h2>
-            <p className="mt-4 max-w-lg font-serif text-base italic leading-relaxed text-[#6B6358] sm:text-lg">
-              Auction lot extraction, original catalogue images and a private Vault.
-              Christie’s, Sotheby’s, Phillips and Bonhams.
-            </p>
-
-            <div className="mt-8 flex flex-col gap-3 font-mono sm:flex-row">
-              <button
-                onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
-                className="rounded-full bg-black px-8 py-3.5 text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-gray-800"
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => { setAuthMode('request'); setShowAuthModal(true); }}
-                className="rounded-full border border-black bg-white px-8 py-3.5 text-[10px] uppercase tracking-[0.18em] text-black transition hover:bg-gray-50"
-              >
-                Request Access
-              </button>
+          /* PROMO LANDING FOR UNAUTHENTICATED USERS */
+          <div className="space-y-16 max-w-5xl mx-auto">
+            <div className="flex flex-col items-center justify-center text-center bg-white/80 backdrop-blur-xl border border-gray-200/80 px-8 py-16 rounded-3xl shadow-sm">
+              <div className="space-y-4 max-w-2xl">
+                <span className="font-mono text-xs tracking-[0.3em] uppercase text-gray-400 font-semibold block">
+                  Institutional Art Advisory &amp; Market Intelligence
+                </span>
+                <h2 className="text-5xl md:text-7xl font-serif font-light text-[#111] tracking-tight">
+                  Art Intelligence Terminal
+                </h2>
+                <p className="font-serif italic text-gray-600 text-lg md:text-xl pt-2 leading-relaxed">
+                  Professional-grade terminal engineered for art dealers, family offices, and private banking art-lending specialists.
+                </p>
+              </div>
             </div>
 
-            <p className="mt-8 font-mono text-[9px] uppercase tracking-[0.16em] text-[#9A9083]">
-              Extraction · Original images · Attempt history
-            </p>
+            <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-8 md:p-14 space-y-12 shadow-sm rounded-3xl">
+              <div className="text-center space-y-3">
+                <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400 block">
+                  [ ART ENGINE — INSTITUTIONAL CASE STUDIES ]
+                </span>
+                <h3 className="text-3xl md:text-4xl font-serif font-light text-[#111]">
+                  AI-Driven Art Valuation &amp; Heritage Architecture
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <Link href="/case-study/fontana" className="group bg-white border border-gray-200/80 p-6 flex flex-col justify-between hover:border-black transition-all duration-300 shadow-sm rounded-2xl">
+                  <div>
+                    <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100 rounded-xl">
+                      <img
+                        src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1022.jpeg"
+                        alt="Lucio Fontana White Absolute"
+                        loading="lazy"
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-700"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-gray-500 font-bold">
+                        Asset: Lucio Fontana (1968) // Valuation
+                      </div>
+                      <h4 className="font-serif text-2xl text-[#111] group-hover:text-gray-600 transition-colors">
+                        THE WHITE ABSOLUTE
+                      </h4>
+                      <p className="font-serif italic text-gray-600 text-xs sm:text-sm leading-relaxed">
+                        See how the Art Engine analyzes liquidity, risk, and market arbitrage for institutional-grade assets.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pt-6 font-mono text-[11px] uppercase tracking-widest text-[#111] flex items-center justify-between border-t border-gray-100 mt-6 font-bold">
+                    <span>Analyze</span>
+                    <span className="group-hover:translate-x-1 transition-transform">→</span>
+                  </div>
+                </Link>
+
+                <Link href="/case-study/garcia" className="group bg-white border border-gray-200/80 p-6 flex flex-col justify-between hover:border-black transition-all duration-300 shadow-sm rounded-2xl">
+                  <div>
+                    <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100 rounded-xl">
+                      <img
+                        src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1047.jpeg"
+                        alt="Emil Garcia Poetics of Silence"
+                        loading="lazy"
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-700"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-gray-500 font-bold">
+                        Asset: Emil Garcia // Packaging
+                      </div>
+                      <h4 className="font-serif text-2xl text-[#111] group-hover:text-gray-600 transition-colors">
+                        POETICS OF SILENCE
+                      </h4>
+                      <p className="font-serif italic text-gray-600 text-xs sm:text-sm leading-relaxed">
+                        Examine how AI-assisted provenance and structural framing transform non-conformist heritage into sovereign capital.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pt-6 font-mono text-[11px] uppercase tracking-widest text-[#111] flex items-center justify-between border-t border-gray-100 mt-6 font-bold">
+                    <span>Examine</span>
+                    <span className="group-hover:translate-x-1 transition-transform">→</span>
+                  </div>
+                </Link>
+
+                <Link href="/case-study/pivovarov" className="group bg-white border border-gray-200/80 p-6 flex flex-col justify-between hover:border-black transition-all duration-300 shadow-sm rounded-2xl">
+                  <div>
+                    <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100 rounded-xl">
+                      <img
+                        src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1039.jpeg"
+                        alt="Viktor Pivovarov Total Loneliness"
+                        loading="lazy"
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-700"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-gray-500 font-bold">
+                        Asset: Viktor Pivovarov // Dossier
+                      </div>
+                      <h4 className="font-serif text-2xl text-[#111] group-hover:text-gray-600 transition-colors">
+                        TOTAL LONELINESS
+                      </h4>
+                      <p className="font-serif italic text-gray-600 text-xs sm:text-sm leading-relaxed">
+                        A foundational case study in Moscow Conceptualism, exploring inward-facing rigour and institutional endurance.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pt-6 font-mono text-[11px] uppercase tracking-widest text-[#111] flex items-center justify-between border-t border-gray-100 mt-6 font-bold">
+                    <span>Read Dossier</span>
+                    <span className="group-hover:translate-x-1 transition-transform">→</span>
+                  </div>
+                </Link>
+              </div>
+            </div>
+
+            <div className="py-16 text-center space-y-8 bg-white/80 backdrop-blur-xl border border-gray-200/80 p-12 shadow-sm rounded-3xl">
+              <div className="space-y-4 max-w-xl mx-auto">
+                <h2 className="text-3xl md:text-5xl font-serif font-light text-[#111]">
+                  Fine Art Banking &amp; Advisory Infrastructure
+                </h2>
+                <p className="font-serif italic text-gray-600 text-lg md:text-xl leading-relaxed">
+                  Generate institutional-quality investment memoranda in seconds with absolute discretion.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row justify-center gap-4 font-mono">
+                <button
+                  onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
+                  className="bg-black hover:bg-gray-800 text-white text-xs uppercase tracking-widest px-10 py-4 transition font-bold rounded-full shadow-sm"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => { setAuthMode('request'); setShowAuthModal(true); }}
+                  className="bg-white hover:bg-gray-50 text-black border border-black text-xs uppercase tracking-widest px-10 py-4 transition font-bold rounded-full shadow-sm"
+                >
+                  Request Access
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           <ArtEngineWorkspace authFetch={authFetch} />
