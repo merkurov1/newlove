@@ -8,8 +8,8 @@ import {
   Brain,
   MessageSquare,
   Send,
-  Settings,
 } from 'lucide-react';
+import PierrotAvatar from './PierrotAvatar';
 import {
   WORKSPACE_ROUTES,
   activeWorkspaceKey,
@@ -21,7 +21,6 @@ const ICONS = {
   brain: Brain,
   flow: Send,
   dash: Activity,
-  settings: Settings,
 } as const;
 
 function registerServiceWorker() {
@@ -68,11 +67,11 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
     <div className="pw-root">
       <nav className="pw-rail" aria-label="Pierrot workspace">
         <Link href="/admin/pierrot" className="pw-rail-brand" aria-label="Pierrot">
-          P
+          <PierrotAvatar size={32} />
         </Link>
 
         <div className="pw-rail-list">
-          {WORKSPACE_ROUTES.filter((item) => item.key !== 'settings').map((item) => {
+          {WORKSPACE_ROUTES.map((item) => {
             const Icon = ICONS[item.key];
             const isActive = active === item.key;
 
@@ -97,15 +96,6 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
           })}
         </div>
 
-        <Link
-          href="/admin/pierrot/settings"
-          className="pw-rail-link"
-          aria-current={active === 'settings' ? 'page' : undefined}
-          title="SETTINGS · Cmd+5"
-        >
-          <Settings size={24} strokeWidth={1.4} aria-hidden="true" />
-          <span>SETTINGS</span>
-        </Link>
       </nav>
 
       <main className="pw-main">{children}</main>

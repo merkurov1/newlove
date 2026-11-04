@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowUp,
   ChevronRight,
+  MessageSquare,
   PanelLeft,
   Plus,
   X,
@@ -475,7 +476,9 @@ export default function ChatWorkspace({
             <PanelLeft size={20} strokeWidth={1.4} aria-hidden="true" />
           </button>
 
-          <PierrotAvatar size={30} />
+          <span className="pw-chat-head-dialog" aria-hidden="true">
+            <MessageSquare size={16} strokeWidth={1.4} />
+          </span>
 
           <div className="pw-chat-head-copy">
             <h1 className="pw-chat-head-title">{title}</h1>

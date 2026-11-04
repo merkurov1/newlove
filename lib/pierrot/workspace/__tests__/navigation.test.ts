@@ -9,17 +9,15 @@ describe('workspace navigation', () => {
   it('keeps the five routes in the specified order', () => {
     expect(WORKSPACE_ROUTES.map((route) => route.key)).toEqual([
       'chat',
-      'brain',
       'flow',
+      'brain',
       'dash',
-      'settings',
     ]);
     expect(WORKSPACE_ROUTES.map((route) => route.shortcut)).toEqual([
       '1',
       '2',
       '3',
       '4',
-      '5',
     ]);
   });
 
@@ -28,7 +26,6 @@ describe('workspace navigation', () => {
     expect(activeWorkspaceKey('/admin/pierrot/brain')).toBe('brain');
     expect(activeWorkspaceKey('/admin/pierrot/flow')).toBe('flow');
     expect(activeWorkspaceKey('/admin/pierrot/dash')).toBe('dash');
-    expect(activeWorkspaceKey('/admin/pierrot/settings')).toBe('settings');
     expect(activeWorkspaceKey('/admin/pierrot/intelligence')).toBe('chat');
   });
 
@@ -47,11 +44,11 @@ describe('workspace navigation', () => {
   it('maps Cmd/Ctrl+1..5 and Cmd/Ctrl+N outside fields', () => {
     const base = { metaKey: true, ctrlKey: false, altKey: false, shiftKey: false };
     expect(shortcutRoute({ ...base, key: '1' }, document.body)).toEqual({ key: 'chat' });
-    expect(shortcutRoute({ ...base, key: '5' }, document.body)).toEqual({ key: 'settings' });
+    expect(shortcutRoute({ ...base, key: '4' }, document.body)).toEqual({ key: 'dash' });
     expect(shortcutRoute({ ...base, key: 'n' }, document.body)).toEqual({ key: 'new-chat' });
     expect(
       shortcutRoute({ ...base, metaKey: false, ctrlKey: true, key: '2' }, document.body)
-    ).toEqual({ key: 'brain' });
+    ).toEqual({ key: 'flow' });
   });
 
   it('ignores shortcuts with modifiers or while typing', () => {

@@ -1,14 +1,10 @@
 import { assertServerOnly } from '@/lib/serverOnly';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
-import { isGeminiConfigured } from '@/lib/ai/gemini';
 import { loadCommercialSummary } from '@/lib/pierrot/commercialIntelligence';
 import { emptyCommercialSummary } from '@/lib/pierrot/commercialSummary';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   BrainRecentSource,
-  FlowItemRow,
-  IntegrationSnapshot,
-  ModelSnapshot,
   OwnerConversation,
   OwnerConversationListItem,
   WorkspaceMetric,
@@ -360,26 +356,6 @@ export async function loadOwnerConversation(
   }
 }
 
-export async function loadRecentFlowItems(limit = 8): Promise<FlowItemRow[]> {
-  try {
-    const store = getServerSupabaseClient({ useServiceRole: true });
-    const { data, error } = await store
-      .from('items')
-      .select(
-        'id,title,slug,body_md,source_url,type,lang,status,visibility,metadata,published_at,created_at,updated_at'
-      )
-      .in('status', ['published', 'draft'])
-      .eq('visibility', 'public')
-      .order('updated_at', { ascending: false })
-      .limit(limit);
-
-    if (error || !Array.isArray(data)) return [];
-    return data as unknown as FlowItemRow[];
-  } catch {
-    return [];
-  }
-}
-
 export async function loadRecentBrainSources(limit = 5): Promise<BrainRecentSource[]> {
   try {
     const store = getServerSupabaseClient({ useServiceRole: true });
@@ -414,43 +390,4 @@ export async function loadRecentBrainSources(limit = 5): Promise<BrainRecentSour
   } catch {
     return [];
   }
-}
-
-export function loadIntegrationSnapshot(): IntegrationSnapshot {
-  return {
-    blueskyConfigured: Boolean(
-      (process.env.BLUESKY_IDENTIFIER || '').trim() &&
-        (process.env.BLUESKY_PASSWORD || '').trim()
-    ),
-    telegramConfigured: Boolean(
-      (process.env.TELEGRAM_BOT_TOKEN || '').trim() &&
-        (process.env.TELEGRAM_CHANNEL_ID || '').trim()
-    ),
-    // No GitHub OAuth flow exists in this repository. A token used by the
-    // knowledge admin endpoint is not a user connection and must not be
-    // presented as one.
-    githubOAuth: false,
-  };
-}
-
-export function loadModelSnapshot(): ModelSnapshot {
-  const gemini = isGeminiConfigured();
-  const deepseek = Boolean((process.env.DEEPSEEK_API_KEY || '').trim());
-  const openrouter = Boolean((process.env.OPENROUTER_API_KEY || '').trim());
-
-  const fallback: string[] = [];
-  if (deepseek) fallback.push('deepseek-chat');
-  if (openrouter) fallback.push('deepseek/deepseek-chat via OpenRouter');
-
-  return {
-    primary: gemini
-      ? 'gemini-3.5-flash'
-      : deepseek
-        ? 'deepseek-chat'
-        : openrouter
-          ? 'deepseek/deepseek-chat via OpenRouter'
-          : null,
-    fallback,
-    configured: gemini || deepseek || openrouter,
-  };
 }

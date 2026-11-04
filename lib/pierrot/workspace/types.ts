@@ -80,27 +80,6 @@ export type OwnerConversation = {
   messages: OwnerChatMessage[];
 };
 
-export type FlowChannelConfig = {
-  telegram: boolean;
-  bluesky: boolean;
-};
-
-export type FlowItemRow = {
-  id: string;
-  title: string | null;
-  slug: string | null;
-  body_md: string | null;
-  source_url: string | null;
-  type: string | null;
-  lang: string | null;
-  status: string | null;
-  visibility: string | null;
-  metadata: Record<string, unknown> | null;
-  published_at: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-};
-
 export type BrainRecentSource = {
   id: string;
   title: string | null;
@@ -110,16 +89,4 @@ export type BrainRecentSource = {
   errorCode: string | null;
   createdAt: string | null;
   documentId: string | null;
-};
-
-export type IntegrationSnapshot = {
-  blueskyConfigured: boolean;
-  telegramConfigured: boolean;
-  githubOAuth: false;
-};
-
-export type ModelSnapshot = {
-  primary: string | null;
-  fallback: string[];
-  configured: boolean;
 };
