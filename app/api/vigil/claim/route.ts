@@ -1,133 +1,187 @@
-/* ===== FILE: app/api/vigil/claim/route.ts ===== */
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import {
+  claimVigilSpark,
+  getVigilSparkStatus,
+} from '@/lib/vigil/claim';
+import { resolveVigilIdentity } from '@/lib/vigil/identity';
 
-import { NextResponse } from 'next/server'
-import { createClient, type User } from '@supabase/supabase-js'
-import { verifySession } from '@/lib/session'
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-export const runtime = 'nodejs'
+function serverClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Проверка формата UUID
-function isUUID(str: string) {
-  const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return regex.test(str);
+  if (!url || !key) return null;
+
+  return createClient(url, key, {
+    auth: { persistSession: false },
+  });
 }
 
-function displayNameFromUser(user: User, profileName?: string | null) {
-  return (
-    profileName?.trim() ||
-    (typeof user.user_metadata?.name === 'string' ? user.user_metadata.name.trim() : '') ||
-    user.email?.split('@')[0]?.trim() ||
-    ''
-  )
+export async function GET(req: Request) {
+  const limited = checkRateLimit(getClientIp(req), {
+    interval: 60 * 1000,
+    maxRequests: 60,
+    keyPrefix: 'vigil-status',
+  });
+
+  if (limited) return limited;
+
+  try {
+    const supabaseAdmin = serverClient();
+
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'server misconfigured' }, { status: 500 });
+    }
+
+    const identity = await resolveVigilIdentity(req, supabaseAdmin);
+
+    if (!identity) {
+      return NextResponse.json(
+        {
+          authenticated: false,
+          canSpark: false,
+          remainingMs: 0,
+          remainingLabel: '',
+          lastSparkAt: null,
+        },
+        { headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
+
+    const status = await getVigilSparkStatus(supabaseAdmin, identity);
+
+    return NextResponse.json(
+      {
+        authenticated: true,
+        ...status,
+      },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
+  } catch (error) {
+    console.error(
+      'Vigil status error:',
+      error instanceof Error ? error.message : error
+    );
+
+    return NextResponse.json(
+      { error: 'Vigil status unavailable' },
+      { status: 503 }
+    );
+  }
 }
 
 export async function POST(req: Request) {
+  const limited = checkRateLimit(getClientIp(req), {
+    interval: 60 * 1000,
+    maxRequests: 20,
+    keyPrefix: 'vigil-claim',
+  });
+
+  if (limited) return limited;
+
   try {
-    const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!sbUrl || !sbKey) return NextResponse.json({ error: 'server misconfigured' }, { status: 500 })
+    const supabaseAdmin = serverClient();
 
-    const supabase = createClient(sbUrl, sbKey)
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'server misconfigured' }, { status: 500 });
+    }
 
-    const body = await req.json().catch(() => ({}))
-    const { id, intention } = body || {}
-    if (!id) return NextResponse.json({ error: 'missing params' }, { status: 400 })
+    const body = await req.json().catch(() => ({}));
+    const { id, intention } = body || {};
 
-    const heartId = Number(id)
+    if (id === undefined || id === null) {
+      return NextResponse.json({ error: 'missing params' }, { status: 400 });
+    }
+
+    const heartId = Number(id);
+
     if (!Number.isInteger(heartId) || heartId < 1 || heartId > 5) {
-      return NextResponse.json({ error: 'invalid heart id' }, { status: 400 })
+      return NextResponse.json({ error: 'invalid heart id' }, { status: 400 });
     }
 
-    // 1. Auth check — temple session cookie/token or a Supabase access token.
-    const cookie = req.headers.get('cookie') || ''
-    const cookieMatch = cookie.match(/(?:^|; )temple_session=([^;]+)/)
-    const authHeader = req.headers.get('authorization') || ''
-    const bearerMatch = authHeader.match(/Bearer (.+)/)
-    const bearerToken = bearerMatch?.[1] || (body?.token ? String(body.token) : null)
-
-    let userId: string | null = null
-    let ownerName = ''
-
-    const templeToken =
-      bearerToken || (cookieMatch ? decodeURIComponent(cookieMatch[1]) : null)
-    if (templeToken) {
-      const session = verifySession(templeToken)
-      if (session?.userId) {
-        userId = session.userId
-        ownerName = (session.displayName || '').trim()
-      }
+    if (
+      typeof intention === 'string' &&
+      intention.length > 280
+    ) {
+      return NextResponse.json({ error: 'intention too long' }, { status: 400 });
     }
 
-    // Web/email users authenticate with Supabase, not the Telegram temple session.
-    if (!userId && bearerToken) {
-      const { data: { user }, error } = await supabase.auth.getUser(bearerToken)
-      if (error) {
-        console.error('vigil claim auth error:', error.message)
-      } else if (user) {
-        userId = user.id
-        const { data: profile } = await supabase
-          .from('users')
-          .select('name')
-          .eq('id', user.id)
-          .maybeSingle()
-        ownerName = displayNameFromUser(user, profile?.name)
-      }
+    const identity = await resolveVigilIdentity(
+      req,
+      supabaseAdmin,
+      typeof body?.token === 'string' ? body.token : null
+    );
+
+    if (!identity) {
+      return NextResponse.json({ error: 'not authenticated' }, { status: 401 });
     }
 
-    if (!userId || !ownerName) {
-      return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
+    const result = await claimVigilSpark(
+      supabaseAdmin,
+      identity,
+      heartId,
+      typeof intention === 'string' ? intention : null
+    );
+
+    if (!result.allowed) {
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil(result.remainingMs / 1000)
+      );
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'cooldown',
+          message: result.remainingLabel
+            ? `You can light the heart again in ${result.remainingLabel}.`
+            : 'You can light the heart again soon.',
+          remainingMs: result.remainingMs,
+          remainingLabel: result.remainingLabel,
+          lastSparkAt: result.lastSparkAt,
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(retryAfterSeconds),
+            'Cache-Control': 'no-store',
+          },
+        }
+      );
     }
 
-    ownerName = ownerName.slice(0, 120)
+    const { data: record, error: recordError } = await supabaseAdmin
+      .from('vigil_hearts')
+      .select('*')
+      .eq('id', heartId)
+      .maybeSingle();
 
-    // 2. SINGLE TENANCY PROTOCOL (Закон Одной Искры)
-    // Прежде чем занять новое, гасим старое.
-    if (isUUID(userId)) {
-        // Если это Supabase юзер - чистим по ID
-        await supabase
-            .from('vigil_hearts')
-            .update({ owner_id: null, owner_name: null, intention: null, last_lit_at: null })
-            .eq('owner_id', userId)
-            .neq('id', heartId) // Не трогаем текущее (на всякий случай, хотя upsert перепишет)
-    } else {
-        // Если это Telegram юзер (у него нет UUID в базе) - чистим по Имени
-        // Это компромисс, пока в базе нет колонки telegram_id
-        await supabase
-            .from('vigil_hearts')
-            .update({ owner_id: null, owner_name: null, intention: null, last_lit_at: null })
-            .eq('owner_name', ownerName)
-            .neq('id', heartId)
+    if (recordError) {
+      console.warn('Vigil heart readback failed:', recordError.message);
     }
 
-    // 3. Prepare Owner Logic
-    let ownerIdToWrite: string | null = null;
-    if (isUUID(userId)) {
-        ownerIdToWrite = userId;
-    }
+    return NextResponse.json({
+      ok: true,
+      record: record ?? null,
+      cooldown: {
+        remainingMs: 24 * 60 * 60 * 1000,
+        remainingLabel: '24h',
+        lastSparkAt: result.lastSparkAt,
+      },
+    });
+  } catch (error) {
+    console.error(
+      'Vigil claim error:',
+      error instanceof Error ? error.message : error
+    );
 
-    const up: Record<string, unknown> = {
-      id: heartId,
-      owner_name: ownerName,
-      owner_id: ownerIdToWrite,
-      last_lit_at: new Date().toISOString()
-    }
-
-    // Preserve an existing intention if the caller didn't send a new one.
-    if (typeof intention === 'string' && intention.trim()) {
-      up.intention = intention.trim().slice(0, 280)
-    }
-
-    // 4. Claim new vessel
-    const { data, error } = await supabase.from('vigil_hearts').upsert(up, { onConflict: 'id' }).select().single()
-
-    if (error) {
-      console.error('vigil claim error:', error)
-      return NextResponse.json({ error: 'db error', details: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ ok: true, record: data })
-  } catch (e: any) {
-    console.error('vigil claim unexpected', e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json(
+      { error: 'The spark could not be transmitted. Please try again.' },
+      { status: 503 }
+    );
   }
 }

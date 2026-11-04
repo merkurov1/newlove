@@ -1,29 +1,21 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { X } from 'lucide-react';
 import useIsTelegram from '@/components/useIsTelegram';
 import TelegramNavigation from '@/components/telegram/TelegramNavigation';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
 import { resolveTelegramStartParam } from '@/lib/telegram/miniAppRoutes';
-
-const RITUAL_ROUTES = [
-  '/temple',
-  '/heartandangel/calm',
-  '/heartandangel/letitgo',
-  '/vigil',
-  '/absolution',
-  '/tribute',
-];
-
-const IMMERSIVE_ROUTES = [
-  '/heartandangel/calm',
-  '/heartandangel/letitgo',
-  '/vigil',
-  '/absolution',
-  '/cast',
-  '/tribute',
-];
+import {
+  hasTelegramBackHandler,
+  runTopTelegramBackHandler,
+  subscribeTelegramBackHandlers,
+} from '@/lib/telegram/backHandler';
+import {
+  isRitualRoute,
+  isTelegramNavigationHidden,
+} from '@/lib/temple/routes';
 
 const WORLD_ROUTE = '/heartandangel/world';
 
@@ -57,6 +49,7 @@ type TelegramWebApp = {
   contentSafeAreaInset?: TelegramInset;
   themeParams?: TelegramThemeParams;
   isExpanded?: boolean;
+  isFullscreen?: boolean;
   ready?: () => void;
   expand?: () => void;
   requestFullscreen?: () => void;
@@ -86,20 +79,6 @@ type TelegramWindow = Window & {
     WebApp?: TelegramWebApp;
   };
 };
-
-function isRitualRoute(pathname: string) {
-  const normalized = pathname.replace(/\/$/, '') || '/';
-
-  return RITUAL_ROUTES.some((route) => normalized === route || normalized.startsWith(`${route}/`));
-}
-
-function isImmersiveRoute(pathname: string) {
-  const normalized = pathname.replace(/\/$/, '') || '/';
-
-  return IMMERSIVE_ROUTES.some(
-    (route) => normalized === route || normalized.startsWith(`${route}/`)
-  );
-}
 
 function getTelegramWebApp(): TelegramWebApp | null {
   if (typeof window === 'undefined') return null;
@@ -186,6 +165,16 @@ export default function TelegramMiniApp() {
   const isTelegram = useIsTelegram();
   const { mode, closeConversation } = usePierrot();
   const startParamHandledRef = useRef(false);
+  const [overlayActive, setOverlayActive] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setOverlayActive(hasTelegramBackHandler());
+
+    sync();
+
+    return subscribeTelegramBackHandlers(sync);
+  }, []);
 
   useEffect(() => {
     const ritual = isRitualRoute(pathname);
@@ -199,6 +188,7 @@ export default function TelegramMiniApp() {
 
   useEffect(() => {
     if (!isTelegram) {
+      setIsFullscreen(false);
       document.body.classList.remove('telegram-app');
 
       document.documentElement.classList.remove('telegram-mini-app');
@@ -265,8 +255,15 @@ export default function TelegramMiniApp() {
 
     syncSafeArea(tg);
     syncViewport(tg);
+    setIsFullscreen(Boolean(tg.isFullscreen));
 
     const handleViewport = () => {
+      syncViewport(tg);
+    };
+
+    const handleFullscreen = () => {
+      setIsFullscreen(Boolean(tg.isFullscreen));
+      syncSafeArea(tg);
       syncViewport(tg);
     };
 
@@ -288,6 +285,7 @@ export default function TelegramMiniApp() {
     tg.onEvent?.('safeAreaChanged', handleSafeArea);
     tg.onEvent?.('contentSafeAreaChanged', handleSafeArea);
     tg.onEvent?.('themeChanged', handleTheme);
+    tg.onEvent?.('fullscreenChanged', handleFullscreen);
 
     window.addEventListener('resize', handleResize);
 
@@ -300,6 +298,7 @@ export default function TelegramMiniApp() {
       tg.offEvent?.('safeAreaChanged', handleSafeArea);
       tg.offEvent?.('contentSafeAreaChanged', handleSafeArea);
       tg.offEvent?.('themeChanged', handleTheme);
+      tg.offEvent?.('fullscreenChanged', handleFullscreen);
 
       window.removeEventListener('resize', handleResize);
 
@@ -334,9 +333,14 @@ export default function TelegramMiniApp() {
 
     const isEntryRoute = pathname === '/' || pathname === WORLD_ROUTE;
     const isConversationOpen = mode !== 'site';
+    const shouldShowBack = !isEntryRoute || isConversationOpen || overlayActive;
 
     const handleBack = () => {
       if (tg) haptic(tg);
+
+      if (runTopTelegramBackHandler()) {
+        return;
+      }
 
       if (isConversationOpen) {
         closeConversation();
@@ -361,10 +365,10 @@ export default function TelegramMiniApp() {
     };
 
     try {
-      if (isEntryRoute && !isConversationOpen) {
-        backButton.hide?.();
-      } else {
+      if (shouldShowBack) {
         backButton.show?.();
+      } else {
+        backButton.hide?.();
       }
 
       backButton.onClick?.(handleBack);
@@ -380,13 +384,60 @@ export default function TelegramMiniApp() {
         /* Telegram BackButton is optional. */
       }
     };
-  }, [closeConversation, isTelegram, mode, pathname, router]);
+  }, [closeConversation, isTelegram, mode, overlayActive, pathname, router]);
 
   if (!isTelegram) return null;
 
-  if (isImmersiveRoute(pathname)) {
+  const isFlowRoute =
+    pathname === '/flow' || pathname.startsWith('/flow/');
+  const showFullscreenClose = isFullscreen && isFlowRoute;
+  const navigationHidden = isTelegramNavigationHidden(pathname);
+
+  const closeMiniApp = () => {
+    const tg = getTelegramWebApp();
+
+    if (tg) haptic(tg);
+
+    try {
+      if (tg?.close) {
+        tg.close();
+        return;
+      }
+    } catch {
+      /* Fall through to browser history. */
+    }
+
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push('/lobby');
+  };
+
+  if (!showFullscreenClose && navigationHidden) {
     return null;
   }
 
-  return <TelegramNavigation />;
+  return (
+    <>
+      {showFullscreenClose && (
+        <button
+          type="button"
+          onClick={closeMiniApp}
+          aria-label="Close Mini App"
+          title="Close"
+          className="fixed z-[120] flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/75 active:scale-95"
+          style={{
+            left: 'max(0.75rem, env(safe-area-inset-left), var(--tg-safe-area-left, 0px))',
+            top: 'max(0.75rem, env(safe-area-inset-top), var(--tg-safe-area-top, 0px))',
+          }}
+        >
+          <X size={19} strokeWidth={1.8} aria-hidden="true" />
+        </button>
+      )}
+
+      {!navigationHidden && <TelegramNavigation />}
+    </>
+  );
 }

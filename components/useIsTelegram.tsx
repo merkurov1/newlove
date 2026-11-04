@@ -28,15 +28,19 @@ export function isTelegramMiniApp() {
 }
 
 export default function useIsTelegram() {
-  const [isTelegram, setIsTelegram] = useState(isTelegramMiniApp);
+  // Keep the first client render aligned with SSR; detect Telegram in effect.
+  const [isTelegram, setIsTelegram] = useState(false);
 
   useEffect(() => {
     if (isTelegram) return;
 
+    let active = true;
     let attempts = 0;
     let timer: number | null = null;
 
     const check = () => {
+      if (!active) return true;
+
       if (isTelegramMiniApp()) {
         setIsTelegram(true);
         return true;
@@ -45,10 +49,12 @@ export default function useIsTelegram() {
       return false;
     };
 
-    if (check()) return;
+    if (check()) {
+      return () => {
+        active = false;
+      };
+    }
 
-    // The SDK is loaded with next/script lazyOnload. Wait for it briefly
-    // instead of polling for the whole lifetime of the page.
     timer = window.setInterval(() => {
       attempts += 1;
 
@@ -61,6 +67,8 @@ export default function useIsTelegram() {
     }, TELEGRAM_DETECTION_INTERVAL_MS);
 
     return () => {
+      active = false;
+
       if (timer !== null) {
         window.clearInterval(timer);
       }

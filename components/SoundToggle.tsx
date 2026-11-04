@@ -19,7 +19,10 @@ export default function SoundToggle({
 
   return (
     <button
+      type="button"
       onClick={toggleAudio}
+      aria-label={isPlaying ? 'Pause ambient audio' : 'Play ambient audio'}
+      aria-pressed={isPlaying}
       className={`flex items-center gap-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${className}`}
     >
       {isPlaying ? (

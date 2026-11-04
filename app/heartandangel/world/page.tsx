@@ -42,7 +42,7 @@ export const metadata: Metadata = {
 
 export default function WorldPage() {
   return (
-    <div className="relative w-full min-h-screen bg-[#111] overflow-hidden">
+    <div className="relative w-full world-viewport bg-[#111] overflow-hidden">
       <JsonLd
         data={visualArtworkJsonLd({
           path: '/heartandangel/world',

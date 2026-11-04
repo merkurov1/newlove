@@ -13,8 +13,18 @@ const ANGEL_WITHOUT_HEART =
 const HEART_IMAGE =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0920.png';
 
+type TelegramWebApp = {
+  expand?: () => void;
+  initDataUnsafe?: {
+    user?: {
+      username?: string;
+      first_name?: string;
+    };
+  };
+};
+
 export default function LetItGoAngel() {
-  const { user, profile, session } = useAuth();
+  const { user, profile } = useAuth();
   const [flyingHearts, setFlyingHearts] = useState<{ id: number }[]>([]);
   const [clickCount, setClickCount] = useState(0);
   const [showWithoutHeart, setShowWithoutHeart] = useState(false);
@@ -28,14 +38,15 @@ export default function LetItGoAngel() {
   const authorRef = useRef(currentAuthorName);
   authorRef.current = currentAuthorName;
 
-  const tokenRef = useRef<string | null>(null);
-  tokenRef.current = session?.access_token || null;
-
   const heartIdCounter = useRef(0);
+  const showWithoutHeartTimeoutRef = useRef<number | null>(null);
+  const heartTimeoutsRef = useRef(new Map<number, number>());
 
   // Инициализация Telegram WebApp (разворачивание на весь экран)
   useEffect(() => {
-    const tg = (window as any).Telegram?.WebApp;
+    const tg = (window as Window & { Telegram?: { WebApp?: TelegramWebApp } })
+      .Telegram?.WebApp;
+
     if (tg) {
       tg.expand?.();
       const name = tg.initDataUnsafe?.user?.username || tg.initDataUnsafe?.user?.first_name;
@@ -69,6 +80,23 @@ export default function LetItGoAngel() {
     };
   }, []);
 
+  useEffect(() => {
+    const heartTimeouts = heartTimeoutsRef.current;
+
+    return () => {
+      if (showWithoutHeartTimeoutRef.current !== null) {
+        window.clearTimeout(showWithoutHeartTimeoutRef.current);
+        showWithoutHeartTimeoutRef.current = null;
+      }
+
+      for (const timeoutId of heartTimeouts.values()) {
+        window.clearTimeout(timeoutId);
+      }
+
+      heartTimeouts.clear();
+    };
+  }, []);
+
   const handleClick = () => {
     if (showWithoutHeart) return;
 
@@ -77,13 +105,22 @@ export default function LetItGoAngel() {
     setClickCount((prev) => prev + 1);
 
     setShowWithoutHeart(true);
-    setTimeout(() => {
+
+    if (showWithoutHeartTimeoutRef.current !== null) {
+      window.clearTimeout(showWithoutHeartTimeoutRef.current);
+    }
+
+    showWithoutHeartTimeoutRef.current = window.setTimeout(() => {
       setShowWithoutHeart(false);
+      showWithoutHeartTimeoutRef.current = null;
     }, 1800);
 
-    setTimeout(() => {
+    const removeTimeout = window.setTimeout(() => {
       setFlyingHearts((prev) => prev.filter((h) => h.id !== newHeartId));
+      heartTimeoutsRef.current.delete(newHeartId);
     }, 6000);
+
+    heartTimeoutsRef.current.set(newHeartId, removeTimeout);
   };
 
   return (
@@ -101,16 +138,25 @@ export default function LetItGoAngel() {
       <div className="absolute bottom-0 left-0 w-full h-[22vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)] pointer-events-none" />
 
       <div className="relative w-full flex-1 flex items-end justify-center pb-[10vh] pt-12 z-20 my-auto">
-        <div 
-          className={`relative transition-transform duration-200 flex items-center justify-center p-4 w-[480px] h-[480px] max-w-[70vw] max-h-[55vh] animate-fade-in ${
-            showWithoutHeart ? 'cursor-default' : 'cursor-pointer active:scale-95'
-          }`}
+        <button
+          type="button"
           onClick={handleClick}
+          disabled={showWithoutHeart}
+          aria-label={
+            showWithoutHeart
+              ? 'Angel is releasing the heart. Please wait.'
+              : 'Release a burden with the angel'
+          }
           title={showWithoutHeart ? "Wait for the angel..." : "Click to let go"}
+          className={`relative transition-transform duration-200 flex items-center justify-center p-4 w-[480px] h-[480px] max-w-[70vw] max-h-[55vh] animate-fade-in ${
+            showWithoutHeart
+              ? 'cursor-default'
+              : 'cursor-pointer active:scale-95'
+          }`}
         >
           <Image
             src={ANGEL_WITH_HEART}
-            alt="Angel with heart"
+            alt=""
             width={480}
             height={480}
             className={`absolute inset-0 w-full h-full object-contain drop-shadow-[0_15px_25px_rgba(0,0,0,0.15)] pointer-events-none transition-opacity duration-200 ${
@@ -121,7 +167,7 @@ export default function LetItGoAngel() {
 
           <Image
             src={ANGEL_WITHOUT_HEART}
-            alt="Angel without heart"
+            alt=""
             width={480}
             height={480}
             className={`absolute inset-0 w-full h-full object-contain drop-shadow-[0_15px_25px_rgba(0,0,0,0.15)] pointer-events-none transition-opacity duration-200 ${
@@ -129,27 +175,29 @@ export default function LetItGoAngel() {
             }`}
             priority
           />
-        </div>
+        </button>
 
         {flyingHearts.map((heart) => (
           <div
             key={heart.id}
-            className="absolute pointer-events-none z-30 animate-fly-away"
+            className="absolute pointer-events-none z-30"
             style={{
               bottom: '24%',
               left: '50%',
-              width: 450,
-              height: 450,
-              marginLeft: '-225px',
+              width: 'min(450px, 70vw)',
+              height: 'min(450px, 70vw)',
+              transform: 'translateX(-50%)',
             }}
           >
-            <Image
-              src={HEART_IMAGE}
-              alt="Flying Heart"
-              width={450}
-              height={450}
-              className="object-contain filter drop-shadow-[0_0_25px_rgba(255,100,100,0.8)]"
-            />
+            <div className="relative h-full w-full animate-fly-away">
+              <Image
+                src={HEART_IMAGE}
+                alt=""
+                fill
+                sizes="(max-width: 640px) 70vw, 450px"
+                className="object-contain filter drop-shadow-[0_0_25px_rgba(255,100,100,0.8)]"
+              />
+            </div>
           </div>
         ))}
       </div>

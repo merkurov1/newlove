@@ -5,11 +5,12 @@ import {
   pierrotConversationIdFromTributeRef,
 } from '@/lib/pierrot/orderAttribution';
 import { createPierrotStore, recordPierrotEventByConversationId } from '@/lib/pierrot/serverStore';
+import { toTributeCents } from '@/lib/tributes/amount';
 
 const stripe = new Stripe(
   process.env.STRIPE_SECRET_KEY || '',
   {
-    apiVersion: '2025-08-27.basil' as any,
+    apiVersion: '2025-08-27.basil',
   }
 );
 
@@ -75,17 +76,18 @@ export async function POST(req: Request) {
       );
     }
 
-    const amountCents = Math.round(amount * 100);
+    const amountCents = toTributeCents(amount);
 
-    if (
-      !Number.isInteger(amountCents) ||
-      amountCents < 100
-    ) {
+    if (amountCents === null) {
       return NextResponse.json(
         { error: 'Invalid amount' },
         { status: 400 }
       );
     }
+
+    const attributionQuery = pierrotAttribution
+      ? `&pierrot=${encodeURIComponent(pierrotAttribution)}`
+      : '';
 
     const session =
       await stripe.checkout.sessions.create({
@@ -108,11 +110,13 @@ export async function POST(req: Request) {
 
         mode: 'payment',
 
+        // The session id lets /tribute verify payment server-side. The browser
+        // return alone is never treated as proof of payment.
         success_url:
-          `${SITE_URL}/tribute?status=success`,
+          `${SITE_URL}/tribute?status=success&session_id={CHECKOUT_SESSION_ID}${attributionQuery}`,
 
         cancel_url:
-          `${SITE_URL}/tribute?status=cancel`,
+          `${SITE_URL}/tribute?status=cancel${attributionQuery}`,
 
         metadata: {
           type: 'tribute_v1',
@@ -124,8 +128,8 @@ export async function POST(req: Request) {
         },
       });
 
-    // Initiation only. A donation is confirmed exclusively by the verified
-    // Stripe webhook after `payment_status === 'paid'`.
+    // Initiation only. A donation is confirmed exclusively by a verified
+    // Stripe webhook or the server-side session verification endpoint.
     const pierrotConversationId =
       pierrotConversationIdFromTributeRef(pierrotAttribution);
 
@@ -154,8 +158,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       url: session.url,
+      sessionId: session.id,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error(
       'Tribute Stripe checkout error:',
       error
@@ -164,8 +169,9 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error:
-          error?.message ||
-          'Unable to create payment session',
+          error instanceof Error
+            ? error.message
+            : 'Unable to create payment session',
       },
       { status: 500 }
     );

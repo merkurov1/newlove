@@ -9,9 +9,10 @@ import useIsTelegram from '@/components/useIsTelegram';
 import ComposerTrigger from '@/components/flow/ComposerTrigger';
 import { PierrotTrigger } from '@/components/PierrotChat';
 import PierrotSectionLink from '@/components/pierrot/PierrotSectionLink';
+import { isImmersiveRoute } from '@/lib/temple/routes';
 
 export default function Header() {
-  const auth = useAuth() as any;
+  const auth = useAuth();
   const user = auth?.user;
   const profile = auth?.profile;
   // Server-verified roles only. user_metadata/app_metadata are intentionally
@@ -28,22 +29,25 @@ export default function Header() {
   const pathname = usePathname() || '';
   const normalizedPath = pathname.replace(/\/$/, '') || '/';
 
-  const isImmersiveRoute =
-    normalizedPath === '/temple' ||
-    normalizedPath === '/cast' ||
-    normalizedPath === '/vigil' ||
-    normalizedPath === '/absolution' ||
-    normalizedPath === '/tribute' ||
-    normalizedPath === '/heartandangel/world' ||
-    normalizedPath === '/heartandangel/calm' ||
-    normalizedPath === '/heartandangel/letitgo';
-
   const profileRef = useRef<HTMLDivElement | null>(null);
   const siteMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const syncIdentity = () => {
-      const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+      const tgUser = (
+        window as Window & {
+          Telegram?: {
+            WebApp?: {
+              initDataUnsafe?: {
+                user?: {
+                  username?: string;
+                  first_name?: string;
+                };
+              };
+            };
+          };
+        }
+      ).Telegram?.WebApp?.initDataUnsafe?.user;
       const telegramName = tgUser?.username || tgUser?.first_name;
       const profileName = profile?.name || profile?.full_name || user?.user_metadata?.name;
       const name = telegramName || profileName;
@@ -53,9 +57,20 @@ export default function Header() {
       }
     };
 
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncIdentity();
+      }
+    };
+
     syncIdentity();
-    const timer = window.setInterval(syncIdentity, 1000);
-    return () => window.clearInterval(timer);
+    window.addEventListener('focus', syncIdentity);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('focus', syncIdentity);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [profile, user]);
 
   useEffect(() => {
@@ -98,9 +113,11 @@ export default function Header() {
   }, [pathname]);
 
   const userId = user?.id || profile?.id || '';
+  const profileUsername =
+    typeof profile?.username === 'string' ? profile.username : '';
 
-  const profileHref = profile?.username
-    ? `/you/${encodeURIComponent(profile.username)}`
+  const profileHref = profileUsername
+    ? `/you/${encodeURIComponent(profileUsername)}`
     : userId
       ? `/you/${userId}`
       : '/profile';
@@ -132,7 +149,7 @@ export default function Header() {
 
   const displayBrand = brandDisplay;
 
-  if (telegramApp || isImmersiveRoute) {
+  if (telegramApp || isImmersiveRoute(normalizedPath)) {
     return null;
   }
 

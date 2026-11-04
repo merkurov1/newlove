@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 type Postcard = {
   id: string;
@@ -11,6 +11,54 @@ type Postcard = {
   available: boolean;
   featured?: boolean;
 };
+
+type PaymentState = 'idle' | 'checking' | 'pending' | 'confirmed' | 'failed';
+
+type TelegramWebApp = {
+  openLink?: (
+    url: string,
+    options?: { try_instant_view?: boolean }
+  ) => void;
+};
+
+const PENDING_SESSION_KEY = 'heartandangel_pending_postcard_session';
+const STATUS_CHECK_THROTTLE_MS = 4_000;
+
+function getTelegramWebApp(): TelegramWebApp | null {
+  if (typeof window === 'undefined') return null;
+
+  const webApp = (
+    window as Window & {
+      Telegram?: { WebApp?: TelegramWebApp };
+    }
+  ).Telegram?.WebApp;
+
+  return webApp && typeof webApp === 'object' ? webApp : null;
+}
+
+function readPendingSession(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    return window.sessionStorage.getItem(PENDING_SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writePendingSession(sessionId: string | null) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    if (sessionId) {
+      window.sessionStorage.setItem(PENDING_SESSION_KEY, sessionId);
+    } else {
+      window.sessionStorage.removeItem(PENDING_SESSION_KEY);
+    }
+  } catch {
+    // Checkout still works when sessionStorage is blocked.
+  }
+}
 
 type OrderFields = {
   recipientName: string;
@@ -51,6 +99,12 @@ export default function PostcardOrderForm({
   const [fields, setFields] = useState<OrderFields>(initialFields);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [paymentState, setPaymentState] = useState<PaymentState>('idle');
+  const [statusMessage, setStatusMessage] = useState('');
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+
+  const lastStatusCheckRef = useRef(0);
+  const checkInFlightRef = useRef(false);
 
   const update = (key: keyof OrderFields, value: string) => {
     setFields((current) => ({ ...current, [key]: value }));
@@ -62,9 +116,122 @@ export default function PostcardOrderForm({
       currency: 'GBP',
     }).format(minorUnits / 100);
 
+  const checkPendingSession = useCallback(async (sessionId: string) => {
+    if (!sessionId || checkInFlightRef.current) return;
+
+    checkInFlightRef.current = true;
+    lastStatusCheckRef.current = Date.now();
+    setPaymentState('checking');
+    setStatusMessage('Checking the order status…');
+    setError('');
+
+    try {
+      const response = await fetch(
+        `/api/postcards/order-success?session_id=${encodeURIComponent(sessionId)}`,
+        { cache: 'no-store' }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data?.order) {
+        if (response.status === 400 || response.status === 404) {
+          writePendingSession(null);
+          setPendingSessionId(null);
+          setPaymentState('failed');
+          setStatusMessage(
+            'This checkout could not be verified. If you were charged, keep your Stripe receipt and contact the Temple.'
+          );
+        } else {
+          setPaymentState('pending');
+          setStatusMessage(
+            'Could not check the order yet. Please try again in a moment.'
+          );
+        }
+
+        return;
+      }
+
+      const order = data.order as {
+        confirmed?: boolean;
+        paymentReceived?: boolean;
+        status?: string;
+      };
+
+      if (order.confirmed) {
+        writePendingSession(null);
+        setPendingSessionId(null);
+        setPaymentState('confirmed');
+        setStatusMessage(
+          'Payment confirmed. Your postcard order is being prepared.'
+        );
+      } else if (order.paymentReceived) {
+        setPaymentState('pending');
+        setStatusMessage(
+          'Payment received. The Temple is still confirming the order. You can check again.'
+        );
+      } else {
+        setPaymentState('pending');
+        setStatusMessage(
+          'No payment has been confirmed yet. If you cancelled, nothing was charged.'
+        );
+      }
+    } catch {
+      setPaymentState('pending');
+      setStatusMessage(
+        'Could not check the order right now. Your payment status is unchanged.'
+      );
+    } finally {
+      checkInFlightRef.current = false;
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const pending = readPendingSession();
+
+    if (pending) {
+      setPendingSessionId(pending);
+      lastStatusCheckRef.current = Date.now();
+      void checkPendingSession(pending);
+    }
+  }, [checkPendingSession]);
+
+  useEffect(() => {
+    const handleReturn = () => {
+      if (document.visibilityState === 'hidden') return;
+
+      setLoading(false);
+
+      const pending = readPendingSession();
+
+      if (!pending) return;
+
+      const now = Date.now();
+
+      if (now - lastStatusCheckRef.current < STATUS_CHECK_THROTTLE_MS) {
+        return;
+      }
+
+      lastStatusCheckRef.current = now;
+      void checkPendingSession(pending);
+    };
+
+    window.addEventListener('focus', handleReturn);
+    window.addEventListener('pageshow', handleReturn);
+    document.addEventListener('visibilitychange', handleReturn);
+
+    return () => {
+      window.removeEventListener('focus', handleReturn);
+      window.removeEventListener('pageshow', handleReturn);
+      document.removeEventListener('visibilitychange', handleReturn);
+    };
+  }, [checkPendingSession]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
+    setStatusMessage('');
+    setPaymentState('idle');
 
     setLoading(true);
 
@@ -79,7 +246,7 @@ export default function PostcardOrderForm({
         }),
       });
 
-      const result = await response.json();
+      const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(result.error || 'Could not create the order.');
@@ -89,16 +256,50 @@ export default function PostcardOrderForm({
         throw new Error('Stripe did not return a payment link.');
       }
 
+      const sessionId =
+        typeof result.sessionId === 'string' ? result.sessionId : null;
+
+      if (sessionId) {
+        setPendingSessionId(sessionId);
+        writePendingSession(sessionId);
+      } else {
+        setPendingSessionId(null);
+        writePendingSession(null);
+      }
+
+      const tg = getTelegramWebApp();
+
+      if (tg && typeof tg.openLink === 'function') {
+        try {
+          tg.openLink(result.paymentUrl, { try_instant_view: false });
+        } catch {
+          setLoading(false);
+          window.location.assign(result.paymentUrl);
+          return;
+        }
+
+        setLoading(false);
+        setPaymentState('pending');
+        setStatusMessage(
+          'Payment window opened. Complete the payment, then return here to check the order.'
+        );
+        return;
+      }
+
+      // Regular browser: the existing success page verifies the session.
+      setLoading(false);
       window.location.assign(result.paymentUrl);
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
-          : 'Something went wrong. Please try again.',
+          : 'Something went wrong. Please try again.'
       );
       setLoading(false);
     }
   }
+
+  const busy = loading || paymentState === 'checking';
 
   return (
     <form onSubmit={submit} className="space-y-10">
@@ -257,13 +458,42 @@ export default function PostcardOrderForm({
           </p>
         )}
 
+        {paymentState !== 'idle' && statusMessage && (
+          <div
+            className={`mt-5 border px-4 py-3 text-sm leading-relaxed ${
+              paymentState === 'confirmed'
+                ? 'border-[#B8C9B4] bg-[#EEF5EC] text-[#3F573B]'
+                : paymentState === 'failed'
+                  ? 'border-[#D9B8B8] bg-[#FBEFEF] text-[#7A3F3F]'
+                  : 'border-[#D9D2C7] bg-[#F7F3EC] text-[#5B544C]'
+            }`}
+            role={paymentState === 'failed' ? 'alert' : 'status'}
+            aria-live={paymentState === 'failed' ? 'assertive' : 'polite'}
+          >
+            <p>{statusMessage}</p>
+
+            {pendingSessionId && paymentState !== 'confirmed' && (
+              <button
+                type="button"
+                onClick={() => void checkPendingSession(pendingSessionId)}
+                disabled={paymentState === 'checking'}
+                className="mt-3 min-h-[44px] border border-[#B5AAA0] px-4 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#37332D] transition hover:border-[#141210] disabled:cursor-wait disabled:opacity-60"
+              >
+                {paymentState === 'checking'
+                  ? 'Checking…'
+                  : 'Check order status'}
+              </button>
+            )}
+          </div>
+        )}
+
         <button
           type="submit"
-          disabled={loading || !postcard.available}
+          disabled={busy || !postcard.available}
           className="mt-6 flex w-full items-center justify-center gap-3 bg-stone-900 px-6 py-4 text-xs font-medium uppercase tracking-[0.18em] text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? 'Preparing secure checkout…' : 'Continue to secure payment'}
-          {!loading && <span aria-hidden="true">↗</span>}
+          {busy ? 'Preparing secure checkout…' : 'Continue to secure payment'}
+          {!busy && <span aria-hidden="true">↗</span>}
         </button>
 
         <p className="mt-3 text-center text-[11px] leading-relaxed text-stone-500">

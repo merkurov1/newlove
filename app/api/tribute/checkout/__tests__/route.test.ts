@@ -110,4 +110,40 @@ describe('POST /api/tribute/checkout', () => {
     expect(session.line_items[0].price_data.unit_amount).toBe(750);
     expect(session.line_items[0].price_data.currency).toBe('usd');
   });
+
+  it('rejects non-finite, below-minimum, above-maximum and non-USD amounts', async () => {
+    for (const body of [
+      { amount: Number.NaN },
+      { amount: Number.POSITIVE_INFINITY },
+      { amount: 0.99 },
+      { amount: -20 },
+      { amount: 1000000 },
+      { amount: 20, currency: 'eur' },
+    ]) {
+      const response = await POST(makeRequest(body));
+
+      expect(response.status).toBe(400);
+    }
+
+    expect(mockCreateSession.mock.calls).toHaveLength(0);
+  });
+
+  it('returns the checkout session id and verifiable return URLs', async () => {
+    const response = await POST(
+      makeRequest({ amount: 20, pierrotAttribution: attribution })
+    );
+    const payload = (await response.json()) as {
+      url: string;
+      sessionId: string;
+    };
+
+    expect(payload.sessionId).toBe('cs_tribute_test');
+
+    const [session] = mockCreateSession.mock.calls[0] as [Record<string, any>];
+    expect(session.success_url).toContain('status=success');
+    expect(session.success_url).toContain('session_id={CHECKOUT_SESSION_ID}');
+    expect(session.success_url).toContain(`pierrot=${encodeURIComponent(attribution)}`);
+    expect(session.cancel_url).toContain('status=cancel');
+    expect(session.cancel_url).toContain(`pierrot=${encodeURIComponent(attribution)}`);
+  });
 });

@@ -14,7 +14,7 @@ import { recordPierrotPurchaseCompleted } from '@/lib/pierrot/commercialAnalytic
 export const dynamic = 'force-dynamic';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-08-27.basil' as any,
+  apiVersion: '2025-08-27.basil',
   typescript: true,
 });
 
@@ -47,18 +47,24 @@ export async function POST(req: Request) {
 
     try {
       event = stripe.webhooks.constructEvent(body, signature, endpointSecret);
-    } catch (error: any) {
-      console.error('Stripe webhook signature error:', error?.message);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'invalid signature';
+
+      console.error('Stripe webhook signature error:', message);
 
       return NextResponse.json(
         {
-          error: `Webhook signature error: ${error?.message || 'invalid signature'}`,
+          error: `Webhook signature error: ${message}`,
         },
         { status: 400 }
       );
     }
 
-    if (event.type !== 'checkout.session.completed') {
+    if (
+      event.type !== 'checkout.session.completed' &&
+      event.type !== 'checkout.session.async_payment_succeeded'
+    ) {
       return NextResponse.json({
         received: true,
       });
@@ -210,7 +216,7 @@ export async function POST(req: Request) {
       processed: true,
       type: 'tribute_v1',
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Stripe webhook handler error:', error);
 
     return NextResponse.json({ error: 'Server Error' }, { status: 500 });

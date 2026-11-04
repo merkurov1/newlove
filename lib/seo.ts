@@ -184,7 +184,6 @@ export const PUBLIC_ROUTES = [
   '/heartandangel/world',
   '/heartandangel/calm',
   '/heartandangel/letitgo',
-  '/heartandangel/NFT',
   '/heartandangel/card',
   '/unframed',
   '/unframed/book',

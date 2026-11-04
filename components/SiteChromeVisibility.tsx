@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { isCustomFooterRoute } from '@/lib/temple/routes';
 
 /**
  * Local-only chrome suppression for the isolated owner workspace.
@@ -23,8 +24,15 @@ export default function SiteChromeVisibility() {
       document.body.removeAttribute('data-pierrot-workspace');
     }
 
+    if (isCustomFooterRoute(pathname)) {
+      document.body.classList.add('custom-footer-route');
+    } else {
+      document.body.classList.remove('custom-footer-route');
+    }
+
     return () => {
       document.body.removeAttribute('data-pierrot-workspace');
+      document.body.classList.remove('custom-footer-route');
     };
   }, [pathname]);
 

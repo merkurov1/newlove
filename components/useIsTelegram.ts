@@ -30,15 +30,20 @@ export function isTelegramMiniApp() {
 }
 
 export default function useIsTelegram() {
-  const [isTelegram, setIsTelegram] = useState(isTelegramMiniApp);
+  // The server and the first client render must agree. Telegram is therefore
+  // detected after hydration, never from a window lookup in the initializer.
+  const [isTelegram, setIsTelegram] = useState(false);
 
   useEffect(() => {
     if (isTelegram) return;
 
+    let active = true;
     let attempts = 0;
     let timer: number | null = null;
 
     const check = () => {
+      if (!active) return true;
+
       if (isTelegramMiniApp()) {
         setIsTelegram(true);
         return true;
@@ -47,7 +52,11 @@ export default function useIsTelegram() {
       return false;
     };
 
-    if (check()) return;
+    if (check()) {
+      return () => {
+        active = false;
+      };
+    }
 
     // The SDK is loaded with next/script lazyOnload. Wait for it briefly
     // instead of polling for the whole lifetime of the page.
@@ -63,6 +72,8 @@ export default function useIsTelegram() {
     }, TELEGRAM_DETECTION_INTERVAL_MS);
 
     return () => {
+      active = false;
+
       if (timer !== null) {
         window.clearInterval(timer);
       }

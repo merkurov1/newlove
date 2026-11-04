@@ -30,9 +30,19 @@ type StoreOptions = {
 
 function makeStore(options: StoreOptions = {}) {
   const inserted: Array<Record<string, unknown>> = [];
+  const templeLogs: Array<Record<string, unknown>> = [];
 
   const store = {
     from(table: string) {
+      if (table === 'temple_log') {
+        return {
+          insert: (row: Record<string, unknown>) => {
+            templeLogs.push(row);
+            return Promise.resolve({ error: null });
+          },
+        };
+      }
+
       if (table !== 'tributes') throw new Error(`Unexpected table ${table}`);
 
       return {
@@ -52,7 +62,7 @@ function makeStore(options: StoreOptions = {}) {
     },
   };
 
-  return { store, inserted };
+  return { store, inserted, templeLogs };
 }
 
 function session(overrides: Record<string, unknown> = {}) {
@@ -78,7 +88,7 @@ beforeEach(() => {
 
 describe('Tribute payment confirmation', () => {
   it('ignores non-Tribute and unpaid sessions', async () => {
-    const { store } = makeStore();
+    const { store, templeLogs } = makeStore();
 
     expect(
       (await confirmTributeCheckoutSession(store, session({ type: 'postcard_v1' }))).status
@@ -92,10 +102,11 @@ describe('Tribute payment confirmation', () => {
       ).status
     ).toBe('ignored');
     expect(analytics.recordPierrotDonationCompleted.mock.calls).toHaveLength(0);
+    expect(templeLogs).toHaveLength(0);
   });
 
   it('inserts one Tribute and one dedicated donation event for a paid session', async () => {
-    const { store, inserted } = makeStore();
+    const { store, inserted, templeLogs } = makeStore();
 
     const outcome = await confirmTributeCheckoutSession(store, session());
 
@@ -106,6 +117,11 @@ describe('Tribute payment confirmation', () => {
       currency: 'usd',
       status: 'succeeded',
       stripe_session_id: 'cs_tribute_test',
+    });
+    expect(templeLogs).toHaveLength(1);
+    expect(templeLogs[0]).toMatchObject({
+      event_type: 'TRIBUTE',
+      author: 'Pilgrim',
     });
     expect(analytics.recordPierrotDonationCompleted).toHaveBeenCalledWith(
       store,
@@ -121,7 +137,7 @@ describe('Tribute payment confirmation', () => {
   });
 
   it('does not insert a second Tribute on a repeated webhook but can backfill attribution', async () => {
-    const { store, inserted } = makeStore({
+    const { store, inserted, templeLogs } = makeStore({
       existing: { id: 'tribute-1' },
     });
 
@@ -129,11 +145,12 @@ describe('Tribute payment confirmation', () => {
 
     expect(outcome.status).toBe('duplicate');
     expect(inserted).toHaveLength(0);
+    expect(templeLogs).toHaveLength(0);
     expect(analytics.recordPierrotDonationCompleted).toHaveBeenCalledTimes(1);
   });
 
   it('acknowledges a concurrent unique-constraint insert as a duplicate', async () => {
-    const { store, inserted } = makeStore({
+    const { store, inserted, templeLogs } = makeStore({
       insertError: { code: '23505' },
     });
 
@@ -141,6 +158,7 @@ describe('Tribute payment confirmation', () => {
 
     expect(outcome.status).toBe('duplicate');
     expect(inserted).toHaveLength(1);
+    expect(templeLogs).toHaveLength(0);
     expect(analytics.recordPierrotDonationCompleted).toHaveBeenCalledTimes(1);
   });
 

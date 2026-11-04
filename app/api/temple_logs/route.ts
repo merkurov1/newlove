@@ -7,9 +7,11 @@ export const runtime = 'nodejs'
 const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(sbUrl, sbKey)
-const EVENT_TYPES = new Set(['VIGIL', 'VIGIL_SPARK', 'ASH', 'CAST', 'ABSOLUTION', 'TRIBUTE', 'MODAL_OPEN', 'INTENSITY', 'WHISPER', 'MEDITATION', 'SILENCE', 'HEARTANDANGEL'])
+// VIGIL_SPARK and TRIBUTE are deliberately absent: only their trusted server
+// routes may write them (after identity/cooldown or verified payment).
+const EVENT_TYPES = new Set(['VIGIL', 'ASH', 'CAST', 'ABSOLUTION', 'MODAL_OPEN', 'INTENSITY', 'WHISPER', 'MEDITATION', 'SILENCE', 'HEARTANDANGEL'])
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     const { data, error } = await supabase
       .from('temple_log')
@@ -23,9 +25,9 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json({ ok: true, data: data ?? [], error: null })
-  } catch (e: any) {
+  } catch (e) {
     console.error('API GET /api/temple_logs unexpected', e)
-    return NextResponse.json({ ok: false, data: [], error: String(e?.message || e) }, { status: 500 })
+    return NextResponse.json({ ok: false, data: [], error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
 }
 
@@ -93,8 +95,8 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ ok: true, data, error: null }, { status: 201 })
-  } catch (e: any) {
+  } catch (e) {
     console.error('API POST /api/temple_logs unexpected', e)
-    return NextResponse.json({ ok: false, data: null, error: String(e?.message || e) }, { status: 500 })
+    return NextResponse.json({ ok: false, data: null, error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
 }

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import useIsTelegram from '@/components/useIsTelegram';
+import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
 
 const ASSETS = {
   angel:
@@ -260,6 +261,29 @@ export default function TempleClient() {
 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!isInfoOpen && !isTracesOpen && !isChroniclesOpen) return;
+
+    return registerTelegramBackHandler(() => {
+      if (isChroniclesOpen) {
+        setIsChroniclesOpen(false);
+        return true;
+      }
+
+      if (isTracesOpen) {
+        setIsTracesOpen(false);
+        return true;
+      }
+
+      if (isInfoOpen) {
+        setIsInfoOpen(false);
+        return true;
+      }
+
+      return false;
+    });
+  }, [isChroniclesOpen, isInfoOpen, isTracesOpen]);
 
   useEffect(() => {
     let cancelled = false;

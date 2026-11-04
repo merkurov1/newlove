@@ -22,6 +22,8 @@ const ASSETS = {
     'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/HeartRain.png',
 };
 
+const MAX_FALLING_HEARTS = 60;
+
 interface FallingHeart {
   id: number;
   x: number;
@@ -29,6 +31,7 @@ interface FallingHeart {
   size: number;
   speed: number;
   swaySpeed: number;
+  phase: number;
 }
 
 interface PointerPosition {
@@ -48,10 +51,17 @@ export default function WorldScene() {
   const nextHeartId = useRef(0);
   const mousePos = useRef<PointerPosition>({ x: 0, y: 0 });
   const sceneRef = useRef<HTMLDivElement | null>(null);
+  const heartsRef = useRef<FallingHeart[]>([]);
+  const heartNodesRef = useRef(new Map<number, HTMLDivElement>());
 
   useEffect(() => {
     // Intentionally random: Angel / Daemon is a core World feature.
     setHeroUrl(Math.random() > 0.5 ? ASSETS.angel : ASSETS.daemon);
+
+    const controller = new AbortController();
+    let active = true;
+    let weatherInFlight = false;
+    let weatherActive = false;
 
     const updateFallbackTime = () => {
       const hour = new Date().getHours();
@@ -83,59 +93,103 @@ export default function WorldScene() {
       }
     };
 
-    updateFallbackTime();
+    const applyWeather = (data: {
+      isDay?: boolean;
+      weatherCode?: number;
+    }): boolean => {
+      const night = data.isDay === false;
+      const weathercode = Number(data.weatherCode);
+
+      if (!Number.isFinite(weathercode)) return false;
+
+      setIsNight(night);
+
+      if (weathercode >= 51 && weathercode <= 82) {
+        setTimeGradient(
+          night
+            ? 'from-[#050B14] via-[#0F172A] to-[#1E293B]'
+            : 'from-[#748CAB] via-[#3E5C76] to-[#1D2D44]'
+        );
+        setCloudOpacity(0.65);
+      } else if (weathercode >= 1 && weathercode <= 3) {
+        setTimeGradient(
+          night
+            ? 'from-[#0B132B] via-[#1C2541] to-[#3A506B]'
+            : 'from-[#B0C4DE] via-[#C5D3E8] to-[#E2E8F0]'
+        );
+        setCloudOpacity(0.45);
+      } else if (night) {
+        setTimeGradient(
+          'from-[#0B132B] via-[#1C2541] to-[#3A506B]'
+        );
+        setCloudOpacity(0.2);
+      } else {
+        setTimeGradient(
+          'from-[#87CEEB] via-[#B0E0E6] to-[#E0F6FF]'
+        );
+        setCloudOpacity(0.3);
+      }
+
+      return true;
+    };
 
     const loadWeather = async () => {
+      if (weatherInFlight) return;
+
+      weatherInFlight = true;
+
       try {
-        const res = await fetch('/api/world/weather', {
+        const res = await fetch('/api/world', {
           cache: 'no-store',
+          signal: controller.signal,
         });
 
         if (!res.ok) return;
 
         const data = await res.json();
 
-        if (!data?.available) return;
+        if (!active) return;
 
-        const night = data.isDay === false;
-        const weathercode = Number(data.weatherCode);
-
-        setIsNight(night);
-
-        if (weathercode >= 51 && weathercode <= 82) {
-          setTimeGradient(
-            night
-              ? 'from-[#050B14] via-[#0F172A] to-[#1E293B]'
-              : 'from-[#748CAB] via-[#3E5C76] to-[#1D2D44]'
-          );
-          setCloudOpacity(0.65);
-        } else if (weathercode >= 1 && weathercode <= 3) {
-          setTimeGradient(
-            night
-              ? 'from-[#0B132B] via-[#1C2541] to-[#3A506B]'
-              : 'from-[#B0C4DE] via-[#C5D3E8] to-[#E2E8F0]'
-          );
-          setCloudOpacity(0.45);
-        } else if (night) {
-          setTimeGradient(
-            'from-[#0B132B] via-[#1C2541] to-[#3A506B]'
-          );
-          setCloudOpacity(0.2);
-        } else {
-          setTimeGradient(
-            'from-[#87CEEB] via-[#B0E0E6] to-[#E0F6FF]'
-          );
-          setCloudOpacity(0.3);
+        if (!data?.available) {
+          weatherActive = false;
+          return;
         }
+
+        weatherActive = applyWeather(data);
       } catch (error) {
+        if (controller.signal.aborted) return;
+
         console.log(
           'World weather unavailable; device-time fallback remains active.',
           error
         );
+
+        if (!weatherActive) {
+          updateFallbackTime();
+        }
+      } finally {
+        weatherInFlight = false;
       }
     };
 
+    updateFallbackTime();
     void loadWeather();
+
+    // Refresh slowly so the world can move from day to night without a
+    // permanent polling loop.
+    const interval = window.setInterval(() => {
+      if (!active) return;
+
+      if (!weatherActive) updateFallbackTime();
+
+      void loadWeather();
+    }, 5 * 60 * 1000);
+
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearInterval(interval);
+    };
   }, []);
 
   const handlePointerMove = (
@@ -180,9 +234,15 @@ export default function WorldScene() {
       size: 25 + Math.random() * 20,
       speed: 1.5 + Math.random() * 2,
       swaySpeed: 0.02 + Math.random() * 0.03,
+      phase: Math.random() * Math.PI * 2,
     }));
 
-    setFallingHearts((prev) => [...prev, ...newHearts]);
+    const next = [...heartsRef.current, ...newHearts].slice(
+      -MAX_FALLING_HEARTS
+    );
+
+    heartsRef.current = next;
+    setFallingHearts(next);
   };
 
   useEffect(() => {
@@ -191,24 +251,36 @@ export default function WorldScene() {
     let frameId = 0;
 
     const animate = () => {
-      setFallingHearts((prev) => {
-        if (prev.length === 0) return prev;
+      let removed = false;
 
-        const next = prev
-          .map((heart) => ({
-            ...heart,
-            y: heart.y + heart.speed,
-            x:
-              heart.x +
-              Math.sin(heart.y * heart.swaySpeed) * 0.6,
-          }))
-          .filter(
-            (heart) =>
-              heart.y < window.innerHeight + 50
-          );
+      for (const heart of heartsRef.current) {
+        heart.y += heart.speed;
 
-        return next;
-      });
+        const displayX =
+          heart.x +
+          Math.sin((heart.y + heart.phase) * heart.swaySpeed) * 0.6;
+
+        const node = heartNodesRef.current.get(heart.id);
+
+        if (node) {
+          node.style.transform = `translate3d(${displayX}px, ${heart.y}px, 0) rotate(${
+            Math.sin(heart.y * 0.05) * 20
+          }deg)`;
+        }
+
+        if (heart.y >= window.innerHeight + 50) {
+          removed = true;
+        }
+      }
+
+      if (removed) {
+        const next = heartsRef.current.filter(
+          (heart) => heart.y < window.innerHeight + 50
+        );
+
+        heartsRef.current = next;
+        setFallingHearts(next);
+      }
 
       frameId = requestAnimationFrame(animate);
     };
@@ -220,11 +292,19 @@ export default function WorldScene() {
     };
   }, [fallingHearts.length]);
 
+  useEffect(() => {
+    const nodes = heartNodesRef.current;
+
+    return () => {
+      nodes.clear();
+    };
+  }, []);
+
   return (
     <div
       ref={sceneRef}
       onPointerMove={handlePointerMove}
-      className={`relative isolate w-full telegram-viewport overflow-hidden bg-gradient-to-b ${timeGradient} transition-colors duration-1000 select-none`}
+      className={`relative isolate w-full world-viewport bg-gradient-to-b ${timeGradient} transition-colors duration-1000 select-none`}
     >
       <section
         className="sr-only"
@@ -354,7 +434,7 @@ export default function WorldScene() {
         />
 
         {heroUrl && (
-          <div className="w-28 h-32 sm:w-38 sm:h-44 flex items-end justify-center drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
+          <div className="w-28 h-32 sm:w-36 sm:h-44 flex items-end justify-center drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
             <Image
               src={heroUrl}
               alt=""
@@ -374,36 +454,38 @@ export default function WorldScene() {
         data-world-heart
         onClick={triggerHeartRain}
         aria-label="Release a rain of hearts"
-        className="absolute top-[26%] sm:top-[28%] left-1/2 z-20 pointer-events-auto flex flex-col items-center animate-bounce-slow transition-transform duration-300 ease-out cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 rounded-full"
+        className="absolute top-[26%] sm:top-[28%] left-1/2 z-20 pointer-events-auto flex flex-col items-center transition-transform duration-300 ease-out cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 rounded-full"
         style={{
           transform:
             'translate(calc(-50% + var(--heart-x, 0px)), calc(-50% + var(--heart-y, 0px)))',
         }}
       >
-        <div className="w-20 sm:w-28 md:w-32 h-20 sm:h-28 md:h-32 drop-shadow-[0_10px_25px_rgba(239,68,68,0.4)] relative">
-          <Image
-            src={ASSETS.heart}
-            alt=""
-            fill
-            className="object-contain"
-            priority
-            draggable={false}
-          />
-        </div>
+        <div className="animate-bounce-slow flex flex-col items-center">
+          <div className="w-20 sm:w-28 md:w-32 h-20 sm:h-28 md:h-32 drop-shadow-[0_10px_25px_rgba(239,68,68,0.4)] relative">
+            <Image
+              src={ASSETS.heart}
+              alt=""
+              fill
+              className="object-contain"
+              priority
+              draggable={false}
+            />
+          </div>
 
-        <svg
-          className="w-8 h-28 sm:h-36 overflow-visible -mt-1"
-          viewBox="0 0 20 120"
-          aria-hidden="true"
-        >
-          <path
-            d="M 10 0 Q 22 60 4 115"
-            fill="none"
-            stroke="rgba(40, 40, 40, 0.45)"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        </svg>
+          <svg
+            className="w-8 h-28 sm:h-36 overflow-visible -mt-1"
+            viewBox="0 0 20 120"
+            aria-hidden="true"
+          >
+            <path
+              d="M 10 0 Q 22 60 4 115"
+              fill="none"
+              stroke="rgba(40, 40, 40, 0.45)"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </div>
       </button>
 
       {/* House / Temple */}
@@ -452,13 +534,18 @@ export default function WorldScene() {
       {fallingHearts.map((heart) => (
         <div
           key={heart.id}
-          className="absolute pointer-events-none z-30"
+          ref={(node) => {
+            if (node) {
+              heartNodesRef.current.set(heart.id, node);
+            } else {
+              heartNodesRef.current.delete(heart.id);
+            }
+          }}
+          className="absolute left-0 top-0 pointer-events-none z-30 will-change-transform"
           style={{
-            left: `${heart.x}px`,
-            top: `${heart.y}px`,
             width: `${heart.size * 1.5}px`,
             height: `${heart.size * 1.5}px`,
-            transform: `rotate(${Math.sin(heart.y * 0.05) * 20}deg)`,
+            transform: `translate3d(${heart.x}px, ${heart.y}px, 0) rotate(0deg)`,
           }}
           aria-hidden="true"
         >
@@ -472,6 +559,7 @@ export default function WorldScene() {
         </div>
       ))}
 
+      {/* eslint-disable-next-line react/no-unknown-property */}
       <style jsx global>{`
         @keyframes cloudsMove {
           0% {

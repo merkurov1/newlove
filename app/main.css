@@ -466,6 +466,17 @@ body.telegram-app .site-footer {
   min-height: var(--tg-viewport-stable-height, 100dvh);
 }
 
+/*
+ * World is a full-screen composition. Use the smaller of the Telegram stable
+ * height and the real dynamic viewport so stale/large SDK values cannot turn
+ * the scene into a scrollable page.
+ */
+.world-viewport {
+  height: min(var(--tg-viewport-stable-height, 100dvh), 100dvh);
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
 body.telegram-app {
   overscroll-behavior-y: none;
 }
@@ -614,11 +625,16 @@ body.telegram-app .temple-screen {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body.telegram-app .animate-clouds-move,
-  body.telegram-app .animate-spin-slow,
-  body.telegram-app .animate-bounce-slow,
-  body.telegram-app .animate-fly-away,
-  body.telegram-app .animate-fade-in {
+  .animate-clouds-move,
+  .animate-spin-slow,
+  .animate-bounce-slow,
+  .animate-bounce,
+  .animate-fly-away,
+  .animate-fade-in,
+  .animate-fadeIn,
+  .animate-ping,
+  .animate-pulse,
+  .animate-marquee {
     animation: none !important;
   }
 
@@ -639,6 +655,25 @@ body.ritual-route > footer {
 }
 
 /*
+ * Some public pages own a full artistic footer (Hub, postcard landing).
+ * Only the duplicate global footer is suppressed; the global Header remains.
+ */
+body.custom-footer-route > footer {
+  display: none !important;
+}
+
+/*
+ * Telegram's floating navigation occupies the bottom corners. On the shortest
+ * phones, tighten the mobile hero artwork so the primary "Explore World" CTA
+ * stays above the two floating controls.
+ */
+@media (max-height: 680px) {
+  body.telegram-app .ha-hub-mobile-art {
+    height: 8.25rem;
+  }
+}
+
+/*
  * Header is fixed and rendered outside #main-content,
  * therefore hiding it through the body route state is explicit.
  */
@@ -650,6 +685,148 @@ body.ritual-route > header {
 /* =========================================================
    TEMPLE TOP BAR
    ========================================================= */
+
+/*
+ * Vigil and Tribute keep the shared TempleTopBar but need a content offset
+ * that includes native safe areas. Using max() here means a browser without
+ * Telegram insets is unchanged, while a notched iPhone or an expanded Mini App
+ * never places content under the Telegram chrome.
+ */
+.vigil-page,
+.tribute-page {
+  min-height: 100dvh;
+  min-height: var(--tg-viewport-stable-height, 100dvh);
+}
+
+.vigil-page {
+  padding-top: max(
+    6.5rem,
+    calc(env(safe-area-inset-top) + 5rem),
+    calc(var(--tg-safe-area-top, 0px) + 5rem)
+  );
+  padding-bottom: max(
+    1.25rem,
+    calc(env(safe-area-inset-bottom) + 0.75rem),
+    calc(var(--tg-safe-area-bottom, 0px) + 0.75rem)
+  );
+}
+
+.tribute-main {
+  padding-top: max(
+    6.75rem,
+    calc(env(safe-area-inset-top) + 5rem),
+    calc(var(--tg-safe-area-top, 0px) + 5rem)
+  );
+  padding-bottom: max(
+    1.5rem,
+    calc(env(safe-area-inset-bottom) + 1rem),
+    calc(var(--tg-safe-area-bottom, 0px) + 1rem)
+  );
+}
+
+@media (min-width: 640px) {
+  .vigil-page {
+    padding-top: max(
+      7rem,
+      calc(env(safe-area-inset-top) + 5.5rem),
+      calc(var(--tg-safe-area-top, 0px) + 5.5rem)
+    );
+    padding-bottom: max(
+      2rem,
+      calc(env(safe-area-inset-bottom) + 1rem),
+      calc(var(--tg-safe-area-bottom, 0px) + 1rem)
+    );
+  }
+
+  .tribute-main {
+    padding-top: max(
+      7rem,
+      calc(env(safe-area-inset-top) + 5.5rem),
+      calc(var(--tg-safe-area-top, 0px) + 5.5rem)
+    );
+    padding-bottom: max(
+      2rem,
+      calc(env(safe-area-inset-bottom) + 1.25rem),
+      calc(var(--tg-safe-area-bottom, 0px) + 1.25rem)
+    );
+  }
+}
+
+/*
+ * Short phone landscape (e.g. iPhone 13 / Android in Telegram): the portrait
+ * stack would require a long scroll. Place the artwork beside the control panel
+ * so the ritual remains playable without hiding the composition.
+ */
+@media (orientation: landscape) and (max-height: 560px) and (min-width: 760px) {
+  .vigil-page {
+    padding-top: max(
+      4.75rem,
+      calc(env(safe-area-inset-top) + 3.75rem),
+      calc(var(--tg-safe-area-top, 0px) + 3.75rem)
+    );
+    padding-bottom: max(
+      0.75rem,
+      calc(env(safe-area-inset-bottom) + 0.5rem),
+      calc(var(--tg-safe-area-bottom, 0px) + 0.5rem)
+    );
+  }
+
+  .vigil-stage {
+    display: grid !important;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    align-items: center;
+    gap: 1rem;
+    max-width: 56rem !important;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .vigil-art {
+    display: flex !important;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .vigil-control {
+    max-width: 28rem !important;
+  }
+
+  .vigil-control > div {
+    padding: 1rem 1.25rem !important;
+    gap: 0.75rem !important;
+  }
+}
+
+/*
+ * Short portrait phones (e.g. iPhone SE). Keep the same composition, but
+ * tighten the vertical rhythm so the amount controls are visible without the
+ * visitor having to hunt for them.
+ */
+@media (orientation: portrait) and (max-height: 640px) and (max-width: 480px) {
+  .tribute-main {
+    padding-top: max(
+      5.5rem,
+      calc(env(safe-area-inset-top) + 4rem),
+      calc(var(--tg-safe-area-top, 0px) + 4rem)
+    );
+    padding-bottom: max(
+      0.75rem,
+      calc(env(safe-area-inset-bottom) + 0.5rem),
+      calc(var(--tg-safe-area-bottom, 0px) + 0.5rem)
+    );
+  }
+
+  .tribute-main > header {
+    margin-bottom: 1rem;
+  }
+
+  .tribute-heart {
+    width: 9rem !important;
+    height: 9rem !important;
+    margin-bottom: 1.75rem !important;
+  }
+}
 
 .temple-topbar {
   position: absolute;

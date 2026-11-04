@@ -13,6 +13,7 @@ export const metadata: Metadata = pageMetadata({
     'https://bronze-main-tiger-8.mypinata.cloud/ipfs/bafybeihnx7kaue4ehbigi4koydoei43ojjykp2mhhh7xwx4qg3tntm5e5e',
   imageAlt: 'Neutral Heart — The Irreversible Choice',
   languages: { 'x-default': '/heartandangel/NFT', en: '/heartandangel/NFT' },
+  noindex: true,
 });
 
 export default function NFTServerPage() {

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
+import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
 
 type NavigationItem = {
   href: string;
@@ -101,7 +102,16 @@ export default function TelegramNavigation() {
 
   useEffect(() => {
     setIsOpen(false);
-  }, [pathname]);
+  }, [mode, pathname]);
+
+  useEffect(() => {
+    if (!isOpen || mode !== 'site') return;
+
+    return registerTelegramBackHandler(() => {
+      closeMenu();
+      return true;
+    });
+  }, [closeMenu, isOpen, mode]);
 
   useEffect(() => {
     if (!isOpen) return;

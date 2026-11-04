@@ -2,18 +2,24 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase-browser';
-import { useAuth } from '@/components/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, Clock, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import TempleTopBar from '@/components/TempleTopBar';
 import Image from 'next/image';
-import { logTempleEvent } from '@/lib/templeLogger';
+import usePrefersReducedMotion from '@/components/pierrot/usePrefersReducedMotion';
+import useTempleIdentity from '@/hooks/useTempleIdentity';
+import {
+  VIGIL_COOLDOWN_MS,
+  formatVigilCooldown,
+  vigilCooldownMessage,
+} from '@/lib/vigil/cooldown';
 
 const ANGEL_GIF =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0966.gif';
 
 const FLAME_ID = 1;
+const CLOCK_REFRESH_MS = 30_000;
 
 type FlameData = {
   id: number;
@@ -39,6 +45,14 @@ type SparkPosition = {
   };
 };
 
+type VigilStatusResponse = {
+  authenticated?: boolean;
+  canSpark?: boolean;
+  remainingMs?: number;
+  remainingLabel?: string;
+  lastSparkAt?: string | null;
+};
+
 // Постоянная тема темной комнаты / часовни
 const roomTheme = {
   bg: 'bg-[#141210]',
@@ -54,14 +68,18 @@ const roomTheme = {
 };
 
 export default function VigilPage() {
-  const { user, profile, isLoading } = useAuth();
+  const identity = useTempleIdentity();
+  const reduceMotion = usePrefersReducedMotion();
 
   const angelRef = useRef<HTMLDivElement | null>(null);
   const heartRef = useRef<HTMLDivElement | null>(null);
+  const flameDataRef = useRef<FlameData | null>(null);
+  const cooldownEndsAtRef = useRef<number | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sparkTimeoutRef =
     useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statusRetryRef = useRef(false);
 
   const [intensity, setIntensity] = useState(1);
   const [timeLeft, setTimeLeft] = useState('');
@@ -72,12 +90,33 @@ export default function VigilPage() {
   const [spark, setSpark] = useState<SparkPosition | null>(null);
   const [rateLimitMsg, setRateLimitMsg] =
     useState<string | null>(null);
+  const [cooldownRemainingMs, setCooldownRemainingMs] =
+    useState<number | null>(null);
 
-  const userName =
-    profile?.name ||
-    user?.user_metadata?.name ||
-    user?.email?.split('@')[0] ||
-    '';
+  const userName = identity.displayName;
+  const identityIsLoading = identity.isLoading;
+  const identitySource = identity.source;
+  const refreshIdentity = identity.refresh;
+  const isOnCooldown =
+    cooldownRemainingMs !== null && cooldownRemainingMs > 0;
+  const cooldownLabel = isOnCooldown
+    ? formatVigilCooldown(cooldownRemainingMs)
+    : '';
+
+  const applyCooldown = useCallback((remainingMs: number) => {
+    const safeRemaining = Number.isFinite(remainingMs)
+      ? Math.max(0, Math.min(VIGIL_COOLDOWN_MS, remainingMs))
+      : 0;
+
+    if (safeRemaining <= 0) {
+      cooldownEndsAtRef.current = null;
+      setCooldownRemainingMs(null);
+      return;
+    }
+
+    cooldownEndsAtRef.current = Date.now() + safeRemaining;
+    setCooldownRemainingMs(safeRemaining);
+  }, []);
 
   const refreshGuardians = useCallback(
     async (): Promise<number> => {
@@ -184,14 +223,14 @@ export default function VigilPage() {
   }, [calculateIntensity]);
 
   const updateTimer = useCallback(() => {
-    if (!flameData?.last_lit_at) {
+    const lastLitAt = flameDataRef.current?.last_lit_at;
+
+    if (!lastLitAt) {
       setTimeLeft('');
       return;
     }
 
-    const lastLitTime = new Date(
-      flameData.last_lit_at
-    ).getTime();
+    const lastLitTime = new Date(lastLitAt).getTime();
 
     if (!Number.isFinite(lastLitTime)) {
       setTimeLeft('');
@@ -199,27 +238,39 @@ export default function VigilPage() {
     }
 
     const diff = Date.now() - lastLitTime;
-
-    const remaining =
-      24 * 60 * 60 * 1000 - diff;
+    const remaining = VIGIL_COOLDOWN_MS - diff;
 
     if (remaining <= 0) {
       setTimeLeft('FLAME EXTINGUISHED');
       return;
     }
 
-    const h = Math.floor(
-      remaining / 3600000
-    );
+    const h = Math.floor(remaining / 3600000);
+    const m = Math.floor((remaining % 3600000) / 60000);
 
-    const m = Math.floor(
-      (remaining % 3600000) / 60000
-    );
+    setTimeLeft(`${h}h ${m}m remaining`);
+  }, []);
 
-    setTimeLeft(
-      `${h}h ${m}m remaining`
-    );
-  }, [flameData]);
+  const updateCooldownClock = useCallback(() => {
+    const endsAt = cooldownEndsAtRef.current;
+
+    if (!endsAt) return;
+
+    const remaining = endsAt - Date.now();
+
+    if (remaining <= 0) {
+      cooldownEndsAtRef.current = null;
+      setCooldownRemainingMs(null);
+      return;
+    }
+
+    setCooldownRemainingMs(remaining);
+  }, []);
+
+  useEffect(() => {
+    flameDataRef.current = flameData;
+    updateTimer();
+  }, [flameData, updateTimer]);
 
   useEffect(() => {
     void refreshData();
@@ -276,10 +327,21 @@ export default function VigilPage() {
         }
       });
 
-    timerRef.current = setInterval(
-      updateTimer,
-      1000
-    );
+    // Minute-level precision is enough. The interval is created once and is
+    // never recreated by flame or cooldown state changes.
+    timerRef.current = setInterval(() => {
+      updateTimer();
+      updateCooldownClock();
+    }, CLOCK_REFRESH_MS);
+
+    const handleVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+
+      updateTimer();
+      updateCooldownClock();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       supabase.removeChannel(channel);
@@ -296,15 +358,112 @@ export default function VigilPage() {
 
         sparkTimeoutRef.current = null;
       }
-    };
-  }, [calculateIntensity, refreshData, updateTimer]);
 
+      document.removeEventListener(
+        'visibilitychange',
+        handleVisibility
+      );
+    };
+  }, [
+    calculateIntensity,
+    refreshData,
+    updateCooldownClock,
+    updateTimer,
+  ]);
+
+  // Ask the server for this identity's own cooldown. The public flame timer is
+  // not used to infer whether this visitor may spark.
   useEffect(() => {
-    updateTimer();
-  }, [updateTimer]);
+    if (identityIsLoading || !userName) return;
+
+    let cancelled = false;
+
+    const loadStatus = async (): Promise<VigilStatusResponse | null> => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const response = await fetch('/api/vigil/claim', {
+          method: 'GET',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: session?.access_token
+            ? {
+                Authorization: `Bearer ${session.access_token}`,
+              }
+            : undefined,
+        });
+
+        if (!response.ok) return null;
+
+        return (await response.json().catch(() => null)) as
+          | VigilStatusResponse
+          | null;
+      } catch {
+        return null;
+      }
+    };
+
+    const resolveStatus = async () => {
+      let status = await loadStatus();
+
+      // A cached Telegram name can survive while the HttpOnly cookie expired.
+      // Re-exchange the signed initData once, then retry.
+      if (
+        !cancelled &&
+        status &&
+        status.authenticated === false &&
+        identitySource === 'telegram' &&
+        !statusRetryRef.current
+      ) {
+        statusRetryRef.current = true;
+        const refreshed = await refreshIdentity();
+
+        if (refreshed && !cancelled) {
+          status = await loadStatus();
+        }
+      }
+
+      if (cancelled || !status?.authenticated) return;
+
+      applyCooldown(
+        typeof status.remainingMs === 'number'
+          ? status.remainingMs
+          : 0
+      );
+    };
+
+    void resolveStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    applyCooldown,
+    identityIsLoading,
+    refreshIdentity,
+    identitySource,
+    userName,
+  ]);
 
   const triggerRitual = async () => {
-    if (isLighting || !userName) {
+    if (isLighting) return;
+
+    if (!userName) {
+      setRateLimitMsg(
+        identity.isTelegram
+          ? identity.error ||
+              'Telegram identity is not available yet.'
+          : 'Please sign in to participate.'
+      );
+      return;
+    }
+
+    if (isOnCooldown) {
+      setRateLimitMsg(
+        vigilCooldownMessage(cooldownRemainingMs ?? 0)
+      );
       return;
     }
 
@@ -313,117 +472,13 @@ export default function VigilPage() {
 
     try {
       const {
-        data: userLogs,
-        error: userLogsError,
-      } = await supabase
-        .from('temple_log')
-        .select('created_at')
-        .in('event_type', [
-          'vigil_spark',
-          'VIGIL_SPARK',
-        ])
-        .eq('author', userName)
-        .order('created_at', {
-          ascending: false,
-        })
-        .limit(1);
-
-      if (userLogsError) {
-        console.error(
-          'Vigil cooldown lookup error:',
-          userLogsError
-        );
-      }
-
-      if (
-        userLogs &&
-        userLogs.length > 0
-      ) {
-        const lastCreatedAt =
-          userLogs[0].created_at;
-
-        const lastLitTime = new Date(
-          lastCreatedAt
-        ).getTime();
-
-        if (Number.isFinite(lastLitTime)) {
-          const diff =
-            Date.now() - lastLitTime;
-
-          const cooldownMs =
-            24 * 60 * 60 * 1000;
-
-          if (diff < cooldownMs) {
-            const remain =
-              cooldownMs - diff;
-
-            const h = Math.floor(
-              remain / 3600000
-            );
-
-            const m = Math.floor(
-              (remain % 3600000) / 60000
-            );
-
-            setRateLimitMsg(
-              `You can light the heart again in ${h}h ${m}m.`
-            );
-
-            setIsLighting(false);
-
-            return;
-          }
-        }
-      }
-    } catch (error) {
-      console.error(
-        'Vigil cooldown check error:',
-        error
-      );
-    }
-
-    if (
-      angelRef.current &&
-      heartRef.current
-    ) {
-      const angelRect =
-        angelRef.current.getBoundingClientRect();
-
-      const heartRect =
-        heartRef.current.getBoundingClientRect();
-
-      setSpark({
-        start: {
-          x:
-            angelRect.left +
-            angelRect.width / 2,
-          y:
-            angelRect.top +
-            angelRect.height / 2,
-        },
-        end: {
-          x:
-            heartRect.left +
-            heartRect.width / 2,
-          y:
-            heartRect.top +
-            heartRect.height / 2,
-        },
-      });
-    }
-
-    try {
-      const nowISO =
-        new Date().toISOString();
-
-      const {
         data: { session },
       } = await supabase.auth.getSession();
 
-      const response = await fetch(
-        '/api/vigil/claim',
-        {
+      const requestClaim = async () => {
+        const response = await fetch('/api/vigil/claim', {
           method: 'POST',
+          credentials: 'same-origin',
           headers: {
             'Content-Type': 'application/json',
             ...(session?.access_token
@@ -434,35 +489,60 @@ export default function VigilPage() {
           },
           body: JSON.stringify({
             id: FLAME_ID,
-            name: userName,
           }),
-        }
-      );
+        });
 
-      if (!response.ok) {
         const payload = await response
           .json()
           .catch(() => null);
 
+        return { response, payload };
+      };
+
+      let { response, payload } = await requestClaim();
+
+      if (
+        response.status === 401 &&
+        identity.source === 'telegram'
+      ) {
+        const refreshed = await identity.refresh();
+
+        if (refreshed) {
+          ({ response, payload } = await requestClaim());
+        }
+      }
+
+      if (response.status === 429) {
+        const remainingMs =
+          typeof payload?.remainingMs === 'number'
+            ? payload.remainingMs
+            : VIGIL_COOLDOWN_MS;
+
+        applyCooldown(remainingMs);
+
+        setRateLimitMsg(
+          payload?.message ||
+            vigilCooldownMessage(remainingMs)
+        );
+
+        setSpark(null);
+        setIsLighting(false);
+
+        return;
+      }
+
+      if (!response.ok) {
         throw new Error(
           payload?.error ||
             `Vigil claim failed (${response.status})`
         );
       }
 
-      const payload = await response
-        .json()
-        .catch(() => null);
-
       const record = payload?.record as
         | FlameData
         | undefined;
 
-      await logTempleEvent({
-        message: `${userName} transmitted a spark`,
-        event_type: 'VIGIL_SPARK',
-        author: userName,
-      });
+      const nowISO = new Date().toISOString();
 
       setFlameData((current) => ({
         ...(current ?? {
@@ -477,7 +557,38 @@ export default function VigilPage() {
           record?.last_lit_at ?? nowISO,
       }));
 
+      applyCooldown(VIGIL_COOLDOWN_MS);
       void calculateIntensity();
+
+      if (
+        angelRef.current &&
+        heartRef.current
+      ) {
+        const angelRect =
+          angelRef.current.getBoundingClientRect();
+
+        const heartRect =
+          heartRef.current.getBoundingClientRect();
+
+        setSpark({
+          start: {
+            x:
+              angelRect.left +
+              angelRect.width / 2,
+            y:
+              angelRect.top +
+              angelRect.height / 2,
+          },
+          end: {
+            x:
+              heartRect.left +
+              heartRect.width / 2,
+            y:
+              heartRect.top +
+              heartRect.height / 2,
+          },
+        });
+      }
     } catch (error) {
       console.error(
         'Vigil ritual error:',
@@ -508,295 +619,345 @@ export default function VigilPage() {
       }, 1200);
   };
 
+  const identityStatus = (() => {
+    if (identity.isLoading) {
+      return (
+        <span className="opacity-50">
+          Preparing your Temple identity...
+        </span>
+      );
+    }
+
+    if (userName) {
+      return (
+        <div className="opacity-90">
+          Connected as{' '}
+          <span className="font-semibold">
+            {userName}
+          </span>
+        </div>
+      );
+    }
+
+    if (identity.isTelegram) {
+      return (
+        <div className="text-amber-400/90">
+          {identity.error ||
+            'Telegram identity is not available. You can still witness the Vigil.'}
+          {identity.error && (
+            <button
+              type="button"
+              onClick={() => void identity.refresh()}
+              className="ml-2 min-h-[44px] align-middle underline underline-offset-2 hover:opacity-80"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="text-amber-400 flex items-center justify-center gap-1.5">
+        <Sparkles size={14} />
+
+        <span>
+          Please{' '}
+          <Link
+            href="/login?next=%2Fvigil"
+            className="underline hover:opacity-80"
+          >
+            sign in
+          </Link>{' '}
+          to participate
+        </span>
+      </div>
+    );
+  })();
+
   return (
     <div
-      className={`relative w-full min-h-[100dvh] ${roomTheme.bg} ${roomTheme.text} font-sans overflow-x-hidden select-none flex flex-col justify-between p-6 pt-36 sm:px-12 sm:pb-12 sm:pt-36 md:p-12 transition-colors duration-1000`}
+      className={`vigil-page relative w-full ${roomTheme.bg} ${roomTheme.text} font-sans overflow-x-hidden select-none flex flex-col px-5 sm:px-10`}
       style={{
         backgroundImage: roomTheme.vignette,
       }}
     >
       <TempleTopBar />
 
-      <h1 className="relative z-20 mx-auto w-full max-w-5xl px-2 pt-4 font-serif text-xs uppercase tracking-[0.3em] text-stone-400">
+      <h1 className="relative z-20 mx-auto w-full max-w-5xl px-1 font-serif text-xs uppercase tracking-[0.3em] text-stone-400">
         Vigil — Digital Temple
       </h1>
 
       {/* Мягкое внутреннее свечение в темной комнате */}
       <div
-        className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-tr ${roomTheme.glow} blur-[120px] pointer-events-none`}
+        className={`pointer-events-none absolute top-1/2 left-1/2 z-0 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-tr ${roomTheme.glow} blur-[120px]`}
       />
 
-      {/* Ангел в темной комнате */}
-      <div
-        ref={angelRef}
-        className="absolute left-[8%] bottom-[8%] sm:left-[15%] sm:bottom-[15%] z-10 md:z-30 flex flex-col items-center pointer-events-none"
-      >
-        <div className="absolute -bottom-2 w-32 h-6 bg-black/40 rounded-full blur-[10px]" />
+      <div className="vigil-stage relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-5 py-3 lg:max-w-5xl lg:gap-0 lg:py-6">
+        {/*
+          On phones and tablets the Angel and the Heart sit together above the
+          control panel, so neither is hidden behind it. From large screens the
+          original side composition returns.
+        */}
+        <div className="vigil-art flex w-full items-end justify-between gap-4 lg:contents">
+          <div
+            ref={angelRef}
+            className="pointer-events-none relative z-10 flex shrink-0 flex-col items-center lg:absolute lg:bottom-[14%] lg:left-[6%] lg:z-30"
+          >
+            <div className="absolute -bottom-2 h-5 w-24 rounded-full bg-black/40 blur-[10px] sm:w-32" />
 
-        <div
-          className={`absolute inset-0 bg-amber-600/15 blur-3xl rounded-full transition-all duration-700 ${
-            isLighting
-              ? 'opacity-100 scale-150'
-              : 'opacity-40'
-          }`}
-        />
-
-        <div className="relative w-32 h-40 sm:w-44 sm:h-52 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.6)]">
-          <Image
-            src={ANGEL_GIF}
-            alt="Guardian Angel"
-            fill
-            className={`object-contain transition-all duration-500 ${
-              isLighting
-                ? 'brightness-125 scale-105 drop-shadow-[0_0_30px_rgba(255,165,0,0.8)]'
-                : ''
-            }`}
-            priority
-            unoptimized
-          />
-        </div>
-      </div>
-
-      {/* Живое сердце */}
-      <div
-        ref={heartRef}
-        className="relative z-10 flex h-32 w-full shrink-0 items-center justify-center mb-5 md:absolute md:top-[30%] md:right-[20%] md:h-auto md:w-auto md:mb-0 md:z-30"
-      >
-        <div
-          className="relative transition-all duration-700 ease-in-out cursor-pointer"
-          style={{
-            transform: `scale(${
-              0.9 + (intensity / 10) * 0.4
-            })`,
-          }}
-        >
-          <motion.div
-            animate={{
-              scale: [1, 1.15, 1],
-              opacity: [0.4, 0.75, 0.4],
-            }}
-            transition={{
-              duration: 2.5,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            }}
-            className="w-32 h-32 sm:w-44 sm:h-44 bg-gradient-to-t from-orange-600 via-rose-600 to-transparent rounded-full blur-[45px] opacity-75 mix-blend-screen"
-          />
-
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Heart
-              size={65 + intensity * 3}
-              className="text-stone-100 fill-orange-600/30 drop-shadow-[0_0_35px_rgba(255,140,0,0.8)] stroke-[1.5]"
+            <div
+              className={`absolute inset-0 rounded-full bg-amber-600/15 blur-3xl transition-all duration-700 ${
+                isLighting
+                  ? 'scale-150 opacity-100'
+                  : 'opacity-40'
+              }`}
             />
-          </div>
-        </div>
 
-        <AnimatePresence>
-          {spark && (
-            <motion.div
-              initial={{
-                x: 0,
-                y: 0,
-                opacity: 0,
-                scale: 0.5,
-              }}
-              animate={{
-                x: [
-                  0,
-                  (spark.end.x -
-                    spark.start.x) *
-                    0.45,
-                  spark.end.x -
-                    spark.start.x,
-                ],
-                y: [
-                  0,
-                  -90,
-                  spark.end.y -
-                    spark.start.y,
-                ],
-                opacity: [
-                  0,
-                  1,
-                  1,
-                  0,
-                ],
-                scale: [
-                  0.55,
-                  1.8,
-                  1.35,
-                  0.25,
-                ],
-                rotate: [
-                  0,
-                  18,
-                  -12,
-                  0,
-                ],
-              }}
-              exit={{
-                opacity: 0,
-              }}
-              transition={{
-                duration: 1.25,
-                times: [
-                  0,
-                  0.35,
-                  0.82,
-                  1,
-                ],
-                ease: [
-                  0.22,
-                  1,
-                  0.36,
-                  1,
-                ],
-              }}
-              className="fixed z-50 pointer-events-none flex items-center justify-center"
+            <div className="relative flex h-32 w-24 items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.6)] sm:h-44 sm:w-36 lg:h-52 lg:w-44">
+              <Image
+                src={ANGEL_GIF}
+                alt="Guardian Angel"
+                fill
+                sizes="(min-width: 1024px) 176px, 144px"
+                className={`object-contain transition-all duration-500 ${
+                  isLighting
+                    ? 'scale-105 brightness-125 drop-shadow-[0_0_30px_rgba(255,165,0,0.8)]'
+                    : ''
+                }`}
+                priority
+                unoptimized
+              />
+            </div>
+          </div>
+
+          <div
+            ref={heartRef}
+            className="relative z-10 flex h-32 w-32 shrink-0 items-center justify-center sm:h-44 sm:w-44 lg:absolute lg:right-[7%] lg:top-[26%] lg:z-30 lg:h-auto lg:w-auto"
+          >
+            <div
+              className="relative transition-all duration-700 ease-in-out"
               style={{
-                left: spark.start.x,
-                top: spark.start.y,
+                transform: `scale(${
+                  0.9 + (intensity / 10) * 0.4
+                })`,
               }}
             >
-              <div className="w-10 h-10 bg-amber-300 rounded-full blur-[3px] shadow-[0_0_30px_10px_#ff9900]" />
-              <div className="absolute w-4 h-4 bg-white rounded-full shadow-[0_0_15px_4px_#ffffff]" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+              <motion.div
+                animate={
+                  reduceMotion
+                    ? { opacity: 0.6 }
+                    : {
+                        scale: [1, 1.15, 1],
+                        opacity: [0.4, 0.75, 0.4],
+                      }
+                }
+                transition={
+                  reduceMotion
+                    ? { duration: 0 }
+                    : {
+                        duration: 2.5,
+                        repeat: Infinity,
+                        ease: 'easeInOut',
+                      }
+                }
+                className="h-32 w-32 rounded-full bg-gradient-to-t from-orange-600 via-rose-600 to-transparent opacity-75 mix-blend-screen blur-[45px] sm:h-44 sm:w-44"
+              />
 
-      {/* Центральный блок управления */}
-      <div className="flex-1 max-w-md mx-auto w-full py-5 md:py-12 flex flex-col items-center justify-center relative z-20 my-auto">
-        <div
-          className={`w-full p-5 sm:p-8 rounded-3xl border backdrop-blur-xl ${roomTheme.cardBg} flex flex-col items-center gap-5 sm:gap-6 text-center shadow-2xl`}
-        >
-          <div className="w-full space-y-3">
-            <div className="font-mono text-xs uppercase tracking-[0.3em] opacity-70">
-              Active Guardians (24h)
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Heart
+                  size={65 + intensity * 3}
+                  className="fill-orange-600/30 text-stone-100 drop-shadow-[0_0_35px_rgba(255,140,0,0.8)] stroke-[1.5]"
+                />
+              </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 justify-center items-center min-h-[40px]">
-              {guardians.length === 0 ? (
-                <div className="font-serif text-sm opacity-50 italic">
-                  No recent sparks recorded yet. Be the first.
-                </div>
-              ) : (
-                guardians.map((guardian, index) => (
-                  <div
-                    key={`${guardian}-${index}`}
-                    className={`font-serif text-xs sm:text-sm px-3.5 py-1.5 rounded-full border shadow-sm transition-transform hover:scale-105 ${roomTheme.buttonClass}`}
-                  >
-                    {guardian}
-                  </div>
-                ))
+            <AnimatePresence>
+              {spark && (
+                <motion.div
+                  initial={
+                    reduceMotion
+                      ? { opacity: 0, scale: 1 }
+                      : {
+                          x: 0,
+                          y: 0,
+                          opacity: 0,
+                          scale: 0.5,
+                        }
+                  }
+                  animate={
+                    reduceMotion
+                      ? { opacity: [0, 1, 0], scale: 1 }
+                      : {
+                          x: [
+                            0,
+                            (spark.end.x -
+                              spark.start.x) *
+                              0.45,
+                            spark.end.x -
+                              spark.start.x,
+                          ],
+                          y: [
+                            0,
+                            -90,
+                            spark.end.y -
+                              spark.start.y,
+                          ],
+                          opacity: [0, 1, 1, 0],
+                          scale: [
+                            0.55,
+                            1.8,
+                            1.35,
+                            0.25,
+                          ],
+                          rotate: [
+                            0,
+                            18,
+                            -12,
+                            0,
+                          ],
+                        }
+                  }
+                  exit={{
+                    opacity: 0,
+                  }}
+                  transition={
+                    reduceMotion
+                      ? { duration: 0.8 }
+                      : {
+                          duration: 1.25,
+                          times: [0, 0.35, 0.82, 1],
+                          ease: [0.22, 1, 0.36, 1],
+                        }
+                  }
+                  className="pointer-events-none fixed z-50 flex items-center justify-center"
+                  style={{
+                    left: spark.start.x,
+                    top: spark.start.y,
+                  }}
+                >
+                  <div className="h-10 w-10 rounded-full bg-amber-300 shadow-[0_0_30px_10px_#ff9900] blur-[3px]" />
+                  <div className="absolute h-4 w-4 rounded-full bg-white shadow-[0_0_15px_4px_#ffffff]" />
+                </motion.div>
               )}
-            </div>
+            </AnimatePresence>
           </div>
+        </div>
 
-          <div className="w-full h-[1px] bg-white/10" />
+        {/* Центральный блок управления */}
+        <div className="vigil-control relative z-20 flex w-full max-w-md flex-col items-center justify-center">
+          <div
+            className={`flex w-full flex-col items-center gap-5 rounded-3xl border p-5 text-center backdrop-blur-xl sm:gap-6 sm:p-7 ${roomTheme.cardBg} shadow-2xl`}
+          >
+            <div className="w-full space-y-3">
+              <div className="font-mono text-xs uppercase tracking-[0.3em] opacity-70">
+                Active Guardians (24h)
+              </div>
 
-          <div className="w-full space-y-4">
-            <div className="text-center space-y-1.5">
-              <div className="font-mono text-xs">
-                {isLoading ? (
-                  <span className="opacity-50">
-                    Verifying session...
-                  </span>
-                ) : userName ? (
-                  <div className="opacity-90">
-                    Connected as{' '}
-                    <span className="font-semibold">
-                      {userName}
-                    </span>
+              <div className="flex min-h-[40px] flex-wrap items-center justify-center gap-2">
+                {guardians.length === 0 ? (
+                  <div className="font-serif text-sm italic opacity-50">
+                    No recent sparks recorded yet. Be the first.
                   </div>
                 ) : (
-                  <div className="text-amber-400 flex items-center justify-center gap-1.5">
-                    <Sparkles size={14} />
+                  guardians.map((guardian, index) => (
+                    <div
+                      key={`${guardian}-${index}`}
+                      className={`max-w-[12rem] truncate rounded-full border px-3.5 py-1.5 font-serif text-xs shadow-sm transition-transform hover:scale-105 sm:text-sm ${roomTheme.buttonClass}`}
+                    >
+                      {guardian}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
 
-                    <span>
-                      Please{' '}
-                      <Link
-                        href="/login?next=%2Fvigil"
-                        className="underline hover:opacity-80"
-                      >
-                        sign in
-                      </Link>{' '}
-                      to participate
+            <div className="h-[1px] w-full bg-white/10" />
+
+            <div className="w-full space-y-4">
+              <div className="space-y-1.5 text-center">
+                <div className="font-mono text-xs">
+                  {identityStatus}
+                </div>
+
+                <div className="flex items-center justify-center gap-2">
+                  <Clock
+                    size={13}
+                    className="text-amber-400"
+                  />
+
+                  <span className="font-mono text-xs uppercase tracking-wider opacity-85">
+                    {timeLeft ||
+                      'Checking status...'}
+                  </span>
+                </div>
+
+                {isOnCooldown && (
+                  <div
+                    className="font-mono text-[11px] uppercase tracking-[0.14em] text-amber-300/80"
+                    aria-live="polite"
+                  >
+                    Next spark in {cooldownLabel}
+                  </div>
+                )}
+
+                {flameData?.owner_name && (
+                  <div
+                    className="font-serif text-sm text-amber-200/90"
+                    aria-live="polite"
+                  >
+                    {timeLeft ===
+                    'FLAME EXTINGUISHED'
+                      ? 'Last spark by'
+                      : 'Heart lit by'}{' '}
+                    <span className="font-semibold text-amber-100">
+                      {flameData.owner_name}
                     </span>
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center justify-center gap-2">
-                <Clock
-                  size={13}
-                  className="text-amber-400"
+              <button
+                type="button"
+                onClick={triggerRitual}
+                disabled={
+                  isLighting || !userName || isOnCooldown
+                }
+                aria-busy={isLighting}
+                className={`
+                  group relative flex h-12 w-full cursor-pointer items-center justify-center gap-2.5 rounded-full border border-white/20 bg-white/10 font-serif text-xs uppercase tracking-widest text-stone-200 shadow-md backdrop-blur-md transition-all hover:bg-white/20 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40
+                `}
+              >
+                <Heart
+                  size={14}
+                  className={`fill-orange-500/30 text-orange-500 ${
+                    isLighting
+                      ? 'animate-bounce'
+                      : ''
+                  }`}
                 />
 
-                <span className="font-mono text-xs uppercase tracking-wider opacity-85">
-                  {timeLeft ||
-                    'Checking status...'}
+                <span>
+                  {isLighting
+                    ? 'Transmitting Spark...'
+                    : isOnCooldown
+                      ? `Spark returns in ${cooldownLabel}`
+                      : 'Send Spark'}
                 </span>
-              </div>
+              </button>
 
-              {flameData?.owner_name && (
+              {rateLimitMsg && (
                 <div
-                  className="font-serif text-sm text-amber-200/90"
-                  aria-live="polite"
+                  className="text-center font-mono text-xs text-rose-400"
+                  role="status"
                 >
-                  {timeLeft ===
-                  'FLAME EXTINGUISHED'
-                    ? 'Last spark by'
-                    : 'Heart lit by'}{' '}
-                  <span className="font-semibold text-amber-100">
-                    {flameData.owner_name}
-                  </span>
+                  {rateLimitMsg}
                 </div>
               )}
             </div>
-
-            <button
-              type="button"
-              onClick={triggerRitual}
-              disabled={
-                isLighting || !userName
-              }
-              className={`
-                group relative w-full h-12 border backdrop-blur-md shadow-md
-                flex items-center justify-center gap-2.5 rounded-full
-                transition-all active:scale-95 disabled:opacity-40 cursor-pointer font-serif text-xs tracking-widest uppercase
-                ${roomTheme.buttonClass}
-              `}
-            >
-              <Heart
-                size={14}
-                className={`text-orange-500 fill-orange-500/30 ${
-                  isLighting
-                    ? 'animate-bounce'
-                    : ''
-                }`}
-              />
-
-              <span>
-                {isLighting
-                  ? 'Transmitting Spark...'
-                  : 'Send Spark'}
-              </span>
-            </button>
-
-            {rateLimitMsg && (
-              <div
-                className="font-mono text-xs text-rose-400 text-center"
-                role="status"
-              >
-                {rateLimitMsg}
-              </div>
-            )}
           </div>
         </div>
       </div>
-
-      <div className="h-4" />
     </div>
   );
 }

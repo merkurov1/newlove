@@ -9,7 +9,7 @@ import { recordPierrotDonationCompleted } from '@/lib/pierrot/commercialAnalytic
 /**
  * Trusted Tribute confirmation.
  *
- * Only a verified `checkout.session.completed` event with
+ * Only a verified Stripe event or a server-side Stripe session retrieval with
  * `payment_status === 'paid'` may create a Tribute row or a
  * `donation_completed` analytics event. Browser-supplied amounts and statuses
  * are never used here.
@@ -44,6 +44,30 @@ async function recordDonationAttribution(
     currency: typeof session.currency === 'string' ? session.currency.toLowerCase() : null,
     source: 'tribute_webhook',
   });
+}
+
+/**
+ * A single public, realtime-safe signal for the Tribute page.
+ *
+ * The browser must not subscribe to the private `tributes` table: realtime
+ * payloads contain the full row (including provider session data). The public
+ * temple log already exists for ritual events and only carries the display name
+ * that the Tribute page is allowed to show.
+ */
+async function recordTributeTempleSignal(
+  supabase: SupabaseClient,
+  donorName: string
+): Promise<void> {
+  const { error } = await supabase.from('temple_log').insert({
+    author: donorName,
+    event_type: 'TRIBUTE',
+    message: `${donorName} offered light to the Temple`,
+    created_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    console.warn('Tribute temple signal failed:', error.message);
+  }
 }
 
 export async function confirmTributeCheckoutSession(
@@ -115,6 +139,7 @@ export async function confirmTributeCheckoutSession(
     return { status: 'rejected', code: 'insert_failed', sessionId: session.id };
   }
 
+  await recordTributeTempleSignal(supabase, donorName);
   await recordDonationAttribution(supabase, session);
 
   return { status: 'confirmed', sessionId: session.id };

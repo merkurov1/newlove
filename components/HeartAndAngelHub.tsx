@@ -8,6 +8,7 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import { FreeMode, Mousewheel } from 'swiper/modules';
 import 'swiper/css';
 import 'swiper/css/free-mode';
+import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
 
 const serif = Newsreader({
   subsets: ['latin'],
@@ -70,10 +71,21 @@ export default function HeartAndAngelHub() {
     };
   }, [isModalOpen]);
 
+  useEffect(() => {
+    if (!isModalOpen) return;
+
+    return registerTelegramBackHandler(() => {
+      setIsModalOpen(false);
+      return true;
+    });
+  }, [isModalOpen]);
+
   return (
     <div
       className={`${sans.className} relative min-h-screen overflow-x-hidden bg-[#FAF8F5] text-[#141210] selection:bg-black selection:text-white`}
     >
+      <h1 className="sr-only">Heart &amp; Angel</h1>
+
       {/* ───────── HERO ───────── */}
       <div className="relative w-full bg-[#EAF2F8] md:flex md:h-[100dvh] md:flex-col md:justify-between md:overflow-hidden md:bg-[#FAF8F5]">
         {/* Desktop background */}
@@ -90,7 +102,7 @@ export default function HeartAndAngelHub() {
         </div>
 
         {/* Mobile */}
-        <div className="flex min-h-[calc(100vh-70px)] flex-col justify-between bg-[#EAF2F8] px-5 pb-6 pt-20 md:hidden">
+        <div className="ha-hub-mobile-hero flex min-h-[calc(100dvh-4.75rem)] flex-col justify-between bg-[#EAF2F8] px-5 pb-6 pt-20 md:hidden">
           <div className="space-y-1.5 text-center">
             <p className={`${serif.className} text-2xl font-light tracking-wider text-zinc-900`}>
               Heart &amp; Angel
@@ -103,7 +115,7 @@ export default function HeartAndAngelHub() {
             </p>
           </div>
 
-          <div className="relative my-2 h-44 w-full">
+          <div className="ha-hub-mobile-art relative my-2 h-44 w-full">
             <Image
               src={`${STORAGE}/heartandangel/World.png`}
               alt="Heart & Angel World"
@@ -143,7 +155,7 @@ export default function HeartAndAngelHub() {
         <div className="relative z-10 hidden h-full flex-col justify-between md:flex">
           <div className="mx-auto flex w-full max-w-7xl justify-end px-10 pt-36">
             <div className="max-w-lg space-y-3 text-right text-white drop-shadow-lg">
-              <h1 className={`${serif.className} text-6xl font-light tracking-wider`}>Heart &amp; Angel</h1>
+              <p className={`${serif.className} text-6xl font-light tracking-wider`}>Heart &amp; Angel</p>
               <p className={`${serif.className} text-lg font-light leading-relaxed tracking-wide text-stone-100`}>
                 The universal mythology for a fragmented world.
               </p>

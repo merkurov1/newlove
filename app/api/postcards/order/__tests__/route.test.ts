@@ -130,7 +130,10 @@ function makeRequest(overrides: Record<string, unknown> = {}): Request {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockCreateSession.mockResolvedValue({ url: 'https://checkout.stripe.com/session' });
+  mockCreateSession.mockResolvedValue({
+    id: 'cs_test_postcard',
+    url: 'https://checkout.stripe.com/session',
+  });
   serverAuth.getServerSupabaseClient.mockReturnValue(makeStore().store);
 });
 
@@ -145,6 +148,9 @@ describe('POST /api/postcards/order', () => {
 
     expect(response.status).toBe(200);
     expect(mockCreateSession).toHaveBeenCalledTimes(1);
+
+    const json = (await response.json()) as { sessionId?: string };
+    expect(json.sessionId).toBe('cs_test_postcard');
 
     const [session] = mockCreateSession.mock.calls[0] as [Record<string, any>];
     expect(session.line_items[0].price_data.unit_amount).toBe(2900);

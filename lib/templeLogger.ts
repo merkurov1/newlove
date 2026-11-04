@@ -9,7 +9,7 @@ interface LogParams {
   event_type: TempleEventType;
   message?: string;
   author?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export async function logTempleEvent({
@@ -18,10 +18,12 @@ export async function logTempleEvent({
   author,
   metadata = {}
 }: LogParams) {
-  // Единое разрешение имени: localStorage -> переданный author -> дефолт 'Pilgrim'
-  const resolvedAuthor = typeof window !== 'undefined' 
-    ? (localStorage.getItem('temple_user') || author || 'Pilgrim')
-    : (author || 'Pilgrim');
+  // Prefer the author explicitly derived by the ritual. localStorage is only
+  // a fallback for callers that do not have a live identity yet.
+  const resolvedAuthor =
+    typeof window !== 'undefined'
+      ? author || localStorage.getItem('temple_user') || 'Pilgrim'
+      : author || 'Pilgrim';
 
   try {
     const { data: { session } } = await supabase.auth.getSession();
