@@ -38,20 +38,35 @@ function CitationBadge({
   );
 }
 
+export function stabilizeStreamingMarkdown(content: string, streaming: boolean): string {
+  if (!streaming) return content;
+
+  // A partially received fenced code block must not swallow the rest of the
+  // answer while the next tokens are still arriving.
+  const fences = (content.match(/```/g) || []).length;
+  return fences % 2 === 1 ? `${content}\n\`\`\`` : content;
+}
+
 export default function WorkspaceMarkdown({
   content,
   className = '',
   citationCount = 0,
   onCitation,
+  streaming = false,
+  editorial = false,
 }: {
   content: string;
   className?: string;
   citationCount?: number;
   onCitation?: (index: number) => void;
+  streaming?: boolean;
+  editorial?: boolean;
 }) {
-  const prepared = prepareCitationMarkdown(content, citationCount);
-  const hasRenderedCitation =
-    citationCount > 0 && prepared.includes(CITATION_HREF_PREFIX);
+  const prepared = prepareCitationMarkdown(
+    stabilizeStreamingMarkdown(content, streaming),
+    citationCount
+  );
+  const hasRenderedCitation = citationCount > 0 && prepared.includes(CITATION_HREF_PREFIX);
 
   return (
     <div className={className}>
@@ -64,6 +79,22 @@ export default function WorkspaceMarkdown({
             return safeSourceUrl(value) || '';
           },
           overrides: {
+            ...(editorial
+              ? {
+                  table: {
+                    component: ({
+                      children,
+                      ...props
+                    }: React.TableHTMLAttributes<HTMLTableElement> & {
+                      children?: React.ReactNode;
+                    }) => (
+                      <div className="pw-table-wrap">
+                        <table {...props}>{children}</table>
+                      </div>
+                    ),
+                  },
+                }
+              : {}),
             a: {
               component: ({
                 href,
@@ -76,9 +107,7 @@ export default function WorkspaceMarkdown({
 
                 if (citation !== null) {
                   if (citation > citationCount) return <span>{children}</span>;
-                  return (
-                    <CitationBadge index={citation} onCitation={onCitation} />
-                  );
+                  return <CitationBadge index={citation} onCitation={onCitation} />;
                 }
 
                 const safe = safeSourceUrl(href || '');
@@ -105,11 +134,7 @@ export default function WorkspaceMarkdown({
       {citationCount > 0 && !hasRenderedCitation && (
         <span className="pw-citations" aria-label="Источники ответа">
           {Array.from({ length: citationCount }, (_, index) => (
-            <CitationBadge
-              key={index + 1}
-              index={index + 1}
-              onCitation={onCitation}
-            />
+            <CitationBadge key={index + 1} index={index + 1} onCitation={onCitation} />
           ))}
         </span>
       )}

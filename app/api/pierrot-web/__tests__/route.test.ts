@@ -86,6 +86,15 @@ jest.mock('@/lib/pierrot/serviceInquiryStore', () => ({
   advanceStoredServiceInquiry: jest.fn(async () => null),
 }));
 
+jest.mock('@/lib/pierrot/memory/store', () => ({
+  buildMemoryContext: jest.fn(async () => null),
+  createMemoryRecord: jest.fn(),
+  deleteMemoryRecord: jest.fn(),
+  getMemorySummary: jest.fn(),
+  listMemoryRecords: jest.fn(),
+  updateMemoryRecord: jest.fn(),
+}));
+
 jest.mock('openai', () => {
   const create = jest.fn();
 
@@ -150,6 +159,14 @@ const mediaEvidence = require('@/lib/knowledge/rag/mediaEvidence') as {
     mockResolvedValue: (value: unknown) => void;
     mockResolvedValueOnce: (value: unknown) => void;
   };
+};
+const memoryStore = jest.requireMock('@/lib/pierrot/memory/store') as {
+  buildMemoryContext: jest.Mock;
+  createMemoryRecord: jest.Mock;
+  deleteMemoryRecord: jest.Mock;
+  getMemorySummary: jest.Mock;
+  listMemoryRecords: jest.Mock;
+  updateMemoryRecord: jest.Mock;
 };
 const documentLookup = jest.requireMock('@/lib/knowledge/rag/documentLookup') as {
   findBrainDocumentByTitle: {
@@ -272,6 +289,20 @@ beforeEach(() => {
   documentLookup.findBrainDocumentByTitle.mockResolvedValue(null);
   documentLookup.loadBrainDocumentChunks.mockReset();
   documentLookup.loadBrainDocumentChunks.mockResolvedValue([]);
+  memoryStore.buildMemoryContext.mockReset();
+  memoryStore.buildMemoryContext.mockResolvedValue(null);
+  memoryStore.createMemoryRecord.mockReset();
+  memoryStore.deleteMemoryRecord.mockReset();
+  memoryStore.deleteMemoryRecord.mockResolvedValue(true);
+  memoryStore.getMemorySummary.mockReset();
+  memoryStore.getMemorySummary.mockResolvedValue({
+    counts: { memory: 0, saved: 0, reminder: 0 },
+    reminders: [],
+    available: true,
+  });
+  memoryStore.listMemoryRecords.mockReset();
+  memoryStore.listMemoryRecords.mockResolvedValue([]);
+  memoryStore.updateMemoryRecord.mockReset();
 
   mockCreate.mockReset();
   mockCreate.mockImplementation(async () => {
@@ -311,6 +342,15 @@ describe('POST /api/pierrot-web persistence', () => {
     };
     expect(startCall.startPage).toBe('/lobby');
     expect(startCall.referrer).toBe('https://news.example/story');
+  });
+
+  it('never writes owner memory for a public visitor', async () => {
+    const response = await POST(
+      makeRequest(validBody({ message: 'Запомни, что я люблю короткие ответы' }))
+    );
+
+    expect(response.status).toBe(200);
+    expect(memoryStore.createMemoryRecord).not.toHaveBeenCalled();
   });
 
   it('keeps the JSON contract for a non-owner caller that sends stream:true', async () => {
@@ -1471,6 +1511,14 @@ describe('Pierrot intelligence regressions', () => {
     });
   }
 
+  function memoryOwner() {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN', name: 'Anton Merkurov' },
+    });
+  }
+
   function systemPrompt(): string {
     const call = asMock(mockCreate).mock.calls[0][0] as {
       messages: Array<{ role: string; content: string }>;
@@ -1981,6 +2029,207 @@ describe('Pierrot intelligence regressions', () => {
     expect(json.owner_tool).toBeUndefined();
     expect(json.sourceStatus?.brain).toBe('not_requested');
   });
+  it('injects explicit owner memory into the model prompt', async () => {
+    memoryOwner();
+    memoryStore.buildMemoryContext.mockResolvedValueOnce(
+      'OWNER MEMORY (private, verified owner only):\nDURABLE MEMORY:\n- Короткие ответы: предпочитает короткие ответы.'
+    );
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Как лучше ответить?' }))
+    );
+
+    expect(response.status).toBe(200);
+    expect(systemPrompt()).toContain('OWNER MEMORY');
+    expect(systemPrompt()).toContain('Короткие ответы');
+  });
+
+  it('allows an explicit memory command when transcript consent is denied', async () => {
+    memoryOwner();
+    memoryStore.createMemoryRecord.mockResolvedValueOnce({
+      id: '44444444-4444-4444-8444-444444444444',
+      kind: 'memory',
+      title: 'короткие ответы',
+      content: 'короткие ответы',
+      reviewAt: null,
+      status: 'current',
+    });
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Запомни, что я предпочитаю короткие ответы',
+          consent: { state: 'denied', version: null },
+        })
+      )
+    );
+    const json = (await response.json()) as {
+      memory_status?: string;
+      recorded?: boolean;
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.memory_status).toBe('saved');
+    expect(json.recorded).toBe(false);
+    expect(memoryStore.createMemoryRecord).toHaveBeenCalled();
+  });
+
+  it('saves “Запомни” only after the memory store confirms the write', async () => {
+    memoryOwner();
+    memoryStore.createMemoryRecord.mockResolvedValueOnce({
+      id: '44444444-4444-4444-8444-444444444444',
+      kind: 'memory',
+      title: 'короткие ответы',
+      content: 'я предпочитаю короткие ответы',
+      reviewAt: null,
+      status: 'current',
+    });
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Запомни, что я предпочитаю короткие ответы',
+        })
+      )
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      memory_status?: string;
+      memory_kind?: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.reply).toContain('Запомнил');
+    expect(json.memory_status).toBe('saved');
+    expect(json.memory_kind).toBe('memory');
+    expect(memoryStore.createMemoryRecord).toHaveBeenCalledWith(
+      expect.anything(),
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      expect.objectContaining({ kind: 'memory', content: 'я предпочитаю короткие ответы' })
+    );
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('does not claim a memory write when the store fails', async () => {
+    memoryOwner();
+    memoryStore.createMemoryRecord.mockRejectedValueOnce(new Error('db down'));
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Сохрани эту идею: отдельная подборка для институций',
+        })
+      )
+    );
+    const json = (await response.json()) as { reply?: string; memory_status?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.memory_status).toBe('write_failed');
+    expect(json.reply).toContain('Не удалось сохранить');
+    expect(json.reply).not.toContain('Сохранил:');
+  });
+
+  it('creates a dated reminder from natural language', async () => {
+    memoryOwner();
+    memoryStore.createMemoryRecord.mockResolvedValueOnce({
+      id: '44444444-4444-4444-8444-444444444444',
+      kind: 'reminder',
+      title: 'проверить интеграцию с LinkedIn',
+      content: 'проверить интеграцию с LinkedIn',
+      reviewAt: '2026-11-05T09:00:00.000Z',
+      status: 'current',
+    });
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Напомни завтра проверить интеграцию с LinkedIn',
+        })
+      )
+    );
+    const json = (await response.json()) as {
+      memory_status?: string;
+      memory_kind?: string;
+      reply?: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.memory_status).toBe('saved');
+    expect(json.memory_kind).toBe('reminder');
+    expect(json.reply).toContain('2026-11-05');
+    expect(memoryStore.createMemoryRecord).toHaveBeenCalledWith(
+      expect.anything(),
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      expect.objectContaining({ kind: 'reminder', reviewAt: expect.any(String) })
+    );
+  });
+
+  it('does not silently overwrite memory when the owner says “вместо”', async () => {
+    memoryOwner();
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Запомни, что теперь вместо длинных ответов нужны короткие',
+        })
+      )
+    );
+    const json = (await response.json()) as { reply?: string; memory_status?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.memory_status).toBe('clarification_required');
+    expect(json.reply).toContain('не буду незаметно');
+    expect(memoryStore.createMemoryRecord).not.toHaveBeenCalled();
+  });
+
+  it('lists all three memory categories from the store', async () => {
+    memoryOwner();
+    memoryStore.listMemoryRecords.mockResolvedValueOnce([
+      {
+        id: '55555555-5555-4555-8555-555555555555',
+        kind: 'memory',
+        title: 'Короткие ответы',
+        content: 'Предпочитает короткие ответы.',
+        reviewAt: null,
+        status: 'current',
+      },
+      {
+        id: '66666666-6666-4666-8666-666666666666',
+        kind: 'saved',
+        title: 'Идея для институций',
+        content: 'Собрать подборку.',
+        reviewAt: null,
+        status: 'current',
+      },
+      {
+        id: '77777777-7777-4777-8777-777777777777',
+        kind: 'reminder',
+        title: 'LinkedIn',
+        content: 'Проверить интеграцию.',
+        reviewAt: '2026-12-01T09:00:00.000Z',
+        status: 'current',
+      },
+    ]);
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Что у нас в памяти?' }))
+    );
+    const json = (await response.json()) as { reply?: string; memory_status?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.memory_status).toBe('listed');
+    expect(json.reply).toContain('Запомнено');
+    expect(json.reply).toContain('Сохранено');
+    expect(json.reply).toContain('Напоминания');
+    expect(json.reply).toContain('LinkedIn');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
   it('streams deterministic owner replies through the same protocol', async () => {
     owner();
 

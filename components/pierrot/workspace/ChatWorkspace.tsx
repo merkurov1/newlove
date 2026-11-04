@@ -3,7 +3,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowUp, MessageSquare, PanelLeft, Plus, Square, X } from 'lucide-react';
+import {
+  Archive,
+  ArrowUp,
+  Bookmark,
+  Check,
+  MessageSquare,
+  PanelLeft,
+  Plus,
+  Square,
+  Trash2,
+  X,
+} from 'lucide-react';
 import type {
   OwnerConversation,
   OwnerConversationListItem,
@@ -28,6 +39,12 @@ import MetricStatusList from './MetricStatusList';
 import WorkspaceMarkdown from './WorkspaceMarkdown';
 import PierrotAvatar from './PierrotAvatar';
 import { useOnlineStatus } from './useOnlineStatus';
+import type {
+  PierrotMemoryKind,
+  PierrotMemoryRecord,
+  PierrotMemorySummary,
+} from '@/lib/pierrot/memory/types';
+import { memoryKindLabel, memoryStatusLabel } from '@/lib/pierrot/memory/types';
 
 type UiMessage = {
   id: string;
@@ -130,6 +147,14 @@ export default function ChatWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [streamStage, setStreamStage] = useState<PierrotStreamStage | null>(null);
   const [retryPrompt, setRetryPrompt] = useState<string | null>(null);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [memorySummary, setMemorySummary] = useState<PierrotMemorySummary | null>(null);
+  const [memoryRecords, setMemoryRecords] = useState<PierrotMemoryRecord[]>([]);
+  const [memoryFilter, setMemoryFilter] = useState<'all' | PierrotMemoryKind>('all');
+  const [memoryLoading, setMemoryLoading] = useState(false);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
+  const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
+  const [editingMemoryContent, setEditingMemoryContent] = useState('');
   const [consent, setConsent] = useState<Consent>(() => ({
     state:
       conversation?.consentState === 'granted'
@@ -189,6 +214,8 @@ export default function ChatWorkspace({
     setError(null);
     setStreamStage(null);
     setRetryPrompt(null);
+    setMemoryOpen(false);
+    setMemoryError(null);
     setLoading(false);
     atBottomRef.current = true;
     streamingMessageIdRef.current = null;
@@ -283,6 +310,135 @@ export default function ChatWorkspace({
       setMessages((current) =>
         current.map((item) => (item.id === message.id ? { ...item, feedbackError: true } : item))
       );
+    }
+  }
+
+  const loadMemoryData = useCallback(async (includeRecords: boolean) => {
+    if (!mountedRef.current) return;
+
+    setMemoryLoading(true);
+    setMemoryError(null);
+
+    try {
+      const [summaryResponse, recordsResponse] = await Promise.all([
+        fetch('/api/pierrot/memory?view=summary'),
+        includeRecords ? fetch('/api/pierrot/memory?status=active&limit=100') : null,
+      ]);
+
+      if (summaryResponse.ok) {
+        const summary = (await summaryResponse.json()) as PierrotMemorySummary;
+        if (mountedRef.current) setMemorySummary(summary);
+      } else {
+        throw new Error('memory_summary_failed');
+      }
+
+      if (recordsResponse) {
+        if (!recordsResponse.ok) throw new Error('memory_records_failed');
+        const data = (await recordsResponse.json()) as {
+          records?: PierrotMemoryRecord[];
+        };
+        if (mountedRef.current) setMemoryRecords(data.records || []);
+      }
+    } catch {
+      if (mountedRef.current) {
+        setMemoryError('Память сейчас недоступна.');
+      }
+    } finally {
+      if (mountedRef.current) setMemoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadMemoryData(false);
+  }, [conversation?.id, loadMemoryData]);
+
+  function openMemory() {
+    setMemoryOpen(true);
+    setInspectorOpen(false);
+    void loadMemoryData(true);
+  }
+
+  async function saveMessageToMemory(message: UiMessage, kind: PierrotMemoryKind) {
+    if (!conversationId) {
+      setMemoryError('Сначала отправь сообщение, затем сохрани ответ.');
+      return;
+    }
+
+    setMemoryError(null);
+    const title =
+      message.content.length > 96 ? `${message.content.slice(0, 93).trimEnd()}…` : message.content;
+
+    try {
+      const response = await fetch('/api/pierrot/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind,
+          title,
+          content: message.content,
+          conversationId,
+          messageId: message.serverMessageId,
+        }),
+      });
+
+      if (!response.ok) throw new Error('memory_write_failed');
+
+      setMemoryOpen(true);
+      setInspectorOpen(false);
+      await loadMemoryData(true);
+    } catch {
+      setMemoryError('Не удалось сохранить запись.');
+    }
+  }
+
+  async function updateMemoryStatus(record: PierrotMemoryRecord, status: string) {
+    setMemoryError(null);
+
+    try {
+      const response = await fetch(`/api/pierrot/memory/${record.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) throw new Error('memory_update_failed');
+      await loadMemoryData(true);
+    } catch {
+      setMemoryError('Не удалось обновить запись.');
+    }
+  }
+
+  async function deleteMemoryRecord(record: PierrotMemoryRecord) {
+    if (!window.confirm(`Удалить запись «${record.title}»?`)) return;
+
+    setMemoryError(null);
+    try {
+      const response = await fetch(`/api/pierrot/memory/${record.id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('memory_delete_failed');
+      if (editingMemoryId === record.id) setEditingMemoryId(null);
+      await loadMemoryData(true);
+    } catch {
+      setMemoryError('Не удалось удалить запись.');
+    }
+  }
+
+  async function saveMemoryEdit(record: PierrotMemoryRecord) {
+    const content = editingMemoryContent.trim();
+    if (!content) return;
+
+    setMemoryError(null);
+    try {
+      const response = await fetch(`/api/pierrot/memory/${record.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      if (!response.ok) throw new Error('memory_update_failed');
+      setEditingMemoryId(null);
+      await loadMemoryData(true);
+    } catch {
+      setMemoryError('Не удалось изменить запись.');
     }
   }
 
@@ -432,6 +588,10 @@ export default function ChatWorkspace({
       } else {
         setError('Ответ получен, но диалог не сохранён: сохранение выключено или не разрешено.');
       }
+
+      if (typeof payload.memory_status === 'string') {
+        void loadMemoryData(true);
+      }
     };
 
     try {
@@ -558,6 +718,14 @@ export default function ChatWorkspace({
         } else {
           setError('Ответ получен, но диалог не сохранён: сохранение выключено или не разрешено.');
         }
+
+        if (
+          payload &&
+          typeof payload === 'object' &&
+          typeof (payload as Record<string, unknown>).memory_status === 'string'
+        ) {
+          void loadMemoryData(true);
+        }
       }
     } catch (caught) {
       if (!mountedRef.current || streamingMessageIdRef.current !== assistantUiId) return;
@@ -646,10 +814,17 @@ export default function ChatWorkspace({
   function closePanels() {
     setDrawerOpen(false);
     setInspectorOpen(false);
+    setMemoryOpen(false);
   }
 
   const streamingMessage = messages.find((message) => message.streaming);
   const hasStreamingContent = Boolean(streamingMessage?.content.trim());
+  const memoryCounts = memorySummary?.counts ?? { memory: 0, saved: 0, reminder: 0 };
+  const memoryTotal = memoryCounts.memory + memoryCounts.saved + memoryCounts.reminder;
+  const filteredMemoryRecords =
+    memoryFilter === 'all'
+      ? memoryRecords
+      : memoryRecords.filter((record) => record.kind === memoryFilter);
   const streamStageLabel =
     streamStage === 'retrieving'
       ? 'Pierrot ищет в архиве'
@@ -663,7 +838,7 @@ export default function ChatWorkspace({
       data-drawer={drawerOpen ? 'open' : 'closed'}
       data-inspector={inspectorOpen ? 'open' : 'closed'}
     >
-      {(drawerOpen || inspectorOpen) && (
+      {(drawerOpen || inspectorOpen || memoryOpen) && (
         <button
           type="button"
           className="pw-scrim"
@@ -755,6 +930,17 @@ export default function ChatWorkspace({
               offline
             </span>
           )}
+
+          <button
+            type="button"
+            className="pw-memory-trigger"
+            onClick={openMemory}
+            aria-label="Открыть память"
+          >
+            <Bookmark size={15} strokeWidth={1.5} aria-hidden="true" />
+            <span>Память</span>
+            <span className="pw-memory-trigger-count">{memoryTotal}</span>
+          </button>
         </header>
 
         <div className="pw-chat-scroll" ref={scrollRef} onScroll={onTranscriptScroll}>
@@ -763,6 +949,12 @@ export default function ChatWorkspace({
               <p className="pw-kicker">Pierrot · owner workspace</p>
               <h2 className="pw-empty-title">Всё спокойно.</h2>
               <p className="pw-empty-summary">{overview.summary}</p>
+              {memoryTotal > 0 && (
+                <button type="button" className="pw-memory-line" onClick={openMemory}>
+                  Память · {memoryCounts.memory} | Сохранено · {memoryCounts.saved} | Напоминания ·{' '}
+                  {memoryCounts.reminder}
+                </button>
+              )}
               <CommercialBrief summary={overview.commercial} />
               <MetricStatusList metrics={overview.metrics} />
             </div>
@@ -815,6 +1007,24 @@ export default function ChatWorkspace({
                               <button type="button" onClick={() => handoff('flow', message)}>
                                 Во Flow
                               </button>
+                              <button
+                                type="button"
+                                onClick={() => void saveMessageToMemory(message, 'memory')}
+                              >
+                                Запомнить
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void saveMessageToMemory(message, 'saved')}
+                              >
+                                Сохранить
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void saveMessageToMemory(message, 'reminder')}
+                              >
+                                Напомнить
+                              </button>
                             </div>
                           )}
 
@@ -823,6 +1033,8 @@ export default function ChatWorkspace({
                           content={message.content}
                           citationCount={messageSourceCount}
                           onCitation={(index) => openSources(message, index)}
+                          streaming={message.streaming}
+                          editorial
                         />
 
                         {message.interrupted && (
@@ -976,6 +1188,134 @@ export default function ChatWorkspace({
           </div>
         </div>
       </section>
+
+      {memoryOpen && (
+        <aside className="pw-memory" aria-label="Память">
+          <div className="pw-memory-inner">
+            <div className="pw-panel-head">
+              <div>
+                <span className="pw-section-title">Memory</span>
+                <p className="pw-inspector-title">
+                  {memoryTotal} {memoryTotal === 1 ? 'запись' : 'записей'}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="pw-icon-button"
+                onClick={() => setMemoryOpen(false)}
+                aria-label="Закрыть память"
+              >
+                <X size={20} strokeWidth={1.4} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="pw-memory-tabs" role="tablist" aria-label="Категории памяти">
+              {[
+                ['all', 'Все', memoryTotal],
+                ['memory', 'Запомнено', memoryCounts.memory],
+                ['saved', 'Сохранено', memoryCounts.saved],
+                ['reminder', 'Напомнить', memoryCounts.reminder],
+              ].map(([value, label, count]) => (
+                <button
+                  key={String(value)}
+                  type="button"
+                  role="tab"
+                  aria-selected={memoryFilter === value}
+                  className={`pw-memory-tab${memoryFilter === value ? ' is-active' : ''}`}
+                  onClick={() => setMemoryFilter(value as 'all' | PierrotMemoryKind)}
+                >
+                  {label} <span>{count}</span>
+                </button>
+              ))}
+            </div>
+
+            {memoryError && <p className="pw-memory-error">{memoryError}</p>}
+
+            <div className="pw-memory-scroll">
+              {memoryLoading ? (
+                <p className="pw-inspector-empty">Загружаю память…</p>
+              ) : filteredMemoryRecords.length === 0 ? (
+                <p className="pw-inspector-empty">
+                  Пока нет записей в этой категории. Можно сказать Пьеро «Запомни», «Сохрани» или
+                  «Напомни».
+                </p>
+              ) : (
+                filteredMemoryRecords.map((record) => (
+                  <article key={record.id} className="pw-memory-record">
+                    <div className="pw-memory-record-head">
+                      <span className="pw-memory-kind">{memoryKindLabel(record.kind)}</span>
+                      <span className="pw-memory-status">{memoryStatusLabel(record.status)}</span>
+                    </div>
+                    <h3 className="pw-memory-title">{record.title}</h3>
+                    <p className="pw-memory-meta">
+                      {[record.reviewAt?.slice(0, 10), record.project]
+                        .filter(Boolean)
+                        .join(' · ') || record.updatedAt.slice(0, 10)}
+                    </p>
+
+                    {editingMemoryId === record.id ? (
+                      <>
+                        <textarea
+                          className="pw-memory-edit"
+                          value={editingMemoryContent}
+                          onChange={(event) => setEditingMemoryContent(event.target.value)}
+                          rows={4}
+                        />
+                        <div className="pw-memory-actions">
+                          <button type="button" onClick={() => void saveMemoryEdit(record)}>
+                            Сохранить
+                          </button>
+                          <button type="button" onClick={() => setEditingMemoryId(null)}>
+                            Отмена
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="pw-memory-content">{record.content}</p>
+                        <div className="pw-memory-actions">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingMemoryId(record.id);
+                              setEditingMemoryContent(record.content);
+                            }}
+                          >
+                            Изменить
+                          </button>
+                          {record.kind === 'reminder' && record.status === 'current' && (
+                            <button
+                              type="button"
+                              onClick={() => void updateMemoryStatus(record, 'completed')}
+                            >
+                              <Check size={12} aria-hidden="true" /> Завершить
+                            </button>
+                          )}
+                          {record.kind === 'saved' && record.status === 'current' && (
+                            <button
+                              type="button"
+                              onClick={() => void updateMemoryStatus(record, 'archived')}
+                            >
+                              <Archive size={12} aria-hidden="true" /> В архив
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="pw-memory-delete"
+                            onClick={() => void deleteMemoryRecord(record)}
+                          >
+                            <Trash2 size={12} aria-hidden="true" /> Удалить
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </article>
+                ))
+              )}
+            </div>
+          </div>
+        </aside>
+      )}
 
       <aside className="pw-inspector" aria-label="Источники ответа">
         <div className="pw-inspector-inner">

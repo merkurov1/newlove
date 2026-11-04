@@ -48,6 +48,52 @@ request signal to the provider. A cancelled or interrupted turn is not written
 as a completed assistant message. Only the final successful answer is persisted
 through the existing `appendPierrotMessage` path.
 
+## Owner memory
+
+Owner memory uses the existing `public.pierrot_decisions` table rather than a
+duplicate store. Three kinds are added through a manual migration:
+
+- `memory` — durable preference/fact/principle;
+- `saved` — temporary note or idea;
+- `reminder` — deferred task or thought; `review_at` is the optional due date.
+
+Statuses used by memory are `current`, `completed`, `archived` and `superseded`;
+the legacy statuses remain valid. RLS stays enabled with no public policies, so
+only the server-side service role can read or write records.
+
+The owner chat recognises explicit and natural-language commands:
+“Запомни”, “Сохрани”, “Напомни”, “пусть это останется в памяти”,
+“к этому надо вернуться”, “что у нас сохранено?”, “покажи напоминания”.
+Ambiguous requests ask one clarification instead of writing a guess.
+Explicit replacement language (“вместо”, “больше не”) is not applied silently.
+
+Memory writes happen before the assistant answers and only a successful
+Supabase insert produces “Запомнил/Сохранил/Напомню”. A failed write is
+reported honestly. Memory is independent of transcript-storage consent: the
+explicit command is its own permission for that one record. Memory is loaded
+as compact owner-only context, never for public Pierrot, and is never exposed
+through public endpoints.
+
+Owner commands and the message action menu can create records. A compact
+Memory panel shows active counts, three categories, reminder dates, statuses,
+inline editing, completion, archiving and deletion. No cron, worker, scheduler
+or push notification is involved.
+
+## Editorial replies
+
+Owner replies use the existing safe Markdown renderer with an editorial style
+layer (`app/admin/pierrot/(workspace)/editorial.css`): clear H1–H4 hierarchy,
+short lead paragraphs, disciplined lists, editorial blockquotes, responsive
+tables, inline code and scrollable code blocks. Citation badges and URL
+sanitization are unchanged. During streaming an unfinished fenced code block is
+closed provisionally so it cannot swallow the rest of the answer; the final
+completed payload remains authoritative.
+
+The owner prompt now distinguishes concise answers from structured analysis:
+no headings for simple questions, H2/H3 only for real sections, tables only for
+genuine comparisons, numbered lists for sequences, and no decorative emoji or
+artificial structure.
+
 ## Autonomous web search
 
 Web evidence is an independent third source, added through Exa Search

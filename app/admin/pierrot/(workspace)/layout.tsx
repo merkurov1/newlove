@@ -3,6 +3,8 @@ import { requireAdmin } from '@/lib/serverAuth';
 import WorkspaceShell from '@/components/pierrot/workspace/WorkspaceShell';
 
 import './workspace.css';
+import './memory.css';
+import './editorial.css';
 
 export const dynamic = 'force-dynamic';
 

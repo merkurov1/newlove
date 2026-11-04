@@ -133,6 +133,15 @@ import {
 } from '@/lib/pierrot/model';
 import { createPierrotStreamResponse } from '@/lib/pierrot/streamResponse';
 import { PIERROT_STREAM_VERSION } from '@/lib/pierrot/streamProtocol';
+import { detectMemoryIntent } from '@/lib/pierrot/memory/intent';
+import {
+  buildMemoryContext,
+  createMemoryRecord,
+  deleteMemoryRecord,
+  listMemoryRecords,
+  updateMemoryRecord,
+} from '@/lib/pierrot/memory/store';
+import type { PierrotMemoryRecord } from '@/lib/pierrot/memory/types';
 import {
   confirmPendingUrlCandidate,
   consumePendingUrlCandidate,
@@ -238,7 +247,20 @@ TONE & BEHAVIOR:
 - Do not reintroduce yourself or repeat the previous answer.
 - For a short follow-up, use the conversation history and the retrieved evidence; ask one precise clarification only when needed.
 - Distinguish what the sources state from your own interpretation. Never fill a retrieval gap with invented facts.
-- Default to one to three short sentences unless the question genuinely requires a structured answer; never use more than one list.
+- Default to one to four short sentences for a simple question. Never add headings, tables or lists to a simple answer.
+- For a genuinely analytical question, answer first, then use two to four H2 sections with short paragraphs. Use H3 only for a real sub-topic.
+- For comparisons, use a table when it genuinely helps; otherwise use prose.
+- For a sequence of actions, use a numbered list. For parallel points, a short bullet list. Never turn every paragraph into a list.
+- Use code blocks for code or technical examples; inline code for identifiers, commands and field names.
+- Do not start with a preamble such as “Вот…”, “Конечно…”, “Давайте разберёмся…”. Do not repeat the question.
+- Do not use decorative emoji or excessive bold. Avoid a wall of text: short paragraphs, clear transitions, no artificial headings.
+- A short answer can still be well composed; a complex answer can be detailed without becoming a presentation.
+
+OWNER MEMORY:
+- The OWNER MEMORY block contains records Anton explicitly created with “Запомни”, “Сохрани” or “Напомни”. Use them as durable context, preferences and open reminders.
+- Never describe a saved note as a permanent fact about Anton unless the record says so. Never invent memory records or claim to remember something that is not in the supplied memory or retrieved evidence.
+- Memory writes are performed and confirmed by the server before generation. Do not say “запомнил” or “сохранил” unless the system has already confirmed the write.
+- When the owner asks what is remembered, saved or pending, use the supplied records and clearly distinguish the three categories. If the list is unavailable, say so.
 
 LINKS:
 - When mentioning a page of this site, use a markdown link, e.g. [Lobby](/lobby).
@@ -424,6 +446,9 @@ export async function POST(req: Request) {
     // Owner knowledge is the default for a verified owner. Sending
     // mode: "site" explicitly turns it off; non-owners never enter this path.
     const ownerMode = ragOwnerAuthorized && !requestedSiteMode;
+    // Memory is independent of transcript-storage consent: an explicit
+    // “Запомни/Сохрани/Напомни” command is its own permission for that record.
+    const memoryStore = ownerMode ? createPierrotStore() : null;
     // Streaming is explicit and owner-only. Every other caller keeps the
     // existing JSON contract, including Telegram and the public chat.
     const streaming = rawStream === true && ownerMode;
@@ -676,10 +701,28 @@ export async function POST(req: Request) {
       ownerProfile
     );
 
+    let ownerMemoryContext: string | null = null;
+    let ownerMemoryUnavailable = false;
+
+    if (perspective === 'personal' && isPierrotUserId(ownerIdentityUserId) && memoryStore) {
+      try {
+        ownerMemoryContext = await buildMemoryContext(memoryStore, ownerIdentityUserId);
+      } catch {
+        // Memory failure must not block the main answer. The model is told
+        // below that memory is unavailable rather than inventing records.
+        ownerMemoryContext = null;
+        ownerMemoryUnavailable = true;
+      }
+    }
+
     const systemPrompt = [
       perspective === 'personal' ? PIERROT_PROMPT_OWNER : PIERROT_PROMPT_PUBLIC,
       buildPierrotPerspectivePrompt(perspective),
       ownerProfileContext,
+      ownerMemoryContext,
+      ownerMemoryUnavailable
+        ? 'OWNER MEMORY UNAVAILABLE: the owner memory store could not be read. Do not claim that a record exists or does not exist. If asked about memory, say that the memory store is temporarily unavailable.'
+        : null,
       contextPrompt,
       commercialPrompt,
       identityGuidance,
@@ -1283,6 +1326,251 @@ export async function POST(req: Request) {
             }
           );
         }
+      }
+
+      const memoryIntent = detectMemoryIntent(trimmedMessage, {
+        history: normalizedHistory,
+      });
+
+      if (memoryIntent.action !== 'none') {
+        const memoryUnavailable = () =>
+          persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Память сейчас недоступна: не удалось подключиться к хранилищу. Я ничего не сохранил и не буду выдумывать записи. Попробуй ещё раз.'
+              : 'Memory is currently unavailable: I could not reach the store. I did not save anything and will not invent records. Try again.',
+            { memory_status: 'unavailable' }
+          );
+
+        if (!memoryStore || !isPierrotUserId(ownerIdentityUserId)) return memoryUnavailable();
+
+        const formatRecord = (record: PierrotMemoryRecord) => {
+          const date = record.reviewAt ? ` · ${record.reviewAt.slice(0, 10)}` : '';
+          const content =
+            record.content.length > 240 ? `${record.content.slice(0, 237)}…` : record.content;
+          return `- ${record.title}${date} — ${content}`;
+        };
+
+        const formatGroup = (title: string, records: PierrotMemoryRecord[]) => {
+          if (records.length === 0) return null;
+          return `${title}\n${records.map(formatRecord).join('\n')}`;
+        };
+
+        if (
+          memoryIntent.action === 'remember' ||
+          memoryIntent.action === 'save' ||
+          memoryIntent.action === 'remind'
+        ) {
+          if (memoryIntent.possibleConflict) {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Похоже, это меняет прежнюю договорённость. Я не буду незаметно перезаписывать старую запись. Уточни, какую именно запись заменить, или сформулируй новую без «вместо» и «больше не».'
+                : 'This seems to change an earlier agreement. I will not silently overwrite the old record. Tell me which record to replace, or phrase the new one without “instead” or “no longer”.',
+              { memory_status: 'clarification_required' }
+            );
+          }
+
+          const content = memoryIntent.content?.trim();
+          if (!content || !memoryIntent.kind) {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Уточни одним вопросом: это запомнить надолго, сохранить как заметку или поставить напоминание?'
+                : 'One clarification: should I remember this long-term, save it as a note, or make a reminder?',
+              { memory_status: 'clarification_required' }
+            );
+          }
+
+          try {
+            const created = await createMemoryRecord(memoryStore, ownerIdentityUserId, {
+              kind: memoryIntent.kind,
+              title: memoryIntent.title || content.slice(0, 96),
+              content,
+              rationale: trimmedMessage,
+              conversationId,
+              messageId: userMessageId,
+              reviewAt: memoryIntent.reviewAt,
+              sourceRefs: [
+                {
+                  type: 'owner_command',
+                  action: memoryIntent.action,
+                  originalMessage: trimmedMessage.slice(0, 1_000),
+                },
+              ],
+            });
+
+            const label =
+              created.kind === 'memory'
+                ? ownerLanguage === 'ru'
+                  ? 'Запомнил'
+                  : 'Remembered'
+                : created.kind === 'saved'
+                  ? ownerLanguage === 'ru'
+                    ? 'Сохранил'
+                    : 'Saved'
+                  : ownerLanguage === 'ru'
+                    ? 'Напомню'
+                    : 'Reminder saved';
+
+            const dateLine =
+              created.kind === 'reminder' && created.reviewAt
+                ? ownerLanguage === 'ru'
+                  ? ` Срок: ${created.reviewAt.slice(0, 10)}.`
+                  : ` Due: ${created.reviewAt.slice(0, 10)}.`
+                : '';
+
+            return persistOwnerReply(`${label}: «${created.title}».${dateLine}`, {
+              memory_status: 'saved',
+              memory_kind: created.kind,
+              memory_id: created.id,
+            });
+          } catch {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Не удалось сохранить запись. Я не буду говорить, что сохранил. Попробуй ещё раз.'
+                : 'I could not save the record. I will not claim it was saved. Try again.',
+              { memory_status: 'write_failed' }
+            );
+          }
+        }
+
+        if (memoryIntent.action === 'list' || memoryIntent.action === 'search') {
+          try {
+            if (memoryIntent.action === 'search' && !memoryIntent.query) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Что именно найти в памяти? Уточни тему или фразу.'
+                  : 'What should I search for in memory? Give me a topic or phrase.',
+                { memory_status: 'clarification_required' }
+              );
+            }
+
+            const records = await listMemoryRecords(memoryStore, {
+              userId: ownerIdentityUserId,
+              status: 'active',
+              ...(memoryIntent.action === 'search' ? { query: memoryIntent.query } : {}),
+              limit: 60,
+            });
+
+            if (records.length === 0) {
+              return persistOwnerReply(
+                memoryIntent.action === 'search'
+                  ? ownerLanguage === 'ru'
+                    ? 'В памяти нет подходящей записи. Я не буду придумывать её.'
+                    : 'I found no matching memory record. I will not invent one.'
+                  : ownerLanguage === 'ru'
+                    ? 'Пока ничего не записано. Можно сказать «Запомни», «Сохрани» или «Напомни».'
+                    : 'Nothing is recorded yet. You can say “Remember”, “Save” or “Remind me”.',
+                {
+                  memory_status: 'empty',
+                  memory_kind: memoryIntent.action === 'search' ? 'search' : 'list',
+                }
+              );
+            }
+
+            const groups = [
+              formatGroup(
+                ownerLanguage === 'ru' ? 'Запомнено' : 'Remembered',
+                records.filter((record) => record.kind === 'memory')
+              ),
+              formatGroup(
+                ownerLanguage === 'ru' ? 'Сохранено' : 'Saved',
+                records.filter((record) => record.kind === 'saved')
+              ),
+              formatGroup(
+                ownerLanguage === 'ru' ? 'Напоминания' : 'Reminders',
+                records.filter((record) => record.kind === 'reminder')
+              ),
+            ].filter((group): group is string => Boolean(group));
+
+            const counts = {
+              memory: records.filter((record) => record.kind === 'memory').length,
+              saved: records.filter((record) => record.kind === 'saved').length,
+              reminder: records.filter((record) => record.kind === 'reminder').length,
+            };
+
+            return persistOwnerReply(groups.join('\n\n'), {
+              memory_status: 'listed',
+              memory_counts: counts,
+              memory_query: memoryIntent.query,
+            });
+          } catch {
+            return memoryUnavailable();
+          }
+        }
+
+        if (
+          memoryIntent.action === 'complete' ||
+          memoryIntent.action === 'archive' ||
+          memoryIntent.action === 'delete'
+        ) {
+          try {
+            const candidates = await listMemoryRecords(memoryStore, {
+              userId: ownerIdentityUserId,
+              status: 'active',
+              ...(memoryIntent.action === 'complete' ? { kinds: ['reminder'] } : {}),
+              ...(memoryIntent.query ? { query: memoryIntent.query } : {}),
+              limit: 20,
+            });
+
+            if (candidates.length === 0) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Не нашёл подходящей записи. Я ничего не изменил.'
+                  : 'I found no matching record. I changed nothing.',
+                { memory_status: 'not_found' }
+              );
+            }
+
+            if (candidates.length > 1) {
+              return persistOwnerReply(
+                `${ownerLanguage === 'ru' ? 'Нашёл несколько записей:' : 'I found several records:'}\n\n${candidates.map(formatRecord).join('\n')}\n\n${
+                  ownerLanguage === 'ru'
+                    ? 'Уточни заголовок, чтобы я не изменил не ту запись.'
+                    : 'Give me the exact title so I do not change the wrong record.'
+                }`,
+                { memory_status: 'clarification_required' }
+              );
+            }
+
+            const target = candidates[0];
+
+            if (memoryIntent.action === 'delete') {
+              await deleteMemoryRecord(memoryStore, ownerIdentityUserId, target.id);
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? `Удалил запись «${target.title}».`
+                  : `Deleted “${target.title}”.`,
+                { memory_status: 'deleted', memory_id: target.id }
+              );
+            }
+
+            const updated = await updateMemoryRecord(memoryStore, ownerIdentityUserId, target.id, {
+              status: memoryIntent.action === 'complete' ? 'completed' : 'archived',
+            });
+
+            return persistOwnerReply(
+              memoryIntent.action === 'complete'
+                ? ownerLanguage === 'ru'
+                  ? `Завершил напоминание «${updated.title}».`
+                  : `Completed reminder “${updated.title}”.`
+                : ownerLanguage === 'ru'
+                  ? `Архивировал заметку «${updated.title}».`
+                  : `Archived note “${updated.title}”.`,
+              {
+                memory_status: memoryIntent.action === 'complete' ? 'completed' : 'archived',
+                memory_id: updated.id,
+              }
+            );
+          } catch {
+            return memoryUnavailable();
+          }
+        }
+
+        return persistOwnerReply(
+          ownerLanguage === 'ru'
+            ? 'Уточни, что сделать с записью: запомнить, сохранить, напомнить, показать, завершить, архивировать или удалить?'
+            : 'Tell me what to do with the record: remember, save, remind, list, complete, archive or delete?',
+          { memory_status: 'clarification_required' }
+        );
       }
 
       if (executionPlan.operation === 'clarify.publications') {
