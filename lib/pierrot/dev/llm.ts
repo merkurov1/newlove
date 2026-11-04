@@ -1,104 +1,205 @@
 import { assertServerOnly } from '@/lib/serverOnly';
 import OpenAI from 'openai';
-import { getDevRepoConfig } from './config';
-import { createGitHubTools } from './github';
+import { getDevRepositoryConfigs } from './repositories';
 import { PIERROT_DEV_SYSTEM_PROMPT } from './prompt';
+import {
+  DEV_TOOL_NAMES,
+  devToolDefinitions,
+  executeDevTool,
+  isDevWriteTool,
+} from './tools';
+import type {
+  DevModelResult,
+  DevTokenUsage,
+  DevToolEvent,
+  DevToolTraceEntry,
+} from './types';
 
 assertServerOnly('lib/pierrot/dev/llm');
 
-const MAX_TOOL_CALLS = 8;
+const DEFAULT_MAX_TOOL_CALLS = 16;
 const MAX_TOOL_RESULT_CHARS = 24_000;
+const MAX_TOTAL_TOOL_RESULT_CHARS = 80_000;
+const DEFAULT_REQUEST_DEADLINE_MS = 90_000;
+const DEFAULT_TOOL_TIMEOUT_MS = 20_000;
+const MAX_REQUEST_DEADLINE_MS = 110_000;
+const MAX_TOOL_TIMEOUT_MS = 30_000;
 
-export type DevToolTrace = {
-  name: string;
-  ok: boolean;
+type ProviderConfig = {
+  provider: 'deepseek' | 'openrouter';
+  baseURL: string;
+  apiKey: string;
+  model: string;
+  headers?: Record<string, string>;
+};
+
+type ChatMessage = { role: 'user' | 'assistant'; content: string };
+
+type SideEffect = {
+  tool: string;
+  repository: string | null;
   summary: string;
 };
 
-export type DevModelResult = {
-  reply: string;
-  provider: 'deepseek' | 'openrouter';
+export type DevAttempt = {
+  provider: string;
   model: string;
-  toolTrace: DevToolTrace[];
+  errorCode: string | null;
+  errorMessage: string | null;
+  toolTrace: DevToolTraceEntry[];
+  usage: DevTokenUsage;
 };
 
-function tools(): OpenAI.Chat.Completions.ChatCompletionTool[] {
-  return [
-    {
-      type: 'function',
-      function: {
-        name: 'get_repo_structure',
-        description:
-          'List files and directories at a path in the configured GitHub repository.',
-        parameters: {
-          type: 'object',
-          properties: {
-            path: {
-              type: 'string',
-              description: 'Repository path. Empty string means the repository root.',
-            },
-          },
-          required: ['path'],
-          additionalProperties: false,
-        },
+export class DevAbortError extends Error {
+  readonly code = 'DEV_REQUEST_ABORTED';
+  constructor(message = 'Dev request was aborted.') {
+    super(message);
+    this.name = 'DevAbortError';
+  }
+}
+
+export class DevDeadlineError extends Error {
+  readonly code = 'DEV_REQUEST_DEADLINE_EXCEEDED';
+  constructor() {
+    super('Dev request exceeded its global deadline.');
+    this.name = 'DevDeadlineError';
+  }
+}
+
+class DevToolLimitError extends Error {
+  readonly code = 'DEV_TOOL_LIMIT_EXCEEDED';
+  readonly toolTrace: DevToolTraceEntry[];
+  readonly events: DevToolEvent[];
+  readonly usage: DevTokenUsage;
+
+  constructor(
+    toolTrace: DevToolTraceEntry[],
+    events: DevToolEvent[],
+    usage: DevTokenUsage
+  ) {
+    super('Dev model exceeded the tool-call limit.');
+    this.name = 'DevToolLimitError';
+    this.toolTrace = toolTrace;
+    this.events = events;
+    this.usage = usage;
+  }
+}
+
+class DevToolTimeoutError extends Error {
+  readonly code = 'DEV_TOOL_TIMEOUT';
+  constructor(tool: string) {
+    super(`GitHub tool "${tool}" timed out.`);
+    this.name = 'DevToolTimeoutError';
+  }
+}
+
+export class DevPartialCompletionError extends Error {
+  readonly code = 'DEV_PARTIALLY_COMPLETED';
+  readonly result: DevModelResult;
+  constructor(result: DevModelResult) {
+    super('The request was partially completed and must not be replayed automatically.');
+    this.name = 'DevPartialCompletionError';
+    this.result = result;
+  }
+}
+
+export class DevProviderError extends Error {
+  readonly code = 'DEV_PROVIDER_FAILED';
+  readonly attempts: DevAttempt[];
+  readonly toolTrace: DevToolTraceEntry[];
+  readonly events: DevToolEvent[];
+  constructor(
+    message: string,
+    attempts: DevAttempt[],
+    toolTrace: DevToolTraceEntry[],
+    events: DevToolEvent[]
+  ) {
+    super(message);
+    this.name = 'DevProviderError';
+    this.attempts = attempts;
+    this.toolTrace = toolTrace;
+    this.events = events;
+  }
+}
+
+function providerConfigs(): ProviderConfig[] {
+  const result: ProviderConfig[] = [];
+  const deepseek = (process.env.DEEPSEEK_API_KEY || '').trim();
+  const openrouter = (process.env.OPENROUTER_API_KEY || '').trim();
+
+  if (deepseek) {
+    result.push({
+      provider: 'deepseek',
+      baseURL: (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').trim(),
+      apiKey: deepseek,
+      model: (process.env.PIERROT_DEV_MODEL || 'deepseek-chat').trim(),
+    });
+  }
+
+  if (openrouter) {
+    result.push({
+      provider: 'openrouter',
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: openrouter,
+      model: (process.env.PIERROT_DEV_OPENROUTER_MODEL || 'deepseek/deepseek-chat').trim(),
+      headers: {
+        'HTTP-Referer': 'https://merkurov.love',
+        'X-Title': 'Merkurov Pierrot Dev',
       },
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'read_file_content',
-        description: 'Read the UTF-8 content of one file from the configured repository.',
-        parameters: {
-          type: 'object',
-          properties: {
-            path: {
-              type: 'string',
-              description: 'Repository-relative file path.',
-            },
-          },
-          required: ['path'],
-          additionalProperties: false,
-        },
-      },
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'create_or_update_file',
-        description:
-          'Create or update one file and commit it. Use a new branch unless the owner explicitly asks to write to the default branch.',
-        parameters: {
-          type: 'object',
-          properties: {
-            path: { type: 'string', description: 'Repository-relative file path.' },
-            content: { type: 'string', description: 'Complete new UTF-8 file content.' },
-            message: { type: 'string', description: 'Commit message.' },
-            branch: { type: 'string', description: 'Target branch. Defaults to main.' },
-          },
-          required: ['path', 'content', 'message'],
-          additionalProperties: false,
-        },
-      },
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'create_pull_request',
-        description: 'Open a pull request from an existing head branch into a base branch.',
-        parameters: {
-          type: 'object',
-          properties: {
-            title: { type: 'string' },
-            head: { type: 'string', description: 'Source branch.' },
-            base: { type: 'string', description: 'Target branch.' },
-            body: { type: 'string' },
-          },
-          required: ['title', 'head'],
-          additionalProperties: false,
-        },
-      },
-    },
-  ];
+    });
+  }
+
+  return result;
+}
+
+export function isDevModelConfigured(): boolean {
+  return providerConfigs().length > 0;
+}
+
+export function getDevProviderNames(): string[] {
+  return providerConfigs().map((config) => config.provider);
+}
+
+function envNumber(name: string, fallback: number, max: number): number {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  return Math.min(Math.floor(value), max);
+}
+
+export function getDevExecutionLimits() {
+  return {
+    maxToolCalls: envNumber('PIERROT_DEV_MAX_TOOL_CALLS', DEFAULT_MAX_TOOL_CALLS, 32),
+    requestDeadlineMs: envNumber(
+      'PIERROT_DEV_REQUEST_DEADLINE_MS',
+      DEFAULT_REQUEST_DEADLINE_MS,
+      MAX_REQUEST_DEADLINE_MS
+    ),
+    toolTimeoutMs: envNumber(
+      'PIERROT_DEV_TOOL_TIMEOUT_MS',
+      DEFAULT_TOOL_TIMEOUT_MS,
+      MAX_TOOL_TIMEOUT_MS
+    ),
+  };
+}
+
+function compactHistory(history: ChatMessage[]): ChatMessage[] {
+  const maxChars = 60_000;
+  let used = 0;
+  const result: ChatMessage[] = [];
+
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const message = history[index];
+    const remaining = maxChars - used;
+    if (remaining <= 0) break;
+    const content =
+      message.content.length > remaining
+        ? message.content.slice(message.content.length - remaining)
+        : message.content;
+    result.unshift({ role: message.role, content });
+    used += content.length;
+  }
+
+  return result;
 }
 
 function parseArguments(value: string | undefined): Record<string, unknown> {
@@ -114,98 +215,200 @@ function parseArguments(value: string | undefined): Record<string, unknown> {
 }
 
 function contextMessage(): string {
-  const repo = getDevRepoConfig();
+  const repos = getDevRepositoryConfigs();
 
   return [
-    `Repository: ${repo.fullName}`,
-    `Default branch: ${repo.defaultBranch}`,
-    `GitHub token configured: ${repo.token ? 'yes' : 'no'}`,
-    `Repository writes enabled: ${repo.writesEnabled ? 'yes' : 'no'}`,
-    repo.token
-      ? 'Never claim an action succeeded unless the tool result confirms it.'
-      : 'GitHub tools are unavailable in this environment. Do not claim to inspect, modify or publish anything in the repository.',
+    'DEV MODE REPOSITORIES',
+    ...repos.map(
+      (repo) =>
+        `- ${repo.key}: ${repo.fullName} (default: ${repo.defaultBranch}, work: ${repo.workBranch}) — ${repo.description}`
+    ),
+    '',
+    'Every repository tool requires an explicit repository parameter. Never present one repository as the other.',
+    'GitHub access is READ ONLY. No write tool exists. Do not claim that a file, commit or PR was created.',
+    'Always report the repository, branch and commit SHA returned by tools.',
+    'If a tool returns complete=false or a warning, state what is missing instead of guessing.',
+    'A commit or PR is not proof that a task is complete. Tests that were not run must be described as not run.',
   ].join('\n');
 }
 
-type ProviderConfig = {
-  provider: 'deepseek' | 'openrouter';
-  baseURL: string;
-  apiKey: string;
-  model: string;
-  headers?: Record<string, string>;
+function usageFrom(completion: {
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  } | null;
+}): DevTokenUsage {
+  return {
+    promptTokens: completion.usage?.prompt_tokens ?? null,
+    completionTokens: completion.usage?.completion_tokens ?? null,
+    totalTokens: completion.usage?.total_tokens ?? null,
+  };
+}
+
+function phaseForTool(name: string): DevToolEvent['phase'] {
+  if (name === 'search_repo') return 'searching';
+  if (name === 'read_file' || name === 'read_file_range') return 'reading';
+  if (
+    name === 'compare_refs' ||
+    name === 'get_commit' ||
+    name === 'get_pull_request' ||
+    name === 'get_check_runs' ||
+    name === 'get_workflow_runs'
+  ) {
+    return 'analyzing';
+  }
+  return 'researching';
+}
+
+function toolLabel(name: string): string {
+  switch (name) {
+    case 'search_repo':
+      return 'Ищу по репозиторию';
+    case 'read_file':
+    case 'read_file_range':
+      return 'Читаю файлы';
+    case 'get_repo_tree':
+      return 'Изучаю структуру репозитория';
+    case 'compare_refs':
+      return 'Сравниваю изменения';
+    case 'get_check_runs':
+    case 'get_workflow_runs':
+      return 'Проверяю CI';
+    case 'get_commit':
+      return 'Читаю commit';
+    case 'list_commits':
+      return 'Смотрю историю';
+    default:
+      return 'Исследую репозиторий';
+  }
+}
+
+function combineSignals(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  if (!signal) return timeout;
+  if (typeof AbortSignal.any === 'function') {
+    return AbortSignal.any([signal, timeout]);
+  }
+  return signal;
+}
+
+async function withTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  signal: AbortSignal | undefined,
+  toolName: string
+): Promise<T> {
+  if (signal?.aborted) throw new DevAbortError();
+
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let abortListener: (() => void) | null = null;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new DevToolTimeoutError(toolName)), timeoutMs);
+    if (signal) {
+      abortListener = () => reject(new DevAbortError());
+      signal.addEventListener('abort', abortListener, { once: true });
+    }
+  });
+
+  try {
+    return await Promise.race([operation, timeoutPromise]);
+  } finally {
+    if (timer) clearTimeout(timer);
+    if (signal && abortListener) signal.removeEventListener('abort', abortListener);
+  }
+}
+
+function assertWithinDeadline(deadlineAt: number): void {
+  if (Date.now() >= deadlineAt) throw new DevDeadlineError();
+}
+
+type ExecutionState = {
+  sideEffects: SideEffect[];
+  lastTrace: DevToolTraceEntry[];
+  lastEvents: DevToolEvent[];
+  lastUsage: DevTokenUsage;
 };
 
-function providerConfigs(): ProviderConfig[] {
-  const result: ProviderConfig[] = [];
-  const deepseek = (process.env.DEEPSEEK_API_KEY || '').trim();
-  const openrouter = (process.env.OPENROUTER_API_KEY || '').trim();
+async function runProvider(input: {
+  config: ProviderConfig;
+  history: ChatMessage[];
+  signal?: AbortSignal;
+  deadlineAt: number;
+  requestId: string;
+  state: ExecutionState;
+  onEvent?: (event: DevToolEvent) => void;
+}): Promise<{
+  result: Omit<DevModelResult, 'latencyMs' | 'requestId'>;
+}> {
+  const limits = getDevExecutionLimits();
+  const trace: DevToolTraceEntry[] = [];
+  const events: DevToolEvent[] = [];
+  const sideEffects = input.state.sideEffects;
+  let usedToolResultChars = 0;
+  const usage: DevTokenUsage = {
+    promptTokens: null,
+    completionTokens: null,
+    totalTokens: null,
+  };
+  const syncState = () => {
+    input.state.lastTrace = trace;
+    input.state.lastEvents = events;
+    input.state.lastUsage = usage;
+  };
 
-  if (deepseek) {
-    result.push({
-      provider: 'deepseek',
-      baseURL: 'https://api.deepseek.com',
-      apiKey: deepseek,
-      model: 'deepseek-chat',
-    });
-  }
-
-  if (openrouter) {
-    result.push({
-      provider: 'openrouter',
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: openrouter,
-      model: 'deepseek/deepseek-chat',
-      headers: {
-        'HTTP-Referer': 'https://merkurov.love',
-        'X-Title': 'Merkurov Pierrot Dev',
-      },
-    });
-  }
-
-  return result;
-}
-
-export function isDevModelConfigured(): boolean {
-  return providerConfigs().length > 0;
-}
-
-async function runProvider(
-  config: ProviderConfig,
-  history: Array<{ role: 'user' | 'assistant'; content: string }>
-): Promise<DevModelResult> {
-  const repo = getDevRepoConfig();
-  const github = repo.token ? createGitHubTools() : null;
-  const trace: DevToolTrace[] = [];
+  const emit = (event: DevToolEvent) => {
+    events.push(event);
+    input.onEvent?.(event);
+  };
 
   const client = new OpenAI({
-    baseURL: config.baseURL,
-    apiKey: config.apiKey,
-    timeout: 60_000,
+    baseURL: input.config.baseURL,
+    apiKey: input.config.apiKey,
+    timeout: Math.max(1_000, Math.min(60_000, input.deadlineAt - Date.now())),
     maxRetries: 0,
-    ...(config.headers ? { defaultHeaders: config.headers } : {}),
+    ...(input.config.headers ? { defaultHeaders: input.config.headers } : {}),
   });
 
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: 'system', content: PIERROT_DEV_SYSTEM_PROMPT },
     { role: 'system', content: contextMessage() },
-    ...history.map((message) => ({
+    ...compactHistory(input.history).map((message) => ({
       role: message.role,
       content: message.content,
     })),
   ];
 
-  const availableTools = github ? tools() : [];
+  const availableTools = devToolDefinitions();
+  emit({
+    type: 'status',
+    phase: 'analyzing',
+    label: `Анализирую задачу · ${input.config.provider}`,
+  });
 
-  for (let iteration = 0; iteration <= MAX_TOOL_CALLS; iteration += 1) {
-    const completion = await client.chat.completions.create({
-      model: config.model,
-      messages,
-      temperature: 0.2,
-      max_tokens: 6000,
-      ...(availableTools.length > 0
-        ? { tools: availableTools, tool_choice: 'auto' as const }
-        : {}),
-    });
+  for (let iteration = 0; iteration <= limits.maxToolCalls; iteration += 1) {
+    assertWithinDeadline(input.deadlineAt);
+
+    const completion = await client.chat.completions.create(
+      {
+        model: input.config.model,
+        messages,
+        temperature: 0.2,
+        max_tokens: Number(process.env.PIERROT_DEV_MAX_TOKENS || 6000),
+        ...(availableTools.length > 0
+          ? { tools: availableTools, tool_choice: 'auto' as const }
+          : {}),
+      },
+      { signal: combineSignals(input.signal, Math.max(1_000, input.deadlineAt - Date.now())) }
+    );
+    assertWithinDeadline(input.deadlineAt);
+
+    const nextUsage = usageFrom(completion);
+    usage.promptTokens = nextUsage.promptTokens;
+    usage.completionTokens = nextUsage.completionTokens;
+    usage.totalTokens = nextUsage.totalTokens;
+    syncState();
 
     const choice = completion.choices[0]?.message;
     if (!choice) throw new Error('Dev model returned no message.');
@@ -213,11 +416,19 @@ async function runProvider(
     if (!choice.tool_calls || choice.tool_calls.length === 0) {
       const reply = (choice.content || '').trim();
       if (!reply) throw new Error('Dev model returned an empty answer.');
+
+      emit({ type: 'status', phase: 'completed', label: 'Ответ готов' });
       return {
-        reply,
-        provider: config.provider,
-        model: config.model,
-        toolTrace: trace,
+        result: {
+          reply,
+          provider: input.config.provider,
+          model: input.config.model,
+          toolTrace: trace,
+          events,
+          usage,
+          status: sideEffects.length > 0 ? 'partially_completed' : 'completed',
+          sideEffects,
+        },
       };
     }
 
@@ -228,98 +439,257 @@ async function runProvider(
     });
 
     for (const call of choice.tool_calls) {
-      const functionCall =
-        'function' in call ? call.function : null;
-      const name = functionCall?.name || 'unknown_tool';
+      assertWithinDeadline(input.deadlineAt);
 
-      if (!github) {
+      if (trace.length >= limits.maxToolCalls) {
+        throw new DevToolLimitError(trace, events, usage);
+      }
+
+      const functionCall = 'function' in call ? call.function : null;
+      const name = functionCall?.name || 'unknown_tool';
+      const args = parseArguments(functionCall?.arguments);
+      const known = DEV_TOOL_NAMES.includes(name as (typeof DEV_TOOL_NAMES)[number]);
+
+      emit({
+        type: 'status',
+        phase: known ? phaseForTool(name) : 'analyzing',
+        label: known ? toolLabel(name) : 'Проверяю запрос',
+        tool: name,
+      });
+
+      if (!known || isDevWriteTool(name)) {
+        const payload = {
+          error: known
+            ? 'Write tools are not available in read-only Dev Mode.'
+            : `Unknown Dev tool: ${name}.`,
+          code: known ? 'GITHUB_WRITES_DISABLED' : 'UNKNOWN_TOOL',
+          complete: false,
+          source: 'github',
+        };
         messages.push({
           role: 'tool',
           tool_call_id: call.id,
-          content: JSON.stringify({ error: 'GitHub tools are not configured.' }),
+          content: JSON.stringify(payload),
         });
         trace.push({
           name,
+          repository: typeof args.repository === 'string' ? args.repository : null,
           ok: false,
-          summary: 'GitHub is not configured.',
+          durationMs: 0,
+          summary: payload.error,
+          meta: null,
+          errorCode: payload.code,
+        });
+        syncState();
+        emit({
+          type: 'tool',
+          tool: name,
+          ok: false,
+          summary: payload.error,
         });
         continue;
       }
 
-      const result = await github.execute(
-        name,
-        parseArguments(functionCall?.arguments)
+      const execution = await withTimeout(
+        executeDevTool(name, args),
+        limits.toolTimeoutMs,
+        input.signal,
+        name
       );
-      const serialized = JSON.stringify(result);
-      const content =
-        serialized.length > MAX_TOOL_RESULT_CHARS
-          ? `${serialized.slice(0, MAX_TOOL_RESULT_CHARS)}\n…[truncated]`
-          : serialized;
+
+      const serialized = JSON.stringify(execution.result);
+      const remainingBudget = Math.max(
+        0,
+        MAX_TOTAL_TOOL_RESULT_CHARS - usedToolResultChars
+      );
+      let content: string;
+
+      if (remainingBudget === 0) {
+        content = JSON.stringify({
+          error:
+            'Tool-result budget for this request is exhausted. Narrow the next request.',
+          code: 'DEV_TOOL_RESULT_BUDGET_EXHAUSTED',
+          complete: false,
+          source: 'github',
+        });
+      } else {
+        const cap = Math.min(MAX_TOOL_RESULT_CHARS, remainingBudget);
+        content =
+          serialized.length > cap
+            ? `${serialized.slice(0, cap)}\n…[truncated]`
+            : serialized;
+        usedToolResultChars += content.length;
+      }
 
       messages.push({
         role: 'tool',
         tool_call_id: call.id,
         content,
       });
-
-      const failed = Boolean(
-        result && typeof result === 'object' && 'error' in result
-      );
-      trace.push({
-        name,
-        ok: !failed,
-        summary: failed
-          ? String((result as { error?: unknown }).error || 'Tool failed.')
-          : summarizeToolResult(name, result),
+      trace.push(execution.trace);
+      syncState();
+      emit({
+        type: 'tool',
+        tool: name,
+        repository: execution.trace.repository,
+        ok: execution.trace.ok,
+        summary: execution.trace.summary,
       });
+
+      const record = execution.result as Record<string, unknown>;
+      if (record.sideEffect === true || isDevWriteTool(name)) {
+        sideEffects.push({
+          tool: name,
+          repository:
+            typeof record.repository === 'string' ? record.repository : null,
+          summary: execution.trace.summary,
+        });
+      }
     }
   }
 
-  throw new Error('Dev model exceeded the tool-call limit.');
+  throw new DevToolLimitError(trace, events, usage);
 }
 
-function summarizeToolResult(name: string, result: unknown): string {
-  if (!result || typeof result !== 'object') return 'ok';
-  const record = result as Record<string, unknown>;
-
-  if (name === 'get_repo_structure') {
-    const entries = Array.isArray(record.entries) ? record.entries.length : 0;
-    return `${entries} entries`;
-  }
-  if (name === 'read_file_content') {
-    return typeof record.path === 'string' ? record.path : 'file read';
-  }
-  if (name === 'create_or_update_file') {
-    return typeof record.commitSha === 'string'
-      ? `commit ${record.commitSha.slice(0, 7)}`
-      : 'file written';
-  }
-  if (name === 'create_pull_request') {
-    return typeof record.number === 'number' ? `PR #${record.number}` : 'PR created';
-  }
-
-  return 'ok';
-}
-
-export async function callDevModel(
-  history: Array<{ role: 'user' | 'assistant'; content: string }>
-): Promise<DevModelResult> {
+export async function callDevModel(input: {
+  history: ChatMessage[];
+  requestId: string;
+  signal?: AbortSignal;
+  onEvent?: (event: DevToolEvent) => void;
+  deadlineMs?: number;
+}): Promise<DevModelResult> {
   const providers = providerConfigs();
   if (providers.length === 0) {
     throw new Error('No dev model provider is configured.');
   }
 
+  const limits = getDevExecutionLimits();
+  const startedAt = Date.now();
+  const deadlineAt =
+    startedAt +
+    Math.min(
+      typeof input.deadlineMs === 'number' && input.deadlineMs > 0
+        ? input.deadlineMs
+        : limits.requestDeadlineMs,
+      MAX_REQUEST_DEADLINE_MS
+    );
+
+  const attempts: DevAttempt[] = [];
+  const allTrace: DevToolTraceEntry[] = [];
+  const allEvents: DevToolEvent[] = [];
+  const state: ExecutionState = {
+    sideEffects: [],
+    lastTrace: [],
+    lastEvents: [],
+    lastUsage: { promptTokens: null, completionTokens: null, totalTokens: null },
+  };
   let lastError: unknown = null;
 
   for (const provider of providers) {
+    assertWithinDeadline(deadlineAt);
+
+    if (input.signal?.aborted) throw new DevAbortError();
+
     try {
-      return await runProvider(provider, history);
+      const run = await runProvider({
+        config: provider,
+        history: input.history,
+        signal: input.signal,
+        deadlineAt,
+        requestId: input.requestId,
+        state,
+        onEvent: (event) => {
+          input.onEvent?.(event);
+        },
+      });
+
+      return {
+        ...run.result,
+        requestId: input.requestId,
+        latencyMs: Date.now() - startedAt,
+        // Keep traces from earlier provider attempts so a fallback is visible
+        // in history instead of silently disappearing.
+        toolTrace: [...allTrace, ...run.result.toolTrace],
+        events: [...allEvents, ...run.result.events],
+        sideEffects: run.result.sideEffects,
+      };
     } catch (error) {
+      const code =
+        error && typeof error === 'object' && 'code' in error
+          ? String((error as { code?: unknown }).code || 'DEV_PROVIDER_FAILED')
+          : 'DEV_PROVIDER_FAILED';
+      const message =
+        error instanceof Error ? error.message : 'Dev provider request failed.';
+
+      const attemptTrace =
+        error && typeof error === 'object' && 'toolTrace' in error
+          ? ((error as { toolTrace?: DevToolTraceEntry[] }).toolTrace || [])
+          : state.lastTrace;
+      const attemptEvents =
+        error && typeof error === 'object' && 'events' in error
+          ? ((error as { events?: DevToolEvent[] }).events || [])
+          : state.lastEvents;
+      const attemptUsage =
+        error && typeof error === 'object' && 'usage' in error
+          ? ((error as { usage?: DevTokenUsage }).usage || state.lastUsage)
+          : state.lastUsage;
+
+      allTrace.push(...attemptTrace);
+      allEvents.push(...attemptEvents);
+      attempts.push({
+        provider: provider.provider,
+        model: provider.model,
+        errorCode: code,
+        errorMessage: message,
+        toolTrace: attemptTrace,
+        usage: attemptUsage,
+      });
       lastError = error;
+
+      // A side effect must never be replayed by another provider.
+      if (state.sideEffects.length > 0) {
+        throw new DevPartialCompletionError({
+          reply:
+            'Запрос частично выполнен. Повторный запуск через другого провайдера остановлен, чтобы не повторить побочный эффект.',
+          provider: provider.provider,
+          model: provider.model,
+          toolTrace: allTrace,
+          events: allEvents,
+          usage: attemptUsage,
+          requestId: input.requestId,
+          status: 'partially_completed',
+          latencyMs: Date.now() - startedAt,
+          sideEffects: state.sideEffects,
+        });
+      }
+
+      if (
+        code === 'DEV_REQUEST_ABORTED' ||
+        code === 'DEV_REQUEST_DEADLINE_EXCEEDED'
+      ) {
+        break;
+      }
+
+      // No side effects yet: a provider fallback is safe. Emit an honest event.
+      const fallbackEvent: DevToolEvent = {
+        type: 'status',
+        phase: 'analyzing',
+        label: `Провайдер ${provider.provider} недоступен, переключаюсь`,
+      };
+      allEvents.push(fallbackEvent);
+      input.onEvent?.(fallbackEvent);
     }
   }
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error('All dev model providers are unavailable.');
+  if (lastError instanceof DevAbortError) throw lastError;
+  if (lastError instanceof DevDeadlineError) throw lastError;
+
+  throw new DevProviderError(
+    lastError instanceof Error
+      ? lastError.message
+      : 'All dev model providers are unavailable.',
+    attempts,
+    allTrace,
+    allEvents
+  );
 }

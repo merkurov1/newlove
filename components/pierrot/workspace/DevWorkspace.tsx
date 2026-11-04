@@ -1,11 +1,29 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowUp, Plus, Terminal, X } from 'lucide-react';
+import {
+  ArrowUp,
+  ChevronRight,
+  GitBranch,
+  PanelRight,
+  Plus,
+  RefreshCw,
+  Terminal,
+  X,
+} from 'lucide-react';
 import WorkspaceMarkdown from './WorkspaceMarkdown';
+import DevTaskStudio from './DevTaskStudio';
 import { useOnlineStatus } from './useOnlineStatus';
+import type {
+  DevMemoryEntry,
+  DevRepositoryStatus,
+  DevTask,
+  DevToolEvent,
+  DevToolTraceEntry,
+  DevTokenUsage,
+} from '@/lib/pierrot/dev/types';
 
 type DevConversationListItem = {
   id: string;
@@ -20,7 +38,12 @@ type DevMessage = {
   content: string;
   provider?: string | null;
   createdAt?: string | null;
-  toolTrace?: Array<{ name: string; ok: boolean; summary: string }>;
+  toolTrace?: DevToolTraceEntry[];
+  events?: DevToolEvent[];
+  requestStatus?: string | null;
+  usage?: DevTokenUsage | null;
+  latencyMs?: number | null;
+  errorCode?: string | null;
   error?: boolean;
 };
 
@@ -34,6 +57,12 @@ type DevConversation = {
     content: string;
     provider?: string | null;
     createdAt?: string | null;
+    toolTrace?: DevToolTraceEntry[];
+    events?: DevToolEvent[];
+    requestStatus?: string | null;
+    usage?: DevTokenUsage | null;
+    latencyMs?: number | null;
+    errorCode?: string | null;
   }>;
 };
 
@@ -46,11 +75,29 @@ type IntegrationStatus = {
     repo: string;
     defaultBranch: string;
     writesEnabled: boolean;
+    writeToolsAvailable: boolean;
   };
+  repositories: DevRepositoryStatus[];
   vercel: {
     detected: boolean;
     tokenConfigured: boolean;
   };
+};
+
+type StreamFinalPayload = {
+  reply?: string;
+  conversationId?: string;
+  provider?: string;
+  model?: string;
+  toolTrace?: DevToolTraceEntry[];
+  events?: DevToolEvent[];
+  usage?: DevTokenUsage;
+  requestId?: string;
+  status?: string;
+  latencyMs?: number;
+  warnings?: string[];
+  error?: string;
+  code?: string;
 };
 
 function formatThreadDate(value: string): string {
@@ -64,6 +111,10 @@ function formatThreadDate(value: string): string {
   }).format(date);
 }
 
+function shortSha(value: string | null): string {
+  return value ? value.slice(0, 7) : '—';
+}
+
 function initialMessages(conversation: DevConversation | null): DevMessage[] {
   if (!conversation) return [];
 
@@ -73,6 +124,12 @@ function initialMessages(conversation: DevConversation | null): DevMessage[] {
     content: message.content,
     provider: message.provider || null,
     createdAt: message.createdAt || null,
+    toolTrace: message.toolTrace,
+    events: message.events,
+    requestStatus: message.requestStatus,
+    usage: message.usage,
+    latencyMs: message.latencyMs,
+    errorCode: message.errorCode,
   }));
 }
 
@@ -93,16 +150,70 @@ function StatusChip({
   );
 }
 
+function ToolTrace({ trace }: { trace: DevToolTraceEntry[] }) {
+  if (trace.length === 0) return null;
+
+  return (
+    <details className="pw-dev-tools-details">
+      <summary>
+        <Terminal size={12} aria-hidden="true" />
+        tools · {trace.length}
+        {trace.some((tool) => !tool.ok) ? ' · errors' : ''}
+      </summary>
+      <div className="pw-dev-tools">
+        {trace.map((tool, index) => (
+          <span
+            key={`${tool.name}-${index}`}
+            className={tool.ok ? 'is-ok' : 'is-error'}
+            title={[
+              tool.summary,
+              tool.meta?.repository,
+              tool.meta?.branch,
+              tool.meta?.complete === false ? 'incomplete' : null,
+              ...(tool.meta?.warnings || []),
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          >
+            {tool.name}
+            {tool.meta?.repository
+              ? ` · ${tool.meta.repository.split('/').pop()}`
+              : ''}
+            {tool.meta?.complete === false ? ' · partial' : ''}
+          </span>
+        ))}
+      </div>
+      <ul className="pw-dev-tool-list">
+        {trace.map((tool, index) => (
+          <li key={`${tool.name}-detail-${index}`}>
+            <span>{tool.name}</span>
+            <span>{tool.summary}</span>
+            <span>{tool.durationMs} ms</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 export default function DevWorkspace({
   conversations,
   conversation,
   integration,
   migrationRequired,
+  tasks,
+  taskMigrationRequired,
+  requestStoreAvailable,
+  memory,
 }: {
   conversations: DevConversationListItem[];
   conversation: DevConversation | null;
   integration: IntegrationStatus;
   migrationRequired: boolean;
+  tasks: DevTask[];
+  taskMigrationRequired: boolean;
+  requestStoreAvailable: boolean;
+  memory: DevMemoryEntry[];
 }) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -111,11 +222,27 @@ export default function DevWorkspace({
   const [conversationId, setConversationId] = useState<string | null>(conversation?.id ?? null);
   const [title, setTitle] = useState(conversation?.title ?? 'Dev-тред');
   const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<string | null>(null);
+  const [liveTools, setLiveTools] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [threadsOpen, setThreadsOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
+  const [activeRepoKey, setActiveRepoKey] = useState<string>(
+    () =>
+      integration.repositories.find((repo) => repo.accessible)?.key ||
+      integration.repositories[0]?.key ||
+      'newlove'
+  );
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const mountedRef = useRef(true);
+  const inFlightRef = useRef(false);
+  const retryRef = useRef<{
+    text: string;
+    requestId: string;
+    conversationId: string | null;
+  } | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -141,7 +268,38 @@ export default function DevWorkspace({
     }
 
     element.scrollTop = element.scrollHeight;
-  }, [loading, messages.length]);
+  }, [loading, messages.length, phase]);
+
+  const activeRepo = useMemo(
+    () =>
+      integration.repositories.find((repo) => repo.key === activeRepoKey) ||
+      integration.repositories[0] ||
+      null,
+    [activeRepoKey, integration.repositories]
+  );
+
+  const lastAssistant = useMemo(
+    () => [...messages].reverse().find((message) => message.role === 'assistant'),
+    [messages]
+  );
+
+  const conversationContext = useMemo(
+    () =>
+      messages
+        .slice(-8)
+        .map((message) => `${message.role === 'user' ? 'OWNER' : 'PIERROT'}: ${message.content}`)
+        .join('\n\n')
+        .slice(0, 12_000),
+    [messages]
+  );
+
+  const suggestedTitle = useMemo(() => {
+    const lastUser = [...messages].reverse().find((message) => message.role === 'user');
+    const clean = (lastUser?.content || title || 'Инженерное задание')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return clean.length > 92 ? `${clean.slice(0, 89).trimEnd()}…` : clean;
+  }, [messages, title]);
 
   function resetThread() {
     setMessages([]);
@@ -149,74 +307,188 @@ export default function DevWorkspace({
     setConversationId(null);
     setTitle('Dev-тред');
     setError(null);
+    setNotice(null);
     setThreadsOpen(false);
+    retryRef.current = null;
     router.replace('/admin/pierrot/dev');
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
-  async function send() {
-    const text = draft.trim();
-    if (!text || loading || !online) return;
+  function applyAssistantPayload(payload: StreamFinalPayload) {
+    if (typeof payload.conversationId === 'string') {
+      setConversationId(payload.conversationId);
+    }
 
-    setLoading(true);
-    setError(null);
-    setDraft('');
-    setThreadsOpen(false);
     setMessages((current) => [
       ...current,
       {
-        id: `local-${Date.now()}`,
-        role: 'user',
-        content: text,
+        id: `reply-${Date.now()}`,
+        role: 'assistant',
+        content: String(payload.reply || ''),
+        provider: typeof payload.provider === 'string' ? payload.provider : null,
         createdAt: new Date().toISOString(),
+        toolTrace: Array.isArray(payload.toolTrace) ? payload.toolTrace : [],
+        events: Array.isArray(payload.events) ? payload.events : [],
+        requestStatus: typeof payload.status === 'string' ? payload.status : 'completed',
+        usage: payload.usage || null,
+        latencyMs: typeof payload.latencyMs === 'number' ? payload.latencyMs : null,
       },
     ]);
+  }
 
-    if (messages.length === 0) {
-      setTitle(text.length > 92 ? `${text.slice(0, 89).trimEnd()}…` : text);
+  async function send() {
+    const text = draft.trim();
+    if (!text || loading || !online || inFlightRef.current) return;
+
+    const retry =
+      retryRef.current &&
+      retryRef.current.text === text &&
+      retryRef.current.conversationId === conversationId
+        ? retryRef.current
+        : null;
+    const requestId =
+      retry?.requestId ||
+      (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
+
+    inFlightRef.current = true;
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+    setPhase('Исследую репозиторий');
+    setLiveTools([]);
+    setDraft('');
+    setThreadsOpen(false);
+
+    if (!retry) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: `local-${Date.now()}`,
+          role: 'user',
+          content: text,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+
+      if (messages.length === 0) {
+        setTitle(text.length > 92 ? `${text.slice(0, 89).trimEnd()}…` : text);
+      }
     }
+
+    let finalPayload: StreamFinalPayload | null = null;
+    let effectiveConversationId = conversationId;
 
     try {
       const response = await fetch('/api/admin/pierrot/dev', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
         body: JSON.stringify({
           message: text,
+          requestId,
+          idempotencyKey: requestId,
+          stream: true,
+          repository: activeRepo?.key || activeRepoKey,
           ...(conversationId ? { conversationId } : {}),
         }),
       });
-      const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(
-          payload?.error || `Dev request failed (${response.status}).`
-        );
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || `Dev request failed (${response.status}).`);
+      }
+
+      const headerConversationId = response.headers.get('x-conversation-id');
+      if (headerConversationId) {
+        effectiveConversationId = headerConversationId;
+        setConversationId(headerConversationId);
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+
+      if (contentType.includes('text/event-stream') && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split('\n\n');
+          buffer = chunks.pop() || '';
+
+          for (const chunk of chunks) {
+            const line = chunk
+              .split('\n')
+              .find((entry) => entry.startsWith('data: '));
+            if (!line) continue;
+
+            let event: Record<string, unknown>;
+            try {
+              event = JSON.parse(line.slice(6));
+            } catch {
+              continue;
+            }
+
+            if (event.type === 'status') {
+              if (typeof event.label === 'string') setPhase(event.label);
+            } else if (event.type === 'tool') {
+              const label = [event.tool, event.summary]
+                .filter((value) => typeof value === 'string')
+                .join(' · ');
+              if (label) {
+                setLiveTools((current) => [...current.slice(-5), label]);
+              }
+            } else if (event.type === 'final') {
+              finalPayload = event.payload as StreamFinalPayload;
+            }
+          }
+        }
+      } else {
+        finalPayload = (await response.json().catch(() => null)) as StreamFinalPayload | null;
+      }
+
+      if (!finalPayload) {
+        throw new Error('Dev response ended without a final payload.');
+      }
+
+      if (finalPayload.error) {
+        throw new Error(finalPayload.error);
       }
 
       if (!mountedRef.current) return;
 
-      if (typeof payload?.conversationId === 'string') {
-        setConversationId(payload.conversationId);
+      if (typeof finalPayload.conversationId === 'string') {
+        effectiveConversationId = finalPayload.conversationId;
       }
-
-      setMessages((current) => [
-        ...current,
-        {
-          id: `reply-${Date.now()}`,
-          role: 'assistant',
-          content: String(payload?.reply || ''),
-          provider: typeof payload?.provider === 'string' ? payload.provider : null,
-          createdAt: new Date().toISOString(),
-          toolTrace: Array.isArray(payload?.toolTrace) ? payload.toolTrace : [],
-        },
-      ]);
-
+      applyAssistantPayload(finalPayload);
+      retryRef.current = null;
+      setPhase(null);
+      setLiveTools([]);
       router.refresh();
     } catch (caught) {
       if (!mountedRef.current) return;
-      setError(caught instanceof Error ? caught.message : 'Dev request failed.');
+      const messageText =
+        caught instanceof Error ? caught.message : 'Dev request failed.';
+      setError(messageText);
+      setPhase(null);
+      retryRef.current = {
+        text,
+        requestId,
+        conversationId: effectiveConversationId,
+      };
+      setDraft(text);
     } finally {
-      if (mountedRef.current) setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+        setPhase(null);
+      }
+      inFlightRef.current = false;
     }
   }
 
@@ -225,6 +497,8 @@ export default function DevWorkspace({
     event.preventDefault();
     void send();
   }
+
+  const writesLabel = integration.github.writesEnabled ? 'writes flag on' : 'read-only';
 
   return (
     <div className="pw-dev">
@@ -282,6 +556,15 @@ export default function DevWorkspace({
         />
       )}
 
+      {contextOpen && (
+        <button
+          type="button"
+          className="pw-dev-context-scrim"
+          aria-label="Закрыть контекст"
+          onClick={() => setContextOpen(false)}
+        />
+      )}
+
       <section className="pw-dev-main" aria-label="Pierrot Dev">
         <header className="pw-dev-head">
           <div className="pw-dev-head-title">
@@ -317,28 +600,40 @@ export default function DevWorkspace({
               }
               title={
                 integration.github.authenticated
-                  ? `${integration.github.repo} · branch ${integration.github.defaultBranch}`
-                  : integration.github.authError ||
-                    'GITHUB_TOKEN не настроен'
+                  ? 'GITHUB_TOKEN активен. Доступны только read-only tools.'
+                  : integration.github.authError || 'GITHUB_TOKEN не настроен'
               }
             />
             <StatusChip
-              label={`Vercel · ${integration.vercel.detected ? 'detected' : 'off'}`}
-              tone={integration.vercel.detected ? 'ok' : 'off'}
+              label={`${activeRepo?.key || 'repo'} · ${activeRepo?.workBranch || '—'}`}
+              tone={activeRepo?.accessible ? 'ok' : 'off'}
               title={
-                integration.vercel.tokenConfigured
-                  ? 'Vercel token configured'
-                  : 'Vercel project env not detected'
+                activeRepo
+                  ? `${activeRepo.fullName} · commit ${activeRepo.lastCommitSha || 'unknown'}`
+                  : 'Репозиторий не выбран'
               }
             />
             <StatusChip
-              label={
-                integration.github.writesEnabled ? 'writes on' : 'writes off'
-              }
+              label={`${shortSha(activeRepo?.lastCommitSha || null)}`}
+              tone={activeRepo?.accessible ? 'ok' : 'off'}
+              title={activeRepo?.error || 'Актуальный commit SHA головы рабочей ветки'}
+            />
+            <StatusChip
+              label={writesLabel}
               tone={integration.github.writesEnabled ? 'warn' : 'off'}
-              title="PIERROT_DEV_WRITE_ENABLED"
+              title="Запись в GitHub не входит в текущий Dev Mode"
             />
           </div>
+
+          <button
+            type="button"
+            className="pw-dev-context-toggle"
+            onClick={() => setContextOpen((value) => !value)}
+            aria-label="Открыть инженерный контекст"
+            aria-expanded={contextOpen}
+          >
+            <PanelRight size={17} strokeWidth={1.5} aria-hidden="true" />
+          </button>
         </header>
 
         {migrationRequired && (
@@ -348,82 +643,253 @@ export default function DevWorkspace({
           </div>
         )}
 
-        <div className="pw-dev-scroll" ref={scrollRef}>
-          {messages.length === 0 ? (
-            <div className="pw-dev-empty">
-              <p className="pw-dev-kicker">ISOLATED THREAD</p>
-              <h2>Dev-тред пуст.</h2>
-              <p>
-                Пьеро читает GitHub через tools, предлагает код и может создать
-                коммит или PR. Обычный RAG и история чата сюда не подмешиваются.
-              </p>
-              <div className="pw-dev-suggestions">
-                <button
-                  type="button"
-                  onClick={() => setDraft('Покажи структуру репозитория в app/admin/pierrot')}
-                >
-                  структура репозитория
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDraft('Прочитай lib/pierrot/workspace/navigation.ts')}
-                >
-                  прочитать файл
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDraft('Найди риск регрессии в PWA Pierrot')}
-                >
-                  риск регрессии
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="pw-dev-thread">
-              {messages.map((message) =>
-                message.role === 'user' ? (
-                  <article key={message.id} className="pw-dev-message-user">
-                    <p>{message.content}</p>
-                  </article>
-                ) : (
-                  <article key={message.id} className="pw-dev-message-assistant">
-                    <div className="pw-dev-message-head">
-                      <span>PIERROT · DEV</span>
-                      {message.provider && <span>{message.provider}</span>}
-                    </div>
-                    <WorkspaceMarkdown
-                      className="pw-dev-answer"
-                      content={message.content}
-                    />
-                    {message.toolTrace && message.toolTrace.length > 0 && (
-                      <div className="pw-dev-tools" aria-label="GitHub tools">
-                        {message.toolTrace.map((tool, index) => (
-                          <span
-                            key={`${tool.name}-${index}`}
-                            className={tool.ok ? 'is-ok' : 'is-error'}
-                            title={tool.summary}
-                          >
-                            {tool.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </article>
-                )
-              )}
+        {taskMigrationRequired && (
+          <div className="pw-dev-banner" role="alert">
+            Нужна миграция <code>2026-11-18_pierrot_dev_engineering.sql</code>.
+            Task Studio работает в ограниченном режиме.
+          </div>
+        )}
 
-              {loading && (
-                <p className="pw-dev-typing" role="status">
-                  DEV · думает и вызывает tools
+        {!requestStoreAvailable && !taskMigrationRequired && (
+          <div className="pw-dev-banner" role="alert">
+            Трассы запросов не сохраняются. Нужна миграция{' '}
+            <code>2026-11-18_pierrot_dev_engineering.sql</code>.
+          </div>
+        )}
+
+        <div className="pw-dev-body">
+          <div className="pw-dev-scroll" ref={scrollRef}>
+            {messages.length === 0 ? (
+              <div className="pw-dev-empty">
+                <p className="pw-dev-kicker">ENGINEERING ENVIRONMENT</p>
+                <h2>Что исследуем?</h2>
+                <p>
+                  Пьеро читает оба репозитория через read-only GitHub tools,
+                  показывает repository, branch и commit SHA, готовит задания для
+                  OpenCode и проверяет фактический diff. RAG и обычная история чата
+                  сюда не подмешиваются.
+                </p>
+                <div className="pw-dev-suggestions">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft('Сравни структуру newlove и Pierrot и объясни границу ответственности')
+                    }
+                  >
+                    сравнить репозитории
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft('Найди реализацию Dev Mode в newlove и проследи путь от UI до Supabase')
+                    }
+                  >
+                    путь UI → API → БД
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft('Проверь последние commits в newlove и Pierrot, затем предложи минимальный следующий шаг')
+                    }
+                  >
+                    последние изменения
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="pw-dev-thread">
+                {messages.map((message) =>
+                  message.role === 'user' ? (
+                    <article key={message.id} className="pw-dev-message-user">
+                      <p>{message.content}</p>
+                    </article>
+                  ) : (
+                    <article key={message.id} className="pw-dev-message-assistant">
+                      <div className="pw-dev-message-head">
+                        <span>PIERROT · DEV</span>
+                        <span>
+                          {message.provider || 'model'}
+                          {message.latencyMs ? ` · ${(message.latencyMs / 1000).toFixed(1)}s` : ''}
+                          {message.requestStatus === 'partially_completed'
+                            ? ' · partial'
+                            : ''}
+                        </span>
+                      </div>
+                      <WorkspaceMarkdown
+                        className="pw-dev-answer"
+                        content={message.content}
+                      />
+                      {message.toolTrace && <ToolTrace trace={message.toolTrace} />}
+                    </article>
+                  )
+                )}
+
+                {loading && (
+                  <div className="pw-dev-typing" role="status">
+                    <span>{phase || 'Исследую репозиторий'}</span>
+                    {liveTools.length > 0 && (
+                      <ul>
+                        {liveTools.map((tool, index) => (
+                          <li key={`${tool}-${index}`}>{tool}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <aside
+            className="pw-dev-context"
+            data-open={contextOpen ? 'true' : 'false'}
+            aria-label="Инженерный контекст"
+          >
+            <div className="pw-dev-context-head">
+              <span className="pw-dev-label">CONTEXT</span>
+              <button
+                type="button"
+                className="pw-icon-button pw-dev-context-close"
+                onClick={() => setContextOpen(false)}
+                aria-label="Закрыть контекст"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </div>
+
+            <section className="pw-dev-context-section">
+              <div className="pw-dev-context-title">
+                <GitBranch size={13} aria-hidden="true" />
+                Активный проект
+              </div>
+              <select
+                className="pw-dev-repo-select"
+                value={activeRepoKey}
+                onChange={(event) => setActiveRepoKey(event.target.value)}
+                aria-label="Активный репозиторий"
+              >
+                {integration.repositories.map((repo) => (
+                  <option key={repo.key} value={repo.key}>
+                    {repo.key} · {repo.fullName}
+                  </option>
+                ))}
+              </select>
+              {activeRepo ? (
+                <dl className="pw-dev-facts">
+                  <div>
+                    <dt>branch</dt>
+                    <dd>{activeRepo.workBranch}</dd>
+                  </div>
+                  <div>
+                    <dt>commit</dt>
+                    <dd title={activeRepo.lastCommitSha || ''}>
+                      {activeRepo.lastCommitSha || 'нет данных'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>access</dt>
+                    <dd>
+                      {activeRepo.accessible ? 'read-only ok' : activeRepo.error || 'off'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>checked</dt>
+                    <dd>{formatThreadDate(activeRepo.checkedAt)}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="pw-dev-context-muted">Репозитории не настроены.</p>
+              )}
+              <button
+                type="button"
+                className="pw-dev-context-action"
+                onClick={() => router.refresh()}
+              >
+                <RefreshCw size={13} aria-hidden="true" />
+                обновить статус
+              </button>
+            </section>
+
+            <section className="pw-dev-context-section">
+              <div className="pw-dev-context-title">
+                <ChevronRight size={13} aria-hidden="true" />
+                Последнее исследование
+              </div>
+              {lastAssistant?.toolTrace && lastAssistant.toolTrace.length > 0 ? (
+                <ul className="pw-dev-research-list">
+                  {lastAssistant.toolTrace.slice(-8).map((tool, index) => (
+                    <li key={`${tool.name}-${index}`}>
+                      <span className={tool.ok ? 'is-ok' : 'is-error'}>
+                        {tool.name}
+                      </span>
+                      <span>{tool.summary}</span>
+                      {tool.meta?.repository && <small>{tool.meta.repository}</small>}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="pw-dev-context-muted">
+                  Ещё нет tool trace в этом треде. Задайте вопрос о коде или
+                  изменениях.
                 </p>
               )}
-            </div>
-          )}
+            </section>
+
+            <section className="pw-dev-context-section">
+              <div className="pw-dev-context-title">Project memory</div>
+              <ul className="pw-dev-memory-list">
+                {memory.slice(0, 6).map((entry) => (
+                  <li key={entry.id}>
+                    <details>
+                      <summary>
+                        <span>{entry.title}</span>
+                        <small>{entry.area}</small>
+                      </summary>
+                      <p>{entry.content}</p>
+                      <p className="pw-dev-memory-source">
+                        {entry.source} · {entry.updatedAt} · commit{' '}
+                        {shortSha(entry.commitSha)} · {entry.status}
+                      </p>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <DevTaskStudio
+              initialTasks={tasks}
+              repositories={integration.repositories.map((repo) => ({
+                key: repo.key,
+                label: repo.key,
+                fullName: repo.fullName,
+                workBranch: repo.workBranch,
+                lastCommitSha: repo.lastCommitSha,
+              }))}
+              activeRepository={activeRepoKey}
+              conversationId={conversationId}
+              conversationContext={conversationContext}
+              suggestedTitle={suggestedTitle}
+              onCopyPrompt={(prompt) =>
+                setNotice(`Prompt скопирован · ${prompt.length} символов`)
+              }
+            />
+          </aside>
         </div>
+
+        {notice && (
+          <div className="pw-dev-notice" role="status">
+            {notice}
+          </div>
+        )}
 
         {error && (
           <div className="pw-dev-error" role="alert">
             {error}
+            {retryRef.current && (
+              <button type="button" onClick={() => void send()} disabled={loading}>
+                повторить тот же requestId
+              </button>
+            )}
           </div>
         )}
 
@@ -434,7 +900,11 @@ export default function DevWorkspace({
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={onKeyDown}
-              placeholder={online ? 'Запрос к репозиторию или коду…' : 'Нет соединения'}
+              placeholder={
+                online
+                  ? 'Вопрос о newlove или Pierrot · Enter — отправить'
+                  : 'Нет соединения'
+              }
               rows={1}
               disabled={!online}
               aria-label="Сообщение Pierrot Dev"
@@ -450,13 +920,14 @@ export default function DevWorkspace({
             </button>
           </div>
           <div className="pw-dev-meta">
-            <span>mode=dev · no RAG · GitHub tools</span>
             <span>
-              {integration.github.configured
-                ? integration.github.writesEnabled
-                  ? 'writes enabled'
-                  : 'read-only'
-                : 'GitHub off'}
+              mode=dev · read-only · 2 repos ·{' '}
+              {requestStoreAvailable ? 'trace persisted' : 'trace off'}
+            </span>
+            <span>
+              {activeRepo?.fullName || integration.github.repo} ·{' '}
+              {activeRepo?.workBranch || integration.github.defaultBranch} ·{' '}
+              {shortSha(activeRepo?.lastCommitSha || null)}
             </span>
           </div>
         </div>

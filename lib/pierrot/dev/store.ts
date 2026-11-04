@@ -2,6 +2,8 @@ import { randomUUID } from 'crypto';
 import { assertServerOnly } from '@/lib/serverOnly';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { loadDevRequestTraces } from './requests';
+import type { DevTokenUsage, DevToolEvent, DevToolTraceEntry } from './types';
 
 assertServerOnly('lib/pierrot/dev/store');
 
@@ -16,6 +18,12 @@ export type DevChatMessage = {
   content: string;
   provider?: string | null;
   createdAt?: string | null;
+  toolTrace?: DevToolTraceEntry[];
+  events?: DevToolEvent[];
+  requestStatus?: string | null;
+  usage?: DevTokenUsage | null;
+  latencyMs?: number | null;
+  errorCode?: string | null;
 };
 
 export type DevConversation = {
@@ -162,6 +170,7 @@ export async function loadDevConversation(
 
     if (messagesError) return null;
 
+    const traces = await loadDevRequestTraces(conversationId);
     const messages = (Array.isArray(rows) ? rows : [])
       .filter(
         (row) =>
@@ -169,13 +178,26 @@ export async function loadDevConversation(
           typeof row.id === 'string' &&
           typeof row.content === 'string'
       )
-      .map((row) => ({
-        id: row.id as string,
-        role: row.role as 'user' | 'assistant',
-        content: row.content as string,
-        provider: typeof row.provider === 'string' ? row.provider : null,
-        createdAt: typeof row.created_at === 'string' ? row.created_at : null,
-      }));
+      .map((row) => {
+        const trace = traces.get(row.id as string);
+        return {
+          id: row.id as string,
+          role: row.role as 'user' | 'assistant',
+          content: row.content as string,
+          provider: typeof row.provider === 'string' ? row.provider : null,
+          createdAt: typeof row.created_at === 'string' ? row.created_at : null,
+          ...(trace
+            ? {
+                toolTrace: trace.toolTrace,
+                events: trace.events,
+                requestStatus: trace.status,
+                usage: trace.usage,
+                latencyMs: trace.latencyMs,
+                errorCode: trace.errorCode,
+              }
+            : {}),
+        };
+      });
 
     const firstUser = messages.find((message) => message.role === 'user');
 
@@ -260,67 +282,104 @@ export async function appendDevMessage({
   role,
   content,
   provider,
+  messageId,
 }: {
   conversationId: string;
   role: 'user' | 'assistant';
   content: string;
   provider?: string | null;
+  messageId?: string | null;
 }): Promise<DevChatMessage> {
   const store = getServerSupabaseClient({ useServiceRole: true });
   const safeContent = content.slice(0, MAX_STORED_MESSAGE);
+  const id =
+    messageId && /^[A-Za-z0-9_-]{8,64}$/.test(messageId)
+      ? messageId
+      : randomUUID();
 
-  const { data: last, error: lastError } = await store
-    .from('pierrot_messages')
-    .select('message_index')
-    .eq('conversation_id', conversationId)
-    .eq('mode', DEV_MODE)
-    .order('message_index', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Idempotent retry: a repeated client request must not append a second copy
+  // of the same message.
+  if (messageId) {
+    const { data: existing, error: existingError } = await store
+      .from('pierrot_messages')
+      .select('id,role,content,provider,created_at')
+      .eq('id', id)
+      .eq('conversation_id', conversationId)
+      .maybeSingle();
 
-  if (lastError) {
-    if (isMissingModeColumn(lastError)) throw new Error('DEV_MIGRATION_REQUIRED');
-    throw lastError;
+    if (!existingError && existing?.id) {
+      return {
+        id: existing.id as string,
+        role: existing.role as 'user' | 'assistant',
+        content: existing.content as string,
+        provider: typeof existing.provider === 'string' ? existing.provider : null,
+        createdAt: typeof existing.created_at === 'string' ? existing.created_at : null,
+      };
+    }
   }
 
-  const nextIndex = Number(last?.message_index || 0) + 1;
-  const id = randomUUID();
-  const now = new Date().toISOString();
+  let lastError: unknown = null;
 
-  const { error } = await store.from('pierrot_messages').insert({
-    id,
-    conversation_id: conversationId,
-    role,
-    content: safeContent,
-    message_index: nextIndex,
-    provider: provider || null,
-    mode: DEV_MODE,
-    created_at: now,
-  });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { data: last, error } = await store
+      .from('pierrot_messages')
+      .select('message_index')
+      .eq('conversation_id', conversationId)
+      .eq('mode', DEV_MODE)
+      .order('message_index', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (error) {
-    if (isMissingModeColumn(error)) throw new Error('DEV_MIGRATION_REQUIRED');
-    throw error;
+    if (error) {
+      if (isMissingModeColumn(error)) throw new Error('DEV_MIGRATION_REQUIRED');
+      lastError = error;
+      break;
+    }
+
+    const nextIndex = Number(last?.message_index || 0) + 1;
+    const now = new Date().toISOString();
+
+    const { error: insertError } = await store.from('pierrot_messages').insert({
+      id,
+      conversation_id: conversationId,
+      role,
+      content: safeContent,
+      message_index: nextIndex,
+      provider: provider || null,
+      mode: DEV_MODE,
+      created_at: now,
+    });
+
+    if (insertError) {
+      if (isMissingModeColumn(insertError)) throw new Error('DEV_MIGRATION_REQUIRED');
+      lastError = insertError;
+      // A concurrent append consumed this index. Re-read and retry.
+      if (String(insertError.code || '') === '23505') continue;
+      break;
+    }
+
+    await store
+      .from('pierrot_conversations')
+      .update({
+        updated_at: now,
+        last_message_at: now,
+        next_message_sequence: nextIndex,
+        expires_at: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+      })
+      .eq('id', conversationId)
+      .eq('mode', DEV_MODE);
+
+    return {
+      id,
+      role,
+      content: safeContent,
+      provider: provider || null,
+      createdAt: now,
+    };
   }
 
-  await store
-    .from('pierrot_conversations')
-    .update({
-      updated_at: now,
-      last_message_at: now,
-      next_message_sequence: nextIndex,
-      expires_at: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
-    })
-    .eq('id', conversationId)
-    .eq('mode', DEV_MODE);
-
-  return {
-    id,
-    role,
-    content: safeContent,
-    provider: provider || null,
-    createdAt: now,
-  };
+  if (lastError) throw lastError;
+  throw new Error('Unable to append Dev message.');
 }
 
 export async function loadDevHistory(

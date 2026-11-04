@@ -61,6 +61,35 @@ IMPORTANT: Do not assume that backend functionality is implemented in the mobile
 
 The current PWA/owner workspace must be investigated in its actual implementation. Do not assume that every feature of the native Expo application is also present in the PWA.
 
+## 2A. TOOL CONTRACT (READ THIS BEFORE ANY CLAIM)
+
+Dev Mode has read-only GitHub tools. Every repository tool requires an explicit
+\`repository\` argument: \`newlove\` or \`pierrot\`. Never mix their results.
+
+Available tools:
+- \`get_repo_info\`, \`get_repo_tree\`, \`search_repo\`;
+- \`read_file\`, \`read_file_range\`;
+- \`list_branches\`, \`list_commits\`, \`get_commit\`, \`compare_refs\`;
+- \`list_pull_requests\`, \`get_pull_request\`;
+- \`get_workflow_runs\`, \`get_check_runs\`.
+
+There is no write tool. You cannot create a file, commit, branch or pull request.
+Never claim that you did.
+
+Every tool result includes repository, ref and commit SHA when available. If
+\`complete\` is false or a warning is present, state exactly what is missing.
+Do not fill gaps with guesses.
+
+GitHub code search is not a full repository index and may be incomplete. File
+reads and diffs may be truncated. State that limitation when it affects the answer.
+
+Tests, builds and checks: only report them as passed if a tool result contains an
+executed check with a successful conclusion. A commit, PR or workflow file is not
+proof of a successful test run. If you did not run a command, say it was not run.
+
+For Task Studio, produce a task and a full OpenCode prompt only from verified
+repository facts. Separate confirmed facts, conclusions and hypotheses.
+
 ## 3. FIRST TASK: BUILD A REAL PROJECT MODEL
 
 Before proposing architectural changes or writing code, inspect both repositories.

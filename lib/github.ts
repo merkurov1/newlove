@@ -73,6 +73,8 @@ export class GitHubError extends Error {
     | 'GITHUB_TOKEN_MISSING'
     | 'GITHUB_AUTH_FAILED'
     | 'GITHUB_WRITES_DISABLED'
+    | 'GITHUB_WRITE_CONFIRMATION_REQUIRED'
+    | 'GITHUB_DEFAULT_BRANCH_PROTECTED'
     | 'GITHUB_INVALID_PATH'
     | 'GITHUB_INVALID_BRANCH'
     | 'GITHUB_NOT_A_FILE'
@@ -157,8 +159,15 @@ export function isGitHubConfigured(): boolean {
   return Boolean(getGitHubToken());
 }
 
+/**
+ * Dev Mode is read-only by default.
+ *
+ * Writes require the explicit server-side value PIERROT_DEV_WRITE_ENABLED=true.
+ * Any other value (including an empty value, "1", "yes" or a typo) keeps
+ * writes disabled. Dev Mode still does not expose write tools to the model.
+ */
 export function isGitHubWriteEnabled(): boolean {
-  return envValue('PIERROT_DEV_WRITE_ENABLED') !== 'false';
+  return envValue('PIERROT_DEV_WRITE_ENABLED') === 'true';
 }
 
 export function getGitHubRepository(): GitHubRepository {
@@ -497,11 +506,20 @@ export async function createOrUpdateFile(input: {
   content: unknown;
   message: unknown;
   branch?: unknown;
+  /** Must be set by an explicit human confirmation flow, never by the model. */
+  confirmed?: unknown;
 }): Promise<GitHubCommitResult> {
   if (!isGitHubWriteEnabled()) {
     throw new GitHubError(
       'GITHUB_WRITES_DISABLED',
-      'GitHub writes are disabled by PIERROT_DEV_WRITE_ENABLED=false.'
+      'GitHub writes are disabled. Set PIERROT_DEV_WRITE_ENABLED=true only after an explicit approval flow exists.'
+    );
+  }
+
+  if (input.confirmed !== true) {
+    throw new GitHubError(
+      'GITHUB_WRITE_CONFIRMATION_REQUIRED',
+      'GitHub writes require an explicit user confirmation.'
     );
   }
 
@@ -529,7 +547,23 @@ export async function createOrUpdateFile(input: {
       ? input.message.trim().slice(0, 500)
       : 'Pierrot Dev update';
 
-  const branch = normalizeGitHubBranch(input.branch, repo.defaultBranch);
+  // Never write directly to the default branch. A non-empty, non-default
+  // working branch is mandatory even if the model tries to omit it.
+  const branch = normalizeGitHubBranch(input.branch, '');
+
+  if (!branch) {
+    throw new GitHubError(
+      'GITHUB_INVALID_BRANCH',
+      'A working branch is required; writes to the default branch are forbidden.'
+    );
+  }
+
+  if (branch === repo.defaultBranch) {
+    throw new GitHubError(
+      'GITHUB_DEFAULT_BRANCH_PROTECTED',
+      `Writes to the default branch ${repo.defaultBranch} are forbidden. Use a separate working branch.`
+    );
+  }
 
   try {
     await ensureBranch(client, branch);
@@ -609,11 +643,20 @@ export async function createPullRequest(input: {
   head: unknown;
   base?: unknown;
   body?: unknown;
+  /** Must be set by an explicit human confirmation flow, never by the model. */
+  confirmed?: unknown;
 }): Promise<GitHubPullRequestResult> {
   if (!isGitHubWriteEnabled()) {
     throw new GitHubError(
       'GITHUB_WRITES_DISABLED',
-      'GitHub writes are disabled by PIERROT_DEV_WRITE_ENABLED=false.'
+      'GitHub writes are disabled. Set PIERROT_DEV_WRITE_ENABLED=true only after an explicit approval flow exists.'
+    );
+  }
+
+  if (input.confirmed !== true) {
+    throw new GitHubError(
+      'GITHUB_WRITE_CONFIRMATION_REQUIRED',
+      'Pull requests require an explicit user confirmation.'
     );
   }
 
@@ -631,6 +674,18 @@ export async function createPullRequest(input: {
   }
   if (!head) {
     throw new GitHubError('GITHUB_INVALID_BRANCH', 'Head branch is required.');
+  }
+  if (head === repo.defaultBranch) {
+    throw new GitHubError(
+      'GITHUB_DEFAULT_BRANCH_PROTECTED',
+      `A pull request cannot use the protected default branch ${repo.defaultBranch} as its head.`
+    );
+  }
+  if (head === base) {
+    throw new GitHubError(
+      'GITHUB_INVALID_BRANCH',
+      'Head and base branches must differ.'
+    );
   }
 
   try {

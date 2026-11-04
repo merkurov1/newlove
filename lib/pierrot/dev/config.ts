@@ -1,10 +1,11 @@
 import { assertServerOnly } from '@/lib/serverOnly';
+import { isGitHubWriteEnabled, verifyGitHubAuth } from '@/lib/github';
 import {
-  getGitHubRepository,
-  getGitHubToken,
-  isGitHubWriteEnabled,
-  verifyGitHubAuth,
-} from '@/lib/github';
+  getDevRepositoryConfig,
+  getDevRepositoryConfigs,
+} from './repositories';
+import { getDevRepositoryStatuses } from './repository';
+import type { DevRepositoryStatus } from './types';
 
 assertServerOnly('lib/pierrot/dev/config');
 
@@ -17,12 +18,19 @@ export type DevRepoConfig = {
   writesEnabled: boolean;
 };
 
+/**
+ * Backwards-compatible single-repository view. New code must use
+ * getDevRepositoryConfigs() and pass an explicit repository.
+ */
 export function getDevRepoConfig(): DevRepoConfig {
-  const repo = getGitHubRepository();
+  const repo = getDevRepositoryConfig('newlove');
 
   return {
-    ...repo,
-    token: getGitHubToken(),
+    owner: repo.owner,
+    repo: repo.repo,
+    fullName: repo.fullName,
+    defaultBranch: repo.defaultBranch,
+    token: null,
     writesEnabled: isGitHubWriteEnabled(),
   };
 }
@@ -35,8 +43,12 @@ export type DevIntegrationStatus = {
     authError: string | null;
     repo: string;
     defaultBranch: string;
+    /** Read-only policy: true only when explicitly enabled server-side. */
     writesEnabled: boolean;
+    /** Dev Mode never exposes write tools to the model. */
+    writeToolsAvailable: boolean;
   };
+  repositories: DevRepositoryStatus[];
   vercel: {
     detected: boolean;
     tokenConfigured: boolean;
@@ -44,19 +56,24 @@ export type DevIntegrationStatus = {
 };
 
 export async function getDevIntegrationStatus(): Promise<DevIntegrationStatus> {
-  const repo = getDevRepoConfig();
-  const auth = await verifyGitHubAuth();
+  const [auth, repositories] = await Promise.all([
+    verifyGitHubAuth(),
+    getDevRepositoryStatuses(),
+  ]);
+  const primary = repositories[0];
 
   return {
     github: {
-      configured: Boolean(repo.token),
+      configured: getDevRepositoryConfigs().some((repo) => repo.configured),
       authenticated: auth.authenticated,
       login: auth.login,
       authError: auth.error,
-      repo: repo.fullName,
-      defaultBranch: repo.defaultBranch,
-      writesEnabled: repo.writesEnabled,
+      repo: primary?.fullName || 'merkurov1/newlove',
+      defaultBranch: primary?.defaultBranch || 'main',
+      writesEnabled: isGitHubWriteEnabled(),
+      writeToolsAvailable: false,
     },
+    repositories,
     vercel: {
       detected: Boolean(
         (process.env.VERCEL || '').trim() ||
