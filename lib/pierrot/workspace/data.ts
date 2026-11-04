@@ -1,6 +1,8 @@
 import { assertServerOnly } from '@/lib/serverOnly';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { isGeminiConfigured } from '@/lib/ai/gemini';
+import { loadCommercialSummary } from '@/lib/pierrot/commercialIntelligence';
+import { emptyCommercialSummary } from '@/lib/pierrot/commercialSummary';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   BrainRecentSource,
@@ -190,13 +192,23 @@ export async function loadWorkspaceOverview(
   const store = getServerSupabaseClient({ useServiceRole: true });
   const periodStartDate = startOfUtcDay(new Date(now.getTime() - (period - 1) * DAY_MS));
 
-  const metrics = await Promise.all(METRIC_META.map((meta) => loadMetric(store, meta, period, now)));
+  const [metrics, commercial] = await Promise.all([
+    Promise.all(METRIC_META.map((meta) => loadMetric(store, meta, period, now))),
+    loadCommercialSummary({
+      store,
+      periodKey: period === 30 ? 'last_30_days' : 'last_7_days',
+      now,
+    }).catch(() =>
+      emptyCommercialSummary(period === 30 ? 'last_30_days' : 'last_7_days', now)
+    ),
+  ]);
 
   return {
     period,
     from: isoDay(periodStartDate),
     to: isoDay(now),
     metrics,
+    commercial,
     summary: buildOverviewSummary(metrics),
     generatedAt: now.toISOString(),
   };

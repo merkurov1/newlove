@@ -11,6 +11,7 @@ describe('Pierrot response parser', () => {
       reply: 'Ответ',
       conversationId: 'conv_12345678',
       sessionId: 'sess_12345678',
+      assistantMessageId: 'a_12345678abcdef',
       provider: 'deepseek',
       recorded: true,
       rag: {
@@ -37,6 +38,7 @@ describe('Pierrot response parser', () => {
     expect(parsed.reply).toBe('Ответ');
     expect(parsed.recorded).toBe(true);
     expect(parsed.answerLabel).toBe('BRAIN + WEB');
+    expect(parsed.assistantMessageId).toBe('a_12345678abcdef');
     expect(parsed.sources.outcome).toBe('relevant_results');
     expect(totalSourceCount(parsed.sources)).toBe(3);
     expect(parsed.sources.brain[1].canonicalUrl).toBeNull();

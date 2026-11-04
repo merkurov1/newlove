@@ -17,6 +17,7 @@ const PRECACHE = [
   '/admin/pierrot/manifest.webmanifest',
   '/admin/pierrot-icon/192',
   '/admin/pierrot-icon/512',
+  '/pierrot/pierrot-avatar-512.jpg',
 ];
 
 self.addEventListener('install', (event) => {
@@ -49,6 +50,7 @@ function isCacheableStatic(url) {
   return (
     url.pathname.startsWith('/_next/static/') ||
     url.pathname.startsWith('/admin/pierrot-icon/') ||
+    url.pathname.startsWith('/pierrot/') ||
     url.pathname === '/admin/pierrot/manifest.webmanifest' ||
     url.pathname === OFFLINE_URL
   );

@@ -8,6 +8,7 @@ import {
 } from '@/lib/pierrot/workspace/data';
 import { buildOverviewSummary } from '@/lib/pierrot/workspace/status';
 import type { WorkspaceOverview } from '@/lib/pierrot/workspace/types';
+import { emptyCommercialSummary } from '@/lib/pierrot/commercialSummary';
 import ChatWorkspace from '@/components/pierrot/workspace/ChatWorkspace';
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +40,7 @@ function unavailableOverview(): WorkspaceOverview {
     from: new Date().toISOString(),
     to: new Date().toISOString(),
     metrics,
+    commercial: emptyCommercialSummary('last_7_days', new Date()),
     summary: buildOverviewSummary(metrics),
     generatedAt: new Date().toISOString(),
   };
@@ -56,8 +58,7 @@ export default async function ChatPage({
     : params.conversation;
   const startNew = (Array.isArray(params.new) ? params.new[0] : params.new) === '1';
 
-  const [overview, conversations, conversation] = await Promise.all([
-    loadWorkspaceOverview(7).catch(() => unavailableOverview()),
+  const [conversations, conversation] = await Promise.all([
     loadOwnerConversations(user.id),
     rawConversation ? loadOwnerConversation(user.id, rawConversation) : Promise.resolve(null),
   ]);
@@ -65,6 +66,13 @@ export default async function ChatPage({
   if (rawConversation && !conversation) {
     redirect('/admin/pierrot');
   }
+
+  // The five metrics and the commercial report are only rendered by the empty
+  // state. Do not spend owner-data queries on a transcript that is already open.
+  const needsOverview = startNew || !conversation || conversation.messages.length === 0;
+  const overview = needsOverview
+    ? await loadWorkspaceOverview(7).catch(() => unavailableOverview())
+    : unavailableOverview();
 
   return (
     <ChatWorkspace

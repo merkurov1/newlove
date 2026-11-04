@@ -7,6 +7,11 @@ import {
   detectCommercialQuestion,
   type CommercialQuestion,
 } from '@/lib/pierrot/commercialQuestion';
+import type {
+  CommercialMoneyTotal,
+  CommercialPeriodSummary,
+  CommercialSummary,
+} from '@/lib/pierrot/commercialSummary';
 import {
   formatPreviousPeriod,
   formatReportingPeriod,
@@ -1535,6 +1540,120 @@ function renderAnswer(
   );
 
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function moneyFromConfirmedPeriod(data: PeriodData): CommercialMoneyTotal[] {
+  const map = new Map<string, MoneyTotal>();
+
+  for (const row of data.purchases) {
+    addMoney(map, currencyValue(row.currency), numberValue(row.amount_total));
+  }
+
+  for (const row of data.donations) {
+    addMoney(map, currencyValue(row.currency), numberValue(row.amount_total));
+  }
+
+  return Array.from(map.values()).sort((a, b) => a.currency.localeCompare(b.currency));
+}
+
+function summarizeCommercialPeriod(data: PeriodData): CommercialPeriodSummary {
+  const postcard = attributedByOffer(data, 'heart_angel_postcard');
+  const unframed = attributedByOffer(data, 'unframed');
+  const tribute = attributedByOffer(data, 'temple_tribute');
+  const flow = attributedByOffer(data, 'journal_flow');
+  const errorSources = new Set(data.errors.map((error) => error.source));
+
+  return {
+    paidCount:
+      postcard.purchases.length + unframed.purchases.length + tribute.donations.length,
+    money: moneyFromConfirmedPeriod(data),
+    postcards: {
+      count: postcard.purchases.length,
+      money: moneyFromPurchases(postcard.purchases),
+    },
+    unframed: {
+      count: unframed.purchases.length,
+      money: moneyFromPurchases(unframed.purchases),
+    },
+    tributes: {
+      count: tribute.donations.length,
+      money: moneyFromDonations(tribute.donations),
+    },
+    flowSubscriptions: flow.subscriptions.length,
+    purchasesAvailable: !errorSources.has('pierrot_v_purchases'),
+    donationsAvailable: !errorSources.has('pierrot_v_donations'),
+    subscriptionsAvailable: data.subscriptionsAvailable,
+  };
+}
+
+/**
+ * Structured commercial report for the owner workspace.
+ *
+ * Only confirmed purchases, donations and confirmed Flow subscriptions are
+ * counted. Checkout starts, offer interest and shown CTAs are deliberately
+ * excluded. GBP and USD remain separate; no exchange rate is applied.
+ */
+export async function loadCommercialSummary({
+  store,
+  periodKey,
+  now = new Date(),
+  timezone = process.env.PIERROT_OWNER_TIMEZONE || DEFAULT_TIMEZONE,
+}: {
+  store: SupabaseClient;
+  periodKey: 'last_7_days' | 'last_30_days';
+  now?: Date;
+  timezone?: string;
+}): Promise<CommercialSummary> {
+  const period = resolveReportingPeriod(periodKey, now, timezone);
+  const previousPeriod: ReportingPeriod = {
+    ...period,
+    key: 'custom',
+    start: period.previous.start,
+    end: period.previous.end,
+    previous: period.previous,
+  };
+
+  const [currentData, previousData] = await Promise.all([
+    loadPeriodData(store, period),
+    loadPeriodData(store, previousPeriod),
+  ]);
+
+  const errors = Array.from(
+    new Set(
+      [...currentData.errors, ...previousData.errors]
+        .filter(
+          (error) =>
+            error.source !== 'pierrot_v_events' && error.source !== 'pierrot_events'
+        )
+        .map((error) => `${error.source}:${error.code}`)
+    )
+  );
+
+  return {
+    periodKey,
+    periodLabel: periodKey === 'last_7_days' ? '7 дней' : '30 дней',
+    start: period.start.toISOString(),
+    end: period.end.toISOString(),
+    timezone,
+    current: summarizeCommercialPeriod(currentData),
+    previous: summarizeCommercialPeriod(previousData),
+    overall: {
+      postcards: {
+        count: currentData.postcards.length,
+        money: moneyFromPostcards(currentData.postcards),
+      },
+      tributes: {
+        count: currentData.tributes.length,
+        money: moneyFromTributes(currentData.tributes),
+      },
+      flowSubscriptions: newSubscriptions(currentData).all.length,
+      postcardsAvailable: currentData.postcardsAvailable,
+      tributesAvailable: currentData.tributesAvailable,
+      subscriptionsAvailable: currentData.subscriptionsAvailable,
+    },
+    complete: errors.length === 0,
+    errors,
+  };
 }
 
 export async function answerPierrotCommercialQuestion({

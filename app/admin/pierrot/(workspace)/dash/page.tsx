@@ -5,6 +5,7 @@ import { loadWorkspaceOverview } from '@/lib/pierrot/workspace/data';
 import { METRIC_STATE_COPY, metricDotTone } from '@/lib/pierrot/workspace/status';
 import type { WorkspacePeriod } from '@/lib/pierrot/workspace/types';
 import Sparkline from '@/components/pierrot/workspace/Sparkline';
+import { CommercialReport } from '@/components/pierrot/workspace/CommercialReport';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,6 +90,8 @@ export default async function DashPage({
           Сравнение с предыдущими {period} днями. Данные читаются из существующих таблиц;
           отсутствующий ряд не заменяется нулём.
         </p>
+
+        <CommercialReport summary={overview.commercial} />
       </div>
     </div>
   );

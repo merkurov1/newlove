@@ -41,11 +41,14 @@ export type WorkspaceMetric = {
 
 export type WorkspacePeriod = 7 | 30;
 
+import type { CommercialSummary } from '@/lib/pierrot/commercialSummary';
+
 export type WorkspaceOverview = {
   period: WorkspacePeriod;
   from: string;
   to: string;
   metrics: WorkspaceMetric[];
+  commercial: CommercialSummary;
   summary: string;
   generatedAt: string;
 };

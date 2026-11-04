@@ -53,6 +53,7 @@ describe('Pierrot service worker privacy boundary', () => {
     expect(source).toContain("'/pierrot-offline.html'");
     expect(source).toContain("'/_next/static/'");
     expect(source).toContain("'/admin/pierrot-icon/'");
+    expect(source).toContain("'/pierrot/pierrot-avatar-512.jpg'");
   });
 
   it('handles logout cache clearing', () => {

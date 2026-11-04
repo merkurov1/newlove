@@ -24,8 +24,10 @@ import {
 } from '@/lib/pierrot/workspace/chatParser';
 import { getPierrotConsent, setPierrotConsent } from '@/lib/pierrot/clientTelemetry';
 import { setWorkspaceHandoff } from '@/lib/pierrot/workspace/handoff';
+import { CommercialBrief } from './CommercialReport';
 import MetricStatusList from './MetricStatusList';
 import WorkspaceMarkdown from './WorkspaceMarkdown';
+import PierrotAvatar from './PierrotAvatar';
 import { useOnlineStatus } from './useOnlineStatus';
 
 type UiMessage = {
@@ -34,6 +36,9 @@ type UiMessage = {
   content: string;
   createdAt: string | null;
   provider?: string | null;
+  serverMessageId?: string | null;
+  feedback?: 'up' | 'down';
+  feedbackError?: boolean;
   sources?: SourceBundle;
   answerLabel?: string | null;
   error?: boolean;
@@ -80,6 +85,7 @@ function initialMessages(conversation: OwnerConversation | null): UiMessage[] {
     content: message.content,
     createdAt: message.createdAt,
     provider: message.provider || null,
+    serverMessageId: message.id,
   }));
 }
 
@@ -171,6 +177,12 @@ export default function ChatWorkspace({
   useEffect(() => {
     const element = scrollRef.current;
     if (!element) return;
+
+    if (messages.length === 0 && !loading) {
+      element.scrollTop = 0;
+      return;
+    }
+
     element.scrollTop = element.scrollHeight;
   }, [messages.length, loading]);
 
@@ -194,6 +206,46 @@ export default function ChatWorkspace({
   function stopSaving() {
     const next = setPierrotConsent('denied');
     setConsent(next);
+  }
+
+  async function submitFeedback(
+    message: UiMessage,
+    rating: 'up' | 'down'
+  ) {
+    if (message.feedback || consent.state !== 'granted') return;
+    if (!conversationId || !sessionId || !message.serverMessageId) return;
+
+    setMessages((current) =>
+      current.map((item) =>
+        item.id === message.id
+          ? { ...item, feedback: rating, feedbackError: false }
+          : item
+      )
+    );
+
+    try {
+      const response = await fetch('/api/pierrot/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId,
+          sessionId,
+          eventName: 'answer_feedback',
+          eventKey: message.serverMessageId,
+          payload: { rating, message_id: message.serverMessageId },
+          consent,
+          context: { pathname: '/admin/pierrot' },
+        }),
+      });
+
+      if (!response.ok) throw new Error('feedback_failed');
+    } catch {
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === message.id ? { ...item, feedbackError: true } : item
+        )
+      );
+    }
   }
 
   async function send() {
@@ -273,6 +325,7 @@ export default function ChatWorkspace({
           content: parsed.reply as string,
           createdAt: new Date().toISOString(),
           provider: parsed.provider,
+          serverMessageId: parsed.assistantMessageId,
           sources: parsed.sources,
           answerLabel: parsed.answerLabel,
         },
@@ -422,7 +475,12 @@ export default function ChatWorkspace({
             <PanelLeft size={20} strokeWidth={1.4} aria-hidden="true" />
           </button>
 
-          <h1 className="pw-chat-head-title">{title}</h1>
+          <PierrotAvatar size={30} />
+
+          <div className="pw-chat-head-copy">
+            <h1 className="pw-chat-head-title">{title}</h1>
+            <span className="pw-chat-head-sub">owner workspace</span>
+          </div>
 
           {!online && (
             <span className="pw-chat-head-meta" role="status">
@@ -437,6 +495,7 @@ export default function ChatWorkspace({
               <p className="pw-kicker">Pierrot · owner workspace</p>
               <h2 className="pw-empty-title">Всё спокойно.</h2>
               <p className="pw-empty-summary">{overview.summary}</p>
+              <CommercialBrief summary={overview.commercial} />
               <MetricStatusList metrics={overview.metrics} />
             </div>
           ) : (
@@ -457,7 +516,13 @@ export default function ChatWorkspace({
                     ) : (
                       <>
                         <div className="pw-message-head">
-                          <span className="pw-message-label">Pierrot</span>
+                          <div className="pw-message-head-left">
+                            <PierrotAvatar size={24} />
+                            <span className="pw-message-label">
+                              Pierrot
+                              {message.provider ? ` · ${message.provider}` : ''}
+                            </span>
+                          </div>
                           <button
                             type="button"
                             className="pw-message-menu"
@@ -498,9 +563,57 @@ export default function ChatWorkspace({
                           </button>
                         )}
 
-                        {message.provider && (
-                          <p className="pw-message-note">{message.provider}</p>
-                        )}
+                        <div className="pw-feedback" role="group" aria-label="Оценка ответа">
+                          <span className="pw-feedback-label">Ответ полезен?</span>
+                          <button
+                            type="button"
+                            className="pw-feedback-button"
+                            aria-label="Ответ полезен"
+                            aria-pressed={message.feedback === 'up'}
+                            disabled={
+                              consent.state !== 'granted' ||
+                              !conversationId ||
+                              !sessionId ||
+                              !message.serverMessageId ||
+                              Boolean(message.feedback)
+                            }
+                            title={
+                              consent.state !== 'granted'
+                                ? 'Для оценки нужно разрешить сохранение'
+                                : 'Оценить ответ'
+                            }
+                            onClick={() => void submitFeedback(message, 'up')}
+                          >
+                            Да
+                          </button>
+                          <span className="pw-feedback-sep" aria-hidden="true">
+                            /
+                          </span>
+                          <button
+                            type="button"
+                            className="pw-feedback-button"
+                            aria-label="Ответ не полезен"
+                            aria-pressed={message.feedback === 'down'}
+                            disabled={
+                              consent.state !== 'granted' ||
+                              !conversationId ||
+                              !sessionId ||
+                              !message.serverMessageId ||
+                              Boolean(message.feedback)
+                            }
+                            title={
+                              consent.state !== 'granted'
+                                ? 'Для оценки нужно разрешить сохранение'
+                                : 'Оценить ответ'
+                            }
+                            onClick={() => void submitFeedback(message, 'down')}
+                          >
+                            Нет
+                          </button>
+                          {message.feedbackError && (
+                            <span className="pw-feedback-error">не отправлено</span>
+                          )}
+                        </div>
                       </>
                     )}
                   </article>
