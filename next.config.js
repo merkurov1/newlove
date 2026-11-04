@@ -42,6 +42,29 @@ const nextConfig = {
         ],
       },
       {
+        // The Heart & Angel SW must never be served from a stale HTTP cache.
+        source: '/heartandangel-sw.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/heartandangel',
+          },
+        ],
+      },
+      {
+        source: '/heartandangel/manifest.webmanifest',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=3600',
+          },
+        ],
+      },
+      {
         // Private research pages must never be cached by a CDN or a shared
         // proxy, even before the server-side ADMIN guard runs.
         source: '/research/telegram/:path*',

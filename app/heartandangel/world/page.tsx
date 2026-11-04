@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import WorldScene from '@/components/WorldScene';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { breadcrumbJsonLd, visualArtworkJsonLd } from '@/lib/structuredData';
@@ -38,6 +38,12 @@ export const metadata: Metadata = {
       'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png',
     ],
   },
+};
+
+// The World is a dark, immersive scene; keep the standalone status bar and
+// browser chrome aligned with it instead of the light Hub palette.
+export const viewport: Viewport = {
+  themeColor: '#111111',
 };
 
 export default function WorldPage() {
