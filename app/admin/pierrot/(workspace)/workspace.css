@@ -1003,6 +1003,25 @@
   background: #000;
 }
 
+.pw-root .pw-send.pw-stop {
+  border: 1px solid var(--pw-field-line);
+  background: transparent;
+  color: var(--pw-ink);
+}
+
+.pw-root .pw-send.pw-stop:hover:not(:disabled) {
+  background: var(--pw-white);
+}
+
+.pw-stream-note {
+  margin: 10px 0 0;
+  color: var(--pw-muted);
+  font-family: var(--pw-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .pw-composer-meta {
   display: flex;
   flex-wrap: wrap;

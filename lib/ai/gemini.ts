@@ -28,6 +28,10 @@ export type GeminiTextResult = {
   latencyMs: number;
 };
 
+export type GeminiStreamResult = GeminiTextResult & {
+  emitted: boolean;
+};
+
 export class GeminiError extends Error {
   readonly code: string;
   readonly status: number | null;
@@ -58,8 +62,46 @@ type GeminiResponse = {
 function extractText(payload: GeminiResponse): string {
   return (payload.candidates?.[0]?.content?.parts || [])
     .map((part) => (typeof part.text === 'string' ? part.text : ''))
-    .join('')
-    .trim();
+    .join('');
+}
+
+function extractSseData(frame: string): string[] {
+  return frame
+    .split('\n')
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trimStart())
+    .filter(Boolean);
+}
+
+function geminiRequestBody(input: {
+  system?: string;
+  prompt?: string;
+  messages?: GeminiMessage[];
+  temperature?: number;
+  maxOutputTokens?: number;
+  responseMimeType?: string;
+}) {
+  const contents =
+    input.messages && input.messages.length > 0
+      ? input.messages.map((message) => ({
+          role: message.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: message.content }],
+        }))
+      : [{ role: 'user', parts: [{ text: input.prompt || '' }] }];
+
+  return {
+    ...(input.system ? { systemInstruction: { parts: [{ text: input.system }] } } : {}),
+    contents,
+    generationConfig: {
+      temperature: input.temperature ?? 0.4,
+      maxOutputTokens: input.maxOutputTokens ?? 700,
+      // Keep output tokens for the actual answer. Without this, newer Flash
+      // models can spend the whole budget on hidden reasoning and return a
+      // truncated answer.
+      thinkingConfig: { thinkingBudget: 0 },
+      ...(input.responseMimeType ? { responseMimeType: input.responseMimeType } : {}),
+    },
+  };
 }
 
 /**
@@ -97,14 +139,6 @@ export async function generateGeminiText(input: {
     else input.signal.addEventListener('abort', relayAbort, { once: true });
   }
 
-  const contents =
-    input.messages && input.messages.length > 0
-      ? input.messages.map((message) => ({
-          role: message.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: message.content }],
-        }))
-      : [{ role: 'user', parts: [{ text: input.prompt || '' }] }];
-
   try {
     const response = await fetch(
       `${GEMINI_ENDPOINT}/${encodeURIComponent(GEMINI_MODEL)}:generateContent`,
@@ -114,23 +148,7 @@ export async function generateGeminiText(input: {
           'Content-Type': 'application/json',
           'x-goog-api-key': apiKey,
         },
-        body: JSON.stringify({
-          ...(input.system
-            ? { systemInstruction: { parts: [{ text: input.system }] } }
-            : {}),
-          contents,
-          generationConfig: {
-            temperature: input.temperature ?? 0.4,
-            maxOutputTokens: input.maxOutputTokens ?? 700,
-            // Keep output tokens for the actual answer. Without this, newer
-            // Flash models can spend the whole budget on hidden reasoning and
-            // return a truncated bilingual answer.
-            thinkingConfig: { thinkingBudget: 0 },
-            ...(input.responseMimeType
-              ? { responseMimeType: input.responseMimeType }
-              : {}),
-          },
-        }),
+        body: JSON.stringify(geminiRequestBody(input)),
         signal: controller.signal,
         cache: 'no-store',
       }
@@ -154,7 +172,7 @@ export async function generateGeminiText(input: {
       );
     }
 
-    const content = extractText(payload || {});
+    const content = extractText(payload || {}).trim();
 
     if (!content) {
       await recordCircuitFailure({
@@ -177,9 +195,12 @@ export async function generateGeminiText(input: {
   } catch (error) {
     if (error instanceof GeminiError) throw error;
 
+    if (input.signal?.aborted) {
+      throw new GeminiError('Gemini request cancelled.', 'gemini_cancelled');
+    }
+
     const aborted =
-      error instanceof Error &&
-      (error.name === 'AbortError' || error.name === 'TimeoutError');
+      error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError');
     const code = aborted ? 'gemini_timeout' : 'gemini_request_failed';
 
     await recordCircuitFailure({
@@ -188,10 +209,180 @@ export async function generateGeminiText(input: {
       permanent: false,
     });
 
-    throw new GeminiError(
-      aborted ? 'Gemini request timed out.' : 'Gemini request failed.',
-      code
+    throw new GeminiError(aborted ? 'Gemini request timed out.' : 'Gemini request failed.', code);
+  } finally {
+    clearTimeout(timer);
+    if (input.signal) input.signal.removeEventListener('abort', relayAbort);
+  }
+}
+
+/**
+ * Genuine Gemini streaming using streamGenerateContent + SSE.
+ *
+ * The caller owns fallback: if this throws before `emitted` becomes true, the
+ * model router may try the next provider. If it throws after text was emitted,
+ * the caller must report an interrupted response instead of appending another
+ * provider's answer.
+ */
+export async function streamGeminiText(input: {
+  system?: string;
+  prompt?: string;
+  messages?: GeminiMessage[];
+  temperature?: number;
+  maxOutputTokens?: number;
+  timeoutMs?: number;
+  responseMimeType?: string;
+  signal?: AbortSignal;
+  onDelta: (text: string) => void;
+}): Promise<GeminiStreamResult> {
+  const apiKey = (process.env.GEMINI_API_KEY || '').trim();
+
+  if (!apiKey) {
+    throw new GeminiError('Gemini is not configured.', 'gemini_not_configured');
+  }
+
+  await assertCircuitClosed('gemini');
+
+  const startedAt = Date.now();
+  const timeoutMs = input.timeoutMs ?? 20_000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const relayAbort = () => controller.abort();
+
+  if (input.signal) {
+    if (input.signal.aborted) controller.abort();
+    else input.signal.addEventListener('abort', relayAbort, { once: true });
+  }
+
+  let emitted = false;
+  let content = '';
+
+  try {
+    const response = await fetch(
+      `${GEMINI_ENDPOINT}/${encodeURIComponent(GEMINI_MODEL)}:streamGenerateContent?alt=sse`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify(geminiRequestBody(input)),
+        signal: controller.signal,
+        cache: 'no-store',
+      }
     );
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as GeminiResponse | null;
+      const code = `gemini_http_${response.status}`;
+
+      await recordCircuitFailure({
+        dependency: 'gemini',
+        errorCode: code,
+        permanent: [400, 401, 403, 404].includes(response.status),
+      });
+
+      throw new GeminiError(
+        payload?.error?.message || 'Gemini request failed.',
+        code,
+        response.status
+      );
+    }
+
+    if (!response.body) {
+      throw new GeminiError('Gemini returned an empty stream.', 'gemini_empty_response');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const consumeFrame = (frame: string) => {
+      for (const data of extractSseData(frame)) {
+        if (data === '[DONE]') continue;
+
+        let payload: GeminiResponse | null = null;
+        try {
+          payload = JSON.parse(data) as GeminiResponse;
+        } catch {
+          throw new GeminiError('Gemini returned a malformed stream.', 'gemini_stream_malformed');
+        }
+
+        if (payload?.error) {
+          throw new GeminiError(
+            payload.error.message || 'Gemini stream failed.',
+            'gemini_stream_error'
+          );
+        }
+
+        const text = extractText(payload || {});
+        if (!text) continue;
+
+        content += text;
+        emitted = true;
+        input.onDelta(text);
+      }
+    };
+
+    try {
+      let done = false;
+
+      while (!done) {
+        const read = await reader.read();
+        done = read.done;
+        if (done) break;
+
+        buffer += decoder.decode(read.value, { stream: true }).replace(/\r\n/g, '\n');
+
+        let boundary = buffer.indexOf('\n\n');
+        while (boundary >= 0) {
+          const frame = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          if (frame.trim()) consumeFrame(frame);
+          boundary = buffer.indexOf('\n\n');
+        }
+      }
+
+      buffer += decoder.decode();
+      if (buffer.trim()) consumeFrame(buffer.replace(/\r\n/g, '\n'));
+    } finally {
+      reader.releaseLock();
+    }
+
+    if (!content.trim()) {
+      await recordCircuitFailure({
+        dependency: 'gemini',
+        errorCode: 'gemini_empty_response',
+        permanent: false,
+      });
+
+      throw new GeminiError('Gemini returned an empty response.', 'gemini_empty_response');
+    }
+
+    await recordCircuitSuccess('gemini');
+
+    return {
+      content: content.trim(),
+      model: GEMINI_MODEL,
+      provider: 'gemini',
+      latencyMs: Date.now() - startedAt,
+      emitted,
+    };
+  } catch (error) {
+    if (error instanceof GeminiError) throw error;
+
+    const aborted =
+      error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError');
+    const code = aborted ? 'gemini_timeout' : 'gemini_request_failed';
+
+    await recordCircuitFailure({
+      dependency: 'gemini',
+      errorCode: code,
+      permanent: false,
+    });
+
+    throw new GeminiError(aborted ? 'Gemini request timed out.' : 'Gemini request failed.', code);
   } finally {
     clearTimeout(timer);
     if (input.signal) input.signal.removeEventListener('abort', relayAbort);

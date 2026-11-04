@@ -1,6 +1,9 @@
 /**
- * Client-safe parsing of the existing /api/pierrot-web JSON contract.
- * The endpoint is not streaming; this module never pretends that it is.
+ * Client-safe parsing of the /api/pierrot-web JSON contract.
+ *
+ * Owner chat can opt into SSE with `stream: true`; the completed event carries
+ * this same JSON shape. Non-streaming consumers (Telegram, public chat and the
+ * legacy JSON path) continue to use the parser unchanged.
  */
 
 export type BrainAnswerSource = {

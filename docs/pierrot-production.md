@@ -18,8 +18,35 @@
 Pierrot uses `gemini-3.5-flash` as the primary model and falls back
 automatically to DeepSeek Direct, then OpenRouter DeepSeek. The same system
 prompt, history and RAG evidence are preserved across providers. Owner
-authorization, retrieval boundaries and the non-streaming response contract are
-unchanged. See `docs/gemini-integration.md`.
+authorization and retrieval boundaries are unchanged. The default response
+remains the existing JSON contract; Owner Workspace chat can opt into SSE with
+`stream: true`. See `docs/gemini-integration.md`.
+
+## Owner chat streaming
+
+Owner Workspace chat sends `stream: true` and `Accept: text/event-stream` to
+`POST /api/pierrot-web`. The route returns `text/event-stream` only for a
+verified owner; every other caller keeps the JSON response.
+
+Protocol version 1 uses SSE `event:` + JSON `data:` frames:
+
+- `accepted` — ids for the accepted turn;
+- `status` — `retrieving`, `generating`, `persisting`;
+- `delta` — incremental provider text;
+- `sources` — actual Brain/Web/source-status payload;
+- `completed` — the authoritative final JSON payload;
+- `error` — sanitized error, stable code, `retryable`/`interrupted` flags.
+
+Gemini streams through `streamGenerateContent?alt=sse`; DeepSeek and OpenRouter
+stream through their OpenAI-compatible chat completion streams. Provider
+fallback is allowed only before the first emitted delta. After the first delta,
+a failure produces `error` with `interrupted: true` and the partial answer is
+never persisted. The client can retry with the original prompt.
+
+Cancellation uses `AbortController` on the client and propagates through the
+request signal to the provider. A cancelled or interrupted turn is not written
+as a completed assistant message. Only the final successful answer is persisted
+through the existing `appendPierrotMessage` path.
 
 ## Autonomous web search
 

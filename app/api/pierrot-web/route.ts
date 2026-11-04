@@ -58,11 +58,7 @@ import {
   isPierrotRagEnabled,
   isPublicPierrotRagEnabled,
 } from '@/lib/knowledge/rag/config';
-import {
-  buildBrainQueryPlan,
-  classifyBrainDocument,
-  isFoodQuery,
-} from '@/lib/knowledge/rag/queryRouting';
+import { buildBrainQueryPlan, isFoodQuery } from '@/lib/knowledge/rag/queryRouting';
 import {
   findBrainDocumentByTitle,
   loadBrainDocumentChunks,
@@ -130,7 +126,13 @@ import {
   type HumanPresencePublicState,
 } from '@/lib/pierrot/humanPresenceShared';
 import { isHumanPresenceConfigured, notifyHumanRequest } from '@/lib/pierrot/humanPresenceTelegram';
-import { callPierrotModel } from '@/lib/pierrot/model';
+import {
+  callPierrotModel,
+  streamPierrotModel,
+  PierrotStreamInterruptedError,
+} from '@/lib/pierrot/model';
+import { createPierrotStreamResponse } from '@/lib/pierrot/streamResponse';
+import { PIERROT_STREAM_VERSION } from '@/lib/pierrot/streamProtocol';
 import {
   confirmPendingUrlCandidate,
   consumePendingUrlCandidate,
@@ -283,6 +285,7 @@ export async function POST(req: Request) {
       visitorId: rawVisitorId,
       consent: rawConsent,
       mode: rawMode,
+      stream: rawStream,
     } = body;
 
     if (!message || typeof message !== 'string' || !message.trim()) {
@@ -421,6 +424,9 @@ export async function POST(req: Request) {
     // Owner knowledge is the default for a verified owner. Sending
     // mode: "site" explicitly turns it off; non-owners never enter this path.
     const ownerMode = ragOwnerAuthorized && !requestedSiteMode;
+    // Streaming is explicit and owner-only. Every other caller keeps the
+    // existing JSON contract, including Telegram and the public chat.
+    const streaming = rawStream === true && ownerMode;
 
     // Format normalized conversation history with hard limits.
     const normalizedHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
@@ -977,9 +983,6 @@ export async function POST(req: Request) {
     // model still has to read the found chunks later in the generation branch.
     let documentLookup: BrainDocumentMatch | null = null;
     let documentChunks: RetrievedChunk[] = [];
-    let documentLookupStatus:
-      'not_requested' | 'found' | 'found_empty' | 'not_found' | 'unavailable' = 'not_requested';
-
     // Owner-only deterministic tools. These use the same server-side loaders as
     // the existing admin pages and never expose another UI or chat.
     if (ownerMode && ragOwnerAuthorized) {
@@ -1020,7 +1023,7 @@ export async function POST(req: Request) {
           }
         }
 
-        return NextResponse.json({
+        const payload = {
           reply: finalText,
           admin: true,
           conversationId,
@@ -1030,7 +1033,30 @@ export async function POST(req: Request) {
           recorded: canStoreTranscript,
           ...extra,
           ...(extra.source_status ? { sourceStatus: extra.source_status } : {}),
-        });
+        };
+
+        if (streaming) {
+          return createPierrotStreamResponse({
+            request: req,
+            run: async (emit) => {
+              emit({
+                type: 'accepted',
+                version: PIERROT_STREAM_VERSION,
+                conversationId,
+                sessionId,
+                userMessageId,
+                assistantMessageId,
+              });
+              emit({
+                type: 'completed',
+                version: PIERROT_STREAM_VERSION,
+                payload,
+              });
+            },
+          });
+        }
+
+        return NextResponse.json(payload);
       };
 
       const pending = pierrotStore
@@ -1178,8 +1204,6 @@ export async function POST(req: Request) {
         const requestedTitle = queryPlan.documentTitle;
 
         if (!requestedTitle) {
-          documentLookupStatus = 'not_found';
-
           return persistOwnerReply(
             ownerLanguage === 'ru'
               ? 'Уточните точное название документа — я найду его в Brain по названию и метаданным.'
@@ -1202,8 +1226,6 @@ export async function POST(req: Request) {
           });
 
           if (!found) {
-            documentLookupStatus = 'not_found';
-
             return persistOwnerReply(
               ownerLanguage === 'ru'
                 ? `Документ «${requestedTitle}» в Brain пока не найден. Я не буду подменять его коммерческой статистикой или другим источником.`
@@ -1221,15 +1243,12 @@ export async function POST(req: Request) {
           }
 
           documentLookup = found;
-          documentLookupStatus = 'found';
           documentChunks = await loadBrainDocumentChunks({
             document: found,
             scope: 'owner',
           });
 
           if (documentChunks.length === 0) {
-            documentLookupStatus = 'found_empty';
-
             return persistOwnerReply(
               ownerLanguage === 'ru'
                 ? `Документ «${found.title}» найден, но его текст ещё не извлечён. Пока я не могу его пересказать.`
@@ -1249,8 +1268,6 @@ export async function POST(req: Request) {
             );
           }
         } catch {
-          documentLookupStatus = 'unavailable';
-
           return persistOwnerReply(
             ownerLanguage === 'ru'
               ? `Brain сейчас недоступен, поэтому документ «${requestedTitle}» не удалось проверить. Я не буду отвечать вместо него другим источником.`
@@ -1324,509 +1341,250 @@ export async function POST(req: Request) {
         }).catch(() => null)
       : Promise.resolve(null);
 
-    let reply = '';
-    let usedProvider = '';
-    let usedModel = '';
-    let generationLatencyMs = 0;
-    let fallbackUsed = false;
-    let ownerRag: OwnerRagResponse | null = null;
-    let retrievalTrace: Omit<PierrotRetrievalTraceInput, 'usedContext' | 'generationOk'> | null =
-      null;
-    let usedRagContext = false;
-    let usedWebContext = false;
-    let webSearchResult: WebSearchResult | null = null;
-    let mediaOutcome: { outcome: string; code?: string | null } | null = null;
-    let brainOutcome: { outcome: string; code?: string | null } | null = null;
+    const runGeneration = async (
+      onDelta?: (text: string) => void,
+      onStatus?: (stage: 'generating' | 'persisting') => void,
+      generationSignal: AbortSignal = req.signal
+    ): Promise<Response> => {
+      let reply = '';
+      let usedProvider = '';
+      let usedModel = '';
+      let generationLatencyMs = 0;
+      let fallbackUsed = false;
+      let ownerRag: OwnerRagResponse | null = null;
+      let retrievalTrace: Omit<PierrotRetrievalTraceInput, 'usedContext' | 'generationOk'> | null =
+        null;
+      let usedRagContext = false;
+      let usedWebContext = false;
+      let webSearchResult: WebSearchResult | null = null;
+      let mediaOutcome: { outcome: string; code?: string | null } | null = null;
+      let brainOutcome: { outcome: string; code?: string | null } | null = null;
 
-    if (!useModel) {
-      reply = plan.reply || 'Silence.';
-    }
+      if (!useModel) {
+        reply = plan.reply || 'Silence.';
+      }
 
-    if (useModel) {
-      try {
-        const reasoningKeywords = [
-          'code',
-          'код',
-          'refactor',
-          'рефактор',
-          'bug',
-          'баг',
-          'error',
-          'ошибка',
-          'анализ',
-          'проанализируй',
-          'разбери',
-          'сравни',
-          'почему',
-          'архитектур',
-          'структур',
-          'алгоритм',
-          'логик',
-          'стратеги',
-          'детально',
-          'подробно',
-          'deep',
-          'reason',
-          'calculate',
-          'вычисли',
-          'исследуй',
-          'system',
-          'database',
-          'sql',
-        ];
+      if (useModel) {
+        try {
+          const reasoningKeywords = [
+            'code',
+            'код',
+            'refactor',
+            'рефактор',
+            'bug',
+            'баг',
+            'error',
+            'ошибка',
+            'анализ',
+            'проанализируй',
+            'разбери',
+            'сравни',
+            'почему',
+            'архитектур',
+            'структур',
+            'алгоритм',
+            'логик',
+            'стратеги',
+            'детально',
+            'подробно',
+            'deep',
+            'reason',
+            'calculate',
+            'вычисли',
+            'исследуй',
+            'system',
+            'database',
+            'sql',
+          ];
 
-        const contextScan = `${trimmedMessage} ${normalizedHistory
-          .slice(-2)
-          .map((h) => h.content)
-          .join(' ')}`.toLowerCase();
-        const prefersReasoning =
-          ragOwnerAuthorized && reasoningKeywords.some((keyword) => contextScan.includes(keyword));
+          const contextScan = `${trimmedMessage} ${normalizedHistory
+            .slice(-2)
+            .map((h) => h.content)
+            .join(' ')}`.toLowerCase();
+          const prefersReasoning =
+            ragOwnerAuthorized &&
+            reasoningKeywords.some((keyword) => contextScan.includes(keyword));
 
-        // Owner-only Brain retrieval. Public conversations never enter this
-        // branch. The mode is a client intent only; access is decided by the
-        // verified server-side owner identity above.
-        let generationSystemPrompt = systemPrompt;
-        const brainPlan = buildBrainQueryPlan(retrievalQuery);
-        const requestsManuscript = brainPlan.requestedSources.includes('manuscript');
-        const explicitBrainQuery = /\b(?:brain|rag)\b|баз[ае]\s+знаний|knowledge base/i.test(
-          trimmedMessage
-        );
-        const useMediaBranch =
-          queryPlan.intent !== 'document_lookup' &&
-          !explicitBrainQuery &&
-          !foodQuery &&
-          (queryPlan.intent === 'media_mentions' || isMediaArchiveQuery(trimmedMessage)) &&
-          !requestsManuscript;
+          // Owner-only Brain retrieval. Public conversations never enter this
+          // branch. The mode is a client intent only; access is decided by the
+          // verified server-side owner identity above.
+          let generationSystemPrompt = systemPrompt;
+          const brainPlan = buildBrainQueryPlan(retrievalQuery);
+          const requestsManuscript = brainPlan.requestedSources.includes('manuscript');
+          const explicitBrainQuery = /\b(?:brain|rag)\b|баз[ае]\s+знаний|knowledge base/i.test(
+            trimmedMessage
+          );
+          const useMediaBranch =
+            queryPlan.intent !== 'document_lookup' &&
+            !explicitBrainQuery &&
+            !foodQuery &&
+            (queryPlan.intent === 'media_mentions' || isMediaArchiveQuery(trimmedMessage)) &&
+            !requestsManuscript;
 
-        // Media coverage is available to both the owner and public visitors.
-        // Public retrieval is metadata/verified-quote only; semantic media
-        // chunks remain owner-scoped.
-        if (useMediaBranch) {
-          const mediaStartedAt = Date.now();
-          let mediaRetrieval: Awaited<ReturnType<typeof retrieveMediaEvidence>> | null = null;
+          // Media coverage is available to both the owner and public visitors.
+          // Public retrieval is metadata/verified-quote only; semantic media
+          // chunks remain owner-scoped.
+          if (useMediaBranch) {
+            const mediaStartedAt = Date.now();
+            let mediaRetrieval: Awaited<ReturnType<typeof retrieveMediaEvidence>> | null = null;
 
-          try {
-            mediaRetrieval = await withTimeout(
-              retrieveMediaEvidence({
-                query: retrievalQuery,
-                limit: 8,
-                ownerAccess: ownerMode,
-                publishedFrom: queryPlan.period?.from ?? null,
-              }),
-              RETRIEVAL_TIMEOUT_MS
-            );
-          } catch {
-            mediaRetrieval = null;
-          }
-
-          if (!mediaRetrieval) {
-            const mediaElapsed = Date.now() - mediaStartedAt;
-            mediaOutcome = {
-              outcome: 'unavailable',
-              code: mediaElapsed >= RETRIEVAL_TIMEOUT_MS - 100 ? 'timeout' : 'retrieval_error',
-            };
-            retrievalTrace = {
-              conversationId,
-              sessionId,
-              userMessageId,
-              mode: 'media',
-              outcome: 'unavailable',
-              code: 'retrieval_timeout',
-              selectedSources: ['media_coverage'],
-              documentIds: [],
-              chunkIds: [],
-              latencyMs: Date.now() - mediaStartedAt,
-              candidateCount: 0,
-              topSimilarity: null,
-              refined: false,
-              attempts: 1,
-              mediaFallbackCount: 0,
-            };
-
-            ownerRag = {
-              mode: 'media',
-              outcome: 'unavailable',
-              sources: [],
-            };
-            usedRagContext = false;
-            generationSystemPrompt = `${systemPrompt}\n\n${buildMediaEvidencePrompt({
-              outcome: 'unavailable',
-              hits: [],
-            })}`;
-
-            console.warn('[Pierrot Media Intelligence] retrieval timed out');
-          } else {
-            mediaOutcome = { outcome: mediaRetrieval.outcome, code: mediaRetrieval.code ?? null };
-            retrievalTrace = {
-              conversationId,
-              sessionId,
-              userMessageId,
-              mode: 'media',
-              outcome: mediaRetrieval.outcome,
-              code: mediaRetrieval.code ?? null,
-              selectedSources: ['media_coverage'],
-              documentIds: Array.from(new Set(mediaRetrieval.hits.map((hit) => hit.documentId))),
-              chunkIds: mediaRetrieval.hits.map((hit) => hit.chunkId),
-              latencyMs: Date.now() - mediaStartedAt,
-              candidateCount: mediaRetrieval.hits.length,
-              topSimilarity: null,
-              refined: false,
-              attempts: 1,
-              mediaFallbackCount: mediaRetrieval.hits.filter((hit) => hit.fallback).length,
-            };
-
-            ownerRag = {
-              mode: 'media',
-              outcome: mediaRetrieval.outcome,
-              sources: buildMediaEvidenceSources(mediaRetrieval),
-            };
-
-            const ragPrompt = buildMediaEvidencePrompt(mediaRetrieval);
-            usedRagContext =
-              mediaRetrieval.outcome === 'relevant_results' && mediaRetrieval.hits.length > 0;
-
-            if (ragPrompt) {
-              generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
-            }
-
-            console.info('[Pierrot Media Intelligence]', {
-              status: mediaRetrieval.outcome,
-              publications: mediaRetrieval.hits.length,
-              fallback: mediaRetrieval.hits.some((hit) => hit.fallback),
-            });
-          }
-        }
-
-        if (!useMediaBranch && !ownerMode && isPublicPierrotRagEnabled()) {
-          try {
-            const retrieval = await retrieveFlowPublicEvidence(
-              {
-                title: trimmedMessage,
-                body_md: null,
-                metadata: null,
-                type: 'article',
-                lang: language,
-                source_url: null,
-              },
-              { enabled: true }
-            );
-
-            brainOutcome = { outcome: retrieval.status };
-            retrievalTrace = {
-              conversationId,
-              sessionId,
-              userMessageId,
-              mode: 'public_brain',
-              outcome: retrieval.status,
-              code: null,
-              selectedSources: Array.from(
-                new Set(retrieval.sourceRefs.map((ref) => ref.sourceType))
-              ),
-              documentIds: retrieval.documentIds,
-              chunkIds: retrieval.sourceRefs.map((ref) => ref.chunkId),
-              latencyMs: retrieval.latencyMs,
-              candidateCount:
-                typeof retrieval.diagnostics.candidateCount === 'number'
-                  ? retrieval.diagnostics.candidateCount
-                  : 0,
-              topSimilarity: retrieval.topSimilarity,
-              refined: false,
-              attempts: 1,
-            };
-
-            const ragPrompt = buildPublicBrainEvidencePrompt(retrieval);
-
-            if (ragPrompt) {
-              generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
-              usedRagContext = true;
-              ownerRag = {
-                mode: 'public',
-                outcome: 'relevant_results',
-                sources: retrieval.sourceRefs.map((ref) => ({
-                  documentId: ref.documentId,
-                  documentTitle: ref.documentTitle,
-                  sourceType: ref.sourceType,
-                  sourceClass: ref.sourceType,
-                  sourceDomain: null,
-                  author: null,
-                  publishedAt: ref.publishedAt,
-                  chunkId: ref.chunkId,
-                  heading: ref.documentTitle,
-                  sectionPath: [],
-                  sectionIndex: 0,
-                  lineStart: 0,
-                  lineEnd: 0,
-                  similarity: ref.similarity,
-                  excerpt: ref.excerpt,
-                  canonicalUrl: ref.sourceUrl,
-                  verificationStatus: 'none',
-                })),
-              };
-            }
-          } catch {
-            brainOutcome = { outcome: 'unavailable', code: 'unexpected_retrieval_error' };
-            retrievalTrace = {
-              conversationId,
-              sessionId,
-              userMessageId,
-              mode: 'public_brain',
-              outcome: 'unavailable',
-              code: 'unexpected_retrieval_error',
-              selectedSources: [],
-              documentIds: [],
-              chunkIds: [],
-              latencyMs: 0,
-              candidateCount: 0,
-              topSimilarity: null,
-              refined: false,
-              attempts: 0,
-            };
-          }
-        }
-
-        if (!useMediaBranch && documentLookup && documentChunks.length > 0) {
-          const documentStartedAt = Date.now();
-          const documentPlan = {
-            ...brainPlan,
-            publishedFrom: null,
-            publishedTo: null,
-            specificDocument: true,
-          };
-          const documentResult: BrainRetrievalResult = {
-            outcome: 'relevant_results',
-            hits: documentChunks,
-            latencyMs: Date.now() - documentStartedAt,
-            topSimilarity: 0.99,
-            plan: documentPlan,
-            method: 'hybrid_v2',
-            selectedSourceClasses: Array.from(
-              new Set(
-                documentChunks
-                  .map((hit) => hit.sourceClass)
-                  .filter((value): value is NonNullable<typeof value> => Boolean(value))
-              )
-            ) as BrainRetrievalResult['selectedSourceClasses'],
-            selectedSourceDomains: [],
-            candidateCount: documentChunks.length,
-            documentIds: [documentLookup.id],
-            chunkIds: documentChunks.map((hit) => hit.chunkId),
-            ranking: documentChunks.map((hit) => ({
-              chunkId: hit.chunkId,
-              documentId: hit.documentId,
-              documentTitle: hit.documentTitle || documentLookup.title,
-              sourceClass:
-                (hit.sourceClass as BrainRetrievalResult['selectedSourceClasses'][number]) ||
-                'other',
-              similarity: hit.similarity,
-              lexicalScore: hit.lexicalScore || 0,
-              combinedScore: hit.combinedScore || hit.similarity,
-            })),
-            timings: { embeddingMs: 0, searchMs: 0, rankingMs: 0 },
-          };
-
-          brainOutcome = { outcome: 'relevant_results' };
-          retrievalTrace = {
-            conversationId,
-            sessionId,
-            userMessageId,
-            mode: 'brain_document',
-            outcome: 'relevant_results',
-            code: null,
-            selectedSources: documentResult.selectedSourceClasses,
-            documentIds: documentResult.documentIds,
-            chunkIds: documentResult.chunkIds,
-            latencyMs: documentResult.latencyMs,
-            candidateCount: documentChunks.length,
-            topSimilarity: 0.99,
-            refined: false,
-            attempts: 1,
-            timings: documentResult.timings,
-            documentTitleRequested: queryPlan.documentTitle,
-            documentTitleMatched: documentLookup.title,
-            documentMatchType: documentLookup.match,
-          };
-          ownerRag = {
-            mode: 'unframed',
-            outcome: 'relevant_results',
-            sources: buildUnframedEvidenceSources(documentResult),
-          };
-
-          const ragPrompt = buildUnframedEvidencePrompt(documentResult);
-          usedRagContext = Boolean(ragPrompt);
-
-          if (ragPrompt) {
-            generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
-          }
-
-          console.info('[Pierrot Brain document]', {
-            status: 'relevant_results',
-            match: documentLookup.match,
-            chunks: documentChunks.length,
-            document_id: documentLookup.id,
-          });
-        } else if (!useMediaBranch && ownerMode && queryPlan.sources.brain) {
-          const ragEnabled = isPierrotRagEnabled();
-
-          if (!ragEnabled) {
-            brainOutcome = { outcome: 'unavailable', code: 'feature_flag_disabled' };
-            ownerRag = {
-              mode: 'unframed',
-              outcome: 'unavailable',
-              sources: [],
-            };
-            usedRagContext = false;
-            generationSystemPrompt = `${systemPrompt}\n\n${buildUnframedUnavailablePrompt(
-              'unavailable'
-            )}`;
-
-            retrievalTrace = {
-              conversationId,
-              sessionId,
-              userMessageId,
-              mode: 'disabled',
-              outcome: 'disabled',
-              code: 'feature_flag_disabled',
-              selectedSources: [],
-              documentIds: [],
-              chunkIds: [],
-              latencyMs: 0,
-              candidateCount: 0,
-              topSimilarity: null,
-              refined: false,
-              attempts: 0,
-            };
-
-            console.info('[Pierrot RAG] disabled by PIERROT_RAG_ENABLED');
-          } else {
             try {
-              const useBrainV2 = isBrainRetrievalV2Enabled();
-
-              if (useBrainV2) {
-                const retrieval = await retrieveBrainEvidenceWithRefinement({
+              mediaRetrieval = await withTimeout(
+                retrieveMediaEvidence({
                   query: retrievalQuery,
-                  plan: brainPlan,
-                  topK: 8,
-                  maxAttempts: 3,
-                  totalTimeoutMs: BRAIN_RAG_TOTAL_TIMEOUT_MS,
-                  retrieve: (attempt) =>
-                    retrieveBrainEvidence({
-                      query: attempt.query,
-                      scope: 'owner',
-                      ownerAuthorized: true,
-                      plan: attempt.plan,
-                      topK: attempt.topK,
-                      timeoutMs: attempt.timeoutMs,
-                    }),
-                });
+                  limit: 8,
+                  ownerAccess: ownerMode,
+                  publishedFrom: queryPlan.period?.from ?? null,
+                }),
+                RETRIEVAL_TIMEOUT_MS
+              );
+            } catch {
+              mediaRetrieval = null;
+            }
 
-                brainOutcome = { outcome: retrieval.outcome, code: retrieval.code ?? null };
-                retrievalTrace = {
-                  conversationId,
-                  sessionId,
-                  userMessageId,
-                  mode: 'brain_v2',
-                  outcome: retrieval.outcome,
-                  code: retrieval.code ?? null,
-                  selectedSources: retrieval.selectedSourceClasses,
-                  documentIds: retrieval.documentIds,
-                  chunkIds: retrieval.chunkIds,
-                  latencyMs: retrieval.latencyMs,
-                  candidateCount: retrieval.candidateCount,
-                  topSimilarity: retrieval.topSimilarity,
-                  refined: retrieval.refined,
-                  attempts: retrieval.attempts,
-                  timings: retrieval.timings ?? null,
-                  timeoutStage: retrieval.timeoutStage ?? null,
-                };
+            if (!mediaRetrieval) {
+              const mediaElapsed = Date.now() - mediaStartedAt;
+              mediaOutcome = {
+                outcome: 'unavailable',
+                code: mediaElapsed >= RETRIEVAL_TIMEOUT_MS - 100 ? 'timeout' : 'retrieval_error',
+              };
+              retrievalTrace = {
+                conversationId,
+                sessionId,
+                userMessageId,
+                mode: 'media',
+                outcome: 'unavailable',
+                code: 'retrieval_timeout',
+                selectedSources: ['media_coverage'],
+                documentIds: [],
+                chunkIds: [],
+                latencyMs: Date.now() - mediaStartedAt,
+                candidateCount: 0,
+                topSimilarity: null,
+                refined: false,
+                attempts: 1,
+                mediaFallbackCount: 0,
+              };
 
+              ownerRag = {
+                mode: 'media',
+                outcome: 'unavailable',
+                sources: [],
+              };
+              usedRagContext = false;
+              generationSystemPrompt = `${systemPrompt}\n\n${buildMediaEvidencePrompt({
+                outcome: 'unavailable',
+                hits: [],
+              })}`;
+
+              console.warn('[Pierrot Media Intelligence] retrieval timed out');
+            } else {
+              mediaOutcome = { outcome: mediaRetrieval.outcome, code: mediaRetrieval.code ?? null };
+              retrievalTrace = {
+                conversationId,
+                sessionId,
+                userMessageId,
+                mode: 'media',
+                outcome: mediaRetrieval.outcome,
+                code: mediaRetrieval.code ?? null,
+                selectedSources: ['media_coverage'],
+                documentIds: Array.from(new Set(mediaRetrieval.hits.map((hit) => hit.documentId))),
+                chunkIds: mediaRetrieval.hits.map((hit) => hit.chunkId),
+                latencyMs: Date.now() - mediaStartedAt,
+                candidateCount: mediaRetrieval.hits.length,
+                topSimilarity: null,
+                refined: false,
+                attempts: 1,
+                mediaFallbackCount: mediaRetrieval.hits.filter((hit) => hit.fallback).length,
+              };
+
+              ownerRag = {
+                mode: 'media',
+                outcome: mediaRetrieval.outcome,
+                sources: buildMediaEvidenceSources(mediaRetrieval),
+              };
+
+              const ragPrompt = buildMediaEvidencePrompt(mediaRetrieval);
+              usedRagContext =
+                mediaRetrieval.outcome === 'relevant_results' && mediaRetrieval.hits.length > 0;
+
+              if (ragPrompt) {
+                generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+              }
+
+              console.info('[Pierrot Media Intelligence]', {
+                status: mediaRetrieval.outcome,
+                publications: mediaRetrieval.hits.length,
+                fallback: mediaRetrieval.hits.some((hit) => hit.fallback),
+              });
+            }
+          }
+
+          if (!useMediaBranch && !ownerMode && isPublicPierrotRagEnabled()) {
+            try {
+              const retrieval = await retrieveFlowPublicEvidence(
+                {
+                  title: trimmedMessage,
+                  body_md: null,
+                  metadata: null,
+                  type: 'article',
+                  lang: language,
+                  source_url: null,
+                },
+                { enabled: true }
+              );
+
+              brainOutcome = { outcome: retrieval.status };
+              retrievalTrace = {
+                conversationId,
+                sessionId,
+                userMessageId,
+                mode: 'public_brain',
+                outcome: retrieval.status,
+                code: null,
+                selectedSources: Array.from(
+                  new Set(retrieval.sourceRefs.map((ref) => ref.sourceType))
+                ),
+                documentIds: retrieval.documentIds,
+                chunkIds: retrieval.sourceRefs.map((ref) => ref.chunkId),
+                latencyMs: retrieval.latencyMs,
+                candidateCount:
+                  typeof retrieval.diagnostics.candidateCount === 'number'
+                    ? retrieval.diagnostics.candidateCount
+                    : 0,
+                topSimilarity: retrieval.topSimilarity,
+                refined: false,
+                attempts: 1,
+              };
+
+              const ragPrompt = buildPublicBrainEvidencePrompt(retrieval);
+
+              if (ragPrompt) {
+                generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+                usedRagContext = true;
                 ownerRag = {
-                  mode: 'unframed',
-                  outcome: retrieval.outcome,
-                  sources:
-                    retrieval.outcome === 'relevant_results'
-                      ? buildUnframedEvidenceSources(retrieval)
-                      : [],
+                  mode: 'public',
+                  outcome: 'relevant_results',
+                  sources: retrieval.sourceRefs.map((ref) => ({
+                    documentId: ref.documentId,
+                    documentTitle: ref.documentTitle,
+                    sourceType: ref.sourceType,
+                    sourceClass: ref.sourceType,
+                    sourceDomain: null,
+                    author: null,
+                    publishedAt: ref.publishedAt,
+                    chunkId: ref.chunkId,
+                    heading: ref.documentTitle,
+                    sectionPath: [],
+                    sectionIndex: 0,
+                    lineStart: 0,
+                    lineEnd: 0,
+                    similarity: ref.similarity,
+                    excerpt: ref.excerpt,
+                    canonicalUrl: ref.sourceUrl,
+                    verificationStatus: 'none',
+                  })),
                 };
-
-                const ragPrompt =
-                  retrieval.outcome === 'relevant_results'
-                    ? buildUnframedEvidencePrompt(retrieval)
-                    : buildUnframedUnavailablePrompt(retrieval.outcome, retrieval.code);
-
-                usedRagContext = retrieval.outcome === 'relevant_results' && Boolean(ragPrompt);
-
-                if (ragPrompt) {
-                  generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
-                }
-
-                console.info('[Pierrot RAG v2]', {
-                  status: retrieval.outcome,
-                  intent: retrieval.plan.intent,
-                  selected_sources: retrieval.selectedSourceClasses,
-                  chunks: retrieval.hits.length,
-                  documents: retrieval.documentIds.length,
-                  latency_ms: retrieval.latencyMs,
-                  code: retrieval.code ?? null,
-                });
-              } else {
-                const retrieval = await retrieveUnframedEvidence({
-                  query: trimmedMessage,
-                  scope: 'owner',
-                  ownerAuthorized: true,
-                });
-
-                brainOutcome = { outcome: retrieval.outcome, code: retrieval.code ?? null };
-                retrievalTrace = {
-                  conversationId,
-                  sessionId,
-                  userMessageId,
-                  mode: 'brain_v1',
-                  outcome: retrieval.outcome,
-                  code: retrieval.code ?? null,
-                  selectedSources: Array.from(
-                    new Set(
-                      retrieval.hits
-                        .map((hit) => hit.sourceClass)
-                        .filter((value): value is string => Boolean(value))
-                    )
-                  ),
-                  documentIds: Array.from(new Set(retrieval.hits.map((hit) => hit.documentId))),
-                  chunkIds: retrieval.hits.map((hit) => hit.chunkId),
-                  latencyMs: retrieval.latencyMs,
-                  candidateCount: retrieval.hits.length,
-                  topSimilarity: retrieval.topSimilarity,
-                  refined: false,
-                  attempts: 1,
-                  timings: null,
-                };
-
-                ownerRag = {
-                  mode: 'unframed',
-                  outcome: retrieval.outcome,
-                  sources:
-                    retrieval.outcome === 'relevant_results'
-                      ? buildUnframedEvidenceSources(retrieval)
-                      : [],
-                };
-
-                const ragPrompt =
-                  retrieval.outcome === 'relevant_results'
-                    ? buildUnframedEvidencePrompt(retrieval)
-                    : buildUnframedUnavailablePrompt(retrieval.outcome, retrieval.code);
-
-                usedRagContext = retrieval.outcome === 'relevant_results' && Boolean(ragPrompt);
-
-                if (ragPrompt) {
-                  generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
-                }
-
-                console.info('[Pierrot RAG v1]', {
-                  status: retrieval.outcome,
-                  scope: 'owner',
-                  chunks: retrieval.hits.length,
-                  latency_ms: retrieval.latencyMs,
-                  code: retrieval.code ?? null,
-                });
               }
             } catch {
               brainOutcome = { outcome: 'unavailable', code: 'unexpected_retrieval_error' };
@@ -1834,7 +1592,7 @@ export async function POST(req: Request) {
                 conversationId,
                 sessionId,
                 userMessageId,
-                mode: 'brain_v2',
+                mode: 'public_brain',
                 outcome: 'unavailable',
                 code: 'unexpected_retrieval_error',
                 selectedSources: [],
@@ -1846,6 +1604,94 @@ export async function POST(req: Request) {
                 refined: false,
                 attempts: 0,
               };
+            }
+          }
+
+          if (!useMediaBranch && documentLookup && documentChunks.length > 0) {
+            const documentStartedAt = Date.now();
+            const documentPlan = {
+              ...brainPlan,
+              publishedFrom: null,
+              publishedTo: null,
+              specificDocument: true,
+            };
+            const documentResult: BrainRetrievalResult = {
+              outcome: 'relevant_results',
+              hits: documentChunks,
+              latencyMs: Date.now() - documentStartedAt,
+              topSimilarity: 0.99,
+              plan: documentPlan,
+              method: 'hybrid_v2',
+              selectedSourceClasses: Array.from(
+                new Set(
+                  documentChunks
+                    .map((hit) => hit.sourceClass)
+                    .filter((value): value is NonNullable<typeof value> => Boolean(value))
+                )
+              ) as BrainRetrievalResult['selectedSourceClasses'],
+              selectedSourceDomains: [],
+              candidateCount: documentChunks.length,
+              documentIds: [documentLookup.id],
+              chunkIds: documentChunks.map((hit) => hit.chunkId),
+              ranking: documentChunks.map((hit) => ({
+                chunkId: hit.chunkId,
+                documentId: hit.documentId,
+                documentTitle: hit.documentTitle || documentLookup.title,
+                sourceClass:
+                  (hit.sourceClass as BrainRetrievalResult['selectedSourceClasses'][number]) ||
+                  'other',
+                similarity: hit.similarity,
+                lexicalScore: hit.lexicalScore || 0,
+                combinedScore: hit.combinedScore || hit.similarity,
+              })),
+              timings: { embeddingMs: 0, searchMs: 0, rankingMs: 0 },
+            };
+
+            brainOutcome = { outcome: 'relevant_results' };
+            retrievalTrace = {
+              conversationId,
+              sessionId,
+              userMessageId,
+              mode: 'brain_document',
+              outcome: 'relevant_results',
+              code: null,
+              selectedSources: documentResult.selectedSourceClasses,
+              documentIds: documentResult.documentIds,
+              chunkIds: documentResult.chunkIds,
+              latencyMs: documentResult.latencyMs,
+              candidateCount: documentChunks.length,
+              topSimilarity: 0.99,
+              refined: false,
+              attempts: 1,
+              timings: documentResult.timings,
+              documentTitleRequested: queryPlan.documentTitle,
+              documentTitleMatched: documentLookup.title,
+              documentMatchType: documentLookup.match,
+            };
+            ownerRag = {
+              mode: 'unframed',
+              outcome: 'relevant_results',
+              sources: buildUnframedEvidenceSources(documentResult),
+            };
+
+            const ragPrompt = buildUnframedEvidencePrompt(documentResult);
+            usedRagContext = Boolean(ragPrompt);
+
+            if (ragPrompt) {
+              generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+            }
+
+            console.info('[Pierrot Brain document]', {
+              status: 'relevant_results',
+              match: documentLookup.match,
+              chunks: documentChunks.length,
+              document_id: documentLookup.id,
+            });
+          } else if (!useMediaBranch && ownerMode && queryPlan.sources.brain) {
+            const ragEnabled = isPierrotRagEnabled();
+
+            if (!ragEnabled) {
+              brainOutcome = { outcome: 'unavailable', code: 'feature_flag_disabled' };
               ownerRag = {
                 mode: 'unframed',
                 outcome: 'unavailable',
@@ -1856,342 +1702,627 @@ export async function POST(req: Request) {
                 'unavailable'
               )}`;
 
-              // Never log query text, passages or provider/database details.
-              console.warn('[Pierrot RAG] unavailable (unexpected)');
+              retrievalTrace = {
+                conversationId,
+                sessionId,
+                userMessageId,
+                mode: 'disabled',
+                outcome: 'disabled',
+                code: 'feature_flag_disabled',
+                selectedSources: [],
+                documentIds: [],
+                chunkIds: [],
+                latencyMs: 0,
+                candidateCount: 0,
+                topSimilarity: null,
+                refined: false,
+                attempts: 0,
+              };
+
+              console.info('[Pierrot RAG] disabled by PIERROT_RAG_ENABLED');
+            } else {
+              try {
+                const useBrainV2 = isBrainRetrievalV2Enabled();
+
+                if (useBrainV2) {
+                  const retrieval = await retrieveBrainEvidenceWithRefinement({
+                    query: retrievalQuery,
+                    plan: brainPlan,
+                    topK: 8,
+                    maxAttempts: 3,
+                    totalTimeoutMs: BRAIN_RAG_TOTAL_TIMEOUT_MS,
+                    retrieve: (attempt) =>
+                      retrieveBrainEvidence({
+                        query: attempt.query,
+                        scope: 'owner',
+                        ownerAuthorized: true,
+                        plan: attempt.plan,
+                        topK: attempt.topK,
+                        timeoutMs: attempt.timeoutMs,
+                      }),
+                  });
+
+                  brainOutcome = { outcome: retrieval.outcome, code: retrieval.code ?? null };
+                  retrievalTrace = {
+                    conversationId,
+                    sessionId,
+                    userMessageId,
+                    mode: 'brain_v2',
+                    outcome: retrieval.outcome,
+                    code: retrieval.code ?? null,
+                    selectedSources: retrieval.selectedSourceClasses,
+                    documentIds: retrieval.documentIds,
+                    chunkIds: retrieval.chunkIds,
+                    latencyMs: retrieval.latencyMs,
+                    candidateCount: retrieval.candidateCount,
+                    topSimilarity: retrieval.topSimilarity,
+                    refined: retrieval.refined,
+                    attempts: retrieval.attempts,
+                    timings: retrieval.timings ?? null,
+                    timeoutStage: retrieval.timeoutStage ?? null,
+                  };
+
+                  ownerRag = {
+                    mode: 'unframed',
+                    outcome: retrieval.outcome,
+                    sources:
+                      retrieval.outcome === 'relevant_results'
+                        ? buildUnframedEvidenceSources(retrieval)
+                        : [],
+                  };
+
+                  const ragPrompt =
+                    retrieval.outcome === 'relevant_results'
+                      ? buildUnframedEvidencePrompt(retrieval)
+                      : buildUnframedUnavailablePrompt(retrieval.outcome, retrieval.code);
+
+                  usedRagContext = retrieval.outcome === 'relevant_results' && Boolean(ragPrompt);
+
+                  if (ragPrompt) {
+                    generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+                  }
+
+                  console.info('[Pierrot RAG v2]', {
+                    status: retrieval.outcome,
+                    intent: retrieval.plan.intent,
+                    selected_sources: retrieval.selectedSourceClasses,
+                    chunks: retrieval.hits.length,
+                    documents: retrieval.documentIds.length,
+                    latency_ms: retrieval.latencyMs,
+                    code: retrieval.code ?? null,
+                  });
+                } else {
+                  const retrieval = await retrieveUnframedEvidence({
+                    query: trimmedMessage,
+                    scope: 'owner',
+                    ownerAuthorized: true,
+                  });
+
+                  brainOutcome = { outcome: retrieval.outcome, code: retrieval.code ?? null };
+                  retrievalTrace = {
+                    conversationId,
+                    sessionId,
+                    userMessageId,
+                    mode: 'brain_v1',
+                    outcome: retrieval.outcome,
+                    code: retrieval.code ?? null,
+                    selectedSources: Array.from(
+                      new Set(
+                        retrieval.hits
+                          .map((hit) => hit.sourceClass)
+                          .filter((value): value is string => Boolean(value))
+                      )
+                    ),
+                    documentIds: Array.from(new Set(retrieval.hits.map((hit) => hit.documentId))),
+                    chunkIds: retrieval.hits.map((hit) => hit.chunkId),
+                    latencyMs: retrieval.latencyMs,
+                    candidateCount: retrieval.hits.length,
+                    topSimilarity: retrieval.topSimilarity,
+                    refined: false,
+                    attempts: 1,
+                    timings: null,
+                  };
+
+                  ownerRag = {
+                    mode: 'unframed',
+                    outcome: retrieval.outcome,
+                    sources:
+                      retrieval.outcome === 'relevant_results'
+                        ? buildUnframedEvidenceSources(retrieval)
+                        : [],
+                  };
+
+                  const ragPrompt =
+                    retrieval.outcome === 'relevant_results'
+                      ? buildUnframedEvidencePrompt(retrieval)
+                      : buildUnframedUnavailablePrompt(retrieval.outcome, retrieval.code);
+
+                  usedRagContext = retrieval.outcome === 'relevant_results' && Boolean(ragPrompt);
+
+                  if (ragPrompt) {
+                    generationSystemPrompt = `${systemPrompt}\n\n${ragPrompt}`;
+                  }
+
+                  console.info('[Pierrot RAG v1]', {
+                    status: retrieval.outcome,
+                    scope: 'owner',
+                    chunks: retrieval.hits.length,
+                    latency_ms: retrieval.latencyMs,
+                    code: retrieval.code ?? null,
+                  });
+                }
+              } catch {
+                brainOutcome = { outcome: 'unavailable', code: 'unexpected_retrieval_error' };
+                retrievalTrace = {
+                  conversationId,
+                  sessionId,
+                  userMessageId,
+                  mode: 'brain_v2',
+                  outcome: 'unavailable',
+                  code: 'unexpected_retrieval_error',
+                  selectedSources: [],
+                  documentIds: [],
+                  chunkIds: [],
+                  latencyMs: 0,
+                  candidateCount: 0,
+                  topSimilarity: null,
+                  refined: false,
+                  attempts: 0,
+                };
+                ownerRag = {
+                  mode: 'unframed',
+                  outcome: 'unavailable',
+                  sources: [],
+                };
+                usedRagContext = false;
+                generationSystemPrompt = `${systemPrompt}\n\n${buildUnframedUnavailablePrompt(
+                  'unavailable'
+                )}`;
+
+                // Never log query text, passages or provider/database details.
+                console.warn('[Pierrot RAG] unavailable (unexpected)');
+              }
             }
           }
-        }
 
-        if (ownerMode && foodQuery && (ownerRag?.sources.length || 0) > 0) {
-          generationSystemPrompt = `${generationSystemPrompt}\n\n${[
-            'FOOD_QUERY_MODE',
-            'The retrieved personal archive evidence contains recipe fragments.',
-            'List the recipes and food fragments that are actually present, with their ingredients and steps.',
-            'Do not claim that the archive has no recipes when recipe evidence is attached.',
-            'If a recipe is incomplete, state exactly which part is present and which part is missing.',
-          ].join('\n')}`;
-        }
-
-        // Web evidence was requested in parallel with Brain. Awaiting it here
-        // keeps the normal answer available even when Brain or Exa failed.
-        webSearchResult = await webSearchPromise;
-
-        const webPrompt = buildWebEvidencePrompt(webSearchResult);
-        const webStatusPrompt = webRequested ? buildWebStatusPrompt(webSearchResult) : null;
-
-        if (webPrompt) {
-          generationSystemPrompt = `${generationSystemPrompt}\n\n${webPrompt}`;
-          usedWebContext = webSearchResult?.outcome === 'relevant_results';
-
-          if (usedWebContext && usedRagContext) {
-            generationSystemPrompt = `${generationSystemPrompt}\n\n${buildBrainWebSynthesisPrompt()}`;
+          if (ownerMode && foodQuery && (ownerRag?.sources.length || 0) > 0) {
+            generationSystemPrompt = `${generationSystemPrompt}\n\n${[
+              'FOOD_QUERY_MODE',
+              'The retrieved personal archive evidence contains recipe fragments.',
+              'List the recipes and food fragments that are actually present, with their ingredients and steps.',
+              'Do not claim that the archive has no recipes when recipe evidence is attached.',
+              'If a recipe is incomplete, state exactly which part is present and which part is missing.',
+            ].join('\n')}`;
           }
-        }
 
-        // A failed or empty search must be visible to the model as a status,
-        // not silently omitted. Otherwise it invents the missing results.
-        if (webStatusPrompt) {
-          generationSystemPrompt = `${generationSystemPrompt}\n\n${webStatusPrompt}`;
-        }
+          // Web evidence was requested in parallel with Brain. Awaiting it here
+          // keeps the normal answer available even when Brain or Exa failed.
+          webSearchResult = await webSearchPromise;
 
-        const generated = await callPierrotModel(
-          generationSystemPrompt,
-          openAiMessages,
-          prefersReasoning
-        );
-        reply = generated.reply;
-        usedProvider = generated.provider;
-        usedModel = generated.model;
-        generationLatencyMs = generated.latencyMs;
-        fallbackUsed = generated.fallbackUsed;
-      } catch (aiError) {
-        const failure = classifyPierrotFailure(aiError, { aborted: req.signal.aborted });
+          const webPrompt = buildWebEvidencePrompt(webSearchResult);
+          const webStatusPrompt = webRequested ? buildWebStatusPrompt(webSearchResult) : null;
 
-        if (pierrotStore && canStoreTranscript) {
-          try {
-            await recordPierrotEvent(pierrotStore, {
-              conversationId,
-              sessionId,
-              eventName: 'assistant_failed',
-              eventKey: `assistant_failed:${userMessageId}`,
-              payload: {
-                message_id: userMessageId,
-                code: failure.code,
-                http_status: failure.httpStatus,
-              },
-            });
-          } catch (error) {
-            persistenceFailure(error, 'assistant_failure_event');
+          if (webPrompt) {
+            generationSystemPrompt = `${generationSystemPrompt}\n\n${webPrompt}`;
+            usedWebContext = webSearchResult?.outcome === 'relevant_results';
+
+            if (usedWebContext && usedRagContext) {
+              generationSystemPrompt = `${generationSystemPrompt}\n\n${buildBrainWebSynthesisPrompt()}`;
+            }
           }
-        }
 
-        if (retrievalTrace && pierrotStore) {
-          await recordPierrotRetrieval(pierrotStore, {
-            ...retrievalTrace,
-            usedContext: usedRagContext,
-            generationOk: false,
+          // A failed or empty search must be visible to the model as a status,
+          // not silently omitted. Otherwise it invents the missing results.
+          if (webStatusPrompt) {
+            generationSystemPrompt = `${generationSystemPrompt}\n\n${webStatusPrompt}`;
+          }
+
+          onStatus?.('generating');
+
+          const generated = onDelta
+            ? await streamPierrotModel(
+                generationSystemPrompt,
+                openAiMessages,
+                prefersReasoning,
+                onDelta,
+                generationSignal
+              )
+            : await callPierrotModel(generationSystemPrompt, openAiMessages, prefersReasoning);
+
+          onStatus?.('persisting');
+          reply = generated.reply;
+          usedProvider = generated.provider;
+          usedModel = generated.model;
+          generationLatencyMs = generated.latencyMs;
+          fallbackUsed = generated.fallbackUsed;
+        } catch (aiError) {
+          const failure = classifyPierrotFailure(aiError, {
+            aborted: generationSignal.aborted,
           });
-        }
+          const interrupted = aiError instanceof PierrotStreamInterruptedError;
 
-        logPierrotFailure({
-          operation: 'pierrot_web_generate',
-          failure,
-          latencyMs: Date.now() - startedAt,
-          error: aiError,
-          provider: usedProvider || 'gemini',
-          dependency: 'pierrot_llm',
-        });
-
-        return NextResponse.json(
-          {
-            error: pierrotErrorCopy(errorLanguage(language), failure.code),
-            code: failure.code,
-            ...(failure.retryAfterSeconds ? { retryAfter: failure.retryAfterSeconds } : {}),
-          },
-          {
-            status: failure.httpStatus,
-            ...(failure.retryAfterSeconds
-              ? { headers: { 'Retry-After': String(failure.retryAfterSeconds) } }
-              : {}),
+          if (pierrotStore && canStoreTranscript) {
+            try {
+              await recordPierrotEvent(pierrotStore, {
+                conversationId,
+                sessionId,
+                eventName: 'assistant_failed',
+                eventKey: `assistant_failed:${userMessageId}`,
+                payload: {
+                  message_id: userMessageId,
+                  code: failure.code,
+                  http_status: failure.httpStatus,
+                },
+              });
+            } catch (error) {
+              persistenceFailure(error, 'assistant_failure_event');
+            }
           }
-        );
-      }
-    }
 
-    // Anton may accept while the model is generating. Re-check before the
-    // assistant turn is persisted or returned, otherwise an AI answer could
-    // land after the human takeover notice.
-    if (pierrotStore && canStoreMetadata) {
-      try {
-        const acceptedDuringGeneration = await getHumanPresenceForConversation(
-          pierrotStore,
-          conversationId,
-          sessionId
-        );
+          if (retrievalTrace && pierrotStore) {
+            await recordPierrotRetrieval(pierrotStore, {
+              ...retrievalTrace,
+              usedContext: usedRagContext,
+              generationOk: false,
+            });
+          }
 
-        if (acceptedDuringGeneration?.request.status === 'active') {
-          await recordHumanEvent(pierrotStore, {
-            conversationId,
-            eventName: 'human_ai_blocked',
-            eventKey: `human_ai_blocked_after_generation:${userMessageId}`,
-            payload: {
-              request_id: acceptedDuringGeneration.request.id,
-              stage: 'post_generation',
-            },
-          }).catch(() => undefined);
+          logPierrotFailure({
+            operation: 'pierrot_web_generate',
+            failure,
+            latencyMs: Date.now() - startedAt,
+            error: aiError,
+            provider: usedProvider || 'gemini',
+            dependency: 'pierrot_llm',
+          });
 
           return NextResponse.json(
             {
-              error: 'Anton is currently handling this conversation.',
-              humanMode: true,
-              human: publicHumanState(acceptedDuringGeneration.request),
-              conversationId,
-              sessionId,
+              error: pierrotErrorCopy(errorLanguage(language), failure.code),
+              code: failure.code,
+              ...(interrupted ? { interrupted: true } : {}),
+              ...(failure.retryAfterSeconds ? { retryAfter: failure.retryAfterSeconds } : {}),
             },
-            { status: 409 }
+            {
+              status: failure.httpStatus,
+              ...(failure.retryAfterSeconds
+                ? { headers: { 'Retry-After': String(failure.retryAfterSeconds) } }
+                : {}),
+            }
           );
         }
-      } catch (error) {
-        persistenceFailure(error, 'human_presence_post_generation');
       }
-    }
 
-    if (!ownerMode && pierrotStore) {
-      try {
-        await recordPierrotOfferShown(pierrotStore, {
-          conversationId,
-          sessionId,
-          userMessageId,
-          intent,
-          plan,
+      if (generationSignal.aborted) {
+        return NextResponse.json(
+          { error: 'Request cancelled.', code: 'cancelled' },
+          { status: 499 }
+        );
+      }
+
+      // Anton may accept while the model is generating. Re-check before the
+      // assistant turn is persisted or returned, otherwise an AI answer could
+      // land after the human takeover notice.
+      if (pierrotStore && canStoreMetadata) {
+        try {
+          const acceptedDuringGeneration = await getHumanPresenceForConversation(
+            pierrotStore,
+            conversationId,
+            sessionId
+          );
+
+          if (acceptedDuringGeneration?.request.status === 'active') {
+            await recordHumanEvent(pierrotStore, {
+              conversationId,
+              eventName: 'human_ai_blocked',
+              eventKey: `human_ai_blocked_after_generation:${userMessageId}`,
+              payload: {
+                request_id: acceptedDuringGeneration.request.id,
+                stage: 'post_generation',
+              },
+            }).catch(() => undefined);
+
+            return NextResponse.json(
+              {
+                error: 'Anton is currently handling this conversation.',
+                humanMode: true,
+                human: publicHumanState(acceptedDuringGeneration.request),
+                conversationId,
+                sessionId,
+              },
+              { status: 409 }
+            );
+          }
+        } catch (error) {
+          persistenceFailure(error, 'human_presence_post_generation');
+        }
+      }
+
+      if (!ownerMode && pierrotStore) {
+        try {
+          await recordPierrotOfferShown(pierrotStore, {
+            conversationId,
+            sessionId,
+            userMessageId,
+            intent,
+            plan,
+          });
+        } catch (error) {
+          persistenceFailure(error, 'offer_shown');
+        }
+      }
+
+      const webSources =
+        useModel && usedWebContext && webSearchResult?.outcome === 'relevant_results'
+          ? webSearchResult.sources
+          : [];
+      const webUsed = webSources.length > 0;
+      const brainUsed = usedRagContext;
+      const requestedSources = {
+        brain: Boolean(brainOutcome),
+        media: Boolean(mediaOutcome),
+        web: webRequested,
+      };
+      const sourceStatus: EvidenceSourceStatuses = buildSourceStatuses({
+        brain: brainOutcome,
+        media: mediaOutcome,
+        web: webSearchResult,
+        requested: requestedSources,
+      });
+      const allowedExternalUrls = [
+        ...(webUsed ? webSources.map((source) => source.url) : []),
+        ...(ownerRag?.sources ?? []).map((source) => source.canonicalUrl),
+      ];
+      const evidenceGuard = guardAnswerEvidence({
+        reply: (reply || 'Silence.').slice(0, PIERROT_MAX_MESSAGE_LENGTH),
+        statuses: sourceStatus,
+        requested: requestedSources,
+        allowedExternalUrls,
+        language: language === 'en' ? 'en' : 'ru',
+        intent: queryPlan.intent,
+      });
+
+      reply = evidenceGuard.reply.slice(0, PIERROT_MAX_MESSAGE_LENGTH);
+
+      const answerSources: PierrotAnswerSources = buildPierrotAnswerSources({
+        brain: brainUsed,
+        web: webUsed,
+      });
+
+      if (webUsed) {
+        reply = composeReplyWithWebSources(reply, webSources, PIERROT_MAX_MESSAGE_LENGTH);
+      }
+
+      let finalReply = reply;
+
+      if (pierrotStore && canStoreTranscript) {
+        try {
+          const stored = await appendPierrotMessage(pierrotStore, {
+            conversationId,
+            sessionId,
+            messageId: assistantMessageId,
+            role: 'assistant',
+            content: reply,
+            provider: usedProvider || null,
+          });
+
+          // Concurrent retries may have stored a slightly different response
+          // under the same deterministic assistant message id. Return the row
+          // that actually exists, so the browser and the archive agree.
+          if (!stored.inserted && stored.content) {
+            finalReply = stored.content;
+          }
+
+          await recordPierrotEvent(pierrotStore, {
+            conversationId,
+            sessionId,
+            eventName: 'assistant_replied',
+            eventKey: `assistant_replied:${assistantMessageId}`,
+            payload: {
+              message_id: assistantMessageId,
+              in_reply_to: userMessageId,
+              provider: usedProvider,
+              model: usedModel,
+              fallback_used: fallbackUsed,
+              generation_latency_ms: generationLatencyMs,
+              length: reply.length,
+              latency_ms: Date.now() - startedAt,
+              answer_sources: answerSources.mode,
+              operation: executionPlan.operation,
+              tool: executionPlan.tool,
+              fallback_policy: executionPlan.fallbackPolicy,
+              requires_web: executionPlan.requiresWeb,
+              web_outcome: webSearchResult?.outcome ?? null,
+              web_code: webSearchResult?.code ?? null,
+              web_source_count: webSources.length,
+              source_status: sourceStatus,
+              evidence_warnings: evidenceGuard.violations,
+              brain_timings: retrievalTrace?.timings ?? null,
+              timeout_stage: retrievalTrace?.timeoutStage ?? null,
+              ...(retrievalTrace?.documentTitleRequested
+                ? {
+                    document_title_requested: retrievalTrace.documentTitleRequested,
+                    document_title_matched: retrievalTrace.documentTitleMatched ?? null,
+                    document_match_type: retrievalTrace.documentMatchType ?? null,
+                  }
+                : {}),
+            },
+          });
+        } catch (error) {
+          persistenceFailure(error, 'assistant_message');
+        }
+      }
+
+      // Final race gate: acceptance may have committed between the post-
+      // generation check and the assistant insert. The browser must never
+      // receive an AI answer after the human takeover notice. The hidden
+      // assistant row is not returned to the visitor and is excluded from the
+      // human state response.
+      if (pierrotStore && canStoreMetadata) {
+        try {
+          const finalHuman = await getHumanPresenceForConversation(
+            pierrotStore,
+            conversationId,
+            sessionId
+          );
+
+          if (finalHuman?.request.status === 'active') {
+            await recordHumanEvent(pierrotStore, {
+              conversationId,
+              eventName: 'human_ai_blocked',
+              eventKey: `human_ai_blocked_after_store:${userMessageId}`,
+              payload: {
+                request_id: finalHuman.request.id,
+                stage: 'post_store',
+              },
+            }).catch(() => undefined);
+
+            return NextResponse.json(
+              {
+                error: 'Anton is currently handling this conversation.',
+                humanMode: true,
+                human: publicHumanState(finalHuman.request),
+                conversationId,
+                sessionId,
+              },
+              { status: 409 }
+            );
+          }
+        } catch (error) {
+          persistenceFailure(error, 'human_presence_post_store');
+        }
+      }
+
+      if (retrievalTrace && pierrotStore) {
+        await recordPierrotRetrieval(pierrotStore, {
+          ...retrievalTrace,
+          usedContext: usedRagContext,
+          generationOk: true,
         });
-      } catch (error) {
-        persistenceFailure(error, 'offer_shown');
       }
-    }
 
-    const webSources =
-      useModel && usedWebContext && webSearchResult?.outcome === 'relevant_results'
-        ? webSearchResult.sources
-        : [];
-    const webUsed = webSources.length > 0;
-    const brainUsed = usedRagContext;
-    const requestedSources = {
-      brain: Boolean(brainOutcome),
-      media: Boolean(mediaOutcome),
-      web: webRequested,
+      return NextResponse.json({
+        reply: finalReply,
+        provider: usedProvider || undefined,
+        model: usedModel || undefined,
+        latencyMs: generationLatencyMs || undefined,
+        fallbackUsed: usedProvider ? fallbackUsed : undefined,
+        ...(ragOwnerAuthorized ? { admin: true } : {}),
+        ...(ownerRag ? { rag: ownerRag } : {}),
+        ...(useModel ? { answerSources } : {}),
+        ...(webSearchResult
+          ? {
+              web: {
+                outcome: webSearchResult.outcome,
+                ...(webSearchResult.code ? { code: webSearchResult.code } : {}),
+                sources: webUsed ? buildPublicWebSources(webSearchResult) : [],
+              },
+            }
+          : {}),
+        ...(useModel
+          ? {
+              sourceStatus,
+              ...(evidenceGuard.violations.length > 0
+                ? { evidenceWarnings: evidenceGuard.violations }
+                : {}),
+            }
+          : {}),
+        conversationId,
+        sessionId,
+        userMessageId,
+        assistantMessageId,
+        recorded: canStoreTranscript,
+        ...responseExtras,
+      });
     };
-    const sourceStatus: EvidenceSourceStatuses = buildSourceStatuses({
-      brain: brainOutcome,
-      media: mediaOutcome,
-      web: webSearchResult,
-      requested: requestedSources,
-    });
-    const allowedExternalUrls = [
-      ...(webUsed ? webSources.map((source) => source.url) : []),
-      ...(ownerRag?.sources ?? []).map((source) => source.canonicalUrl),
-    ];
-    const evidenceGuard = guardAnswerEvidence({
-      reply: (reply || 'Silence.').slice(0, PIERROT_MAX_MESSAGE_LENGTH),
-      statuses: sourceStatus,
-      requested: requestedSources,
-      allowedExternalUrls,
-      language: language === 'en' ? 'en' : 'ru',
-      intent: queryPlan.intent,
-    });
 
-    reply = evidenceGuard.reply.slice(0, PIERROT_MAX_MESSAGE_LENGTH);
-
-    const answerSources: PierrotAnswerSources = buildPierrotAnswerSources({
-      brain: brainUsed,
-      web: webUsed,
-    });
-
-    if (webUsed) {
-      reply = composeReplyWithWebSources(reply, webSources, PIERROT_MAX_MESSAGE_LENGTH);
-    }
-
-    let finalReply = reply;
-
-    if (pierrotStore && canStoreTranscript) {
-      try {
-        const stored = await appendPierrotMessage(pierrotStore, {
-          conversationId,
-          sessionId,
-          messageId: assistantMessageId,
-          role: 'assistant',
-          content: reply,
-          provider: usedProvider || null,
-        });
-
-        // Concurrent retries may have stored a slightly different response
-        // under the same deterministic assistant message id. Return the row
-        // that actually exists, so the browser and the archive agree.
-        if (!stored.inserted && stored.content) {
-          finalReply = stored.content;
-        }
-
-        await recordPierrotEvent(pierrotStore, {
-          conversationId,
-          sessionId,
-          eventName: 'assistant_replied',
-          eventKey: `assistant_replied:${assistantMessageId}`,
-          payload: {
-            message_id: assistantMessageId,
-            in_reply_to: userMessageId,
-            provider: usedProvider,
-            model: usedModel,
-            fallback_used: fallbackUsed,
-            generation_latency_ms: generationLatencyMs,
-            length: reply.length,
-            latency_ms: Date.now() - startedAt,
-            answer_sources: answerSources.mode,
-            operation: executionPlan.operation,
-            tool: executionPlan.tool,
-            fallback_policy: executionPlan.fallbackPolicy,
-            requires_web: executionPlan.requiresWeb,
-            web_outcome: webSearchResult?.outcome ?? null,
-            web_code: webSearchResult?.code ?? null,
-            web_source_count: webSources.length,
-            source_status: sourceStatus,
-            evidence_warnings: evidenceGuard.violations,
-            brain_timings: retrievalTrace?.timings ?? null,
-            timeout_stage: retrievalTrace?.timeoutStage ?? null,
-            ...(retrievalTrace?.documentTitleRequested
-              ? {
-                  document_title_requested: retrievalTrace.documentTitleRequested,
-                  document_title_matched: retrievalTrace.documentTitleMatched ?? null,
-                  document_match_type: retrievalTrace.documentMatchType ?? null,
-                }
-              : {}),
-          },
-        });
-      } catch (error) {
-        persistenceFailure(error, 'assistant_message');
-      }
-    }
-
-    // Final race gate: acceptance may have committed between the post-
-    // generation check and the assistant insert. The browser must never
-    // receive an AI answer after the human takeover notice. The hidden
-    // assistant row is not returned to the visitor and is excluded from the
-    // human state response.
-    if (pierrotStore && canStoreMetadata) {
-      try {
-        const finalHuman = await getHumanPresenceForConversation(
-          pierrotStore,
-          conversationId,
-          sessionId
-        );
-
-        if (finalHuman?.request.status === 'active') {
-          await recordHumanEvent(pierrotStore, {
+    if (streaming) {
+      return createPierrotStreamResponse({
+        request: req,
+        run: async (emit) => {
+          emit({
+            type: 'accepted',
+            version: PIERROT_STREAM_VERSION,
             conversationId,
-            eventName: 'human_ai_blocked',
-            eventKey: `human_ai_blocked_after_store:${userMessageId}`,
-            payload: {
-              request_id: finalHuman.request.id,
-              stage: 'post_store',
-            },
-          }).catch(() => undefined);
+            sessionId,
+            userMessageId,
+            assistantMessageId,
+          });
+          emit({
+            type: 'status',
+            version: PIERROT_STREAM_VERSION,
+            stage: 'retrieving',
+          });
 
-          return NextResponse.json(
-            {
-              error: 'Anton is currently handling this conversation.',
-              humanMode: true,
-              human: publicHumanState(finalHuman.request),
-              conversationId,
-              sessionId,
-            },
-            { status: 409 }
+          const response = await runGeneration(
+            (text) => emit({ type: 'delta', version: PIERROT_STREAM_VERSION, text }),
+            (stage) => emit({ type: 'status', version: PIERROT_STREAM_VERSION, stage })
           );
-        }
-      } catch (error) {
-        persistenceFailure(error, 'human_presence_post_store');
-      }
-    }
+          const payload = (await response.json().catch(() => null)) as Record<
+            string,
+            unknown
+          > | null;
 
-    if (retrievalTrace && pierrotStore) {
-      await recordPierrotRetrieval(pierrotStore, {
-        ...retrievalTrace,
-        usedContext: usedRagContext,
-        generationOk: true,
+          if (!response.ok) {
+            const error =
+              payload && typeof payload.error === 'string'
+                ? payload.error
+                : 'The response stream failed.';
+            const code =
+              payload && typeof payload.code === 'string' ? payload.code : 'stream_error';
+            const retryAfter =
+              payload && typeof payload.retryAfter === 'number' ? payload.retryAfter : undefined;
+            const interrupted = payload?.interrupted === true;
+
+            emit({
+              type: 'error',
+              version: PIERROT_STREAM_VERSION,
+              error,
+              code,
+              ...(retryAfter ? { retryAfter } : {}),
+              retryable: response.status === 429 || response.status >= 500,
+              ...(interrupted ? { interrupted: true } : {}),
+            });
+            return;
+          }
+
+          if (!payload) {
+            emit({
+              type: 'error',
+              version: PIERROT_STREAM_VERSION,
+              error: 'The response stream ended without a payload.',
+              code: 'empty_stream_payload',
+              retryable: true,
+              interrupted: true,
+            });
+            return;
+          }
+
+          const sourcePayload = {
+            ...(payload.rag ? { rag: payload.rag } : {}),
+            ...(payload.web ? { web: payload.web } : {}),
+            ...(payload.answerSources ? { answerSources: payload.answerSources } : {}),
+            ...(payload.sourceStatus ? { sourceStatus: payload.sourceStatus } : {}),
+          };
+
+          if (Object.keys(sourcePayload).length > 0) {
+            emit({
+              type: 'sources',
+              version: PIERROT_STREAM_VERSION,
+              payload: sourcePayload,
+            });
+          }
+
+          emit({
+            type: 'completed',
+            version: PIERROT_STREAM_VERSION,
+            payload,
+          });
+        },
       });
     }
 
-    return NextResponse.json({
-      reply: finalReply,
-      provider: usedProvider || undefined,
-      model: usedModel || undefined,
-      latencyMs: generationLatencyMs || undefined,
-      fallbackUsed: usedProvider ? fallbackUsed : undefined,
-      ...(ragOwnerAuthorized ? { admin: true } : {}),
-      ...(ownerRag ? { rag: ownerRag } : {}),
-      ...(useModel ? { answerSources } : {}),
-      ...(webSearchResult
-        ? {
-            web: {
-              outcome: webSearchResult.outcome,
-              ...(webSearchResult.code ? { code: webSearchResult.code } : {}),
-              sources: webUsed ? buildPublicWebSources(webSearchResult) : [],
-            },
-          }
-        : {}),
-      ...(useModel
-        ? {
-            sourceStatus,
-            ...(evidenceGuard.violations.length > 0
-              ? { evidenceWarnings: evidenceGuard.violations }
-              : {}),
-          }
-        : {}),
-      conversationId,
-      sessionId,
-      userMessageId,
-      assistantMessageId,
-      recorded: canStoreTranscript,
-      ...responseExtras,
-    });
+    return runGeneration();
   } catch (error: unknown) {
     const failure = classifyPierrotFailure(error, { aborted: req.signal.aborted });
 

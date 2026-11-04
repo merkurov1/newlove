@@ -313,6 +313,14 @@ describe('POST /api/pierrot-web persistence', () => {
     expect(startCall.referrer).toBe('https://news.example/story');
   });
 
+  it('keeps the JSON contract for a non-owner caller that sends stream:true', async () => {
+    const response = await POST(makeRequest(validBody({ stream: true })));
+    const json = (await response.json()) as { reply?: string };
+
+    expect(response.headers.get('content-type')).toContain('application/json');
+    expect(json.reply).toBe('Pierrot reply');
+  });
+
   it('returns a verified offer response without calling the model', async () => {
     const response = await POST(
       makeRequest(validBody({ message: 'I want to buy the Heart & Angel postcard' }))
@@ -1972,6 +1980,114 @@ describe('Pierrot intelligence regressions', () => {
     expect(retrieval.retrieveUnframedEvidence).not.toHaveBeenCalled();
     expect(json.owner_tool).toBeUndefined();
     expect(json.sourceStatus?.brain).toBe('not_requested');
+  });
+  it('streams deterministic owner replies through the same protocol', async () => {
+    owner();
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Сколько у меня публикаций?',
+          stream: true,
+        })
+      )
+    );
+    const text = await response.text();
+    const completed = text.split('\n\n').find((frame) => frame.startsWith('event: completed'));
+    const dataLine = completed?.split('\n').find((line) => line.startsWith('data:'));
+    const payload = JSON.parse(String(dataLine).slice(5));
+
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    expect(payload.payload.reply).toContain('Уточни');
+    expect(payload.payload.recorded).toBe(true);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('streams owner chat as SSE and persists only the completed answer', async () => {
+    owner();
+    const previousKey = process.env.GEMINI_API_KEY;
+    const previousFetch = global.fetch;
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    global.fetch = jest.fn(async () => {
+      const encoder = new TextEncoder();
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode('data: {"candidates":[{"content":{"parts":[{"text":"Hello "}]}}]}\n\n')
+          );
+          controller.enqueue(
+            encoder.encode('data: {"candidates":[{"content":{"parts":[{"text":"world"}]}}]}\n\n')
+          );
+          controller.close();
+        },
+      });
+      return new Response(body, { status: 200 });
+    }) as unknown as typeof fetch;
+
+    try {
+      const response = await POST(
+        makeRequest(validBody({ mode: 'unframed', message: 'Привет', stream: true }))
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/event-stream');
+
+      const text = await response.text();
+      expect(text).toContain('event: accepted');
+      expect(text).toContain('event: status');
+      expect(text).toContain('event: delta');
+      expect(text).toContain('event: completed');
+
+      const completed = text.split('\n\n').find((frame) => frame.startsWith('event: completed'));
+      const dataLine = completed?.split('\n').find((line) => line.startsWith('data:'));
+      const payload = JSON.parse(String(dataLine).slice(5));
+
+      expect(payload.payload.reply).toBe('Hello world');
+      expect(payload.payload.provider).toBe('gemini');
+      expect(mockRecord.filter((item) => item === 'message:assistant')).toHaveLength(1);
+    } finally {
+      if (previousKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = previousKey;
+      global.fetch = previousFetch;
+    }
+  });
+
+  it('reports an interrupted stream and does not persist a partial answer', async () => {
+    owner();
+    const previousKey = process.env.GEMINI_API_KEY;
+    const previousFetch = global.fetch;
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    global.fetch = jest.fn(async () => {
+      const encoder = new TextEncoder();
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode('data: {"candidates":[{"content":{"parts":[{"text":"Partial"}]}}]}\n\n')
+          );
+          setTimeout(() => controller.error(new Error('provider disconnected')), 1);
+        },
+      });
+      return new Response(body, { status: 200 });
+    }) as unknown as typeof fetch;
+
+    try {
+      const response = await POST(
+        makeRequest(validBody({ mode: 'unframed', message: 'Привет', stream: true }))
+      );
+      const text = await response.text();
+      const errorFrame = text.split('\n\n').find((frame) => frame.startsWith('event: error'));
+      const dataLine = errorFrame?.split('\n').find((line) => line.startsWith('data:'));
+      const payload = JSON.parse(String(dataLine).slice(5));
+
+      expect(payload.interrupted).toBe(true);
+      expect(payload.code).toBeTruthy();
+      expect(mockRecord.filter((item) => item === 'message:assistant')).toHaveLength(0);
+    } finally {
+      if (previousKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = previousKey;
+      global.fetch = previousFetch;
+    }
   });
 });
 

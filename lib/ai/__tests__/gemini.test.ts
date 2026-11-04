@@ -2,11 +2,8 @@
 
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
-import {
-  assertCircuitClosed,
-  resetCircuitBreakerState,
-} from '@/lib/operations/circuitBreaker';
-import { GeminiError, generateGeminiText } from '../gemini';
+import { assertCircuitClosed, resetCircuitBreakerState } from '@/lib/operations/circuitBreaker';
+import { GeminiError, generateGeminiText, streamGeminiText } from '../gemini';
 
 function jsonResponse(payload: unknown, ok = true, status = 200) {
   return {
@@ -65,9 +62,7 @@ describe('Gemini provider helper', () => {
   });
 
   it('maps HTTP 429 and opens the circuit after repeated failures', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ error: { message: 'quota exceeded' } }, false, 429)
-    );
+    fetchMock.mockResolvedValue(jsonResponse({ error: { message: 'quota exceeded' } }, false, 429));
 
     await expect(generateGeminiText({ prompt: 'one' })).rejects.toBeInstanceOf(GeminiError);
     await expect(generateGeminiText({ prompt: 'two' })).rejects.toMatchObject({
@@ -101,6 +96,87 @@ describe('Gemini provider helper', () => {
     await expect(generateGeminiText({ prompt: 'slow' })).rejects.toMatchObject({
       code: 'gemini_timeout',
     });
+  });
+
+  it('streams Gemini SSE chunks and emits each text delta once', async () => {
+    const encoder = new TextEncoder();
+    const frames = [
+      'data: {"candidates":[{"content":{"parts":[{"text":"Готов"}]}}]}\n\n',
+      'data: {"candidates":[{"content":{"parts":[{"text":"о."}]}}]}\n\n',
+    ];
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(frames[0].slice(0, 17)));
+        controller.enqueue(encoder.encode(frames[0].slice(17) + frames[1]));
+        controller.close();
+      },
+    });
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    );
+
+    const deltas: string[] = [];
+    const result = await streamGeminiText({
+      prompt: 'hello',
+      onDelta: (text) => deltas.push(text),
+    });
+
+    expect(result).toMatchObject({
+      content: 'Готово.',
+      emitted: true,
+      provider: 'gemini',
+      model: 'gemini-3.5-flash',
+    });
+    expect(deltas).toEqual(['Готов', 'о.']);
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('gemini-3.5-flash:streamGenerateContent?alt=sse');
+  });
+
+  it('rejects a malformed Gemini stream frame', async () => {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {not-json}\n\n'));
+        controller.close();
+      },
+    });
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    );
+
+    await expect(
+      streamGeminiText({ prompt: 'hello', onDelta: () => undefined })
+    ).rejects.toMatchObject({ code: 'gemini_stream_malformed' });
+  });
+
+  it('rejects an empty Gemini stream', async () => {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"candidates":[]}\n\n'));
+        controller.close();
+      },
+    });
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    );
+
+    await expect(
+      streamGeminiText({ prompt: 'hello', onDelta: () => undefined })
+    ).rejects.toMatchObject({ code: 'gemini_empty_response' });
   });
 
   it('does not call the provider when the key is missing', async () => {

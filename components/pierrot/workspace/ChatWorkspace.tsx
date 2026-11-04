@@ -3,13 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  ArrowUp,
-  MessageSquare,
-  PanelLeft,
-  Plus,
-  X,
-} from 'lucide-react';
+import { ArrowUp, MessageSquare, PanelLeft, Plus, Square, X } from 'lucide-react';
 import type {
   OwnerConversation,
   OwnerConversationListItem,
@@ -23,6 +17,11 @@ import {
   type SourceBundle,
 } from '@/lib/pierrot/workspace/chatParser';
 import { getPierrotConsent, setPierrotConsent } from '@/lib/pierrot/clientTelemetry';
+import {
+  PierrotStreamProtocolError,
+  consumePierrotEventStream,
+  type PierrotStreamStage,
+} from '@/lib/pierrot/streamProtocol';
 import { setWorkspaceHandoff } from '@/lib/pierrot/workspace/handoff';
 import { CommercialBrief } from './CommercialReport';
 import MetricStatusList from './MetricStatusList';
@@ -42,6 +41,8 @@ type UiMessage = {
   sources?: SourceBundle;
   answerLabel?: string | null;
   error?: boolean;
+  streaming?: boolean;
+  interrupted?: boolean;
 };
 
 type SelectedSources = {
@@ -75,6 +76,19 @@ function formatConversationDate(value: string): string {
 
 function messageLabel(message: UiMessage): string {
   return message.role === 'user' ? 'Вы' : 'Pierrot';
+}
+
+function withoutLastUser(messages: UiMessage[]): UiMessage[] {
+  let index = -1;
+
+  for (let cursor = messages.length - 1; cursor >= 0; cursor -= 1) {
+    if (messages[cursor]?.role === 'user') {
+      index = cursor;
+      break;
+    }
+  }
+
+  return index >= 0 ? messages.filter((_, cursor) => cursor !== index) : messages;
 }
 
 function initialMessages(conversation: OwnerConversation | null): UiMessage[] {
@@ -114,6 +128,8 @@ export default function ChatWorkspace({
   const [selectedSources, setSelectedSources] = useState<SelectedSources | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [streamStage, setStreamStage] = useState<PierrotStreamStage | null>(null);
+  const [retryPrompt, setRetryPrompt] = useState<string | null>(null);
   const [consent, setConsent] = useState<Consent>(() => ({
     state:
       conversation?.consentState === 'granted'
@@ -128,7 +144,12 @@ export default function ChatWorkspace({
   const inspectorScrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const abortReasonRef = useRef<'user' | 'timeout' | null>(null);
   const mountedRef = useRef(true);
+  const atBottomRef = useRef(true);
+  const deltaBufferRef = useRef('');
+  const deltaFrameRef = useRef<number | null>(null);
+  const streamingMessageIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -166,7 +187,12 @@ export default function ChatWorkspace({
     setInspectorOpen(false);
     setMenuOpenId(null);
     setError(null);
+    setStreamStage(null);
+    setRetryPrompt(null);
     setLoading(false);
+    atBottomRef.current = true;
+    streamingMessageIdRef.current = null;
+    deltaBufferRef.current = '';
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
 
@@ -185,8 +211,17 @@ export default function ChatWorkspace({
       return;
     }
 
-    element.scrollTop = element.scrollHeight;
-  }, [messages.length, loading]);
+    if (atBottomRef.current) {
+      element.scrollTop = element.scrollHeight;
+    }
+  }, [messages, loading, streamStage]);
+
+  function onTranscriptScroll() {
+    const element = scrollRef.current;
+    if (!element) return;
+
+    atBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 96;
+  }
 
   useEffect(() => {
     const element = inputRef.current;
@@ -218,18 +253,13 @@ export default function ChatWorkspace({
     setConsent(next);
   }
 
-  async function submitFeedback(
-    message: UiMessage,
-    rating: 'up' | 'down'
-  ) {
+  async function submitFeedback(message: UiMessage, rating: 'up' | 'down') {
     if (message.feedback || consent.state !== 'granted') return;
     if (!conversationId || !sessionId || !message.serverMessageId) return;
 
     setMessages((current) =>
       current.map((item) =>
-        item.id === message.id
-          ? { ...item, feedback: rating, feedbackError: false }
-          : item
+        item.id === message.id ? { ...item, feedback: rating, feedbackError: false } : item
       )
     );
 
@@ -251,48 +281,169 @@ export default function ChatWorkspace({
       if (!response.ok) throw new Error('feedback_failed');
     } catch {
       setMessages((current) =>
-        current.map((item) =>
-          item.id === message.id ? { ...item, feedbackError: true } : item
-        )
+        current.map((item) => (item.id === message.id ? { ...item, feedbackError: true } : item))
       );
     }
   }
 
-  async function send() {
-    const text = draft.trim();
+  function applyAssistantDelta(id: string, text: string) {
+    if (!text) return;
+
+    setMessages((current) =>
+      current.map((item) => (item.id === id ? { ...item, content: item.content + text } : item))
+    );
+  }
+
+  function flushDeltaBuffer(id: string) {
+    if (deltaFrameRef.current !== null) {
+      window.cancelAnimationFrame(deltaFrameRef.current);
+      deltaFrameRef.current = null;
+    }
+
+    const chunk = deltaBufferRef.current;
+    deltaBufferRef.current = '';
+    applyAssistantDelta(id, chunk);
+  }
+
+  function queueDelta(id: string, text: string) {
+    deltaBufferRef.current += text;
+
+    if (deltaFrameRef.current !== null) return;
+
+    deltaFrameRef.current = window.requestAnimationFrame(() => {
+      deltaFrameRef.current = null;
+      const chunk = deltaBufferRef.current;
+      deltaBufferRef.current = '';
+      applyAssistantDelta(id, chunk);
+    });
+  }
+
+  function stopGeneration() {
+    abortReasonRef.current = 'user';
+    abortRef.current?.abort();
+  }
+
+  function retryLast() {
+    if (!retryPrompt || loading) return;
+
+    setRetryPrompt(null);
+    setError(null);
+    void send(retryPrompt, { retry: true });
+  }
+
+  async function send(explicitText?: string, options: { retry?: boolean } = {}) {
+    const text = (explicitText ?? draft).trim();
     if (!text || loading || !online) return;
 
-    setError(null);
-    setLoading(true);
-    setDraft('');
-    setMenuOpenId(null);
-
+    const isRetry = options.retry === true;
+    const previousMessages = messages;
     const userMessage: UiMessage = {
       id: `local-${Date.now()}`,
       role: 'user',
       content: text,
       createdAt: new Date().toISOString(),
     };
+    const assistantUiId = `stream-${Date.now()}`;
 
-    setMessages((current) => [...current, userMessage]);
-    if (messages.length === 0) {
+    setError(null);
+    setRetryPrompt(null);
+    setStreamStage(null);
+    setLoading(true);
+    setDraft('');
+    setMenuOpenId(null);
+    atBottomRef.current = true;
+    deltaBufferRef.current = '';
+    streamingMessageIdRef.current = assistantUiId;
+
+    setMessages((current) => {
+      const base = isRetry ? current.filter((item) => !item.interrupted) : current;
+      return [
+        ...base,
+        ...(isRetry ? [] : [userMessage]),
+        {
+          id: assistantUiId,
+          role: 'assistant',
+          content: '',
+          createdAt: new Date().toISOString(),
+          streaming: true,
+        },
+      ];
+    });
+
+    if (!isRetry && previousMessages.length === 0) {
       setTitle(text.length > 92 ? `${text.slice(0, 89).trimEnd()}…` : text);
     }
 
-    const history = messages
-      .filter((message) => !message.error)
+    const historySource = isRetry ? withoutLastUser(previousMessages) : previousMessages;
+    const history = historySource
+      .filter((message) => !message.error && !message.interrupted)
       .map((message) => ({ role: message.role, content: message.content }));
 
     const controller = new AbortController();
     abortRef.current = controller;
-    const timeout = window.setTimeout(() => controller.abort(), 60_000);
+    abortReasonRef.current = null;
+    const timeout = window.setTimeout(() => {
+      abortReasonRef.current = 'timeout';
+      controller.abort();
+    }, 60_000);
+
+    let receivedAny = false;
+    const streamState: {
+      completed: Record<string, unknown> | null;
+      error: {
+        error: string;
+        code: string;
+        retryAfter?: number;
+        retryable?: boolean;
+        interrupted?: boolean;
+      } | null;
+    } = { completed: null, error: null };
+
+    const applyCompleted = (payload: Record<string, unknown>) => {
+      const parsed = parsePierrotResponse(payload);
+      const reply = parsed.reply;
+
+      if (!reply) throw new Error('Pierrot не вернул текст ответа.');
+
+      flushDeltaBuffer(assistantUiId);
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === assistantUiId
+            ? {
+                ...item,
+                content: reply,
+                provider: parsed.provider,
+                serverMessageId: parsed.assistantMessageId,
+                sources: parsed.sources,
+                answerLabel: parsed.answerLabel,
+                streaming: false,
+                interrupted: false,
+                error: false,
+              }
+            : item
+        )
+      );
+
+      if (parsed.conversationId) setConversationId(parsed.conversationId);
+      if (parsed.sessionId) setSessionId(parsed.sessionId);
+
+      if (parsed.recorded) {
+        router.refresh();
+      } else {
+        setError('Ответ получен, но диалог не сохранён: сохранение выключено или не разрешено.');
+      }
+    };
 
     try {
       const response = await fetch('/api/pierrot-web', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
         body: JSON.stringify({
           message: text,
+          stream: true,
           ...(conversationId ? { conversationId } : {}),
           ...(sessionId ? { sessionId } : {}),
           consent:
@@ -310,66 +461,161 @@ export default function ChatWorkspace({
         signal: controller.signal,
       });
 
-      const payload = await response.json().catch(() => null);
-      const parsed = parsePierrotResponse(payload);
+      const contentType = response.headers.get('content-type') || '';
 
-      if (!response.ok) {
-        throw new Error(
-          parsed.error
-            ? `${parsed.error}${parsed.code ? ` · ${parsed.code}` : ''}`
-            : `Запрос не выполнен (${response.status}).`
-        );
-      }
+      if (contentType.includes('text/event-stream')) {
+        await consumePierrotEventStream(response, {
+          onAccepted: (event) => {
+            setConversationId(event.conversationId);
+            setSessionId(event.sessionId);
+          },
+          onStatus: (event) => setStreamStage(event.stage),
+          onDelta: (chunk) => {
+            receivedAny = true;
+            queueDelta(assistantUiId, chunk);
+          },
+          onSources: (payload) => {
+            const parsed = parsePierrotResponse(payload);
+            setMessages((current) =>
+              current.map((item) =>
+                item.id === assistantUiId
+                  ? { ...item, sources: parsed.sources, answerLabel: parsed.answerLabel }
+                  : item
+              )
+            );
+          },
+          onCompleted: (payload) => {
+            streamState.completed = payload;
+          },
+          onError: (event) => {
+            streamState.error = event;
+          },
+        });
 
-      if (!parsed.reply) {
-        throw new Error('Pierrot не вернул текст ответа.');
-      }
+        if (!response.ok) {
+          throw new Error(`Запрос не выполнен (${response.status}).`);
+        }
 
-      if (!mountedRef.current) return;
+        if (streamState.error) {
+          const failure = new Error(
+            streamState.error.error || 'Не удалось получить ответ.'
+          ) as Error & {
+            code?: string;
+            retryAfter?: number;
+            interrupted?: boolean;
+          };
+          failure.code = streamState.error.code;
+          failure.retryAfter = streamState.error.retryAfter;
+          failure.interrupted = streamState.error.interrupted;
+          throw failure;
+        }
 
-      setMessages((current) => [
-        ...current,
-        {
-          id: `reply-${Date.now()}`,
-          role: 'assistant',
-          content: parsed.reply as string,
-          createdAt: new Date().toISOString(),
-          provider: parsed.provider,
-          serverMessageId: parsed.assistantMessageId,
-          sources: parsed.sources,
-          answerLabel: parsed.answerLabel,
-        },
-      ]);
+        if (!streamState.completed) {
+          throw new PierrotStreamProtocolError('stream_ended_before_completion');
+        }
 
-      if (parsed.conversationId) setConversationId(parsed.conversationId);
-      if (parsed.sessionId) setSessionId(parsed.sessionId);
-
-      if (parsed.recorded) {
-        router.refresh();
+        applyCompleted(streamState.completed);
       } else {
-        setError(
-          'Ответ получен, но диалог не сохранён: сохранение выключено или не разрешено.'
+        const payload = await response.json().catch(() => null);
+        const parsed = parsePierrotResponse(payload);
+
+        if (!response.ok) {
+          throw new Error(
+            parsed.error
+              ? `${parsed.error}${parsed.code ? ` · ${parsed.code}` : ''}`
+              : `Запрос не выполнен (${response.status}).`
+          );
+        }
+
+        if (!parsed.reply) {
+          throw new Error('Pierrot не вернул текст ответа.');
+        }
+
+        flushDeltaBuffer(assistantUiId);
+        setMessages((current) =>
+          current.map((item) =>
+            item.id === assistantUiId
+              ? {
+                  ...item,
+                  content: parsed.reply as string,
+                  provider: parsed.provider,
+                  serverMessageId: parsed.assistantMessageId,
+                  sources: parsed.sources,
+                  answerLabel: parsed.answerLabel,
+                  streaming: false,
+                  interrupted: false,
+                  error: false,
+                }
+              : item
+          )
         );
+
+        if (parsed.conversationId) setConversationId(parsed.conversationId);
+        if (parsed.sessionId) setSessionId(parsed.sessionId);
+
+        if (parsed.recorded) {
+          router.refresh();
+        } else {
+          setError('Ответ получен, но диалог не сохранён: сохранение выключено или не разрешено.');
+        }
       }
     } catch (caught) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || streamingMessageIdRef.current !== assistantUiId) return;
+
+      flushDeltaBuffer(assistantUiId);
 
       const isAbort =
         caught instanceof DOMException
           ? caught.name === 'AbortError'
           : caught instanceof Error && caught.name === 'AbortError';
-
-      setError(
-        isAbort
+      const failure = caught as Error & {
+        code?: string;
+        retryAfter?: number;
+        interrupted?: boolean;
+      };
+      const stopReason =
+        abortReasonRef.current === 'timeout'
           ? 'Ответ не пришёл за 60 секунд. Сообщение не отправлено повторно автоматически.'
-          : caught instanceof Error
-            ? caught.message
-            : 'Не удалось получить ответ.'
-      );
+          : 'Генерация остановлена.';
+
+      if (receivedAny) {
+        setMessages((current) =>
+          current.map((item) =>
+            item.id === assistantUiId
+              ? { ...item, streaming: false, interrupted: true, error: true }
+              : item
+          )
+        );
+        setError(
+          isAbort
+            ? stopReason
+            : failure.interrupted
+              ? 'Ответ прерван. Можно повторить запрос.'
+              : failure.message || 'Ответ прерван.'
+        );
+        setRetryPrompt(text);
+      } else {
+        setMessages((current) => current.filter((item) => item.id !== assistantUiId));
+        setError(
+          isAbort
+            ? stopReason
+            : caught instanceof PierrotStreamProtocolError
+              ? 'Поток ответа повреждён. Попробуйте ещё раз.'
+              : caught instanceof Error
+                ? caught.message
+                : 'Не удалось получить ответ.'
+        );
+        setRetryPrompt(text);
+      }
     } finally {
       window.clearTimeout(timeout);
-      if (mountedRef.current) setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+        setStreamStage(null);
+      }
+      streamingMessageIdRef.current = null;
       abortRef.current = null;
+      abortReasonRef.current = null;
     }
   }
 
@@ -401,6 +647,15 @@ export default function ChatWorkspace({
     setDrawerOpen(false);
     setInspectorOpen(false);
   }
+
+  const streamingMessage = messages.find((message) => message.streaming);
+  const hasStreamingContent = Boolean(streamingMessage?.content.trim());
+  const streamStageLabel =
+    streamStage === 'retrieving'
+      ? 'Pierrot ищет в архиве'
+      : streamStage === 'persisting'
+        ? 'Pierrot сохраняет ответ'
+        : 'Pierrot формулирует ответ';
 
   return (
     <div
@@ -447,8 +702,8 @@ export default function ChatWorkspace({
 
             {conversations.length === 0 ? (
               <p className="pw-drawer-empty">
-                Сохранённых диалогов нет. Они появляются здесь только при включённом
-                сохранении и после ответа Pierrot.
+                Сохранённых диалогов нет. Они появляются здесь только при включённом сохранении и
+                после ответа Pierrot.
               </p>
             ) : (
               <ul className="pw-conversation-list">
@@ -502,7 +757,7 @@ export default function ChatWorkspace({
           )}
         </header>
 
-        <div className="pw-chat-scroll" ref={scrollRef}>
+        <div className="pw-chat-scroll" ref={scrollRef} onScroll={onTranscriptScroll}>
           {messages.length === 0 ? (
             <div className="pw-empty">
               <p className="pw-kicker">Pierrot · owner workspace</p>
@@ -514,16 +769,12 @@ export default function ChatWorkspace({
           ) : (
             <div className="pw-chat-thread">
               {messages.map((message) => {
-                const messageSourceCount = message.sources
-                  ? totalSourceCount(message.sources)
-                  : 0;
+                const messageSourceCount = message.sources ? totalSourceCount(message.sources) : 0;
 
                 return (
                   <article
                     key={message.id}
-                    className={`pw-message ${
-                      message.role === 'user' ? 'pw-message-user' : ''
-                    }`}
+                    className={`pw-message ${message.role === 'user' ? 'pw-message-user' : ''}`}
                   >
                     {message.role === 'user' ? (
                       <div className="pw-bubble-user">{message.content}</div>
@@ -537,31 +788,35 @@ export default function ChatWorkspace({
                               {message.provider ? ` · ${message.provider}` : ''}
                             </span>
                           </div>
-                          <button
-                            type="button"
-                            className="pw-message-menu"
-                            aria-label="Действия с сообщением"
-                            aria-expanded={menuOpenId === message.id}
-                            onClick={() =>
-                              setMenuOpenId((current) =>
-                                current === message.id ? null : message.id
-                              )
-                            }
-                          >
-                            ···
-                          </button>
+                          {!message.streaming && !message.interrupted && (
+                            <button
+                              type="button"
+                              className="pw-message-menu"
+                              aria-label="Действия с сообщением"
+                              aria-expanded={menuOpenId === message.id}
+                              onClick={() =>
+                                setMenuOpenId((current) =>
+                                  current === message.id ? null : message.id
+                                )
+                              }
+                            >
+                              ···
+                            </button>
+                          )}
                         </div>
 
-                        {menuOpenId === message.id && (
-                          <div className="pw-message-actions">
-                            <button type="button" onClick={() => handoff('brain', message)}>
-                              В Brain
-                            </button>
-                            <button type="button" onClick={() => handoff('flow', message)}>
-                              Во Flow
-                            </button>
-                          </div>
-                        )}
+                        {menuOpenId === message.id &&
+                          !message.streaming &&
+                          !message.interrupted && (
+                            <div className="pw-message-actions">
+                              <button type="button" onClick={() => handoff('brain', message)}>
+                                В Brain
+                              </button>
+                              <button type="button" onClick={() => handoff('flow', message)}>
+                                Во Flow
+                              </button>
+                            </div>
+                          )}
 
                         <WorkspaceMarkdown
                           className="pw-reply"
@@ -570,67 +825,75 @@ export default function ChatWorkspace({
                           onCitation={(index) => openSources(message, index)}
                         />
 
-                        <div className="pw-feedback" role="group" aria-label="Оценка ответа">
-                          <span className="pw-feedback-label">Ответ полезен?</span>
-                          <button
-                            type="button"
-                            className="pw-feedback-button"
-                            aria-label="Ответ полезен"
-                            aria-pressed={message.feedback === 'up'}
-                            disabled={
-                              consent.state !== 'granted' ||
-                              !conversationId ||
-                              !sessionId ||
-                              !message.serverMessageId ||
-                              Boolean(message.feedback)
-                            }
-                            title={
-                              consent.state !== 'granted'
-                                ? 'Для оценки нужно разрешить сохранение'
-                                : 'Оценить ответ'
-                            }
-                            onClick={() => void submitFeedback(message, 'up')}
-                          >
-                            Да
-                          </button>
-                          <span className="pw-feedback-sep" aria-hidden="true">
-                            /
-                          </span>
-                          <button
-                            type="button"
-                            className="pw-feedback-button"
-                            aria-label="Ответ не полезен"
-                            aria-pressed={message.feedback === 'down'}
-                            disabled={
-                              consent.state !== 'granted' ||
-                              !conversationId ||
-                              !sessionId ||
-                              !message.serverMessageId ||
-                              Boolean(message.feedback)
-                            }
-                            title={
-                              consent.state !== 'granted'
-                                ? 'Для оценки нужно разрешить сохранение'
-                                : 'Оценить ответ'
-                            }
-                            onClick={() => void submitFeedback(message, 'down')}
-                          >
-                            Нет
-                          </button>
-                          {message.feedbackError && (
-                            <span className="pw-feedback-error">не отправлено</span>
-                          )}
-                        </div>
+                        {message.interrupted && (
+                          <p className="pw-stream-note" role="status">
+                            Ответ прерван. Можно повторить запрос.
+                          </p>
+                        )}
+
+                        {!message.streaming && !message.interrupted && (
+                          <div className="pw-feedback" role="group" aria-label="Оценка ответа">
+                            <span className="pw-feedback-label">Ответ полезен?</span>
+                            <button
+                              type="button"
+                              className="pw-feedback-button"
+                              aria-label="Ответ полезен"
+                              aria-pressed={message.feedback === 'up'}
+                              disabled={
+                                consent.state !== 'granted' ||
+                                !conversationId ||
+                                !sessionId ||
+                                !message.serverMessageId ||
+                                Boolean(message.feedback)
+                              }
+                              title={
+                                consent.state !== 'granted'
+                                  ? 'Для оценки нужно разрешить сохранение'
+                                  : 'Оценить ответ'
+                              }
+                              onClick={() => void submitFeedback(message, 'up')}
+                            >
+                              Да
+                            </button>
+                            <span className="pw-feedback-sep" aria-hidden="true">
+                              /
+                            </span>
+                            <button
+                              type="button"
+                              className="pw-feedback-button"
+                              aria-label="Ответ не полезен"
+                              aria-pressed={message.feedback === 'down'}
+                              disabled={
+                                consent.state !== 'granted' ||
+                                !conversationId ||
+                                !sessionId ||
+                                !message.serverMessageId ||
+                                Boolean(message.feedback)
+                              }
+                              title={
+                                consent.state !== 'granted'
+                                  ? 'Для оценки нужно разрешить сохранение'
+                                  : 'Оценить ответ'
+                              }
+                              onClick={() => void submitFeedback(message, 'down')}
+                            >
+                              Нет
+                            </button>
+                            {message.feedbackError && (
+                              <span className="pw-feedback-error">не отправлено</span>
+                            )}
+                          </div>
+                        )}
                       </>
                     )}
                   </article>
                 );
               })}
 
-              {loading && (
+              {loading && !hasStreamingContent && (
                 <p className="pw-typing" role="status" aria-live="polite">
                   <span aria-hidden="true" />
-                  Pierrot формулирует ответ
+                  {streamStageLabel}
                 </p>
               )}
             </div>
@@ -644,6 +907,14 @@ export default function ChatWorkspace({
             role="alert"
           >
             {error}
+            {retryPrompt && !loading && (
+              <>
+                {' '}
+                <button type="button" className="pw-link-button" onClick={retryLast}>
+                  Повторить
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -665,15 +936,26 @@ export default function ChatWorkspace({
               aria-label="Сообщение Пьеро"
             />
 
-            <button
-              type="button"
-              className="pw-send"
-              onClick={() => void send()}
-              disabled={!online || loading || !draft.trim()}
-              aria-label="Отправить сообщение"
-            >
-              <ArrowUp size={18} strokeWidth={1.7} aria-hidden="true" />
-            </button>
+            {loading ? (
+              <button
+                type="button"
+                className="pw-send pw-stop"
+                onClick={stopGeneration}
+                aria-label="Остановить генерацию"
+              >
+                <Square size={13} strokeWidth={2} fill="currentColor" aria-hidden="true" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="pw-send"
+                onClick={() => void send()}
+                disabled={!online || !draft.trim()}
+                aria-label="Отправить сообщение"
+              >
+                <ArrowUp size={18} strokeWidth={1.7} aria-hidden="true" />
+              </button>
+            )}
           </div>
 
           <div className="pw-composer-meta">
@@ -765,9 +1047,7 @@ export default function ChatWorkspace({
                               .filter(Boolean)
                               .join(' · ') || 'метаданные не переданы'}
                           </p>
-                          {source.excerpt && (
-                            <p className="pw-source-excerpt">{source.excerpt}</p>
-                          )}
+                          {source.excerpt && <p className="pw-source-excerpt">{source.excerpt}</p>}
                           {source.canonicalUrl && (
                             <a
                               className="pw-source-link"
@@ -784,36 +1064,36 @@ export default function ChatWorkspace({
                       {selectedSources.bundle.web.map((source, index) => {
                         const globalIndex = selectedSources.bundle.brain.length + index;
                         return (
-                        <div
-                          key={`web-${index}`}
-                          id={`pw-source-${globalIndex}`}
-                          className={`pw-inspector-source${
-                            selectedSources.index === globalIndex ? ' is-active' : ''
-                          }`}
-                        >
-                          <span className="pw-source-type">веб</span>
-                          <h3 className="pw-source-title">
-                            {source.title || source.domain || 'Без названия'}
-                          </h3>
-                          <p className="pw-source-meta">
-                            {[source.domain, source.publishedAt, source.author]
-                              .filter(Boolean)
-                              .join(' · ') || 'метаданные не переданы'}
-                          </p>
-                          {source.excerpt && (
-                            <p className="pw-source-excerpt">{source.excerpt}</p>
-                          )}
-                          {source.url && (
-                            <a
-                              className="pw-source-link"
-                              href={source.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              открыть источник
-                            </a>
-                          )}
-                        </div>
+                          <div
+                            key={`web-${index}`}
+                            id={`pw-source-${globalIndex}`}
+                            className={`pw-inspector-source${
+                              selectedSources.index === globalIndex ? ' is-active' : ''
+                            }`}
+                          >
+                            <span className="pw-source-type">веб</span>
+                            <h3 className="pw-source-title">
+                              {source.title || source.domain || 'Без названия'}
+                            </h3>
+                            <p className="pw-source-meta">
+                              {[source.domain, source.publishedAt, source.author]
+                                .filter(Boolean)
+                                .join(' · ') || 'метаданные не переданы'}
+                            </p>
+                            {source.excerpt && (
+                              <p className="pw-source-excerpt">{source.excerpt}</p>
+                            )}
+                            {source.url && (
+                              <a
+                                className="pw-source-link"
+                                href={source.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                открыть источник
+                              </a>
+                            )}
+                          </div>
                         );
                       })}
                     </>
