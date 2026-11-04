@@ -12,12 +12,14 @@ describe('workspace navigation', () => {
       'flow',
       'brain',
       'dash',
+      'dev',
     ]);
     expect(WORKSPACE_ROUTES.map((route) => route.shortcut)).toEqual([
       '1',
       '2',
       '3',
       '4',
+      '5',
     ]);
   });
 
@@ -26,6 +28,7 @@ describe('workspace navigation', () => {
     expect(activeWorkspaceKey('/admin/pierrot/brain')).toBe('brain');
     expect(activeWorkspaceKey('/admin/pierrot/flow')).toBe('flow');
     expect(activeWorkspaceKey('/admin/pierrot/dash')).toBe('dash');
+    expect(activeWorkspaceKey('/admin/pierrot/dev')).toBe('dev');
     expect(activeWorkspaceKey('/admin/pierrot/intelligence')).toBe('chat');
   });
 
@@ -45,6 +48,7 @@ describe('workspace navigation', () => {
     const base = { metaKey: true, ctrlKey: false, altKey: false, shiftKey: false };
     expect(shortcutRoute({ ...base, key: '1' }, document.body)).toEqual({ key: 'chat' });
     expect(shortcutRoute({ ...base, key: '4' }, document.body)).toEqual({ key: 'dash' });
+    expect(shortcutRoute({ ...base, key: '5' }, document.body)).toEqual({ key: 'dev' });
     expect(shortcutRoute({ ...base, key: 'n' }, document.body)).toEqual({ key: 'new-chat' });
     expect(
       shortcutRoute({ ...base, metaKey: false, ctrlKey: true, key: '2' }, document.body)

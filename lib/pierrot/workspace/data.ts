@@ -215,23 +215,46 @@ function truncateTitle(value: string): string {
   return clean.length > 92 ? `${clean.slice(0, 89).trimEnd()}…` : clean;
 }
 
+function isMissingModeColumn(error: unknown): boolean {
+  const value =
+    error && typeof error === 'object'
+      ? `${String((error as { code?: unknown }).code || '')} ${
+          String((error as { message?: unknown }).message || '')
+        }`
+      : '';
+  return /PGRST204|42703/.test(value) || /column .*mode.* does not exist/i.test(value);
+}
+
 export async function loadOwnerConversations(
   ownerUserId: string,
   limit = 40
 ): Promise<OwnerConversationListItem[]> {
   try {
     const store = getServerSupabaseClient({ useServiceRole: true });
-    const { data, error } = await store
+    const select =
+      'id,session_id,started_at,updated_at,last_message_at,consent_state,identity_type,user_id,mode';
+
+    let result = await store
       .from('pierrot_conversations')
-      .select(
-        'id,session_id,started_at,updated_at,last_message_at,consent_state,identity_type,user_id'
-      )
+      .select(select)
       .eq('identity_type', 'owner')
       .eq('user_id', ownerUserId)
+      .eq('mode', 'site')
       .order('updated_at', { ascending: false })
       .limit(limit);
 
-    if (error || !Array.isArray(data) || data.length === 0) return [];
+    if (result.error && isMissingModeColumn(result.error)) {
+      result = await store
+        .from('pierrot_conversations')
+        .select(select)
+        .eq('identity_type', 'owner')
+        .eq('user_id', ownerUserId)
+        .order('updated_at', { ascending: false })
+        .limit(limit);
+    }
+
+    const data = result.data;
+    if (result.error || !Array.isArray(data) || data.length === 0) return [];
 
     const ids = data
       .map((row) => (typeof row.id === 'string' ? row.id : null))
@@ -296,15 +319,31 @@ export async function loadOwnerConversation(
 
   try {
     const store = getServerSupabaseClient({ useServiceRole: true });
-    const { data: conversation, error } = await store
+    const select = 'id,session_id,started_at,consent_state,identity_type,user_id,mode';
+
+    let result = await store
       .from('pierrot_conversations')
-      .select('id,session_id,started_at,consent_state,identity_type,user_id')
+      .select(select)
       .eq('id', conversationId)
       .eq('identity_type', 'owner')
       .eq('user_id', ownerUserId)
+      .eq('mode', 'site')
       .maybeSingle();
 
-    if (error || !conversation || typeof conversation.session_id !== 'string') return null;
+    if (result.error && isMissingModeColumn(result.error)) {
+      result = await store
+        .from('pierrot_conversations')
+        .select(select)
+        .eq('id', conversationId)
+        .eq('identity_type', 'owner')
+        .eq('user_id', ownerUserId)
+        .maybeSingle();
+    }
+
+    const conversation = result.data;
+    if (result.error || !conversation || typeof conversation.session_id !== 'string') {
+      return null;
+    }
 
     const { data: rows, error: messagesError } = await store
       .from('pierrot_messages')

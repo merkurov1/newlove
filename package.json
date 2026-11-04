@@ -71,6 +71,7 @@
     "@editorjs/list": "^2.0.8",
     "@google/generative-ai": "^0.24.1",
     "@nomicfoundation/solidity-analyzer-linux-x64-gnu": "^0.1.2",
+    "@octokit/rest": "^22.0.1",
     "@paralleldrive/cuid2": "^2.2.2",
     "@react-email/components": "^0.0.22",
     "@react-email/render": "^0.0.16",

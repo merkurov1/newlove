@@ -3,6 +3,7 @@ export const WORKSPACE_ROUTES = [
   { key: 'flow', path: '/admin/pierrot/flow', label: 'FLOW', shortcut: '2' },
   { key: 'brain', path: '/admin/pierrot/brain', label: 'BRAIN', shortcut: '3' },
   { key: 'dash', path: '/admin/pierrot/dash', label: 'DASH', shortcut: '4' },
+  { key: 'dev', path: '/admin/pierrot/dev', label: 'DEV', shortcut: '5' },
 ] as const;
 
 export type WorkspaceRouteKey = (typeof WORKSPACE_ROUTES)[number]['key'];
@@ -11,6 +12,7 @@ export function activeWorkspaceKey(pathname: string): WorkspaceRouteKey {
   if (pathname.startsWith('/admin/pierrot/flow')) return 'flow';
   if (pathname.startsWith('/admin/pierrot/brain')) return 'brain';
   if (pathname.startsWith('/admin/pierrot/dash')) return 'dash';
+  if (pathname.startsWith('/admin/pierrot/dev')) return 'dev';
   return 'chat';
 }
 

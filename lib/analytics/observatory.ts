@@ -284,6 +284,7 @@ async function loadPeriodData(
     let next = query
       .gte('started_at', from)
       .lte('started_at', to)
+      .neq('start_page', '/admin/pierrot/dev')
       .order('started_at', { ascending: false });
     if (language) next = next.eq('language', language);
     return next;
@@ -910,7 +911,8 @@ async function countConversationsSince(
   let query = store
     .from('pierrot_conversations')
     .select('id', { count: 'exact', head: true })
-    .gte('started_at', since.toISOString());
+    .gte('started_at', since.toISOString())
+    .neq('start_page', '/admin/pierrot/dev');
 
   if (language) query = query.eq('language', language);
 

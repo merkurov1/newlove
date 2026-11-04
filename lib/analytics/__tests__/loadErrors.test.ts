@@ -8,8 +8,10 @@ jest.mock('@/lib/serverAuth', () => ({
       select: () => ({
         gte: () => ({
           lte: () => ({
-            order: () => ({
-              range: async () => ({ data: null, error: { message: 'db unavailable' } }),
+            neq: () => ({
+              order: () => ({
+                range: async () => ({ data: null, error: { message: 'db unavailable' } }),
+              }),
             }),
           }),
         }),

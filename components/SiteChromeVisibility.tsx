@@ -16,7 +16,8 @@ export default function SiteChromeVisibility() {
       pathname === '/admin/pierrot' ||
       pathname.startsWith('/admin/pierrot/brain') ||
       pathname.startsWith('/admin/pierrot/flow') ||
-      pathname.startsWith('/admin/pierrot/dash');
+      pathname.startsWith('/admin/pierrot/dash') ||
+      pathname.startsWith('/admin/pierrot/dev');
 
     if (ownerWorkspace) {
       document.body.setAttribute('data-pierrot-workspace', 'true');

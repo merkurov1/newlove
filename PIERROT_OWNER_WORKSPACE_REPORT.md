@@ -43,6 +43,7 @@
 - FLOW
 - BRAIN
 - DASH
+- DEV
 
 Экран SETTINGS убран из PWA-меню. Аккаунт и подключения остаются доступны через существующие разделы админки.
 
@@ -54,6 +55,7 @@
 - `⌘/Ctrl + 2` — FLOW
 - `⌘/Ctrl + 3` — BRAIN
 - `⌘/Ctrl + 4` — DASH
+- `⌘/Ctrl + 5` — DEV
 - `⌘/Ctrl + N` — новый диалог
 
 Сочетания не перехватываются, когда курсор находится в `input`, `textarea`, `select` или `contenteditable`.
@@ -266,9 +268,61 @@
 
 Все цифры берутся из существующих таблиц, views и analytics-функций. Отсутствующие данные показываются как «—» или «недоступно», а не как ноль.
 
-## 7. SETTINGS
+## 7. DEV
 
-Экран удалён из PWA-меню и маршрута. Настройки аккаунта и интеграций остаются в существующей админке.
+Изолированный инженерный ассистент Пьеро. После DASH.
+
+### Изоляция
+- Отдельный тред с `mode = 'dev'` в `pierrot_conversations` и `pierrot_messages`.
+- Не пересекается с обычным owner-чатом.
+- Не участвует в RAG / Brain retrieval.
+- История сохраняется в Supabase и восстанавливается из `/admin/pierrot/dev?conversation=…`.
+
+### UI
+- Минималистичный инженерный экран.
+- Отдельный список Dev-тредов.
+- Ответы и код — моноширинным шрифтом.
+- Статусы интеграций:
+  - GitHub;
+  - Vercel;
+  - writes on/off.
+- Трейс вызванных GitHub tools под ответом.
+
+### Backend
+- Изолированный endpoint: `/api/admin/pierrot/dev`.
+- Только ADMIN.
+- Отдельный system prompt Dev.
+- Без RAG.
+- LLM: DeepSeek direct, fallback OpenRouter.
+- GitHub через `@octokit/rest`.
+- Общий серверный модуль: `lib/github.ts`.
+- Автоподстановка owner/repo: `GITHUB_OWNER` + `GITHUB_REPO`.
+- Токен: `GITHUB_TOKEN` (только server-side).
+- Проверка токена: `verifyGitHubAuth()` → `users.getAuthenticated()` при открытии Dev-вкладки; результат кэшируется на 5 минут.
+- Ошибки авторизации логируются без токена и заголовков.
+
+GitHub tools:
+- `get_repo_structure(path)`;
+- `read_file_content(path)`;
+- `create_or_update_file(path, content, message, branch)`;
+- `create_pull_request(title, head, base, body)`.
+
+Репозиторий ограничен env `GITHUB_OWNER` / `GITHUB_REPO` (или полным `PIERROT_GITHUB_REPO`; fallback `VERCEL_GIT_REPO_OWNER`/`VERCEL_GIT_REPO_SLUG`, затем `merkurov1/newlove`). Модель не может выбрать другой репозиторий.
+
+Запись можно отключить: `PIERROT_DEV_WRITE_ENABLED=false`.
+
+### Supabase migration
+Нужно применить:
+
+`migrations/2026-11-17_pierrot_dev_mode.sql`
+
+Она добавляет:
+- `mode` в `pierrot_conversations`;
+- `mode` в `pierrot_messages`;
+- индексы;
+- увеличенный лимит длины сообщения для кода.
+
+Если миграция не применена, Dev-вкладка показывает предупреждение, а endpoint возвращает `DEV_MIGRATION_REQUIRED`.
 
 ## 8. Offline
 
@@ -293,7 +347,7 @@ Service worker **не кэширует**:
 При отсутствии сети:
 
 - открывается offline-страница;
-- отправка сообщений, Brain, Flow, Settings и публикация отключены;
+- отправка сообщений, Brain, Flow, Dev и публикация отключены;
 - интерфейс не делает вид, что операция выполнена.
 
 Push-уведомления не добавлялись.
@@ -325,6 +379,7 @@ Push-уведомления не добавлялись.
 - коммерческий отчёт из существующих commercial views;
 - оценка ответов через существующий `/api/pierrot/events`;
 - Flow composer и публикация через существующую модалку сайта;
+- Dev-треды, GitHub tools и статусы интеграций;
 - PWA manifest, iOS metadata, service worker.
 
 ### Честные ограничения
@@ -360,8 +415,8 @@ Push-уведомления не добавлялись.
 - Pierrot tests — 413 passed.
 - Flow tests — 159 passed.
 - Brain tests — 76 passed.
-- Workspace/status/navigation/parser/commercial/PWA tests — 27 passed.
-- Финальный объединённый прогон Flow/Pierrot/workspace — 524 passed.
+- Workspace/status/navigation/parser/citations/commercial/PWA tests — 33 passed.
+- Финальный объединённый прогон Flow/Pierrot/workspace/analytics/GitHub — 579 passed.
 
 ### Build
 
@@ -395,3 +450,4 @@ Push-уведомления не добавлялись.
 6. Нужный ответ отправить в Brain или Flow через `···`.
 7. В Brain проверить preview и сохранить.
 8. В Flow открыть «Что нового?», написать пост, вставить ссылку/фото и опубликовать через ту же модалку, что на сайте.
+9. В Dev попросить структуру файла, чтение кода или создать коммит/PR.

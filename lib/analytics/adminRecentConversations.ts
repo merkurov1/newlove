@@ -80,6 +80,7 @@ export async function loadRecentPierrotConversations(
         'conversation_id,started_at,last_message_at,language,start_page,status,message_count,last_message_role'
       )
       .not('last_message_at', 'is', null)
+      .neq('start_page', '/admin/pierrot/dev')
       .order('last_message_at', { ascending: false })
       .limit(safeLimit);
 

@@ -1250,6 +1250,7 @@ async function fetchConversationRows(
         q
           .gte('started_at', filters.from)
           .lte('started_at', filters.to)
+          .neq('start_page', '/admin/pierrot/dev')
           .order('started_at', { ascending: false })
     );
   } catch (error) {
@@ -1263,6 +1264,7 @@ async function fetchConversationRows(
         q
           .gte('started_at', filters.from)
           .lte('started_at', filters.to)
+          .neq('start_page', '/admin/pierrot/dev')
           .order('started_at', { ascending: false })
     );
 

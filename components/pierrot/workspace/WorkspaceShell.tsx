@@ -8,6 +8,7 @@ import {
   Brain,
   MessageSquare,
   Send,
+  Terminal,
 } from 'lucide-react';
 import PierrotAvatar from './PierrotAvatar';
 import {
@@ -21,6 +22,7 @@ const ICONS = {
   brain: Brain,
   flow: Send,
   dash: Activity,
+  dev: Terminal,
 } as const;
 
 function registerServiceWorker() {
