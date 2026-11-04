@@ -2,7 +2,7 @@
 
 Главная страница PWA — это `/admin/pierrot` (CHAT). Это не публичная главная сайта.
 
-Ниже — актуальный код на момент коммита `9144117a`. В конце — полный CSS.
+Ниже — актуальный код. В конце — полный CSS.
 
 ## Состав
 
@@ -19,6 +19,7 @@
 - `lib/pierrot/workspace/types.ts`
 - `lib/pierrot/workspace/status.ts`
 - `lib/pierrot/workspace/chatParser.ts`
+- `lib/pierrot/workspace/citations.ts`
 - `lib/pierrot/workspace/data.ts`
 - `lib/pierrot/commercialSummary.ts`
 - `app/admin/pierrot/(workspace)/workspace.css`
@@ -292,7 +293,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowUp,
-  ChevronRight,
   MessageSquare,
   PanelLeft,
   Plus,
@@ -336,6 +336,7 @@ type SelectedSources = {
   messageId: string;
   label: string;
   bundle: SourceBundle;
+  index: number | null;
 };
 
 type Consent = {
@@ -412,6 +413,7 @@ export default function ChatWorkspace({
   }));
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const inspectorScrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
@@ -485,6 +487,14 @@ export default function ChatWorkspace({
     if (!selectedSources) return 0;
     return totalSourceCount(selectedSources.bundle);
   }, [selectedSources]);
+
+  useEffect(() => {
+    if (!inspectorOpen || selectedSources?.index == null) return;
+    const target = inspectorScrollRef.current?.querySelector<HTMLElement>(
+      `#pw-source-${selectedSources.index}`
+    );
+    target?.scrollIntoView({ block: 'nearest' });
+  }, [inspectorOpen, selectedSources]);
 
   function allowSaving() {
     const next = setPierrotConsent('granted');
@@ -662,13 +672,14 @@ export default function ChatWorkspace({
     router.push(kind === 'brain' ? '/admin/pierrot/brain' : '/admin/pierrot/flow');
   }
 
-  function openSources(message: UiMessage) {
+  function openSources(message: UiMessage, index = 0) {
     if (!message.sources || totalSourceCount(message.sources) === 0) return;
 
     setSelectedSources({
       messageId: message.id,
       label: messageLabel(message),
       bundle: message.sources,
+      index: Math.max(0, Math.min(index, totalSourceCount(message.sources) - 1)),
     });
     setInspectorOpen(true);
     setMenuOpenId(null);
@@ -791,8 +802,9 @@ export default function ChatWorkspace({
           ) : (
             <div className="pw-chat-thread">
               {messages.map((message) => {
-                const hasSources =
-                  message.sources && totalSourceCount(message.sources) > 0;
+                const messageSourceCount = message.sources
+                  ? totalSourceCount(message.sources)
+                  : 0;
 
                 return (
                   <article
@@ -839,19 +851,12 @@ export default function ChatWorkspace({
                           </div>
                         )}
 
-                        <WorkspaceMarkdown className="pw-reply" content={message.content} />
-
-                        {hasSources && (
-                          <button
-                            type="button"
-                            className="pw-source-line"
-                            onClick={() => openSources(message)}
-                            aria-expanded={inspectorOpen}
-                          >
-                            из базы · {totalSourceCount(message.sources as SourceBundle)}{' '}
-                            источников <ChevronRight size={11} aria-hidden="true" />
-                          </button>
-                        )}
+                        <WorkspaceMarkdown
+                          className="pw-reply"
+                          content={message.content}
+                          citationCount={messageSourceCount}
+                          onCitation={(index) => openSources(message, index)}
+                        />
 
                         <div className="pw-feedback" role="group" aria-label="Оценка ответа">
                           <span className="pw-feedback-label">Ответ полезен?</span>
@@ -932,23 +937,21 @@ export default function ChatWorkspace({
 
         <div className="pw-composer-wrap">
           <div className="pw-composer-inner">
-            <div className="pw-composer-field">
-              <label className="pw-kicker" htmlFor="pw-composer" style={{ display: 'none' }}>
-                Сообщение Пьеро
-              </label>
-              <textarea
-                id="pw-composer"
-                ref={inputRef}
-                className="pw-composer-input"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={onComposerKeyDown}
-                placeholder={online ? 'Напишите Пьеро' : 'Нет соединения'}
-                rows={1}
-                disabled={!online}
-                aria-label="Сообщение Пьеро"
-              />
-            </div>
+            <label className="pw-kicker" htmlFor="pw-composer" style={{ display: 'none' }}>
+              Сообщение Пьеро
+            </label>
+            <textarea
+              id="pw-composer"
+              ref={inputRef}
+              className="pw-composer-input"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={onComposerKeyDown}
+              placeholder={online ? 'Напишите Пьеро' : 'Нет соединения'}
+              rows={1}
+              disabled={!online}
+              aria-label="Сообщение Пьеро"
+            />
 
             <button
               type="button"
@@ -987,7 +990,9 @@ export default function ChatWorkspace({
               <span className="pw-section-title">Источники</span>
               <p className="pw-inspector-title">
                 {selectedSources
-                  ? `${sourceCount} ${sourceCount === 1 ? 'источник' : 'источников'}`
+                  ? selectedSources.index === null
+                    ? `${sourceCount} ${sourceCount === 1 ? 'источник' : 'источников'}`
+                    : `Источник ${selectedSources.index + 1} из ${sourceCount}`
                   : 'Не выбрано'}
               </p>
             </div>
@@ -1001,11 +1006,10 @@ export default function ChatWorkspace({
             </button>
           </div>
 
-          <div className="pw-inspector-scroll">
+          <div className="pw-inspector-scroll" ref={inspectorScrollRef}>
             {!selectedSources ? (
               <p className="pw-inspector-empty">
-                Откройте строку «из базы» под ответом, чтобы увидеть источники, которые
-                действительно вернул retrieval.
+                Нажмите на инлайн-бейдж источника в ответе, чтобы открыть его здесь.
               </p>
             ) : (
               <>
@@ -1035,7 +1039,10 @@ export default function ChatWorkspace({
                       {selectedSources.bundle.brain.map((source, index) => (
                         <div
                           key={`${source.documentId || 'brain'}-${index}`}
-                          className="pw-inspector-source"
+                          id={`pw-source-${index}`}
+                          className={`pw-inspector-source${
+                            selectedSources.index === index ? ' is-active' : ''
+                          }`}
                         >
                           <span className="pw-source-type">{sourceTypeLabel(source)}</span>
                           <h3 className="pw-source-title">
@@ -1062,8 +1069,16 @@ export default function ChatWorkspace({
                         </div>
                       ))}
 
-                      {selectedSources.bundle.web.map((source, index) => (
-                        <div key={`web-${index}`} className="pw-inspector-source">
+                      {selectedSources.bundle.web.map((source, index) => {
+                        const globalIndex = selectedSources.bundle.brain.length + index;
+                        return (
+                        <div
+                          key={`web-${index}`}
+                          id={`pw-source-${globalIndex}`}
+                          className={`pw-inspector-source${
+                            selectedSources.index === globalIndex ? ' is-active' : ''
+                          }`}
+                        >
                           <span className="pw-source-type">веб</span>
                           <h3 className="pw-source-title">
                             {source.title || source.domain || 'Без названия'}
@@ -1087,7 +1102,8 @@ export default function ChatWorkspace({
                             </a>
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </>
                   )}
                 </div>
@@ -1151,21 +1167,66 @@ export default function PierrotAvatar({
 import React from 'react';
 import Markdown from 'markdown-to-jsx';
 import { safeSourceUrl } from '@/lib/pierrot/workspace/chatParser';
+import {
+  CITATION_HREF_PREFIX,
+  citationIndexFromHref,
+  prepareCitationMarkdown,
+} from '@/lib/pierrot/workspace/citations';
+
+function CitationBadge({
+  index,
+  onCitation,
+}: {
+  index: number;
+  onCitation?: (index: number) => void;
+}) {
+  const content = <span aria-hidden="true">{index}</span>;
+
+  if (!onCitation) {
+    return (
+      <span className="pw-cite" aria-label={`Источник ${index}`}>
+        {content}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="pw-cite"
+      onClick={() => onCitation(index - 1)}
+      aria-label={`Открыть источник ${index}`}
+    >
+      {content}
+    </button>
+  );
+}
 
 export default function WorkspaceMarkdown({
   content,
   className = '',
+  citationCount = 0,
+  onCitation,
 }: {
   content: string;
   className?: string;
+  citationCount?: number;
+  onCitation?: (index: number) => void;
 }) {
+  const prepared = prepareCitationMarkdown(content, citationCount);
+  const hasRenderedCitation =
+    citationCount > 0 && prepared.includes(CITATION_HREF_PREFIX);
+
   return (
     <div className={className}>
       <Markdown
         options={{
           disableParsingRawHTML: true,
           forceBlock: true,
-          sanitizer: (value: string) => safeSourceUrl(value) || '',
+          sanitizer: (value: string) => {
+            if (value.startsWith(CITATION_HREF_PREFIX)) return value;
+            return safeSourceUrl(value) || '';
+          },
           overrides: {
             a: {
               component: ({
@@ -1175,6 +1236,15 @@ export default function WorkspaceMarkdown({
               }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
                 children?: React.ReactNode;
               }) => {
+                const citation = citationIndexFromHref(href || '');
+
+                if (citation !== null) {
+                  if (citation > citationCount) return <span>{children}</span>;
+                  return (
+                    <CitationBadge index={citation} onCitation={onCitation} />
+                  );
+                }
+
                 const safe = safeSourceUrl(href || '');
                 if (!safe) return <span>{children}</span>;
                 const external = /^https?:\/\//i.test(safe);
@@ -1193,8 +1263,20 @@ export default function WorkspaceMarkdown({
           },
         }}
       >
-        {content}
+        {prepared}
       </Markdown>
+
+      {citationCount > 0 && !hasRenderedCitation && (
+        <span className="pw-citations" aria-label="Источники ответа">
+          {Array.from({ length: citationCount }, (_, index) => (
+            <CitationBadge
+              key={index + 1}
+              index={index + 1}
+              onCitation={onCitation}
+            />
+          ))}
+        </span>
+      )}
     </div>
   );
 }
@@ -1731,6 +1813,43 @@ export function retrievalStateLabel(outcome: string | null, code: string | null)
 
 export function totalSourceCount(bundle: SourceBundle): number {
   return bundle.brain.length + bundle.web.length;
+}
+
+```
+
+## `lib/pierrot/workspace/citations.ts`
+
+```ts
+/**
+ * Deterministic inline citation helpers.
+ *
+ * The backend does not guarantee `[n]` markers. When the model emits them we
+ * turn them into clickable badges. When it does not, the UI renders a compact
+ * badge cluster at the end of the answer instead of a separate source line.
+ */
+
+export const CITATION_HREF_PREFIX = 'pw-cite:';
+
+export function citationIndexFromHref(href: string): number | null {
+  if (!href.startsWith(CITATION_HREF_PREFIX)) return null;
+  const value = Number(href.slice(CITATION_HREF_PREFIX.length));
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+export function hasCitationMarkers(content: string): boolean {
+  return /\[\[?\d{1,3}\]?\]/.test(content);
+}
+
+export function prepareCitationMarkdown(content: string, citationCount: number): string {
+  if (citationCount <= 0) return content;
+
+  const normalized = content.replace(/\[\[(\d{1,3})\]\]/g, '[$1]');
+
+  return normalized.replace(/\[(\d{1,3})\](?!\()/g, (match, raw: string) => {
+    const index = Number(raw);
+    if (!Number.isInteger(index) || index < 1 || index > citationCount) return match;
+    return `[${raw}](${CITATION_HREF_PREFIX}${raw})`;
+  });
 }
 
 ```
@@ -3143,20 +3262,51 @@ export function emptyCommercialSummary(
   text-align: left;
 }
 
-.pw-source-line {
-  margin-top: 14px;
+/* Inline citations */
+.pw-root .pw-cite {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0 4px;
+  margin: 0 2px;
+  border: 1px solid var(--pw-chip-line);
+  border-radius: 999px;
+  background: var(--pw-paper);
   color: var(--pw-flow);
   font-family: var(--pw-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  line-height: 1.4;
-  text-transform: uppercase;
-  text-align: left;
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1;
+  text-decoration: none;
+  vertical-align: super;
 }
 
-.pw-source-line:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+.pw-root .pw-cite::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+
+.pw-root .pw-cite:hover {
+  border-color: var(--pw-flow);
+  background: var(--pw-white);
+}
+
+.pw-citations {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.pw-citations .pw-cite {
+  vertical-align: baseline;
 }
 
 .pw-message-note {
@@ -3269,41 +3419,50 @@ export function emptyCommercialSummary(
 .pw-composer-wrap {
   flex: 0 0 auto;
   padding: 12px 28px max(14px, env(safe-area-inset-bottom));
-  border-top: 1px solid var(--pw-line);
   background: var(--pw-paper);
 }
 
 .pw-composer-inner {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   max-width: 640px;
   margin: 0 auto;
-}
-
-.pw-composer-field {
-  flex: 1;
-  min-width: 0;
-}
-
-.pw-composer-input {
-  display: block;
-  width: 100%;
-  min-height: 56px;
-  max-height: 168px;
-  padding: 15px 20px;
-  overflow-y: auto;
+  padding: 7px 7px 7px 4px;
   border: 1px solid var(--pw-field-line);
   border-radius: 28px;
   background: var(--pw-white);
+  transition: border-color 120ms ease;
+}
+
+.pw-composer-inner:focus-within {
+  border-color: var(--pw-ink);
+}
+
+.pw-root .pw-composer-input {
+  display: block;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 168px;
+  padding: 9px 6px 9px 18px;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   font-family: var(--pw-serif);
   font-size: 19px;
   line-height: 1.35;
   resize: none;
 }
 
-.pw-send {
+.pw-root .pw-composer-input:focus {
+  outline: none;
+}
+
+.pw-root .pw-send {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
@@ -3312,13 +3471,13 @@ export function emptyCommercialSummary(
   height: 40px;
   min-width: 40px;
   min-height: 40px;
-  margin-bottom: 8px;
+  margin: 0 2px 2px 0;
   border-radius: 50%;
   background: var(--pw-ink);
   color: var(--pw-paper);
 }
 
-.pw-send:hover:not(:disabled) {
+.pw-root .pw-send:hover:not(:disabled) {
   background: #000;
 }
 
@@ -3330,7 +3489,7 @@ export function emptyCommercialSummary(
   gap: 6px 16px;
   width: 100%;
   max-width: 640px;
-  margin: 10px auto 0;
+  margin: 8px auto 0;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
   font-size: 9px;
@@ -3387,6 +3546,17 @@ export function emptyCommercialSummary(
 
 .pw-inspector-source:last-child {
   border-bottom: 0;
+}
+
+.pw-inspector-source.is-active {
+  padding-right: 12px;
+  padding-left: 12px;
+  background: var(--pw-panel);
+  box-shadow: inset 2px 0 0 var(--pw-ink);
+}
+
+.pw-inspector-source {
+  scroll-margin-top: 8px;
 }
 
 .pw-source-type {
@@ -3449,22 +3619,38 @@ export function emptyCommercialSummary(
 }
 
 @media (max-width: 1099px) {
-  .pw-chat[data-drawer="open"] .pw-drawer,
-  .pw-chat[data-inspector="open"] .pw-inspector {
+  .pw-chat[data-drawer="open"] .pw-drawer {
     position: absolute;
     top: 0;
     bottom: 0;
+    left: 0;
     z-index: 20;
     width: min(320px, calc(100vw - 48px));
     flex-basis: auto;
   }
 
-  .pw-chat[data-drawer="open"] .pw-drawer {
+  .pw-chat[data-inspector="open"] .pw-inspector {
+    position: absolute;
+    top: auto;
+    right: 0;
+    bottom: 0;
     left: 0;
+    z-index: 25;
+    width: 100%;
+    max-height: min(72dvh, 640px);
+    flex-basis: auto;
+    border-top: 1px solid var(--pw-line);
+    border-left: 0;
   }
 
-  .pw-chat[data-inspector="open"] .pw-inspector {
-    right: 0;
+  .pw-chat[data-inspector="open"] .pw-inspector-inner {
+    width: 100%;
+    height: auto;
+    max-height: min(72dvh, 640px);
+  }
+
+  .pw-chat[data-inspector="open"] .pw-inspector-scroll {
+    max-height: calc(min(72dvh, 640px) - 64px);
   }
 
   .pw-drawer-inner,
@@ -5116,7 +5302,12 @@ export function emptyCommercialSummary(
     padding: 10px 14px max(10px, env(safe-area-inset-bottom));
   }
 
+  .pw-composer-inner {
+    border-radius: 26px;
+  }
+
   .pw-composer-input {
+    padding-left: 16px;
     font-size: 18px;
   }
 

@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowUp,
-  ChevronRight,
   MessageSquare,
   PanelLeft,
   Plus,
@@ -49,6 +48,7 @@ type SelectedSources = {
   messageId: string;
   label: string;
   bundle: SourceBundle;
+  index: number | null;
 };
 
 type Consent = {
@@ -125,6 +125,7 @@ export default function ChatWorkspace({
   }));
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const inspectorScrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
@@ -198,6 +199,14 @@ export default function ChatWorkspace({
     if (!selectedSources) return 0;
     return totalSourceCount(selectedSources.bundle);
   }, [selectedSources]);
+
+  useEffect(() => {
+    if (!inspectorOpen || selectedSources?.index == null) return;
+    const target = inspectorScrollRef.current?.querySelector<HTMLElement>(
+      `#pw-source-${selectedSources.index}`
+    );
+    target?.scrollIntoView({ block: 'nearest' });
+  }, [inspectorOpen, selectedSources]);
 
   function allowSaving() {
     const next = setPierrotConsent('granted');
@@ -375,13 +384,14 @@ export default function ChatWorkspace({
     router.push(kind === 'brain' ? '/admin/pierrot/brain' : '/admin/pierrot/flow');
   }
 
-  function openSources(message: UiMessage) {
+  function openSources(message: UiMessage, index = 0) {
     if (!message.sources || totalSourceCount(message.sources) === 0) return;
 
     setSelectedSources({
       messageId: message.id,
       label: messageLabel(message),
       bundle: message.sources,
+      index: Math.max(0, Math.min(index, totalSourceCount(message.sources) - 1)),
     });
     setInspectorOpen(true);
     setMenuOpenId(null);
@@ -504,8 +514,9 @@ export default function ChatWorkspace({
           ) : (
             <div className="pw-chat-thread">
               {messages.map((message) => {
-                const hasSources =
-                  message.sources && totalSourceCount(message.sources) > 0;
+                const messageSourceCount = message.sources
+                  ? totalSourceCount(message.sources)
+                  : 0;
 
                 return (
                   <article
@@ -552,19 +563,12 @@ export default function ChatWorkspace({
                           </div>
                         )}
 
-                        <WorkspaceMarkdown className="pw-reply" content={message.content} />
-
-                        {hasSources && (
-                          <button
-                            type="button"
-                            className="pw-source-line"
-                            onClick={() => openSources(message)}
-                            aria-expanded={inspectorOpen}
-                          >
-                            из базы · {totalSourceCount(message.sources as SourceBundle)}{' '}
-                            источников <ChevronRight size={11} aria-hidden="true" />
-                          </button>
-                        )}
+                        <WorkspaceMarkdown
+                          className="pw-reply"
+                          content={message.content}
+                          citationCount={messageSourceCount}
+                          onCitation={(index) => openSources(message, index)}
+                        />
 
                         <div className="pw-feedback" role="group" aria-label="Оценка ответа">
                           <span className="pw-feedback-label">Ответ полезен?</span>
@@ -645,23 +649,21 @@ export default function ChatWorkspace({
 
         <div className="pw-composer-wrap">
           <div className="pw-composer-inner">
-            <div className="pw-composer-field">
-              <label className="pw-kicker" htmlFor="pw-composer" style={{ display: 'none' }}>
-                Сообщение Пьеро
-              </label>
-              <textarea
-                id="pw-composer"
-                ref={inputRef}
-                className="pw-composer-input"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={onComposerKeyDown}
-                placeholder={online ? 'Напишите Пьеро' : 'Нет соединения'}
-                rows={1}
-                disabled={!online}
-                aria-label="Сообщение Пьеро"
-              />
-            </div>
+            <label className="pw-kicker" htmlFor="pw-composer" style={{ display: 'none' }}>
+              Сообщение Пьеро
+            </label>
+            <textarea
+              id="pw-composer"
+              ref={inputRef}
+              className="pw-composer-input"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={onComposerKeyDown}
+              placeholder={online ? 'Напишите Пьеро' : 'Нет соединения'}
+              rows={1}
+              disabled={!online}
+              aria-label="Сообщение Пьеро"
+            />
 
             <button
               type="button"
@@ -700,7 +702,9 @@ export default function ChatWorkspace({
               <span className="pw-section-title">Источники</span>
               <p className="pw-inspector-title">
                 {selectedSources
-                  ? `${sourceCount} ${sourceCount === 1 ? 'источник' : 'источников'}`
+                  ? selectedSources.index === null
+                    ? `${sourceCount} ${sourceCount === 1 ? 'источник' : 'источников'}`
+                    : `Источник ${selectedSources.index + 1} из ${sourceCount}`
                   : 'Не выбрано'}
               </p>
             </div>
@@ -714,11 +718,10 @@ export default function ChatWorkspace({
             </button>
           </div>
 
-          <div className="pw-inspector-scroll">
+          <div className="pw-inspector-scroll" ref={inspectorScrollRef}>
             {!selectedSources ? (
               <p className="pw-inspector-empty">
-                Откройте строку «из базы» под ответом, чтобы увидеть источники, которые
-                действительно вернул retrieval.
+                Нажмите на инлайн-бейдж источника в ответе, чтобы открыть его здесь.
               </p>
             ) : (
               <>
@@ -748,7 +751,10 @@ export default function ChatWorkspace({
                       {selectedSources.bundle.brain.map((source, index) => (
                         <div
                           key={`${source.documentId || 'brain'}-${index}`}
-                          className="pw-inspector-source"
+                          id={`pw-source-${index}`}
+                          className={`pw-inspector-source${
+                            selectedSources.index === index ? ' is-active' : ''
+                          }`}
                         >
                           <span className="pw-source-type">{sourceTypeLabel(source)}</span>
                           <h3 className="pw-source-title">
@@ -775,8 +781,16 @@ export default function ChatWorkspace({
                         </div>
                       ))}
 
-                      {selectedSources.bundle.web.map((source, index) => (
-                        <div key={`web-${index}`} className="pw-inspector-source">
+                      {selectedSources.bundle.web.map((source, index) => {
+                        const globalIndex = selectedSources.bundle.brain.length + index;
+                        return (
+                        <div
+                          key={`web-${index}`}
+                          id={`pw-source-${globalIndex}`}
+                          className={`pw-inspector-source${
+                            selectedSources.index === globalIndex ? ' is-active' : ''
+                          }`}
+                        >
                           <span className="pw-source-type">веб</span>
                           <h3 className="pw-source-title">
                             {source.title || source.domain || 'Без названия'}
@@ -800,7 +814,8 @@ export default function ChatWorkspace({
                             </a>
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </>
                   )}
                 </div>
