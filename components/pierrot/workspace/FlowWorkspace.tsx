@@ -251,51 +251,6 @@ export default function FlowWorkspace() {
   return (
     <div className="pw-flow-site">
       <div className="pw-flow-site-inner">
-        <header className="pw-flow-site-head">
-          <div>
-            <p className="pw-kicker">FLOW · ПУБЛИЧНО</p>
-            <h1 className="pw-flow-site-title">Flow</h1>
-            <p className="pw-flow-site-sub">Stream of thoughts, media &amp; signals</p>
-          </div>
-          <div className="pw-flow-site-links">
-            <a
-              href="https://bsky.app/profile/merkurov.love"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Bluesky ↗
-            </a>
-            <span>·</span>
-            <a
-              href="https://t.me/unframed_am"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Telegram ↗
-            </a>
-            <span>·</span>
-            <a href="/flow/rss.xml" target="_blank" rel="noopener noreferrer">
-              RSS ↗
-            </a>
-          </div>
-        </header>
-
-        <button
-          type="button"
-          className="pw-flow-composer"
-          onClick={() => setComposerOpen(true)}
-          disabled={!online}
-          aria-haspopup="dialog"
-        >
-          <span className="pw-flow-composer-placeholder">
-            {online ? 'Что нового?' : 'Нет соединения'}
-          </span>
-          <span className="pw-flow-composer-action">
-            <PenLine size={14} aria-hidden="true" />
-            Опубликовать
-          </span>
-        </button>
-
         {error && (
           <div className="pw-notice pw-notice-warning" role="alert">
             {error}
@@ -311,18 +266,23 @@ export default function FlowWorkspace() {
         ) : empty ? (
           <div className="pw-flow-empty">
             <p>Публикаций пока нет.</p>
-            <button
-              type="button"
-              onClick={() => setComposerOpen(true)}
-              disabled={!online}
-            >
-              Написать первую запись
-            </button>
           </div>
         ) : (
           <div className="pw-site-feed">{content}</div>
         )}
       </div>
+
+      <button
+        type="button"
+        className="pw-flow-publish"
+        onClick={() => setComposerOpen(true)}
+        disabled={!online}
+        aria-haspopup="dialog"
+        aria-label="Опубликовать запись в Flow"
+      >
+        <PenLine size={15} aria-hidden="true" />
+        Опубликовать
+      </button>
 
       <NewPostModal
         open={composerOpen}
