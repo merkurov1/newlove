@@ -53,6 +53,15 @@ stepper.
 Publication creates or updates the existing `articles` row. Repeating the same
 version is idempotent; a newer essay version requires **Update Publication**.
 
+## Pierrot PWA tab
+
+The owner PWA exposes Art Engine as a separate rail tab at
+`/admin/pierrot/art-engine` (`Cmd/Ctrl+6`, label `ART`). It mounts the same
+workspace inside the Pierrot shell. The URL composer is offset to the right of
+the desktop rail and above the mobile bottom rail; it does not overlap the
+Pierrot navigation. The tab is included in `SiteChromeVisibility` so the public
+Header/Footer stay hidden.
+
 ## Screenshots
 
 All screenshots are in `docs/art-engine/screenshots/`.

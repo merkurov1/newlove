@@ -31,6 +31,7 @@ export default function ArtEngineComposer({
   status,
   processing,
   bottomOffset,
+  embeddedInPierrot = false,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -38,17 +39,26 @@ export default function ArtEngineComposer({
   status: IngestionStatus | 'idle';
   processing: boolean;
   bottomOffset: number;
+  embeddedInPierrot?: boolean;
 }) {
   const label = STATUS_LABEL[status] || STATUS_LABEL.unknown;
   const dot = STATUS_DOT[status] || STATUS_DOT.unknown;
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 z-30"
-      style={{ bottom: bottomOffset }}
+      className={
+        embeddedInPierrot
+          ? 'pw-art-engine-composer pointer-events-none fixed z-30'
+          : 'pointer-events-none fixed inset-x-0 z-30'
+      }
+      style={
+        embeddedInPierrot
+          ? ({ ['--ae-keyboard-offset' as string]: `${bottomOffset}px` } as React.CSSProperties)
+          : { bottom: bottomOffset }
+      }
       data-art-engine-composer
     >
-      <div className="pointer-events-none bg-gradient-to-t from-[#FAF8F5] via-[#FAF8F5]/95 to-transparent pb-[max(1rem,env(safe-area-inset-bottom))] pl-4 pr-[max(4.75rem,env(safe-area-inset-right))] pt-10 sm:pl-6 sm:pr-6">
+      <div className={`pointer-events-none bg-gradient-to-t from-[#FAF8F5] via-[#FAF8F5]/95 to-transparent pb-[max(1rem,env(safe-area-inset-bottom))] pt-10 ${embeddedInPierrot ? 'pl-4 pr-4 sm:pl-6 sm:pr-6' : 'pl-4 pr-[max(4.75rem,env(safe-area-inset-right))] sm:pl-6 sm:pr-6'}`}>
         <div className="pointer-events-auto mx-auto w-full max-w-4xl">
           <form
             onSubmit={(event) => {

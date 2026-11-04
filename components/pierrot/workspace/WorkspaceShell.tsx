@@ -7,6 +7,7 @@ import {
   Activity,
   Brain,
   MessageSquare,
+  Palette,
   Send,
   Terminal,
 } from 'lucide-react';
@@ -23,6 +24,7 @@ const ICONS = {
   flow: Send,
   dash: Activity,
   dev: Terminal,
+  art: Palette,
 } as const;
 
 function registerServiceWorker() {

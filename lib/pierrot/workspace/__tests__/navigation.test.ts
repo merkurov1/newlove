@@ -6,13 +6,14 @@ import {
 } from '../navigation';
 
 describe('workspace navigation', () => {
-  it('keeps the five routes in the specified order', () => {
+  it('keeps the six routes in the specified order', () => {
     expect(WORKSPACE_ROUTES.map((route) => route.key)).toEqual([
       'chat',
       'flow',
       'brain',
       'dash',
       'dev',
+      'art',
     ]);
     expect(WORKSPACE_ROUTES.map((route) => route.shortcut)).toEqual([
       '1',
@@ -20,6 +21,7 @@ describe('workspace navigation', () => {
       '3',
       '4',
       '5',
+      '6',
     ]);
   });
 
@@ -29,6 +31,7 @@ describe('workspace navigation', () => {
     expect(activeWorkspaceKey('/admin/pierrot/flow')).toBe('flow');
     expect(activeWorkspaceKey('/admin/pierrot/dash')).toBe('dash');
     expect(activeWorkspaceKey('/admin/pierrot/dev')).toBe('dev');
+    expect(activeWorkspaceKey('/admin/pierrot/art-engine')).toBe('art');
     expect(activeWorkspaceKey('/admin/pierrot/intelligence')).toBe('chat');
   });
 
@@ -44,11 +47,12 @@ describe('workspace navigation', () => {
     expect(isTextEntryTarget(document.body)).toBe(false);
   });
 
-  it('maps Cmd/Ctrl+1..5 and Cmd/Ctrl+N outside fields', () => {
+  it('maps Cmd/Ctrl+1..6 and Cmd/Ctrl+N outside fields', () => {
     const base = { metaKey: true, ctrlKey: false, altKey: false, shiftKey: false };
     expect(shortcutRoute({ ...base, key: '1' }, document.body)).toEqual({ key: 'chat' });
     expect(shortcutRoute({ ...base, key: '4' }, document.body)).toEqual({ key: 'dash' });
     expect(shortcutRoute({ ...base, key: '5' }, document.body)).toEqual({ key: 'dev' });
+    expect(shortcutRoute({ ...base, key: '6' }, document.body)).toEqual({ key: 'art' });
     expect(shortcutRoute({ ...base, key: 'n' }, document.body)).toEqual({ key: 'new-chat' });
     expect(
       shortcutRoute({ ...base, metaKey: false, ctrlKey: true, key: '2' }, document.body)

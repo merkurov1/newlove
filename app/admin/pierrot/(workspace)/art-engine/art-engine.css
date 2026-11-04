@@ -1,0 +1,27 @@
+/* Art Engine tab inside the isolated Pierrot workspace. */
+
+.pw-art-engine-page {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: max(16px, env(safe-area-inset-top));
+}
+
+.pw-art-engine-composer {
+  right: 0;
+  left: var(--pw-rail);
+  bottom: var(--ae-keyboard-offset, 0px);
+}
+
+@media (max-width: 699px) {
+  .pw-art-engine-page {
+    height: calc(100dvh - 62px - env(safe-area-inset-bottom));
+    padding-top: max(14px, env(safe-area-inset-top));
+  }
+
+  .pw-art-engine-composer {
+    right: 0;
+    left: 0;
+    bottom: calc(62px + env(safe-area-inset-bottom) + var(--ae-keyboard-offset, 0px));
+  }
+}

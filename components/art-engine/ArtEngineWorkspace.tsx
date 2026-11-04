@@ -74,7 +74,13 @@ function failedAttemptFromResponse(url: string, data: any): AttemptSummary {
   };
 }
 
-export default function ArtEngineWorkspace({ authFetch }: { authFetch: AuthFetch }) {
+export default function ArtEngineWorkspace({
+  authFetch,
+  embeddedInPierrot = false,
+}: {
+  authFetch: AuthFetch;
+  embeddedInPierrot?: boolean;
+}) {
   const [tab, setTab] = useState<'workspace' | 'vault'>('workspace');
   const [url, setUrl] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -420,7 +426,13 @@ export default function ArtEngineWorkspace({ authFetch }: { authFetch: AuthFetch
   }, [detail, selectedAttempt]);
 
   return (
-    <div className="relative pb-[calc(10.5rem+env(safe-area-inset-bottom))]">
+    <div
+      className={
+        embeddedInPierrot
+          ? 'relative pb-[calc(12.5rem+env(safe-area-inset-bottom))]'
+          : 'relative pb-[calc(10.5rem+env(safe-area-inset-bottom))]'
+      }
+    >
       <div ref={topRef} className="mx-auto max-w-7xl scroll-mt-28 px-4 sm:px-6">
         <header className="flex flex-col gap-4 pb-4 pt-2 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
@@ -559,6 +571,7 @@ export default function ArtEngineWorkspace({ authFetch }: { authFetch: AuthFetch
         status={status}
         processing={processing || action !== null}
         bottomOffset={bottomOffset}
+        embeddedInPierrot={embeddedInPierrot}
       />
 
       {publishOpen && detail && (
