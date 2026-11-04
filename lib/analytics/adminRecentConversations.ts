@@ -59,7 +59,7 @@ function toConversation(row: OverviewRow | ConversationRow): RecentPierrotConver
     status: stringValue(row.status, 'active'),
     messageCount: numberValue((row as OverviewRow).message_count),
     lastMessageRole: roleValue((row as OverviewRow).last_message_role),
-    href: `/admin/pierrot?conversation=${encodeURIComponent(id)}`,
+    href: `/admin/pierrot/intelligence?conversation=${encodeURIComponent(id)}`,
   };
 }
 

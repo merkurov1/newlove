@@ -599,7 +599,7 @@ async function ExplorerTable({
               <tr key={row.id} className="align-top">
                 <td className="px-3 py-2.5">
                   <Link
-                    href={`/admin/pierrot?conversation=${encodeURIComponent(row.id)}`}
+                    href={`/admin/pierrot/intelligence?conversation=${encodeURIComponent(row.id)}`}
                     className="text-[#8B1E3F] hover:underline"
                   >
                     {formatDate(row.startedAt)}
@@ -746,7 +746,7 @@ async function OfferDrilldown({
                 <td className="px-3 py-2.5 text-[#746D66]">{event.reason ?? '—'}</td>
                 <td className="px-3 py-2.5">
                   <Link
-                    href={`/admin/pierrot?conversation=${encodeURIComponent(event.conversationId)}`}
+                    href={`/admin/pierrot/intelligence?conversation=${encodeURIComponent(event.conversationId)}`}
                     className="font-mono text-[10px] text-[#8B1E3F] hover:underline"
                   >
                     {event.conversationId.slice(-10)}
@@ -821,7 +821,7 @@ async function RetrievalDrilldown({
           )}
           <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-[#89827B]">
             <Link
-              href={`/admin/pierrot?conversation=${encodeURIComponent(failure.conversationId)}`}
+              href={`/admin/pierrot/intelligence?conversation=${encodeURIComponent(failure.conversationId)}`}
               className="font-mono uppercase tracking-[0.12em] text-[#8B1E3F] hover:underline"
             >
               Open conversation →
@@ -882,7 +882,7 @@ async function TopicDrilldown({
             {topic.conversationIds.map((id) => (
               <li key={id}>
                 <Link
-                  href={`/admin/pierrot?conversation=${encodeURIComponent(id)}`}
+                  href={`/admin/pierrot/intelligence?conversation=${encodeURIComponent(id)}`}
                   className="border border-[#E5E1DC] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#746D66] hover:border-[#990F3D] hover:text-[#8B1E3F]"
                 >
                   {id.slice(-10)}
@@ -1311,7 +1311,7 @@ export default async function ObservatoryPage({ searchParams }: { searchParams?:
                 <tr key={conversation.id}>
                   <td className="px-3 py-2.5">
                     <Link
-                      href={`/admin/pierrot?conversation=${encodeURIComponent(conversation.id)}`}
+                      href={`/admin/pierrot/intelligence?conversation=${encodeURIComponent(conversation.id)}`}
                       className="text-[#8B1E3F] hover:underline"
                     >
                       {formatDate(conversation.startedAt)}

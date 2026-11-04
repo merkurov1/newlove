@@ -25,7 +25,7 @@ export default function DeleteConversationButton({ conversationId }: { conversat
         throw new Error(data.error || 'Delete failed');
       }
 
-      router.push('/admin/pierrot');
+      router.push('/admin/pierrot/intelligence');
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Delete failed');

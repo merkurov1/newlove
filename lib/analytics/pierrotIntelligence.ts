@@ -332,7 +332,7 @@ function confidenceFor(sampleSize: number, hits: number): 'low' | 'medium' | 'hi
 function evidence(conversations: string[], limit = 5): Array<{ label: string; href: string }> {
   return conversations.slice(0, limit).map((id) => ({
     label: `Conversation ${id.slice(-8)}`,
-    href: `/admin/pierrot?conversation=${encodeURIComponent(id)}`,
+    href: `/admin/pierrot/intelligence?conversation=${encodeURIComponent(id)}`,
   }));
 }
 
@@ -503,7 +503,7 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
       offersViewed: Array.from(offersViewed),
       ctaClicked: Array.from(ctaClicked),
       topics: Array.from(topics),
-      href: `/admin/pierrot?conversation=${encodeURIComponent(conversation.id)}`,
+      href: `/admin/pierrot/intelligence?conversation=${encodeURIComponent(conversation.id)}`,
     };
   });
 

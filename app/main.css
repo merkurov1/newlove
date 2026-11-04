@@ -53,6 +53,21 @@ body {
   padding-right: max(env(safe-area-inset-right), var(--tg-safe-area-right, 0px));
 }
 
+/* Isolated owner workspace: local suppression only. */
+body[data-pierrot-workspace='true'] {
+  background: #f8f6f1;
+  color: #1d1b18;
+}
+
+body[data-pierrot-workspace='true'] .site-header,
+body[data-pierrot-workspace='true'] .site-footer {
+  display: none !important;
+}
+
+body[data-pierrot-workspace='true'] #main-content {
+  padding: 0;
+}
+
 a {
   color: #111;
   text-decoration: none;

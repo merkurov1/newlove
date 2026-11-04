@@ -254,7 +254,7 @@ describe('Pierrot Intelligence aggregation', () => {
       expect(insight.period).toEqual(period);
       expect(insight.confidence).toBe('low');
       for (const item of insight.evidence) {
-        expect(item.href).toContain('/admin/pierrot?conversation=');
+        expect(item.href).toContain('/admin/pierrot/intelligence?conversation=');
       }
     }
   });

@@ -30,6 +30,7 @@ import Footer from '@/components/Footer';
 import PierrotChat from '@/components/PierrotChat';
 import { PierrotProvider } from '@/components/pierrot/PierrotContext';
 import TelegramMiniApp from '@/components/TelegramMiniApp';
+import SiteChromeVisibility from '@/components/SiteChromeVisibility';
 import NextDynamic from 'next/dynamic';
 import { unstable_cache } from 'next/cache';
 
@@ -250,6 +251,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <AuthProvider>
           <GlobalAudioProvider>
             <PierrotProvider>
+              <SiteChromeVisibility />
               <TelegramMiniApp />
 
               <a
