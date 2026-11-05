@@ -210,6 +210,12 @@ function splitOversizedText(text: string, maxChars: number, overlapChars: number
     if (end <= start) end = Math.min(text.length, start + maxChars);
 
     ranges.push({ start, end });
+
+    // The final range already reaches the end of the text. Without this guard
+    // the loop backs up by the overlap and emits ~300-character sliding
+    // windows until it reaches the end one character at a time.
+    if (end >= text.length) break;
+
     start = Math.max(start + 1, end - overlapChars);
   }
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { authorizeKnowledgeAdmin } from '@/lib/knowledge/adminAuth';
 import { enqueueBrainSources } from '@/lib/knowledge/brain/enqueue';
+import { processBrainRunInline } from '@/lib/knowledge/brain/inline';
 import { computeBrainProgress } from '@/lib/knowledge/brain/process';
 import {
   BRAIN_SOURCE_LIMITS,
@@ -16,7 +17,7 @@ import { createBrainStore } from '@/lib/knowledge/brain/store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -72,7 +73,20 @@ export async function POST(request: Request) {
       recheckExisting: record.recheckExisting === true,
     });
 
-    const jobs = result.jobs;
+    // A normal save must become searchable without an operator opening an
+    // admin worker. Process one freshly-created job synchronously under a hard
+    // time/job budget. Remaining batch jobs stay queued and can be drained by
+    // the existing per-run endpoint; no scheduler is created here.
+    const inline = result.startRun
+      ? await processBrainRunInline({
+          store,
+          runId: result.startRun.id,
+          maxJobs: 1,
+          budgetMs: 90_000,
+        })
+      : null;
+
+    const jobs = result.startRun ? await store.getJobs(result.startRun.id) : result.jobs;
     const progress = computeBrainProgress(jobs);
 
     return json(
@@ -83,9 +97,11 @@ export async function POST(request: Request) {
         progress,
         rows: result.rows,
         skipped: result.skipped,
-        nextUrl: result.startRun
-          ? `/api/admin/brain/runs/${result.startRun.id}/next`
-          : null,
+        inline,
+        nextUrl:
+          result.startRun && progress.queued + progress.processing > 0
+            ? `/api/admin/brain/runs/${result.startRun.id}/next`
+            : null,
       },
       202
     );

@@ -6,6 +6,8 @@ import { records as mediaRecords, archives as mediaArchives } from '@/data/media
 import { parseUrl } from '@/lib/flow/parseUrl';
 import { isYouTubeUrl } from '@/lib/flow/youtube';
 import { enqueueBrainSources } from '@/lib/knowledge/brain/enqueue';
+import { processBrainRunInline } from '@/lib/knowledge/brain/inline';
+import { createBrainStore } from '@/lib/knowledge/brain/store';
 import { previewBrainSource } from '@/lib/knowledge/brain/preview';
 import { recordPierrotEvent } from '@/lib/pierrot/serverStore';
 import {
@@ -741,11 +743,26 @@ export async function confirmPendingUrlCandidate(input: {
         };
       }
 
+      const store = createBrainStore();
+      const inline =
+        store && saved.coverage?.runId
+          ? await processBrainRunInline({
+              store,
+              runId: saved.coverage.runId,
+              maxJobs: 1,
+              budgetMs: 45_000,
+            })
+          : null;
+
       return {
-        status: 'queued',
-        message: ru
-          ? 'Добавлено: публикация сохранена в Media Archive, задача на индексацию в Brain поставлена в очередь.'
-          : 'Added: the publication is saved in the Media Archive and a Brain indexing job is queued.',
+        status: inline?.processed ? 'added' : 'queued',
+        message: inline?.processed
+          ? ru
+            ? 'Добавлено: публикация сохранена и проиндексирована в Brain.'
+            : 'Added: the publication is saved and indexed in Brain.'
+          : ru
+            ? 'Добавлено: публикация сохранена в Media Archive, задача на индексацию в Brain поставлена в очередь.'
+            : 'Added: the publication is saved in the Media Archive and a Brain indexing job is queued.',
         runId: saved.coverage?.runId,
       };
     } catch (error) {
@@ -796,11 +813,26 @@ export async function confirmPendingUrlCandidate(input: {
     }
 
     if (row.status === 'queued') {
+      const store = createBrainStore();
+      const inline =
+        store && result.startRun
+          ? await processBrainRunInline({
+              store,
+              runId: result.startRun.id,
+              maxJobs: 1,
+              budgetMs: 45_000,
+            })
+          : null;
+
       return {
-        status: 'added',
-        message: ru
-          ? 'Добавлено: материал поставлен в очередь Brain.'
-          : 'Added: the material is queued in Brain.',
+        status: inline?.processed ? 'added' : 'queued',
+        message: inline?.processed
+          ? ru
+            ? 'Добавлено: материал проиндексирован в Brain.'
+            : 'Added: the material is indexed in Brain.'
+          : ru
+            ? 'Добавлено: материал поставлен в очередь Brain.'
+            : 'Added: the material is queued in Brain.',
         runId: result.startRun?.id,
       };
     }

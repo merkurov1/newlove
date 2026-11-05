@@ -14,7 +14,11 @@ type Props = { params: { slug: string } };
 async function getRecord(slug: string) {
   const decoded = decodeURIComponent(slug);
   const records = await getMediaRecords();
-  return records.find((record) => record.slug === decoded) || null;
+  return (
+    records.find((record) => record.slug === decoded) ||
+    records.find((record) => record.slugAliases?.includes(decoded)) ||
+    null
+  );
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

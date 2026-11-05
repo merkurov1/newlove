@@ -26,7 +26,7 @@ type DatabaseMediaRecord = {
   ai_metadata?: Record<string, unknown> | null;
 };
 
-const VALID_LANGUAGES: Lang[] = ['EN', 'RU', 'DE', 'PL', 'BS'];
+const VALID_LANGUAGES: Lang[] = ['EN', 'RU', 'DE', 'PL', 'BS', 'FR', 'IT', 'ES', 'UK'];
 
 const VALID_KINDS: Kind[] = [
   'quote',
@@ -116,9 +116,16 @@ function mapDatabaseRecord(row: DatabaseMediaRecord): MediaRecord | null {
 
   const timelineDate = publicationDate ?? dateFromCreatedAt(row.created_at) ?? '1900';
 
+  const slugAliases = Array.isArray(metadata.slug_aliases)
+    ? metadata.slug_aliases.filter(
+        (value): value is string => typeof value === 'string' && value.length > 0
+      )
+    : undefined;
+
   return {
     id: text(row.id) || undefined,
     slug: text(metadata.slug, slugFromUrl(url)),
+    ...(slugAliases && slugAliases.length > 0 ? { slugAliases } : {}),
     title: text(row.title, 'Untitled publication'),
     outlet: text(row.outlet, 'Unknown publication'),
     url,
@@ -292,7 +299,9 @@ export async function getMediaRecords(): Promise<MediaRecord[]> {
           'ai_metadata',
         ].join(',')
       )
-      .eq('status', 'published')
+      // Read every status so a database draft/archived decision also removes
+      // a matching local fallback record. The database is the source of truth
+      // once a record exists there.
       .order('created_at', { ascending: false })
       .limit(5000);
 
@@ -300,15 +309,21 @@ export async function getMediaRecords(): Promise<MediaRecord[]> {
       console.error('[media] Supabase query failed:', error.message);
     } else {
       for (const rawRow of data ?? []) {
-        const record = mapDatabaseRecord(rawRow as DatabaseMediaRecord);
+        const row = rawRow as DatabaseMediaRecord;
+        const key = canonicalize(text(row.url, text(row.canonical_url)));
+
+        if (row.status !== 'published') {
+          if (key) merged.delete(key);
+          continue;
+        }
+
+        const record = mapDatabaseRecord(row);
 
         if (!record) continue;
 
-        const key = canonicalize(record.url);
-
         // Published database records replace matching local entries.
         // New records are added without deleting the verified archive.
-        merged.set(key, record);
+        merged.set(canonicalize(record.url), record);
         if (record.id) dbRecordsById.set(record.id, record);
       }
     }

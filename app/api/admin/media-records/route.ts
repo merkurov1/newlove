@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { normalizeSourceUrl } from '@/lib/knowledge/brain/url';
 import { createBrainStore } from '@/lib/knowledge/brain/store';
+import { processBrainRunInline } from '@/lib/knowledge/brain/inline';
 import { previewMediaSource, type MediaPreviewInput } from '@/lib/knowledge/media/sourcePreview';
 import { saveMediaPreview, MediaSaveError } from '@/lib/knowledge/media/savePreview';
 import { createBrainStorage } from '@/lib/knowledge/brain/storage';
@@ -10,7 +11,7 @@ import { BrainSourceError } from '@/lib/knowledge/brain/sourceValidation';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 class HttpError extends Error {
   constructor(
@@ -447,11 +448,22 @@ export async function POST(request: NextRequest) {
       requestedBy: admin.id,
     });
 
+    const inline =
+      store && result.coverage?.runId
+        ? await processBrainRunInline({
+            store,
+            runId: result.coverage.runId,
+            maxJobs: 1,
+            budgetMs: 90_000,
+          })
+        : null;
+
     return NextResponse.json({
       record: result.record,
       updated: result.updated,
       extraction,
       coverage: result.coverage,
+      inline,
     });
   } catch (error) {
     if (error instanceof HttpError) {

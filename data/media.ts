@@ -23,7 +23,7 @@ export interface PublicMediaRelation {
   confidence: number;
 }
 
-export type Lang = 'EN' | 'RU' | 'DE' | 'PL' | 'BS';
+export type Lang = 'EN' | 'RU' | 'DE' | 'PL' | 'BS' | 'FR' | 'IT' | 'ES' | 'UK';
 export type Topic = 'Internet & Censorship' | 'AI & Tech' | 'Art & Culture' | 'Fintech & Crypto';
 export type Kind =
   | 'quote' // цитата или комментарий в материале издания
@@ -37,6 +37,7 @@ export type Kind =
 
 export interface MediaRecord {
   slug: string; // для /media/record/<slug>
+  slugAliases?: string[]; // historical slugs kept for stable inbound links
   title: string;
   outlet: string; // чистое имя издания, по нему считаются издания
   program?: string; // рубрика или передача
@@ -662,7 +663,7 @@ const items: Draft[] = [
     '2018-04-19',
     'The Washington Post',
     'The Russian government just managed to hack itself',
-    'https://www.washingtonpost.com/news/democracy-post/wp/2018/04/19/the-russian-government-just-managed-to-hack-self/',
+    'https://www.washingtonpost.com/news/democracy-post/wp/2018/04/19/the-russian-government-just-managed-to-hack-itself/',
     'EN',
     'i',
     'quote',
@@ -817,22 +818,22 @@ const items: Draft[] = [
     '2017-04-16',
     'Эхо Москвы',
     'Какие сервисы следующими попадут под запрет?',
-    'https://echo.msk.ru/programs/tochka/1963350-echo/',
+    'https://echofm.online/archive/tochka/24228',
     'RU',
     'i',
     'radio',
-    'Эфир об очередной волне блокировок. Гости: Игорь Королёв (CNews), Юрий Синодов (Roem.ru).',
+    'Эфир программы «Точка» об очередной волне блокировок. Участники: Антон Меркуров, Юрий Синодов (Roem.ru), Игорь Королёв (CNews).',
     { program: 'Точка' }
   ),
   r(
-    '2017-03-26',
-    'ABC News',
-    'Thousands march through Moscow for internet freedom',
-    'https://abcnews.go.com/International/thousands-march-moscow-internet-freedom-russia-cracks-election/story?id=46693748',
+    '2017-07-24',
+    'ABC News (Australia)',
+    'Thousands march through Moscow for internet freedom as Russia cracks down ahead of election',
+    'https://www.abc.net.au/news/2017-07-24/thousands-march-through-moscow-to-call-for-internet-freedom/8736736',
     'EN',
     'i',
     'quote',
-    'Комментарии о публичных акциях за цифровую свободу.'
+    'More than 2,000 people marched through Moscow for internet freedom as the Kremlin pushed new censorship laws ahead of the 2018 election. Anton Merkurov is quoted on the enforcement gap.'
   ),
   r(
     '2017-02-12',

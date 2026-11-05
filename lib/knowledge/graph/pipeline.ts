@@ -470,11 +470,13 @@ export async function processNextGraphJob(input: {
         code.startsWith('deepseek_') || code === 'document_has_no_chunks'
           ? code
           : 'graph_extraction_failed',
-      error_detail: permanent
-        ? 'Permanent extraction error; automatic retries stopped.'
-        : canRetry
-          ? 'Transient extraction failure; the document was requeued with backoff.'
-          : 'Document extraction failed after the maximum number of attempts.',
+      error_detail: (
+        permanent
+          ? `Permanent extraction error: ${rawCode}`
+          : canRetry
+            ? `Transient extraction failure: ${rawCode}`
+            : `Document extraction failed after ${job.attempts} attempts: ${rawCode}`
+      ).slice(0, 1000),
       locked_at: null,
       worker_id: null,
       completed_at: canRetry ? null : new Date().toISOString(),

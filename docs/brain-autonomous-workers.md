@@ -1,6 +1,16 @@
 # Autonomous Brain and Graph workers
 
-**Goal:** ingestion and graph extraction continue after the admin browser tab is closed, a deployment restarts, or a serverless function times out.
+> **Current production state (2026-11-05):** there is **no active scheduler**.
+> `vercel.json` has no `crons`, `cron.job` is empty, and Supabase Vault contains
+> no worker secrets. `brain_worker_tick()` therefore cannot call the site.
+> Normal admin/Pierrot saves process one freshly-created job synchronously
+> through `processBrainRunInline()` under a hard job/time budget. The queues
+> and the protected worker endpoints remain available for explicit operator
+> use, but ordinary work does not depend on them. See
+> `docs/audits/brain-media-final-audit.md`.
+
+**Goal:** ingestion can complete after the admin browser tab is closed without
+requiring a permanent server.
 
 No permanently running server is used. The same Supabase queue and `FOR UPDATE SKIP LOCKED` RPCs are reused.
 
@@ -75,6 +85,28 @@ For production, use one of:
 Vercel Hobby allows at most two daily cron jobs. Do not configure four entries
 on Hobby; the deployment will be rejected. See
 `docs/production-operations.md` for the current runbook.
+
+## 3.1 Inline save path (no scheduler required)
+
+`POST /api/admin/brain/sources`, `POST /api/admin/media-records` and the
+owner-only Pierrot URL intake call `processBrainRunInline()` after enqueueing.
+It:
+
+- processes at most one job from the run just created;
+- has a 45–90 second budget and no retry loop;
+- does not touch unrelated runs and does not queue graph work;
+- returns a truthful `inline.error` if embeddings are not configured.
+
+The job row remains the checkpoint. If an inline invocation is interrupted, the
+job is recovered by the normal lease logic on the next explicit run.
+
+Graph extraction is intentionally **not** queued by the inline path. It is an
+optional enrichment step and is run explicitly with:
+
+```bash
+npx tsx scripts/knowledge/graph-backfill.ts --status
+npx tsx scripts/knowledge/graph-backfill.ts --max-jobs 2
+```
 
 ## 4. Optional Supabase pg_cron tick
 

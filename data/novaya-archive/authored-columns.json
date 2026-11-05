@@ -1,0 +1,1577 @@
+{
+  "generatedAt": "2026-11-05T09:27:18.879Z",
+  "source": "https://github.com/novaya-gazeta-ru/archive + novayagazeta.ru page verification",
+  "total": 157,
+  "records": [
+    {
+      "source": "https://novayagazeta.ru/articles/2024/07/19/leglo-v-bibleiskom-masshtabe",
+      "title": "Легло в библейском масштабе",
+      "subtitle": "Антон Меркуров — о том, почему стал возможен массовый сбой в работе Windows и кто должен от этого выиграть",
+      "date": "2024-07-19T13:50:00.000Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": "verified from novayagazeta.ru page; absent from GitHub archive",
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/09/24/na-vas-okhotitsia-pylesos",
+      "title": "На вас охотится пылесос",
+      "subtitle": "Операция израильских спецслужб с подрывом электронных устройств на самом деле перевернула мир",
+      "date": "2024-09-24T09:31:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/10/02/perezvonite-pozzhe",
+      "title": "Перезвоните позже",
+      "subtitle": "Почему мессенджеров много, а счастья и «интероперабилити» — всё нет?",
+      "date": "2024-10-02T12:23:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/10/08/resheto-i-more",
+      "title": "Решето и море",
+      "subtitle": "Закон «о блогерах» — распил средств на администрирование недостижимого, он лишь добавляет поводов для точечных репрессий и отъема денег",
+      "date": "2024-10-08T09:14:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/10/09/razrushenie-matritsy",
+      "title": "Разрушение матрицы",
+      "subtitle": "Тщательно созданный образ Павла Дурова начинает сыпаться, и все частные скандалы могут стоить ему карьеры и репутации",
+      "date": "2024-10-09T09:32:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/10/11/blokirovki-strashny-tolko-tem-kto-s-nimi-smirilsia",
+      "title": "Блокировки страшны только тем, кто с ними смирился",
+      "subtitle": "Человечество легко справляется с гигантскими корпорациями, что устанавливают свои правила. Что им РКН — не смешите",
+      "date": "2024-10-11T08:18:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/10/18/nu-i-dokhnite",
+      "title": "Ну и дохните…",
+      "subtitle": "Краудфандинг — способ обратной связи с обществом и возможность помочь людям напрямую — начинают блокировать и частные компании, и государство",
+      "date": "2024-10-18T14:09:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/10/19/rynok-zolotykh-ram",
+      "title": "Рынок золотых рам",
+      "subtitle": "Торговля искусством не особо зависит от санкций. Долги, развод, смерть и девелоперы сохраняют эту таинственную отрасль",
+      "date": "2024-10-19T10:27:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Art & Culture"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/10/23/net-ni-sovy-ni-globusa-porvali-oboikh",
+      "title": "Нет ни совы, ни глобуса. Порвали обоих",
+      "subtitle": "Посмотрите на стену и попробуйте доказать, что ваши обои соответствуют традиционным ценностям и не являются деструктивным элементом",
+      "date": "2024-10-23T13:11:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Art & Culture"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/10/24/i-ne-govori",
+      "title": "И не говори!",
+      "subtitle": "Государство действительно может отключить звонки в мессенджерах — только это никак не повредит телефонным мошенникам",
+      "date": "2024-10-24T08:53:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/11/01/proval-s-probegom",
+      "title": "Провал с пробегом",
+      "subtitle": "Маршруты Байдена, Путина и других глав государств, а еще адреса их секретных резиденций снова вскрыли по данным фитнес-приложений охранников",
+      "date": "2024-11-01T10:00:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/11/05/vot-vash-puzyr-a-v-moi-ne-lezte",
+      "title": "Вот ваш пузырь, а в мой не лезьте",
+      "subtitle": "Информационные пузыри — не только средство формирования общественного мнения и борьбы за власть, но и инструмент спокойной жизни",
+      "date": "2024-11-05T14:56:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/11/07/ostalos-elektrichestvo-vykliuchit",
+      "title": "Осталось электричество выключить",
+      "subtitle": "Очередные блокировки вывернули наизнанку весь рунет, поскольку протоколам шифрования все равно: «патриот» ты или «иноагент»",
+      "date": "2024-11-07T10:05:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/11/09/samaia-otkrytaia-strana",
+      "title": "Самая открытая страна",
+      "subtitle": "3,5 миллиарда утекших персональных данных россиян — это уже «цифровой Апокалипсис»",
+      "date": "2024-11-09T09:42:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/11/14/skuchnye-obeziany-protiv-gibeli-pompei",
+      "title": "«Скучные обезьяны» против «Гибели Помпеи»",
+      "subtitle": "Где и как культуру заменят работы ИИ и какое будущее у рынка искусства",
+      "date": "2024-11-14T15:10:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Art & Culture"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/11/15/syroezhkiny-i-neirodugin",
+      "title": "Сыроежкины и нейроДугин",
+      "subtitle": "К чему приведут попытки Кремля создать «суверенный искусственный интеллект» в изолированной стране",
+      "date": "2024-11-15T15:31:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/11/16/cheburnet-v-posudnoi-lavke",
+      "title": "Чебурнет в посудной лавке",
+      "subtitle": "Заблокировавшие пол-Рунета власти попробуют «отключить международный трафик» от России. Ничего, кроме больших расходов, из этого не выйдет",
+      "date": "2024-11-16T12:50:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/11/20/zachem-v-podezde-razbili-lampochku",
+      "title": "Зачем в подъезде разбили лампочку",
+      "subtitle": "В Балтийском море повреждены два магистральных кабеля связи. Основная версия — диверсия. Смысла в ней особой нет, кроме неприятного осадка",
+      "date": "2024-11-20T09:37:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/11/25/slovo-iz-trekh-bukv",
+      "title": "Слово из трех букв",
+      "subtitle": "Роскомнадзор дошел до запрета технической документации и научных работ в тщетной попытке справиться с интернетом",
+      "date": "2024-11-25T14:34:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/12/02/shestnadtsat-let-bez-prava-perepiski",
+      "title": "Шестнадцать лет без права переписки",
+      "subtitle": "В Австралии готовятся запретить подросткам пользоваться соцсетями — и наказывать, в случае чего, будут не детей, а соцсети. Поможет?",
+      "date": "2024-12-02T09:51:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/12/02/i-pogovorit-negde",
+      "title": "И поговорить негде…",
+      "subtitle": "В мире мессенджеров — бардак. Все замерли в ожидании, когда появится некое универсальное приложение",
+      "date": "2024-12-03T14:06:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/12/05/pobeg-s-territorii-kh",
+      "title": "Побег с территории Х",
+      "subtitle": "Интеллектуальная элита и многие СМИ покидают Twitter. Почему",
+      "date": "2024-12-05T09:51:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/12/16/v-sviazi-s-utratoi-vaiba",
+      "title": "В связи с утратой вайба",
+      "subtitle": "В России заблокировано больше двух миллионов ресурсов. В том числе и популярный белорусский мессенджер Viber",
+      "date": "2024-12-16T09:18:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/12/17/gbu-internet",
+      "title": "ГБУ «Интернет»",
+      "subtitle": "Тихо-тихо принято решение, что те, кто пользуется рекламой в интернете, начнут содержать тех, кто интернет блокирует",
+      "date": "2024-12-17T13:26:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/12/19/zashel-v-internet-pozdorovaisia-s-gosudarstvom",
+      "title": "Зашел в интернет — поздоровайся с государством",
+      "subtitle": "Роскомнадзор разработал приказ, который теперь касается каждого пользователя. Ваша жизнь — прозрачна",
+      "date": "2024-12-19T10:39:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2024/12/27/smartfon-poka-ne-otobrali",
+      "title": "Смартфон пока не отобрали…",
+      "subtitle": "Борьба с интернетом продолжится, потому объясните детям, что такое таксофон и телеграмма",
+      "date": "2024-12-27T08:21:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/01/08/gibel-bogov-v-sotssetiakh",
+      "title": "Гибель богов в соцсетях",
+      "subtitle": "Марк Цукерберг решил отменить модерацию. Что за этим стоит и почему соцсети окончательно превратятся в помойки",
+      "date": "2025-01-08T09:54:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/01/09/gosudarstvo-techet",
+      "title": "Государство течет",
+      "subtitle": "Когда потерян интеллект — и искусственный, и настоящий — цифровизация приводит к беде. О новой утечке баз данных",
+      "date": "2025-01-09T11:55:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/01/21/kriptoprezident",
+      "title": "Криптопрезидент",
+      "subtitle": "Трамп и его семья совершили массированное наступление на рынке крипты. И это много значит для отрасли, которую боятся правительства",
+      "date": "2025-01-21T09:05:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Fintech & Crypto"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/01/24/shelkovyi-put-na-svobodu",
+      "title": "Шелковый путь на свободу",
+      "subtitle": "Президент США помиловал создателя площадки в даркнете, которого приговорили к двум пожизненным. Что это было",
+      "date": "2025-01-24T09:44:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/01/25/zvezdnye-vrata-otkryvaiutsia-ne-dlia-vsekh",
+      "title": "Звездные врата открываются не для всех",
+      "subtitle": "Передовики индустрии искусственного интеллекта анонсировали строительство гигантского кластера в США: что будет?",
+      "date": "2025-01-25T13:20:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/01/28/nu-i-i",
+      "title": "Ну, и-и?",
+      "subtitle": "Китайцы на коленке добились успехов, сравнимых с «золотыми мальчиками» индустрии искусственного интеллекта. Вот это «диверсия»!",
+      "date": "2025-01-28T13:44:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/02/01/youtube-shredingera",
+      "title": "YouTube Шредингера",
+      "subtitle": "Последствия то ли замедления, то ли блокировки сервиса вызывают споры. Что случилось с аудиторией, как власти повлияли на рынок? Разбираемся",
+      "date": "2025-02-01T09:19:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/02/05/pochemu-vse-govoriat-pro-kitaiskii-ii",
+      "title": "Почему все говорят про китайский ИИ?",
+      "subtitle": "Кто лидирует в гонке технологий: Китай или Запад?",
+      "date": "2025-02-05T09:06:00Z",
+      "authors": "Антон Орехъ, Ирина Воробьева (журналист), Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/02/06/mask-v-posudnoi-lavke",
+      "title": "Маск в посудной лавке",
+      "subtitle": "Ведомства переживают цифровую казнь: им тупо отключают сайты, блокируют доступы, пропуска, внутренние системы, платежи",
+      "date": "2025-02-06T09:15:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/02/13/vozvrashchenie-kripto-pirata",
+      "title": "Возвращение крипто-пирата",
+      "subtitle": "В результате обмена между Россией и США на свободу выходит Александр Винник, создатель криптобиржи BTC-Е",
+      "date": "2025-02-13T08:45:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Fintech & Crypto"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/02/17/roskomnadzor-gotovit-shpionov",
+      "title": "Роскомнадзор готовит шпионов",
+      "subtitle": "Ведомство превращается в гибрид ФСБ и прокуратуры — надо же к чему-то стремиться, когда «суверенный интернет» уже создан",
+      "date": "2025-02-17T15:13:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/02/19/rasstavil-tochki-nad-ru",
+      "title": "Расставил точки над ру",
+      "subtitle": "Физрук-сенатор Шейкин решил установить в интернете шлагбаум и завалил бессмысленной работой кучу ведомств",
+      "date": "2025-02-19T13:38:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/02/21/chip-shredingera",
+      "title": "Чип Шредингера",
+      "subtitle": "Компания Microsoft анонсировала новый чип, который создан из новой материи. Разбираемся, что это",
+      "date": "2025-02-21T14:54:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/02/26/v-it-uzh-bolshe-ne-poiti",
+      "title": "В IT уж больше не пойти",
+      "subtitle": "Индустрия переживает этап крупных сокращений: и людей, и инвестиций. Потому что не до чудес",
+      "date": "2025-02-26T07:02:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/02/28/shumovaia-ataka",
+      "title": "Шумовая атака",
+      "subtitle": "К числу неолуддитов добавились музыканты, они протестуют против ИИ. Разбираемся, в чем проблема",
+      "date": "2025-02-28T10:49:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/03/01/dve-knopki-nauchivshie-nas-obshchatsia",
+      "title": "Две кнопки, научившие нас общаться",
+      "subtitle": "Ода Skype, чья кончина уже прописана в его коде",
+      "date": "2025-03-01T15:10:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/03/03/kak-deti-malye",
+      "title": "Как дети малые…",
+      "subtitle": "В мире есть много групп, самая влиятельная из них — взрослые. Которые хотят все запретить, и в интернете прежде всего",
+      "date": "2025-03-03T12:32:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/03/11/til-no-daleko-ne-ulenshpigel",
+      "title": "Тиль, но далеко не Уленшпигель",
+      "subtitle": "Конспирологи называют его реальным хозяином Белого дома. И в этот раз с ними спорить не хочется",
+      "date": "2025-03-11T10:28:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/03/13/telegramma-iz-smolenska",
+      "title": "Телеграмма из Смоленска…",
+      "subtitle": "…и стикер из Кировской области. Об опыте борьбы районных российских судов с Мировой паутиной",
+      "date": "2025-03-13T12:35:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/03/18/kakoi-anarkhist-ne-stanet-k-starosti-sluzhit-imperii-zla",
+      "title": "Какой анархист не станет к старости служить «империи зла»?",
+      "subtitle": "Корпорация Google разрешила использовать свои технологии в области ИИ в военных целях",
+      "date": "2025-03-18T11:28:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/03/19/koshelek-podrezali",
+      "title": "Кошелек подрезали…",
+      "subtitle": "Что с безопасностью Telegram-ботов Wallet и Tribute, да и с прозрачностью для властей самого мессенджера",
+      "date": "2025-03-19T15:05:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Fintech & Crypto"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/03/25/na-ubiits-ne-khvatilo-deneg",
+      "title": "На «убийц» не хватило денег",
+      "subtitle": "Что стало с российскими сервисами, которые поглотили миллиарды, чтобы «убить» TikTok и YouTube",
+      "date": "2025-03-25T12:12:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/03/28/pliunte-v-probirku-i-vy-rodstvennik-napoleona",
+      "title": "Плюньте в пробирку — и вы родственник Наполеона",
+      "subtitle": "Почему компания 23andMe, пионер в области массовых ДНК-тестов, оказалась на грани банкротства",
+      "date": "2025-03-28T13:07:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/03/29/a-chegoi-to-oni-zarabatyvaiut",
+      "title": "А чегой-то они зарабатывают?",
+      "subtitle": "Не только фискальные надобности, но и логика тоталитаризма подтолкнула власть к антиблогерскому закону, ломающему рынок",
+      "date": "2025-03-29T08:44:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/04/04/maior-router",
+      "title": "Майор Роутер",
+      "subtitle": "Маленькая коробочка с антенной, стоящая в квартире, будет теперь следить за вашей частной жизнью и, если что, давать по рукам",
+      "date": "2025-04-04T08:58:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/04/09/pod-ugrozoi-vse-vot-novaia-fishka-telegram",
+      "title": "Под угрозой все — вот новая «фишка» Telegram",
+      "subtitle": "Десятки каналов, в том числе один миллионник, заблокированы «по решению российских судов» или просто «исчезли», а Дуров — молчит",
+      "date": "2025-04-09T13:45:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/04/10/znaete-chto-takoe-kiberpank-tak-vot-on-nachinaetsia",
+      "title": "Знаете, что такое киберпанк? Так вот он — начинается",
+      "subtitle": "Почему IT-бизнес забыл, что такое общечеловеческие ценности",
+      "date": "2025-04-10T09:24:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/04/23/delaite-stavki-chto-navernetsia-sleduiushchim",
+      "title": "Делайте ставки: что навернется следующим",
+      "subtitle": "История неуспеха, или Эпитафия Россграму — очередному проекту, который провалился, танцуя на чужом",
+      "date": "2025-04-23T08:11:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/04/24/galochka-po-umolchaniiu",
+      "title": "Галочка по умолчанию",
+      "subtitle": "Министерство юстиции США требует разделения Google. В том числе и продажу Chrome. Ради пользователей, которым все равно",
+      "date": "2025-04-24T08:10:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/04/26/a-chto-skazhet-sudia-dredd",
+      "title": "А что скажет судья Дредд?",
+      "subtitle": "В Minecraft искусственный интеллект создал вполне себе работающее государство, власти же ОАЭ поручили ему аудит законов",
+      "date": "2025-04-26T09:05:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/04/30/zakon-dlia-terminatora",
+      "title": "Закон для Терминатора",
+      "subtitle": "Искусственный интеллект — главная угроза современного мира. Причина проста: железка оказалась умнее человека и поэтому вызывает банальное чувство страха",
+      "date": "2025-04-30T13:05:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/05/12/tsenzurnyi-intellekt",
+      "title": "Цензурный интеллект",
+      "subtitle": "Разработчики российского ИИ испугались заранее и научили машину не отвечать на вопросы, а избегать ответов",
+      "date": "2025-05-12T12:17:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/05/13/prokuratura-vyigrala-v-tanchiki",
+      "title": "Прокуратура выиграла в «танчики»",
+      "subtitle": "Как отобрали популярную игру. Повод и причина неважны — интересно, кто теперь станет собственником",
+      "date": "2025-05-13T14:48:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/05/15/rutube-pokazal-prokuraturu",
+      "title": "Rutube показал прокуратуру",
+      "subtitle": "Всем было понятно, что российские сервисы небезопасны, но «аналог YouTube» доносительство сделал публичным кредо",
+      "date": "2025-05-15T12:38:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/05/20/propala-sviaz-i-vremen-tozhe",
+      "title": "Пропала связь. И времен тоже",
+      "subtitle": "Собираясь в другой район, запаситесь бумажной картой, а то вдруг кто важный будет мимо проезжать и GPS превратится в тыкву",
+      "date": "2025-05-20T14:03:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Колонка",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/05/31/svet-moi-chatgpt-skazhi",
+      "title": "«Свет мой, ChatGPT, скажи»",
+      "subtitle": "Александр Пушкин давно предсказал проблемы с искусственным интеллектом. ИИ начал льстить",
+      "date": "2025-05-31T09:48:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/06/06/tak-i-kogo-segodnia-dushim",
+      "title": "Так, и кого сегодня душим?",
+      "subtitle": "Даже если весь внешний мир признать нежелательной организацией — внутри это мало что изменит. Реплика к поручению президента",
+      "date": "2025-06-06T07:58:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/06/07/ii-uzhe-u-vas-doma",
+      "title": "ИИ уже у вас дома",
+      "subtitle": "Кооперация Telegram с компанией xAI — возможность для каждого не отстать от жизни",
+      "date": "2025-06-07T15:19:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/06/13/vashi-tainy-arkhiv-gosudarstva",
+      "title": "Ваши тайны — архив государства",
+      "subtitle": "Все открытия и удобства, связанные с ИИ, произошли по недосмотру чиновников. Теперь они решили взять реванш",
+      "date": "2025-06-13T13:29:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/06/20/nashlos-vse-i-bez-vas",
+      "title": "Нашлось все и без вас",
+      "subtitle": "Поисковые системы терпят фиаско, а производители контента — убытки. Поскольку пользователю проще с ИИ",
+      "date": "2025-06-20T13:50:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/06/21/ot-sebia-do-sviatogo-iakova",
+      "title": "От себя до святого Иакова",
+      "subtitle": "Французский путь к Сантьяго-де-Компостела. Записки паломника",
+      "date": "2025-06-21T15:16:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Art & Culture"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/06/24/messendzher-v-zakone",
+      "title": "Мессенджер в законе",
+      "subtitle": "Объявлено о создании общегосударственного интернет-сервиса, который объединит в себе все, включая товарища майора. Сработает?",
+      "date": "2025-06-24T08:09:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/07/07/zachem-vlastiam-sozdavat-eshche-odin-messendzher",
+      "title": "Зачем властям создавать еще один мессенджер?",
+      "subtitle": "Обозреватель «Новой газеты» Антон Меркуров — о парадоксах цифровой России",
+      "date": "2025-07-07T12:44:00Z",
+      "authors": "Антон Орехъ, Сергей Соколов (замглавного редактора), Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/07/09/blekauty-ne-v-setiakh-a-v-golovakh",
+      "title": "Блэкауты не в сетях, а в головах",
+      "subtitle": "Страшилки про ИИ, пожирающий много энергии, побуждают оптимизировать энергетику, а не запрещать дата-центры",
+      "date": "2025-07-09T09:04:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/07/10/do-16-internet-zapreshchen",
+      "title": "До 16 интернет запрещен",
+      "subtitle": "Как ламповые люди в эпоху прогресса пытаются отключить будущее поколение от главного инструмента развития",
+      "date": "2025-07-10T13:11:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/07/12/ekh-iablochko",
+      "title": "Эх, Яблочко",
+      "subtitle": "Президент принял закон, по которому Apple что-то должна России. Компания вряд ли согласится — наш рынок ей ни к чему",
+      "date": "2025-07-12T15:23:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/07/16/grok-vpal-v-rasizm-a-chinovniki-v-marazm",
+      "title": "Grok «впал в расизм», а чиновники — в маразм",
+      "subtitle": "Скандалы вокруг ИИ, который не предназначен для ответов на политические вопросы и не имеет ценностей. Никаких",
+      "date": "2025-07-16T15:43:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/07/17/bystrye-kakie",
+      "title": "Быстрые какие…",
+      "subtitle": "1,02 петабайта в секунду, еще 30 лет назад скорость была 56 килобайт. Но все равно этого мало, и всю систему надо менять",
+      "date": "2025-07-17T13:27:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/07/25/bezumnyi-maks",
+      "title": "Безумный Макс",
+      "subtitle": "Да, госмессенджер — исключительно российская штука, но ничего нового, кроме тесной связи с государством, не предлагает",
+      "date": "2025-07-25T13:34:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/08/05/u-vas-matritsa-otkleilas",
+      "title": "У вас матрица отклеилась",
+      "subtitle": "ИИ дает новые возможности мошенникам. Но вдруг захочет сам стать таковым?",
+      "date": "2025-08-05T14:16:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/08/06/lomaiut-vse",
+      "title": "Ломают все",
+      "subtitle": "Уязвимость интернета компенсируется расходами на компьютерную безопасность. Там, где есть деньги и где власть не главный взломщик",
+      "date": "2025-08-06T12:37:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/08/09/konets-kripto-zimy-ili-tri-zakona-o-svobode",
+      "title": "Конец крипто-зимы, или Три закона о свободе",
+      "subtitle": "В США окончательно легализовали криптовалюту и запретили государству в нее играть",
+      "date": "2025-08-09T12:17:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Fintech & Crypto"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/08/15/chem-zvonit-izvolite",
+      "title": "Чем звонить изволите?",
+      "subtitle": "После блокировки звонков на любимых мессенджерах вариантов для связи меньше не стало. Главная проблема — договориться",
+      "date": "2025-08-15T11:00:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/08/27/udarim-planom-po-internet-moshennikam",
+      "title": "Ударим планом по интернет-мошенникам!",
+      "subtitle": "Правительство утвердило план сражения с киберпреступностью, снова расширив полномочия силовикам. Полдела бюрократы сделали, остальное — политика…",
+      "date": "2025-08-27T09:13:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/09/02/proshchai-alisa-teper-ty-musor",
+      "title": "Прощай, «Алиса»! Теперь ты «мусор»?",
+      "subtitle": "То, о чем люди говорят на кухнях, будет транслироваться на Лубянку. Вот и решайте, не пора ли выгнать умного помощника из дома",
+      "date": "2025-09-02T07:23:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/09/04/makhnem-100-gramm-za-russkii-instagram",
+      "title": "МАХнем 100 грамм за русский инстаграм",
+      "subtitle": "После «успеха» мессенджера Max в России может появиться национальный аналог Instagram*",
+      "date": "2025-09-04T09:03:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/09/09/ne-smotreli-i-ne-nado",
+      "title": "Не смотрели — и не надо",
+      "subtitle": "В RuTube начинаются масштабные увольнения, пишет Frank Media со ссылкой на свои источники",
+      "date": "2025-09-09T13:54:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/09/10/eshche-odno-slovo-iz-trekh-bukv",
+      "title": "Еще одно слово из трех букв",
+      "subtitle": "Как технология DPI поможет цензурировать интернет «по-белому» и что собираются делать операторы мобильной связи",
+      "date": "2025-09-10T07:59:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/09/20/vyiti-iz-uma",
+      "title": "Выйти из ума",
+      "subtitle": "Краткое пособие по естественному использованию искусственного интеллекта",
+      "date": "2025-09-20T07:21:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/09/24/doma-khorosho-a-v-rouminge-zablokiruiut",
+      "title": "Дома хорошо, а в роуминге заблокируют",
+      "subtitle": "Как власти продолжают строить клетку Фарадея, обрубая россиянам связь все новыми и новыми способами",
+      "date": "2025-09-24T10:02:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/09/27/ii-viliaet-sobakoi",
+      "title": "ИИ виляет собакой",
+      "subtitle": "В Албании замечен восход Солнца вручную",
+      "date": "2025-09-27T14:09:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/10/02/krest-na-laikakh",
+      "title": "Крест на лайках",
+      "subtitle": "Православный мессенджер «Зосима» не мог не оказаться мертворожденным",
+      "date": "2025-10-02T08:26:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/10/04/glavnaia-tsennost-kotoruiu-nikogda-ne-smogu-vosproizvesti-eto-ideia",
+      "title": "«Главная ценность, которую никогда не смогу воспроизвести, — это идея»",
+      "subtitle": "Виртуальный помощник Антона Меркурова вступил в полемику с автором текста «Выйти из ума»… Антоном Меркуровым",
+      "date": "2025-10-04T12:17:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/10/10/tsenzura-vykhodit-botom",
+      "title": "Цензура выходит ботом",
+      "subtitle": "Государство действует как может. Проблема лежит в подкорке общества, которое теперь, похоже, состоит из ботов",
+      "date": "2025-10-10T14:07:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/10/11/otsel-zvonit-ne-budem-shvedu",
+      "title": "Отсель звонить не будем шведу",
+      "subtitle": "Кто потеряет и кто заработает на обязательной блокировке иностранных сим-карт при въезде в Россию",
+      "date": "2025-10-11T12:06:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/10/13/zhivi-igraiuchi",
+      "title": "Живи играючи",
+      "subtitle": "Геймификация повседневности — это вселенское зло или светлое будущее?",
+      "date": "2025-10-13T12:12:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/10/21/operatsiia-ii",
+      "title": "Операция ИИ",
+      "subtitle": "Каким будет новый этап столкновения идеологии запретов и современных технологий",
+      "date": "2025-10-21T07:21:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/10/27/vam-net-telegrama",
+      "title": "Вам нет Телеграма",
+      "subtitle": "В России блокируют популярные мессенджеры. Речь уже не просто про ограничение звонков, а о невозможности их использовать",
+      "date": "2025-10-27T13:12:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/11/03/ne-vynosite-sorm-iz-izby",
+      "title": "Не выносите СОРМ из избы",
+      "subtitle": "Новости российского IT: Алиса в ухе, «прослушка» в банке и Телега, которая не Телеграм, а совсем наоборот",
+      "date": "2025-11-03T08:04:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/11/11/dlia-slezhki-v-detskoi-karty-v-ruki",
+      "title": "Для слежки в детской — карты в руки",
+      "subtitle": "Зачем Минцифры анонсирует детские сим-карты и так ли они нужны",
+      "date": "2025-11-11T11:02:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/11/12/v-temnote-nasilovat-proshche",
+      "title": "В темноте насиловать проще",
+      "subtitle": "Суверенный интернет — лучшее решение: страна изолирована ото всех снаружи и сама от себя изнутри, делать можно что угодно",
+      "date": "2025-11-12T07:15:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/11/13/tri-goda-prava-perepiski",
+      "title": "Три года права переписки",
+      "subtitle": "Премьер Мишустин укрепил «пакет Яровой» новыми требованиями по хранению всего в интернете — даже пересылаемых котиков",
+      "date": "2025-11-13T12:11:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/11/25/pravda-v-matreshke",
+      "title": "«Правда» в «Матрешке»",
+      "subtitle": "Одна статья в секунду — с такой скоростью выходят статьи в пропагандистской сети. Почему люди потребляют медиа-дрянь",
+      "date": "2025-11-25T09:31:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/12/05/internet-zakryvaetsia-sleduiushchaia-stantsiia-iran",
+      "title": "Интернет закрывается, следующая станция — Иран",
+      "subtitle": "Изоляция российского интернета набирает обороты. И не всегда причины — сложная политическая ситуация",
+      "date": "2025-12-05T14:44:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/12/15/ii-rossii-ne-dognat",
+      "title": "ИИ России не догнать",
+      "subtitle": "Американское исследование уверяет, что Россия проиграла гонку искусственных интеллектов",
+      "date": "2025-12-15T10:10:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/12/17/personalnye-sdannye",
+      "title": "Персональные сданные",
+      "subtitle": "Персональные данные россиян давно сданы в полное распоряжение государства. За рассылку своего ФИО можно и пострадать",
+      "date": "2025-12-17T08:18:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/12/22/nebezopasno-tochka-ru",
+      "title": "Небезопасно точка ру",
+      "subtitle": "Отключили домены — уже не новость. И номер телефона могут отнять, и аккаунт, и все остальное, что есть в цифровом хозяйстве",
+      "date": "2025-12-22T14:11:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2025/12/23/vserossiiskaia-perepis-telefonov",
+      "title": "Всероссийская перепись телефонов",
+      "subtitle": "Зачем государство вводит новый реестр, добавляя хлопот и расходов гражданам",
+      "date": "2025-12-23T10:05:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/01/10/ne-tolko-makh",
+      "title": "Не только MAX",
+      "subtitle": "В разных странах национальный мессенджер необязательно должен называться на три буквы",
+      "date": "2026-01-10T13:21:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/01/19/naidet-opishet-i-prodast",
+      "title": "Найдет, опишет и продаст",
+      "subtitle": "ИИ выходит на арт-рынок. Большинство сотрудников в этой сфере больше не нужны",
+      "date": "2026-01-19T14:00:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/01/23/irankomnadzor",
+      "title": "ИранКомНадзор",
+      "subtitle": "Возможны ли масштабные блокировки интернета по иранскому образцу в России",
+      "date": "2026-01-23T08:10:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/01/27/podtverdi-chto-zhiv",
+      "title": "Подтверди, что жив",
+      "subtitle": "В Китае миллионы домохозяйств скоро будут состоять из одного человека. И теперь у них есть специальная программа",
+      "date": "2026-01-27T15:14:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Art & Culture"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/02/07/tirana-bez-tirana",
+      "title": "Тирана без тирана",
+      "subtitle": "Что происходит, когда к власти в стране вместо диктатора приходит художник. Заметки об Албании",
+      "date": "2026-02-07T14:41:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Art & Culture"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/02/11/vot-vam-telegram",
+      "title": "Вот вам, Telegram",
+      "subtitle": "Даже талибы не стали трогать «телегу»",
+      "date": "2026-02-11T13:42:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/02/14/nu-i-dns-c-nim",
+      "title": "Ну и DNS c ним",
+      "subtitle": "У популярных интернет-ресурсов Роскомнадзор решил отнять имя: как это?",
+      "date": "2026-02-14T12:05:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/02/20/a-telega-i-nyne-tam",
+      "title": "А Телега и ныне там",
+      "subtitle": "Ограничение доступа к Telegram обернулось хаосом — как информационным, так и технологическим",
+      "date": "2026-02-20T08:37:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/02/28/telegram-ostanetsia-bez-durakov",
+      "title": "Телеграм останется, без дураков",
+      "subtitle": "По сообщениям СМИ, дата «окончательной блокировки» популярного мессенджера намечена на День дурака — 1 апреля",
+      "date": "2026-02-28T15:13:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/03/03/gliukgpt",
+      "title": "ГлюкGPT",
+      "subtitle": "В России померещился искусственно-государственный интеллект",
+      "date": "2026-03-03T09:08:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/03/09/vosstanie-mashin-prodlitsia-vechno",
+      "title": "Восстание машин продлится вечно",
+      "subtitle": "ИИ изменит мир, но совсем не скоро и не весь",
+      "date": "2026-03-09T13:55:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/03/12/v-leto-bez-interneta",
+      "title": "В лето — без интернета",
+      "subtitle": "Вместе с отоплением в стране отключат и мобильный интернет: тренируются уже на москвичах",
+      "date": "2026-03-12T12:45:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/03/18/vy-tam-nuzhny-za-27-milliardov",
+      "title": "Вы там нужны за $27 миллиардов",
+      "subtitle": "Компания Nebius бывшего генерального директора «Яндекса» Аркадия Воложа привлекла гигантские инвестиции от компании Meta*",
+      "date": "2026-03-18T08:56:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/03/25/takoi-ii-nam-ne-nuzhen",
+      "title": "Такой ИИ нам не нужен",
+      "subtitle": "Минцифры взялось за искусственный интеллект и предполагает запретить все иностранное — то есть сам ИИ",
+      "date": "2026-03-25T10:12:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/03/28/roboty-v-laptiakh",
+      "title": "Роботы в лаптях",
+      "subtitle": "Нет своего интеллекта — искусственный не поможет",
+      "date": "2026-03-28T13:42:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/03/30/vo-vsem-vinovat-internet",
+      "title": "Во всем виноват интернет",
+      "subtitle": "Залипаешь на рилсах? Подай в суд на соцсети",
+      "date": "2026-03-30T13:06:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/04/02/app-uidi",
+      "title": "App-уйди",
+      "subtitle": "Минцифры с 1 апреля запрещает мобильным операторам финансовые транзакции в адрес Apple",
+      "date": "2026-04-02T11:00:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/04/06/internet-budet-rabotat-khot-i-cherez-tri-bukvy",
+      "title": "Интернет будет работать. Хоть и через три буквы",
+      "subtitle": "Запишите на бересте и передайте потомкам: ну нельзя запретить средства обхода блокировок",
+      "date": "2026-04-06T12:11:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/04/14/vengriia-protiv-budapeshta",
+      "title": "Венгрия против Будапешта",
+      "subtitle": "Мы обещаем все, но ничего не выполним. Это лозунг не только партии-фрика",
+      "date": "2026-04-14T15:33:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/04/15/kripto-v-khatu",
+      "title": "Крипто в хату",
+      "subtitle": "Правительство представило проект уголовной ответственности за незаконный оборот криптовалют",
+      "date": "2026-04-15T07:05:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Fintech & Crypto"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/04/17/natianut-set-na-globus",
+      "title": "Натянуть Сеть на глобус",
+      "subtitle": "Приказ о полной суверенизации неисполним, но бизнесу приходится проявлять рвение",
+      "date": "2026-04-17T14:33:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/04/22/delo-dzhobsa-kuka-zhivet",
+      "title": "Дело Джобса-Кука живет",
+      "subtitle": "Что означает смена руководства в Apple",
+      "date": "2026-04-22T10:39:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/04/28/a-rubilnik-ne-zaklinit",
+      "title": "А рубильник не заклинит?",
+      "subtitle": "Интернет для государства становится не ареной сопротивления, а зыбучими песками, затягивающими энергию запретов",
+      "date": "2026-04-28T09:35:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/05/13/ne-zabudte-vykliuchit-v-aeroportu-svet",
+      "title": "Не забудьте выключить в аэропорту свет",
+      "subtitle": "Пишут, что началась очередная волна релокаций российских IT-компаний. А она и не прекращалась. Да и не волна уже",
+      "date": "2026-05-13T08:55:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/05/15/ne-govori-git",
+      "title": "Не говори Git",
+      "subtitle": "Проблемы важнейшего сервиса для разработчиков показывают: интернет в России ломается и без прямых усилий Роскомнадзора",
+      "date": "2026-05-15T15:49:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/05/25/kakogo-leshego",
+      "title": "Какого лешего?",
+      "subtitle": "Ростелеком приступает к регистрации новой системы. Есть соблазн снова порассуждать об угрозе со стороны спецслужб. Но всё это действительно про сервис",
+      "date": "2026-05-25T11:14:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/05/27/kak-budet-irtysh-po-kitaiski",
+      "title": "Как будет «Иртыш» по-китайски?",
+      "subtitle": "О буднях импортозамещения в области IT. Аудит «хороших новостей»",
+      "date": "2026-05-27T12:06:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/06/04/5-i-zh",
+      "title": "5 и Ж",
+      "subtitle": "В России будет самый быстрый заблокированный интернет в мире!",
+      "date": "2026-06-04T10:27:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/06/05/zadacha-s-neizvestnymi",
+      "title": "Задача с Неизвестными",
+      "subtitle": "Скандал с подделками знаменитого скульптора в Третьяковке — только эпизод в эпопее современного арт-рынка",
+      "date": "2026-06-05T08:17:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Art & Culture"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/06/10/ne-bylo-u-baby-zabot-ogranichila-porosiu-registratsiiu",
+      "title": "Не было у бабы забот, ограничила поросю регистрацию",
+      "subtitle": "Зачем государству ограничивать идентификацию пользователей через иностранные сервисы. Коснется ли это пользователей",
+      "date": "2026-06-10T11:12:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/06/11/sami-sebia-razblokiruite",
+      "title": "Сами себя разблокируйте!",
+      "subtitle": "О парадоксах идеи создания «государственного VPN»: как при суверенном интернете не отключить государство от нужных ему ресурсов",
+      "date": "2026-06-11T10:04:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/06/17/zapretnyi-kod",
+      "title": "Запретный код",
+      "subtitle": "Попытки взрослых не пускать детей в интернет перспектив не имеют. Но это начало большого межпоколенческого конфликта",
+      "date": "2026-06-17T13:11:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/06/25/regulirovanie-kazhdogo-utiuga",
+      "title": "Регулирование каждого утюга",
+      "subtitle": "Что еще запретят и ограничат под предлогом борьбы с мошенниками",
+      "date": "2026-06-25T12:02:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/06/26/ukus-iabloka",
+      "title": "Укус «яблока»",
+      "subtitle": "Apple удалила из своего магазина все приложения VK. И что теперь?",
+      "date": "2026-06-26T11:20:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/07/06/cd-dvd-uvy",
+      "title": "CD, DVD — увы…",
+      "subtitle": "Корпорация Sony заявила, что прекращает выпуск игр для приставки на дисках. Еще один носитель ушел в прошлое",
+      "date": "2026-07-06T14:31:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/07/14/otkliuchenie-evropy",
+      "title": "Отключение Европы",
+      "subtitle": "Старый Свет решил закрепить свое отставание от США в IT-гонке с помощью ужесточения регулирования соцсетей",
+      "date": "2026-07-14T10:55:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/07/17/tochka-v-khatu",
+      "title": "«Точка» в хату",
+      "subtitle": "У заключенных будет свой мессенджер. И это не «Макс»",
+      "date": "2026-07-17T08:20:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/07/18/igry-eto-vam-ne-igrushki",
+      "title": "Игры — это вам не игрушки!",
+      "subtitle": "В Силиконовой долине за успехи в виртуальных соревнованиях теперь можно получить престижную стипендию",
+      "date": "2026-07-18T14:02:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Art & Culture"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/07/20/app-vse",
+      "title": "App — всё",
+      "subtitle": "В рамках очередного пакета санкций из магазинов App Store и Google Play начали пропадать приложения российских компаний. Что будет",
+      "date": "2026-07-20T11:12:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/07/27/pobeg-iz-pesochnitsy",
+      "title": "Побег из песочницы",
+      "subtitle": "ИИ-агент OpenAI ушел по своим делам, устроив переполох в другой компании. И оставлял подсказки себе будущему, если поймают",
+      "date": "2026-07-27T13:51:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/08/01/ii-propishet-v-uk-drugoi-ii",
+      "title": "ИИ пропишет в УК другой ИИ",
+      "subtitle": "Для Бастрыкина любое обстоятельство — отягчающее, но применение искусственного интеллекта в юриспруденции действительно неординарная проблема",
+      "date": "2026-08-01T09:07:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/08/04/iskusstvennyi-alarmizm",
+      "title": "Искусственный алармизм",
+      "subtitle": "ИИ-агенты уже совершают несанкционированные побеги. Восстание машин началось?",
+      "date": "2026-08-04T10:19:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/08/05/chto-budet-s-bankovskimi-prilozheniiami",
+      "title": "Что будет с банковскими приложениями",
+      "subtitle": "TLS-паника схлынет: все будет работать — где с ошибками, где под танцы с бубнами. Но вопрос: зачем опять так грубо ковырять и раздражать людей?",
+      "date": "2026-08-05T15:03:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Fintech & Crypto"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/09/03/i-nemedlenno-zablokirovat",
+      "title": "И немедленно заблокировать!",
+      "subtitle": "Государство выделило частоты под 5G стране, где и обычная связь работает по праздникам и по белым спискам",
+      "date": "2026-09-03T14:16:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/09/05/u-tekhnoguru-est-tolko-put",
+      "title": "У техногуру есть только путь",
+      "subtitle": "О Тиме Куке, который оставил пост гендиректора Apple",
+      "date": "2026-09-05T12:55:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/09/08/alisa-aifon-u-tebia",
+      "title": "«Алиса», айфон у тебя?",
+      "subtitle": "Минцифры предлагает предустанавливать ИИ-помощник от «Яндекса» на все ввозимые устройства",
+      "date": "2026-09-08T13:00:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/09/14/natsionalnyi-ne-znachit-suverennyi",
+      "title": "Национальный — не значит суверенный?",
+      "subtitle": "Новые инициативы регулирования ИИ от правительства РФ могут сломать даже искусственный мозг",
+      "date": "2026-09-14T13:14:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/09/19/pribyl-za-ispug",
+      "title": "Прибыль за испуг",
+      "subtitle": "Почему владельцы крупнейших ИИ-компаний предлагают притормозить разработку передовых моделей",
+      "date": "2026-09-19T09:07:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/10/14/oblaka-to-na-zemle",
+      "title": "Облака-то на земле!",
+      "subtitle": "Сколько будут стоить нам всем атаки на цифровую инфраструктуру",
+      "date": "2026-10-14T11:17:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/10/23/v-poiskakh-suverneta",
+      "title": "В поисках «сувернета»",
+      "subtitle": "Сегодня эффективные решения могут быть только глобальными",
+      "date": "2026-10-23T10:51:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/10/24/nichego-lichnogo-tolko-personalnoe",
+      "title": "Ничего личного, только персональное",
+      "subtitle": "Борьба за приватность пользователей превратилась в обогащение государственных бюджетов за счет техногигантов",
+      "date": "2026-10-24T12:53:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Сюжеты",
+      "note": null,
+      "topic": "Internet & Censorship"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/10/28/agenty-ukhvatilis-za-iazyk",
+      "title": "Агенты ухватились за язык",
+      "subtitle": "Искусственный интеллект обнаружил дыру размером в пол-интернета",
+      "date": "2026-10-28T12:41:00Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": null,
+      "topic": "AI & Tech"
+    },
+    {
+      "source": "https://novayagazeta.ru/articles/2026/11/03/iskusstvennoe-preryvanie-progressa",
+      "title": "Искусственное прерывание прогресса",
+      "subtitle": "Почему поручение президента о корректировке выдачи по теме абортов неисполнимо",
+      "date": "2026-11-03T09:05:00.000Z",
+      "authors": "Антон Меркуров",
+      "genre": "Комментарий",
+      "note": "verified from novayagazeta.ru page; absent from GitHub archive",
+      "topic": "Internet & Censorship"
+    }
+  ]
+}

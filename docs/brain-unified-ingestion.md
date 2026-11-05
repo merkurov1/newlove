@@ -1,6 +1,9 @@
 # Unified Brain ingestion — URL, PDF, TXT and pasted text
 
-**Status:** implemented, migration required before use in production.
+**Status:** implemented in production. Normal saves process one newly-created
+job synchronously (`processBrainRunInline`) under a hard budget, so indexing
+does not depend on a scheduler or on an operator pressing a worker button.
+Graph extraction is optional and is no longer queued by the inline path.
 
 ## 1. What changed
 
@@ -15,8 +18,10 @@ SOURCE
   → CHUNKING
   → EMBEDDINGS
   → KNOWLEDGE INDEX
-  → GRAPH EXTRACTION (queued after the run)
   → RESULT
+
+Graph extraction is a separate, optional enrichment pass. It is not queued by
+the normal save path and does not block search.
 ```
 
 There is still exactly one RAG store:

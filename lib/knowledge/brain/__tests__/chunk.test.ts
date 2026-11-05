@@ -120,4 +120,18 @@ describe('Brain article chunking', () => {
     expect(result.chunks.every((chunk) => chunk.content.length <= 2400)).toBe(true);
     expect(result.chunks.map((chunk) => chunk.content).join(' ')).toContain('Sentence 120');
   });
+
+  it('does not emit sliding-window duplicates at the end of a long paragraph', () => {
+    const paragraph = Array.from(
+      { length: 900 },
+      (_, index) => `word${index}`
+    ).join(' ');
+
+    const article = articleWith([{ type: 'paragraph', text: paragraph }]);
+    const result = chunkArticle(article, 'doc_article_tail');
+
+    expect(result.chunks.length).toBeLessThan(10);
+    expect(new Set(result.chunks.map((chunk) => chunk.content)).size).toBe(result.chunks.length);
+    expect(result.chunks.at(-1)?.content).toContain('word899');
+  });
 });

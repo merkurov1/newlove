@@ -120,6 +120,39 @@ describe('Brain graph extraction', () => {
     expect(extraction.relationships[0].evidence).toContain('Heart & Angel');
   });
 
+  it('splits a malformed batch and keeps both halves', async () => {
+    let call = 0;
+    const chatJson = jest.fn(async (_system: string, user: string) => {
+      call += 1;
+      if (call === 1) throw new Error('deepseek_invalid_json');
+
+      const parsed = JSON.parse(user) as { chunks: Array<{ chunk_id: string }> };
+      const chunkId = parsed.chunks[0]?.chunk_id || chunks[0].id;
+      return {
+        entities: [
+          {
+            name: chunkId === chunks[0].id ? 'Anton Merkurov' : 'Heart & Angel',
+            type: chunkId === chunks[0].id ? 'person' : 'art project',
+            confidence: 0.9,
+            chunk_id: chunkId,
+            evidence:
+              chunkId === chunks[0].id
+                ? 'Anton Merkurov argues'
+                : 'Heart & Angel develops this idea',
+          },
+        ],
+        relationships: [],
+      };
+    });
+
+    const extraction = await extractDocumentGraph({ document, chunks }, chatJson);
+
+    expect(chatJson).toHaveBeenCalledTimes(3);
+    expect(extraction.entities.map((entity) => entity.name)).toEqual(
+      expect.arrayContaining(['Anton Merkurov', 'Heart & Angel'])
+    );
+  });
+
   it('summarises only documents that were supplied', async () => {
     const chatJson = jest.fn(async () => ({
       documents: [

@@ -52,29 +52,28 @@ Target URL:
 https://www.washingtonpost.com/world/2026/10/29/ukrainian-attacks-are-threatening-putin-ai-aspirations/
 ```
 
-Verified server-side result (2026-10-31):
+Server-side extraction of the live page remains paywalled/unavailable. However, a
+full article text had already been captured manually into the private
+`brain-sources` bucket. After removing the site navigation/footer, that stored
+text was indexed in place. Verified record state (2026-11-05):
 
 - title: `These data centers hold Putin’s AI aspirations. They’re big targets.`
 - outlet: `The Washington Post`
 - author: `Mary Ilyushina`
 - canonical URL retained
 - publication date: `2026-10-29`
-- quality: `metadata_only`
-- coverage status: `failed`
-- 649 chars / 96 words / 1 chunk
-- no paywall bypass
+- language: `EN`
+- quality: `full_text` from the captured source
+- no paywall bypass, no live re-fetch of the subscriber article
 
-The preview therefore:
+The preview still reports `metadata_only` when the server can only see the
+subscriber shell, and it never treats that shell as full text. If the page
+exceeds the 3 MB source cap or the server returns 401/402/403/451, the preview
+returns a `blocked` result with 0 chars / 0 chunks and the same manual/PDF
+fallback.
 
-- retains the original URL and normalized canonical URL;
-- reports extraction quality `metadata_only`, not `full_text`;
-- shows a warning before save;
-- does not index the subscriber preview as complete coverage;
-- allows the administrator to switch to manual full text or PDF/TXT using the same original URL.
-
-If the page exceeds the 3 MB source cap or the server returns 401/402/403/451, the preview returns a `blocked` result with 0 chars / 0 chunks and the same manual/PDF fallback.
-
-Manual text and PDF/TXT then go through the same Brain chunking, embedding, indexing and graph pipeline.
+Manual text and PDF/TXT then go through the same Brain chunking, embedding,
+indexing and graph pipeline.
 
 ## Legacy linked article documents
 

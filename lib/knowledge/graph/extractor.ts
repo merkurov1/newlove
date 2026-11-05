@@ -22,8 +22,10 @@ import type {
 } from './types';
 
 export const BRAIN_GRAPH_EXTRACTOR_VERSION = 'brain-graph-v1';
-export const BRAIN_GRAPH_MAX_BATCH_CHARS = 12_000;
-export const BRAIN_GRAPH_MAX_BATCH_CHUNKS = 8;
+// Smaller batches keep the JSON response below the provider's output limit.
+// Larger batches intermittently returned truncated JSON on 2026-11-05.
+export const BRAIN_GRAPH_MAX_BATCH_CHARS = 7_000;
+export const BRAIN_GRAPH_MAX_BATCH_CHUNKS = 4;
 
 type ChatJson = (
   system: string,
@@ -45,7 +47,7 @@ const EXTRACTION_SYSTEM = [
   'If a relationship is implied rather than explicit, set inference=true and confidence <= 0.65.',
   'Preserve the author’s terminology; do not translate names.',
   'Do not output email addresses, phone numbers, tokens or other secrets.',
-  'Maximum 60 entities and 80 relationships per batch.',
+  'Maximum 30 entities and 40 relationships per batch.',
   'Return: {"entities":[...],"relationships":[...]}.',
 ].join(' ');
 
@@ -283,10 +285,10 @@ export async function extractDocumentGraph(
   chatJson: ChatJson = graphChatJson
 ): Promise<DocumentExtraction> {
   const batches = planChunkBatches(input.chunks);
-  const entities: ExtractedEntity[] = [];
-  const relationships: ExtractedRelationship[] = [];
 
-  for (const batch of batches) {
+  const runBatch = async (
+    batch: BrainChunkForGraph[]
+  ): Promise<{ entities: ExtractedEntity[]; relationships: ExtractedRelationship[] }> => {
     const payload = {
       document: {
         id: input.document.id,
@@ -304,11 +306,31 @@ export async function extractDocumentGraph(
       })),
     };
 
-    const raw = await chatJson(EXTRACTION_SYSTEM, JSON.stringify(payload), {
-      maxTokens: 8192,
-    });
-    const parsed = parseBatch(raw, batch);
+    try {
+      const raw = await chatJson(EXTRACTION_SYSTEM, JSON.stringify(payload), {
+        maxTokens: 8192,
+      });
+      return parseBatch(raw, batch);
+    } catch (error) {
+      // A single over-long or malformed batch must not fail the whole
+      // document. Split it and retry the halves; a single-chunk failure is
+      // still surfaced to the job so it can be reported truthfully.
+      if (batch.length <= 1) throw error;
+      const middle = Math.ceil(batch.length / 2);
+      const left = await runBatch(batch.slice(0, middle));
+      const right = await runBatch(batch.slice(middle));
+      return {
+        entities: [...left.entities, ...right.entities],
+        relationships: [...left.relationships, ...right.relationships],
+      };
+    }
+  };
 
+  const entities: ExtractedEntity[] = [];
+  const relationships: ExtractedRelationship[] = [];
+
+  for (const batch of batches) {
+    const parsed = await runBatch(batch);
     entities.push(...parsed.entities);
     relationships.push(...parsed.relationships);
   }

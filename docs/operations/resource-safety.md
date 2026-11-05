@@ -1,8 +1,13 @@
 # Resource safety and background process map
 
+> **Historical snapshot — superseded on 2026-11-05.** The live state, final
+> queue numbers and the shutdown verification are in
+> `docs/audits/brain-media-final-audit.md`. This document is kept for the
+> original process map and limit rationale.
+
 Date: 2026-10-31
 Scope: Brain, Graph, Media Intelligence, Pierrot, Flow, newsletter delivery
-Status: code changes implemented; **not deployed**, **no migration applied**, **no worker backlog executed**
+Status: historical audit snapshot; see the final audit for current production state
 
 This document separates the repository state from the observed production state.
 Nothing in this change creates, enables or restores a schedule.
