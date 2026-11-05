@@ -5,6 +5,13 @@ export const WORKSPACE_ROUTES = [
   { key: 'dash', path: '/admin/pierrot/dash', label: 'DASH', shortcut: '4' },
   { key: 'dev', path: '/admin/pierrot/dev', label: 'DEV', shortcut: '5' },
   { key: 'art', path: '/admin/pierrot/art-engine', label: 'ART', shortcut: '6' },
+  {
+    key: 'heart',
+    path: '/admin/pierrot/heart-and-angel',
+    label: 'HEART & ANGEL',
+    shortLabel: 'HEART',
+    shortcut: '7',
+  },
 ] as const;
 
 export type WorkspaceRouteKey = (typeof WORKSPACE_ROUTES)[number]['key'];
@@ -15,11 +22,12 @@ export function activeWorkspaceKey(pathname: string): WorkspaceRouteKey {
   if (pathname.startsWith('/admin/pierrot/dash')) return 'dash';
   if (pathname.startsWith('/admin/pierrot/dev')) return 'dev';
   if (pathname.startsWith('/admin/pierrot/art-engine')) return 'art';
+  if (pathname.startsWith('/admin/pierrot/heart-and-angel')) return 'heart';
   return 'chat';
 }
 
 /**
- * Shortcuts must not steal Cmd/Ctrl+N or Cmd/Ctrl+1..6 while the owner is
+ * Shortcuts must not steal Cmd/Ctrl+N or Cmd/Ctrl+1..7 while the owner is
  * typing into a field, a contenteditable surface or a native select.
  */
 export function isTextEntryTarget(target: EventTarget | null): boolean {

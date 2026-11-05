@@ -6,7 +6,7 @@ import {
 } from '../navigation';
 
 describe('workspace navigation', () => {
-  it('keeps the six routes in the specified order', () => {
+  it('keeps the seven routes in the specified order', () => {
     expect(WORKSPACE_ROUTES.map((route) => route.key)).toEqual([
       'chat',
       'flow',
@@ -14,6 +14,7 @@ describe('workspace navigation', () => {
       'dash',
       'dev',
       'art',
+      'heart',
     ]);
     expect(WORKSPACE_ROUTES.map((route) => route.shortcut)).toEqual([
       '1',
@@ -22,6 +23,7 @@ describe('workspace navigation', () => {
       '4',
       '5',
       '6',
+      '7',
     ]);
   });
 
@@ -32,6 +34,7 @@ describe('workspace navigation', () => {
     expect(activeWorkspaceKey('/admin/pierrot/dash')).toBe('dash');
     expect(activeWorkspaceKey('/admin/pierrot/dev')).toBe('dev');
     expect(activeWorkspaceKey('/admin/pierrot/art-engine')).toBe('art');
+    expect(activeWorkspaceKey('/admin/pierrot/heart-and-angel')).toBe('heart');
     expect(activeWorkspaceKey('/admin/pierrot/intelligence')).toBe('chat');
   });
 
@@ -47,12 +50,13 @@ describe('workspace navigation', () => {
     expect(isTextEntryTarget(document.body)).toBe(false);
   });
 
-  it('maps Cmd/Ctrl+1..6 and Cmd/Ctrl+N outside fields', () => {
+  it('maps Cmd/Ctrl+1..7 and Cmd/Ctrl+N outside fields', () => {
     const base = { metaKey: true, ctrlKey: false, altKey: false, shiftKey: false };
     expect(shortcutRoute({ ...base, key: '1' }, document.body)).toEqual({ key: 'chat' });
     expect(shortcutRoute({ ...base, key: '4' }, document.body)).toEqual({ key: 'dash' });
     expect(shortcutRoute({ ...base, key: '5' }, document.body)).toEqual({ key: 'dev' });
     expect(shortcutRoute({ ...base, key: '6' }, document.body)).toEqual({ key: 'art' });
+    expect(shortcutRoute({ ...base, key: '7' }, document.body)).toEqual({ key: 'heart' });
     expect(shortcutRoute({ ...base, key: 'n' }, document.body)).toEqual({ key: 'new-chat' });
     expect(
       shortcutRoute({ ...base, metaKey: false, ctrlKey: true, key: '2' }, document.body)

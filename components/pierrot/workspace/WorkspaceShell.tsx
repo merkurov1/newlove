@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   Activity,
   Brain,
+  Heart,
   MessageSquare,
   Palette,
   Send,
@@ -25,6 +26,7 @@ const ICONS = {
   dash: Activity,
   dev: Terminal,
   art: Palette,
+  heart: Heart,
 } as const;
 
 function registerServiceWorker() {
@@ -78,6 +80,7 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
           {WORKSPACE_ROUTES.map((item) => {
             const Icon = ICONS[item.key];
             const isActive = active === item.key;
+            const shortLabel = 'shortLabel' in item ? item.shortLabel : item.label;
 
             return (
               <Link
@@ -85,6 +88,7 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
                 href={item.path}
                 className="pw-rail-link"
                 aria-current={isActive ? 'page' : undefined}
+                aria-label={item.label}
                 title={`${item.label} · Cmd+${item.shortcut}`}
                 onClick={(event) => {
                   if (item.key === 'chat' && isActive) {
@@ -94,7 +98,8 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
                 }}
               >
                 <Icon size={24} strokeWidth={1.4} aria-hidden="true" />
-                <span>{item.label}</span>
+                <span className="max-[699px]:hidden">{item.label}</span>
+                <span className="hidden max-[699px]:inline">{shortLabel}</span>
               </Link>
             );
           })}
