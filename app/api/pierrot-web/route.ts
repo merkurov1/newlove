@@ -453,9 +453,11 @@ export async function POST(req: Request) {
     // Memory is independent of transcript-storage consent: an explicit
     // “Запомни/Сохрани/Напомни” command is its own permission for that record.
     const memoryStore = ownerMode ? createPierrotStore() : null;
-    // Streaming is explicit and owner-only. Every other caller keeps the
-    // existing JSON contract, including Telegram and the public chat.
-    const streaming = rawStream === true && ownerMode;
+    // Streaming is an explicit transport choice. It is safe for public
+    // visitors because owner-only retrieval, tools and memory are gated by the
+    // server-verified ownerMode above, not by the response format. Telegram and
+    // other JSON consumers keep the existing contract by omitting `stream`.
+    const streaming = rawStream === true;
 
     // Format normalized conversation history with hard limits.
     const normalizedHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];

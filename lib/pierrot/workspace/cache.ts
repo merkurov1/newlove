@@ -31,14 +31,7 @@ export type ParsedOverviewCache = {
   stale: boolean;
 };
 
-const METRIC_STATES = new Set([
-  'растёт',
-  'стоит',
-  'падает',
-  'тихо',
-  'пухнет',
-  'тревога',
-]);
+const METRIC_STATES = new Set(['растёт', 'стоит', 'падает', 'тихо', 'пухнет', 'тревога']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -139,10 +132,7 @@ export function parseOverviewCache(
   }
 }
 
-export function readOverviewCache(
-  ownerId: string,
-  now = Date.now()
-): ParsedOverviewCache | null {
+export function readOverviewCache(ownerId: string, now = Date.now()): ParsedOverviewCache | null {
   if (typeof window === 'undefined') return null;
 
   try {

@@ -366,12 +366,78 @@ describe('POST /api/pierrot-web persistence', () => {
     expect(memoryStore.createMemoryRecord).not.toHaveBeenCalled();
   });
 
-  it('keeps the JSON contract for a non-owner caller that sends stream:true', async () => {
-    const response = await POST(makeRequest(validBody({ stream: true })));
-    const json = (await response.json()) as { reply?: string };
+  it('streams a public reply as SSE without owner data', async () => {
+    const response = await POST(
+      makeRequest(
+        validBody({
+          message: 'I want to buy the Heart & Angel postcard',
+          stream: true,
+        })
+      )
+    );
 
-    expect(response.headers.get('content-type')).toContain('application/json');
-    expect(json.reply).toBe('Pierrot reply');
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+
+    const text = await response.text();
+    expect(text).toContain('event: accepted');
+    expect(text).toContain('event: status');
+    expect(text).toContain('event: completed');
+
+    const completed = text.split('\n\n').find((frame) => frame.startsWith('event: completed'));
+    const dataLine = completed?.split('\n').find((line) => line.startsWith('data:'));
+    const payload = JSON.parse(String(dataLine).slice(5));
+
+    expect(payload.payload.reply).toContain('£29');
+    expect(payload.payload.admin).toBeUndefined();
+    expect(payload.payload.rag).toBeUndefined();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('streams public model text progressively through the same protocol', async () => {
+    const previousKey = process.env.GEMINI_API_KEY;
+    const previousFetch = global.fetch;
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    global.fetch = jest.fn(async () => {
+      const encoder = new TextEncoder();
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode('data: {"candidates":[{"content":{"parts":[{"text":"Public "}]}}]}\n\n')
+          );
+          controller.enqueue(
+            encoder.encode('data: {"candidates":[{"content":{"parts":[{"text":"answer"}]}}]}\n\n')
+          );
+          controller.close();
+        },
+      });
+      return new Response(body, { status: 200 });
+    }) as unknown as typeof fetch;
+
+    try {
+      const response = await POST(
+        makeRequest(validBody({ message: 'Who is Mark Rothko?', stream: true }))
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/event-stream');
+
+      const text = await response.text();
+      expect(text).toContain('event: delta');
+      expect(text).toContain('Public ');
+
+      const completed = text.split('\n\n').find((frame) => frame.startsWith('event: completed'));
+      const dataLine = completed?.split('\n').find((line) => line.startsWith('data:'));
+      const payload = JSON.parse(String(dataLine).slice(5));
+
+      expect(payload.payload.reply).toBe('Public answer');
+      expect(payload.payload.provider).toBe('gemini');
+      expect(payload.payload.admin).toBeUndefined();
+      expect(mockRecord.filter((item) => item === 'message:assistant')).toHaveLength(1);
+    } finally {
+      if (previousKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = previousKey;
+      global.fetch = previousFetch;
+    }
   });
 
   it('returns a verified offer response without calling the model', async () => {

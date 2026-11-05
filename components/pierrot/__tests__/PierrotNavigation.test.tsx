@@ -645,7 +645,7 @@ describe('Pierrot conversational navigation', () => {
     expect(await screen.findByText(/You're now in Selection\./)).toBeInTheDocument();
   });
 
-  it('shows the navigation index in the empty conversation', () => {
+  it('shows a concise greeting and a small set of starting points', () => {
     currentPathname = '/lobby';
     renderApp();
 
@@ -654,24 +654,22 @@ describe('Pierrot conversational navigation', () => {
     const dialog = screen.getByRole('dialog');
 
     expect(within(dialog).getByText('Structure is the antidote to chaos.')).toBeInTheDocument();
+    expect(within(dialog).getByText(/I am Pierrot/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Ask in your own words/)).toBeInTheDocument();
     expect(within(dialog).queryByText(/Context Architecture/)).not.toBeInTheDocument();
 
-    for (const name of [
-      'Anton Merkurov',
-      'Lobby',
-      'Unframed',
-      'Flow',
-      'Journal',
-      'Art Engine',
-      'Selection',
-      'Heart & Angel',
-      'Temple',
-    ]) {
-      expect(within(dialog).getByRole('link', { name: new RegExp(name, 'i') })).toBeInTheDocument();
+    for (const name of ['Who is Anton?', 'Art & Heart', 'UNFRAMED', 'Journal & Flow']) {
+      expect(
+        within(dialog).getByRole('button', { name: new RegExp(name, 'i') })
+      ).toBeInTheDocument();
     }
+
+    expect(
+      within(dialog).getAllByRole('button', { name: /anton|art|unframed|journal/i })
+    ).toHaveLength(4);
   });
 
-  it('starts a guaranteed curated dialogue from the default CTA', async () => {
+  it('starts a free-form conversation from a suggested beginning', async () => {
     currentPathname = '/lobby';
     renderApp();
 
@@ -679,13 +677,14 @@ describe('Pierrot conversational navigation', () => {
 
     const dialog = screen.getByRole('dialog');
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Ask Pierrot something' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /Who is Anton\?/i }));
 
-    expect(within(dialog).getByText('Where should I start?')).toBeInTheDocument();
-    expect(within(dialog).getByText(/Start with the/)).toBeInTheDocument();
-    expect(within(dialog).getByRole('link', { name: 'Lobby' })).toHaveAttribute('href', '/lobby');
-    expect(within(dialog).getByRole('button', { name: 'Enter the Lobby' })).toBeInTheDocument();
-    expect(chatFetchCalls()).toHaveLength(0);
+    await waitFor(() => {
+      expect(chatFetchCalls()).toHaveLength(1);
+    });
+
+    expect(chatFetchCalls()[0][1].body).toContain('Who is Anton Merkurov');
+    expect(await within(dialog).findByText('A quiet answer.')).toBeInTheDocument();
   });
 
   it('opens the Heritage scenario from the Lobby page', async () => {

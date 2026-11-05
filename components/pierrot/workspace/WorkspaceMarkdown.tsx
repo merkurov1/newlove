@@ -8,6 +8,7 @@ import {
   citationIndexFromHref,
   prepareCitationMarkdown,
 } from '@/lib/pierrot/workspace/citations';
+import { stabilizeStreamingMarkdown } from '@/lib/pierrot/streamingText';
 
 function CitationBadge({
   index,
@@ -38,14 +39,8 @@ function CitationBadge({
   );
 }
 
-export function stabilizeStreamingMarkdown(content: string, streaming: boolean): string {
-  if (!streaming) return content;
-
-  // A partially received fenced code block must not swallow the rest of the
-  // answer while the next tokens are still arriving.
-  const fences = (content.match(/```/g) || []).length;
-  return fences % 2 === 1 ? `${content}\n\`\`\`` : content;
-}
+// Kept as a named export for existing imports and tests.
+export { stabilizeStreamingMarkdown };
 
 export default function WorkspaceMarkdown({
   content,

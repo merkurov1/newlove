@@ -108,8 +108,7 @@ export default function PierrotChat() {
   } = usePierrot();
 
   const humanLanguage =
-    typeof navigator !== 'undefined' &&
-    navigator.language?.toLowerCase().startsWith('ru')
+    typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('ru')
       ? 'ru'
       : 'en';
   const humanCopy = getHumanCopy(humanLanguage);
@@ -414,8 +413,8 @@ export default function PierrotChat() {
                         'max(12px, env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))',
                     }}
                     className="
-                      shrink-0 border-t border-[#ECE6DC]/60
-                      px-5 pt-3 sm:px-7 sm:pt-4
+                      shrink-0 bg-[#FAF8F5]
+                      px-4 pt-2.5 sm:px-7 sm:pt-4
                     "
                   >
                     <div className="mx-auto w-full max-w-3xl">
@@ -424,9 +423,7 @@ export default function PierrotChat() {
                           <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[#B08A5A]" />
                           <span className="min-w-0 break-words">
                             {humanCopy.waiting}
-                            {humanPresence?.visitorLabel
-                              ? ` · ${humanPresence.visitorLabel}`
-                              : ''}
+                            {humanPresence?.visitorLabel ? ` · ${humanPresence.visitorLabel}` : ''}
                           </span>
                           <button
                             type="button"
@@ -443,9 +440,7 @@ export default function PierrotChat() {
                           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#8CA18A]" />
                           <span className="min-w-0 break-words">
                             {humanCopy.activeLabel}
-                            {humanPresence?.visitorLabel
-                              ? ` · ${humanPresence.visitorLabel}`
-                              : ''}
+                            {humanPresence?.visitorLabel ? ` · ${humanPresence.visitorLabel}` : ''}
                           </span>
                           <button
                             type="button"
@@ -473,6 +468,11 @@ export default function PierrotChat() {
                               : 'Write to Pierrot…'
                         }
                       />
+                      {!isHumanActive && (
+                        <p className="mt-2 hidden px-2 font-mono text-[8px] uppercase tracking-[0.12em] text-[#B0A79B] sm:block">
+                          Enter to send · Shift+Enter for a new line
+                        </p>
+                      )}
                     </div>
                   </footer>
                 </motion.section>
