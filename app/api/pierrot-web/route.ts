@@ -134,6 +134,12 @@ import {
 import { createPierrotStreamResponse } from '@/lib/pierrot/streamResponse';
 import { PIERROT_STREAM_VERSION } from '@/lib/pierrot/streamProtocol';
 import { detectMemoryIntent, type PierrotMemoryAction } from '@/lib/pierrot/memory/intent';
+import {
+  createDevTaskFromChat,
+  detectDevTaskIntent,
+  looksLikeEngineeringTask,
+  transferMemoryRecordToDev,
+} from '@/lib/pierrot/memory/devBridge';
 import { loadLatestMemoryListRecords, loadPendingMemoryDelete } from '@/lib/pierrot/memory/context';
 import {
   buildMemoryContext,
@@ -147,6 +153,11 @@ import {
 } from '@/lib/pierrot/memory/store';
 import { runMemorySteward } from '@/lib/pierrot/memory/steward';
 import { buildSkillsContext } from '@/lib/pierrot/skills/store';
+import {
+  formatSkillAnalysisChatReply,
+  parseSkillAnalysisCommand,
+} from '@/lib/pierrot/skills/analysis/reply';
+import { runOwnerSkillAnalysis } from '@/lib/pierrot/skills/analysis/run';
 import type {
   PierrotMemoryKind,
   PierrotMemoryRecord,
@@ -1161,6 +1172,44 @@ export async function POST(req: Request) {
         return NextResponse.json(payload);
       };
 
+      // Explicit owner-only Skill Foundry analysis. The command must be
+      // unmistakable; ordinary questions about skills or work do not trigger a
+      // full scan. The work itself is bounded and deterministic, with no model
+      // call, cron, worker or automatic retry.
+      const analysisCommand = parseSkillAnalysisCommand(trimmedMessage);
+
+      if (analysisCommand) {
+        if (!pierrotStore || !isPierrotUserId(ownerIdentityUserId)) {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Полный анализ доступен владельцу с подтверждённым Supabase-профилем. Открой [Skill Foundry](/admin/pierrot/skills) в owner PWA.'
+              : 'Full analysis is available to the owner with a verified Supabase profile. Open [Skill Foundry](/admin/pierrot/skills) in the owner PWA.'
+          );
+        }
+
+        try {
+          const result = await runOwnerSkillAnalysis({
+            store: pierrotStore,
+            userId: ownerIdentityUserId,
+            days: 60,
+          });
+          return persistOwnerReply(
+            formatSkillAnalysisChatReply(result.analysis, analysisCommand, result.persisted),
+            {
+              skill_analysis: result.analysis.id,
+              skill_analysis_status: result.status,
+              skill_analysis_persisted: result.persisted,
+            }
+          );
+        } catch {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Не удалось собрать анализ работы. Я не буду выдавать это за успешный результат. Подробности доступны в [Skill Foundry](/admin/pierrot/skills).'
+              : 'I could not assemble the work analysis. I will not present that as a successful result. Details are available in [Skill Foundry](/admin/pierrot/skills).'
+          );
+        }
+      }
+
       const pending = pierrotStore
         ? await loadPendingUrlCandidate(pierrotStore, conversationId).catch(() => null)
         : null;
@@ -1390,6 +1439,201 @@ export async function POST(req: Request) {
       const memoryIntent = detectMemoryIntent(trimmedMessage, {
         history: normalizedHistory,
       });
+
+      // Dev task bridge: ordinary memory stays in pierrot_decisions; an
+      // explicit or clearly engineering request is routed to Task Studio.
+      // The source memory record is preserved and never marked completed here.
+      const devTaskIntent = detectDevTaskIntent(trimmedMessage, {
+        history: normalizedHistory,
+      });
+
+      if (devTaskIntent.action !== 'none') {
+        if (!memoryStore || !isPierrotUserId(ownerIdentityUserId)) {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Dev-задачи доступны только владельцу. Ничего не создано.'
+              : 'Dev tasks are available to the owner only. Nothing was created.',
+            { dev_task_status: 'unavailable' }
+          );
+        }
+
+        const repositoryKey = devTaskIntent.repository || 'newlove';
+
+        if (devTaskIntent.action === 'transfer') {
+          let candidates: PierrotMemoryRecord[] = [];
+
+          try {
+            if (devTaskIntent.query) {
+              const found = await searchMemory(memoryStore, {
+                userId: ownerIdentityUserId,
+                query: devTaskIntent.query,
+                includeArchive: false,
+                limit: 10,
+              });
+              candidates = found.records;
+            } else {
+              const listed = await loadLatestMemoryListRecords(
+                memoryStore,
+                ownerIdentityUserId,
+                conversationId
+              ).catch(() => [] as PierrotMemoryRecord[]);
+              candidates =
+                listed.length > 0
+                  ? listed
+                  : await listMemoryRecords(memoryStore, {
+                      userId: ownerIdentityUserId,
+                      status: 'active',
+                      limit: 60,
+                    });
+
+              if (candidates.length > 1) {
+                const engineering = candidates.filter(
+                  (record) =>
+                    looksLikeEngineeringTask(`${record.title} ${record.content}`) ||
+                    record.tags.some((tag) => /dev/i.test(tag))
+                );
+                if (engineering.length === 1) candidates = engineering;
+              }
+            }
+          } catch {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Не удалось прочитать память, поэтому Dev-задача не создана. Ничего не подтверждаю.'
+                : 'I could not read memory, so no Dev task was created. I am not claiming success.',
+              { dev_task_status: 'failed' }
+            );
+          }
+
+          const seen = new Set<string>();
+          candidates = candidates.filter((record) => {
+            if (seen.has(record.id)) return false;
+            seen.add(record.id);
+            return true;
+          });
+
+          if (candidates.length === 0) {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Не вижу запись памяти, которую нужно перенести в Dev. Назови заголовок или сначала сохрани задачу.'
+                : 'I cannot identify the memory record to transfer. Name its title or save it first.',
+              { dev_task_status: 'not_found' }
+            );
+          }
+
+          if (candidates.length > 1) {
+            return persistOwnerReply(
+              `${ownerLanguage === 'ru' ? 'Нашёл несколько записей:' : 'I found several records:'}\n\n${candidates
+                .slice(0, 10)
+                .map(
+                  (record, index) =>
+                    `${index + 1}. ${record.title} · ${record.kind} · ${record.status}`
+                )
+                .join('\n')}\n\n${
+                ownerLanguage === 'ru'
+                  ? 'Уточни заголовок. Ничего не создано.'
+                  : 'Give me the exact title. Nothing was created.'
+              }`,
+              { dev_task_status: 'clarification_required', memory_candidates: candidates.length }
+            );
+          }
+
+          try {
+            const transferred = await transferMemoryRecordToDev({
+              store: memoryStore,
+              userId: ownerIdentityUserId,
+              record: candidates[0],
+              repository: repositoryKey,
+            });
+            const task = transferred.task;
+            const prefix = transferred.created
+              ? ownerLanguage === 'ru'
+                ? 'Перенёс в Dev'
+                : 'Transferred to Dev'
+              : ownerLanguage === 'ru'
+                ? 'Эта запись уже перенесена в Dev'
+                : 'This record is already in Dev';
+            const linkWarning =
+              transferred.created && !transferred.linkPersisted
+                ? ownerLanguage === 'ru'
+                  ? ' Ссылка в исходной записи памяти не сохранилась, но Dev-задача хранит её ID и повторный перенос не создаст дубль.'
+                  : ' The source-memory link could not be saved, but the Dev task stores its ID, so a retry will not duplicate it.'
+                : '';
+
+            return persistOwnerReply(
+              `${prefix}: «${task.title}».\n${ownerLanguage === 'ru' ? 'Репозиторий' : 'Repository'}: ${repositoryKey} · ${ownerLanguage === 'ru' ? 'статус' : 'status'}: ${task.status} · Dev ID: ${task.id.slice(0, 8)}\n${
+                ownerLanguage === 'ru'
+                  ? 'Исходная запись памяти сохранена и не отмечена выполненной.'
+                  : 'The source memory record is preserved and was not marked completed.'
+              }${linkWarning}`,
+              {
+                dev_task_status: task.status,
+                dev_task_id: task.id,
+                dev_task_repository: repositoryKey,
+                dev_task_created: transferred.created,
+                dev_task_already_linked: transferred.alreadyLinked,
+                dev_task_link_persisted: transferred.linkPersisted,
+                memory_id: candidates[0].id,
+                memory_status: candidates[0].status,
+              }
+            );
+          } catch {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Не удалось создать Dev-задачу. Исходная запись памяти не изменена, и я не буду утверждать, что задача создана.'
+                : 'I could not create the Dev task. The source memory record is unchanged, and I will not claim the task exists.',
+              { dev_task_status: 'failed', memory_id: candidates[0].id }
+            );
+          }
+        }
+
+        const lastAssistant = [...normalizedHistory]
+          .reverse()
+          .find((item) => item.role === 'assistant' && item.content.trim())?.content;
+        const content =
+          devTaskIntent.content?.trim() ||
+          (devTaskIntent.explicit ? lastAssistant?.trim() : trimmedMessage.trim()) ||
+          trimmedMessage.trim();
+
+        if (!content || content.length < 3) {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Что именно поставить в Dev-задачу? Сформулируй цель или название.'
+              : 'What should the Dev task contain? Give me a goal or a title.',
+            { dev_task_status: 'clarification_required' }
+          );
+        }
+
+        try {
+          const task = await createDevTaskFromChat({
+            userId: ownerIdentityUserId,
+            content,
+            repository: repositoryKey,
+            conversationId,
+            originalMessage: trimmedMessage,
+          });
+
+          return persistOwnerReply(
+            `${ownerLanguage === 'ru' ? 'Создал Dev-задачу' : 'Created a Dev task'}: «${task.title}».\n${ownerLanguage === 'ru' ? 'Репозиторий' : 'Repository'}: ${repositoryKey} · ${ownerLanguage === 'ru' ? 'статус' : 'status'}: ${task.status} · Dev ID: ${task.id.slice(0, 8)}\n${
+              ownerLanguage === 'ru'
+                ? 'Задача не отмечена выполненной. Её можно открыть в Task Studio и скопировать prompt для OpenCode.'
+                : 'The task is not marked completed. Open it in Task Studio to copy the OpenCode prompt.'
+            }`,
+            {
+              dev_task_status: task.status,
+              dev_task_id: task.id,
+              dev_task_repository: repositoryKey,
+              dev_task_created: true,
+            }
+          );
+        } catch {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Не удалось создать Dev-задачу. Я не буду говорить, что она сохранена. Проверь миграцию Task Studio и попробуй ещё раз.'
+              : 'I could not create the Dev task. I will not claim it was saved. Check the Task Studio migration and try again.',
+            { dev_task_status: 'failed' }
+          );
+        }
+      }
 
       const permanentDeleteConfirmation =
         /^(?:да(?:[,\s]+(?:удали|удалить|delete|подтверждаю))?|подтверждаю|confirm|yes(?:[,\s]+delete)?)[.!]?$/i.test(
@@ -2346,15 +2590,22 @@ export async function POST(req: Request) {
       queryPlan.intent === 'commercial' ||
       queryPlan.intent === 'analytics' ||
       queryPlan.intent === 'knowledge_graph';
+    const explicitNonWebSource =
+      webDecision?.explicitSource === 'brain' || webDecision?.explicitSource === 'media';
+    const explicitSourceWithoutQuery = Boolean(
+      webDecision?.explicitSource && !webDecision.shouldSearch
+    );
     const webRequested = Boolean(
       useModel &&
       webDecision &&
       !webSuppressedIntent &&
+      !explicitNonWebSource &&
+      !explicitSourceWithoutQuery &&
       (queryPlan.sources.web || webDecision.shouldSearch)
     );
     const webSearchPromise: Promise<WebSearchResult | null> = webRequested
       ? searchWebEvidence({
-          query: webDecision?.shouldSearch ? webDecision.query : trimmedMessage,
+          query: webDecision?.query || trimmedMessage,
         }).catch(() => null)
       : Promise.resolve(null);
 
@@ -3149,6 +3400,13 @@ export async function POST(req: Request) {
               tool: executionPlan.tool,
               fallback_policy: executionPlan.fallbackPolicy,
               requires_web: executionPlan.requiresWeb,
+              web_requested: webRequested,
+              web_command: webRequested ? trimmedMessage.slice(0, 500) : null,
+              web_query: webRequested ? webSearchResult?.query || webDecision?.query || null : null,
+              web_reason: webDecision?.reason ?? null,
+              web_used_context: webDecision?.usedContext ?? false,
+              web_topic_changed: webDecision?.topicChanged ?? false,
+              web_latency_ms: webSearchResult?.latencyMs ?? null,
               web_outcome: webSearchResult?.outcome ?? null,
               web_code: webSearchResult?.code ?? null,
               web_source_count: webSources.length,

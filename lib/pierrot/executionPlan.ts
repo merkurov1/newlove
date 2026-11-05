@@ -152,10 +152,27 @@ export function buildPierrotExecutionPlan(
   const searchVerb = SEARCH_VERBS.test(message);
   const statsTerms = STATS_TERMS.test(message);
   const mediaStats = MEDIA_STATS_TERMS.test(message);
+  const explicitWebIntent =
+    queryPlan.intent === 'web_research' || queryPlan.intent === 'brain_web_research';
+
+  // An explicit web source command has absolute priority. Owner tools and the
+  // generic owner searchVerb heuristic must not intercept it.
+  if (explicitWebIntent) {
+    ownerTool = null;
+    resolved.operation =
+      queryPlan.intent === 'brain_web_research' ? 'brain_web.search' : 'web.search';
+    resolved.tool = queryPlan.intent === 'brain_web_research' ? 'brain+web' : 'web';
+    resolved.ownerOnly = false;
+    resolved.fallbackPolicy =
+      queryPlan.intent === 'brain_web_research'
+        ? 'brain_then_web_only_when_explicit'
+        : 'none';
+  }
 
   // "RAG", "Brain" and "Media" are source names, not statistics commands by
   // themselves. Search verbs win unless the message also asks for status.
   if (
+    !explicitWebIntent &&
     ownerTool &&
     (ownerTool.kind === 'rag' || ownerTool.kind === 'brain') &&
     searchVerb &&
@@ -168,7 +185,7 @@ export function buildPierrotExecutionPlan(
     resolved.fallbackPolicy = 'no_source_substitution';
   }
 
-  if (ownerTool) {
+  if (ownerTool && !explicitWebIntent) {
     if (ownerTool.kind === 'commercial') {
       resolved.operation = 'commercial.report';
       resolved.tool = 'commercial';
@@ -213,7 +230,12 @@ export function buildPierrotExecutionPlan(
     }
   }
 
-  if (options.ownerMode && resolved.operation === 'general' && searchVerb) {
+  if (
+    !explicitWebIntent &&
+    options.ownerMode &&
+    resolved.operation === 'general' &&
+    searchVerb
+  ) {
     resolved.operation = 'brain.search';
     resolved.tool = 'brain';
     resolved.ownerOnly = true;

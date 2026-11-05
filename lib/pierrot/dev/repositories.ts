@@ -1,5 +1,4 @@
 import { assertServerOnly } from '@/lib/serverOnly';
-import { getGitHubToken } from '@/lib/github';
 import type {
   DevRepositoryConfig,
   DevRepositoryKey,
@@ -68,7 +67,8 @@ function repositoryConfig(definition: (typeof REPOSITORY_DEFINITIONS)[number]): 
     defaultBranch,
     workBranch,
     description: definition.description,
-    configured: Boolean(getGitHubToken()),
+    // Configuration only: the token itself is read by the repository client.
+    configured: Boolean((process.env.GITHUB_TOKEN || '').trim()),
   };
 }
 

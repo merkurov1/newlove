@@ -53,6 +53,7 @@ function inputFromBody(body: unknown): DevTaskInput {
     tests: stringArray('tests'),
     acceptanceCriteria: stringArray('acceptanceCriteria'),
     unverified: stringArray('unverified'),
+    decisionIds: stringArray('decisionIds'),
     conversationId:
       typeof value.conversationId === 'string' ? value.conversationId : null,
     status: typeof value.status === 'string' ? (value.status as DevTaskInput['status']) : undefined,

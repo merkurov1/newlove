@@ -66,7 +66,7 @@ function taskRow(overrides: Record<string, unknown> = {}): Record<string, unknow
   return {
     id: TASK_ID,
     user_id: USER_ID,
-    repository: 'newlove',
+    repository: 'merkurov1/newlove',
     base_ref: 'main',
     base_commit: 'a'.repeat(40),
     task: 'Dev Mode reliability',
@@ -136,7 +136,7 @@ describe('Task Studio prompt generation', () => {
     });
 
     expect(prompt).toContain('# ENGINEERING TASK — Dev Mode reliability');
-    expect(prompt).toContain('Repository: newlove');
+    expect(prompt).toContain('Repository: merkurov1/newlove');
     expect(prompt).toContain('## Acceptance criteria');
     expect(prompt).toContain('No replay after side effects');
     expect(prompt).toContain('Never write directly to the default branch');
@@ -174,7 +174,7 @@ describe('Task Studio persistence', () => {
     expect(lastInsert).toMatchObject({
       task: 'Dev Mode reliability',
       status: 'draft',
-      repository: 'newlove',
+      repository: 'merkurov1/newlove',
       conversation_id: 'conv_12345678',
     });
     expect(String(lastInsert?.prompt_text)).toContain('# ENGINEERING TASK');

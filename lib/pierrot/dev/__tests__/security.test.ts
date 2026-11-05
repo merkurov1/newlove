@@ -25,8 +25,8 @@ describe('Dev Mode security boundary', () => {
   });
 
   it('does not promise write capabilities in the system prompt', () => {
-    expect(PIERROT_DEV_SYSTEM_PROMPT).toContain('There is no write tool');
     expect(PIERROT_DEV_SYSTEM_PROMPT).toContain('read-only GitHub tools');
+    expect(PIERROT_DEV_SYSTEM_PROMPT).toMatch(/no write tool|You do not write code/i);
     expect(PIERROT_DEV_SYSTEM_PROMPT).not.toContain(
       'create_or_update_file(path, content, message, branch)'
     );

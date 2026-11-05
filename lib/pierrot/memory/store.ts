@@ -642,6 +642,8 @@ export type MemoryUpdatePatch = {
   lastReferencedAt?: string | null;
   archivedReason?: string | null;
   supersededBy?: string | null;
+  /** Add or replace provenance links without changing the record body/status. */
+  sourceRefs?: unknown[];
   /** Event-only metadata; not persisted on the row. */
   eventReason?: string;
   eventSource?: string;
@@ -699,6 +701,9 @@ export async function updateMemoryRecord(
   if (patch.lastReferencedAt !== undefined) update.last_referenced_at = patch.lastReferencedAt;
   if (patch.archivedReason !== undefined) update.archived_reason = patch.archivedReason;
   if (patch.supersededBy !== undefined) update.superseded_by = patch.supersededBy;
+  if (patch.sourceRefs !== undefined) {
+    update.source_refs = patch.sourceRefs.slice(0, 20);
+  }
 
   const statusChanged = Boolean(patch.status && patch.status !== existing.status);
   const hasNonStatusChange =
@@ -712,7 +717,8 @@ export async function updateMemoryRecord(
     patch.confidence !== undefined ||
     patch.validFrom !== undefined ||
     patch.validUntil !== undefined ||
-    patch.supersededBy !== undefined;
+    patch.supersededBy !== undefined ||
+    patch.sourceRefs !== undefined;
 
   if (!statusChanged && !hasNonStatusChange) {
     if (patch.lastReferencedAt !== undefined) {
@@ -780,6 +786,7 @@ export async function updateMemoryRecord(
       last_referenced_at: existing.lastReferencedAt,
       archived_reason: existing.archivedReason,
       superseded_by: existing.supersededBy,
+      source_refs: existing.sourceRefs,
       status: existing.status,
       updated_at: existing.updatedAt,
     };

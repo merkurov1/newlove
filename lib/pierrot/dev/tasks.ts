@@ -59,9 +59,23 @@ function status(value: unknown, fallback: DevTaskStatus = 'draft'): DevTaskStatu
 
 function verificationStatus(value: unknown): DevVerificationStatus | null {
   const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (normalized === 'passed') return 'verified';
+  if (normalized === 'partial') return 'verified_with_warnings';
+  if (normalized === 'not_run') return 'not_verified';
+  if (normalized === 'failed') return 'rejected';
   return DEV_VERIFICATION_STATUSES.includes(normalized as DevVerificationStatus)
     ? (normalized as DevVerificationStatus)
     : null;
+}
+
+function storedVerificationStatus(
+  value: DevVerificationStatus | null
+): string | null {
+  if (value === 'verified') return 'passed';
+  if (value === 'verified_with_warnings') return 'partial';
+  if (value === 'not_verified') return 'not_run';
+  if (value === 'rejected') return 'failed';
+  return value;
 }
 
 function missingColumn(error: unknown): boolean {
@@ -114,6 +128,7 @@ function mapRow(row: Record<string, unknown>): DevTask {
     unverified: list(row.unverified),
     conversationId:
       typeof row.conversation_id === 'string' ? row.conversation_id : null,
+    decisionIds: list(row.decision_ids),
     status: status(row.status),
     verificationStatus: verificationStatus(row.verification_status),
     verificationNotes: text(row.verification_notes),
@@ -203,6 +218,7 @@ export function createTaskInput(input: DevTaskInput): DevTaskInput {
     acceptanceCriteria: list(input.acceptanceCriteria),
     unverified: list(input.unverified),
     conversationId: input.conversationId || null,
+    decisionIds: list(input.decisionIds),
     status: status(input.status),
   };
 }
@@ -223,6 +239,7 @@ function fullRow(input: DevTaskInput): Record<string, unknown> {
     security_constraints: input.securityConstraints || [],
     unverified: input.unverified || [],
     conversation_id: input.conversationId || null,
+    decision_ids: input.decisionIds || [],
     status: input.status || 'draft',
     title: input.title,
     objective: input.objective || '',
@@ -278,14 +295,16 @@ export async function createDevTask(
   const store = getServerSupabaseClient({ useServiceRole: true });
   const input = createTaskInput(rawInput);
   const config = resolveDevRepository(input.repository);
-  input.repository = config.key;
+  // Production stores owner/repo (the CHECK constraint rejects a bare key),
+  // while the UI/API use the short key. Normalize at the persistence boundary.
+  input.repository = config.fullName;
 
   const prompt = buildTaskPrompt({
     ...input,
     title: input.title,
     objective: input.objective || '',
     context: input.context || '',
-    repository: config.key,
+    repository: config.fullName,
     baseRef: input.baseRef || config.workBranch,
     baseCommit: input.baseCommit || null,
     affectedFiles: input.affectedFiles || [],
@@ -302,6 +321,7 @@ export async function createDevTask(
     acceptanceCriteria: input.acceptanceCriteria || [],
     unverified: input.unverified || [],
     conversationId: input.conversationId || null,
+    decisionIds: input.decisionIds || [],
     status: input.status || 'draft',
     id: '',
     userId: null,
@@ -319,7 +339,7 @@ export async function createDevTask(
   const row = fullRow({
     ...input,
     baseRef: input.baseRef || config.workBranch,
-    repository: config.key,
+    repository: config.fullName,
   });
   row.prompt_text = prompt;
   row.user_id = isUuid(userId) ? userId : null;
@@ -385,6 +405,36 @@ export async function getDevTask(
   }
 }
 
+/**
+ * Idempotency boundary for memory → Dev transfers. The task stores the source
+ * decision ID in the existing `decision_ids` array, so a retry cannot create a
+ * second Dev task even if updating the source memory row failed.
+ */
+export async function findDevTaskByDecisionId(
+  userId: string,
+  decisionId: string
+): Promise<DevTask | null> {
+  if (!isUuid(decisionId)) return null;
+
+  try {
+    const store = getServerSupabaseClient({ useServiceRole: true });
+    let query = store
+      .from('pierrot_dev_prompts')
+      .select('*')
+      .contains('decision_ids', [decisionId])
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (isUuid(userId)) query = query.eq('user_id', userId);
+
+    const { data, error } = await query.maybeSingle();
+    if (error || !data) return null;
+    return mapRow(data);
+  } catch {
+    return null;
+  }
+}
+
 export async function updateDevTask(
   userId: string,
   id: string,
@@ -414,17 +464,22 @@ export async function updateDevTask(
     acceptanceCriteria: patch.acceptanceCriteria ?? existing.acceptanceCriteria,
     unverified: patch.unverified ?? existing.unverified,
     conversationId: patch.conversationId ?? existing.conversationId,
+    decisionIds: patch.decisionIds ?? existing.decisionIds,
     status: patch.status ?? existing.status,
   };
 
   const normalized = createTaskInput(mergedInput);
+  const repositoryConfig = resolveDevRepository(
+    normalized.repository || existing.repository
+  );
+  normalized.repository = repositoryConfig.fullName;
   const prompt = buildTaskPrompt({
     ...existing,
     ...normalized,
     title: normalized.title,
     objective: normalized.objective || '',
     context: normalized.context || '',
-    repository: normalized.repository || existing.repository,
+    repository: repositoryConfig.fullName,
     baseRef: normalized.baseRef || existing.baseRef,
     baseCommit: normalized.baseCommit || null,
     affectedFiles: normalized.affectedFiles || [],
@@ -441,6 +496,7 @@ export async function updateDevTask(
     acceptanceCriteria: normalized.acceptanceCriteria || [],
     unverified: normalized.unverified || [],
     conversationId: normalized.conversationId || null,
+    decisionIds: normalized.decisionIds || [],
     status: normalized.status || existing.status,
     promptText: '',
   });
@@ -468,6 +524,7 @@ export async function updateDevTask(
     acceptance_criteria: normalized.acceptanceCriteria || [],
     unverified: normalized.unverified || [],
     conversation_id: normalized.conversationId || null,
+    decision_ids: normalized.decisionIds || [],
     status: normalized.status || existing.status,
     prompt_text: prompt,
     updated_at: new Date().toISOString(),
@@ -495,6 +552,7 @@ export async function updateDevTask(
       security_constraints: normalized.securityConstraints || [],
       unverified: normalized.unverified || [],
       conversation_id: normalized.conversationId || null,
+      decision_ids: normalized.decisionIds || [],
       status: normalized.status || existing.status,
       prompt_text: prompt,
       updated_at: new Date().toISOString(),
@@ -525,14 +583,15 @@ export async function attachDevTaskResult(input: {
   if (!existing) return null;
 
   const store = getServerSupabaseClient({ useServiceRole: true });
+  const nextVerification =
+    input.verificationStatus === undefined
+      ? existing.verificationStatus
+      : input.verificationStatus;
   const patch: Record<string, unknown> = {
     result_commit: input.resultCommit || null,
     pull_requests: input.pullRequests || existing.pullRequests,
     result_notes: text(input.resultNotes ?? existing.resultNotes),
-    verification_status:
-      input.verificationStatus === undefined
-        ? existing.verificationStatus
-        : input.verificationStatus,
+    verification_status: storedVerificationStatus(nextVerification),
     verification_notes: text(input.verificationNotes ?? existing.verificationNotes),
     status: status(input.status, existing.status),
     updated_at: new Date().toISOString(),
@@ -548,10 +607,7 @@ export async function attachDevTaskResult(input: {
   if (result.error && missingColumn(result.error)) {
     const legacyPatch = {
       result_commit: input.resultCommit || null,
-      verification_status:
-        input.verificationStatus === undefined
-          ? existing.verificationStatus
-          : input.verificationStatus,
+      verification_status: storedVerificationStatus(nextVerification),
       verification_notes: text(input.verificationNotes ?? existing.verificationNotes),
       status: status(input.status, existing.status),
       updated_at: new Date().toISOString(),
@@ -609,7 +665,7 @@ export async function saveDevTaskReview(input: {
   const result = await store
     .from('pierrot_dev_prompts')
     .update({
-      verification_status: input.report.verdict,
+      verification_status: storedVerificationStatus(input.report.verdict),
       verification_notes: notes,
       verification_report: compactReport,
       result_commit: input.report.headCommit,

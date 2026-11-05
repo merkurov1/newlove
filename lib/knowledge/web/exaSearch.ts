@@ -138,7 +138,16 @@ function parseSources(
 
     if (!normalizedUrl || seen.has(normalizedUrl.dedupeKey)) continue;
 
-    const rawText = typeof record.text === 'string' ? record.text.trim() : '';
+    const highlights = Array.isArray(record.highlights)
+      ? record.highlights
+          .filter((highlight): highlight is string => typeof highlight === 'string')
+          .map((highlight) => sanitizeText(highlight, 900))
+          .filter(Boolean)
+          .slice(0, 6)
+      : [];
+    const highlightText = highlights.join(' ');
+    const pageText = typeof record.text === 'string' ? record.text.trim() : '';
+    const rawText = highlightText || pageText;
 
     if (!rawText) continue;
 
@@ -163,6 +172,13 @@ function parseSources(
       publishedAt: normalizePublishedDate(record.publishedDate),
       author: normalizeAuthor(record.author),
       text,
+      ...(highlights.length > 0
+        ? {
+            highlights: highlights.map((highlight) =>
+              sanitizeText(highlight, 600)
+            ),
+          }
+        : {}),
     });
   }
 
@@ -227,6 +243,9 @@ export async function searchWebEvidence(input: SearchWebEvidenceInput): Promise<
           numResults,
           moderation: true,
           contents: {
+            // Highlights are the primary, cheaper evidence format. `text` stays
+            // as a bounded compatibility fallback for pages without highlights.
+            highlights: true,
             text: {
               maxCharacters: WEB_SEARCH_MAX_TEXT_CHARS,
               verbosity: 'compact',

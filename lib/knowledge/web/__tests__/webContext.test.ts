@@ -8,6 +8,7 @@ import {
   buildPublicWebSources,
   buildWebEvidencePrompt,
   buildWebSourcesSection,
+  buildWebStatusPrompt,
   composeReplyWithWebSources,
 } from '../webContext';
 
@@ -121,6 +122,20 @@ describe('web evidence context', () => {
     expect(prompt).toContain('Keep the two sources distinct');
     expect(prompt).toContain('Identify changes, contradictions and genuinely new developments');
     expect(prompt).toContain('Do not present a Brain passage as external reporting');
+  });
+
+  it('never manufactures a Sources block when search failed', () => {
+    expect(buildWebSourcesSection([])).toBe('');
+    expect(composeReplyWithWebSources('Honest answer.', [], 500)).toBe('Honest answer.');
+    expect(
+      buildWebStatusPrompt({
+        outcome: 'unavailable',
+        query: 'x',
+        sources: [],
+        latencyMs: 1,
+        code: 'timeout',
+      })
+    ).toContain('Do not invent a source');
   });
 
   it('returns only bounded excerpts to the browser, never full page text', () => {

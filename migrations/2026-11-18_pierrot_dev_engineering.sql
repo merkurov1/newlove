@@ -143,6 +143,30 @@ REVOKE ALL ON TABLE public.pierrot_dev_requests FROM PUBLIC, anon, authenticated
 GRANT ALL ON TABLE public.pierrot_dev_prompts TO service_role;
 GRANT ALL ON TABLE public.pierrot_dev_requests TO service_role;
 
+-- Production originally created the Task Studio table with a narrower status
+-- vocabulary (draft/ready/used/verified/failed). The Task Studio contract needs
+-- in_progress/review/rejected/archived as well. Keep the original values for
+-- backward compatibility and expand the allowed set without touching rows.
+DO $$
+BEGIN
+  ALTER TABLE public.pierrot_dev_prompts
+    DROP CONSTRAINT IF EXISTS pierrot_dev_prompts_status_check;
+
+  ALTER TABLE public.pierrot_dev_prompts
+    ADD CONSTRAINT pierrot_dev_prompts_status_check
+    CHECK (status IN (
+      'draft',
+      'ready',
+      'in_progress',
+      'review',
+      'verified',
+      'rejected',
+      'archived',
+      'used',
+      'failed'
+    ));
+END $$;
+
 COMMENT ON TABLE public.pierrot_dev_prompts IS
   'Owner-only engineering tasks for Pierrot Dev Mode. Created from Dev conversations; no public access.';
 COMMENT ON TABLE public.pierrot_dev_requests IS

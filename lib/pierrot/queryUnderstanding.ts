@@ -388,7 +388,7 @@ function classifyIntent(input: {
       text
     );
   const externalMarker =
-    /(что\s+известно|what\s+is\s+known|who\s+is|кто\s+такой|что\s+такое|what\s+is|what\s+are|в\s+интернете|on\s+the\s+web|external|внешн|сравни\s+с|compare\s+with)/i.test(
+    /(что\s+известно|what\s+is\s+known|who\s+is|кто\s+такой|что\s+такое|what\s+is|what\s+are|интернет[а-я]*|on\s+the\s+web|web\s+search|online|\bweb\b|external|внешн|сравни\s+с|compare\s+with)/i.test(
       text
     );
 
@@ -450,7 +450,7 @@ function classifyIntent(input: {
   }
 
   if (
-    /(в\s+интернете|интернет[еа]?|online|web\s+search|поищи\s+в\s+сети|latest\s+news|новости|что\s+происходит|what\s+is\s+happening|current\s+events)/i.test(
+    /((?:найди|поищи|посмотри|проверь)(?:те)?\s+(?:в|во)\s+(?:интернете|сети|вебе)|что\s+(?:пишут|говорят|известно)\s+(?:в|во)\s+(?:интернете|сети|вебе)|search\s+(?:the\s+)?web|find\s+(?:it\s+)?online|look\s+(?:it\s+)?up|check\s+online|web\s+search|в\s+интернете|интернет[еа]?|online|поищи\s+в\s+сети|latest\s+news|новости|что\s+происходит|what\s+is\s+happening|current\s+events)/i.test(
       text
     )
   ) {

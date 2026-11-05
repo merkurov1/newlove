@@ -67,6 +67,7 @@ function patchFromBody(body: Record<string, unknown>): Partial<DevTaskInput> {
     'tests',
     'acceptanceCriteria',
     'unverified',
+    'decisionIds',
   ] as const) {
     const value = arrayValue(body[key]);
     if (value) patch[key] = value;

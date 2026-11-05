@@ -102,6 +102,41 @@ describe('Exa web search client', () => {
     expect(body.contents).toMatchObject({ text: { maxCharacters: 2_000 } });
   });
 
+  it('requests highlights and uses them as the primary evidence text', async () => {
+    const fetchImpl = fetchReturning({
+      results: [
+        {
+          title: 'Sotheby’s results',
+          url: 'https://www.sothebys.com/results',
+          publishedDate: '2026-11-01T00:00:00.000Z',
+          author: 'Sotheby’s',
+          highlights: [
+            'The auction total reached a record level.',
+            'The sale was led by a rare painting.',
+          ],
+          text: 'Long page text that should not be needed when highlights are present.',
+        },
+      ],
+    });
+
+    const search = await searchWebEvidence({
+      query: 'Sotheby’s auction results',
+      env,
+      fetchImpl,
+    });
+
+    expect(search.outcome).toBe('relevant_results');
+    expect(search.sources[0].text).toContain('record level');
+    expect(search.sources[0].text).toContain('rare painting');
+    expect(search.sources[0].highlights).toHaveLength(2);
+
+    const request = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls[0];
+    const init = request?.[1] as RequestInit;
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+
+    expect(body.contents).toMatchObject({ highlights: true });
+  });
+
   it('deduplicates the same URL with trailing slash, hash or tracking host variants', async () => {
     const fetchImpl = fetchReturning({
       results: [
@@ -165,6 +200,23 @@ describe('Exa web search client', () => {
     expect(search.outcome).toBe('unavailable');
     expect(search.code).toBe('timeout');
     expect(search.sources).toEqual([]);
+  });
+
+  it('returns a structured empty result when Exa has no usable sources', async () => {
+    const fetchImpl = fetchReturning({ results: [] });
+
+    const search = await searchWebEvidence({
+      query: 'An obscure query',
+      env,
+      fetchImpl,
+    });
+
+    expect(search).toMatchObject({
+      outcome: 'no_results',
+      sources: [],
+      query: 'An obscure query',
+    });
+    expect(search.code).toBeUndefined();
   });
 
   it('returns unavailable on an HTTP error', async () => {

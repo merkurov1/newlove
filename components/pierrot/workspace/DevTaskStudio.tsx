@@ -440,6 +440,12 @@ export default function DevTaskStudio({
             <span className="pw-dev-task-id">{selected.id.slice(0, 8)}</span>
           </div>
 
+          {selected.decisionIds.length > 0 && (
+            <p className="pw-dev-context-muted">
+              Из памяти: {selected.decisionIds.map((id) => id.slice(0, 8)).join(', ')}
+            </p>
+          )}
+
           <label className="pw-dev-field">
             <span>Название</span>
             <input

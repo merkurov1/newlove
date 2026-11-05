@@ -1257,6 +1257,80 @@ describe('Pierrot autonomous web search', () => {
     expect(json.reply).toContain('[Mark Rothko](https://www.moma.org/artists/5047)');
   });
 
+  it('strips an explicit web command before calling Exa', async () => {
+    webSearch.searchWebEvidence.mockResolvedValueOnce(webResult());
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          message: 'Найди в интернете последние новости о Sotheby’s',
+        })
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(webSearch.searchWebEvidence).toHaveBeenCalledTimes(1);
+    const searchCall = webSearch.searchWebEvidence.mock.calls[0][0] as {
+      query: string;
+    };
+    expect(searchCall.query).toContain('Sotheby');
+    expect(searchCall.query.toLowerCase()).not.toContain('найди в интернете');
+  });
+
+  it('uses the previous web topic for a contextual follow-up', async () => {
+    webSearch.searchWebEvidence.mockResolvedValueOnce(webResult());
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          message: 'А теперь подробнее про результаты аукционов',
+          history: [
+            {
+              role: 'user',
+              content: 'Найди в интернете последние новости о Sotheby’s',
+            },
+            { role: 'assistant', content: 'Вот несколько источников.' },
+          ],
+        })
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(webSearch.searchWebEvidence).toHaveBeenCalledTimes(1);
+    const searchCall = webSearch.searchWebEvidence.mock.calls[0][0] as {
+      query: string;
+    };
+    expect(searchCall.query).toContain('Sotheby');
+    expect(searchCall.query).toContain('аукцион');
+  });
+
+  it('does not call Exa for an explicit Brain request', async () => {
+    const response = await POST(
+      makeRequest(validBody({ message: 'Найди в Brain заметку о Sotheby’s' }))
+    );
+
+    expect(response.status).toBe(200);
+    expect(webSearch.searchWebEvidence).not.toHaveBeenCalled();
+  });
+
+  it('does not call Exa for an explicit Media Archive request', async () => {
+    const response = await POST(
+      makeRequest(validBody({ message: 'Найди в Media Archive публикации о Sotheby’s' }))
+    );
+
+    expect(response.status).toBe(200);
+    expect(webSearch.searchWebEvidence).not.toHaveBeenCalled();
+  });
+
+  it('does not invent a query for an empty explicit web command', async () => {
+    const response = await POST(
+      makeRequest(validBody({ message: 'Поищи в интернете' }))
+    );
+
+    expect(response.status).toBe(200);
+    expect(webSearch.searchWebEvidence).not.toHaveBeenCalled();
+  });
+
   it('joins Brain and Web evidence when both are relevant', async () => {
     asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
       id: 'owner-1',

@@ -53,6 +53,27 @@ describe('Pierrot execution plan routing', () => {
     expect(plan.operation).toBe('web.search');
   });
 
+  it.each([
+    'Найди в интернете последние новости о Sotheby’s',
+    'Поищи в сети информацию о Sotheby’s',
+    'Посмотри в сети последние результаты аукционов',
+    'Проверь в интернете, что нового у Sotheby’s',
+    'Search the web for the latest Sotheby’s results',
+  ])('keeps explicit web command %s on web.search', (query) => {
+    const plan = buildPierrotExecutionPlan(query, { ownerMode: true });
+    expect(plan.operation).toBe('web.search');
+    expect(plan.tool).toBe('web');
+    expect(plan.ownerTool).toBeNull();
+  });
+
+  it('keeps an explicit Brain request on Brain even when it contains a search verb', () => {
+    const plan = buildPierrotExecutionPlan('Найди в Brain заметку о Sotheby’s', {
+      ownerMode: true,
+    });
+    expect(plan.operation).toBe('brain.search');
+    expect(plan.ownerTool).toBeNull();
+  });
+
   it('routes “Покажи последние материалы из Media Archive” to media.search', () => {
     const plan = buildPierrotExecutionPlan('Покажи последние материалы из Media Archive', {
       ownerMode: true,

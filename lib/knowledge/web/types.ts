@@ -26,6 +26,8 @@ export type WebEvidenceSource = {
   author: string | null;
   /** Bounded extracted text. Server-side only; never returned to the browser whole. */
   text: string;
+  /** Exa highlight fragments used to build `text`, when supplied. */
+  highlights?: string[];
 };
 
 export type WebEvidenceSourceSummary = Omit<WebEvidenceSource, 'text'> & {

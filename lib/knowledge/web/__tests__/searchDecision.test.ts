@@ -158,4 +158,122 @@ describe('autonomous web search decision', () => {
     expect(decision.query).toBe('the latest developments in AI?');
     expect(buildWebSearchQuery('x'.repeat(1_000)).length).toBeLessThanOrEqual(500);
   });
+
+  it.each([
+    'Найди в интернете последние новости о Sotheby’s',
+    'Поищи в сети информацию о Sotheby’s',
+    'Найди в сети информацию о Sotheby’s',
+    'Посмотри в сети последние результаты аукционов',
+    'Проверь в интернете, что нового у Sotheby’s',
+    'Что пишут в интернете о Sotheby’s',
+    'Search the web for the latest Sotheby’s results',
+    'Find online the latest Sotheby’s results',
+    'Look it up: Sotheby’s auction results',
+    'Check online for Sotheby’s news',
+  ])('forces web search for an explicit command: %s', (message) => {
+    const decision = decideWebSearch({ message });
+
+    expect(decision.shouldSearch).toBe(true);
+    expect(decision.reason).toBe('explicit_web');
+    expect(decision.query.length).toBeGreaterThan(0);
+    expect(decision.query.toLowerCase()).not.toContain('найди в интернете');
+    expect(decision.query.toLowerCase()).not.toContain('search the web');
+  });
+
+  it('keeps explicit Brain and Media Archive requests away from web search', () => {
+    expect(decideWebSearch({ message: 'Найди в Brain заметку о Sotheby’s' })).toMatchObject({
+      shouldSearch: false,
+      reason: 'explicit_brain',
+    });
+    expect(
+      decideWebSearch({ message: 'Найди в Media Archive публикации о Sotheby’s' })
+    ).toMatchObject({
+      shouldSearch: false,
+      reason: 'explicit_media',
+    });
+  });
+
+  it('routes an explicit comparison to Brain + Web', () => {
+    const decision = decideWebSearch({
+      message: 'Сравни мои тексты с тем, что пишут в интернете',
+    });
+
+    expect(decision.shouldSearch).toBe(true);
+    expect(decision.reason).toBe('explicit_brain_web');
+    expect(decision.explicitSource).toBe('brain_web');
+  });
+
+  it('keeps the previous web topic across a follow-up', () => {
+    const decision = decideWebSearch({
+      message: 'А теперь подробнее про результаты аукционов',
+      history: [
+        {
+          role: 'user',
+          content: 'Найди в интернете последние новости о Sotheby’s',
+        },
+        { role: 'assistant', content: 'Вот несколько источников.' },
+      ],
+    });
+
+    expect(decision.shouldSearch).toBe(true);
+    expect(decision.reason).toBe('web_follow_up');
+    expect(decision.usedContext).toBe(true);
+    expect(decision.query).toContain('Sotheby');
+    expect(decision.query).toContain('аукцион');
+  });
+
+  it('resolves a pronoun from the previous web query', () => {
+    const decision = decideWebSearch({
+      message: 'А что известно о его финансировании?',
+      history: [
+        {
+          role: 'user',
+          content: 'Найди в интернете информацию о новом проекте X',
+        },
+        { role: 'assistant', content: 'Нашёл несколько публикаций.' },
+      ],
+    });
+
+    expect(decision.shouldSearch).toBe(true);
+    expect(decision.reason).toBe('web_follow_up');
+    expect(decision.query).toContain('новом проекте X');
+    expect(decision.query).toContain('финансировании');
+  });
+
+  it('switches cleanly to a new web topic when asked', () => {
+    const decision = decideWebSearch({
+      message: 'А теперь про Christie’s',
+      history: [
+        {
+          role: 'user',
+          content: 'Найди в интернете последние новости о Sotheby’s',
+        },
+        { role: 'assistant', content: 'Вот несколько источников.' },
+      ],
+    });
+
+    expect(decision.shouldSearch).toBe(true);
+    expect(decision.topicChanged).toBe(true);
+    expect(decision.query).toContain('Christie');
+    expect(decision.query).not.toContain('Sotheby');
+  });
+
+  it('preserves explicit domains and date constraints in the query', () => {
+    const decision = decideWebSearch({
+      message:
+        'Найди в интернете на artnet.com новости о Sotheby’s за последнюю неделю',
+    });
+
+    expect(decision.shouldSearch).toBe(true);
+    expect(decision.query).toContain('artnet.com');
+    expect(decision.query).toContain('последнюю неделю');
+  });
+
+  it('does not treat an empty explicit command as a successful search', () => {
+    const decision = decideWebSearch({ message: 'Поищи в интернете' });
+
+    expect(decision.shouldSearch).toBe(false);
+    expect(decision.reason).toBe('ambiguous');
+    expect(decision.signals).toContain('empty_query');
+  });
 });
