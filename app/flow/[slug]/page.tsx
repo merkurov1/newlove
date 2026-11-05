@@ -19,6 +19,7 @@ import {
 import { getCachedFlowItem } from '@/lib/flow/items-cash';
 import { readDistributionUrl } from '@/lib/flow/distribution';
 import PierrotContextBlock from '@/components/flow/PierrotContextBlock';
+import FlowImageComponent from '@/components/flow/FlowImage';
 
 // Publication data and its ready AI context share one tagged cache entry.
 // Edits, deletes and AI context generation invalidate the same tag.
@@ -219,11 +220,12 @@ function MarkdownBody({ body }: { body: string }) {
           },
           img: ({ src, alt }) => (
             <figure className="my-7">
-              <img
+              <FlowImageComponent
                 src={src}
                 alt={alt ?? ''}
-                loading="lazy"
-                className="mx-auto max-h-[75vh] w-full object-contain"
+                aspectRatio="4 / 3"
+                objectFit="contain"
+                sizes="(max-width: 768px) 100vw, 720px"
               />
               {alt && (
                 <figcaption className="mt-2 font-serif text-sm italic text-stone-500">
@@ -261,11 +263,17 @@ function ImageFigure({
   index,
   className,
   imageClassName,
+  aspectRatio,
+  objectFit = 'cover',
+  priority = false,
 }: {
   image: FlowImage;
   index: number;
   className?: string;
   imageClassName?: string;
+  aspectRatio?: string;
+  objectFit?: 'cover' | 'contain';
+  priority?: boolean;
 }) {
   const caption = image.caption ?? image.alt;
 
@@ -277,11 +285,17 @@ function ImageFigure({
         rel="noopener noreferrer"
         className="block overflow-hidden rounded-2xl bg-stone-100"
       >
-        <img
+        <FlowImageComponent
           src={image.url}
           alt={caption || `Image ${index + 1}`}
-          loading={index === 0 ? 'eager' : 'lazy'}
-          className={imageClassName}
+          aspectRatio={
+            aspectRatio ||
+            (image.width && image.height ? `${image.width} / ${image.height}` : '4 / 3')
+          }
+          objectFit={objectFit}
+          priority={priority || index === 0}
+          sizes="(max-width: 768px) 100vw, 720px"
+          imageClassName={imageClassName}
         />
       </a>
       {caption && (
@@ -302,7 +316,9 @@ function SmartGallery({ images }: { images: FlowImage[] }) {
         image={images[0]}
         index={0}
         className="my-6"
-        imageClassName="mx-auto max-h-[78vh] w-auto max-w-full object-contain"
+        aspectRatio="4 / 3"
+        objectFit="contain"
+        priority
       />
     );
   }
@@ -315,7 +331,9 @@ function SmartGallery({ images }: { images: FlowImage[] }) {
             key={`${image.url}-${index}`}
             image={image}
             index={index}
-            imageClassName="aspect-[4/3] w-full object-cover transition duration-300 hover:scale-[1.01]"
+            imageClassName="transition duration-300 hover:scale-[1.01]"
+            aspectRatio="4 / 3"
+            objectFit="cover"
           />
         ))}
       </div>
@@ -328,7 +346,9 @@ function SmartGallery({ images }: { images: FlowImage[] }) {
         <ImageFigure
           image={images[0]}
           index={0}
-          imageClassName="aspect-[16/10] w-full object-cover transition duration-300 hover:scale-[1.01]"
+          imageClassName="transition duration-300 hover:scale-[1.01]"
+          aspectRatio="16 / 10"
+          objectFit="cover"
         />
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
           {images.slice(1, 3).map((image, index) => (
@@ -336,7 +356,9 @@ function SmartGallery({ images }: { images: FlowImage[] }) {
               key={`${image.url}-${index}`}
               image={image}
               index={index + 1}
-              imageClassName="aspect-[4/3] w-full object-cover transition duration-300 hover:scale-[1.01]"
+              imageClassName="transition duration-300 hover:scale-[1.01]"
+            aspectRatio="4 / 3"
+            objectFit="cover"
             />
           ))}
         </div>
@@ -351,7 +373,9 @@ function SmartGallery({ images }: { images: FlowImage[] }) {
           key={`${image.url}-${index}`}
           image={image}
           index={index}
-          imageClassName="aspect-square w-full object-cover transition duration-300 hover:scale-[1.01]"
+          imageClassName="transition duration-300 hover:scale-[1.01]"
+          aspectRatio="1 / 1"
+          objectFit="cover"
         />
       ))}
     </div>
@@ -386,11 +410,13 @@ function VideoBlock({ videos }: { videos: FlowVideo[] }) {
               className="block rounded-2xl border border-stone-200 p-4 transition hover:bg-stone-50"
             >
               {video.thumbnail && (
-                <img
+                <FlowImageComponent
                   src={video.thumbnail}
                   alt={video.title ?? ''}
-                  loading={index === 0 ? 'eager' : 'lazy'}
-                  className="mb-3 aspect-video w-full rounded-xl object-cover"
+                  aspectRatio="16 / 9"
+                  sizes="(max-width: 768px) 100vw, 720px"
+                  priority={index === 0}
+                  className="mb-3 rounded-xl"
                 />
               )}
               <span className="font-serif text-lg text-stone-900">
@@ -424,11 +450,14 @@ function SmartLinks({ links }: { links: FlowLink[] }) {
         >
           <div className="flex min-w-0 items-center gap-4">
             {link.image ? (
-              <img
+              <FlowImageComponent
                 src={link.image}
                 alt=""
-                loading="lazy"
-                className="h-14 w-14 shrink-0 rounded-xl bg-stone-200 object-cover"
+                aspectRatio="1 / 1"
+                sizes="56px"
+                transformWidth={160}
+                className="shrink-0 rounded-xl"
+                style={{ width: 56, height: 56 }}
               />
             ) : (
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-stone-200/50 font-mono text-sm text-stone-400">

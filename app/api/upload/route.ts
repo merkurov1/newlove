@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { optimizeUploadImage } from '@/lib/images/optimizeUpload';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -51,14 +52,18 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createClient({ useServiceRole: true });
+    const optimized = await optimizeUploadImage(
+      Buffer.from(await file.arrayBuffer()),
+      file.type
+    );
 
     const storageKey =
-      `flow/uploads/${crypto.randomUUID()}.${extension}`;
+      `flow/uploads/${crypto.randomUUID()}.${optimized.extension}`;
 
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
-      .upload(storageKey, await file.arrayBuffer(), {
-        contentType: file.type,
+      .upload(storageKey, optimized.buffer, {
+        contentType: optimized.mimeType,
         cacheControl: '31536000',
         upsert: false,
       });
@@ -94,8 +99,12 @@ export async function POST(req: NextRequest) {
         url: data.publicUrl,
         path: storageKey,
         name: file.name,
-        type: file.type,
-        size: file.size,
+        type: optimized.mimeType,
+        size: optimized.buffer.length,
+        width: optimized.width,
+        height: optimized.height,
+        optimized: optimized.optimized,
+        originalSize: optimized.originalSize,
       },
     });
   } catch (error) {

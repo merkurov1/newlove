@@ -3,11 +3,14 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import NewPostModal from '@/components/flow/NewPostModal';
+import FlowImageComponent from '@/components/flow/FlowImage';
 
 type FlowImage = {
   url: string;
   alt: string | null;
   caption: string | null;
+  width: number | null;
+  height: number | null;
 };
 
 type FlowVideo = {
@@ -196,13 +199,14 @@ function LinkCard({
           href={href}
           tabIndex={-1}
           aria-hidden="true"
-          className="relative w-32 shrink-0 sm:w-40"
+          className="w-32 shrink-0 sm:w-40"
         >
-          <img
+          <FlowImageComponent
             src={preview.image}
             alt=""
-            loading="lazy"
-            className="absolute inset-0 h-full w-full object-cover"
+            aspectRatio="1 / 1"
+            sizes="(max-width: 640px) 128px, 160px"
+            transformWidth={320}
           />
         </Link>
       )}
@@ -223,11 +227,14 @@ function CompactLinkRow({
     <div className="group/row flex items-center justify-between gap-3 p-3 transition hover:bg-neutral-100/50">
       <div className="flex min-w-0 items-center gap-3">
         {preview.image ? (
-          <img
+          <FlowImageComponent
             src={preview.image}
             alt=""
-            loading="lazy"
-            className="h-10 w-10 shrink-0 rounded-lg bg-neutral-200 object-cover"
+            aspectRatio="1 / 1"
+            sizes="40px"
+            transformWidth={160}
+            className="shrink-0 rounded-lg"
+            style={{ width: 40, height: 40 }}
           />
         ) : (
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-200/50 font-mono text-xs text-neutral-400">
@@ -281,13 +288,14 @@ function GalleryGrid({
       <figure className="mb-4">
         <Link
           href={href}
-          className="inline-block max-w-full overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50 transition hover:border-neutral-300"
+          className="block w-full overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50 transition hover:border-neutral-300"
         >
-          <img
+          <FlowImageComponent
             src={image.url}
             alt={altFor(image, 0)}
-            loading="lazy"
-            className="block max-h-[520px] w-auto max-w-full object-cover"
+            aspectRatio="4 / 3"
+            objectFit="contain"
+            sizes="(max-width: 768px) 100vw, 640px"
           />
         </Link>
         {(image.caption || image.alt) && (
@@ -308,11 +316,11 @@ function GalleryGrid({
             href={href}
             className="block overflow-hidden rounded-2xl bg-neutral-100 transition hover:opacity-95"
           >
-            <img
+            <FlowImageComponent
               src={image.url}
               alt={altFor(image, index)}
-              loading="lazy"
-              className="block aspect-[4/3] w-full object-cover"
+              aspectRatio="4 / 3"
+              sizes="(max-width: 640px) 50vw, 320px"
             />
           </Link>
         ))}
@@ -327,11 +335,11 @@ function GalleryGrid({
           href={href}
           className="block overflow-hidden rounded-2xl bg-neutral-100 transition hover:opacity-95"
         >
-          <img
+          <FlowImageComponent
             src={images[0].url}
             alt={altFor(images[0], 0)}
-            loading="lazy"
-            className="block aspect-[16/9] w-full object-cover"
+            aspectRatio="16 / 9"
+            sizes="(max-width: 768px) 100vw, 640px"
           />
         </Link>
         <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
@@ -341,11 +349,11 @@ function GalleryGrid({
               href={href}
               className="block overflow-hidden rounded-2xl bg-neutral-100 transition hover:opacity-95"
             >
-              <img
+              <FlowImageComponent
                 src={image.url}
                 alt={altFor(image, index + 1)}
-                loading="lazy"
-                className="block aspect-[4/3] w-full object-cover"
+                aspectRatio="4 / 3"
+                sizes="(max-width: 640px) 50vw, 320px"
               />
             </Link>
           ))}
@@ -368,11 +376,11 @@ function GalleryGrid({
             href={href}
             className="relative block overflow-hidden rounded-2xl bg-neutral-100 transition hover:opacity-95"
           >
-            <img
+            <FlowImageComponent
               src={image.url}
               alt={altFor(image, index)}
-              loading="lazy"
-              className="block aspect-square w-full object-cover"
+              aspectRatio="1 / 1"
+              sizes="(max-width: 640px) 50vw, 320px"
             />
             {isLastWithMore && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white backdrop-blur-[2px]">
@@ -403,11 +411,12 @@ function VideoCards({ videos }: { videos: FlowVideo[] }) {
         >
           {video.thumbnail && (
             <div className="relative w-32 shrink-0 overflow-hidden rounded-xl bg-neutral-200 sm:w-40">
-              <img
+              <FlowImageComponent
                 src={video.thumbnail}
                 alt=""
-                loading="lazy"
-                className="block aspect-video h-auto w-full object-cover"
+                aspectRatio="16 / 9"
+                sizes="(max-width: 640px) 128px, 160px"
+                transformWidth={320}
               />
               <span className="absolute inset-0 flex items-center justify-center bg-black/10 transition group-hover:bg-black/20">
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900/80 text-white shadow backdrop-blur-sm">

@@ -1,15 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
-import { ExternalLink, PenLine, Trash2 } from 'lucide-react';
+import { ExternalLink, PenLine, Trash2, X } from 'lucide-react';
 import NewPostModal from '@/components/flow/NewPostModal';
+import FlowImage from '@/components/flow/FlowImage';
+import WorkspaceMarkdown from './WorkspaceMarkdown';
 import { useOnlineStatus } from './useOnlineStatus';
 
-type FlowImage = {
+type FlowImageItem = {
   url: string;
   alt: string | null;
   caption: string | null;
+  width: number | null;
+  height: number | null;
 };
 
 type FlowLink = {
@@ -49,7 +53,7 @@ type FlowFeedItem = {
   source_url?: string | null;
   canonicalUrl?: string;
   sourceName?: string;
-  images?: FlowImage[];
+  images?: FlowImageItem[];
   videos?: FlowVideo[];
   links?: FlowLink[];
   published_at?: string | null;
@@ -87,16 +91,21 @@ export default function FlowWorkspace() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<FlowFeedItem | null>(null);
   const mountedRef = useRef(true);
-  const fetchingRef = useRef(false);
+  const requestIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const loadItems = useCallback(async () => {
-    if (fetchingRef.current) return;
-    fetchingRef.current = true;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const requestId = ++requestIdRef.current;
 
     try {
       const response = await fetch('/api/flow/items?limit=20&offset=0', {
         cache: 'no-store',
+        signal: controller.signal,
       });
       const payload = (await response.json().catch(() => ({}))) as FlowFeedResponse;
 
@@ -104,15 +113,17 @@ export default function FlowWorkspace() {
         throw new Error(payload.error || 'Не удалось загрузить Flow.');
       }
 
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || requestId !== requestIdRef.current) return;
       setItems(Array.isArray(payload.items) ? payload.items : []);
       setError(null);
     } catch (caught) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || requestId !== requestIdRef.current) return;
+      if (caught instanceof DOMException && caught.name === 'AbortError') return;
       setError(caught instanceof Error ? caught.message : 'Не удалось загрузить Flow.');
     } finally {
-      fetchingRef.current = false;
-      if (mountedRef.current) setLoading(false);
+      if (mountedRef.current && requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -127,9 +138,21 @@ export default function FlowWorkspace() {
     window.addEventListener('flow:updated', handleUpdated);
     return () => {
       mountedRef.current = false;
+      abortRef.current?.abort();
       window.removeEventListener('flow:updated', handleUpdated);
     };
   }, [loadItems]);
+
+  useEffect(() => {
+    if (!selectedItem) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setSelectedItem(null);
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [selectedItem]);
 
   async function deleteItem(item: FlowFeedItem) {
     if (!online) return;
@@ -152,7 +175,6 @@ export default function FlowWorkspace() {
       }
 
       setItems((current) => current.filter((entry) => entry.id !== item.id));
-      window.dispatchEvent(new CustomEvent('flow:updated'));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Удаление не удалось.');
     } finally {
@@ -162,91 +184,9 @@ export default function FlowWorkspace() {
 
   const empty = !loading && items.length === 0;
 
-  const content = useMemo(
-    () =>
-      items.map((item) => {
-        const body = item.bodyExcerpt || item.bodyText || '';
-        const images = item.images ?? [];
-        const links = (item.links ?? []).filter((link) => !link.inBody);
-        const href = itemHref(item);
-
-        return (
-          <article key={item.id} className="pw-site-entry">
-            <div className="pw-site-entry-meta">
-              <time dateTime={item.published_at || item.created_at || undefined}>
-                {formatDate(item.published_at || item.created_at)}
-              </time>
-              <div className="pw-site-entry-actions">
-                <button
-                  type="button"
-                  onClick={() => setEditingId(item.id)}
-                  disabled={!online || deletingId === item.id}
-                  aria-label="Редактировать запись"
-                >
-                  <PenLine size={13} aria-hidden="true" />
-                  Редактировать
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void deleteItem(item)}
-                  disabled={!online || deletingId === item.id}
-                  aria-label="Удалить запись"
-                >
-                  <Trash2 size={13} aria-hidden="true" />
-                  {deletingId === item.id ? 'Удаляю…' : 'Удалить'}
-                </button>
-              </div>
-            </div>
-
-            {item.showTitle && item.title && (
-              <h2 className="pw-site-entry-title">
-                <Link href={href}>{item.title}</Link>
-              </h2>
-            )}
-
-            {body && (
-              <Link href={href} className="pw-site-entry-body">
-                <p>{body}</p>
-              </Link>
-            )}
-
-            {item.bodyTruncated && (
-              <Link href={href} className="pw-site-entry-more">
-                Read full →
-              </Link>
-            )}
-
-            {images.length > 0 && (
-              <Link href={href} className="pw-site-entry-image">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={images[0].url} alt={images[0].alt || ''} loading="lazy" />
-              </Link>
-            )}
-
-            {links.map((link) => (
-              <a
-                key={link.url}
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="pw-site-entry-link"
-              >
-                <span>{link.title || link.siteName || link.domain || link.url}</span>
-                {link.description && <small>{link.description}</small>}
-                <em>{link.siteName || link.domain || 'источник'} ↗</em>
-              </a>
-            ))}
-
-            <div className="pw-site-entry-footer">
-              <Link href={href}>
-                Открыть на сайте <ExternalLink size={11} aria-hidden="true" />
-              </Link>
-            </div>
-          </article>
-        );
-      }),
-    [deletingId, items, online]
-  );
+  function openReader(item: FlowFeedItem) {
+    setSelectedItem(item);
+  }
 
   return (
     <div className="pw-flow-site">
@@ -259,16 +199,137 @@ export default function FlowWorkspace() {
 
         {loading ? (
           <div className="pw-flow-loading" aria-busy="true" aria-label="Загрузка Flow">
-            <span />
-            <span />
-            <span />
+            {[0, 1, 2].map((index) => (
+              <div key={index} className="pw-flow-skeleton">
+                <span className="pw-flow-skeleton-meta" />
+                <span className="pw-flow-skeleton-title" />
+                <span className="pw-flow-skeleton-line" />
+                <span className="pw-flow-skeleton-image" />
+              </div>
+            ))}
+          </div>
+        ) : error && items.length === 0 ? (
+          <div className="pw-flow-empty">
+            <p>Не удалось загрузить Flow.</p>
+            <button type="button" onClick={() => void loadItems()}>
+              Повторить
+            </button>
           </div>
         ) : empty ? (
           <div className="pw-flow-empty">
             <p>Публикаций пока нет.</p>
           </div>
         ) : (
-          <div className="pw-site-feed">{content}</div>
+          <div className="pw-site-feed">
+            {items.map((item, itemIndex) => {
+              const body = item.bodyExcerpt || item.bodyText || '';
+              const images = item.images ?? [];
+              const links = (item.links ?? []).filter((link) => !link.inBody);
+              const href = itemHref(item);
+
+              return (
+                <article
+                  key={item.id}
+                  className="pw-site-entry"
+                  style={{ '--pw-entry-index': itemIndex } as CSSProperties}
+                >
+                  <div className="pw-site-entry-meta">
+                    <time dateTime={item.published_at || item.created_at || undefined}>
+                      {formatDate(item.published_at || item.created_at)}
+                    </time>
+                    <div className="pw-site-entry-actions">
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(item.id)}
+                        disabled={!online || deletingId === item.id}
+                        aria-label="Редактировать запись"
+                      >
+                        <PenLine size={13} aria-hidden="true" />
+                        Редактировать
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteItem(item)}
+                        disabled={!online || deletingId === item.id}
+                        aria-label="Удалить запись"
+                      >
+                        <Trash2 size={13} aria-hidden="true" />
+                        {deletingId === item.id ? 'Удаляю…' : 'Удалить'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {item.showTitle && item.title && (
+                    <h2 className="pw-site-entry-title">
+                      <button type="button" onClick={() => openReader(item)}>
+                        {item.title}
+                      </button>
+                    </h2>
+                  )}
+
+                  {body && (
+                    <button
+                      type="button"
+                      className="pw-site-entry-body"
+                      onClick={() => openReader(item)}
+                    >
+                      <span className="pw-site-entry-body-text">{body}</span>
+                    </button>
+                  )}
+
+                  {item.bodyTruncated && (
+                    <button
+                      type="button"
+                      className="pw-site-entry-more"
+                      onClick={() => openReader(item)}
+                    >
+                      Читать полностью →
+                    </button>
+                  )}
+
+                  {images.length > 0 && (
+                    <button
+                      type="button"
+                      className="pw-site-entry-image"
+                      onClick={() => openReader(item)}
+                      aria-label="Открыть запись с изображением"
+                    >
+                      <FlowImage
+                        src={images[0].url}
+                        alt={images[0].alt || item.title || ''}
+                        aspectRatio="4 / 3"
+                        sizes="(max-width: 900px) 100vw, 720px"
+                        priority={itemIndex === 0}
+                      />
+                    </button>
+                  )}
+
+                  {links.map((link) => (
+                    <a
+                      key={link.url}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="pw-site-entry-link"
+                    >
+                      <span>{link.title || link.siteName || link.domain || link.url}</span>
+                      {link.description && <small>{link.description}</small>}
+                      <em>{link.siteName || link.domain || 'источник'} ↗</em>
+                    </a>
+                  ))}
+
+                  <div className="pw-site-entry-footer">
+                    <button type="button" onClick={() => openReader(item)}>
+                      Читать
+                    </button>
+                    <a href={href} target="_blank" rel="noopener noreferrer">
+                      На сайте <ExternalLink size={11} aria-hidden="true" />
+                    </a>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -284,12 +345,103 @@ export default function FlowWorkspace() {
         Опубликовать
       </button>
 
+      {selectedItem && (
+        <div
+          className="pw-flow-reader"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pw-flow-reader-title"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setSelectedItem(null);
+          }}
+        >
+          <article className="pw-flow-reader-panel">
+            <header className="pw-flow-reader-head">
+              <div>
+                <p className="pw-dev-kicker">FLOW · ПУБЛИЧНО</p>
+                <time dateTime={selectedItem.published_at || selectedItem.created_at || undefined}>
+                  {formatDate(selectedItem.published_at || selectedItem.created_at)}
+                </time>
+              </div>
+              <button
+                type="button"
+                className="pw-icon-button"
+                onClick={() => setSelectedItem(null)}
+                aria-label="Закрыть запись"
+                autoFocus
+              >
+                <X size={18} strokeWidth={1.4} aria-hidden="true" />
+              </button>
+            </header>
+
+            {selectedItem.title && (
+              <h2 id="pw-flow-reader-title" className="pw-flow-reader-title">
+                {selectedItem.title}
+              </h2>
+            )}
+
+            {selectedItem.body_md ? (
+              <WorkspaceMarkdown
+                className="pw-flow-reader-body"
+                content={selectedItem.body_md}
+              />
+            ) : (
+              <p className="pw-flow-reader-text">
+                {selectedItem.bodyText || selectedItem.bodyExcerpt || ''}
+              </p>
+            )}
+
+            {(selectedItem.images ?? []).map((image, index) => (
+              <FlowImage
+                key={`${image.url}-${index}`}
+                src={image.url}
+                alt={image.alt || image.caption || ''}
+                aspectRatio={
+                  image.width && image.height
+                    ? `${image.width} / ${image.height}`
+                    : '4 / 3'
+                }
+                objectFit="contain"
+                sizes="(max-width: 900px) 100vw, 720px"
+                className="pw-flow-reader-image"
+                priority={index === 0}
+              />
+            ))}
+
+            {(selectedItem.links ?? [])
+              .filter((link) => !link.inBody)
+              .map((link) => (
+                <a
+                  key={link.url}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="pw-flow-reader-link"
+                >
+                  <span>{link.title || link.siteName || link.domain || link.url}</span>
+                  {link.description && <small>{link.description}</small>}
+                  <em>{link.siteName || link.domain || 'источник'} ↗</em>
+                </a>
+              ))}
+
+            <footer className="pw-flow-reader-foot">
+              <a
+                href={itemHref(selectedItem)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Открыть на сайте <ExternalLink size={12} aria-hidden="true" />
+              </a>
+            </footer>
+          </article>
+        </div>
+      )}
+
       <NewPostModal
         open={composerOpen}
         onClose={() => setComposerOpen(false)}
         onCreated={() => {
           setComposerOpen(false);
-          void loadItems();
           window.dispatchEvent(new CustomEvent('flow:updated'));
         }}
       />
@@ -301,7 +453,6 @@ export default function FlowWorkspace() {
           onClose={() => setEditingId(null)}
           onCreated={() => {
             setEditingId(null);
-            void loadItems();
             window.dispatchEvent(new CustomEvent('flow:updated'));
           }}
         />

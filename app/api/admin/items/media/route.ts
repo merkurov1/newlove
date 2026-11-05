@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { normalizeFlowItem } from '@/lib/flow/content';
 import { invalidateFlowCache } from '@/lib/flow/items-cash';
+import { optimizeUploadImage } from '@/lib/images/optimizeUpload';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,23 +16,6 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/gif',
   'image/avif',
 ]);
-
-function extensionFromMime(mime: string) {
-  switch (mime) {
-    case 'image/jpeg':
-      return 'jpg';
-    case 'image/png':
-      return 'png';
-    case 'image/webp':
-      return 'webp';
-    case 'image/gif':
-      return 'gif';
-    case 'image/avif':
-      return 'avif';
-    default:
-      return 'bin';
-  }
-}
 
 function cleanFilename(filename: string) {
   return filename
@@ -129,7 +113,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const extension = extensionFromMime(file.type);
+    const optimized = await optimizeUploadImage(
+      Buffer.from(await file.arrayBuffer()),
+      file.type
+    );
+    const extension = optimized.extension;
 
     const filename =
       cleanFilename(file.name) || `image.${extension}`;
@@ -137,12 +125,10 @@ export async function POST(req: NextRequest) {
     const storageKey =
       `flow/${itemId}/${crypto.randomUUID()}.${extension}`;
 
-    const bytes = await file.arrayBuffer();
-
     const { error: uploadError } = await supabase.storage
       .from('media')
-      .upload(storageKey, bytes, {
-        contentType: file.type,
+      .upload(storageKey, optimized.buffer, {
+        contentType: optimized.mimeType,
         cacheControl: '31536000',
         upsert: false,
       });
@@ -185,8 +171,10 @@ export async function POST(req: NextRequest) {
       public_url: publicUrl,
       storage_key: storageKey,
       filename,
-      mime: file.type,
-      size: file.size,
+      mime: optimized.mimeType,
+      size: optimized.buffer.length,
+      width: optimized.width,
+      height: optimized.height,
       alt: filename,
     };
 
@@ -205,7 +193,7 @@ export async function POST(req: NextRequest) {
       .insert({
         item_id: itemId.trim(),
         storage_key: storageKey,
-        mime: file.type,
+        mime: optimized.mimeType,
         alt: filename,
       })
       .select('*')
