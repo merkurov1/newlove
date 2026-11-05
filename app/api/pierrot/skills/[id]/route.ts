@@ -12,6 +12,8 @@ import {
 import type { SkillDefinition } from '@/lib/pierrot/skills/types';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 function definitionFrom(body: Record<string, unknown>): SkillDefinition {
   return (
@@ -103,7 +105,13 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     }
 
     if (action === 'test') {
-      const run = await testSkill(store, userId, id, versionId);
+      const run = await testSkill(store, userId, id, versionId, {
+        includeHistorical: record.historical !== false,
+        days:
+          typeof record.days === 'number' && Number.isFinite(record.days)
+            ? Math.min(180, Math.max(7, Math.trunc(record.days)))
+            : undefined,
+      });
       const skill = await getSkill(store, userId, id);
       return NextResponse.json({ available: true, run, skill });
     }

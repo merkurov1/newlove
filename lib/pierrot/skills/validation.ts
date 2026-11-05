@@ -1,10 +1,6 @@
-import type { SkillDefinition, SkillTest } from './types';
+import type { SkillCheck, SkillDefinition, SkillTest } from './types';
 
-export type SkillCheck = {
-  name: string;
-  passed: boolean;
-  detail?: string;
-};
+export type { SkillCheck } from './types';
 
 const DANGEROUS_TOOL = /(shell|exec|deploy|production|delete|drop\s+table|sql|admin|cron|worker)/i;
 const APPROVAL_CONSTRAINT = /(approval|approve|confirm|permission|разреш|подтвержд|согласован)/i;
@@ -139,7 +135,20 @@ export function validateSkillDefinition(definition: SkillDefinition): {
       'Inputs should be declared; an empty list is allowed only for a self-contained procedure.',
   });
 
+  const unresolved = /\[ТРЕБУЕТ УТОЧНЕНИЯ\]|\[needs clarification\]/i.test(
+    JSON.stringify(definition)
+  );
+  checks.push({
+    name: 'no_unresolved_placeholders',
+    passed: !unresolved,
+    detail: unresolved
+      ? 'Замените пометки [ТРЕБУЕТ УТОЧНЕНИЯ] фактами из источников или уточнением владельца.'
+      : 'No unresolved placeholders.',
+  });
+
   return {
+    // Historical/execution checks may be non-blocking; structural checks are
+    // the compatibility gate for approval.
     passed: checks.every((check) => check.passed),
     checks,
   };

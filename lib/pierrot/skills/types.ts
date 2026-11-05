@@ -59,12 +59,26 @@ export type SkillRecord = {
   updatedAt: string;
 };
 
+export type SkillCheckPhase = 'structural' | 'historical' | 'execution';
+
+export type SkillCheck = {
+  name: string;
+  passed: boolean;
+  detail?: string;
+  /** Structural checks gate approval. Historical/execution checks are evidence. */
+  phase?: SkillCheckPhase;
+  /** Defaults to true for backwards compatibility with existing runs. */
+  blocking?: boolean;
+  /** Identifiers of the source conversations/tasks examined by the check. */
+  evidence?: string[];
+};
+
 export type SkillRun = {
   id: string;
   skillId: string;
   versionId: string;
   status: 'passed' | 'failed';
-  checks: Array<{ name: string; passed: boolean; detail?: string }>;
+  checks: SkillCheck[];
   createdAt: string;
 };
 
@@ -106,6 +120,112 @@ export function skillStatusLabel(status: SkillStatus): string {
       return 'архив';
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Skill analysis contract                                             */
+/* ------------------------------------------------------------------ */
+
+export type SkillAnalysisSourceKey =
+  'owner_chat' | 'memory' | 'dev_mode' | 'tool_events' | 'existing_skills' | 'brain';
+
+export type SkillAnalysisSourceStatus = {
+  key: SkillAnalysisSourceKey;
+  label: string;
+  status: 'available' | 'partial' | 'unavailable' | 'not_used';
+  count: number;
+  note: string;
+};
+
+export type SkillAnalysisEvidenceRef = {
+  source: 'owner_chat' | 'dev_task' | 'memory' | 'dev_request' | 'event';
+  id: string;
+  label: string;
+  date: string | null;
+  conversationId?: string | null;
+  href?: string | null;
+};
+
+export type SkillAnalysisProcedure = {
+  id: string;
+  name: string;
+  description: string;
+  exampleCount: number;
+  evidence: SkillAnalysisEvidenceRef[];
+  sequence: string[];
+  tools: string[];
+  repeatability: 'высокая' | 'средняя' | 'низкая';
+  usefulness: string;
+  relatedSkillIds: string[];
+};
+
+export type SkillAnalysisProblem = {
+  id: string;
+  category:
+    | 'repeated_without_skill'
+    | 'repeated_explanation'
+    | 'repeated_failure'
+    | 'missing_context'
+    | 'unused_capability'
+    | 'skill_overlap'
+    | 'skill_incomplete';
+  description: string;
+  evidence: SkillAnalysisEvidenceRef[];
+};
+
+export type SkillAnalysisProposal = {
+  id: string;
+  kind: 'new' | 'improve';
+  name: string;
+  problem: string;
+  evidence: SkillAnalysisEvidenceRef[];
+  howItWorks: string;
+  difference: string;
+  limitations: string[];
+  definition: SkillDefinition;
+  changelog: string;
+  gaps: string[];
+  relatedSkillId?: string;
+};
+
+export type SkillAnalysisReview = {
+  skillId: string;
+  name: string;
+  status: SkillStatus;
+  issues: string[];
+  recommendation: string;
+  evidence: SkillAnalysisEvidenceRef[];
+  proposedDefinition: SkillDefinition | null;
+  changelog: string;
+};
+
+export type SkillAnalysisReport = {
+  id: string | null;
+  generatedAt: string;
+  periodDays: number;
+  periodStart: string;
+  periodEnd: string;
+  overview: string;
+  sources: SkillAnalysisSourceStatus[];
+  procedures: SkillAnalysisProcedure[];
+  problems: SkillAnalysisProblem[];
+  proposals: SkillAnalysisProposal[];
+  skillReviews: SkillAnalysisReview[];
+  stats: {
+    conversations: number;
+    messages: number;
+    devTasks: number;
+    devRequests: number;
+    memoryRecords: number;
+    toolTraceEvents: number;
+  };
+};
+
+export type StoredSkillAnalysis = {
+  id: string;
+  status: 'completed' | 'partial' | 'failed';
+  report: SkillAnalysisReport;
+  createdAt: string;
+};
 
 export function emptySkillDefinition(): SkillDefinition {
   return {

@@ -403,7 +403,8 @@ export async function testSkill(
   store: SupabaseClient,
   userId: string,
   skillId: string,
-  versionId?: string | null
+  versionId?: string | null,
+  options: { includeHistorical?: boolean; days?: number } = {}
 ): Promise<SkillRun> {
   const skill = await getSkill(store, userId, skillId);
   if (!skill) throw new Error('skill_not_found');
@@ -415,15 +416,38 @@ export async function testSkill(
   if (!version) throw new Error('skill_version_not_found');
 
   const validation = validateSkillDefinition(version.definition);
+  const structuralChecks = validation.checks.map((check) => ({
+    ...check,
+    phase: 'structural' as const,
+    blocking: true,
+  }));
+
+  const historicalChecks =
+    options.includeHistorical === false
+      ? []
+      : await import('./historical')
+          .then((module) =>
+            module.loadHistoricalSkillChecks({
+              store,
+              userId,
+              definition: version.definition,
+              days: options.days,
+            })
+          )
+          .catch(() => []);
+
+  const checks = [...structuralChecks, ...historicalChecks];
+  const passed = structuralChecks.every((check) => check.passed);
   const now = new Date().toISOString();
+
   const { data, error } = await store
     .from(RUNS_TABLE)
     .insert({
       user_id: userId,
       skill_id: skillId,
       version_id: version.id,
-      status: validation.passed ? 'passed' : 'failed',
-      checks: validation.checks,
+      status: passed ? 'passed' : 'failed',
+      checks,
       created_at: now,
     })
     .select('*')
@@ -437,12 +461,12 @@ export async function testSkill(
   await Promise.all([
     store
       .from(VERSIONS_TABLE)
-      .update({ status: validation.passed ? 'testing' : 'draft' })
+      .update({ status: passed ? 'testing' : 'draft' })
       .eq('id', version.id)
       .eq('user_id', userId),
     store
       .from(SKILLS_TABLE)
-      .update({ status: validation.passed ? 'testing' : 'draft', updated_at: now })
+      .update({ status: passed ? 'testing' : 'draft', updated_at: now })
       .eq('id', skillId)
       .eq('user_id', userId),
   ]).catch(() => undefined);
@@ -453,8 +477,8 @@ export async function testSkill(
     id: stringOf(row.id),
     skillId,
     versionId: version.id,
-    status: validation.passed ? 'passed' : 'failed',
-    checks: validation.checks,
+    status: passed ? 'passed' : 'failed',
+    checks,
     createdAt: now,
   };
 }

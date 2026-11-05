@@ -5,12 +5,14 @@ import { Check, FilePlus2, Loader2, RotateCcw, Search, X } from 'lucide-react';
 import type {
   SkillDefinition,
   SkillDetail,
+  SkillExample,
   SkillRecord,
   SkillRun,
   SkillSuggestionResult,
   SkillTest,
 } from '@/lib/pierrot/skills/types';
 import { emptySkillDefinition, skillStatusLabel } from '@/lib/pierrot/skills/types';
+import SkillAnalysisPanel from './SkillAnalysisPanel';
 
 type FormState = {
   name: string;
@@ -23,6 +25,7 @@ type FormState = {
   constraints: string;
   expectedResult: string;
   tests: string;
+  examples: string;
   changelog: string;
 };
 
@@ -45,6 +48,29 @@ function testsToLines(tests: SkillTest[]): string {
   return tests.map((test) => [test.name, test.input || '', test.expected].join(' | ')).join('\n');
 }
 
+function parseExamples(value: string): SkillExample[] {
+  return lines(value).flatMap((line) => {
+    const [title, input, result, date] = line.split('|').map((part) => part.trim());
+    if (!title || !result) return [];
+    return [
+      {
+        title,
+        ...(input ? { input } : {}),
+        result,
+        ...(date ? { date } : {}),
+      },
+    ];
+  });
+}
+
+function examplesToLines(examples: SkillExample[]): string {
+  return examples
+    .map((example) =>
+      [example.title, example.input || '', example.result, example.date || ''].join(' | ')
+    )
+    .join('\n');
+}
+
 function definitionToForm(definition: SkillDefinition, changelog = ''): FormState {
   return {
     name: definition.name,
@@ -57,6 +83,7 @@ function definitionToForm(definition: SkillDefinition, changelog = ''): FormStat
     constraints: definition.constraints.join('\n'),
     expectedResult: definition.expectedResult,
     tests: testsToLines(definition.tests),
+    examples: examplesToLines(definition.examples),
     changelog,
   };
 }
@@ -73,7 +100,7 @@ function formToDefinition(form: FormState): SkillDefinition {
     constraints: lines(form.constraints),
     expectedResult: form.expectedResult.trim(),
     tests: parseTests(form.tests),
-    examples: [],
+    examples: parseExamples(form.examples),
   };
 }
 
@@ -105,9 +132,29 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 function runSummary(run: SkillRun | null): string {
   if (!run) return 'Тестов ещё не было.';
-  const failed = run.checks.filter((check) => !check.passed);
-  if (run.status === 'passed') return 'Контрольный тест пройден.';
-  return `Тест не пройден: ${failed.map((check) => check.name).join(', ') || 'см. проверки'}.`;
+
+  const structural = run.checks.filter((check) => !check.phase || check.phase === 'structural');
+  const historical = run.checks.filter((check) => check.phase === 'historical');
+  const structuralFailed = structural.filter((check) => !check.passed);
+
+  if (structuralFailed.length > 0) {
+    return `Структурная проверка не пройдена: ${structuralFailed
+      .map((check) => check.name)
+      .join(', ')}.`;
+  }
+
+  const historicalPassed = historical.filter((check) => check.passed).length;
+  const execution = run.checks.find((check) => check.phase === 'execution');
+
+  return [
+    'Структурная проверка пройдена.',
+    historical.length > 0
+      ? `Историческая применимость: ${historicalPassed}/${historical.length} проверок.`
+      : 'Исторические примеры не проверялись.',
+    execution ? 'Реальное исполнение не запускалось.' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 export default function SkillFoundryWorkspace() {
@@ -163,6 +210,40 @@ export default function SkillFoundryWorkspace() {
     setError(null);
     setNotice(null);
     setForm(definitionToForm(emptySkillDefinition()));
+  }
+
+  async function createDraftFromAnalysis(
+    definition: SkillDefinition,
+    changelog: string,
+    label: string,
+    relatedSkillId?: string
+  ) {
+    setError(null);
+    setNotice(label);
+
+    if (!relatedSkillId) {
+      setSelected(null);
+      setCreating(true);
+      setForm(definitionToForm(definition, changelog));
+      return;
+    }
+
+    setBusy('analysis-draft');
+
+    try {
+      const data = await api<{ skill: SkillDetail }>(`/api/pierrot/skills/${relatedSkillId}`);
+      setSelected(data.skill);
+      setCreating(false);
+      setForm(definitionToForm(definition, changelog));
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Не удалось открыть существующий навык для новой версии.'
+      );
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function suggestFromMemory() {
@@ -221,6 +302,7 @@ export default function SkillFoundryWorkspace() {
       constraints: (parsed.constraints || []).join('\n'),
       expectedResult: parsed.expected?.[0] || '',
       tests: (parsed.tests || []).join('\n'),
+      examples: '',
       changelog: 'Initial draft',
     });
   }
@@ -332,304 +414,323 @@ export default function SkillFoundryWorkspace() {
   );
 
   return (
-    <div className="pw-skills">
-      <div className="pw-skills-list">
-        <div className="pw-skills-list-head">
-          <label className="pw-label" style={{ flex: 1 }}>
-            Поиск навыка
-            <input
-              className="pw-input"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="название или описание"
-            />
-          </label>
-          <button type="button" className="pw-button pw-button-primary" onClick={beginCreate}>
-            <FilePlus2 size={14} aria-hidden="true" />
-            Новый
-          </button>
-          <button
-            type="button"
-            className="pw-button"
-            onClick={() => void suggestFromMemory()}
-            disabled={busy !== null}
-          >
-            {busy === 'suggest' ? (
-              <Loader2 size={14} className="pw-spin" aria-hidden="true" />
-            ) : (
-              <Search size={14} aria-hidden="true" />
-            )}
-            Из памяти
-          </button>
-        </div>
+    <>
+      <SkillAnalysisPanel onCreateDraft={createDraftFromAnalysis} />
 
-        {loading ? (
-          <p className="pw-inspector-empty">Загружаю навыки…</p>
-        ) : skills.length === 0 ? (
-          <p className="pw-inspector-empty">
-            Навыков пока нет. Пьеро предложит черновик после повторяемой успешной процедуры; создать
-            его вручную тоже можно.
-          </p>
-        ) : (
-          <ul className="pw-skills-items">
-            {skills.map((skill) => (
-              <li key={skill.id}>
-                <button
-                  type="button"
-                  className={`pw-skill-item${selected?.id === skill.id ? ' is-active' : ''}`}
-                  onClick={() => void openSkill(skill.id)}
-                >
-                  <span className="pw-skill-item-name">{skill.name}</span>
-                  <span className="pw-skill-item-meta">
-                    {skillStatusLabel(skill.status)}
-                    {skill.currentVersion ? ` · v${skill.currentVersion.version}` : ''}
-                  </span>
-                  <span className="pw-skill-item-description">{skill.description}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="pw-skills-detail">
-        {error && <p className="pw-notice pw-notice-warning">{error}</p>}
-        {notice && <p className="pw-notice">{notice}</p>}
-
-        {(selected || creating) && (
-          <>
-            <div className="pw-skills-detail-head">
-              <div>
-                <p className="pw-kicker">
-                  {creating ? 'новый черновик' : `версия ${selected?.currentVersion?.version ?? 1}`}
-                </p>
-                <h2 className="pw-page-title" style={{ marginTop: 4 }}>
-                  {form.name || 'Без названия'}
-                </h2>
-                {selected && (
-                  <p className="pw-skill-item-meta">
-                    {skillStatusLabel(selected.status)}
-                    {selected.currentVersion
-                      ? ` · активная версия ${selected.currentVersion.version}`
-                      : ''}
-                  </p>
-                )}
-              </div>
-              {!creating && selected && (
-                <button
-                  type="button"
-                  className="pw-icon-button"
-                  onClick={() => {
-                    setSelected(null);
-                    setCreating(false);
-                  }}
-                  aria-label="Закрыть навык"
-                >
-                  <X size={18} aria-hidden="true" />
-                </button>
+      <div className="pw-skills">
+        <div className="pw-skills-list">
+          <div className="pw-skills-list-head">
+            <label className="pw-label" style={{ flex: 1 }}>
+              Поиск навыка
+              <input
+                className="pw-input"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="название или описание"
+              />
+            </label>
+            <button type="button" className="pw-button pw-button-primary" onClick={beginCreate}>
+              <FilePlus2 size={14} aria-hidden="true" />
+              Новый
+            </button>
+            <button
+              type="button"
+              className="pw-button"
+              onClick={() => void suggestFromMemory()}
+              disabled={busy !== null}
+            >
+              {busy === 'suggest' ? (
+                <Loader2 size={14} className="pw-spin" aria-hidden="true" />
+              ) : (
+                <Search size={14} aria-hidden="true" />
               )}
-            </div>
+              Из памяти
+            </button>
+          </div>
 
-            <div className="pw-skills-form">
-              <label className="pw-label">
-                Название
-                <input
-                  className="pw-input"
-                  value={form.name}
-                  onChange={(event) => setForm({ ...form, name: event.target.value })}
-                />
-              </label>
-              <label className="pw-label">
-                Описание
-                <textarea
-                  className="pw-textarea"
-                  value={form.description}
-                  onChange={(event) => setForm({ ...form, description: event.target.value })}
-                />
-              </label>
-              <label className="pw-label">
-                Назначение
-                <textarea
-                  className="pw-textarea"
-                  value={form.purpose}
-                  onChange={(event) => setForm({ ...form, purpose: event.target.value })}
-                />
-              </label>
-              <label className="pw-label">
-                Условия применения · по одному на строку
-                <textarea
-                  className="pw-textarea"
-                  value={form.conditions}
-                  onChange={(event) => setForm({ ...form, conditions: event.target.value })}
-                />
-              </label>
-              <label className="pw-label">
-                Входные данные · по одному на строку
-                <textarea
-                  className="pw-textarea"
-                  value={form.inputs}
-                  onChange={(event) => setForm({ ...form, inputs: event.target.value })}
-                />
-              </label>
-              <label className="pw-label">
-                Шаги · по одному на строку
-                <textarea
-                  className="pw-textarea"
-                  value={form.steps}
-                  onChange={(event) => setForm({ ...form, steps: event.target.value })}
-                  style={{ minHeight: 140 }}
-                />
-              </label>
-              <label className="pw-label">
-                Инструменты · по одному на строку
-                <textarea
-                  className="pw-textarea"
-                  value={form.tools}
-                  onChange={(event) => setForm({ ...form, tools: event.target.value })}
-                />
-              </label>
-              <label className="pw-label">
-                Ограничения и безопасность · по одному на строку
-                <textarea
-                  className="pw-textarea"
-                  value={form.constraints}
-                  onChange={(event) => setForm({ ...form, constraints: event.target.value })}
-                />
-              </label>
-              <label className="pw-label">
-                Ожидаемый результат
-                <textarea
-                  className="pw-textarea"
-                  value={form.expectedResult}
-                  onChange={(event) => setForm({ ...form, expectedResult: event.target.value })}
-                />
-              </label>
-              <label className="pw-label">
-                Контрольные тесты · `name | input | expected`, по одному на строку
-                <textarea
-                  className="pw-textarea"
-                  value={form.tests}
-                  onChange={(event) => setForm({ ...form, tests: event.target.value })}
-                />
-              </label>
-              <label className="pw-label">
-                Комментарий к версии
-                <input
-                  className="pw-input"
-                  value={form.changelog}
-                  onChange={(event) => setForm({ ...form, changelog: event.target.value })}
-                />
-              </label>
-
-              <div className="pw-skills-actions">
-                <button
-                  type="button"
-                  className="pw-button pw-button-primary"
-                  onClick={() => void saveVersion()}
-                  disabled={busy !== null}
-                >
-                  {busy === 'save' ? (
-                    <Loader2 size={14} className="pw-spin" aria-hidden="true" />
-                  ) : (
-                    <Check size={14} aria-hidden="true" />
-                  )}
-                  {creating ? 'Создать черновик' : 'Сохранить как новую версию'}
-                </button>
-                {creating && (
-                  <button type="button" className="pw-button" onClick={applyTemplate}>
-                    Подставить шаблон
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {!creating && selected && (
-              <>
-                <div className="pw-skills-actions" style={{ marginTop: 18 }}>
+          {loading ? (
+            <p className="pw-inspector-empty">Загружаю навыки…</p>
+          ) : skills.length === 0 ? (
+            <p className="pw-inspector-empty">
+              Навыков пока нет. Пьеро предложит черновик после повторяемой успешной процедуры;
+              создать его вручную тоже можно.
+            </p>
+          ) : (
+            <ul className="pw-skills-items">
+              {skills.map((skill) => (
+                <li key={skill.id}>
                   <button
                     type="button"
-                    className="pw-button"
-                    onClick={() => void act('test')}
-                    disabled={busy !== null}
+                    className={`pw-skill-item${selected?.id === skill.id ? ' is-active' : ''}`}
+                    onClick={() => void openSkill(skill.id)}
                   >
-                    Проверить
+                    <span className="pw-skill-item-name">{skill.name}</span>
+                    <span className="pw-skill-item-meta">
+                      {skillStatusLabel(skill.status)}
+                      {skill.currentVersion ? ` · v${skill.currentVersion.version}` : ''}
+                    </span>
+                    <span className="pw-skill-item-description">{skill.description}</span>
                   </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="pw-skills-detail">
+          {error && <p className="pw-notice pw-notice-warning">{error}</p>}
+          {notice && <p className="pw-notice">{notice}</p>}
+
+          {(selected || creating) && (
+            <>
+              <div className="pw-skills-detail-head">
+                <div>
+                  <p className="pw-kicker">
+                    {creating
+                      ? 'новый черновик'
+                      : `версия ${selected?.currentVersion?.version ?? 1}`}
+                  </p>
+                  <h2 className="pw-page-title" style={{ marginTop: 4 }}>
+                    {form.name || 'Без названия'}
+                  </h2>
+                  {selected && (
+                    <p className="pw-skill-item-meta">
+                      {skillStatusLabel(selected.status)}
+                      {selected.currentVersion
+                        ? ` · активная версия ${selected.currentVersion.version}`
+                        : ''}
+                    </p>
+                  )}
+                </div>
+                {!creating && selected && (
+                  <button
+                    type="button"
+                    className="pw-icon-button"
+                    onClick={() => {
+                      setSelected(null);
+                      setCreating(false);
+                    }}
+                    aria-label="Закрыть навык"
+                  >
+                    <X size={18} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+
+              <div className="pw-skills-form">
+                <label className="pw-label">
+                  Название
+                  <input
+                    className="pw-input"
+                    value={form.name}
+                    onChange={(event) => setForm({ ...form, name: event.target.value })}
+                  />
+                </label>
+                <label className="pw-label">
+                  Описание
+                  <textarea
+                    className="pw-textarea"
+                    value={form.description}
+                    onChange={(event) => setForm({ ...form, description: event.target.value })}
+                  />
+                </label>
+                <label className="pw-label">
+                  Назначение
+                  <textarea
+                    className="pw-textarea"
+                    value={form.purpose}
+                    onChange={(event) => setForm({ ...form, purpose: event.target.value })}
+                  />
+                </label>
+                <label className="pw-label">
+                  Условия применения · по одному на строку
+                  <textarea
+                    className="pw-textarea"
+                    value={form.conditions}
+                    onChange={(event) => setForm({ ...form, conditions: event.target.value })}
+                  />
+                </label>
+                <label className="pw-label">
+                  Входные данные · по одному на строку
+                  <textarea
+                    className="pw-textarea"
+                    value={form.inputs}
+                    onChange={(event) => setForm({ ...form, inputs: event.target.value })}
+                  />
+                </label>
+                <label className="pw-label">
+                  Шаги · по одному на строку
+                  <textarea
+                    className="pw-textarea"
+                    value={form.steps}
+                    onChange={(event) => setForm({ ...form, steps: event.target.value })}
+                    style={{ minHeight: 140 }}
+                  />
+                </label>
+                <label className="pw-label">
+                  Инструменты · по одному на строку
+                  <textarea
+                    className="pw-textarea"
+                    value={form.tools}
+                    onChange={(event) => setForm({ ...form, tools: event.target.value })}
+                  />
+                </label>
+                <label className="pw-label">
+                  Ограничения и безопасность · по одному на строку
+                  <textarea
+                    className="pw-textarea"
+                    value={form.constraints}
+                    onChange={(event) => setForm({ ...form, constraints: event.target.value })}
+                  />
+                </label>
+                <label className="pw-label">
+                  Ожидаемый результат
+                  <textarea
+                    className="pw-textarea"
+                    value={form.expectedResult}
+                    onChange={(event) => setForm({ ...form, expectedResult: event.target.value })}
+                  />
+                </label>
+                <label className="pw-label">
+                  Контрольные тесты · `name | input | expected`, по одному на строку
+                  <textarea
+                    className="pw-textarea"
+                    value={form.tests}
+                    onChange={(event) => setForm({ ...form, tests: event.target.value })}
+                  />
+                </label>
+                <label className="pw-label">
+                  Исторические примеры · `title | input | result | date`, по одному на строку
+                  <textarea
+                    className="pw-textarea"
+                    value={form.examples}
+                    onChange={(event) => setForm({ ...form, examples: event.target.value })}
+                  />
+                </label>
+                <label className="pw-label">
+                  Комментарий к версии
+                  <input
+                    className="pw-input"
+                    value={form.changelog}
+                    onChange={(event) => setForm({ ...form, changelog: event.target.value })}
+                  />
+                </label>
+
+                <div className="pw-skills-actions">
                   <button
                     type="button"
                     className="pw-button pw-button-primary"
-                    onClick={() => void act('approve')}
-                    disabled={busy !== null || !canApprove}
+                    onClick={() => void saveVersion()}
+                    disabled={busy !== null}
                   >
-                    Утвердить
+                    {busy === 'save' ? (
+                      <Loader2 size={14} className="pw-spin" aria-hidden="true" />
+                    ) : (
+                      <Check size={14} aria-hidden="true" />
+                    )}
+                    {creating ? 'Создать черновик' : 'Сохранить как новую версию'}
                   </button>
-                  <button
-                    type="button"
-                    className="pw-button"
-                    onClick={() => void act('disable')}
-                    disabled={busy !== null || selected.status === 'disabled'}
-                  >
-                    Отключить
-                  </button>
+                  {creating && (
+                    <button type="button" className="pw-button" onClick={applyTemplate}>
+                      Подставить шаблон
+                    </button>
+                  )}
                 </div>
+              </div>
 
-                <div className="pw-skills-run">
-                  <p className="pw-section-title">Последний тест</p>
-                  <p className="pw-skill-item-meta">{runSummary(selected.latestRun)}</p>
-                  {selected.latestRun && (
+              {!creating && selected && (
+                <>
+                  <div className="pw-skills-actions" style={{ marginTop: 18 }}>
+                    <button
+                      type="button"
+                      className="pw-button"
+                      onClick={() => void act('test')}
+                      disabled={busy !== null}
+                    >
+                      Проверить
+                    </button>
+                    <button
+                      type="button"
+                      className="pw-button pw-button-primary"
+                      onClick={() => void act('approve')}
+                      disabled={busy !== null || !canApprove}
+                    >
+                      Утвердить
+                    </button>
+                    <button
+                      type="button"
+                      className="pw-button"
+                      onClick={() => void act('disable')}
+                      disabled={busy !== null || selected.status === 'disabled'}
+                    >
+                      Отключить
+                    </button>
+                  </div>
+
+                  <div className="pw-skills-run">
+                    <p className="pw-section-title">Последний тест</p>
+                    <p className="pw-skill-item-meta">{runSummary(selected.latestRun)}</p>
+                    {selected.latestRun && (
+                      <ul>
+                        {selected.latestRun.checks.map((check) => (
+                          <li
+                            key={`${check.phase || 'structural'}-${check.name}`}
+                            data-passed={check.passed ? 'true' : 'false'}
+                            data-phase={check.phase || 'structural'}
+                          >
+                            {check.passed ? '✓' : '×'} {check.phase ? `[${check.phase}] ` : ''}
+                            {check.name}
+                            {check.detail ? ` — ${check.detail}` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div className="pw-skills-history">
+                    <p className="pw-section-title">История версий</p>
                     <ul>
-                      {selected.latestRun.checks.map((check) => (
-                        <li key={check.name} data-passed={check.passed ? 'true' : 'false'}>
-                          {check.passed ? '✓' : '×'} {check.name}
-                          {check.detail ? ` — ${check.detail}` : ''}
+                      {selected.versions.map((version) => (
+                        <li key={version.id}>
+                          <span>
+                            v{version.version} · {skillStatusLabel(version.status)} ·{' '}
+                            {version.createdAt.slice(0, 10)}
+                            {version.changelog ? ` — ${version.changelog}` : ''}
+                          </span>
+                          {version.id !== selected.currentVersionId && (
+                            <button
+                              type="button"
+                              className="pw-button pw-button-small"
+                              onClick={() => void restore(version.id)}
+                              disabled={busy !== null}
+                            >
+                              <RotateCcw size={12} aria-hidden="true" />
+                              Вернуть
+                            </button>
+                          )}
                         </li>
                       ))}
                     </ul>
-                  )}
-                </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
 
-                <div className="pw-skills-history">
-                  <p className="pw-section-title">История версий</p>
-                  <ul>
-                    {selected.versions.map((version) => (
-                      <li key={version.id}>
-                        <span>
-                          v{version.version} · {skillStatusLabel(version.status)} ·{' '}
-                          {version.createdAt.slice(0, 10)}
-                          {version.changelog ? ` — ${version.changelog}` : ''}
-                        </span>
-                        {version.id !== selected.currentVersionId && (
-                          <button
-                            type="button"
-                            className="pw-button pw-button-small"
-                            onClick={() => void restore(version.id)}
-                            disabled={busy !== null}
-                          >
-                            <RotateCcw size={12} aria-hidden="true" />
-                            Вернуть
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </>
-            )}
-          </>
-        )}
-
-        {!selected && !creating && (
-          <div className="pw-skills-empty">
-            <Search size={22} strokeWidth={1.2} aria-hidden="true" />
-            <p className="pw-page-lede">
-              Навык описывает повторяемую процедуру: условия, шаги, инструменты, ограничения и
-              контрольные тесты. Он не заменяет память и не даёт новых прав.
-            </p>
-            <button type="button" className="pw-button" onClick={beginCreate}>
-              Создать первый навык
-            </button>
-          </div>
-        )}
+          {!selected && !creating && (
+            <div className="pw-skills-empty">
+              <Search size={22} strokeWidth={1.2} aria-hidden="true" />
+              <p className="pw-page-lede">
+                Навык описывает повторяемую процедуру: условия, шаги, инструменты, ограничения и
+                контрольные тесты. Он не заменяет память и не даёт новых прав.
+              </p>
+              <button type="button" className="pw-button" onClick={beginCreate}>
+                Создать первый навык
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
