@@ -1,16 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import {
-  Check,
-  Clipboard,
-  FileCheck2,
-  Loader2,
-  Plus,
-  Save,
-  ShieldCheck,
-} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Clipboard, FileCheck2, Loader2, Plus, Save, ShieldCheck } from 'lucide-react';
+import { diagnosisToTaskInput } from '@/lib/pierrot/dev/diagnosis';
 import type {
+  DevDiagnosis,
   DevTask,
   DevTaskStatus,
   DevVerificationStatus,
@@ -117,6 +111,8 @@ export default function DevTaskStudio({
   conversationId,
   conversationContext,
   suggestedTitle,
+  diagnosis,
+  createNonce,
   onCopyPrompt,
 }: {
   initialTasks: DevTask[];
@@ -125,12 +121,12 @@ export default function DevTaskStudio({
   conversationId: string | null;
   conversationContext: string;
   suggestedTitle: string;
+  diagnosis?: DevDiagnosis | null;
+  createNonce?: number;
   onCopyPrompt?: (prompt: string) => void;
 }) {
   const [tasks, setTasks] = useState<DevTask[]>(initialTasks);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    initialTasks[0]?.id ?? null
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(initialTasks[0]?.id ?? null);
   const [form, setForm] = useState<TaskForm | null>(
     initialTasks[0] ? formFromTask(initialTasks[0]) : null
   );
@@ -144,6 +140,7 @@ export default function DevTaskStudio({
   } | null>(null);
   const [resultCommit, setResultCommit] = useState('');
   const [resultNotes, setResultNotes] = useState('');
+  const lastCreateNonce = useRef(createNonce || 0);
 
   const selected = useMemo(
     () => tasks.find((task) => task.id === selectedId) || null,
@@ -156,6 +153,14 @@ export default function DevTaskStudio({
       setForm(formFromTask(initialTasks[0]));
     }
   }, [initialTasks, selectedId]);
+
+  useEffect(() => {
+    if (!createNonce || createNonce === lastCreateNonce.current) return;
+    lastCreateNonce.current = createNonce;
+    void createFromConversation();
+    // The nonce is the explicit create signal; the latest closure is fine here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createNonce]);
 
   useEffect(() => {
     if (!selected) return;
@@ -201,27 +206,33 @@ export default function DevTaskStudio({
     setError(null);
     setNotice(null);
 
-    const repo =
-      repositories.find((entry) => entry.key === activeRepository) ||
-      repositories[0];
+    const repo = repositories.find((entry) => entry.key === activeRepository) || repositories[0];
+
+    const structured =
+      diagnosis && diagnosis.shouldCreateTask
+        ? diagnosisToTaskInput(diagnosis, {
+            conversationId,
+            baseRef: repo?.workBranch || diagnosis.ref || 'main',
+            baseCommit: diagnosis.commitSha || repo?.lastCommitSha || null,
+          })
+        : null;
+
+    const input = structured || {
+      title: suggestedTitle.trim() || 'Инженерное задание из Dev-треда',
+      objective: 'Преобразовать текущее обсуждение в проверяемое инженерное изменение.',
+      context: conversationContext.slice(0, 12_000),
+      repository: repo?.key || activeRepository,
+      baseRef: repo?.workBranch || 'main',
+      baseCommit: repo?.lastCommitSha || null,
+      conversationId,
+      status: 'draft' as const,
+    };
 
     try {
       const response = await fetch('/api/admin/pierrot/dev/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title:
-            suggestedTitle.trim() ||
-            'Инженерное задание из Dev-треда',
-          objective:
-            'Преобразовать текущее обсуждение в проверяемое инженерное изменение.',
-          context: conversationContext.slice(0, 12_000),
-          repository: repo?.key || activeRepository,
-          baseRef: repo?.workBranch || 'main',
-          baseCommit: repo?.lastCommitSha || null,
-          conversationId,
-          status: 'draft',
-        }),
+        body: JSON.stringify(input),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
@@ -229,7 +240,11 @@ export default function DevTaskStudio({
       }
       if (payload?.task) {
         upsertTask(payload.task as DevTask);
-        setNotice('Задание создано. Отредактируйте поля и сохраните.');
+        setNotice(
+          structured
+            ? `Задание создано из диагностики: ${structured.affectedFiles?.length || 0} проверенных файлов. Отредактируйте поля и сохраните.`
+            : 'Задание создано из обсуждения без структурированной диагностики. Проверьте поля и добавьте файлы только при наличии свидетельств.'
+        );
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Task creation failed.');
@@ -309,8 +324,7 @@ export default function DevTaskStudio({
     setNotice(null);
 
     try {
-      const pullRequests =
-        resultNotes.match(/https?:\/\/\S+\/pull\/\d+/g)?.slice(0, 20) || [];
+      const pullRequests = resultNotes.match(/https?:\/\/\S+\/pull\/\d+/g)?.slice(0, 20) || [];
       const response = await fetch(
         `/api/admin/pierrot/dev/tasks/${encodeURIComponent(selected.id)}`,
         {
@@ -387,7 +401,11 @@ export default function DevTaskStudio({
           className="pw-dev-icon-text"
           onClick={() => void createFromConversation()}
           disabled={busy === 'create'}
-          title="Создать задание из текущего Dev-треда"
+          title={
+            diagnosis?.shouldCreateTask
+              ? 'Создать задание из проверенной диагностики'
+              : 'Создать задание из текущего Dev-треда'
+          }
         >
           {busy === 'create' ? (
             <Loader2 size={14} className="pw-spin" aria-hidden="true" />
@@ -400,8 +418,8 @@ export default function DevTaskStudio({
 
       {tasks.length === 0 ? (
         <p className="pw-dev-studio-empty">
-          Заданий пока нет. Создайте одно из текущего обсуждения или заполните
-          форму вручную после первого сохранения.
+          Заданий пока нет. Создайте одно из текущего обсуждения или заполните форму вручную после
+          первого сохранения.
         </p>
       ) : (
         <ul className="pw-dev-task-list">
@@ -419,11 +437,7 @@ export default function DevTaskStudio({
                   {STATUS_LABELS[task.status]} · {formatDate(task.updatedAt)}
                 </span>
                 {task.verificationStatus && (
-                  <span
-                    className={`pw-dev-verdict ${verificationTone(
-                      task.verificationStatus
-                    )}`}
-                  >
+                  <span className={`pw-dev-verdict ${verificationTone(task.verificationStatus)}`}>
                     {task.verificationStatus.replaceAll('_', ' ')}
                   </span>
                 )}
@@ -472,9 +486,7 @@ export default function DevTaskStudio({
               <span>Статус</span>
               <select
                 value={form.status}
-                onChange={(event) =>
-                  updateField('status', event.target.value as DevTaskStatus)
-                }
+                onChange={(event) => updateField('status', event.target.value as DevTaskStatus)}
               >
                 {Object.entries(STATUS_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
@@ -699,15 +711,14 @@ export default function DevTaskStudio({
           </div>
 
           {selected.pullRequests.length > 0 && (
-            <p className="pw-dev-context-muted">
-              PR: {selected.pullRequests.join(' · ')}
-            </p>
+            <p className="pw-dev-context-muted">PR: {selected.pullRequests.join(' · ')}</p>
           )}
 
           {selected.promptText && (
             <details className="pw-dev-prompt">
               <summary>
-                <Clipboard size={13} aria-hidden="true" />Полный prompt для OpenCode
+                <Clipboard size={13} aria-hidden="true" />
+                Полный prompt для OpenCode
               </summary>
               <pre>{selected.promptText}</pre>
             </details>

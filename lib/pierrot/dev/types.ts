@@ -41,6 +41,52 @@ export type DevToolMeta = {
   complete: boolean;
   source: 'github';
   warnings?: string[];
+  /** Repository-relative paths touched by this tool result. */
+  paths?: string[];
+  /** Bounded line ranges actually returned by read tools. */
+  ranges?: Array<{ path: string; startLine: number; endLine: number }>;
+};
+
+export type DevDiagnosisConfidence = 'confirmed' | 'likely' | 'unverified';
+
+export type DevDiagnosisFile = {
+  path: string;
+  startLine: number | null;
+  endLine: number | null;
+};
+
+export type DevDiagnosisFinding = {
+  statement: string;
+  evidence: string;
+};
+
+export type DevDiagnosisChanges = {
+  backend: string[];
+  frontend: string[];
+  database: string[];
+  mobile: string[];
+};
+
+/**
+ * Structured result of a repository investigation. It is produced by the dev
+ * model in a machine-readable block and validated against the real tool trace
+ * before it reaches Task Studio.
+ */
+export type DevDiagnosis = {
+  taskSummary: string;
+  repository: string;
+  ref: string;
+  commitSha: string | null;
+  inspectedFiles: DevDiagnosisFile[];
+  confirmedFindings: DevDiagnosisFinding[];
+  likelyFindings: DevDiagnosisFinding[];
+  hypotheses: DevDiagnosisFinding[];
+  recommendedFix: string;
+  risks: string[];
+  tests: string[];
+  changes: DevDiagnosisChanges;
+  shouldCreateTask: boolean;
+  confidence: DevDiagnosisConfidence;
 };
 
 export type DevToolTraceEntry = {
@@ -54,12 +100,14 @@ export type DevToolTraceEntry = {
 };
 
 export type DevToolEvent = {
-  type: 'status' | 'tool' | 'error';
+  type: 'status' | 'tool' | 'error' | 'diagnosis';
   phase?:
+    | 'connecting'
     | 'researching'
     | 'searching'
     | 'reading'
     | 'analyzing'
+    | 'preparing'
     | 'task'
     | 'review'
     | 'failed'
@@ -70,6 +118,8 @@ export type DevToolEvent = {
   ok?: boolean;
   summary?: string;
   code?: string;
+  /** Present only on type="diagnosis" persistence events. */
+  diagnosis?: DevDiagnosis;
 };
 
 export type DevTokenUsage = {
@@ -79,11 +129,7 @@ export type DevTokenUsage = {
 };
 
 export type DevRequestStatus =
-  | 'pending'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'partially_completed';
+  'pending' | 'running' | 'completed' | 'failed' | 'partially_completed';
 
 export type DevRequestMeta = {
   requestId: string;
@@ -109,22 +155,15 @@ export type DevModelResult = {
   status: 'completed' | 'partially_completed';
   latencyMs: number;
   sideEffects: Array<{ tool: string; repository: string | null; summary: string }>;
+  /** Validated structured diagnosis; never contains invented paths. */
+  diagnosis: DevDiagnosis | null;
 };
 
 export type DevTaskStatus =
-  | 'draft'
-  | 'ready'
-  | 'in_progress'
-  | 'review'
-  | 'verified'
-  | 'rejected'
-  | 'archived';
+  'draft' | 'ready' | 'in_progress' | 'review' | 'verified' | 'rejected' | 'archived';
 
 export type DevVerificationStatus =
-  | 'verified'
-  | 'verified_with_warnings'
-  | 'not_verified'
-  | 'rejected';
+  'verified' | 'verified_with_warnings' | 'not_verified' | 'rejected';
 
 export type DevTask = {
   id: string;

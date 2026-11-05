@@ -2361,6 +2361,80 @@ a.pw-home-indicator:hover {
   color: var(--pw-ink);
 }
 
+.pw-dev-empty-facts {
+  max-width: none !important;
+  font-family: var(--pw-mono);
+  font-size: 9px !important;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.pw-dev-diagnosis {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--pw-line);
+  background: color-mix(in srgb, var(--pw-paper) 92%, var(--pw-ink) 8%);
+}
+
+.pw-dev-diagnosis-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pw-dev-diagnosis-summary {
+  margin: 8px 0 0;
+  font-family: var(--pw-serif);
+  font-size: 17px;
+  line-height: 1.3;
+}
+
+.pw-dev-diagnosis-facts {
+  margin: 6px 0 0;
+  color: var(--pw-muted);
+  font-family: var(--pw-mono);
+  font-size: 8px;
+  letter-spacing: 0.03em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.pw-dev-diagnosis-details {
+  margin-top: 10px;
+}
+
+.pw-dev-diagnosis-details > summary {
+  color: var(--pw-muted);
+  cursor: pointer;
+  font-family: var(--pw-mono);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pw-dev-diagnosis-details ul {
+  margin: 8px 0 0;
+  padding-left: 16px;
+}
+
+.pw-dev-diagnosis-details li {
+  margin-bottom: 5px;
+  color: var(--pw-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.pw-dev-diagnosis-details code {
+  color: var(--pw-ink);
+  font-family: var(--pw-mono);
+  font-size: 9px;
+}
+
+.pw-dev-diagnosis .pw-dev-action {
+  margin-top: 10px;
+}
+
 .pw-dev-composer-wrap {
   flex: 0 0 auto;
   padding: 10px 28px max(12px, env(safe-area-inset-bottom));

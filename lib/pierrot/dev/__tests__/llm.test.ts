@@ -23,8 +23,13 @@ jest.mock('../tools', () => {
 
 import {
   callDevModel,
+  DevAbortError,
+  DevDeadlineError,
   DevPartialCompletionError,
   DevProviderError,
+  fallbackReserveMs,
+  getDevExecutionLimits,
+  normalizeProviderError,
 } from '../llm';
 import { executeDevTool } from '../tools';
 import type { DevToolTraceEntry } from '../types';
@@ -87,7 +92,8 @@ function finalAnswer(text: string): Record<string, unknown> {
 }
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  mockCreate.mockReset();
+  mockExecute.mockReset();
   process.env.DEEPSEEK_API_KEY = 'deepseek-test';
   process.env.OPENROUTER_API_KEY = 'openrouter-test';
   process.env.PIERROT_DEV_MAX_TOOL_CALLS = '6';
@@ -181,7 +187,7 @@ describe('LLM orchestration safety', () => {
     }
   });
 
-  it('allows fallback after read-only tools', async () => {
+  it('does not replay a long investigation after read-only tools', async () => {
     mockExecute.mockResolvedValue({
       name: 'get_repo_info',
       ok: true,
@@ -194,16 +200,17 @@ describe('LLM orchestration safety', () => {
     });
     mockCreate
       .mockResolvedValueOnce(toolCall())
-      .mockRejectedValueOnce(new Error('deepseek failed after read'))
-      .mockResolvedValueOnce(finalAnswer('answer from openrouter'));
+      .mockRejectedValueOnce(new Error('deepseek failed after read'));
 
-    const result = await callDevModel({
-      history: [{ role: 'user', content: 'read the repo' }],
-      requestId: 'req_read_fallback',
-    });
+    await expect(
+      callDevModel({
+        history: [{ role: 'user', content: 'read the repo' }],
+        requestId: 'req_read_fallback',
+      })
+    ).rejects.toBeInstanceOf(DevPartialCompletionError);
 
-    expect(result.provider).toBe('openrouter');
-    expect(result.reply).toBe('answer from openrouter');
+    // The second provider must not repeat the investigation.
+    expect(mockCreate).toHaveBeenCalledTimes(2);
   });
 
   it('stops an infinite tool loop', async () => {
@@ -217,17 +224,18 @@ describe('LLM orchestration safety', () => {
     });
     mockCreate.mockResolvedValue(toolCall());
 
-    await expect(
-      callDevModel({
+    try {
+      await callDevModel({
         history: [{ role: 'user', content: 'loop' }],
         requestId: 'req_loop',
-      })
-    ).rejects.toMatchObject({
-      name: 'DevProviderError',
-      attempts: [
-        expect.objectContaining({ errorCode: 'DEV_TOOL_LIMIT_EXCEEDED' }),
-      ],
-    });
+      });
+      throw new Error('Expected the tool loop to stop with a partial result.');
+    } catch (error) {
+      expect(error).toBeInstanceOf(DevPartialCompletionError);
+      const partial = (error as DevPartialCompletionError).result;
+      expect(partial.status).toBe('partially_completed');
+      expect(partial.toolTrace.length).toBeGreaterThan(0);
+    }
   });
 
   it('bounds a hanging tool and reports a provider failure', async () => {
@@ -241,5 +249,108 @@ describe('LLM orchestration safety', () => {
         requestId: 'req_timeout',
       })
     ).rejects.toBeInstanceOf(DevProviderError);
+  });
+
+  it('normalizes OpenAI abort variants into explicit errors', () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    expect(
+      normalizeProviderError(new Error('anything'), {
+        deadlineAt: Date.now() + 10_000,
+        signal: controller.signal,
+      })
+    ).toBeInstanceOf(DevAbortError);
+
+    expect(
+      normalizeProviderError(
+        Object.assign(new Error('Request was aborted.'), {
+          name: 'APIUserAbortError',
+        }),
+        { deadlineAt: Date.now() + 10_000 }
+      )
+    ).toBeInstanceOf(DevAbortError);
+
+    expect(
+      normalizeProviderError(new Error('aborted'), {
+        deadlineAt: Date.now() - 1,
+      })
+    ).toBeInstanceOf(DevDeadlineError);
+  });
+
+  it('reserves part of the deadline for a fallback provider', () => {
+    expect(fallbackReserveMs(90_000, 1)).toBe(0);
+    const reserve = fallbackReserveMs(90_000, 2);
+    expect(reserve).toBeGreaterThan(0);
+    expect(reserve).toBeLessThan(90_000);
+  });
+
+  it('does not call a provider when the deadline has already expired', async () => {
+    await expect(
+      callDevModel({
+        history: [{ role: 'user', content: 'too late' }],
+        requestId: 'req_deadline',
+        deadlineMs: 1,
+      })
+    ).rejects.toBeInstanceOf(DevDeadlineError);
+
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('does not start a fallback after a user abort', async () => {
+    const controller = new AbortController();
+    mockCreate.mockImplementation(async () => {
+      controller.abort();
+      throw Object.assign(new Error('Request was aborted.'), {
+        name: 'APIUserAbortError',
+      });
+    });
+
+    await expect(
+      callDevModel({
+        history: [{ role: 'user', content: 'abort' }],
+        requestId: 'req_abort',
+        signal: controller.signal,
+      })
+    ).rejects.toBeInstanceOf(DevAbortError);
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips an identical repeated tool call instead of executing it twice', async () => {
+    mockExecute.mockResolvedValue({
+      name: 'search_repo',
+      ok: true,
+      result: {
+        repository: 'merkurov1/newlove',
+        matches: [{ path: 'components/FlowPreview.tsx' }],
+        complete: true,
+      },
+      trace: trace('search_repo'),
+    });
+    mockCreate
+      .mockResolvedValueOnce(toolCall('search_repo'))
+      .mockResolvedValueOnce(toolCall('search_repo'))
+      .mockResolvedValueOnce(finalAnswer('done'));
+
+    const result = await callDevModel({
+      history: [{ role: 'user', content: 'search once' }],
+      requestId: 'req_duplicate',
+    });
+
+    expect(result.reply).toBe('done');
+    expect(mockExecute).toHaveBeenCalledTimes(1);
+    expect(result.toolTrace).toHaveLength(1);
+  });
+
+  it('keeps the default tool budget narrow', () => {
+    const previous = process.env.PIERROT_DEV_MAX_TOOL_CALLS;
+    delete process.env.PIERROT_DEV_MAX_TOOL_CALLS;
+    try {
+      expect(getDevExecutionLimits().maxToolCalls).toBeLessThanOrEqual(10);
+    } finally {
+      if (previous === undefined) delete process.env.PIERROT_DEV_MAX_TOOL_CALLS;
+      else process.env.PIERROT_DEV_MAX_TOOL_CALLS = previous;
+    }
   });
 });

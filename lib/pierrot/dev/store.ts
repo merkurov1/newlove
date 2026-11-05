@@ -3,7 +3,7 @@ import { assertServerOnly } from '@/lib/serverOnly';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { loadDevRequestTraces } from './requests';
-import type { DevTokenUsage, DevToolEvent, DevToolTraceEntry } from './types';
+import type { DevDiagnosis, DevTokenUsage, DevToolEvent, DevToolTraceEntry } from './types';
 
 assertServerOnly('lib/pierrot/dev/store');
 
@@ -24,6 +24,7 @@ export type DevChatMessage = {
   usage?: DevTokenUsage | null;
   latencyMs?: number | null;
   errorCode?: string | null;
+  diagnosis?: DevDiagnosis | null;
 };
 
 export type DevConversation = {
@@ -43,9 +44,9 @@ export type DevConversationListItem = {
 function isMissingModeColumn(error: unknown): boolean {
   const value =
     error && typeof error === 'object'
-      ? `${String((error as { code?: unknown }).code || '')} ${
-          String((error as { message?: unknown }).message || '')
-        }`
+      ? `${String((error as { code?: unknown }).code || '')} ${String(
+          (error as { message?: unknown }).message || ''
+        )}`
       : '';
 
   return /PGRST204|42703/.test(value) || /column .*mode.* does not exist/i.test(value);
@@ -96,7 +97,9 @@ export async function loadDevConversations(
     const store = getServerSupabaseClient({ useServiceRole: true });
     const { data, error } = await store
       .from('pierrot_conversations')
-      .select('id,session_id,started_at,updated_at,last_message_at,consent_state,identity_type,user_id,mode')
+      .select(
+        'id,session_id,started_at,updated_at,last_message_at,consent_state,identity_type,user_id,mode'
+      )
       .eq('identity_type', 'owner')
       .eq('user_id', ownerUserId)
       .eq('mode', DEV_MODE)
@@ -194,6 +197,7 @@ export async function loadDevConversation(
                 usage: trace.usage,
                 latencyMs: trace.latencyMs,
                 errorCode: trace.errorCode,
+                diagnosis: trace.diagnosis,
               }
             : {}),
         };
@@ -292,10 +296,7 @@ export async function appendDevMessage({
 }): Promise<DevChatMessage> {
   const store = getServerSupabaseClient({ useServiceRole: true });
   const safeContent = content.slice(0, MAX_STORED_MESSAGE);
-  const id =
-    messageId && /^[A-Za-z0-9_-]{8,64}$/.test(messageId)
-      ? messageId
-      : randomUUID();
+  const id = messageId && /^[A-Za-z0-9_-]{8,64}$/.test(messageId) ? messageId : randomUUID();
 
   // Idempotent retry: a repeated client request must not append a second copy
   // of the same message.
@@ -402,8 +403,7 @@ export async function loadDevHistory(
       .reverse()
       .filter(
         (row): row is { role: 'user' | 'assistant'; content: string; message_index: number } =>
-          (row.role === 'user' || row.role === 'assistant') &&
-          typeof row.content === 'string'
+          (row.role === 'user' || row.role === 'assistant') && typeof row.content === 'string'
       )
       .map((row) => ({ role: row.role, content: row.content }));
   } catch {

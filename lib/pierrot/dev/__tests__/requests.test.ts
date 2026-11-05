@@ -171,9 +171,63 @@ describe('request traces', () => {
     expect(JSON.stringify(lastUpdates[0])).not.toContain('Authorization');
   });
 
+  it('persists the structured diagnosis inside existing events', async () => {
+    const diagnosis = {
+      taskSummary: 'Fix preview rendering',
+      repository: 'newlove',
+      ref: 'main',
+      commitSha: 'a'.repeat(40),
+      inspectedFiles: [],
+      confirmedFindings: [],
+      likelyFindings: [],
+      hypotheses: [],
+      recommendedFix: 'Preserve the preview URL.',
+      risks: [],
+      tests: [],
+      changes: { backend: [], frontend: [], database: [], mobile: [] },
+      shouldCreateTask: true,
+      confidence: 'confirmed' as const,
+    };
+
+    queue.push({ data: null, error: null });
+    await completeDevRequest({
+      requestId: REQUEST_ID,
+      status: 'completed',
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      reply: 'answer',
+      latencyMs: 100,
+      usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 },
+      toolTrace: [],
+      events: [],
+      sideEffects: [],
+      responseMessageId: 'a_12345678',
+      diagnosis,
+    });
+
+    expect(lastUpdates[0].events).toEqual([{ type: 'diagnosis', diagnosis }]);
+
+    queue.push({
+      data: [
+        requestRow({
+          response_message_id: 'a_12345678',
+          events: lastUpdates[0].events,
+          status: 'completed',
+        }),
+      ],
+      error: null,
+    });
+    const traces = await loadDevRequestTraces(CONVERSATION_ID);
+    expect(traces.get('a_12345678')?.diagnosis).toMatchObject({
+      taskSummary: 'Fix preview rendering',
+    });
+  });
+
   it('loads traces and attaches them by assistant message id', async () => {
     queue.push({
-      data: [requestRow({ response_message_id: 'a_12345678', tool_trace: [{ name: 'read_file' }] })],
+      data: [
+        requestRow({ response_message_id: 'a_12345678', tool_trace: [{ name: 'read_file' }] }),
+      ],
       error: null,
     });
 

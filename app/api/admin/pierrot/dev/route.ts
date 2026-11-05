@@ -9,20 +9,10 @@ import {
   DevProviderError,
   isDevModelConfigured,
 } from '@/lib/pierrot/dev/llm';
-import {
-  appendDevMessage,
-  ensureDevConversation,
-  loadDevHistory,
-} from '@/lib/pierrot/dev/store';
-import {
-  beginDevRequest,
-  completeDevRequest,
-  failDevRequest,
-} from '@/lib/pierrot/dev/requests';
-import type {
-  DevModelResult,
-  DevToolEvent,
-} from '@/lib/pierrot/dev/types';
+import { getDevRepositoryConfigs, resolveDevRepository } from '@/lib/pierrot/dev/repositories';
+import { appendDevMessage, ensureDevConversation, loadDevHistory } from '@/lib/pierrot/dev/store';
+import { beginDevRequest, completeDevRequest, failDevRequest } from '@/lib/pierrot/dev/requests';
+import type { DevModelResult, DevToolEvent } from '@/lib/pierrot/dev/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -74,9 +64,7 @@ function safeErrorMessage(error: unknown): string {
   return 'Dev request failed.';
 }
 
-function statusFromResult(
-  result: DevModelResult
-): 'completed' | 'partially_completed' {
+function statusFromResult(result: DevModelResult): 'completed' | 'partially_completed' {
   return result.status === 'partially_completed' ? 'partially_completed' : 'completed';
 }
 
@@ -115,12 +103,23 @@ function sseResponse(
           close();
         })
         .catch((error) => {
+          const record =
+            error && typeof error === 'object'
+              ? (error as {
+                  toolTrace?: unknown;
+                  events?: unknown;
+                  diagnosis?: unknown;
+                })
+              : {};
           emit({
             type: 'final',
             payload: {
               error: safeErrorMessage(error),
               code: errorCode(error),
               status: 'failed',
+              toolTrace: Array.isArray(record.toolTrace) ? record.toolTrace : [],
+              events: Array.isArray(record.events) ? record.events : [],
+              diagnosis: record.diagnosis || null,
             },
           });
           close();
@@ -171,27 +170,17 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const message =
-    body && typeof body.message === 'string' ? body.message.trim() : '';
+  const message = body && typeof body.message === 'string' ? body.message.trim() : '';
   const conversationId =
-    body && typeof body.conversationId === 'string'
-      ? body.conversationId
-      : null;
+    body && typeof body.conversationId === 'string' ? body.conversationId : null;
   const requestId =
-    safeId(body?.requestId) ||
-    safeId(req.headers.get('x-idempotency-key')) ||
-    randomUUID();
+    safeId(body?.requestId) || safeId(req.headers.get('x-idempotency-key')) || randomUUID();
   const idempotencyKey =
-    safeId(body?.idempotencyKey) ||
-    safeId(req.headers.get('x-idempotency-key')) ||
-    requestId;
+    safeId(body?.idempotencyKey) || safeId(req.headers.get('x-idempotency-key')) || requestId;
   const wantsStream =
-    body?.stream === true ||
-    (req.headers.get('accept') || '').includes('text/event-stream');
-  const repositoryHint =
-    typeof body?.repository === 'string' ? body.repository.slice(0, 80) : null;
-  const baseRef =
-    typeof body?.baseRef === 'string' ? body.baseRef.slice(0, 200) : null;
+    body?.stream === true || (req.headers.get('accept') || '').includes('text/event-stream');
+  const repositoryHint = typeof body?.repository === 'string' ? body.repository.slice(0, 80) : null;
+  const baseRef = typeof body?.baseRef === 'string' ? body.baseRef.slice(0, 200) : null;
 
   if (!message) {
     return json({ error: 'Message is required.', status: 'failed' }, 400);
@@ -203,6 +192,35 @@ export async function POST(req: Request) {
 
   if (conversationId && !ID_PATTERN.test(conversationId)) {
     return json({ error: 'Invalid conversation id.', status: 'failed' }, 400);
+  }
+
+  const repositoryConfigs = getDevRepositoryConfigs();
+  let activeRepository = repositoryConfigs[0];
+
+  try {
+    activeRepository = resolveDevRepository(repositoryHint || undefined);
+  } catch {
+    return json(
+      {
+        error: 'Unknown repository. Choose newlove or pierrot.',
+        code: 'DEV_REPO_INVALID',
+        status: 'failed',
+      },
+      400
+    );
+  }
+
+  if (!activeRepository.configured) {
+    return json(
+      {
+        error:
+          'GitHub access is not configured. Dev Mode cannot inspect the repository until GITHUB_TOKEN is available.',
+        code: 'DEV_GITHUB_UNAVAILABLE',
+        status: 'failed',
+        repository: activeRepository.key,
+      },
+      503
+    );
   }
 
   let conversation: Awaited<ReturnType<typeof ensureDevConversation>>;
@@ -252,14 +270,12 @@ export async function POST(req: Request) {
         requestId,
         status: 'completed',
         latencyMs: begin.request.latencyMs,
+        diagnosis: begin.request.diagnosis,
         cached: true,
       });
     }
 
-    if (
-      begin.request.status === 'pending' ||
-      begin.request.status === 'running'
-    ) {
+    if (begin.request.status === 'pending' || begin.request.status === 'running') {
       return json(
         {
           error: 'This request is already running.',
@@ -327,10 +343,17 @@ export async function POST(req: Request) {
     const events: DevToolEvent[] = [];
 
     try {
+      emit({
+        type: 'status',
+        phase: 'connecting',
+        label: `Подключаюсь к ${activeRepository.fullName}`,
+      });
+
       result = await callDevModel({
         history: await loadDevHistory(conversation.id, 30),
         requestId,
         signal: req.signal,
+        repository: activeRepository.key,
         onEvent: (event) => {
           events.push(event);
           emit(event);
@@ -371,6 +394,7 @@ export async function POST(req: Request) {
           events: partial.events,
           sideEffects: partial.sideEffects,
           responseMessageId: assistantMessageId,
+          diagnosis: partial.diagnosis,
         });
 
         return {
@@ -384,12 +408,27 @@ export async function POST(req: Request) {
           requestId,
           status: 'partially_completed',
           latencyMs: partial.latencyMs,
+          diagnosis: partial.diagnosis,
           warnings,
         };
       }
 
-      const trace = caught instanceof DevProviderError ? caught.toolTrace : [];
-      const errorEvents = caught instanceof DevProviderError ? caught.events : events;
+      const caughtRecord =
+        caught && typeof caught === 'object'
+          ? (caught as { toolTrace?: unknown; events?: unknown })
+          : {};
+      const trace =
+        caught instanceof DevProviderError
+          ? caught.toolTrace
+          : Array.isArray(caughtRecord.toolTrace)
+            ? (caughtRecord.toolTrace as DevModelResult['toolTrace'])
+            : [];
+      const errorEvents =
+        caught instanceof DevProviderError
+          ? caught.events
+          : Array.isArray(caughtRecord.events)
+            ? (caughtRecord.events as DevToolEvent[])
+            : events;
 
       await failDevRequest({
         requestId,
@@ -402,12 +441,15 @@ export async function POST(req: Request) {
       });
 
       // Keep the transcript in a defined state after a failed assistant turn.
+      const detail = safeErrorMessage(caught).slice(0, 240);
+      const traceNote =
+        trace.length > 0 ? ` Собранные шаги сохранены в trace (${trace.length}).` : '';
       const notice =
         code === 'DEV_REQUEST_ABORTED'
-          ? 'Запрос прерван. Сообщение сохранено; можно повторить с новым requestId.'
+          ? `Запрос прерван. Сообщение сохранено; можно повторить с новым requestId.${traceNote}`
           : code === 'DEV_REQUEST_DEADLINE_EXCEEDED'
-            ? 'Запрос превысил допустимое время. Сообщение сохранено; можно продолжить с нового запроса.'
-            : `Ответ не получен (${code}). Сообщение сохранено; можно повторить с новым requestId.`;
+            ? `Запрос превысил допустимое время. Сообщение сохранено; можно продолжить с нового запроса.${traceNote}`
+            : `Ответ не получен (${code})${detail ? `: ${detail}` : ''}. Сообщение сохранено; можно повторить с новым requestId.${traceNote}`;
 
       const assistantMessageId = deterministicMessageId(
         'assistant',
@@ -425,14 +467,18 @@ export async function POST(req: Request) {
         // The request row is authoritative for the failure status.
       }
 
-      throw caught;
+      // Carry the partial trace and the explicit code to both the streaming
+      // final payload and the non-streaming JSON response.
+      throw Object.assign(new Error(safeErrorMessage(caught)), {
+        code,
+        status: 'failed',
+        toolTrace: trace,
+        events: errorEvents,
+        diagnosis: null,
+      });
     }
 
-    const assistantMessageId = deterministicMessageId(
-      'assistant',
-      conversation.id,
-      idempotencyKey
-    );
+    const assistantMessageId = deterministicMessageId('assistant', conversation.id, idempotencyKey);
 
     let assistantPersisted = true;
     try {
@@ -445,14 +491,10 @@ export async function POST(req: Request) {
       });
     } catch (error) {
       assistantPersisted = false;
-      warnings.push(
-        `Assistant reply could not be persisted: ${safeErrorMessage(error)}`
-      );
+      warnings.push(`Assistant reply could not be persisted: ${safeErrorMessage(error)}`);
     }
 
-    const finalStatus = assistantPersisted
-      ? statusFromResult(result)
-      : 'partially_completed';
+    const finalStatus = assistantPersisted ? statusFromResult(result) : 'partially_completed';
     await completeDevRequest({
       requestId,
       status: finalStatus,
@@ -465,6 +507,7 @@ export async function POST(req: Request) {
       events: result.events,
       sideEffects: result.sideEffects,
       responseMessageId: assistantPersisted ? assistantMessageId : null,
+      diagnosis: result.diagnosis,
     });
 
     return {
@@ -478,6 +521,7 @@ export async function POST(req: Request) {
       requestId,
       status: finalStatus,
       latencyMs: result.latencyMs,
+      diagnosis: result.diagnosis,
       warnings,
     };
   };
@@ -493,12 +537,19 @@ export async function POST(req: Request) {
     return json(payload, payload.status === 'partially_completed' ? 207 : 200);
   } catch (error) {
     const code = errorCode(error);
+    const record =
+      error && typeof error === 'object'
+        ? (error as { toolTrace?: unknown; events?: unknown; diagnosis?: unknown })
+        : {};
     return json(
       {
         error: safeErrorMessage(error),
         code,
         requestId,
         status: 'failed',
+        toolTrace: Array.isArray(record.toolTrace) ? record.toolTrace : [],
+        events: Array.isArray(record.events) ? record.events : [],
+        diagnosis: record.diagnosis || null,
       },
       code === 'DEV_REQUEST_ABORTED' ? 499 : 500
     );

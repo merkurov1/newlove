@@ -17,6 +17,7 @@ import WorkspaceMarkdown from './WorkspaceMarkdown';
 import DevTaskStudio from './DevTaskStudio';
 import { useOnlineStatus } from './useOnlineStatus';
 import type {
+  DevDiagnosis,
   DevMemoryEntry,
   DevRepositoryStatus,
   DevTask,
@@ -44,6 +45,7 @@ type DevMessage = {
   usage?: DevTokenUsage | null;
   latencyMs?: number | null;
   errorCode?: string | null;
+  diagnosis?: DevDiagnosis | null;
   error?: boolean;
 };
 
@@ -63,6 +65,7 @@ type DevConversation = {
     usage?: DevTokenUsage | null;
     latencyMs?: number | null;
     errorCode?: string | null;
+    diagnosis?: DevDiagnosis | null;
   }>;
 };
 
@@ -96,6 +99,7 @@ type StreamFinalPayload = {
   status?: string;
   latencyMs?: number;
   warnings?: string[];
+  diagnosis?: DevDiagnosis | null;
   error?: string;
   code?: string;
 };
@@ -130,6 +134,7 @@ function initialMessages(conversation: DevConversation | null): DevMessage[] {
     usage: message.usage,
     latencyMs: message.latencyMs,
     errorCode: message.errorCode,
+    diagnosis: message.diagnosis || null,
   }));
 }
 
@@ -176,9 +181,7 @@ function ToolTrace({ trace }: { trace: DevToolTraceEntry[] }) {
               .join(' · ')}
           >
             {tool.name}
-            {tool.meta?.repository
-              ? ` · ${tool.meta.repository.split('/').pop()}`
-              : ''}
+            {tool.meta?.repository ? ` · ${tool.meta.repository.split('/').pop()}` : ''}
             {tool.meta?.complete === false ? ' · partial' : ''}
           </span>
         ))}
@@ -193,6 +196,85 @@ function ToolTrace({ trace }: { trace: DevToolTraceEntry[] }) {
         ))}
       </ul>
     </details>
+  );
+}
+
+function DiagnosisCard({
+  diagnosis,
+  onCreateTask,
+}: {
+  diagnosis: DevDiagnosis;
+  onCreateTask: () => void;
+}) {
+  const tone =
+    diagnosis.confidence === 'confirmed'
+      ? 'is-verified'
+      : diagnosis.confidence === 'likely'
+        ? 'is-warn'
+        : 'is-unverified';
+
+  return (
+    <section className="pw-dev-diagnosis" aria-label="Структурированная диагностика">
+      <div className="pw-dev-diagnosis-head">
+        <span className="pw-dev-kicker">DIAGNOSIS</span>
+        <span className={`pw-dev-verdict ${tone}`}>{diagnosis.confidence}</span>
+      </div>
+      <p className="pw-dev-diagnosis-summary">{diagnosis.taskSummary}</p>
+      <p className="pw-dev-diagnosis-facts">
+        {diagnosis.repository} · {diagnosis.ref} ·{' '}
+        {diagnosis.commitSha ? diagnosis.commitSha.slice(0, 7) : 'commit unknown'} ·{' '}
+        {diagnosis.inspectedFiles.length} files
+      </p>
+
+      {diagnosis.inspectedFiles.length > 0 && (
+        <details className="pw-dev-diagnosis-details">
+          <summary>Файлы и свидетельства</summary>
+          <ul>
+            {diagnosis.inspectedFiles.map((file) => (
+              <li key={file.path}>
+                <code>{file.path}</code>
+                {file.startLine ? `:${file.startLine}-${file.endLine || file.startLine}` : ''}
+              </li>
+            ))}
+          </ul>
+          {diagnosis.confirmedFindings.length > 0 && (
+            <ul>
+              {diagnosis.confirmedFindings.map((finding, index) => (
+                <li key={`confirmed-${index}`}>
+                  <strong>confirmed</strong> {finding.statement}
+                  {finding.evidence ? ` · ${finding.evidence}` : ''}
+                </li>
+              ))}
+            </ul>
+          )}
+          {diagnosis.likelyFindings.length > 0 && (
+            <ul>
+              {diagnosis.likelyFindings.map((finding, index) => (
+                <li key={`likely-${index}`}>
+                  <strong>likely</strong> {finding.statement}
+                </li>
+              ))}
+            </ul>
+          )}
+          {diagnosis.hypotheses.length > 0 && (
+            <ul>
+              {diagnosis.hypotheses.map((finding, index) => (
+                <li key={`hypothesis-${index}`}>
+                  <strong>unverified</strong> {finding.statement}
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
+      )}
+
+      {diagnosis.shouldCreateTask && (
+        <button type="button" className="pw-dev-action" onClick={onCreateTask}>
+          <Plus size={14} aria-hidden="true" />
+          Задание из диагностики
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -228,6 +310,7 @@ export default function DevWorkspace({
   const [notice, setNotice] = useState<string | null>(null);
   const [threadsOpen, setThreadsOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
+  const [taskCreateNonce, setTaskCreateNonce] = useState(0);
   const [activeRepoKey, setActiveRepoKey] = useState<string>(
     () =>
       integration.repositories.find((repo) => repo.accessible)?.key ||
@@ -295,9 +378,7 @@ export default function DevWorkspace({
 
   const suggestedTitle = useMemo(() => {
     const lastUser = [...messages].reverse().find((message) => message.role === 'user');
-    const clean = (lastUser?.content || title || 'Инженерное задание')
-      .replace(/\s+/g, ' ')
-      .trim();
+    const clean = (lastUser?.content || title || 'Инженерное задание').replace(/\s+/g, ' ').trim();
     return clean.length > 92 ? `${clean.slice(0, 89).trimEnd()}…` : clean;
   }, [messages, title]);
 
@@ -332,13 +413,17 @@ export default function DevWorkspace({
         requestStatus: typeof payload.status === 'string' ? payload.status : 'completed',
         usage: payload.usage || null,
         latencyMs: typeof payload.latencyMs === 'number' ? payload.latencyMs : null,
+        errorCode: typeof payload.code === 'string' ? payload.code : null,
+        diagnosis: payload.diagnosis || null,
       },
     ]);
   }
 
   async function send() {
     const text = draft.trim();
-    if (!text || loading || !online || inFlightRef.current) return;
+    if (!text || loading || !online || !integration.github.configured || inFlightRef.current) {
+      return;
+    }
 
     const retry =
       retryRef.current &&
@@ -356,7 +441,7 @@ export default function DevWorkspace({
     setLoading(true);
     setError(null);
     setNotice(null);
-    setPhase('Исследую репозиторий');
+    setPhase(`Подключаюсь к ${activeRepo?.fullName || 'репозиторию'}`);
     setLiveTools([]);
     setDraft('');
     setThreadsOpen(false);
@@ -423,9 +508,7 @@ export default function DevWorkspace({
           buffer = chunks.pop() || '';
 
           for (const chunk of chunks) {
-            const line = chunk
-              .split('\n')
-              .find((entry) => entry.startsWith('data: '));
+            const line = chunk.split('\n').find((entry) => entry.startsWith('data: '));
             if (!line) continue;
 
             let event: Record<string, unknown>;
@@ -457,11 +540,17 @@ export default function DevWorkspace({
         throw new Error('Dev response ended without a final payload.');
       }
 
+      if (!mountedRef.current) return;
+
       if (finalPayload.error) {
+        // Preserve the partial tool trace in the transcript even when the
+        // provider failed before producing a conclusion.
+        applyAssistantPayload({
+          ...finalPayload,
+          reply: finalPayload.error,
+        });
         throw new Error(finalPayload.error);
       }
-
-      if (!mountedRef.current) return;
 
       if (typeof finalPayload.conversationId === 'string') {
         effectiveConversationId = finalPayload.conversationId;
@@ -473,8 +562,7 @@ export default function DevWorkspace({
       router.refresh();
     } catch (caught) {
       if (!mountedRef.current) return;
-      const messageText =
-        caught instanceof Error ? caught.message : 'Dev request failed.';
+      const messageText = caught instanceof Error ? caught.message : 'Dev request failed.';
       setError(messageText);
       setPhase(null);
       retryRef.current = {
@@ -638,15 +726,15 @@ export default function DevWorkspace({
 
         {migrationRequired && (
           <div className="pw-dev-banner" role="alert">
-            Нужна миграция <code>2026-11-17_pierrot_dev_mode.sql</code>. Без неё
-            Dev-треды не сохраняются в Supabase.
+            Нужна миграция <code>2026-11-17_pierrot_dev_mode.sql</code>. Без неё Dev-треды не
+            сохраняются в Supabase.
           </div>
         )}
 
         {taskMigrationRequired && (
           <div className="pw-dev-banner" role="alert">
-            Нужна миграция <code>2026-11-18_pierrot_dev_engineering.sql</code>.
-            Task Studio работает в ограниченном режиме.
+            Нужна миграция <code>2026-11-18_pierrot_dev_engineering.sql</code>. Task Studio работает
+            в ограниченном режиме.
           </div>
         )}
 
@@ -657,6 +745,13 @@ export default function DevWorkspace({
           </div>
         )}
 
+        {!integration.github.configured && (
+          <div className="pw-dev-banner" role="alert">
+            GitHub access не настроен: нет <code>GITHUB_TOKEN</code>. Пока токен недоступен, Dev
+            Mode не будет вызывать модель для исследования репозитория.
+          </div>
+        )}
+
         <div className="pw-dev-body">
           <div className="pw-dev-scroll" ref={scrollRef}>
             {messages.length === 0 ? (
@@ -664,35 +759,45 @@ export default function DevWorkspace({
                 <p className="pw-dev-kicker">ENGINEERING ENVIRONMENT</p>
                 <h2>Что исследуем?</h2>
                 <p>
-                  Пьеро читает оба репозитория через read-only GitHub tools,
-                  показывает repository, branch и commit SHA, готовит задания для
-                  OpenCode и проверяет фактический diff. RAG и обычная история чата
+                  Пьеро ищет по репозиторию, читает нужные файлы, показывает repository, branch и
+                  commit SHA и отделяет подтверждённые факты от гипотез. RAG и обычная история чата
                   сюда не подмешиваются.
+                </p>
+                <p className="pw-dev-empty-facts">
+                  {activeRepo?.fullName || integration.github.repo} ·{' '}
+                  {activeRepo?.workBranch || integration.github.defaultBranch} ·{' '}
+                  {integration.github.authenticated
+                    ? `GitHub @${integration.github.login || 'authenticated'}`
+                    : integration.github.configured
+                      ? 'GitHub auth failed'
+                      : 'GitHub access off'}
                 </p>
                 <div className="pw-dev-suggestions">
                   <button
                     type="button"
                     onClick={() =>
-                      setDraft('Сравни структуру newlove и Pierrot и объясни границу ответственности')
+                      setDraft('Проверь, почему на главной Flow не загружаются preview изображения')
                     }
                   >
-                    сравнить репозитории
+                    почему не работает…
                   </button>
                   <button
                     type="button"
                     onClick={() =>
-                      setDraft('Найди реализацию Dev Mode в newlove и проследи путь от UI до Supabase')
+                      setDraft(
+                        'Изучи, как сейчас реализована навигация и PWA-оболочка в owner workspace'
+                      )
                     }
                   >
-                    путь UI → API → БД
+                    как реализовано…
                   </button>
                   <button
                     type="button"
                     onClick={() =>
-                      setDraft('Проверь последние commits в newlove и Pierrot, затем предложи минимальный следующий шаг')
+                      setDraft('Найди в репозитории причину и подготовь задачу для OpenCode')
                     }
                   >
-                    последние изменения
+                    найти и подготовить задачу
                   </button>
                 </div>
               </div>
@@ -712,13 +817,21 @@ export default function DevWorkspace({
                           {message.latencyMs ? ` · ${(message.latencyMs / 1000).toFixed(1)}s` : ''}
                           {message.requestStatus === 'partially_completed'
                             ? ' · partial'
-                            : ''}
+                            : message.requestStatus === 'failed'
+                              ? ' · failed'
+                              : ''}
                         </span>
                       </div>
-                      <WorkspaceMarkdown
-                        className="pw-dev-answer"
-                        content={message.content}
-                      />
+                      <WorkspaceMarkdown className="pw-dev-answer" content={message.content} />
+                      {message.diagnosis && (
+                        <DiagnosisCard
+                          diagnosis={message.diagnosis}
+                          onCreateTask={() => {
+                            setTaskCreateNonce((value) => value + 1);
+                            setContextOpen(true);
+                          }}
+                        />
+                      )}
                       {message.toolTrace && <ToolTrace trace={message.toolTrace} />}
                     </article>
                   )
@@ -788,9 +901,7 @@ export default function DevWorkspace({
                   </div>
                   <div>
                     <dt>access</dt>
-                    <dd>
-                      {activeRepo.accessible ? 'read-only ok' : activeRepo.error || 'off'}
-                    </dd>
+                    <dd>{activeRepo.accessible ? 'read-only ok' : activeRepo.error || 'off'}</dd>
                   </div>
                   <div>
                     <dt>checked</dt>
@@ -819,9 +930,7 @@ export default function DevWorkspace({
                 <ul className="pw-dev-research-list">
                   {lastAssistant.toolTrace.slice(-8).map((tool, index) => (
                     <li key={`${tool.name}-${index}`}>
-                      <span className={tool.ok ? 'is-ok' : 'is-error'}>
-                        {tool.name}
-                      </span>
+                      <span className={tool.ok ? 'is-ok' : 'is-error'}>{tool.name}</span>
                       <span>{tool.summary}</span>
                       {tool.meta?.repository && <small>{tool.meta.repository}</small>}
                     </li>
@@ -829,8 +938,7 @@ export default function DevWorkspace({
                 </ul>
               ) : (
                 <p className="pw-dev-context-muted">
-                  Ещё нет tool trace в этом треде. Задайте вопрос о коде или
-                  изменениях.
+                  Ещё нет tool trace в этом треде. Задайте вопрос о коде или изменениях.
                 </p>
               )}
             </section>
@@ -847,8 +955,8 @@ export default function DevWorkspace({
                       </summary>
                       <p>{entry.content}</p>
                       <p className="pw-dev-memory-source">
-                        {entry.source} · {entry.updatedAt} · commit{' '}
-                        {shortSha(entry.commitSha)} · {entry.status}
+                        {entry.source} · {entry.updatedAt} · commit {shortSha(entry.commitSha)} ·{' '}
+                        {entry.status}
                       </p>
                     </details>
                   </li>
@@ -869,9 +977,9 @@ export default function DevWorkspace({
               conversationId={conversationId}
               conversationContext={conversationContext}
               suggestedTitle={suggestedTitle}
-              onCopyPrompt={(prompt) =>
-                setNotice(`Prompt скопирован · ${prompt.length} символов`)
-              }
+              diagnosis={lastAssistant?.diagnosis || null}
+              createNonce={taskCreateNonce}
+              onCopyPrompt={(prompt) => setNotice(`Prompt скопирован · ${prompt.length} символов`)}
             />
           </aside>
         </div>
@@ -901,19 +1009,21 @@ export default function DevWorkspace({
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={onKeyDown}
               placeholder={
-                online
-                  ? 'Вопрос о newlove или Pierrot · Enter — отправить'
-                  : 'Нет соединения'
+                !online
+                  ? 'Нет соединения'
+                  : !integration.github.configured
+                    ? 'GitHub access не настроен'
+                    : 'Вопрос о newlove или Pierrot · Enter — отправить'
               }
               rows={1}
-              disabled={!online}
+              disabled={!online || !integration.github.configured}
               aria-label="Сообщение Pierrot Dev"
             />
             <button
               type="button"
               className="pw-dev-send"
               onClick={() => void send()}
-              disabled={!online || loading || !draft.trim()}
+              disabled={!online || !integration.github.configured || loading || !draft.trim()}
               aria-label="Отправить в Dev"
             >
               <ArrowUp size={16} strokeWidth={1.7} aria-hidden="true" />

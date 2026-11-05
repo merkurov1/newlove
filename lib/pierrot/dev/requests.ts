@@ -1,6 +1,8 @@
 import { assertServerOnly } from '@/lib/serverOnly';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
+import { diagnosisFromEvents } from './diagnosis';
 import type {
+  DevDiagnosis,
   DevRequestStatus,
   DevTokenUsage,
   DevToolTraceEntry,
@@ -23,6 +25,7 @@ export type DevRequestRow = {
   toolTrace: DevToolTraceEntry[];
   events: DevToolEvent[];
   sideEffects: Array<{ tool: string; repository: string | null; summary: string }>;
+  diagnosis: DevDiagnosis | null;
   errorCode: string | null;
   errorMessage: string | null;
   startedAt: string;
@@ -40,9 +43,9 @@ export type BeginDevRequestResult = {
 function isMissingTable(error: unknown): boolean {
   const text =
     error && typeof error === 'object'
-      ? `${String((error as { code?: unknown }).code || '')} ${
-          String((error as { message?: unknown }).message || '')
-        }`
+      ? `${String((error as { code?: unknown }).code || '')} ${String(
+          (error as { message?: unknown }).message || ''
+        )}`
       : '';
   return /PGRST205|42P01|relation .* does not exist/i.test(text);
 }
@@ -50,8 +53,8 @@ function isMissingTable(error: unknown): boolean {
 function isUniqueViolation(error: unknown): boolean {
   return Boolean(
     error &&
-      typeof error === 'object' &&
-      String((error as { code?: unknown }).code || '') === '23505'
+    typeof error === 'object' &&
+    String((error as { code?: unknown }).code || '') === '23505'
   );
 }
 
@@ -72,23 +75,20 @@ function mapRow(row: Record<string, unknown>): DevRequestRow {
     latencyMs: typeof row.latency_ms === 'number' ? row.latency_ms : null,
     usage: {
       promptTokens: typeof row.prompt_tokens === 'number' ? row.prompt_tokens : null,
-      completionTokens:
-        typeof row.completion_tokens === 'number' ? row.completion_tokens : null,
+      completionTokens: typeof row.completion_tokens === 'number' ? row.completion_tokens : null,
       totalTokens: typeof row.total_tokens === 'number' ? row.total_tokens : null,
     },
-    toolTrace: Array.isArray(row.tool_trace)
-      ? (row.tool_trace as DevToolTraceEntry[])
-      : [],
+    toolTrace: Array.isArray(row.tool_trace) ? (row.tool_trace as DevToolTraceEntry[]) : [],
     events: Array.isArray(row.events) ? (row.events as DevToolEvent[]) : [],
     sideEffects: Array.isArray(row.side_effects)
       ? (row.side_effects as DevRequestRow['sideEffects'])
       : [],
+    diagnosis: diagnosisFromEvents(Array.isArray(row.events) ? (row.events as DevToolEvent[]) : []),
     errorCode: typeof row.error_code === 'string' ? row.error_code : null,
     errorMessage: typeof row.error_message === 'string' ? row.error_message : null,
     startedAt: String(row.started_at || ''),
     finishedAt: typeof row.finished_at === 'string' ? row.finished_at : null,
-    responseMessageId:
-      typeof row.response_message_id === 'string' ? row.response_message_id : null,
+    responseMessageId: typeof row.response_message_id === 'string' ? row.response_message_id : null,
   };
 }
 
@@ -156,6 +156,7 @@ export async function beginDevRequest(input: {
         toolTrace: [],
         events: [],
         sideEffects: [],
+        diagnosis: null,
         errorCode: null,
         errorMessage: null,
         startedAt: new Date().toISOString(),
@@ -201,9 +202,16 @@ export async function completeDevRequest(input: {
   events: DevToolEvent[];
   sideEffects: DevRequestRow['sideEffects'];
   responseMessageId: string | null;
+  diagnosis?: DevDiagnosis | null;
 }): Promise<void> {
   const store = getStore();
   if (!store) return;
+
+  // There is no dedicated diagnosis column; the existing jsonb event array is
+  // the closest compatible store and requires no migration.
+  const events: DevToolEvent[] = input.diagnosis
+    ? [...input.events, { type: 'diagnosis', diagnosis: input.diagnosis }]
+    : input.events;
 
   const { error } = await store
     .from('pierrot_dev_requests')
@@ -218,7 +226,7 @@ export async function completeDevRequest(input: {
       completion_tokens: input.usage.completionTokens,
       total_tokens: input.usage.totalTokens,
       tool_trace: input.toolTrace,
-      events: input.events,
+      events,
       side_effects: input.sideEffects,
       finished_at: new Date().toISOString(),
     })
@@ -330,9 +338,6 @@ export async function loadRecentDevRequests(
 export async function isDevRequestStoreAvailable(): Promise<boolean> {
   const store = getStore();
   if (!store) return false;
-  const { error } = await store
-    .from('pierrot_dev_requests')
-    .select('request_id')
-    .limit(1);
+  const { error } = await store.from('pierrot_dev_requests').select('request_id').limit(1);
   return !error;
 }

@@ -255,6 +255,68 @@ export function summarizeToolResult(name: string, result: unknown): string {
   return prefix ? `${prefix}ok` : 'ok';
 }
 
+function safePath(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const path = value.trim().replace(/\\/g, '/').replace(/^\.\//, '');
+  if (!path || path.length > 260 || path.includes('..')) return null;
+  return path;
+}
+
+function traceFilesForTool(
+  name: string,
+  result: Record<string, unknown>
+): {
+  paths: string[];
+  ranges: Array<{ path: string; startLine: number; endLine: number }>;
+} {
+  const paths = new Set<string>();
+  const ranges: Array<{ path: string; startLine: number; endLine: number }> = [];
+  const addPath = (value: unknown) => {
+    const path = safePath(value);
+    if (path) paths.add(path);
+    return path;
+  };
+
+  if (name === 'read_file') {
+    const path = addPath(result.path);
+    const lineCount = numeric(result.lineCount);
+    if (path && lineCount && lineCount > 0) {
+      ranges.push({
+        path,
+        startLine: 1,
+        endLine: Math.max(1, Math.round(lineCount)),
+      });
+    }
+  } else if (name === 'read_file_range') {
+    const path = addPath(result.path);
+    const start = numeric(result.startLine);
+    const end = numeric(result.endLine);
+    if (path && start && end) {
+      ranges.push({
+        path,
+        startLine: Math.max(1, Math.round(start)),
+        endLine: Math.max(Math.round(start), Math.round(end)),
+      });
+    }
+  } else if (name === 'search_repo') {
+    for (const match of Array.isArray(result.matches) ? result.matches : []) {
+      if (match && typeof match === 'object') {
+        addPath((match as Record<string, unknown>).path);
+      }
+      if (paths.size >= 40) break;
+    }
+  } else if (name === 'get_commit' || name === 'compare_refs' || name === 'get_pull_request') {
+    for (const file of Array.isArray(result.files) ? result.files : []) {
+      if (file && typeof file === 'object') {
+        addPath((file as Record<string, unknown>).filename);
+      }
+      if (paths.size >= 60) break;
+    }
+  }
+
+  return { paths: Array.from(paths).slice(0, 60), ranges };
+}
+
 function numeric(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
@@ -385,23 +447,22 @@ export async function executeDevTool(
         });
         break;
       default:
-        throw new DevRepoError(
-          'GITHUB_API_ERROR',
-          `Unknown Dev tool: ${name}.`
-        );
+        throw new DevRepoError('GITHUB_API_ERROR', `Unknown Dev tool: ${name}.`);
     }
 
     const record = result as Record<string, unknown>;
+    const files = traceFilesForTool(name, record);
     const meta = {
       repository: String(record.repository || ''),
       branch: String(record.branch || ''),
-      commitSha:
-        typeof record.commitSha === 'string' ? record.commitSha : null,
+      commitSha: typeof record.commitSha === 'string' ? record.commitSha : null,
       complete: record.complete !== false,
       source: 'github' as const,
       ...(Array.isArray(record.warnings) && record.warnings.length > 0
         ? { warnings: record.warnings.map(String) }
         : {}),
+      ...(files.paths.length > 0 ? { paths: files.paths } : {}),
+      ...(files.ranges.length > 0 ? { ranges: files.ranges } : {}),
     };
 
     return {
@@ -430,8 +491,7 @@ export async function executeDevTool(
       },
       trace: {
         name,
-        repository:
-          typeof args.repository === 'string' ? args.repository : null,
+        repository: typeof args.repository === 'string' ? args.repository : null,
         ok: false,
         durationMs: Date.now() - startedAt,
         summary: payload.error,
