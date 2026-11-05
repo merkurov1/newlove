@@ -12,6 +12,7 @@ export const WORKSPACE_ROUTES = [
     label: 'HEART & ANGEL',
     shortLabel: 'HEART',
     shortcut: '8',
+    iconOnly: true,
   },
 ] as const;
 

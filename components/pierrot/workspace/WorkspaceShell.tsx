@@ -81,12 +81,13 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
             const Icon = ICONS[item.key];
             const isActive = active === item.key;
             const shortLabel = 'shortLabel' in item ? item.shortLabel : item.label;
+            const iconOnly = 'iconOnly' in item && item.iconOnly === true;
 
             return (
               <Link
                 key={item.key}
                 href={item.path}
-                className="pw-rail-link"
+                className={`pw-rail-link${iconOnly ? ' pw-rail-link--icon-only' : ''}`}
                 aria-current={isActive ? 'page' : undefined}
                 aria-label={item.label}
                 title={`${item.label} · Cmd+${item.shortcut}`}
@@ -98,8 +99,12 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
                 }}
               >
                 <Icon size={24} strokeWidth={1.4} aria-hidden="true" />
-                <span className="max-[699px]:hidden">{item.label}</span>
-                <span className="hidden max-[699px]:inline">{shortLabel}</span>
+                {!iconOnly && (
+                  <>
+                    <span className="max-[699px]:hidden">{item.label}</span>
+                    <span className="hidden max-[699px]:inline">{shortLabel}</span>
+                  </>
+                )}
               </Link>
             );
           })}

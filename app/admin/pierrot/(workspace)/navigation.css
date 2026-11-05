@@ -1,0 +1,8 @@
+/*
+ * The Heart & Angel rail item is icon-only. Keep its icon on the same optical
+ * line as the icons of labelled items without leaving an empty label container.
+ */
+.pw-rail-link.pw-rail-link--icon-only {
+  justify-content: flex-start;
+  padding-top: 13px;
+}
