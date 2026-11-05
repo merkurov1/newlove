@@ -145,7 +145,7 @@ import {
 } from '@/lib/pierrot/memory/store';
 import { runMemorySteward } from '@/lib/pierrot/memory/steward';
 import { buildSkillsContext } from '@/lib/pierrot/skills/store';
-import type { PierrotMemoryRecord } from '@/lib/pierrot/memory/types';
+import type { PierrotMemoryRecord, PierrotMemoryStatus } from '@/lib/pierrot/memory/types';
 import {
   confirmPendingUrlCandidate,
   consumePendingUrlCandidate,
@@ -1771,12 +1771,26 @@ export async function POST(req: Request) {
               includeArchive,
               historyOnly: includeArchive,
               ...(memoryIntent.action === 'complete'
-                ? { kinds: ['task', 'reminder'] as const, statuses: ['current'] as const }
-                : {}),
+                ? {
+                    kinds: ['task', 'reminder'] as const,
+                    statuses: ['current'] as PierrotMemoryStatus[],
+                  }
+                : memoryIntent.action === 'archive' || memoryIntent.action === 'forget'
+                  ? { statuses: ['current'] as PierrotMemoryStatus[] }
+                  : memoryIntent.action === 'restore'
+                    ? {
+                        statuses: [
+                          'completed',
+                          'archived',
+                          'superseded',
+                          'rejected',
+                        ] as PierrotMemoryStatus[],
+                      }
+                    : {}),
               limit: 20,
             });
 
-            const candidates = result.records;
+            const candidates = [...result.records];
 
             if (candidates.length === 0 && memoryIntent.action === 'complete') {
               // “Это уже сделано” may not repeat the task wording. Fall back to
@@ -1793,8 +1807,8 @@ export async function POST(req: Request) {
             if (candidates.length === 0) {
               return persistOwnerReply(
                 ownerLanguage === 'ru'
-                  ? 'Не нашёл подходящей записи. Я ничего не изменил.'
-                  : 'I found no matching record. I changed nothing.',
+                  ? 'Не нашёл подходящей записи. Уточни заголовок или скажи «покажи память». Ничего не изменено.'
+                  : 'I found no matching record. Give me the exact title or ask to show memory. Nothing was changed.',
                 { memory_status: 'not_found' }
               );
             }
@@ -1815,7 +1829,8 @@ export async function POST(req: Request) {
             const target = candidates[0];
 
             if (memoryIntent.action === 'delete') {
-              await deleteMemoryRecord(memoryStore, ownerIdentityUserId, target.id);
+              const deleted = await deleteMemoryRecord(memoryStore, ownerIdentityUserId, target.id);
+              if (!deleted) throw new Error('memory_not_found');
               return persistOwnerReply(
                 ownerLanguage === 'ru'
                   ? `Удалил навсегда запись «${target.title}» и её поисковый индекс.`
@@ -1830,6 +1845,9 @@ export async function POST(req: Request) {
                 ownerIdentityUserId,
                 target.id
               );
+              if (restored.id !== target.id || restored.status !== 'current') {
+                throw new Error('memory_status_not_applied');
+              }
               return persistOwnerReply(
                 ownerLanguage === 'ru'
                   ? `Вернул в память запись «${restored.title}».`
@@ -1853,6 +1871,12 @@ export async function POST(req: Request) {
                   ? { archivedReason: 'owner_archive' }
                   : { archivedReason: 'completed' }),
             });
+
+            // The reply must be based on the row that the database actually
+            // returned, not on the intended patch.
+            if (updated.id !== target.id || updated.status !== nextStatus) {
+              throw new Error('memory_status_not_applied');
+            }
 
             return persistOwnerReply(
               memoryIntent.action === 'complete'
@@ -1886,6 +1910,24 @@ export async function POST(req: Request) {
                   ? 'Схема памяти ещё не обновлена, поэтому этот статус сейчас недоступен. Запись не изменена.'
                   : 'The memory schema has not been migrated, so this status is unavailable. The record was not changed.',
                 { memory_status: 'migration_required' }
+              );
+            }
+
+            if (message === 'memory_status_not_applied') {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Не удалось подтвердить изменение статуса в базе. Я не буду утверждать, что запись заархивирована или завершена. Проверь память и попробуй ещё раз.'
+                  : 'I could not confirm the status change in the database. I will not claim the record was archived or completed. Check memory and try again.',
+                { memory_status: 'write_failed' }
+              );
+            }
+
+            if (message === 'memory_not_found') {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Запись не найдена или уже изменилась. Я ничего не утверждаю и не меняю.'
+                  : 'The record was not found or has already changed. I am not claiming or changing anything.',
+                { memory_status: 'not_found' }
               );
             }
 

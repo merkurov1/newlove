@@ -269,7 +269,11 @@ const CLEANUP_PREVIEW = [
   /покажи[^.!?]*(?:что|какие)[^.!?]*(?:можно|стоит|нужно)\s*(?:почистить|удалить|заархивировать|убрать)/i,
   /что\s+(?:можно|стоит|нужно)\s*(?:почистить|заархивировать|убрать)/i,
   /кандидат[а-я]*\s+на\s+очистк/i,
+  /(?:убери|убрать|почисти|очисти)[^.!?]*(?:в\s+архив)?[^.!?]*(?:вс[её](?:\s|$)|лишн|мусор|ненужн)/i,
+  /(?:убери|убрать|почисти|очисти)[^.!?]*(?:в\s+архив)?[^.!?]*вс[её][^.!?]*(?:неактуальн|устар|лишн)/i,
+  /что\s+(?:можно|стоит|нужно)\s+(?:убрать|заархивировать|архивировать)\s+в\s+архив/i,
   /what\s+can\s+(?:i|we)\s+clean(?:\s+up)?/i,
+  /(?:archive|clean\s+up)[^.!?]*(?:everything|anything)[^.!?]*(?:irrelevant|outdated|stale|unused)/i,
   /memory\s+cleanup\s+candidates/i,
 ];
 
@@ -281,15 +285,31 @@ const CLEANUP = [
 
 const COMPLETE_PATTERNS = [
   /(?:^|\s)(?:заверши|завершить|выполни|выполнить|закрой|закрыть)\s+(?:напоминание|задачу|это|запись)?\s*/i,
-  /(?:^|\s)(?:это\s+)?(?:уже\s+)?(?:сделано|выполнено|готово)(?:\s|$)/i,
+  /(?:^|[\s,.;:—–-])(?:задача|задачу|запись|напоминание|task|note|reminder)?[^.!?]{0,160}?(?:^|[\s,.;:—–-])(?:выполнена|выполнено|выполнен|сделана|сделано|сделан|готова|готово|готов|завершена|завершено|завершён)(?=$|[\s,.;:—–!?])/iu,
+  /(?:^|\s)(?:это\s+)?(?:уже\s+)?(?:сделано|выполнено|готово)(?:\s|[.,!?]|$)/i,
   /(?:^|\s)(?:complete|finish|close)\s+(?:the\s+)?(?:reminder|task|this|it)\b/i,
-  /(?:^|\s)(?:this\s+is|it\s+is|that\s+is)\s+(?:already\s+)?done(?:\s|$)/i,
+  /(?:^|\s)(?:this|it|that)\s+(?:is|was|has\s+been)\s+(?:already\s+)?(?:done|completed|finished)(?:\s|[.,!?]|$)/i,
 ];
 
+const INCOMPLETE_STATE =
+  /(?:^|\s)не\s+(?:выполнена|выполнено|выполнен|сделана|сделано|сделан|готова|готово|готов|завершена|завершено|завершён|done|completed|finished)/i;
+
 const ARCHIVE_PATTERNS = [
-  /(?:^|\s)(?:архивируй|архивировать|в\s+архив)\s+(?:заметку|запись|напоминание|note|saved|reminder)?/i,
-  /(?:^|\s)(?:archive)\s+(?:the\s+)?(?:note|record|reminder)\b/i,
+  /(?:^|[\s,.;:—–-])(?:архивируй(?:те)?|архивировать|убери(?:те)?\s+(?:это\s+)?в\s+архив|убрать\s+(?:это\s+)?в\s+архив|перемести(?:те)?\s+в\s+архив)(?=$|[\s,.;:—–!?])/i,
+  /(?:^|\s)в\s+архив(?=$|[\s,.;:—–!?])/i,
+  /^(?:please[,\s]*)?(?:archive|move\s+to\s+archive)\s+(?:this|it|that|the\s+(?:note|record|reminder|task))\b/i,
+  /(?:^|[\s,.;:—–-])archive\s+(?:it|this|that|the\s+(?:note|record|reminder|task))(?=$|[\s,.;:—–!?])/i,
+  /(?:^|[\s,.;:—–-])move\s+(?:it|this|that|the\s+(?:note|record|reminder|task))\s+to\s+(?:the\s+)?archive(?=$|[\s,.;:—–!?])/i,
 ];
+
+const ARCHIVE_COMMAND_SOURCE =
+  /(?:^|[\s,.;:—–-])(?:архивируй(?:те)?|архивировать|убери(?:те)?\s+(?:это\s+)?в\s+архив|убрать\s+(?:это\s+)?в\s+архив|перемести(?:те)?\s+в\s+архив|archive\s+(?:it|this|that|the\s+(?:note|record|reminder|task))|move\s+(?:it|this|that|the\s+(?:note|record|reminder|task))\s+to\s+(?:the\s+)?archive)(?=$|[\s,.;:—–!?])/gi;
+const COMPLETE_COMMAND_SOURCE =
+  /(?:^|[\s,.;:—–-])(?:заверши(?:те)?|завершить|выполни(?:те)?|выполнить|закрой(?:те)?|закрыть|complete|finish|close)(?=$|[\s,.;:—–!?])/gi;
+const COMPLETION_STATE_SOURCE =
+  /(?:^|[\s,.;:—–-])(?:уже\s+)?(?:выполнена|выполнено|выполнен|сделана|сделано|сделан|готова|готово|готов|завершена|завершено|завершён|completed|finished|done|ready|неактуальн[а-я]*|устар[а-я]*|ненужн[а-я]*|лишн[а-я]*)(?=$|[\s,.;:—–!?])/gi;
+const TASK_LEAD_SOURCE =
+  /^(?:пожалуйста[,\s]*)?(?:задача|задачу|запись|заметку|напоминание|task|note|reminder)\s+(?:(?:про|о|об|по|about|on)\s+)?/i;
 
 const FORGET_PATTERNS = [
   /^(?:пожалуйста[,\s]*)?(?:забудь|забыть|забудьте)\s+(?:про|о|об)?\s*/i,
@@ -429,6 +449,40 @@ function queryWithHistory(
 }
 
 /**
+ * Extract the record title from an archive/completion sentence. Commands and
+ * completion adjectives can appear at the beginning, in the middle or at the
+ * end (“Задача X выполнена, убери в архив”). The previous assistant answer is
+ * used only when the owner supplied no title at all.
+ */
+function mutationTarget(
+  message: string,
+  options: { archive: boolean; history?: HistoryItem[] }
+): string | null {
+  let value = message.trim();
+
+  if (options.archive) value = value.replace(ARCHIVE_COMMAND_SOURCE, ' ');
+
+  value = value.replace(COMPLETE_COMMAND_SOURCE, ' ');
+  value = value.replace(TASK_LEAD_SOURCE, ' ');
+  value = value.replace(COMPLETION_STATE_SOURCE, ' ');
+  value = value.replace(
+    /(?:^|\s)(?:это|эта|этот|эту|эти|этих|уже|её|ее|его|их|it|this|that|them)(?=\s|$)/gi,
+    ' '
+  );
+  value = value
+    .replace(/^[\s,.;:—–-]+/g, '')
+    .replace(/[\s,.;:—–-]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500);
+
+  if (value) return value;
+
+  const previous = lastAssistantText(options.history);
+  return previous ? previous.slice(0, 500) : null;
+}
+
+/**
  * Detects the owner’s memory intention. It is deliberately command-first:
  * casual mentions of “remember” do not create records.
  */
@@ -478,6 +532,16 @@ export function detectMemoryIntent(
     });
   }
 
+  // Explicit archive wins over the completion adjective that often accompanies
+  // it (“Задача X выполнена, убери в архив”).
+  if (ARCHIVE_PATTERNS.some((pattern) => pattern.test(original) || pattern.test(text))) {
+    return result('archive', {
+      query: mutationTarget(original, { archive: true, history: options.history }),
+      confidence: 0.9,
+      reason: 'archive_request',
+    });
+  }
+
   for (const pattern of CURRENT_PATTERNS) {
     if (pattern.test(original) || pattern.test(text)) {
       return result('current_status', {
@@ -499,23 +563,17 @@ export function detectMemoryIntent(
     }
   }
 
-  for (const pattern of COMPLETE_PATTERNS) {
-    if (pattern.test(original) || pattern.test(text)) {
-      return result('complete', {
-        query: queryWithHistory(original, COMPLETE_PATTERNS, options.history),
-        confidence: 0.86,
-        reason: 'complete_request',
-      });
-    }
-  }
+  const incompleteState = INCOMPLETE_STATE.test(original) || INCOMPLETE_STATE.test(text);
 
-  for (const pattern of ARCHIVE_PATTERNS) {
-    if (pattern.test(original) || pattern.test(text)) {
-      return result('archive', {
-        query: queryWithHistory(original, ARCHIVE_PATTERNS, options.history),
-        confidence: 0.84,
-        reason: 'archive_request',
-      });
+  if (!incompleteState) {
+    for (const pattern of COMPLETE_PATTERNS) {
+      if (pattern.test(original) || pattern.test(text)) {
+        return result('complete', {
+          query: mutationTarget(original, { archive: false, history: options.history }),
+          confidence: 0.86,
+          reason: 'complete_request',
+        });
+      }
     }
   }
 

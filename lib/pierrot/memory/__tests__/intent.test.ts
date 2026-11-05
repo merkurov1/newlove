@@ -133,4 +133,75 @@ describe('owner memory intent', () => {
       permanent: true,
     });
   });
+
+  it('recognises all Russian completed/finished forms', () => {
+    for (const state of [
+      'выполнена',
+      'выполнено',
+      'выполнен',
+      'сделана',
+      'сделано',
+      'сделан',
+      'готова',
+      'готово',
+      'готов',
+      'завершена',
+      'завершено',
+      'завершён',
+    ]) {
+      expect(detectMemoryIntent(`Задача про поле ввода ${state}.`)).toMatchObject({
+        action: 'complete',
+        query: 'поле ввода',
+      });
+    }
+  });
+
+  it('extracts the task title and gives archive precedence over completion', () => {
+    const completed = detectMemoryIntent('Задача про поле ввода выполнена.', {
+      history: [
+        {
+          role: 'assistant',
+          content: 'Это длинный предыдущий ответ, который не должен попасть в поиск.',
+        },
+      ],
+    });
+    expect(completed).toMatchObject({
+      action: 'complete',
+      query: 'поле ввода',
+    });
+    expect(completed.query).not.toContain('длинный предыдущий ответ');
+
+    expect(
+      detectMemoryIntent('Задача оптимизация картинок во Flow — выполнена, убери в архив.', {
+        history: [
+          {
+            role: 'assistant',
+            content: 'Это длинный предыдущий ответ, который не должен попасть в поиск.',
+          },
+        ],
+      })
+    ).toMatchObject({
+      action: 'archive',
+      query: 'оптимизация картинок во Flow',
+    });
+
+    const archived = detectMemoryIntent('Поле ввода Пьеро готово, архивируй.');
+    expect(archived.action).toBe('archive');
+    expect(archived.query).toBe('Поле ввода Пьеро');
+    expect(archived.query).not.toContain('готово');
+    expect(archived.query).not.toContain('архивируй');
+  });
+
+  it('does not treat a negative completion as done', () => {
+    expect(detectMemoryIntent('Задача про поле ввода не выполнена.')).toMatchObject({
+      action: 'none',
+    });
+  });
+
+  it('returns a cleanup preview for a bulk archive request', () => {
+    expect(detectMemoryIntent('Убери в архив всё лишнее и неактуальное')).toMatchObject({
+      action: 'cleanup_preview',
+      query: null,
+    });
+  });
 });

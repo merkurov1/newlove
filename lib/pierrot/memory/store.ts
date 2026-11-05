@@ -722,6 +722,9 @@ export async function updateMemoryRecord(
   const data = await updateMemoryRow(store, userId, id, update);
   const record = toRecord(data);
   if (!record) throw new Error('memory_record_invalid');
+  if (patch.status && record.status !== patch.status) {
+    throw new Error('memory_status_not_applied');
+  }
 
   await recordDecisionEvent(store, {
     decisionId: record.id,

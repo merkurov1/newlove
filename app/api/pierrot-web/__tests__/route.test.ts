@@ -1,4 +1,5 @@
 /** @jest-environment node */
+/* eslint-disable @typescript-eslint/no-require-imports */
 
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
@@ -2316,6 +2317,178 @@ describe('Pierrot intelligence regressions', () => {
     expect(json.memory_status).toBe('clarification_required');
     expect(json.reply).toContain('Ничего не изменено');
     expect(memoryStore.deleteMemoryRecord).not.toHaveBeenCalled();
+  });
+
+  it('completes a task only after the returned status is completed', async () => {
+    memoryOwner();
+    const record = {
+      id: '12121212-1212-4212-8212-121212121212',
+      kind: 'task',
+      title: 'Задача про поле ввода',
+      content: 'Поле ввода Пьеро.',
+      status: 'current',
+      updatedAt: '2026-11-05T10:00:00.000Z',
+      createdAt: '2026-11-01T10:00:00.000Z',
+      validFrom: '2026-11-01T10:00:00.000Z',
+      reviewAt: null,
+      supersededBy: null,
+      importance: 0.6,
+      confidence: 0.9,
+      tags: [],
+      sourceRefs: [],
+    };
+
+    memoryStore.searchMemory.mockResolvedValueOnce({
+      records: [record],
+      semanticUsed: true,
+      archiveSearched: false,
+      lexicalFallback: false,
+    });
+    memoryStore.updateMemoryRecord.mockResolvedValueOnce({ ...record, status: 'completed' });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Задача про поле ввода выполнена.' }))
+    );
+    const json = (await response.json()) as { memory_status?: string; reply?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.memory_status).toBe('completed');
+    expect(json.reply).toContain('Завершил задачу');
+    expect(memoryStore.updateMemoryRecord).toHaveBeenCalledWith(
+      expect.anything(),
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      record.id,
+      expect.objectContaining({ status: 'completed', archivedReason: 'completed' })
+    );
+  });
+
+  it('archives on an explicit archive phrase with a completion adjective', async () => {
+    memoryOwner();
+    const record = {
+      id: '13131313-1313-4313-8313-131313131313',
+      kind: 'task',
+      title: 'Оптимизация картинок во Flow',
+      content: 'Сжать изображения на странице Flow.',
+      status: 'current',
+      updatedAt: '2026-11-05T10:00:00.000Z',
+      createdAt: '2026-11-01T10:00:00.000Z',
+      validFrom: '2026-11-01T10:00:00.000Z',
+      reviewAt: null,
+      supersededBy: null,
+      importance: 0.6,
+      confidence: 0.9,
+      tags: [],
+      sourceRefs: [],
+    };
+
+    memoryStore.searchMemory.mockResolvedValueOnce({
+      records: [record],
+      semanticUsed: true,
+      archiveSearched: false,
+      lexicalFallback: false,
+    });
+    memoryStore.updateMemoryRecord.mockResolvedValueOnce({ ...record, status: 'archived' });
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Задача оптимизация картинок во Flow — выполнена, убери в архив.',
+        })
+      )
+    );
+    const json = (await response.json()) as { memory_status?: string; reply?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.memory_status).toBe('archived');
+    expect(json.reply).toContain('Архивировал');
+    expect(memoryStore.searchMemory).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ query: 'оптимизация картинок во Flow', statuses: ['current'] })
+    );
+    expect(memoryStore.updateMemoryRecord).toHaveBeenCalledWith(
+      expect.anything(),
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      record.id,
+      expect.objectContaining({ status: 'archived', archivedReason: 'owner_archive' })
+    );
+  });
+
+  it('does not claim success when the database returns the old status', async () => {
+    memoryOwner();
+    const record = {
+      id: '14141414-1414-4414-8414-141414141414',
+      kind: 'task',
+      title: 'Поле ввода Пьеро',
+      content: 'Завершить поле ввода.',
+      status: 'current',
+      updatedAt: '2026-11-05T10:00:00.000Z',
+      createdAt: '2026-11-01T10:00:00.000Z',
+      validFrom: '2026-11-01T10:00:00.000Z',
+      reviewAt: null,
+      supersededBy: null,
+      importance: 0.6,
+      confidence: 0.9,
+      tags: [],
+      sourceRefs: [],
+    };
+
+    memoryStore.searchMemory.mockResolvedValueOnce({
+      records: [record],
+      semanticUsed: true,
+      archiveSearched: false,
+      lexicalFallback: false,
+    });
+    // Simulate a silent write failure: the returned row still has current.
+    memoryStore.updateMemoryRecord.mockResolvedValueOnce({ ...record, status: 'current' });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Поле ввода Пьеро готово, архивируй.' }))
+    );
+    const json = (await response.json()) as { memory_status?: string; reply?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.memory_status).toBe('write_failed');
+    expect(json.reply).not.toContain('Архивировал');
+    expect(json.reply).toContain('не буду утверждать');
+  });
+
+  it('asks for clarification when an archive target is ambiguous', async () => {
+    memoryOwner();
+    memoryStore.searchMemory.mockResolvedValueOnce({
+      records: [
+        {
+          id: '15151515-1515-4515-8515-151515151515',
+          title: 'Оптимизация картинок во Flow',
+          content: 'Первая запись.',
+          status: 'current',
+        },
+        {
+          id: '16161616-1616-4616-8616-161616161616',
+          title: 'Оптимизация картинок в Media',
+          content: 'Вторая запись.',
+          status: 'current',
+        },
+      ],
+      semanticUsed: true,
+      archiveSearched: false,
+      lexicalFallback: false,
+    });
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Задача оптимизация картинок выполнена, убери в архив.',
+        })
+      )
+    );
+    const json = (await response.json()) as { memory_status?: string; reply?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.memory_status).toBe('clarification_required');
+    expect(json.reply).toContain('Ничего не изменено');
+    expect(memoryStore.updateMemoryRecord).not.toHaveBeenCalled();
   });
 
   it('streams deterministic owner replies through the same protocol', async () => {
