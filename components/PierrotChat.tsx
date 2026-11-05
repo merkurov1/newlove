@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, RotateCcw, BookOpen } from 'lucide-react';
@@ -18,9 +18,12 @@ type PierrotTriggerProps = {
 
 export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
   const { toggleConversation, hasUnread } = usePierrot();
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const label = hasUnread ? 'Open Pierrot, new message' : 'Open Pierrot';
 
   if (compact) {
+    const showAvatar = Boolean(PIERROT_AVATAR_SRC) && !avatarFailed;
+
     return (
       <button
         type="button"
@@ -39,7 +42,22 @@ export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
           focus:ring-offset-2
         "
       >
-        <span className="transition-transform duration-200 group-hover:scale-110">P</span>
+        {showAvatar ? (
+          // Deliberately a plain <img>: the trigger is a 40px avatar, and the
+          // public Header must not gain a new image loader dependency.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={PIERROT_AVATAR_SRC}
+            alt=""
+            aria-hidden="true"
+            width={40}
+            height={40}
+            onError={() => setAvatarFailed(true)}
+            className="h-full w-full rounded-full object-cover transition-transform duration-200 group-hover:scale-105"
+          />
+        ) : (
+          <span className="transition-transform duration-200 group-hover:scale-110">P</span>
+        )}
         {hasUnread && (
           <span
             aria-hidden="true"
