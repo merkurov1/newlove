@@ -1,9 +1,7 @@
 import dotenv from 'dotenv';
 import { Client } from 'pg';
-import { pipeline, env } from '@huggingface/transformers';
 
 dotenv.config({ path: '.env.production.local' });
-env.allowLocalModels = false;
 
 function literal(values: number[]) {
   return `[${values.map((v) => v.toFixed(8)).join(',')}]`;
@@ -11,7 +9,10 @@ function literal(values: number[]) {
 
 (async () => {
   const query = 'data centers Putin AI aspirations';
-  const extractor = await pipeline('feature-extraction', 'Xenova/bge-m3', {
+  const moduleName = '@huggingface/transformers';
+  const transformers = await import(moduleName);
+  transformers.env.allowLocalModels = false;
+  const extractor = await transformers.pipeline('feature-extraction', 'Xenova/bge-m3', {
     dtype: 'q8',
     device: 'cpu',
   });

@@ -86,7 +86,15 @@ Schedulers observed:
    (`circuit_open:llm`, provider JSON truncation).
 6. `media_archive_records.indexing_status` did not always reflect the linked
    document’s real coverage status.
-7. No usable local `OPENROUTER_API_KEY`: the pulled value is the literal
+7. A chunker edge case (`splitOversizedText`) emitted ~300-character sliding
+   duplicates after the final range of a long paragraph. Three documents were
+   affected:
+   - Washington Post: 306 chunks for a 9.5k-character article;
+   - Radio Svoboda “Замедление Рунета”: 920 chunks with 127 duplicates;
+   - Radio Svoboda “Помощник? Конкурент? Убийца?”: 316 chunks with 50
+     duplicates.
+8. Three chunks contained only a stray blockquote marker (`>`).
+9. No usable local `OPENROUTER_API_KEY`: the pulled value is the literal
    `[SENSITIVE]` placeholder. The production site has its own Vercel secret,
    but local repair jobs could not embed.
 
@@ -186,6 +194,16 @@ Final media inventory: **265 records, 263 published, 2 drafts, 0 NULL dates,
   coverage status (`completed` / `partial` / `failed` / `blocked`).
 - Linked Brain document metadata (title, URL, published date, author, language,
   outlet/kind/topic) is kept in sync with the Media Archive record.
+- Fixed the chunker tail-duplication bug in `splitOversizedText`, added a
+  regression test, and re-indexed the three affected documents:
+  - Washington Post 306 → 6 chunks;
+  - “Замедление Рунета” 920 → 20 chunks;
+  - “Помощник? Конкурент? Убийца?” 316 → 16 chunks.
+- Removed three noise chunks containing only a stray `>` and recalculated
+  `chunk_count` for every document (`doc_chunkcount_mismatch = 0`).
+- Linked two legacy `article` documents (“Облака-то на земле!” and “Агенты
+  ухватились за язык”) to their Media Archive records by exact canonical URL
+  when no other document was linked.
 
 ### 4.3 Graph
 
@@ -248,18 +266,18 @@ provider marker makes them easy to find.
 
 | Metric | Value |
 |---|---:|
-| documents | `{{DOCS}}` |
-| chunks | `{{CHUNKS}}` |
-| chunks with embedding | `{{CHUNK_EMB}}` |
-| searchable documents (`ingestion_status=completed`, ≥1 chunk) | `{{SEARCHABLE}}` |
-| entities / relationships | `{{ENTITIES}}` / `{{RELATIONSHIPS}}` |
-| ingestion queued / processing | `{{ING_QUEUED}}` / `{{ING_PROCESSING}}` |
-| ingestion failed / partial | `{{ING_FAILED}}` / `{{ING_PARTIAL}}` |
+| documents | `282` |
+| chunks | `1736` |
+| chunks with embedding | `1736` |
+| searchable documents (`ingestion_status=completed`, ≥1 chunk) | `257` |
+| entities / relationships | `2825` / `3710` |
+| ingestion queued / processing | `0` / `0` |
+| ingestion failed / partial | `28` / `13` |
 | orphaned chunks | 0 |
 | orphaned jobs (missing run/document) | 0 |
 | duplicate active document jobs | 0 |
-| graph queued / processing | `{{GRAPH_QUEUED}}` / `{{GRAPH_PROCESSING}}` |
-| graph failed / cancelled | `{{GRAPH_FAILED}}` / `{{GRAPH_CANCELLED}}` |
+| graph queued / processing | `22` / `0` |
+| graph failed / cancelled | `6` / `7` |
 
 ### Media
 
@@ -268,8 +286,8 @@ provider marker makes them easy to find.
 | records | 265 |
 | published | 263 |
 | drafts | 2 |
-| with full text (`media_text_quality=full_text`, >0 chunks) | `{{MEDIA_FULLTEXT}}` |
-| with a linked Brain document | `{{MEDIA_LINKED}}` |
+| with full text (`media_text_quality=full_text`, >0 chunks) | `231` |
+| with a linked Brain document | `259` |
 | Novaya author columns (verified) | 157 |
 | found in source / already present / added | 157 / 118 / 39 |
 | ambiguous matches | 0 |
@@ -319,11 +337,15 @@ provider marker makes them easy to find.
 3. **Metadata-only sources.** Short programme synopses (for example
    `Почему все говорят про китайский ИИ?`) cannot produce full text. They stay
    failed with `metadata_only`; this is not hidden as completed.
-4. **Very large graph documents.** UNFRAMED/2018/2019 are explicitly deferred
+4. **Graph enrichment queue.** 22 graph jobs for ordinary documents remain
+   queued at commit time (plus 6 failed jobs that need a retry). Graph
+   enrichment is optional, does not block search, and is drained by the
+   explicit CLI in §7. No scheduler will pick them up automatically.
+5. **Very large graph documents.** UNFRAMED/2018/2019 are explicitly deferred
    for graph extraction. Search is unaffected.
-5. **`Вечный зов`.** No authorship evidence was found. It is a draft pending
+6. **`Вечный зов`.** No authorship evidence was found. It is a draft pending
    owner review, not silently deleted.
-6. **Code deployment.** The code fixes are in the working tree; this audit did
+7. **Code deployment.** The code fixes are in the working tree; this audit did
    not deploy them to Vercel. The data repairs are already in production.
 
 ---
@@ -389,11 +411,14 @@ select name from vault.secrets;
 ## 9. Files changed by this audit
 
 - `data/novaya-archive/authored-columns.json` (new manifest)
-- `data/media.ts` (language union)
-- `lib/mediaRecords.ts` (languages, DB-draft suppression)
+- `data/media.ts` (language union, verified link corrections)
+- `lib/mediaRecords.ts` (languages, DB-draft suppression, slug aliases)
+- `app/media/record/[slug]/page.tsx` (historical slug aliases)
 - `lib/knowledge/brain/inline.ts` (new)
 - `lib/knowledge/brain/__tests__/inline.test.ts` (new)
-- `lib/knowledge/graph/extractor.ts` (batching)
+- `lib/knowledge/brain/chunk.ts` (tail-duplication fix)
+- `lib/knowledge/brain/__tests__/chunk.test.ts` (regression test)
+- `lib/knowledge/graph/extractor.ts` (batching + split retry)
 - `lib/knowledge/graph/pipeline.ts` (error detail)
 - `lib/pierrot/urlIntake.ts` (inline indexing)
 - `app/api/admin/brain/sources/route.ts` (inline indexing)
@@ -402,9 +427,11 @@ select name from vault.secrets;
 - `scripts/knowledge/media-metadata-repairs.ts` (new)
 - `scripts/knowledge/graph-backfill.ts` (new)
 - `scripts/knowledge/backfill-media-summaries.ts` (new)
+- `scripts/knowledge/reindex-duplicate-chunks.ts` (new)
 - `scripts/knowledge/local-embedding-backfill.ts` (new)
 - `scripts/knowledge/local-embedding-probe.ts` (new)
 - `scripts/knowledge/local-embedding-query-probe.ts` (new)
+- `scripts/knowledge/local-embedding-content-probe.ts` (new)
 - docs: `media-source-ingestion.md`, `brain-autonomous-workers.md`,
   `brain-unified-ingestion.md`, `operations/resource-safety.md`, this file.
 
