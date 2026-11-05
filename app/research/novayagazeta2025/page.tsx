@@ -16,7 +16,6 @@ export const metadata: Metadata = pageMetadata({
   languages: {
     'x-default': '/research/novayagazeta2025',
     en: '/research/novayagazeta2025',
-    ru: '/research/novayagazeta2025',
   },
 });
 

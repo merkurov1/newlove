@@ -43,7 +43,6 @@ export const metadata: Metadata = pageMetadata({
   languages: {
     'x-default': '/heartandangel',
     en: '/heartandangel',
-    ru: '/heartandangel',
   },
 });
 

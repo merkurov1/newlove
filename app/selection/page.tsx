@@ -18,7 +18,6 @@ export const metadata: Metadata = pageMetadata({
   languages: {
     'x-default': '/selection',
     en: '/selection',
-    ru: '/selection',
   },
 });
 

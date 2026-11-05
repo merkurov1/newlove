@@ -1,7 +1,13 @@
 import type { MetadataRoute } from 'next';
-import { absoluteUrl, PUBLIC_ROUTES, SITE_URL } from '@/lib/seo';
+import { absoluteUrl, PUBLIC_ROUTES } from '@/lib/seo';
 import { createClient } from '@/lib/supabase/server';
 import { getMediaRecords } from '@/lib/mediaRecords';
+import {
+  SECTION_BY_PATH,
+  SECTION_LANGUAGES,
+  languageAlternates,
+  localizedPath,
+} from '@/lib/i18n/config';
 
 export const revalidate = 3600;
 
@@ -9,25 +15,11 @@ export const revalidate = 3600;
 // advertised through <link rel="alternate"> metadata and deliberately kept
 // out of the sitemap.
 
-// TODO(anton): when separate RU/EN URLs exist, replace the same-URL hreflang
-// entries below with real counterpart URLs.
-const BILINGUAL_ROUTES = new Set([
-  '/',
-  '/lobby',
-  '/advising',
-  '/journal',
-  '/heritage',
-  '/media',
-  '/heartandangel',
-  '/selection',
-  '/flow',
-  '/unframed',
-]);
-
 function entry(
   path: string,
   lastModified: string | Date = new Date(),
   priority = 0.7,
+  alternates?: Record<string, string>
 ): MetadataRoute.Sitemap[number] {
   const url = absoluteUrl(path);
 
@@ -36,14 +28,12 @@ function entry(
     lastModified,
     changeFrequency: 'weekly',
     priority,
-    ...(BILINGUAL_ROUTES.has(path)
+    ...(alternates
       ? {
           alternates: {
-            languages: {
-              en: url,
-              ru: url,
-              'x-default': url,
-            },
+            languages: Object.fromEntries(
+              Object.entries(alternates).map(([language, path]) => [language, absoluteUrl(path)])
+            ),
           },
         }
       : {}),
@@ -60,14 +50,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
   const routes: MetadataRoute.Sitemap = PUBLIC_ROUTES.filter(
     // /letters is retained as a public archive but canonicalises to /journal.
-    (route) => route !== '/letters',
-  ).map((route) =>
-    entry(
-      route,
-      now,
-      route === '/' ? 1 : route === '/lobby' || route === '/advising' ? 0.9 : 0.7,
-    ),
-  );
+    (route) => route !== '/letters'
+  ).flatMap((route) => {
+    const priority = route === '/' ? 1 : route === '/lobby' || route === '/advising' ? 0.9 : 0.7;
+    const section = SECTION_BY_PATH[route];
+
+    if (!section) return [entry(route, now, priority)];
+
+    const alternates = languageAlternates(section);
+    const entries = [entry(route, now, priority, alternates)];
+
+    for (const language of SECTION_LANGUAGES[section]) {
+      if (language === 'en') continue;
+      entries.push(entry(localizedPath(section, language), now, priority, alternates));
+    }
+
+    return entries;
+  });
 
   const seen = new Set(routes.map((item) => item.url));
   const push = (path: string, date: unknown, priority = 0.6) => {
@@ -101,11 +100,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         .not('slug', 'is', null)
         .limit(1000),
       supabase.from('Tag').select('slug,name').limit(500),
-      supabase
-        .from('lots')
-        .select('id,created_at')
-        .eq('status', 'published')
-        .limit(1000),
+      supabase.from('lots').select('id,created_at').eq('status', 'published').limit(1000),
       getMediaRecords().catch(() => []),
     ]);
 
@@ -116,7 +111,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     for (const item of flowItems.data || []) {
       const slug = String(item.slug || '').trim();
-      if (slug) push(`/flow/${encodeURIComponent(slug)}`, item.updated_at || item.published_at, 0.6);
+      if (slug)
+        push(`/flow/${encodeURIComponent(slug)}`, item.updated_at || item.published_at, 0.6);
     }
 
     for (const letter of letters.data || []) {
@@ -126,7 +122,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       push(
         `/journal/${encodeURIComponent(slug)}`,
         letter.updatedAt || letter.publishedAt || letter.createdAt,
-        0.7,
+        0.7
       );
     }
 

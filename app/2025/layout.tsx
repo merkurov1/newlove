@@ -8,7 +8,7 @@ export const metadata: Metadata = pageMetadata({
   title: '2025 — Year Review | Anton Merkurov',
   description: DESCRIPTION,
   path: '/2025',
-  languages: { 'x-default': '/2025', en: '/2025', ru: '/2025' },
+  languages: { 'x-default': '/2025', en: '/2025' },
 });
 
 export default function Layout2025({ children }: { children: React.ReactNode }) {

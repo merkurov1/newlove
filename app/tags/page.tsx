@@ -14,7 +14,7 @@ export const metadata: Metadata = pageMetadata({
   title: 'Tags — Browse the Archive by Topic | Anton Merkurov',
   description: TAGS_DESCRIPTION,
   path: '/tags',
-  languages: { 'x-default': '/tags', en: '/tags', ru: '/tags' },
+  languages: { 'x-default': '/tags', en: '/tags' },
 });
 
 async function getTags() {

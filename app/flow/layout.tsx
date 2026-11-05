@@ -9,7 +9,6 @@ export const metadata: Metadata = pageMetadata({
   languages: {
     'x-default': '/flow',
     en: '/flow',
-    ru: '/flow',
   },
   rssPath: '/flow/rss',
   jsonFeedPath: '/flow/feed.json',

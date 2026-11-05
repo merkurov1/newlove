@@ -364,15 +364,41 @@ const navItems: { id: string; num: string; label: L }[] = [
   { id: 'sources', num: '08', label: { en: 'Sources', ru: 'Источники' } },
 ];
 
-export default function HeritageClient() {
-  const [lang, setLang] = useState<Lang>('en');
+type HeritageClientProps = {
+  initialLang?: Lang;
+};
+
+export default function HeritageClient({ initialLang = 'en' }: HeritageClientProps = {}) {
+  const [lang, setLang] = useState<Lang>(initialLang);
   const [activeSection, setActiveSection] = useState<string>('family');
   const [pressFilter, setPressFilter] = useState<'all' | 'own' | 'cov'>('all');
   const [lightbox, setLightbox] = useState<{ src: string; alt: string; caption?: string } | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [detectedRussian, setDetectedRussian] = useState(false);
 
   const t = useCallback((o: L) => o[lang], [lang]);
   const tx = useCallback((en: string, ru: string) => (lang === 'en' ? en : ru), [lang]);
+
+  useEffect(() => {
+    if (initialLang !== 'en') return;
+
+    try {
+      if (window.localStorage.getItem('merkurov.language-choice')) return;
+    } catch {
+      // Browser detection still works when storage is unavailable.
+    }
+
+    const languages =
+      typeof navigator !== 'undefined' && navigator.languages?.length
+        ? navigator.languages
+        : typeof navigator !== 'undefined' && navigator.language
+          ? [navigator.language]
+          : [];
+
+    if (languages.some((value) => String(value).toLowerCase().startsWith('ru'))) {
+      setDetectedRussian(true);
+    }
+  }, [initialLang]);
 
   // Sync scroll spy
   useEffect(() => {
@@ -429,6 +455,7 @@ export default function HeritageClient() {
   return (
     <div
       lang={lang}
+      dir="ltr"
       className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] antialiased relative overflow-x-hidden"
     >
       {/* Subtle Paper Grain Texture (Website signature) */}
@@ -484,7 +511,14 @@ export default function HeritageClient() {
                 <button
                   key={l}
                   type="button"
-                  onClick={() => setLang(l)}
+                  onClick={() => {
+                    setLang(l);
+                    try {
+                      window.localStorage.setItem('merkurov.language-choice', l);
+                    } catch {
+                      // Language switching still works without storage.
+                    }
+                  }}
                   aria-pressed={lang === l}
                   className={`px-2.5 py-1 rounded-full font-mono text-[10px] uppercase font-bold tracking-wider transition-all min-h-0 min-w-0 ${
                     lang === l
@@ -519,6 +553,28 @@ export default function HeritageClient() {
       <div className="max-w-6xl mx-auto px-5 sm:px-8 lg:px-12 pt-12 sm:pt-16 pb-28 relative z-20 space-y-24 sm:space-y-32">
         {/* ===================== HERO SECTION ===================== */}
         <section aria-labelledby="hero-title" className="space-y-10 border-b border-stone-200/90 pb-16 sm:pb-24">
+          {detectedRussian && (
+            <div className="flex justify-end">
+              <p className="font-sans text-[11px] leading-relaxed text-stone-500">
+                This page is also available in{' '}
+                <Link
+                  href="/ru/heritage"
+                  hrefLang="ru"
+                  onClick={() => {
+                    try {
+                      window.localStorage.setItem('merkurov.language-choice', 'ru');
+                    } catch {
+                      // The link still works without storage.
+                    }
+                  }}
+                  className="underline decoration-stone-400 underline-offset-4 transition-colors hover:text-stone-900"
+                >
+                  Русский
+                </Link>
+                .
+              </p>
+            </div>
+          )}
           {/* Eyebrow & Live Accession Badge */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-stone-100 border border-stone-200/80 font-mono text-[11px] uppercase tracking-[0.2em] text-stone-700">

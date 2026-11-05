@@ -98,7 +98,7 @@ export function websiteJsonLd() {
     description:
       'The official website of Anton Merkurov: art, heritage, advising, publishing and digital projects.',
     publisher: { '@id': personId },
-    inLanguage: ['en', 'ru'],
+    inLanguage: ['en', 'ru', 'de', 'fr', 'ar'],
   });
 }
 
@@ -115,7 +115,12 @@ export function organizationJsonLd() {
   });
 }
 
-export function profilePageJsonLd(input: { path: string; name: string; description: string }) {
+export function profilePageJsonLd(input: {
+  path: string;
+  name: string;
+  description: string;
+  inLanguage?: string;
+}) {
   const url = absoluteUrl(input.path);
   return compact({
     '@context': 'https://schema.org',
@@ -127,7 +132,7 @@ export function profilePageJsonLd(input: { path: string; name: string; descripti
     mainEntity: { '@id': personId },
     about: { '@id': personId },
     isPartOf: { '@id': websiteId },
-    inLanguage: SITE_LANGUAGE,
+    inLanguage: input.inLanguage || SITE_LANGUAGE,
   });
 }
 
@@ -136,6 +141,7 @@ export function professionalServiceJsonLd(input: {
   name: string;
   description: string;
   serviceType: string[];
+  inLanguage?: string;
 }) {
   const url = absoluteUrl(input.path);
   return compact({
@@ -150,7 +156,7 @@ export function professionalServiceJsonLd(input: {
     provider: { '@id': personId },
     areaServed: 'Worldwide',
     serviceType: input.serviceType,
-    inLanguage: SITE_LANGUAGE,
+    inLanguage: input.inLanguage || SITE_LANGUAGE,
   });
 }
 
@@ -174,6 +180,7 @@ export function collectionPageJsonLd(input: {
   name: string;
   description: string;
   items?: { name: string; url: string; type?: string }[];
+  inLanguage?: string;
 }) {
   const url = absoluteUrl(input.path);
   return compact({
@@ -184,7 +191,7 @@ export function collectionPageJsonLd(input: {
     name: input.name,
     description: input.description,
     isPartOf: { '@id': websiteId },
-    inLanguage: SITE_LANGUAGE,
+    inLanguage: input.inLanguage || SITE_LANGUAGE,
     ...(input.items?.length
       ? {
           mainEntity: {

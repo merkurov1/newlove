@@ -30,7 +30,6 @@ export const metadata: Metadata = pageMetadata({
   languages: {
     'x-default': '/media',
     en: '/media',
-    ru: '/media',
   },
 });
 
