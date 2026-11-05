@@ -387,6 +387,92 @@ describe('Temporal Memory', () => {
     expect(db.all('pierrot_memory_embeddings')).toHaveLength(0);
   });
 
+  it('does not report success when the status event cannot be written', async () => {
+    const db = new FakeSupabase();
+    const store = db.asClient();
+    const task = await createMemoryRecord(store, OWNER_ID, {
+      kind: 'task',
+      content: 'Проверить Heart&Angel.',
+      skipEmbedding: true,
+    });
+    const eventsBefore = db
+      .all('pierrot_decision_events')
+      .filter((event) => event.decision_id === task.id).length;
+
+    db.failTable('pierrot_decision_events', 'XX000', 'event write failed');
+
+    await expect(
+      updateMemoryRecord(store, OWNER_ID, task.id, {
+        status: 'completed',
+        archivedReason: 'completed',
+      })
+    ).rejects.toThrow('memory_event_write_failed');
+
+    expect((await getMemoryRecord(store, OWNER_ID, task.id))?.status).toBe('current');
+    expect(
+      db.all('pierrot_decision_events').filter((event) => event.decision_id === task.id)
+    ).toHaveLength(eventsBefore);
+  });
+
+  it('does not leave a row behind when its creation event cannot be written', async () => {
+    const db = new FakeSupabase();
+    const store = db.asClient();
+    db.failTable('pierrot_decision_events', 'XX000', 'event write failed');
+
+    await expect(
+      createMemoryRecord(store, OWNER_ID, {
+        kind: 'task',
+        content: 'Не должна остаться без события.',
+        skipEmbedding: true,
+      })
+    ).rejects.toThrow('memory_event_write_failed');
+
+    expect(db.all('pierrot_decisions')).toHaveLength(0);
+  });
+
+  it('treats a repeated completion as idempotent without a second status event', async () => {
+    const db = new FakeSupabase();
+    const store = db.asClient();
+    const task = await createMemoryRecord(store, OWNER_ID, {
+      kind: 'task',
+      content: 'Завершить один раз.',
+      skipEmbedding: true,
+    });
+
+    await updateMemoryRecord(store, OWNER_ID, task.id, {
+      status: 'completed',
+      archivedReason: 'completed',
+    });
+    const firstStatusEvent = db
+      .all('pierrot_decision_events')
+      .find((event) => event.decision_id === task.id && event.event_type === 'status_changed');
+    expect(firstStatusEvent).toMatchObject({
+      from_status: 'current',
+      to_status: 'completed',
+      metadata: expect.objectContaining({
+        source: 'memory_store',
+        reason: 'status_change',
+      }),
+    });
+    const eventsAfterFirst = db
+      .all('pierrot_decision_events')
+      .filter(
+        (event) => event.decision_id === task.id && event.event_type === 'status_changed'
+      ).length;
+
+    const repeated = await updateMemoryRecord(store, OWNER_ID, task.id, {
+      status: 'completed',
+      archivedReason: 'completed',
+    });
+
+    expect(repeated.status).toBe('completed');
+    expect(
+      db
+        .all('pierrot_decision_events')
+        .filter((event) => event.decision_id === task.id && event.event_type === 'status_changed')
+    ).toHaveLength(eventsAfterFirst);
+  });
+
   it('previews cleanup candidates without changing anything', async () => {
     const db = new FakeSupabase();
     const store = db.asClient();

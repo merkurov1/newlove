@@ -30,6 +30,8 @@ export type PierrotMemoryIntent = {
   permanent: boolean;
   /** Search should include archived/superseded records. */
   includeArchive: boolean;
+  /** The command refers to records from the most recent displayed list. */
+  listReference: 'none' | 'all' | 'last' | 'last_two' | 'these';
   confidence: number;
   reason: string;
 };
@@ -278,21 +280,31 @@ const CLEANUP_PREVIEW = [
 ];
 
 const CLEANUP = [
-  /^(?:пожалуйста[,\s]*)?(?:почисти|очисти|прибери)\s+(?:память|записи)/i,
+  /^(?:пожалуйста[,\s]*)?(?:почисти|очисти|прибери)\s+(?:память|записи|список)/i,
   /^(?:please[,\s]*)?(?:clean|tidy)\s+(?:up\s+)?(?:my\s+)?memory/i,
   /проведи\s+уборку\s+памяти/i,
 ];
 
 const COMPLETE_PATTERNS = [
-  /(?:^|\s)(?:заверши|завершить|выполни|выполнить|закрой|закрыть)\s+(?:напоминание|задачу|это|запись)?\s*/i,
+  /(?:^|\s)(?:заверши|завершить|выполни|выполнить|закрой|закрыть|отметь|отметить|пометь|пометить|считай|считать)\s+(?:как\s+)?(?:напоминание|задачу|это|запись)?\s*/i,
+  /(?:^|\s)(?:mark|set)\b[^.!?]{0,160}?\b(?:done|complete|completed|finished)\b/i,
   /(?:^|[\s,.;:—–-])(?:задача|задачу|запись|напоминание|task|note|reminder)?[^.!?]{0,160}?(?:^|[\s,.;:—–-])(?:выполнена|выполнено|выполнен|сделана|сделано|сделан|готова|готово|готов|завершена|завершено|завершён)(?=$|[\s,.;:—–!?])/iu,
   /(?:^|\s)(?:это\s+)?(?:уже\s+)?(?:сделано|выполнено|готово)(?:\s|[.,!?]|$)/i,
   /(?:^|\s)(?:complete|finish|close)\s+(?:the\s+)?(?:reminder|task|this|it)\b/i,
+  /^(?:done|completed|finished)(?:\s|[.,!?]|$)/i,
   /(?:^|\s)(?:this|it|that)\s+(?:is|was|has\s+been)\s+(?:already\s+)?(?:done|completed|finished)(?:\s|[.,!?]|$)/i,
 ];
 
 const INCOMPLETE_STATE =
   /(?:^|\s)не\s+(?:выполнена|выполнено|выполнен|сделана|сделано|сделан|готова|готово|готов|завершена|завершено|завершён|done|completed|finished)/i;
+
+const PLAIN_ARCHIVE_PATTERNS = [
+  /(?:^|[\s,.;:—–-])(?:удали|удалить|сотри|стереть|убери|убрать)\s+(?:эту\s+|это\s+|этот\s+|the\s+)?(?:задачу|запись|заметку|напоминание|пункт|task|note|record|reminder)(?=$|[\s,.;:—–!?])/i,
+  /(?:^|[\s,.;:—–-])(?:удали|удалить|сотри|стереть|убери|убрать)\s+(?:всё|все|все\s+это|всё\s+это|всё\s+перечисленное|все\s+перечисленное|this\s+list|all\s+listed|everything\s+listed)(?=$|[\s,.;:—–!?])/i,
+  /(?:^|[\s,.;:—–-])(?:убери|убрать)\s+(?:это|эту|этот)(?=$|[\s,.;:—–!?])/i,
+  /(?:^|[\s,.;:—–-])(?:delete|remove|discard)\s+(?:this|that|it|the\s+(?:task|note|record|reminder))(?=$|[\s,.;:—–!?])/i,
+  /^(?:удали|удалить|сотри|стереть|убери|убрать|delete|remove|discard)[.!?]?$/i,
+];
 
 const ARCHIVE_PATTERNS = [
   /(?:^|[\s,.;:—–-])(?:архивируй(?:те)?|архивировать|убери(?:те)?\s+(?:это\s+)?в\s+архив|убрать\s+(?:это\s+)?в\s+архив|перемести(?:те)?\s+в\s+архив)(?=$|[\s,.;:—–!?])/i,
@@ -300,16 +312,19 @@ const ARCHIVE_PATTERNS = [
   /^(?:please[,\s]*)?(?:archive|move\s+to\s+archive)\s+(?:this|it|that|the\s+(?:note|record|reminder|task))\b/i,
   /(?:^|[\s,.;:—–-])archive\s+(?:it|this|that|the\s+(?:note|record|reminder|task))(?=$|[\s,.;:—–!?])/i,
   /(?:^|[\s,.;:—–-])move\s+(?:it|this|that|the\s+(?:note|record|reminder|task))\s+to\s+(?:the\s+)?archive(?=$|[\s,.;:—–!?])/i,
+  /^(?:please[,\s]*)?archive\s+(?:all|everything|these|the\s+listed)\b/i,
 ];
 
 const ARCHIVE_COMMAND_SOURCE =
-  /(?:^|[\s,.;:—–-])(?:архивируй(?:те)?|архивировать|убери(?:те)?\s+(?:это\s+)?в\s+архив|убрать\s+(?:это\s+)?в\s+архив|перемести(?:те)?\s+в\s+архив|archive\s+(?:it|this|that|the\s+(?:note|record|reminder|task))|move\s+(?:it|this|that|the\s+(?:note|record|reminder|task))\s+to\s+(?:the\s+)?archive)(?=$|[\s,.;:—–!?])/gi;
+  /(?:^|[\s,.;:—–-])(?:архивируй(?:те)?|архивировать|убери(?:те)?\s+(?:это\s+)?в\s+архив|убрать\s+(?:это\s+)?в\s+архив|перемести(?:те)?\s+в\s+архив|archive\s+(?:it|this|that|the\s+(?:note|record|reminder|task)|all|everything|these|the\s+listed)|move\s+(?:it|this|that|the\s+(?:note|record|reminder|task))\s+to\s+(?:the\s+)?archive)(?=$|[\s,.;:—–!?])/gi;
+const PLAIN_ARCHIVE_COMMAND_SOURCE =
+  /(?:^|[\s,.;:—–-])(?:удали|удалить|сотри|стереть|убери|убрать|delete|remove|discard)\s*(?:эту\s+|это\s+|этот\s+|the\s+)?(?:задачу|запись|заметку|напоминание|пункт|task|note|record|reminder|всё|все|всё\s+перечисленное|все\s+перечисленное|this\s+list|all\s+listed|everything\s+listed)?/gi;
 const COMPLETE_COMMAND_SOURCE =
-  /(?:^|[\s,.;:—–-])(?:заверши(?:те)?|завершить|выполни(?:те)?|выполнить|закрой(?:те)?|закрыть|complete|finish|close)(?=$|[\s,.;:—–!?])/gi;
+  /(?:^|[\s,.;:—–-])(?:заверши(?:те)?|завершить|выполни(?:те)?|выполнить|закрой(?:те)?|закрыть|отметь(?:те)?|отметить|пометь(?:те)?|пометить|считай(?:те)?|считать|complete|finish|close|mark|set)(?=$|[\s,.;:—–!?])/gi;
 const COMPLETION_STATE_SOURCE =
-  /(?:^|[\s,.;:—–-])(?:уже\s+)?(?:выполнена|выполнено|выполнен|сделана|сделано|сделан|готова|готово|готов|завершена|завершено|завершён|completed|finished|done|ready|неактуальн[а-я]*|устар[а-я]*|ненужн[а-я]*|лишн[а-я]*)(?=$|[\s,.;:—–!?])/gi;
+  /(?:^|[\s,.;:—–-])(?:уже\s+)?(?:выполнена|выполнено|выполнен|выполненной|выполненную|выполненными|сделана|сделано|сделан|сделанной|сделанную|сделанными|готова|готово|готов|готовой|завершена|завершено|завершён|завершённой|завершённую|завершёнными|completed|finished|done|ready|неактуальн[а-я]*|устар[а-я]*|ненужн[а-я]*|лишн[а-я]*)(?=$|[\s,.;:—–!?])/gi;
 const TASK_LEAD_SOURCE =
-  /^(?:пожалуйста[,\s]*)?(?:задача|задачу|запись|заметку|напоминание|task|note|reminder)\s+(?:(?:про|о|об|по|about|on)\s+)?/i;
+  /^(?:пожалуйста[,\s]*)?(?:the\s+)?(?:задача|задачу|запись|заметку|напоминание|task|note|reminder)\s+(?:(?:про|о|об|по|about|on|for)\s+)?/i;
 
 const FORGET_PATTERNS = [
   /^(?:пожалуйста[,\s]*)?(?:забудь|забыть|забудьте)\s+(?:про|о|об)?\s*/i,
@@ -362,6 +377,7 @@ function result(
     possibleConflict: false,
     permanent: false,
     includeArchive: false,
+    listReference: 'none',
     confidence: options.confidence ?? 0.7,
     reason: options.reason ?? action,
     ...options,
@@ -448,6 +464,31 @@ function queryWithHistory(
   return previous ? previous.slice(0, 500) : null;
 }
 
+function cleanMutationValue(value: string): string {
+  let cleaned = value
+    .replace(
+      /(?:^|\s)(?:это|эта|этот|эту|эти|этих|уже|её|ее|его|их|it|this|that|them|as|как)(?=\s|$)/gi,
+      ' '
+    )
+    .replace(/^[\s,.;:—–-]+/g, '')
+    .replace(/^(?:the\s+)?(?:task|note|record|reminder|задачу|запись|заметку|напоминание)\s+/gi, '')
+    .replace(/^(?:про|о|об|about|on|for)\s+/i, '')
+    .replace(/[\s,.;:—–-]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (/^(?:задачу|запись|заметку|напоминание|task|note|record|reminder)$/i.test(cleaned)) {
+    cleaned = '';
+  }
+
+  return cleaned.slice(0, 500);
+}
+
+function commandTarget(message: string, patterns: RegExp[]): string | null {
+  const value = cleanMutationValue(stripCommand(message, patterns));
+  return value || null;
+}
+
 /**
  * Extract the record title from an archive/completion sentence. Commands and
  * completion adjectives can appear at the beginning, in the middle or at the
@@ -460,26 +501,52 @@ function mutationTarget(
 ): string | null {
   let value = message.trim();
 
-  if (options.archive) value = value.replace(ARCHIVE_COMMAND_SOURCE, ' ');
+  if (options.archive) {
+    value = value.replace(ARCHIVE_COMMAND_SOURCE, ' ');
+    value = value.replace(PLAIN_ARCHIVE_COMMAND_SOURCE, ' ');
+  }
 
-  value = value.replace(COMPLETE_COMMAND_SOURCE, ' ');
+  value = value.replace(COMPLETE_COMMAND_SOURCE, ' ').trim();
   value = value.replace(TASK_LEAD_SOURCE, ' ');
   value = value.replace(COMPLETION_STATE_SOURCE, ' ');
   value = value.replace(
     /(?:^|\s)(?:это|эта|этот|эту|эти|этих|уже|её|ее|его|их|it|this|that|them)(?=\s|$)/gi,
     ' '
   );
-  value = value
-    .replace(/^[\s,.;:—–-]+/g, '')
-    .replace(/[\s,.;:—–-]+$/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 500);
+  value = cleanMutationValue(value);
 
   if (value) return value;
+  return null;
+}
 
-  const previous = lastAssistantText(options.history);
-  return previous ? previous.slice(0, 500) : null;
+function detectListReference(message: string): PierrotMemoryIntent['listReference'] {
+  const text = normalize(message);
+
+  if (
+    /(всё\s+перечисленное|все\s+перечисленное|все\s+перечисленные|all\s+listed|everything\s+listed|all\s+of\s+these)/i.test(
+      text
+    )
+  ) {
+    return 'all';
+  }
+  if (/(последние\s+две|последних\s+двух|last\s+two)/i.test(text)) return 'last_two';
+  if (
+    /(эту\s+задачу|эту\s+запись|эту\s+заметку|это\s+напоминание|this\s+task|this\s+record|this\s+note|this\s+reminder)/i.test(
+      text
+    )
+  ) {
+    return 'last';
+  }
+  if (
+    /(?:^|\s)(?:закрой|заверши|отметь|пометь|считай|close|finish|complete|mark)\s+(?:эту\s+)?(?:задачу|напоминание|task|reminder)/i.test(
+      text
+    )
+  ) {
+    return 'last';
+  }
+  if (/(это|these|this\s+list|этот\s+список)/i.test(text)) return 'these';
+
+  return 'none';
 }
 
 /**
@@ -506,7 +573,7 @@ export function detectMemoryIntent(
 
   if (DELETE_PATTERNS.some((pattern) => pattern.test(original) || pattern.test(text))) {
     return result('delete', {
-      query: queryWithHistory(original, DELETE_PATTERNS, options.history),
+      query: commandTarget(original, DELETE_PATTERNS),
       permanent: true,
       includeArchive: true,
       confidence: 0.93,
@@ -516,7 +583,7 @@ export function detectMemoryIntent(
 
   if (RESTORE_PATTERNS.some((pattern) => pattern.test(original) || pattern.test(text))) {
     return result('restore', {
-      query: queryWithHistory(original, RESTORE_PATTERNS, options.history),
+      query: commandTarget(original, RESTORE_PATTERNS),
       includeArchive: true,
       confidence: 0.88,
       reason: 'restore_request',
@@ -525,7 +592,7 @@ export function detectMemoryIntent(
 
   if (FORGET_PATTERNS.some((pattern) => pattern.test(original) || pattern.test(text))) {
     return result('forget', {
-      query: queryWithHistory(original, FORGET_PATTERNS, options.history),
+      query: commandTarget(original, FORGET_PATTERNS),
       includeArchive: true,
       confidence: 0.9,
       reason: 'forget_request',
@@ -534,9 +601,13 @@ export function detectMemoryIntent(
 
   // Explicit archive wins over the completion adjective that often accompanies
   // it (“Задача X выполнена, убери в архив”).
-  if (ARCHIVE_PATTERNS.some((pattern) => pattern.test(original) || pattern.test(text))) {
+  if (
+    ARCHIVE_PATTERNS.some((pattern) => pattern.test(original) || pattern.test(text)) ||
+    PLAIN_ARCHIVE_PATTERNS.some((pattern) => pattern.test(original) || pattern.test(text))
+  ) {
     return result('archive', {
       query: mutationTarget(original, { archive: true, history: options.history }),
+      listReference: detectListReference(original),
       confidence: 0.9,
       reason: 'archive_request',
     });
@@ -570,6 +641,7 @@ export function detectMemoryIntent(
       if (pattern.test(original) || pattern.test(text)) {
         return result('complete', {
           query: mutationTarget(original, { archive: false, history: options.history }),
+          listReference: detectListReference(original),
           confidence: 0.86,
           reason: 'complete_request',
         });

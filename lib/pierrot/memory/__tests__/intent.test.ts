@@ -108,6 +108,7 @@ describe('owner memory intent', () => {
       query: 'старый черновик',
     });
     expect(detectMemoryIntent('Почисти память')).toMatchObject({ action: 'cleanup' });
+    expect(detectMemoryIntent('Почисти список')).toMatchObject({ action: 'cleanup' });
     expect(detectMemoryIntent('Покажи, что можно почистить')).toMatchObject({
       action: 'cleanup_preview',
     });
@@ -131,6 +132,68 @@ describe('owner memory intent', () => {
     expect(detectMemoryIntent('Delete the note permanently')).toMatchObject({
       action: 'delete',
       permanent: true,
+    });
+  });
+
+  it('maps ordinary delete language to archive and extracts the target', () => {
+    expect(detectMemoryIntent('Удали задачу про Heart&Angel')).toMatchObject({
+      action: 'archive',
+      query: 'Heart&Angel',
+    });
+    expect(detectMemoryIntent('Удали напоминание про Journal')).toMatchObject({
+      action: 'archive',
+      query: 'Journal',
+    });
+    expect(detectMemoryIntent('Убери эту задачу')).toMatchObject({
+      action: 'archive',
+      query: null,
+      listReference: 'last',
+    });
+    expect(detectMemoryIntent('Delete the task about Heart&Angel')).toMatchObject({
+      action: 'archive',
+      query: 'Heart&Angel',
+    });
+    expect(detectMemoryIntent('Удали этот текст')).toMatchObject({
+      action: 'none',
+    });
+  });
+
+  it('recognises mark/consider completion forms and English completion', () => {
+    expect(detectMemoryIntent('Пометь задачу про Heart&Angel выполненной')).toMatchObject({
+      action: 'complete',
+      query: 'Heart&Angel',
+    });
+    expect(detectMemoryIntent('Отметь выполненной')).toMatchObject({ action: 'complete' });
+    expect(detectMemoryIntent('Считай задачу выполненной')).toMatchObject({
+      action: 'complete',
+      listReference: 'last',
+    });
+    expect(detectMemoryIntent('Mark the task about Journal as completed')).toMatchObject({
+      action: 'complete',
+      query: 'Journal',
+    });
+  });
+
+  it('retains list references for batch and “last two” operations', () => {
+    expect(detectMemoryIntent('Удали всё перечисленное')).toMatchObject({
+      action: 'archive',
+      listReference: 'all',
+    });
+    expect(detectMemoryIntent('Отметь последние две задачи выполненными')).toMatchObject({
+      action: 'complete',
+      listReference: 'last_two',
+    });
+    expect(detectMemoryIntent('Archive all listed tasks')).toMatchObject({
+      action: 'archive',
+      listReference: 'all',
+    });
+  });
+
+  it('recognises a bare delete without a target as a contextual archive command', () => {
+    expect(detectMemoryIntent('Удали')).toMatchObject({
+      action: 'archive',
+      query: null,
+      permanent: false,
     });
   });
 

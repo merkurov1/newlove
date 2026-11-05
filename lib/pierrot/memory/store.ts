@@ -147,20 +147,18 @@ async function recordDecisionEvent(
     metadata?: Record<string, unknown>;
   }
 ): Promise<void> {
-  await store
-    .from('pierrot_decision_events')
-    .insert({
-      decision_id: input.decisionId,
-      user_id: input.userId,
-      event_type: input.eventType,
-      from_status: input.fromStatus ?? null,
-      to_status: input.toStatus ?? null,
-      metadata: input.metadata ?? {},
-    })
-    .then(
-      () => undefined,
-      () => undefined
-    );
+  const { error } = await store.from('pierrot_decision_events').insert({
+    decision_id: input.decisionId,
+    user_id: input.userId,
+    event_type: input.eventType,
+    from_status: input.fromStatus ?? null,
+    to_status: input.toStatus ?? null,
+    metadata: input.metadata ?? {},
+  });
+
+  if (error) {
+    throw new Error('memory_event_write_failed');
+  }
 }
 
 export type ListMemoryOptions = {
@@ -213,7 +211,7 @@ export async function listMemoryRecords(
     .filter((row): row is PierrotMemoryRecord => row !== null);
 }
 
-async function listRecordsByIds(
+export async function listMemoryRecordsByIds(
   store: SupabaseClient,
   userId: string,
   ids: string[]
@@ -576,6 +574,9 @@ export async function createMemoryRecord(
       throw error;
     }
     record = { ...record, supersededBy: null };
+  }
+
+  try {
     await recordDecisionEvent(store, {
       decisionId: record.id,
       userId,
@@ -584,23 +585,16 @@ export async function createMemoryRecord(
       metadata: {
         kind: record.kind,
         title: record.title,
-        replaces: supersededRecordId,
-      },
-    });
-  } else {
-    await recordDecisionEvent(store, {
-      decisionId: record.id,
-      userId,
-      eventType: 'created',
-      toStatus: record.status,
-      metadata: {
-        kind: record.kind,
-        title: record.title,
+        source: 'owner_chat',
+        ...(supersededRecordId ? { replaces: supersededRecordId } : {}),
         ...(best?.relation.contradiction
           ? { conflictWith: best.record.id, conflictScore: best.relation.score }
           : {}),
       },
     });
+  } catch (error) {
+    await deleteMemoryRecord(store, userId, record.id).catch(() => false);
+    throw error;
   }
 
   const client = input.skipEmbedding ? null : resolveMemoryEmbeddingClient();
@@ -648,6 +642,9 @@ export type MemoryUpdatePatch = {
   lastReferencedAt?: string | null;
   archivedReason?: string | null;
   supersededBy?: string | null;
+  /** Event-only metadata; not persisted on the row. */
+  eventReason?: string;
+  eventSource?: string;
 };
 
 export async function updateMemoryRecord(
@@ -704,6 +701,30 @@ export async function updateMemoryRecord(
   if (patch.supersededBy !== undefined) update.superseded_by = patch.supersededBy;
 
   const statusChanged = Boolean(patch.status && patch.status !== existing.status);
+  const hasNonStatusChange =
+    patch.title !== undefined ||
+    patch.content !== undefined ||
+    patch.rationale !== undefined ||
+    patch.project !== undefined ||
+    patch.tags !== undefined ||
+    patch.reviewAt !== undefined ||
+    patch.importance !== undefined ||
+    patch.confidence !== undefined ||
+    patch.validFrom !== undefined ||
+    patch.validUntil !== undefined ||
+    patch.supersededBy !== undefined;
+
+  if (!statusChanged && !hasNonStatusChange) {
+    if (patch.lastReferencedAt !== undefined) {
+      await updateMemoryRow(store, userId, id, {
+        last_referenced_at: patch.lastReferencedAt,
+      });
+      return { ...existing, lastReferencedAt: patch.lastReferencedAt };
+    }
+
+    return existing;
+  }
+
   if (statusChanged) {
     update.status = patch.status;
     if (patch.status === 'archived' && patch.archivedReason === undefined) {
@@ -726,18 +747,51 @@ export async function updateMemoryRecord(
     throw new Error('memory_status_not_applied');
   }
 
-  await recordDecisionEvent(store, {
-    decisionId: record.id,
-    userId,
-    eventType: statusChanged ? 'status_changed' : 'updated',
-    fromStatus: existing.status,
-    toStatus: record.status,
-    metadata: {
-      kind: record.kind,
-      contentChanged: patch.content !== undefined && content !== existing.content,
-      ...(statusChanged ? { archivedReason: record.archivedReason } : {}),
-    },
-  });
+  try {
+    await recordDecisionEvent(store, {
+      decisionId: record.id,
+      userId,
+      eventType: statusChanged ? 'status_changed' : 'updated',
+      fromStatus: existing.status,
+      toStatus: record.status,
+      metadata: {
+        kind: record.kind,
+        title: record.title,
+        source: patch.eventSource || 'memory_store',
+        reason: patch.eventReason || (statusChanged ? 'status_change' : 'content_update'),
+        contentChanged: patch.content !== undefined && content !== existing.content,
+        ...(statusChanged ? { archivedReason: record.archivedReason } : {}),
+      },
+    });
+  } catch (error) {
+    // Do not leave a status/content change without its audit event. Restore
+    // the previous row before surfacing the failure. Never claim success.
+    const rollback = {
+      title: existing.title,
+      content: existing.content,
+      rationale: existing.rationale,
+      project: existing.project,
+      tags: existing.tags,
+      review_at: existing.reviewAt,
+      importance: existing.importance,
+      confidence: existing.confidence,
+      valid_from: existing.validFrom,
+      valid_until: existing.validUntil,
+      last_referenced_at: existing.lastReferencedAt,
+      archived_reason: existing.archivedReason,
+      superseded_by: existing.supersededBy,
+      status: existing.status,
+      updated_at: existing.updatedAt,
+    };
+
+    try {
+      await updateMemoryRow(store, userId, id, rollback);
+    } catch {
+      throw new Error('memory_event_write_failed_rollback_failed');
+    }
+
+    throw error;
+  }
 
   const contentChanged =
     (patch.content !== undefined && content !== existing.content) ||
@@ -790,14 +844,29 @@ export async function supersedeMemoryRecord(
     updated_at: now,
   });
 
-  await recordDecisionEvent(store, {
-    decisionId: oldId,
-    userId,
-    eventType: 'status_changed',
-    fromStatus: old.status,
-    toStatus: 'superseded',
-    metadata: { superseded_by: newId },
-  });
+  try {
+    await recordDecisionEvent(store, {
+      decisionId: oldId,
+      userId,
+      eventType: 'status_changed',
+      fromStatus: old.status,
+      toStatus: 'superseded',
+      metadata: {
+        source: 'memory_store',
+        reason: 'superseded',
+        superseded_by: newId,
+      },
+    });
+  } catch (error) {
+    await updateMemoryRow(store, userId, oldId, {
+      status: old.status,
+      superseded_by: old.supersededBy,
+      valid_until: old.validUntil,
+      archived_reason: old.archivedReason,
+      updated_at: old.updatedAt,
+    }).catch(() => undefined);
+    throw error;
+  }
 
   const updated = toRecord(data);
   if (updated) {
@@ -969,7 +1038,7 @@ export async function searchMemory(
       semanticUsed = true;
       if (rows.length === 0) return [];
 
-      const found = await listRecordsByIds(
+      const found = await listMemoryRecordsByIds(
         store,
         input.userId,
         rows.map((row) => row.decision_id)

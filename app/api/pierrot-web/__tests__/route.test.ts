@@ -91,11 +91,17 @@ jest.mock('@/lib/pierrot/memory/store', () => ({
   buildMemoryContext: jest.fn(async () => null),
   createMemoryRecord: jest.fn(),
   deleteMemoryRecord: jest.fn(),
+  getMemoryRecord: jest.fn(),
   getMemorySummary: jest.fn(),
   listMemoryRecords: jest.fn(),
   restoreMemoryRecord: jest.fn(),
   searchMemory: jest.fn(),
   updateMemoryRecord: jest.fn(),
+}));
+
+jest.mock('@/lib/pierrot/memory/context', () => ({
+  loadLatestMemoryListRecords: jest.fn(async () => []),
+  loadPendingMemoryDelete: jest.fn(async () => null),
 }));
 
 jest.mock('openai', () => {
@@ -167,11 +173,16 @@ const memoryStore = jest.requireMock('@/lib/pierrot/memory/store') as {
   buildMemoryContext: jest.Mock;
   createMemoryRecord: jest.Mock;
   deleteMemoryRecord: jest.Mock;
+  getMemoryRecord: jest.Mock;
   getMemorySummary: jest.Mock;
   listMemoryRecords: jest.Mock;
   restoreMemoryRecord: jest.Mock;
   searchMemory: jest.Mock;
   updateMemoryRecord: jest.Mock;
+};
+const memoryContext = jest.requireMock('@/lib/pierrot/memory/context') as {
+  loadLatestMemoryListRecords: jest.Mock;
+  loadPendingMemoryDelete: jest.Mock;
 };
 const documentLookup = jest.requireMock('@/lib/knowledge/rag/documentLookup') as {
   findBrainDocumentByTitle: {
@@ -299,6 +310,8 @@ beforeEach(() => {
   memoryStore.createMemoryRecord.mockReset();
   memoryStore.deleteMemoryRecord.mockReset();
   memoryStore.deleteMemoryRecord.mockResolvedValue(true);
+  memoryStore.getMemoryRecord.mockReset();
+  memoryStore.getMemoryRecord.mockResolvedValue(null);
   memoryStore.getMemorySummary.mockReset();
   memoryStore.getMemorySummary.mockResolvedValue({
     counts: { memory: 0, saved: 0, reminder: 0 },
@@ -316,6 +329,10 @@ beforeEach(() => {
     lexicalFallback: true,
   });
   memoryStore.updateMemoryRecord.mockReset();
+  memoryContext.loadLatestMemoryListRecords.mockReset();
+  memoryContext.loadLatestMemoryListRecords.mockResolvedValue([]);
+  memoryContext.loadPendingMemoryDelete.mockReset();
+  memoryContext.loadPendingMemoryDelete.mockResolvedValue(null);
 
   mockCreate.mockReset();
   mockCreate.mockImplementation(async () => {
@@ -1644,6 +1661,26 @@ describe('Pierrot intelligence regressions', () => {
     ];
   }
 
+  function memoryRecord(overrides: Record<string, unknown> = {}) {
+    return {
+      id: '21212121-2121-4121-8121-212121212121',
+      kind: 'task',
+      title: 'Heart & Angel',
+      content: 'Подготовить задачу по Heart & Angel.',
+      status: 'current',
+      updatedAt: '2026-11-05T10:00:00.000Z',
+      createdAt: '2026-11-01T10:00:00.000Z',
+      validFrom: '2026-11-01T10:00:00.000Z',
+      reviewAt: null,
+      supersededBy: null,
+      importance: 0.6,
+      confidence: 0.9,
+      tags: [],
+      sourceRefs: [],
+      ...overrides,
+    };
+  }
+
   it('routs a named Weekly Review document to Brain, never to Commercial', async () => {
     owner();
     documentLookup.findBrainDocumentByTitle.mockResolvedValueOnce(weeklyDocument());
@@ -2298,15 +2335,323 @@ describe('Pierrot intelligence regressions', () => {
     const response = await POST(
       makeRequest(validBody({ mode: 'unframed', message: 'Что у нас в памяти?' }))
     );
-    const json = (await response.json()) as { reply?: string; memory_status?: string };
+    const json = (await response.json()) as {
+      reply?: string;
+      memory_status?: string;
+      memory_list_ids?: string[];
+    };
 
     expect(response.status).toBe(200);
     expect(json.memory_status).toBe('listed');
+    expect(json.memory_list_ids).toEqual([
+      '55555555-5555-4555-8555-555555555555',
+      '66666666-6666-4666-8666-666666666666',
+      '77777777-7777-4777-8777-777777777777',
+    ]);
     expect(json.reply).toContain('Запомнено');
     expect(json.reply).toContain('Сохранено');
     expect(json.reply).toContain('Напоминания');
     expect(json.reply).toContain('LinkedIn');
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('archives a task on a plain “удали” command', async () => {
+    memoryOwner();
+    const record = memoryRecord({ title: 'Heart & Angel' });
+    memoryStore.searchMemory.mockResolvedValueOnce({
+      records: [record],
+      semanticUsed: false,
+      archiveSearched: false,
+      lexicalFallback: true,
+    });
+    memoryStore.updateMemoryRecord.mockResolvedValueOnce({ ...record, status: 'archived' });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Удали задачу про Heart&Angel' }))
+    );
+    const json = (await response.json()) as { memory_status?: string; reply?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.memory_status).toBe('archived');
+    expect(json.reply).toContain('Архивировал');
+    expect(memoryStore.deleteMemoryRecord).not.toHaveBeenCalled();
+    expect(memoryStore.updateMemoryRecord).toHaveBeenCalledWith(
+      expect.anything(),
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      record.id,
+      expect.objectContaining({
+        status: 'archived',
+        archivedReason: 'owner_archive',
+        eventReason: 'owner_archive',
+        eventSource: 'owner_chat',
+      })
+    );
+  });
+
+  it('archives a reminder on a plain “удали” command', async () => {
+    memoryOwner();
+    const record = memoryRecord({
+      id: '22222222-2222-4222-8222-222222222222',
+      kind: 'reminder',
+      title: 'Journal',
+    });
+    memoryStore.searchMemory.mockResolvedValueOnce({
+      records: [record],
+      semanticUsed: false,
+      archiveSearched: false,
+      lexicalFallback: true,
+    });
+    memoryStore.updateMemoryRecord.mockResolvedValueOnce({ ...record, status: 'archived' });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Удали напоминание про Journal' }))
+    );
+    const json = (await response.json()) as { memory_status?: string };
+
+    expect(json.memory_status).toBe('archived');
+    expect(memoryStore.updateMemoryRecord).toHaveBeenCalledWith(
+      expect.anything(),
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      record.id,
+      expect.objectContaining({ status: 'archived' })
+    );
+    expect(memoryStore.deleteMemoryRecord).not.toHaveBeenCalled();
+  });
+
+  it('completes a task on “пометь … выполненной”', async () => {
+    memoryOwner();
+    const record = memoryRecord({ title: 'Heart & Angel' });
+    memoryStore.searchMemory.mockResolvedValueOnce({
+      records: [record],
+      semanticUsed: false,
+      archiveSearched: false,
+      lexicalFallback: true,
+    });
+    memoryStore.updateMemoryRecord.mockResolvedValueOnce({ ...record, status: 'completed' });
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Пометь задачу про Heart&Angel выполненной',
+        })
+      )
+    );
+    const json = (await response.json()) as { memory_status?: string; reply?: string };
+
+    expect(json.memory_status).toBe('completed');
+    expect(json.reply).toContain('Завершил задачу');
+    expect(memoryStore.updateMemoryRecord).toHaveBeenCalledWith(
+      expect.anything(),
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      record.id,
+      expect.objectContaining({ status: 'completed', archivedReason: 'completed' })
+    );
+  });
+
+  it('resolves “это уже сделано, закрой” from the last memory list', async () => {
+    memoryOwner();
+    const record = memoryRecord({ title: 'Heart & Angel' });
+    memoryContext.loadLatestMemoryListRecords.mockResolvedValueOnce([record]);
+    memoryStore.updateMemoryRecord.mockResolvedValueOnce({ ...record, status: 'completed' });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Это уже сделано, закрой' }))
+    );
+    const json = (await response.json()) as { memory_status?: string };
+
+    expect(json.memory_status).toBe('completed');
+    expect(memoryStore.searchMemory).not.toHaveBeenCalled();
+    expect(memoryStore.updateMemoryRecord).toHaveBeenCalledWith(
+      expect.anything(),
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      record.id,
+      expect.objectContaining({ status: 'completed' })
+    );
+  });
+
+  it('archives every record explicitly listed by the previous answer', async () => {
+    memoryOwner();
+    const first = memoryRecord({ id: '31313131-3131-4131-8131-313131313131', title: 'Alpha' });
+    const second = memoryRecord({ id: '32323232-3232-4232-8232-323232323232', title: 'Beta' });
+    memoryContext.loadLatestMemoryListRecords.mockResolvedValueOnce([first, second]);
+    memoryStore.updateMemoryRecord.mockImplementation(async (_store, _userId, id, patch) => {
+      const record = [first, second].find((item) => item.id === id) || first;
+      return { ...record, status: (patch as { status: string }).status };
+    });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Удали всё перечисленное' }))
+    );
+    const json = (await response.json()) as {
+      memory_status?: string;
+      memory_count?: number;
+      reply?: string;
+    };
+
+    expect(json.memory_status).toBe('archived');
+    expect(json.memory_count).toBe(2);
+    expect(json.reply).toContain('Alpha');
+    expect(json.reply).toContain('Beta');
+    expect(memoryStore.updateMemoryRecord).toHaveBeenCalledTimes(2);
+    expect(memoryStore.searchMemory).not.toHaveBeenCalled();
+  });
+
+  it('completes exactly the last two tasks from the list', async () => {
+    memoryOwner();
+    const first = memoryRecord({ id: '41414141-4141-4141-8141-414141414141', title: 'First' });
+    const second = memoryRecord({ id: '42424242-4242-4242-8242-424242424242', title: 'Second' });
+    const third = memoryRecord({ id: '43434343-4343-4343-8343-434343434343', title: 'Third' });
+    memoryContext.loadLatestMemoryListRecords.mockResolvedValueOnce([first, second, third]);
+    memoryStore.updateMemoryRecord.mockImplementation(async (_store, _userId, id, patch) => {
+      const record = [first, second, third].find((item) => item.id === id) || first;
+      return { ...record, status: (patch as { status: string }).status };
+    });
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Отметь последние две задачи выполненными',
+        })
+      )
+    );
+    const json = (await response.json()) as { memory_count?: number; memory_status?: string };
+
+    expect(json.memory_status).toBe('completed');
+    expect(json.memory_count).toBe(2);
+    expect(memoryStore.updateMemoryRecord).toHaveBeenCalledTimes(2);
+    const ids = memoryStore.updateMemoryRecord.mock.calls.map((call) => call[2]);
+    expect(ids).toEqual([second.id, third.id]);
+  });
+
+  it('asks for a separate confirmation before permanent deletion', async () => {
+    memoryOwner();
+    const record = memoryRecord({ id: '51515151-5151-4151-8151-515151515151' });
+    memoryContext.loadLatestMemoryListRecords.mockResolvedValueOnce([record]);
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Удали навсегда эту запись' }))
+    );
+    const json = (await response.json()) as { memory_status?: string; reply?: string };
+
+    expect(json.memory_status).toBe('confirmation_required');
+    expect(json.reply).toContain('Подтверди');
+    expect(memoryStore.deleteMemoryRecord).not.toHaveBeenCalled();
+  });
+
+  it('does not delete permanently when the target is not identified', async () => {
+    memoryOwner();
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Удали навсегда эту запись' }))
+    );
+    const json = (await response.json()) as { memory_status?: string; reply?: string };
+
+    expect(json.memory_status).toBe('clarification_required');
+    expect(json.reply).toContain('подтверждение');
+    expect(memoryStore.deleteMemoryRecord).not.toHaveBeenCalled();
+  });
+
+  it('executes permanent deletion only after the confirmation turn', async () => {
+    memoryOwner();
+    const id = '52525252-5252-4252-8252-525252525252';
+    memoryContext.loadPendingMemoryDelete.mockResolvedValueOnce({
+      id,
+      title: 'Old record',
+      requestedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    memoryStore.getMemoryRecord.mockResolvedValueOnce(null);
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'да, удалить' }))
+    );
+    const json = (await response.json()) as { memory_status?: string; permanent?: boolean };
+
+    expect(json.memory_status).toBe('deleted');
+    expect(json.permanent).toBe(true);
+    expect(memoryStore.deleteMemoryRecord).toHaveBeenCalledWith(
+      expect.anything(),
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      id
+    );
+  });
+
+  it('asks which record to archive when “удали” has several context targets', async () => {
+    memoryOwner();
+    const first = memoryRecord({ id: '61616161-6161-4161-8161-616161616161', title: 'Alpha' });
+    const second = memoryRecord({ id: '62626262-6262-4262-8262-626262626262', title: 'Beta' });
+    memoryContext.loadLatestMemoryListRecords.mockResolvedValueOnce([first, second]);
+
+    const response = await POST(makeRequest(validBody({ mode: 'unframed', message: 'Удали' })));
+    const json = (await response.json()) as { memory_status?: string; reply?: string };
+
+    expect(json.memory_status).toBe('clarification_required');
+    expect(json.reply).toContain('Alpha');
+    expect(json.reply).toContain('Beta');
+    expect(memoryStore.updateMemoryRecord).not.toHaveBeenCalled();
+    expect(memoryStore.deleteMemoryRecord).not.toHaveBeenCalled();
+  });
+
+  it('does not treat “удали этот текст” as a memory command', async () => {
+    memoryOwner();
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Удали этот текст' }))
+    );
+
+    expect(response.status).toBe(200);
+    expect(memoryStore.searchMemory).not.toHaveBeenCalled();
+    expect(memoryStore.updateMemoryRecord).not.toHaveBeenCalled();
+    expect(memoryStore.deleteMemoryRecord).not.toHaveBeenCalled();
+    expect(mockCreate).toHaveBeenCalled();
+  });
+
+  it('does not claim archive success when the status event fails', async () => {
+    memoryOwner();
+    const record = memoryRecord();
+    memoryStore.searchMemory.mockResolvedValueOnce({
+      records: [record],
+      semanticUsed: false,
+      archiveSearched: false,
+      lexicalFallback: true,
+    });
+    memoryStore.updateMemoryRecord.mockRejectedValueOnce(new Error('memory_event_write_failed'));
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Удали задачу про Heart&Angel' }))
+    );
+    const json = (await response.json()) as { memory_status?: string; reply?: string };
+
+    expect(json.memory_status).toBe('write_failed');
+    expect(json.reply).not.toContain('Архивировал');
+    expect(json.reply).toContain('не буду утверждать');
+  });
+
+  it('reports an already archived record idempotently', async () => {
+    memoryOwner();
+    const record = memoryRecord({ status: 'archived' });
+    memoryStore.searchMemory.mockResolvedValueOnce({
+      records: [record],
+      semanticUsed: false,
+      archiveSearched: true,
+      lexicalFallback: true,
+    });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Удали задачу про Heart&Angel' }))
+    );
+    const json = (await response.json()) as {
+      memory_status?: string;
+      memory_count?: number;
+      reply?: string;
+    };
+
+    expect(json.memory_status).toBe('archived');
+    expect(json.memory_count).toBe(0);
+    expect(json.reply).toContain('уже в архиве');
+    expect(memoryStore.updateMemoryRecord).not.toHaveBeenCalled();
   });
 
   it('archives on “забудь” and never calls physical deletion', async () => {
@@ -2470,7 +2815,10 @@ describe('Pierrot intelligence regressions', () => {
     expect(json.reply).toContain('Архивировал');
     expect(memoryStore.searchMemory).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ query: 'оптимизация картинок во Flow', statuses: ['current'] })
+      expect.objectContaining({
+        query: 'оптимизация картинок во Flow',
+        statuses: ['current', 'archived'],
+      })
     );
     expect(memoryStore.updateMemoryRecord).toHaveBeenCalledWith(
       expect.anything(),
