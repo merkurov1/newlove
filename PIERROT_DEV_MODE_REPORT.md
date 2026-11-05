@@ -131,7 +131,7 @@ npx jest lib/pierrot/dev app/api/admin/pierrot/dev app/api/pierrot-web \
 ```
 
 - 10 suites passed
-- 159 tests passed
+- 163 tests passed
 - 0 failed
 
 Broader run:
@@ -147,11 +147,11 @@ npx jest lib/pierrot app/api/pierrot-web app/api/admin/pierrot/dev \
 
 Typecheck:
 
-```bash
-npx tsc --noEmit --incremental
-```
-
-- passes cleanly.
+- a targeted `tsc` project covering the changed Dev route, components and
+  modules passes;
+- a later repo-wide `npx tsc --noEmit --incremental` was blocked by unrelated
+  parallel work in `lib/pierrot/skills/analysis/collect.ts`, not by the files in
+  this change.
 
 Lint:
 
