@@ -32,6 +32,22 @@ describe('Dev Mode security boundary', () => {
     );
   });
 
+  it('keeps the investigation workflow narrow and evidence-based', () => {
+    expect(PIERROT_DEV_SYSTEM_PROMPT).toContain('search_repo');
+    expect(PIERROT_DEV_SYSTEM_PROMPT).toContain('4–8 tool calls');
+    expect(PIERROT_DEV_SYSTEM_PROMPT).toContain('Do not perform a whole-project audit');
+    expect(PIERROT_DEV_SYSTEM_PROMPT).toContain('Never invent line numbers');
+    expect(PIERROT_DEV_SYSTEM_PROMPT).toContain('<DEV_DIAGNOSIS>');
+    expect(PIERROT_DEV_SYSTEM_PROMPT).toContain('OpenCode');
+  });
+
+  it('reports missing GitHub access before calling the model', () => {
+    const route = fs.readFileSync(path.join(root, 'app/api/admin/pierrot/dev/route.ts'), 'utf8');
+
+    expect(route).toContain('DEV_GITHUB_UNAVAILABLE');
+    expect(route.indexOf('DEV_GITHUB_UNAVAILABLE')).toBeLessThan(route.indexOf('callDevModel({'));
+  });
+
   it('keeps the example configuration read-only', () => {
     const env = fs.readFileSync(path.join(root, '.env.example'), 'utf8');
     expect(env).toContain('PIERROT_DEV_WRITE_ENABLED=false');
@@ -60,10 +76,7 @@ describe('Dev Mode security boundary', () => {
   });
 
   it('requires an admin request for the Dev API routes', () => {
-    const route = fs.readFileSync(
-      path.join(root, 'app/api/admin/pierrot/dev/route.ts'),
-      'utf8'
-    );
+    const route = fs.readFileSync(path.join(root, 'app/api/admin/pierrot/dev/route.ts'), 'utf8');
     const tasksRoute = fs.readFileSync(
       path.join(root, 'app/api/admin/pierrot/dev/tasks/route.ts'),
       'utf8'
