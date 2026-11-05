@@ -15,7 +15,9 @@ import {
   type PierrotChatAction,
 } from '@/lib/pierrot/navigation';
 import { linkifyInternalRoutes } from '@/lib/pierrot/linkify';
+import { parseRecipeResponse } from '@/lib/pierrot/recipeParser';
 import { isPierrotOfferId } from '@/lib/pierrot/offers';
+import RecipeCard from '@/components/pierrot/RecipeCard';
 import { getPierrotConversationId, trackPierrotEvent } from '@/lib/pierrot/clientTelemetry';
 import {
   appendPierrotPostcardAttribution,
@@ -250,6 +252,28 @@ function PierrotMarkdown({ content }: { content: string }) {
     >
       {linkifyInternalRoutes(content)}
     </Markdown>
+  );
+}
+
+/**
+ * A reply becomes a recipe card only when the parser finds a complete,
+ * explicit structure. Everything else keeps the normal Markdown rendering.
+ */
+function PierrotAssistantContent({ content }: { content: string }) {
+  const parsed = parseRecipeResponse(content);
+
+  if (!parsed) return <PierrotMarkdown content={content} />;
+
+  return (
+    <>
+      {parsed.before && <PierrotMarkdown content={parsed.before} />}
+      <RecipeCard recipe={parsed.recipe} />
+      {parsed.after && (
+        <div className="mt-3">
+          <PierrotMarkdown content={parsed.after} />
+        </div>
+      )}
+    </>
   );
 }
 
@@ -603,7 +627,7 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
                       leading-[1.8] text-[#2F2B26] sm:max-w-[92%] sm:text-[16.5px]
                     "
                   >
-                    <PierrotMarkdown content={message.content} />
+                    <PierrotAssistantContent content={message.content} />
                     {shouldShowMessageTime(message) && formatMessageTime(message.createdAt) && (
                       <span className="mt-1 block font-mono text-[8px] text-[#A49A8C]">
                         {formatMessageTime(message.createdAt)}
