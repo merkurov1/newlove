@@ -95,4 +95,42 @@ describe('owner memory intent', () => {
     expect(parseReminderDate('напомни в пятницу', now)).toBe('2026-11-06T09:00:00.000Z');
     expect(parseReminderDate('напомни когда-нибудь', now)).toBeNull();
   });
+
+  it('recognises the full lifecycle commands and keeps forget non-destructive', () => {
+    expect(detectMemoryIntent('Забудь про старый черновик')).toMatchObject({
+      action: 'forget',
+      permanent: false,
+      query: 'старый черновик',
+    });
+    expect(detectMemoryIntent('Удали навсегда старый черновик')).toMatchObject({
+      action: 'delete',
+      permanent: true,
+      query: 'старый черновик',
+    });
+    expect(detectMemoryIntent('Почисти память')).toMatchObject({ action: 'cleanup' });
+    expect(detectMemoryIntent('Покажи, что можно почистить')).toMatchObject({
+      action: 'cleanup_preview',
+    });
+    expect(detectMemoryIntent('Верни в память заметку про выставку')).toMatchObject({
+      action: 'restore',
+      includeArchive: true,
+    });
+    expect(detectMemoryIntent('Что сейчас актуально по проекту Pierrot')).toMatchObject({
+      action: 'current_status',
+      query: 'проекту Pierrot',
+    });
+    expect(detectMemoryIntent('Что мы решали по поводу выставки')).toMatchObject({
+      action: 'history_search',
+      includeArchive: true,
+    });
+    expect(detectMemoryIntent('Это уже сделано')).toMatchObject({ action: 'complete' });
+    expect(detectMemoryIntent('Forget about the old draft')).toMatchObject({
+      action: 'forget',
+      permanent: false,
+    });
+    expect(detectMemoryIntent('Delete the note permanently')).toMatchObject({
+      action: 'delete',
+      permanent: true,
+    });
+  });
 });

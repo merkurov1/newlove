@@ -1,9 +1,6 @@
 import { assertServerOnly } from '@/lib/serverOnly';
 import { getCurrentUser, requireAdminFromRequest } from '@/lib/serverAuth';
-import {
-  isVerifiedOwnerCredential,
-  isVerifiedOwnerUser,
-} from '@/lib/knowledge/rag/authorization';
+import { isVerifiedOwnerCredential, isVerifiedOwnerUser } from '@/lib/knowledge/rag/authorization';
 import { isPierrotUserId } from '@/lib/pierrot/identity';
 
 assertServerOnly('lib/pierrot/memory/auth');
@@ -24,8 +21,7 @@ export async function resolveMemoryOwner(req: Request): Promise<string | null> {
   }
 
   const hasCredential =
-    Boolean(req.headers.get('authorization')) ||
-    Boolean(req.headers.get('x-telegram-init-data'));
+    Boolean(req.headers.get('authorization')) || Boolean(req.headers.get('x-telegram-init-data'));
 
   if (!hasCredential) return null;
 

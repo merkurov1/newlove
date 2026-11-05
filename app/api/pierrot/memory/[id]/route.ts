@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createPierrotStore } from '@/lib/pierrot/serverStore';
 import { resolveMemoryOwner } from '@/lib/pierrot/memory/auth';
-import { deleteMemoryRecord, updateMemoryRecord } from '@/lib/pierrot/memory/store';
-import type { PierrotMemoryStatus } from '@/lib/pierrot/memory/types';
+import {
+  deleteMemoryRecord,
+  getMemoryRecord,
+  restoreMemoryRecord,
+  updateMemoryRecord,
+} from '@/lib/pierrot/memory/store';
+import { type PierrotMemoryStatus } from '@/lib/pierrot/memory/types';
 import { isPierrotUserId } from '@/lib/pierrot/identity';
 
 export const dynamic = 'force-dynamic';
@@ -22,6 +27,49 @@ function parseDate(value: unknown): string | null {
 
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function permanentConfirmed(req: Request, body: Record<string, unknown> | null): boolean {
+  const url = new URL(req.url);
+  const query =
+    url.searchParams.get('permanent') === '1' ||
+    url.searchParams.get('mode') === 'permanent' ||
+    url.searchParams.get('confirm') === 'permanent';
+
+  return query || body?.permanent === true || body?.mode === 'permanent';
+}
+
+export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
+  const userId = await resolveMemoryOwner(req);
+  if (!userId) {
+    return NextResponse.json({ error: 'Owner only.', code: 'owner_only' }, { status: 403 });
+  }
+
+  const { id } = await context.params;
+  if (!isPierrotUserId(id)) {
+    return NextResponse.json({ error: 'Invalid memory id.' }, { status: 400 });
+  }
+
+  const store = createPierrotStore();
+  if (!store) {
+    return NextResponse.json(
+      { error: 'Memory storage is unavailable.', code: 'memory_unavailable' },
+      { status: 503 }
+    );
+  }
+
+  try {
+    const record = await getMemoryRecord(store, userId, id);
+    if (!record) {
+      return NextResponse.json({ error: 'Memory not found.' }, { status: 404 });
+    }
+    return NextResponse.json({ available: true, record });
+  } catch {
+    return NextResponse.json(
+      { error: 'Memory is temporarily unavailable.', code: 'memory_unavailable' },
+      { status: 503 }
+    );
+  }
 }
 
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
@@ -64,7 +112,21 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     return NextResponse.json({ error: 'Invalid reminder date.' }, { status: 400 });
   }
 
+  const importance =
+    typeof record.importance === 'number' && Number.isFinite(record.importance)
+      ? record.importance
+      : undefined;
+  const confidence =
+    typeof record.confidence === 'number' && Number.isFinite(record.confidence)
+      ? record.confidence
+      : undefined;
+
   try {
+    if (record.restore === true) {
+      const restored = await restoreMemoryRecord(store, userId, id);
+      return NextResponse.json({ available: true, record: restored });
+    }
+
     const updated = await updateMemoryRecord(store, userId, id, {
       ...(typeof record.title === 'string' ? { title: record.title } : {}),
       ...(typeof record.content === 'string' ? { content: record.content } : {}),
@@ -78,11 +140,32 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
         ? { tags: record.tags.filter((tag): tag is string => typeof tag === 'string') }
         : {}),
       ...(reviewAt !== undefined ? { reviewAt } : {}),
+      ...(importance !== undefined ? { importance } : {}),
+      ...(confidence !== undefined ? { confidence } : {}),
+      ...(record.archivedReason === null || typeof record.archivedReason === 'string'
+        ? { archivedReason: record.archivedReason as string | null }
+        : {}),
       ...(status ? { status } : {}),
     });
 
     return NextResponse.json({ available: true, record: updated });
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+
+    if (message === 'memory_not_found') {
+      return NextResponse.json({ error: 'Memory not found.' }, { status: 404 });
+    }
+
+    if (message === 'memory_status_unsupported') {
+      return NextResponse.json(
+        {
+          error: 'Memory status migration is not applied.',
+          code: 'memory_migration_required',
+        },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
       { error: 'Memory could not be updated.', code: 'memory_update_failed' },
       { status: 503 }
@@ -101,6 +184,25 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
     return NextResponse.json({ error: 'Invalid memory id.' }, { status: 400 });
   }
 
+  const body = await req.json().catch(() => null);
+
+  // Physical deletion is irreversible and requires an explicit confirmation.
+  if (
+    !permanentConfirmed(
+      req,
+      body && typeof body === 'object' ? (body as Record<string, unknown>) : null
+    )
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          'Physical deletion requires an explicit permanent confirmation. Archive the record instead.',
+        code: 'permanent_confirmation_required',
+      },
+      { status: 400 }
+    );
+  }
+
   const store = createPierrotStore();
   if (!store) {
     return NextResponse.json(
@@ -114,7 +216,7 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
     if (!deleted) {
       return NextResponse.json({ error: 'Memory not found.' }, { status: 404 });
     }
-    return NextResponse.json({ deleted: true });
+    return NextResponse.json({ deleted: true, permanent: true });
   } catch {
     return NextResponse.json(
       { error: 'Memory could not be deleted.', code: 'memory_delete_failed' },

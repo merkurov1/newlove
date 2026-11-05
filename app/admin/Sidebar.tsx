@@ -13,6 +13,7 @@ const navItems = [
   { href: '/admin/newsletter-jobs', label: 'Логи доставки' },
   { href: '/admin/users', label: 'Пользователи и подписчики' },
   { href: '/admin/brain/radar', label: 'Editorial Radar' },
+  { href: '/admin/decision-observatory', label: 'Decision Observatory' },
   { href: '/admin/brain', label: 'Brain Injection' },
 ];
 

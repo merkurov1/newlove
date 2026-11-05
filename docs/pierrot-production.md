@@ -51,33 +51,52 @@ through the existing `appendPierrotMessage` path.
 ## Owner memory
 
 Owner memory uses the existing `public.pierrot_decisions` table rather than a
-duplicate store. Three kinds are added through a manual migration:
+duplicate store. Three owner-memory kinds are added through a manual migration:
 
 - `memory` — durable preference/fact/principle;
 - `saved` — temporary note or idea;
 - `reminder` — deferred task or thought; `review_at` is the optional due date.
 
-Statuses used by memory are `current`, `completed`, `archived` and `superseded`;
-the legacy statuses remain valid. RLS stays enabled with no public policies, so
-only the server-side service role can read or write records.
+Existing decision kinds (`decision`, `position`, `preference`, `constraint`,
+`task`, `rejected_recommendation`) remain part of Temporal Memory.
 
-The owner chat recognises explicit and natural-language commands:
-“Запомни”, “Сохрани”, “Напомни”, “пусть это останется в памяти”,
-“к этому надо вернуться”, “что у нас сохранено?”, “покажи напоминания”.
-Ambiguous requests ask one clarification instead of writing a guess.
-Explicit replacement language (“вместо”, “больше не”) is not applied silently.
+Statuses used by memory are `current`, `completed`, `archived`, `superseded`,
+`rejected` and `uncertain`. RLS stays enabled with no public policies, so only
+the server-side service role can read or write records.
 
-Memory writes happen before the assistant answers and only a successful
-Supabase insert produces “Запомнил/Сохранил/Напомню”. A failed write is
-reported honestly. Memory is independent of transcript-storage consent: the
-explicit command is its own permission for that one record. Memory is loaded
-as compact owner-only context, never for public Pierrot, and is never exposed
-through public endpoints.
+The full architecture, commands, lifecycle, hybrid search, Memory Steward,
+Brain Status cache, Skill Foundry and Decision Observatory are documented in
+`docs/pierrot-temporal-memory.md`.
+
+Summary of current behaviour:
+
+- natural commands in Russian and English cover remember/save/remind, search,
+  history, current state, complete, archive, forget, restore, cleanup preview
+  and cleanup;
+- “Забудь” archives; only “Удали навсегда” physically deletes a record and its
+  embedding;
+- completions, archives, replacements and contradictions preserve history;
+- semantic hybrid search uses the existing BGE-M3/pgvector infrastructure in a
+  separate `pierrot_memory_embeddings` table, with lexical fallback;
+- the owner start screen shows a cached, deterministic Brain status block;
+- the owner workspace has a Skill Foundry at `/admin/pierrot/skills`;
+- the admin has a manually-run Decision Observatory next to Editorial Radar.
+
+Prepared, **not applied**, migrations:
+
+- `migrations/2026-11-19_pierrot_temporal_memory.sql`
+- `migrations/2026-11-19_pierrot_skills.sql`
+- `migrations/2026-11-19_pierrot_decision_observatory.sql`
+
+Until they are applied, memory CRUD keeps working on the legacy columns,
+semantic search falls back to lexical retrieval, and the UI reports that the
+index is not ready instead of pretending otherwise.
 
 Owner commands and the message action menu can create records. A compact
-Memory panel shows active counts, three categories, reminder dates, statuses,
-inline editing, completion, archiving and deletion. No cron, worker, scheduler
-or push notification is involved.
+Memory panel shows active and archived records, three primary categories,
+reminder dates, statuses, inline editing, completion, archiving, restore and
+permanent deletion (with explicit confirmation). No cron, worker, scheduler or
+push notification is involved.
 
 ## Editorial replies
 

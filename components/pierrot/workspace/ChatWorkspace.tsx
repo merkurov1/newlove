@@ -45,6 +45,8 @@ import type {
   PierrotMemorySummary,
 } from '@/lib/pierrot/memory/types';
 import { memoryKindLabel, memoryStatusLabel } from '@/lib/pierrot/memory/types';
+import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
+import BrainStatusCard from './BrainStatusCard';
 
 type UiMessage = {
   id: string;
@@ -126,11 +128,13 @@ export default function ChatWorkspace({
   conversations,
   conversation,
   startNew,
+  brainStatus,
 }: {
   overview: WorkspaceOverview;
   conversations: OwnerConversationListItem[];
   conversation: OwnerConversation | null;
   startNew: boolean;
+  brainStatus?: BrainStatusSnapshot | null;
 }) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -151,6 +155,7 @@ export default function ChatWorkspace({
   const [memorySummary, setMemorySummary] = useState<PierrotMemorySummary | null>(null);
   const [memoryRecords, setMemoryRecords] = useState<PierrotMemoryRecord[]>([]);
   const [memoryFilter, setMemoryFilter] = useState<'all' | PierrotMemoryKind>('all');
+  const [memoryScope, setMemoryScope] = useState<'active' | 'archive' | 'all'>('active');
   const [memoryLoading, setMemoryLoading] = useState(false);
   const [memoryError, setMemoryError] = useState<string | null>(null);
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
@@ -313,40 +318,50 @@ export default function ChatWorkspace({
     }
   }
 
-  const loadMemoryData = useCallback(async (includeRecords: boolean) => {
-    if (!mountedRef.current) return;
+  const loadMemoryData = useCallback(
+    async (includeRecords: boolean) => {
+      if (!mountedRef.current) return;
 
-    setMemoryLoading(true);
-    setMemoryError(null);
+      setMemoryLoading(true);
+      setMemoryError(null);
 
-    try {
-      const [summaryResponse, recordsResponse] = await Promise.all([
-        fetch('/api/pierrot/memory?view=summary'),
-        includeRecords ? fetch('/api/pierrot/memory?status=active&limit=100') : null,
-      ]);
+      try {
+        const recordsUrl =
+          memoryScope === 'archive'
+            ? '/api/pierrot/memory?status=archive&limit=120'
+            : memoryScope === 'all'
+              ? '/api/pierrot/memory?status=all&limit=120'
+              : '/api/pierrot/memory?status=active&limit=100';
 
-      if (summaryResponse.ok) {
-        const summary = (await summaryResponse.json()) as PierrotMemorySummary;
-        if (mountedRef.current) setMemorySummary(summary);
-      } else {
-        throw new Error('memory_summary_failed');
+        const [summaryResponse, recordsResponse] = await Promise.all([
+          fetch('/api/pierrot/memory?view=summary'),
+          includeRecords ? fetch(recordsUrl) : null,
+        ]);
+
+        if (summaryResponse.ok) {
+          const summary = (await summaryResponse.json()) as PierrotMemorySummary;
+          if (mountedRef.current) setMemorySummary(summary);
+        } else {
+          throw new Error('memory_summary_failed');
+        }
+
+        if (recordsResponse) {
+          if (!recordsResponse.ok) throw new Error('memory_records_failed');
+          const data = (await recordsResponse.json()) as {
+            records?: PierrotMemoryRecord[];
+          };
+          if (mountedRef.current) setMemoryRecords(data.records || []);
+        }
+      } catch {
+        if (mountedRef.current) {
+          setMemoryError('Память сейчас недоступна.');
+        }
+      } finally {
+        if (mountedRef.current) setMemoryLoading(false);
       }
-
-      if (recordsResponse) {
-        if (!recordsResponse.ok) throw new Error('memory_records_failed');
-        const data = (await recordsResponse.json()) as {
-          records?: PierrotMemoryRecord[];
-        };
-        if (mountedRef.current) setMemoryRecords(data.records || []);
-      }
-    } catch {
-      if (mountedRef.current) {
-        setMemoryError('Память сейчас недоступна.');
-      }
-    } finally {
-      if (mountedRef.current) setMemoryLoading(false);
-    }
-  }, []);
+    },
+    [memoryScope]
+  );
 
   useEffect(() => {
     void loadMemoryData(false);
@@ -407,19 +422,59 @@ export default function ChatWorkspace({
     }
   }
 
-  async function deleteMemoryRecord(record: PierrotMemoryRecord) {
-    if (!window.confirm(`Удалить запись «${record.title}»?`)) return;
-
+  async function archiveMemoryRecord(record: PierrotMemoryRecord) {
     setMemoryError(null);
     try {
       const response = await fetch(`/api/pierrot/memory/${record.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'archived',
+          ...(record.kind === 'reminder' ? { status: 'completed' } : {}),
+        }),
+      });
+      if (!response.ok) throw new Error('memory_archive_failed');
+      if (editingMemoryId === record.id) setEditingMemoryId(null);
+      await loadMemoryData(true);
+    } catch {
+      setMemoryError('Не удалось убрать запись в архив.');
+    }
+  }
+
+  async function restoreMemoryRecord(record: PierrotMemoryRecord) {
+    setMemoryError(null);
+    try {
+      const response = await fetch(`/api/pierrot/memory/${record.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restore: true }),
+      });
+      if (!response.ok) throw new Error('memory_restore_failed');
+      await loadMemoryData(true);
+    } catch {
+      setMemoryError('Не удалось вернуть запись из архива.');
+    }
+  }
+
+  async function permanentlyDeleteMemoryRecord(record: PierrotMemoryRecord) {
+    if (
+      !window.confirm(
+        `Удалить запись «${record.title}» навсегда? Она исчезнет из памяти и архива, вместе с поисковым индексом. Это необратимо.`
+      )
+    ) {
+      return;
+    }
+
+    setMemoryError(null);
+    try {
+      const response = await fetch(`/api/pierrot/memory/${record.id}?permanent=1`, {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('memory_delete_failed');
       if (editingMemoryId === record.id) setEditingMemoryId(null);
       await loadMemoryData(true);
     } catch {
-      setMemoryError('Не удалось удалить запись.');
+      setMemoryError('Не удалось удалить запись навсегда.');
     }
   }
 
@@ -949,6 +1004,7 @@ export default function ChatWorkspace({
               <p className="pw-kicker">Pierrot · owner workspace</p>
               <h2 className="pw-empty-title">Всё спокойно.</h2>
               <p className="pw-empty-summary">{overview.summary}</p>
+              <BrainStatusCard initial={brainStatus ?? null} />
               {memoryTotal > 0 && (
                 <button type="button" className="pw-memory-line" onClick={openMemory}>
                   Память · {memoryCounts.memory} | Сохранено · {memoryCounts.saved} | Напоминания ·{' '}
@@ -1209,6 +1265,29 @@ export default function ChatWorkspace({
               </button>
             </div>
 
+            <div className="pw-memory-tabs" role="tablist" aria-label="Раздел памяти">
+              {[
+                ['active', 'Активное'],
+                ['archive', 'Архив'],
+                ['all', 'Всё'],
+              ].map(([value, label]) => (
+                <button
+                  key={String(value)}
+                  type="button"
+                  role="tab"
+                  aria-selected={memoryScope === value}
+                  className={`pw-memory-tab${memoryScope === value ? ' is-active' : ''}`}
+                  onClick={() => {
+                    setMemoryScope(value as 'active' | 'archive' | 'all');
+                    setEditingMemoryId(null);
+                    void loadMemoryData(true);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <div className="pw-memory-tabs" role="tablist" aria-label="Категории памяти">
               {[
                 ['all', 'Все', memoryTotal],
@@ -1283,28 +1362,31 @@ export default function ChatWorkspace({
                           >
                             Изменить
                           </button>
-                          {record.kind === 'reminder' && record.status === 'current' && (
-                            <button
-                              type="button"
-                              onClick={() => void updateMemoryStatus(record, 'completed')}
-                            >
-                              <Check size={12} aria-hidden="true" /> Завершить
+                          {(record.kind === 'reminder' || record.kind === 'task') &&
+                            record.status === 'current' && (
+                              <button
+                                type="button"
+                                onClick={() => void updateMemoryStatus(record, 'completed')}
+                              >
+                                <Check size={12} aria-hidden="true" /> Завершить
+                              </button>
+                            )}
+                          {record.status === 'current' && (
+                            <button type="button" onClick={() => void archiveMemoryRecord(record)}>
+                              <Archive size={12} aria-hidden="true" /> В архив
                             </button>
                           )}
-                          {record.kind === 'saved' && record.status === 'current' && (
-                            <button
-                              type="button"
-                              onClick={() => void updateMemoryStatus(record, 'archived')}
-                            >
-                              <Archive size={12} aria-hidden="true" /> В архив
+                          {record.status !== 'current' && (
+                            <button type="button" onClick={() => void restoreMemoryRecord(record)}>
+                              <Archive size={12} aria-hidden="true" /> Вернуть в память
                             </button>
                           )}
                           <button
                             type="button"
                             className="pw-memory-delete"
-                            onClick={() => void deleteMemoryRecord(record)}
+                            onClick={() => void permanentlyDeleteMemoryRecord(record)}
                           >
-                            <Trash2 size={12} aria-hidden="true" /> Удалить
+                            <Trash2 size={12} aria-hidden="true" /> Удалить навсегда
                           </button>
                         </div>
                       </>

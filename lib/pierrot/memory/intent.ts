@@ -7,9 +7,15 @@ export type PierrotMemoryAction =
   | 'remind'
   | 'list'
   | 'search'
+  | 'history_search'
+  | 'current_status'
   | 'complete'
   | 'archive'
+  | 'forget'
+  | 'restore'
   | 'delete'
+  | 'cleanup'
+  | 'cleanup_preview'
   | 'clarify';
 
 export type PierrotMemoryIntent = {
@@ -20,6 +26,10 @@ export type PierrotMemoryIntent = {
   title: string | null;
   reviewAt: string | null;
   possibleConflict: boolean;
+  /** True only for an explicit “навсегда / permanently” delete. */
+  permanent: boolean;
+  /** Search should include archived/superseded records. */
+  includeArchive: boolean;
   confidence: number;
   reason: string;
 };
@@ -235,9 +245,71 @@ const LIST_PATTERNS = [
 
 const SEARCH_PATTERNS = [
   /найди\s+(?:в\s+памяти|запись|заметку|напоминание)/i,
-  /что\s+(?:мы\s+)?(?:решали|записали|сохраняли)\s+(?:про|о)/i,
+  /поищи\s+в\s+памяти/i,
   /search\s+(?:my\s+)?memory/i,
   /find\s+(?:a\s+)?(?:memory|saved|reminder)/i,
+];
+
+const HISTORY_PATTERNS = [
+  /что\s+(?:мы\s+)?(?:решали|записали|сохраняли|обсуждали)\s+(?:про|о|по)/i,
+  /что\s+было\s+(?:раньше|до\s+этого)/i,
+  /истори[яю]\s+(?:по|про|вопроса)/i,
+  /(?:what|which)\s+did\s+we\s+(?:decide|agree)\s+(?:about|on)/i,
+  /decision\s+history/i,
+];
+
+const CURRENT_PATTERNS = [
+  /что\s+(?:сейчас|теперь)\s+актуально/i,
+  /что\s+актуально\s+(?:по|про|насчет)/i,
+  /что\s+(?:сейчас\s+)?действует\s+(?:по|про)/i,
+  /what\s+is\s+(?:currently\s+)?(?:current|in\s+effect)\s+(?:about|on|for)/i,
+];
+
+const CLEANUP_PREVIEW = [
+  /покажи[^.!?]*(?:что|какие)[^.!?]*(?:можно|стоит|нужно)\s*(?:почистить|удалить|заархивировать|убрать)/i,
+  /что\s+(?:можно|стоит|нужно)\s*(?:почистить|заархивировать|убрать)/i,
+  /кандидат[а-я]*\s+на\s+очистк/i,
+  /what\s+can\s+(?:i|we)\s+clean(?:\s+up)?/i,
+  /memory\s+cleanup\s+candidates/i,
+];
+
+const CLEANUP = [
+  /^(?:пожалуйста[,\s]*)?(?:почисти|очисти|прибери)\s+(?:память|записи)/i,
+  /^(?:please[,\s]*)?(?:clean|tidy)\s+(?:up\s+)?(?:my\s+)?memory/i,
+  /проведи\s+уборку\s+памяти/i,
+];
+
+const COMPLETE_PATTERNS = [
+  /(?:^|\s)(?:заверши|завершить|выполни|выполнить|закрой|закрыть)\s+(?:напоминание|задачу|это|запись)?\s*/i,
+  /(?:^|\s)(?:это\s+)?(?:уже\s+)?(?:сделано|выполнено|готово)(?:\s|$)/i,
+  /(?:^|\s)(?:complete|finish|close)\s+(?:the\s+)?(?:reminder|task|this|it)\b/i,
+  /(?:^|\s)(?:this\s+is|it\s+is|that\s+is)\s+(?:already\s+)?done(?:\s|$)/i,
+];
+
+const ARCHIVE_PATTERNS = [
+  /(?:^|\s)(?:архивируй|архивировать|в\s+архив)\s+(?:заметку|запись|напоминание|note|saved|reminder)?/i,
+  /(?:^|\s)(?:archive)\s+(?:the\s+)?(?:note|record|reminder)\b/i,
+];
+
+const FORGET_PATTERNS = [
+  /^(?:пожалуйста[,\s]*)?(?:забудь|забыть|забудьте)\s+(?:про|о|об)?\s*/i,
+  /^(?:убери|убрать)\s+(?:это\s+)?из\s+памяти\s*/i,
+  /^(?:please[,\s]*)?(?:forget)\s+(?:about\s+)?/i,
+  /^(?:это|эта\s+запись|это\s+решение)\s+больше\s+не\s+актуальн/i,
+  /^(?:this|that|it)\s+is\s+no\s+longer\s+(?:relevant|current|true)/i,
+];
+
+const DELETE_PATTERNS = [
+  /^(?:пожалуйста[,\s]*)?(?:удали|удалить|сотри|стереть)\s+(?:навсегда|безвозвратно|окончательно)\s*/i,
+  /^(?:удали|удалить)\s+(?:запись|заметку|напоминание)?\s*(?:навсегда|безвозвратно)/i,
+  /^(?:please[,\s]*)?(?:delete|remove|erase)\s+(?:permanently|for\s+good)\s*/i,
+  /^(?:delete|erase)\s+(?:the\s+)?(?:record|memory|note|reminder)\s+(?:permanently|for\s+good)/i,
+];
+
+const RESTORE_PATTERNS = [
+  /^(?:пожалуйста[,\s]*)?(?:верни|восстанови)\s+(?:это\s+)?(?:в\s+память|из\s+архива)\s*/i,
+  /^(?:пожалуйста[,\s]*)?(?:верни|восстанови)\s+(?:запись|заметку|напоминание)?\s*/i,
+  /^(?:please[,\s]*)?(?:restore|bring\s+back)\s+(?:the\s+)?(?:memory|record|note|reminder)?\s*/i,
 ];
 
 const CREATE_REMEMBER =
@@ -245,7 +317,7 @@ const CREATE_REMEMBER =
 const CREATE_SAVE =
   /^(?:пожалуйста[,\s]*)?(?:сохрани|сохраните|сохранить)(?:\s+(?:это|эту\s+идею|этот\s+текст|эту\s+мысль|идею|заметку|пока|на\s+потом|себе))?\s*[:,—–-]?\s*/i;
 const CREATE_REMIND =
-  /^(?:пожалуйста[,\s]*)?(?:напомни|напомните|напомнить)(?:\s+(?:мне|потом|позже|об этом))*\s*[:,—–-]?\s*/i;
+  /^(?:пожалуйста[,\s]*)?(?:напомни|напомните|напомнить)(?:\s+(?:мне|потом|позже|об\s+этом))*\s*[:,—–-]?\s*/i;
 const CREATE_REMEMBER_EN =
   /^(?:please[,\s]*)?(?:remember|keep\s+(?:this\s+)?in\s+mind|note\s+that)\s*[:,—–-]?\s*/i;
 const CREATE_SAVE_EN =
@@ -253,7 +325,8 @@ const CREATE_SAVE_EN =
 const CREATE_REMIND_EN =
   /^(?:please[,\s]*)?(?:remind\s+me|remind)\s*(?:later|about|to)?\s*[:,—–-]?\s*/i;
 
-const CONFLICT = /(вместо|больше\s+не|отменя|отмени|replace|instead|no\s+longer|not\s+anymore)/i;
+const CONFLICT =
+  /(вместо|больше\s+не|отменя|отмени|заменя|replace|instead|no\s+longer|not\s+anymore)/i;
 
 function result(
   action: PierrotMemoryAction,
@@ -267,6 +340,8 @@ function result(
     title: null,
     reviewAt: null,
     possibleConflict: false,
+    permanent: false,
+    includeArchive: false,
     confidence: options.confidence ?? 0.7,
     reason: options.reason ?? action,
     ...options,
@@ -322,6 +397,37 @@ function createIntent(
   });
 }
 
+function stripCommand(message: string, patterns: RegExp[]): string {
+  let value = message.trim();
+
+  for (const pattern of patterns) {
+    const match = value.match(pattern);
+    if (match) {
+      value = value.slice(match[0].length);
+      break;
+    }
+  }
+
+  return value
+    .replace(/^[\s:—–,-]+/, '')
+    .replace(/^(?:по|про|об|о|about|on|for)\s+/i, '')
+    .replace(/[\s?.!]+$/, '')
+    .trim()
+    .slice(0, 500);
+}
+
+function queryWithHistory(
+  message: string,
+  patterns: RegExp[],
+  history?: HistoryItem[]
+): string | null {
+  const query = stripCommand(message, patterns);
+  if (query) return query;
+
+  const previous = lastAssistantText(history);
+  return previous ? previous.slice(0, 500) : null;
+}
+
 /**
  * Detects the owner’s memory intention. It is deliberately command-first:
  * casual mentions of “remember” do not create records.
@@ -335,6 +441,84 @@ export function detectMemoryIntent(
 
   if (!text) return result('none', { confidence: 1, reason: 'empty' });
 
+  // Preview must run before the destructive-sounding cleanup command.
+  if (CLEANUP_PREVIEW.some((pattern) => pattern.test(original) || pattern.test(text))) {
+    return result('cleanup_preview', { confidence: 0.92, reason: 'cleanup_preview' });
+  }
+
+  if (CLEANUP.some((pattern) => pattern.test(original) || pattern.test(text))) {
+    return result('cleanup', { confidence: 0.9, reason: 'cleanup_request' });
+  }
+
+  if (DELETE_PATTERNS.some((pattern) => pattern.test(original) || pattern.test(text))) {
+    return result('delete', {
+      query: queryWithHistory(original, DELETE_PATTERNS, options.history),
+      permanent: true,
+      includeArchive: true,
+      confidence: 0.93,
+      reason: 'permanent_delete_request',
+    });
+  }
+
+  if (RESTORE_PATTERNS.some((pattern) => pattern.test(original) || pattern.test(text))) {
+    return result('restore', {
+      query: queryWithHistory(original, RESTORE_PATTERNS, options.history),
+      includeArchive: true,
+      confidence: 0.88,
+      reason: 'restore_request',
+    });
+  }
+
+  if (FORGET_PATTERNS.some((pattern) => pattern.test(original) || pattern.test(text))) {
+    return result('forget', {
+      query: queryWithHistory(original, FORGET_PATTERNS, options.history),
+      includeArchive: true,
+      confidence: 0.9,
+      reason: 'forget_request',
+    });
+  }
+
+  for (const pattern of CURRENT_PATTERNS) {
+    if (pattern.test(original) || pattern.test(text)) {
+      return result('current_status', {
+        query: queryWithHistory(original, CURRENT_PATTERNS, options.history),
+        confidence: 0.88,
+        reason: 'current_status_request',
+      });
+    }
+  }
+
+  for (const pattern of HISTORY_PATTERNS) {
+    if (pattern.test(original) || pattern.test(text)) {
+      return result('history_search', {
+        query: queryWithHistory(original, HISTORY_PATTERNS, options.history),
+        includeArchive: true,
+        confidence: 0.86,
+        reason: 'history_search_request',
+      });
+    }
+  }
+
+  for (const pattern of COMPLETE_PATTERNS) {
+    if (pattern.test(original) || pattern.test(text)) {
+      return result('complete', {
+        query: queryWithHistory(original, COMPLETE_PATTERNS, options.history),
+        confidence: 0.86,
+        reason: 'complete_request',
+      });
+    }
+  }
+
+  for (const pattern of ARCHIVE_PATTERNS) {
+    if (pattern.test(original) || pattern.test(text)) {
+      return result('archive', {
+        query: queryWithHistory(original, ARCHIVE_PATTERNS, options.history),
+        confidence: 0.84,
+        reason: 'archive_request',
+      });
+    }
+  }
+
   for (const pattern of LIST_PATTERNS) {
     if (pattern.test(original) || pattern.test(text)) {
       return result('list', { confidence: 0.9, reason: 'list_request' });
@@ -343,47 +527,12 @@ export function detectMemoryIntent(
 
   for (const pattern of SEARCH_PATTERNS) {
     if (pattern.test(original) || pattern.test(text)) {
-      const query = original
-        .replace(/найди\s+(?:в\s+памяти|запись|заметку|напоминание)/i, '')
-        .replace(/что\s+(?:мы\s+)?(?:решали|записали|сохраняли)\s+(?:про|о)/i, '')
-        .trim();
       return result('search', {
-        query: query || null,
+        query: queryWithHistory(original, SEARCH_PATTERNS, options.history),
         confidence: 0.85,
         reason: 'search_request',
       });
     }
-  }
-
-  if (
-    /(^|\s)(заверши|завершить|выполни|выполнить)\s+(напоминание|задачу)/i.test(original) ||
-    /(^|\s)(complete|finish)\s+(the\s+)?reminder/i.test(original)
-  ) {
-    return result('complete', {
-      query: original.replace(/^(заверши|завершить|выполни|выполнить|complete|finish)\s+/i, ''),
-      confidence: 0.85,
-      reason: 'complete_request',
-    });
-  }
-
-  if (/(^|\s)(архивируй|архивировать|archive)\s+(заметку|запись|note|saved)/i.test(original)) {
-    return result('archive', {
-      query: original.replace(/^(архивируй|архивировать|archive)\s+/i, ''),
-      confidence: 0.82,
-      reason: 'archive_request',
-    });
-  }
-
-  if (
-    /(^|\s)(удали|удалить|delete|remove)\s+(запись|заметку|напоминание|memory|note|reminder)/i.test(
-      original
-    )
-  ) {
-    return result('delete', {
-      query: original.replace(/^(удали|удалить|delete|remove)\s+/i, ''),
-      confidence: 0.82,
-      reason: 'delete_request',
-    });
   }
 
   if (/^(запиши|записать|write\s+this\s+down|make\s+a\s+note)(?=\s|$)/i.test(text)) {
@@ -425,4 +574,20 @@ export function detectMemoryIntent(
   }
 
   return result('none', { confidence: 0.95, reason: 'no_memory_command' });
+}
+
+/**
+ * A write can be an addition, a refinement or an explicit replacement. The
+ * store uses this verdict to decide whether it is allowed to link an older
+ * record; nothing is ever deleted by a write.
+ */
+export function classifyMemoryWrite(intent: PierrotMemoryIntent): 'add' | 'refine' | 'replace' {
+  if (intent.possibleConflict) return 'replace';
+  if (
+    intent.action === 'remember' &&
+    /\b(уточняю|точнее|а\s+именно|rather|more\s+precisely)\b/i.test(intent.content || '')
+  ) {
+    return 'refine';
+  }
+  return 'add';
 }

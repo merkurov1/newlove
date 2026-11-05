@@ -151,7 +151,9 @@ describe('owner memory item API', () => {
 
   it('deletes only the owner record', async () => {
     const response = await DELETE(
-      request(`http://localhost/api/pierrot/memory/${memoryId}`, { method: 'DELETE' }),
+      request(`http://localhost/api/pierrot/memory/${memoryId}?permanent=1`, {
+        method: 'DELETE',
+      }),
       { params: Promise.resolve({ id: memoryId }) }
     );
 

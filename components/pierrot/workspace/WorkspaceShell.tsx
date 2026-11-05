@@ -10,6 +10,7 @@ import {
   MessageSquare,
   Palette,
   Send,
+  Sparkles,
   Terminal,
 } from 'lucide-react';
 import PierrotAvatar from './PierrotAvatar';
@@ -26,6 +27,7 @@ const ICONS = {
   dash: Activity,
   dev: Terminal,
   art: Palette,
+  skills: Sparkles,
   heart: Heart,
 } as const;
 
@@ -33,11 +35,9 @@ function registerServiceWorker() {
   if (process.env.NODE_ENV !== 'production') return;
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
 
-  navigator.serviceWorker
-    .register('/pierrot-sw.js', { scope: '/admin/pierrot' })
-    .catch(() => {
-      // Offline shell is an enhancement; the workspace stays fully usable.
-    });
+  navigator.serviceWorker.register('/pierrot-sw.js', { scope: '/admin/pierrot' }).catch(() => {
+    // Offline shell is an enhancement; the workspace stays fully usable.
+  });
 }
 
 export default function WorkspaceShell({ children }: { children: React.ReactNode }) {
@@ -104,7 +104,6 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
             );
           })}
         </div>
-
       </nav>
 
       <main className="pw-main">{children}</main>

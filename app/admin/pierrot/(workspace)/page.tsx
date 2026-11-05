@@ -9,6 +9,9 @@ import {
 import { buildOverviewSummary } from '@/lib/pierrot/workspace/status';
 import type { WorkspaceOverview } from '@/lib/pierrot/workspace/types';
 import { emptyCommercialSummary } from '@/lib/pierrot/commercialSummary';
+import { createPierrotStore } from '@/lib/pierrot/serverStore';
+import { loadBrainStatus } from '@/lib/pierrot/memory/brainStatus';
+import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
 import ChatWorkspace from '@/components/pierrot/workspace/ChatWorkspace';
 
 export const dynamic = 'force-dynamic';
@@ -70,9 +73,16 @@ export default async function ChatPage({
   // The five metrics and the commercial report are only rendered by the empty
   // state. Do not spend owner-data queries on a transcript that is already open.
   const needsOverview = startNew || !conversation || conversation.messages.length === 0;
-  const overview = needsOverview
-    ? await loadWorkspaceOverview(7).catch(() => unavailableOverview())
-    : unavailableOverview();
+  const [overview, brainStatus] = await Promise.all([
+    needsOverview
+      ? loadWorkspaceOverview(7).catch(() => unavailableOverview())
+      : Promise.resolve(unavailableOverview()),
+    needsOverview
+      ? loadBrainStatus(createPierrotStore(), user.id, { detailed: false }).catch(
+          (): BrainStatusSnapshot | null => null
+        )
+      : Promise.resolve(null),
+  ]);
 
   return (
     <ChatWorkspace
@@ -81,6 +91,7 @@ export default async function ChatPage({
       conversations={conversations}
       conversation={conversation}
       startNew={startNew}
+      brainStatus={brainStatus}
     />
   );
 }

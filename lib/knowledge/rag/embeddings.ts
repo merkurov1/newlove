@@ -131,6 +131,60 @@ function batches<T>(items: T[], size: number): T[][] {
   return result;
 }
 
+/**
+ * Short-lived, bounded query-embedding cache.
+ *
+ * Brain retrieval and Temporal Memory retrieval run in the same request and
+ * embed the same short query with the same model. Reusing that vector avoids a
+ * second paid call. Write-time indexing never hits this cache because each
+ * record text is unique. Test runs bypass it so mocks stay deterministic.
+ */
+const QUERY_CACHE_TTL_MS = 60_000;
+const QUERY_CACHE_MAX_ENTRIES = 256;
+const queryEmbeddingCache = new Map<string, { vector: number[]; expiresAt: number }>();
+
+function cacheEnabled(): boolean {
+  return process.env.NODE_ENV !== 'test';
+}
+
+function cacheKey(modelId: string, dimensions: number, text: string): string {
+  return `${modelId}\u0000${dimensions}\u0000${text}`;
+}
+
+function readCachedEmbedding(modelId: string, dimensions: number, text: string): number[] | null {
+  if (!cacheEnabled()) return null;
+
+  const key = cacheKey(modelId, dimensions, text);
+  const entry = queryEmbeddingCache.get(key);
+  if (!entry) return null;
+
+  if (entry.expiresAt <= Date.now()) {
+    queryEmbeddingCache.delete(key);
+    return null;
+  }
+
+  return entry.vector;
+}
+
+function writeCachedEmbedding(
+  modelId: string,
+  dimensions: number,
+  text: string,
+  vector: number[]
+): void {
+  if (!cacheEnabled()) return;
+
+  if (queryEmbeddingCache.size >= QUERY_CACHE_MAX_ENTRIES) {
+    const oldest = queryEmbeddingCache.keys().next().value;
+    if (typeof oldest === 'string') queryEmbeddingCache.delete(oldest);
+  }
+
+  queryEmbeddingCache.set(cacheKey(modelId, dimensions, text), {
+    vector,
+    expiresAt: Date.now() + QUERY_CACHE_TTL_MS,
+  });
+}
+
 export function createOpenRouterEmbeddingClient(
   options: OpenRouterEmbeddingOptions
 ): EmbeddingClient {
@@ -238,11 +292,30 @@ export function createOpenRouterEmbeddingClient(
         return text;
       });
 
-      const result: number[][] = [];
+      const result: number[][] = new Array(normalized.length);
+      const missingIndexes: number[] = [];
+      const missingTexts: string[] = [];
 
-      for (const batch of batches(normalized, batchSize)) {
+      normalized.forEach((text, index) => {
+        const cached = readCachedEmbedding(modelId, dimensions, text);
+        if (cached) {
+          result[index] = cached;
+        } else {
+          missingIndexes.push(index);
+          missingTexts.push(text);
+        }
+      });
+
+      let cursor = 0;
+      for (const batch of batches(missingTexts, batchSize)) {
         const vectors = await embedBatch(batch, signal);
-        result.push(...vectors);
+
+        for (const vector of vectors) {
+          const index = missingIndexes[cursor];
+          result[index] = vector;
+          writeCachedEmbedding(modelId, dimensions, missingTexts[cursor], vector);
+          cursor += 1;
+        }
       }
 
       return result;

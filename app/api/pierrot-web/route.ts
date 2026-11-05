@@ -139,8 +139,12 @@ import {
   createMemoryRecord,
   deleteMemoryRecord,
   listMemoryRecords,
+  restoreMemoryRecord,
+  searchMemory,
   updateMemoryRecord,
 } from '@/lib/pierrot/memory/store';
+import { runMemorySteward } from '@/lib/pierrot/memory/steward';
+import { buildSkillsContext } from '@/lib/pierrot/skills/store';
 import type { PierrotMemoryRecord } from '@/lib/pierrot/memory/types';
 import {
   confirmPendingUrlCandidate,
@@ -703,15 +707,27 @@ export async function POST(req: Request) {
 
     let ownerMemoryContext: string | null = null;
     let ownerMemoryUnavailable = false;
+    let skillsContext: string | null = null;
 
     if (perspective === 'personal' && isPierrotUserId(ownerIdentityUserId) && memoryStore) {
       try {
-        ownerMemoryContext = await buildMemoryContext(memoryStore, ownerIdentityUserId);
+        ownerMemoryContext = await buildMemoryContext(memoryStore, ownerIdentityUserId, {
+          query: retrievalQuery,
+          limit: 8,
+        });
       } catch {
         // Memory failure must not block the main answer. The model is told
         // below that memory is unavailable rather than inventing records.
         ownerMemoryContext = null;
         ownerMemoryUnavailable = true;
+      }
+
+      try {
+        // Approved skills are a separate concept from memory. Ranking is
+        // deterministic; nothing is executed here.
+        skillsContext = await buildSkillsContext(memoryStore, ownerIdentityUserId, trimmedMessage);
+      } catch {
+        skillsContext = null;
       }
     }
 
@@ -720,6 +736,7 @@ export async function POST(req: Request) {
       buildPierrotPerspectivePrompt(perspective),
       ownerProfileContext,
       ownerMemoryContext,
+      skillsContext,
       ownerMemoryUnavailable
         ? 'OWNER MEMORY UNAVAILABLE: the owner memory store could not be read. Do not claim that a record exists or does not exist. If asked about memory, say that the memory store is temporarily unavailable.'
         : null,
@@ -1343,16 +1360,57 @@ export async function POST(req: Request) {
 
         if (!memoryStore || !isPierrotUserId(ownerIdentityUserId)) return memoryUnavailable();
 
-        const formatRecord = (record: PierrotMemoryRecord) => {
-          const date = record.reviewAt ? ` · ${record.reviewAt.slice(0, 10)}` : '';
+        const formatRecord = (record: PierrotMemoryRecord, index?: number) => {
+          const marker = index === undefined ? '- ' : `${index + 1}. `;
+          const date = (record.validFrom || record.updatedAt || record.createdAt || '').slice(
+            0,
+            10
+          );
+          const status =
+            record.status === 'current'
+              ? ''
+              : record.status === 'uncertain'
+                ? ' · под вопросом'
+                : ` · ${record.status}`;
+          const archive = ['archived', 'completed', 'superseded', 'rejected'].includes(
+            record.status
+          )
+            ? ' · архив'
+            : '';
           const content =
             record.content.length > 240 ? `${record.content.slice(0, 237)}…` : record.content;
-          return `- ${record.title}${date} — ${content}`;
+          const supersession = record.supersededBy
+            ? ` · заменено записью ${record.supersededBy.slice(0, 8)}`
+            : '';
+          return `${marker}${record.title}${date ? ` · ${date}` : ''}${status}${archive}${supersession} — ${content}`;
         };
 
         const formatGroup = (title: string, records: PierrotMemoryRecord[]) => {
           if (records.length === 0) return null;
-          return `${title}\n${records.map(formatRecord).join('\n')}`;
+          return `${title}\n${records.map((record) => formatRecord(record)).join('\n')}`;
+        };
+
+        const formatSearchResults = (
+          records: PierrotMemoryRecord[],
+          options: { archive: boolean }
+        ) => {
+          if (records.length === 0) {
+            return ownerLanguage === 'ru'
+              ? 'В памяти нет подходящей записи. Я не буду придумывать её.'
+              : 'I found no matching memory record. I will not invent one.';
+          }
+
+          return `${ownerLanguage === 'ru' ? 'Нашёл в памяти:' : 'Found in memory:'}\n\n${records
+            .map((record) => formatRecord(record))
+            .join('\n')}${
+            options.archive
+              ? `\n\n${
+                  ownerLanguage === 'ru'
+                    ? 'Архив показан только как исторический контекст; он не считается текущей договорённостью.'
+                    : 'Archive entries are historical context only; they are not current agreements.'
+                }`
+              : ''
+          }`;
         };
 
         if (
@@ -1360,15 +1418,6 @@ export async function POST(req: Request) {
           memoryIntent.action === 'save' ||
           memoryIntent.action === 'remind'
         ) {
-          if (memoryIntent.possibleConflict) {
-            return persistOwnerReply(
-              ownerLanguage === 'ru'
-                ? 'Похоже, это меняет прежнюю договорённость. Я не буду незаметно перезаписывать старую запись. Уточни, какую именно запись заменить, или сформулируй новую без «вместо» и «больше не».'
-                : 'This seems to change an earlier agreement. I will not silently overwrite the old record. Tell me which record to replace, or phrase the new one without “instead” or “no longer”.',
-              { memory_status: 'clarification_required' }
-            );
-          }
-
           const content = memoryIntent.content?.trim();
           if (!content || !memoryIntent.kind) {
             return persistOwnerReply(
@@ -1377,6 +1426,36 @@ export async function POST(req: Request) {
                 : 'One clarification: should I remember this long-term, save it as a note, or make a reminder?',
               { memory_status: 'clarification_required' }
             );
+          }
+
+          // Replacement is not guessed. If “вместо/больше не” does not map to
+          // exactly one active record, nothing is written and the owner is
+          // asked which record was meant.
+          if (memoryIntent.possibleConflict) {
+            let targets = 0;
+
+            if (typeof searchMemory === 'function') {
+              try {
+                const match = await searchMemory(memoryStore, {
+                  userId: ownerIdentityUserId,
+                  query: content,
+                  limit: 6,
+                  includeArchive: false,
+                });
+                targets = match.records.length;
+              } catch {
+                targets = 0;
+              }
+            }
+
+            if (targets !== 1) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Похоже, это меняет прежнюю договорённость. Я не буду незаметно перезаписывать старую запись. Уточни, какую именно запись заменить, или сформулируй новую без «вместо» и «больше не».'
+                  : 'This seems to change an earlier agreement. I will not silently overwrite the old record. Tell me which record to replace, or phrase the new one without “instead” or “no longer”.',
+                { memory_status: 'clarification_required' }
+              );
+            }
           }
 
           try {
@@ -1388,6 +1467,7 @@ export async function POST(req: Request) {
               conversationId,
               messageId: userMessageId,
               reviewAt: memoryIntent.reviewAt,
+              possibleConflict: memoryIntent.possibleConflict,
               sourceRefs: [
                 {
                   type: 'owner_command',
@@ -1396,6 +1476,19 @@ export async function POST(req: Request) {
                 },
               ],
             });
+
+            if (created.deduplicated) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? `Это уже есть в памяти: «${created.title}». Ничего не дублировал.`
+                  : `This is already in memory: “${created.title}”. I did not duplicate it.`,
+                {
+                  memory_status: 'deduplicated',
+                  memory_kind: created.kind,
+                  memory_id: created.id,
+                }
+              );
+            }
 
             const label =
               created.kind === 'memory'
@@ -1417,12 +1510,56 @@ export async function POST(req: Request) {
                   : ` Due: ${created.reviewAt.slice(0, 10)}.`
                 : '';
 
-            return persistOwnerReply(`${label}: «${created.title}».${dateLine}`, {
-              memory_status: 'saved',
-              memory_kind: created.kind,
-              memory_id: created.id,
-            });
-          } catch {
+            const replacementLine = created.supersededRecordId
+              ? ownerLanguage === 'ru'
+                ? ' Прежняя запись сохранена в архиве как заменённая.'
+                : ' The previous record was preserved as superseded.'
+              : '';
+
+            const conflictLine =
+              created.conflictRecordId || created.status === 'uncertain'
+                ? ownerLanguage === 'ru'
+                  ? ' Вижу возможное противоречие с другой записью, поэтому пометил новую как «под вопросом». Ничего не перезаписывал.'
+                  : ' I see a possible contradiction with another record, so the new one is marked uncertain. Nothing was overwritten.'
+                : '';
+
+            const indexingLine =
+              created.indexingStatus === 'pending' || created.indexingStatus === 'failed'
+                ? ownerLanguage === 'ru'
+                  ? ' Семантический индекс обновится позже; запись уже доступна по словам.'
+                  : ' The semantic index will catch up later; the record is already searchable by words.'
+                : '';
+
+            return persistOwnerReply(
+              `${label}: «${created.title}».${dateLine}${replacementLine}${conflictLine}${indexingLine}`,
+              {
+                memory_status: created.status === 'uncertain' ? 'uncertain' : 'saved',
+                memory_kind: created.kind,
+                memory_id: created.id,
+                ...(created.indexingStatus ? { memory_index: created.indexingStatus } : {}),
+              }
+            );
+          } catch (error) {
+            const message = error instanceof Error ? error.message : '';
+
+            if (message === 'memory_replacement_ambiguous') {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Похоже, это заменяет прежнюю договорённость, но я не понял, какую именно. Ничего не изменил. Назови заголовок записи или скажи «что сейчас актуально по…».'
+                  : 'This seems to replace an earlier agreement, but I could not identify which one. I changed nothing. Name the record title or ask “what is current about…”.',
+                { memory_status: 'clarification_required' }
+              );
+            }
+
+            if (message === 'memory_status_unsupported') {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Схема памяти ещё не обновлена, поэтому этот статус сейчас недоступен. Запись не изменена.'
+                  : 'The memory schema has not been migrated, so this status is unavailable. The record was not changed.',
+                { memory_status: 'migration_required' }
+              );
+            }
+
             return persistOwnerReply(
               ownerLanguage === 'ru'
                 ? 'Не удалось сохранить запись. Я не буду говорить, что сохранил. Попробуй ещё раз.'
@@ -1432,9 +1569,19 @@ export async function POST(req: Request) {
           }
         }
 
-        if (memoryIntent.action === 'list' || memoryIntent.action === 'search') {
+        if (
+          memoryIntent.action === 'list' ||
+          memoryIntent.action === 'search' ||
+          memoryIntent.action === 'history_search' ||
+          memoryIntent.action === 'current_status'
+        ) {
           try {
-            if (memoryIntent.action === 'search' && !memoryIntent.query) {
+            if (
+              (memoryIntent.action === 'search' ||
+                memoryIntent.action === 'history_search' ||
+                memoryIntent.action === 'current_status') &&
+              !memoryIntent.query
+            ) {
               return persistOwnerReply(
                 ownerLanguage === 'ru'
                   ? 'Что именно найти в памяти? Уточни тему или фразу.'
@@ -1443,54 +1590,144 @@ export async function POST(req: Request) {
               );
             }
 
-            const records = await listMemoryRecords(memoryStore, {
-              userId: ownerIdentityUserId,
-              status: 'active',
-              ...(memoryIntent.action === 'search' ? { query: memoryIntent.query } : {}),
-              limit: 60,
-            });
+            if (memoryIntent.action === 'list') {
+              const records = await listMemoryRecords(memoryStore, {
+                userId: ownerIdentityUserId,
+                status: 'active',
+                limit: 60,
+              });
 
-            if (records.length === 0) {
-              return persistOwnerReply(
-                memoryIntent.action === 'search'
-                  ? ownerLanguage === 'ru'
-                    ? 'В памяти нет подходящей записи. Я не буду придумывать её.'
-                    : 'I found no matching memory record. I will not invent one.'
-                  : ownerLanguage === 'ru'
+              if (records.length === 0) {
+                return persistOwnerReply(
+                  ownerLanguage === 'ru'
                     ? 'Пока ничего не записано. Можно сказать «Запомни», «Сохрани» или «Напомни».'
                     : 'Nothing is recorded yet. You can say “Remember”, “Save” or “Remind me”.',
-                {
-                  memory_status: 'empty',
-                  memory_kind: memoryIntent.action === 'search' ? 'search' : 'list',
-                }
+                  { memory_status: 'empty', memory_kind: 'list' }
+                );
+              }
+
+              const groups = [
+                formatGroup(
+                  ownerLanguage === 'ru' ? 'Запомнено' : 'Remembered',
+                  records.filter((record) => record.kind === 'memory')
+                ),
+                formatGroup(
+                  ownerLanguage === 'ru' ? 'Сохранено' : 'Saved',
+                  records.filter((record) => record.kind === 'saved')
+                ),
+                formatGroup(
+                  ownerLanguage === 'ru' ? 'Напоминания' : 'Reminders',
+                  records.filter((record) => record.kind === 'reminder')
+                ),
+                formatGroup(
+                  ownerLanguage === 'ru' ? 'Решения и задачи' : 'Decisions and tasks',
+                  records.filter((record) => !['memory', 'saved', 'reminder'].includes(record.kind))
+                ),
+              ].filter((group): group is string => Boolean(group));
+
+              const counts = {
+                memory: records.filter((record) => record.kind === 'memory').length,
+                saved: records.filter((record) => record.kind === 'saved').length,
+                reminder: records.filter((record) => record.kind === 'reminder').length,
+              };
+
+              return persistOwnerReply(groups.join('\n\n'), {
+                memory_status: 'listed',
+                memory_counts: counts,
+              });
+            }
+
+            const result = await searchMemory(memoryStore, {
+              userId: ownerIdentityUserId,
+              query: memoryIntent.query || '',
+              includeArchive:
+                memoryIntent.includeArchive || memoryIntent.action === 'history_search',
+              historyOnly: memoryIntent.action === 'history_search',
+              ...(memoryIntent.action === 'current_status'
+                ? { statuses: ['current'] as const }
+                : {}),
+              limit: 12,
+            });
+
+            return persistOwnerReply(
+              formatSearchResults(result.records, {
+                archive: result.archiveSearched || memoryIntent.action === 'history_search',
+              }),
+              {
+                memory_status: result.records.length > 0 ? 'found' : 'empty',
+                memory_query: memoryIntent.query,
+                memory_search: {
+                  semantic: result.semanticUsed,
+                  lexical_fallback: result.lexicalFallback,
+                  archive: result.archiveSearched,
+                  ...(result.semanticUnavailableReason
+                    ? { reason: result.semanticUnavailableReason }
+                    : {}),
+                },
+              }
+            );
+          } catch {
+            return memoryUnavailable();
+          }
+        }
+
+        if (memoryIntent.action === 'cleanup_preview' || memoryIntent.action === 'cleanup') {
+          try {
+            const report = await runMemorySteward(memoryStore, ownerIdentityUserId, {
+              apply: memoryIntent.action === 'cleanup',
+              limitCandidates: 30,
+            });
+
+            const lines = [
+              ownerLanguage === 'ru'
+                ? `Проверил ${report.scanned} записей.`
+                : `Scanned ${report.scanned} records.`,
+            ];
+
+            if (report.candidates.length === 0) {
+              lines.push(
+                ownerLanguage === 'ru'
+                  ? 'Очевидных дублей, устаревших заметок и противоречий не нашёл.'
+                  : 'I found no obvious duplicates, stale notes or contradictions.'
+              );
+            } else {
+              lines.push(
+                ownerLanguage === 'ru'
+                  ? 'Кандидаты на уборку (ничего не удаляется):'
+                  : 'Cleanup candidates (nothing is deleted):'
+              );
+              for (const candidate of report.candidates.slice(0, 12)) {
+                lines.push(
+                  `- ${candidate.title} · ${candidate.type} · ${
+                    candidate.safeToApply
+                      ? ownerLanguage === 'ru'
+                        ? 'можно архивировать безопасно'
+                        : 'safe to archive'
+                      : ownerLanguage === 'ru'
+                        ? 'нужно решение владельца'
+                        : 'needs owner decision'
+                  } — ${candidate.reason}`
+                );
+              }
+            }
+
+            if (memoryIntent.action === 'cleanup') {
+              lines.push(
+                report.applied.length > 0
+                  ? ownerLanguage === 'ru'
+                    ? `Архивировал безопасных кандидатов: ${report.applied.length}. Записи сохранены в архиве.`
+                    : `Archived safe candidates: ${report.applied.length}. Records remain in the archive.`
+                  : ownerLanguage === 'ru'
+                    ? 'Ничего не изменил: безопасных автоматических действий нет.'
+                    : 'Nothing changed: there are no safe automatic actions.'
               );
             }
 
-            const groups = [
-              formatGroup(
-                ownerLanguage === 'ru' ? 'Запомнено' : 'Remembered',
-                records.filter((record) => record.kind === 'memory')
-              ),
-              formatGroup(
-                ownerLanguage === 'ru' ? 'Сохранено' : 'Saved',
-                records.filter((record) => record.kind === 'saved')
-              ),
-              formatGroup(
-                ownerLanguage === 'ru' ? 'Напоминания' : 'Reminders',
-                records.filter((record) => record.kind === 'reminder')
-              ),
-            ].filter((group): group is string => Boolean(group));
-
-            const counts = {
-              memory: records.filter((record) => record.kind === 'memory').length,
-              saved: records.filter((record) => record.kind === 'saved').length,
-              reminder: records.filter((record) => record.kind === 'reminder').length,
-            };
-
-            return persistOwnerReply(groups.join('\n\n'), {
-              memory_status: 'listed',
-              memory_counts: counts,
-              memory_query: memoryIntent.query,
+            return persistOwnerReply(lines.join('\n'), {
+              memory_status:
+                memoryIntent.action === 'cleanup' ? 'cleanup_applied' : 'cleanup_preview',
+              memory_candidates: report.candidates.length,
+              memory_applied: report.applied.length,
             });
           } catch {
             return memoryUnavailable();
@@ -1500,16 +1737,58 @@ export async function POST(req: Request) {
         if (
           memoryIntent.action === 'complete' ||
           memoryIntent.action === 'archive' ||
+          memoryIntent.action === 'forget' ||
+          memoryIntent.action === 'restore' ||
           memoryIntent.action === 'delete'
         ) {
           try {
-            const candidates = await listMemoryRecords(memoryStore, {
+            const includeArchive =
+              memoryIntent.action === 'forget' ||
+              memoryIntent.action === 'restore' ||
+              memoryIntent.action === 'delete';
+
+            if (memoryIntent.action === 'delete' && !memoryIntent.permanent) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Физическое удаление возможно только по явной команде «удали навсегда». Скажи её, если это действительно нужно; иначе я могу убрать запись в архив.'
+                  : 'Physical deletion requires an explicit “delete permanently” command. Say it if that is really intended; otherwise I can archive the record.',
+                { memory_status: 'clarification_required' }
+              );
+            }
+
+            if (memoryIntent.action === 'delete' && !memoryIntent.query) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Уточни, какую именно запись удалить навсегда. Ничего не изменено.'
+                  : 'Tell me which record to delete permanently. Nothing was changed.',
+                { memory_status: 'clarification_required' }
+              );
+            }
+
+            const result = await searchMemory(memoryStore, {
               userId: ownerIdentityUserId,
-              status: 'active',
-              ...(memoryIntent.action === 'complete' ? { kinds: ['reminder'] } : {}),
-              ...(memoryIntent.query ? { query: memoryIntent.query } : {}),
+              query: memoryIntent.query || '',
+              includeArchive,
+              historyOnly: includeArchive,
+              ...(memoryIntent.action === 'complete'
+                ? { kinds: ['task', 'reminder'] as const, statuses: ['current'] as const }
+                : {}),
               limit: 20,
             });
+
+            const candidates = result.records;
+
+            if (candidates.length === 0 && memoryIntent.action === 'complete') {
+              // “Это уже сделано” may not repeat the task wording. Fall back to
+              // the open-task list; a single candidate is safe, several are not.
+              const openTasks = await listMemoryRecords(memoryStore, {
+                userId: ownerIdentityUserId,
+                status: 'active',
+                kinds: ['task', 'reminder'],
+                limit: 20,
+              });
+              candidates.push(...openTasks);
+            }
 
             if (candidates.length === 0) {
               return persistOwnerReply(
@@ -1522,12 +1801,14 @@ export async function POST(req: Request) {
 
             if (candidates.length > 1) {
               return persistOwnerReply(
-                `${ownerLanguage === 'ru' ? 'Нашёл несколько записей:' : 'I found several records:'}\n\n${candidates.map(formatRecord).join('\n')}\n\n${
+                `${ownerLanguage === 'ru' ? 'Нашёл несколько записей:' : 'I found several records:'}\n\n${candidates
+                  .map((record, index) => formatRecord(record, index))
+                  .join('\n')}\n\n${
                   ownerLanguage === 'ru'
-                    ? 'Уточни заголовок, чтобы я не изменил не ту запись.'
-                    : 'Give me the exact title so I do not change the wrong record.'
+                    ? 'Уточни заголовок, чтобы я не изменил не ту запись. Ничего не изменено.'
+                    : 'Give me the exact title so I do not change the wrong record. Nothing was changed.'
                 }`,
-                { memory_status: 'clarification_required' }
+                { memory_status: 'clarification_required', memory_candidates: candidates.length }
               );
             }
 
@@ -1537,38 +1818,85 @@ export async function POST(req: Request) {
               await deleteMemoryRecord(memoryStore, ownerIdentityUserId, target.id);
               return persistOwnerReply(
                 ownerLanguage === 'ru'
-                  ? `Удалил запись «${target.title}».`
-                  : `Deleted “${target.title}”.`,
-                { memory_status: 'deleted', memory_id: target.id }
+                  ? `Удалил навсегда запись «${target.title}» и её поисковый индекс.`
+                  : `Permanently deleted “${target.title}” and its search embedding.`,
+                { memory_status: 'deleted', memory_id: target.id, permanent: true }
               );
             }
 
+            if (memoryIntent.action === 'restore') {
+              const restored = await restoreMemoryRecord(
+                memoryStore,
+                ownerIdentityUserId,
+                target.id
+              );
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? `Вернул в память запись «${restored.title}».`
+                  : `Restored “${restored.title}” to active memory.`,
+                { memory_status: 'restored', memory_id: restored.id }
+              );
+            }
+
+            const nextStatus =
+              memoryIntent.action === 'complete'
+                ? 'completed'
+                : memoryIntent.action === 'forget'
+                  ? 'archived'
+                  : 'archived';
+
             const updated = await updateMemoryRecord(memoryStore, ownerIdentityUserId, target.id, {
-              status: memoryIntent.action === 'complete' ? 'completed' : 'archived',
+              status: nextStatus,
+              ...(memoryIntent.action === 'forget'
+                ? { archivedReason: 'owner_forget' }
+                : memoryIntent.action === 'archive'
+                  ? { archivedReason: 'owner_archive' }
+                  : { archivedReason: 'completed' }),
             });
 
             return persistOwnerReply(
               memoryIntent.action === 'complete'
                 ? ownerLanguage === 'ru'
-                  ? `Завершил напоминание «${updated.title}».`
-                  : `Completed reminder “${updated.title}”.`
-                : ownerLanguage === 'ru'
-                  ? `Архивировал заметку «${updated.title}».`
-                  : `Archived note “${updated.title}”.`,
+                  ? `Завершил задачу «${updated.title}». Она сохранена в истории.`
+                  : `Completed “${updated.title}”. It remains in history.`
+                : memoryIntent.action === 'forget'
+                  ? ownerLanguage === 'ru'
+                    ? `Убрал из активной памяти «${updated.title}». Историческая запись сохранена в архиве.`
+                    : `Removed “${updated.title}” from active memory. The historical record remains in the archive.`
+                  : ownerLanguage === 'ru'
+                    ? `Архивировал запись «${updated.title}». История сохранена.`
+                    : `Archived “${updated.title}”. History is preserved.`,
               {
-                memory_status: memoryIntent.action === 'complete' ? 'completed' : 'archived',
+                memory_status:
+                  memoryIntent.action === 'complete'
+                    ? 'completed'
+                    : memoryIntent.action === 'forget'
+                      ? 'forgotten'
+                      : 'archived',
                 memory_id: updated.id,
+                permanent: false,
               }
             );
-          } catch {
+          } catch (error) {
+            const message = error instanceof Error ? error.message : '';
+
+            if (message === 'memory_status_unsupported') {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Схема памяти ещё не обновлена, поэтому этот статус сейчас недоступен. Запись не изменена.'
+                  : 'The memory schema has not been migrated, so this status is unavailable. The record was not changed.',
+                { memory_status: 'migration_required' }
+              );
+            }
+
             return memoryUnavailable();
           }
         }
 
         return persistOwnerReply(
           ownerLanguage === 'ru'
-            ? 'Уточни, что сделать с записью: запомнить, сохранить, напомнить, показать, завершить, архивировать или удалить?'
-            : 'Tell me what to do with the record: remember, save, remind, list, complete, archive or delete?',
+            ? 'Уточни, что сделать с записью: запомнить, сохранить, напомнить, показать, завершить, заархивировать, вернуть из архива или удалить навсегда?'
+            : 'Tell me what to do with the record: remember, save, remind, list, complete, archive, restore or delete permanently?',
           { memory_status: 'clarification_required' }
         );
       }

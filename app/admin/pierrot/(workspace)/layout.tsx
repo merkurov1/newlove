@@ -5,6 +5,7 @@ import WorkspaceShell from '@/components/pierrot/workspace/WorkspaceShell';
 import './workspace.css';
 import './memory.css';
 import './editorial.css';
+import './skills.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,11 +43,7 @@ export const viewport: Viewport = {
   themeColor: '#F8F6F1',
 };
 
-export default async function PierrotWorkspaceLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function PierrotWorkspaceLayout({ children }: { children: React.ReactNode }) {
   await requireAdmin();
 
   return <WorkspaceShell>{children}</WorkspaceShell>;

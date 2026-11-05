@@ -92,6 +92,8 @@ jest.mock('@/lib/pierrot/memory/store', () => ({
   deleteMemoryRecord: jest.fn(),
   getMemorySummary: jest.fn(),
   listMemoryRecords: jest.fn(),
+  restoreMemoryRecord: jest.fn(),
+  searchMemory: jest.fn(),
   updateMemoryRecord: jest.fn(),
 }));
 
@@ -166,6 +168,8 @@ const memoryStore = jest.requireMock('@/lib/pierrot/memory/store') as {
   deleteMemoryRecord: jest.Mock;
   getMemorySummary: jest.Mock;
   listMemoryRecords: jest.Mock;
+  restoreMemoryRecord: jest.Mock;
+  searchMemory: jest.Mock;
   updateMemoryRecord: jest.Mock;
 };
 const documentLookup = jest.requireMock('@/lib/knowledge/rag/documentLookup') as {
@@ -302,6 +306,14 @@ beforeEach(() => {
   });
   memoryStore.listMemoryRecords.mockReset();
   memoryStore.listMemoryRecords.mockResolvedValue([]);
+  memoryStore.restoreMemoryRecord.mockReset();
+  memoryStore.searchMemory.mockReset();
+  memoryStore.searchMemory.mockResolvedValue({
+    records: [],
+    semanticUsed: false,
+    archiveSearched: false,
+    lexicalFallback: true,
+  });
   memoryStore.updateMemoryRecord.mockReset();
 
   mockCreate.mockReset();
@@ -2228,6 +2240,82 @@ describe('Pierrot intelligence regressions', () => {
     expect(json.reply).toContain('Напоминания');
     expect(json.reply).toContain('LinkedIn');
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('archives on “забудь” and never calls physical deletion', async () => {
+    memoryOwner();
+    const record = {
+      id: '88888888-8888-4888-8888-888888888888',
+      kind: 'saved',
+      title: 'Заметка про выставку',
+      content: 'Позвонить в галерею.',
+      status: 'current',
+      updatedAt: '2026-11-01T10:00:00.000Z',
+      createdAt: '2026-11-01T10:00:00.000Z',
+      validFrom: '2026-11-01T10:00:00.000Z',
+      reviewAt: null,
+      supersededBy: null,
+      importance: 0.4,
+      confidence: 0.9,
+      tags: [],
+      sourceRefs: [],
+    };
+
+    memoryStore.searchMemory.mockResolvedValueOnce({
+      records: [record],
+      semanticUsed: false,
+      archiveSearched: true,
+      lexicalFallback: true,
+    });
+    memoryStore.updateMemoryRecord.mockResolvedValueOnce({ ...record, status: 'archived' });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Забудь про заметку про выставку' }))
+    );
+    const json = (await response.json()) as { memory_status?: string; reply?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.memory_status).toBe('forgotten');
+    expect(memoryStore.deleteMemoryRecord).not.toHaveBeenCalled();
+    expect(memoryStore.updateMemoryRecord).toHaveBeenCalledWith(
+      expect.anything(),
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      record.id,
+      expect.objectContaining({ status: 'archived', archivedReason: 'owner_forget' })
+    );
+  });
+
+  it('does not delete when a permanent delete matches several records', async () => {
+    memoryOwner();
+    memoryStore.searchMemory.mockResolvedValueOnce({
+      records: [
+        {
+          id: '99999999-9999-4999-8999-999999999999',
+          title: 'Заметка А',
+          content: 'А',
+          status: 'archived',
+        },
+        {
+          id: 'aaaaaaaa-aaaa-4aaa-8aaa-bbbbbbbbbbbb',
+          title: 'Заметка Б',
+          content: 'Б',
+          status: 'archived',
+        },
+      ],
+      semanticUsed: false,
+      archiveSearched: true,
+      lexicalFallback: true,
+    });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Удали навсегда заметку про выставку' }))
+    );
+    const json = (await response.json()) as { memory_status?: string; reply?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.memory_status).toBe('clarification_required');
+    expect(json.reply).toContain('Ничего не изменено');
+    expect(memoryStore.deleteMemoryRecord).not.toHaveBeenCalled();
   });
 
   it('streams deterministic owner replies through the same protocol', async () => {
