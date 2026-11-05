@@ -1,30 +1,32 @@
 import Link from 'next/link';
+import { ChevronRight, Wallet } from 'lucide-react';
 import {
-  commercialVerdict,
+  commercialHomeStatus,
   type CommercialSummary,
 } from '@/lib/pierrot/commercialSummary';
 
+/**
+ * One compact money indicator. Amounts, payment counts and source details stay
+ * in DASH; this screen only says whether confirmed money exists.
+ */
 export function CommercialBrief({ summary }: { summary: CommercialSummary }) {
-  const verdict = commercialVerdict(summary);
+  const status = commercialHomeStatus(summary);
 
   return (
-    <section
-      className={`pw-commercial-brief pw-commercial-${verdict.tone}`}
-      aria-label="Короткий коммерческий отчёт"
+    <Link
+      href="/admin/pierrot/dash"
+      className="pw-home-indicator pw-commercial-indicator"
+      data-tone={status.tone}
+      aria-label={`Деньги: ${status.label}. Открыть DASH`}
     >
-      <div className="pw-commercial-brief-head">
-        <span className="pw-kicker">Деньги · {summary.periodLabel}</span>
-        <Link href="/admin/pierrot/dash" className="pw-commercial-link">
-          в статистику →
-        </Link>
-      </div>
-      <p className="pw-commercial-verdict">{verdict.headline}</p>
-      <p className="pw-commercial-detail">{verdict.detail}</p>
-      {!summary.complete && (
-        <p className="pw-commercial-partial">
-          Часть источников недоступна: {summary.errors.join(' · ')}
-        </p>
-      )}
-    </section>
+      <span className="pw-home-indicator-icon" aria-hidden="true">
+        <Wallet size={16} strokeWidth={1.5} />
+      </span>
+      <span className="pw-home-indicator-label">Деньги</span>
+      <span className="pw-home-indicator-value">{status.label}</span>
+      <span className="pw-home-indicator-chevron" aria-hidden="true">
+        <ChevronRight size={15} strokeWidth={1.4} />
+      </span>
+    </Link>
   );
 }

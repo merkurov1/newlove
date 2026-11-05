@@ -9,7 +9,8 @@ import { readMemoryEmbeddingCounts, resolveMemoryEmbeddingClient } from './embed
 assertServerOnly('lib/pierrot/memory/brainStatus');
 
 const SNAPSHOT_TABLE = 'pierrot_brain_status_snapshots';
-const FRESH_TTL_MS = 10 * 60 * 1000;
+export const BRAIN_STATUS_FRESH_TTL_MS = 24 * 60 * 60 * 1000;
+const FRESH_TTL_MS = BRAIN_STATUS_FRESH_TTL_MS;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function isMissingRelation(error: { code?: unknown } | null | undefined): boolean {

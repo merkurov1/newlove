@@ -1,13 +1,23 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Brain, Check, Loader2, RefreshCw, Search } from 'lucide-react';
+import {
+  AlertTriangle,
+  Brain,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  RefreshCw,
+  Search,
+} from 'lucide-react';
 import type {
   BrainIssue,
   BrainState,
   BrainStatusSnapshot,
 } from '@/lib/pierrot/memory/brainStatusTypes';
 import type { StewardReport } from '@/lib/pierrot/memory/types';
+import { compactBrainStatus } from '@/lib/pierrot/workspace/status';
 
 const STATE_LABEL: Record<BrainState, string> = {
   stable: 'Stable',
@@ -54,8 +64,13 @@ function issueLabel(issue: BrainIssue): string {
   }
 }
 
-export default function BrainStatusCard({ initial }: { initial: BrainStatusSnapshot | null }) {
-  const [snapshot, setSnapshot] = useState<BrainStatusSnapshot | null>(initial);
+export default function BrainStatusCard({
+  snapshot,
+  onSnapshotChange,
+}: {
+  snapshot: BrainStatusSnapshot | null;
+  onSnapshotChange: (snapshot: BrainStatusSnapshot) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<'detail' | 'check' | 'cleanup' | 'index' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,13 +85,13 @@ export default function BrainStatusCard({ initial }: { initial: BrainStatusSnaps
       const response = await fetch('/api/pierrot/brain-status?detail=1');
       if (!response.ok) throw new Error('status_failed');
       const payload = (await response.json()) as BrainStatusSnapshot;
-      setSnapshot(payload);
+      onSnapshotChange(payload);
     } catch {
       setError('Состояние Brain сейчас недоступно.');
     } finally {
       setBusy(null);
     }
-  }, []);
+  }, [onSnapshotChange]);
 
   useEffect(() => {
     if (!open) return;
@@ -91,7 +106,7 @@ export default function BrainStatusCard({ initial }: { initial: BrainStatusSnaps
     try {
       const response = await fetch('/api/pierrot/brain-status', { method: 'POST' });
       if (!response.ok) throw new Error('check_failed');
-      setSnapshot((await response.json()) as BrainStatusSnapshot);
+      onSnapshotChange((await response.json()) as BrainStatusSnapshot);
     } catch {
       setError('Проверка не выполнена. Показано последнее известное состояние.');
     } finally {
@@ -158,52 +173,38 @@ export default function BrainStatusCard({ initial }: { initial: BrainStatusSnaps
     setOpen((value) => !value);
   }
 
-  if (!snapshot) {
-    return (
-      <button type="button" className="pw-brain-status" onClick={toggleOpen}>
-        <span className="pw-brain-status-icon" aria-hidden="true">
-          <Brain size={18} strokeWidth={1.5} />
-        </span>
-        <span className="pw-brain-status-body">
-          <span className="pw-brain-status-head">
-            <span className="pw-brain-status-name">BRAIN</span>
-            <span className="pw-brain-status-state" data-state="degraded">
-              Degraded
-            </span>
-          </span>
-          <span className="pw-brain-status-summary">
-            Состояние ещё не загружено. Нажмите, чтобы проверить.
-          </span>
-        </span>
-      </button>
-    );
-  }
+  const compact = compactBrainStatus(snapshot);
 
   return (
     <section className="pw-brain-status-wrap" aria-label="Состояние Brain">
-      <button type="button" className="pw-brain-status" onClick={toggleOpen} aria-expanded={open}>
-        <span className="pw-brain-status-icon" aria-hidden="true">
-          <Brain size={18} strokeWidth={1.5} />
+      <button
+        type="button"
+        className="pw-home-indicator pw-brain-status"
+        onClick={toggleOpen}
+        aria-expanded={open}
+        data-tone={compact.tone}
+      >
+        <span className="pw-home-indicator-icon" aria-hidden="true">
+          <Brain size={16} strokeWidth={1.5} />
         </span>
-        <span className="pw-brain-status-body">
-          <span className="pw-brain-status-head">
-            <span className="pw-brain-status-name">BRAIN</span>
-            <span className="pw-brain-status-state" data-state={snapshot.state}>
-              {STATE_LABEL[snapshot.state]}
-            </span>
-          </span>
-          <span className="pw-brain-status-summary">{snapshot.summary}</span>
-          <span className="pw-brain-status-time">
-            {formatChecked(snapshot.checkedAt)}
-            {snapshot.stale ? ' · последнее известное' : ''}
-          </span>
+        <span className="pw-home-indicator-label">Память</span>
+        <span className="pw-home-indicator-value">{compact.label}</span>
+        <span className="pw-home-indicator-chevron" aria-hidden="true">
+          {open ? (
+            <ChevronUp size={15} strokeWidth={1.4} />
+          ) : (
+            <ChevronDown size={15} strokeWidth={1.4} />
+          )}
         </span>
       </button>
 
       {open && (
         <div className="pw-brain-detail">
           <div className="pw-brain-detail-head">
-            <span className="pw-section-title">Состояние Brain</span>
+            <span className="pw-section-title">
+              Состояние Brain
+              {snapshot ? ` · ${STATE_LABEL[snapshot.state]}` : ''}
+            </span>
             <button
               type="button"
               className="pw-brain-detail-close"
@@ -216,7 +217,14 @@ export default function BrainStatusCard({ initial }: { initial: BrainStatusSnaps
 
           {error && <p className="pw-brain-detail-error">{error}</p>}
 
-          <dl className="pw-brain-metrics">
+          {!snapshot && (
+            <p className="pw-brain-detail-note">
+              Состояние ещё не загружено. Нажмите «Проверить сейчас», чтобы получить срез.
+            </p>
+          )}
+
+          {snapshot && (
+            <dl className="pw-brain-metrics">
             <div>
               <dt>Temporal Memory</dt>
               <dd>{snapshot.detail?.temporalMemory ?? '—'}</dd>
@@ -254,9 +262,10 @@ export default function BrainStatusCard({ initial }: { initial: BrainStatusSnaps
               <dt>Последняя проверка</dt>
               <dd>{snapshot.checkedAt ? formatChecked(snapshot.checkedAt) : '—'}</dd>
             </div>
-          </dl>
+            </dl>
+          )}
 
-          {snapshot.issues.length > 0 && (
+          {snapshot && snapshot.issues.length > 0 && (
             <ul className="pw-brain-issues">
               {snapshot.issues.map((issue, index) => (
                 <li key={`${issue.code}-${index}`} data-severity={issue.severity}>

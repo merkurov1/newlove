@@ -1,4 +1,5 @@
 import {
+  commercialHomeStatus,
   commercialVerdict,
   emptyCommercialSummary,
   formatCommercialMoney,
@@ -62,6 +63,40 @@ describe('commercial summary', () => {
     const verdict = commercialVerdict(summary(0, 0));
     expect(verdict.tone).toBe('none');
     expect(verdict.headline).toBe('Нет, разбогатели не сегодня.');
+  });
+
+  it('keeps the compact home indicator quiet when nothing is confirmed', () => {
+    expect(commercialHomeStatus(summary(0, 0))).toEqual({
+      label: 'Пока тихо',
+      tone: 'quiet',
+    });
+  });
+
+  it('reports growth only from confirmed activity', () => {
+    expect(commercialHomeStatus(summary(2, 1)).label).toBe('Разбогатели!');
+    expect(commercialHomeStatus(summary(3, 3)).label).toBe('Деньги есть');
+  });
+
+  it('reports no money when the previous period had confirmed payments', () => {
+    expect(commercialHomeStatus(summary(0, 2))).toEqual({
+      label: 'Нет денег',
+      tone: 'down',
+    });
+  });
+
+  it('never claims a confident zero when sources are incomplete', () => {
+    expect(commercialHomeStatus(summary(0, 0, 0, false))).toEqual({
+      label: 'Данные неполные',
+      tone: 'unknown',
+    });
+    expect(commercialHomeStatus(summary(1, 0, 0, false))).toEqual({
+      label: 'Деньги есть',
+      tone: 'positive',
+    });
+  });
+
+  it('counts confirmed Flow subscriptions as money activity', () => {
+    expect(commercialHomeStatus(summary(0, 0, 1)).label).toBe('Разбогатели!');
   });
 
   it('uses Russian plural forms for payments', () => {

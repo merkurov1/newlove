@@ -5,7 +5,8 @@ import type { BrainStatusSnapshot } from './brainStatusTypes';
 assertServerOnly('lib/pierrot/memory/brainCache');
 
 const SNAPSHOT_TABLE = 'pierrot_brain_status_snapshots';
-const MEMORY_TTL_MS = 15 * 60 * 1000;
+export const BRAIN_LOCAL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const MEMORY_TTL_MS = BRAIN_LOCAL_CACHE_TTL_MS;
 
 type CachedSnapshot = {
   snapshot: BrainStatusSnapshot;

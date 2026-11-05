@@ -34,8 +34,11 @@ import {
   type PierrotStreamStage,
 } from '@/lib/pierrot/streamProtocol';
 import { setWorkspaceHandoff } from '@/lib/pierrot/workspace/handoff';
-import { CommercialBrief } from './CommercialReport';
-import MetricStatusList from './MetricStatusList';
+import { isRefreshStatusCommand } from '@/lib/pierrot/workspace/refreshCommand';
+import {
+  readOverviewCache,
+  writeOverviewCache,
+} from '@/lib/pierrot/workspace/cache';
 import WorkspaceMarkdown from './WorkspaceMarkdown';
 import PierrotAvatar from './PierrotAvatar';
 import { useOnlineStatus } from './useOnlineStatus';
@@ -46,7 +49,7 @@ import type {
 } from '@/lib/pierrot/memory/types';
 import { memoryKindLabel, memoryStatusLabel } from '@/lib/pierrot/memory/types';
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
-import BrainStatusCard from './BrainStatusCard';
+import HomeOverview from './HomeOverview';
 
 type UiMessage = {
   id: string;
@@ -62,6 +65,8 @@ type UiMessage = {
   error?: boolean;
   streaming?: boolean;
   interrupted?: boolean;
+  /** Local deterministic command acknowledgement; never sent to the model. */
+  local?: boolean;
 };
 
 type SelectedSources = {
@@ -124,12 +129,14 @@ function initialMessages(conversation: OwnerConversation | null): UiMessage[] {
 }
 
 export default function ChatWorkspace({
+  ownerId,
   overview,
   conversations,
   conversation,
   startNew,
   brainStatus,
 }: {
+  ownerId: string;
   overview: WorkspaceOverview;
   conversations: OwnerConversationListItem[];
   conversation: OwnerConversation | null;
@@ -138,6 +145,10 @@ export default function ChatWorkspace({
 }) {
   const router = useRouter();
   const online = useOnlineStatus();
+  const [overviewState, setOverviewState] = useState<WorkspaceOverview>(overview);
+  const [brainSnapshot, setBrainSnapshot] = useState<BrainStatusSnapshot | null>(
+    brainStatus ?? null
+  );
   const [messages, setMessages] = useState<UiMessage[]>(() => initialMessages(conversation));
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
@@ -195,6 +206,29 @@ export default function ChatWorkspace({
     }
     setConsent(getPierrotConsent());
   }, [conversation?.consentState]);
+
+  useEffect(() => {
+    const cached = readOverviewCache(ownerId);
+    if (!cached) return;
+
+    setOverviewState((current) => {
+      const cachedTime = Date.parse(cached.savedAt);
+      const currentTime = Date.parse(current.generatedAt);
+
+      if (current.stale && !cached.stale) return cached.overview;
+      if (!Number.isFinite(cachedTime)) return current;
+      if (Number.isFinite(currentTime) && cachedTime <= currentTime) return current;
+
+      return { ...cached.overview, stale: cached.stale };
+    });
+  }, [ownerId]);
+
+  useEffect(() => {
+    if (overviewState.stale) return;
+    // Preserve the original snapshot time; a cached navigation must not make
+    // old analytics look freshly computed.
+    writeOverviewCache(ownerId, overviewState, overviewState.generatedAt);
+  }, [ownerId, overviewState]);
 
   useEffect(() => {
     function toggle() {
@@ -542,9 +576,113 @@ export default function ChatWorkspace({
     void send(retryPrompt, { retry: true });
   }
 
+  async function runRefreshCommand(text: string) {
+    if (loading || !online) return;
+
+    const userMessage: UiMessage = {
+      id: `local-command-${Date.now()}`,
+      role: 'user',
+      content: text,
+      createdAt: new Date().toISOString(),
+      local: true,
+    };
+    const assistantId = `local-refresh-${Date.now()}`;
+
+    setError(null);
+    setRetryPrompt(null);
+    setStreamStage(null);
+    setLoading(true);
+    setDraft('');
+    setMenuOpenId(null);
+    atBottomRef.current = true;
+    setMessages((current) => [...current, userMessage]);
+
+    try {
+      const response = await fetch('/api/admin/pierrot/overview', {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        partial?: boolean;
+        overview?: WorkspaceOverview | null;
+        brainStatus?: BrainStatusSnapshot | null;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || 'refresh_failed');
+      }
+
+      const nextOverview = payload.overview ?? null;
+      const nextBrain = payload.brainStatus ?? null;
+
+      if (nextOverview) {
+        setOverviewState({ ...nextOverview, stale: false });
+      } else {
+        setOverviewState((current) => ({ ...current, stale: true }));
+      }
+      if (nextBrain) {
+        setBrainSnapshot(nextBrain);
+      } else {
+        setBrainSnapshot((current) => (current ? { ...current, stale: true } : current));
+      }
+
+      let confirmation: string;
+      if (nextOverview && nextBrain) {
+        confirmation = payload.partial
+          ? 'Обновил состояние. Часть источников ответила с ошибкой; подробности в DASH.'
+          : 'Состояние обновлено: показатели за 7 дней и память.';
+      } else if (nextOverview) {
+        confirmation =
+          'Показатели за 7 дней обновлены. Память сейчас недоступна; оставил последнее известное состояние.';
+      } else if (nextBrain) {
+        confirmation =
+          'Память обновлена. Показатели сейчас недоступны; оставил последнее известное состояние.';
+      } else {
+        throw new Error('refresh_failed');
+      }
+
+      setMessages((current) => [
+        ...current,
+        {
+          id: assistantId,
+          role: 'assistant',
+          content: confirmation,
+          createdAt: new Date().toISOString(),
+          local: true,
+        },
+      ]);
+    } catch {
+      if (!mountedRef.current) return;
+      setOverviewState((current) => ({ ...current, stale: true }));
+      setBrainSnapshot((current) => (current ? { ...current, stale: true } : current));
+      setError('Не удалось обновить состояние. Оставил последнее известное.');
+      setMessages((current) => [
+        ...current,
+        {
+          id: assistantId,
+          role: 'assistant',
+          content:
+            'Обновить не удалось. Оставил последнее известное состояние; данные не заменены нулями.',
+          createdAt: new Date().toISOString(),
+          local: true,
+        },
+      ]);
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }
+
   async function send(explicitText?: string, options: { retry?: boolean } = {}) {
     const text = (explicitText ?? draft).trim();
     if (!text || loading || !online) return;
+
+    if (!options.retry && isRefreshStatusCommand(text)) {
+      await runRefreshCommand(text);
+      return;
+    }
 
     const isRetry = options.retry === true;
     const previousMessages = messages;
@@ -587,7 +725,7 @@ export default function ChatWorkspace({
 
     const historySource = isRetry ? withoutLastUser(previousMessages) : previousMessages;
     const history = historySource
-      .filter((message) => !message.error && !message.interrupted)
+      .filter((message) => !message.error && !message.interrupted && !message.local)
       .map((message) => ({ role: message.role, content: message.content }));
 
     const controller = new AbortController();
@@ -1000,20 +1138,11 @@ export default function ChatWorkspace({
 
         <div className="pw-chat-scroll" ref={scrollRef} onScroll={onTranscriptScroll}>
           {messages.length === 0 ? (
-            <div className="pw-empty">
-              <p className="pw-kicker">Pierrot · owner workspace</p>
-              <h2 className="pw-empty-title">Всё спокойно.</h2>
-              <p className="pw-empty-summary">{overview.summary}</p>
-              <BrainStatusCard initial={brainStatus ?? null} />
-              {memoryTotal > 0 && (
-                <button type="button" className="pw-memory-line" onClick={openMemory}>
-                  Память · {memoryCounts.memory} | Сохранено · {memoryCounts.saved} | Напоминания ·{' '}
-                  {memoryCounts.reminder}
-                </button>
-              )}
-              <CommercialBrief summary={overview.commercial} />
-              <MetricStatusList metrics={overview.metrics} />
-            </div>
+            <HomeOverview
+              overview={overviewState}
+              brainStatus={brainSnapshot}
+              onBrainStatusChange={setBrainSnapshot}
+            />
           ) : (
             <div className="pw-chat-thread">
               {messages.map((message) => {
@@ -1032,11 +1161,11 @@ export default function ChatWorkspace({
                           <div className="pw-message-head-left">
                             <PierrotAvatar size={24} />
                             <span className="pw-message-label">
-                              Pierrot
+                              {message.local ? 'Состояние' : 'Pierrot'}
                               {message.provider ? ` · ${message.provider}` : ''}
                             </span>
                           </div>
-                          {!message.streaming && !message.interrupted && (
+                          {!message.streaming && !message.interrupted && !message.local && (
                             <button
                               type="button"
                               className="pw-message-menu"
@@ -1055,7 +1184,8 @@ export default function ChatWorkspace({
 
                         {menuOpenId === message.id &&
                           !message.streaming &&
-                          !message.interrupted && (
+                          !message.interrupted &&
+                          !message.local && (
                             <div className="pw-message-actions">
                               <button type="button" onClick={() => handoff('brain', message)}>
                                 В Brain
@@ -1099,7 +1229,7 @@ export default function ChatWorkspace({
                           </p>
                         )}
 
-                        {!message.streaming && !message.interrupted && (
+                        {!message.streaming && !message.interrupted && !message.local && (
                           <div className="pw-feedback" role="group" aria-label="Оценка ответа">
                             <span className="pw-feedback-label">Ответ полезен?</span>
                             <button

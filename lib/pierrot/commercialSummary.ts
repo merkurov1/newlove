@@ -171,6 +171,47 @@ export function commercialVerdict(summary: CommercialSummary): CommercialVerdict
   };
 }
 
+export type CommercialHomeTone = 'positive' | 'quiet' | 'down' | 'unknown';
+
+export type CommercialHomeStatus = {
+  /** One short owner-facing phrase. No amounts or payment counts. */
+  label: 'Нет денег' | 'Разбогатели!' | 'Деньги есть' | 'Пока тихо' | 'Данные неполные';
+  tone: CommercialHomeTone;
+};
+
+/**
+ * Compact home-screen money state.
+ *
+ * Only confirmed purchases, donations and confirmed Flow subscriptions are
+ * counted. Checkout starts and shown offers are never treated as revenue.
+ * When any required commercial source is unavailable the result is never a
+ * confident zero: it is either partial ("Деньги есть") or "Данные неполные".
+ */
+export function commercialHomeStatus(summary: CommercialSummary): CommercialHomeStatus {
+  const currentCount = summary.current.paidCount + summary.current.flowSubscriptions;
+  const previousCount = summary.previous.paidCount + summary.previous.flowSubscriptions;
+
+  if (!summary.complete) {
+    return currentCount > 0
+      ? { label: 'Деньги есть', tone: 'positive' }
+      : { label: 'Данные неполные', tone: 'unknown' };
+  }
+
+  if (currentCount === 0 && previousCount === 0) {
+    return { label: 'Пока тихо', tone: 'quiet' };
+  }
+
+  if (currentCount === 0) {
+    return { label: 'Нет денег', tone: 'down' };
+  }
+
+  if (currentCount > previousCount) {
+    return { label: 'Разбогатели!', tone: 'positive' };
+  }
+
+  return { label: 'Деньги есть', tone: 'positive' };
+}
+
 export function emptyCommercialPeriod(): CommercialPeriodSummary {
   return {
     paidCount: 0,

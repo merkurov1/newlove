@@ -51,6 +51,8 @@ export type WorkspaceOverview = {
   commercial: CommercialSummary;
   summary: string;
   generatedAt: string;
+  /** True when this is the last successful snapshot, not a fresh load. */
+  stale?: boolean;
 };
 
 export type OwnerConversationListItem = {

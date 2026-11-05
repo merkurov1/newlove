@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { requireAdmin } from '@/lib/serverAuth';
 import {
@@ -12,6 +13,10 @@ import { emptyCommercialSummary } from '@/lib/pierrot/commercialSummary';
 import { createPierrotStore } from '@/lib/pierrot/serverStore';
 import { loadBrainStatus } from '@/lib/pierrot/memory/brainStatus';
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
+import {
+  overviewCookieName,
+  parseOverviewCache,
+} from '@/lib/pierrot/workspace/cache';
 import ChatWorkspace from '@/components/pierrot/workspace/ChatWorkspace';
 
 export const dynamic = 'force-dynamic';
@@ -46,6 +51,7 @@ function unavailableOverview(): WorkspaceOverview {
     commercial: emptyCommercialSummary('last_7_days', new Date()),
     summary: buildOverviewSummary(metrics),
     generatedAt: new Date().toISOString(),
+    stale: true,
   };
 }
 
@@ -73,10 +79,34 @@ export default async function ChatPage({
   // The five metrics and the commercial report are only rendered by the empty
   // state. Do not spend owner-data queries on a transcript that is already open.
   const needsOverview = startNew || !conversation || conversation.messages.length === 0;
+
+  let cachedOverview: ReturnType<typeof parseOverviewCache> = null;
+  if (needsOverview) {
+    const raw = cookies().get(overviewCookieName(user.id))?.value;
+    if (raw) {
+      cachedOverview = parseOverviewCache(raw, user.id);
+      if (!cachedOverview) {
+        try {
+          cachedOverview = parseOverviewCache(decodeURIComponent(raw), user.id);
+        } catch {
+          // Malformed cookie values are rejected by both parse attempts.
+        }
+      }
+    }
+  }
+
+  const overviewPromise = !needsOverview
+    ? Promise.resolve(unavailableOverview())
+    : cachedOverview && !cachedOverview.stale
+      ? Promise.resolve({ ...cachedOverview.overview, stale: false })
+      : loadWorkspaceOverview(7).catch(() =>
+          cachedOverview
+            ? { ...cachedOverview.overview, stale: true }
+            : unavailableOverview()
+        );
+
   const [overview, brainStatus] = await Promise.all([
-    needsOverview
-      ? loadWorkspaceOverview(7).catch(() => unavailableOverview())
-      : Promise.resolve(unavailableOverview()),
+    overviewPromise,
     needsOverview
       ? loadBrainStatus(createPierrotStore(), user.id, { detailed: false }).catch(
           (): BrainStatusSnapshot | null => null
@@ -87,6 +117,7 @@ export default async function ChatPage({
   return (
     <ChatWorkspace
       key={conversation?.id || 'new'}
+      ownerId={user.id}
       overview={overview}
       conversations={conversations}
       conversation={conversation}

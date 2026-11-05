@@ -4,6 +4,7 @@ import React from 'react';
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase-browser';
 import { useRouter } from 'next/navigation';
+import { clearOverviewCaches } from '@/lib/pierrot/workspace/cache';
 
 type Profile = Record<string, unknown> & {
   id: string;
@@ -341,6 +342,9 @@ export function AuthProvider(props: React.PropsWithChildren) {
       // Local sign-out already succeeded; the next server request will still
       // fail if the cookie is no longer accepted by Supabase.
     }
+
+    // Aggregate owner-only overview snapshots must not survive a logout.
+    clearOverviewCaches();
 
     activeUserIdRef.current = null;
     loadedProfileForUserRef.current = null;

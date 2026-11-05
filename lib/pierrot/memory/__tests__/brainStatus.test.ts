@@ -2,7 +2,8 @@
 
 import { describe, expect, it, beforeEach, afterEach } from '@jest/globals';
 import { FakeSupabase, OWNER_ID } from '../testSupport/fakeSupabase';
-import { computeBrainStatus, loadBrainStatus } from '../brainStatus';
+import { BRAIN_STATUS_FRESH_TTL_MS, computeBrainStatus, loadBrainStatus } from '../brainStatus';
+import { clearLocalBrainSnapshot } from '../brainCache';
 import { createMemoryRecord } from '../store';
 
 const originalRag = process.env.PIERROT_RAG_ENABLED;
@@ -118,6 +119,35 @@ describe('Brain status', () => {
     });
     const refreshed = await loadBrainStatus(store, OWNER_ID);
     expect(refreshed.metrics.activeRecords).toBe(3);
+  });
+
+  it('keeps a snapshot fresh for 24 hours and recomputes after expiry', async () => {
+    expect(BRAIN_STATUS_FRESH_TTL_MS).toBe(24 * 60 * 60 * 1000);
+
+    const db = new FakeSupabase();
+    db.seed('pierrot_decisions', [decision()]);
+    const store = db.asClient();
+
+    clearLocalBrainSnapshot(OWNER_ID);
+    const first = await loadBrainStatus(store, OWNER_ID, { force: true });
+    expect(first.metrics.activeRecords).toBe(1);
+
+    const rows = db.rows('pierrot_brain_status_snapshots');
+    expect(rows).toHaveLength(1);
+
+    rows[0].checked_at = new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString();
+    clearLocalBrainSnapshot(OWNER_ID);
+    const cached = await loadBrainStatus(store, OWNER_ID);
+    expect(cached.checkedAt).toBe(rows[0].checked_at);
+
+    // A direct insert bypasses the store invalidation, but the 24-hour expiry
+    // must still force a coherent recomputation on the next new-chat screen.
+    rows[0].checked_at = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+    db.rows('pierrot_decisions').push(decision());
+    clearLocalBrainSnapshot(OWNER_ID);
+
+    const refreshed = await loadBrainStatus(store, OWNER_ID);
+    expect(refreshed.metrics.activeRecords).toBe(2);
   });
 
   it('keeps the last known snapshot when a refresh cannot reach storage', async () => {
