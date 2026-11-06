@@ -123,10 +123,11 @@ retrieval or the existing Gemini/DeepSeek chain.
   either is missing, chat continues normally with model knowledge and Brain.
 - The decision to search is deterministic (`lib/knowledge/web/searchDecision.ts`)
   and makes no extra LLM call. Greetings, casual messages, writing tasks,
-  short follow-ups, and questions about Anton's own texts stay off the web
-  path. Current events, explicit verification and general factual lookups
-  search. A question that needs both the owner's archive and current external
-  evidence runs Brain and Exa in parallel.
+  short follow-ups, general definitions and questions about Anton's own memory,
+  tasks, projects, texts or conversation history stay off the web path. Current
+  events, explicit verification, direct external-research requests and factual
+  lookups that need external evidence search. A question that needs both the
+  owner's archive and current external evidence runs Brain and Exa in parallel.
 - Only the user's external research query is sent to Exa. Brain passages,
   private manuscript text, unpublished columns, owner-only material and the
   conversation history are never part of the Exa request.

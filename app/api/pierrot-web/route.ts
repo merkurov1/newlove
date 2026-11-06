@@ -2582,7 +2582,7 @@ export async function POST(req: Request) {
     // The promise starts before Brain retrieval so both run in parallel; a web
     // failure can never block the normal answer.
     const webDecision = useModel
-      ? decideWebSearch({ message: trimmedMessage, history: normalizedHistory })
+      ? decideWebSearch({ message: trimmedMessage, history: normalizedHistory, ownerMode })
       : null;
     const webSuppressedIntent =
       queryPlan.intent === 'document_lookup' ||

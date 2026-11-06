@@ -33,11 +33,18 @@ describe('autonomous web search decision', () => {
     expect(decision.query).toBe('Who is Mark Rothko?');
   });
 
-  it('searches for a general-knowledge definition', () => {
+  it('does not search for a general-knowledge definition', () => {
     const decision = decideWebSearch({ message: 'What is poststructuralism?' });
 
-    expect(decision.shouldSearch).toBe(true);
-    expect(decision.reason).toBe('factual_lookup');
+    expect(decision.shouldSearch).toBe(false);
+    expect(decision.reason).toBe('general_knowledge');
+  });
+
+  it('does not search for "Что такое Gemini?" just because it is a definition', () => {
+    const decision = decideWebSearch({ message: 'Что такое Gemini?' });
+
+    expect(decision.shouldSearch).toBe(false);
+    expect(decision.reason).toBe('general_knowledge');
   });
 
   it('searches for a current-events question', () => {
@@ -120,6 +127,68 @@ describe('autonomous web search decision', () => {
 
     expect(decision.shouldSearch).toBe(false);
     expect(decision.reason).toBe('follow_up');
+  });
+
+  it.each([
+    'Итак, посмотри в памяти, что на сегодня?',
+    'Посмотри в памяти, что у меня сегодня?',
+    'Что осталось сделать?',
+    'Какие у меня планы?',
+    'Что изменилось?',
+    'Что нового в моем проекте?',
+    'Что мы обсуждали вчера?',
+    'О чем мы говорили?',
+    'What did we discuss yesterday?',
+    'What is left to do?',
+    'What changed?',
+  ])('keeps an internal owner question off the web: %s', (message) => {
+    const decision = decideWebSearch({ message, ownerMode: true, history });
+
+    expect(decision.shouldSearch).toBe(false);
+    expect(decision.query).toBe('');
+  });
+
+  it('does not search when the user asks what the Sources block is', () => {
+    const decision = decideWebSearch({
+      message: 'А что за источники в ответе?',
+      ownerMode: true,
+      history: [
+        { role: 'user', content: 'Итак, посмотри в памяти, что на сегодня?' },
+        { role: 'assistant', content: 'Ответ.\n\nSources:\n- [Memory](https://example.com)' },
+      ],
+    });
+
+    expect(decision.shouldSearch).toBe(false);
+    expect(decision.reason).toBe('conversation_meta');
+  });
+
+  it('still searches when an owner asks for external news about their project', () => {
+    const decision = decideWebSearch({
+      message: 'Найди последние новости о моем проекте',
+      ownerMode: true,
+    });
+
+    expect(decision.shouldSearch).toBe(true);
+    expect(decision.reason).toBe('current_events');
+  });
+
+  it('still searches for an external change even when the wording resembles an internal check', () => {
+    const decision = decideWebSearch({
+      message: 'Что изменилось в законе об AI?',
+      ownerMode: true,
+    });
+
+    expect(decision.shouldSearch).toBe(true);
+    expect(decision.reason).toBe('current_events');
+  });
+
+  it('does not search for a change inside the owner project', () => {
+    const decision = decideWebSearch({
+      message: 'Что изменилось в моем проекте?',
+      ownerMode: true,
+    });
+
+    expect(decision.shouldSearch).toBe(false);
   });
 
   it('allows both Brain and Web when an owner question also needs current evidence', () => {

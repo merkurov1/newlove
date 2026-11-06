@@ -54,7 +54,7 @@ the limitations that remain after the audit.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PIERROT_WEB_SEARCH_ENABLED` | `false` | Enables deterministic Exa search for current/factual questions |
+| `PIERROT_WEB_SEARCH_ENABLED` | `false` | Enables deterministic Exa search for current, explicit verification and genuine external-research questions |
 | `EXA_API_KEY` | — | Server-only Exa Search key. Never use a `NEXT_PUBLIC_*` name |
 | `PIERROT_WEB_SEARCH_TIMEOUT_MS` | `6000` | Per-search timeout; clamped to 1000–10000 ms |
 | `PIERROT_WEB_SEARCH_MAX_RESULTS` | `5` | Result count; clamped to 1–6 |

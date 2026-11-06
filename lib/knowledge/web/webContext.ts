@@ -69,6 +69,17 @@ export function buildWebSourcesSection(sources: WebEvidenceSource[]): string {
 }
 
 /**
+ * The model is instructed not to write a Sources block. Older prompts and
+ * fallback providers can still echo one; remove only a trailing generated
+ * block so the deterministic section is never appended twice.
+ */
+function stripTrailingSourcesSection(value: string): string {
+  return value
+    .replace(/\n{2,}Sources:\s*\n(?:[-*]\s+[^\n]*(?:\n|$))+$/i, '')
+    .trimEnd();
+}
+
+/**
  * Keeps the model's answer intact while guaranteeing a bounded, valid Sources
  * section. If the answer is already at the message limit, the link block takes
  * priority over trailing prose so citations are never silently cut.
@@ -82,7 +93,7 @@ export function composeReplyWithWebSources(
 
   if (!section) return reply.slice(0, maxLength);
 
-  const normalized = reply.trim() || 'Silence.';
+  const normalized = stripTrailingSourcesSection(reply.trim()) || 'Silence.';
   const separator = '\n\n';
   const budget = Math.max(0, maxLength - section.length - separator.length);
   const core = normalized.slice(0, budget).trimEnd();

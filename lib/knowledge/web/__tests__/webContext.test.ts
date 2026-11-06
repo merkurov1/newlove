@@ -94,6 +94,20 @@ describe('web evidence context', () => {
     expect(composed.length).toBeLessThanOrEqual(400);
   });
 
+  it('does not append a second Sources block when the model echoed one', () => {
+    const reply = [
+      'Mark Rothko was an American abstract painter.',
+      '',
+      'Sources:',
+      '- [Model copy](https://example.com/unsafe)',
+    ].join('\n');
+    const composed = composeReplyWithWebSources(reply, [source()], 800);
+
+    expect(composed.match(/Sources:/g)).toHaveLength(1);
+    expect(composed).not.toContain('https://example.com/unsafe');
+    expect(composed).toContain('[Mark Rothko](https://www.moma.org/artists/5047)');
+  });
+
   it('keeps a long answer within the limit while preserving the Sources block', () => {
     const composed = composeReplyWithWebSources('word '.repeat(500), [source()], 240);
 

@@ -1232,6 +1232,152 @@ describe('Pierrot autonomous web search', () => {
     expect(webSearch.searchWebEvidence).not.toHaveBeenCalled();
   });
 
+  it('answers an owner memory question from internal context without web sources', async () => {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+    memoryStore.buildMemoryContext.mockResolvedValueOnce('OWNER_MEMORY_CONTEXT');
+
+    const response = await POST(
+      makeRequest(validBody({ message: 'Итак, посмотри в памяти, что на сегодня?' }))
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      web?: unknown;
+      answerSources?: { mode?: string };
+    };
+    const modelCall = asMock(mockCreate).mock.calls[0][0] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(webSearch.searchWebEvidence).not.toHaveBeenCalled();
+    expect(modelCall.messages[0].content).toContain('OWNER_MEMORY_CONTEXT');
+    expect(modelCall.messages[0].content).not.toContain('WEB_SEARCH_EVIDENCE');
+    expect(json.web).toBeUndefined();
+    expect(json.answerSources).toMatchObject({ mode: 'model' });
+    expect(json.reply).not.toContain('Sources:');
+  });
+
+  it('does not treat a question about the Sources block as a new web search', async () => {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          message: 'А что за источники в ответе?',
+          history: [
+            { role: 'user', content: 'Итак, посмотри в памяти, что на сегодня?' },
+            {
+              role: 'assistant',
+              content: 'Ответ.\n\nSources:\n- [Memory](https://example.com)',
+            },
+          ],
+        })
+      )
+    );
+    const json = (await response.json()) as { reply?: string; web?: unknown };
+
+    expect(response.status).toBe(200);
+    expect(webSearch.searchWebEvidence).not.toHaveBeenCalled();
+    expect(json.web).toBeUndefined();
+    expect(json.reply).not.toContain('Sources:');
+  });
+
+  it('answers a conversation-history question without web search', async () => {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+    memoryStore.buildMemoryContext.mockResolvedValueOnce('OWNER_MEMORY_CONTEXT');
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          message: 'Что мы обсуждали вчера?',
+          history: [
+            { role: 'user', content: 'Мы обсуждали обновление Flow.' },
+            { role: 'assistant', content: 'Да, обновление Flow.' },
+          ],
+        })
+      )
+    );
+    const json = (await response.json()) as { reply?: string; web?: unknown };
+
+    expect(response.status).toBe(200);
+    expect(webSearch.searchWebEvidence).not.toHaveBeenCalled();
+    expect(json.web).toBeUndefined();
+    expect(json.reply).not.toContain('Sources:');
+  });
+
+  it('does not search the web for a general definition', async () => {
+    const response = await POST(makeRequest(validBody({ message: 'Что такое Gemini?' })));
+    const json = (await response.json()) as { reply?: string; web?: unknown };
+
+    expect(response.status).toBe(200);
+    expect(webSearch.searchWebEvidence).not.toHaveBeenCalled();
+    expect(json.web).toBeUndefined();
+    expect(json.reply).not.toContain('Sources:');
+  });
+
+  it('searches current events on a direct news request', async () => {
+    webSearch.searchWebEvidence.mockResolvedValueOnce(webResult());
+
+    const response = await POST(
+      makeRequest(validBody({ message: 'Найди последние новости об AI' }))
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      web?: { outcome?: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(webSearch.searchWebEvidence).toHaveBeenCalledTimes(1);
+    expect(json.web?.outcome).toBe('relevant_results');
+    expect(json.reply).toContain('Sources:');
+  });
+
+  it('verifies a claim when the user explicitly asks', async () => {
+    webSearch.searchWebEvidence.mockResolvedValueOnce(webResult());
+
+    const response = await POST(
+      makeRequest(validBody({ message: 'Проверь, актуальна ли эта информация' }))
+    );
+    const json = (await response.json()) as { web?: { outcome?: string } };
+
+    expect(response.status).toBe(200);
+    expect(webSearch.searchWebEvidence).toHaveBeenCalledTimes(1);
+    expect(json.web?.outcome).toBe('relevant_results');
+  });
+
+  it('does not append Sources when web search returns nothing useful', async () => {
+    webSearch.searchWebEvidence.mockResolvedValueOnce({
+      outcome: 'no_results',
+      query: 'Найди последние новости об AI',
+      sources: [],
+      latencyMs: 3,
+    });
+
+    const response = await POST(
+      makeRequest(validBody({ message: 'Найди последние новости об AI' }))
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      web?: { outcome?: string; sources?: unknown[] };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.web).toMatchObject({ outcome: 'no_results', sources: [] });
+    expect(json.reply).not.toContain('Sources:');
+  });
+
   it('searches the web for a simple factual question and returns clickable sources', async () => {
     webSearch.searchWebEvidence.mockResolvedValueOnce(webResult());
 

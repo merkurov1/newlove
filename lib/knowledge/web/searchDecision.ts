@@ -13,9 +13,10 @@ export type ContextualWebQuery = {
  * Deterministic, side-effect-free routing for autonomous web search.
  *
  * The goal is deliberately conservative: search only when external evidence
- * materially improves the answer. General knowledge, casual conversation,
- * writing tasks, follow-ups and questions about Anton's own texts stay on the
- * model/Brain path. No model call is made to decide.
+ * materially improves the answer. Owner memory, tasks, plans, projects,
+ * conversation history, general definitions, casual conversation, writing
+ * tasks and questions about Anton's own texts stay on the model/Brain path.
+ * No model call is made to decide.
  */
 
 export type WebSearchReason =
@@ -25,9 +26,12 @@ export type WebSearchReason =
   | 'writing_request'
   | 'personal_brain'
   | 'owner_brain'
+  | 'internal_context'
+  | 'conversation_meta'
   | 'current_events'
   | 'verification'
   | 'factual_lookup'
+  | 'general_knowledge'
   | 'explicit_web'
   | 'explicit_brain'
   | 'explicit_media'
@@ -54,6 +58,8 @@ export type WebSearchDecisionInput = {
   history?: Array<{ role: 'user' | 'assistant'; content: string }>;
   /** Optional explicit previous search topic, when the caller already knows it. */
   previousWebQuery?: string | null;
+  /** Owner mode can ask about their own tasks, projects and history. */
+  ownerMode?: boolean;
 };
 
 function normalize(value: string): string {
@@ -582,7 +588,203 @@ const VERIFICATION_TERMS = [
   'проверь',
   'подтверди',
   'по данным',
-  'источник',
+  'по источникам',
+  'проверь источник',
+];
+
+/**
+ * Meta questions about the answer already on screen. "What are these
+ * sources?" is not a request to verify a fact and must never start a second
+ * unrelated web search.
+ */
+const CONVERSATION_META_TERMS = [
+  'что за источники',
+  'что это за источники',
+  'какие источники в ответе',
+  'какие источники ты использовал',
+  'какие источники использовал',
+  'откуда источники',
+  'откуда эти источники',
+  'почему источники',
+  'зачем источники',
+  'что за ссылки',
+  'что это за ссылки',
+  'откуда ссылки',
+  'откуда эти ссылки',
+  'блок источников',
+  'what are these sources',
+  'what are those sources',
+  'where did these sources',
+  'where do these sources',
+  'why are there sources',
+  'why did you add sources',
+  'what are these links',
+  'where did these links',
+  'source block',
+];
+
+/**
+ * A direct reference to the owner's memory or to the shared conversation
+ * history is enough on its own: neither can be answered by the public web.
+ */
+const INTERNAL_MEMORY_TERMS = [
+  'посмотри в памяти',
+  'посмотри в моей памяти',
+  'что в памяти',
+  'что в моей памяти',
+  'проверь память',
+  'проверь в памяти',
+  'в моей памяти',
+  'из памяти',
+  'in my memory',
+  'in memory',
+  'look in memory',
+  'check memory',
+  'my memory',
+  'что ты помнишь',
+  'что помнишь',
+  'do you remember',
+  'what do you remember',
+  'что мы обсуждали',
+  'что мы обсуждали вчера',
+  'о чем мы говорили',
+  'о чём мы говорили',
+  'что мы говорили',
+  'история диалогов',
+  'история нашего разговора',
+  'what did we discuss',
+  'what have we discussed',
+  'what did we talk about',
+  'conversation history',
+  'our conversation',
+  'what did you say earlier',
+  'что ты говорил раньше',
+];
+
+/**
+ * Owner-only questions about current tasks, plans and projects. They are
+ * answered from Brain, memory and project data before the public web is even
+ * considered.
+ */
+const INTERNAL_OWNER_TERMS = [
+  'что у меня',
+  'что у меня сегодня',
+  'что у меня осталось',
+  'что осталось',
+  'что осталось сделать',
+  'что мне делать',
+  'мои задачи',
+  'моих задач',
+  'мои планы',
+  'моих планов',
+  'какие у меня планы',
+  'мой прогресс',
+  'мои проекты',
+  'моих проектов',
+  'в моем проекте',
+  'в моём проекте',
+  'над чем я работаю',
+  'чем я занят',
+  'что я делал',
+  'что изменилось',
+  'что нового у меня',
+  'что нового в моем',
+  'что нового в моём',
+  'what do i have today',
+  'what do i have',
+  'what is left',
+  'what should i do',
+  'my tasks',
+  'my plans',
+  'my projects',
+  'what changed',
+  'what has changed',
+  'what am i working on',
+];
+
+const INTERNAL_PRODUCT_TERMS = [
+  'brain',
+  'rag',
+  'flow',
+  'pierrot',
+  'пьеро',
+  'мой архив',
+  'мои записи',
+  'my archive',
+  'my notes',
+  'my brain',
+];
+
+/**
+ * An internal question still becomes an external search when the user asks
+ * about the outside world, news or a fresh external check.
+ */
+const INTERNAL_EXTERNAL_OVERRIDE_TERMS = [
+  'latest',
+  'recent',
+  'recently',
+  'news',
+  'breaking',
+  'current events',
+  'what is happening in the world',
+  'what happened in the world',
+  'on the web',
+  'online',
+  'press coverage',
+  'media coverage',
+  'compare with',
+  'последние',
+  'недавно',
+  'новости',
+  'в мире',
+  'в интернете',
+  'в сети',
+  'в сми',
+  'в прессе',
+  'что происходит в мире',
+  'что случилось в мире',
+  'что произошло в мире',
+  'сравни с',
+  'закон',
+  'законе',
+  'закона',
+  'законов',
+  'рынок',
+  'рынке',
+  'рынка',
+  'экономика',
+  'экономике',
+  'выборы',
+  'выборах',
+  'суд',
+  'суде',
+  'инфляция',
+  'инфляции',
+  'компания',
+  'компании',
+  'стартап',
+  'стартапе',
+];
+
+/**
+ * Pure definitions are model knowledge. They should not trigger an external
+ * search unless a freshness or verification signal is also present.
+ */
+const GENERAL_DEFINITION_TERMS = [
+  'what is',
+  'what are',
+  'what was',
+  'what were',
+  'what does',
+  'define',
+  'definition of',
+  'meaning of',
+  'explain',
+  'что такое',
+  'что значит',
+  'что означает',
+  'определение',
+  'объясни',
 ];
 
 const FACTUAL_LOOKUP_TERMS = [
@@ -736,6 +938,14 @@ export function decideWebSearch(input: WebSearchDecisionInput): WebSearchDecisio
     });
   }
 
+  // A question about the Sources block from the previous answer is a
+  // conversation-meta question, not a request to verify anything externally.
+  if (hasAny(normalized, CONVERSATION_META_TERMS)) {
+    return decision(false, 'conversation_meta', message, ['conversation_meta'], 0.05, {
+      explicitSource,
+    });
+  }
+
   // A follow-up after a previous web search keeps the same public topic even
   // when the user does not repeat “в интернете”.
   if (previousWebQuery && (isWebFollowUp(message) || isTopicSwitch(message))) {
@@ -761,13 +971,21 @@ export function decideWebSearch(input: WebSearchDecisionInput): WebSearchDecisio
     });
   }
 
-  const currentEvents =
-    hasAny(normalized, CURRENT_EVENT_STRONG_TERMS) || hasAny(normalized, CURRENT_EVENT_WEAK_TERMS);
   const verification = hasAny(normalized, VERIFICATION_TERMS);
   const personalBrain = hasAny(normalized, PERSONAL_BRAIN_TERMS);
   const ownerBrain = hasAny(normalized, OWNER_BRAIN_TERMS);
   const writingRequest = hasAny(normalized, WRITING_REQUEST_TERMS);
   const factualLookup = isQuestion(message, normalized) && hasAny(normalized, FACTUAL_LOOKUP_TERMS);
+  const generalDefinition = hasAny(normalized, GENERAL_DEFINITION_TERMS);
+  const internalMemory = hasAny(normalized, INTERNAL_MEMORY_TERMS);
+  const internalOwner = Boolean(input.ownerMode) && hasAny(normalized, INTERNAL_OWNER_TERMS);
+  const internalProduct = Boolean(input.ownerMode) && hasAny(normalized, INTERNAL_PRODUCT_TERMS);
+  const internalContext = internalMemory || internalOwner || internalProduct;
+  const externalCurrentEvents = hasAny(normalized, INTERNAL_EXTERNAL_OVERRIDE_TERMS);
+  const currentEvents =
+    hasAny(normalized, CURRENT_EVENT_STRONG_TERMS) ||
+    hasAny(normalized, CURRENT_EVENT_WEAK_TERMS) ||
+    (internalContext && externalCurrentEvents);
 
   const signals: string[] = [];
   if (currentEvents) signals.push('current_events');
@@ -776,6 +994,27 @@ export function decideWebSearch(input: WebSearchDecisionInput): WebSearchDecisio
   if (ownerBrain) signals.push('owner_brain');
   if (writingRequest) signals.push('writing_request');
   if (factualLookup) signals.push('factual_lookup');
+  if (generalDefinition) signals.push('general_definition');
+  if (internalContext) {
+    signals.push('internal_context');
+    if (internalMemory) signals.push('internal_memory');
+    if (internalOwner) signals.push('internal_owner');
+    if (internalProduct) signals.push('internal_product');
+  }
+
+  // Internal memory, tasks, plans, projects and conversation history are
+  // answered from Brain/memory first. Time words such as "сегодня" are not
+  // enough to turn them into external current-events searches. News, explicit
+  // external-world wording or verification still win.
+  if (internalContext && !verification && !externalCurrentEvents) {
+    return decision(
+      false,
+      internalProduct || internalOwner ? 'owner_brain' : 'internal_context',
+      message,
+      signals,
+      0.1
+    );
+  }
 
   // External verification wins over owner/personal scope: the answer can compare
   // what Brain says with what the world currently says.
@@ -797,6 +1036,21 @@ export function decideWebSearch(input: WebSearchDecisionInput): WebSearchDecisio
 
   if (verification) {
     return decision(true, 'verification', message, signals, 0.85);
+  }
+
+  // General definitions are model knowledge. Only freshness/verification
+  // signals above turn them into external research. A definition that also
+  // contains a substantive lookup cue (for example "history of") may still
+  // search through the factual-lookup path below.
+  if (generalDefinition && factualLookup) {
+    const lookupWithoutDefinition = hasAny(
+      normalized,
+      FACTUAL_LOOKUP_TERMS.filter((term) => !GENERAL_DEFINITION_TERMS.includes(term))
+    );
+
+    if (!lookupWithoutDefinition) {
+      return decision(false, 'general_knowledge', message, signals, 0.2);
+    }
   }
 
   if (factualLookup) {
