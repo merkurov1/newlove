@@ -31,6 +31,7 @@ const groups = [
       { href: '/admin/brain/radar', label: 'Editorial Radar', icon: '◈' },
       { href: '/admin/decision-observatory', label: 'Decision Observatory', icon: '◉' },
       { href: '/admin/brain', label: 'Brain Injection', icon: '◇' },
+      { href: '/admin/skills', label: 'Skill Foundry', icon: '✦' },
     ],
   },
 ];

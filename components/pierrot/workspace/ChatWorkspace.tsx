@@ -47,7 +47,6 @@ import type {
 import { memoryKindLabel, memoryStatusLabel } from '@/lib/pierrot/memory/types';
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
 import HomeOverview from './HomeOverview';
-import WorkspaceWriteLink from './WorkspaceWriteLink';
 
 type UiMessage = {
   id: string;
@@ -1144,8 +1143,6 @@ export default function ChatWorkspace({
             <span>Память</span>
             <span className="pw-memory-trigger-count">{memoryTotal}</span>
           </button>
-
-          <WorkspaceWriteLink />
         </header>
 
         <div className="pw-chat-scroll" ref={scrollRef} onScroll={onTranscriptScroll}>

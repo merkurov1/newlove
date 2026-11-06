@@ -139,6 +139,10 @@ export default function Header() {
   const isAdmin = rolesArr.some(
     (r: unknown) => typeof r === 'string' && r.toUpperCase() === 'ADMIN'
   );
+  // Creating a Flow post belongs to the Flow interface only. Keeping the
+  // composer in the global header made the write affordance appear on every
+  // public page for the owner.
+  const isFlowRoute = normalizedPath === '/flow' || normalizedPath.startsWith('/flow/');
 
   const isOwner =
     !user ||
@@ -442,7 +446,7 @@ export default function Header() {
 
         {/* Right section: Composer and Pierrot */}
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {isAdmin && <ComposerTrigger />}
+          {isAdmin && isFlowRoute && <ComposerTrigger />}
           <PierrotTrigger compact />
         </div>
       </div>

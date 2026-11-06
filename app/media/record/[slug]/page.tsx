@@ -4,6 +4,11 @@ import { notFound } from 'next/navigation';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { articleJsonLd, breadcrumbJsonLd, creativeWorkJsonLd } from '@/lib/structuredData';
 import { getMediaRecords } from '@/lib/mediaRecords';
+import {
+  isMediaReprint,
+  originalMediaRelation,
+  reprintMediaRelations,
+} from '@/lib/mediaClassification';
 import { description, pageMetadata, truncate } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
@@ -72,6 +77,14 @@ export default async function MediaRecordPage({ params }: Props) {
     profile: 'Profile',
   };
 
+  const original = originalMediaRelation(record);
+  const reprints = reprintMediaRelations(record);
+  const presenceLabel = isMediaReprint(record)
+    ? 'Reprint'
+    : reprints.length > 0
+      ? 'Original publication'
+      : presence[record.kind] || record.kind;
+
   return (
     <div className="min-h-screen bg-[#FAF8F5] px-5 pb-24 pt-32 text-[#141210] sm:px-8 sm:pt-40">
       <JsonLd
@@ -135,11 +148,24 @@ export default async function MediaRecordPage({ params }: Props) {
           <div className="mt-5 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500">
             <time dateTime={record.date}>{record.date}</time>
             <span>{record.lang}</span>
-            <span>{presence[record.kind] || record.kind}</span>
+            <span>{presenceLabel}</span>
             <span>{record.derivedTopic || record.topic}</span>
             {record.subtopics?.length ? <span>{record.subtopics.join(' · ')}</span> : null}
           </div>
         </header>
+
+        {original && (
+          <p className="mt-6 border-l-2 border-[#A53A27] pl-4 font-sans text-xs leading-relaxed text-stone-600">
+            Reprint of{' '}
+            <Link
+              className="underline decoration-stone-300 underline-offset-4 hover:decoration-stone-900"
+              href={`/media/record/${encodeURIComponent(original.slug)}`}
+            >
+              {original.outlet}: {original.title}
+            </Link>
+            . The original publication is the source of this material.
+          </p>
+        )}
 
         {record.summary ? (
           <p className="mt-8 font-serif text-lg leading-relaxed text-stone-700 sm:text-xl">

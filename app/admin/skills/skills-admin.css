@@ -1,0 +1,25 @@
+/*
+ * Skill Foundry uses the owner-workspace design tokens and components, but it
+ * now lives inside the normal admin shell instead of the fixed PWA viewport.
+ * This wrapper keeps the shared .pw-* styles while restoring document flow.
+ */
+.pw-root.pw-skills-admin {
+  position: static;
+  inset: auto;
+  display: block;
+  min-height: 0;
+  overflow: visible;
+  background: transparent;
+}
+
+.pw-skills-admin .pw-page {
+  height: auto;
+  overflow: visible;
+  padding: 0;
+}
+
+.pw-skills-admin .pw-page-inner {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}

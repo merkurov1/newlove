@@ -17,14 +17,13 @@ export const WORKSPACE_PRIMARY_ROUTES = [
 
 /**
  * Lower utility group. It is separated from the primary workspaces in the
- * rail. Skill Foundry is kept here so the existing route stays discoverable
- * without interrupting the requested Chat / Flow / Art / Heart order.
+ * rail. Administrative tools such as Skill Foundry live in /admin, outside
+ * this owner PWA.
  */
 export const WORKSPACE_BOTTOM_ROUTES = [
   { key: 'brain', path: '/admin/pierrot/brain', label: 'BRAIN', shortcut: '5' },
   { key: 'dash', path: '/admin/pierrot/dash', label: 'DASH', shortcut: '6' },
   { key: 'dev', path: '/admin/pierrot/dev', label: 'DEV', shortcut: '7' },
-  { key: 'skills', path: '/admin/pierrot/skills', label: 'SKILLS', shortcut: '8' },
 ] as const;
 
 export const WORKSPACE_ROUTES = [...WORKSPACE_PRIMARY_ROUTES, ...WORKSPACE_BOTTOM_ROUTES] as const;
@@ -40,7 +39,6 @@ export function activeWorkspaceKey(pathname: string): WorkspaceRouteKey {
   if (pathname.startsWith('/admin/pierrot/dash')) return 'dash';
   if (pathname.startsWith('/admin/pierrot/dev')) return 'dev';
   if (pathname.startsWith('/admin/pierrot/art-engine')) return 'art';
-  if (pathname.startsWith('/admin/pierrot/skills')) return 'skills';
   return 'chat';
 }
 

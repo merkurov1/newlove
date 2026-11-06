@@ -251,8 +251,11 @@ async function enrichMediaRecords(recordsById: Map<string, MediaRecord>): Promis
     };
 
     if (source && target) {
-      add(source, target, directional ? 'original' : 'related');
-      add(target, source, directional ? 'reprint' : 'related');
+      // media_record_relations stores the original as source and the reprint
+      // as target. Each record must therefore describe the *other* side:
+      // the original sees a reprint, the reprint sees the original source.
+      add(source, target, directional ? 'reprint' : 'related');
+      add(target, source, directional ? 'original' : 'related');
     }
   }
 }

@@ -458,10 +458,10 @@ export default function FlowWorkspace() {
         onClick={() => setComposerOpen(true)}
         disabled={!online}
         aria-haspopup="dialog"
-        aria-label="Опубликовать запись в Flow"
+        aria-label="Написать в Flow"
       >
         <PenLine size={15} aria-hidden="true" />
-        Опубликовать
+        Написать
       </button>
 
       {selectedItem && (

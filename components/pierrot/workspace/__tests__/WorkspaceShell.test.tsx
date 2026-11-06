@@ -53,11 +53,25 @@ describe('WorkspaceShell navigation', () => {
       '/admin/pierrot/art-engine',
       '/heartandangel/world',
     ]);
-    expect(bottom.slice(0, 3)).toEqual([
+    expect(bottom).toEqual([
       '/admin/pierrot/brain',
       '/admin/pierrot/dash',
       '/admin/pierrot/dev',
     ]);
+  });
+
+  it('does not expose Skill Foundry inside the owner PWA rail', () => {
+    const html = renderToStaticMarkup(
+      <WorkspaceShell>
+        <div>content</div>
+      </WorkspaceShell>
+    );
+    const $ = cheerio.load(html);
+
+    expect($('a[href="/admin/pierrot/skills"]')).toHaveLength(0);
+    expect($('a[href="/admin/skills"]')).toHaveLength(0);
+    expect($('.pw-write-link')).toHaveLength(0);
+    expect($.root().text()).not.toContain('Написать');
   });
 
   it('keeps labels on the other rail items', () => {

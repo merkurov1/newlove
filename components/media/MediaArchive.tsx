@@ -4,6 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { Kind, MediaRecord } from '@/data/media';
+import {
+  isMediaReprint,
+  originalMediaRelation,
+  reprintMediaRelations,
+} from '@/lib/mediaClassification';
 
 type Props = {
   records: MediaRecord[];
@@ -14,16 +19,26 @@ type TypeDef = {
   id: string;
   label: string;
   kinds: Kind[] | null;
+  reprintsOnly?: boolean;
+  excludeReprints?: boolean;
 };
 
 type TimelineNode =
-  { type: 'record'; record: MediaRecord } | { type: 'series'; items: MediaRecord[] };
+  | { type: 'record'; record: MediaRecord }
+  | { type: 'series'; items: MediaRecord[] }
+  | { type: 'reprints'; outlet: string; items: MediaRecord[] };
 
 const TYPES: TypeDef[] = [
   { id: 'all', label: 'All', kinds: null },
-  { id: 'commentary', label: 'Commentary', kinds: ['quote', 'mention'] },
+  {
+    id: 'commentary',
+    label: 'Commentary',
+    kinds: ['quote', 'mention'],
+    excludeReprints: true,
+  },
   { id: 'talks', label: 'Interviews & broadcasts', kinds: ['interview', 'radio', 'video'] },
   { id: 'columns', label: 'Columns', kinds: ['column', 'blog'] },
+  { id: 'reprints', label: 'Reprints', kinds: null, reprintsOnly: true },
   { id: 'profiles', label: 'Profiles', kinds: ['profile'] },
 ];
 
@@ -90,6 +105,12 @@ function compareRecords(a: MediaRecord, b: MediaRecord): number {
   const dateOrder = b.date.localeCompare(a.date);
   if (dateOrder !== 0) return dateOrder;
   return a.title.localeCompare(b.title);
+}
+
+function presenceLabel(record: MediaRecord): string {
+  if (isMediaReprint(record)) return 'Reprint';
+  if (reprintMediaRelations(record).length > 0) return 'Original publication';
+  return PRESENCE_LABEL[record.kind];
 }
 
 export default function MediaArchive({ records, archives }: Props) {
@@ -212,6 +233,7 @@ export default function MediaArchive({ records, archives }: Props) {
     const byTopic = new Map<string, MediaRecord[]>();
 
     for (const record of records) {
+      if (isMediaReprint(record)) continue;
       const topicName = record.derivedTopic || record.topic;
       const list = byTopic.get(topicName) || [];
       list.push(record);
@@ -273,10 +295,14 @@ export default function MediaArchive({ records, archives }: Props) {
   const matches = useCallback(
     (record: MediaRecord, ignoreYear = false) => {
       const selectedType = TYPES.find((item) => item.id === type);
+      const recordIsReprint = isMediaReprint(record);
 
       if (selectedType?.kinds && !selectedType.kinds.includes(record.kind)) {
         return false;
       }
+
+      if (selectedType?.reprintsOnly && !recordIsReprint) return false;
+      if (selectedType?.excludeReprints && recordIsReprint) return false;
 
       if (lang && record.lang !== lang) return false;
       if (topic && (record.derivedTopic || record.topic) !== topic) return false;
@@ -301,6 +327,10 @@ export default function MediaArchive({ records, archives }: Props) {
           record.lang,
           record.date,
           KIND_LABEL[record.kind],
+          presenceLabel(record),
+          ...(record.related ?? []).map(
+            (related) => `${related.outlet} ${related.title} ${related.relationType}`
+          ),
           ...(record.verifiedQuotes ?? []).map((quote) => quote.text),
         ]
           .join(' ')
@@ -382,15 +412,44 @@ export default function MediaArchive({ records, archives }: Props) {
       .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
       .map(([recordYear, yearRecords]) => {
         const seriesItems = yearRecords.filter(
-          (record) => record.kind === 'column' && record.outlet === SERIES_OUTLET
+          (record) =>
+            record.kind === 'column' &&
+            record.outlet === SERIES_OUTLET &&
+            !isMediaReprint(record)
         );
 
         const collapseSeries = isOverview && seriesItems.length >= SERIES_MIN;
 
+        // Reprints are grouped separately from original columns and
+        // commentary. Grouping by outlet keeps a syndicated article in a
+        // single collapsed row instead of presenting it as a new mention.
+        const reprintGroups = new Map<string, MediaRecord[]>();
+        if (isOverview) {
+          yearRecords.forEach((record) => {
+            if (!isMediaReprint(record)) return;
+            const items = reprintGroups.get(record.outlet) ?? [];
+            items.push(record);
+            reprintGroups.set(record.outlet, items);
+          });
+        }
+
         const nodes: TimelineNode[] = [];
+        const addedReprintOutlets = new Set<string>();
         let seriesAdded = false;
 
         yearRecords.forEach((record) => {
+          if (isOverview && isMediaReprint(record)) {
+            if (!addedReprintOutlets.has(record.outlet)) {
+              nodes.push({
+                type: 'reprints',
+                outlet: record.outlet,
+                items: reprintGroups.get(record.outlet) ?? [record],
+              });
+              addedReprintOutlets.add(record.outlet);
+            }
+            return;
+          }
+
           const belongsToSeries =
             collapseSeries && record.kind === 'column' && record.outlet === SERIES_OUTLET;
 
@@ -788,6 +847,70 @@ export default function MediaArchive({ records, archives }: Props) {
                     );
                   }
 
+                  if (node.type === 'reprints') {
+                    const single = node.items.length === 1 ? node.items[0] : null;
+
+                    return (
+                      <li
+                        key={`reprints-${group.year}-${node.outlet}-${index}`}
+                        className="ma-row"
+                      >
+                        <div className="ma-date">{node.items.length}×</div>
+
+                        <details className="ma-series">
+                          <summary>
+                            <span className="ma-meta">
+                              <span className="ma-outlet">{node.outlet}</span>
+                              <span>Reprint series</span>
+                            </span>
+
+                            <span className="ma-title">
+                              {single ? single.title : `${node.outlet} reprints`}
+                              <em>
+                                {' '}
+                                · {node.items.length}{' '}
+                                {node.items.length === 1 ? 'reprint' : 'reprints'}
+                              </em>
+                            </span>
+
+                            <span className="ma-sum">
+                              Republished material. Each entry links to the original publication.
+                            </span>
+                          </summary>
+
+                          <ol className="ma-mini">
+                            {node.items.map((item) => {
+                              const original = originalMediaRelation(item);
+
+                              return (
+                                <li key={item.slug}>
+                                  <time dateTime={item.date}>{formatDate(item.date)}</time>
+                                  <div>
+                                    <Link
+                                      href={`/media/record/${encodeURIComponent(item.slug)}`}
+                                    >
+                                      {item.title}
+                                    </Link>
+                                    {original && (
+                                      <span className="ma-reprint-source">
+                                        Reprint of{' '}
+                                        <Link
+                                          href={`/media/record/${encodeURIComponent(original.slug)}`}
+                                        >
+                                          {original.outlet}: {original.title}
+                                        </Link>
+                                      </span>
+                                    )}
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ol>
+                        </details>
+                      </li>
+                    );
+                  }
+
                   const record = node.record;
 
                   return (
@@ -804,7 +927,7 @@ export default function MediaArchive({ records, archives }: Props) {
                           {record.program && <span>{record.program}</span>}
 
                           <span className="ma-tag">{record.lang}</span>
-                          <span className="ma-kind">{PRESENCE_LABEL[record.kind]}</span>
+                          <span className="ma-kind">{presenceLabel(record)}</span>
                         </p>
 
                         <Link
@@ -1475,6 +1598,24 @@ const CSS = `
 }
 
 .ma-mini a:hover {
+  color: var(--ma-accent);
+}
+
+.ma-reprint-source {
+  display: block;
+  margin-top: 3px;
+  color: var(--ma-muted);
+  font: 9px/1.6 var(--ma-mono);
+}
+
+.ma-reprint-source a {
+  color: var(--ma-fg);
+  text-decoration: underline;
+  text-decoration-color: var(--ma-line);
+  text-underline-offset: 3px;
+}
+
+.ma-reprint-source a:hover {
   color: var(--ma-accent);
 }
 

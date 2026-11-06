@@ -1182,8 +1182,8 @@ export async function POST(req: Request) {
         if (!pierrotStore || !isPierrotUserId(ownerIdentityUserId)) {
           return persistOwnerReply(
             ownerLanguage === 'ru'
-              ? 'Полный анализ доступен владельцу с подтверждённым Supabase-профилем. Открой [Skill Foundry](/admin/pierrot/skills) в owner PWA.'
-              : 'Full analysis is available to the owner with a verified Supabase profile. Open [Skill Foundry](/admin/pierrot/skills) in the owner PWA.'
+              ? 'Полный анализ доступен владельцу с подтверждённым Supabase-профилем. Открой [Skill Foundry](/admin/skills) в админке.'
+              : 'Full analysis is available to the owner with a verified Supabase profile. Open [Skill Foundry](/admin/skills) in the admin area.'
           );
         }
 
@@ -1204,8 +1204,8 @@ export async function POST(req: Request) {
         } catch {
           return persistOwnerReply(
             ownerLanguage === 'ru'
-              ? 'Не удалось собрать анализ работы. Я не буду выдавать это за успешный результат. Подробности доступны в [Skill Foundry](/admin/pierrot/skills).'
-              : 'I could not assemble the work analysis. I will not present that as a successful result. Details are available in [Skill Foundry](/admin/pierrot/skills).'
+              ? 'Не удалось собрать анализ работы. Я не буду выдавать это за успешный результат. Подробности доступны в [Skill Foundry](/admin/skills).'
+              : 'I could not assemble the work analysis. I will not present that as a successful result. Details are available in [Skill Foundry](/admin/skills).'
           );
         }
       }

@@ -91,7 +91,7 @@ export function formatSkillAnalysisChatReply(
   }
 
   lines.push(
-    `Полный отчёт${persisted ? '' : ' (не сохранён: миграция анализа не применена)'}: [Skill Foundry](/admin/pierrot/skills).`
+    `Полный отчёт${persisted ? '' : ' (не сохранён: миграция анализа не применена)'}: [Skill Foundry](/admin/skills).`
   );
 
   return lines.join('\n\n').slice(0, 3_500);

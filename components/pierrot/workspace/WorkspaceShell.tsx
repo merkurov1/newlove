@@ -10,11 +10,9 @@ import {
   MessageSquare,
   Palette,
   Send,
-  Sparkles,
   Terminal,
 } from 'lucide-react';
 import PierrotAvatar from './PierrotAvatar';
-import WorkspaceWriteLink from './WorkspaceWriteLink';
 import {
   WORKSPACE_BOTTOM_ROUTES,
   WORKSPACE_PRIMARY_ROUTES,
@@ -30,7 +28,6 @@ const ICONS = {
   dash: Activity,
   dev: Terminal,
   art: Palette,
-  skills: Sparkles,
   heart: Heart,
 } as const;
 
@@ -86,7 +83,6 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
   const pathname = usePathname() || '/admin/pierrot';
   const router = useRouter();
   const active = activeWorkspaceKey(pathname);
-  const showFloatingWrite = active !== 'chat' && active !== 'heart';
 
   useEffect(() => {
     if (pathname.startsWith('/admin/pierrot')) registerServiceWorker();
@@ -134,8 +130,7 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
         </div>
       </nav>
 
-      <main className={`pw-main${showFloatingWrite ? ' pw-main--with-write' : ''}`}>
-        {showFloatingWrite && <WorkspaceWriteLink floating />}
+      <main className="pw-main">
         {children}
       </main>
     </div>

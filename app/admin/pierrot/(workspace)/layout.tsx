@@ -6,7 +6,6 @@ import './workspace.css';
 import './memory.css';
 import './editorial.css';
 import './navigation.css';
-import './skills.css';
 
 export const dynamic = 'force-dynamic';
 
