@@ -19,8 +19,7 @@ function json(body: unknown, status = 200) {
 }
 
 function inputFromBody(body: unknown): DevTaskInput {
-  const value =
-    body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  const value = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
   const stringArray = (key: string): string[] | undefined =>
     Array.isArray(value[key])
       ? (value[key] as unknown[])
@@ -32,18 +31,14 @@ function inputFromBody(body: unknown): DevTaskInput {
     title: typeof value.title === 'string' ? value.title : '',
     objective: typeof value.objective === 'string' ? value.objective : undefined,
     context: typeof value.context === 'string' ? value.context : undefined,
-    repository:
-      typeof value.repository === 'string' ? value.repository : undefined,
+    repository: typeof value.repository === 'string' ? value.repository : undefined,
     baseRef: typeof value.baseRef === 'string' ? value.baseRef : undefined,
-    baseCommit:
-      typeof value.baseCommit === 'string' ? value.baseCommit : undefined,
+    baseCommit: typeof value.baseCommit === 'string' ? value.baseCommit : undefined,
     affectedFiles: stringArray('affectedFiles'),
-    currentBehavior:
-      typeof value.currentBehavior === 'string' ? value.currentBehavior : undefined,
+    currentBehavior: typeof value.currentBehavior === 'string' ? value.currentBehavior : undefined,
     requiredBehavior:
       typeof value.requiredBehavior === 'string' ? value.requiredBehavior : undefined,
-    technicalPlan:
-      typeof value.technicalPlan === 'string' ? value.technicalPlan : undefined,
+    technicalPlan: typeof value.technicalPlan === 'string' ? value.technicalPlan : undefined,
     backendChanges: stringArray('backendChanges'),
     frontendChanges: stringArray('frontendChanges'),
     databaseChanges: stringArray('databaseChanges'),
@@ -54,8 +49,8 @@ function inputFromBody(body: unknown): DevTaskInput {
     acceptanceCriteria: stringArray('acceptanceCriteria'),
     unverified: stringArray('unverified'),
     decisionIds: stringArray('decisionIds'),
-    conversationId:
-      typeof value.conversationId === 'string' ? value.conversationId : null,
+    conversationId: typeof value.conversationId === 'string' ? value.conversationId : null,
+    projectId: typeof value.projectId === 'string' ? value.projectId : null,
     status: typeof value.status === 'string' ? (value.status as DevTaskInput['status']) : undefined,
   };
 }
@@ -113,6 +108,7 @@ export async function POST(req: Request) {
         503
       );
     }
+    if (code === 'PROJECT_NOT_FOUND') return json({ error: 'Project not found.' }, 404);
     console.error('[Pierrot Dev] task create failed', { code });
     return json({ error: 'Unable to create the task.', code }, 500);
   }

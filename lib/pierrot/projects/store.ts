@@ -1,0 +1,247 @@
+import { assertServerOnly } from '@/lib/serverOnly';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
+import type { PierrotProject, PierrotProjectSnapshot, PierrotProjectStatus } from './types';
+
+assertServerOnly('lib/pierrot/projects/store');
+
+const PROJECT_COLUMNS =
+  'id,owner_user_id,slug,name,description,objective,status,priority,project_brief,brief_revision,last_activity_at,created_at,updated_at';
+const text = (value: unknown) => (typeof value === 'string' ? value : '');
+
+function mapProject(row: Record<string, unknown>): PierrotProject {
+  return {
+    id: text(row.id),
+    ownerUserId: text(row.owner_user_id),
+    slug: text(row.slug),
+    name: text(row.name),
+    description: text(row.description),
+    objective: text(row.objective),
+    status: (['active', 'paused', 'archived'].includes(text(row.status))
+      ? text(row.status)
+      : 'active') as PierrotProjectStatus,
+    priority: Number(row.priority || 0),
+    projectBrief: text(row.project_brief),
+    briefRevision: Number(row.brief_revision || 1),
+    lastActivityAt: text(row.last_activity_at),
+    createdAt: text(row.created_at),
+    updatedAt: text(row.updated_at),
+  };
+}
+
+export async function listPierrotProjects(ownerUserId: string): Promise<PierrotProject[]> {
+  const { data, error } = await getServerSupabaseClient({ useServiceRole: true })
+    .from('pierrot_projects')
+    .select(PROJECT_COLUMNS)
+    .eq('owner_user_id', ownerUserId)
+    .order('last_activity_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map((row) => mapProject(row as Record<string, unknown>));
+}
+
+export async function getPierrotProject(
+  ownerUserId: string,
+  projectRef: string
+): Promise<PierrotProject | null> {
+  const { data, error } = await getServerSupabaseClient({ useServiceRole: true })
+    .from('pierrot_projects')
+    .select(PROJECT_COLUMNS)
+    .eq('owner_user_id', ownerUserId)
+    .or(`id.eq.${projectRef},slug.eq.${projectRef}`)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapProject(data as Record<string, unknown>) : null;
+}
+
+export async function createPierrotProject(
+  ownerUserId: string,
+  input: Partial<PierrotProject>
+): Promise<PierrotProject> {
+  const slug = text(input.slug)
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80);
+  if (!slug || !text(input.name).trim()) throw new Error('PROJECT_NAME_REQUIRED');
+  const { data, error } = await getServerSupabaseClient({ useServiceRole: true })
+    .from('pierrot_projects')
+    .insert({
+      owner_user_id: ownerUserId,
+      slug,
+      name: text(input.name).trim().slice(0, 160),
+      description: text(input.description),
+      objective: text(input.objective),
+      project_brief: text(input.projectBrief),
+      status: input.status || 'active',
+      priority: Number(input.priority || 0),
+    })
+    .select(PROJECT_COLUMNS)
+    .single();
+  if (error) throw error;
+  return mapProject(data as Record<string, unknown>);
+}
+
+/** Creates the pilot shell only; historical facts are deliberately not inferred. */
+export async function ensureHeartAndAngelProject(ownerUserId: string): Promise<PierrotProject> {
+  const existing = await getPierrotProject(ownerUserId, 'heart-and-angel');
+  if (existing) return existing;
+  return createPierrotProject(ownerUserId, {
+    slug: 'heart-and-angel',
+    name: 'Heart & Angel',
+    description:
+      'Pilot workspace for the existing Heart & Angel website and digital infrastructure.',
+    objective:
+      'Collect verified artistic, technical and commercial context without turning historical ideas into active work.',
+    projectBrief:
+      'Pilot project created as a reviewable shell. Verify existing artistic materials, website infrastructure, commercial components, decisions and current state before expanding this brief.',
+  });
+}
+
+export async function updatePierrotProject(
+  ownerUserId: string,
+  id: string,
+  patch: Partial<PierrotProject>
+): Promise<PierrotProject | null> {
+  const update: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+    last_activity_at: new Date().toISOString(),
+  };
+  for (const [key, column] of [
+    ['name', 'name'],
+    ['description', 'description'],
+    ['objective', 'objective'],
+    ['projectBrief', 'project_brief'],
+    ['status', 'status'],
+    ['priority', 'priority'],
+  ] as const) {
+    if (patch[key] !== undefined) update[column] = patch[key];
+  }
+  if (patch.projectBrief !== undefined)
+    update.brief_revision = Number(patch.briefRevision || 1) + 1;
+  const client = getServerSupabaseClient({ useServiceRole: true });
+  const { data, error } = await client
+    .from('pierrot_projects')
+    .update(update)
+    .eq('id', id)
+    .eq('owner_user_id', ownerUserId)
+    .select(PROJECT_COLUMNS)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  if (patch.projectBrief !== undefined)
+    await client
+      .from('pierrot_project_brief_revisions')
+      .insert({
+        project_id: id,
+        revision: Number((data as Record<string, unknown>).brief_revision || 1),
+        brief: patch.projectBrief,
+        change_note: 'Owner update',
+        created_by: ownerUserId,
+      });
+  return mapProject(data as Record<string, unknown>);
+}
+
+export async function linkConversationToProject(
+  ownerUserId: string,
+  projectId: string,
+  conversationId: string
+): Promise<void> {
+  const client = getServerSupabaseClient({ useServiceRole: true });
+  const project = await getPierrotProject(ownerUserId, projectId);
+  if (!project) throw new Error('PROJECT_NOT_FOUND');
+  const { data: conversation } = await client
+    .from('pierrot_conversations')
+    .select('id,user_id')
+    .eq('id', conversationId)
+    .maybeSingle();
+  if (!conversation || (conversation.user_id && conversation.user_id !== ownerUserId))
+    throw new Error('CONVERSATION_NOT_FOUND');
+  const { error } = await client
+    .from('pierrot_project_conversations')
+    .upsert({
+      project_id: project.id,
+      conversation_id: conversationId,
+      owner_user_id: ownerUserId,
+    });
+  if (error) throw error;
+  await client
+    .from('pierrot_projects')
+    .update({ last_activity_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', project.id)
+    .eq('owner_user_id', ownerUserId);
+}
+
+export async function getPierrotProjectSnapshot(
+  ownerUserId: string,
+  projectRef: string
+): Promise<PierrotProjectSnapshot | null> {
+  const project = await getPierrotProject(ownerUserId, projectRef);
+  if (!project) return null;
+  const client = getServerSupabaseClient({ useServiceRole: true });
+  const [decisions, tasks, conversations, knowledge, artifacts] = await Promise.all([
+    client
+      .from('pierrot_project_decisions')
+      .select('decision:pierrot_decisions(id,title,content,status,updated_at)')
+      .eq('project_id', project.id)
+      .eq('owner_user_id', ownerUserId)
+      .limit(12),
+    client
+      .from('pierrot_dev_prompts')
+      .select('id,title,task,status,updated_at')
+      .eq('project_id', project.id)
+      .eq('user_id', ownerUserId)
+      .order('updated_at', { ascending: false })
+      .limit(12),
+    client
+      .from('pierrot_project_conversations')
+      .select('conversation:pierrot_conversations(id,title,started_at)')
+      .eq('project_id', project.id)
+      .eq('owner_user_id', ownerUserId)
+      .limit(12),
+    client
+      .from('pierrot_project_knowledge')
+      .select('document:knowledge_documents(id,title,status)')
+      .eq('project_id', project.id)
+      .eq('owner_user_id', ownerUserId)
+      .limit(12),
+    client
+      .from('pierrot_project_artifacts')
+      .select('id,title,artifact_type,updated_at')
+      .eq('project_id', project.id)
+      .eq('owner_user_id', ownerUserId)
+      .order('updated_at', { ascending: false })
+      .limit(12),
+  ]);
+  return {
+    ...project,
+    decisions: (decisions.data || []).map((r: any) => ({
+      id: r.decision?.id || '',
+      title: r.decision?.title || '',
+      content: r.decision?.content || '',
+      status: r.decision?.status || '',
+      updatedAt: r.decision?.updated_at || '',
+    })),
+    tasks: (tasks.data || []).map((r: any) => ({
+      id: r.id,
+      title: r.title || r.task || '',
+      status: r.status || '',
+      updatedAt: r.updated_at || '',
+    })),
+    conversations: (conversations.data || []).map((r: any) => ({
+      id: r.conversation?.id || '',
+      title: r.conversation?.title || '',
+      updatedAt: r.conversation?.started_at || '',
+    })),
+    knowledge: (knowledge.data || []).map((r: any) => ({
+      id: r.document?.id || '',
+      title: r.document?.title || null,
+      status: r.document?.status || null,
+    })),
+    artifacts: (artifacts.data || []).map((r: any) => ({
+      id: r.id,
+      title: r.title,
+      artifactType: r.artifact_type,
+      updatedAt: r.updated_at,
+    })),
+  };
+}

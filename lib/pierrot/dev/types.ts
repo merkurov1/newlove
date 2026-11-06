@@ -188,6 +188,7 @@ export type DevTask = {
   acceptanceCriteria: string[];
   unverified: string[];
   conversationId: string | null;
+  projectId?: string | null;
   /** Source memory/decision IDs in pierrot_decisions. */
   decisionIds: string[];
   status: DevTaskStatus;
@@ -223,6 +224,7 @@ export type DevTaskInput = {
   acceptanceCriteria?: string[];
   unverified?: string[];
   conversationId?: string | null;
+  projectId?: string | null;
   decisionIds?: string[];
   status?: DevTaskStatus;
 };

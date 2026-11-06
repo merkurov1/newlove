@@ -1,5 +1,6 @@
 export const WORKSPACE_PRIMARY_ROUTES = [
   { key: 'chat', path: '/admin/pierrot', label: 'CHAT', shortcut: '1' },
+  { key: 'projects', path: '/admin/pierrot/projects', label: 'PROJECTS', shortcut: '8' },
   { key: 'flow', path: '/admin/pierrot/flow', label: 'FLOW', shortcut: '2' },
   { key: 'art', path: '/admin/pierrot/art-engine', label: 'ART', shortcut: '3' },
   {
@@ -35,6 +36,7 @@ export function activeWorkspaceKey(pathname: string): WorkspaceRouteKey {
   if (pathname.startsWith('/heartandangel')) return 'heart';
   if (pathname.startsWith('/admin/pierrot/heart-and-angel')) return 'heart';
   if (pathname.startsWith('/admin/pierrot/flow')) return 'flow';
+  if (pathname.startsWith('/admin/pierrot/projects')) return 'projects';
   if (pathname.startsWith('/admin/pierrot/brain')) return 'brain';
   if (pathname.startsWith('/admin/pierrot/dash')) return 'dash';
   if (pathname.startsWith('/admin/pierrot/dev')) return 'dev';

@@ -195,6 +195,8 @@ import {
   normalizePierrotOwnerProfile,
   type PierrotOwnerProfile,
 } from '@/lib/pierrot/perspective';
+import { getPierrotProjectSnapshot } from '@/lib/pierrot/projects/store';
+import { resolvePierrotProject } from '@/lib/pierrot/projects/resolver';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -399,6 +401,10 @@ export async function POST(req: Request) {
     const referrer = sanitizePierrotReferrer(
       context && typeof context === 'object' ? context.referrer : undefined
     );
+    const requestedProject =
+      context && typeof context === 'object' && typeof context.project === 'string'
+        ? context.project.slice(0, 120)
+        : null;
     const language = detectPierrotLanguage(trimmedMessage);
     const conversationId = rawConversationId ?? randomUUID();
     const sessionId = rawSessionId ?? randomUUID();
@@ -759,10 +765,49 @@ export async function POST(req: Request) {
     );
 
     let ownerMemoryContext: string | null = null;
+    let ownerProjectContext: string | null = null;
+    let projectResolutionNote: string | null = null;
     let ownerMemoryUnavailable = false;
     let skillsContext: string | null = null;
 
     if (perspective === 'personal' && isPierrotUserId(ownerIdentityUserId) && memoryStore) {
+      let resolvedProjectRef = requestedProject;
+      try {
+        const resolved = await resolvePierrotProject({
+          ownerUserId: ownerIdentityUserId,
+          explicitProjectId: requestedProject,
+          message: trimmedMessage,
+        });
+        resolvedProjectRef = resolved.project?.slug || resolvedProjectRef;
+        if (resolved.ambiguous) projectResolutionNote = 'PROJECT CONTEXT AMBIGUOUS: ask the owner which project they mean before using project-specific context.';
+      } catch {
+        // Project context is an enhancement; a missing migration must not break chat.
+      }
+      if (resolvedProjectRef) {
+        try {
+          const project = await getPierrotProjectSnapshot(ownerIdentityUserId, resolvedProjectRef);
+          if (project) {
+            ownerProjectContext = [
+              `PROJECT CONTEXT: ${project.name} (${project.status})`,
+              `Brief: ${project.projectBrief || 'No reviewed brief yet.'}`,
+              project.objective ? `Objective: ${project.objective}` : null,
+              project.decisions.length
+                ? `Recent decisions: ${project.decisions.map((item) => `${item.title} [${item.status}]`).join('; ')}`
+                : null,
+              project.tasks.length
+                ? `Open/project tasks: ${project.tasks
+                    .filter((item) => !['verified', 'archived'].includes(item.status))
+                    .map((item) => `${item.title} [${item.status}]`)
+                    .join('; ')}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join('\n');
+          }
+        } catch {
+          ownerProjectContext = null;
+        }
+      }
       try {
         ownerMemoryContext = await buildMemoryContext(memoryStore, ownerIdentityUserId, {
           query: retrievalQuery,
@@ -789,6 +834,8 @@ export async function POST(req: Request) {
       buildPierrotPerspectivePrompt(perspective),
       ownerProfileContext,
       ownerMemoryContext,
+      ownerProjectContext,
+      projectResolutionNote,
       skillsContext,
       ownerMemoryUnavailable
         ? 'OWNER MEMORY UNAVAILABLE: the owner memory store could not be read. Do not claim that a record exists or does not exist. If asked about memory, say that the memory store is temporarily unavailable.'

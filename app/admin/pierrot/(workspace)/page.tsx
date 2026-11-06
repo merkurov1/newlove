@@ -18,6 +18,7 @@ import {
   parseOverviewCache,
 } from '@/lib/pierrot/workspace/cache';
 import ChatWorkspace from '@/components/pierrot/workspace/ChatWorkspace';
+import { getPierrotProject } from '@/lib/pierrot/projects/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,10 +67,12 @@ export default async function ChatPage({
     ? params.conversation[0]
     : params.conversation;
   const startNew = (Array.isArray(params.new) ? params.new[0] : params.new) === '1';
+  const projectRef = Array.isArray(params.project) ? params.project[0] : params.project;
 
-  const [conversations, conversation] = await Promise.all([
+  const [conversations, conversation, project] = await Promise.all([
     loadOwnerConversations(user.id),
     rawConversation ? loadOwnerConversation(user.id, rawConversation) : Promise.resolve(null),
+    projectRef ? getPierrotProject(user.id, projectRef) : Promise.resolve(null),
   ]);
 
   if (rawConversation && !conversation) {
@@ -123,6 +126,7 @@ export default async function ChatPage({
       conversation={conversation}
       startNew={startNew}
       brainStatus={brainStatus}
+      project={project}
     />
   );
 }

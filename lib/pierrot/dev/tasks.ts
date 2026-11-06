@@ -1,6 +1,7 @@
 import { assertServerOnly } from '@/lib/serverOnly';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { resolveDevRepository } from './repositories';
+import { getPierrotProject } from '@/lib/pierrot/projects/store';
 import type {
   DevTask,
   DevTaskInput,
@@ -68,9 +69,7 @@ function verificationStatus(value: unknown): DevVerificationStatus | null {
     : null;
 }
 
-function storedVerificationStatus(
-  value: DevVerificationStatus | null
-): string | null {
+function storedVerificationStatus(value: DevVerificationStatus | null): string | null {
   if (value === 'verified') return 'passed';
   if (value === 'verified_with_warnings') return 'partial';
   if (value === 'not_verified') return 'not_run';
@@ -81,9 +80,9 @@ function storedVerificationStatus(
 function missingColumn(error: unknown): boolean {
   const textValue =
     error && typeof error === 'object'
-      ? `${String((error as { code?: unknown }).code || '')} ${
-          String((error as { message?: unknown }).message || '')
-        }`
+      ? `${String((error as { code?: unknown }).code || '')} ${String(
+          (error as { message?: unknown }).message || ''
+        )}`
       : '';
   return /PGRST204|42703/.test(textValue);
 }
@@ -91,18 +90,16 @@ function missingColumn(error: unknown): boolean {
 function missingTable(error: unknown): boolean {
   const textValue =
     error && typeof error === 'object'
-      ? `${String((error as { code?: unknown }).code || '')} ${
-          String((error as { message?: unknown }).message || '')
-        }`
+      ? `${String((error as { code?: unknown }).code || '')} ${String(
+          (error as { message?: unknown }).message || ''
+        )}`
       : '';
   return /PGRST205|42P01|relation .* does not exist/i.test(textValue);
 }
 
 function mapRow(row: Record<string, unknown>): DevTask {
   const repository = String(row.repository || 'merkurov1/newlove');
-  const repositoryKey = repository.toLowerCase().includes('pierrot')
-    ? 'pierrot'
-    : 'newlove';
+  const repositoryKey = repository.toLowerCase().includes('pierrot') ? 'pierrot' : 'newlove';
 
   return {
     id: String(row.id || ''),
@@ -126,8 +123,8 @@ function mapRow(row: Record<string, unknown>): DevTask {
     tests: list(row.tests),
     acceptanceCriteria: list(row.acceptance_criteria),
     unverified: list(row.unverified),
-    conversationId:
-      typeof row.conversation_id === 'string' ? row.conversation_id : null,
+    conversationId: typeof row.conversation_id === 'string' ? row.conversation_id : null,
+    projectId: typeof row.project_id === 'string' ? row.project_id : null,
     decisionIds: list(row.decision_ids),
     status: status(row.status),
     verificationStatus: verificationStatus(row.verification_status),
@@ -219,6 +216,7 @@ export function createTaskInput(input: DevTaskInput): DevTaskInput {
     unverified: list(input.unverified),
     conversationId: input.conversationId || null,
     decisionIds: list(input.decisionIds),
+    projectId: input.projectId || null,
     status: status(input.status),
   };
 }
@@ -239,6 +237,7 @@ function fullRow(input: DevTaskInput): Record<string, unknown> {
     security_constraints: input.securityConstraints || [],
     unverified: input.unverified || [],
     conversation_id: input.conversationId || null,
+    project_id: input.projectId || null,
     decision_ids: input.decisionIds || [],
     status: input.status || 'draft',
     title: input.title,
@@ -288,12 +287,12 @@ async function insertWithFallback(
   return store.from('pierrot_dev_prompts').insert(legacy).select('*').single();
 }
 
-export async function createDevTask(
-  userId: string,
-  rawInput: DevTaskInput
-): Promise<DevTask> {
+export async function createDevTask(userId: string, rawInput: DevTaskInput): Promise<DevTask> {
   const store = getServerSupabaseClient({ useServiceRole: true });
   const input = createTaskInput(rawInput);
+  if (input.projectId && !(await getPierrotProject(userId, input.projectId))) {
+    throw new Error('PROJECT_NOT_FOUND');
+  }
   const config = resolveDevRepository(input.repository);
   // Production stores owner/repo (the CHECK constraint rejects a bare key),
   // while the UI/API use the short key. Normalize at the persistence boundary.
@@ -386,10 +385,7 @@ export async function listDevTasks(
   }
 }
 
-export async function getDevTask(
-  userId: string,
-  id: string
-): Promise<DevTask | null> {
+export async function getDevTask(userId: string, id: string): Promise<DevTask | null> {
   if (!isUuid(id)) return null;
 
   try {
@@ -464,14 +460,13 @@ export async function updateDevTask(
     acceptanceCriteria: patch.acceptanceCriteria ?? existing.acceptanceCriteria,
     unverified: patch.unverified ?? existing.unverified,
     conversationId: patch.conversationId ?? existing.conversationId,
+    projectId: patch.projectId ?? existing.projectId,
     decisionIds: patch.decisionIds ?? existing.decisionIds,
     status: patch.status ?? existing.status,
   };
 
   const normalized = createTaskInput(mergedInput);
-  const repositoryConfig = resolveDevRepository(
-    normalized.repository || existing.repository
-  );
+  const repositoryConfig = resolveDevRepository(normalized.repository || existing.repository);
   normalized.repository = repositoryConfig.fullName;
   const prompt = buildTaskPrompt({
     ...existing,
@@ -524,6 +519,7 @@ export async function updateDevTask(
     acceptance_criteria: normalized.acceptanceCriteria || [],
     unverified: normalized.unverified || [],
     conversation_id: normalized.conversationId || null,
+    project_id: normalized.projectId || null,
     decision_ids: normalized.decisionIds || [],
     status: normalized.status || existing.status,
     prompt_text: prompt,
@@ -584,9 +580,7 @@ export async function attachDevTaskResult(input: {
 
   const store = getServerSupabaseClient({ useServiceRole: true });
   const nextVerification =
-    input.verificationStatus === undefined
-      ? existing.verificationStatus
-      : input.verificationStatus;
+    input.verificationStatus === undefined ? existing.verificationStatus : input.verificationStatus;
   const patch: Record<string, unknown> = {
     result_commit: input.resultCommit || null,
     pull_requests: input.pullRequests || existing.pullRequests,

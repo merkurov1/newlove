@@ -47,6 +47,7 @@ import type {
 import { memoryKindLabel, memoryStatusLabel } from '@/lib/pierrot/memory/types';
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
 import HomeOverview from './HomeOverview';
+import type { PierrotProject } from '@/lib/pierrot/projects/types';
 
 type UiMessage = {
   id: string;
@@ -132,6 +133,7 @@ export default function ChatWorkspace({
   conversation,
   startNew,
   brainStatus,
+  project,
 }: {
   ownerId: string;
   overview: WorkspaceOverview;
@@ -139,6 +141,7 @@ export default function ChatWorkspace({
   conversation: OwnerConversation | null;
   startNew: boolean;
   brainStatus?: BrainStatusSnapshot | null;
+  project?: PierrotProject | null;
 }) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -177,6 +180,15 @@ export default function ChatWorkspace({
           : 'pending',
     version: null,
   }));
+
+  useEffect(() => {
+    if (!project?.id || !conversationId) return;
+    void fetch(`/api/admin/pierrot/projects/${project.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'link_conversation', conversationId }),
+    });
+  }, [conversationId, project?.id]);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inspectorScrollRef = useRef<HTMLDivElement | null>(null);
@@ -262,8 +274,12 @@ export default function ChatWorkspace({
   useEffect(() => {
     if (!startNew) return;
     resetConversation();
-    router.replace('/admin/pierrot');
-  }, [resetConversation, router, startNew]);
+    router.replace(
+      project?.slug
+        ? `/admin/pierrot?project=${encodeURIComponent(project.slug)}`
+        : '/admin/pierrot'
+    );
+  }, [project?.slug, resetConversation, router, startNew]);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -805,6 +821,7 @@ export default function ChatWorkspace({
           context: {
             pathname: '/admin/pierrot',
             referrer: typeof document !== 'undefined' ? document.referrer : undefined,
+            ...(project?.slug ? { project: project.slug } : {}),
           },
           history,
         }),

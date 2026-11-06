@@ -1,17 +1,12 @@
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
-import {
-  attachDevTaskResult,
-  getDevTask,
-  updateDevTask,
-} from '@/lib/pierrot/dev/tasks';
+import { attachDevTaskResult, getDevTask, updateDevTask } from '@/lib/pierrot/dev/tasks';
 import type { DevTaskInput, DevTaskStatus, DevVerificationStatus } from '@/lib/pierrot/dev/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -52,6 +47,9 @@ function patchFromBody(body: Record<string, unknown>): Partial<DevTaskInput> {
   if (typeof body.conversationId === 'string' || body.conversationId === null) {
     patch.conversationId = body.conversationId as string | null;
   }
+  if (typeof body.projectId === 'string' || body.projectId === null) {
+    patch.projectId = body.projectId as string | null;
+  }
   if (typeof body.status === 'string') {
     patch.status = body.status as DevTaskStatus;
   }
@@ -76,10 +74,7 @@ function patchFromBody(body: Record<string, unknown>): Partial<DevTaskInput> {
   return patch;
 }
 
-export async function GET(
-  req: Request,
-  context: { params: { id: string } }
-) {
+export async function GET(req: Request, context: { params: { id: string } }) {
   let admin: Awaited<ReturnType<typeof requireAdminFromRequest>>;
   try {
     admin = await requireAdminFromRequest(req);
@@ -96,10 +91,7 @@ export async function GET(
   return json({ task });
 }
 
-export async function PATCH(
-  req: Request,
-  context: { params: { id: string } }
-) {
+export async function PATCH(req: Request, context: { params: { id: string } }) {
   let admin: Awaited<ReturnType<typeof requireAdminFromRequest>>;
   try {
     admin = await requireAdminFromRequest(req);
@@ -121,19 +113,15 @@ export async function PATCH(
     const task = await attachDevTaskResult({
       userId: admin.id,
       taskId: context.params.id,
-      resultCommit:
-        typeof value.resultCommit === 'string' ? value.resultCommit : null,
+      resultCommit: typeof value.resultCommit === 'string' ? value.resultCommit : null,
       pullRequests: arrayValue(value.pullRequests),
-      resultNotes:
-        typeof value.resultNotes === 'string' ? value.resultNotes : undefined,
+      resultNotes: typeof value.resultNotes === 'string' ? value.resultNotes : undefined,
       verificationStatus:
         typeof value.verificationStatus === 'string'
           ? (value.verificationStatus as DevVerificationStatus)
           : undefined,
       verificationNotes:
-        typeof value.verificationNotes === 'string'
-          ? value.verificationNotes
-          : undefined,
+        typeof value.verificationNotes === 'string' ? value.verificationNotes : undefined,
       status: typeof value.status === 'string' ? (value.status as DevTaskStatus) : undefined,
     });
     if (!task) return json({ error: 'Task not found or update failed.' }, 404);
