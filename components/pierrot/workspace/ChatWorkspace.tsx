@@ -140,16 +140,20 @@ function ConversationLinks({
     <ul className="pw-conversation-list">
       {items.map((item) => (
         <li key={item.id}>
-          {item.projectId && item.projectSlug && item.projectName && (
-            <span className="pw-conversation-project">Проект · {item.projectName}</span>
-          )}
           <Link
             href={`/admin/pierrot?conversation=${encodeURIComponent(item.id)}`}
             className="pw-conversation-link"
             aria-current={conversationId === item.id ? 'page' : undefined}
             onClick={onOpen}
           >
-            <span className="pw-conversation-title">{item.title}</span>
+            <span className="pw-conversation-heading">
+              <span className="pw-conversation-title">{item.title}</span>
+              {item.projectId && item.projectName && (
+                <span className="pw-conversation-project" title={`Проект: ${item.projectName}`}>
+                  {item.projectName}
+                </span>
+              )}
+            </span>
             <span className="pw-conversation-date">
               {formatConversationDate(item.updatedAt)} · {item.messageCount}{' '}
               {item.messageCount === 1 ? 'сообщение' : 'сообщений'}
