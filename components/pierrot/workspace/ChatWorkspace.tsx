@@ -8,6 +8,7 @@ import {
   ArrowUp,
   Bookmark,
   Check,
+  FolderOpen,
   MessageSquare,
   PanelLeft,
   Plus,
@@ -1142,6 +1143,15 @@ export default function ChatWorkspace({
               <Plus size={18} strokeWidth={1.4} aria-hidden="true" />
               Новый диалог
             </button>
+
+            <Link
+              href="/admin/pierrot/projects"
+              className="pw-new-chat"
+              onClick={() => setDrawerOpen(false)}
+            >
+              <FolderOpen size={18} strokeWidth={1.4} aria-hidden="true" />
+              Проекты
+            </Link>
 
             <div className="pw-drawer-section">
               <div className="pw-drawer-section-title">Недавние разговоры</div>

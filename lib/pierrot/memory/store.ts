@@ -42,6 +42,8 @@ const OPTIONAL_COLUMNS = [
   'last_referenced_at',
   'archived_reason',
   'superseded_by',
+  'owner_rating',
+  'owner_rating_updated_at',
 ];
 const MAX_CONTEXT_CHARS = 6_000;
 
@@ -104,6 +106,11 @@ function toRecord(row: DecisionRow): PierrotMemoryRecord | null {
     updatedAt: row.updated_at,
     importance: clamp01(row.importance, defaultImportance(row.kind)),
     confidence: clamp01(row.confidence, defaultConfidence(row.kind)),
+    ownerRating:
+      typeof row.owner_rating === 'number' && row.owner_rating >= 1 && row.owner_rating <= 10
+        ? row.owner_rating
+        : null,
+    ownerRatingUpdatedAt: stringOrNull(row.owner_rating_updated_at),
     validFrom: stringOrNull(row.valid_from),
     validUntil: stringOrNull(row.valid_until),
     lastReferencedAt: stringOrNull(row.last_referenced_at),
@@ -377,6 +384,8 @@ async function updateMemoryRow(
   if (!error) return data as DecisionRow;
 
   if (isMissingOptionalColumn(error)) {
+    // A rating write must not silently disappear through the legacy fallback.
+    if ('owner_rating' in patch) throw new Error('memory_rating_migration_required');
     const legacy = { ...patch };
     for (const column of OPTIONAL_COLUMNS) delete legacy[column];
 
@@ -553,6 +562,12 @@ export async function createMemoryRecord(
     review_at: input.reviewAt ?? null,
     importance: clamp01(input.importance, defaultImportance(input.kind)),
     confidence,
+    ...(input.ownerRating !== undefined
+      ? {
+          owner_rating: input.ownerRating,
+          owner_rating_updated_at: now,
+        }
+      : {}),
     valid_from: now,
     valid_until: validUntil,
     last_referenced_at: now,
@@ -637,6 +652,7 @@ export type MemoryUpdatePatch = {
   reviewAt?: string | null;
   importance?: number;
   confidence?: number;
+  ownerRating?: number;
   validFrom?: string | null;
   validUntil?: string | null;
   lastReferencedAt?: string | null;
@@ -696,6 +712,14 @@ export async function updateMemoryRecord(
     update.importance = clamp01(patch.importance, existing.importance);
   if (patch.confidence !== undefined)
     update.confidence = clamp01(patch.confidence, existing.confidence);
+  if (patch.ownerRating !== undefined) {
+    const rating = Number(patch.ownerRating);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 10) {
+      throw new Error('memory_rating_invalid');
+    }
+    update.owner_rating = rating;
+    update.owner_rating_updated_at = now;
+  }
   if (patch.validFrom !== undefined) update.valid_from = patch.validFrom;
   if (patch.validUntil !== undefined) update.valid_until = patch.validUntil;
   if (patch.lastReferencedAt !== undefined) update.last_referenced_at = patch.lastReferencedAt;
@@ -715,6 +739,7 @@ export async function updateMemoryRecord(
     patch.reviewAt !== undefined ||
     patch.importance !== undefined ||
     patch.confidence !== undefined ||
+    patch.ownerRating !== undefined ||
     patch.validFrom !== undefined ||
     patch.validUntil !== undefined ||
     patch.supersededBy !== undefined ||

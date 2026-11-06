@@ -1346,6 +1346,41 @@ describe('Pierrot autonomous web search', () => {
     expect(json.reply).not.toContain('Sources:');
   });
 
+  it('answers “Что у нас сегодня?” from internal context without Exa', async () => {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+
+    const response = await POST(
+      makeRequest(validBody({ message: 'Что у нас сегодня?', mode: 'unframed' }))
+    );
+    const json = (await response.json()) as { reply?: string; web?: unknown };
+
+    expect(response.status).toBe(200);
+    expect(webSearch.searchWebEvidence).not.toHaveBeenCalled();
+    expect(json.web).toBeUndefined();
+    expect(json.reply).not.toContain('Sources:');
+  });
+
+  it('answers “Как дела с Journal?” as a project question without Exa', async () => {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+
+    const response = await POST(
+      makeRequest(validBody({ message: 'Как дела с Journal?', mode: 'unframed' }))
+    );
+    const json = (await response.json()) as { reply?: string; web?: unknown };
+
+    expect(response.status).toBe(200);
+    expect(webSearch.searchWebEvidence).not.toHaveBeenCalled();
+    expect(json.web).toBeUndefined();
+  });
+
   it('does not search the web for a general definition', async () => {
     const response = await POST(makeRequest(validBody({ message: 'Что такое Gemini?' })));
     const json = (await response.json()) as { reply?: string; web?: unknown };

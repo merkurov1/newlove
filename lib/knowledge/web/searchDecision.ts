@@ -37,6 +37,7 @@ export type WebSearchReason =
   | 'explicit_media'
   | 'explicit_brain_web'
   | 'web_follow_up'
+  | 'diagnostic'
   | 'ambiguous';
 
 export type WebSearchDecision = {
@@ -94,25 +95,15 @@ function hasAny(text: string, terms: string[]): boolean {
 const GREETING_EXACT =
   /^(hi|hii|hello|hey|yo|hiya|good morning|good afternoon|good evening|thanks|thank you|cheers|bye|goodbye|see you|ok|okay|sure|great|nice|cool|привет|здравствуй|здравствуйте|добрый день|добрый вечер|доброе утро|спасибо|пока|до свидания|ок|хорошо|отлично)[\s!.,?…]*$/i;
 
-const CASUAL_META_TERMS = [
-  'how are you',
-  'how is it going',
-  "how's it going",
-  'how old are you',
-  'who are you',
-  'what is your name',
-  "what's your name",
-  'tell me a joke',
-  'what can you do',
-  'what do you do',
-  'как дела',
-  'как ты',
-  'кто ты',
-  'твое имя',
-  'твое имя?',
-  'расскажи шутку',
-  'что ты умеешь',
-  'что ты делаешь',
+/**
+ * These are whole-message conversational questions. They must not be matched
+ * as substrings: “Как дела с Journal?” is a project-status question, not a
+ * greeting.
+ */
+const CASUAL_META_EXACT = [
+  /^(?:hi|hello|hey)[,!.\s]+(?:how are you|how is it going|how's it going)[\s!.,?…]*$/i,
+  /^(?:hi|hello|hey|how are you|how is it going|how's it going|how old are you|who are you|what is your name|what's your name|tell me a joke|what can you do|what do you do)[\s!.,?…]*$/i,
+  /^(?:привет|здравствуй(?:те)?|как дела|как ты|кто ты|твое имя|твоё имя|расскажи шутку|что ты умеешь|что ты делаешь)[\s!.,?…]*$/i,
 ];
 
 const FOLLOW_UP_EXACT =
@@ -571,6 +562,147 @@ const CURRENT_EVENT_WEAK_TERMS = [
   'уволился',
 ];
 
+/**
+ * Time/freshness words are context, not external-search intent. They become a
+ * search only when the same message also names an external subject.
+ */
+const TEMPORAL_SIGNAL_TERMS = [
+  'latest',
+  'recent',
+  'recently',
+  'today',
+  'tonight',
+  'this morning',
+  'this week',
+  'this month',
+  'this year',
+  'current',
+  'currently',
+  'right now',
+  'now',
+  'what is happening',
+  "what's happening",
+  'what happened',
+  'what has happened',
+  'status of',
+  'update',
+  'updated',
+  'as of',
+  'so far',
+  'next week',
+  'next month',
+  'upcoming',
+  'последние',
+  'последний',
+  'последняя',
+  'последнее',
+  'последний месяц',
+  'последние 30 дней',
+  'за последний месяц',
+  'last month',
+  'past month',
+  'недавно',
+  'сейчас',
+  'сегодня',
+  'на этой неделе',
+  'в этом месяце',
+  'в этом году',
+  'что происходит',
+  'что случилось',
+  'что произошло',
+  'что нового',
+  'статус',
+  'обновление',
+  'на данный момент',
+];
+
+/**
+ * A temporal word plus one of these subjects is enough to warrant an external
+ * search. Without such a subject the question stays internal/model-only.
+ */
+const EXTERNAL_TOPIC_TERMS = [
+  'world',
+  'in the world',
+  'news',
+  'breaking',
+  'developments',
+  'publication',
+  'publications',
+  'published',
+  'сми',
+  'пресс',
+  'пресса',
+  'прессе',
+  'цитировал',
+  'цитировали',
+  'цитирует',
+  'coverage',
+  'press coverage',
+  'media coverage',
+  'публикации обо мне',
+  'publications about me',
+  'announced',
+  'released',
+  'art market',
+  'market',
+  'stock',
+  'stocks',
+  'shares',
+  'price',
+  'prices',
+  'inflation',
+  'economy',
+  'election',
+  'law',
+  'bill',
+  'regulation',
+  'lawsuit',
+  'court',
+  'company',
+  'startup',
+  'ceo',
+  'earnings',
+  'valuation',
+  'funding',
+  'acquisition',
+  'merger',
+  'died',
+  'appointed',
+  'resigned',
+  'openai',
+  'sotheby',
+  'christie',
+  'в мире',
+  'новости',
+  'публикаци',
+  'публикация',
+  'опубликован',
+  'объявлен',
+  'рынок',
+  'рынке',
+  'акции',
+  'цена',
+  'цены',
+  'инфляция',
+  'экономика',
+  'экономике',
+  'выборы',
+  'выборах',
+  'закон',
+  'законе',
+  'закона',
+  'законов',
+  'суд',
+  'суде',
+  'компания',
+  'компании',
+  'стартап',
+  'стартапе',
+  'умер',
+  'назначен',
+  'уволился',
+];
+
 const VERIFICATION_TERMS = [
   'verify',
   'fact check',
@@ -625,6 +757,29 @@ const CONVERSATION_META_TERMS = [
 ];
 
 /**
+ * “Почему ты так ответил?” is a request to inspect the previous answer, not a
+ * new research request and not a fact check.
+ */
+const DIAGNOSTIC_TERMS = [
+  'почему ты так ответил',
+  'почему ты так сказал',
+  'почему ты так решил',
+  'зачем ты так ответил',
+  'как ты это понял',
+  'на чем основан ответ',
+  'на чём основан ответ',
+  'откуда такой ответ',
+  'какой контекст ты использовал',
+  'какие инструменты ты использовал',
+  'why did you answer',
+  'why did you say that',
+  'why did you reply',
+  'explain your answer',
+  'what context did you use',
+  'what tools did you use',
+];
+
+/**
  * A direct reference to the owner's memory or to the shared conversation
  * history is enough on its own: neither can be answered by the public web.
  */
@@ -648,6 +803,10 @@ const INTERNAL_MEMORY_TERMS = [
   'what do you remember',
   'что мы обсуждали',
   'что мы обсуждали вчера',
+  'что я обсуждал',
+  'что я обсуждал вчера',
+  'что я говорил',
+  'что я говорил вчера',
   'о чем мы говорили',
   'о чём мы говорили',
   'что мы говорили',
@@ -671,18 +830,36 @@ const INTERNAL_OWNER_TERMS = [
   'как у меня дела',
   'как мои дела',
   'что у меня происходит',
+  'что у нас происходит',
   'что происходит со мной',
   'что происходит с моим проектом',
   'что сейчас происходит с моим проектом',
+  'что происходит с проектом',
   'с моим проектом',
+  'с проектом',
   'что у меня',
   'что у меня сегодня',
-  'что у меня осталось',
+  'что у меня сейчас',
+  'что у нас',
+  'что у нас сегодня',
+  'что у нас сейчас',
+  'что у нас нового',
+  'что у нас по',
+  'что у нас в проекте',
+  'что по проекту',
+  'что нового у меня',
+  'что нового в моем',
+  'что нового в моём',
+  'что нового в проекте',
+  'что изменилось в проекте',
   'что осталось',
   'что осталось сделать',
   'что мне делать',
   'мои задачи',
   'моих задач',
+  'моими задачами',
+  'что с задачами',
+  'что происходило сегодня с моими задачами',
   'мои планы',
   'моих планов',
   'какие у меня планы',
@@ -695,11 +872,18 @@ const INTERNAL_OWNER_TERMS = [
   'чем я занят',
   'что я делал',
   'что изменилось',
-  'что нового у меня',
-  'что нового в моем',
-  'что нового в моём',
+  'статус проекта',
+  'состояние проекта',
+  'обнови состояние проекта',
+  'обновить состояние проекта',
+  'задачи проекта',
+  'как дела с',
+  'как дела по',
+  'как дела в проекте',
+  'как проект',
   'what do i have today',
   'what do i have',
+  'what do we have today',
   'what is left',
   'what should i do',
   'my tasks',
@@ -707,8 +891,13 @@ const INTERNAL_OWNER_TERMS = [
   'my projects',
   'what changed',
   'what has changed',
+  'what changed in my project',
   'what am i working on',
   'how am i doing',
+  'how is the project',
+  'project status',
+  'project state',
+  'update project state',
   "what's happening with me",
   'what is happening with me',
   "what's going on with me",
@@ -968,6 +1157,58 @@ export function decideWebSearch(input: WebSearchDecisionInput): WebSearchDecisio
     });
   }
 
+  if (hasAny(normalized, DIAGNOSTIC_TERMS)) {
+    return decision(false, 'diagnostic', message, ['diagnostic'], 0.05, {
+      explicitSource,
+    });
+  }
+
+  const verification = hasAny(normalized, VERIFICATION_TERMS);
+  const personalBrain = hasAny(normalized, PERSONAL_BRAIN_TERMS);
+  const ownerBrain = hasAny(normalized, OWNER_BRAIN_TERMS);
+  const writingRequest = hasAny(normalized, WRITING_REQUEST_TERMS);
+  const factualLookup = isQuestion(message, normalized) && hasAny(normalized, FACTUAL_LOOKUP_TERMS);
+  const generalDefinition = hasAny(normalized, GENERAL_DEFINITION_TERMS);
+  const internalMemory = hasAny(normalized, INTERNAL_MEMORY_TERMS);
+  const internalOwner = Boolean(input.ownerMode) && hasAny(normalized, INTERNAL_OWNER_TERMS);
+  const internalProduct = Boolean(input.ownerMode) && hasAny(normalized, INTERNAL_PRODUCT_TERMS);
+  const internalContext = internalMemory || internalOwner || internalProduct;
+  const externalCurrentEvents = hasAny(normalized, INTERNAL_EXTERNAL_OVERRIDE_TERMS);
+  const externalTopic = hasAny(normalized, EXTERNAL_TOPIC_TERMS);
+  const matchedCurrentEventTerms = [...CURRENT_EVENT_STRONG_TERMS, ...CURRENT_EVENT_WEAK_TERMS].filter(
+    (term) => hasTerm(normalized, term)
+  );
+  // A non-temporal current-event cue (news, a company, a publication) is
+  // enough. A bare time word (“today”, “latest”, “what is happening”) is only
+  // a modifier and needs an external subject in the same message.
+  const nonTemporalCurrentEvent = matchedCurrentEventTerms.some(
+    (term) => !TEMPORAL_SIGNAL_TERMS.includes(normalize(term))
+  );
+  const temporalSignal = hasAny(normalized, TEMPORAL_SIGNAL_TERMS);
+  const currentEvents =
+    nonTemporalCurrentEvent ||
+    (temporalSignal && externalTopic) ||
+    (internalContext && externalCurrentEvents);
+
+  // Internal memory, tasks, plans, projects and conversation history are
+  // answered from Brain/memory first. This check comes before greetings so
+  // “Как дела с Journal?” is not mistaken for “Как дела?”.
+  if (internalContext && !currentEvents && !externalCurrentEvents) {
+    return decision(
+      false,
+      internalProduct || internalOwner ? 'owner_brain' : 'internal_context',
+      message,
+      [
+        'internal_context',
+        ...(internalMemory ? ['internal_memory'] : []),
+        ...(internalOwner ? ['internal_owner'] : []),
+        ...(internalProduct ? ['internal_product'] : []),
+        ...(temporalSignal ? ['temporal_context'] : []),
+      ],
+      0.1
+    );
+  }
+
   // A follow-up after a previous web search keeps the same public topic even
   // when the user does not repeat “в интернете”.
   if (previousWebQuery && (isWebFollowUp(message) || isTopicSwitch(message))) {
@@ -988,7 +1229,7 @@ export function decideWebSearch(input: WebSearchDecisionInput): WebSearchDecisio
     }
   }
 
-  if (GREETING_EXACT.test(normalized) || hasAny(normalized, CASUAL_META_TERMS)) {
+  if (GREETING_EXACT.test(normalized) || CASUAL_META_EXACT.some((pattern) => pattern.test(normalized))) {
     return decision(false, 'greeting', message, ['casual'], 0.05, { explicitSource });
   }
 
@@ -999,22 +1240,6 @@ export function decideWebSearch(input: WebSearchDecisionInput): WebSearchDecisio
       explicitSource,
     });
   }
-
-  const verification = hasAny(normalized, VERIFICATION_TERMS);
-  const personalBrain = hasAny(normalized, PERSONAL_BRAIN_TERMS);
-  const ownerBrain = hasAny(normalized, OWNER_BRAIN_TERMS);
-  const writingRequest = hasAny(normalized, WRITING_REQUEST_TERMS);
-  const factualLookup = isQuestion(message, normalized) && hasAny(normalized, FACTUAL_LOOKUP_TERMS);
-  const generalDefinition = hasAny(normalized, GENERAL_DEFINITION_TERMS);
-  const internalMemory = hasAny(normalized, INTERNAL_MEMORY_TERMS);
-  const internalOwner = Boolean(input.ownerMode) && hasAny(normalized, INTERNAL_OWNER_TERMS);
-  const internalProduct = Boolean(input.ownerMode) && hasAny(normalized, INTERNAL_PRODUCT_TERMS);
-  const internalContext = internalMemory || internalOwner || internalProduct;
-  const externalCurrentEvents = hasAny(normalized, INTERNAL_EXTERNAL_OVERRIDE_TERMS);
-  const currentEvents =
-    hasAny(normalized, CURRENT_EVENT_STRONG_TERMS) ||
-    hasAny(normalized, CURRENT_EVENT_WEAK_TERMS) ||
-    (internalContext && externalCurrentEvents);
 
   const signals: string[] = [];
   if (currentEvents) signals.push('current_events');
@@ -1029,20 +1254,6 @@ export function decideWebSearch(input: WebSearchDecisionInput): WebSearchDecisio
     if (internalMemory) signals.push('internal_memory');
     if (internalOwner) signals.push('internal_owner');
     if (internalProduct) signals.push('internal_product');
-  }
-
-  // Internal memory, tasks, plans, projects and conversation history are
-  // answered from Brain/memory first. Time words such as "сегодня" are not
-  // enough to turn them into external current-events searches. News, explicit
-  // external-world wording or verification still win.
-  if (internalContext && !verification && !externalCurrentEvents) {
-    return decision(
-      false,
-      internalProduct || internalOwner ? 'owner_brain' : 'internal_context',
-      message,
-      signals,
-      0.1
-    );
   }
 
   // External verification wins over owner/personal scope: the answer can compare

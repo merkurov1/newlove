@@ -8,7 +8,11 @@ export type PierrotProject = {
   description: string;
   objective: string;
   status: PierrotProjectStatus;
+  /** Internal ordering value, never the owner's explicit rating. */
   priority: number;
+  /** Owner's explicit 1..10 rating, separate from priority/importance. */
+  ownerRating: number | null;
+  ownerRatingUpdatedAt: string | null;
   projectBrief: string;
   briefRevision: number;
   lastActivityAt: string;

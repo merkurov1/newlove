@@ -187,6 +187,109 @@ describe('strict memory task operations', () => {
     expect(byId.get(unlinked.id)?.status).toBe('current');
   });
 
+  it('scopes “Задачи в Journal — выполнены” to Journal and never Media', async () => {
+    const { db, store } = client();
+    const journalProject = project(randomUUID(), 'Journal', 'journal');
+    const mediaProject = project(randomUUID(), 'Media', 'media');
+    db.seed('pierrot_projects', [journalProject, mediaProject]);
+
+    const journal = task(randomUUID(), 'Journal — выпуск 12');
+    const media = task(randomUUID(), 'Media — колонка');
+    db.seed('pierrot_decisions', [journal, media]);
+    db.seed('pierrot_project_decisions', [
+      { project_id: journalProject.id, decision_id: journal.id, owner_user_id: OWNER_ID },
+      { project_id: mediaProject.id, decision_id: media.id, owner_user_id: OWNER_ID },
+    ]);
+
+    const resolution = await resolve(store, 'Задачи в Journal - выполнены отметь это');
+    expect(resolution.status).toBe('resolved');
+    if (resolution.status !== 'resolved') return;
+    expect(resolution.targets.map((record) => record.id)).toEqual([journal.id]);
+    // Even one project task is a project-scoped batch: preview before write.
+    expect(resolution.requiresConfirmation).toBe(true);
+
+    await executeMemoryOperation({
+      store,
+      userId: OWNER_ID,
+      action: resolution.action,
+      targets: resolution.targets,
+    });
+
+    const byId = new Map(db.all('pierrot_decisions').map((row) => [row.id, row]));
+    expect(byId.get(journal.id)?.status).toBe('completed');
+    expect(byId.get(media.id)?.status).toBe('current');
+  });
+
+  it('asks for a project name instead of treating it as all-memory scope', async () => {
+    const { db, store } = client();
+    db.seed('pierrot_decisions', [
+      task(randomUUID(), 'Journal — выпуск'),
+      task(randomUUID(), 'Media — колонка'),
+    ]);
+
+    const resolution = await resolve(store, 'Так все задачи по проекту выполнены');
+    expect(resolution.status).toBe('no_target');
+    expect(db.all('pierrot_decisions').every((row) => row.status === 'current')).toBe(true);
+  });
+
+  it('restores the exact archived task and preserves history', async () => {
+    const { db, store } = client();
+    const row = task(randomUUID(), 'Восстановить эту задачу', { status: 'completed' });
+    db.seed('pierrot_decisions', [row]);
+
+    const intent = detectMemoryIntent('Ты случайно завершил эту задачу, восстанови её');
+    expect(intent.action).toBe('restore');
+    db.seed('pierrot_events', [
+      {
+        id: randomUUID(),
+        conversation_id: 'conversation-1',
+        event_name: 'assistant_replied',
+        created_at: new Date().toISOString(),
+        payload: {
+          memory_list_ids: [row.id],
+          memory_list_kinds: ['task'],
+        },
+      },
+    ]);
+
+    const resolution = await resolveMemoryOperation({
+      store,
+      userId: OWNER_ID,
+      intent,
+      listContext: [
+        {
+          id: row.id,
+          kind: 'task',
+          title: row.title,
+          content: row.content,
+          status: 'completed',
+          project: null,
+          tags: [],
+          sourceRefs: [],
+          conversationId: null,
+          messageId: null,
+          reviewAt: null,
+          decidedAt: null,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          importance: 0.6,
+          confidence: 0.9,
+          ownerRating: null,
+          ownerRatingUpdatedAt: null,
+          validFrom: null,
+          validUntil: null,
+          lastReferencedAt: null,
+          archivedReason: null,
+          supersededBy: null,
+        } as PierrotMemoryRecord,
+      ],
+    });
+
+    expect(resolution.status).toBe('resolved');
+    if (resolution.status !== 'resolved') return;
+    expect(resolution.targets.map((record) => record.id)).toEqual([row.id]);
+  });
+
   it('refuses a project operation when Media is not an exact project name', async () => {
     const { db, store } = client();
     db.seed('pierrot_projects', [project(randomUUID(), 'Journal', 'journal')]);

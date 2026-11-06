@@ -46,7 +46,9 @@ export default function ProjectOverview({ project: initial }: { project: Pierrot
             {project.description || project.objective || 'Постоянное рабочее пространство Pierrot.'}
           </p>
           <small>
-            {statusSummary.label} · последняя активность{' '}
+            {statusSummary.label}
+            {project.ownerRating ? ` · оценка ${project.ownerRating}/10` : ''} · последняя
+            активность{' '}
             {project.lastActivityAt
               ? new Date(project.lastActivityAt).toLocaleDateString('ru-RU')
               : '—'}

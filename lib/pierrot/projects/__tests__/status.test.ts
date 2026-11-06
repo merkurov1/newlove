@@ -11,6 +11,8 @@ function project(overrides: Partial<PierrotProjectSnapshot> = {}): PierrotProjec
     objective: '',
     status: 'active',
     priority: 0,
+    ownerRating: null,
+    ownerRatingUpdatedAt: null,
     projectBrief: '',
     briefRevision: 0,
     lastActivityAt: '',

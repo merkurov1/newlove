@@ -56,6 +56,7 @@ import {
   createTaskInput,
   listDevTasks,
   updateDevTask,
+  validateDevTaskCompletion,
 } from '../tasks';
 import type { DevTask } from '../types';
 
@@ -220,6 +221,58 @@ describe('Task Studio persistence', () => {
     const result = await listDevTasks(USER_ID, 20);
     expect(result.tasks).toEqual([]);
     expect(result.migrationRequired).toBe(true);
+  });
+
+  it('refuses to mark a task verified without acceptance criteria and evidence', () => {
+    expect(() =>
+      validateDevTaskCompletion({
+        verificationStatus: null,
+        acceptanceCriteria: [],
+        tests: [],
+        unverified: [],
+        verificationNotes: '',
+        resultCommit: null,
+        pullRequests: [],
+      })
+    ).toThrow('DEV_VERIFICATION_REQUIRED');
+
+    expect(() =>
+      validateDevTaskCompletion({
+        verificationStatus: 'verified',
+        acceptanceCriteria: [],
+        tests: ['npm test'],
+        unverified: [],
+        verificationNotes: 'Ran locally.',
+        resultCommit: 'a'.repeat(40),
+        pullRequests: [],
+      })
+    ).toThrow('DEV_ACCEPTANCE_CRITERIA_REQUIRED');
+
+    expect(() =>
+      validateDevTaskCompletion({
+        verificationStatus: 'verified',
+        acceptanceCriteria: ['Search returns one result.'],
+        tests: [],
+        unverified: [],
+        verificationNotes: '',
+        resultCommit: null,
+        pullRequests: [],
+      })
+    ).toThrow('DEV_EVIDENCE_REQUIRED');
+  });
+
+  it('accepts verified only with criteria, evidence and a real result', () => {
+    expect(() =>
+      validateDevTaskCompletion({
+        verificationStatus: 'verified_with_warnings',
+        acceptanceCriteria: ['Search returns one result.'],
+        tests: ['npm test -- search'],
+        unverified: ['mobile keyboard'],
+        verificationNotes: 'Tested locally; mobile keyboard not run.',
+        resultCommit: 'a'.repeat(40),
+        pullRequests: [],
+      })
+    ).not.toThrow();
   });
 
   it('attaches a result and verification status', async () => {

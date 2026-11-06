@@ -49,6 +49,15 @@ export type WorkspacePeriod = 7 | 30;
 
 import type { CommercialSummary } from '@/lib/pierrot/commercialSummary';
 
+export type WorkspaceProjectHealth = {
+  /** null means the source could not be read; zero is a real value. */
+  activeProjects: number | null;
+  /** Active owner tasks/reminders, not the model's interpretation. */
+  activeTasks: number | null;
+  /** Dev tasks that are ready, in progress or awaiting review. */
+  activeDevTasks: number | null;
+};
+
 export type WorkspaceOverview = {
   period: WorkspacePeriod;
   from: string;
@@ -59,6 +68,7 @@ export type WorkspaceOverview = {
   generatedAt: string;
   /** True when this is the last successful snapshot, not a fresh load. */
   stale?: boolean;
+  projectHealth?: WorkspaceProjectHealth;
 };
 
 export type OwnerConversationListItem = {

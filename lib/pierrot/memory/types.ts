@@ -58,6 +58,9 @@ export type PierrotMemoryRecord = {
   importance: number;
   /** 0..1; an inferred fact is never equal to an explicit owner command. */
   confidence: number;
+  /** Owner's explicit 1..10 rating, never the model importance/confidence. */
+  ownerRating: number | null;
+  ownerRatingUpdatedAt: string | null;
   validFrom: string | null;
   validUntil: string | null;
   lastReferencedAt: string | null;
@@ -102,6 +105,7 @@ export type PierrotMemoryWriteInput = {
   validUntil?: string | null;
   importance?: number;
   confidence?: number;
+  ownerRating?: number;
   status?: PierrotMemoryStatus;
   sourceRefs?: Array<Record<string, unknown>>;
   /**

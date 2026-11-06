@@ -5,6 +5,19 @@ describe('project chat commands', () => {
     expect(detectProjectCommand('Пьеро, создай проект Art Engine')).toEqual({
       action: 'create',
       name: 'Art Engine',
+      task: null,
+    });
+  });
+
+  it('does not put a second command into the project name', () => {
+    expect(
+      detectProjectCommand(
+        'Создай проект Heart & Angel и там добавь задачу - опустить шарик с сердечком на мобильных ниже'
+      )
+    ).toEqual({
+      action: 'create',
+      name: 'Heart & Angel',
+      task: 'опустить шарик с сердечком на мобильных ниже',
     });
   });
 
@@ -27,6 +40,39 @@ describe('project chat commands', () => {
       taskQuery: null,
       projectName: 'Art Engine',
     });
+  });
+
+  it('parses an explicit owner rating without touching priority', () => {
+    expect(detectProjectCommand('Поставь проекту Journal оценку 8')).toEqual({
+      action: 'rate',
+      name: 'Journal',
+      rating: 8,
+    });
+    expect(detectProjectCommand('Оцени проект Art Engine на 10')).toEqual({
+      action: 'rate',
+      name: 'Art Engine',
+      rating: 10,
+    });
+  });
+
+  it('rejects an out-of-range rating', () => {
+    expect(detectProjectCommand('Поставь проекту Journal оценку 11')).toEqual({ action: 'none' });
+  });
+
+  it('parses a meaningful brief update', () => {
+    expect(
+      detectProjectCommand(
+        'Обнови бриф проекта Journal: цель — еженедельный выпуск с редакционным отбором.'
+      )
+    ).toMatchObject({
+      action: 'update_brief',
+      name: 'Journal',
+      brief: 'цель — еженедельный выпуск с редакционным отбором.',
+    });
+  });
+
+  it('does not overwrite a brief with a tiny message', () => {
+    expect(detectProjectCommand('Обнови бриф проекта Journal: ок')).toEqual({ action: 'none' });
   });
 
   it('does not treat deleting a task as deleting a project', () => {

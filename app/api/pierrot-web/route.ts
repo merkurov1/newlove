@@ -25,6 +25,7 @@ import {
   createPierrotStore,
   ensurePierrotConversation,
   findPierrotAssistantReply,
+  loadLastPierrotAssistantTrace,
   loadPierrotCommercialSignals,
   persistenceFailure,
   recordPierrotEvent,
@@ -76,7 +77,7 @@ import {
 } from '@/lib/knowledge/rag/evidence';
 import type { RagRetrievalOutcome, RetrievedChunk } from '@/lib/knowledge/rag/types';
 import type { BrainRetrievalResult } from '@/lib/knowledge/rag/brainRetrieval';
-import { decideWebSearch, hasExplicitWebCommand } from '@/lib/knowledge/web/searchDecision';
+import { decideWebSearch } from '@/lib/knowledge/web/searchDecision';
 import { searchWebEvidence } from '@/lib/knowledge/web/exaSearch';
 import {
   buildBrainWebSynthesisPrompt,
@@ -165,6 +166,7 @@ import {
   type MemoryOperationOutcome,
 } from '@/lib/pierrot/memory/operations';
 import { buildSkillsContext } from '@/lib/pierrot/skills/store';
+import { loadOwnerHistoryContext } from '@/lib/pierrot/memory/historyContext';
 import {
   formatSkillAnalysisChatReply,
   parseSkillAnalysisCommand,
@@ -215,11 +217,22 @@ import {
   getPierrotProjectSnapshot,
   listPierrotProjects,
   linkConversationToProject,
+  updatePierrotProject,
 } from '@/lib/pierrot/projects/store';
 import { detectProjectCommand } from '@/lib/pierrot/projects/commands';
-import { listProjectTasks, moveDecisionToProject } from '@/lib/pierrot/projects/links';
+import {
+  listProjectTasks,
+  loadProjectConversationContext,
+  moveDecisionToProject,
+  resolveExactProject,
+} from '@/lib/pierrot/projects/links';
+import {
+  createOwnerTask,
+  type OwnerTaskCreationResult,
+} from '@/lib/pierrot/memory/taskCreation';
 import { listDevTasks, updateDevTask } from '@/lib/pierrot/dev/tasks';
 import { resolvePierrotProject } from '@/lib/pierrot/projects/resolver';
+import { formatPierrotAnswerTrace } from '@/lib/pierrot/diagnostics';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -633,6 +646,10 @@ export async function POST(req: Request) {
               selected.project.id,
               conversationId
             );
+            // Carry the project into this same first turn. Conversation lookup
+            // happened before the new conversation existed, so without this
+            // the opening message would miss its project context.
+            conversationProject = selected.project;
           }
         }
 
@@ -823,6 +840,7 @@ export async function POST(req: Request) {
 
     let ownerMemoryContext: string | null = null;
     let ownerProjectContext: string | null = null;
+    let ownerHistoryContext: string | null = null;
     let projectResolutionNote: string | null = null;
     let ownerMemoryUnavailable = false;
     let skillsContext: string | null = null;
@@ -847,19 +865,35 @@ export async function POST(req: Request) {
         try {
           const project = await getPierrotProjectSnapshot(ownerIdentityUserId, resolvedProjectRef);
           if (project) {
+            const conversationContext = await loadProjectConversationContext(
+              memoryStore,
+              ownerIdentityUserId,
+              project.id,
+              { limit: 5, excludeConversationId: conversationId }
+            ).catch(() => null);
             ownerProjectContext = [
               `PROJECT CONTEXT: ${project.name} (${project.status})`,
-              `Brief: ${project.projectBrief || 'No reviewed brief yet.'}`,
+              `Brief revision ${project.briefRevision}: ${project.projectBrief || 'No reviewed brief yet.'}`,
               project.objective ? `Objective: ${project.objective}` : null,
+              project.ownerRating
+                ? `Owner rating: ${project.ownerRating}/10 (explicit owner value; not model importance).`
+                : null,
               project.decisions.length
                 ? `Recent decisions: ${project.decisions.map((item) => `${item.title} [${item.status}]`).join('; ')}`
                 : null,
               project.tasks.length
                 ? `Open/project tasks: ${project.tasks
-                    .filter((item) => !['verified', 'archived'].includes(item.status))
+                    .filter((item) => !['verified', 'archived', 'completed', 'cancelled'].includes(item.status))
                     .map((item) => `${item.title} [${item.status}]`)
                     .join('; ')}`
                 : null,
+              project.conversations.length
+                ? `Linked conversations: ${project.conversations.map((item) => item.title || item.id).join('; ')}`
+                : null,
+              project.knowledge.length
+                ? `Project knowledge: ${project.knowledge.map((item) => item.title || item.id).join('; ')}`
+                : null,
+              conversationContext,
             ]
               .filter(Boolean)
               .join('\n');
@@ -887,6 +921,22 @@ export async function POST(req: Request) {
       } catch {
         skillsContext = null;
       }
+
+      const asksConversationHistory =
+        /(?:что\s+(?:я|мы)\s+(?:вчера\s+)?(?:обсуждал|говорил|решали|обсуждали)|истори[яю]\s+(?:диалогов|разговоров|нашего)|что\s+было\s+в\s+прошлом\s+разговоре|what\s+did\s+(?:i|we)\s+(?:discuss|talk about)|conversation history|previous conversation)/i.test(
+          trimmedMessage
+        );
+
+      if (asksConversationHistory) {
+        try {
+          ownerHistoryContext = await loadOwnerHistoryContext(memoryStore, ownerIdentityUserId, {
+            excludeConversationId: conversationId,
+            limit: 5,
+          });
+        } catch {
+          ownerHistoryContext = null;
+        }
+      }
     }
 
     const systemPrompt = [
@@ -894,6 +944,13 @@ export async function POST(req: Request) {
       buildPierrotPerspectivePrompt(perspective),
       ownerProfileContext,
       ownerMemoryContext,
+      ownerHistoryContext,
+      !ownerHistoryContext &&
+      /(?:что\s+(?:я|мы)\s+(?:вчера\s+)?(?:обсуждал|говорил|решали|обсуждали)|истори[яю]\s+(?:диалогов|разговоров|нашего)|what\s+did\s+(?:i|we)\s+(?:discuss|talk about))/i.test(
+        trimmedMessage
+      )
+        ? 'CONVERSATION HISTORY UNAVAILABLE: no recent saved transcript could be read. Say so instead of reconstructing the conversation from guesses.'
+        : null,
       ownerProjectContext,
       projectResolutionNote,
       skillsContext,
@@ -1279,6 +1336,115 @@ export async function POST(req: Request) {
         return NextResponse.json(payload);
       };
 
+      const diagnosticQuestion =
+        /(?:почему|зачем)\s+ты\s+так\s+(?:ответил|ответила|сказал|сказала|решил|решила)|(?:откуда|на\s+ч[её]м)\s+(?:такой\s+)?ответ|какие\s+(?:контекст|инструменты)\s+ты\s+использовал|why\s+did\s+you\s+(?:answer|say|reply)|explain\s+your\s+answer|what\s+(?:context|tools)\s+did\s+you\s+use/i.test(
+          trimmedMessage
+        );
+
+      if (diagnosticQuestion) {
+        const trace =
+          pierrotStore && canStoreMetadata
+            ? await loadLastPierrotAssistantTrace(pierrotStore, conversationId).catch(() => null)
+            : null;
+        return persistOwnerReply(
+          formatPierrotAnswerTrace(trace, ownerLanguage),
+          {
+            deterministic: true,
+            diagnostic_trace: trace
+              ? {
+                  provider: trace.provider ?? null,
+                  web_requested: trace.web_requested ?? false,
+                  web_reason: trace.web_reason ?? null,
+                  answer_sources: trace.answer_sources ?? null,
+                }
+              : null,
+          }
+        );
+      }
+
+      const projectCorrection =
+        /^(?:нет|не\s+то|это\s+не|я\s+(?:имел|имела|имею)\s+в\s+виду|это\s+касается|относится\s+к|это\s+про|нет[,!]?\s+это)(?=\s|[,!?.]|$)/i.test(
+          trimmedMessage.trim()
+        );
+
+      if (projectCorrection && memoryStore && isPierrotUserId(ownerIdentityUserId)) {
+        const corrected = await resolvePierrotProject({
+          ownerUserId: ownerIdentityUserId,
+          conversationProject,
+          message: trimmedMessage,
+        }).catch(() => ({ project: null, ambiguous: false }));
+
+        if (corrected.project) {
+          const candidates = (
+            await loadLatestMemoryListRecords(
+              memoryStore,
+              ownerIdentityUserId,
+              conversationId
+            ).catch(() => [])
+          ).filter(
+            (record) =>
+              (record.kind === 'task' || record.kind === 'reminder') &&
+              record.status === 'current'
+          );
+
+          if (candidates.length === 1) {
+            try {
+              await moveDecisionToProject(
+                memoryStore,
+                ownerIdentityUserId,
+                candidates[0].id,
+                corrected.project
+              );
+              const linked = await listProjectTasks(
+                memoryStore,
+                ownerIdentityUserId,
+                corrected.project.id,
+                { statuses: ['current'], limit: 500 }
+              );
+              if (!linked.some((record) => record.id === candidates[0].id)) {
+                throw new Error('PROJECT_CORRECTION_NOT_CONFIRMED');
+              }
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? `Исправил связь: задача «${candidates[0].title}» теперь в проекте «${corrected.project.name}». Дубликат проекта не создавался.`
+                  : `Corrected the link: “${candidates[0].title}” now belongs to “${corrected.project.name}”. No duplicate project was created.`,
+                {
+                  project_command: 'reclassify_task',
+                  project_status: 'moved',
+                  project_id: corrected.project.id,
+                  memory_id: candidates[0].id,
+                  memory_list_ids: [candidates[0].id],
+                  operation_log: {
+                    intent: 'project_reclassification',
+                    project_id: corrected.project.id,
+                    object_id: candidates[0].id,
+                    result: 'confirmed',
+                  },
+                }
+              );
+            } catch {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? `Понял правильный проект, но не смог подтвердить перенос задачи «${candidates[0].title}». Ничего не утверждаю.`
+                  : `I understood the correct project, but could not confirm moving “${candidates[0].title}”. I am not claiming it changed.`,
+                { project_command: 'reclassify_task', project_status: 'failed' }
+              );
+            }
+          }
+
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? `Понял: правильный проект — «${corrected.project.name}». Не вижу ровно одну недавнюю задачу для переноса. Уточни её заголовок, и я исправлю связь без создания дубликата проекта.`
+              : `Understood: the correct project is “${corrected.project.name}”. I cannot identify exactly one recent task to move. Name its title and I will fix the link without creating a duplicate project.`,
+            {
+              project_command: 'reclassify_task',
+              project_status: 'clarification_required',
+              project_id: corrected.project.id,
+            }
+          );
+        }
+      }
+
       const projectCommand = detectProjectCommand(trimmedMessage);
       if (projectCommand.action !== 'none') {
         if (!isPierrotUserId(ownerIdentityUserId)) {
@@ -1298,10 +1464,137 @@ export async function POST(req: Request) {
             });
           }
           try {
+            const existing = memoryStore
+              ? await resolveExactProject(
+                  memoryStore,
+                  ownerIdentityUserId,
+                  projectCommand.name
+                ).catch(() => ({ project: null, ambiguous: false }))
+              : { project: null, ambiguous: false };
+
+            if (existing.ambiguous) {
+              return persistOwnerReply(
+                `Несколько проектов совпадают с «${projectCommand.name}». Новый проект не создан. Уточни точное название.`,
+                { project_command: 'create', project_status: 'ambiguous' }
+              );
+            }
+
+            if (existing.project) {
+              if (!projectCommand.task) {
+                return persistOwnerReply(
+                  `Проект «${existing.project.name}» уже существует. Дубликат не создан.`,
+                  {
+                    project_command: 'create',
+                    project_status: 'already_exists',
+                    project_id: existing.project.id,
+                    project_slug: existing.project.slug,
+                  }
+                );
+              }
+
+              if (!memoryStore) {
+                return persistOwnerReply(
+                  `Проект «${existing.project.name}» уже есть, но хранилище задач недоступно. Задача не сохранена.`,
+                  {
+                    project_command: 'create',
+                    project_status: 'partial',
+                    project_id: existing.project.id,
+                  }
+                );
+              }
+
+              const taskResult = await createOwnerTask({
+                store: memoryStore,
+                userId: ownerIdentityUserId,
+                content: projectCommand.task,
+                projectRef: existing.project.id,
+                conversationId,
+                messageId: userMessageId,
+                originalMessage: trimmedMessage,
+              });
+
+              if (taskResult.status === 'created' || taskResult.status === 'already_exists') {
+                return persistOwnerReply(
+                  `Проект «${existing.project.name}» уже существовал — дубликат не создан. Задача «${taskResult.task.title}» (${taskResult.task.id.slice(0, 8)}) сохранена и связана с проектом.`,
+                  {
+                    project_command: 'create',
+                    project_status: 'existing_with_task',
+                    project_id: existing.project.id,
+                    memory_id: taskResult.task.id,
+                    memory_list_ids: [taskResult.task.id],
+                    memory_status: 'saved',
+                  }
+                );
+              }
+
+              return persistOwnerReply(
+                `Проект «${existing.project.name}» уже есть, но задачу сохранить и проверить не удалось. Я не буду утверждать, что она создана.`,
+                {
+                  project_command: 'create',
+                  project_status: 'partial',
+                  project_id: existing.project.id,
+                }
+              );
+            }
+
             const created = await createPierrotProject(ownerIdentityUserId, {
               name: projectCommand.name,
               projectBrief: '',
             });
+
+            if (projectCommand.task) {
+              if (!memoryStore) {
+                return persistOwnerReply(
+                  `Проект «${created.name}» создан, но хранилище задач недоступно. Задача не сохранена.`,
+                  {
+                    project_command: 'create',
+                    project_status: 'partial',
+                    project_id: created.id,
+                  }
+                );
+              }
+              const taskResult = await createOwnerTask({
+                store: memoryStore,
+                userId: ownerIdentityUserId,
+                content: projectCommand.task,
+                projectRef: created.id,
+                conversationId,
+                messageId: userMessageId,
+                originalMessage: trimmedMessage,
+              });
+
+              if (taskResult.status === 'created' || taskResult.status === 'already_exists') {
+                return persistOwnerReply(
+                  `Создал проект «${created.name}» и задачу «${taskResult.task.title}» (${taskResult.task.id.slice(0, 8)}). Проверил запись и связь с проектом.`,
+                  {
+                    project_command: 'create',
+                    project_status: 'created',
+                    project_id: created.id,
+                    project_slug: created.slug,
+                    memory_id: taskResult.task.id,
+                    memory_list_ids: [taskResult.task.id],
+                    memory_status: 'saved',
+                    operation_log: {
+                      intent: 'create_project_with_task',
+                      project_id: created.id,
+                      object_id: taskResult.task.id,
+                      result: 'confirmed',
+                    },
+                  }
+                );
+              }
+
+              return persistOwnerReply(
+                `Проект «${created.name}» создан, но задачу сохранить и проверить не удалось. Я не буду утверждать, что она существует.`,
+                {
+                  project_command: 'create',
+                  project_status: 'partial',
+                  project_id: created.id,
+                  task_status: taskResult.status,
+                }
+              );
+            }
+
             return persistOwnerReply(
               `Создал проект «${created.name}». Теперь можно сказать: «перенеси эту задачу в проект ${created.name}».`,
               {
@@ -1319,14 +1612,132 @@ export async function POST(req: Request) {
           }
         }
 
-        if (projectCommand.action === 'delete') {
-          const project = await getPierrotProject(ownerIdentityUserId, projectCommand.name);
+        if (projectCommand.action === 'rate') {
+          const resolved = await resolveExactProject(
+            memoryStore || createPierrotStore()!,
+            ownerIdentityUserId,
+            projectCommand.name
+          );
+          if (!resolved.project) {
+            return persistOwnerReply(
+              resolved.ambiguous
+                ? 'Несколько проектов совпадают с этим названием. Уточни точный проект. Оценка не сохранена.'
+                : `Не нашёл проект «${projectCommand.name}». Оценка не сохранена.`,
+              { project_command: 'rate', project_status: 'not_found' }
+            );
+          }
+
+          try {
+            const updated = await updatePierrotProject(
+              ownerIdentityUserId,
+              resolved.project.id,
+              { ownerRating: projectCommand.rating }
+            );
+            const verified = updated
+              ? await getPierrotProject(ownerIdentityUserId, resolved.project.id)
+              : null;
+            if (!verified || verified.ownerRating !== projectCommand.rating) {
+              throw new Error('PROJECT_RATING_NOT_CONFIRMED');
+            }
+            return persistOwnerReply(
+              `Сохранил оценку проекта «${verified.name}»: ${projectCommand.rating}/10. Это твоя оценка; она не меняет внутреннюю важность или уверенность модели.`,
+              {
+                project_command: 'rate',
+                project_status: 'saved',
+                project_id: verified.id,
+                owner_rating: projectCommand.rating,
+                operation_log: {
+                  intent: 'project_rating',
+                  project_id: verified.id,
+                  object_id: verified.id,
+                  new_value: projectCommand.rating,
+                  result: 'confirmed',
+                },
+              }
+            );
+          } catch (error) {
+            const code = error instanceof Error ? error.message : 'rating_failed';
+            if (code === 'PROJECT_RATING_MIGRATION_REQUIRED') {
+              return persistOwnerReply(
+                'Оценка не сохранена: в базе ещё нет отдельного поля пользовательской оценки. Подготовь миграцию owner_rating; importance и priority не подменяют её.',
+                { project_command: 'rate', project_status: 'migration_required' }
+              );
+            }
+            return persistOwnerReply(
+              `Не удалось подтвердить сохранение оценки проекта «${resolved.project.name}». Я не буду утверждать, что она записана.`,
+              { project_command: 'rate', project_status: 'failed' }
+            );
+          }
+        }
+
+        if (projectCommand.action === 'update_brief') {
+          const resolved = await resolveExactProject(
+            memoryStore || createPierrotStore()!,
+            ownerIdentityUserId,
+            projectCommand.name
+          );
+          const project = resolved.project;
           if (!project) {
             return persistOwnerReply(
-              `Не нашёл проект «${projectCommand.name}». Ничего не удалено.`,
+              resolved.ambiguous
+                ? 'Несколько проектов совпадают с этим названием. Уточни точный проект. Бриф не изменён.'
+                : `Не нашёл проект «${projectCommand.name}». Бриф не изменён.`,
+              {
+                project_command: 'update_brief',
+                project_status: resolved.ambiguous ? 'ambiguous' : 'not_found',
+              }
+            );
+          }
+          try {
+            const updated = await updatePierrotProject(ownerIdentityUserId, project.id, {
+              projectBrief: projectCommand.brief,
+              briefChangeNote: projectCommand.note,
+            });
+            const verified = updated
+              ? await getPierrotProject(ownerIdentityUserId, project.id)
+              : null;
+            if (!verified || verified.projectBrief !== projectCommand.brief) {
+              throw new Error('PROJECT_BRIEF_NOT_CONFIRMED');
+            }
+            return persistOwnerReply(
+              `Обновил бриф проекта «${verified.name}» до ревизии ${verified.briefRevision}. Предыдущая ревизия сохранена в истории.`,
+              {
+                project_command: 'update_brief',
+                project_status: 'saved',
+                project_id: verified.id,
+                brief_revision: verified.briefRevision,
+                operation_log: {
+                  intent: 'project_brief_update',
+                  project_id: verified.id,
+                  old_value: project.projectBrief.slice(0, 500),
+                  new_value: verified.projectBrief.slice(0, 500),
+                  result: 'confirmed',
+                },
+              }
+            );
+          } catch {
+            return persistOwnerReply(
+              `Не удалось подтвердить обновление брифа проекта «${project.name}». Предыдущий бриф не считается изменённым.`,
+              { project_command: 'update_brief', project_status: 'failed' }
+            );
+          }
+        }
+
+        if (projectCommand.action === 'delete') {
+          const resolvedDelete = await resolveExactProject(
+            memoryStore || createPierrotStore()!,
+            ownerIdentityUserId,
+            projectCommand.name
+          );
+          const project = resolvedDelete.project;
+          if (!project) {
+            return persistOwnerReply(
+              resolvedDelete.ambiguous
+                ? 'Несколько проектов совпадают с этим названием. Уточни точный проект. Ничего не удалено.'
+                : `Не нашёл проект «${projectCommand.name}». Ничего не удалено.`,
               {
                 project_command: 'delete',
-                project_status: 'not_found',
+                project_status: resolvedDelete.ambiguous ? 'ambiguous' : 'not_found',
               }
             );
           }
@@ -2161,6 +2572,19 @@ export async function POST(req: Request) {
             memory_operation_scope: pendingOperation.scope,
             memory_operation_engine: outcome.engine,
             memory_operation_pending: null,
+            // Keep the exact changed IDs available for a following
+            // “restore this task” turn.
+            memory_list_ids: outcome.targets.map((target) => target.id),
+            operation_log: {
+              intent: `memory_operation:${pendingOperation.action}`,
+              project_id: pendingOperation.projectId,
+              object_ids: outcome.targets.map((target) => target.id),
+              target_titles: pendingOperation.titles.map((item) => item.title),
+              new_statuses: outcome.targets.map((target) => target.status),
+              changed: outcome.changed,
+              failed: outcome.failed,
+              result: outcome.status,
+            },
           });
         }
       }
@@ -2231,7 +2655,8 @@ export async function POST(req: Request) {
           const supersession = record.supersededBy
             ? ` · заменено записью ${record.supersededBy.slice(0, 8)}`
             : '';
-          return `${marker}${record.title}${date ? ` · ${date}` : ''}${status}${archive}${supersession} — ${content}`;
+          const rating = record.ownerRating ? ` · оценка ${record.ownerRating}/10` : '';
+          return `${marker}${record.title}${date ? ` · ${date}` : ''}${status}${archive}${rating}${supersession} — ${content}`;
         };
 
         const formatGroup = (title: string, records: PierrotMemoryRecord[]) => {
@@ -2261,6 +2686,291 @@ export async function POST(req: Request) {
               : ''
           }`;
         };
+
+        if (memoryIntent.action === 'create_task') {
+          const content = memoryIntent.content?.trim();
+          if (!content) {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Что записать в задачу? Дай формулировку — я сохраню её и покажу точный ID после проверки.'
+                : 'What should the task say? Give me the wording; I will save it and show the exact ID after verification.',
+              { memory_status: 'clarification_required', task_intent: 'create_task' }
+            );
+          }
+
+          const result = await createOwnerTask({
+            store: memoryStore,
+            userId: ownerIdentityUserId,
+            content,
+            projectRef: memoryIntent.projectRef,
+            conversationId,
+            messageId: userMessageId,
+            originalMessage: trimmedMessage,
+          });
+
+          if (result.status === 'project_not_found' || result.status === 'project_ambiguous') {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? result.status === 'project_ambiguous'
+                  ? `Несколько проектов совпадают с «${result.projectRef}». Задача не создана. Уточни точный проект.`
+                  : `Не нашёл проект «${result.projectRef}». Задача не создана, чтобы не привязать её к чужому проекту.`
+                : result.status === 'project_ambiguous'
+                  ? `Several projects match “${result.projectRef}”. Nothing was created. Name the exact project.`
+                  : `I could not find “${result.projectRef}”. Nothing was created so the task cannot land in the wrong project.`,
+              {
+                memory_status: 'clarification_required',
+                task_intent: 'create_task',
+                project_status: result.status,
+              }
+            );
+          }
+
+          if (result.status === 'existing_in_other_project') {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? `Такая задача уже существует${result.existingProjectName ? ` в проекте «${result.existingProjectName}»` : ' в другом проекте'} и не была перенесена в «${result.project?.name}». Дубликат не создан, чужая связь не изменена.`
+                : `This task already exists${result.existingProjectName ? ` in “${result.existingProjectName}”` : ' in another project'} and was not moved to “${result.project?.name}”. Nothing was duplicated or relinked.`,
+              {
+                memory_status: 'clarification_required',
+                task_intent: 'create_task',
+                task_status: result.status,
+                memory_id: result.task.id,
+                project_id: result.project?.id,
+              }
+            );
+          }
+
+          if (result.status === 'invalid_content') {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Формулировка слишком короткая. Задача не создана.'
+                : 'The wording is too short. Nothing was created.',
+              { memory_status: 'clarification_required', task_intent: 'create_task' }
+            );
+          }
+
+          if (result.status === 'write_failed' || result.status === 'verification_failed') {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Не удалось сохранить и перечитать задачу. Я не буду утверждать, что она создана.'
+                : 'I could not save and read back the task. I will not claim it exists.',
+              {
+                memory_status: 'write_failed',
+                task_intent: 'create_task',
+                task_status: result.status,
+              }
+            );
+          }
+
+          if (result.status === 'link_failed') {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? `Задача «${result.task?.title || content}» сохранена (${result.task?.id.slice(0, 8)}), но связь с проектом «${result.project?.name}» не подтвердилась. Я не буду утверждать, что она в проекте.`
+                : `The task “${result.task?.title || content}” was saved (${result.task?.id.slice(0, 8)}), but the link to “${result.project?.name}” was not confirmed. I will not claim it belongs to the project.`,
+              {
+                memory_status: 'partial',
+                task_intent: 'create_task',
+                task_status: 'link_failed',
+                memory_id: result.task?.id,
+                project_id: result.project?.id,
+              }
+            );
+          }
+
+          const createdResult = result as Extract<
+            OwnerTaskCreationResult,
+            { status: 'created' | 'already_exists' }
+          >;
+          const projectLine = createdResult.project
+            ? ` в проект «${createdResult.project.name}»`
+            : '';
+          const already = createdResult.status === 'already_exists';
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? already
+                ? `Такая задача уже есть: «${createdResult.task.title}» (${createdResult.task.id.slice(0, 8)})${projectLine}. Ничего не дублировал.`
+                : `Создал задачу «${createdResult.task.title}»${projectLine}. ID: ${createdResult.task.id.slice(0, 8)}. Прочитал запись обратно — статус ${createdResult.task.status}.`
+              : already
+                ? `This task already exists: “${createdResult.task.title}” (${createdResult.task.id.slice(0, 8)})${projectLine}. Nothing was duplicated.`
+                : `Created “${createdResult.task.title}”${projectLine}. ID: ${createdResult.task.id.slice(0, 8)}. Read-back status: ${createdResult.task.status}.`,
+            {
+              memory_status: already ? 'deduplicated' : 'saved',
+              memory_kind: 'task',
+              memory_id: createdResult.task.id,
+              memory_list_ids: [createdResult.task.id],
+              project_id: createdResult.project?.id,
+              task_intent: 'create_task',
+              task_status: createdResult.status,
+              operation_log: {
+                intent: 'create_task',
+                project_id: createdResult.project?.id || null,
+                object_id: createdResult.task.id,
+                new_value: createdResult.task.title,
+                result:
+                  createdResult.linkPersisted || !createdResult.project ? 'confirmed' : 'partial',
+              },
+            }
+          );
+        }
+
+        if (memoryIntent.action === 'rate') {
+          if (!memoryIntent.rating || !memoryIntent.ratingTarget) {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Уточни оценку от 1 до 10 и объект: проект или задача.'
+                : 'Give a rating from 1 to 10 and the target: project or task.',
+              { memory_status: 'clarification_required', task_intent: 'rate' }
+            );
+          }
+
+          if (memoryIntent.ratingTarget === 'project') {
+            const ref = memoryIntent.projectRef || '';
+            const resolved = await resolveExactProject(memoryStore, ownerIdentityUserId, ref);
+            if (!resolved.project) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? resolved.ambiguous
+                    ? 'Несколько проектов совпадают с этим названием. Оценка не сохранена.'
+                    : `Не нашёл проект «${ref}». Оценка не сохранена.`
+                  : resolved.ambiguous
+                    ? 'Several projects match that name. Nothing was saved.'
+                    : `I could not find “${ref}”. Nothing was saved.`,
+                { memory_status: 'clarification_required', task_intent: 'rate' }
+              );
+            }
+
+            try {
+              await updatePierrotProject(ownerIdentityUserId, resolved.project.id, {
+                ownerRating: memoryIntent.rating,
+              });
+              const verified = await getPierrotProject(ownerIdentityUserId, resolved.project.id);
+              if (!verified || verified.ownerRating !== memoryIntent.rating) {
+                throw new Error('PROJECT_RATING_NOT_CONFIRMED');
+              }
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? `Сохранил оценку проекта «${verified.name}»: ${memoryIntent.rating}/10. Это твоя оценка, отдельно от importance и приоритета модели.`
+                  : `Saved the owner rating for “${verified.name}”: ${memoryIntent.rating}/10. It is separate from model importance and priority.`,
+                {
+                  memory_status: 'saved',
+                  task_intent: 'rate',
+                  project_id: verified.id,
+                  owner_rating: memoryIntent.rating,
+                  operation_log: {
+                    intent: 'task_or_project_rating',
+                    project_id: verified.id,
+                    new_value: memoryIntent.rating,
+                    result: 'confirmed',
+                  },
+                }
+              );
+            } catch (error) {
+              const code = error instanceof Error ? error.message : '';
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? code === 'PROJECT_RATING_MIGRATION_REQUIRED'
+                    ? 'Оценка не сохранена: нужно добавить отдельное поле owner_rating. Приоритет и importance его не заменяют.'
+                    : 'Не удалось подтвердить сохранение оценки. Я не буду утверждать, что она записана.'
+                  : 'I could not confirm the rating. I will not claim it was saved.',
+                {
+                  memory_status: code === 'PROJECT_RATING_MIGRATION_REQUIRED' ? 'migration_required' : 'write_failed',
+                  task_intent: 'rate',
+                }
+              );
+            }
+          }
+
+          const query = memoryIntent.query || '';
+          const found = await searchMemory(memoryStore, {
+            userId: ownerIdentityUserId,
+            query,
+            includeArchive: false,
+            limit: 20,
+          });
+          const exact = found.records.filter(
+            (record) => record.title.toLowerCase().trim() === query.toLowerCase().trim()
+          );
+          const candidates = exact.length > 0 ? exact : found.records;
+          if (candidates.length !== 1) {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? candidates.length === 0
+                  ? `Не нашёл задачу «${query}». Оценка не сохранена.`
+                  : `Нашёл несколько записей. Уточни точный заголовок, чтобы я не поставил оценку не той задаче:\n\n${candidates
+                      .slice(0, 10)
+                      .map((record, index) => `${index + 1}. ${record.title}`)
+                      .join('\n')}`
+                : 'I did not find exactly one task. Nothing was rated.',
+              { memory_status: 'clarification_required', task_intent: 'rate' }
+            );
+          }
+
+          const target = candidates[0];
+          try {
+            const updated = await updateMemoryRecord(memoryStore, ownerIdentityUserId, target.id, {
+              ownerRating: memoryIntent.rating,
+              eventReason: 'owner_rating',
+              eventSource: 'owner_chat',
+            });
+            const verified = await getMemoryRecord(memoryStore, ownerIdentityUserId, target.id);
+            if (!verified || verified.ownerRating !== memoryIntent.rating) {
+              throw new Error('TASK_RATING_NOT_CONFIRMED');
+            }
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? `Сохранил оценку задачи «${verified.title}»: ${memoryIntent.rating}/10. Важность модели не изменена.`
+                : `Saved the owner rating for “${verified.title}”: ${memoryIntent.rating}/10. Model importance was not changed.`,
+              {
+                memory_status: 'saved',
+                task_intent: 'rate',
+                memory_id: verified.id,
+                owner_rating: memoryIntent.rating,
+                operation_log: {
+                  intent: 'task_or_project_rating',
+                  object_id: verified.id,
+                  new_value: memoryIntent.rating,
+                  result: 'confirmed',
+                },
+              }
+            );
+          } catch (error) {
+            const code = error instanceof Error ? error.message : '';
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? code === 'memory_rating_migration_required'
+                  ? 'Оценка задачи не сохранена: нужно добавить отдельное поле owner_rating. Importance её не заменяет.'
+                  : 'Не удалось подтвердить сохранение оценки задачи. Я не буду утверждать, что она записана.'
+                : 'I could not confirm the task rating. I will not claim it was saved.',
+              {
+                memory_status:
+                  code === 'memory_rating_migration_required' ? 'migration_required' : 'write_failed',
+                task_intent: 'rate',
+                memory_id: target.id,
+              }
+            );
+          }
+        }
+
+        if (memoryIntent.action === 'clarify' && memoryIntent.reason === 'project_scope_missing') {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Уточни точное название проекта. Фраза «все задачи по проекту» без имени не даёт права затрагивать задачи других проектов. Ничего не изменено.'
+              : 'Name the exact project. “All tasks in the project” without a name does not permit touching other projects. Nothing was changed.',
+            { memory_status: 'clarification_required', task_intent: 'project_scope_missing' }
+          );
+        }
+
+        if (
+          memoryIntent.action === 'clarify' &&
+          memoryIntent.reason === 'task_reference_ambiguous'
+        ) {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Уточни, какие именно задачи создать и в каком проекте. Я не буду превращать «это всё» в список задач без точных формулировок. Ничего не создано.'
+              : 'Tell me which tasks to create and in which project. I will not turn “all this” into a task list without exact wording. Nothing was created.',
+            { memory_status: 'clarification_required', task_intent: 'create_task' }
+          );
+        }
 
         if (
           memoryIntent.action === 'remember' ||
@@ -2723,7 +3433,24 @@ export async function POST(req: Request) {
               memory_operation_status: outcome.status,
               memory_operation_scope: resolution.scope,
               memory_operation_engine: outcome.engine,
+              memory_list_ids: outcome.targets.map((target) => target.id),
               ...(resolution.project ? { project_id: resolution.project.id } : {}),
+              operation_log: {
+                intent: `memory_operation:${resolution.action}`,
+                project_id: resolution.project?.id || null,
+                object_ids: outcome.targets.map((target) => target.id),
+                previous_statuses: resolution.targets.map((target) => ({
+                  id: target.id,
+                  status: target.status,
+                })),
+                new_statuses: outcome.targets.map((target) => ({
+                  id: target.id,
+                  status: target.status,
+                })),
+                changed: outcome.changed,
+                failed: outcome.failed,
+                result: outcome.status,
+              },
             });
           } catch {
             return persistOwnerReply(
@@ -2769,6 +3496,7 @@ export async function POST(req: Request) {
               hasListContext &&
               (placeholder ||
                 listReference === 'all' ||
+                listReference === 'last' ||
                 listReference === 'last_two' ||
                 listReference === 'these');
 
@@ -3039,38 +3767,10 @@ export async function POST(req: Request) {
           ownerMode: ragOwnerAuthorized,
         })
       : null;
-    const webSuppressedIntent =
-      queryPlan.intent === 'document_lookup' ||
-      queryPlan.intent === 'biography' ||
-      queryPlan.intent === 'commercial' ||
-      queryPlan.intent === 'analytics' ||
-      queryPlan.intent === 'knowledge_graph';
-    const explicitNonWebSource =
-      webDecision?.explicitSource === 'brain' || webDecision?.explicitSource === 'media';
-    const explicitSourceWithoutQuery = Boolean(
-      webDecision?.explicitSource && !webDecision.shouldSearch
-    );
-    // decideWebSearch is the single authority for autonomous web execution.
-    // queryPlan.sources.web describes intent classification and may inherit an
-    // old web intent for a follow-up; it must never bypass a later web veto.
-    const ownerInternalWebQuestion =
-      ragOwnerAuthorized &&
-      !hasExplicitWebCommand(trimmedMessage) &&
-      (webDecision?.reason === 'web_follow_up' ||
-        (Boolean(webDecision?.signals.includes('internal_context')) &&
-          !Boolean(webDecision?.signals.includes('current_events'))) ||
-        Boolean(requestedProject) ||
-        Boolean(conversationProject));
-    const webRequested = Boolean(
-      useModel &&
-      webDecision?.shouldSearch &&
-      // Owner workspace questions are about Pierrot's own memory, projects,
-      // tasks and history by default. Site mode must not weaken that boundary.
-      !ownerInternalWebQuestion &&
-      !webSuppressedIntent &&
-      !explicitNonWebSource &&
-      !explicitSourceWithoutQuery
-    );
+    // decideWebSearch is the *single* authority for autonomous web execution.
+    // Intent classification, project context and early execution-plan hints
+    // are inputs to the decision, never a second veto or a second permission.
+    const webRequested = Boolean(useModel && webDecision?.shouldSearch);
     const webSearchPromise: Promise<WebSearchResult | null> = webRequested
       ? searchWebEvidence({
           query: webDecision?.query || trimmedMessage,
@@ -3867,7 +4567,10 @@ export async function POST(req: Request) {
               operation: executionPlan.operation,
               tool: executionPlan.tool,
               fallback_policy: executionPlan.fallbackPolicy,
-              requires_web: executionPlan.requiresWeb,
+              // requires_web is the executed decision, not an early intent
+              // hint. This keeps the event internally consistent.
+              requires_web: webRequested,
+              intent_requires_web: executionPlan.requiresWeb,
               web_requested: webRequested,
               web_command: webRequested ? trimmedMessage.slice(0, 500) : null,
               web_query: webRequested ? webSearchResult?.query || webDecision?.query || null : null,

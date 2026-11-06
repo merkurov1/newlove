@@ -139,6 +139,47 @@ function mapRow(row: Record<string, unknown>): DevTask {
   };
 }
 
+/**
+ * A task may only be marked `verified` when a real verification result exists.
+ * A generated prompt, a `used` flag or a copied commit is not proof.
+ */
+export function validateDevTaskCompletion(
+  task: Pick<
+    DevTask,
+    | 'verificationStatus'
+    | 'acceptanceCriteria'
+    | 'tests'
+    | 'unverified'
+    | 'verificationNotes'
+    | 'resultCommit'
+    | 'pullRequests'
+  >
+): void {
+  if (
+    task.verificationStatus !== 'verified' &&
+    task.verificationStatus !== 'verified_with_warnings'
+  ) {
+    throw new Error('DEV_VERIFICATION_REQUIRED');
+  }
+  if (task.acceptanceCriteria.length === 0) {
+    throw new Error('DEV_ACCEPTANCE_CRITERIA_REQUIRED');
+  }
+  if (
+    task.tests.length === 0 &&
+    task.unverified.length === 0 &&
+    task.verificationNotes.trim().length === 0
+  ) {
+    throw new Error('DEV_EVIDENCE_REQUIRED');
+  }
+  if (
+    !task.resultCommit &&
+    task.pullRequests.length === 0 &&
+    task.verificationNotes.trim().length === 0
+  ) {
+    throw new Error('DEV_RESULT_EVIDENCE_REQUIRED');
+  }
+}
+
 export function buildTaskPrompt(task: DevTask): string {
   const lines: string[] = [];
   const add = (heading: string, value?: string | null) => {
@@ -466,6 +507,17 @@ export async function updateDevTask(
   };
 
   const normalized = createTaskInput(mergedInput);
+  if (normalized.status === 'verified') {
+    validateDevTaskCompletion({
+      verificationStatus: existing.verificationStatus,
+      acceptanceCriteria: normalized.acceptanceCriteria || [],
+      tests: normalized.tests || [],
+      unverified: normalized.unverified || [],
+      verificationNotes: existing.verificationNotes,
+      resultCommit: existing.resultCommit,
+      pullRequests: existing.pullRequests,
+    });
+  }
   const repositoryConfig = resolveDevRepository(normalized.repository || existing.repository);
   normalized.repository = repositoryConfig.fullName;
   const prompt = buildTaskPrompt({
@@ -581,6 +633,18 @@ export async function attachDevTaskResult(input: {
   const store = getServerSupabaseClient({ useServiceRole: true });
   const nextVerification =
     input.verificationStatus === undefined ? existing.verificationStatus : input.verificationStatus;
+  const nextStatus = status(input.status, existing.status);
+  if (nextStatus === 'verified') {
+    validateDevTaskCompletion({
+      verificationStatus: nextVerification,
+      acceptanceCriteria: existing.acceptanceCriteria,
+      tests: existing.tests,
+      unverified: existing.unverified,
+      verificationNotes: input.verificationNotes ?? existing.verificationNotes,
+      resultCommit: input.resultCommit ?? existing.resultCommit,
+      pullRequests: input.pullRequests ?? existing.pullRequests,
+    });
+  }
   const patch: Record<string, unknown> = {
     result_commit: input.resultCommit || null,
     pull_requests: input.pullRequests || existing.pullRequests,

@@ -2,7 +2,7 @@
 
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
 import type { WorkspaceOverview } from '@/lib/pierrot/workspace/types';
-import { aggregateActivityState } from '@/lib/pierrot/workspace/status';
+import { buildOwnerOverallStatus } from '@/lib/pierrot/workspace/status';
 import BrainStatusCard from './BrainStatusCard';
 import { CommercialBrief } from './CommercialReport';
 import MetricStatusList from './MetricStatusList';
@@ -35,13 +35,25 @@ export default function HomeOverview({
   brainStatus: BrainStatusSnapshot | null;
   onBrainStatusChange: (snapshot: BrainStatusSnapshot) => void;
 }) {
-  const activityState = aggregateActivityState(overview.metrics);
+  const overall = buildOwnerOverallStatus({
+    metrics: overview.metrics,
+    commercial: overview.commercial,
+    brain: brainStatus,
+    projects: overview.projectHealth,
+  });
+  const projectLine =
+    overview.projectHealth &&
+    overview.projectHealth.activeTasks !== null &&
+    overview.projectHealth.activeTasks > 0
+      ? ` В работе задач: ${overview.projectHealth.activeTasks}.`
+      : '';
 
   return (
     <div className="pw-empty">
       <p className="pw-kicker">Pierrot · owner workspace</p>
-      <p className="pw-empty-summary" data-state={activityState} role="status">
-        {overview.summary}
+      <p className="pw-empty-summary" data-state={overall.state} role="status">
+        {overall.headline} {overview.summary}
+        {projectLine}
       </p>
 
       <div className="pw-home-indicators" aria-label="Состояние">

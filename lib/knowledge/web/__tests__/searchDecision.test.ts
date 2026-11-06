@@ -356,4 +356,69 @@ describe('autonomous web search decision', () => {
     expect(decision.reason).toBe('ambiguous');
     expect(decision.signals).toContain('empty_query');
   });
+
+  describe('owner workspace scenarios', () => {
+    it.each([
+      'Что у нас сегодня?',
+      'Как дела с Journal?',
+      'Что я вчера обсуждал с Пьеро?',
+      'Обнови состояние проекта',
+      'Что происходило сегодня с моими задачами?',
+      'Что нового?',
+      'Что сейчас в задачах?',
+      'Покажи статус проекта Art Engine',
+    ])('keeps internal state and project questions off the web: %s', (message) => {
+      const decision = decideWebSearch({
+        message,
+        ownerMode: true,
+        history,
+      });
+
+      expect(decision.shouldSearch).toBe(false);
+      expect(decision.query).toBe('');
+    });
+
+    it.each([
+      'Найди последние новости об OpenAI',
+      'Проверь актуальную документацию Supabase',
+      'Найди в интернете публикации обо мне за эту неделю',
+    ])('still searches for an explicit external request: %s', (message) => {
+      const decision = decideWebSearch({ message, ownerMode: true, history });
+
+      expect(decision.shouldSearch).toBe(true);
+      expect(decision.query.length).toBeGreaterThan(0);
+    });
+
+    it('does not turn a bare time word into a news search', () => {
+      expect(decideWebSearch({ message: 'Что сегодня?', ownerMode: true }).shouldSearch).toBe(
+        false
+      );
+      expect(
+        decideWebSearch({ message: 'What is happening?', ownerMode: true }).shouldSearch
+      ).toBe(false);
+    });
+
+    it('searches when a time word has a real external subject', () => {
+      expect(
+        decideWebSearch({ message: 'Что происходит на рынке?', ownerMode: true }).shouldSearch
+      ).toBe(true);
+      expect(
+        decideWebSearch({
+          message: 'What is happening in the contemporary art market?',
+          ownerMode: true,
+        }).shouldSearch
+      ).toBe(true);
+    });
+
+    it('does not search for a diagnostic question', () => {
+      const decision = decideWebSearch({
+        message: 'Почему ты так ответил?',
+        ownerMode: true,
+        history,
+      });
+
+      expect(decision.shouldSearch).toBe(false);
+      expect(decision.reason).toBe('diagnostic');
+    });
+  });
 });

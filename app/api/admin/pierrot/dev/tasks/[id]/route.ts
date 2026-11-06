@@ -109,26 +109,40 @@ export async function PATCH(req: Request, context: { params: { id: string } }) {
   }
   const value = body as Record<string, unknown>;
 
-  if (value.action === 'attach_result') {
-    const task = await attachDevTaskResult({
-      userId: admin.id,
-      taskId: context.params.id,
-      resultCommit: typeof value.resultCommit === 'string' ? value.resultCommit : null,
-      pullRequests: arrayValue(value.pullRequests),
-      resultNotes: typeof value.resultNotes === 'string' ? value.resultNotes : undefined,
-      verificationStatus:
-        typeof value.verificationStatus === 'string'
-          ? (value.verificationStatus as DevVerificationStatus)
-          : undefined,
-      verificationNotes:
-        typeof value.verificationNotes === 'string' ? value.verificationNotes : undefined,
-      status: typeof value.status === 'string' ? (value.status as DevTaskStatus) : undefined,
-    });
+  try {
+    if (value.action === 'attach_result') {
+      const task = await attachDevTaskResult({
+        userId: admin.id,
+        taskId: context.params.id,
+        resultCommit: typeof value.resultCommit === 'string' ? value.resultCommit : null,
+        pullRequests: arrayValue(value.pullRequests),
+        resultNotes: typeof value.resultNotes === 'string' ? value.resultNotes : undefined,
+        verificationStatus:
+          typeof value.verificationStatus === 'string'
+            ? (value.verificationStatus as DevVerificationStatus)
+            : undefined,
+        verificationNotes:
+          typeof value.verificationNotes === 'string' ? value.verificationNotes : undefined,
+        status: typeof value.status === 'string' ? (value.status as DevTaskStatus) : undefined,
+      });
+      if (!task) return json({ error: 'Task not found or update failed.' }, 404);
+      return json({ task });
+    }
+
+    const task = await updateDevTask(admin.id, context.params.id, patchFromBody(value));
     if (!task) return json({ error: 'Task not found or update failed.' }, 404);
     return json({ task });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : 'DEV_TASK_UPDATE_FAILED';
+    const verificationError = code.startsWith('DEV_');
+    return json(
+      {
+        error: verificationError
+          ? 'Задача не может быть помечена проверенной без acceptance criteria, тестов/ручной проверки и подтверждённого результата.'
+          : 'Unable to update the task.',
+        code,
+      },
+      verificationError ? 409 : 500
+    );
   }
-
-  const task = await updateDevTask(admin.id, context.params.id, patchFromBody(value));
-  if (!task) return json({ error: 'Task not found or update failed.' }, 404);
-  return json({ task });
 }

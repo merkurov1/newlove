@@ -50,5 +50,6 @@ export async function POST(request: Request) {
 function validationCopy(code: PierrotProjectValidationError['code']): string {
   if (code === 'PROJECT_NAME_REQUIRED') return 'Введите название проекта.';
   if (code === 'PROJECT_NAME_TOO_LONG') return 'Название проекта слишком длинное.';
+  if (code === 'PROJECT_EXISTS') return 'Проект с таким названием уже существует.';
   return 'Бриф проекта слишком длинный.';
 }

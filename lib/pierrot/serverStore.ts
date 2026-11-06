@@ -511,6 +511,31 @@ export async function setPierrotConversationConsent(
   if (error) throw error;
 }
 
+/**
+ * Loads only the operational trace of the most recent assistant reply. It is
+ * used to answer “Почему ты так ответил?” without exposing prompts, secrets or
+ * retrieved passages.
+ */
+export async function loadLastPierrotAssistantTrace(
+  store: SupabaseClient,
+  conversationId: string
+): Promise<Record<string, unknown> | null> {
+  const { data, error } = await store
+    .from('pierrot_events')
+    .select('payload,created_at')
+    .eq('conversation_id', conversationId)
+    .eq('event_name', 'assistant_replied')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data?.payload || typeof data.payload !== 'object') return null;
+  return {
+    ...(data.payload as Record<string, unknown>),
+    created_at: data.created_at,
+  };
+}
+
 export async function findPierrotAssistantReply(
   store: SupabaseClient,
   conversationId: string,

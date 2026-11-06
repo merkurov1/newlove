@@ -86,6 +86,80 @@ export async function listProjectTasks(
     .slice(0, limit);
 }
 
+/**
+ * Loads a compact, project-scoped conversation trace for the prompt. It never
+ * reads conversations from another project: the IDs come only from the
+ * canonical `pierrot_project_conversations` relation.
+ */
+export async function loadProjectConversationContext(
+  store: SupabaseClient,
+  ownerUserId: string,
+  projectId: string,
+  options: { limit?: number; excludeConversationId?: string | null } = {}
+): Promise<string | null> {
+  const limit = Math.min(Math.max(options.limit ?? 5, 1), 10);
+  const { data: links, error } = await store
+    .from('pierrot_project_conversations')
+    .select('conversation_id')
+    .eq('owner_user_id', ownerUserId)
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false })
+    .limit(limit + 1);
+
+  if (error) throw new Error('project_conversations_unavailable');
+
+  const conversationIds = (Array.isArray(links) ? links : [])
+    .map((row) => (row && typeof row.conversation_id === 'string' ? row.conversation_id : ''))
+    .filter(Boolean)
+    .filter((id) => id !== options.excludeConversationId)
+    .slice(0, limit);
+
+  if (conversationIds.length === 0) return null;
+
+  const [{ data: conversations }, { data: messages }] = await Promise.all([
+    store
+      .from('pierrot_conversations')
+      .select('id,title,started_at')
+      .in('id', conversationIds),
+    store
+      .from('pierrot_messages')
+      .select('conversation_id,role,content,created_at')
+      .in('conversation_id', conversationIds)
+      .order('created_at', { ascending: false })
+      .limit(limit * 6),
+  ]);
+
+  const titles = new Map<string, string>();
+  for (const row of conversations || []) {
+    if (!row || typeof row.id !== 'string') continue;
+    const title = typeof row.title === 'string' && row.title.trim() ? row.title.trim() : 'Untitled';
+    titles.set(row.id, title);
+  }
+
+  const byConversation = new Map<string, string[]>();
+  for (const row of [...(messages || [])].reverse()) {
+    if (!row || typeof row.conversation_id !== 'string' || typeof row.content !== 'string') {
+      continue;
+    }
+    const content = row.content.replace(/\s+/g, ' ').trim().slice(0, 420);
+    if (!content) continue;
+    const line = `${row.role === 'assistant' ? 'Pierrot' : 'Owner'}: ${content}`;
+    const list = byConversation.get(row.conversation_id) || [];
+    list.push(line);
+    byConversation.set(row.conversation_id, list);
+  }
+
+  const blocks: string[] = [];
+  for (const id of conversationIds) {
+    const lines = (byConversation.get(id) || []).slice(-4);
+    if (lines.length === 0) continue;
+    blocks.push(`- ${titles.get(id) || 'Project conversation'}\n${lines.map((line) => `  ${line}`).join('\n')}`);
+  }
+
+  if (blocks.length === 0) return null;
+  return `RECENT PROJECT CONVERSATIONS (same project only):\n${blocks.join('\n')}`.slice(0, 4_000);
+}
+
 export async function resolveExactProject(
   store: SupabaseClient,
   ownerUserId: string,

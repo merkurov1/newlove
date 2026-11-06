@@ -7,11 +7,52 @@ assertServerOnly('lib/pierrot/projects/store');
 
 const PROJECT_COLUMNS =
   'id,owner_user_id,slug,name,description,objective,status,priority,project_brief,brief_revision,last_activity_at,created_at,updated_at';
+const PROJECT_COLUMNS_WITH_RATING = `${PROJECT_COLUMNS},owner_rating,owner_rating_updated_at`;
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function isMissingColumn(error: unknown): boolean {
+  const value =
+    error && typeof error === 'object'
+      ? `${String((error as { code?: unknown }).code || '')} ${String(
+          (error as { message?: unknown }).message || ''
+        )}`
+      : '';
+  return /PGRST204|42703/.test(value) || /column .* does not exist/i.test(value);
+}
+
+async function selectProject(
+  column: 'id' | 'slug',
+  value: string,
+  ownerUserId: string
+): Promise<{ data: Record<string, unknown> | null; error: unknown }> {
+  const client = getServerSupabaseClient({ useServiceRole: true });
+  const run = (columns: string) =>
+    client
+      .from('pierrot_projects')
+      .select(columns)
+      .eq('owner_user_id', ownerUserId)
+      .eq(column, value)
+      .maybeSingle();
+
+  const withRating = await run(PROJECT_COLUMNS_WITH_RATING);
+  if (withRating.error && isMissingColumn(withRating.error)) {
+    const legacy = await run(PROJECT_COLUMNS);
+    return { data: (legacy.data as Record<string, unknown> | null) || null, error: legacy.error };
+  }
+
+  return {
+    data: (withRating.data as Record<string, unknown> | null) || null,
+    error: withRating.error,
+  };
+}
+
 export class PierrotProjectValidationError extends Error {
-  code: 'PROJECT_NAME_REQUIRED' | 'PROJECT_NAME_TOO_LONG' | 'PROJECT_BRIEF_TOO_LONG';
+  code:
+    | 'PROJECT_NAME_REQUIRED'
+    | 'PROJECT_NAME_TOO_LONG'
+    | 'PROJECT_BRIEF_TOO_LONG'
+    | 'PROJECT_EXISTS';
 
   constructor(code: PierrotProjectValidationError['code']) {
     super(code);
@@ -48,6 +89,11 @@ export function mapProject(row: Record<string, unknown>): PierrotProject {
       ? text(row.status)
       : 'active') as PierrotProjectStatus,
     priority: Number(row.priority || 0),
+    ownerRating:
+      typeof row.owner_rating === 'number' && row.owner_rating >= 1 && row.owner_rating <= 10
+        ? row.owner_rating
+        : null,
+    ownerRatingUpdatedAt: text(row.owner_rating_updated_at) || null,
     projectBrief: text(row.project_brief),
     briefRevision: Number(row.brief_revision || 1),
     lastActivityAt: text(row.last_activity_at),
@@ -57,38 +103,32 @@ export function mapProject(row: Record<string, unknown>): PierrotProject {
 }
 
 export async function listPierrotProjects(ownerUserId: string): Promise<PierrotProject[]> {
-  const { data, error } = await getServerSupabaseClient({ useServiceRole: true })
-    .from('pierrot_projects')
-    .select(PROJECT_COLUMNS)
-    .eq('owner_user_id', ownerUserId)
-    .order('last_activity_at', { ascending: false });
-  if (error) throw error;
-  return (data || []).map((row) => mapProject(row as Record<string, unknown>));
+  const client = getServerSupabaseClient({ useServiceRole: true });
+  const run = (columns: string) =>
+    client
+      .from('pierrot_projects')
+      .select(columns)
+      .eq('owner_user_id', ownerUserId)
+      .order('last_activity_at', { ascending: false });
+
+  let result = await run(PROJECT_COLUMNS_WITH_RATING);
+  if (result.error && isMissingColumn(result.error)) result = await run(PROJECT_COLUMNS);
+  if (result.error) throw result.error;
+  return ((result.data || []) as unknown[]).map((row) => mapProject(row as Record<string, unknown>));
 }
 
 export async function getPierrotProject(
   ownerUserId: string,
   projectRef: string
 ): Promise<PierrotProject | null> {
-  const client = getServerSupabaseClient({ useServiceRole: true });
   if (UUID_PATTERN.test(projectRef)) {
-    const byId = await client
-      .from('pierrot_projects')
-      .select(PROJECT_COLUMNS)
-      .eq('owner_user_id', ownerUserId)
-      .eq('id', projectRef)
-      .maybeSingle();
+    const byId = await selectProject('id', projectRef, ownerUserId);
     if (byId.error) throw byId.error;
-    if (byId.data) return mapProject(byId.data as Record<string, unknown>);
+    if (byId.data) return mapProject(byId.data);
   }
-  const bySlug = await client
-    .from('pierrot_projects')
-    .select(PROJECT_COLUMNS)
-    .eq('owner_user_id', ownerUserId)
-    .eq('slug', projectRef)
-    .maybeSingle();
+  const bySlug = await selectProject('slug', projectRef, ownerUserId);
   if (bySlug.error) throw bySlug.error;
-  return bySlug.data ? mapProject(bySlug.data as Record<string, unknown>) : null;
+  return bySlug.data ? mapProject(bySlug.data) : null;
 }
 
 export async function createPierrotProject(
@@ -101,6 +141,17 @@ export async function createPierrotProject(
   const projectBrief = text(input.projectBrief).trim();
   if (projectBrief.length > 20_000)
     throw new PierrotProjectValidationError('PROJECT_BRIEF_TOO_LONG');
+  const client = getServerSupabaseClient({ useServiceRole: true });
+  const { data: existing } = await client
+    .from('pierrot_projects')
+    .select('id')
+    .eq('owner_user_id', ownerUserId)
+    .ilike('name', name)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) throw new PierrotProjectValidationError('PROJECT_EXISTS');
+
   const requestedSlug = text(input.slug).trim();
   const slug =
     requestedSlug && /^[a-z0-9][a-z0-9-]*$/.test(requestedSlug)
@@ -121,7 +172,7 @@ export async function createPierrotProject(
     .select(PROJECT_COLUMNS)
     .single();
   if (error) throw error;
-  return mapProject(data as Record<string, unknown>);
+  return mapProject(data as unknown as Record<string, unknown>);
 }
 
 export async function getPierrotProjectForConversation(
@@ -170,10 +221,15 @@ export async function ensureHeartAndAngelProject(ownerUserId: string): Promise<P
   });
 }
 
+export type PierrotProjectPatch = Partial<PierrotProject> & {
+  /** Human-readable reason stored with the new brief revision. */
+  briefChangeNote?: string;
+};
+
 export async function updatePierrotProject(
   ownerUserId: string,
   id: string,
-  patch: Partial<PierrotProject>
+  patch: PierrotProjectPatch
 ): Promise<PierrotProject | null> {
   const update: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
@@ -189,31 +245,60 @@ export async function updatePierrotProject(
   ] as const) {
     if (patch[key] !== undefined) update[column] = patch[key];
   }
-  if (patch.projectBrief !== undefined)
-    update.brief_revision = Number(patch.briefRevision || 1) + 1;
+  if (patch.ownerRating !== undefined) {
+    const rating = Number(patch.ownerRating);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 10) {
+      throw new Error('PROJECT_RATING_INVALID');
+    }
+    update.owner_rating = rating;
+    update.owner_rating_updated_at = new Date().toISOString();
+  }
   const client = getServerSupabaseClient({ useServiceRole: true });
   const before = await client
     .from('pierrot_projects')
-    .select('name')
+    .select('name,project_brief,brief_revision')
     .eq('id', id)
     .eq('owner_user_id', ownerUserId)
     .maybeSingle();
   const previousName = typeof before.data?.name === 'string' ? before.data.name : null;
-  const { data, error } = await client
-    .from('pierrot_projects')
-    .update(update)
-    .eq('id', id)
-    .eq('owner_user_id', ownerUserId)
-    .select(PROJECT_COLUMNS)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) return null;
-  if (patch.projectBrief !== undefined)
+  const previousBrief =
+    typeof before.data?.project_brief === 'string' ? before.data.project_brief : null;
+  const briefChanged =
+    patch.projectBrief !== undefined &&
+    (previousBrief === null || patch.projectBrief.trim() !== previousBrief.trim());
+  if (patch.projectBrief !== undefined) {
+    if (briefChanged) {
+      update.brief_revision = Number(before.data?.brief_revision || patch.briefRevision || 1) + 1;
+    } else {
+      delete update.project_brief;
+    }
+  }
+  const runUpdate = (columns: string) =>
+    client
+      .from('pierrot_projects')
+      .update(update)
+      .eq('id', id)
+      .eq('owner_user_id', ownerUserId)
+      .select(columns)
+      .maybeSingle();
+
+  let result = await runUpdate(PROJECT_COLUMNS_WITH_RATING);
+  if (result.error && isMissingColumn(result.error)) {
+    if (patch.ownerRating !== undefined) {
+      throw new Error('PROJECT_RATING_MIGRATION_REQUIRED');
+    }
+    result = await runUpdate(PROJECT_COLUMNS);
+  }
+  if (result.error) throw result.error;
+  if (!result.data) return null;
+  const data = result.data;
+
+  if (briefChanged && patch.projectBrief !== undefined)
     await client.from('pierrot_project_brief_revisions').insert({
       project_id: id,
-      revision: Number((data as Record<string, unknown>).brief_revision || 1),
+      revision: Number((data as unknown as Record<string, unknown>).brief_revision || 1),
       brief: patch.projectBrief,
-      change_note: 'Owner update',
+      change_note: (patch.briefChangeNote || 'Owner update').slice(0, 240),
       created_by: ownerUserId,
     });
 
@@ -239,7 +324,7 @@ export async function updatePierrotProject(
     }
   }
 
-  return mapProject(data as Record<string, unknown>);
+  return mapProject(data as unknown as Record<string, unknown>);
 }
 
 export async function linkConversationToProject(

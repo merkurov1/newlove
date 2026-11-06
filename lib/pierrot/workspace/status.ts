@@ -99,8 +99,13 @@ export function buildOwnerOverallStatus(input: {
   metrics: WorkspaceMetric[];
   commercial: CommercialSummary;
   brain: BrainStatusSnapshot | null;
+  projects?: {
+    activeProjects: number | null;
+    activeTasks: number | null;
+    activeDevTasks: number | null;
+  } | null;
 }): OwnerOverallStatus {
-  const { metrics, commercial, brain } = input;
+  const { metrics, commercial, brain, projects } = input;
 
   const missingMetrics = metrics.filter((metric) => metric.state === null).length;
   const hasGrowth = metrics.some(
@@ -143,16 +148,28 @@ export function buildOwnerOverallStatus(input: {
     return { state: 'questions', headline: OVERALL_HEADLINE.questions };
   }
 
+  const projectsIncomplete = Boolean(
+    projects &&
+    (projects.activeProjects === null ||
+      projects.activeTasks === null ||
+      projects.activeDevTasks === null)
+  );
+  const hasProjectWork = Boolean(
+    projects &&
+    ((projects.activeTasks ?? 0) > 0 || (projects.activeDevTasks ?? 0) > 0)
+  );
+
   if (
     missingMetrics > 0 ||
     !commercial.complete ||
     money.label === 'Данные неполные' ||
-    brainIncomplete
+    brainIncomplete ||
+    projectsIncomplete
   ) {
     return { state: 'incomplete', headline: OVERALL_HEADLINE.incomplete };
   }
 
-  if (hasGrowth || money.label === 'Разбогатели!') {
+  if (hasGrowth || money.label === 'Разбогатели!' || hasProjectWork) {
     return { state: 'movement', headline: OVERALL_HEADLINE.movement };
   }
 

@@ -236,13 +236,20 @@ export async function loadWorkspaceOverview(
   const store = getServerSupabaseClient({ useServiceRole: true });
   const periodStartDate = new Date(startOfUtcDay(now).getTime() - period * DAY_MS);
 
-  const [metrics, commercial] = await Promise.all([
+  const [metrics, commercial, activeProjects, activeTasks, activeDevTasks] = await Promise.all([
     Promise.all(METRIC_META.map((meta) => loadMetric(store, meta, period, now))),
     loadCommercialSummary({
       store,
       periodKey: period === 30 ? 'last_30_days' : 'last_7_days',
       now,
     }).catch(() => emptyCommercialSummary(period === 30 ? 'last_30_days' : 'last_7_days', now)),
+    readCount(store, 'pierrot_projects', (query) => query.eq('status', 'active')),
+    readCount(store, 'pierrot_decisions', (query) =>
+      query.in('kind', ['task', 'reminder']).in('status', ['current', 'uncertain'])
+    ),
+    readCount(store, 'pierrot_dev_prompts', (query) =>
+      query.in('status', ['ready', 'in_progress', 'review'])
+    ),
   ]);
 
   return {
@@ -253,6 +260,11 @@ export async function loadWorkspaceOverview(
     commercial,
     summary: buildOverviewSummary(metrics),
     generatedAt: now.toISOString(),
+    projectHealth: {
+      activeProjects: activeProjects.ok ? activeProjects.value : null,
+      activeTasks: activeTasks.ok ? activeTasks.value : null,
+      activeDevTasks: activeDevTasks.ok ? activeDevTasks.value : null,
+    },
   };
 }
 

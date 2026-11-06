@@ -65,6 +65,7 @@ export default function ProjectsWorkspace({
               {project.description || project.objective || project.projectBrief || 'Без описания.'}
             </p>
             <small>
+              {project.ownerRating ? `Оценка ${project.ownerRating}/10 · ` : ''}
               Последняя активность: {new Date(project.lastActivityAt).toLocaleDateString('ru-RU')}
             </small>
           </Link>

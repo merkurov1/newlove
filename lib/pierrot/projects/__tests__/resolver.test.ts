@@ -10,6 +10,8 @@ const project = (name: string, slug: string): PierrotProject => ({
   objective: '',
   status: 'active',
   priority: 0,
+  ownerRating: null,
+  ownerRatingUpdatedAt: null,
   projectBrief: '',
   briefRevision: 1,
   lastActivityAt: '',

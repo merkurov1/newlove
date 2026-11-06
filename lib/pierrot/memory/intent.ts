@@ -9,6 +9,8 @@ export type PierrotMemoryAction =
   | 'search'
   | 'history_search'
   | 'current_status'
+  | 'create_task'
+  | 'rate'
   | 'complete'
   | 'archive'
   | 'forget'
@@ -38,6 +40,9 @@ export type PierrotMemoryIntent = {
   scope: PierrotMemoryMutationScope;
   /** Exact project name/slug/id extracted from a project-scoped command. */
   projectRef: string | null;
+  /** Owner rating 1..10, kept separate from model importance/confidence. */
+  rating: number | null;
+  ratingTarget: 'project' | 'task' | null;
   confidence: number;
   reason: string;
 };
@@ -249,6 +254,17 @@ const LIST_PATTERNS = [
   /show\s+(?:my\s+)?(?:memory|saved|reminders)/i,
   /what\s+(?:have\s+i|did\s+i)\s+(?:save|remember)/i,
   /what\s+(?:have\s+we|did\s+we)\s+(?:saved|remembered)/i,
+  /покажи\s+(?:мне\s+)?(?:все\s+)?(?:текущие\s+|активные\s+|открытые\s+)?(?:задачи|задач|напоминания)/i,
+  /покажи\s+(?:мне\s+)?(?:все\s+)?(?:технические|рабочие)\s+(?:задачи|задач)/i,
+  /покажи\s+(?:мне\s+)?(?:текущий\s+)?список\s+(?:задач|напоминаний)/i,
+  /какие\s+(?:у\s+меня\s+)?(?:есть\s+)?(?:текущие\s+|активные\s+|открытые\s+)?(?:задачи|задач)/i,
+  /какие\s+(?:ещё|еще\s+)?(?:технические\s+)?задачи/i,
+  /перечисли\s+(?:все\s+)?(?:текущие\s+|активные\s+|технические\s+)?(?:задачи|задач)/i,
+  /список\s+(?:текущих\s+|активных\s+|открытых\s+)?(?:задач|задачи|напоминаний)/i,
+  /что\s+(?:сейчас\s+)?(?:в\s+)?(?:задачах|напоминаниях)/i,
+  /show\s+(?:my\s+)?(?:current\s+|active\s+|open\s+)?tasks/i,
+  /what\s+are\s+my\s+(?:current\s+|active\s+|open\s+)?tasks/i,
+  /list\s+(?:my\s+)?(?:current\s+|active\s+|open\s+)?tasks/i,
 ];
 
 const SEARCH_PATTERNS = [
@@ -352,6 +368,10 @@ const RESTORE_PATTERNS = [
   /^(?:пожалуйста[,\s]*)?(?:верни|восстанови)\s+(?:это\s+)?(?:в\s+память|из\s+архива)\s*/i,
   /^(?:пожалуйста[,\s]*)?(?:верни|восстанови)\s+(?:запись|заметку|напоминание)?\s*/i,
   /^(?:please[,\s]*)?(?:restore|bring\s+back)\s+(?:the\s+)?(?:memory|record|note|reminder)?\s*/i,
+  // “Ты случайно завершил эту задачу, восстанови её” is a correction after an
+  // operation and must also reach the restore path.
+  /(?:^|[\s,.;:—–-])(?:верни|верните|восстанови|восстановите)(?=\s|$)/i,
+  /(?:^|[\s,.;:—–-])(?:restore|bring\s+back)\b/i,
 ];
 
 const CREATE_REMEMBER =
@@ -387,6 +407,8 @@ function result(
     listReference: 'none',
     scope: 'none',
     projectRef: null,
+    rating: null,
+    ratingTarget: null,
     confidence: options.confidence ?? 0.7,
     reason: options.reason ?? action,
     ...options,
@@ -559,22 +581,27 @@ function detectListReference(message: string): PierrotMemoryIntent['listReferenc
 }
 
 const GENERIC_SCOPE_WORDS =
-  /^(?:все|всё|все\s+мои|мои|текущие|активные|открытые|незавершённые|незавершенные|all|my|current|active|open|unfinished|pending)$/i;
+  /^(?:все|всё|все\s+мои|мои|текущие|активные|открытые|незавершённые|незавершенные|all|my|current|active|open|unfinished|pending|проект|проекта|проекту|project)$/i;
 
 const PROJECT_SCOPE_CANDIDATES: RegExp[] = [
   /(?:все|всех|всё|all|every)\s+(?:мои\s+|my\s+)?(?:задачи|задач|tasks?)\s+(?:по|в|из|для|проекта|проекту|project)\s+(.+)$/i,
   /(?:все|all|every)\s+(?:задачи|tasks?)\s+(?:проекта|project)\s+(.+)$/i,
+  /^\s*(?:все\s+|all\s+)?(?:задачи|задач|tasks?)\s+(?:в|во|по|из|для|проекта|проекту|project)\s+(.+)$/i,
   /(?:заверши(?:те)?|завершить|выполни(?:те)?|выполнить|закрой(?:те)?|закрыть|complete|finish|close)\s+(?:все|all)\s+(?:задачи|tasks?)\s+(?:по|в|из|для|проекта|проекту|project)\s+(.+)$/i,
   /(?:все|all|every)\s+(?:задачи|tasks?)\s+(.+)$/i,
 ];
 
 function cleanProjectRef(value: string): string {
   return value
+    .split(
+      /\s*[—–-]\s*(?=(?:уже\s+)?(?:выполн|заверш|сдел|готов|done|completed|finished|отметь|пометь))/i
+    )[0]
     .replace(
       /\s+(?:уже\s+)?(?:выполнены|выполнено|выполнен|завершены|завершено|завершён|сделаны|сделано|готовы|готово|done|completed|finished)(?:\s|$).*$/i,
       ''
     )
-    .replace(/^(?:по|в|из|для|проекта|проекту|project)\s+/i, '')
+    .replace(/^(?:(?:по|в|из|для)\s+)?(?:проект[аеу]?|project)\s+/i, '')
+    .replace(/^(?:по|в|из|для)\s+/i, '')
     .replace(/[.!?;:]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim()
@@ -590,6 +617,127 @@ function detectProjectRef(message: string): string | null {
     if (GENERIC_SCOPE_WORDS.test(ref)) continue;
     return ref;
   }
+  return null;
+}
+
+const CREATE_TASK_COMMAND =
+  /^(?:пожалуйста[,\s]*)?(?:добав(?:ь|ьте)|добавить|созда(?:й|йте)|создать|завед(?:и|ите)|завести|постав(?:ь|ьте)|поставить|запиш(?:и|ите)|записать|add|create|make)\s+(?:новую\s+|new\s+)?(?:задачу|задачy|таск|task)(?=\s|$|[:—–-])\s*[:—–-]?\s*/i;
+
+const UNNAMED_PROJECT_SCOPE =
+  /(?:^|\s)(?:все\s+)?(?:задачи|задач|tasks?)\s+(?:в|во|по|из|для)\s+проект[аеу]?(?=\s|[,.!?]|$)/i;
+
+const TASK_REFERENCE_APPEND =
+  /^(?:пожалуйста[,\s]*)?(?:добав(?:ь|ьте)|добавить|запиш(?:и|ите)|записать|add|create)\s+(?:это|это\s+всё|это\s+все|всё\s+это|все\s+это|this|all\s+this)\s+(?:в\s+|to\s+)?(?:задачи|задачу|таски|tasks?)(?=\s|$|[.!?])/i;
+
+const TASK_PROJECT_PREFIX =
+  /^\s*(?:в|во|по|для)\s+(?:проект[аеу]?\s+|project\s+)?(.+?)\s*[,:—–-]?\s*(?=(?:добав(?:ь|ьте)|добавить|созда(?:й|йте)|создать|завед(?:и|ите)|завести|постав(?:ь|ьте)|поставить|запиш(?:и|ите)|записать|add|create)\s+(?:новую\s+)?(?:задачу|таск|task))/i;
+
+const TASK_PROJECT_SUFFIX =
+  /(?:\s|^)(?:в|во|по|для)\s+(?:проект[аеу]?|project)\s+([\p{L}\p{N}][\p{L}\p{N} &'’_./-]{0,100})/iu;
+
+const PROJECT_REF_STOP =
+  /\s+(?:на|в|во|с|со|по|для|если|чтобы|котор[а-яё]*|где|когда|и\s+не|не\s+трогай|—|–|,|;)\s+/i;
+
+function cleanTaskProjectRef(value: string): string | null {
+  const cleaned = value
+    .split(PROJECT_REF_STOP)[0]
+    .replace(/^[\s:—–,.-]+/, '')
+    .replace(/[\s,.;:!?—–-]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+
+  if (!cleaned) return null;
+  if (/^(?:проект|проекта|проекту|project|задачи|задачу|это|it|this)$/i.test(cleaned)) {
+    return null;
+  }
+  return cleaned;
+}
+
+function extractTaskCreation(
+  message: string
+): { content: string; projectRef: string | null } | null {
+  let working = message.trim();
+  let projectRef: string | null = null;
+
+  const prefix = working.match(TASK_PROJECT_PREFIX);
+  if (prefix) {
+    const candidate = cleanTaskProjectRef(prefix[1]);
+    if (candidate) {
+      projectRef = candidate;
+      working = working.slice(prefix[0].length);
+    }
+  }
+
+  const command = working.match(CREATE_TASK_COMMAND);
+  if (!command) return null;
+
+  working = working.slice(command[0].length).trim();
+
+  if (!projectRef) {
+    const suffix = working.match(TASK_PROJECT_SUFFIX);
+    if (suffix && suffix.index !== undefined) {
+      const candidate = cleanTaskProjectRef(suffix[1]);
+      if (candidate) {
+        projectRef = candidate;
+        // The capture is intentionally greedy so it can contain a multi-word
+        // project name. Remove only the project phrase, never the task text
+        // that follows it.
+        const start = suffix.index;
+        const relative = suffix[0].indexOf(candidate);
+        const end =
+          relative >= 0 ? start + relative + candidate.length : start + suffix[0].length;
+        working = `${working.slice(0, start)} ${working.slice(end)}`;
+      }
+    }
+  }
+
+  const content = cleanContent(
+    working
+      .replace(/^[\s:—–,.-]+/, '')
+      .replace(/^(?:что|чтобы|to)\s+/i, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+
+  return { content, projectRef };
+}
+
+function extractRating(
+  message: string
+): { target: 'project' | 'task'; ref: string; rating: number } | null {
+  const patterns: Array<{ pattern: RegExp; target: 'project' | 'task' }> = [
+    {
+      pattern:
+        /(?:поставь|поставить|установи|установить|задай|задать|оцени|оценить|rate|set)\s+(?:проекту|проект|project)\s+(.+?)\s+(?:оценку|рейтинг|rating|на)?\s*[:—–-]?\s*(\d{1,2})(?:\s*(?:\/\s*10|из\s*10))?/iu,
+      target: 'project',
+    },
+    {
+      pattern:
+        /(?:поставь|поставить|установи|установить|задай|задать|оцени|оценить|rate|set)\s+(?:задаче|задачу|задачe|task)\s+(.+?)\s+(?:оценку|рейтинг|rating|на)?\s*[:—–-]?\s*(\d{1,2})(?:\s*(?:\/\s*10|из\s*10))?/iu,
+      target: 'task',
+    },
+    {
+      pattern:
+        /оценка\s+(?:проекта|проекту|project)\s+(.+?)\s*[:—–-]\s*(\d{1,2})(?:\s*(?:\/\s*10|из\s*10))?/iu,
+      target: 'project',
+    },
+    {
+      pattern:
+        /оценка\s+(?:задачи|задаче|task)\s+(.+?)\s*[:—–-]\s*(\d{1,2})(?:\s*(?:\/\s*10|из\s*10))?/iu,
+      target: 'task',
+    },
+  ];
+
+  for (const item of patterns) {
+    const match = message.match(item.pattern);
+    if (!match?.[2]) continue;
+    const rating = Number(match[2]);
+    const ref = cleanMutationValue(match[1]);
+    if (!ref || !Number.isInteger(rating) || rating < 1 || rating > 10) continue;
+    return { target: item.target, ref, rating };
+  }
+
   return null;
 }
 
@@ -651,8 +799,11 @@ export function detectMemoryIntent(
   }
 
   if (RESTORE_PATTERNS.some((pattern) => pattern.test(original) || pattern.test(text))) {
+    const listReference = detectListReference(original);
     return result('restore', {
       query: commandTarget(original, RESTORE_PATTERNS),
+      listReference,
+      scope: listReference === 'last' ? 'single' : 'none',
       includeArchive: true,
       confidence: 0.88,
       reason: 'restore_request',
@@ -676,6 +827,12 @@ export function detectMemoryIntent(
   ) {
     const listReference = detectListReference(original);
     const projectRef = detectProjectRef(original);
+    if (!projectRef && UNNAMED_PROJECT_SCOPE.test(original)) {
+      return result('clarify', {
+        confidence: 0.5,
+        reason: 'project_scope_missing',
+      });
+    }
     return result('archive', {
       query: mutationTarget(original, { archive: true, history: options.history }),
       listReference,
@@ -683,6 +840,38 @@ export function detectMemoryIntent(
       scope: detectMutationScope(original, listReference, projectRef),
       confidence: 0.9,
       reason: 'archive_request',
+    });
+  }
+
+  // Explicit task creation is a real write. References such as “добавь это
+  // всё в задачи” are deliberately not guessed: an ambiguous pronoun must
+  // not create a batch of tasks or produce a false “added” answer.
+  const taskCreation = extractTaskCreation(original);
+  if (taskCreation) {
+    return result('create_task', {
+      content: taskCreation.content || null,
+      projectRef: taskCreation.projectRef,
+      confidence: taskCreation.content ? 0.93 : 0.55,
+      reason: taskCreation.content ? 'task_creation_request' : 'task_content_missing',
+    });
+  }
+
+  if (TASK_REFERENCE_APPEND.test(text)) {
+    return result('clarify', {
+      confidence: 0.4,
+      reason: 'task_reference_ambiguous',
+    });
+  }
+
+  const rating = extractRating(original);
+  if (rating) {
+    return result('rate', {
+      rating: rating.rating,
+      ratingTarget: rating.target,
+      query: rating.target === 'task' ? rating.ref : null,
+      projectRef: rating.target === 'project' ? rating.ref : null,
+      confidence: 0.94,
+      reason: 'owner_rating_request',
     });
   }
 
@@ -714,6 +903,12 @@ export function detectMemoryIntent(
       if (pattern.test(original) || pattern.test(text)) {
         const listReference = detectListReference(original);
         const projectRef = detectProjectRef(original);
+        if (!projectRef && UNNAMED_PROJECT_SCOPE.test(original)) {
+          return result('clarify', {
+            confidence: 0.5,
+            reason: 'project_scope_missing',
+          });
+        }
         return result('complete', {
           query: mutationTarget(original, { archive: false, history: options.history }),
           listReference,

@@ -173,6 +173,29 @@ describe('owner overall status', () => {
 
     expect(result.state).toBe('questions');
   });
+
+  it('does not say everything is calm while project tasks are active', () => {
+    const result = buildOwnerOverallStatus({
+      metrics: metrics('стоит', 'тихо', 'стоит', 'тихо', 'стоит'),
+      commercial: commercial(),
+      brain: brain(),
+      projects: { activeProjects: 3, activeTasks: 2, activeDevTasks: 0 },
+    });
+
+    expect(result.state).toBe('movement');
+    expect(result.headline).toBe('Есть движение.');
+  });
+
+  it('reports incomplete when project health could not be read', () => {
+    const result = buildOwnerOverallStatus({
+      metrics: metrics('стоит', 'тихо', 'стоит', 'тихо', 'стоит'),
+      commercial: commercial(),
+      brain: brain(),
+      projects: { activeProjects: null, activeTasks: null, activeDevTasks: null },
+    });
+
+    expect(result.state).toBe('incomplete');
+  });
 });
 
 describe('project activity aggregation', () => {
