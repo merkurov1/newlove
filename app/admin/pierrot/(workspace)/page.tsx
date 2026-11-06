@@ -13,10 +13,7 @@ import { emptyCommercialSummary } from '@/lib/pierrot/commercialSummary';
 import { createPierrotStore } from '@/lib/pierrot/serverStore';
 import { loadBrainStatus } from '@/lib/pierrot/memory/brainStatus';
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
-import {
-  overviewCookieName,
-  parseOverviewCache,
-} from '@/lib/pierrot/workspace/cache';
+import { overviewCookieName, parseOverviewCache } from '@/lib/pierrot/workspace/cache';
 import ChatWorkspace from '@/components/pierrot/workspace/ChatWorkspace';
 import {
   getPierrotProject,
@@ -72,6 +69,8 @@ export default async function ChatPage({
     : params.conversation;
   const startNew = (Array.isArray(params.new) ? params.new[0] : params.new) === '1';
   const projectRef = Array.isArray(params.project) ? params.project[0] : params.project;
+  const projectWelcome =
+    (Array.isArray(params.welcome) ? params.welcome[0] : params.welcome) === 'project';
 
   const [conversations, conversation, explicitProject, projects] = await Promise.all([
     loadOwnerConversations(user.id),
@@ -84,7 +83,8 @@ export default async function ChatPage({
     redirect('/admin/pierrot');
   }
 
-  const project = explicitProject ||
+  const project =
+    explicitProject ||
     (conversation ? await getPierrotProjectForConversation(user.id, conversation.id) : null);
 
   // The five metrics and the commercial report are only rendered by the empty
@@ -111,9 +111,7 @@ export default async function ChatPage({
     : cachedOverview && !cachedOverview.stale
       ? Promise.resolve({ ...cachedOverview.overview, stale: false })
       : loadWorkspaceOverview(7).catch(() =>
-          cachedOverview
-            ? { ...cachedOverview.overview, stale: true }
-            : unavailableOverview()
+          cachedOverview ? { ...cachedOverview.overview, stale: true } : unavailableOverview()
         );
 
   const [overview, brainStatus] = await Promise.all([
@@ -134,6 +132,7 @@ export default async function ChatPage({
       projects={projects}
       conversation={conversation}
       startNew={startNew}
+      projectWelcome={projectWelcome}
       brainStatus={brainStatus}
       project={project}
     />

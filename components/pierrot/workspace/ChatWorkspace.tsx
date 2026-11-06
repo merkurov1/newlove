@@ -199,6 +199,7 @@ export default function ChatWorkspace({
   projects,
   conversation,
   startNew,
+  projectWelcome,
   brainStatus,
   project,
 }: {
@@ -208,6 +209,7 @@ export default function ChatWorkspace({
   projects: PierrotProject[];
   conversation: OwnerConversation | null;
   startNew: boolean;
+  projectWelcome?: boolean;
   brainStatus?: BrainStatusSnapshot | null;
   project?: PierrotProject | null;
 }) {
@@ -333,12 +335,25 @@ export default function ChatWorkspace({
   useEffect(() => {
     if (!startNew) return;
     resetConversation();
-    router.replace(
-      project?.slug
-        ? `/admin/pierrot?project=${encodeURIComponent(project.slug)}`
-        : '/admin/pierrot'
-    );
-  }, [project?.slug, resetConversation, router, startNew]);
+    if (projectWelcome && project) {
+      setMessages([
+        {
+          id: `project-welcome-${project.id}`,
+          role: 'assistant',
+          content: `Что мне нужно знать о проекте «${project.name}»? Расскажи о его цели, текущем состоянии, важных решениях и ближайших задачах.`,
+          createdAt: new Date().toISOString(),
+          local: true,
+        },
+      ]);
+    }
+    if (!projectWelcome) {
+      router.replace(
+        project?.slug
+          ? `/admin/pierrot?project=${encodeURIComponent(project.slug)}`
+          : '/admin/pierrot'
+      );
+    }
+  }, [project, projectWelcome, resetConversation, router, startNew]);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -1164,14 +1179,18 @@ export default function ChatWorkspace({
 
             <div className="pw-drawer-section">
               <div className="pw-drawer-section-title">Недавние разговоры</div>
-            {projects.length > 0 && <ProjectLinks projects={projects} onOpen={() => setDrawerOpen(false)} />}
-            {orderedConversations.length === 0 && projects.length === 0 ? (
-              <p className="pw-drawer-empty">
-                Сохранённых диалогов пока нет.
-              </p>
-            ) : (
-              <ConversationLinks items={orderedConversations} conversationId={conversationId} onOpen={() => setDrawerOpen(false)} />
-            )}
+              {projects.length > 0 && (
+                <ProjectLinks projects={projects} onOpen={() => setDrawerOpen(false)} />
+              )}
+              {orderedConversations.length === 0 && projects.length === 0 ? (
+                <p className="pw-drawer-empty">Сохранённых диалогов пока нет.</p>
+              ) : (
+                <ConversationLinks
+                  items={orderedConversations}
+                  conversationId={conversationId}
+                  onOpen={() => setDrawerOpen(false)}
+                />
+              )}
             </div>
           </div>
         </div>

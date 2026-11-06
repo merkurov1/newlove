@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { PierrotProject } from '@/lib/pierrot/projects/types';
 
 export default function ProjectsWorkspace({
@@ -11,9 +12,9 @@ export default function ProjectsWorkspace({
 }) {
   const [projects, setProjects] = useState(initialProjects);
   const [name, setName] = useState('');
-  const [brief, setBrief] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const router = useRouter();
 
   async function create() {
     if (creating || !name.trim()) return;
@@ -23,7 +24,7 @@ export default function ProjectsWorkspace({
       const response = await fetch('/api/admin/pierrot/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), projectBrief: brief }),
+        body: JSON.stringify({ name: name.trim() }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -32,7 +33,9 @@ export default function ProjectsWorkspace({
       }
       setProjects((current) => [data.project, ...current]);
       setName('');
-      setBrief('');
+      router.push(
+        `/admin/pierrot?new=1&project=${encodeURIComponent(data.project.slug)}&welcome=project`
+      );
     } catch {
       setError('Сеть недоступна. Проект не создан.');
     } finally {
@@ -72,12 +75,6 @@ export default function ProjectsWorkspace({
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Название"
-          />
-          <textarea
-            value={brief}
-            onChange={(event) => setBrief(event.target.value)}
-            placeholder="Короткий проверяемый бриф"
-            rows={4}
           />
           <button onClick={() => void create()} disabled={!name.trim() || creating}>
             {creating ? 'Создаём…' : 'Создать'}

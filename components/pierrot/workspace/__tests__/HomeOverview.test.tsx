@@ -73,7 +73,7 @@ describe('owner home overview', () => {
       />
     );
 
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
+    expect(screen.getByRole('status')).toHaveTextContent(
       'Показатели держатся ровно.'
     );
     expect(document.querySelectorAll('.pw-home-indicator')).toHaveLength(3);

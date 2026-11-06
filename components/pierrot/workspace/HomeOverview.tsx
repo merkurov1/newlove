@@ -40,9 +40,9 @@ export default function HomeOverview({
   return (
     <div className="pw-empty">
       <p className="pw-kicker">Pierrot · owner workspace</p>
-      <h2 className="pw-empty-title" data-state={activityState}>
+      <p className="pw-empty-summary" data-state={activityState} role="status">
         {overview.summary}
-      </h2>
+      </p>
 
       <div className="pw-home-indicators" aria-label="Состояние">
         <BrainStatusCard snapshot={brainStatus} onSnapshotChange={onBrainStatusChange} />

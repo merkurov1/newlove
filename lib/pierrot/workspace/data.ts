@@ -24,6 +24,7 @@ const METRIC_META: Array<{
   label: string;
   table: string;
   dateColumn: string;
+  bulkImportEligible?: boolean;
   totalFilter?: (query: any) => any;
   periodFilter?: (query: any) => any;
 }> = [
@@ -62,6 +63,7 @@ const METRIC_META: Array<{
     label: 'Медиа',
     table: 'media_archive_records',
     dateColumn: 'created_at',
+    bulkImportEligible: true,
   },
 ];
 
@@ -122,7 +124,7 @@ async function readTimestamps(
   }
 }
 
-function bulkAdjustedCount(series: number[]): {
+function bulkAdjustedCount(series: number[], eligible: boolean): {
   raw: number;
   organic: number;
   peak: number;
@@ -134,7 +136,8 @@ function bulkAdjustedCount(series: number[]): {
   // A single day is treated as a bulk/import event only when it is both large
   // in absolute terms and dominates the period. Small legitimate bursts stay
   // in the comparison. No source/batch column is assumed here.
-  const bulk = nonZeroDays === 1 && raw >= 20 && peak >= 20 && peak / raw >= 0.7;
+  const bulk =
+    eligible && nonZeroDays === 1 && raw >= 20 && peak >= 20 && peak / raw >= 0.7;
   return { raw, organic: bulk ? raw - peak : raw, peak, bulk };
 }
 
@@ -184,8 +187,12 @@ async function loadMetric(
   const previousSeries = timestamps
     ? bucketSeries(timestamps, previousStartDate.getTime(), period)
     : null;
-  const currentProfile = series ? bulkAdjustedCount(series) : null;
-  const previousProfile = previousSeries ? bulkAdjustedCount(previousSeries) : null;
+  const currentProfile = series
+    ? bulkAdjustedCount(series, meta.bulkImportEligible === true)
+    : null;
+  const previousProfile = previousSeries
+    ? bulkAdjustedCount(previousSeries, meta.bulkImportEligible === true)
+    : null;
   const periodCount = currentProfile?.raw || 0;
   const previousCount = previousProfile?.raw || 0;
   const comparisonCurrent = currentProfile?.organic ?? null;

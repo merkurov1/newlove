@@ -608,7 +608,9 @@
   max-width: 32em;
   margin: 22px 0 0;
   color: var(--pw-muted);
-  font-size: 23px;
+  font-family: var(--pw-sans);
+  font-size: 16px;
+  font-weight: 400;
   line-height: 1.4;
 }
 

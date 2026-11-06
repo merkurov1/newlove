@@ -6,23 +6,8 @@ import type { PierrotProjectSnapshot } from '@/lib/pierrot/projects/types';
 
 export default function ProjectOverview({ project: initial }: { project: PierrotProjectSnapshot }) {
   const [project, setProject] = useState(initial);
-  const [brief, setBrief] = useState(initial.projectBrief);
   const [notice, setNotice] = useState('');
   const [savingStatus, setSavingStatus] = useState(false);
-  async function saveBrief() {
-    const response = await fetch(`/api/admin/pierrot/projects/${project.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectBrief: brief, briefRevision: project.briefRevision }),
-    });
-    if (!response.ok) {
-      setNotice('Не удалось сохранить бриф.');
-      return;
-    }
-    const data = await response.json();
-    setProject((current) => ({ ...current, ...data.project }));
-    setNotice('Бриф сохранён.');
-  }
   async function setStatus(status: 'active' | 'paused' | 'archived') {
     setSavingStatus(true);
     setNotice('');
@@ -35,7 +20,13 @@ export default function ProjectOverview({ project: initial }: { project: Pierrot
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'status_failed');
       setProject((current) => ({ ...current, ...data.project }));
-      setNotice(status === 'paused' ? 'Проект приостановлен.' : status === 'archived' ? 'Проект архивирован.' : 'Проект возобновлён.');
+      setNotice(
+        status === 'paused'
+          ? 'Проект приостановлен.'
+          : status === 'archived'
+            ? 'Проект архивирован.'
+            : 'Проект возобновлён.'
+      );
     } catch {
       setNotice('Не удалось изменить статус проекта.');
     } finally {
@@ -49,40 +40,50 @@ export default function ProjectOverview({ project: initial }: { project: Pierrot
           <Link href="/admin/pierrot/projects">← Все проекты</Link>
           <p className="pw-eyebrow">PROJECT / {project.status}</p>
           <h1>{project.name}</h1>
-          <p>{project.description || project.objective || 'Постоянное рабочее пространство Pierrot.'}</p>
+          <p>
+            {project.description || project.objective || 'Постоянное рабочее пространство Pierrot.'}
+          </p>
           <small>
             {project.status} · последняя активность{' '}
-            {project.lastActivityAt ? new Date(project.lastActivityAt).toLocaleDateString('ru-RU') : '—'}
+            {project.lastActivityAt
+              ? new Date(project.lastActivityAt).toLocaleDateString('ru-RU')
+              : '—'}
           </small>
         </div>
-        <Link className="pw-button" href={`/admin/pierrot?new=1&project=${project.slug}`}>
-          Новый разговор в проекте
-        </Link>
-          <div>
-            {project.status === 'active' ? (
-              <button type="button" onClick={() => void setStatus('paused')} disabled={savingStatus}>
-                Приостановить
-              </button>
-            ) : project.status === 'paused' ? (
-              <button type="button" onClick={() => void setStatus('active')} disabled={savingStatus}>
-                Возобновить
-              </button>
-            ) : null}
-            {project.status !== 'archived' && (
-              <button type="button" onClick={() => void setStatus('archived')} disabled={savingStatus}>
-                Архивировать
-              </button>
-            )}
-          </div>
+        <div>
+          {project.status === 'active' ? (
+            <button type="button" onClick={() => void setStatus('paused')} disabled={savingStatus}>
+              Приостановить
+            </button>
+          ) : project.status === 'paused' ? (
+            <button type="button" onClick={() => void setStatus('active')} disabled={savingStatus}>
+              Возобновить
+            </button>
+          ) : null}
+          {project.status !== 'archived' && (
+            <button
+              type="button"
+              onClick={() => void setStatus('archived')}
+              disabled={savingStatus}
+            >
+              Архивировать
+            </button>
+          )}
+        </div>
       </header>
       <div className="pw-project-overview-grid">
         <article className="pw-project-panel pw-project-panel--brief">
-          <h2>Project Brief</h2>
-          <textarea value={brief} onChange={(event) => setBrief(event.target.value)} rows={12} />
-          <div>
-            <button onClick={() => void saveBrief()}>Сохранить бриф</button>
-            {notice && <span>{notice}</span>}
-          </div>
+          <h2>Что известно о проекте</h2>
+          <p>
+            {project.projectBrief ||
+              project.objective ||
+              project.description ||
+              'Pierrot пока ничего не знает об этом проекте.'}
+          </p>
+          <p className="pw-muted">
+            Чтобы добавить контекст, открой проектный разговор в Chat и расскажи Pierrot о цели,
+            состоянии и важных решениях.
+          </p>
         </article>
         <ProjectList
           title="Решения"
