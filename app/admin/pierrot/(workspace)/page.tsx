@@ -15,11 +15,7 @@ import { loadBrainStatus } from '@/lib/pierrot/memory/brainStatus';
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
 import { overviewCookieName, parseOverviewCache } from '@/lib/pierrot/workspace/cache';
 import ChatWorkspace from '@/components/pierrot/workspace/ChatWorkspace';
-import {
-  getPierrotProject,
-  getPierrotProjectForConversation,
-  listPierrotProjects,
-} from '@/lib/pierrot/projects/store';
+import { getPierrotProject, getPierrotProjectForConversation } from '@/lib/pierrot/projects/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,11 +68,10 @@ export default async function ChatPage({
   const projectWelcome =
     (Array.isArray(params.welcome) ? params.welcome[0] : params.welcome) === 'project';
 
-  const [conversations, conversation, explicitProject, projects] = await Promise.all([
+  const [conversations, conversation, explicitProject] = await Promise.all([
     loadOwnerConversations(user.id),
     rawConversation ? loadOwnerConversation(user.id, rawConversation) : Promise.resolve(null),
     projectRef ? getPierrotProject(user.id, projectRef) : Promise.resolve(null),
-    listPierrotProjects(user.id),
   ]);
 
   if (rawConversation && !conversation) {
@@ -129,7 +124,6 @@ export default async function ChatPage({
       ownerId={user.id}
       overview={overview}
       conversations={conversations}
-      projects={projects}
       conversation={conversation}
       startNew={startNew}
       projectWelcome={projectWelcome}

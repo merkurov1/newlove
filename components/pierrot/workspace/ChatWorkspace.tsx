@@ -47,6 +47,7 @@ import type {
 import { memoryKindLabel, memoryStatusLabel } from '@/lib/pierrot/memory/types';
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
 import HomeOverview from './HomeOverview';
+import { sortOwnerConversations } from '@/lib/pierrot/workspace/conversationOrdering';
 import type { PierrotProject } from '@/lib/pierrot/projects/types';
 
 type UiMessage = {
@@ -140,13 +141,7 @@ function ConversationLinks({
       {items.map((item) => (
         <li key={item.id}>
           {item.projectId && item.projectSlug && item.projectName && (
-            <Link
-              href={`/admin/pierrot/projects/${encodeURIComponent(item.projectSlug)}`}
-              className="pw-conversation-project"
-              onClick={onOpen}
-            >
-              Проект · {item.projectName}
-            </Link>
+            <span className="pw-conversation-project">Проект · {item.projectName}</span>
           )}
           <Link
             href={`/admin/pierrot?conversation=${encodeURIComponent(item.id)}`}
@@ -166,37 +161,10 @@ function ConversationLinks({
   );
 }
 
-function ProjectLinks({ projects, onOpen }: { projects: PierrotProject[]; onOpen: () => void }) {
-  return (
-    <ul className="pw-conversation-list pw-project-recent-list">
-      {projects.map((project) => (
-        <li key={project.id}>
-          <Link
-            href={`/admin/pierrot/projects/${encodeURIComponent(project.slug)}`}
-            className="pw-conversation-link"
-            onClick={onOpen}
-          >
-            <span className="pw-conversation-title">Проект · {project.name}</span>
-            <span className="pw-conversation-date">Открыть рабочее пространство</span>
-          </Link>
-          <Link
-            href={`/admin/pierrot?new=1&project=${encodeURIComponent(project.slug)}`}
-            className="pw-conversation-project"
-            onClick={onOpen}
-          >
-            + Новый разговор в проекте
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export default function ChatWorkspace({
   ownerId,
   overview,
   conversations,
-  projects,
   conversation,
   startNew,
   projectWelcome,
@@ -206,7 +174,6 @@ export default function ChatWorkspace({
   ownerId: string;
   overview: WorkspaceOverview;
   conversations: OwnerConversationListItem[];
-  projects: PierrotProject[];
   conversation: OwnerConversation | null;
   startNew: boolean;
   projectWelcome?: boolean;
@@ -1125,12 +1092,7 @@ export default function ChatWorkspace({
         ? 'Pierrot сохраняет ответ'
         : 'Pierrot формулирует ответ';
   const orderedConversations = useMemo(
-    () =>
-      [...conversations].sort((left, right) => {
-        const projectOrder = Number(Boolean(right.projectId)) - Number(Boolean(left.projectId));
-        if (projectOrder !== 0) return projectOrder;
-        return Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
-      }),
+    () => sortOwnerConversations(conversations),
     [conversations]
   );
 
@@ -1179,10 +1141,7 @@ export default function ChatWorkspace({
 
             <div className="pw-drawer-section">
               <div className="pw-drawer-section-title">Недавние разговоры</div>
-              {projects.length > 0 && (
-                <ProjectLinks projects={projects} onOpen={() => setDrawerOpen(false)} />
-              )}
-              {orderedConversations.length === 0 && projects.length === 0 ? (
+              {orderedConversations.length === 0 ? (
                 <p className="pw-drawer-empty">Сохранённых диалогов пока нет.</p>
               ) : (
                 <ConversationLinks

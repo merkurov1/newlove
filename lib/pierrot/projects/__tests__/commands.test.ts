@@ -28,4 +28,8 @@ describe('project chat commands', () => {
       projectName: 'Art Engine',
     });
   });
+
+  it('does not treat deleting a task as deleting a project', () => {
+    expect(detectProjectCommand('удали задачу про Heart&Angel')).toEqual({ action: 'none' });
+  });
 });

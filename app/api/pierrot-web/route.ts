@@ -76,7 +76,7 @@ import {
 } from '@/lib/knowledge/rag/evidence';
 import type { RagRetrievalOutcome, RetrievedChunk } from '@/lib/knowledge/rag/types';
 import type { BrainRetrievalResult } from '@/lib/knowledge/rag/brainRetrieval';
-import { decideWebSearch } from '@/lib/knowledge/web/searchDecision';
+import { decideWebSearch, hasExplicitWebCommand } from '@/lib/knowledge/web/searchDecision';
 import { searchWebEvidence } from '@/lib/knowledge/web/exaSearch';
 import {
   buildBrainWebSynthesisPrompt,
@@ -514,16 +514,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Owner mode is not available.' }, { status: 403 });
     }
 
-    // Owner knowledge is the default for a verified owner. Sending
-    // mode: "site" explicitly turns it off; non-owners never enter this path.
-    const ownerMode = ragOwnerAuthorized && !requestedSiteMode;
+    // A project conversation remains personal even when an older client sends
+    // mode: "site". The surface flag must not discard a verified project's
+    // context, while an explicitly public owner turn keeps its legacy public
+    // perspective.
     let conversationProject: Awaited<ReturnType<typeof getPierrotProjectForConversation>> = null;
-    if (ownerMode && isPierrotUserId(ownerIdentityUserId) && rawConversationId) {
-      conversationProject = await getPierrotProjectForConversation(
-        ownerIdentityUserId,
-        rawConversationId
-      ).catch(() => null);
+    if (ragOwnerAuthorized && isPierrotUserId(ownerIdentityUserId) && rawConversationId) {
+      try {
+        conversationProject = await getPierrotProjectForConversation(
+          ownerIdentityUserId,
+          rawConversationId
+        );
+      } catch {
+        conversationProject = null;
+      }
     }
+    const ownerMode =
+      ragOwnerAuthorized &&
+      (!requestedSiteMode || Boolean(requestedProject) || Boolean(conversationProject));
     // Memory is independent of transcript-storage consent: an explicit
     // “Запомни/Сохрани/Напомни” command is its own permission for that record.
     const memoryStore = ownerMode ? createPierrotStore() : null;
@@ -607,7 +615,11 @@ export async function POST(req: Request) {
             explicitProjectId: requestedProject,
           });
           if (selected.project) {
-            await linkConversationToProject(ownerIdentityUserId, selected.project.id, conversationId);
+            await linkConversationToProject(
+              ownerIdentityUserId,
+              selected.project.id,
+              conversationId
+            );
           }
         }
 
@@ -812,7 +824,9 @@ export async function POST(req: Request) {
           message: trimmedMessage,
         });
         resolvedProjectRef = resolved.project?.slug || resolvedProjectRef;
-        if (resolved.ambiguous) projectResolutionNote = 'PROJECT CONTEXT AMBIGUOUS: ask the owner which project they mean before using project-specific context.';
+        if (resolved.ambiguous)
+          projectResolutionNote =
+            'PROJECT CONTEXT AMBIGUOUS: ask the owner which project they mean before using project-specific context.';
       } catch {
         // Project context is an enhancement; a missing migration must not break chat.
       }
@@ -1275,12 +1289,15 @@ export async function POST(req: Request) {
               name: projectCommand.name,
               projectBrief: '',
             });
-            return persistOwnerReply(`Создал проект «${created.name}». Теперь можно сказать: «перенеси эту задачу в проект ${created.name}».`, {
-              project_command: 'create',
-              project_status: 'created',
-              project_id: created.id,
-              project_slug: created.slug,
-            });
+            return persistOwnerReply(
+              `Создал проект «${created.name}». Теперь можно сказать: «перенеси эту задачу в проект ${created.name}».`,
+              {
+                project_command: 'create',
+                project_status: 'created',
+                project_id: created.id,
+                project_slug: created.slug,
+              }
+            );
           } catch {
             return persistOwnerReply('Не удалось создать проект. Название не сохранено.', {
               project_command: 'create',
@@ -1292,17 +1309,23 @@ export async function POST(req: Request) {
         if (projectCommand.action === 'delete') {
           const project = await getPierrotProject(ownerIdentityUserId, projectCommand.name);
           if (!project) {
-            return persistOwnerReply(`Не нашёл проект «${projectCommand.name}». Ничего не удалено.`, {
-              project_command: 'delete',
-              project_status: 'not_found',
-            });
+            return persistOwnerReply(
+              `Не нашёл проект «${projectCommand.name}». Ничего не удалено.`,
+              {
+                project_command: 'delete',
+                project_status: 'not_found',
+              }
+            );
           }
           if (!projectCommand.confirmed) {
-            return persistOwnerReply(`Удаление проекта «${project.name}» необратимо и удалит его связи с разговорами и материалами. Подтверди фразой «да, удалить проект ${project.name}».`, {
-              project_command: 'delete',
-              project_status: 'confirmation_required',
-              project_id: project.id,
-            });
+            return persistOwnerReply(
+              `Удаление проекта «${project.name}» необратимо и удалит его связи с разговорами и материалами. Подтверди фразой «да, удалить проект ${project.name}».`,
+              {
+                project_command: 'delete',
+                project_status: 'confirmation_required',
+                project_id: project.id,
+              }
+            );
           }
           await deletePierrotProject(ownerIdentityUserId, project.id);
           return persistOwnerReply(`Удалил проект «${project.name}».`, {
@@ -1314,7 +1337,9 @@ export async function POST(req: Request) {
 
         const projects = await listPierrotProjects(ownerIdentityUserId);
         const matches = projects.filter(
-          (item) => item.name.toLocaleLowerCase() === projectCommand.projectName.toLocaleLowerCase() || item.slug === projectCommand.projectName.toLowerCase()
+          (item) =>
+            item.name.toLocaleLowerCase() === projectCommand.projectName.toLocaleLowerCase() ||
+            item.slug === projectCommand.projectName.toLowerCase()
         );
         if (matches.length !== 1) {
           return persistOwnerReply(
@@ -1328,7 +1353,9 @@ export async function POST(req: Request) {
         const taskResult = await listDevTasks(ownerIdentityUserId, 100);
         const taskCandidates = taskResult.tasks.filter((task) =>
           projectCommand.taskQuery
-            ? `${task.title} ${task.objective}`.toLocaleLowerCase().includes(projectCommand.taskQuery.toLocaleLowerCase())
+            ? `${task.title} ${task.objective}`
+                .toLocaleLowerCase()
+                .includes(projectCommand.taskQuery.toLocaleLowerCase())
             : task.conversationId === conversationId
         );
         if (taskCandidates.length !== 1) {
@@ -1343,12 +1370,15 @@ export async function POST(req: Request) {
           projectId: targetProject.id,
         });
         if (!moved) throw new Error('PROJECT_TASK_MOVE_FAILED');
-        return persistOwnerReply(`Перенёс задачу «${moved.title}» в проект «${targetProject.name}».`, {
-          project_command: 'move_task',
-          project_status: 'moved',
-          project_id: targetProject.id,
-          dev_task_id: moved.id,
-        });
+        return persistOwnerReply(
+          `Перенёс задачу «${moved.title}» в проект «${targetProject.name}».`,
+          {
+            project_command: 'move_task',
+            project_status: 'moved',
+            project_id: targetProject.id,
+            dev_task_id: moved.id,
+          }
+        );
       }
 
       // Explicit owner-only Skill Foundry analysis. The command must be
@@ -2785,9 +2815,20 @@ export async function POST(req: Request) {
     // decideWebSearch is the single authority for autonomous web execution.
     // queryPlan.sources.web describes intent classification and may inherit an
     // old web intent for a follow-up; it must never bypass a later web veto.
+    const ownerInternalWebQuestion =
+      ragOwnerAuthorized &&
+      !hasExplicitWebCommand(trimmedMessage) &&
+      (webDecision?.reason === 'web_follow_up' ||
+        (Boolean(webDecision?.signals.includes('internal_context')) &&
+          !Boolean(webDecision?.signals.includes('current_events'))) ||
+        Boolean(requestedProject) ||
+        Boolean(conversationProject));
     const webRequested = Boolean(
       useModel &&
       webDecision?.shouldSearch &&
+      // Owner workspace questions are about Pierrot's own memory, projects,
+      // tasks and history by default. Site mode must not weaken that boundary.
+      !ownerInternalWebQuestion &&
       !webSuppressedIntent &&
       !explicitNonWebSource &&
       !explicitSourceWithoutQuery

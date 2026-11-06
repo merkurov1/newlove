@@ -3,11 +3,13 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import type { PierrotProjectSnapshot } from '@/lib/pierrot/projects/types';
+import { getProjectStatusSummary } from '@/lib/pierrot/projects/status';
 
 export default function ProjectOverview({ project: initial }: { project: PierrotProjectSnapshot }) {
   const [project, setProject] = useState(initial);
   const [notice, setNotice] = useState('');
   const [savingStatus, setSavingStatus] = useState(false);
+  const statusSummary = getProjectStatusSummary(project);
   async function setStatus(status: 'active' | 'paused' | 'archived') {
     setSavingStatus(true);
     setNotice('');
@@ -44,7 +46,7 @@ export default function ProjectOverview({ project: initial }: { project: Pierrot
             {project.description || project.objective || 'Постоянное рабочее пространство Pierrot.'}
           </p>
           <small>
-            {project.status} · последняя активность{' '}
+            {statusSummary.label} · последняя активность{' '}
             {project.lastActivityAt
               ? new Date(project.lastActivityAt).toLocaleDateString('ru-RU')
               : '—'}
@@ -72,6 +74,14 @@ export default function ProjectOverview({ project: initial }: { project: Pierrot
         </div>
       </header>
       <div className="pw-project-overview-grid">
+        <article className="pw-project-panel pw-project-panel--status">
+          <h2>Статус проекта</h2>
+          <p>{statusSummary.explanation}</p>
+          <p className="pw-muted">
+            Обновлено:{' '}
+            {project.updatedAt ? new Date(project.updatedAt).toLocaleDateString('ru-RU') : '—'}
+          </p>
+        </article>
         <article className="pw-project-panel pw-project-panel--brief">
           <h2>Что известно о проекте</h2>
           <p>

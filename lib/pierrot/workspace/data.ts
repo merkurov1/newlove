@@ -124,7 +124,10 @@ async function readTimestamps(
   }
 }
 
-function bulkAdjustedCount(series: number[], eligible: boolean): {
+function bulkAdjustedCount(
+  series: number[],
+  eligible: boolean
+): {
   raw: number;
   organic: number;
   peak: number;
@@ -136,8 +139,7 @@ function bulkAdjustedCount(series: number[], eligible: boolean): {
   // A single day is treated as a bulk/import event only when it is both large
   // in absolute terms and dominates the period. Small legitimate bursts stay
   // in the comparison. No source/batch column is assumed here.
-  const bulk =
-    eligible && nonZeroDays === 1 && raw >= 20 && peak >= 20 && peak / raw >= 0.7;
+  const bulk = eligible && nonZeroDays === 1 && raw >= 20 && peak >= 20 && peak / raw >= 0.7;
   return { raw, organic: bulk ? raw - peak : raw, peak, bulk };
 }
 
@@ -359,6 +361,7 @@ export async function loadOwnerConversations(
             projectId: project?.id || null,
             projectSlug: project?.slug || null,
             projectName: project?.name || null,
+            projectStatus: project?.status || null,
           };
         })(),
         id: row.id as string,

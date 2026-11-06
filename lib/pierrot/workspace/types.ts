@@ -73,6 +73,7 @@ export type OwnerConversationListItem = {
   projectId: string | null;
   projectSlug: string | null;
   projectName: string | null;
+  projectStatus?: 'active' | 'paused' | 'archived' | null;
 };
 
 export type OwnerChatMessage = {
