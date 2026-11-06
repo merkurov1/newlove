@@ -11,7 +11,6 @@ describe('workspace navigation', () => {
   it('keeps the requested primary order and a separated utility group', () => {
     expect(WORKSPACE_PRIMARY_ROUTES.map((route) => route.key)).toEqual([
       'chat',
-      'projects',
       'flow',
       'art',
       'heart',
@@ -19,7 +18,6 @@ describe('workspace navigation', () => {
     expect(WORKSPACE_BOTTOM_ROUTES.map((route) => route.key)).toEqual(['brain', 'dash', 'dev']);
     expect(WORKSPACE_ROUTES.map((route) => route.key)).toEqual([
       'chat',
-      'projects',
       'flow',
       'art',
       'heart',
@@ -29,7 +27,6 @@ describe('workspace navigation', () => {
     ]);
     expect(WORKSPACE_ROUTES.map((route) => route.shortcut)).toEqual([
       '1',
-      '8',
       '2',
       '3',
       '4',
@@ -41,7 +38,7 @@ describe('workspace navigation', () => {
 
   it('resolves active route without treating intelligence as the owner shell', () => {
     expect(activeWorkspaceKey('/admin/pierrot')).toBe('chat');
-    expect(activeWorkspaceKey('/admin/pierrot/projects')).toBe('projects');
+    expect(activeWorkspaceKey('/admin/pierrot/projects')).toBe('chat');
     expect(activeWorkspaceKey('/admin/pierrot/brain')).toBe('brain');
     expect(activeWorkspaceKey('/admin/pierrot/flow')).toBe('flow');
     expect(activeWorkspaceKey('/admin/pierrot/dash')).toBe('dash');
@@ -67,7 +64,7 @@ describe('workspace navigation', () => {
   it('maps workspace shortcuts and Cmd/Ctrl+N outside fields', () => {
     const base = { metaKey: true, ctrlKey: false, altKey: false, shiftKey: false };
     expect(shortcutRoute({ ...base, key: '1' }, document.body)).toEqual({ key: 'chat' });
-    expect(shortcutRoute({ ...base, key: '8' }, document.body)).toEqual({ key: 'projects' });
+    expect(shortcutRoute({ ...base, key: '8' }, document.body)).toBeNull();
     expect(shortcutRoute({ ...base, key: '2' }, document.body)).toEqual({ key: 'flow' });
     expect(shortcutRoute({ ...base, key: '3' }, document.body)).toEqual({ key: 'art' });
     expect(shortcutRoute({ ...base, key: '4' }, document.body)).toEqual({ key: 'heart' });

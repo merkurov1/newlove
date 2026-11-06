@@ -6,7 +6,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   Activity,
   Brain,
-  FolderOpen,
   Heart,
   MessageSquare,
   Palette,
@@ -30,7 +29,6 @@ const ICONS = {
   dev: Terminal,
   art: Palette,
   heart: Heart,
-  projects: FolderOpen,
 } as const;
 
 function registerServiceWorker() {
