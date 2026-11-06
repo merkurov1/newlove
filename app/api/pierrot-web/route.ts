@@ -196,10 +196,16 @@ import {
   type PierrotOwnerProfile,
 } from '@/lib/pierrot/perspective';
 import {
+  createPierrotProject,
+  deletePierrotProject,
+  getPierrotProject,
   getPierrotProjectForConversation,
   getPierrotProjectSnapshot,
+  listPierrotProjects,
   linkConversationToProject,
 } from '@/lib/pierrot/projects/store';
+import { detectProjectCommand } from '@/lib/pierrot/projects/commands';
+import { listDevTasks, updateDevTask } from '@/lib/pierrot/dev/tasks';
 import { resolvePierrotProject } from '@/lib/pierrot/projects/resolver';
 
 export const runtime = 'nodejs';
@@ -1245,6 +1251,105 @@ export async function POST(req: Request) {
 
         return NextResponse.json(payload);
       };
+
+      const projectCommand = detectProjectCommand(trimmedMessage);
+      if (projectCommand.action !== 'none') {
+        if (!isPierrotUserId(ownerIdentityUserId)) {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Команды управления проектами доступны только владельцу.'
+              : 'Project management commands are available to the owner only.',
+            { project_command: projectCommand.action, project_status: 'unauthorized' }
+          );
+        }
+
+        if (projectCommand.action === 'create') {
+          if (!projectCommand.name) {
+            return persistOwnerReply('Назови проект: «создай проект Art Engine».', {
+              project_command: 'create',
+              project_status: 'invalid',
+            });
+          }
+          try {
+            const created = await createPierrotProject(ownerIdentityUserId, {
+              name: projectCommand.name,
+              projectBrief: '',
+            });
+            return persistOwnerReply(`Создал проект «${created.name}». Теперь можно сказать: «перенеси эту задачу в проект ${created.name}».`, {
+              project_command: 'create',
+              project_status: 'created',
+              project_id: created.id,
+              project_slug: created.slug,
+            });
+          } catch {
+            return persistOwnerReply('Не удалось создать проект. Название не сохранено.', {
+              project_command: 'create',
+              project_status: 'failed',
+            });
+          }
+        }
+
+        if (projectCommand.action === 'delete') {
+          const project = await getPierrotProject(ownerIdentityUserId, projectCommand.name);
+          if (!project) {
+            return persistOwnerReply(`Не нашёл проект «${projectCommand.name}». Ничего не удалено.`, {
+              project_command: 'delete',
+              project_status: 'not_found',
+            });
+          }
+          if (!projectCommand.confirmed) {
+            return persistOwnerReply(`Удаление проекта «${project.name}» необратимо и удалит его связи с разговорами и материалами. Подтверди фразой «да, удалить проект ${project.name}».`, {
+              project_command: 'delete',
+              project_status: 'confirmation_required',
+              project_id: project.id,
+            });
+          }
+          await deletePierrotProject(ownerIdentityUserId, project.id);
+          return persistOwnerReply(`Удалил проект «${project.name}».`, {
+            project_command: 'delete',
+            project_status: 'deleted',
+            project_id: project.id,
+          });
+        }
+
+        const projects = await listPierrotProjects(ownerIdentityUserId);
+        const matches = projects.filter(
+          (item) => item.name.toLocaleLowerCase() === projectCommand.projectName.toLocaleLowerCase() || item.slug === projectCommand.projectName.toLowerCase()
+        );
+        if (matches.length !== 1) {
+          return persistOwnerReply(
+            matches.length > 1
+              ? 'Нашёл несколько проектов с таким названием. Уточни точное имя.'
+              : `Не нашёл проект «${projectCommand.projectName}».`,
+            { project_command: 'move_task', project_status: 'project_not_found' }
+          );
+        }
+        const targetProject = matches[0];
+        const taskResult = await listDevTasks(ownerIdentityUserId, 100);
+        const taskCandidates = taskResult.tasks.filter((task) =>
+          projectCommand.taskQuery
+            ? `${task.title} ${task.objective}`.toLocaleLowerCase().includes(projectCommand.taskQuery.toLocaleLowerCase())
+            : task.conversationId === conversationId
+        );
+        if (taskCandidates.length !== 1) {
+          return persistOwnerReply(
+            taskCandidates.length === 0
+              ? 'Не нашёл задачу для переноса. Назови её точнее или сначала создай Dev-задачу в этом разговоре.'
+              : `Нашёл ${taskCandidates.length} задачи. Назови точный заголовок, чтобы я не перенёс не ту.`,
+            { project_command: 'move_task', project_status: 'task_not_unique' }
+          );
+        }
+        const moved = await updateDevTask(ownerIdentityUserId, taskCandidates[0].id, {
+          projectId: targetProject.id,
+        });
+        if (!moved) throw new Error('PROJECT_TASK_MOVE_FAILED');
+        return persistOwnerReply(`Перенёс задачу «${moved.title}» в проект «${targetProject.name}».`, {
+          project_command: 'move_task',
+          project_status: 'moved',
+          project_id: targetProject.id,
+          dev_task_id: moved.id,
+        });
+      }
 
       // Explicit owner-only Skill Foundry analysis. The command must be
       // unmistakable; ordinary questions about skills or work do not trigger a

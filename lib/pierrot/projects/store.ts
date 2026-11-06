@@ -8,6 +8,7 @@ assertServerOnly('lib/pierrot/projects/store');
 const PROJECT_COLUMNS =
   'id,owner_user_id,slug,name,description,objective,status,priority,project_brief,brief_revision,last_activity_at,created_at,updated_at';
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export class PierrotProjectValidationError extends Error {
   code: 'PROJECT_NAME_REQUIRED' | 'PROJECT_NAME_TOO_LONG' | 'PROJECT_BRIEF_TOO_LONG';
@@ -67,14 +68,16 @@ export async function getPierrotProject(
   projectRef: string
 ): Promise<PierrotProject | null> {
   const client = getServerSupabaseClient({ useServiceRole: true });
-  const byId = await client
-    .from('pierrot_projects')
-    .select(PROJECT_COLUMNS)
-    .eq('owner_user_id', ownerUserId)
-    .eq('id', projectRef)
-    .maybeSingle();
-  if (byId.error) throw byId.error;
-  if (byId.data) return mapProject(byId.data as Record<string, unknown>);
+  if (UUID_PATTERN.test(projectRef)) {
+    const byId = await client
+      .from('pierrot_projects')
+      .select(PROJECT_COLUMNS)
+      .eq('owner_user_id', ownerUserId)
+      .eq('id', projectRef)
+      .maybeSingle();
+    if (byId.error) throw byId.error;
+    if (byId.data) return mapProject(byId.data as Record<string, unknown>);
+  }
   const bySlug = await client
     .from('pierrot_projects')
     .select(PROJECT_COLUMNS)
@@ -130,6 +133,18 @@ export async function getPierrotProjectForConversation(
     .maybeSingle();
   if (error) throw error;
   return data?.project_id ? getPierrotProject(ownerUserId, String(data.project_id)) : null;
+}
+
+export async function deletePierrotProject(ownerUserId: string, projectRef: string): Promise<boolean> {
+  const project = await getPierrotProject(ownerUserId, projectRef);
+  if (!project) return false;
+  const { error } = await getServerSupabaseClient({ useServiceRole: true })
+    .from('pierrot_projects')
+    .delete()
+    .eq('id', project.id)
+    .eq('owner_user_id', ownerUserId);
+  if (error) throw error;
+  return true;
 }
 
 /** Creates the pilot shell only; historical facts are deliberately not inferred. */
