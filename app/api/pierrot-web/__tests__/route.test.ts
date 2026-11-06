@@ -1261,6 +1261,34 @@ describe('Pierrot autonomous web search', () => {
     expect(json.reply).not.toContain('Sources:');
   });
 
+  it('does not let an inherited web intent bypass an explicit web veto', async () => {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+    memoryStore.buildMemoryContext.mockResolvedValueOnce('OWNER_MEMORY_CONTEXT');
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'site',
+          message: 'Как у меня дела? Что происходит? Какие планы на день?',
+          history: [
+            { role: 'user', content: 'Итак, посмотри в памяти, что на сегодня?' },
+            { role: 'assistant', content: 'Ответ.' },
+          ],
+        })
+      )
+    );
+    const json = (await response.json()) as { web?: unknown; reply?: string };
+
+    expect(response.status).toBe(200);
+    expect(webSearch.searchWebEvidence).not.toHaveBeenCalled();
+    expect(json.web).toBeUndefined();
+    expect(json.reply).not.toContain('Sources:');
+  });
+
   it('does not treat a question about the Sources block as a new web search', async () => {
     asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
       id: '11111111-1111-4111-8111-111111111111',
@@ -1272,6 +1300,7 @@ describe('Pierrot autonomous web search', () => {
       makeRequest(
         validBody({
           message: 'А что за источники в ответе?',
+          mode: 'site',
           history: [
             { role: 'user', content: 'Итак, посмотри в памяти, что на сегодня?' },
             {
@@ -1469,9 +1498,7 @@ describe('Pierrot autonomous web search', () => {
   });
 
   it('does not invent a query for an empty explicit web command', async () => {
-    const response = await POST(
-      makeRequest(validBody({ message: 'Поищи в интернете' }))
-    );
+    const response = await POST(makeRequest(validBody({ message: 'Поищи в интернете' })));
 
     expect(response.status).toBe(200);
     expect(webSearch.searchWebEvidence).not.toHaveBeenCalled();

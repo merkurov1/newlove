@@ -140,7 +140,8 @@ const EXPLICIT_MEDIA_PATTERNS: RegExp[] = [
   /(?:^|\s)media\s+archive(?=\s|$)/i,
 ];
 
-const BRAIN_MENTION = /(?:^|\s)(?:brain|rag|баз[ае]\s+знаний|мозг|мой\s+архив|мои\s+текст|my\s+texts|my\s+writing)(?=\s|$)/i;
+const BRAIN_MENTION =
+  /(?:^|\s)(?:brain|rag|баз[ае]\s+знаний|мозг|мой\s+архив|мои\s+текст|my\s+texts|my\s+writing)(?=\s|$)/i;
 const WEB_MENTION = /(?:^|\s)(?:интернет[а-я]*|в\s+сети|web|online)(?=\s|$)/i;
 const COMPARE_WITH_WEB = /(?:сравни|compare).{0,120}(?:интернет|web|online|сми|media)/i;
 
@@ -152,7 +153,10 @@ const TOPIC_SWITCH =
 
 function stripLeadingFiller(value: string): string {
   return value
-    .replace(/^(?:please|can you|could you|would you|will you|пожалуйста|можешь|не мог бы)\s*[,]?\s*/i, '')
+    .replace(
+      /^(?:please|can you|could you|would you|will you|пожалуйста|можешь|не мог бы)\s*[,]?\s*/i,
+      ''
+    )
     .trim();
 }
 
@@ -282,11 +286,10 @@ export function buildContextualWebQuery(input: {
 }): ContextualWebQuery {
   const message = typeof input.message === 'string' ? input.message : '';
   const explicitQuery = extractExplicitWebQuery(message);
-  const previous =
-    (input.previousWebQuery ?? findPreviousWebQuery(input.history) ?? '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 320);
+  const previous = (input.previousWebQuery ?? findPreviousWebQuery(input.history) ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 320);
   const topicChanged = isTopicSwitch(message);
 
   if (explicitQuery !== null) {
@@ -313,9 +316,7 @@ export function buildContextualWebQuery(input: {
 
   if (previous && (isWebFollowUp(message) || topicChanged)) {
     const detail = topicChanged ? stripTopicSwitchPrefix(message) : stripFollowUpPrefix(message);
-    const query = topicChanged
-      ? detail
-      : combineWebQueries(previous, detail);
+    const query = topicChanged ? detail : combineWebQueries(previous, detail);
     return {
       query: query || previous,
       usedContext: !topicChanged,
@@ -667,6 +668,13 @@ const INTERNAL_MEMORY_TERMS = [
  * considered.
  */
 const INTERNAL_OWNER_TERMS = [
+  'как у меня дела',
+  'как мои дела',
+  'что у меня происходит',
+  'что происходит со мной',
+  'что происходит с моим проектом',
+  'что сейчас происходит с моим проектом',
+  'с моим проектом',
   'что у меня',
   'что у меня сегодня',
   'что у меня осталось',
@@ -700,6 +708,17 @@ const INTERNAL_OWNER_TERMS = [
   'what changed',
   'what has changed',
   'what am i working on',
+  'how am i doing',
+  "what's happening with me",
+  'what is happening with me',
+  "what's going on with me",
+  'what is going on with me',
+  "what's happening with my project",
+  'what is happening with my project',
+  "what's going on with my project",
+  'what is going on with my project',
+  'what are my plans for today',
+  'my plans for today',
 ];
 
 const INTERNAL_PRODUCT_TERMS = [
@@ -894,8 +913,11 @@ export function decideWebSearch(input: WebSearchDecisionInput): WebSearchDecisio
     history: input.history,
     previousWebQuery: input.previousWebQuery,
   });
-  const previousWebQuery =
-    (input.previousWebQuery ?? findPreviousWebQuery(input.history) ?? '').trim();
+  const previousWebQuery = (
+    input.previousWebQuery ??
+    findPreviousWebQuery(input.history) ??
+    ''
+  ).trim();
 
   // An explicit source command wins over every heuristic. “Найди в Brain” or
   // “Найди в Media Archive” must not be hijacked by web search, and an explicit
@@ -950,12 +972,19 @@ export function decideWebSearch(input: WebSearchDecisionInput): WebSearchDecisio
   // when the user does not repeat “в интернете”.
   if (previousWebQuery && (isWebFollowUp(message) || isTopicSwitch(message))) {
     if (contextual.query && contextual.query.length >= 2) {
-      return decision(true, 'web_follow_up', message, ['web_follow_up', 'previous_web_context'], 0.88, {
-        query: contextual.query,
-        usedContext: contextual.usedContext,
-        topicChanged: contextual.topicChanged,
-        explicitSource,
-      });
+      return decision(
+        true,
+        'web_follow_up',
+        message,
+        ['web_follow_up', 'previous_web_context'],
+        0.88,
+        {
+          query: contextual.query,
+          usedContext: contextual.usedContext,
+          topicChanged: contextual.topicChanged,
+          explicitSource,
+        }
+      );
     }
   }
 

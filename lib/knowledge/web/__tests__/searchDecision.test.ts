@@ -132,6 +132,8 @@ describe('autonomous web search decision', () => {
   it.each([
     'Итак, посмотри в памяти, что на сегодня?',
     'Посмотри в памяти, что у меня сегодня?',
+    'Как у меня дела? Что происходит? Какие планы на день?',
+    'Что сейчас происходит с моим проектом?',
     'Что осталось сделать?',
     'Какие у меня планы?',
     'Что изменилось?',
@@ -146,6 +148,16 @@ describe('autonomous web search decision', () => {
 
     expect(decision.shouldSearch).toBe(false);
     expect(decision.query).toBe('');
+  });
+
+  it('keeps the owner public persona off the web for personal state questions', () => {
+    const decision = decideWebSearch({
+      message: 'Как у меня дела? Что происходит? Какие планы на день?',
+      ownerMode: true,
+    });
+
+    expect(decision.shouldSearch).toBe(false);
+    expect(decision.reason).toBe('owner_brain');
   });
 
   it('does not search when the user asks what the Sources block is', () => {
@@ -329,8 +341,7 @@ describe('autonomous web search decision', () => {
 
   it('preserves explicit domains and date constraints in the query', () => {
     const decision = decideWebSearch({
-      message:
-        'Найди в интернете на artnet.com новости о Sotheby’s за последнюю неделю',
+      message: 'Найди в интернете на artnet.com новости о Sotheby’s за последнюю неделю',
     });
 
     expect(decision.shouldSearch).toBe(true);

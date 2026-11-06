@@ -2582,7 +2582,15 @@ export async function POST(req: Request) {
     // The promise starts before Brain retrieval so both run in parallel; a web
     // failure can never block the normal answer.
     const webDecision = useModel
-      ? decideWebSearch({ message: trimmedMessage, history: normalizedHistory, ownerMode })
+      ? decideWebSearch({
+          message: trimmedMessage,
+          history: normalizedHistory,
+          // A verified owner may deliberately select the public persona, but
+          // that must not make personal-state questions look like public
+          // current-events requests. Explicit external requests still win in
+          // decideWebSearch.
+          ownerMode: ragOwnerAuthorized,
+        })
       : null;
     const webSuppressedIntent =
       queryPlan.intent === 'document_lookup' ||
@@ -2595,13 +2603,15 @@ export async function POST(req: Request) {
     const explicitSourceWithoutQuery = Boolean(
       webDecision?.explicitSource && !webDecision.shouldSearch
     );
+    // decideWebSearch is the single authority for autonomous web execution.
+    // queryPlan.sources.web describes intent classification and may inherit an
+    // old web intent for a follow-up; it must never bypass a later web veto.
     const webRequested = Boolean(
       useModel &&
-      webDecision &&
+      webDecision?.shouldSearch &&
       !webSuppressedIntent &&
       !explicitNonWebSource &&
-      !explicitSourceWithoutQuery &&
-      (queryPlan.sources.web || webDecision.shouldSearch)
+      !explicitSourceWithoutQuery
     );
     const webSearchPromise: Promise<WebSearchResult | null> = webRequested
       ? searchWebEvidence({
