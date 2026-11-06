@@ -90,6 +90,54 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const PAGE_SIZE = 30;
 const SERIES_OUTLET = 'Новая газета';
 const SERIES_MIN = 4;
+const REPRESENTATIVE_OUTLETS = 6;
+
+const KIND_SCORE: Record<Kind, number> = {
+  column: 5,
+  interview: 5,
+  radio: 4,
+  video: 4,
+  quote: 4,
+  blog: 3,
+  mention: 2,
+  profile: 1,
+};
+
+function prestigeGroup(outlet: string): string | null {
+  return (
+    PRESTIGE.find((publication) => outlet === publication || outlet.startsWith(publication)) ?? null
+  );
+}
+
+function prestigeIndex(outlet: string): number {
+  const group = prestigeGroup(outlet);
+  return group ? PRESTIGE.indexOf(group) : Number.MAX_SAFE_INTEGER;
+}
+
+function recordTimestamp(date: string): number {
+  const normalized = date.length === 4 ? `${date}-01-01` : date.length === 7 ? `${date}-01` : date;
+  const timestamp = Date.parse(normalized);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function editorialScore(record: MediaRecord, latestTimestamp: number): number {
+  const rank = prestigeIndex(record.outlet);
+  // PRESTIGE encodes editorial recognition. Unranked outlets still compete on
+  // recency, format and verified evidence, but cannot outrank the archive's
+  // established international publications by quote volume alone.
+  const prestige = rank === Number.MAX_SAFE_INTEGER ? 0 : Math.max(10, 42 - rank * 2);
+  const verifiedQuotes = Math.min(record.verifiedQuotes?.length ?? 0, 3);
+  const ageInYears = latestTimestamp
+    ? Math.max(0, (latestTimestamp - recordTimestamp(record.date)) / (365.25 * 24 * 60 * 60 * 1000))
+    : 0;
+  const recency = Math.max(0, 6 - ageInYears);
+  const quality = record.textQuality === 'high' ? 3 : record.textQuality === 'medium' ? 1 : 0;
+  const topicConfidence = record.derivedTopic ? 2 : 0;
+
+  return (
+    prestige + verifiedQuotes * 2 + recency + quality + topicConfidence + KIND_SCORE[record.kind]
+  );
+}
 
 function formatDate(date: string): string {
   const [, month, day] = date.split('-');
@@ -132,6 +180,7 @@ export default function MediaArchive({ records, archives }: Props) {
 
   const [query, setQuery] = useState(queryFromUrl);
   const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE);
+  const [searchMode, setSearchMode] = useState<'archive' | 'semantic'>('archive');
   const [semanticQuery, setSemanticQuery] = useState('');
   const [semanticResults, setSemanticResults] = useState<
     Array<{
@@ -206,12 +255,8 @@ export default function MediaArchive({ records, archives }: Props) {
     });
 
     const outlets = [...outletCounts.keys()].sort((a, b) => {
-      const indexA = PRESTIGE.indexOf(a);
-      const indexB = PRESTIGE.indexOf(b);
-
-      if (indexA !== -1 || indexB !== -1) {
-        return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
-      }
+      const rankOrder = prestigeIndex(a) - prestigeIndex(b);
+      if (rankOrder !== 0) return rankOrder;
 
       return (outletCounts.get(b) ?? 0) - (outletCounts.get(a) ?? 0) || a.localeCompare(b);
     });
@@ -228,9 +273,27 @@ export default function MediaArchive({ records, archives }: Props) {
     };
   }, [records]);
 
+  const representativeOutlets = useMemo(() => {
+    const seen = new Set<string>();
+    const selected: string[] = [];
+
+    for (const publication of stats.outlets) {
+      const group = prestigeGroup(publication) ?? publication;
+      if (seen.has(group)) continue;
+
+      seen.add(group);
+      selected.push(publication);
+
+      if (selected.length === REPRESENTATIVE_OUTLETS) break;
+    }
+
+    return selected;
+  }, [stats.outlets]);
+
   const collections = useMemo(() => {
     const topics = ['Internet & Censorship', 'AI & Tech', 'Art & Culture', 'Fintech & Crypto'];
     const byTopic = new Map<string, MediaRecord[]>();
+    const latestTimestamp = Math.max(...records.map((record) => recordTimestamp(record.date)), 0);
 
     for (const record of records) {
       if (isMediaReprint(record)) continue;
@@ -241,16 +304,29 @@ export default function MediaArchive({ records, archives }: Props) {
     }
 
     return topics
-      .map((topicName) => ({
-        topic: topicName,
-        records: (byTopic.get(topicName) || [])
-          .sort((left, right) => {
-            const quoteOrder = (right.quoteCount || 0) - (left.quoteCount || 0);
-            return quoteOrder || right.date.localeCompare(left.date);
-          })
-          .slice(0, 3),
-      }))
-      .filter((collection) => collection.records.length > 0);
+      .map((topicName) => {
+        const ranked = [...(byTopic.get(topicName) || [])].sort((left, right) => {
+          const scoreOrder =
+            editorialScore(right, latestTimestamp) - editorialScore(left, latestTimestamp);
+          return scoreOrder || compareRecords(left, right);
+        });
+
+        if (ranked.length === 0) return null;
+
+        const first = ranked[0];
+        const firstGroup = prestigeGroup(first.outlet) ?? first.outlet;
+        const second =
+          ranked.find((record) => (prestigeGroup(record.outlet) ?? record.outlet) !== firstGroup) ??
+          ranked[1];
+
+        return {
+          topic: topicName,
+          records: second ? [first, second] : [first],
+        };
+      })
+      .filter(
+        (collection): collection is { topic: string; records: MediaRecord[] } => collection !== null
+      );
   }, [records]);
 
   const runSemanticSearch = useCallback(async () => {
@@ -351,7 +427,7 @@ export default function MediaArchive({ records, archives }: Props) {
     [records, matches]
   );
 
-  const histogram = useMemo(() => {
+  const yearOptions = useMemo(() => {
     const counts = new Map<number, number>();
 
     records
@@ -367,17 +443,12 @@ export default function MediaArchive({ records, archives }: Props) {
       years.push(y);
     }
 
-    const peak = Math.max(1, ...years.map((y) => counts.get(y) ?? 0));
-
-    return years.map((y) => {
-      const count = counts.get(y) ?? 0;
-
-      return {
-        year: y,
-        count,
-        height: count ? Math.max(6, Math.sqrt(count / peak) * 100) : 0,
-      };
-    });
+    return years
+      .map((yearValue) => ({
+        year: yearValue,
+        count: counts.get(yearValue) ?? 0,
+      }))
+      .reverse();
   }, [records, matches, stats.minYear, stats.maxYear]);
 
   const activeFilters = Boolean(
@@ -413,9 +484,7 @@ export default function MediaArchive({ records, archives }: Props) {
       .map(([recordYear, yearRecords]) => {
         const seriesItems = yearRecords.filter(
           (record) =>
-            record.kind === 'column' &&
-            record.outlet === SERIES_OUTLET &&
-            !isMediaReprint(record)
+            record.kind === 'column' && record.outlet === SERIES_OUTLET && !isMediaReprint(record)
         );
 
         const collapseSeries = isOverview && seriesItems.length >= SERIES_MIN;
@@ -477,94 +546,77 @@ export default function MediaArchive({ records, archives }: Props) {
         <h1 className="ma-h1">Public record & commentary</h1>
 
         <p className="ma-lede">
-          A continuous record of analytical columns, international media citations, interviews, and
-          public appearances tracing transformations in digital infrastructure, technology, and
-          contemporary culture.
+          Analytical columns, international citations, interviews and commentary on technology and
+          culture.
         </p>
 
-        <dl className="ma-stats">
-          <div>
-            <dt>Records</dt>
-            <dd>{stats.total}</dd>
-          </div>
-          <div>
-            <dt>Publications</dt>
-            <dd>{stats.outlets.length}</dd>
-          </div>
-          <div>
-            <dt>Languages</dt>
-            <dd>{stats.languages.length}</dd>
-          </div>
-          <div>
-            <dt>Years covered</dt>
-            <dd>{stats.maxYear - stats.minYear + 1}</dd>
-          </div>
-        </dl>
+        <p className="ma-stats-line" aria-label="Archive summary">
+          <span>
+            <strong>{stats.total}</strong> records
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            <strong>{stats.outlets.length}</strong> publications
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            <strong>{stats.languages.length}</strong> languages
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            <strong>{stats.maxYear - stats.minYear + 1}</strong> years
+          </span>
+        </p>
 
-        <div className="ma-wall" aria-label="Filter by publication">
-          {stats.outlets.slice(0, 22).map((publication) => (
-            <button
-              key={publication}
-              type="button"
-              className="ma-outlet-btn"
-              aria-pressed={outlet === publication}
-              onClick={() => toggleFilter('outlet', outlet, publication)}
-            >
-              {publication}
-            </button>
+        <div className="ma-publications" aria-label="Representative publications">
+          {representativeOutlets.map((publication, index) => (
+            <span key={publication} className="ma-publication">
+              {index > 0 && (
+                <span className="ma-publication-sep" aria-hidden="true">
+                  ·
+                </span>
+              )}
+              <button
+                type="button"
+                className="ma-outlet-btn"
+                aria-pressed={outlet === publication}
+                onClick={() => toggleFilter('outlet', outlet, publication)}
+              >
+                {publication}
+              </button>
+            </span>
           ))}
         </div>
-
-        {archives.length > 0 && (
-          <p className="ma-archives">
-            <span className="ma-archives-label">Author archives</span>
-            {archives.map((archive, index) => (
-              <span key={archive.url}>
-                {index > 0 && <span aria-hidden="true"> · </span>}
-                <a href={archive.url} target="_blank" rel="noopener noreferrer">
-                  {archive.outlet} ↗
-                </a>
-              </span>
-            ))}
-          </p>
-        )}
       </header>
 
       {collections.length > 0 && (
         <section className="ma-collections" aria-label="Thematic collections">
-          <div className="ma-section-heading">
-            <span className="ma-eyebrow">Thematic collections</span>
-            <span className="ma-small-note">
-              Real publications, selected by topic and verified commentary
-            </span>
+          <div className="ma-collections-head">
+            <h2 className="ma-section-title">Thematic collections</h2>
+            <span className="ma-small-note">Selected publications by topic</span>
           </div>
           <div className="ma-collection-grid">
             {collections.map((collection) => (
               <article key={collection.topic} className="ma-collection">
-                <h2>{collection.topic}</h2>
-                <ol>
+                <h3>{collection.topic}</h3>
+                <ul>
                   {collection.records.map((record) => (
                     <li key={record.slug}>
                       <Link href={`/media/record/${encodeURIComponent(record.slug)}`}>
                         {record.title}
                       </Link>
-                      <span>
+                      <span className="ma-collection-meta">
                         {record.outlet} · {formatDate(record.date)}
-                        {record.verifiedQuotes?.length
-                          ? ` · ${record.verifiedQuotes.length} verified quote${
-                              record.verifiedQuotes.length === 1 ? '' : 's'
-                            }`
-                          : ''}
                       </span>
                     </li>
                   ))}
-                </ol>
+                </ul>
                 <button
                   type="button"
                   className="ma-collection-more"
                   onClick={() => updateUrl({ topic: collection.topic, q: null })}
                 >
-                  View topic →
+                  View collection →
                 </button>
               </article>
             ))}
@@ -572,122 +624,154 @@ export default function MediaArchive({ records, archives }: Props) {
         </section>
       )}
 
-      <section className="ma-explorer" aria-label="Explore archive">
-        <div className="ma-section-heading">
-          <span className="ma-eyebrow">Browse by year</span>
-          <span className="ma-small-note">Select a year to filter the archive</span>
-        </div>
-
-        <div className="ma-hist" role="group" aria-label="Records by year">
-          {histogram.map(({ year: barYear, count, height }) => (
-            <button
-              key={barYear}
-              type="button"
-              className="ma-bar"
-              aria-pressed={year === String(barYear)}
-              disabled={count === 0}
-              title={`${barYear}: ${count} records`}
-              aria-label={`${barYear}: ${count} records`}
-              onClick={() => toggleFilter('year', year, String(barYear))}
-            >
-              <span className="ma-bar-fill" style={{ height: `${height}%` }} />
-              <span className="ma-bar-label">{String(barYear).slice(2)}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
       <section className="ma-filters" aria-label="Filter media archive">
-        <label className="ma-search">
-          <span className="ma-sr">Search the media archive</span>
-          <span className="ma-search-icon" aria-hidden="true">
-            ⌕
-          </span>
-          <input
-            type="search"
-            value={query}
-            placeholder="Search title, publication, topic, date…"
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          {query && (
+        <form
+          className="ma-search-row"
+          role="search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (searchMode === 'semantic') void runSemanticSearch();
+          }}
+        >
+          <label className="ma-search">
+            <span className="ma-sr">
+              {searchMode === 'semantic' ? 'Search by meaning' : 'Search the media archive'}
+            </span>
+            <span className="ma-search-icon" aria-hidden="true">
+              ⌕
+            </span>
+            <input
+              type="search"
+              value={searchMode === 'semantic' ? semanticQuery : query}
+              placeholder={
+                searchMode === 'semantic'
+                  ? 'e.g. comments about data centres, AI sovereignty'
+                  : 'Search title, publication, topic, date…'
+              }
+              aria-label={
+                searchMode === 'semantic' ? 'Semantic search query' : 'Search the media archive'
+              }
+              onChange={(event) =>
+                searchMode === 'semantic'
+                  ? setSemanticQuery(event.target.value)
+                  : setQuery(event.target.value)
+              }
+            />
+            {(searchMode === 'semantic' ? semanticQuery : query) && (
+              <button
+                className="ma-clear-search"
+                type="button"
+                aria-label={searchMode === 'semantic' ? 'Clear semantic search' : 'Clear search'}
+                onClick={() => {
+                  if (searchMode === 'semantic') {
+                    setSemanticQuery('');
+                    setSemanticResults([]);
+                    setSemanticMessage('');
+                  } else {
+                    setQuery('');
+                  }
+                }}
+              >
+                ×
+              </button>
+            )}
+          </label>
+
+          {searchMode === 'semantic' && (
             <button
-              className="ma-clear-search"
-              type="button"
-              aria-label="Clear search"
-              onClick={() => setQuery('')}
+              type="submit"
+              className="ma-search-submit"
+              disabled={semanticLoading || !semanticQuery.trim()}
             >
-              ×
+              {semanticLoading ? 'Searching…' : 'Search'}
             </button>
           )}
-        </label>
 
-        <div className="ma-filter-block">
-          <span className="ma-filter-label">Format</span>
-          <div className="ma-chips" role="group" aria-label="Format">
-            {TYPES.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className="ma-chip"
-                aria-pressed={type === item.id}
-                onClick={() =>
-                  updateUrl({
-                    type: item.id === 'all' ? null : item.id,
-                  })
-                }
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
+          <button
+            type="button"
+            className="ma-search-mode"
+            aria-pressed={searchMode === 'semantic'}
+            onClick={() =>
+              setSearchMode((current) => (current === 'archive' ? 'semantic' : 'archive'))
+            }
+          >
+            {searchMode === 'semantic' ? 'Archive search' : 'Search by meaning'}
+          </button>
+        </form>
 
-        <div className="ma-filter-block">
-          <span className="ma-filter-label">Language</span>
-          <div className="ma-chips" role="group" aria-label="Language">
-            {stats.languages.map((language) => (
-              <button
-                key={language}
-                type="button"
-                className="ma-chip ma-chip-small"
-                aria-pressed={lang === language}
-                onClick={() => toggleFilter('lang', lang, language)}
-              >
-                {language}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="ma-filter-block">
-          <span className="ma-filter-label">Topic</span>
-          <div className="ma-chips" role="group" aria-label="Topic">
-            {stats.topics.map((item) => (
-              <button
-                key={item}
-                type="button"
-                className="ma-chip ma-chip-small"
-                aria-pressed={topic === item}
-                onClick={() => toggleFilter('topic', topic, item)}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="ma-filter-block">
-          <span className="ma-filter-label">Evidence</span>
-          <div className="ma-chips" role="group" aria-label="Evidence">
-            <button
-              type="button"
-              className="ma-chip ma-chip-small"
-              aria-pressed={quotesOnly}
-              onClick={() => updateUrl({ quotes: quotesOnly ? null : '1' })}
+        <div className="ma-filter-row">
+          <label className="ma-field">
+            <span>Format</span>
+            <select
+              value={type}
+              onChange={(event) =>
+                updateUrl({ type: event.target.value === 'all' ? null : event.target.value })
+              }
             >
-              Verified quotes
-            </button>
-          </div>
+              {TYPES.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="ma-field">
+            <span>Language</span>
+            <select value={lang} onChange={(event) => updateUrl({ lang: event.target.value })}>
+              <option value="">All languages</option>
+              {stats.languages.map((language) => (
+                <option key={language} value={language}>
+                  {language}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="ma-field">
+            <span>Topic</span>
+            <select value={topic} onChange={(event) => updateUrl({ topic: event.target.value })}>
+              <option value="">All topics</option>
+              {stats.topics.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="ma-field">
+            <span>Publication</span>
+            <select value={outlet} onChange={(event) => updateUrl({ outlet: event.target.value })}>
+              <option value="">All publications</option>
+              {stats.outlets.map((publication) => (
+                <option key={publication} value={publication}>
+                  {publication}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="ma-field">
+            <span>Year</span>
+            <select value={year} onChange={(event) => updateUrl({ year: event.target.value })}>
+              <option value="">All years</option>
+              {yearOptions.map((option) => (
+                <option key={option.year} value={option.year} disabled={option.count === 0}>
+                  {option.year} ({option.count})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="ma-toggle">
+            <input
+              type="checkbox"
+              checked={quotesOnly}
+              onChange={() => updateUrl({ quotes: quotesOnly ? null : '1' })}
+            />
+            <span>Verified quotes</span>
+          </label>
         </div>
 
         <div className="ma-results-line">
@@ -706,80 +790,57 @@ export default function MediaArchive({ records, archives }: Props) {
         </div>
       </section>
 
-      <section className="ma-semantic" aria-label="Semantic search">
-        <div className="ma-section-heading">
-          <span className="ma-eyebrow">Search by meaning</span>
-          <span className="ma-small-note">
-            Ask about a theme, quote or position. Results link to the original publication.
-          </span>
-        </div>
-        <form
-          className="ma-semantic-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void runSemanticSearch();
-          }}
-        >
-          <input
-            type="search"
-            value={semanticQuery}
-            onChange={(event) => setSemanticQuery(event.target.value)}
-            placeholder="e.g. comments about data centres, AI sovereignty, direct quotes"
-            aria-label="Semantic search query"
-          />
-          <button type="submit" disabled={semanticLoading || !semanticQuery.trim()}>
-            {semanticLoading ? 'Searching…' : 'Search'}
-          </button>
-        </form>
+      {searchMode === 'semantic' && (
+        <section className="ma-semantic-results" aria-label="Semantic search results">
+          {semanticMessage && semanticResults.length === 0 && (
+            <p className="ma-semantic-summary" role="status">
+              {semanticMessage}
+            </p>
+          )}
 
-        {semanticResults.length > 0 && (
-          <div className="ma-semantic-results" aria-live="polite">
-            <p className="ma-semantic-summary">{semanticMessage}</p>
-            <ol>
-              {semanticResults.map((result) => (
-                <li key={result.slug}>
-                  <div>
-                    <Link href={result.href}>{result.title}</Link>
-                    <span className="ma-semantic-meta">
-                      {result.outlet} · {result.date} ·{' '}
-                      {PRESENCE_LABEL[result.kind as Kind] || result.kind}
-                    </span>
-                  </div>
-                  {result.quotes.slice(0, 2).map((quote) => (
-                    <blockquote key={quote.id} className="ma-semantic-quote">
-                      <span className="ma-quote-label">
-                        {quote.type === 'direct_quote'
-                          ? 'Verified direct quote'
-                          : quote.type === 'indirect_quote'
-                            ? 'Verified paraphrase'
-                            : 'Verified mention'}
+          {semanticResults.length > 0 && (
+            <div aria-live="polite">
+              <p className="ma-semantic-summary">{semanticMessage}</p>
+              <ol>
+                {semanticResults.map((result) => (
+                  <li key={result.slug}>
+                    <div>
+                      <Link href={result.href}>{result.title}</Link>
+                      <span className="ma-semantic-meta">
+                        {result.outlet} · {result.date} ·{' '}
+                        {PRESENCE_LABEL[result.kind as Kind] || result.kind}
                       </span>
-                      “{quote.text}”
-                      {quote.translation && (
-                        <span className="ma-quote-translation">{quote.translation}</span>
-                      )}
-                    </blockquote>
-                  ))}
-                  <a
-                    href={result.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ma-semantic-link"
-                  >
-                    Original publication ↗
-                  </a>
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
-
-        {semanticMessage && semanticResults.length === 0 && (
-          <p className="ma-semantic-summary" role="status">
-            {semanticMessage}
-          </p>
-        )}
-      </section>
+                    </div>
+                    {result.quotes.slice(0, 2).map((quote) => (
+                      <blockquote key={quote.id} className="ma-semantic-quote">
+                        <span className="ma-quote-label">
+                          {quote.type === 'direct_quote'
+                            ? 'Verified direct quote'
+                            : quote.type === 'indirect_quote'
+                              ? 'Verified paraphrase'
+                              : 'Verified mention'}
+                        </span>
+                        “{quote.text}”
+                        {quote.translation && (
+                          <span className="ma-quote-translation">{quote.translation}</span>
+                        )}
+                      </blockquote>
+                    ))}
+                    <a
+                      href={result.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ma-semantic-link"
+                    >
+                      Original publication ↗
+                    </a>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="ma-timeline" aria-label="Media timeline">
         {groups.length === 0 ? (
@@ -851,10 +912,7 @@ export default function MediaArchive({ records, archives }: Props) {
                     const single = node.items.length === 1 ? node.items[0] : null;
 
                     return (
-                      <li
-                        key={`reprints-${group.year}-${node.outlet}-${index}`}
-                        className="ma-row"
-                      >
+                      <li key={`reprints-${group.year}-${node.outlet}-${index}`} className="ma-row">
                         <div className="ma-date">{node.items.length}×</div>
 
                         <details className="ma-series">
@@ -886,9 +944,7 @@ export default function MediaArchive({ records, archives }: Props) {
                                 <li key={item.slug}>
                                   <time dateTime={item.date}>{formatDate(item.date)}</time>
                                   <div>
-                                    <Link
-                                      href={`/media/record/${encodeURIComponent(item.slug)}`}
-                                    >
+                                    <Link href={`/media/record/${encodeURIComponent(item.slug)}`}>
                                       {item.title}
                                     </Link>
                                     {original && (
@@ -1013,6 +1069,19 @@ export default function MediaArchive({ records, archives }: Props) {
         )}
       </section>
 
+      {archives.length > 0 && (
+        <details className="ma-author-archives">
+          <summary>Author archives</summary>
+          <div>
+            {archives.map((archive) => (
+              <a key={archive.url} href={archive.url} target="_blank" rel="noopener noreferrer">
+                {archive.outlet} ↗
+              </a>
+            ))}
+          </div>
+        </details>
+      )}
+
       <footer className="ma-footer-note">
         <span>MEDIA ARCHIVE</span>
         <span>ANTON MERKUROV</span>
@@ -1027,7 +1096,6 @@ const CSS = `
   --ma-fg: #171715;
   --ma-muted: #77766f;
   --ma-line: #e6e4df;
-  --ma-soft: #f7f6f2;
   --ma-accent: #a53a27;
   --ma-serif: var(--font-cormorant, 'Cormorant Garamond', Georgia, serif);
   --ma-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -1048,12 +1116,12 @@ const CSS = `
   box-sizing: border-box;
 }
 
-.ma button,
-.ma input {
+:where(.ma) button,
+:where(.ma) input {
   font: inherit;
 }
 
-.ma button {
+:where(.ma) button {
   color: inherit;
 }
 
@@ -1070,81 +1138,79 @@ const CSS = `
   text-decoration: none;
 }
 
-.ma-eyebrow {
-  margin: 0;
-  color: var(--ma-accent);
-  font: 500 10px/1.5 var(--ma-mono);
-  letter-spacing: .14em;
-  text-transform: uppercase;
-}
-
 .ma-hero {
-  padding-bottom: clamp(40px, 6vw, 76px);
+  padding-bottom: clamp(18px, 2vw, 22px);
 }
 
 .ma-h1 {
   max-width: 900px;
   margin: 0;
   font-family: var(--ma-serif);
-  font-size: clamp(48px, 8.5vw, 104px);
+  font-size: clamp(36px, 3.2vw, 44px);
   font-weight: 400;
-  line-height: .94;
-  letter-spacing: -.045em;
+  line-height: 1;
+  letter-spacing: -.04em;
 }
 
 .ma-lede {
-  max-width: 680px;
-  margin: 28px 0 0;
-  color: var(--ma-muted);
-  font-size: 16px;
-  line-height: 1.75;
-}
-
-.ma-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 48px 0 0;
-  padding: 22px 0;
-  border-top: 1px solid var(--ma-line);
-  border-bottom: 1px solid var(--ma-line);
-  gap: 20px;
-}
-
-.ma-stats div {
-  min-width: 0;
-}
-
-.ma-stats dt {
-  color: var(--ma-muted);
-  font: 10px/1.5 var(--ma-mono);
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.ma-stats dd {
+  max-width: 760px;
   margin: 8px 0 0;
-  font-family: var(--ma-serif);
-  font-size: clamp(30px, 4vw, 46px);
-  font-weight: 400;
-  line-height: 1;
+  color: var(--ma-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.ma-stats-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 9px;
+  margin: 12px 0 0;
+  color: var(--ma-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ma-stats-line strong {
+  color: var(--ma-fg);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-.ma-wall {
+.ma-stats-line > span[aria-hidden="true"] {
+  color: var(--ma-line);
+}
+
+.ma-publications {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 18px;
-  margin-top: 28px;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-top: 8px;
+  font-family: var(--ma-serif);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.ma-publication {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ma-publication-sep {
+  color: var(--ma-line);
 }
 
 .ma-outlet-btn {
-  padding: 2px 0;
+  min-height: 0;
+  padding: 0;
   border: 0;
   border-bottom: 1px solid transparent;
   background: transparent;
   color: var(--ma-muted);
-  font-family: var(--ma-serif);
-  font-size: clamp(16px, 1.8vw, 20px);
+  font: inherit;
+  line-height: 1.4;
   cursor: pointer;
   transition: color .15s ease, border-color .15s ease;
 }
@@ -1155,114 +1221,31 @@ const CSS = `
   border-bottom-color: var(--ma-accent);
 }
 
-.ma-archives {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 7px;
-  margin: 28px 0 0;
-  color: var(--ma-muted);
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.ma-archives-label {
-  margin-right: 5px;
-  font-family: var(--ma-mono);
-  font-size: 10px;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.ma-archives a {
-  color: var(--ma-fg);
-  text-decoration: underline;
-  text-decoration-color: var(--ma-line);
-  text-underline-offset: 3px;
-}
-
-.ma-archives a:hover {
-  text-decoration-color: var(--ma-accent);
-  color: var(--ma-accent);
-}
-
-.ma-explorer {
-  padding: 26px 0 0;
-  border-top: 1px solid var(--ma-line);
-}
-
-.ma-section-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-}
-
 .ma-small-note {
   color: var(--ma-muted);
   font-size: 11px;
 }
 
-.ma-hist {
-  display: flex;
-  align-items: flex-end;
-  gap: 5px;
-  height: 100px;
-  margin: 22px 0 0;
-  padding-bottom: 4px;
-}
-
-.ma-bar {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  justify-content: flex-end;
-  align-items: stretch;
-  gap: 8px;
-  min-width: 0;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.ma-bar-fill {
-  display: block;
-  width: 100%;
-  min-height: 0;
-  background: #d9d6ce;
-  transition: background .15s ease, height .2s ease;
-}
-
-.ma-bar:hover:not(:disabled) .ma-bar-fill,
-.ma-bar[aria-pressed="true"] .ma-bar-fill {
-  background: var(--ma-accent);
-}
-
-.ma-bar:disabled {
-  cursor: default;
-  opacity: .24;
-}
-
-.ma-bar-label {
-  color: var(--ma-muted);
-  font: 9px/1 var(--ma-mono);
-  text-align: center;
-}
-
 .ma-filters {
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  margin-top: 34px;
-  padding: 28px 0 22px;
+  gap: 14px;
+  margin-top: 24px;
+  padding: 20px 0 14px;
   border-top: 1px solid var(--ma-line);
   border-bottom: 1px solid var(--ma-line);
 }
 
+.ma-search-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
 .ma-search {
   display: flex;
+  flex: 1 1 300px;
   align-items: center;
   gap: 12px;
   min-width: 0;
@@ -1281,14 +1264,14 @@ const CSS = `
 .ma-search-icon {
   color: var(--ma-muted);
   font-family: var(--ma-serif);
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1;
 }
 
 .ma-search input {
   width: 100%;
   min-width: 0;
-  padding: 12px 0;
+  padding: 10px 0;
   border: 0;
   border-radius: 0;
   outline: none;
@@ -1315,52 +1298,98 @@ const CSS = `
   cursor: pointer;
 }
 
-.ma-filter-block {
-  display: grid;
-  grid-template-columns: 100px minmax(0, 1fr);
-  align-items: start;
-  gap: 14px;
-}
-
-.ma-filter-label {
-  padding-top: 7px;
-  color: var(--ma-muted);
-  font: 10px/1.5 var(--ma-mono);
+.ma-search-submit {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  border: 1px solid var(--ma-fg);
+  border-radius: 0;
+  background: var(--ma-fg);
+  color: #fff;
+  font: 500 9px/1.4 var(--ma-mono);
   letter-spacing: .08em;
   text-transform: uppercase;
+  cursor: pointer;
 }
 
-.ma-chips {
+.ma-search-submit:disabled {
+  border-color: var(--ma-line);
+  background: transparent;
+  color: var(--ma-muted);
+  cursor: default;
+}
+
+.ma-search-mode {
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--ma-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ma-search-mode:hover,
+.ma-search-mode[aria-pressed="true"] {
+  color: var(--ma-fg);
+  border-bottom-color: var(--ma-accent);
+}
+
+.ma-filter-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  align-items: flex-end;
+  gap: 10px 18px;
 }
 
-.ma-chip {
-  padding: 7px 11px;
-  border: 1px solid var(--ma-line);
+.ma-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ma-field > span {
+  color: var(--ma-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.ma-field select {
+  max-width: 210px;
+  padding: 4px 20px 4px 0;
+  border: 0;
+  border-bottom: 1px solid var(--ma-line);
   border-radius: 0;
   background: transparent;
   color: var(--ma-fg);
   font-size: 11px;
-  line-height: 1.3;
+  line-height: 1.4;
   cursor: pointer;
-  transition: border-color .15s ease, background .15s ease, color .15s ease;
 }
 
-.ma-chip:hover {
-  border-color: var(--ma-fg);
+.ma-field select:hover,
+.ma-field select:focus {
+  border-bottom-color: var(--ma-fg);
 }
 
-.ma-chip[aria-pressed="true"] {
-  border-color: var(--ma-fg);
-  background: var(--ma-fg);
-  color: #fff;
+.ma-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 0;
+  color: var(--ma-fg);
+  font-size: 11px;
+  cursor: pointer;
 }
 
-.ma-chip-small {
-  padding: 6px 9px;
-  font-size: 10px;
+.ma-toggle input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--ma-fg);
 }
 
 .ma-results-line {
@@ -1383,6 +1412,7 @@ const CSS = `
 }
 
 .ma-reset {
+  min-height: 0;
   padding: 0;
   border: 0;
   background: transparent;
@@ -1689,33 +1719,56 @@ const CSS = `
     padding-top: 112px;
   }
 
-  .ma-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 22px 14px;
+  .ma-h1 {
+    font-size: clamp(34px, 9.5vw, 42px);
   }
 
-  .ma-section-heading {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 5px;
+  .ma-lede {
+    margin-top: 8px;
+    font-size: 13px;
   }
 
-  .ma-hist {
-    gap: 3px;
-    height: 82px;
+  .ma-stats-line {
+    margin-top: 10px;
+    gap: 3px 7px;
+    font-size: 11px;
   }
 
-  .ma-bar-label {
-    font-size: 8px;
+  .ma-publications {
+    margin-top: 7px;
+    gap: 2px 6px;
+    font-size: 12px;
   }
 
-  .ma-filter-block {
-    grid-template-columns: 1fr;
-    gap: 7px;
+  .ma-publication {
+    gap: 6px;
   }
 
-  .ma-filter-label {
-    padding-top: 0;
+  .ma-filters {
+    margin-top: 20px;
+    padding-top: 16px;
+    gap: 12px;
+  }
+
+  .ma-search {
+    flex-basis: 180px;
+  }
+
+  .ma-filter-row {
+    gap: 8px 14px;
+  }
+
+  .ma-field {
+    flex: 1 1 calc(50% - 7px);
+  }
+
+  .ma-field select {
+    width: 100%;
+    max-width: none;
+  }
+
+  .ma-toggle {
+    flex: 1 1 100%;
   }
 
   .ma-row {
@@ -1745,7 +1798,7 @@ const CSS = `
 
 @media (max-width: 420px) {
   .ma-h1 {
-    font-size: 48px;
+    font-size: 38px;
   }
 
   .ma-results-line {
@@ -1755,14 +1808,6 @@ const CSS = `
   .ma-footer-note {
     flex-direction: column;
     gap: 3px;
-  }
-
-  .ma-bar-label {
-    display: none;
-  }
-
-  .ma-bar:nth-child(odd) .ma-bar-label {
-    display: block;
   }
 }
 
@@ -1775,25 +1820,19 @@ const CSS = `
   }
 }
 .ma-collections {
-  margin-top: 34px;
+  margin-top: 24px;
   border-top: 1px solid var(--ma-line);
-  padding-top: 18px;
+  padding-top: 14px;
 }
 
-.ma-collection-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.ma-collections-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
   gap: 12px;
-  margin-top: 14px;
 }
 
-.ma-collection {
-  border: 1px solid var(--ma-line);
-  padding: 14px;
-  background: var(--ma-soft);
-}
-
-.ma-collection h2 {
+.ma-section-title {
   margin: 0;
   font-family: var(--ma-serif);
   font-size: 18px;
@@ -1801,22 +1840,48 @@ const CSS = `
   line-height: 1.2;
 }
 
-.ma-collection ol {
+.ma-collection-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.ma-collection {
+  border-top: 1px solid var(--ma-fg);
+  padding-top: 8px;
+}
+
+.ma-collection h3 {
+  margin: 0;
+  font-family: var(--ma-serif);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.ma-collection ul {
   list-style: none;
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   padding: 0;
 }
 
 .ma-collection li {
+  padding: 0;
+}
+
+.ma-collection li + li {
+  margin-top: 8px;
   border-top: 1px solid var(--ma-line);
-  padding: 8px 0;
+  padding-top: 8px;
 }
 
 .ma-collection li a {
   display: block;
   color: var(--ma-fg);
-  font-size: 12px;
-  line-height: 1.35;
+  font-family: var(--ma-serif);
+  font-size: 14px;
+  line-height: 1.25;
   text-decoration: none;
 }
 
@@ -1825,75 +1890,87 @@ const CSS = `
   text-decoration: underline;
 }
 
-.ma-collection li span {
+.ma-collection-meta {
   display: block;
   margin-top: 3px;
   color: var(--ma-muted);
-  font-family: var(--ma-mono);
   font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  line-height: 1.4;
 }
 
 .ma-collection-more {
-  margin-top: 8px;
+  min-height: 0;
+  margin-top: 6px;
   border: 0;
   padding: 0;
   background: transparent;
-  color: var(--ma-accent);
+  color: var(--ma-muted);
   cursor: pointer;
-  font-family: var(--ma-mono);
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.ma-semantic {
-  margin-top: 28px;
-  border-top: 1px solid var(--ma-line);
-  padding-top: 18px;
-}
-
-.ma-semantic-form {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.ma-semantic-form input {
-  flex: 1;
-  min-width: 0;
-  border: 1px solid var(--ma-line);
-  background: #fff;
-  padding: 10px 12px;
-  color: var(--ma-fg);
-  font-size: 13px;
-}
-
-.ma-semantic-form button {
-  border: 1px solid var(--ma-fg);
-  background: var(--ma-fg);
-  color: #fff;
-  padding: 10px 16px;
-  cursor: pointer;
-  font-family: var(--ma-mono);
   font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  line-height: 1.4;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
-.ma-semantic-form button:disabled {
-  opacity: 0.4;
-  cursor: default;
+.ma-collection-more:hover {
+  color: var(--ma-accent);
+}
+
+.ma-author-archives {
+  margin-top: 42px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ma-line);
+  color: var(--ma-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.ma-author-archives summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.ma-author-archives summary::-webkit-details-marker {
+  display: none;
+}
+
+.ma-author-archives summary::after {
+  content: ' +';
+  color: var(--ma-muted);
+}
+
+.ma-author-archives[open] summary::after {
+  content: ' −';
+}
+
+.ma-author-archives div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 8px;
+}
+
+.ma-author-archives a {
+  color: var(--ma-fg);
+  text-decoration: underline;
+  text-decoration-color: var(--ma-line);
+  text-underline-offset: 3px;
+}
+
+.ma-author-archives a:hover {
+  color: var(--ma-accent);
+  text-decoration-color: var(--ma-accent);
 }
 
 .ma-semantic-results {
-  margin-top: 14px;
+  margin-top: 4px;
 }
 
 .ma-semantic-summary {
+  margin: 6px 0;
   color: var(--ma-muted);
   font-size: 12px;
+  line-height: 1.6;
 }
 
 .ma-semantic-results ol {
@@ -2006,11 +2083,31 @@ const CSS = `
 
 @media (max-width: 560px) {
   .ma-collection-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 14px;
   }
 
-  .ma-semantic-form {
-    flex-direction: column;
+  .ma-collection h3 {
+    font-size: 13px;
+  }
+
+  .ma-collection li a {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .ma-collection-meta {
+    margin-top: 2px;
+    font-size: 8px;
+  }
+
+  .ma-collection-more {
+    margin-top: 4px;
+    font-size: 9px;
   }
 }
 
