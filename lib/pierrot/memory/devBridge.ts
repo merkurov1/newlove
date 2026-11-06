@@ -9,6 +9,8 @@ import {
 import type { DevRepositoryKey, DevTask } from '@/lib/pierrot/dev/types';
 import { updateMemoryRecord } from './store';
 import type { PierrotMemoryRecord } from './types';
+import { getPierrotProjectForConversation, listPierrotProjects } from '@/lib/pierrot/projects/store';
+import { matchUniqueProjectMention } from '@/lib/pierrot/projects/matching';
 
 assertServerOnly('lib/pierrot/memory/devBridge');
 
@@ -223,6 +225,21 @@ export async function createDevTaskFromChat(input: {
         : cleanTitle
       : titleFromContent(content);
 
+  let projectId: string | null = null;
+  try {
+    if (input.conversationId) {
+      projectId = (
+        await getPierrotProjectForConversation(input.userId, input.conversationId)
+      )?.id || null;
+    }
+    if (!projectId) {
+      const projects = await listPierrotProjects(input.userId);
+      projectId = matchUniqueProjectMention(projects, `${input.originalMessage || ''} ${content}`)?.id || null;
+    }
+  } catch {
+    projectId = null;
+  }
+
   return createDevTask(input.userId, {
     title: title || 'Инженерное задание из чата Pierrot',
     objective: content,
@@ -252,6 +269,7 @@ export async function createDevTaskFromChat(input: {
     acceptanceCriteria: [],
     unverified: [],
     conversationId: input.conversationId || null,
+    projectId,
     decisionIds: [],
     status: 'draft',
   });

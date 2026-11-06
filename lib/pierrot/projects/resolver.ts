@@ -1,5 +1,6 @@
 import { getPierrotProject, listPierrotProjects } from './store';
 import type { PierrotProject } from './types';
+export { matchUniqueProjectMention } from './matching';
 
 const EXPLICIT =
   /(?:верн(?:и|ёмся)|работаем|работать|делаем|перейд(?:и|ём))\s+(?:к|над|на)?\s*([\p{L}0-9][\p{L}0-9 &_-]{1,80})|(?:let['’]s\s+(?:work\s+on|return\s+to))\s+([\p{L}0-9][\p{L}0-9 &_-]{1,80})/iu;

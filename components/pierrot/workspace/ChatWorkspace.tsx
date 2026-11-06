@@ -163,6 +163,7 @@ export default function ChatWorkspace({
   ownerId,
   overview,
   conversations,
+  projects,
   conversation,
   startNew,
   brainStatus,
@@ -171,6 +172,7 @@ export default function ChatWorkspace({
   ownerId: string;
   overview: WorkspaceOverview;
   conversations: OwnerConversationListItem[];
+  projects: PierrotProject[];
   conversation: OwnerConversation | null;
   startNew: boolean;
   brainStatus?: BrainStatusSnapshot | null;
@@ -1078,6 +1080,9 @@ export default function ChatWorkspace({
   const projectGroups = useMemo(() => {
     const groups = new Map<string, { name: string; slug: string; items: OwnerConversationListItem[] }>();
     const unassigned: OwnerConversationListItem[] = [];
+    for (const item of projects) {
+      groups.set(item.id, { name: item.name, slug: item.slug, items: [] });
+    }
     for (const item of conversations) {
       if (!item.projectId || !item.projectSlug || !item.projectName) {
         unassigned.push(item);
@@ -1092,7 +1097,7 @@ export default function ChatWorkspace({
       groups.set(item.projectId, current);
     }
     return { groups: Array.from(groups.entries()), unassigned };
-  }, [conversations]);
+  }, [conversations, projects]);
 
   return (
     <div
