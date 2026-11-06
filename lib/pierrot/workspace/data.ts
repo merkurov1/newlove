@@ -311,10 +311,10 @@ export async function loadOwnerConversations(
         .limit(limit);
     }
 
-    const data = result.data;
+    let data = result.data;
     if (result.error || !Array.isArray(data) || data.length === 0) return [];
 
-    const ids = data
+    const initialIds = data
       .map((row) => (typeof row.id === 'string' ? row.id : null))
       .filter((value): value is string => Boolean(value));
 
@@ -322,7 +322,7 @@ export async function loadOwnerConversations(
       .from('pierrot_project_conversations')
       .select('conversation_id,project_id')
       .eq('owner_user_id', ownerUserId)
-      .in('conversation_id', ids);
+      .in('conversation_id', initialIds);
     const projectIds = Array.from(
       new Set(
         (links || [])
@@ -338,6 +338,49 @@ export async function loadOwnerConversations(
         projectById.get(String(row.project_id)) || null,
       ])
     );
+    const projectByCanonicalConversation = new Map(
+      projects
+        .filter((project): project is NonNullable<typeof project> => Boolean(project?.conversationId))
+        .map((project) => [project.conversationId as string, project])
+    );
+
+    // A project is represented by its canonical conversation only. If the
+    // canonical row fell outside the recent limit, load it explicitly so the
+    // list can never show a project as several separate chats.
+    const presentIds = new Set(initialIds);
+    const missingCanonicalIds = Array.from(projectByCanonicalConversation.keys()).filter(
+      (id) => !presentIds.has(id)
+    );
+    if (missingCanonicalIds.length > 0) {
+      const extra = await store
+        .from('pierrot_conversations')
+        .select(select)
+        .in('id', missingCanonicalIds)
+        .eq('identity_type', 'owner')
+        .eq('user_id', ownerUserId)
+        .limit(missingCanonicalIds.length);
+      if (!extra.error && Array.isArray(extra.data)) {
+        data = [...data, ...extra.data];
+      }
+    }
+
+    const dataById = new Map(
+      (Array.isArray(data) ? data : [])
+        .filter((row) => row && typeof row.id === 'string')
+        .map((row) => [String(row.id), row])
+    );
+    const visibleData = Array.from(dataById.values()).filter((row) => {
+      const id = String(row.id);
+      const linkedProject = projectByConversation.get(id);
+      const canonicalProject = projectByCanonicalConversation.get(id);
+      const ownerProject = canonicalProject || linkedProject;
+      if (!ownerProject) return true;
+      // Legacy historical chats stay in the database and in project history
+      // search, but not as separate rows in the dialogue list.
+      return !ownerProject.conversationId || id === ownerProject.conversationId;
+    });
+
+    const ids = visibleData.map((row) => String(row.id));
 
     const { data: messageRows } = await store
       .from('pierrot_messages')
@@ -358,7 +401,7 @@ export async function loadOwnerConversations(
       }
     }
 
-    return data
+    return visibleData
       .filter(
         (row) =>
           typeof row.id === 'string' &&
@@ -368,7 +411,9 @@ export async function loadOwnerConversations(
       )
       .map((row) => ({
         ...(() => {
-          const project = projectByConversation.get(row.id as string) || null;
+          const canonical = projectByCanonicalConversation.get(row.id as string);
+          const linked = projectByConversation.get(row.id as string);
+          const project = canonical || linked || null;
           return {
             projectId: project?.id || null,
             projectSlug: project?.slug || null,
@@ -401,7 +446,8 @@ export async function loadOwnerConversations(
 
 export async function loadOwnerConversation(
   ownerUserId: string,
-  conversationId: string
+  conversationId: string,
+  options: { limit?: number; beforeIndex?: number | null } = {}
 ): Promise<OwnerConversation | null> {
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(conversationId)) return null;
 
@@ -433,38 +479,48 @@ export async function loadOwnerConversation(
       return null;
     }
 
-    const { data: rows, error: messagesError } = await store
+    const limit = Math.min(Math.max(options.limit ?? 160, 1), 500);
+    let query = store
       .from('pierrot_messages')
       .select('id,role,content,message_index,provider,created_at')
-      .eq('conversation_id', conversationId)
-      .order('message_index', { ascending: true })
-      .limit(500);
+      .eq('conversation_id', conversationId);
+
+    if (typeof options.beforeIndex === 'number' && Number.isFinite(options.beforeIndex)) {
+      query = query.lt('message_index', options.beforeIndex);
+    }
+
+    const { data: rows, error: messagesError } = await query
+      .order('message_index', { ascending: false })
+      .limit(limit + 1);
 
     if (messagesError) return null;
 
-    const messages = (Array.isArray(rows) ? rows : [])
-      .filter(
-        (
-          row
-        ): row is {
-          id: string;
-          role: 'user' | 'assistant';
-          content: string;
-          message_index: number;
-          provider: string | null;
-          created_at: string | null;
-        } =>
-          (row.role === 'user' || row.role === 'assistant') &&
-          typeof row.id === 'string' &&
-          typeof row.content === 'string'
-      )
-      .map((row) => ({
-        id: row.id,
-        role: row.role,
-        content: row.content,
-        createdAt: typeof row.created_at === 'string' ? row.created_at : null,
-        provider: typeof row.provider === 'string' ? row.provider : null,
-      }));
+    const descending = (Array.isArray(rows) ? rows : []).filter(
+      (
+        row
+      ): row is {
+        id: string;
+        role: 'user' | 'assistant';
+        content: string;
+        message_index: number;
+        provider: string | null;
+        created_at: string | null;
+      } =>
+        (row.role === 'user' || row.role === 'assistant') &&
+        typeof row.id === 'string' &&
+        typeof row.content === 'string'
+    );
+    const hasMore = descending.length > limit;
+    const page = (hasMore ? descending.slice(0, limit) : descending).reverse();
+
+    const messages = page.map((row) => ({
+      id: row.id,
+      role: row.role,
+      content: row.content,
+      createdAt: typeof row.created_at === 'string' ? row.created_at : null,
+      provider: typeof row.provider === 'string' ? row.provider : null,
+      messageIndex: Number(row.message_index || 0),
+    }));
 
     const firstUser = messages.find((message) => message.role === 'user');
 
@@ -479,6 +535,8 @@ export async function loadOwnerConversation(
             ? 'pending'
             : null,
       messages,
+      hasMore,
+      oldestMessageIndex: messages.length > 0 ? messages[0].messageIndex : null,
     };
   } catch {
     return null;

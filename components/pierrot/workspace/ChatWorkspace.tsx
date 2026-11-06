@@ -50,6 +50,7 @@ import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes'
 import HomeOverview from './HomeOverview';
 import { sortOwnerConversations } from '@/lib/pierrot/workspace/conversationOrdering';
 import type { PierrotProject } from '@/lib/pierrot/projects/types';
+import { detectProjectReviewCommand } from '@/lib/pierrot/projects/commands';
 
 type UiMessage = {
   id: string;
@@ -194,6 +195,11 @@ export default function ChatWorkspace({
   const [messages, setMessages] = useState<UiMessage[]>(() => initialMessages(conversation));
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasOlder, setHasOlder] = useState(Boolean(conversation?.hasMore));
+  const [oldestIndex, setOldestIndex] = useState<number | null>(
+    conversation?.oldestMessageIndex ?? null
+  );
   const [conversationId, setConversationId] = useState<string | null>(conversation?.id ?? null);
   const [sessionId, setSessionId] = useState<string | null>(conversation?.sessionId ?? null);
   const [title, setTitle] = useState<string>(conversation?.title ?? 'Новый диалог');
@@ -289,6 +295,8 @@ export default function ChatWorkspace({
     setConversationId(null);
     setSessionId(null);
     setTitle('Новый диалог');
+    setHasOlder(false);
+    setOldestIndex(null);
     setSelectedSources(null);
     setInspectorOpen(false);
     setMenuOpenId(null);
@@ -354,6 +362,71 @@ export default function ChatWorkspace({
     element.style.height = 'auto';
     element.style.height = `${Math.min(168, element.scrollHeight)}px`;
   }, [draft]);
+
+  async function loadOlderMessages() {
+    if (!conversationId || loadingOlder || !hasOlder || oldestIndex == null) return;
+
+    const scrollElement = scrollRef.current;
+    const previousHeight = scrollElement?.scrollHeight ?? 0;
+    setLoadingOlder(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/api/admin/pierrot/conversations?conversationId=${encodeURIComponent(
+          conversationId
+        )}&beforeIndex=${oldestIndex}&limit=120`
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Не удалось загрузить старые сообщения.');
+
+      const incoming: UiMessage[] = Array.isArray(data.messages)
+        ? (data.messages as unknown[])
+            .filter(
+              (message: unknown): message is {
+                id: string;
+                role: 'user' | 'assistant';
+                content: string;
+                createdAt: string | null;
+                provider?: string | null;
+              } =>
+                Boolean(message) &&
+                typeof message === 'object' &&
+                typeof (message as Record<string, unknown>).id === 'string' &&
+                ((message as Record<string, unknown>).role === 'user' ||
+                  (message as Record<string, unknown>).role === 'assistant') &&
+                typeof (message as Record<string, unknown>).content === 'string'
+            )
+            .map(
+              (message): UiMessage => ({
+                id: message.id,
+                role: message.role,
+                content: message.content,
+                createdAt: message.createdAt || null,
+                provider: message.provider || null,
+                serverMessageId: message.id,
+              })
+            )
+        : [];
+
+      setMessages((current) => {
+        const existing = new Set(current.map((message) => message.id));
+        return [...incoming.filter((message) => !existing.has(message.id)), ...current];
+      });
+      setHasOlder(Boolean(data.hasMore));
+      if (typeof data.oldestMessageIndex === 'number') setOldestIndex(data.oldestMessageIndex);
+
+      window.requestAnimationFrame(() => {
+        const element = scrollRef.current;
+        if (!element) return;
+        element.scrollTop = element.scrollHeight - previousHeight;
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Не удалось загрузить старые сообщения.');
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
 
   const sourceCount = useMemo(() => {
     if (!selectedSources) return 0;
@@ -1090,12 +1163,17 @@ export default function ChatWorkspace({
     memoryFilter === 'all'
       ? memoryRecords
       : memoryRecords.filter((record) => record.kind === memoryFilter);
+  const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user');
+  const reviewInProgress =
+    loading && Boolean(lastUserMessage && detectProjectReviewCommand(lastUserMessage.content));
   const streamStageLabel =
-    streamStage === 'retrieving'
-      ? 'Pierrot ищет в архиве'
-      : streamStage === 'persisting'
-        ? 'Pierrot сохраняет ответ'
-        : 'Pierrot формулирует ответ';
+    reviewInProgress
+      ? 'Pierrot проверяет историю, задачи, решения и материалы проекта'
+      : streamStage === 'retrieving'
+        ? 'Pierrot ищет в архиве'
+        : streamStage === 'persisting'
+          ? 'Pierrot сохраняет ответ'
+          : 'Pierrot формулирует ответ';
   const orderedConversations = useMemo(
     () => sortOwnerConversations(conversations),
     [conversations]
@@ -1187,7 +1265,20 @@ export default function ChatWorkspace({
 
           <div className="pw-chat-head-copy">
             <h1 className="pw-chat-head-title">{title}</h1>
-            <span className="pw-chat-head-sub">owner workspace</span>
+            <span className="pw-chat-head-sub">
+              owner workspace
+              {project && (
+                <>
+                  {' · '}
+                  <Link
+                    className="pw-conversation-project"
+                    href={`/admin/pierrot/projects/${encodeURIComponent(project.slug)}`}
+                  >
+                    {project.name}
+                  </Link>
+                </>
+              )}
+            </span>
           </div>
 
           {!online && (
@@ -1217,6 +1308,18 @@ export default function ChatWorkspace({
             />
           ) : (
             <div className="pw-chat-thread">
+              {hasOlder && (
+                <div className="pw-history-more">
+                  <button
+                    type="button"
+                    className="pw-history-more-button"
+                    onClick={() => void loadOlderMessages()}
+                    disabled={loadingOlder}
+                  >
+                    {loadingOlder ? 'Загружаем…' : 'Загрузить более ранние сообщения'}
+                  </button>
+                </div>
+              )}
               {messages.map((message) => {
                 const messageSourceCount = message.sources ? totalSourceCount(message.sources) : 0;
 

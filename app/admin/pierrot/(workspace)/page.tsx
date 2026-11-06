@@ -16,6 +16,7 @@ import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes'
 import { overviewCookieName, parseOverviewCache } from '@/lib/pierrot/workspace/cache';
 import ChatWorkspace from '@/components/pierrot/workspace/ChatWorkspace';
 import { getPierrotProject, getPierrotProjectForConversation } from '@/lib/pierrot/projects/store';
+import { ensureProjectConversation } from '@/lib/pierrot/projects/conversation';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,24 +64,50 @@ export default async function ChatPage({
   const rawConversation = Array.isArray(params.conversation)
     ? params.conversation[0]
     : params.conversation;
-  const startNew = (Array.isArray(params.new) ? params.new[0] : params.new) === '1';
+  const requestedNew = (Array.isArray(params.new) ? params.new[0] : params.new) === '1';
   const projectRef = Array.isArray(params.project) ? params.project[0] : params.project;
-  const projectWelcome =
-    (Array.isArray(params.welcome) ? params.welcome[0] : params.welcome) === 'project';
 
-  const [conversations, conversation, explicitProject] = await Promise.all([
+  const [conversations, loadedConversation, explicitProject] = await Promise.all([
     loadOwnerConversations(user.id),
     rawConversation ? loadOwnerConversation(user.id, rawConversation) : Promise.resolve(null),
     projectRef ? getPierrotProject(user.id, projectRef) : Promise.resolve(null),
   ]);
 
+  let conversation = loadedConversation;
+  let project =
+    explicitProject ||
+    (conversation ? await getPierrotProjectForConversation(user.id, conversation.id) : null);
+
+  // A project always opens its single canonical conversation. Old links or
+  // bookmarks that point at a historical session are redirected to the one
+  // permanent chat instead of rendering a second project transcript.
+  if (project) {
+    const store = createPierrotStore();
+    const canonical = store
+      ? await ensureProjectConversation(store, user.id, project.id).catch(() => null)
+      : null;
+
+    if (canonical) {
+      const refreshed = await getPierrotProject(user.id, project.id);
+      if (refreshed) project = refreshed;
+
+      if (rawConversation && (!conversation || conversation.id !== canonical.conversationId)) {
+        redirect(`/admin/pierrot?project=${encodeURIComponent(project.slug)}`);
+      }
+      if (!conversation || conversation.id !== canonical.conversationId) {
+        conversation = await loadOwnerConversation(user.id, canonical.conversationId);
+      }
+    }
+  }
+
   if (rawConversation && !conversation) {
     redirect('/admin/pierrot');
   }
 
-  const project =
-    explicitProject ||
-    (conversation ? await getPierrotProjectForConversation(user.id, conversation.id) : null);
+  // A project never starts a "new" parallel chat. The global + button still
+  // creates an ordinary owner chat when no project is open.
+  const startNew = requestedNew && !project;
+  const projectWelcome = false;
 
   // The five metrics and the commercial report are only rendered by the empty
   // state. Do not spend owner-data queries on a transcript that is already open.
@@ -120,7 +147,7 @@ export default async function ChatPage({
 
   return (
     <ChatWorkspace
-      key={conversation?.id || 'new'}
+      key={conversation?.id || project?.id || 'new'}
       ownerId={user.id}
       overview={overview}
       conversations={conversations}

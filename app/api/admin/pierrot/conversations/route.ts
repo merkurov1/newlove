@@ -1,7 +1,46 @@
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAuth';
+import { loadOwnerConversation } from '@/lib/pierrot/workspace/data';
 
 export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request) {
+  try {
+    const admin = await requireAdminFromRequest(request);
+    const url = new URL(request.url);
+    const conversationId = url.searchParams.get('conversationId') || '';
+    const beforeRaw = url.searchParams.get('beforeIndex');
+    const limitRaw = url.searchParams.get('limit');
+
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(conversationId)) {
+      return NextResponse.json({ error: 'Invalid conversation id.' }, { status: 400 });
+    }
+
+    const beforeIndex = beforeRaw && /^\d+$/.test(beforeRaw) ? Number(beforeRaw) : null;
+    const limit = limitRaw && /^\d+$/.test(limitRaw) ? Number(limitRaw) : 120;
+
+    const conversation = await loadOwnerConversation(admin.id, conversationId, {
+      ...(beforeIndex && beforeIndex > 0 ? { beforeIndex } : {}),
+      limit,
+    });
+
+    if (!conversation) {
+      return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      messages: conversation.messages,
+      hasMore: Boolean(conversation.hasMore),
+      oldestMessageIndex: conversation.oldestMessageIndex ?? null,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Lookup failed';
+    return NextResponse.json(
+      { error: message },
+      { status: message === 'Unauthorized' ? 401 : 500 }
+    );
+  }
+}
 
 export async function DELETE(request: Request) {
   try {

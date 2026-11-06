@@ -4,6 +4,7 @@ export type ProjectCommand =
   | { action: 'move_task'; taskQuery: string | null; projectName: string }
   | { action: 'rate'; name: string; rating: number }
   | { action: 'update_brief'; name: string; brief: string; note: string }
+  | { action: 'review'; projectName: string | null }
   | { action: 'none' };
 
 function clean(value: string): string {
@@ -18,6 +19,34 @@ function clean(value: string): string {
 
 const FOLLOW_UP_TASK =
   /\s+(?:и|а|затем|потом|and|then)\s+(?:там\s+)?(?:добав(?:ь|ьте)|добавить|созда(?:й|йте)|создать|запиш(?:и|ите)|записать|постав(?:ь|ьте)|поставить|add|create)\s+(?:новую\s+|new\s+)?(?:задачу|задачy|таск|task)\s*[:—–-]?\s*/i;
+
+/**
+ * Natural-language project review intents. Deliberately scoped to phrases
+ * about the whole project so an ordinary chat cannot trigger a sweep by
+ * accident.
+ */
+const PROJECT_REVIEW_PATTERNS = [
+  /^(?:пьеро[,:]?\s*)?(?:наведи|навести|приведи|привести)\s+(?:всё\s+|все\s+)?(?:в\s+)?порядок(?:\s+в\s+проекте(?:\s+(.+))?)?$/iu,
+  /^(?:пьеро[,:]?\s*)?(?:разбери|разобрать|проанализируй|проанализировать)\s+(?:этот\s+|весь\s+|наш\s+)?проект(?:\s+(.+))?$/iu,
+  /^(?:пьеро[,:]?\s*)?(?:проведи|провести|сделай|сделать)\s+(?:полную\s+|глубокую\s+)?(?:ревизию|аудит|разбор)\s+(?:проекта|проекту|в\s+проекте)(?:\s+(.+))?$/iu,
+  /^(?:пьеро[,:]?\s*)?(?:ревизия|аудит)\s+проекта(?:\s+(.+))?$/iu,
+  /^(?:пьеро[,:]?\s*)?(?:review|audit|tidy\s+up)\s+(?:the\s+)?project(?:\s+(.+))?$/iu,
+] as const;
+
+export function detectProjectReviewCommand(message: string): { projectName: string | null } | null {
+  const value = message.trim().replace(/[\s.!?;:]+$/g, '');
+  for (const pattern of PROJECT_REVIEW_PATTERNS) {
+    const match = value.match(pattern);
+    if (!match) continue;
+    const raw = typeof match[1] === 'string' ? match[1].trim() : '';
+    const projectName = raw
+      ? clean(raw.replace(/^(?:проект[аеу]?|project)\s+/iu, '')) || null
+      : null;
+    return { projectName };
+  }
+  return null;
+}
+
 
 function splitCreateBody(value: string): { name: string; task: string | null } {
   const marker = value.search(FOLLOW_UP_TASK);
@@ -37,6 +66,9 @@ function splitCreateBody(value: string): { name: string; task: string | null } {
 
 export function detectProjectCommand(message: string): ProjectCommand {
   const value = message.trim();
+
+  const review = detectProjectReviewCommand(value);
+  if (review) return { action: 'review', projectName: review.projectName };
 
   const confirmedDelete = value.match(
     /^(?:да[,\s]+)?(?:удали|удалить|подтверждаю)\s+проект\s+(.+)$/iu

@@ -33,9 +33,7 @@ export default function ProjectsWorkspace({
       }
       setProjects((current) => [data.project, ...current]);
       setName('');
-      router.push(
-        `/admin/pierrot?new=1&project=${encodeURIComponent(data.project.slug)}&welcome=project`
-      );
+      router.push(`/admin/pierrot?project=${encodeURIComponent(data.project.slug)}`);
     } catch {
       setError('Сеть недоступна. Проект не создан.');
     } finally {
@@ -49,14 +47,14 @@ export default function ProjectsWorkspace({
         <div>
           <p className="pw-eyebrow">PIERROT / WORKSPACES</p>
           <h1>Проекты</h1>
-          <p>Постоянный контекст для работы между разговорами.</p>
+          <p>Один постоянный чат на проект: история, задачи, решения и материалы.</p>
         </div>
       </header>
       <div className="pw-project-grid">
         {projects.map((project) => (
           <Link
             className="pw-project-card"
-            href={`/admin/pierrot/projects/${project.slug}`}
+            href={`/admin/pierrot?project=${encodeURIComponent(project.slug)}`}
             key={project.id}
           >
             <span className="pw-project-status">{project.status}</span>

@@ -55,6 +55,12 @@ export default function ProjectOverview({ project: initial }: { project: Pierrot
           </small>
         </div>
         <div>
+          <Link
+            className="pw-project-open-chat"
+            href={`/admin/pierrot?project=${encodeURIComponent(project.slug)}`}
+          >
+            Открыть постоянный чат →
+          </Link>
           {project.status === 'active' ? (
             <button type="button" onClick={() => void setStatus('paused')} disabled={savingStatus}>
               Приостановить
@@ -92,9 +98,20 @@ export default function ProjectOverview({ project: initial }: { project: Pierrot
               project.description ||
               'Pierrot пока ничего не знает об этом проекте.'}
           </p>
+          {project.latestReview?.summary && (
+            <>
+              <h2>Последняя ревизия</h2>
+              <p>{project.latestReview.summary}</p>
+              <p className="pw-muted">
+                {project.latestReview.completedAt
+                  ? new Date(project.latestReview.completedAt).toLocaleDateString('ru-RU')
+                  : ''}
+              </p>
+            </>
+          )}
           <p className="pw-muted">
-            Чтобы добавить контекст, открой проектный разговор в Chat и расскажи Pierrot о цели,
-            состоянии и важных решениях.
+            Чтобы добавить контекст, открой постоянный чат проекта и напиши Pierrot о цели, состоянии
+            и важных решениях. Команда «Наведи порядок в проекте» запускает ревизию.
           </p>
         </article>
         <ProjectList

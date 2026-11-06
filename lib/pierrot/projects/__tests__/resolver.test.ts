@@ -12,6 +12,7 @@ const project = (name: string, slug: string): PierrotProject => ({
   priority: 0,
   ownerRating: null,
   ownerRatingUpdatedAt: null,
+  conversationId: null,
   projectBrief: '',
   briefRevision: 1,
   lastActivityAt: '',

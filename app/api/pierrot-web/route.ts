@@ -222,10 +222,14 @@ import {
 import { detectProjectCommand } from '@/lib/pierrot/projects/commands';
 import {
   listProjectTasks,
-  loadProjectConversationContext,
   moveDecisionToProject,
   resolveExactProject,
 } from '@/lib/pierrot/projects/links';
+import {
+  ensureProjectConversation,
+} from '@/lib/pierrot/projects/conversation';
+import { buildProjectChatContext } from '@/lib/pierrot/projects/history';
+import { runProjectReview } from '@/lib/pierrot/projects/review/service';
 import {
   createOwnerTask,
   type OwnerTaskCreationResult,
@@ -442,8 +446,8 @@ export async function POST(req: Request) {
         ? context.project.slice(0, 120)
         : null;
     const language = detectPierrotLanguage(trimmedMessage);
-    const conversationId = rawConversationId ?? randomUUID();
-    const sessionId = rawSessionId ?? randomUUID();
+    let conversationId = rawConversationId ?? randomUUID();
+    let sessionId = rawSessionId ?? randomUUID();
     const userMessageId = rawUserMessageId ?? randomUUID();
     const consent: PierrotConsent = normalizePierrotConsent(rawConsent) ?? {
       state: 'pending',
@@ -561,6 +565,56 @@ export async function POST(req: Request) {
     // Memory is independent of transcript-storage consent: an explicit
     // “Запомни/Сохрани/Напомни” command is its own permission for that record.
     const memoryStore = ownerMode ? createPierrotStore() : null;
+
+    // A project has exactly one canonical conversation. This is enforced
+    // server-side so an old link, a refreshed browser or a client that still
+    // holds a historical conversation id cannot create a second project chat.
+    let canonicalProjectNote: string | null = null;
+    if (ownerMode && memoryStore && isPierrotUserId(ownerIdentityUserId)) {
+      try {
+        const targetProject =
+          conversationProject ||
+          (requestedProject
+            ? (
+                await resolvePierrotProject({
+                  ownerUserId: ownerIdentityUserId,
+                  explicitProjectId: requestedProject,
+                })
+              ).project
+            : null);
+
+        if (targetProject) {
+          const canonical = await ensureProjectConversation(
+            memoryStore,
+            ownerIdentityUserId,
+            targetProject.id
+          );
+          if (canonical) {
+            if (canonical.conversationId !== conversationId) {
+              conversationId = canonical.conversationId;
+              sessionId = canonical.sessionId;
+              canonicalProjectNote =
+                'This is the project’s single permanent chat. Continue from the latest saved message; do not announce a new conversation.';
+            }
+            conversationProject =
+              (await getPierrotProject(ownerIdentityUserId, targetProject.id)) || targetProject;
+            await linkConversationToProject(
+              ownerIdentityUserId,
+              targetProject.id,
+              canonical.conversationId
+            ).catch(() => undefined);
+          }
+        }
+      } catch (error) {
+        // A partially migrated database must not break ordinary owner chat.
+        // Project context remains available; canonical persistence is retried
+        // when the reviewed migration is present.
+        canonicalProjectNote =
+          'PROJECT CHAT STORAGE NOTE: the canonical project conversation could not be resolved. Do not claim that a second chat was created.';
+        persistenceFailure(error, 'project_canonical_conversation');
+      }
+    }
+
     // Streaming is an explicit transport choice. It is safe for public
     // visitors because owner-only retrieval, tools and memory are gated by the
     // server-verified ownerMode above, not by the response format. Telegram and
@@ -865,12 +919,19 @@ export async function POST(req: Request) {
         try {
           const project = await getPierrotProjectSnapshot(ownerIdentityUserId, resolvedProjectRef);
           if (project) {
-            const conversationContext = await loadProjectConversationContext(
-              memoryStore,
-              ownerIdentityUserId,
-              project.id,
-              { limit: 5, excludeConversationId: conversationId }
-            ).catch(() => null);
+            const wantsHistory =
+              /(?:что\s+(?:я|мы)\s+(?:вчера\s+)?(?:обсуждал|говорил|решали|обсуждали)|истори[яю]\s+(?:диалогов|разговоров|нашего|проекта)|что\s+было\s+в\s+прошлом\s+разговоре|обсуждал[\p{L}]*\s+ли|помнишь\s+ли|what\s+did\s+(?:i|we)\s+(?:discuss|talk about)|was\s+(?:it|this)\s+discussed|conversation history|project history|did\s+we\s+discuss)/iu.test(
+                trimmedMessage
+              );
+            const conversationContext = await buildProjectChatContext({
+              store: memoryStore,
+              ownerUserId: ownerIdentityUserId,
+              project,
+              conversationId,
+              query: trimmedMessage,
+              wantsHistory,
+              recentLimit: 12,
+            }).catch(() => null);
             ownerProjectContext = [
               `PROJECT CONTEXT: ${project.name} (${project.status})`,
               `Brief revision ${project.briefRevision}: ${project.projectBrief || 'No reviewed brief yet.'}`,
@@ -887,11 +948,16 @@ export async function POST(req: Request) {
                     .map((item) => `${item.title} [${item.status}]`)
                     .join('; ')}`
                 : null,
-              project.conversations.length
-                ? `Linked conversations: ${project.conversations.map((item) => item.title || item.id).join('; ')}`
-                : null,
               project.knowledge.length
                 ? `Project knowledge: ${project.knowledge.map((item) => item.title || item.id).join('; ')}`
+                : null,
+              project.artifacts.length
+                ? `Project materials: ${project.artifacts
+                    .map((item) => `${item.title} (${item.artifactType})`)
+                    .join('; ')}`
+                : null,
+              project.latestReview?.summary
+                ? `Latest project review summary: ${project.latestReview.summary}`
                 : null,
               conversationContext,
             ]
@@ -927,7 +993,7 @@ export async function POST(req: Request) {
           trimmedMessage
         );
 
-      if (asksConversationHistory) {
+      if (asksConversationHistory && !conversationProject) {
         try {
           ownerHistoryContext = await loadOwnerHistoryContext(memoryStore, ownerIdentityUserId, {
             excludeConversationId: conversationId,
@@ -946,6 +1012,7 @@ export async function POST(req: Request) {
       ownerMemoryContext,
       ownerHistoryContext,
       !ownerHistoryContext &&
+      !conversationProject &&
       /(?:что\s+(?:я|мы)\s+(?:вчера\s+)?(?:обсуждал|говорил|решали|обсуждали)|истори[яю]\s+(?:диалогов|разговоров|нашего)|what\s+did\s+(?:i|we)\s+(?:discuss|talk about))/i.test(
         trimmedMessage
       )
@@ -953,6 +1020,7 @@ export async function POST(req: Request) {
         : null,
       ownerProjectContext,
       projectResolutionNote,
+      canonicalProjectNote,
       skillsContext,
       ownerMemoryUnavailable
         ? 'OWNER MEMORY UNAVAILABLE: the owner memory store could not be read. Do not claim that a record exists or does not exist. If asked about memory, say that the memory store is temporarily unavailable.'
@@ -1454,6 +1522,80 @@ export async function POST(req: Request) {
               : 'Project management commands are available to the owner only.',
             { project_command: projectCommand.action, project_status: 'unauthorized' }
           );
+        }
+
+        if (projectCommand.action === 'review') {
+          if (!memoryStore) {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Хранилище проекта недоступно. Ревизия не запущена, ничего не изменено.'
+                : 'Project storage is unavailable. The review was not started.',
+              { project_command: 'review', project_status: 'storage_unavailable' }
+            );
+          }
+
+          const target =
+            conversationProject ||
+            (projectCommand.projectName
+              ? (
+                  await resolveExactProject(
+                    memoryStore,
+                    ownerIdentityUserId,
+                    projectCommand.projectName
+                  )
+                ).project
+              : null);
+
+          if (!target) {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? projectCommand.projectName
+                  ? `Не нашёл ровно один проект «${projectCommand.projectName}». Ничего не изменено. Открой нужный проект или уточни название.`
+                  : 'Ревизия выполняется внутри проекта. Открой проект и повтори «Наведи порядок в проекте».'
+                : projectCommand.projectName
+                  ? `I could not find exactly one project named “${projectCommand.projectName}”. Nothing changed.`
+                  : 'A project review runs inside a project. Open the project and repeat the command.',
+              { project_command: 'review', project_status: 'clarification_required' }
+            );
+          }
+
+          const snapshot = await getPierrotProjectSnapshot(
+            ownerIdentityUserId,
+            target.id
+          ).catch(() => null);
+
+          if (!snapshot) {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Не удалось прочитать состояние проекта. Ревизия не запущена, ничего не изменено.'
+                : 'The project state could not be read. The review was not started and nothing changed.',
+              { project_command: 'review', project_status: 'failed' }
+            );
+          }
+
+          const review = await runProjectReview({
+            store: memoryStore,
+            ownerUserId: ownerIdentityUserId,
+            project: snapshot,
+            conversationId,
+            requestMessageId: userMessageId,
+            language: ownerLanguage,
+          });
+
+          return persistOwnerReply(review.reply, {
+            project_command: 'review',
+            project_status: review.status,
+            project_id: snapshot.id,
+            project_review_id: review.runId || null,
+            project_review_status: review.status,
+            operation_log: review.report
+              ? {
+                  intent: 'project_review',
+                  project_id: snapshot.id,
+                  result: review.status,
+                }
+              : null,
+          });
         }
 
         if (projectCommand.action === 'create') {

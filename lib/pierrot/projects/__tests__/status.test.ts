@@ -13,6 +13,7 @@ function project(overrides: Partial<PierrotProjectSnapshot> = {}): PierrotProjec
     priority: 0,
     ownerRating: null,
     ownerRatingUpdatedAt: null,
+    conversationId: null,
     projectBrief: '',
     briefRevision: 0,
     lastActivityAt: '',

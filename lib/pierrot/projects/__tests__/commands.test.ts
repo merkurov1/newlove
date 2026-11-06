@@ -78,4 +78,23 @@ describe('project chat commands', () => {
   it('does not treat deleting a task as deleting a project', () => {
     expect(detectProjectCommand('удали задачу про Heart&Angel')).toEqual({ action: 'none' });
   });
+
+  it.each([
+    'Наведи порядок в проекте',
+    'Разбери проект',
+    'Приведи всё в порядок',
+    'Проведи ревизию проекта',
+    'Пьеро, сделай глубокую ревизию проекта',
+    'review the project',
+  ])('recognises a whole-project review intent: %s', (message) => {
+    expect(detectProjectCommand(message)).toMatchObject({ action: 'review' });
+  });
+
+  it('keeps the review command scoped and can carry a project name', () => {
+    expect(detectProjectCommand('Наведи порядок в проекте Art Engine')).toEqual({
+      action: 'review',
+      projectName: 'Art Engine',
+    });
+    expect(detectProjectCommand('наведи порядок в голове')).toEqual({ action: 'none' });
+  });
 });

@@ -6,8 +6,11 @@ import { projectSlugBase, uniqueProjectSlug } from './slug';
 assertServerOnly('lib/pierrot/projects/store');
 
 const PROJECT_COLUMNS =
-  'id,owner_user_id,slug,name,description,objective,status,priority,project_brief,brief_revision,last_activity_at,created_at,updated_at';
+  'id,owner_user_id,slug,name,description,objective,status,priority,project_brief,brief_revision,conversation_id,last_activity_at,created_at,updated_at';
 const PROJECT_COLUMNS_WITH_RATING = `${PROJECT_COLUMNS},owner_rating,owner_rating_updated_at`;
+const PROJECT_COLUMNS_LEGACY =
+  'id,owner_user_id,slug,name,description,objective,status,priority,project_brief,brief_revision,last_activity_at,created_at,updated_at';
+const PROJECT_COLUMNS_LEGACY_WITH_RATING = `${PROJECT_COLUMNS_LEGACY},owner_rating,owner_rating_updated_at`;
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -37,8 +40,12 @@ async function selectProject(
 
   const withRating = await run(PROJECT_COLUMNS_WITH_RATING);
   if (withRating.error && isMissingColumn(withRating.error)) {
-    const legacy = await run(PROJECT_COLUMNS);
-    return { data: (legacy.data as Record<string, unknown> | null) || null, error: legacy.error };
+    const legacy = await run(PROJECT_COLUMNS_LEGACY_WITH_RATING);
+    if (!legacy.error) {
+      return { data: (legacy.data as Record<string, unknown> | null) || null, error: null };
+    }
+    const oldest = await run(PROJECT_COLUMNS_LEGACY);
+    return { data: (oldest.data as Record<string, unknown> | null) || null, error: oldest.error };
   }
 
   return {
@@ -94,6 +101,7 @@ export function mapProject(row: Record<string, unknown>): PierrotProject {
         ? row.owner_rating
         : null,
     ownerRatingUpdatedAt: text(row.owner_rating_updated_at) || null,
+    conversationId: text(row.conversation_id) || null,
     projectBrief: text(row.project_brief),
     briefRevision: Number(row.brief_revision || 1),
     lastActivityAt: text(row.last_activity_at),
@@ -112,7 +120,10 @@ export async function listPierrotProjects(ownerUserId: string): Promise<PierrotP
       .order('last_activity_at', { ascending: false });
 
   let result = await run(PROJECT_COLUMNS_WITH_RATING);
-  if (result.error && isMissingColumn(result.error)) result = await run(PROJECT_COLUMNS);
+  if (result.error && isMissingColumn(result.error)) {
+    result = await run(PROJECT_COLUMNS_LEGACY_WITH_RATING);
+    if (result.error && isMissingColumn(result.error)) result = await run(PROJECT_COLUMNS_LEGACY);
+  }
   if (result.error) throw result.error;
   return ((result.data || []) as unknown[]).map((row) => mapProject(row as Record<string, unknown>));
 }
@@ -157,7 +168,7 @@ export async function createPierrotProject(
     requestedSlug && /^[a-z0-9][a-z0-9-]*$/.test(requestedSlug)
       ? requestedSlug.slice(0, 80)
       : await uniqueSlug(ownerUserId, name);
-  const { data, error } = await getServerSupabaseClient({ useServiceRole: true })
+  let inserted: any = await getServerSupabaseClient({ useServiceRole: true })
     .from('pierrot_projects')
     .insert({
       owner_user_id: ownerUserId,
@@ -171,8 +182,16 @@ export async function createPierrotProject(
     })
     .select(PROJECT_COLUMNS)
     .single();
-  if (error) throw error;
-  return mapProject(data as unknown as Record<string, unknown>);
+  if (inserted.error && isMissingColumn(inserted.error)) {
+    inserted = await getServerSupabaseClient({ useServiceRole: true })
+      .from('pierrot_projects')
+      .select(PROJECT_COLUMNS_LEGACY)
+      .eq('owner_user_id', ownerUserId)
+      .eq('slug', slug)
+      .maybeSingle();
+  }
+  if (inserted.error) throw inserted.error;
+  return mapProject(inserted.data as unknown as Record<string, unknown>);
 }
 
 export async function getPierrotProjectForConversation(
@@ -180,6 +199,22 @@ export async function getPierrotProjectForConversation(
   conversationId: string
 ): Promise<PierrotProject | null> {
   const client = getServerSupabaseClient({ useServiceRole: true });
+
+  // Canonical path first: the project row itself owns the one true chat.
+  const canonical = await client
+    .from('pierrot_projects')
+    .select(PROJECT_COLUMNS)
+    .eq('owner_user_id', ownerUserId)
+    .eq('conversation_id', conversationId)
+    .maybeSingle();
+
+  if (!canonical.error && canonical.data) {
+    return mapProject(canonical.data as Record<string, unknown>);
+  }
+
+  // Compatibility for projects that have not run the reviewed merge yet. The
+  // relation is provenance, not a competing "main chat" selector; it only maps
+  // legacy conversation links back to the project that owns them.
   const { data, error } = await client
     .from('pierrot_project_conversations')
     .select('project_id')
@@ -287,7 +322,7 @@ export async function updatePierrotProject(
     if (patch.ownerRating !== undefined) {
       throw new Error('PROJECT_RATING_MIGRATION_REQUIRED');
     }
-    result = await runUpdate(PROJECT_COLUMNS);
+    result = await runUpdate(PROJECT_COLUMNS_LEGACY);
   }
   if (result.error) throw result.error;
   if (!result.data) return null;
@@ -342,6 +377,20 @@ export async function linkConversationToProject(
     .maybeSingle();
   if (!conversation || (conversation.user_id && conversation.user_id !== ownerUserId))
     throw new Error('CONVERSATION_NOT_FOUND');
+
+  // A project keeps one canonical conversation. The first explicit link can
+  // claim an existing conversation; later links stay provenance-only so they
+  // cannot silently open a second "main" chat.
+  const claimed = await client
+    .from('pierrot_projects')
+    .update({ conversation_id: conversationId, updated_at: new Date().toISOString() })
+    .eq('id', project.id)
+    .eq('owner_user_id', ownerUserId)
+    .is('conversation_id', null)
+    .select('id');
+
+  if (claimed.error) throw claimed.error;
+
   const { error } = await client.from('pierrot_project_conversations').upsert({
     project_id: project.id,
     conversation_id: conversationId,
@@ -362,7 +411,7 @@ export async function getPierrotProjectSnapshot(
   const project = await getPierrotProject(ownerUserId, projectRef);
   if (!project) return null;
   const client = getServerSupabaseClient({ useServiceRole: true });
-  const [decisions, tasks, conversations, knowledge, artifacts] = await Promise.all([
+  const [decisions, tasks, conversations, knowledge, artifacts, review] = await Promise.all([
     client
       .from('pierrot_project_decisions')
       .select('decision:pierrot_decisions(id,title,content,status,kind,updated_at)')
@@ -376,12 +425,13 @@ export async function getPierrotProjectSnapshot(
       .eq('user_id', ownerUserId)
       .order('updated_at', { ascending: false })
       .limit(12),
-    client
-      .from('pierrot_project_conversations')
-      .select('conversation:pierrot_conversations(id,title,started_at)')
-      .eq('project_id', project.id)
-      .eq('owner_user_id', ownerUserId)
-      .limit(12),
+    project.conversationId
+      ? client
+          .from('pierrot_conversations')
+          .select('id,title,started_at')
+          .eq('id', project.conversationId)
+          .limit(1)
+      : Promise.resolve({ data: [], error: null } as { data: unknown[]; error: null }),
     client
       .from('pierrot_project_knowledge')
       .select('document:knowledge_documents(id,title,status)')
@@ -395,6 +445,19 @@ export async function getPierrotProjectSnapshot(
       .eq('owner_user_id', ownerUserId)
       .order('updated_at', { ascending: false })
       .limit(12),
+    client
+      .from('pierrot_project_reviews')
+      .select('id,summary,completed_at')
+      .eq('project_id', project.id)
+      .eq('owner_user_id', ownerUserId)
+      .in('status', ['completed', 'partial'])
+      .order('completed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(
+        (result) => (result.error ? null : result),
+        () => null
+      ),
   ]);
   const decisionRows = (decisions.data || []).map((r: any) => ({
     id: r.decision?.id || '',
@@ -416,6 +479,14 @@ export async function getPierrotProjectSnapshot(
 
   return {
     ...project,
+    latestReview:
+      review?.data && typeof (review.data as Record<string, unknown>).summary === 'string'
+        ? {
+            summary: String((review.data as Record<string, unknown>).summary),
+            completedAt: text((review.data as Record<string, unknown>).completed_at),
+            runId: text((review.data as Record<string, unknown>).id),
+          }
+        : null,
     decisions: decisionRows,
     tasks: [
       ...(tasks.data || []).map((r: any) => ({
@@ -427,9 +498,9 @@ export async function getPierrotProjectSnapshot(
       ...memoryTasks,
     ],
     conversations: (conversations.data || []).map((r: any) => ({
-      id: r.conversation?.id || '',
-      title: r.conversation?.title || '',
-      updatedAt: r.conversation?.started_at || '',
+      id: r.id || '',
+      title: r.title || '',
+      updatedAt: r.started_at || '',
     })),
     knowledge: (knowledge.data || []).map((r: any) => ({
       id: r.document?.id || '',

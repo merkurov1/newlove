@@ -13,6 +13,8 @@ export type PierrotProject = {
   /** Owner's explicit 1..10 rating, separate from priority/importance. */
   ownerRating: number | null;
   ownerRatingUpdatedAt: string | null;
+  /** Single canonical conversation for this project; never one chat per visit. */
+  conversationId: string | null;
   projectBrief: string;
   briefRevision: number;
   lastActivityAt: string;
@@ -21,6 +23,12 @@ export type PierrotProject = {
 };
 
 export type PierrotProjectSnapshot = PierrotProject & {
+  /** Latest completed project review summary, if one exists. */
+  latestReview?: {
+    summary: string;
+    completedAt: string;
+    runId: string;
+  } | null;
   decisions: Array<{
     id: string;
     title: string;

@@ -92,6 +92,7 @@ export type OwnerChatMessage = {
   content: string;
   createdAt: string | null;
   provider?: string | null;
+  messageIndex?: number;
 };
 
 export type OwnerConversation = {
@@ -100,6 +101,9 @@ export type OwnerConversation = {
   title: string;
   consentState: 'pending' | 'granted' | 'denied' | null;
   messages: OwnerChatMessage[];
+  /** True when older messages exist before `oldestMessageIndex`. */
+  hasMore?: boolean;
+  oldestMessageIndex?: number | null;
 };
 
 export type BrainRecentSource = {
