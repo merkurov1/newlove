@@ -115,8 +115,42 @@ export type ParsedUrlResult = {
 
 const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-const BOT_FALLBACK_UA =
-  'Twitterbot/1.0';
+const BOT_FALLBACK_UA = 'Twitterbot/1.0';
+
+/**
+ * Fetch a public URL while validating every redirect target. Native fetch
+ * follows redirects before application code can inspect them, which would
+ * otherwise let a public host redirect the server into a private network.
+ */
+async function fetchSafePublicUrl(
+  initialUrl: string,
+  init: RequestInit,
+  maxRedirects = 3
+): Promise<Response> {
+  let currentUrl = assertSafePublicUrl(initialUrl).toString();
+
+  for (let redirect = 0; redirect <= maxRedirects; redirect += 1) {
+    const response = await fetch(currentUrl, {
+      ...init,
+      redirect: 'manual',
+    });
+
+    // Some callers provide lightweight fetch mocks without a status/headers
+    // object. Native fetch always provides both, but treating an incomplete
+    // mock as a final response keeps metadata parsing deterministic in tests.
+    if (typeof response.status !== 'number' || response.status < 300 || response.status >= 400) {
+      return response;
+    }
+
+    const location = response.headers?.get?.('location');
+    if (!location) return response;
+    if (redirect === maxRedirects) throw new Error('Too many redirects.');
+
+    currentUrl = assertSafePublicUrl(new URL(location, currentUrl).toString()).toString();
+  }
+
+  throw new Error('Too many redirects.');
+}
 
 function normalizeUrl(raw: string): string {
   const trimmed = raw.trim().replace(/^<|>$/g, '');
@@ -131,7 +165,10 @@ function isMediumHost(host: string): boolean {
   return lower === 'medium.com' || lower.endsWith('.medium.com');
 }
 
-async function fetchMediumRssFallback(urlStr: string, host: string): Promise<ParsedUrlResult | null> {
+async function fetchMediumRssFallback(
+  urlStr: string,
+  host: string
+): Promise<ParsedUrlResult | null> {
   try {
     let username: string | null = null;
     let postId: string | null = null;
@@ -155,10 +192,7 @@ async function fetchMediumRssFallback(urlStr: string, host: string): Promise<Par
 
     if (postId && Array.isArray(feed.items)) {
       const item = feed.items.find((it) =>
-        Boolean(
-          (it.guid && it.guid.includes(postId!)) ||
-          (it.link && it.link.includes(postId!))
-        )
+        Boolean((it.guid && it.guid.includes(postId!)) || (it.link && it.link.includes(postId!)))
       );
       if (item) {
         const content = (item as any)['content:encoded'] || item.content || '';
@@ -168,7 +202,8 @@ async function fetchMediumRssFallback(urlStr: string, host: string): Promise<Par
           isYouTube: false,
           domain: host,
           title: item.title || null,
-          description: (item.contentSnippet || content.replace(/<[^>]*>/g, '')).slice(0, 300) || null,
+          description:
+            (item.contentSnippet || content.replace(/<[^>]*>/g, '')).slice(0, 300) || null,
           image: imgMatch ? imgMatch[1] : null,
           site_name: 'Medium',
           favicon: 'https://medium.com/favicon.ico',
@@ -219,7 +254,9 @@ export async function parseUrl(rawUrl: string): Promise<ParsedUrlResult> {
           isYouTube: true,
           domain: 'youtube.com',
           title: ytInfo.metadata.title,
-          description: ytInfo.metadata.author_name ? `Channel: ${ytInfo.metadata.author_name}` : null,
+          description: ytInfo.metadata.author_name
+            ? `Channel: ${ytInfo.metadata.author_name}`
+            : null,
           image: ytInfo.metadata.thumbnail_url,
           site_name: 'YouTube',
           favicon: 'https://www.google.com/s2/favicons?domain=youtube.com&sz=64',
@@ -264,10 +301,11 @@ export async function parseUrl(rawUrl: string): Promise<ParsedUrlResult> {
     let res: Response | null = null;
 
     try {
-      res = await fetch(normalized, {
+      res = await fetchSafePublicUrl(normalized, {
         headers: {
           'User-Agent': BROWSER_UA,
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          Accept:
+            'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9,ru;q=0.8',
         },
         signal: AbortSignal.timeout(6000),
@@ -279,7 +317,7 @@ export async function parseUrl(rawUrl: string): Promise<ParsedUrlResult> {
     // If blocked (403, 401, 5xx) or errored, retry with social bot UA (Twitterbot is widely whitelisted)
     if (!res || !res.ok) {
       try {
-        res = await fetch(normalized, {
+        res = await fetchSafePublicUrl(normalized, {
           headers: {
             'User-Agent': BOT_FALLBACK_UA,
             Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -308,9 +346,7 @@ export async function parseUrl(rawUrl: string): Promise<ParsedUrlResult> {
     }
 
     const finalUrl = res.url || normalized;
-    const declaredLength = Number(
-      res.headers?.get?.('content-length') || 0,
-    );
+    const declaredLength = Number(res.headers?.get?.('content-length') || 0);
 
     if (declaredLength > MAX_HTML_BYTES) {
       throw new Error('Source page is too large for a link preview.');
@@ -335,7 +371,8 @@ export async function parseUrl(rawUrl: string): Promise<ParsedUrlResult> {
 
     // For Medium, generic title `<title>Medium</title>` should fallback to article headline
     if (isMedium && (!title || title.trim().toLowerCase() === 'medium')) {
-      const articleHeadline = $('article h1').first().text().trim() || $('h1').first().text().trim();
+      const articleHeadline =
+        $('article h1').first().text().trim() || $('h1').first().text().trim();
       if (articleHeadline) {
         title = articleHeadline;
       }
@@ -370,9 +407,7 @@ export async function parseUrl(rawUrl: string): Promise<ParsedUrlResult> {
     }
 
     const site_name =
-      (isMedium ? 'Medium' : null) ||
-      getMeta('meta[property="og:site_name"]') ||
-      domain;
+      (isMedium ? 'Medium' : null) || getMeta('meta[property="og:site_name"]') || domain;
 
     return {
       url: finalUrl,

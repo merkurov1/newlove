@@ -1,7 +1,6 @@
-"use client";
+'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { createClient } from '@/lib/supabase-browser';
 
 // Minimalist microphone button for /temple page.
 // Records via MediaRecorder (fallback) and uploads to Supabase Storage,
@@ -16,7 +15,6 @@ export default function MicrophoneButton({ className }: { className?: string }) 
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
-  const supabase = createClient();
 
   useEffect(() => {
     if (!navigator.mediaDevices || !window.MediaRecorder) setSupported(false);
@@ -28,7 +26,9 @@ export default function MicrophoneButton({ className }: { className?: string }) 
       const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRef.current = mr;
       chunksRef.current = [];
-      mr.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data); };
+      mr.ondataavailable = (e) => {
+        if (e.data && e.data.size) chunksRef.current.push(e.data);
+      };
       mr.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
         setRecordedBlob(blob);
@@ -37,7 +37,10 @@ export default function MicrophoneButton({ className }: { className?: string }) 
       mr.start();
       setRecording(true);
       setTimer(0);
-      timerRef.current = window.setInterval(() => setTimer(t => t + 1), 1000) as unknown as number;
+      timerRef.current = window.setInterval(
+        () => setTimer((t) => t + 1),
+        1000
+      ) as unknown as number;
     } catch (e) {
       console.error('mic start error', e);
       setSupported(false);
@@ -47,7 +50,9 @@ export default function MicrophoneButton({ className }: { className?: string }) 
   const stop = () => {
     const mr = mediaRef.current;
     if (!mr) return;
-    try { mr.stop(); } catch (e) {}
+    try {
+      mr.stop();
+    } catch (e) {}
     setRecording(false);
   };
 
@@ -59,30 +64,22 @@ export default function MicrophoneButton({ className }: { className?: string }) 
   };
 
   async function uploadAndCreate(blob: Blob) {
-    // create filename and upload to supabase storage (public bucket `whispers`)
-    const fn = `whispers/${Date.now()}-voice.webm`;
     try {
-      // @ts-ignore
-      const up = await supabase.storage.from('whispers').upload(fn, blob, { cacheControl: '3600', upsert: false });
-      if (up.error) throw up.error;
-      const publicUrl = supabase.storage.from('whispers').getPublicUrl(fn).data.publicUrl;
-
       // collect telegram user id if available via Telegram WebApp
       // @ts-ignore
       const tg = (window as any).Telegram?.WebApp;
       const tgUser = tg?.initDataUnsafe?.user;
 
-      await fetch('/api/whispers', {
+      const form = new FormData();
+      form.append('file', blob, 'whisper.webm');
+      form.append('telegram_user_id', String(tgUser?.id || ''));
+      form.append('telegram_first_name', String(tgUser?.first_name || ''));
+
+      const response = await fetch('/api/whispers', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          telegram_user_id: tgUser?.id || null,
-          telegram_first_name: tgUser?.first_name || null,
-          telegram_file_id: publicUrl,
-          telegram_file_unique_id: null,
-          storage_path: fn
-        })
+        body: form,
       });
+      if (!response.ok) throw new Error('Whisper upload failed');
     } catch (e) {
       console.error('upload failed', e);
     }
@@ -117,9 +114,28 @@ export default function MicrophoneButton({ className }: { className?: string }) 
         }}
         title={`Open voice recorder`}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M19 11v2a7 7 0 0 1-14 0v-2" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z"
+            stroke="white"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M19 11v2a7 7 0 0 1-14 0v-2"
+            stroke="white"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity="0.6"
+          />
         </svg>
       </button>
 
@@ -132,19 +148,41 @@ export default function MicrophoneButton({ className }: { className?: string }) 
 
           <div className="flex items-center gap-2">
             {!recording ? (
-              <button onClick={start} className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 rounded">Record</button>
+              <button
+                onClick={start}
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 rounded"
+              >
+                Record
+              </button>
             ) : (
-              <button onClick={stop} className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-black py-2 rounded">Stop</button>
+              <button
+                onClick={stop}
+                className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-black py-2 rounded"
+              >
+                Stop
+              </button>
             )}
-            <button onClick={() => { discardRecorded(); setIsPanelOpen(false); }} className="px-3 py-2 bg-white/6 rounded">Close</button>
+            <button
+              onClick={() => {
+                discardRecorded();
+                setIsPanelOpen(false);
+              }}
+              className="px-3 py-2 bg-white/6 rounded"
+            >
+              Close
+            </button>
           </div>
 
           {recordedBlob && (
             <div className="mt-3">
               <audio controls src={URL.createObjectURL(recordedBlob)} className="w-full mb-2" />
               <div className="flex gap-2">
-                <button onClick={sendRecorded} className="flex-1 bg-white text-black py-2 rounded">Send</button>
-                <button onClick={discardRecorded} className="px-3 py-2 bg-white/6 rounded">Discard</button>
+                <button onClick={sendRecorded} className="flex-1 bg-white text-black py-2 rounded">
+                  Send
+                </button>
+                <button onClick={discardRecorded} className="px-3 py-2 bg-white/6 rounded">
+                  Discard
+                </button>
               </div>
             </div>
           )}

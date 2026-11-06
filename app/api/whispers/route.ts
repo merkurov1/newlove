@@ -1,110 +1,153 @@
+import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
-import { requireAdminFromRequest } from '@/lib/serverAuth';
 
-// Server route: accept new whisper events from the admin capture UI.
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
+const SIGNED_URL_SECONDS = 60 * 60;
+const AUDIO_TYPES = new Map([
+  ['audio/webm', 'webm'],
+  ['audio/mp4', 'mp4'],
+  ['audio/mpeg', 'mp3'],
+  ['audio/ogg', 'ogg'],
+  ['audio/wav', 'wav'],
+]);
+
+function errorResponse(error: string, status: number) {
+  return NextResponse.json(
+    { ok: false, error },
+    { status, headers: { 'Cache-Control': 'no-store' } }
+  );
+}
+
+/** Admin-only capture endpoint for private whisper storage. */
 export async function POST(req: Request) {
   const limited = checkRateLimit(getClientIp(req), {
     interval: 60 * 1000,
-    maxRequests: 20,
-    keyPrefix: 'whispers-create',
+    maxRequests: 10,
+    keyPrefix: 'whispers-upload',
   });
   if (limited) return limited;
 
   try {
-    try {
-      await requireAdminFromRequest(req);
-    } catch {
-      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    await requireAdminFromRequest(req);
+  } catch {
+    return errorResponse('Unauthorized', 401);
+  }
+
+  const contentLength = Number(req.headers.get('content-length') || 0);
+  if (contentLength > MAX_AUDIO_BYTES + 64 * 1024) {
+    return errorResponse('Audio file is too large.', 413);
+  }
+
+  try {
+    const form = await req.formData();
+    const file = form.get('file');
+    if (!(file instanceof File)) return errorResponse('Audio file is required.', 400);
+    if (file.size < 1 || file.size > MAX_AUDIO_BYTES) {
+      return errorResponse('Audio file is too large.', 413);
     }
 
-    const body = await req.json();
-    const { telegram_user_id, telegram_first_name, telegram_file_id, telegram_file_unique_id, storage_path } = body;
+    const extension = AUDIO_TYPES.get(file.type.toLowerCase());
+    if (!extension) return errorResponse('Unsupported audio type.', 415);
 
-    if (storage_path !== null && storage_path !== undefined) {
-      if (typeof storage_path !== 'string' || !/^whispers\/[A-Za-z0-9._-]{1,160}$/.test(storage_path)) {
-        return NextResponse.json({ ok: false, error: 'Invalid storage path.' }, { status: 400 });
-      }
-    }
-
-    // server helpers from repo
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-
-    // Ensure the service role key is present — inserting rows must be done
-    // with a service-role client so RLS policies do not block the insert.
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      const msg = 'SUPABASE_SERVICE_ROLE_KEY is not configured on the server. \n' +
-        'Server must use the service role key to insert into `whispers` (RLS blocks anonymous inserts).';
-      console.error(msg);
-      return NextResponse.json({ ok: false, error: msg }, { status: 500 });
-    }
-
+    const storagePath = `whispers/${randomUUID()}.${extension}`;
     const supabase = getServerSupabaseClient({ useServiceRole: true });
-
-    const insert = await supabase.from('whispers').insert({
-      telegram_user_id: telegram_user_id || null,
-      telegram_file_id: telegram_file_id || null,
-      telegram_file_unique_id: telegram_file_unique_id || null,
-      storage_path: storage_path || null,
-      status: 'new'
-    }).select('*').single();
-
-    if (insert.error) {
-      // Surface RLS-specific guidance when the insert is blocked by policy
-      const errMsg = String(insert.error.message || insert.error);
-      if (errMsg.toLowerCase().includes('row-level') || errMsg.toLowerCase().includes('policy')) {
-        const guidance = 'Insert failed due to row-level security. Ensure this route runs with SUPABASE_SERVICE_ROLE_KEY or adjust RLS policies.';
-        console.error('whispers insert rls', insert.error);
-        return NextResponse.json({ ok: false, error: guidance, detail: errMsg }, { status: 403 });
-      }
-      throw insert.error;
-    }
-    const whisper = insert.data;
-
-    // Notify admin via bot (prefer new Pierrot bot, fall back to legacy TELEGRAM_BOT_TOKEN)
-    const BOT_TOKEN = process.env.PIERROT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
-    const ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.PIERROT_ADMIN_CHAT_ID;
-
-    if (!BOT_TOKEN) console.error('notify admin: bot token missing (set PIERROT_BOT_TOKEN or TELEGRAM_BOT_TOKEN)');
-    if (!ADMIN_CHAT_ID) console.error('notify admin: ADMIN_CHAT_ID missing (set TELEGRAM_ADMIN_CHAT_ID or PIERROT_ADMIN_CHAT_ID)');
-
-    if (BOT_TOKEN && ADMIN_CHAT_ID) {
-      try {
-        const sendUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendVoice`;
-        // Prefer the public storage path (URL) if provided; otherwise fall back to telegram_file_id
-        const voiceUrl = storage_path || telegram_file_id || null;
-        if (!voiceUrl) {
-          console.error('notify admin: no voice URL or file id provided for whisper', { whisperId: whisper.id });
-        } else {
-          // compose inline keyboard for actions
-          const keyboard = {
-            inline_keyboard: [
-              [
-                { text: 'Транскрибировать', callback_data: `transcribe:${whisper.id}` },
-                { text: 'Ответить', callback_data: `reply:${whisper.id}` }
-              ]
-            ]
-          };
-
-          const res = await fetch(sendUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: ADMIN_CHAT_ID, voice: voiceUrl, caption: `Новый шёпот в Храм от ${telegram_first_name || 'Pilgrim'}`, reply_markup: keyboard })
-          });
-
-          if (!res.ok) {
-            const text = await res.text().catch(() => '<no body>');
-            console.error('notify admin telegram error', { status: res.status, body: text });
-          }
-        }
-      } catch (e) {
-        console.error('notify admin error', e);
-      }
+    const upload = await supabase.storage
+      .from('whispers')
+      .upload(storagePath, Buffer.from(await file.arrayBuffer()), {
+        contentType: file.type,
+        cacheControl: '3600',
+        upsert: false,
+      });
+    if (upload.error) {
+      console.error('[whispers] private upload failed:', upload.error.message);
+      return errorResponse('Audio upload failed.', 502);
     }
 
-    return NextResponse.json({ ok: true, whisper });
-  } catch (e) {
-    console.error('whispers POST error', e);
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+    const telegramUserId = String(form.get('telegram_user_id') || '').trim();
+    const telegramFirstName = String(form.get('telegram_first_name') || '').trim();
+    const insert = await supabase
+      .from('whispers')
+      .insert({
+        telegram_user_id: telegramUserId || null,
+        telegram_file_id: null,
+        telegram_file_unique_id: null,
+        storage_path: storagePath,
+        status: 'new',
+      })
+      .select('id,telegram_user_id,storage_path,status,created_at')
+      .single();
+
+    if (insert.error || !insert.data) {
+      await supabase.storage
+        .from('whispers')
+        .remove([storagePath])
+        .catch(() => undefined);
+      console.error('[whispers] row insert failed:', insert.error?.message || 'unknown');
+      return errorResponse('Whisper could not be saved.', 500);
+    }
+
+    const signed = await supabase.storage
+      .from('whispers')
+      .createSignedUrl(storagePath, SIGNED_URL_SECONDS);
+    const audioUrl = signed.data?.signedUrl || null;
+
+    await notifyOwner({
+      audioUrl,
+      telegramUserId,
+      telegramFirstName,
+      whisperId: String(insert.data.id),
+    });
+
+    return NextResponse.json(
+      { ok: true, whisper: { ...insert.data, audio_url: audioUrl } },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
+  } catch (error) {
+    console.error('[whispers] upload failed:', error instanceof Error ? error.message : 'unknown');
+    return errorResponse('Whisper upload failed.', 500);
+  }
+}
+
+async function notifyOwner(input: {
+  audioUrl: string | null;
+  telegramUserId: string;
+  telegramFirstName: string;
+  whisperId: string;
+}) {
+  const botToken = process.env.PIERROT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+  const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.PIERROT_ADMIN_CHAT_ID;
+  if (!botToken || !adminChatId || !input.audioUrl) return;
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendVoice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(8_000),
+      body: JSON.stringify({
+        chat_id: adminChatId,
+        voice: input.audioUrl,
+        caption: `Новый шёпот в Храм от ${input.telegramFirstName || 'Pilgrim'}`,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: 'Транскрибировать', callback_data: `transcribe:${input.whisperId}` },
+              { text: 'Ответить', callback_data: `reply:${input.whisperId}` },
+            ],
+          ],
+        },
+      }),
+    });
+    if (!response.ok) console.error('[whispers] Telegram notification failed:', response.status);
+  } catch (error) {
+    console.error(
+      '[whispers] Telegram notification failed:',
+      error instanceof Error ? error.message : 'unknown'
+    );
   }
 }

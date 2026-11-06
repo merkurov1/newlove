@@ -337,12 +337,15 @@ describe('Pierrot conversational navigation', () => {
       expect(chatFetchCalls()).toHaveLength(1);
     });
 
-    expect(within(dialog).getByRole('link', { name: 'Арт' })).toHaveAttribute(
+    expect(await within(dialog).findByRole('link', { name: 'Арт' })).toHaveAttribute(
       'href',
       '/heartandangel'
     );
-    expect(within(dialog).getByRole('link', { name: 'Лобби' })).toHaveAttribute('href', '/lobby');
-    expect(within(dialog).getByRole('link', { name: 'Журнал' })).toHaveAttribute(
+    expect(await within(dialog).findByRole('link', { name: 'Лобби' })).toHaveAttribute(
+      'href',
+      '/lobby'
+    );
+    expect(await within(dialog).findByRole('link', { name: 'Журнал' })).toHaveAttribute(
       'href',
       '/journal'
     );

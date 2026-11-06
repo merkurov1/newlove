@@ -3,8 +3,10 @@ import { render, screen } from '@testing-library/react';
 import Header from '@/components/Header';
 import { PierrotProvider } from '@/components/pierrot/PierrotContext';
 
+let mockPathname = '/lobby';
+
 jest.mock('next/navigation', () => ({
-  usePathname: () => '/lobby',
+  usePathname: () => mockPathname,
   useRouter: () => ({ push: jest.fn(), refresh: jest.fn() }),
 }));
 
@@ -23,6 +25,10 @@ function app() {
 }
 
 describe('Header Pierrot and Flow controls', () => {
+  beforeEach(() => {
+    mockPathname = '/lobby';
+  });
+
   it('does not offer the admin Flow composer to a non-admin user', () => {
     mockAuth = {
       user: { id: 'user-1', email: 'reader@example.com' },
@@ -39,6 +45,7 @@ describe('Header Pierrot and Flow controls', () => {
   });
 
   it('shows the Flow composer to an admin and keeps Pierrot next to it', () => {
+    mockPathname = '/flow';
     mockAuth = {
       user: { id: 'admin-1', email: 'owner@example.com' },
       profile: { id: 'admin-1', name: 'Owner' },

@@ -21,9 +21,20 @@ export default async function WhispersPage() {
   await requireAdminFromRequest();
 
   const supabase = getServerSupabaseClient({ useServiceRole: true });
-  const { data } = await supabase.from('whispers').select('*').order('created_at', { ascending: false }).limit(200);
+  const { data } = await supabase
+    .from('whispers')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(200);
 
-  const list = data || [];
+  const list = await Promise.all(
+    (data || []).map(async (whisper: any) => {
+      const path = typeof whisper.storage_path === 'string' ? whisper.storage_path : null;
+      if (!path) return { ...whisper, audio_url: null };
+      const signed = await supabase.storage.from('whispers').createSignedUrl(path, 60 * 60);
+      return { ...whisper, audio_url: signed.data?.signedUrl || null };
+    })
+  );
 
   return (
     <div className="min-h-screen p-6 text-white bg-black">
@@ -40,13 +51,17 @@ export default async function WhispersPage() {
             <div key={w.id} className="bg-white/3 border border-white/5 p-4 rounded-md">
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 w-12">
-                  <audio controls src={w.telegram_file_id || ''} className="w-full" />
+                  <audio controls src={w.audio_url || ''} className="w-full" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm text-white/60">{new Date(w.created_at).toLocaleString()}</div>
-                  <div className="mt-2 text-white/90">{w.transcribed_text || <span className="text-white/40">(not transcribed)</span>}</div>
+                  <div className="text-sm text-white/60">
+                    {new Date(w.created_at).toLocaleString()}
+                  </div>
+                  <div className="mt-2 text-white/90">
+                    {w.transcribed_text || <span className="text-white/40">(not transcribed)</span>}
+                  </div>
                   <div className="mt-3">
-                    <WhisperActions id={String(w.id)} url={w.telegram_file_id || null} />
+                    <WhisperActions id={String(w.id)} />
                   </div>
                 </div>
               </div>

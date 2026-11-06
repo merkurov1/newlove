@@ -2,12 +2,13 @@
 
 import { describe, expect, it } from '@jest/globals';
 
-import {
-  buildUnframedManifest,
-  sha256Hex,
-} from '../../../unframed';
+import { buildUnframedManifest, sha256Hex } from '../../../unframed';
 import { SourceHashMismatchError } from '../../../types';
-import { createBaselineRetriever, createImprovedRetriever, DEFAULT_IMPROVED_CONFIG } from '../../c1/retrieval';
+import {
+  createBaselineRetriever,
+  createImprovedRetriever,
+  DEFAULT_IMPROVED_CONFIG,
+} from '../../c1/retrieval';
 import type { C1Question } from '../../c1/types';
 import { evaluatePhaseC2, serializeC2Report } from '../evaluate';
 import { reciprocalRankFusion } from '../hybrid';
@@ -47,10 +48,10 @@ function build(raw: string) {
 
 function sectionIndexForChapter(
   buildResult: ReturnType<typeof build>,
-  chapterPrefix: string,
+  chapterPrefix: string
 ): number {
   const section = buildResult.document.sections.find((candidate) =>
-    candidate.heading.startsWith(chapterPrefix),
+    candidate.heading.startsWith(chapterPrefix)
   );
 
   if (!section) throw new Error('synthetic chapter not found');
@@ -58,13 +59,8 @@ function sectionIndexForChapter(
   return section.index;
 }
 
-function chunkIdForSection(
-  buildResult: ReturnType<typeof build>,
-  sectionIndex: number,
-): string {
-  const chunk = buildResult.chunks.find(
-    (candidate) => candidate.sectionIndex === sectionIndex,
-  );
+function chunkIdForSection(buildResult: ReturnType<typeof build>, sectionIndex: number): string {
+  const chunk = buildResult.chunks.find((candidate) => candidate.sectionIndex === sectionIndex);
 
   if (!chunk) throw new Error('synthetic section has no chunk');
 
@@ -158,12 +154,8 @@ describe('Phase C.2 retrieval bake-off', () => {
       const second = retriever('bravouniqueterm deltaterm', 5);
 
       expect(second.outcome).toBe(first.outcome);
-      expect(second.hits.map((hit) => hit.chunkId)).toEqual(
-        first.hits.map((hit) => hit.chunkId),
-      );
-      expect(second.hits.map((hit) => hit.score)).toEqual(
-        first.hits.map((hit) => hit.score),
-      );
+      expect(second.hits.map((hit) => hit.chunkId)).toEqual(first.hits.map((hit) => hit.chunkId));
+      expect(second.hits.map((hit) => hit.score)).toEqual(first.hits.map((hit) => hit.score));
     }
   });
 
@@ -188,7 +180,16 @@ describe('Phase C.2 retrieval bake-off', () => {
 
     expect(availability.available).toBe(false);
     expect(availability.model.multilingual).toBe(false);
-    expect(availability.blocker).toContain('no local ONNX/embedding runtime');
+    if (availability.runtime.available) {
+      expect(availability.blocker).not.toContain('no local ONNX/embedding runtime');
+    } else {
+      expect(availability.blocker).toContain('no local ONNX/embedding runtime');
+    }
+    if (availability.model.exists) {
+      expect(availability.blocker).toContain('all-MiniLM-L6-v2');
+    } else {
+      expect(availability.blocker).toContain('no local embedding model directory');
+    }
   });
 
   it('validates ground truth and computes abstention/false-positive metrics', () => {
@@ -261,9 +262,9 @@ describe('Phase C.2 retrieval bake-off', () => {
     const ids = C2_QUESTIONS.map((question) => question.id);
 
     expect(new Set(ids).size).toBe(ids.length);
-    expect(
-      split.dev.length + split.calibration.length + split.test.length,
-    ).toBe(C2_QUESTIONS.length);
+    expect(split.dev.length + split.calibration.length + split.test.length).toBe(
+      C2_QUESTIONS.length
+    );
   });
 
   it('fails closed on source hash mismatch', () => {
@@ -271,7 +272,7 @@ describe('Phase C.2 retrieval bake-off', () => {
       buildUnframedManifest({
         raw: SYNTHETIC_SOURCE,
         expectedSha256: '0'.repeat(64),
-      }),
+      })
     ).toThrow(SourceHashMismatchError);
   });
 

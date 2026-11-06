@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
 import React, { useState } from 'react';
 
-export default function WhisperActions({ id, url }: { id: string; url: string | null }) {
+export default function WhisperActions({ id }: { id: string }) {
   const [transcribing, setTranscribing] = useState(false);
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
   const [transcribedText, setTranscribedText] = useState<string | null>(null);
@@ -16,8 +16,8 @@ export default function WhisperActions({ id, url }: { id: string; url: string | 
   const handleTranscribe = async () => {
     setTranscribeError(null);
     setTranscribedText(null);
-    if (!id || !url) {
-      setTranscribeError('missing id or url');
+    if (!id) {
+      setTranscribeError('missing whisper id');
       return;
     }
     setTranscribing(true);
@@ -25,7 +25,7 @@ export default function WhisperActions({ id, url }: { id: string; url: string | 
       const res = await fetch('/api/transcribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ whisperId: id, url })
+        body: JSON.stringify({ whisperId: id }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -52,7 +52,7 @@ export default function WhisperActions({ id, url }: { id: string; url: string | 
       const res = await fetch('/api/whispers/reply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ whisperId: id, message: replyMessage })
+        body: JSON.stringify({ whisperId: id, message: replyMessage }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || `status ${res.status}`);
@@ -68,14 +68,20 @@ export default function WhisperActions({ id, url }: { id: string; url: string | 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <button onClick={handleTranscribe} disabled={transcribing || !url} className="px-3 py-1 bg-white/6 rounded">
+        <button
+          onClick={handleTranscribe}
+          disabled={transcribing}
+          className="px-3 py-1 bg-white/6 rounded"
+        >
           {transcribing ? 'Transcribing…' : 'Transcribe'}
         </button>
         {transcribeError ? <div className="text-xs text-red-400">{transcribeError}</div> : null}
       </div>
 
       {transcribedText ? (
-        <div className="text-sm bg-white/3 p-2 rounded font-mono text-white/90">{transcribedText}</div>
+        <div className="text-sm bg-white/3 p-2 rounded font-mono text-white/90">
+          {transcribedText}
+        </div>
       ) : null}
 
       {/* debug removed */}
@@ -87,7 +93,9 @@ export default function WhisperActions({ id, url }: { id: string; url: string | 
           placeholder="Your reply"
           className="flex-1 p-2 bg-black/20 rounded text-sm"
         />
-        <button className="px-3 py-1 bg-white/6 rounded" disabled={replying}>{replying ? 'Sending…' : 'Send'}</button>
+        <button className="px-3 py-1 bg-white/6 rounded" disabled={replying}>
+          {replying ? 'Sending…' : 'Send'}
+        </button>
       </form>
       {replyError ? <div className="text-xs text-red-400">{replyError}</div> : null}
       {replySuccess ? <div className="text-xs text-green-400">Sent</div> : null}

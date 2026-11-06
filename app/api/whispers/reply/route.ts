@@ -32,35 +32,55 @@ export async function POST(req: Request) {
       whisperId = params.get('whisperId') || params.get('whisper_id');
       message = params.get('message');
     }
-    if (!whisperId || !message) return NextResponse.json({ ok: false, error: 'missing' }, { status: 400 });
+    if (!whisperId || !message)
+      return NextResponse.json({ ok: false, error: 'missing' }, { status: 400 });
+    if (typeof whisperId !== 'string' || typeof message !== 'string' || message.length > 2_000) {
+      return NextResponse.json({ ok: false, error: 'invalid input' }, { status: 400 });
+    }
 
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const supabase = getServerSupabaseClient({ useServiceRole: true });
 
-    const { data: whisper } = await supabase.from('whispers').select('*').eq('id', whisperId).single();
+    const { data: whisper } = await supabase
+      .from('whispers')
+      .select('*')
+      .eq('id', whisperId)
+      .single();
     if (!whisper) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 });
 
     // Prefer PIERROT_BOT_TOKEN (new bot); fall back to legacy TELEGRAM_BOT_TOKEN
     const BOT_TOKEN = process.env.PIERROT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
-    if (!BOT_TOKEN) return NextResponse.json({ ok: false, error: 'bot token missing (set PIERROT_BOT_TOKEN or TELEGRAM_BOT_TOKEN)' }, { status: 500 });
+    if (!BOT_TOKEN)
+      return NextResponse.json(
+        { ok: false, error: 'bot token missing (set PIERROT_BOT_TOKEN or TELEGRAM_BOT_TOKEN)' },
+        { status: 500 }
+      );
 
     // try to send message to user via bot
     const sendUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
     const chatId = whisper.telegram_user_id;
     if (!chatId) return NextResponse.json({ ok: false, error: 'no chat id' }, { status: 400 });
 
-    await fetch(sendUrl, {
+    const telegramResponse = await fetch(sendUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'HTML' })
+      signal: AbortSignal.timeout(8_000),
+      body: JSON.stringify({ chat_id: chatId, text: message }),
     });
+    if (!telegramResponse.ok) {
+      console.error('[whispers] Telegram reply failed:', telegramResponse.status);
+      return NextResponse.json({ ok: false, error: 'Delivery failed' }, { status: 502 });
+    }
 
     // update DB
-    await supabase.from('whispers').update({ my_response: message, status: 'answered' }).eq('id', whisperId);
+    await supabase
+      .from('whispers')
+      .update({ my_response: message, status: 'answered' })
+      .eq('id', whisperId);
 
     return NextResponse.json({ ok: true });
   } catch (e) {
-    console.error('reply error', e);
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+    console.error('reply error', e instanceof Error ? e.message : 'unknown');
+    return NextResponse.json({ ok: false, error: 'Reply failed' }, { status: 500 });
   }
 }
