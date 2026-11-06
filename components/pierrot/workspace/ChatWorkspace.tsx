@@ -166,10 +166,37 @@ function ConversationLinks({
   );
 }
 
+function ProjectLinks({ projects, onOpen }: { projects: PierrotProject[]; onOpen: () => void }) {
+  return (
+    <ul className="pw-conversation-list pw-project-recent-list">
+      {projects.map((project) => (
+        <li key={project.id}>
+          <Link
+            href={`/admin/pierrot/projects/${encodeURIComponent(project.slug)}`}
+            className="pw-conversation-link"
+            onClick={onOpen}
+          >
+            <span className="pw-conversation-title">Проект · {project.name}</span>
+            <span className="pw-conversation-date">Открыть рабочее пространство</span>
+          </Link>
+          <Link
+            href={`/admin/pierrot?new=1&project=${encodeURIComponent(project.slug)}`}
+            className="pw-conversation-project"
+            onClick={onOpen}
+          >
+            + Новый разговор в проекте
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function ChatWorkspace({
   ownerId,
   overview,
   conversations,
+  projects,
   conversation,
   startNew,
   brainStatus,
@@ -178,6 +205,7 @@ export default function ChatWorkspace({
   ownerId: string;
   overview: WorkspaceOverview;
   conversations: OwnerConversationListItem[];
+  projects: PierrotProject[];
   conversation: OwnerConversation | null;
   startNew: boolean;
   brainStatus?: BrainStatusSnapshot | null;
@@ -1136,7 +1164,8 @@ export default function ChatWorkspace({
 
             <div className="pw-drawer-section">
               <div className="pw-drawer-section-title">Недавние разговоры</div>
-            {orderedConversations.length === 0 ? (
+            {projects.length > 0 && <ProjectLinks projects={projects} onOpen={() => setDrawerOpen(false)} />}
+            {orderedConversations.length === 0 && projects.length === 0 ? (
               <p className="pw-drawer-empty">
                 Сохранённых диалогов пока нет.
               </p>

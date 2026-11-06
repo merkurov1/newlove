@@ -11,11 +11,14 @@ import { WORKSPACE_METRIC_KEYS } from './types';
  * navigation instead of querying all five metric sources again.
  */
 
-export const OVERVIEW_CACHE_VERSION = 1;
+// Bump whenever the metric window or interpretation changes. Reusing an old
+// snapshot here would make the home screen show the previous status language
+// and the previous alarm decision for up to a day.
+export const OVERVIEW_CACHE_VERSION = 2;
 export const OVERVIEW_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-const STORAGE_PREFIX = 'pierrot:workspace:overview:v1:';
-const COOKIE_PREFIX = 'pw_overview_v1_';
+const STORAGE_PREFIX = 'pierrot:workspace:overview:v2:';
+const COOKIE_PREFIX = 'pw_overview_v2_';
 export const OVERVIEW_COOKIE_PATH = '/admin/pierrot';
 
 export type OverviewCacheRecord = {
