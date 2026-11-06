@@ -758,6 +758,10 @@ export default function FlowPage() {
                 RSS ↗
               </a>
               <span className="text-neutral-200">·</span>
+              <Link href="/flow-issues" className="transition hover:text-neutral-900">
+                Issues ↗
+              </Link>
+              <span className="text-neutral-200">·</span>
               <Link href="/journal" className="transition hover:text-neutral-900">
                 Journal ↗
               </Link>

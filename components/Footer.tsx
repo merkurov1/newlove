@@ -6,6 +6,7 @@ const FOOTER_LINKS = [
   { href: '/media', label: 'Media Archive' },
   { href: '/unframed', label: 'Unframed' },
   { href: '/flow', label: 'Flow' },
+  { href: '/flow-issues', label: 'Flow Issues' },
   { href: '/selection', label: 'Selection' },
   { href: '/journal', label: 'Journal' },
 ] as const;
@@ -37,7 +38,10 @@ export default function Footer() {
           <span>
             &copy; {currentYear} {PERSON_NAME}
           </span>
-          <span className="font-sans text-[10px] lowercase italic tracking-normal text-zinc-400" lang="en">
+          <span
+            className="font-sans text-[10px] lowercase italic tracking-normal text-zinc-400"
+            lang="en"
+          >
             {AI_DISCLOSURE}
           </span>
         </div>

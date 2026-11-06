@@ -95,7 +95,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         .limit(2000),
       supabase
         .from('letters')
-        .select('slug,publishedAt,updatedAt,createdAt,kind,status,published')
+        .select('slug,publishedAt,updatedAt,createdAt,kind,status,published,lang')
         .eq('published', true)
         .not('slug', 'is', null)
         .limit(1000),
@@ -119,8 +119,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       const slug = String(letter.slug || '').trim();
       if (!slug) continue;
       if (letter.status && letter.status !== 'published') continue;
+
+      const issueRoute =
+        String(letter.lang || '').toLowerCase() === 'en' ? '/en/flow-issues' : '/flow-issues';
+
       push(
-        `/journal/${encodeURIComponent(slug)}`,
+        letter.kind === 'issue'
+          ? `${issueRoute}/${encodeURIComponent(slug)}`
+          : `/journal/${encodeURIComponent(slug)}`,
         letter.updatedAt || letter.publishedAt || letter.createdAt,
         0.7
       );

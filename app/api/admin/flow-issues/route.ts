@@ -1,54 +1,34 @@
-import { NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
-import {
-  getServerSupabaseClient,
-  requireAdminFromRequest,
-} from "@/lib/serverAuth";
-import {
-  buildIssuePayload,
-  resolveIssueWindow,
-} from "@/lib/flow-issue/build";
-import { renderIssue } from "@/lib/flow-issue/render";
-import {
-  getPayloadItemIds,
-  samePayloadComposition,
-} from "@/lib/flow-issue/draft";
-import { processNewsletterJob } from "@/lib/newsletter/processJob";
-import {
-  filterSubscribersByLang,
-  isSubscriberMatchingLang,
-} from "@/lib/newsletter/language";
-import type {
-  IssueLang,
-  IssuePayload,
-} from "@/lib/flow-issue/types";
+import { NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
+import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
+import { buildIssuePayload, resolveIssueWindow } from '@/lib/flow-issue/build';
+import { renderIssue } from '@/lib/flow-issue/render';
+import { buildIssueTitle } from '@/lib/flow-issue/title';
+import { getPayloadItemIds, samePayloadComposition } from '@/lib/flow-issue/draft';
+import { processNewsletterJob } from '@/lib/newsletter/processJob';
+import { filterSubscribersByLang, isSubscriberMatchingLang } from '@/lib/newsletter/language';
+import type { IssueLang, IssuePayload } from '@/lib/flow-issue/types';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const maxDuration = 60;
 
-const SITE_URL = "https://www.merkurov.love";
+const SITE_URL = 'https://www.merkurov.love';
 
 function validLang(value: unknown): value is IssueLang {
-  return value === "ru" || value === "en";
+  return value === 'ru' || value === 'en';
 }
 
 function slugify(value: string): string {
   return value
-    .normalize("NFKD")
+    .normalize('NFKD')
     .toLowerCase()
-    .replace(/[^a-z0-9а-яё]+/gi, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(/[^a-z0-9а-яё]+/gi, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
-function isRecord(
-  value: unknown,
-): value is Record<string, unknown> {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value)
-  );
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**
@@ -61,14 +41,8 @@ function issueWarnings(payload: unknown): string[] {
     return [];
   }
 
-  const heuristic =
-    typeof payload.analysis.heuristic === "number"
-      ? payload.analysis.heuristic
-      : 0;
-  const model =
-    typeof payload.analysis.model === "number"
-      ? payload.analysis.model
-      : 0;
+  const heuristic = typeof payload.analysis.heuristic === 'number' ? payload.analysis.heuristic : 0;
+  const model = typeof payload.analysis.model === 'number' ? payload.analysis.model : 0;
 
   if (heuristic <= 0) return [];
 
@@ -89,30 +63,26 @@ async function getAdminSupabase() {
   return getServerSupabaseClient({ useServiceRole: true });
 }
 
-async function findExistingDraft(
-  supabase: any,
-  lang: IssueLang,
-  payload: IssuePayload,
-) {
+async function findExistingDraft(supabase: any, lang: IssueLang, payload: IssuePayload) {
   const candidateIds = getPayloadItemIds(payload);
 
   if (!candidateIds.length) return null;
 
   const { data, error } = await supabase
-    .from("letters")
+    .from('letters')
     .select(
-      "id,title,slug,kind,lang,number,period_start,period_end,status,payload,html_web,html_email,text_email,published,sent_at",
+      'id,title,slug,kind,lang,number,period_start,period_end,status,payload,html_web,html_email,text_email,published,sent_at'
     )
-    .eq("kind", "issue")
-    .eq("lang", lang)
-    .eq("status", "draft")
-    .order("createdAt", { ascending: false })
+    .eq('kind', 'issue')
+    .eq('lang', lang)
+    .eq('status', 'draft')
+    .order('createdAt', { ascending: false })
     .limit(100);
 
   if (error) throw error;
 
   const existing = (data || []).find((issue: any) =>
-    samePayloadComposition(issue.payload, payload),
+    samePayloadComposition(issue.payload, payload)
   );
 
   return existing || null;
@@ -125,20 +95,19 @@ export async function GET(request: Request) {
     const supabase = await getAdminSupabase();
 
     const { data: issues, error } = await supabase
-      .from("letters")
+      .from('letters')
       .select(
-        "id,title,slug,number,lang,status,published,sent_at,sentAt,createdAt,publishedAt,updatedAt",
+        'id,title,slug,number,lang,status,published,sent_at,sentAt,createdAt,publishedAt,updatedAt'
       )
-      .eq("kind", "issue")
-      .order("createdAt", { ascending: false });
+      .eq('kind', 'issue')
+      .order('createdAt', { ascending: false });
 
     if (error) throw error;
 
-    const { data: activeSubs, error: subscribersError } =
-      await supabase
-        .from("subscribers")
-        .select("id,locale")
-        .eq("isActive", true);
+    const { data: activeSubs, error: subscribersError } = await supabase
+      .from('subscribers')
+      .select('id,locale')
+      .eq('isActive', true);
 
     if (subscribersError) throw subscribersError;
 
@@ -147,11 +116,11 @@ export async function GET(request: Request) {
     const activeSubscribersTotal = activeList.length;
 
     const activeSubscribersEn = activeList.filter((subscriber) =>
-      isSubscriberMatchingLang(subscriber.locale, "en"),
+      isSubscriberMatchingLang(subscriber.locale, 'en')
     ).length;
 
     const activeSubscribersRu = activeList.filter((subscriber) =>
-      isSubscriberMatchingLang(subscriber.locale, "ru"),
+      isSubscriberMatchingLang(subscriber.locale, 'ru')
     ).length;
 
     return NextResponse.json({
@@ -162,17 +131,13 @@ export async function GET(request: Request) {
       activeSubscribersEn,
     });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Ошибка загрузки выпусков";
+    const message = error instanceof Error ? error.message : 'Ошибка загрузки выпусков';
 
-    const unauthorized =
-      /unauthorized|admin access required/i.test(message);
+    const unauthorized = /unauthorized|admin access required/i.test(message);
 
     return NextResponse.json(
-      { error: unauthorized ? "Доступ запрещён" : message },
-      { status: unauthorized ? 401 : 500 },
+      { error: unauthorized ? 'Доступ запрещён' : message },
+      { status: unauthorized ? 401 : 500 }
     );
   }
 }
@@ -188,24 +153,18 @@ export async function POST(request: Request) {
 
       if (!isRecord(parsed)) {
         return NextResponse.json(
-          { error: "Тело запроса должно быть JSON-объектом." },
-          { status: 400 },
+          { error: 'Тело запроса должно быть JSON-объектом.' },
+          { status: 400 }
         );
       }
 
       body = parsed;
     } catch {
-      return NextResponse.json(
-        { error: "Некорректный JSON." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: 'Некорректный JSON.' }, { status: 400 });
     }
 
     if (!validLang(body.lang)) {
-      return NextResponse.json(
-        { error: "lang должен быть ru или en." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: 'lang должен быть ru или en.' }, { status: 400 });
     }
 
     const lang = body.lang;
@@ -214,31 +173,15 @@ export async function POST(request: Request) {
     const { start, end } = await resolveIssueWindow(
       supabase,
       lang,
-      typeof body.periodStart === "string"
-        ? body.periodStart
-        : null,
-      typeof body.periodEnd === "string"
-        ? body.periodEnd
-        : null,
+      typeof body.periodStart === 'string' ? body.periodStart : null,
+      typeof body.periodEnd === 'string' ? body.periodEnd : null
     );
 
-    if (
-      Number.isNaN(start.getTime()) ||
-      Number.isNaN(end.getTime()) ||
-      start >= end
-    ) {
-      return NextResponse.json(
-        { error: "Период выпуска задан некорректно." },
-        { status: 400 },
-      );
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) {
+      return NextResponse.json({ error: 'Период выпуска задан некорректно.' }, { status: 400 });
     }
 
-    const payload = await buildIssuePayload(
-      supabase,
-      lang,
-      start,
-      end,
-    );
+    const payload = await buildIssuePayload(supabase, lang, start, end);
 
     // An empty issue is almost always a data problem, not an editorial
     // choice. Fail with an explanation instead of saving a draft with no
@@ -254,20 +197,16 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "В выбранном периоде нет материалов для выпуска. Проверьте, что записи опубликованы, видимы и содержат текст, ссылку или медиа.",
+            'В выбранном периоде нет материалов для выпуска. Проверьте, что записи опубликованы, видимы и содержат текст, ссылку или медиа.',
           warnings: issueWarnings(payload),
         },
-        { status: 409 },
+        { status: 409 }
       );
     }
 
     // Do not create another draft if the same Flow records are
     // already represented by an existing draft for this language.
-    const existingDraft = await findExistingDraft(
-      supabase,
-      lang,
-      payload,
-    );
+    const existingDraft = await findExistingDraft(supabase, lang, payload);
 
     if (existingDraft) {
       return NextResponse.json(
@@ -276,33 +215,28 @@ export async function POST(request: Request) {
           reusedExistingDraft: true,
           warnings: issueWarnings(existingDraft.payload),
         },
-        { status: 200 },
+        { status: 200 }
       );
     }
 
-    const { data: previous, error: previousError } =
-      await supabase
-        .from("letters")
-        .select("number")
-        .eq("kind", "issue")
-        .eq("lang", lang)
-        .order("number", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    const { data: previous, error: previousError } = await supabase
+      .from('letters')
+      .select('number')
+      .eq('kind', 'issue')
+      .eq('lang', lang)
+      .order('number', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (previousError) throw previousError;
 
     const number = (previous?.number ?? 0) + 1;
     const periodLabel = end.toISOString().slice(0, 10);
 
-    const title =
-      lang === "ru"
-        ? `Выпуск ${number} · ${periodLabel}`
-        : `Issue ${number} · ${periodLabel}`;
+    // Headline contract: main item title + Flow brand + issue date.
+    const title = buildIssueTitle(payload);
 
-    const baseSlug = slugify(
-      `${lang}-issue-${number}-${periodLabel}`,
-    );
+    const baseSlug = slugify(`${lang}-issue-${number}-${periodLabel}`);
 
     const slug = `${baseSlug}-${randomUUID().slice(0, 8)}`;
 
@@ -316,7 +250,7 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
 
     const { data: issue, error: insertError } = await supabase
-      .from("letters")
+      .from('letters')
       .insert({
         id: randomUUID(),
         title,
@@ -327,30 +261,30 @@ export async function POST(request: Request) {
         createdAt: now,
         updatedAt: now,
         authorId: admin.id,
-        kind: "issue",
+        kind: 'issue',
         lang,
         number,
         period_start: start.toISOString(),
         period_end: end.toISOString(),
-        status: "draft",
+        status: 'draft',
         payload,
         html_web: rendered.htmlWeb,
         html_email: rendered.htmlEmail,
         text_email: rendered.textEmail,
       })
       .select(
-        "id,title,slug,kind,lang,number,period_start,period_end,status,payload,html_web,html_email,text_email,published,sent_at",
+        'id,title,slug,kind,lang,number,period_start,period_end,status,payload,html_web,html_email,text_email,published,sent_at'
       )
       .single();
 
     if (insertError) {
-      if (insertError.code === "23505") {
+      if (insertError.code === '23505') {
         return NextResponse.json(
           {
             error:
-              "Номер выпуска уже занят параллельной операцией. Обновите страницу и повторите сборку.",
+              'Номер выпуска уже занят параллельной операцией. Обновите страницу и повторите сборку.',
           },
-          { status: 409 },
+          { status: 409 }
         );
       }
 
@@ -363,22 +297,18 @@ export async function POST(request: Request) {
         reusedExistingDraft: false,
         warnings: issueWarnings(payload),
       },
-      { status: 201 },
+      { status: 201 }
     );
   } catch (error) {
-    console.error("[flow-issues] build failed", error);
+    console.error('[flow-issues] build failed', error);
 
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Ошибка сборки выпуска";
+    const message = error instanceof Error ? error.message : 'Ошибка сборки выпуска';
 
-    const unauthorized =
-      /unauthorized|admin access required/i.test(message);
+    const unauthorized = /unauthorized|admin access required/i.test(message);
 
     return NextResponse.json(
-      { error: unauthorized ? "Доступ запрещён" : message },
-      { status: unauthorized ? 401 : 500 },
+      { error: unauthorized ? 'Доступ запрещён' : message },
+      { status: unauthorized ? 401 : 500 }
     );
   }
 }
@@ -394,57 +324,48 @@ export async function PATCH(request: Request) {
 
       if (!isRecord(parsed)) {
         return NextResponse.json(
-          { error: "Тело запроса должно быть JSON-объектом." },
-          { status: 400 },
+          { error: 'Тело запроса должно быть JSON-объектом.' },
+          { status: 400 }
         );
       }
 
       body = parsed;
     } catch {
-      return NextResponse.json(
-        { error: "Некорректный JSON." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: 'Некорректный JSON.' }, { status: 400 });
     }
 
-    const id =
-      typeof body.id === "string" ? body.id.trim() : "";
+    const id = typeof body.id === 'string' ? body.id.trim() : '';
 
     const action = body.action;
 
-    if (!id || (action !== "publish" && action !== "send")) {
+    if (!id || (action !== 'publish' && action !== 'send')) {
       return NextResponse.json(
         {
-          error: "Ожидаются id и action: publish или send.",
+          error: 'Ожидаются id и action: publish или send.',
         },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
     const supabase = await getAdminSupabase();
 
     const { data: issue, error: fetchError } = await supabase
-      .from("letters")
-      .select(
-        "id,title,slug,kind,lang,status,published,publishedAt,sent_at,html_email,text_email",
-      )
-      .eq("id", id)
-      .eq("kind", "issue")
+      .from('letters')
+      .select('id,title,slug,kind,lang,status,published,publishedAt,sent_at,html_email,text_email')
+      .eq('id', id)
+      .eq('kind', 'issue')
       .maybeSingle();
 
     if (fetchError) throw fetchError;
 
     if (!issue) {
-      return NextResponse.json(
-        { error: "Выпуск не найден." },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: 'Выпуск не найден.' }, { status: 404 });
     }
 
     const now = new Date().toISOString();
 
-    if (action === "publish") {
-      if (issue.status === "published" && issue.published) {
+    if (action === 'publish') {
+      if (issue.status === 'published' && issue.published) {
         return NextResponse.json({
           ok: true,
           alreadyPublished: true,
@@ -452,32 +373,28 @@ export async function PATCH(request: Request) {
         });
       }
 
-      const { data: updated, error: updateError } =
-        await supabase
-          .from("letters")
-          .update({
-            published: true,
-            status: "published",
-            publishedAt: issue.publishedAt || now,
-            updatedAt: now,
-          })
-          .eq("id", issue.id)
-          .eq("kind", "issue")
-          .eq("status", "draft")
-          .select(
-            "id,title,slug,lang,number,status,published,publishedAt,sent_at",
-          )
-          .maybeSingle();
+      const { data: updated, error: updateError } = await supabase
+        .from('letters')
+        .update({
+          published: true,
+          status: 'published',
+          publishedAt: issue.publishedAt || now,
+          updatedAt: now,
+        })
+        .eq('id', issue.id)
+        .eq('kind', 'issue')
+        .eq('status', 'draft')
+        .select('id,title,slug,lang,number,status,published,publishedAt,sent_at')
+        .maybeSingle();
 
       if (updateError) throw updateError;
 
       if (!updated) {
         return NextResponse.json(
           {
-            error:
-              "Выпуск изменён другим запросом. Обновите страницу.",
+            error: 'Выпуск изменён другим запросом. Обновите страницу.',
           },
-          { status: 409 },
+          { status: 409 }
         );
       }
 
@@ -493,43 +410,39 @@ export async function PATCH(request: Request) {
     if (issue.sent_at) {
       return NextResponse.json(
         {
-          error:
-            "Этот выпуск уже отправлялся. Повторная рассылка заблокирована.",
+          error: 'Этот выпуск уже отправлялся. Повторная рассылка заблокирована.',
           sent_at: issue.sent_at,
         },
-        { status: 409 },
+        { status: 409 }
       );
     }
 
     if (!process.env.RESEND_API_KEY) {
       return NextResponse.json(
         {
-          error:
-            "RESEND_API_KEY не настроен. Рассылка не поставлена в очередь.",
+          error: 'RESEND_API_KEY не настроен. Рассылка не поставлена в очередь.',
         },
-        { status: 503 },
+        { status: 503 }
       );
     }
 
     if (!issue.html_email?.trim()) {
       return NextResponse.json(
         {
-          error:
-            "У выпуска отсутствует HTML-версия письма. Соберите новый выпуск.",
+          error: 'У выпуска отсутствует HTML-версия письма. Соберите новый выпуск.',
         },
-        { status: 409 },
+        { status: 409 }
       );
     }
 
     // If this issue is already being sent, return its existing job.
-    const { data: activeJobs, error: activeJobsError } =
-      await supabase
-        .from("newsletter_jobs")
-        .select("id,status")
-        .eq("letter_id", issue.id)
-        .in("status", ["pending", "processing"])
-        .order("created_at", { ascending: false })
-        .limit(1);
+    const { data: activeJobs, error: activeJobsError } = await supabase
+      .from('newsletter_jobs')
+      .select('id,status')
+      .eq('letter_id', issue.id)
+      .in('status', ['pending', 'processing'])
+      .order('created_at', { ascending: false })
+      .limit(1);
 
     if (activeJobsError) throw activeJobsError;
 
@@ -550,85 +463,73 @@ export async function PATCH(request: Request) {
       });
     }
 
-    const { data: activeSubs, error: subscribersError } =
-      await supabase
-        .from("subscribers")
-        .select("id,locale")
-        .eq("isActive", true);
+    const { data: activeSubs, error: subscribersError } = await supabase
+      .from('subscribers')
+      .select('id,locale')
+      .eq('isActive', true);
 
     if (subscribersError) throw subscribersError;
 
-    const matchingSubs = filterSubscribersByLang(
-      activeSubs || [],
-      issue.lang,
-    );
+    const matchingSubs = filterSubscribersByLang(activeSubs || [], issue.lang);
 
     if (!matchingSubs.length) {
-      const langLabel =
-        issue.lang === "en"
-          ? "англоязычных"
-          : "русскоязычных";
+      const langLabel = issue.lang === 'en' ? 'англоязычных' : 'русскоязычных';
 
       return NextResponse.json(
         {
           error: `Нет активных ${langLabel} подписчиков. Рассылка не создана.`,
         },
-        { status: 409 },
+        { status: 409 }
       );
     }
 
     // The worker rejects unpublished issues, so publish before queueing.
-    if (issue.status !== "published" || !issue.published) {
-      const { data: publishedIssue, error: publishError } =
-        await supabase
-          .from("letters")
-          .update({
-            published: true,
-            status: "published",
-            publishedAt: issue.publishedAt || now,
-            updatedAt: now,
-          })
-          .eq("id", issue.id)
-          .eq("kind", "issue")
-          .select("id")
-          .maybeSingle();
+    if (issue.status !== 'published' || !issue.published) {
+      const { data: publishedIssue, error: publishError } = await supabase
+        .from('letters')
+        .update({
+          published: true,
+          status: 'published',
+          publishedAt: issue.publishedAt || now,
+          updatedAt: now,
+        })
+        .eq('id', issue.id)
+        .eq('kind', 'issue')
+        .select('id')
+        .maybeSingle();
 
       if (publishError) throw publishError;
 
       if (!publishedIssue) {
         return NextResponse.json(
           {
-            error:
-              "Не удалось опубликовать выпуск перед рассылкой.",
+            error: 'Не удалось опубликовать выпуск перед рассылкой.',
           },
-          { status: 409 },
+          { status: 409 }
         );
       }
     }
 
     const jobId = randomUUID();
 
-    const { error: jobError } = await supabase
-      .from("newsletter_jobs")
-      .insert({
-        id: jobId,
-        letter_id: issue.id,
-        status: "pending",
-        created_at: now,
-      });
+    const { error: jobError } = await supabase.from('newsletter_jobs').insert({
+      id: jobId,
+      letter_id: issue.id,
+      status: 'pending',
+      created_at: now,
+    });
 
     if (jobError) {
       // A unique index prevents concurrent duplicate jobs.
-      if (jobError.code === "23505") {
-        const { data: existingJob, error: existingJobError } =
-          await supabase
-            .from("newsletter_jobs")
-            .select("id,status")
-            .eq("letter_id", issue.id)
-            .in("status", ["pending", "processing"])
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+      if (jobError.code === '23505') {
+        const { data: existingJob, error: existingJobError } = await supabase
+          .from('newsletter_jobs')
+          .select('id,status')
+          .eq('letter_id', issue.id)
+          .in('status', ['pending', 'processing'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
         if (existingJobError) throw existingJobError;
 
@@ -646,15 +547,12 @@ export async function PATCH(request: Request) {
       throw jobError;
     }
 
-    const sendResult = await processNewsletterJob(
-      jobId,
-      supabase,
-    );
+    const sendResult = await processNewsletterJob(jobId, supabase);
 
     const { data: updatedIssue } = await supabase
-      .from("letters")
-      .select("id,title,slug,status,published,sent_at,publishedAt")
-      .eq("id", issue.id)
+      .from('letters')
+      .select('id,title,slug,status,published,sent_at,publishedAt')
+      .eq('id', issue.id)
       .maybeSingle();
 
     return NextResponse.json({
@@ -670,7 +568,7 @@ export async function PATCH(request: Request) {
         id: issue.id,
         title: issue.title,
         slug: issue.slug,
-        status: "published",
+        status: 'published',
         sent_at: new Date().toISOString(),
       },
       message:
@@ -679,25 +577,19 @@ export async function PATCH(request: Request) {
           : sendResult.skippedCount > 0
             ? `Выпуск обработан (отправка пропущена: ${sendResult.skippedCount} адресов).`
             : sendResult.failedCount > 0
-              ? `Ошибка отправки подписчикам: ${
-                  sendResult.error || "проверьте журнал рассылок"
-                }.`
-              : "Выпуск опубликован и разослан.",
+              ? `Ошибка отправки подписчикам: ${sendResult.error || 'проверьте журнал рассылок'}.`
+              : 'Выпуск опубликован и разослан.',
     });
   } catch (error) {
-    console.error("[flow-issues] PATCH failed", error);
+    console.error('[flow-issues] PATCH failed', error);
 
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Ошибка обработки выпуска";
+    const message = error instanceof Error ? error.message : 'Ошибка обработки выпуска';
 
-    const unauthorized =
-      /unauthorized|admin access required/i.test(message);
+    const unauthorized = /unauthorized|admin access required/i.test(message);
 
     return NextResponse.json(
-      { error: unauthorized ? "Доступ запрещён" : message },
-      { status: unauthorized ? 401 : 500 },
+      { error: unauthorized ? 'Доступ запрещён' : message },
+      { status: unauthorized ? 401 : 500 }
     );
   }
 }

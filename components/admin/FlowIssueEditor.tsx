@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useMemo, useState, type ReactNode } from "react";
-import Link from "next/link";
+import { useMemo, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 
 export type EditableIssueEntryData = {
   id: string;
@@ -19,9 +19,11 @@ export type EditableIssueData = {
   id: string;
   title: string;
   slug: string;
-  lang: "ru" | "en";
+  lang: 'ru' | 'en';
   number: number | null;
   previewHtml: string;
+  summary: string;
+  pierrotIntro: string[];
   lead: EditableIssueEntryData | null;
   latest: EditableIssueEntryData[];
   links: EditableIssueEntryData[];
@@ -29,7 +31,7 @@ export type EditableIssueData = {
   photos: EditableIssueEntryData[];
 };
 
-type ArraySection = "latest" | "links" | "videos" | "photos";
+type ArraySection = 'latest' | 'links' | 'videos' | 'photos';
 
 type SectionsState = {
   lead: EditableIssueEntryData | null;
@@ -40,24 +42,24 @@ type SectionsState = {
 };
 
 const SECTION_LABELS: Record<ArraySection, string> = {
-  latest: "Последнее в потоке",
-  links: "Ссылки",
-  videos: "Видео",
-  photos: "Кадры",
+  latest: 'Последнее в потоке',
+  links: 'Ссылки',
+  videos: 'Видео',
+  photos: 'Кадры',
 };
 
 function formatDate(value: string): string {
-  if (!value) return "";
+  if (!value) return '';
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "";
+  if (Number.isNaN(date.getTime())) return '';
 
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
   }).format(date);
 }
 
@@ -105,22 +107,14 @@ function EntryCard({
   total: number;
   onMove: (direction: -1 | 1) => void;
   onRemove: () => void;
-  onChange: (
-    field:
-      | "title"
-      | "body"
-      | "description"
-      | "alt"
-      | "caption",
-    value: string,
-  ) => void;
+  onChange: (field: 'title' | 'body' | 'description' | 'alt' | 'caption', value: string) => void;
 }) {
   return (
     <article className="border-t border-[#EAE6E1] py-5 first:border-t-0 first:pt-0">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[#89827B]">
           <span className="rounded bg-[#F4EFEA] px-2 py-0.5 text-[#1C1A1B]">
-            {entry.type || "item"}
+            {entry.type || 'item'}
           </span>
           <span>{formatDate(entry.publishedAt)}</span>
           {entry.url && (
@@ -154,11 +148,7 @@ function EntryCard({
           >
             ↓
           </button>
-          <button
-            type="button"
-            onClick={onRemove}
-            className="text-[#89827B] hover:text-red-700"
-          >
+          <button type="button" onClick={onRemove} className="text-[#89827B] hover:text-red-700">
             убрать
           </button>
         </div>
@@ -169,9 +159,7 @@ function EntryCard({
           <FieldLabel>Заголовок</FieldLabel>
           <input
             value={entry.title}
-            onChange={(event) =>
-              onChange("title", event.target.value)
-            }
+            onChange={(event) => onChange('title', event.target.value)}
             className="w-full border border-[#D9D3CD] bg-white px-3 py-2 text-sm outline-none focus:border-[#990F3D]"
           />
         </label>
@@ -180,37 +168,31 @@ function EntryCard({
           <FieldLabel>Текст</FieldLabel>
           <textarea
             value={entry.body}
-            onChange={(event) =>
-              onChange("body", event.target.value)
-            }
+            onChange={(event) => onChange('body', event.target.value)}
             rows={3}
             className="w-full resize-y border border-[#D9D3CD] bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-[#990F3D]"
           />
         </label>
 
-        {section === "links" && (
+        {section === 'links' && (
           <label className="block">
             <FieldLabel>Описание ссылки</FieldLabel>
             <textarea
               value={entry.description}
-              onChange={(event) =>
-                onChange("description", event.target.value)
-              }
+              onChange={(event) => onChange('description', event.target.value)}
               rows={2}
               className="w-full resize-y border border-[#D9D3CD] bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-[#990F3D]"
             />
           </label>
         )}
 
-        {section === "photos" && (
+        {section === 'photos' && (
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
               <FieldLabel>Alt</FieldLabel>
               <input
                 value={entry.alt}
-                onChange={(event) =>
-                  onChange("alt", event.target.value)
-                }
+                onChange={(event) => onChange('alt', event.target.value)}
                 className="w-full border border-[#D9D3CD] bg-white px-3 py-2 text-sm outline-none focus:border-[#990F3D]"
               />
             </label>
@@ -218,9 +200,7 @@ function EntryCard({
               <FieldLabel>Подпись</FieldLabel>
               <input
                 value={entry.caption}
-                onChange={(event) =>
-                  onChange("caption", event.target.value)
-                }
+                onChange={(event) => onChange('caption', event.target.value)}
                 className="w-full border border-[#D9D3CD] bg-white px-3 py-2 text-sm outline-none focus:border-[#990F3D]"
               />
             </label>
@@ -231,21 +211,15 @@ function EntryCard({
   );
 }
 
-export default function FlowIssueEditor({
-  issue,
-}: {
-  issue: EditableIssueData;
-}) {
+export default function FlowIssueEditor({ issue }: { issue: EditableIssueData }) {
   const [title, setTitle] = useState(issue.title);
-  const [sections, setSections] = useState<SectionsState>(() =>
-    cloneIssue(issue),
-  );
+  const [summary, setSummary] = useState(issue.summary || '');
+  const [pierrotIntro, setPierrotIntro] = useState((issue.pierrotIntro || []).join('\n\n'));
+  const [sections, setSections] = useState<SectionsState>(() => cloneIssue(issue));
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [previewHtml, setPreviewHtml] = useState(
-    issue.previewHtml,
-  );
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [previewHtml, setPreviewHtml] = useState(issue.previewHtml);
   const [showPreview, setShowPreview] = useState(false);
 
   const counts = useMemo(
@@ -255,56 +229,42 @@ export default function FlowIssueEditor({
       videos: sections.videos.length,
       photos: sections.photos.length,
     }),
-    [sections],
+    [sections]
   );
 
-  function updateLead(field: "title" | "body", value: string) {
+  function updateLead(field: 'title' | 'body', value: string) {
     setSections((current) =>
       current.lead
         ? {
             ...current,
             lead: { ...current.lead, [field]: value },
           }
-        : current,
+        : current
     );
   }
 
   function updateEntry(
     section: ArraySection,
     index: number,
-    field:
-      | "title"
-      | "body"
-      | "description"
-      | "alt"
-      | "caption",
-    value: string,
+    field: 'title' | 'body' | 'description' | 'alt' | 'caption',
+    value: string
   ) {
     setSections((current) => ({
       ...current,
       [section]: current[section].map((entry, entryIndex) =>
-        entryIndex === index
-          ? { ...entry, [field]: value }
-          : entry,
+        entryIndex === index ? { ...entry, [field]: value } : entry
       ),
     }));
   }
 
-  function moveEntry(
-    section: ArraySection,
-    index: number,
-    direction: -1 | 1,
-  ) {
+  function moveEntry(section: ArraySection, index: number, direction: -1 | 1) {
     setSections((current) => {
       const next = [...current[section]];
       const target = index + direction;
 
       if (target < 0 || target >= next.length) return current;
 
-      [next[index], next[target]] = [
-        next[target],
-        next[index],
-      ];
+      [next[index], next[target]] = [next[target], next[index]];
 
       return { ...current, [section]: next };
     });
@@ -313,62 +273,52 @@ export default function FlowIssueEditor({
   function removeEntry(section: ArraySection, index: number) {
     setSections((current) => ({
       ...current,
-      [section]: current[section].filter(
-        (_, entryIndex) => entryIndex !== index,
-      ),
+      [section]: current[section].filter((_, entryIndex) => entryIndex !== index),
     }));
   }
 
   async function save() {
     setSaving(true);
-    setError("");
-    setMessage("");
+    setError('');
+    setMessage('');
 
     try {
-      const response = await fetch(
-        `/api/admin/flow-issues/${encodeURIComponent(issue.id)}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            title,
-            sections: {
-              lead: sections.lead
-                ? editableEntry(sections.lead)
-                : null,
-              latest: sections.latest.map(editableEntry),
-              links: sections.links.map(editableEntry),
-              videos: sections.videos.map(editableEntry),
-              photos: sections.photos.map(editableEntry),
-            },
-          }),
+      const response = await fetch(`/api/admin/flow-issues/${encodeURIComponent(issue.id)}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      );
+        body: JSON.stringify({
+          title,
+          sections: {
+            summary,
+            pierrotIntro: pierrotIntro
+              .split(/\n{2,}/)
+              .map((paragraph) => paragraph.trim())
+              .filter(Boolean),
+            lead: sections.lead ? editableEntry(sections.lead) : null,
+            latest: sections.latest.map(editableEntry),
+            links: sections.links.map(editableEntry),
+            videos: sections.videos.map(editableEntry),
+            photos: sections.photos.map(editableEntry),
+          },
+        }),
+      });
 
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(
-          data.error || "Не удалось сохранить выпуск.",
-        );
+        throw new Error(data.error || 'Не удалось сохранить выпуск.');
       }
 
-      if (typeof data.htmlWeb === "string") {
+      if (typeof data.htmlWeb === 'string') {
         setPreviewHtml(data.htmlWeb);
         setShowPreview(true);
       }
 
-      setMessage(
-        "Сохранено. Веб-версия, email и текст пересобраны.",
-      );
+      setMessage('Сохранено. Веб-версия, email и текст пересобраны.');
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Не удалось сохранить выпуск.",
-      );
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить выпуск.');
     } finally {
       setSaving(false);
     }
@@ -382,21 +332,15 @@ export default function FlowIssueEditor({
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#990F3D]">
               Flow / Issue editor
             </p>
-            <h1 className="mt-3 font-serif text-4xl tracking-tight">
-              Редактура выпуска
-            </h1>
+            <h1 className="mt-3 font-serif text-4xl tracking-tight">Редактура выпуска</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#1C1A1B]/60">
-              Можно править текст, менять порядок и убирать
-              материалы. Состав источников фиксирован, а
-              оригинальные записи Flow не изменяются.
+              Можно править текст, менять порядок и убирать материалы. Состав источников фиксирован,
+              а оригинальные записи Flow не изменяются.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-xs">
-            <Link
-              href="/admin/flow-issues"
-              className="text-[#89827B] hover:text-[#1C1A1B]"
-            >
+            <Link href="/admin/flow-issues" className="text-[#89827B] hover:text-[#1C1A1B]">
               ← К выпускам
             </Link>
             <button
@@ -405,7 +349,7 @@ export default function FlowIssueEditor({
               disabled={!previewHtml}
               className="border border-[#1C1A1B]/20 px-3 py-2 font-mono uppercase tracking-wider hover:border-[#990F3D] disabled:opacity-40"
             >
-              {showPreview ? "Скрыть предпросмотр" : "Предпросмотр"}
+              {showPreview ? 'Скрыть предпросмотр' : 'Предпросмотр'}
             </button>
           </div>
         </div>
@@ -427,9 +371,7 @@ export default function FlowIssueEditor({
               className="h-[720px] w-full border-0 bg-white"
             />
           ) : (
-            <p className="p-5 text-sm text-[#89827B]">
-              Предпросмотр появится после сохранения.
-            </p>
+            <p className="p-5 text-sm text-[#89827B]">Предпросмотр появится после сохранения.</p>
           )}
         </div>
       )}
@@ -443,13 +385,33 @@ export default function FlowIssueEditor({
             className="w-full border border-[#D9D3CD] bg-white px-4 py-3 font-serif text-2xl outline-none focus:border-[#990F3D]"
           />
         </label>
+
+        <label className="mt-4 block">
+          <FieldLabel>Summary / О чём выпуск</FieldLabel>
+          <input
+            value={summary}
+            onChange={(event) => setSummary(event.target.value)}
+            maxLength={240}
+            className="w-full border border-[#D9D3CD] bg-white px-4 py-3 text-sm outline-none focus:border-[#990F3D]"
+          />
+        </label>
+
+        <label className="mt-4 block">
+          <FieldLabel>Колонка Пьеро (2–3 абзаца, пустая строка между)</FieldLabel>
+          <textarea
+            value={pierrotIntro}
+            onChange={(event) => setPierrotIntro(event.target.value)}
+            rows={7}
+            className="w-full resize-y border border-[#D9D3CD] bg-white px-4 py-3 text-sm leading-6 outline-none focus:border-[#990F3D]"
+          />
+        </label>
       </section>
 
       <section className="mt-10 border border-[#1C1A1B]/15 bg-white p-5 sm:p-7">
         <div className="mb-4 flex items-baseline justify-between border-b border-[#EAE6E1] pb-3">
           <h2 className="font-serif text-2xl">Lead</h2>
           <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#89827B]">
-            {sections.lead ? "1 материал" : "нет"}
+            {sections.lead ? '1 материал' : 'нет'}
           </span>
         </div>
 
@@ -458,11 +420,9 @@ export default function FlowIssueEditor({
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[#89827B]">
                 <span className="rounded bg-[#F4EFEA] px-2 py-0.5 text-[#1C1A1B]">
-                  {sections.lead.type || "item"}
+                  {sections.lead.type || 'item'}
                 </span>
-                <span>
-                  {formatDate(sections.lead.publishedAt)}
-                </span>
+                <span>{formatDate(sections.lead.publishedAt)}</span>
               </div>
               <button
                 type="button"
@@ -483,9 +443,7 @@ export default function FlowIssueEditor({
                 <FieldLabel>Заголовок</FieldLabel>
                 <input
                   value={sections.lead.title}
-                  onChange={(event) =>
-                    updateLead("title", event.target.value)
-                  }
+                  onChange={(event) => updateLead('title', event.target.value)}
                   className="w-full border border-[#D9D3CD] bg-white px-3 py-2 text-sm outline-none focus:border-[#990F3D]"
                 />
               </label>
@@ -493,9 +451,7 @@ export default function FlowIssueEditor({
                 <FieldLabel>Текст</FieldLabel>
                 <textarea
                   value={sections.lead.body}
-                  onChange={(event) =>
-                    updateLead("body", event.target.value)
-                  }
+                  onChange={(event) => updateLead('body', event.target.value)}
                   rows={6}
                   className="w-full resize-y border border-[#D9D3CD] bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-[#990F3D]"
                 />
@@ -503,52 +459,37 @@ export default function FlowIssueEditor({
             </div>
           </article>
         ) : (
-          <p className="text-sm text-[#89827B]">
-            Lead удалён. Выпуск будет начинаться с рубрик.
-          </p>
+          <p className="text-sm text-[#89827B]">Lead удалён. Выпуск будет начинаться с рубрик.</p>
         )}
       </section>
 
-      {(Object.keys(SECTION_LABELS) as ArraySection[]).map(
-        (section) => (
-          <section
-            key={section}
-            className="mt-8 border border-[#1C1A1B]/15 bg-white p-5 sm:p-7"
-          >
-            <div className="mb-4 flex items-baseline justify-between border-b border-[#EAE6E1] pb-3">
-              <h2 className="font-serif text-2xl">
-                {SECTION_LABELS[section]}
-              </h2>
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#89827B]">
-                {counts[section]} материалов
-              </span>
-            </div>
+      {(Object.keys(SECTION_LABELS) as ArraySection[]).map((section) => (
+        <section key={section} className="mt-8 border border-[#1C1A1B]/15 bg-white p-5 sm:p-7">
+          <div className="mb-4 flex items-baseline justify-between border-b border-[#EAE6E1] pb-3">
+            <h2 className="font-serif text-2xl">{SECTION_LABELS[section]}</h2>
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#89827B]">
+              {counts[section]} материалов
+            </span>
+          </div>
 
-            {sections[section].length === 0 ? (
-              <p className="text-sm text-[#89827B]">
-                Пусто. Раздел будет скрыт в выпуске.
-              </p>
-            ) : (
-              sections[section].map((entry, index) => (
-                <EntryCard
-                  key={entry.id}
-                  entry={entry}
-                  index={index}
-                  section={section}
-                  total={sections[section].length}
-                  onMove={(direction) =>
-                    moveEntry(section, index, direction)
-                  }
-                  onRemove={() => removeEntry(section, index)}
-                  onChange={(field, value) =>
-                    updateEntry(section, index, field, value)
-                  }
-                />
-              ))
-            )}
-          </section>
-        ),
-      )}
+          {sections[section].length === 0 ? (
+            <p className="text-sm text-[#89827B]">Пусто. Раздел будет скрыт в выпуске.</p>
+          ) : (
+            sections[section].map((entry, index) => (
+              <EntryCard
+                key={entry.id}
+                entry={entry}
+                index={index}
+                section={section}
+                total={sections[section].length}
+                onMove={(direction) => moveEntry(section, index, direction)}
+                onRemove={() => removeEntry(section, index)}
+                onChange={(field, value) => updateEntry(section, index, field, value)}
+              />
+            ))
+          )}
+        </section>
+      ))}
 
       <div className="sticky bottom-4 z-10 mt-8 border border-[#1C1A1B]/15 bg-[#FAF8F5]/95 p-4 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -564,9 +505,7 @@ export default function FlowIssueEditor({
               </p>
             )}
             {!error && !message && (
-              <p className="text-[#89827B]">
-                Правки сохраняются только в выпуске, не в Flow.
-              </p>
+              <p className="text-[#89827B]">Правки сохраняются только в выпуске, не в Flow.</p>
             )}
           </div>
 
@@ -576,7 +515,7 @@ export default function FlowIssueEditor({
             disabled={saving || !title.trim()}
             className="inline-flex min-h-11 items-center bg-[#990F3D] px-6 py-3 text-sm font-medium text-white transition hover:bg-[#7E0C33] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? "Сохраняю…" : "Сохранить выпуск"}
+            {saving ? 'Сохраняю…' : 'Сохранить выпуск'}
           </button>
         </div>
       </div>

@@ -1,32 +1,20 @@
+import { createClient } from '@/lib/supabase/server';
+import { notFound, redirect } from 'next/navigation';
+import ReadMoreOrLoginClient from '@/components/letters/ReadMoreOrLoginClient';
+import FlowIssueArticle from '@/components/flow-issues/FlowIssueArticle';
+import { parseRichTextContent } from '@/lib/contentParser';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { buildIssueTitle } from '@/lib/flow-issue/title';
+import type { IssuePayload } from '@/lib/flow-issue/types';
 
-import { createClient } from "@/lib/supabase/server";
-import { notFound, redirect } from "next/navigation";
-import ReadMoreOrLoginClient from "@/components/letters/ReadMoreOrLoginClient";
-import { parseRichTextContent } from "@/lib/contentParser";
-import { sanitizeMetadata } from "@/lib/metadataSanitize";
-
-const SITE = "https://www.merkurov.love";
+const SITE = 'https://www.merkurov.love';
 
 type PageProps = {
   params: { slug: string } | Promise<{ slug: string }>;
 };
 
-function getIssueBody(html: string): string | null {
-  const match = html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
-  return match?.[1] ?? null;
-}
-
-function getIssueStyles(html: string): string {
-  const match = html.match(/<style\b[^>]*>([\s\S]*?)<\/style>/i);
-  return match?.[1] ?? "";
-}
-
 function isRecord(value: unknown): value is Record<string, any> {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value)
-  );
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function getIssueOgImage(payload: unknown): string {
@@ -41,38 +29,27 @@ function getIssueOgImage(payload: unknown): string {
 
   const firstLink = Array.isArray(data.links)
     ? data.links.find(
-        (entry: unknown) =>
-          isRecord(entry) &&
-          typeof entry.image === "string" &&
-          entry.image.trim(),
+        (entry: unknown) => isRecord(entry) && typeof entry.image === 'string' && entry.image.trim()
       )
     : null;
 
   const firstVideo = Array.isArray(data.videos)
     ? data.videos.find(
-        (entry: unknown) =>
-          isRecord(entry) &&
-          typeof entry.image === "string" &&
-          entry.image.trim(),
+        (entry: unknown) => isRecord(entry) && typeof entry.image === 'string' && entry.image.trim()
       )
     : null;
 
   const firstPhoto = Array.isArray(data.photos)
     ? data.photos.find(
-        (entry: unknown) =>
-          isRecord(entry) &&
-          typeof entry.image === "string" &&
-          entry.image.trim(),
+        (entry: unknown) => isRecord(entry) && typeof entry.image === 'string' && entry.image.trim()
       )
     : null;
 
-  const images = Array.isArray(metadata.images)
-    ? metadata.images
-    : [];
+  const images = Array.isArray(metadata.images) ? metadata.images : [];
 
   const firstMetadataImage = images
     .map((entry: unknown) => {
-      if (typeof entry === "string") return entry;
+      if (typeof entry === 'string') return entry;
       if (!isRecord(entry)) return null;
 
       return (
@@ -85,10 +62,7 @@ function getIssueOgImage(payload: unknown): string {
         null
       );
     })
-    .find(
-      (value: unknown) =>
-        typeof value === "string" && value.trim(),
-    );
+    .find((value: unknown) => typeof value === 'string' && value.trim());
 
   const candidates: unknown[] = [
     metadata.og_image,
@@ -110,14 +84,14 @@ function getIssueOgImage(payload: unknown): string {
   ];
 
   for (const candidate of candidates) {
-    if (typeof candidate !== "string" || !candidate.trim()) {
+    if (typeof candidate !== 'string' || !candidate.trim()) {
       continue;
     }
 
     try {
       const url = new URL(candidate.trim(), SITE);
 
-      if (url.protocol === "https:" || url.protocol === "http:") {
+      if (url.protocol === 'https:' || url.protocol === 'http:') {
         return url.toString();
       }
     } catch {
@@ -135,34 +109,40 @@ export async function generateMetadata({ params }: PageProps) {
     const supabase = createClient({ useServiceRole: true });
 
     const { data: issue } = await supabase
-      .from("letters")
-      .select("title,slug,kind,status,published,html_web,payload,content")
-      .eq("slug", slug)
-      .eq("published", true)
+      .from('letters')
+      .select('title,slug,kind,status,published,html_web,payload,content')
+      .eq('slug', slug)
+      .eq('published', true)
       .maybeSingle();
 
-    if (issue?.kind === "issue" && issue.status === "published") {
-      const title = issue.title || "Flow | Anton Merkurov";
-      const lang = issue.payload?.lang === "ru" ? "ru" : "en";
+    if (issue?.kind === 'issue' && issue.status === 'published') {
+      const issuePayload =
+        issue.payload && typeof issue.payload === 'object' ? (issue.payload as IssuePayload) : null;
+      const title =
+        (issuePayload ? buildIssueTitle(issuePayload) : '') ||
+        issue.title ||
+        'Flow | Anton Merkurov';
+      const lang = issue.payload?.lang === 'ru' ? 'ru' : 'en';
       const period = issue.payload?.period;
 
       const description = period
-        ? lang === "ru"
-          ? `Выпуск Flow за период ${new Date(period.start).toLocaleDateString(
-              "ru-RU",
-              { timeZone: "UTC" },
-            )} — ${new Date(period.end).toLocaleDateString("ru-RU", {
-              timeZone: "UTC",
+        ? lang === 'ru'
+          ? `Выпуск Flow за период ${new Date(period.start).toLocaleDateString('ru-RU', {
+              timeZone: 'UTC',
+            })} — ${new Date(period.end).toLocaleDateString('ru-RU', {
+              timeZone: 'UTC',
             })}.`
-          : `Flow issue, ${new Date(period.start).toLocaleDateString(
-              "en-GB",
-              { timeZone: "UTC" },
-            )} — ${new Date(period.end).toLocaleDateString("en-GB", {
-              timeZone: "UTC",
+          : `Flow issue, ${new Date(period.start).toLocaleDateString('en-GB', {
+              timeZone: 'UTC',
+            })} — ${new Date(period.end).toLocaleDateString('en-GB', {
+              timeZone: 'UTC',
             })}.`
-        : "Flow newspaper issue.";
+        : 'Flow newspaper issue.';
 
-      const canonical = `${SITE}/journal/${encodeURIComponent(slug)}`;
+      const canonical =
+        lang === 'ru'
+          ? `${SITE}/flow-issues/${encodeURIComponent(slug)}`
+          : `${SITE}/en/flow-issues/${encodeURIComponent(slug)}`;
       const ogImage = getIssueOgImage(issue.payload);
 
       return sanitizeMetadata({
@@ -181,10 +161,10 @@ export async function generateMetadata({ params }: PageProps) {
               height: 630,
             },
           ],
-          type: "article",
+          type: 'article',
         },
         twitter: {
-          card: "summary_large_image",
+          card: 'summary_large_image',
           title,
           description,
           images: [ogImage],
@@ -193,22 +173,20 @@ export async function generateMetadata({ params }: PageProps) {
     }
 
     const { data: letter, error } = await supabase
-      .from("letters")
-      .select("title,content")
-      .eq("slug", slug)
-      .eq("published", true)
+      .from('letters')
+      .select('title,content')
+      .eq('slug', slug)
+      .eq('published', true)
       .maybeSingle();
 
     if (error || !letter) {
       return sanitizeMetadata({
-        title: "Letter | Anton Merkurov",
+        title: 'Letter | Anton Merkurov',
       });
     }
 
-    const title = letter.title || "Letter";
-    const description = String(
-      parseRichTextContent(letter.content || ""),
-    ).slice(0, 160);
+    const title = letter.title || 'Letter';
+    const description = String(parseRichTextContent(letter.content || '')).slice(0, 160);
     const canonical = `${SITE}/journal/${encodeURIComponent(slug)}`;
     const fallbackImage = `${SITE}/default-og.png`;
 
@@ -220,21 +198,21 @@ export async function generateMetadata({ params }: PageProps) {
         description,
         url: canonical,
         images: [fallbackImage],
-        type: "article",
+        type: 'article',
       },
       alternates: { canonical },
       twitter: {
-        card: "summary_large_image",
+        card: 'summary_large_image',
         title,
         description,
         images: [fallbackImage],
       },
     });
   } catch (error) {
-    console.error("[Letters] Metadata generation failed:", error);
+    console.error('[Letters] Metadata generation failed:', error);
 
     return sanitizeMetadata({
-      title: "Letter | Anton Merkurov",
+      title: 'Letter | Anton Merkurov',
     });
   }
 }
@@ -246,56 +224,55 @@ export default async function LetterPage({ params }: PageProps) {
   const supabasePublic = createClient({ useServiceRole: true });
 
   const { data: issue, error: issueError } = await supabasePublic
-    .from("letters")
-    .select(
-      "id,title,slug,kind,status,published,html_web,payload,publishedAt,createdAt",
-    )
-    .eq("slug", slug)
-    .eq("kind", "issue")
-    .eq("status", "published")
-    .eq("published", true)
+    .from('letters')
+    .select('id,title,slug,kind,status,published,html_web,payload,publishedAt,createdAt,number')
+    .eq('slug', slug)
+    .eq('kind', 'issue')
+    .eq('status', 'published')
+    .eq('published', true)
     .maybeSingle();
 
   if (issueError) {
-    console.error("[Flow issue] Failed to load issue:", issueError);
+    console.error('[Flow issue] Failed to load issue:', issueError);
   }
 
   if (issue) {
-    const html = String(issue.html_web || "");
-    const body = getIssueBody(html);
-    const styles = getIssueStyles(html);
+    const html = String(issue.html_web || '');
 
-    if (!body) {
-      console.error(
-        `[Flow issue] Published issue ${slug} has no HTML body`,
-      );
+    if (!/<body\b[^>]*>/i.test(html) && !issue.payload) {
+      console.error(`[Flow issue] Published issue ${slug} has no HTML body`);
       notFound();
     }
 
     const issueDate = issue.publishedAt || issue.createdAt || undefined;
-    const lang = issue.payload?.lang === "ru" ? "ru" : "en";
+    const lang = issue.payload?.lang === 'ru' ? 'ru' : 'en';
     const period = issue.payload?.period;
     const ogImage = getIssueOgImage(issue.payload);
 
+    const headline =
+      issue.payload && typeof issue.payload === 'object'
+        ? buildIssueTitle(issue.payload as IssuePayload)
+        : issue.title || 'Flow';
+
     const articleSchema = {
-      "@context": "https://schema.org",
-      "@type": "NewsArticle",
-      headline: issue.title || "Flow",
+      '@context': 'https://schema.org',
+      '@type': 'NewsArticle',
+      headline: headline || 'Flow',
       datePublished: issueDate,
       image: [ogImage],
       inLanguage: lang,
       mainEntityOfPage: {
-        "@type": "WebPage",
-        "@id": `${SITE}/letters/${slug}`,
+        '@type': 'WebPage',
+        '@id': `${SITE}/letters/${slug}`,
       },
       author: {
-        "@type": "Person",
-        name: "Anton Merkurov",
+        '@type': 'Person',
+        name: 'Anton Merkurov',
         url: SITE,
       },
       publisher: {
-        "@type": "Person",
-        name: "Anton Merkurov",
+        '@type': 'Person',
+        name: 'Anton Merkurov',
         url: SITE,
       },
       ...(period
@@ -306,69 +283,23 @@ export default async function LetterPage({ params }: PageProps) {
     };
 
     return (
-      <div
-        lang={lang}
-        className="flow-issue-page min-h-screen text-[#1C1A1B]"
-      >
+      <>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify(articleSchema).replace(
-              /</g,
-              "\\u003c",
-            ),
+            __html: JSON.stringify(articleSchema).replace(/</g, '\\u003c'),
           }}
         />
-        <style>{styles}</style>
-        <style>{`
-          body:has(.flow-issue-page) .site-header,
-          body:has(.flow-issue-page) .site-footer {
-            display: none !important;
-          }
-          body:has(.flow-issue-page) {
-            background: #FAF8F5 !important;
-          }
-          .flow-issue-page {
-            padding-top: 5rem;
-          }
-          @supports selector(:has(*)) {
-            body:has(.flow-issue-page) .flow-issue-page {
-              padding-top: 0;
-            }
-          }
-          .flow-issue-back {
-            position: relative;
-            z-index: 11;
-            max-width: 1120px;
-            margin: 0 auto;
-            padding: 14px 20px 0;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font: 12px ui-monospace, monospace;
-            letter-spacing: .08em;
-            text-transform: uppercase;
-            color: #52525B;
-          }
-          .flow-issue-back a {
-            color: inherit;
-            text-decoration: none;
-            border-bottom: 1px solid transparent;
-          }
-          .flow-issue-back a:hover {
-            border-bottom-color: currentColor;
-          }
-          .flow-issue-back span {
-            color: #D4D4D8;
-          }
-        `}</style>
-        <div className="flow-issue-back">
-          <a href="/flow">← Flow</a>
-          <span>·</span>
-          <a href="/letters">Все выпуски</a>
-        </div>
-        <div dangerouslySetInnerHTML={{ __html: body }} />
-      </div>
+        <FlowIssueArticle
+          htmlWeb={html}
+          lang={lang}
+          slug={slug}
+          payload={issue.payload}
+          title={issue.title}
+          number={typeof issue.number === 'number' ? issue.number : null}
+          indexHref={lang === 'ru' ? '/flow-issues' : '/en/flow-issues'}
+        />
+      </>
     );
   }
 
@@ -383,45 +314,41 @@ export default async function LetterPage({ params }: PageProps) {
   }
 
   const { data: letter, error } = await supabasePublic
-    .from("letters")
-    .select(
-      "id,title,slug,content,published,publishedAt,createdAt,authorId,users(name)",
-    )
-    .eq("slug", slug)
-    .eq("published", true)
+    .from('letters')
+    .select('id,title,slug,content,published,publishedAt,createdAt,authorId,users(name)')
+    .eq('slug', slug)
+    .eq('published', true)
     .maybeSingle();
 
   if (error || !letter) {
     notFound();
   }
 
-  const letterAuthor = Array.isArray(letter.users)
-    ? letter.users[0]
-    : letter.users;
+  const letterAuthor = Array.isArray(letter.users) ? letter.users[0] : letter.users;
 
-  const plainContent = parseRichTextContent(letter.content || "");
+  const plainContent = parseRichTextContent(letter.content || '');
   const previewContent = plainContent.slice(0, 300);
   const hasMore = plainContent.length > 300;
   const datePublished = letter.publishedAt || letter.createdAt;
 
   const breadcrumbSchema = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
     itemListElement: [
       {
-        "@type": "ListItem",
+        '@type': 'ListItem',
         position: 1,
-        name: "Home",
+        name: 'Home',
         item: SITE,
       },
       {
-        "@type": "ListItem",
+        '@type': 'ListItem',
         position: 2,
-        name: "Letters",
+        name: 'Letters',
         item: `${SITE}/letters`,
       },
       {
-        "@type": "ListItem",
+        '@type': 'ListItem',
         position: 3,
         name: letter.title,
         item: `${SITE}/letters/${slug}`,
@@ -430,24 +357,24 @@ export default async function LetterPage({ params }: PageProps) {
   };
 
   const letterArticleSchema = {
-    "@context": "https://schema.org",
-    "@type": "Article",
+    '@context': 'https://schema.org',
+    '@type': 'Article',
     headline: letter.title,
     description: previewContent,
     datePublished,
     author: {
-      "@type": "Person",
-      name: letterAuthor?.name || "Anton Merkurov",
+      '@type': 'Person',
+      name: letterAuthor?.name || 'Anton Merkurov',
       url: SITE,
     },
     publisher: {
-      "@type": "Person",
-      name: "Anton Merkurov",
+      '@type': 'Person',
+      name: 'Anton Merkurov',
       url: SITE,
     },
     mainEntityOfPage: {
-      "@type": "WebPage",
-      "@id": `${SITE}/letters/${slug}`,
+      '@type': 'WebPage',
+      '@id': `${SITE}/letters/${slug}`,
     },
   };
 
@@ -456,19 +383,13 @@ export default async function LetterPage({ params }: PageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(letterArticleSchema).replace(
-            /</g,
-            "\\u003c",
-          ),
+          __html: JSON.stringify(letterArticleSchema).replace(/</g, '\\u003c'),
         }}
       />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbSchema).replace(
-            /</g,
-            "\\u003c",
-          ),
+          __html: JSON.stringify(breadcrumbSchema).replace(/</g, '\\u003c'),
         }}
       />
 
@@ -476,24 +397,19 @@ export default async function LetterPage({ params }: PageProps) {
         <div className="mx-auto max-w-3xl px-4 py-12">
           <article className="rounded-2xl border border-blue-100 bg-white p-8 shadow-sm">
             <header className="mb-8">
-              <h1 className="mb-3 text-3xl font-bold text-gray-900">
-                {letter.title}
-              </h1>
+              <h1 className="mb-3 text-3xl font-bold text-gray-900">{letter.title}</h1>
 
               <div className="flex items-center gap-4 text-sm text-gray-500">
-                <span>{letterAuthor?.name || "Author"}</span>
+                <span>{letterAuthor?.name || 'Author'}</span>
                 <span>•</span>
                 <time dateTime={datePublished}>
                   {datePublished
-                    ? new Date(datePublished).toLocaleDateString(
-                        "en-US",
-                        {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        },
-                      )
-                    : ""}
+                    ? new Date(datePublished).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })
+                    : ''}
                 </time>
               </div>
             </header>
@@ -501,7 +417,7 @@ export default async function LetterPage({ params }: PageProps) {
             <div className="prose prose-lg max-w-none">
               <div className="leading-relaxed text-gray-700">
                 {previewContent}
-                {hasMore && "..."}
+                {hasMore && '...'}
               </div>
             </div>
 

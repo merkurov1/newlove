@@ -1,20 +1,14 @@
-
-export type IssueLang = "ru" | "en";
-export type IssueStatus = "draft" | "published";
-export type IssueKind = "about_flow" | "world" | "other";
-export type ItemType = "note" | "link" | "video" | "photo";
+export type IssueLang = 'ru' | 'en';
+export type IssueStatus = 'draft' | 'published';
+export type IssueKind = 'about_flow' | 'world' | 'other';
+export type ItemType = 'note' | 'link' | 'video' | 'photo';
 
 /**
  * The editorial role is a recommendation from the model. Selection still
  * applies explicit thresholds and diversity/redundancy rules, so a model
  * cannot unilaterally promote an item.
  */
-export type IssueAIRole =
-  | "lead"
-  | "supporting"
-  | "link"
-  | "visual"
-  | "omit";
+export type IssueAIRole = 'lead' | 'supporting' | 'link' | 'visual' | 'omit';
 
 /**
  * Analysis cached in `items.metadata.issue_ai`.
@@ -23,7 +17,7 @@ export type IssueAIRole =
  * optional so old cached records and old payloads remain valid.
  */
 export type IssueAI = {
-  lang: IssueLang | "other";
+  lang: IssueLang | 'other';
   kind: IssueKind;
   model: string;
   at: string;
@@ -51,7 +45,7 @@ export type IssueAI = {
   role?: IssueAIRole;
   rationale?: string;
   /** Provider that actually produced the analysis. */
-  provider?: "gemini" | "deepseek";
+  provider?: 'gemini' | 'deepseek';
   /** End-to-end provider latency in milliseconds. */
   latencyMs?: number;
   /** True when Gemini failed and DeepSeek produced the analysis. */
@@ -84,20 +78,23 @@ export type IssueEntry = {
   publishedAt: string;
   createdAt: string;
   metadata: Record<string, any>;
-  lang: IssueLang | "other";
+  lang: IssueLang | 'other';
   kind: IssueKind;
   own: boolean;
+  /** Whether this item may be sent to an AI provider. */
+  aiAllowed?: boolean;
+  /** Link description / photo caption / video summary, when present. */
+  description?: string;
+  /** Preview image used by the full issue feed. */
+  image?: string;
+  /** Photo alt text. */
+  alt?: string;
+  /** Photo/video caption. */
+  caption?: string;
 };
 
 export type IssueSectionKey =
-  | "lead"
-  | "latest"
-  | "links"
-  | "videos"
-  | "photos"
-  | "metrics"
-  | "sources"
-  | "subscribe";
+  'lead' | 'latest' | 'links' | 'videos' | 'photos' | 'metrics' | 'sources' | 'subscribe';
 
 export type IssueTemplateSettings = {
   theme: {
@@ -143,7 +140,7 @@ export type IssuePayload = {
   period: {
     start: string;
     end: string;
-    timezone: "UTC";
+    timezone: 'UTC';
   };
   stats: {
     total: number;
@@ -163,7 +160,25 @@ export type IssuePayload = {
       photoAltEqualsFilename: number;
       emptyDrafts: number;
     };
+    /** Earliest published Flow record, used for the issue header metric. */
+    flowStartedAt?: string | null;
+    /** Days from the start of Flow to the issue date. */
+    flowActiveDays?: number;
   };
+
+  /**
+   * Every material published in the issue period. This is the canonical feed
+   * for the issue page; the legacy section arrays below are kept for
+   * compatibility with older payloads and the newsletter.
+   */
+  items?: IssueEntry[];
+
+  /** Short phrase shown in the third header metric card. */
+  summary?: string;
+
+  /** Two or three short paragraphs of Pierrot's author column. */
+  pierrotIntro?: string[];
+
   lead: (IssueEntry & { annotation?: string }) | null;
   latest: IssueEntry[];
   links: (IssueEntry & {
@@ -209,7 +224,7 @@ export type IssuePayload = {
 
   /** Kept for compatibility with the previous renderer and stored payloads. */
   design: {
-    template: "classic" | "spread" | "data";
+    template: 'classic' | 'spread' | 'data';
     tokens: {
       accent: string;
       paper: string;
@@ -228,7 +243,7 @@ export type IssueRecord = {
   createdAt: string;
   updatedAt: string;
   authorId: string;
-  kind: "letter" | "issue";
+  kind: 'letter' | 'issue';
   lang: IssueLang | null;
   number: number | null;
   period_start: string | null;

@@ -72,8 +72,7 @@ export function description(value: string, fallback = ''): string {
   const source = truncate(value || fallback, 160);
   if (source.length >= 120) return source;
 
-  const suffix =
-    ' Anton Merkurov — digital strategist, art dealer and heritage architect.';
+  const suffix = ' Anton Merkurov — digital strategist, art dealer and heritage architect.';
   const combined = truncate(`${source}${suffix}`, 160);
   return combined.length >= 120 ? combined : source;
 }
@@ -116,7 +115,7 @@ export function pageMetadata(input: PageMetadataInput): Metadata {
 
   const languages = input.languages
     ? Object.fromEntries(
-        Object.entries(input.languages).map(([key, value]) => [key, absoluteUrl(value)]),
+        Object.entries(input.languages).map(([key, value]) => [key, absoluteUrl(value)])
       )
     : undefined;
 
@@ -139,7 +138,12 @@ export function pageMetadata(input: PageMetadataInput): Metadata {
       url,
       siteName: SITE_NAME,
       locale: input.locale || SITE_LOCALE,
-      type: input.type === 'profile' ? 'profile' : input.type === 'book' ? 'book' : input.type || 'website',
+      type:
+        input.type === 'profile'
+          ? 'profile'
+          : input.type === 'book'
+            ? 'book'
+            : input.type || 'website',
       images: [{ url: image, width, height, alt: imageAlt }],
       ...(input.publishedTime ? { publishedTime: input.publishedTime } : {}),
       ...(input.modifiedTime ? { modifiedTime: input.modifiedTime } : {}),
@@ -189,6 +193,8 @@ export const PUBLIC_ROUTES = [
   '/unframed/book',
   '/flow',
   '/flow/join',
+  '/flow-issues',
+  '/en/flow-issues',
   '/selection',
   '/isakeyforall',
   '/research',
@@ -234,8 +240,7 @@ export const ROUTE_COPY: Record<
     title: 'Private Office & Access | Anton Merkurov',
     description:
       'The private office of Anton Merkurov: heritage architecture, art-market counsel and access to selected cultural projects.',
-    image:
-      'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png',
+    image: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png',
     imageAlt: 'Anton Merkurov — Private Office & Access',
   },
   '/advising': {

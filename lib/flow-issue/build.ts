@@ -1,22 +1,13 @@
-
 import {
   classifyNewItems,
+  generateIssueNarrative,
   heuristicLanguage,
   translateIssueEntries,
-} from "./deepseek";
-import {
-  candidateFromItem,
-  isHeuristicAnalysis,
-  selectIssueContent,
-} from "./editorial";
-import {
-  buildSourceIndex,
-  getLinkPresentation,
-} from "./metadata";
-import {
-  DEFAULT_ISSUE_TEMPLATE,
-  normalizeIssueTemplate,
-} from "./template";
+} from './deepseek';
+import { buildFallbackNarrative, type IssueNarrative } from './narrative';
+import { candidateFromItem, isHeuristicAnalysis, selectIssueContent } from './editorial';
+import { buildSourceIndex, getLinkPresentation } from './metadata';
+import { DEFAULT_ISSUE_TEMPLATE, normalizeIssueTemplate } from './template';
 import type {
   FlowItem,
   IssueEntry,
@@ -24,19 +15,18 @@ import type {
   IssueLang,
   IssuePayload,
   IssueTemplateSettings,
-} from "./types";
+} from './types';
 
-const SITE = "https://www.merkurov.love";
+const SITE = 'https://www.merkurov.love';
 const DAY = 86_400_000;
 
 const SELECT_ITEMS =
-  "id,type,status,visibility,lang,slug,title,body_md,source_url,ai_allowed,metadata,created_at,updated_at,published_at";
+  'id,type,status,visibility,lang,slug,title,body_md,source_url,ai_allowed,metadata,created_at,updated_at,published_at';
 
-const clean = (value: unknown): string =>
-  typeof value === "string" ? value.trim() : "";
+const clean = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
 const safeDate = (value: unknown): Date | null => {
-  if (typeof value !== "string" && !(value instanceof Date)) {
+  if (typeof value !== 'string' && !(value instanceof Date)) {
     return null;
   }
 
@@ -45,7 +35,7 @@ const safeDate = (value: unknown): Date | null => {
 };
 
 const itemText = (item: FlowItem) =>
-  [item.title, item.body_md].map(clean).filter(Boolean).join("\n\n");
+  [item.title, item.body_md].map(clean).filter(Boolean).join('\n\n');
 
 /**
  * Metrics keep their original eligibility rule: a published record with a
@@ -65,21 +55,14 @@ const itemIsSelectable = (item: FlowItem): boolean => {
   const metadata = item.metadata || {};
 
   switch (item.type) {
-    case "link": {
+    case 'link': {
       const link = getLinkPresentation(metadata);
       return Boolean(link.title || link.description);
     }
-    case "video":
-      return Boolean(
-        clean(metadata.youtube?.title) ||
-          clean(metadata.youtube?.video_id),
-      );
-    case "photo":
-      return Boolean(
-        clean(metadata.public_url) ||
-          clean(metadata.alt) ||
-          clean(metadata.caption),
-      );
+    case 'video':
+      return Boolean(clean(metadata.youtube?.title) || clean(metadata.youtube?.video_id));
+    case 'photo':
+      return Boolean(clean(metadata.public_url) || clean(metadata.alt) || clean(metadata.caption));
     default:
       return Boolean(clean(metadata.title) || clean(metadata.description));
   }
@@ -91,21 +74,19 @@ const itemUrl = (item: FlowItem): string | null => {
   const raw =
     clean(metadata.canonical_url) ||
     clean(item.source_url) ||
-    (item.slug ? `${SITE}/flow/${item.slug}` : "");
+    (item.slug ? `${SITE}/flow/${item.slug}` : '');
 
   try {
     const url = new URL(raw);
 
-    return url.protocol === "http:" || url.protocol === "https:"
-      ? url.toString()
-      : null;
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
   } catch {
     return null;
   }
 };
 
 function isOwn(item: FlowItem, url: string | null): boolean {
-  if (item.type === "note" || item.type === "photo") {
+  if (item.type === 'note' || item.type === 'photo') {
     return true;
   }
 
@@ -114,23 +95,20 @@ function isOwn(item: FlowItem, url: string | null): boolean {
   try {
     const host = new URL(url).hostname.toLowerCase();
 
-    return (
-      host === "merkurov.love" ||
-      host.endsWith(".merkurov.love")
-    );
+    return host === 'merkurov.love' || host.endsWith('.merkurov.love');
   } catch {
     return false;
   }
 }
 
-function inferLanguage(item: FlowItem): IssueLang | "other" {
-  if (item.lang === "ru" || item.lang === "en") {
+function inferLanguage(item: FlowItem): IssueLang | 'other' {
+  if (item.lang === 'ru' || item.lang === 'en') {
     return item.lang;
   }
 
   const cached = item.metadata?.issue_ai?.lang;
 
-  if (cached === "ru" || cached === "en" || cached === "other") {
+  if (cached === 'ru' || cached === 'en' || cached === 'other') {
     return cached;
   }
 
@@ -140,15 +118,11 @@ function inferLanguage(item: FlowItem): IssueLang | "other" {
 function inferKind(item: FlowItem): IssueKind {
   const cached = item.metadata?.issue_ai?.kind;
 
-  if (
-    cached === "about_flow" ||
-    cached === "world" ||
-    cached === "other"
-  ) {
+  if (cached === 'about_flow' || cached === 'world' || cached === 'other') {
     return cached;
   }
 
-  return "other";
+  return 'other';
 }
 
 function toEntry(item: FlowItem): IssueEntry {
@@ -160,10 +134,7 @@ function toEntry(item: FlowItem): IssueEntry {
     id: item.id,
     type: item.type,
     title:
-      clean(item.title) ||
-      clean(metadata.title) ||
-      link.title ||
-      clean(metadata.youtube?.title),
+      clean(item.title) || clean(metadata.title) || link.title || clean(metadata.youtube?.title),
     body: clean(item.body_md),
     url,
     publishedAt: item.published_at || item.created_at,
@@ -172,7 +143,49 @@ function toEntry(item: FlowItem): IssueEntry {
     lang: inferLanguage(item),
     kind: inferKind(item),
     own: isOwn(item, url),
+    aiAllowed: item.ai_allowed === true,
   };
+}
+
+/**
+ * Add the presentation fields used by the full issue feed. The legacy
+ * section arrays remain untouched; these fields only enrich `payload.items`.
+ */
+function toFeedEntry(item: FlowItem, entry: IssueEntry): IssueEntry {
+  const metadata = item.metadata || {};
+  const link = getLinkPresentation(metadata);
+
+  switch (item.type) {
+    case 'link':
+      return {
+        ...entry,
+        title: entry.title || link.title,
+        description: link.description,
+        image: link.image,
+      };
+
+    case 'video': {
+      const videoId = clean(metadata.youtube?.video_id);
+      return {
+        ...entry,
+        title: clean(metadata.youtube?.title) || entry.title,
+        image: clean(metadata.youtube?.thumbnail_url),
+        url: videoId ? `https://www.youtube.com/watch?v=${videoId}` : entry.url,
+        caption: clean(metadata.youtube?.title),
+      };
+    }
+
+    case 'photo':
+      return {
+        ...entry,
+        image: clean(metadata.public_url),
+        alt: clean(metadata.alt),
+        caption: clean(metadata.caption) || entry.body,
+      };
+
+    default:
+      return entry;
+  }
 }
 
 function median(values: number[]): number | null {
@@ -186,9 +199,7 @@ function median(values: number[]): number | null {
     : Math.round((sorted[middle - 1] + sorted[middle]) / 2);
 }
 
-function countBy<T extends string>(
-  values: T[],
-): Record<string, number> {
+function countBy<T extends string>(values: T[]): Record<string, number> {
   return values.reduce<Record<string, number>>((counts, value) => {
     counts[value] = (counts[value] || 0) + 1;
     return counts;
@@ -202,8 +213,8 @@ function dayKey(date: Date): string {
 export function calculateMetrics(
   published: FlowItem[],
   start: Date,
-  end: Date,
-): IssuePayload["stats"] {
+  end: Date
+): IssuePayload['stats'] {
   const entries = published.map(toEntry);
 
   const delays = published
@@ -213,12 +224,7 @@ export function calculateMetrics(
 
       if (!created || !publishedAt) return null;
 
-      return Math.max(
-        0,
-        Math.round(
-          (publishedAt.getTime() - created.getTime()) / 1000,
-        ),
-      );
+      return Math.max(0, Math.round((publishedAt.getTime() - created.getTime()) / 1000));
     })
     .filter((value): value is number => value !== null);
 
@@ -242,11 +248,11 @@ export function calculateMetrics(
 
   const mismatch = published.filter((item) => {
     const detected = inferLanguage(item);
-    return detected !== "other" && item.lang !== detected;
+    return detected !== 'other' && item.lang !== detected;
   }).length;
 
   const photoAltEqualsFilename = published.filter((item) => {
-    if (item.type !== "photo") return false;
+    if (item.type !== 'photo') return false;
 
     const alt = clean(item.metadata?.alt);
     const filename = clean(item.metadata?.filename);
@@ -262,11 +268,7 @@ export function calculateMetrics(
 
   const perDay: { date: string; count: number }[] = [];
 
-  for (
-    let cursor = startDay.getTime();
-    cursor <= endDay.getTime();
-    cursor += DAY
-  ) {
+  for (let cursor = startDay.getTime(); cursor <= endDay.getTime(); cursor += DAY) {
     const date = new Date(cursor);
     const key = dayKey(date);
 
@@ -281,10 +283,7 @@ export function calculateMetrics(
   for (const seconds of delays) {
     const bucket = seconds <= 0 ? 0 : Math.floor(Math.log10(seconds));
 
-    delayBuckets.set(
-      bucket,
-      (delayBuckets.get(bucket) || 0) + 1,
-    );
+    delayBuckets.set(bucket, (delayBuckets.get(bucket) || 0) + 1);
   }
 
   const delayDistribution = [...delayBuckets.entries()]
@@ -295,14 +294,12 @@ export function calculateMetrics(
     }));
 
   return {
-    // Count only records included in the published issue.
+    // These metrics describe the published source period. The editorial
+    // selection is stored separately in lead/latest/links/videos/photos.
     total: published.length,
     published: published.length,
     drafts: 0,
-    days: Math.max(
-      1,
-      Math.ceil((end.getTime() - start.getTime()) / DAY),
-    ),
+    days: Math.max(1, Math.ceil((end.getTime() - start.getTime()) / DAY)),
     medianDelaySeconds: median(delays),
     byType,
     byKind: {
@@ -323,33 +320,77 @@ export function calculateMetrics(
   };
 }
 
-async function loadActiveTemplate(
-  supabase: any,
-): Promise<{
+async function loadActiveTemplate(supabase: any): Promise<{
   version: number;
   config: IssueTemplateSettings;
 }> {
   const { data, error } = await supabase
-    .from("flow_issue_template_versions")
-    .select("version,config")
-    .eq("is_active", true)
+    .from('flow_issue_template_versions')
+    .select('version,config')
+    .eq('is_active', true)
     .maybeSingle();
 
   if (error) throw error;
 
   return {
     version: Number(data?.version) || 0,
-    config: normalizeIssueTemplate(
-      data?.config ?? DEFAULT_ISSUE_TEMPLATE,
-    ),
+    config: normalizeIssueTemplate(data?.config ?? DEFAULT_ISSUE_TEMPLATE),
   };
+}
+
+/**
+ * Start of the Flow project: the very first item ever created, regardless of
+ * its current status or visibility. The issue period is irrelevant here.
+ * An explicit FLOW_STARTED_AT can still override the database value.
+ */
+async function loadFlowStartedAt(supabase: any): Promise<Date | null> {
+  const configured =
+    safeDate(process.env.FLOW_STARTED_AT) || safeDate(process.env.NEXT_PUBLIC_FLOW_STARTED_AT);
+
+  if (configured) return configured;
+
+  try {
+    let query: any = supabase
+      .from('items')
+      .select('created_at,published_at')
+      .order('created_at', { ascending: true });
+
+    if (typeof query.limit === 'function') {
+      query = query.limit(1);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (error) return null;
+
+    return safeDate(data?.created_at) || safeDate(data?.published_at) || null;
+  } catch (error) {
+    console.warn(
+      '[flow-issue] flow start lookup failed',
+      error instanceof Error ? error.message : 'unknown_error'
+    );
+
+    return null;
+  }
+}
+
+function flowActiveDays(startedAt: Date | null, issueDate: Date): number {
+  if (!startedAt) return 1;
+
+  const start = new Date(startedAt);
+  start.setUTCHours(0, 0, 0, 0);
+
+  const end = new Date(issueDate);
+  end.setUTCHours(0, 0, 0, 0);
+
+  return Math.max(1, Math.floor((end.getTime() - start.getTime()) / DAY) + 1);
 }
 
 export async function resolveIssueWindow(
   supabase: any,
   lang: IssueLang,
   requestedStart?: string | null,
-  requestedEnd?: string | null,
+  requestedEnd?: string | null
 ) {
   const end = safeDate(requestedEnd) || new Date();
 
@@ -357,23 +398,23 @@ export async function resolveIssueWindow(
     const start = safeDate(requestedStart);
 
     if (!start) {
-      throw new Error("Некорректная дата начала периода.");
+      throw new Error('Некорректная дата начала периода.');
     }
 
     if (start.getTime() >= end.getTime()) {
-      throw new Error("Начало периода должно быть раньше окончания.");
+      throw new Error('Начало периода должно быть раньше окончания.');
     }
 
     return { start, end };
   }
 
   const { data: lastIssue, error: lastError } = await supabase
-    .from("letters")
-    .select("period_end")
-    .eq("kind", "issue")
-    .eq("lang", lang)
-    .eq("status", "published")
-    .order("number", { ascending: false })
+    .from('letters')
+    .select('period_end')
+    .eq('kind', 'issue')
+    .eq('lang', lang)
+    .eq('status', 'published')
+    .order('number', { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -383,30 +424,25 @@ export async function resolveIssueWindow(
 
   if (previousEnd) {
     if (previousEnd.getTime() >= end.getTime()) {
-      throw new Error(
-        "Конец периода должен быть позже конца предыдущего опубликованного выпуска.",
-      );
+      throw new Error('Конец периода должен быть позже конца предыдущего опубликованного выпуска.');
     }
 
     return { start: previousEnd, end };
   }
 
   const { data: firstItem, error: firstError } = await supabase
-    .from("items")
-    .select("published_at,created_at")
-    .eq("status", "published")
-    .eq("visibility", "public")
-    .not("published_at", "is", null)
-    .order("published_at", { ascending: true })
+    .from('items')
+    .select('published_at,created_at')
+    .eq('status', 'published')
+    .eq('visibility', 'public')
+    .not('published_at', 'is', null)
+    .order('published_at', { ascending: true })
     .limit(1)
     .maybeSingle();
 
   if (firstError) throw firstError;
 
-  const start =
-    safeDate(firstItem?.published_at) ||
-    safeDate(firstItem?.created_at) ||
-    end;
+  const start = safeDate(firstItem?.published_at) || safeDate(firstItem?.created_at) || end;
 
   return { start, end };
 }
@@ -415,31 +451,29 @@ export async function buildIssuePayload(
   supabase: any,
   lang: IssueLang,
   start: Date,
-  end: Date,
+  end: Date
 ): Promise<IssuePayload> {
-  const [publishedResult, activeTemplate] = await Promise.all([
+  const [publishedResult, activeTemplate, flowStartedAt] = await Promise.all([
     supabase
-      .from("items")
+      .from('items')
       .select(SELECT_ITEMS)
-      .eq("status", "published")
-      .eq("visibility", "public")
-      .gte("published_at", start.toISOString())
-      .lte("published_at", end.toISOString())
-      .order("published_at", { ascending: false }),
+      .eq('status', 'published')
+      .eq('visibility', 'public')
+      .gte('published_at', start.toISOString())
+      .lte('published_at', end.toISOString())
+      .order('published_at', { ascending: false }),
 
     loadActiveTemplate(supabase),
+    loadFlowStartedAt(supabase),
   ]);
 
   if (publishedResult.error) throw publishedResult.error;
 
   const records = ((publishedResult.data || []) as FlowItem[]).filter(
-    (item) => safeDate(item.published_at) !== null,
+    (item) => safeDate(item.published_at) !== null
   );
 
   const published = records.filter(itemIsSelectable);
-
-  // Preserve the pre-existing metrics denominator (title/body records only).
-  const metricSource = records.filter(itemHasCoreContent);
 
   // Analysis only enriches metadata; it does not rewrite Flow text.
   const analyses = await classifyNewItems(supabase, published);
@@ -461,10 +495,7 @@ export async function buildIssuePayload(
   let classifiedItems = published;
 
   if (ids.length > 0) {
-    const { data, error } = await supabase
-      .from("items")
-      .select(SELECT_ITEMS)
-      .in("id", ids);
+    const { data, error } = await supabase.from('items').select(SELECT_ITEMS).in('id', ids);
 
     if (error) throw error;
 
@@ -485,20 +516,24 @@ export async function buildIssuePayload(
     });
   }
 
+  // Snapshot of every published record in the period. It powers the
+  // "Published" metric and keeps the canonical source set available for
+  // audits. It is deliberately not rendered as one long feed.
+  const issueItems = [...records]
+    .sort(
+      (first, second) =>
+        (safeDate(second.published_at)?.getTime() || 0) -
+        (safeDate(first.published_at)?.getTime() || 0)
+    )
+    .map((item) => toFeedEntry(item, toEntry(item)));
+
   // Crucial: do not filter records by language here.
   // Both language versions must be built from this same canonical set.
-  const candidates = classifiedItems.map((item) =>
-    candidateFromItem(item, toEntry(item), end),
-  );
+  const candidates = classifiedItems.map((item) => candidateFromItem(item, toEntry(item), end));
 
-  const { config: template, version: templateVersion } =
-    activeTemplate;
+  const { config: template, version: templateVersion } = activeTemplate;
 
-  const selection = selectIssueContent(
-    candidates,
-    template.limits,
-    end,
-  );
+  const selection = selectIssueContent(candidates, template.limits, end);
 
   const lead = selection.lead;
   const latest = selection.latest;
@@ -506,20 +541,14 @@ export async function buildIssuePayload(
   const links = selection.links.map((entry) => {
     const metadata = entry.metadata;
     const link = getLinkPresentation(metadata);
-    const originalDate =
-      safeDate(metadata.published_at)?.toISOString() || null;
+    const originalDate = safeDate(metadata.published_at)?.toISOString() || null;
 
     const addedAt = safeDate(entry.publishedAt);
     const original = safeDate(originalDate);
 
     const ageDays =
       addedAt && original
-        ? Math.max(
-            0,
-            Math.floor(
-              (addedAt.getTime() - original.getTime()) / DAY,
-            ),
-          )
+        ? Math.max(0, Math.floor((addedAt.getTime() - original.getTime()) / DAY))
         : null;
 
     return {
@@ -539,13 +568,10 @@ export async function buildIssuePayload(
 
     return {
       ...entry,
-      title:
-        clean(entry.metadata.youtube?.title) || entry.title,
+      title: clean(entry.metadata.youtube?.title) || entry.title,
       image: clean(entry.metadata.youtube?.thumbnail_url),
       videoId: videoId || null,
-      url: videoId
-        ? `https://www.youtube.com/watch?v=${videoId}`
-        : entry.url,
+      url: videoId ? `https://www.youtube.com/watch?v=${videoId}` : entry.url,
     };
   });
 
@@ -560,7 +586,7 @@ export async function buildIssuePayload(
   // not every external record in the period.
   const externalEntries: IssueEntry[] = [];
 
-  if (lead && (lead.type === "link" || lead.type === "video")) {
+  if (lead && (lead.type === 'link' || lead.type === 'video')) {
     externalEntries.push(lead);
   }
 
@@ -572,7 +598,7 @@ export async function buildIssuePayload(
   // a non-null IssueEntry and fixes the nullable-lead assignment error.
   type IssueContent = Pick<
     IssuePayload,
-    "lead" | "latest" | "links" | "videos" | "photos" | "sourceIndex"
+    'lead' | 'latest' | 'links' | 'videos' | 'photos' | 'sourceIndex'
   >;
 
   let payloadEntries: IssueContent = {
@@ -584,12 +610,9 @@ export async function buildIssuePayload(
     sourceIndex,
   };
 
-  if (lang === "en") {
+  if (lang === 'en') {
     const aiAllowedById = new Map(
-      classifiedItems.map((item) => [
-        item.id,
-        item.ai_allowed === true,
-      ]),
+      classifiedItems.map((item) => [item.id, item.ai_allowed === true])
     );
     const translationInput: {
       key: string;
@@ -603,12 +626,12 @@ export async function buildIssuePayload(
 
     if (lead) {
       translationInput.push({
-        key: "lead",
-        title: lead.title || "",
-        body: lead.body || "",
-        description: "",
-        alt: "",
-        caption: "",
+        key: 'lead',
+        title: lead.title || '',
+        body: lead.body || '',
+        description: '',
+        alt: '',
+        caption: '',
         aiAllowed: aiAllowedById.get(lead.id) === true,
       });
     }
@@ -616,11 +639,11 @@ export async function buildIssuePayload(
     latest.forEach((entry, index) => {
       translationInput.push({
         key: `latest:${index}`,
-        title: entry.title || "",
-        body: entry.body || "",
-        description: "",
-        alt: "",
-        caption: "",
+        title: entry.title || '',
+        body: entry.body || '',
+        description: '',
+        alt: '',
+        caption: '',
         aiAllowed: aiAllowedById.get(entry.id) === true,
       });
     });
@@ -628,14 +651,11 @@ export async function buildIssuePayload(
     links.forEach((entry, index) => {
       translationInput.push({
         key: `links:${index}`,
-        title: entry.title || "",
-        body: entry.body || "",
-        description:
-          typeof entry.description === "string"
-            ? entry.description
-            : "",
-        alt: "",
-        caption: "",
+        title: entry.title || '',
+        body: entry.body || '',
+        description: typeof entry.description === 'string' ? entry.description : '',
+        alt: '',
+        caption: '',
         aiAllowed: aiAllowedById.get(entry.id) === true,
       });
     });
@@ -643,11 +663,11 @@ export async function buildIssuePayload(
     videos.forEach((entry, index) => {
       translationInput.push({
         key: `videos:${index}`,
-        title: entry.title || "",
-        body: entry.body || "",
-        description: "",
-        alt: "",
-        caption: "",
+        title: entry.title || '',
+        body: entry.body || '',
+        description: '',
+        alt: '',
+        caption: '',
         aiAllowed: aiAllowedById.get(entry.id) === true,
       });
     });
@@ -655,26 +675,21 @@ export async function buildIssuePayload(
     photos.forEach((entry, index) => {
       translationInput.push({
         key: `photos:${index}`,
-        title: entry.title || "",
-        body: entry.body || "",
-        description: "",
-        alt: typeof entry.alt === "string" ? entry.alt : "",
-        caption:
-          typeof entry.caption === "string"
-            ? entry.caption
-            : "",
+        title: entry.title || '',
+        body: entry.body || '',
+        description: '',
+        alt: typeof entry.alt === 'string' ? entry.alt : '',
+        caption: typeof entry.caption === 'string' ? entry.caption : '',
         aiAllowed: aiAllowedById.get(entry.id) === true,
       });
     });
 
     const translated = await translateIssueEntries(translationInput);
-    const translations = new Map(
-      translated.map((entry) => [entry.key, entry]),
-    );
+    const translations = new Map(translated.map((entry) => [entry.key, entry]));
 
     const translateEntry = <T extends { title: string; body: string }>(
       entry: T,
-      key: string,
+      key: string
     ): T => {
       const tr = translations.get(key);
       if (!tr) return entry;
@@ -688,19 +703,15 @@ export async function buildIssuePayload(
 
     const translationKeyById = new Map<string, string>();
 
-    links.forEach((entry, index) =>
-      translationKeyById.set(entry.id, `links:${index}`),
-    );
-    videos.forEach((entry, index) =>
-      translationKeyById.set(entry.id, `videos:${index}`),
-    );
+    if (lead) translationKeyById.set(lead.id, 'lead');
+
+    links.forEach((entry, index) => translationKeyById.set(entry.id, `links:${index}`));
+    videos.forEach((entry, index) => translationKeyById.set(entry.id, `videos:${index}`));
 
     payloadEntries = {
-      lead: lead ? translateEntry(lead, "lead") : null,
+      lead: lead ? translateEntry(lead, 'lead') : null,
 
-      latest: latest.map((entry, index) =>
-        translateEntry(entry, `latest:${index}`),
-      ),
+      latest: latest.map((entry, index) => translateEntry(entry, `latest:${index}`)),
 
       links: links.map((entry, index) => {
         const tr = translations.get(`links:${index}`);
@@ -714,9 +725,7 @@ export async function buildIssuePayload(
         };
       }),
 
-      videos: videos.map((entry, index) =>
-        translateEntry(entry, `videos:${index}`),
-      ),
+      videos: videos.map((entry, index) => translateEntry(entry, `videos:${index}`)),
 
       photos: photos.map((entry, index) => {
         const tr = translations.get(`photos:${index}`);
@@ -735,20 +744,27 @@ export async function buildIssuePayload(
         const key = translationKeyById.get(source.id);
         const tr = key ? translations.get(key) : undefined;
 
-        return tr
-          ? { ...source, title: tr.title || source.title }
-          : source;
+        return tr ? { ...source, title: tr.title || source.title } : source;
       }),
     };
   }
 
-  const classifiedById = new Map(
-    classifiedItems.map((item) => [item.id, item]),
-  );
-  const metricItems = metricSource.map(
-    (item) => classifiedById.get(item.id) || item,
-  );
-  const stats = calculateMetrics(metricItems, start, end);
+  const selectedEntries: IssueEntry[] = [];
+  const selectedIds = new Set<string>();
+  const addSelected = (entry: IssueEntry | null | undefined) => {
+    if (!entry || selectedIds.has(entry.id)) return;
+    selectedIds.add(entry.id);
+    selectedEntries.push(entry);
+  };
+
+  addSelected(payloadEntries.lead);
+  payloadEntries.latest.forEach(addSelected);
+  payloadEntries.links.forEach(addSelected);
+  payloadEntries.videos.forEach(addSelected);
+  payloadEntries.photos.forEach(addSelected);
+
+  const stats = calculateMetrics(records, start, end);
+  const activeDays = flowActiveDays(flowStartedAt, end);
 
   // Keep the metrics unambiguous: published records are counted once;
   // drafts are not included in the issue header.
@@ -756,17 +772,43 @@ export async function buildIssuePayload(
     ...stats,
     total: undefined,
     drafts: undefined,
-  } as unknown as IssuePayload["stats"];
+    flowStartedAt: flowStartedAt?.toISOString() || null,
+    flowActiveDays: activeDays,
+  } as unknown as IssuePayload['stats'];
+
+  const period = {
+    start: start.toISOString(),
+    end: end.toISOString(),
+    timezone: 'UTC' as const,
+  };
+
+  const fallbackNarrative = buildFallbackNarrative(selectedEntries, analyses, lang);
+  let narrative: IssueNarrative = fallbackNarrative;
+
+  try {
+    const generated = await generateIssueNarrative({
+      items: selectedEntries,
+      analyses,
+      lang,
+      period,
+    });
+
+    if (generated) narrative = generated;
+  } catch (error) {
+    console.warn(
+      '[flow-issue] narrative generation failed; using local narrative',
+      error instanceof Error ? error.message : 'unknown_error'
+    );
+  }
 
   return {
     schemaVersion: 2,
     lang,
-    period: {
-      start: start.toISOString(),
-      end: end.toISOString(),
-      timezone: "UTC",
-    },
+    period,
     stats: displayStats,
+    items: issueItems,
+    summary: narrative.summary,
+    pierrotIntro: narrative.paragraphs,
     lead: payloadEntries.lead,
     latest: payloadEntries.latest,
     links: payloadEntries.links,
@@ -777,7 +819,7 @@ export async function buildIssuePayload(
     template,
     analysis: analysisSources,
     design: {
-      template: "classic",
+      template: 'classic',
       tokens: {
         accent: template.theme.accent,
         paper: template.theme.paper,

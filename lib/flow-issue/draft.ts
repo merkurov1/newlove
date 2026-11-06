@@ -1,9 +1,5 @@
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value)
-  );
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**
@@ -19,14 +15,14 @@ export function getPayloadItemIds(payload: unknown): string[] {
   const addEntry = (entry: unknown) => {
     if (!isRecord(entry)) return;
 
-    if (typeof entry.id === "string" && entry.id.trim()) {
+    if (typeof entry.id === 'string' && entry.id.trim()) {
       ids.add(entry.id);
     }
   };
 
   addEntry(payload.lead);
 
-  for (const key of ["latest", "links", "videos", "photos"]) {
+  for (const key of ['items', 'latest', 'links', 'videos', 'photos']) {
     const entries = payload[key];
 
     if (Array.isArray(entries)) {
@@ -43,10 +39,7 @@ export function getPayloadItemIds(payload: unknown): string[] {
  * regenerating the same period returns the existing draft instead of
  * overwriting it with a new algorithm's composition.
  */
-export function samePayloadComposition(
-  first: unknown,
-  second: unknown,
-): boolean {
+export function samePayloadComposition(first: unknown, second: unknown): boolean {
   const a = getPayloadItemIds(first);
   const b = getPayloadItemIds(second);
 

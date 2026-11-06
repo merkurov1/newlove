@@ -1,16 +1,16 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import { getServerSupabaseClient } from "@/lib/serverAuth";
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
 import FlowIssueEditor, {
   type EditableIssueData,
   type EditableIssueEntryData,
-} from "@/components/admin/FlowIssueEditor";
-import type { IssuePayload } from "@/lib/flow-issue/types";
+} from '@/components/admin/FlowIssueEditor';
+import type { IssuePayload } from '@/lib/flow-issue/types';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: "Flow Issue Editor — Admin",
+  title: 'Flow Issue Editor — Admin',
   robots: {
     index: false,
     follow: false,
@@ -21,34 +21,27 @@ type PageProps = {
   params: Promise<{ id: string }> | { id: string };
 };
 
-function isRecord(
-  value: unknown,
-): value is Record<string, unknown> {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value)
-  );
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function editableEntry(value: unknown): EditableIssueEntryData | null {
-  if (!isRecord(value) || typeof value.id !== "string") {
+  if (!isRecord(value) || typeof value.id !== 'string') {
     return null;
   }
 
-  const clean = (field: string) =>
-    typeof value[field] === "string" ? value[field] : "";
+  const clean = (field: string) => (typeof value[field] === 'string' ? value[field] : '');
 
   return {
     id: value.id,
-    type: clean("type"),
-    title: clean("title"),
-    body: clean("body"),
-    description: clean("description"),
-    alt: clean("alt"),
-    caption: clean("caption"),
-    url: typeof value.url === "string" ? value.url : null,
-    publishedAt: clean("publishedAt"),
+    type: clean('type'),
+    title: clean('title'),
+    body: clean('body'),
+    description: clean('description'),
+    alt: clean('alt'),
+    caption: clean('caption'),
+    url: typeof value.url === 'string' ? value.url : null,
+    publishedAt: clean('publishedAt'),
   };
 }
 
@@ -57,53 +50,35 @@ function editableList(value: unknown): EditableIssueEntryData[] {
 
   return value
     .map(editableEntry)
-    .filter(
-      (entry): entry is EditableIssueEntryData =>
-        entry !== null,
-    );
+    .filter((entry): entry is EditableIssueEntryData => entry !== null);
 }
 
-export default async function FlowIssueEditorPage({
-  params,
-}: PageProps) {
+export default async function FlowIssueEditorPage({ params }: PageProps) {
   const { id } = await params;
   const supabase = getServerSupabaseClient({
     useServiceRole: true,
   });
 
   const { data, error } = await supabase
-    .from("letters")
-    .select(
-      "id,title,slug,kind,status,published,number,lang,payload,html_web",
-    )
-    .eq("id", id)
-    .eq("kind", "issue")
+    .from('letters')
+    .select('id,title,slug,kind,status,published,number,lang,payload,html_web')
+    .eq('id', id)
+    .eq('kind', 'issue')
     .maybeSingle();
 
   if (error || !data) notFound();
 
-  if (
-    data.status !== "draft" ||
-    data.published ||
-    !isRecord(data.payload)
-  ) {
+  if (data.status !== 'draft' || data.published || !isRecord(data.payload)) {
     return (
       <div className="mx-auto max-w-2xl border border-[#1C1A1B]/15 bg-white p-8">
-        <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#990F3D]">
-          Flow / Issue
-        </p>
-        <h1 className="mt-3 font-serif text-3xl">
-          Выпуск недоступен для редактирования
-        </h1>
+        <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#990F3D]">Flow / Issue</p>
+        <h1 className="mt-3 font-serif text-3xl">Выпуск недоступен для редактирования</h1>
         <p className="mt-3 text-sm leading-6 text-[#1C1A1B]/65">
-          Опубликованные выпуски и выпуски без payload не
-          редактируются, чтобы сохранить архив неизменным.
+          Опубликованные выпуски и выпуски без payload не редактируются, чтобы сохранить архив
+          неизменным.
         </p>
         <div className="mt-6 flex flex-wrap gap-4 text-sm">
-          <Link
-            href="/admin/flow-issues"
-            className="text-[#990F3D] hover:underline"
-          >
+          <Link href="/admin/flow-issues" className="text-[#990F3D] hover:underline">
             ← К выпускам
           </Link>
           {data.slug && (
@@ -125,13 +100,17 @@ export default async function FlowIssueEditorPage({
 
   const issue: EditableIssueData = {
     id: data.id,
-    title: data.title || "Flow issue",
-    slug: data.slug || "",
-    lang: data.lang === "ru" ? "ru" : "en",
-    number:
-      typeof data.number === "number" ? data.number : null,
-    previewHtml:
-      typeof data.html_web === "string" ? data.html_web : "",
+    title: data.title || 'Flow issue',
+    slug: data.slug || '',
+    lang: data.lang === 'ru' ? 'ru' : 'en',
+    number: typeof data.number === 'number' ? data.number : null,
+    previewHtml: typeof data.html_web === 'string' ? data.html_web : '',
+    summary: typeof payload.summary === 'string' ? payload.summary : '',
+    pierrotIntro: Array.isArray(payload.pierrotIntro)
+      ? payload.pierrotIntro.filter(
+          (paragraph): paragraph is string => typeof paragraph === 'string'
+        )
+      : [],
     lead: editableEntry(payload.lead),
     latest: editableList(payload.latest),
     links: editableList(payload.links),

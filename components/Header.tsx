@@ -113,8 +113,7 @@ export default function Header() {
   }, [pathname]);
 
   const userId = user?.id || profile?.id || '';
-  const profileUsername =
-    typeof profile?.username === 'string' ? profile.username : '';
+  const profileUsername = typeof profile?.username === 'string' ? profile.username : '';
 
   const profileHref = profileUsername
     ? `/you/${encodeURIComponent(profileUsername)}`
@@ -139,10 +138,19 @@ export default function Header() {
   const isAdmin = rolesArr.some(
     (r: unknown) => typeof r === 'string' && r.toUpperCase() === 'ADMIN'
   );
-  // Creating a Flow post belongs to the Flow interface only. Keeping the
-  // composer in the global header made the write affordance appear on every
-  // public page for the owner.
-  const isFlowRoute = normalizedPath === '/flow' || normalizedPath.startsWith('/flow/');
+  // The Flow composer is an owner/admin affordance. It used to rely only on
+  // the ADMIN role, which hid the write button for the signed-in owner when
+  // the role payload had not loaded yet. The owner identity is checked
+  // explicitly and the API still enforces admin access server-side.
+  const isAuthenticated = Boolean(user);
+  const ownerName = userName.toLowerCase();
+  const ownerEmail = String(user?.email || '').toLowerCase();
+  const canComposeFlow =
+    isAuthenticated &&
+    (isAdmin ||
+      ownerEmail === 'merkurov@gmail.com' ||
+      ownerName.includes('merkurov') ||
+      ownerName.includes('антон'));
 
   const isOwner =
     !user ||
@@ -446,7 +454,7 @@ export default function Header() {
 
         {/* Right section: Composer and Pierrot */}
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {isAdmin && isFlowRoute && <ComposerTrigger />}
+          {canComposeFlow && <ComposerTrigger />}
           <PierrotTrigger compact />
         </div>
       </div>
