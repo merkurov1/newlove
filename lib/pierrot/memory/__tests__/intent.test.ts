@@ -189,6 +189,34 @@ describe('owner memory intent', () => {
     });
   });
 
+  it('separates single, project and global completion scopes', () => {
+    expect(detectMemoryIntent('Пометь задачу Bank Leumi выполненной')).toMatchObject({
+      action: 'complete',
+      scope: 'single',
+      query: 'Bank Leumi',
+    });
+    expect(detectMemoryIntent('Все задачи по Media выполнены')).toMatchObject({
+      action: 'complete',
+      scope: 'project',
+      projectRef: 'Media',
+    });
+    expect(detectMemoryIntent('Все задачи Journal выполнены')).toMatchObject({
+      action: 'complete',
+      scope: 'project',
+      projectRef: 'Journal',
+    });
+    expect(detectMemoryIntent('Заверши все мои текущие задачи')).toMatchObject({
+      action: 'complete',
+      scope: 'all',
+      projectRef: null,
+    });
+    expect(detectMemoryIntent('Отметь эту задачу выполненной')).toMatchObject({
+      action: 'complete',
+      scope: 'single',
+      listReference: 'last',
+    });
+  });
+
   it('recognises a bare delete without a target as a contextual archive command', () => {
     expect(detectMemoryIntent('Удали')).toMatchObject({
       action: 'archive',

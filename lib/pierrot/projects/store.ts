@@ -30,10 +30,13 @@ async function uniqueSlug(ownerUserId: string, name: string): Promise<string> {
     .like('slug', `${base}%`);
   if (error) throw error;
 
-  return uniqueProjectSlug(name, (data || []).map((row) => text((row as Record<string, unknown>).slug)));
+  return uniqueProjectSlug(
+    name,
+    (data || []).map((row) => text((row as Record<string, unknown>).slug))
+  );
 }
 
-function mapProject(row: Record<string, unknown>): PierrotProject {
+export function mapProject(row: Record<string, unknown>): PierrotProject {
   return {
     id: text(row.id),
     ownerUserId: text(row.owner_user_id),
@@ -99,9 +102,10 @@ export async function createPierrotProject(
   if (projectBrief.length > 20_000)
     throw new PierrotProjectValidationError('PROJECT_BRIEF_TOO_LONG');
   const requestedSlug = text(input.slug).trim();
-  const slug = requestedSlug && /^[a-z0-9][a-z0-9-]*$/.test(requestedSlug)
-    ? requestedSlug.slice(0, 80)
-    : await uniqueSlug(ownerUserId, name);
+  const slug =
+    requestedSlug && /^[a-z0-9][a-z0-9-]*$/.test(requestedSlug)
+      ? requestedSlug.slice(0, 80)
+      : await uniqueSlug(ownerUserId, name);
   const { data, error } = await getServerSupabaseClient({ useServiceRole: true })
     .from('pierrot_projects')
     .insert({
@@ -135,7 +139,10 @@ export async function getPierrotProjectForConversation(
   return data?.project_id ? getPierrotProject(ownerUserId, String(data.project_id)) : null;
 }
 
-export async function deletePierrotProject(ownerUserId: string, projectRef: string): Promise<boolean> {
+export async function deletePierrotProject(
+  ownerUserId: string,
+  projectRef: string
+): Promise<boolean> {
   const project = await getPierrotProject(ownerUserId, projectRef);
   if (!project) return false;
   const { error } = await getServerSupabaseClient({ useServiceRole: true })
@@ -185,6 +192,13 @@ export async function updatePierrotProject(
   if (patch.projectBrief !== undefined)
     update.brief_revision = Number(patch.briefRevision || 1) + 1;
   const client = getServerSupabaseClient({ useServiceRole: true });
+  const before = await client
+    .from('pierrot_projects')
+    .select('name')
+    .eq('id', id)
+    .eq('owner_user_id', ownerUserId)
+    .maybeSingle();
+  const previousName = typeof before.data?.name === 'string' ? before.data.name : null;
   const { data, error } = await client
     .from('pierrot_projects')
     .update(update)
@@ -195,15 +209,36 @@ export async function updatePierrotProject(
   if (error) throw error;
   if (!data) return null;
   if (patch.projectBrief !== undefined)
-    await client
-      .from('pierrot_project_brief_revisions')
-      .insert({
-        project_id: id,
-        revision: Number((data as Record<string, unknown>).brief_revision || 1),
-        brief: patch.projectBrief,
-        change_note: 'Owner update',
-        created_by: ownerUserId,
-      });
+    await client.from('pierrot_project_brief_revisions').insert({
+      project_id: id,
+      revision: Number((data as Record<string, unknown>).brief_revision || 1),
+      brief: patch.projectBrief,
+      change_note: 'Owner update',
+      created_by: ownerUserId,
+    });
+
+  // Keep the legacy display mirror aligned after a rename. The relation table
+  // remains the canonical source; this only prevents stale text in memory UI.
+  if (previousName && patch.name && patch.name !== previousName) {
+    const { data: links } = await client
+      .from('pierrot_project_decisions')
+      .select('decision_id')
+      .eq('project_id', id)
+      .eq('owner_user_id', ownerUserId)
+      .limit(500);
+    const ids = (Array.isArray(links) ? links : [])
+      .map((row) => (row && typeof row.decision_id === 'string' ? row.decision_id : ''))
+      .filter(Boolean);
+
+    if (ids.length > 0) {
+      await client
+        .from('pierrot_decisions')
+        .update({ project: patch.name, updated_at: new Date().toISOString() })
+        .eq('user_id', ownerUserId)
+        .in('id', ids);
+    }
+  }
+
   return mapProject(data as Record<string, unknown>);
 }
 
@@ -222,13 +257,11 @@ export async function linkConversationToProject(
     .maybeSingle();
   if (!conversation || (conversation.user_id && conversation.user_id !== ownerUserId))
     throw new Error('CONVERSATION_NOT_FOUND');
-  const { error } = await client
-    .from('pierrot_project_conversations')
-    .upsert({
-      project_id: project.id,
-      conversation_id: conversationId,
-      owner_user_id: ownerUserId,
-    });
+  const { error } = await client.from('pierrot_project_conversations').upsert({
+    project_id: project.id,
+    conversation_id: conversationId,
+    owner_user_id: ownerUserId,
+  });
   if (error) throw error;
   await client
     .from('pierrot_projects')
@@ -247,7 +280,7 @@ export async function getPierrotProjectSnapshot(
   const [decisions, tasks, conversations, knowledge, artifacts] = await Promise.all([
     client
       .from('pierrot_project_decisions')
-      .select('decision:pierrot_decisions(id,title,content,status,updated_at)')
+      .select('decision:pierrot_decisions(id,title,content,status,kind,updated_at)')
       .eq('project_id', project.id)
       .eq('owner_user_id', ownerUserId)
       .limit(12),
@@ -278,21 +311,36 @@ export async function getPierrotProjectSnapshot(
       .order('updated_at', { ascending: false })
       .limit(12),
   ]);
+  const decisionRows = (decisions.data || []).map((r: any) => ({
+    id: r.decision?.id || '',
+    title: r.decision?.title || '',
+    content: r.decision?.content || '',
+    status: r.decision?.status || '',
+    kind: r.decision?.kind || '',
+    updatedAt: r.decision?.updated_at || '',
+  }));
+
+  const memoryTasks = decisionRows
+    .filter((row: { kind: string }) => row.kind === 'task' || row.kind === 'reminder')
+    .map((row: { id: string; title: string; status: string; updatedAt: string }) => ({
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      updatedAt: row.updatedAt,
+    }));
+
   return {
     ...project,
-    decisions: (decisions.data || []).map((r: any) => ({
-      id: r.decision?.id || '',
-      title: r.decision?.title || '',
-      content: r.decision?.content || '',
-      status: r.decision?.status || '',
-      updatedAt: r.decision?.updated_at || '',
-    })),
-    tasks: (tasks.data || []).map((r: any) => ({
-      id: r.id,
-      title: r.title || r.task || '',
-      status: r.status || '',
-      updatedAt: r.updated_at || '',
-    })),
+    decisions: decisionRows,
+    tasks: [
+      ...(tasks.data || []).map((r: any) => ({
+        id: r.id,
+        title: r.title || r.task || '',
+        status: r.status || '',
+        updatedAt: r.updated_at || '',
+      })),
+      ...memoryTasks,
+    ],
     conversations: (conversations.data || []).map((r: any) => ({
       id: r.conversation?.id || '',
       title: r.conversation?.title || '',

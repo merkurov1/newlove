@@ -18,6 +18,8 @@ export type PierrotMemoryAction =
   | 'cleanup_preview'
   | 'clarify';
 
+export type PierrotMemoryMutationScope = 'single' | 'selection' | 'project' | 'all' | 'none';
+
 export type PierrotMemoryIntent = {
   action: PierrotMemoryAction;
   kind: PierrotMemoryKind | null;
@@ -32,6 +34,10 @@ export type PierrotMemoryIntent = {
   includeArchive: boolean;
   /** The command refers to records from the most recent displayed list. */
   listReference: 'none' | 'all' | 'last' | 'last_two' | 'these';
+  /** Strict target scope. Multi-record scopes require preview + confirmation. */
+  scope: PierrotMemoryMutationScope;
+  /** Exact project name/slug/id extracted from a project-scoped command. */
+  projectRef: string | null;
   confidence: number;
   reason: string;
 };
@@ -288,15 +294,16 @@ const CLEANUP = [
 const COMPLETE_PATTERNS = [
   /(?:^|\s)(?:заверши|завершить|выполни|выполнить|закрой|закрыть|отметь|отметить|пометь|пометить|считай|считать)\s+(?:как\s+)?(?:напоминание|задачу|это|запись)?\s*/i,
   /(?:^|\s)(?:mark|set)\b[^.!?]{0,160}?\b(?:done|complete|completed|finished)\b/i,
-  /(?:^|[\s,.;:—–-])(?:задача|задачу|запись|напоминание|task|note|reminder)?[^.!?]{0,160}?(?:^|[\s,.;:—–-])(?:выполнена|выполнено|выполнен|сделана|сделано|сделан|готова|готово|готов|завершена|завершено|завершён)(?=$|[\s,.;:—–!?])/iu,
+  /(?:^|[\s,.;:—–-])(?:задача|задачу|запись|напоминание|task|note|reminder)?[^.!?]{0,160}?(?:^|[\s,.;:—–-])(?:выполнена|выполнено|выполнен|выполнены|сделана|сделано|сделан|сделаны|готова|готово|готов|готовы|завершена|завершено|завершён|завершены)(?=$|[\s,.;:—–!?])/iu,
   /(?:^|\s)(?:это\s+)?(?:уже\s+)?(?:сделано|выполнено|готово)(?:\s|[.,!?]|$)/i,
+  /(?:^|[\s,.;:—–-])(?:выполнены|сделаны|завершены|готовы|completed|done|finished)(?=$|[\s,.;:—–!?])/i,
   /(?:^|\s)(?:complete|finish|close)\s+(?:the\s+)?(?:reminder|task|this|it)\b/i,
   /^(?:done|completed|finished)(?:\s|[.,!?]|$)/i,
   /(?:^|\s)(?:this|it|that)\s+(?:is|was|has\s+been)\s+(?:already\s+)?(?:done|completed|finished)(?:\s|[.,!?]|$)/i,
 ];
 
 const INCOMPLETE_STATE =
-  /(?:^|\s)не\s+(?:выполнена|выполнено|выполнен|сделана|сделано|сделан|готова|готово|готов|завершена|завершено|завершён|done|completed|finished)/i;
+  /(?:^|\s)не\s+(?:выполнена|выполнено|выполнен|выполнены|сделана|сделано|сделан|сделаны|готова|готово|готов|готовы|завершена|завершено|завершён|завершены|done|completed|finished)/i;
 
 const PLAIN_ARCHIVE_PATTERNS = [
   /(?:^|[\s,.;:—–-])(?:удали|удалить|сотри|стереть|убери|убрать)\s+(?:эту\s+|это\s+|этот\s+|the\s+)?(?:задачу|запись|заметку|напоминание|пункт|task|note|record|reminder)(?=$|[\s,.;:—–!?])/i,
@@ -322,7 +329,7 @@ const PLAIN_ARCHIVE_COMMAND_SOURCE =
 const COMPLETE_COMMAND_SOURCE =
   /(?:^|[\s,.;:—–-])(?:заверши(?:те)?|завершить|выполни(?:те)?|выполнить|закрой(?:те)?|закрыть|отметь(?:те)?|отметить|пометь(?:те)?|пометить|считай(?:те)?|считать|complete|finish|close|mark|set)(?=$|[\s,.;:—–!?])/gi;
 const COMPLETION_STATE_SOURCE =
-  /(?:^|[\s,.;:—–-])(?:уже\s+)?(?:выполнена|выполнено|выполнен|выполненной|выполненную|выполненными|сделана|сделано|сделан|сделанной|сделанную|сделанными|готова|готово|готов|готовой|завершена|завершено|завершён|завершённой|завершённую|завершёнными|completed|finished|done|ready|неактуальн[а-я]*|устар[а-я]*|ненужн[а-я]*|лишн[а-я]*)(?=$|[\s,.;:—–!?])/gi;
+  /(?:^|[\s,.;:—–-])(?:уже\s+)?(?:выполнена|выполнено|выполнен|выполнены|выполненной|выполненную|выполненными|сделана|сделано|сделан|сделаны|сделанной|сделанную|сделанными|готова|готово|готов|готовы|готовой|завершена|завершено|завершён|завершены|завершённой|завершённую|завершёнными|completed|finished|done|ready|неактуальн[а-я]*|устар[а-я]*|ненужн[а-я]*|лишн[а-я]*)(?=$|[\s,.;:—–!?])/gi;
 const TASK_LEAD_SOURCE =
   /^(?:пожалуйста[,\s]*)?(?:the\s+)?(?:задача|задачу|запись|заметку|напоминание|task|note|reminder)\s+(?:(?:про|о|об|по|about|on|for)\s+)?/i;
 
@@ -378,6 +385,8 @@ function result(
     permanent: false,
     includeArchive: false,
     listReference: 'none',
+    scope: 'none',
+    projectRef: null,
     confidence: options.confidence ?? 0.7,
     reason: options.reason ?? action,
     ...options,
@@ -549,6 +558,66 @@ function detectListReference(message: string): PierrotMemoryIntent['listReferenc
   return 'none';
 }
 
+const GENERIC_SCOPE_WORDS =
+  /^(?:все|всё|все\s+мои|мои|текущие|активные|открытые|незавершённые|незавершенные|all|my|current|active|open|unfinished|pending)$/i;
+
+const PROJECT_SCOPE_CANDIDATES: RegExp[] = [
+  /(?:все|всех|всё|all|every)\s+(?:мои\s+|my\s+)?(?:задачи|задач|tasks?)\s+(?:по|в|из|для|проекта|проекту|project)\s+(.+)$/i,
+  /(?:все|all|every)\s+(?:задачи|tasks?)\s+(?:проекта|project)\s+(.+)$/i,
+  /(?:заверши(?:те)?|завершить|выполни(?:те)?|выполнить|закрой(?:те)?|закрыть|complete|finish|close)\s+(?:все|all)\s+(?:задачи|tasks?)\s+(?:по|в|из|для|проекта|проекту|project)\s+(.+)$/i,
+  /(?:все|all|every)\s+(?:задачи|tasks?)\s+(.+)$/i,
+];
+
+function cleanProjectRef(value: string): string {
+  return value
+    .replace(
+      /\s+(?:уже\s+)?(?:выполнены|выполнено|выполнен|завершены|завершено|завершён|сделаны|сделано|готовы|готово|done|completed|finished)(?:\s|$).*$/i,
+      ''
+    )
+    .replace(/^(?:по|в|из|для|проекта|проекту|project)\s+/i, '')
+    .replace(/[.!?;:]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+}
+
+function detectProjectRef(message: string): string | null {
+  for (const pattern of PROJECT_SCOPE_CANDIDATES) {
+    const match = message.match(pattern);
+    if (!match?.[1]) continue;
+    const ref = cleanProjectRef(match[1]);
+    if (!ref) continue;
+    if (GENERIC_SCOPE_WORDS.test(ref)) continue;
+    return ref;
+  }
+  return null;
+}
+
+function detectMutationScope(
+  message: string,
+  listReference: PierrotMemoryIntent['listReference'],
+  projectRef: string | null
+): PierrotMemoryMutationScope {
+  if (projectRef) return 'project';
+
+  const text = normalize(message);
+  if (
+    /(?:все|всё|все\s+мои|all|every)\s+(?:мои\s+|my\s+)?(?:текущие|активные|открытые|незавершённые|незавершенные|current|active|open|unfinished|pending)?\s*(?:задачи|задач|tasks?)(?:\s|$)/i.test(
+      text
+    ) &&
+    !/(?:эти|этих|перечислен|these|listed)/i.test(text)
+  ) {
+    return 'all';
+  }
+
+  if (listReference === 'last') return 'single';
+  if (listReference === 'all' || listReference === 'last_two' || listReference === 'these') {
+    return 'selection';
+  }
+
+  return 'single';
+}
+
 /**
  * Detects the owner’s memory intention. It is deliberately command-first:
  * casual mentions of “remember” do not create records.
@@ -605,9 +674,13 @@ export function detectMemoryIntent(
     ARCHIVE_PATTERNS.some((pattern) => pattern.test(original) || pattern.test(text)) ||
     PLAIN_ARCHIVE_PATTERNS.some((pattern) => pattern.test(original) || pattern.test(text))
   ) {
+    const listReference = detectListReference(original);
+    const projectRef = detectProjectRef(original);
     return result('archive', {
       query: mutationTarget(original, { archive: true, history: options.history }),
-      listReference: detectListReference(original),
+      listReference,
+      projectRef,
+      scope: detectMutationScope(original, listReference, projectRef),
       confidence: 0.9,
       reason: 'archive_request',
     });
@@ -639,9 +712,13 @@ export function detectMemoryIntent(
   if (!incompleteState) {
     for (const pattern of COMPLETE_PATTERNS) {
       if (pattern.test(original) || pattern.test(text)) {
+        const listReference = detectListReference(original);
+        const projectRef = detectProjectRef(original);
         return result('complete', {
           query: mutationTarget(original, { archive: false, history: options.history }),
-          listReference: detectListReference(original),
+          listReference,
+          projectRef,
+          scope: detectMutationScope(original, listReference, projectRef),
           confidence: 0.86,
           reason: 'complete_request',
         });

@@ -97,7 +97,9 @@ export default function ProjectOverview({ project: initial }: { project: Pierrot
         </article>
         <ProjectList
           title="Решения"
-          items={project.decisions.map((item) => `${item.title} · ${item.status}`)}
+          items={project.decisions
+            .filter((item) => item.kind !== 'task' && item.kind !== 'reminder')
+            .map((item) => `${item.title} · ${item.status}`)}
         />
         <ProjectList
           title="Задачи"

@@ -2717,43 +2717,36 @@ describe('Pierrot intelligence regressions', () => {
     );
   });
 
-  it('archives every record explicitly listed by the previous answer', async () => {
+  it('previews every explicitly listed record before archiving it', async () => {
     memoryOwner();
     const first = memoryRecord({ id: '31313131-3131-4131-8131-313131313131', title: 'Alpha' });
     const second = memoryRecord({ id: '32323232-3232-4232-8232-323232323232', title: 'Beta' });
     memoryContext.loadLatestMemoryListRecords.mockResolvedValueOnce([first, second]);
-    memoryStore.updateMemoryRecord.mockImplementation(async (_store, _userId, id, patch) => {
-      const record = [first, second].find((item) => item.id === id) || first;
-      return { ...record, status: (patch as { status: string }).status };
-    });
 
     const response = await POST(
       makeRequest(validBody({ mode: 'unframed', message: 'Удали всё перечисленное' }))
     );
     const json = (await response.json()) as {
       memory_status?: string;
-      memory_count?: number;
+      memory_operation_pending?: { targetIds?: string[] };
       reply?: string;
     };
 
-    expect(json.memory_status).toBe('archived');
-    expect(json.memory_count).toBe(2);
+    expect(json.memory_status).toBe('confirmation_required');
     expect(json.reply).toContain('Alpha');
     expect(json.reply).toContain('Beta');
-    expect(memoryStore.updateMemoryRecord).toHaveBeenCalledTimes(2);
+    expect(json.reply).toContain('Подтверди');
+    expect(json.memory_operation_pending?.targetIds).toEqual([first.id, second.id]);
+    expect(memoryStore.updateMemoryRecord).not.toHaveBeenCalled();
     expect(memoryStore.searchMemory).not.toHaveBeenCalled();
   });
 
-  it('completes exactly the last two tasks from the list', async () => {
+  it('previews exactly the last two tasks instead of completing them immediately', async () => {
     memoryOwner();
     const first = memoryRecord({ id: '41414141-4141-4141-8141-414141414141', title: 'First' });
     const second = memoryRecord({ id: '42424242-4242-4242-8242-424242424242', title: 'Second' });
     const third = memoryRecord({ id: '43434343-4343-4343-8343-434343434343', title: 'Third' });
     memoryContext.loadLatestMemoryListRecords.mockResolvedValueOnce([first, second, third]);
-    memoryStore.updateMemoryRecord.mockImplementation(async (_store, _userId, id, patch) => {
-      const record = [first, second, third].find((item) => item.id === id) || first;
-      return { ...record, status: (patch as { status: string }).status };
-    });
 
     const response = await POST(
       makeRequest(
@@ -2763,13 +2756,14 @@ describe('Pierrot intelligence regressions', () => {
         })
       )
     );
-    const json = (await response.json()) as { memory_count?: number; memory_status?: string };
+    const json = (await response.json()) as {
+      memory_operation_pending?: { targetIds?: string[] };
+      memory_status?: string;
+    };
 
-    expect(json.memory_status).toBe('completed');
-    expect(json.memory_count).toBe(2);
-    expect(memoryStore.updateMemoryRecord).toHaveBeenCalledTimes(2);
-    const ids = memoryStore.updateMemoryRecord.mock.calls.map((call) => call[2]);
-    expect(ids).toEqual([second.id, third.id]);
+    expect(json.memory_status).toBe('confirmation_required');
+    expect(json.memory_operation_pending?.targetIds).toEqual([second.id, third.id]);
+    expect(memoryStore.updateMemoryRecord).not.toHaveBeenCalled();
   });
 
   it('asks for a separate confirmation before permanent deletion', async () => {

@@ -147,11 +147,23 @@ import {
   deleteMemoryRecord,
   getMemoryRecord,
   listMemoryRecords,
+  listMemoryRecordsByIds,
   restoreMemoryRecord,
   searchMemory,
   updateMemoryRecord,
 } from '@/lib/pierrot/memory/store';
 import { runMemorySteward } from '@/lib/pierrot/memory/steward';
+import {
+  createPendingMemoryOperation,
+  executeMemoryOperation,
+  formatMemoryOperationOutcome,
+  isMemoryOperationCancellation,
+  isMemoryOperationConfirmation,
+  loadPendingMemoryOperation,
+  memoryOperationAction,
+  resolveMemoryOperation,
+  type MemoryOperationOutcome,
+} from '@/lib/pierrot/memory/operations';
 import { buildSkillsContext } from '@/lib/pierrot/skills/store';
 import {
   formatSkillAnalysisChatReply,
@@ -205,6 +217,7 @@ import {
   linkConversationToProject,
 } from '@/lib/pierrot/projects/store';
 import { detectProjectCommand } from '@/lib/pierrot/projects/commands';
+import { listProjectTasks, moveDecisionToProject } from '@/lib/pierrot/projects/links';
 import { listDevTasks, updateDevTask } from '@/lib/pierrot/dev/tasks';
 import { resolvePierrotProject } from '@/lib/pierrot/projects/resolver';
 
@@ -1350,6 +1363,108 @@ export async function POST(req: Request) {
           );
         }
         const targetProject = matches[0];
+
+        if (memoryStore && isPierrotUserId(ownerIdentityUserId)) {
+          const normalizeTitle = (value: string) =>
+            value.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
+
+          let memoryCandidates: PierrotMemoryRecord[] = [];
+
+          if (projectCommand.taskQuery) {
+            const found = await searchMemory(memoryStore, {
+              userId: ownerIdentityUserId,
+              query: projectCommand.taskQuery,
+              statuses: ['current'],
+              kinds: ['task', 'reminder'],
+              limit: 20,
+            });
+            memoryCandidates = found.records;
+          } else {
+            const listed = await loadLatestMemoryListRecords(
+              memoryStore,
+              ownerIdentityUserId,
+              conversationId
+            ).catch(() => [] as PierrotMemoryRecord[]);
+            const last = [...listed]
+              .reverse()
+              .find(
+                (record) =>
+                  record.status === 'current' &&
+                  (record.kind === 'task' || record.kind === 'reminder')
+              );
+            memoryCandidates = last ? [last] : [];
+          }
+
+          memoryCandidates = Array.from(
+            new Map(memoryCandidates.map((record) => [record.id, record])).values()
+          );
+
+          if (projectCommand.taskQuery && memoryCandidates.length > 1) {
+            const exact = memoryCandidates.filter(
+              (record) =>
+                normalizeTitle(record.title) === normalizeTitle(projectCommand.taskQuery || '')
+            );
+            if (exact.length === 1) memoryCandidates = exact;
+          }
+
+          if (memoryCandidates.length > 1) {
+            return persistOwnerReply(
+              'Нашёл несколько задач памяти. Уточни точный заголовок, чтобы я не перенёс не ту. Ничего не изменено.',
+              {
+                project_command: 'move_task',
+                project_status: 'task_not_unique',
+                memory_candidates: memoryCandidates.slice(0, 10).map((record) => ({
+                  id: record.id,
+                  title: record.title,
+                })),
+              }
+            );
+          }
+
+          if (memoryCandidates.length === 1) {
+            const memoryTask = memoryCandidates[0];
+
+            try {
+              await moveDecisionToProject(
+                memoryStore,
+                ownerIdentityUserId,
+                memoryTask.id,
+                targetProject
+              );
+
+              const linked = await listProjectTasks(
+                memoryStore,
+                ownerIdentityUserId,
+                targetProject.id,
+                { statuses: ['current'], limit: 500 }
+              );
+              if (!linked.some((record) => record.id === memoryTask.id)) {
+                throw new Error('PROJECT_TASK_LINK_NOT_CONFIRMED');
+              }
+            } catch {
+              return persistOwnerReply(
+                `Не удалось сохранить связь задачи «${memoryTask.title}» с проектом «${targetProject.name}». Я не буду утверждать, что перенос выполнен.`,
+                {
+                  project_command: 'move_task',
+                  project_status: 'failed',
+                  project_id: targetProject.id,
+                  memory_id: memoryTask.id,
+                }
+              );
+            }
+
+            return persistOwnerReply(
+              `Перенёс задачу «${memoryTask.title}» в проект «${targetProject.name}».`,
+              {
+                project_command: 'move_task',
+                project_status: 'moved',
+                project_id: targetProject.id,
+                memory_id: memoryTask.id,
+              }
+            );
+          }
+        }
+
         const taskResult = await listDevTasks(ownerIdentityUserId, 100);
         const taskCandidates = taskResult.tasks.filter((task) =>
           projectCommand.taskQuery
@@ -1922,6 +2037,134 @@ export async function POST(req: Request) {
         }
       }
 
+      const memoryOperationConfirmation = isMemoryOperationConfirmation(trimmedMessage);
+      const memoryOperationCancellation = isMemoryOperationCancellation(trimmedMessage);
+
+      if (
+        memoryStore &&
+        isPierrotUserId(ownerIdentityUserId) &&
+        (memoryOperationConfirmation || memoryOperationCancellation)
+      ) {
+        const pendingOperation = await loadPendingMemoryOperation(
+          memoryStore,
+          conversationId
+        ).catch(() => null);
+
+        if (pendingOperation) {
+          if (memoryOperationCancellation) {
+            const outcome: MemoryOperationOutcome = {
+              status: 'cancelled',
+              action: pendingOperation.action,
+              scope: pendingOperation.scope,
+              changed: 0,
+              already: 0,
+              failed: 0,
+              targets: pendingOperation.titles.map((item) => ({
+                id: item.id,
+                title: item.title,
+                status: 'unchanged',
+              })),
+              candidates: [],
+              projectName: pendingOperation.projectName,
+              pending: null,
+              engine: null,
+            };
+
+            return persistOwnerReply(formatMemoryOperationOutcome(outcome, ownerLanguage), {
+              memory_status: 'cancelled',
+              memory_operation_id: pendingOperation.operationId,
+              memory_operation_scope: pendingOperation.scope,
+              memory_operation_pending: null,
+            });
+          }
+
+          const records = await listMemoryRecordsByIds(
+            memoryStore,
+            ownerIdentityUserId,
+            pendingOperation.targetIds
+          ).catch(() => []);
+          const byId = new Map(records.map((record) => [record.id, record]));
+          const missing = pendingOperation.targetIds.some((id) => !byId.has(id));
+          let changedComposition = records.some((record) => record.status !== 'current');
+
+          if (!changedComposition && pendingOperation.projectId) {
+            const linked = await listProjectTasks(
+              memoryStore,
+              ownerIdentityUserId,
+              pendingOperation.projectId,
+              { statuses: ['current'], limit: 500 }
+            ).catch(() => []);
+            const linkedIds = new Set(linked.map((record) => record.id));
+            changedComposition = pendingOperation.targetIds.some((id) => !linkedIds.has(id));
+          }
+
+          if (missing || changedComposition) {
+            const outcome: MemoryOperationOutcome = {
+              status: 'composition_changed',
+              action: pendingOperation.action,
+              scope: pendingOperation.scope,
+              changed: 0,
+              already: 0,
+              failed: 0,
+              targets: [],
+              candidates: records,
+              projectName: pendingOperation.projectName,
+              pending: null,
+              engine: null,
+            };
+
+            return persistOwnerReply(formatMemoryOperationOutcome(outcome, ownerLanguage), {
+              memory_status: 'clarification_required',
+              memory_operation_id: pendingOperation.operationId,
+              memory_operation_pending: null,
+            });
+          }
+
+          const executed = await executeMemoryOperation({
+            store: memoryStore,
+            userId: ownerIdentityUserId,
+            action: pendingOperation.action,
+            targets: records,
+          });
+
+          const outcome: MemoryOperationOutcome = {
+            ...executed.outcome,
+            status:
+              executed.outcome.failed > 0
+                ? 'partial'
+                : executed.outcome.changed === 0
+                  ? 'already'
+                  : 'completed',
+            action: pendingOperation.action,
+            scope: pendingOperation.scope,
+            candidates: [],
+            projectName: pendingOperation.projectName,
+            pending: null,
+          };
+
+          return persistOwnerReply(formatMemoryOperationOutcome(outcome, ownerLanguage), {
+            memory_status:
+              outcome.status === 'partial'
+                ? outcome.changed > 0
+                  ? 'partial'
+                  : 'write_failed'
+                : pendingOperation.action === 'complete'
+                  ? 'completed'
+                  : pendingOperation.action === 'forget'
+                    ? 'forgotten'
+                    : 'archived',
+            memory_ids: outcome.targets.map((target) => target.id),
+            memory_count: outcome.changed,
+            memory_already: outcome.already,
+            memory_failed: outcome.failed,
+            memory_operation_id: pendingOperation.operationId,
+            memory_operation_scope: pendingOperation.scope,
+            memory_operation_engine: outcome.engine,
+            memory_operation_pending: null,
+          });
+        }
+      }
+
       let memoryListContext: PierrotMemoryRecord[] | null = null;
       let skipMemoryHandling = false;
 
@@ -1942,6 +2185,8 @@ export async function POST(req: Request) {
         if (
           memoryListContext.length === 0 &&
           memoryIntent.listReference === 'none' &&
+          memoryIntent.scope !== 'project' &&
+          memoryIntent.scope !== 'all' &&
           !memoryIntent.permanent &&
           (memoryIntent.action === 'archive' ||
             memoryIntent.action === 'forget' ||
@@ -2092,6 +2337,17 @@ export async function POST(req: Request) {
                   memory_id: created.id,
                 }
               );
+            }
+
+            if (conversationProject) {
+              // A task created inside a project conversation gets the canonical
+              // relation immediately; the text column remains only a mirror.
+              await moveDecisionToProject(
+                memoryStore,
+                ownerIdentityUserId,
+                created.id,
+                conversationProject
+              ).catch(() => undefined);
             }
 
             const label =
@@ -2346,6 +2602,139 @@ export async function POST(req: Request) {
           }
         }
 
+        const strictOperationAction = memoryOperationAction(memoryIntent);
+
+        if (
+          strictOperationAction &&
+          ['complete', 'archive', 'forget'].includes(strictOperationAction)
+        ) {
+          try {
+            const resolution = await resolveMemoryOperation({
+              store: memoryStore,
+              userId: ownerIdentityUserId,
+              intent: memoryIntent,
+              listContext: memoryListContext,
+            });
+
+            if (resolution.status !== 'resolved') {
+              const outcome: MemoryOperationOutcome = {
+                status: resolution.status === 'no_target' ? 'not_found' : resolution.status,
+                action: resolution.action,
+                scope: resolution.scope,
+                changed: 0,
+                already: 0,
+                failed: 0,
+                targets: [],
+                candidates: resolution.candidates.map((record) => ({
+                  id: record.id,
+                  title: record.title,
+                  status: record.status,
+                })),
+                projectName: resolution.projectRef,
+                pending: null,
+                engine: null,
+              };
+
+              return persistOwnerReply(formatMemoryOperationOutcome(outcome, ownerLanguage), {
+                memory_status: 'clarification_required',
+                memory_operation_status: outcome.status,
+                memory_operation_scope: outcome.scope,
+                memory_candidates: outcome.candidates.length,
+              });
+            }
+
+            if (resolution.requiresConfirmation) {
+              if (!pierrotStore || !canStoreTranscript) {
+                return persistOwnerReply(
+                  ownerLanguage === 'ru'
+                    ? 'Для массовой операции нужно подтверждение в сохранённом диалоге. Включи сохранение и повтори команду. Ничего не изменено.'
+                    : 'A batch operation needs a confirmation in saved conversation context. Enable saving and repeat the command. Nothing was changed.',
+                  { memory_status: 'confirmation_unavailable' }
+                );
+              }
+
+              const pending = createPendingMemoryOperation(resolution);
+              const outcome: MemoryOperationOutcome = {
+                status: 'preview',
+                action: resolution.action,
+                scope: resolution.scope,
+                changed: 0,
+                already: 0,
+                failed: 0,
+                targets: resolution.targets.map((record) => ({
+                  id: record.id,
+                  title: record.title,
+                  status: record.status,
+                })),
+                candidates: [],
+                projectName: resolution.project?.name || null,
+                pending,
+                engine: null,
+              };
+
+              return persistOwnerReply(formatMemoryOperationOutcome(outcome, ownerLanguage), {
+                memory_status: 'confirmation_required',
+                memory_operation_status: 'preview',
+                memory_operation_scope: resolution.scope,
+                memory_operation_pending: pending,
+                memory_ids: pending.targetIds,
+                memory_count: resolution.targets.length,
+                ...(resolution.project ? { project_id: resolution.project.id } : {}),
+              });
+            }
+
+            const executed = await executeMemoryOperation({
+              store: memoryStore,
+              userId: ownerIdentityUserId,
+              action: resolution.action,
+              targets: resolution.targets,
+            });
+
+            const outcome: MemoryOperationOutcome = {
+              ...executed.outcome,
+              status:
+                executed.outcome.failed > 0
+                  ? 'partial'
+                  : executed.outcome.changed === 0
+                    ? 'already'
+                    : 'completed',
+              action: resolution.action,
+              scope: resolution.scope,
+              candidates: [],
+              projectName: resolution.project?.name || null,
+              pending: null,
+            };
+
+            return persistOwnerReply(formatMemoryOperationOutcome(outcome, ownerLanguage), {
+              memory_status:
+                outcome.status === 'partial'
+                  ? outcome.changed > 0
+                    ? 'partial'
+                    : 'write_failed'
+                  : resolution.action === 'complete'
+                    ? 'completed'
+                    : resolution.action === 'forget'
+                      ? 'forgotten'
+                      : 'archived',
+              memory_ids: outcome.targets.map((target) => target.id),
+              memory_count: outcome.changed,
+              memory_already: outcome.already,
+              memory_failed: outcome.failed,
+              memory_operation_status: outcome.status,
+              memory_operation_scope: resolution.scope,
+              memory_operation_engine: outcome.engine,
+              ...(resolution.project ? { project_id: resolution.project.id } : {}),
+            });
+          } catch {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Не удалось разрешить цель команды. Я ничего не изменил. Уточни точный заголовок задачи или проект.'
+                : 'I could not resolve the command target. Nothing was changed. Give the exact task title or project.',
+              { memory_status: 'clarification_required' }
+            );
+          }
+        }
+
         if (isMemoryMutationAction(memoryIntent.action)) {
           try {
             const includeArchive =
@@ -2541,166 +2930,15 @@ export async function POST(req: Request) {
               );
             }
 
-            if (candidates.length > 1 && listReference === 'none') {
-              return persistOwnerReply(
-                `${ownerLanguage === 'ru' ? 'Нашёл несколько записей:' : 'I found several records:'}\n\n${candidates
-                  .map((record, index) => formatRecord(record, index))
-                  .join('\n')}\n\n${
-                  ownerLanguage === 'ru'
-                    ? 'Уточни заголовок, чтобы я не изменил не ту запись. Ничего не изменено.'
-                    : 'Give me the exact title so I do not change the wrong record. Nothing was changed.'
-                }`,
-                { memory_status: 'clarification_required', memory_candidates: candidates.length }
-              );
-            }
-
-            const nextStatus: 'completed' | 'archived' =
-              memoryIntent.action === 'complete' ? 'completed' : 'archived';
-            const archivedReason =
-              memoryIntent.action === 'complete'
-                ? 'completed'
-                : memoryIntent.action === 'forget'
-                  ? 'owner_forget'
-                  : 'owner_archive';
-            const eventReason =
-              memoryIntent.action === 'complete'
-                ? 'owner_complete'
-                : memoryIntent.action === 'forget'
-                  ? 'owner_forget'
-                  : 'owner_archive';
-
-            const results: Array<{ record: PierrotMemoryRecord; already: boolean }> = [];
-            const failures: Array<{ record: PierrotMemoryRecord; error: string }> = [];
-
-            for (const target of candidates) {
-              if (target.status === nextStatus) {
-                results.push({ record: target, already: true });
-                continue;
-              }
-
-              try {
-                const updated = await updateMemoryRecord(
-                  memoryStore,
-                  ownerIdentityUserId,
-                  target.id,
-                  {
-                    status: nextStatus,
-                    archivedReason,
-                    eventReason,
-                    eventSource: 'owner_chat',
-                  }
-                );
-
-                if (updated.id !== target.id || updated.status !== nextStatus) {
-                  throw new Error('memory_status_not_applied');
-                }
-
-                results.push({ record: updated, already: false });
-              } catch (error) {
-                failures.push({
-                  record: target,
-                  error: error instanceof Error ? error.message : 'memory_update_failed',
-                });
-              }
-            }
-
-            if (results.length === 0) {
-              throw new Error(failures[0]?.error || 'memory_update_failed');
-            }
-
-            const changed = results.filter((result) => !result.already).length;
-            const already = results.filter((result) => result.already).length;
-            const changedTitles = results
-              .filter((result) => !result.already)
-              .map((result) => `«${result.record.title}»`)
-              .join(', ');
-            const alreadyTitles = results
-              .filter((result) => result.already)
-              .map((result) => `«${result.record.title}»`)
-              .join(', ');
-            const failedTitles = failures.map((failure) => `«${failure.record.title}»`).join(', ');
-            const activeLabel = nextStatus === 'completed' ? 'выполнена' : 'в архиве';
-
-            if (failures.length > 0) {
-              return persistOwnerReply(
-                ownerLanguage === 'ru'
-                  ? `Изменил: ${changedTitles || '—'}. Не удалось изменить: ${failedTitles}. По этим записям я ничего не утверждаю.`
-                  : `Changed: ${changedTitles || '—'}. Failed to change: ${failedTitles}. I am not claiming those records were changed.`,
-                {
-                  memory_status: 'partial',
-                  memory_ids: results.map((result) => result.record.id),
-                  memory_count: changed,
-                  memory_already: already,
-                  memory_failed: failures.length,
-                }
-              );
-            }
-
-            if (changed === 0) {
-              return persistOwnerReply(
-                ownerLanguage === 'ru'
-                  ? `${alreadyTitles} уже ${activeLabel}. Ничего не менял.`
-                  : `${alreadyTitles} ${already === 1 ? 'was' : 'were'} already ${activeLabel}. Nothing was changed.`,
-                {
-                  memory_status:
-                    memoryIntent.action === 'complete'
-                      ? 'completed'
-                      : memoryIntent.action === 'forget'
-                        ? 'forgotten'
-                        : 'archived',
-                  memory_ids: results.map((result) => result.record.id),
-                  memory_count: 0,
-                  memory_already: already,
-                }
-              );
-            }
-
-            const actionLabel =
-              memoryIntent.action === 'complete'
-                ? ownerLanguage === 'ru'
-                  ? 'Завершил задачу'
-                  : 'Completed'
-                : memoryIntent.action === 'forget'
-                  ? ownerLanguage === 'ru'
-                    ? 'Убрал из активной памяти'
-                    : 'Removed from active memory'
-                  : ownerLanguage === 'ru'
-                    ? 'Архивировал'
-                    : 'Archived';
-
-            const batchActionLabel =
-              memoryIntent.action === 'complete'
-                ? ownerLanguage === 'ru'
-                  ? 'Завершил'
-                  : 'Completed'
-                : actionLabel;
-
-            const summary =
-              results.length === 1
-                ? `${actionLabel} ${changedTitles}. ${
-                    ownerLanguage === 'ru' ? 'История сохранена.' : 'History is preserved.'
-                  }`
-                : `${batchActionLabel}: ${changedTitles}. ${
-                    already > 0
-                      ? ownerLanguage === 'ru'
-                        ? `Ещё ${alreadyTitles} уже ${activeLabel}.`
-                        : `${alreadyTitles} ${already === 1 ? 'was' : 'were'} already ${activeLabel}.`
-                      : ''
-                  }`;
-
-            const resultStatus =
-              memoryIntent.action === 'complete'
-                ? 'completed'
-                : memoryIntent.action === 'forget'
-                  ? 'forgotten'
-                  : 'archived';
-
-            return persistOwnerReply(summary, {
-              memory_status: resultStatus,
-              memory_ids: results.map((result) => result.record.id),
-              memory_count: changed,
-              memory_already: already,
-            });
+            // Complete/archive/forget are handled by the strict ID resolver
+            // above. Reaching this point means the target was not one of the
+            // supported single-record delete/restore branches.
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Не удалось однозначно определить одну задачу. Ничего не изменено. Уточни точный заголовок.'
+                : 'I could not identify exactly one task. Nothing was changed. Give the exact title.',
+              { memory_status: 'clarification_required' }
+            );
           } catch (error) {
             const message = error instanceof Error ? error.message : '';
 

@@ -22,6 +22,7 @@ export type PierrotProjectSnapshot = PierrotProject & {
     title: string;
     content: string;
     status: string;
+    kind?: string;
     updatedAt: string;
   }>;
   tasks: Array<{ id: string; title: string; status: string; updatedAt: string }>;

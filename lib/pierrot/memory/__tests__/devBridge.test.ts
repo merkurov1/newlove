@@ -18,6 +18,11 @@ jest.mock('../store', () => ({
   updateMemoryRecord: jest.fn(),
 }));
 
+jest.mock('@/lib/pierrot/projects/store', () => ({
+  getPierrotProjectForConversation: jest.fn(async () => null),
+  listPierrotProjects: jest.fn(async () => []),
+}));
+
 import { createDevTask, findDevTaskByDecisionId } from '@/lib/pierrot/dev/tasks';
 import { updateMemoryRecord } from '../store';
 import {
