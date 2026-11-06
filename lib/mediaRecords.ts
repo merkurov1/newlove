@@ -230,16 +230,19 @@ async function enrichMediaRecords(recordsById: Map<string, MediaRecord>): Promis
     const targetId = String(row.target_media_record_id);
     const source = recordsById.get(sourceId);
     const target = recordsById.get(targetId);
+    const relationType = String(row.relation_type);
+    const directional = relationType === 'reprint' || relationType === 'syndication';
 
-    const add = (record: MediaRecord, other: MediaRecord) => {
+    const add = (record: MediaRecord, other: MediaRecord, role: PublicMediaRelation['role']) => {
       const related: PublicMediaRelation = {
         slug: other.slug,
         title: other.title,
         outlet: other.outlet,
         url: other.url,
         date: other.date,
-        relationType: String(row.relation_type),
+        relationType,
         confidence: Number(row.confidence) || 0,
+        ...(role ? { role } : {}),
       };
       const exists = (record.related || []).some(
         (item) => item.slug === related.slug && item.relationType === related.relationType
@@ -248,8 +251,8 @@ async function enrichMediaRecords(recordsById: Map<string, MediaRecord>): Promis
     };
 
     if (source && target) {
-      add(source, target);
-      add(target, source);
+      add(source, target, directional ? 'original' : 'related');
+      add(target, source, directional ? 'reprint' : 'related');
     }
   }
 }

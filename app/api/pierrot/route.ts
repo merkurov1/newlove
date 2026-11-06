@@ -1,4 +1,6 @@
-import { Bot, webhookCallback, InlineKeyboard, type Context } from 'grammy';
+import { Bot, webhookCallback, InlineKeyboard, GrammyError, type Context } from 'grammy';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
+import { claimTelegramUpdate, releaseTelegramUpdateClaim } from '@/lib/telegram/updateIdempotency';
 import {
   createPierrotStore,
   deletePierrotConversation,
@@ -211,8 +213,16 @@ async function sendPierrotResponse(ctx: Context, data: PierrotResponse, question
       parse_mode: 'HTML',
       ...(buttons.length > 0 ? { reply_markup: keyboard } : {}),
     });
-  } catch {
-    await ctx.reply(`${question ? `${question}\n\n` : ''}${data.reply || 'Silence.'}`);
+  } catch (error) {
+    // A 400 from Telegram means the HTML was rejected and nothing was sent, so
+    // a plain-text retry is safe. Network/ambiguous failures must not trigger a
+    // second reply: that is a real source of visible duplicates.
+    if (error instanceof GrammyError && error.error_code === 400) {
+      await ctx.reply(`${question ? `${question}\n\n` : ''}${data.reply || 'Silence.'}`);
+      return;
+    }
+
+    throw error;
   }
 }
 
@@ -226,16 +236,16 @@ async function handleText(ctx: Context, text: string, messageId: string, questio
     return;
   }
 
+  let data: PierrotResponse;
+
   try {
     await ctx.api.sendChatAction(chatId, 'typing').catch(() => undefined);
-    const data = await requestPierrot({
+    data = await requestPierrot({
       chatId,
       userId: ctx.from?.id,
       messageId,
       text,
     });
-
-    await sendPierrotResponse(ctx, data, question);
   } catch (error) {
     // Never expose provider responses, prompts or internal details.
     console.error(
@@ -243,9 +253,21 @@ async function handleText(ctx: Context, text: string, messageId: string, questio
       error instanceof Error ? error.message : 'unknown'
     );
     await ctx.reply('The ether is disrupted. Please try again.');
+    return;
+  }
+
+  try {
+    await sendPierrotResponse(ctx, data, question);
+  } catch (error) {
+    // The turn was already generated. Do not send a second, different reply
+    // when Telegram's response was lost; log it and let update idempotency
+    // prevent a redelivery from producing another answer.
+    console.error(
+      '[Pierrot TG] reply delivery failed:',
+      error instanceof Error ? error.message : 'unknown'
+    );
   }
 }
-
 function welcomeKeyboard() {
   return new InlineKeyboard()
     .url('Lobby', `${siteUrl}/lobby`)
@@ -1394,6 +1416,17 @@ const telegramWebhook = webhookCallback(
   webhookSecret ? { secretToken: webhookSecret } : undefined
 );
 
+function updateIdFromPayload(payload: unknown): number | string | null {
+  if (!payload || typeof payload !== 'object') return null;
+
+  const value = (payload as Record<string, unknown>).update_id;
+
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) return value;
+
+  return null;
+}
+
 export async function POST(request: Request) {
   if (enforceWebhookSecret && !webhookSecret) {
     return new Response(
@@ -1408,5 +1441,71 @@ export async function POST(request: Request) {
     );
   }
 
-  return telegramWebhook(request);
+  let updateId: number | string | null = null;
+
+  try {
+    // Telegram retries the same update_id when the first webhook response is
+    // slow. Claim it before grammY starts handlers so a retry can never send a
+    // second Pierrot answer.
+    const payload = await request.clone().json();
+    updateId = updateIdFromPayload(payload);
+  } catch {
+    // Let grammY return its normal 400 for malformed bodies.
+  }
+
+  if (updateId !== null) {
+    try {
+      const store = getServerSupabaseClient({ useServiceRole: true });
+      const claim = await claimTelegramUpdate(store, updateId);
+
+      if (claim === 'duplicate') {
+        return new Response(JSON.stringify({ ok: true, duplicate: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        });
+      }
+
+      if (claim === 'unavailable') {
+        return new Response(
+          JSON.stringify({ ok: false, error: 'Update idempotency storage is unavailable.' }),
+          {
+            status: 503,
+            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+          }
+        );
+      }
+    } catch {
+      return new Response(
+        JSON.stringify({ ok: false, error: 'Update idempotency storage is unavailable.' }),
+        {
+          status: 503,
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        }
+      );
+    }
+  }
+
+  try {
+    const response = await telegramWebhook(request);
+
+    // A non-2xx response is retried by Telegram. Release the claim so the same
+    // update can be processed again instead of being silently ignored.
+    if (updateId !== null && !response.ok) {
+      const store = getServerSupabaseClient({ useServiceRole: true });
+      await releaseTelegramUpdateClaim(store, updateId);
+    }
+
+    return response;
+  } catch (error) {
+    if (updateId !== null) {
+      try {
+        const store = getServerSupabaseClient({ useServiceRole: true });
+        await releaseTelegramUpdateClaim(store, updateId);
+      } catch {
+        // The original failure is more important.
+      }
+    }
+
+    throw error;
+  }
 }

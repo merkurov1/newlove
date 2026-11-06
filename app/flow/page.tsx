@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import NewPostModal from '@/components/flow/NewPostModal';
 import FlowImageComponent from '@/components/flow/FlowImage';
+import { resolveFlowCardComposition } from '@/lib/flow/cardComposition';
 
 type FlowImage = {
   url: string;
@@ -125,13 +126,7 @@ function EntryMeta({
   );
 }
 
-function AdminControls({
-  onEdit,
-  onDelete,
-}: {
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
+function AdminControls({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
   return (
     <div className="flex items-center gap-3">
       <button
@@ -156,13 +151,7 @@ function AdminControls({
   );
 }
 
-function LinkCard({
-  preview,
-  itemHref: href,
-}: {
-  preview: FlowLink;
-  itemHref: string;
-}) {
+function LinkCard({ preview, itemHref: href }: { preview: FlowLink; itemHref: string }) {
   const domain = preview.siteName || preview.domain || '';
 
   return (
@@ -195,12 +184,7 @@ function LinkCard({
       </div>
 
       {preview.image && (
-        <Link
-          href={href}
-          tabIndex={-1}
-          aria-hidden="true"
-          className="w-32 shrink-0 sm:w-40"
-        >
+        <Link href={href} tabIndex={-1} aria-hidden="true" className="w-32 shrink-0 sm:w-40">
           <FlowImageComponent
             src={preview.image}
             alt=""
@@ -214,13 +198,7 @@ function LinkCard({
   );
 }
 
-function CompactLinkRow({
-  preview,
-  itemHref: href,
-}: {
-  preview: FlowLink;
-  itemHref: string;
-}) {
+function CompactLinkRow({ preview, itemHref: href }: { preview: FlowLink; itemHref: string }) {
   const domain = preview.siteName || preview.domain || '';
 
   return (
@@ -269,13 +247,7 @@ function CompactLinkRow({
   );
 }
 
-function GalleryGrid({
-  images,
-  itemHref: href,
-}: {
-  images: FlowImage[];
-  itemHref: string;
-}) {
+function GalleryGrid({ images, itemHref: href }: { images: FlowImage[]; itemHref: string }) {
   if (images.length === 0) return null;
 
   const altFor = (image: FlowImage, index: number) =>
@@ -439,9 +411,7 @@ function VideoCards({ videos }: { videos: FlowVideo[] }) {
             </span>
 
             {video.author && (
-              <span className="mt-1 block text-xs text-neutral-500">
-                {video.author}
-              </span>
+              <span className="mt-1 block text-xs text-neutral-500">{video.author}</span>
             )}
 
             <span className="mt-2 inline-block font-mono text-[10px] tracking-wider text-neutral-400">
@@ -471,15 +441,28 @@ function Entry({
   const links = (item.links ?? []).filter((link) => !link.inBody);
   const body = item.bodyExcerpt ?? item.bodyText ?? '';
   const showTitle = Boolean(item.showTitle && item.title);
+  const hasText = showTitle || Boolean(body);
+  const hasImages = images.length > 0;
+  const hasVideos = videos.length > 0;
+  const composition = resolveFlowCardComposition({
+    hasText,
+    images: images.length,
+    videos: videos.length,
+    links: links.length,
+  });
 
   return (
-    <article className="group border-b border-neutral-100 py-8 first:pt-0 last:border-b-0">
-      <EntryMeta
-        item={item}
-        admin={admin}
-        onEdit={onEdit}
-        onDelete={onDelete}
-      />
+    <article
+      className={`group flow-entry flow-entry--${composition} border-b border-neutral-100 py-8 first:pt-0 last:border-b-0`}
+      data-content-type={item.contentType || item.type}
+    >
+      <EntryMeta item={item} admin={admin} onEdit={onEdit} onDelete={onDelete} />
+
+      {/* Image and video are the lead element whenever they exist. The title
+       * and body follow, so text can never visually displace the media. */}
+      {hasImages && <GalleryGrid images={images} itemHref={href} />}
+
+      {hasVideos && <VideoCards videos={videos} />}
 
       {showTitle && (
         <h2 className="mb-2 text-lg font-medium leading-snug text-neutral-900 sm:text-xl">
@@ -508,10 +491,6 @@ function Entry({
         </div>
       )}
 
-      <VideoCards videos={videos} />
-
-      <GalleryGrid images={images} itemHref={href} />
-
       {links.length === 1 && (
         <div className="mt-3">
           <LinkCard preview={links[0]} itemHref={href} />
@@ -521,11 +500,7 @@ function Entry({
       {links.length > 1 && (
         <div className="mt-3 divide-y divide-neutral-200/50 overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50/40">
           {links.map((preview) => (
-            <CompactLinkRow
-              key={preview.url}
-              preview={preview}
-              itemHref={href}
-            />
+            <CompactLinkRow key={preview.url} preview={preview} itemHref={href} />
           ))}
         </div>
       )}
@@ -547,13 +522,7 @@ function LoadingEntries() {
   );
 }
 
-function Message({
-  children,
-  action,
-}: {
-  children: ReactNode;
-  action?: ReactNode;
-}) {
+function Message({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <div className="py-16 text-center text-sm text-neutral-400">
       <p>{children}</p>
@@ -590,10 +559,9 @@ export default function FlowPage() {
 
     try {
       const offset = reset ? 0 : itemsRef.current.length;
-      const response = await fetch(
-        `/api/flow/items?limit=${PAGE_SIZE}&offset=${offset}`,
-        { cache: 'no-store' }
-      );
+      const response = await fetch(`/api/flow/items?limit=${PAGE_SIZE}&offset=${offset}`, {
+        cache: 'no-store',
+      });
 
       const json = (await response.json().catch(() => ({}))) as FlowResponse;
 
@@ -610,9 +578,7 @@ export default function FlowPage() {
             ...itemsRef.current,
             ...incoming.filter(
               (incomingItem) =>
-                !itemsRef.current.some(
-                  (existingItem) => existingItem.id === incomingItem.id
-                )
+                !itemsRef.current.some((existingItem) => existingItem.id === incomingItem.id)
             ),
           ];
 
@@ -624,9 +590,7 @@ export default function FlowPage() {
       if (!mountedRef.current) return;
 
       console.error('[flow] failed to load items:', error);
-      setLoadError(
-        error instanceof Error ? error.message : 'Could not load Flow.'
-      );
+      setLoadError(error instanceof Error ? error.message : 'Could not load Flow.');
     } finally {
       isFetchingRef.current = false;
 
@@ -666,18 +630,14 @@ export default function FlowPage() {
         throw new Error(json.error || 'Failed to delete item.');
       }
 
-      const nextItems = itemsRef.current.filter(
-        (entry) => entry.id !== item.id
-      );
+      const nextItems = itemsRef.current.filter((entry) => entry.id !== item.id);
 
       itemsRef.current = nextItems;
       setItems(nextItems);
       window.dispatchEvent(new CustomEvent('flow:updated'));
     } catch (error) {
       console.error('[flow] delete failed:', error);
-      window.alert(
-        error instanceof Error ? error.message : 'Failed to delete item.'
-      );
+      window.alert(error instanceof Error ? error.message : 'Failed to delete item.');
     }
   }, []);
 
@@ -864,13 +824,8 @@ export default function FlowPage() {
                 </Message>
               )}
 
-              <div
-                ref={observerRef}
-                className="flex min-h-16 items-center justify-center py-6"
-              >
-                {loadingMore && (
-                  <span className="text-xs text-neutral-400">Loading…</span>
-                )}
+              <div ref={observerRef} className="flex min-h-16 items-center justify-center py-6">
+                {loadingMore && <span className="text-xs text-neutral-400">Loading…</span>}
 
                 {!loadingMore && hasMore && !loadError && (
                   <button

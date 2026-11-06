@@ -15,15 +15,29 @@ export default function TemplePageTransition({ children }: { children: ReactNode
     media.addEventListener?.('change', update);
     return () => media.removeEventListener?.('change', update);
   }, []);
+
+  // The World is an immersive fixed viewport. When the owner opens it inside
+  // WorkspaceShell, a transformed motion wrapper would become the containing
+  // block for the fixed shell and collapse it. Keep this route immediate.
+  if (pathname === '/heartandangel/world' || pathname.startsWith('/heartandangel/world/')) {
+    return <>{children}</>;
+  }
+
   return (
     <AnimatePresence mode="wait" initial={false}>
       <motion.div
         key={pathname}
-        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 9, scale: 0.995, filter: 'blur(5px)' }}
+        initial={
+          reduceMotion ? { opacity: 0 } : { opacity: 0, y: 9, scale: 0.995, filter: 'blur(5px)' }
+        }
         animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -5, scale: 0.998, filter: 'blur(3px)' }}
+        exit={
+          reduceMotion ? { opacity: 0 } : { opacity: 0, y: -5, scale: 0.998, filter: 'blur(3px)' }
+        }
         transition={{ duration: reduceMotion ? 0.12 : 0.34, ease: [0.22, 1, 0.36, 1] }}
-      >{children}</motion.div>
+      >
+        {children}
+      </motion.div>
     </AnimatePresence>
   );
 }

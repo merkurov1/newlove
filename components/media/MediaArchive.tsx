@@ -845,6 +845,8 @@ export default function MediaArchive({ records, archives }: Props) {
                                 <Link href={`/media/record/${encodeURIComponent(related.slug)}`}>
                                   {related.outlet}: {related.title}
                                 </Link>
+                                {related.role === 'original' && <em> · original source</em>}
+                                {related.role === 'reprint' && <em> · reprint</em>}
                               </span>
                             ))}
                           </p>
@@ -1834,6 +1836,15 @@ const CSS = `
 
 .ma-related a:hover {
   color: var(--ma-accent);
+}
+
+.ma-related em {
+  color: var(--ma-muted);
+  font-family: var(--ma-mono);
+  font-size: 9px;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .ma-semantic-link {

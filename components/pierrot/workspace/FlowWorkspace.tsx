@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ExternalLink, PenLine, Trash2, X } from 'lucide-react';
 import NewPostModal from '@/components/flow/NewPostModal';
 import FlowImage from '@/components/flow/FlowImage';
+import { resolveFlowCardComposition } from '@/lib/flow/cardComposition';
 import WorkspaceMarkdown from './WorkspaceMarkdown';
 import { useOnlineStatus } from './useOnlineStatus';
 
@@ -81,6 +82,111 @@ function formatDate(value?: string | null): string {
 
 function itemHref(item: FlowFeedItem): string {
   return item.slug ? `/flow/${encodeURIComponent(item.slug)}` : '/flow';
+}
+
+function imageAspect(image: FlowImageItem): string {
+  return image.width && image.height ? `${image.width} / ${image.height}` : '4 / 3';
+}
+
+function EntryImages({
+  images,
+  title,
+  priority,
+  onOpen,
+}: {
+  images: FlowImageItem[];
+  title: string;
+  priority: boolean;
+  onOpen: () => void;
+}) {
+  if (images.length === 1) {
+    const image = images[0];
+
+    return (
+      <button
+        type="button"
+        className="pw-site-entry-image"
+        onClick={onOpen}
+        aria-label="Открыть запись с изображением"
+      >
+        <FlowImage
+          src={image.url}
+          alt={image.alt || image.caption || title || ''}
+          aspectRatio={imageAspect(image)}
+          objectFit="contain"
+          sizes="(max-width: 900px) 100vw, 720px"
+          priority={priority}
+        />
+      </button>
+    );
+  }
+
+  const visible = images.slice(0, 4);
+  const remaining = images.length - visible.length;
+
+  return (
+    <div className="pw-site-entry-gallery">
+      {visible.map((image, index) => (
+        <button
+          key={`${image.url}-${index}`}
+          type="button"
+          className="pw-site-entry-gallery-item"
+          onClick={onOpen}
+          aria-label="Открыть запись с изображениями"
+        >
+          <FlowImage
+            src={image.url}
+            alt={image.alt || image.caption || `${title} — ${index + 1}`}
+            aspectRatio={index === 0 && visible.length === 3 ? '16 / 9' : '1 / 1'}
+            sizes="(max-width: 900px) 50vw, 350px"
+            priority={priority && index === 0}
+          />
+          {index === visible.length - 1 && remaining > 0 && (
+            <span className="pw-site-entry-gallery-count">+{remaining}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function EntryVideos({ videos }: { videos: FlowVideo[] }) {
+  return (
+    <>
+      {videos.map((video, index) => (
+        <a
+          key={`${video.url}-${index}`}
+          href={video.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pw-site-entry-video"
+        >
+          {video.thumbnail && (
+            <span className="pw-site-entry-video-thumb">
+              <FlowImage
+                src={video.thumbnail}
+                alt=""
+                aspectRatio="16 / 9"
+                sizes="(max-width: 900px) 40vw, 220px"
+              />
+              <span className="pw-site-entry-video-play" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </span>
+            </span>
+          )}
+          <span className="pw-site-entry-video-copy">
+            <strong>{video.title || 'Смотреть видео'}</strong>
+            <span>
+              {video.author ? `${video.author} · ` : ''}
+              {video.provider === 'youtube' ? 'YouTube' : 'Видео'} ↗
+            </span>
+          </span>
+        </a>
+      ))}
+    </>
+  );
 }
 
 export default function FlowWorkspace() {
@@ -224,13 +330,26 @@ export default function FlowWorkspace() {
             {items.map((item, itemIndex) => {
               const body = item.bodyExcerpt || item.bodyText || '';
               const images = item.images ?? [];
+              const videos = item.videos ?? [];
               const links = (item.links ?? []).filter((link) => !link.inBody);
               const href = itemHref(item);
+              const showTitle = Boolean(item.showTitle && item.title);
+              const hasText = showTitle || Boolean(body);
+              const hasImages = images.length > 0;
+              const hasVideos = videos.length > 0;
+              const hasMedia = hasImages || hasVideos;
+              const composition = resolveFlowCardComposition({
+                hasText,
+                images: images.length,
+                videos: videos.length,
+                links: links.length,
+              });
 
               return (
                 <article
                   key={item.id}
-                  className="pw-site-entry"
+                  className={`pw-site-entry pw-site-entry--${composition}`}
+                  data-content-type={item.contentType || item.type}
                   style={{ '--pw-entry-index': itemIndex } as CSSProperties}
                 >
                   <div className="pw-site-entry-meta">
@@ -259,7 +378,24 @@ export default function FlowWorkspace() {
                     </div>
                   </div>
 
-                  {item.showTitle && item.title && (
+                  {/* Visual content always comes before the title and body when
+                   * both exist. The text can no longer push an image below the
+                   * fold or make it look secondary. */}
+                  {hasMedia && (
+                    <div className="pw-site-entry-media">
+                      {hasImages && (
+                        <EntryImages
+                          images={images}
+                          title={item.title}
+                          priority={itemIndex === 0}
+                          onOpen={() => openReader(item)}
+                        />
+                      )}
+                      {hasVideos && <EntryVideos videos={videos} />}
+                    </div>
+                  )}
+
+                  {showTitle && (
                     <h2 className="pw-site-entry-title">
                       <button type="button" onClick={() => openReader(item)}>
                         {item.title}
@@ -284,23 +420,6 @@ export default function FlowWorkspace() {
                       onClick={() => openReader(item)}
                     >
                       Читать полностью →
-                    </button>
-                  )}
-
-                  {images.length > 0 && (
-                    <button
-                      type="button"
-                      className="pw-site-entry-image"
-                      onClick={() => openReader(item)}
-                      aria-label="Открыть запись с изображением"
-                    >
-                      <FlowImage
-                        src={images[0].url}
-                        alt={images[0].alt || item.title || ''}
-                        aspectRatio="4 / 3"
-                        sizes="(max-width: 900px) 100vw, 720px"
-                        priority={itemIndex === 0}
-                      />
                     </button>
                   )}
 
@@ -380,26 +499,13 @@ export default function FlowWorkspace() {
               </h2>
             )}
 
-            {selectedItem.body_md ? (
-              <WorkspaceMarkdown
-                className="pw-flow-reader-body"
-                content={selectedItem.body_md}
-              />
-            ) : (
-              <p className="pw-flow-reader-text">
-                {selectedItem.bodyText || selectedItem.bodyExcerpt || ''}
-              </p>
-            )}
-
             {(selectedItem.images ?? []).map((image, index) => (
               <FlowImage
                 key={`${image.url}-${index}`}
                 src={image.url}
                 alt={image.alt || image.caption || ''}
                 aspectRatio={
-                  image.width && image.height
-                    ? `${image.width} / ${image.height}`
-                    : '4 / 3'
+                  image.width && image.height ? `${image.width} / ${image.height}` : '4 / 3'
                 }
                 objectFit="contain"
                 sizes="(max-width: 900px) 100vw, 720px"
@@ -407,6 +513,14 @@ export default function FlowWorkspace() {
                 priority={index === 0}
               />
             ))}
+
+            {selectedItem.body_md ? (
+              <WorkspaceMarkdown className="pw-flow-reader-body" content={selectedItem.body_md} />
+            ) : (
+              <p className="pw-flow-reader-text">
+                {selectedItem.bodyText || selectedItem.bodyExcerpt || ''}
+              </p>
+            )}
 
             {(selectedItem.links ?? [])
               .filter((link) => !link.inBody)
@@ -425,11 +539,7 @@ export default function FlowWorkspace() {
               ))}
 
             <footer className="pw-flow-reader-foot">
-              <a
-                href={itemHref(selectedItem)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a href={itemHref(selectedItem)} target="_blank" rel="noopener noreferrer">
                 Открыть на сайте <ExternalLink size={12} aria-hidden="true" />
               </a>
             </footer>

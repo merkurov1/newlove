@@ -21,6 +21,8 @@ export interface PublicMediaRelation {
   date: string;
   relationType: string;
   confidence: number;
+  /** Directional role for reprint/syndication relations. */
+  role?: 'original' | 'reprint' | 'related';
 }
 
 export type Lang = 'EN' | 'RU' | 'DE' | 'PL' | 'BS' | 'FR' | 'IT' | 'ES' | 'UK';

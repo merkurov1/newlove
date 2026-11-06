@@ -201,7 +201,11 @@ export default async function MediaRecordPage({ params }: Props) {
                     {related.outlet}: {related.title}
                   </Link>
                   <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.1em] text-stone-400">
-                    {related.relationType}
+                    {related.role === 'original'
+                      ? 'original source'
+                      : related.role === 'reprint'
+                        ? 'reprint'
+                        : related.relationType}
                   </span>
                 </li>
               ))}

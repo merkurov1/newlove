@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, RotateCcw, BookOpen } from 'lucide-react';
+import { X, RotateCcw } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
 import { PierrotInput, PierrotMessageList } from '@/components/pierrot/PierrotConversation';
 import PierrotDataNotice from '@/components/pierrot/PierrotDataNotice';
@@ -360,8 +360,9 @@ export default function PierrotChat() {
                               }
                             `}
                           >
-                            <BookOpen size={14} strokeWidth={1.7} />
-                            <span className="hidden sm:inline">Brain</span>
+                            <span className="font-mono text-[9px] uppercase tracking-[0.16em] sm:text-[10px]">
+                              Brain
+                            </span>
                           </button>
                         )}
 

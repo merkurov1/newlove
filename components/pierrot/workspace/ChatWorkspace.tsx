@@ -35,10 +35,7 @@ import {
 } from '@/lib/pierrot/streamProtocol';
 import { setWorkspaceHandoff } from '@/lib/pierrot/workspace/handoff';
 import { isRefreshStatusCommand } from '@/lib/pierrot/workspace/refreshCommand';
-import {
-  readOverviewCache,
-  writeOverviewCache,
-} from '@/lib/pierrot/workspace/cache';
+import { readOverviewCache, writeOverviewCache } from '@/lib/pierrot/workspace/cache';
 import WorkspaceMarkdown from './WorkspaceMarkdown';
 import PierrotAvatar from './PierrotAvatar';
 import { useOnlineStatus } from './useOnlineStatus';
@@ -50,6 +47,7 @@ import type {
 import { memoryKindLabel, memoryStatusLabel } from '@/lib/pierrot/memory/types';
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
 import HomeOverview from './HomeOverview';
+import WorkspaceWriteLink from './WorkspaceWriteLink';
 
 type UiMessage = {
   id: string;
@@ -1013,7 +1011,19 @@ export default function ChatWorkspace({
   const streamingMessage = messages.find((message) => message.streaming);
   const hasStreamingContent = Boolean(streamingMessage?.content.trim());
   const memoryCounts = memorySummary?.counts ?? { memory: 0, saved: 0, reminder: 0 };
-  const memoryTotal = memoryCounts.memory + memoryCounts.saved + memoryCounts.reminder;
+  const categoryTotal = memoryCounts.memory + memoryCounts.saved + memoryCounts.reminder;
+  // Canonical active count. The home status card uses
+  // BrainStatusSnapshot.metrics.activeRecords, which is produced from the same
+  // summary (all current kinds), so the trigger and the Memory panel no longer
+  // show a narrower "three categories only" number.
+  const memoryTotal = memorySummary?.activeTotal ?? (categoryTotal || memoryRecords.length);
+  const memoryScopeTotal = memorySummary
+    ? memoryScope === 'active'
+      ? memoryTotal
+      : memoryScope === 'archive'
+        ? (memorySummary.archivedTotal ?? memoryRecords.length)
+        : memoryTotal + (memorySummary.archivedTotal ?? 0) + (memorySummary.uncertainTotal ?? 0)
+    : memoryRecords.length || memoryTotal;
   const filteredMemoryRecords =
     memoryFilter === 'all'
       ? memoryRecords
@@ -1134,6 +1144,8 @@ export default function ChatWorkspace({
             <span>Память</span>
             <span className="pw-memory-trigger-count">{memoryTotal}</span>
           </button>
+
+          <WorkspaceWriteLink />
         </header>
 
         <div className="pw-chat-scroll" ref={scrollRef} onScroll={onTranscriptScroll}>
@@ -1382,7 +1394,7 @@ export default function ChatWorkspace({
               <div>
                 <span className="pw-section-title">Memory</span>
                 <p className="pw-inspector-title">
-                  {memoryTotal} {memoryTotal === 1 ? 'запись' : 'записей'}
+                  {memoryScopeTotal} {memoryScopeTotal === 1 ? 'запись' : 'записей'}
                 </p>
               </div>
               <button
@@ -1420,7 +1432,7 @@ export default function ChatWorkspace({
 
             <div className="pw-memory-tabs" role="tablist" aria-label="Категории памяти">
               {[
-                ['all', 'Все', memoryTotal],
+                ['all', 'Все', memoryScopeTotal],
                 ['memory', 'Запомнено', memoryCounts.memory],
                 ['saved', 'Сохранено', memoryCounts.saved],
                 ['reminder', 'Напомнить', memoryCounts.reminder],

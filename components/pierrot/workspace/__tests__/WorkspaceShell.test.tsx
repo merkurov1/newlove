@@ -15,14 +15,14 @@ const WorkspaceShell = require('../WorkspaceShell')
   .default as typeof import('../WorkspaceShell').default;
 
 describe('WorkspaceShell navigation', () => {
-  it('keeps the Heart & Angel rail item icon-only and linked to the same route', () => {
+  it('keeps the Heart & Angel rail item icon-only and points it at the public World inside the shell', () => {
     const html = renderToStaticMarkup(
       <WorkspaceShell>
         <div>content</div>
       </WorkspaceShell>
     );
     const $ = cheerio.load(html);
-    const heart = $('a[href="/admin/pierrot/heart-and-angel"]');
+    const heart = $('a[href="/heartandangel/world"]');
 
     expect(heart).toHaveLength(1);
     expect(heart.attr('aria-label')).toBe('HEART & ANGEL');
@@ -30,6 +30,34 @@ describe('WorkspaceShell navigation', () => {
     expect(heart.find('span')).toHaveLength(0);
     expect(heart.text().trim()).toBe('');
     expect(heart.find('svg')).toHaveLength(1);
+  });
+
+  it('orders the primary workspaces before the separated utility group', () => {
+    const html = renderToStaticMarkup(
+      <WorkspaceShell>
+        <div>content</div>
+      </WorkspaceShell>
+    );
+    const $ = cheerio.load(html);
+
+    const primary = $('.pw-rail-group--primary a')
+      .map((_, node) => $(node).attr('href'))
+      .get();
+    const bottom = $('.pw-rail-group--bottom a')
+      .map((_, node) => $(node).attr('href'))
+      .get();
+
+    expect(primary).toEqual([
+      '/admin/pierrot',
+      '/admin/pierrot/flow',
+      '/admin/pierrot/art-engine',
+      '/heartandangel/world',
+    ]);
+    expect(bottom.slice(0, 3)).toEqual([
+      '/admin/pierrot/brain',
+      '/admin/pierrot/dash',
+      '/admin/pierrot/dev',
+    ]);
   });
 
   it('keeps labels on the other rail items', () => {

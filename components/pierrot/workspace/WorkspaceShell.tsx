@@ -14,7 +14,10 @@ import {
   Terminal,
 } from 'lucide-react';
 import PierrotAvatar from './PierrotAvatar';
+import WorkspaceWriteLink from './WorkspaceWriteLink';
 import {
+  WORKSPACE_BOTTOM_ROUTES,
+  WORKSPACE_PRIMARY_ROUTES,
   WORKSPACE_ROUTES,
   activeWorkspaceKey,
   shortcutRoute,
@@ -40,14 +43,54 @@ function registerServiceWorker() {
   });
 }
 
+type RailItem = (typeof WORKSPACE_ROUTES)[number];
+
+function RailLink({
+  item,
+  active,
+}: {
+  item: RailItem;
+  active: ReturnType<typeof activeWorkspaceKey>;
+}) {
+  const Icon = ICONS[item.key];
+  const isActive = active === item.key;
+  const shortLabel = 'shortLabel' in item ? item.shortLabel : item.label;
+  const iconOnly = 'iconOnly' in item && item.iconOnly === true;
+
+  return (
+    <Link
+      href={item.path}
+      className={`pw-rail-link${iconOnly ? ' pw-rail-link--icon-only' : ''}`}
+      aria-current={isActive ? 'page' : undefined}
+      aria-label={item.label}
+      title={`${item.label} · Cmd+${item.shortcut}`}
+      onClick={(event) => {
+        if (item.key === 'chat' && isActive) {
+          event.preventDefault();
+          window.dispatchEvent(new CustomEvent('pierrot:toggle-drawer'));
+        }
+      }}
+    >
+      <Icon size={24} strokeWidth={1.4} aria-hidden="true" />
+      {!iconOnly && (
+        <>
+          <span className="max-[699px]:hidden">{item.label}</span>
+          <span className="hidden max-[699px]:inline">{shortLabel}</span>
+        </>
+      )}
+    </Link>
+  );
+}
+
 export default function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || '/admin/pierrot';
   const router = useRouter();
   const active = activeWorkspaceKey(pathname);
+  const showFloatingWrite = active !== 'chat' && active !== 'heart';
 
   useEffect(() => {
-    registerServiceWorker();
-  }, []);
+    if (pathname.startsWith('/admin/pierrot')) registerServiceWorker();
+  }, [pathname]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -77,41 +120,24 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
         </Link>
 
         <div className="pw-rail-list">
-          {WORKSPACE_ROUTES.map((item) => {
-            const Icon = ICONS[item.key];
-            const isActive = active === item.key;
-            const shortLabel = 'shortLabel' in item ? item.shortLabel : item.label;
-            const iconOnly = 'iconOnly' in item && item.iconOnly === true;
+          <div className="pw-rail-group pw-rail-group--primary">
+            {WORKSPACE_PRIMARY_ROUTES.map((item) => (
+              <RailLink key={item.key} item={item} active={active} />
+            ))}
+          </div>
 
-            return (
-              <Link
-                key={item.key}
-                href={item.path}
-                className={`pw-rail-link${iconOnly ? ' pw-rail-link--icon-only' : ''}`}
-                aria-current={isActive ? 'page' : undefined}
-                aria-label={item.label}
-                title={`${item.label} · Cmd+${item.shortcut}`}
-                onClick={(event) => {
-                  if (item.key === 'chat' && isActive) {
-                    event.preventDefault();
-                    window.dispatchEvent(new CustomEvent('pierrot:toggle-drawer'));
-                  }
-                }}
-              >
-                <Icon size={24} strokeWidth={1.4} aria-hidden="true" />
-                {!iconOnly && (
-                  <>
-                    <span className="max-[699px]:hidden">{item.label}</span>
-                    <span className="hidden max-[699px]:inline">{shortLabel}</span>
-                  </>
-                )}
-              </Link>
-            );
-          })}
+          <div className="pw-rail-group pw-rail-group--bottom" aria-label="Инструменты">
+            {WORKSPACE_BOTTOM_ROUTES.map((item) => (
+              <RailLink key={item.key} item={item} active={active} />
+            ))}
+          </div>
         </div>
       </nav>
 
-      <main className="pw-main">{children}</main>
+      <main className={`pw-main${showFloatingWrite ? ' pw-main--with-write' : ''}`}>
+        {showFloatingWrite && <WorkspaceWriteLink floating />}
+        {children}
+      </main>
     </div>
   );
 }
