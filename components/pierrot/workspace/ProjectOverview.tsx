@@ -8,6 +8,7 @@ export default function ProjectOverview({ project: initial }: { project: Pierrot
   const [project, setProject] = useState(initial);
   const [brief, setBrief] = useState(initial.projectBrief);
   const [notice, setNotice] = useState('');
+  const [savingStatus, setSavingStatus] = useState(false);
   async function saveBrief() {
     const response = await fetch(`/api/admin/pierrot/projects/${project.id}`, {
       method: 'PATCH',
@@ -22,6 +23,25 @@ export default function ProjectOverview({ project: initial }: { project: Pierrot
     setProject((current) => ({ ...current, ...data.project }));
     setNotice('Бриф сохранён.');
   }
+  async function setStatus(status: 'active' | 'paused' | 'archived') {
+    setSavingStatus(true);
+    setNotice('');
+    try {
+      const response = await fetch(`/api/admin/pierrot/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'status_failed');
+      setProject((current) => ({ ...current, ...data.project }));
+      setNotice(status === 'paused' ? 'Проект приостановлен.' : status === 'archived' ? 'Проект архивирован.' : 'Проект возобновлён.');
+    } catch {
+      setNotice('Не удалось изменить статус проекта.');
+    } finally {
+      setSavingStatus(false);
+    }
+  }
   return (
     <section className="pw-project-overview">
       <header className="pw-section-header">
@@ -29,11 +49,31 @@ export default function ProjectOverview({ project: initial }: { project: Pierrot
           <Link href="/admin/pierrot/projects">← Все проекты</Link>
           <p className="pw-eyebrow">PROJECT / {project.status}</p>
           <h1>{project.name}</h1>
-          <p>{project.description || project.objective}</p>
+          <p>{project.description || project.objective || 'Постоянное рабочее пространство Pierrot.'}</p>
+          <small>
+            {project.status} · последняя активность{' '}
+            {project.lastActivityAt ? new Date(project.lastActivityAt).toLocaleDateString('ru-RU') : '—'}
+          </small>
         </div>
         <Link className="pw-button" href={`/admin/pierrot?new=1&project=${project.slug}`}>
           Новый разговор в проекте
         </Link>
+          <div>
+            {project.status === 'active' ? (
+              <button type="button" onClick={() => void setStatus('paused')} disabled={savingStatus}>
+                Приостановить
+              </button>
+            ) : project.status === 'paused' ? (
+              <button type="button" onClick={() => void setStatus('active')} disabled={savingStatus}>
+                Возобновить
+              </button>
+            ) : null}
+            {project.status !== 'archived' && (
+              <button type="button" onClick={() => void setStatus('archived')} disabled={savingStatus}>
+                Архивировать
+              </button>
+            )}
+          </div>
       </header>
       <div className="pw-project-overview-grid">
         <article className="pw-project-panel pw-project-panel--brief">
@@ -54,7 +94,10 @@ export default function ProjectOverview({ project: initial }: { project: Pierrot
         />
         <ProjectList
           title="Разговоры"
-          items={project.conversations.map((item) => item.title || item.id)}
+          items={project.conversations.map((item) => ({
+            label: item.title || item.id,
+            href: `/admin/pierrot?conversation=${encodeURIComponent(item.id)}&project=${encodeURIComponent(project.slug)}`,
+          }))}
         />
         <ProjectList
           title="Знания"
@@ -69,14 +112,22 @@ export default function ProjectOverview({ project: initial }: { project: Pierrot
   );
 }
 
-function ProjectList({ title, items }: { title: string; items: string[] }) {
+function ProjectList({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<string | { label: string; href: string }>;
+}) {
   return (
     <article className="pw-project-panel">
       <h2>{title}</h2>
       {items.length ? (
         <ul>
           {items.map((item, index) => (
-            <li key={`${item}-${index}`}>{item}</li>
+            <li key={`${typeof item === 'string' ? item : item.label}-${index}`}>
+              {typeof item === 'string' ? item : <Link href={item.href}>{item.label}</Link>}
+            </li>
           ))}
         </ul>
       ) : (

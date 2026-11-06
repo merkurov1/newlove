@@ -64,6 +64,9 @@ export type OwnerConversationListItem = {
   updatedAt: string;
   consentState: 'pending' | 'granted' | 'denied' | null;
   messageCount: number;
+  projectId: string | null;
+  projectSlug: string | null;
+  projectName: string | null;
 };
 
 export type OwnerChatMessage = {

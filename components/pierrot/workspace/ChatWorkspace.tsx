@@ -8,6 +8,8 @@ import {
   ArrowUp,
   Bookmark,
   Check,
+  ChevronDown,
+  ChevronRight,
   MessageSquare,
   PanelLeft,
   Plus,
@@ -126,6 +128,37 @@ function initialMessages(conversation: OwnerConversation | null): UiMessage[] {
   }));
 }
 
+function ConversationLinks({
+  items,
+  conversationId,
+  onOpen,
+}: {
+  items: OwnerConversationListItem[];
+  conversationId: string | null;
+  onOpen: () => void;
+}) {
+  return (
+    <ul className="pw-conversation-list">
+      {items.map((item) => (
+        <li key={item.id}>
+          <Link
+            href={`/admin/pierrot?conversation=${encodeURIComponent(item.id)}`}
+            className="pw-conversation-link"
+            aria-current={conversationId === item.id ? 'page' : undefined}
+            onClick={onOpen}
+          >
+            <span className="pw-conversation-title">{item.title}</span>
+            <span className="pw-conversation-date">
+              {formatConversationDate(item.updatedAt)} · {item.messageCount}{' '}
+              {item.messageCount === 1 ? 'сообщение' : 'сообщений'}
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function ChatWorkspace({
   ownerId,
   overview,
@@ -169,6 +202,7 @@ export default function ChatWorkspace({
   const [memoryScope, setMemoryScope] = useState<'active' | 'archive' | 'all'>('active');
   const [memoryLoading, setMemoryLoading] = useState(false);
   const [memoryError, setMemoryError] = useState<string | null>(null);
+  const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({});
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
   const [editingMemoryContent, setEditingMemoryContent] = useState('');
   const [consent, setConsent] = useState<Consent>(() => ({
@@ -180,15 +214,6 @@ export default function ChatWorkspace({
           : 'pending',
     version: null,
   }));
-
-  useEffect(() => {
-    if (!project?.id || !conversationId) return;
-    void fetch(`/api/admin/pierrot/projects/${project.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'link_conversation', conversationId }),
-    });
-  }, [conversationId, project?.id]);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inspectorScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1050,6 +1075,24 @@ export default function ChatWorkspace({
       : streamStage === 'persisting'
         ? 'Pierrot сохраняет ответ'
         : 'Pierrot формулирует ответ';
+  const projectGroups = useMemo(() => {
+    const groups = new Map<string, { name: string; slug: string; items: OwnerConversationListItem[] }>();
+    const unassigned: OwnerConversationListItem[] = [];
+    for (const item of conversations) {
+      if (!item.projectId || !item.projectSlug || !item.projectName) {
+        unassigned.push(item);
+        continue;
+      }
+      const current = groups.get(item.projectId) || {
+        name: item.projectName,
+        slug: item.projectSlug,
+        items: [],
+      };
+      current.items.push(item);
+      groups.set(item.projectId, current);
+    }
+    return { groups: Array.from(groups.entries()), unassigned };
+  }, [conversations]);
 
   return (
     <div
@@ -1094,31 +1137,47 @@ export default function ChatWorkspace({
               Новый диалог
             </button>
 
-            {conversations.length === 0 ? (
+            <div className="pw-drawer-section">
+              <div className="pw-drawer-section-title">Проекты</div>
+              {projectGroups.groups.map(([id, group]) => {
+                const collapsed = collapsedProjects[id] === true;
+                return (
+                  <section key={id} className="pw-project-conversation-group">
+                    <div className="pw-project-conversation-heading">
+                      <button
+                        type="button"
+                        className="pw-project-conversation-toggle"
+                        aria-expanded={!collapsed}
+                        onClick={() =>
+                          setCollapsedProjects((current) => ({ ...current, [id]: !collapsed }))
+                        }
+                      >
+                        {collapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+                        <span>{group.name}</span>
+                      </button>
+                      <Link href={`/admin/pierrot?new=1&project=${encodeURIComponent(group.slug)}`}>
+                        <Plus size={15} aria-label={`Новый диалог в проекте ${group.name}`} />
+                      </Link>
+                    </div>
+                    {!collapsed && (
+                      <ConversationLinks items={group.items} conversationId={conversationId} onOpen={() => setDrawerOpen(false)} />
+                    )}
+                  </section>
+                );
+              })}
+              {projectGroups.groups.length === 0 && <p className="pw-drawer-empty">Проектных диалогов пока нет.</p>}
+            </div>
+
+            <div className="pw-drawer-section">
+              <div className="pw-drawer-section-title">Недавние разговоры</div>
+            {projectGroups.unassigned.length === 0 ? (
               <p className="pw-drawer-empty">
-                Сохранённых диалогов нет. Они появляются здесь только при включённом сохранении и
-                после ответа Pierrot.
+                Непривязанных сохранённых диалогов пока нет.
               </p>
             ) : (
-              <ul className="pw-conversation-list">
-                {conversations.map((item) => (
-                  <li key={item.id}>
-                    <Link
-                      href={`/admin/pierrot?conversation=${encodeURIComponent(item.id)}`}
-                      className="pw-conversation-link"
-                      aria-current={conversationId === item.id ? 'page' : undefined}
-                      onClick={() => setDrawerOpen(false)}
-                    >
-                      <span className="pw-conversation-title">{item.title}</span>
-                      <span className="pw-conversation-date">
-                        {formatConversationDate(item.updatedAt)} · {item.messageCount}{' '}
-                        {item.messageCount === 1 ? 'сообщение' : 'сообщений'}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              <ConversationLinks items={projectGroups.unassigned} conversationId={conversationId} onOpen={() => setDrawerOpen(false)} />
             )}
+            </div>
           </div>
         </div>
       </aside>

@@ -195,7 +195,11 @@ import {
   normalizePierrotOwnerProfile,
   type PierrotOwnerProfile,
 } from '@/lib/pierrot/perspective';
-import { getPierrotProjectSnapshot } from '@/lib/pierrot/projects/store';
+import {
+  getPierrotProjectForConversation,
+  getPierrotProjectSnapshot,
+  linkConversationToProject,
+} from '@/lib/pierrot/projects/store';
 import { resolvePierrotProject } from '@/lib/pierrot/projects/resolver';
 
 export const runtime = 'nodejs';
@@ -507,6 +511,13 @@ export async function POST(req: Request) {
     // Owner knowledge is the default for a verified owner. Sending
     // mode: "site" explicitly turns it off; non-owners never enter this path.
     const ownerMode = ragOwnerAuthorized && !requestedSiteMode;
+    let conversationProject: Awaited<ReturnType<typeof getPierrotProjectForConversation>> = null;
+    if (ownerMode && isPierrotUserId(ownerIdentityUserId) && rawConversationId) {
+      conversationProject = await getPierrotProjectForConversation(
+        ownerIdentityUserId,
+        rawConversationId
+      ).catch(() => null);
+    }
     // Memory is independent of transcript-storage consent: an explicit
     // “Запомни/Сохрани/Напомни” command is its own permission for that record.
     const memoryStore = ownerMode ? createPierrotStore() : null;
@@ -578,6 +589,21 @@ export async function POST(req: Request) {
           consentVersion: consent.version,
           identity,
         });
+
+        if (
+          ownerMode &&
+          isPierrotUserId(ownerIdentityUserId) &&
+          requestedProject &&
+          !conversationProject
+        ) {
+          const selected = await resolvePierrotProject({
+            ownerUserId: ownerIdentityUserId,
+            explicitProjectId: requestedProject,
+          });
+          if (selected.project) {
+            await linkConversationToProject(ownerIdentityUserId, selected.project.id, conversationId);
+          }
+        }
 
         await recordPierrotEvent(pierrotStore, {
           conversationId,
@@ -775,7 +801,8 @@ export async function POST(req: Request) {
       try {
         const resolved = await resolvePierrotProject({
           ownerUserId: ownerIdentityUserId,
-          explicitProjectId: requestedProject,
+          explicitProjectId: rawConversationId ? null : requestedProject,
+          conversationProject,
           message: trimmedMessage,
         });
         resolvedProjectRef = resolved.project?.slug || resolvedProjectRef;

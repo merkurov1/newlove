@@ -13,22 +13,31 @@ export default function ProjectsWorkspace({
   const [name, setName] = useState('');
   const [brief, setBrief] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   async function create() {
+    if (creating || !name.trim()) return;
     setError(null);
-    const response = await fetch('/api/admin/pierrot/projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, projectBrief: brief }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setError(data.error || 'Не удалось создать проект.');
-      return;
+    setCreating(true);
+    try {
+      const response = await fetch('/api/admin/pierrot/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), projectBrief: brief }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.error || 'Не удалось создать проект.');
+        return;
+      }
+      setProjects((current) => [data.project, ...current]);
+      setName('');
+      setBrief('');
+    } catch {
+      setError('Сеть недоступна. Проект не создан.');
+    } finally {
+      setCreating(false);
     }
-    setProjects((current) => [data.project, ...current]);
-    setName('');
-    setBrief('');
   }
 
   return (
@@ -70,8 +79,8 @@ export default function ProjectsWorkspace({
             placeholder="Короткий проверяемый бриф"
             rows={4}
           />
-          <button onClick={() => void create()} disabled={!name.trim()}>
-            Создать
+          <button onClick={() => void create()} disabled={!name.trim() || creating}>
+            {creating ? 'Создаём…' : 'Создать'}
           </button>
           {error && <p role="alert">{error}</p>}
         </div>

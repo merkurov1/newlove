@@ -13,6 +13,7 @@ import type {
   WorkspacePeriod,
 } from './types';
 import { buildOverviewSummary, classifyMetricState } from './status';
+import { getPierrotProject } from '@/lib/pierrot/projects/store';
 
 assertServerOnly('lib/pierrot/workspace/data');
 
@@ -260,6 +261,23 @@ export async function loadOwnerConversations(
       .map((row) => (typeof row.id === 'string' ? row.id : null))
       .filter((value): value is string => Boolean(value));
 
+    const { data: links } = await store
+      .from('pierrot_project_conversations')
+      .select('conversation_id,project_id')
+      .eq('owner_user_id', ownerUserId)
+      .in('conversation_id', ids);
+    const projectIds = Array.from(
+      new Set((links || []).map((row) => (typeof row.project_id === 'string' ? row.project_id : null)).filter(Boolean))
+    ) as string[];
+    const projects = await Promise.all(projectIds.map((id) => getPierrotProject(ownerUserId, id)));
+    const projectById = new Map(projects.filter(Boolean).map((project) => [project!.id, project!]));
+    const projectByConversation = new Map(
+      (links || []).map((row) => [
+        String(row.conversation_id),
+        projectById.get(String(row.project_id)) || null,
+      ])
+    );
+
     const { data: messageRows } = await store
       .from('pierrot_messages')
       .select('conversation_id,role,content,message_index')
@@ -288,6 +306,14 @@ export async function loadOwnerConversations(
           (counts.get(row.id as string) || 0) > 0
       )
       .map((row) => ({
+        ...(() => {
+          const project = projectByConversation.get(row.id as string) || null;
+          return {
+            projectId: project?.id || null,
+            projectSlug: project?.slug || null,
+            projectName: project?.name || null,
+          };
+        })(),
         id: row.id as string,
         sessionId: row.session_id as string,
         title: firstUserMessage.get(row.id as string) || 'Новый диалог',

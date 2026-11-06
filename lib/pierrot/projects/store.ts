@@ -1,12 +1,36 @@
 import { assertServerOnly } from '@/lib/serverOnly';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import type { PierrotProject, PierrotProjectSnapshot, PierrotProjectStatus } from './types';
+import { projectSlugBase, uniqueProjectSlug } from './slug';
 
 assertServerOnly('lib/pierrot/projects/store');
 
 const PROJECT_COLUMNS =
   'id,owner_user_id,slug,name,description,objective,status,priority,project_brief,brief_revision,last_activity_at,created_at,updated_at';
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
+
+export class PierrotProjectValidationError extends Error {
+  code: 'PROJECT_NAME_REQUIRED' | 'PROJECT_NAME_TOO_LONG' | 'PROJECT_BRIEF_TOO_LONG';
+
+  constructor(code: PierrotProjectValidationError['code']) {
+    super(code);
+    this.name = 'PierrotProjectValidationError';
+    this.code = code;
+  }
+}
+
+async function uniqueSlug(ownerUserId: string, name: string): Promise<string> {
+  const base = projectSlugBase(name);
+  const client = getServerSupabaseClient({ useServiceRole: true });
+  const { data, error } = await client
+    .from('pierrot_projects')
+    .select('slug')
+    .eq('owner_user_id', ownerUserId)
+    .like('slug', `${base}%`);
+  if (error) throw error;
+
+  return uniqueProjectSlug(name, (data || []).map((row) => text((row as Record<string, unknown>).slug)));
+}
 
 function mapProject(row: Record<string, unknown>): PierrotProject {
   return {
@@ -42,36 +66,48 @@ export async function getPierrotProject(
   ownerUserId: string,
   projectRef: string
 ): Promise<PierrotProject | null> {
-  const { data, error } = await getServerSupabaseClient({ useServiceRole: true })
+  const client = getServerSupabaseClient({ useServiceRole: true });
+  const byId = await client
     .from('pierrot_projects')
     .select(PROJECT_COLUMNS)
     .eq('owner_user_id', ownerUserId)
-    .or(`id.eq.${projectRef},slug.eq.${projectRef}`)
+    .eq('id', projectRef)
     .maybeSingle();
-  if (error) throw error;
-  return data ? mapProject(data as Record<string, unknown>) : null;
+  if (byId.error) throw byId.error;
+  if (byId.data) return mapProject(byId.data as Record<string, unknown>);
+  const bySlug = await client
+    .from('pierrot_projects')
+    .select(PROJECT_COLUMNS)
+    .eq('owner_user_id', ownerUserId)
+    .eq('slug', projectRef)
+    .maybeSingle();
+  if (bySlug.error) throw bySlug.error;
+  return bySlug.data ? mapProject(bySlug.data as Record<string, unknown>) : null;
 }
 
 export async function createPierrotProject(
   ownerUserId: string,
   input: Partial<PierrotProject>
 ): Promise<PierrotProject> {
-  const slug = text(input.slug)
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 80);
-  if (!slug || !text(input.name).trim()) throw new Error('PROJECT_NAME_REQUIRED');
+  const name = text(input.name).trim();
+  if (!name) throw new PierrotProjectValidationError('PROJECT_NAME_REQUIRED');
+  if (name.length > 160) throw new PierrotProjectValidationError('PROJECT_NAME_TOO_LONG');
+  const projectBrief = text(input.projectBrief).trim();
+  if (projectBrief.length > 20_000)
+    throw new PierrotProjectValidationError('PROJECT_BRIEF_TOO_LONG');
+  const requestedSlug = text(input.slug).trim();
+  const slug = requestedSlug && /^[a-z0-9][a-z0-9-]*$/.test(requestedSlug)
+    ? requestedSlug.slice(0, 80)
+    : await uniqueSlug(ownerUserId, name);
   const { data, error } = await getServerSupabaseClient({ useServiceRole: true })
     .from('pierrot_projects')
     .insert({
       owner_user_id: ownerUserId,
       slug,
-      name: text(input.name).trim().slice(0, 160),
+      name: name.slice(0, 160),
       description: text(input.description),
       objective: text(input.objective),
-      project_brief: text(input.projectBrief),
+      project_brief: projectBrief,
       status: input.status || 'active',
       priority: Number(input.priority || 0),
     })
@@ -79,6 +115,21 @@ export async function createPierrotProject(
     .single();
   if (error) throw error;
   return mapProject(data as Record<string, unknown>);
+}
+
+export async function getPierrotProjectForConversation(
+  ownerUserId: string,
+  conversationId: string
+): Promise<PierrotProject | null> {
+  const client = getServerSupabaseClient({ useServiceRole: true });
+  const { data, error } = await client
+    .from('pierrot_project_conversations')
+    .select('project_id')
+    .eq('owner_user_id', ownerUserId)
+    .eq('conversation_id', conversationId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.project_id ? getPierrotProject(ownerUserId, String(data.project_id)) : null;
 }
 
 /** Creates the pilot shell only; historical facts are deliberately not inferred. */
