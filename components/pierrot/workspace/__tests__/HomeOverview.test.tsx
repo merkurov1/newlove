@@ -73,7 +73,9 @@ describe('owner home overview', () => {
       />
     );
 
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Всё спокойно.');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
+      'Показатели держатся ровно.'
+    );
     expect(document.querySelectorAll('.pw-home-indicator')).toHaveLength(3);
     expect(screen.getByText('Память актуальна · 5 активных записей · OK')).toBeTruthy();
     expect(screen.getByText('Пока тихо')).toBeTruthy();

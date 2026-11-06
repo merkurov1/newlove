@@ -2,7 +2,7 @@
 
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
 import type { WorkspaceOverview } from '@/lib/pierrot/workspace/types';
-import { buildOwnerOverallStatus } from '@/lib/pierrot/workspace/status';
+import { aggregateActivityState } from '@/lib/pierrot/workspace/status';
 import BrainStatusCard from './BrainStatusCard';
 import { CommercialBrief } from './CommercialReport';
 import MetricStatusList from './MetricStatusList';
@@ -35,17 +35,13 @@ export default function HomeOverview({
   brainStatus: BrainStatusSnapshot | null;
   onBrainStatusChange: (snapshot: BrainStatusSnapshot) => void;
 }) {
-  const overall = buildOwnerOverallStatus({
-    metrics: overview.metrics,
-    commercial: overview.commercial,
-    brain: brainStatus,
-  });
+  const activityState = aggregateActivityState(overview.metrics);
 
   return (
     <div className="pw-empty">
       <p className="pw-kicker">Pierrot · owner workspace</p>
-      <h2 className="pw-empty-title" data-state={overall.state}>
-        {overall.headline}
+      <h2 className="pw-empty-title" data-state={activityState}>
+        {overview.summary}
       </h2>
 
       <div className="pw-home-indicators" aria-label="Состояние">

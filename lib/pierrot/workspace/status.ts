@@ -27,12 +27,12 @@ export const METRIC_STATUS_THRESHOLDS = {
 } as const;
 
 export const METRIC_STATE_COPY: Record<MetricState, string> = {
-  'растёт': 'растёт',
-  'стоит': 'стоит',
-  'падает': 'падает',
-  'тихо': 'тихо',
-  'пухнет': 'пухнет',
-  'тревога': 'тревога',
+  растёт: 'растёт',
+  стоит: 'стоит',
+  падает: 'падает',
+  тихо: 'тихо',
+  пухнет: 'пухнет',
+  тревога: 'тревога',
 };
 
 export type MetricDotTone = 'growth' | 'attention' | 'neutral' | 'missing';
@@ -44,10 +44,7 @@ export function metricDotTone(state: MetricState | null): MetricDotTone {
   return 'neutral';
 }
 
-export function classifyMetricState(
-  current: number,
-  previous: number
-): MetricState {
+export function classifyMetricState(current: number, previous: number): MetricState {
   const safeCurrent = Number.isFinite(current) ? Math.max(0, current) : 0;
   const safePrevious = Number.isFinite(previous) ? Math.max(0, previous) : 0;
 
@@ -118,24 +115,24 @@ export function buildOwnerOverallStatus(input: {
 
   const brainError = Boolean(
     brain &&
-      (brain.state === 'degraded' ||
-        !brain.storageAvailable ||
-        brain.issues.some((issue) => issue.severity === 'error'))
+    (brain.state === 'degraded' ||
+      !brain.storageAvailable ||
+      brain.issues.some((issue) => issue.severity === 'error'))
   );
   const brainConcern = Boolean(
     brain &&
-      (brain.state === 'attention' ||
-        brain.metrics.conflicts > 0 ||
-        brain.metrics.overdueTasks > 0 ||
-        brain.metrics.embeddingsFailed > 0)
+    (brain.state === 'attention' ||
+      brain.metrics.conflicts > 0 ||
+      brain.metrics.overdueTasks > 0 ||
+      brain.metrics.embeddingsFailed > 0)
   );
   const brainIncomplete = Boolean(
     !brain ||
-      brain.stale ||
-      brain.state === 'updating' ||
-      (brain.metrics.embeddingsPending > 0 &&
-        !brain.metrics.embeddingsFailed &&
-        brain.metrics.conflicts === 0)
+    brain.stale ||
+    brain.state === 'updating' ||
+    (brain.metrics.embeddingsPending > 0 &&
+      !brain.metrics.embeddingsFailed &&
+      brain.metrics.conflicts === 0)
   );
 
   if (brainError || brainConcern || hasSevereDecline || money.label === 'Нет денег') {
@@ -163,14 +160,7 @@ export function buildOwnerOverallStatus(input: {
 }
 
 export type ActivityState =
-  | 'тревога'
-  | 'смешанно'
-  | 'падает'
-  | 'пухнет'
-  | 'растёт'
-  | 'ровно'
-  | 'тихо'
-  | 'нет данных';
+  'тревога' | 'смешанно' | 'падает' | 'пухнет' | 'растёт' | 'ровно' | 'тихо' | 'нет данных';
 
 export const ACTIVITY_STATE_COPY: Record<ActivityState, string> = {
   тревога: 'Тревога',
@@ -195,16 +185,18 @@ export function aggregateActivityState(metrics: WorkspaceMetric[]): ActivityStat
   const available = metrics.filter((metric) => metric.state !== null);
   const states = available.map((metric) => metric.state as MetricState);
 
-  if (states.includes('тревога')) return 'тревога';
-
   const declines = states.filter((state) => state === 'падает' || state === 'тревога').length;
   const growths = states.filter((state) => state === 'растёт' || state === 'пухнет').length;
   const surges = states.filter((state) => state === 'пухнет').length;
-
-  if (declines > 0 && growths > 0) return 'смешанно';
-  if (declines > 0) return 'падает';
+  const alarms = states.filter((state) => state === 'тревога').length;
 
   if (available.length < MIN_ACTIVITY_METRICS) return 'нет данных';
+  if (declines > 0 && growths > 0) return 'смешанно';
+  // A single metric can be noisy (or represent a one-off import). The
+  // aggregate only escalates to an alarm when several independent metrics
+  // confirm a severe decline; otherwise it remains a factual decline.
+  if (alarms >= 2 && declines >= 3) return 'тревога';
+  if (declines > 0) return 'падает';
   if (surges > 0) return 'пухнет';
   if (growths > 0) return 'растёт';
   if (states.every((state) => state === 'тихо')) return 'тихо';
@@ -228,9 +220,7 @@ function activeRecordsLabel(count: number): string {
  * no paragraphs, no redundant timestamps, no repeated status labels.
  * Deviations replace that sentence with one explicit reason.
  */
-export function compactBrainStatus(
-  snapshot: BrainStatusSnapshot | null
-): BrainCompactStatus {
+export function compactBrainStatus(snapshot: BrainStatusSnapshot | null): BrainCompactStatus {
   if (!snapshot) {
     return { label: 'Память недоступна', tone: 'missing' };
   }
@@ -305,17 +295,37 @@ export function buildOverviewSummary(metrics: WorkspaceMetric[]): string {
     return 'Нет данных для сравнения. Показатели не рассчитаны.';
   }
 
-  const noteworthy = available.filter(
-    (metric) => metric.state !== 'стоит' && metric.state !== 'тихо'
-  );
+  const noteworthy = available.filter((metric) => {
+    if (metric.state === 'стоит' || metric.state === 'тихо') return false;
+    return Boolean(
+      metric.bulkImportCurrent ||
+      metric.bulkImportPrevious ||
+      metric.changeRatio === undefined ||
+      (metric.changeRatio !== null && Math.abs(metric.changeRatio) >= 0.1)
+    );
+  });
 
   if (noteworthy.length === 0) {
     return 'Показатели держатся ровно. Ничего не требует внимания.';
   }
 
-  return noteworthy
-    .map((metric) => `${metric.label} — ${metric.state}`)
-    .join(', ')
-    .replace(/,([^,]*)$/, ' и$1')
-    .concat('.');
+  const sentences = noteworthy.map((metric) => {
+    const current = metric.comparisonCurrent ?? metric.periodCount;
+    const previous = metric.comparisonPrevious ?? metric.previousCount;
+    const ratio = metric.changeRatio;
+    const percent =
+      ratio !== undefined && ratio !== null
+        ? ` (${ratio >= 0 ? '+' : '−'}${Math.round(Math.abs(ratio) * 100)}%, ${current} против ${previous})`
+        : ` (${current} сейчас, ${previous} ранее)`;
+    if (metric.bulkImportPrevious) {
+      return `${metric.label} пополняется${percent}; предыдущий период искажён разовым импортом ${metric.bulkImportPrevious} записей`;
+    }
+    if (metric.state === 'падает' || metric.state === 'тревога') {
+      return `${metric.label} ниже предыдущего периода${percent}`;
+    }
+    return `${metric.label} ${metric.state}${percent}`;
+  });
+  if (sentences.length === 1) return `${sentences[0]}.`;
+  if (sentences.length === 2) return `${sentences[0]} и ${sentences[1]}.`;
+  return `${sentences.slice(0, -1).join(', ')} и ${sentences[sentences.length - 1]}.`;
 }

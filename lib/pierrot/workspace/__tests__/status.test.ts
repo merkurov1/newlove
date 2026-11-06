@@ -59,7 +59,7 @@ describe('metric status mapping', () => {
     expect(metricDotTone(null)).toBe('missing');
   });
 
-  it('builds a summary only from the five states', () => {
+  it('builds a factual summary with values and change direction', () => {
     const summary = buildOverviewSummary([
       metric('Пользователи', 'растёт', 'users'),
       metric('Подписчики', 'стоит', 'subscribers'),
@@ -68,8 +68,9 @@ describe('metric status mapping', () => {
       metric('Медиа', 'тревога', 'media'),
     ]);
 
-    expect(summary).toBe('Пользователи — растёт, Flow — падает и Медиа — тревога.');
-    expect(summary).not.toMatch(/\d/);
+    expect(summary).toContain('Пользователи растёт');
+    expect(summary).toContain('Flow ниже предыдущего периода');
+    expect(summary).toContain('Медиа ниже предыдущего периода');
   });
 
   it('states missing data explicitly instead of zero', () => {
@@ -77,5 +78,47 @@ describe('metric status mapping', () => {
       { ...metric('Пользователи', null), available: false, series: null },
     ]);
     expect(summary).toBe('Нет данных для сравнения. Показатели не рассчитаны.');
+  });
+
+  it('does not turn an isolated media import into a system alarm', () => {
+    const summary = buildOverviewSummary([
+      { ...metric('Пользователи', 'тихо', 'users'), current: 0, periodCount: 0, previousCount: 0 },
+      {
+        ...metric('Подписчики', 'тихо', 'subscribers'),
+        current: 0,
+        periodCount: 0,
+        previousCount: 0,
+      },
+      {
+        ...metric('Flow', 'растёт', 'flow'),
+        periodCount: 17,
+        previousCount: 15,
+        comparisonCurrent: 17,
+        comparisonPrevious: 15,
+        changeRatio: 2 / 15,
+      },
+      {
+        ...metric('Диалоги', 'падает', 'conversations'),
+        periodCount: 51,
+        previousCount: 90,
+        comparisonCurrent: 51,
+        comparisonPrevious: 90,
+        changeRatio: -39 / 90,
+      },
+      {
+        ...metric('Медиа', 'пухнет', 'media'),
+        periodCount: 42,
+        previousCount: 219,
+        comparisonCurrent: 42,
+        comparisonPrevious: 0,
+        changeRatio: null,
+        bulkImportPrevious: 219,
+      },
+    ]);
+
+    expect(summary).toContain('Flow растёт');
+    expect(summary).toContain('Диалоги ниже предыдущего периода');
+    expect(summary).toContain('разовым импортом 219 записей');
+    expect(summary).not.toContain('тревога');
   });
 });

@@ -96,11 +96,16 @@ async function readTimestamps(
   table: string,
   column: string,
   from: string,
-  to: string,
+  toExclusive: string,
   configure?: (query: any) => any
 ): Promise<string[] | null> {
   try {
-    let query = store.from(table).select(column).gte(column, from).lte(column, to).limit(10000);
+    let query = store
+      .from(table)
+      .select(column)
+      .gte(column, from)
+      .lt(column, toExclusive)
+      .limit(10000);
     if (configure) query = configure(query);
     const { data, error } = await query;
     if (error) return null;
@@ -115,6 +120,22 @@ async function readTimestamps(
   } catch {
     return null;
   }
+}
+
+function bulkAdjustedCount(series: number[]): {
+  raw: number;
+  organic: number;
+  peak: number;
+  bulk: boolean;
+} {
+  const raw = series.reduce((sum, value) => sum + value, 0);
+  const peak = Math.max(0, ...series);
+  const nonZeroDays = series.filter((value) => value > 0).length;
+  // A single day is treated as a bulk/import event only when it is both large
+  // in absolute terms and dominates the period. Small legitimate bursts stay
+  // in the comparison. No source/batch column is assumed here.
+  const bulk = nonZeroDays === 1 && raw >= 20 && peak >= 20 && peak / raw >= 0.7;
+  return { raw, organic: bulk ? raw - peak : raw, peak, bulk };
 }
 
 function bucketSeries(
@@ -140,7 +161,10 @@ async function loadMetric(
   period: WorkspacePeriod,
   now: Date
 ): Promise<WorkspaceMetric> {
-  const periodStartDate = startOfUtcDay(new Date(now.getTime() - (period - 1) * DAY_MS));
+  // Use complete UTC days for both periods. The current partial day is never
+  // compared with a complete historical day.
+  const currentEndDate = startOfUtcDay(now);
+  const periodStartDate = new Date(currentEndDate.getTime() - period * DAY_MS);
   const previousStartDate = new Date(periodStartDate.getTime() - period * DAY_MS);
   const periodStart = periodStartDate.getTime();
 
@@ -151,19 +175,25 @@ async function loadMetric(
       meta.table,
       meta.dateColumn,
       isoDay(previousStartDate),
-      isoDay(now),
+      isoDay(currentEndDate),
       meta.periodFilter
     ),
   ]);
 
   const series = timestamps ? bucketSeries(timestamps, periodStart, period) : null;
-  const periodCount = series ? series.reduce((sum, value) => sum + value, 0) : 0;
-  const previousCount = timestamps
-    ? timestamps.filter((value) => {
-        const time = new Date(value).getTime();
-        return Number.isFinite(time) && time >= previousStartDate.getTime() && time < periodStart;
-      }).length
-    : 0;
+  const previousSeries = timestamps
+    ? bucketSeries(timestamps, previousStartDate.getTime(), period)
+    : null;
+  const currentProfile = series ? bulkAdjustedCount(series) : null;
+  const previousProfile = previousSeries ? bulkAdjustedCount(previousSeries) : null;
+  const periodCount = currentProfile?.raw || 0;
+  const previousCount = previousProfile?.raw || 0;
+  const comparisonCurrent = currentProfile?.organic ?? null;
+  const comparisonPrevious = previousProfile?.organic ?? null;
+  const changeRatio =
+    comparisonCurrent !== null && comparisonPrevious !== null && comparisonPrevious > 0
+      ? (comparisonCurrent - comparisonPrevious) / comparisonPrevious
+      : null;
 
   return {
     key: meta.key,
@@ -171,8 +201,16 @@ async function loadMetric(
     current: total.value,
     periodCount,
     previousCount,
-    state: series ? classifyMetricState(periodCount, previousCount) : null,
+    state:
+      comparisonCurrent !== null && comparisonPrevious !== null
+        ? classifyMetricState(comparisonCurrent, comparisonPrevious)
+        : null,
     series,
+    comparisonCurrent: comparisonCurrent ?? undefined,
+    comparisonPrevious: comparisonPrevious ?? undefined,
+    bulkImportCurrent: currentProfile?.bulk ? currentProfile.peak : undefined,
+    bulkImportPrevious: previousProfile?.bulk ? previousProfile.peak : undefined,
+    changeRatio,
     available: total.ok || series !== null,
   };
 }
@@ -187,7 +225,7 @@ export async function loadWorkspaceOverview(
   now = new Date()
 ): Promise<WorkspaceOverview> {
   const store = getServerSupabaseClient({ useServiceRole: true });
-  const periodStartDate = startOfUtcDay(new Date(now.getTime() - (period - 1) * DAY_MS));
+  const periodStartDate = new Date(startOfUtcDay(now).getTime() - period * DAY_MS);
 
   const [metrics, commercial] = await Promise.all([
     Promise.all(METRIC_META.map((meta) => loadMetric(store, meta, period, now))),
@@ -195,9 +233,7 @@ export async function loadWorkspaceOverview(
       store,
       periodKey: period === 30 ? 'last_30_days' : 'last_7_days',
       now,
-    }).catch(() =>
-      emptyCommercialSummary(period === 30 ? 'last_30_days' : 'last_7_days', now)
-    ),
+    }).catch(() => emptyCommercialSummary(period === 30 ? 'last_30_days' : 'last_7_days', now)),
   ]);
 
   return {
@@ -219,9 +255,9 @@ function truncateTitle(value: string): string {
 function isMissingModeColumn(error: unknown): boolean {
   const value =
     error && typeof error === 'object'
-      ? `${String((error as { code?: unknown }).code || '')} ${
-          String((error as { message?: unknown }).message || '')
-        }`
+      ? `${String((error as { code?: unknown }).code || '')} ${String(
+          (error as { message?: unknown }).message || ''
+        )}`
       : '';
   return /PGRST204|42703/.test(value) || /column .*mode.* does not exist/i.test(value);
 }
@@ -267,7 +303,11 @@ export async function loadOwnerConversations(
       .eq('owner_user_id', ownerUserId)
       .in('conversation_id', ids);
     const projectIds = Array.from(
-      new Set((links || []).map((row) => (typeof row.project_id === 'string' ? row.project_id : null)).filter(Boolean))
+      new Set(
+        (links || [])
+          .map((row) => (typeof row.project_id === 'string' ? row.project_id : null))
+          .filter(Boolean)
+      )
     ) as string[];
     const projects = await Promise.all(projectIds.map((id) => getPierrotProject(ownerUserId, id)));
     const projectById = new Map(projects.filter(Boolean).map((project) => [project!.id, project!]));
@@ -382,7 +422,9 @@ export async function loadOwnerConversation(
 
     const messages = (Array.isArray(rows) ? rows : [])
       .filter(
-        (row): row is {
+        (
+          row
+        ): row is {
           id: string;
           role: 'user' | 'assistant';
           content: string;

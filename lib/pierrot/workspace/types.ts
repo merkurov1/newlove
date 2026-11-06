@@ -31,6 +31,12 @@ export type WorkspaceMetric = {
   periodCount: number;
   /** Additions in the previous comparable period. */
   previousCount: number;
+  /** Counts used for comparison after removing a detected one-day bulk spike. */
+  comparisonCurrent?: number;
+  comparisonPrevious?: number;
+  bulkImportCurrent?: number;
+  bulkImportPrevious?: number;
+  changeRatio?: number | null;
   /** null when the historical series is unavailable. */
   state: MetricState | null;
   /** Daily counts for the current period, oldest first. null when unavailable. */

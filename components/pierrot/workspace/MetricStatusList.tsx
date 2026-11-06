@@ -36,9 +36,8 @@ const ACTIVITY_TONE: Record<ActivityState, string> = {
 };
 
 /**
- * The home screen shows one aggregated project word, not the five-row metric
- * list. All five metrics still arrive from the real sources; DASH keeps the
- * detailed presentation.
+ * The home screen shows one aggregate for site activity, not project state.
+ * All five metrics still arrive from the real sources; DASH keeps the detail.
  */
 export default function MetricStatusList({
   metrics,
@@ -59,14 +58,14 @@ export default function MetricStatusList({
           ? `Нет данных по ${missing} из ${metrics.length} показателей. Подробности в DASH.`
           : 'Подробные показатели — в DASH.'
       }
-      aria-label={`Активность проектов: ${ACTIVITY_STATE_COPY[state]}${
+      aria-label={`Активность сайта: ${ACTIVITY_STATE_COPY[state]}${
         missing > 0 ? `. Нет данных по ${missing} из ${metrics.length} показателей` : ''
       }`}
     >
       <span className="pw-home-indicator-icon" aria-hidden="true">
         <Icon size={16} strokeWidth={1.5} />
       </span>
-      <span className="pw-home-indicator-label">Проект</span>
+      <span className="pw-home-indicator-label">Активность</span>
       <span className="pw-home-indicator-value">{ACTIVITY_STATE_COPY[state]}</span>
     </div>
   );

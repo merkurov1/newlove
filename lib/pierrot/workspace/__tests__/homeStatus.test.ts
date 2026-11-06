@@ -22,7 +22,9 @@ function metric(key: WorkspaceMetric['key'], state: MetricState | null): Workspa
 }
 
 function metrics(...states: Array<MetricState | null>): WorkspaceMetric[] {
-  return states.map((state, index) => metric((['users', 'subscribers', 'flow', 'conversations', 'media'] as const)[index], state));
+  return states.map((state, index) =>
+    metric((['users', 'subscribers', 'flow', 'conversations', 'media'] as const)[index], state)
+  );
 }
 
 function commercial(overrides: Partial<CommercialSummary> = {}): CommercialSummary {
@@ -175,9 +177,7 @@ describe('owner overall status', () => {
 
 describe('project activity aggregation', () => {
   it('is quiet when all activity is low', () => {
-    expect(aggregateActivityState(metrics('тихо', 'тихо', 'тихо', 'тихо', 'тихо'))).toBe(
-      'тихо'
-    );
+    expect(aggregateActivityState(metrics('тихо', 'тихо', 'тихо', 'тихо', 'тихо'))).toBe('тихо');
   });
 
   it('is stable when indicators hold', () => {
@@ -210,21 +210,19 @@ describe('project activity aggregation', () => {
     );
   });
 
-  it('prioritises alarm above growth', () => {
+  it('does not escalate one alarm when the rest of activity points elsewhere', () => {
     expect(aggregateActivityState(metrics('растёт', 'тревога', 'тихо', 'стоит', 'тихо'))).toBe(
-      'тревога'
+      'смешанно'
     );
   });
 
   it('does not invent a trend from insufficient data', () => {
     expect(aggregateActivityState(metrics(null, null, null, null, null))).toBe('нет данных');
-    expect(aggregateActivityState(metrics('растёт', 'стоит', null, null, null))).toBe(
-      'нет данных'
-    );
+    expect(aggregateActivityState(metrics('растёт', 'стоит', null, null, null))).toBe('нет данных');
   });
 
-  it('keeps a severe negative signal even with missing sources', () => {
-    expect(aggregateActivityState(metrics('тревога', null, null, null, null))).toBe('тревога');
+  it('does not infer a system state from one metric when sources are missing', () => {
+    expect(aggregateActivityState(metrics('тревога', null, null, null, null))).toBe('нет данных');
   });
 
   it('has one short word for every state', () => {
