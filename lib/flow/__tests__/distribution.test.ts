@@ -141,6 +141,28 @@ describe('independent distribution channels', () => {
     expect(publishBluesky).toHaveBeenCalledTimes(1);
   });
 
+  it('stores the real Bluesky failure without hiding it behind a generic message', async () => {
+    const publishTelegram = jest.fn(async () => telegramSuccess());
+    const publishBluesky = jest.fn(async () => ({
+      error: 'Bluesky rejected the post: 330 graphemes exceeds 300.',
+      uncertain: false,
+    }));
+
+    const result = await crosspostFlowItem(payload(), {
+      deps: {
+        supabase: null,
+        now: () => NOW,
+        publishTelegram,
+        publishBluesky,
+      },
+    });
+
+    expect(result.channels?.bluesky?.status).toBe('failed');
+    expect(result.channels?.bluesky?.lastError).toContain('330 graphemes');
+    expect(result.channels?.bluesky?.uncertain).toBe(false);
+    expect(result.telegram?.messageId).toBe(101);
+  });
+
   it('keeps Telegram published when Bluesky fails, then retries only Bluesky', async () => {
     const publishTelegram = jest.fn(async () => telegramSuccess());
     const failedBluesky = jest.fn(async () => null);

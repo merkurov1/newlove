@@ -10,6 +10,7 @@ import {
 import {
   buildBlueskySummaryPrompt,
   composeBlueskyPost,
+  resolveBlueskyShareUrl,
   BLUESKY_MAX_GRAPHEMES,
 } from '@/lib/flow/blueskyPost';
 import { resolveFlowMetadataFromContent } from '@/lib/flow/metadata';
@@ -18,6 +19,88 @@ import { generateFlowAIText } from '@/lib/flow/ai';
 let cachedAgent: BskyAgent | null = null;
 
 const THUMB_LIMIT = 950_000;
+
+export type BlueskyPublishResult =
+  { uri: string; cid: string } | { error: string; uncertain?: boolean };
+
+function blueskyErrorRecord(error: unknown): {
+  status: number | null;
+  code: string | null;
+  message: string;
+} {
+  if (!error || typeof error !== 'object') {
+    return {
+      status: null,
+      code: null,
+      message: error instanceof Error ? error.message : 'Bluesky publish failed.',
+    };
+  }
+
+  const record = error as {
+    status?: unknown;
+    error?: unknown;
+    message?: unknown;
+    name?: unknown;
+  };
+
+  return {
+    status: typeof record.status === 'number' ? record.status : null,
+    code: typeof record.error === 'string' ? record.error : null,
+    message:
+      typeof record.message === 'string'
+        ? record.message
+        : typeof record.name === 'string'
+          ? record.name
+          : 'Bluesky publish failed.',
+  };
+}
+
+function isBlueskyAuthError(error: unknown): boolean {
+  const info = blueskyErrorRecord(error);
+
+  return (
+    info.status === 401 ||
+    info.code === 'ExpiredToken' ||
+    info.code === 'InvalidToken' ||
+    info.code === 'AuthRequired' ||
+    /not logged in|expired token|invalid token/i.test(info.message)
+  );
+}
+
+function isUncertainBlueskyError(error: unknown): boolean {
+  const info = blueskyErrorRecord(error);
+
+  return (
+    info.status === null ||
+    info.status === 408 ||
+    info.status === 429 ||
+    info.status >= 500 ||
+    /timeout|timed out|network|fetch failed|econnreset/i.test(info.message)
+  );
+}
+
+/** Safe, actionable message stored in crosspost channel state. */
+function blueskyErrorMessage(error: unknown): string {
+  const info = blueskyErrorRecord(error);
+
+  if (isBlueskyAuthError(error)) {
+    return 'Bluesky session expired or invalid. Retry the crosspost.';
+  }
+
+  if (info.status === 429) {
+    return 'Bluesky rate limit exceeded. Retry later.';
+  }
+
+  if (info.status !== null && info.status >= 500) {
+    return 'Bluesky PDS is unavailable. Retry later.';
+  }
+
+  if (/grapheme|record\/text|too long|invalid/i.test(info.message)) {
+    return `Bluesky rejected the post: ${info.message.slice(0, 180)}`;
+  }
+
+  return `Bluesky publish failed: ${info.message.slice(0, 180)}`;
+}
 
 type LinkPreview = {
   url?: string;
@@ -178,22 +261,24 @@ async function summarizeForBluesky(
  * Flow URL. The Flow link is also used as an external embed so every platform
  * shows the same editorial card.
  */
-export async function publishToBluesky(
-  input: PublishInput
-): Promise<{ uri: string; cid: string } | null> {
+export async function publishToBluesky(input: PublishInput): Promise<BlueskyPublishResult> {
   try {
-    const agent = await getBlueskyAgent();
+    let agent = await getBlueskyAgent();
 
     const content = normalizeFlowItem(input, {
       media: Array.isArray((input as any).media) ? (input as any).media : [],
     });
 
+    const shareUrl = resolveBlueskyShareUrl({
+      canonicalUrl: content.canonicalUrl,
+      id: content.id,
+    });
     const summary = await summarizeForBluesky(content);
     const post = composeBlueskyPost({
       title: content.showTitle ? content.title : null,
       bodyText: content.bodyText,
       language: content.language,
-      flowUrl: content.canonicalUrl,
+      flowUrl: shareUrl,
       summary,
     });
 
@@ -201,8 +286,13 @@ export async function publishToBluesky(
     richText.detectFacetsWithoutResolution();
 
     if (richText.graphemeLength > BLUESKY_MAX_GRAPHEMES) {
-      console.warn('[bluesky] Post still exceeds the grapheme limit; refusing.');
-      return null;
+      console.warn('[bluesky] Post still exceeds the grapheme limit; refusing.', {
+        graphemes: richText.graphemeLength,
+        shareUrl,
+      });
+      return {
+        error: `Bluesky rejected the post: ${richText.graphemeLength} graphemes exceeds ${BLUESKY_MAX_GRAPHEMES}.`,
+      };
     }
 
     const metadata = resolveFlowMetadataFromContent(content);
@@ -213,7 +303,7 @@ export async function publishToBluesky(
     const embed = {
       $type: 'app.bsky.embed.external',
       external: {
-        uri: metadata.canonicalUrl,
+        uri: shareUrl,
         title: truncateGraphemes(metadata.title, 200).trim(),
         description: truncateGraphemes(metadata.description, 300).trim(),
         ...(thumb ? { thumb } : {}),
@@ -228,7 +318,19 @@ export async function publishToBluesky(
       embed,
     };
 
-    const result = await agent.post(record);
+    let result: { uri: string; cid: string };
+    try {
+      result = await agent.post(record);
+    } catch (error) {
+      if (!isBlueskyAuthError(error)) throw error;
+
+      // A warm serverless instance can hold an expired session. Drop it and
+      // retry once with a fresh login before reporting a channel failure.
+      console.warn('[bluesky] Session rejected; re-authenticating once.');
+      cachedAgent = null;
+      agent = await getBlueskyAgent();
+      result = await agent.post(record);
+    }
 
     console.info('[bluesky] Published:', {
       uri: result.uri,
@@ -236,12 +338,17 @@ export async function publishToBluesky(
       graphemes: richText.graphemeLength,
       facets: richText.facets?.length ?? 0,
       embedType: embed.$type,
+      shareUrl,
     });
 
     return { uri: result.uri, cid: result.cid };
   } catch (error) {
-    console.error('[bluesky] Publish failed:', error);
-    return null;
+    const message = blueskyErrorMessage(error);
+    console.error('[bluesky] Publish failed:', {
+      message,
+      error,
+    });
+    return { error: message, uncertain: isUncertainBlueskyError(error) };
   }
 }
 

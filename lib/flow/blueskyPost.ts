@@ -17,6 +17,8 @@ import {
 
 export const BLUESKY_MAX_GRAPHEMES = 300;
 export const BLUESKY_SUMMARY_MAX_GRAPHEMES = 180;
+/** Above this length the public slug URL is swapped for the short Flow URL. */
+export const BLUESKY_CANONICAL_URL_MAX_GRAPHEMES = 120;
 
 export type BlueskyPostInput = {
   title: string | null;
@@ -35,6 +37,33 @@ export type BlueskyPost = {
 };
 
 const URL_PATTERN = /https?:\/\/[^\s<>"']+/gi;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Bluesky counts the whole post, including the link, against 300 graphemes.
+ * Percent-encoded Cyrillic slugs can consume most of that budget. Keep short
+ * canonical URLs, but use the stable `/flow/i/<id>` redirect for long ones.
+ */
+export function resolveBlueskyShareUrl(input: {
+  canonicalUrl: string;
+  id?: string | null;
+  maxCanonicalGraphemes?: number;
+}): string {
+  const canonical = input.canonicalUrl.trim();
+  const max = input.maxCanonicalGraphemes ?? BLUESKY_CANONICAL_URL_MAX_GRAPHEMES;
+
+  if (!canonical || graphemeLength(canonical) <= max) return canonical;
+
+  const id = input.id?.trim() || '';
+  if (!UUID_PATTERN.test(id)) return canonical;
+
+  try {
+    const origin = new URL(canonical).origin;
+    return `${origin}/flow/i/${id}`;
+  } catch {
+    return canonical;
+  }
+}
 
 function stripUrls(value: string): string {
   return value.replace(URL_PATTERN, ' ').replace(/\s+/g, ' ').trim();
@@ -135,10 +164,18 @@ export function composeBlueskyPost(input: BlueskyPostInput): BlueskyPost {
   const max = input.maxGraphemes ?? BLUESKY_MAX_GRAPHEMES;
   const url = input.flowUrl.trim();
   const separator = '\n\n';
-  const available = Math.max(
-    40,
-    max - graphemeLength(url) - graphemeLength(separator)
-  );
+  // Never reserve a minimum body budget when the URL itself is long: that
+  // could push the complete post over Bluesky's 300-grapheme limit.
+  const available = Math.max(0, max - graphemeLength(url) - graphemeLength(separator));
+
+  if (available === 0) {
+    return {
+      text: url,
+      body: '',
+      usedSummary: false,
+      truncated: true,
+    };
+  }
 
   const cleanTitle =
     input.title && !isTechnicalText(input.title) ? input.title.trim() : '';

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { publishToBluesky } from '@/lib/bluesky';
+import { publishToBluesky, type BlueskyPublishResult } from '@/lib/bluesky';
 import {
   isFacebookConfigured,
   publishToFacebook,
@@ -115,7 +115,7 @@ export type CrosspostDeps = {
     content: FlowContent,
     options: { resume?: TelegramResumeState; deps?: TelegramPublisherDeps }
   ) => Promise<TelegramPublishResult>;
-  publishBluesky?: (payload: CrosspostPayload) => Promise<{ uri: string; cid: string } | null>;
+  publishBluesky?: (payload: CrosspostPayload) => Promise<BlueskyPublishResult | null>;
   publishFacebook?: (
     payload: CrosspostPayload,
     options?: { resume?: MetaResumeState }
@@ -590,19 +590,22 @@ function stateForTelegram(
 
 function stateForBluesky(
   previous: CrosspostChannelState | undefined,
-  result: { uri: string; cid: string } | null,
+  result: BlueskyPublishResult | null,
   contentHash: string,
   now: Date
 ): CrosspostChannelState {
   const timestamp = now.toISOString();
 
-  if (!result) {
+  if (!result || 'error' in result) {
     return {
       ...(previous ?? emptyChannel('failed')),
       status: 'failed',
       attempts: previous?.attempts ?? 1,
-      lastError: previous?.lastError ?? 'Bluesky publish failed.',
-      uncertain: false,
+      lastError:
+        result && 'error' in result
+          ? result.error
+          : previous?.lastError ?? 'Bluesky publish failed.',
+      uncertain: result && 'error' in result ? Boolean(result.uncertain) : false,
       contentHash,
       startedAt: previous?.startedAt ?? timestamp,
       updatedAt: timestamp,
@@ -1017,7 +1020,13 @@ export async function crosspostFlowItem(
             imageUrls: content.images.map((image) => image.url),
           }).catch((error) => {
             console.error('[crosspost:bluesky] Publish failed:', error);
-            return null;
+            return {
+              error:
+                error instanceof Error
+                  ? error.message.slice(0, 300)
+                  : 'Bluesky publish failed.',
+              uncertain: true,
+            };
           })
         : Promise.resolve(null),
 

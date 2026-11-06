@@ -7,6 +7,7 @@ import {
   BLUESKY_MAX_GRAPHEMES,
   composeBlueskyPost,
   fallbackBlueskySummary,
+  resolveBlueskyShareUrl,
 } from '../blueskyPost';
 import { graphemeLength } from '../content';
 
@@ -68,6 +69,35 @@ describe('Bluesky post composition', () => {
     expect(post.text.endsWith(FLOW_URL)).toBe(true);
   });
 
+  it('uses the short Flow redirect for long percent-encoded Cyrillic slugs', () => {
+    const id = '18933270-d9d5-45f8-8255-8e5fb84d3832';
+    const longCanonical =
+      'https://www.merkurov.love/flow/%D0%BF%D1%8C%D0%B5%D1%80%D0%BE-%D0%BC%D0%BE%D0%B8-%D0%B4%D0%BD%D0%BA-%D1%83-%D1%82%D0%B5%D0%B1%D1%8F-%D1%82%D0%B5%D0%BF%D0%B5%D1%80%D1%8C-%D1%82%D1%8B-%D0%B7%D0%BD%D0%B0%D0%B5%D1%88%D1%8C-%D0%BF%D1%80%D0%BE-%D0%BC%D0%B5%D0%BD%D1%8F-%D0%B2-xy143';
+
+    expect(resolveBlueskyShareUrl({ canonicalUrl: FLOW_URL, id })).toBe(FLOW_URL);
+    expect(resolveBlueskyShareUrl({ canonicalUrl: longCanonical, id })).toBe(
+      `https://www.merkurov.love/flow/i/${id}`
+    );
+  });
+
+  it('keeps the complete post within 300 graphemes with a short share URL', () => {
+    const id = '18933270-d9d5-45f8-8255-8e5fb84d3832';
+    const shareUrl = resolveBlueskyShareUrl({
+      canonicalUrl:
+        'https://www.merkurov.love/flow/%D0%BF%D1%8C%D0%B5%D1%80%D0%BE-%D0%BF%D1%80%D0%BE-%D0%B4%D0%BD%D0%BA',
+      id,
+    });
+    const post = composeBlueskyPost({
+      title: 'Пьетро и геном',
+      bodyText: 'Длинный текст '.repeat(80),
+      language: 'ru',
+      flowUrl: shareUrl,
+    });
+
+    expect(post.text.endsWith(shareUrl)).toBe(true);
+    expect(graphemeLength(post.text)).toBeLessThanOrEqual(BLUESKY_MAX_GRAPHEMES);
+  });
+
   it('never truncates the URL, including query parameters', () => {
     const post = composeBlueskyPost({
       title: 'Title',
@@ -97,9 +127,7 @@ describe('Bluesky post composition', () => {
     expect(linkFacet).toBeDefined();
     expect(linkFacet?.index.byteStart).toBeGreaterThan(post.text.indexOf(FLOW_URL));
     expect(
-      bytes
-        .subarray(linkFacet!.index.byteStart, linkFacet!.index.byteEnd)
-        .toString('utf8')
+      bytes.subarray(linkFacet!.index.byteStart, linkFacet!.index.byteEnd).toString('utf8')
     ).toBe(FLOW_URL);
   });
 
