@@ -90,6 +90,8 @@ type PageMetadataInput = {
   imageHeight?: number;
   type?: 'website' | 'article' | 'profile' | 'book';
   locale?: string;
+  /** Additional Open Graph locales for bilingual pages (e.g. ['ru_RU']). */
+  alternateLocale?: string | string[];
   publishedTime?: string;
   modifiedTime?: string;
   authors?: string[];
@@ -138,6 +140,7 @@ export function pageMetadata(input: PageMetadataInput): Metadata {
       url,
       siteName: SITE_NAME,
       locale: input.locale || SITE_LOCALE,
+      ...(input.alternateLocale ? { alternateLocale: input.alternateLocale } : {}),
       type:
         input.type === 'profile'
           ? 'profile'
@@ -182,6 +185,7 @@ export const PUBLIC_ROUTES = [
   '/advising',
   '/journal',
   '/heritage',
+  '/heritage/krass',
   '/media',
   '/heartandangel',
   '/heartandangel/about',

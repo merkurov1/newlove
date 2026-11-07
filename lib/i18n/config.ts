@@ -1,5 +1,5 @@
 /**
- * Small, explicit language layer for the four public pages that have
+ * Small, explicit language layer for the five public pages that have
  * editorial translations. This is intentionally not a general i18n system:
  * there is no runtime translator, no message catalogue and no locale router.
  */
@@ -8,7 +8,7 @@ export const LANGUAGES = ['en', 'ru', 'de', 'fr', 'ar'] as const;
 
 export type Language = (typeof LANGUAGES)[number];
 
-export type SectionKey = 'heritage' | 'lobby' | 'advising' | 'isakeyforall';
+export type SectionKey = 'heritage' | 'krass' | 'lobby' | 'advising' | 'isakeyforall';
 
 export type Direction = 'ltr' | 'rtl';
 
@@ -19,6 +19,7 @@ export const SECTION_PATHS: Record<SectionKey, string> = {
   lobby: '/lobby',
   advising: '/advising',
   isakeyforall: '/isakeyforall',
+  krass: '/heritage/krass',
 };
 
 /** Only these languages have real, edited content for each section. */
@@ -27,6 +28,7 @@ export const SECTION_LANGUAGES: Record<SectionKey, readonly Language[]> = {
   lobby: ['en', 'ru', 'de'],
   advising: ['en', 'ru', 'de', 'fr', 'ar'],
   isakeyforall: ['en', 'ru', 'de'],
+  krass: ['en', 'ru'],
 };
 
 export const LANGUAGE_META: Record<
@@ -45,6 +47,7 @@ export const SECTION_BY_PATH: Record<string, SectionKey> = {
   [SECTION_PATHS.lobby]: 'lobby',
   [SECTION_PATHS.advising]: 'advising',
   [SECTION_PATHS.isakeyforall]: 'isakeyforall',
+  [SECTION_PATHS.krass]: 'krass',
 };
 
 export function getDirection(language: Language): Direction {
