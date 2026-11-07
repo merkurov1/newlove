@@ -11,6 +11,9 @@
   background: var(--paper);
   color: var(--ink);
   min-height: 100vh;
+  /* Clear the fixed site header so the breadcrumb and language switcher do not
+     slide underneath it. */
+  padding-top: 100px;
   font-family: var(--font-inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
   -webkit-font-smoothing: antialiased;
 }
@@ -72,14 +75,15 @@
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 64px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 48px;
   align-items: center;
   min-height: min(860px, 92vh);
   padding: 72px 0 88px;
 }
 
 .heroCopy {
+  min-width: 0;
   max-width: 620px;
 }
 
@@ -87,10 +91,11 @@
   margin: 22px 0 0;
   font-family: var(--font-cormorant, Garamond, Georgia, 'Times New Roman', serif);
   font-weight: 400;
-  font-size: clamp(3.8rem, 8.6vw, 8.2rem);
+  font-size: clamp(2.9rem, 4.8vw, 4.3rem);
   line-height: 0.82;
   letter-spacing: -0.055em;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 
 .heroTitleLine {

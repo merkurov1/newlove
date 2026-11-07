@@ -171,11 +171,6 @@ export default function KrassExhibition({ items, opening, lang }: Props) {
     else goPrev();
   };
 
-  const openingIndex = Math.max(
-    0,
-    items.findIndex((entry) => entry.id === opening.id)
-  );
-
   const cardClass = (entry: KrassItem, index: number) => {
     const wide = entry.scan.aspectRatio > 1.12;
     const doc = isDocument(entry);
@@ -264,23 +259,18 @@ export default function KrassExhibition({ items, opening, lang }: Props) {
           </div>
 
           <figure className={styles.heroFigure}>
-            <button
-              type="button"
-              className={styles.heroImageFrame}
-              onClick={() => openItem(openingIndex)}
-              aria-label={`${labels.view}: ${displayTitle(opening, lang)}`}
-            >
+            <div className={styles.heroImageFrame}>
               <Image
                 src={opening.imageUrl}
                 alt={imageAlt(opening, lang)}
                 width={opening.scan.width}
                 height={opening.scan.height}
                 className={styles.heroImage}
-                sizes="(max-width: 1100px) 100vw, 55vw"
+                sizes="(max-width: 1100px) 100vw, 50vw"
                 quality={88}
                 priority
               />
-            </button>
+            </div>
             <figcaption className={styles.heroCaption}>
               <span>{copy.hero.imageCaption}</span>
               <span>{labels.collectionCount}</span>
