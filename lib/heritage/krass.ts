@@ -1,4 +1,4 @@
-import catalog from '../../docs/heritage/krass/catalog.json';
+import catalog from './krass-catalog.json';
 import type { KrassCatalog, KrassItem } from './krass-types';
 
 const data = catalog as KrassCatalog;
