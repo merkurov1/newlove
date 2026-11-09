@@ -6164,172 +6164,6 @@ a.pw-home-indicator:hover {
   color: var(--pw-ink);
 }
 
-/* ---------------- Project rail above the dialogue ---------------- */
-
-.pw-chat-page {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-.pw-chat-page > .pw-chat {
-  flex: 1;
-  height: auto;
-  min-height: 0;
-}
-
-.pw-project-rail {
-  flex: 0 0 auto;
-  min-width: 0;
-  border-bottom: 1px solid var(--pw-line);
-  background: var(--pw-paper);
-}
-
-.pw-project-rail-scroll {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: flex-start;
-  gap: 8px;
-  width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 9px clamp(12px, 2.4vw, 22px);
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-.pw-project-rail-scroll::-webkit-scrollbar {
-  display: none;
-}
-
-.pw-project-rail-card {
-  flex: 0 0 auto;
-  width: clamp(184px, 17vw, 244px);
-  min-width: 0;
-  border: 1px solid var(--pw-line);
-  background: transparent;
-  transition: border-color 140ms ease;
-}
-
-.pw-project-rail-card[data-active='true'] {
-  border-color: var(--pw-chip-line);
-  box-shadow: inset 0 -1px 0 var(--pw-ink);
-}
-
-.pw-project-rail-card-head {
-  display: flex;
-  align-items: stretch;
-  min-height: 46px;
-}
-
-.pw-project-rail-link {
-  display: flex;
-  flex: 1 1 auto;
-  align-items: center;
-  min-width: 0;
-  padding: 8px 11px;
-}
-
-.pw-project-rail-link:hover {
-  background: color-mix(in srgb, var(--pw-ink) 3%, transparent);
-}
-
-.pw-project-rail-name {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  font-family: var(--pw-serif);
-  font-size: 15px;
-  letter-spacing: -0.01em;
-  line-height: 1.15;
-  text-overflow: ellipsis;
-}
-
-.pw-project-rail-toggle {
-  display: inline-flex;
-  flex: 0 0 42px;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  min-width: 42px;
-  min-height: 46px;
-  border-left: 1px solid var(--pw-line);
-  color: var(--pw-muted);
-  font-family: var(--pw-mono);
-  font-size: 18px;
-  font-weight: 400;
-  line-height: 1;
-  transition:
-    color 120ms ease,
-    background 120ms ease;
-}
-
-.pw-project-rail-toggle:hover,
-.pw-project-rail-card[data-expanded='true'] .pw-project-rail-toggle {
-  color: var(--pw-ink);
-  background: color-mix(in srgb, var(--pw-ink) 4%, transparent);
-}
-
-.pw-project-rail-sessions {
-  max-height: min(184px, 28dvh);
-  overflow-y: auto;
-  border-top: 1px solid var(--pw-line);
-  overscroll-behavior: contain;
-}
-
-.pw-project-rail-session {
-  display: block;
-  padding: 8px 11px 9px;
-  border-bottom: 1px solid color-mix(in srgb, var(--pw-line) 70%, transparent);
-}
-
-.pw-project-rail-session:last-child {
-  border-bottom: 0;
-}
-
-.pw-project-rail-session:hover {
-  background: color-mix(in srgb, var(--pw-ink) 4%, transparent);
-}
-
-.pw-project-rail-session[aria-current='page'] {
-  box-shadow: inset 2px 0 0 var(--pw-ink);
-}
-
-.pw-project-rail-session-title {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  font-family: var(--pw-serif);
-  font-size: 14px;
-  line-height: 1.25;
-}
-
-.pw-project-rail-session-meta {
-  display: block;
-  margin-top: 3px;
-  color: var(--pw-muted);
-  font-family: var(--pw-mono);
-  font-size: 8px;
-  letter-spacing: 0.08em;
-  line-height: 1.3;
-  text-transform: uppercase;
-}
-
-.pw-project-rail-empty {
-  margin: 0;
-  padding: 10px 11px;
-  color: var(--pw-muted);
-  font-family: var(--pw-mono);
-  font-size: 8px;
-  letter-spacing: 0.06em;
-  line-height: 1.4;
-  text-transform: uppercase;
-}
-
 /* ---------------- Flow overlay ---------------- */
 
 .pw-flow-overlay {
@@ -6391,20 +6225,6 @@ a.pw-home-indicator:hover {
 }
 
 @media (max-width: 760px) {
-  .pw-project-rail-scroll {
-    gap: 6px;
-    padding: 7px 12px;
-  }
-
-  .pw-project-rail-card {
-    width: 78vw;
-    max-width: 270px;
-  }
-
-  .pw-project-rail-sessions {
-    max-height: 34dvh;
-  }
-
   .pw-flow-overlay {
     padding: 0;
   }
@@ -6419,12 +6239,6 @@ a.pw-home-indicator:hover {
   .pw-flow-overlay-head {
     padding-top: max(6px, env(safe-area-inset-top));
     padding-left: 14px;
-  }
-}
-
-@media (min-width: 761px) and (max-width: 1180px) {
-  .pw-project-rail-card {
-    width: 210px;
   }
 }
 
