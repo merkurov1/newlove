@@ -234,7 +234,7 @@ Contains:
 
 ## 7. Remaining notes
 
-- Commit: `0b4a424e961ce45499237db8d079a775f4235cd0`.
+- Implementation commit: `6c5a842d60331e57a75a47a3ba98574ab64622df`.
 - Production build was intentionally not run at the user’s request. TypeScript and the full Jest suite were run.
 - Dev-mode conversations were preserved inside MAIN as owner sessions (`mode` stays in metadata/provenance and in the original conversation row). The separate dev workspace was not redesigned.
 - Unknown/visitor conversations (131 + 12 at migration time) were intentionally not attached to the owner MAIN history: they are not proven owner data. They remain untouched in the legacy tables.
