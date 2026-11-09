@@ -58,8 +58,8 @@ describe('WorkspaceShell navigation', () => {
         .get()
     ).toEqual(['Чат', 'Journal', 'Heart & Angel']);
     expect($('.pw-topbar-nav a[aria-current="page"]').text()).toBe('Journal');
-    expect($('.pw-topbar-actions button[aria-label="Открыть память"]')).toHaveLength(1);
-    expect($('.pw-topbar-actions button[aria-label="Открыть Flow"]')).toHaveLength(1);
+    expect($('.pw-topbar-actions button[aria-label="Открыть память"]')).toHaveLength(0);
+    expect($('.pw-topbar-actions button[aria-label="Написать в Flow"]')).toHaveLength(1);
   });
 
   it('does not expose public section paths or technical routes as primary navigation', () => {

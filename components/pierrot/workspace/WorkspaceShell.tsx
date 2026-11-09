@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Brain, PenLine } from 'lucide-react';
+import { PenLine } from 'lucide-react';
 import PierrotAvatar from './PierrotAvatar';
+import NewPostModal from '@/components/flow/NewPostModal';
 import {
   activeWorkspaceKey,
   buildWorkspaceRoutes,
@@ -35,6 +36,7 @@ export default function WorkspaceShell({
   const projectSlug = searchParams?.get('project') || null;
   const routes = useMemo(() => buildWorkspaceRoutes(projects), [projects]);
   const active = activeWorkspaceKey(pathname, projects, historyId, projectSlug);
+  const [composerOpen, setComposerOpen] = useState(false);
 
   useEffect(() => {
     if (pathname.startsWith('/admin/pierrot')) registerServiceWorker();
@@ -72,13 +74,6 @@ export default function WorkspaceShell({
     router.push('/admin/pierrot?new=1');
   }
 
-  function openPanel(section: 'memory' | 'flow') {
-    if (pathname === '/admin/pierrot') {
-      window.dispatchEvent(new CustomEvent('pierrot:open-panel', { detail: { section } }));
-      return;
-    }
-    router.push(`/admin/pierrot?panel=${section}`);
-  }
 
   return (
     <div className="pw-root">
@@ -106,22 +101,13 @@ export default function WorkspaceShell({
           ))}
         </nav>
 
-        <div className="pw-topbar-actions" aria-label="Память и Flow">
+        <div className="pw-topbar-actions" aria-label="Написать в Flow">
           <button
             type="button"
             className="pw-topbar-action"
-            onClick={() => openPanel('memory')}
-            aria-label="Открыть память"
-            title="Память"
-          >
-            <Brain size={18} strokeWidth={1.4} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            className="pw-topbar-action"
-            onClick={() => openPanel('flow')}
-            aria-label="Открыть Flow"
-            title="Flow"
+            onClick={() => setComposerOpen(true)}
+            aria-label="Написать в Flow"
+            title="Написать"
           >
             <PenLine size={17} strokeWidth={1.4} aria-hidden="true" />
           </button>
@@ -129,6 +115,15 @@ export default function WorkspaceShell({
       </header>
 
       <main className="pw-main">{children}</main>
+
+      <NewPostModal
+        open={composerOpen}
+        onClose={() => setComposerOpen(false)}
+        onCreated={() => {
+          setComposerOpen(false);
+          window.dispatchEvent(new CustomEvent('flow:updated'));
+        }}
+      />
     </div>
   );
 }

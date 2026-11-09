@@ -1,5 +1,7 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'fs';
+import path from 'path';
+import { fireEvent, render, screen } from '@testing-library/react';
 import ChatWorkspace from '../ChatWorkspace';
 import type {
   OwnerConversation,
@@ -9,11 +11,6 @@ import type {
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), refresh: jest.fn() }),
-}));
-
-jest.mock('../FlowWorkspace', () => ({
-  __esModule: true,
-  default: () => <div data-testid="flow-workspace" />,
 }));
 
 const overview = {
@@ -61,31 +58,15 @@ const sessions: OwnerSessionListItem[] = [
   },
 ];
 
-describe('ChatWorkspace Memory and Flow actions', () => {
-  const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
-    const url = String(input);
-    if (url.includes('view=summary')) {
-      return {
-        ok: true,
-        json: async () => ({
-          counts: { memory: 1, saved: 0, reminder: 0 },
-          reminders: [],
-          available: true,
-          activeTotal: 1,
-          archivedTotal: 0,
-          uncertainTotal: 0,
-        }),
-      } as Response;
-    }
-    return { ok: true, json: async () => ({ records: [] }) } as Response;
-  });
-
+describe('ChatWorkspace PWA controls', () => {
   beforeEach(() => {
-    global.fetch = fetchMock as unknown as typeof fetch;
-    fetchMock.mockClear();
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ records: [] }),
+    })) as unknown as typeof fetch;
   });
 
-  function renderWorkspace(initialPanel?: 'memory' | 'flow') {
+  function renderWorkspace() {
     return render(
       <ChatWorkspace
         ownerId="owner-1"
@@ -93,73 +74,59 @@ describe('ChatWorkspace Memory and Flow actions', () => {
         sessions={sessions}
         conversation={conversation}
         startNew={false}
-        initialPanel={initialPanel}
       />
     );
   }
 
-  function openPanel(section: 'memory' | 'flow') {
+  it('always sends granted consent so owner history is stored', () => {
+    const source = readFileSync(
+      path.join(process.cwd(), 'components/pierrot/workspace/ChatWorkspace.tsx'),
+      'utf8'
+    );
+
+    expect(source).toContain("state: 'granted'");
+    expect(source).toContain('consent,');
+    expect(source).not.toContain('setPierrotConsent');
+  });
+
+  it('does not render the memory management panel or its trigger', () => {
+    renderWorkspace();
+
+    expect(document.getElementById('pw-memory-panel')).not.toBeInTheDocument();
+    expect(document.querySelector('.pw-side-trigger')).not.toBeInTheDocument();
+    expect(screen.queryByText('Память')).not.toBeInTheDocument();
+  });
+
+  it('removes the consent/save status controls from the composer', () => {
+    renderWorkspace();
+
+    expect(screen.queryByText('Разрешить сохранение')).not.toBeInTheDocument();
+    expect(screen.queryByText('Не сохранять')).not.toBeInTheDocument();
+    expect(screen.queryByText('Сохранение включено · до 90 дней')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Отправить сообщение')).toBeInTheDocument();
+  });
+
+  it('does not expose message memory/Flow actions in the PWA chat', () => {
+    renderWorkspace();
+
+    expect(screen.queryByText('В память')).not.toBeInTheDocument();
+    expect(screen.queryByText('Запомнить')).not.toBeInTheDocument();
+    expect(screen.queryByText('Сохранить')).not.toBeInTheDocument();
+    expect(screen.queryByText('Напомнить')).not.toBeInTheDocument();
+    expect(screen.queryByText('Во Flow')).not.toBeInTheDocument();
+  });
+
+  it('ignores the retired legacy Flow overlay event', () => {
+    renderWorkspace();
+
     fireEvent(
       window,
       new CustomEvent('pierrot:open-panel', {
-        detail: { section },
+        detail: { section: 'flow' },
       })
     );
-  }
 
-  it('opens the existing Memory panel from the right-corner icon', async () => {
-    renderWorkspace();
-
-    openPanel('memory');
-
-    await waitFor(() => {
-      expect(document.getElementById('pw-memory-panel')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Правила и долгосрочный контекст')).toBeInTheDocument();
-  });
-
-  it('opens the existing FlowWorkspace inside a single overlay', () => {
-    renderWorkspace();
-
-    openPanel('flow');
-
-    expect(screen.getByRole('dialog', { name: 'Flow' })).toBeInTheDocument();
-    expect(screen.getByTestId('flow-workspace')).toBeInTheDocument();
-    expect(document.querySelectorAll('.pw-flow-overlay')).toHaveLength(1);
-  });
-
-  it('closes the Flow overlay with Escape and restores background scrolling', async () => {
-    renderWorkspace();
-
-    openPanel('flow');
-    expect(document.body.style.overflow).toBe('hidden');
-
-    fireEvent.keyDown(document, { key: 'Escape' });
-
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Flow' })).not.toBeInTheDocument();
-    });
-    expect(document.body.style.overflow).not.toBe('hidden');
-  });
-
-  it('never keeps Memory and Flow open at the same time', async () => {
-    renderWorkspace();
-
-    openPanel('memory');
-    await waitFor(() => {
-      expect(document.getElementById('pw-memory-panel')).toBeInTheDocument();
-    });
-
-    openPanel('flow');
-    expect(document.getElementById('pw-memory-panel')).not.toBeInTheDocument();
-    expect(screen.getByRole('dialog', { name: 'Flow' })).toBeInTheDocument();
-    expect(document.querySelectorAll('.pw-flow-overlay')).toHaveLength(1);
-
-    openPanel('memory');
-
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Flow' })).not.toBeInTheDocument();
-    });
-    expect(document.getElementById('pw-memory-panel')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Flow' })).not.toBeInTheDocument();
+    expect(document.querySelector('.pw-flow-overlay')).not.toBeInTheDocument();
   });
 });

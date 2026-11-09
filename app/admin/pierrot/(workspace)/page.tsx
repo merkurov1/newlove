@@ -65,9 +65,6 @@ export default async function ChatPage({
   const rawConversation = param(params.conversation);
   const projectRef = param(params.project);
   const requestedNew = param(params.new) === '1';
-  const requestedPanel = param(params.panel);
-  const initialPanel: 'memory' | 'flow' | null =
-    requestedPanel === 'memory' ? 'memory' : requestedPanel === 'flow' ? 'flow' : null;
 
   // Old conversation URLs and legacy project links resolve to the permanent
   // history/session URL. The browser never opens a legacy conversation as an
@@ -171,7 +168,6 @@ export default async function ChatPage({
       startNew={requestedNew}
       brainStatus={brainStatus}
       project={project}
-      initialPanel={initialPanel}
     />
   );
 }
