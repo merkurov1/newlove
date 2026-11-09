@@ -9,6 +9,7 @@ export type PierrotOperation =
   | 'media.stats'
   | 'commercial.report'
   | 'analytics.report'
+  | 'website.report'
   | 'graph.report'
   | 'system.health'
   | 'system.stats'
@@ -154,10 +155,12 @@ export function buildPierrotExecutionPlan(
   const mediaStats = MEDIA_STATS_TERMS.test(message);
   const explicitWebIntent =
     queryPlan.intent === 'web_research' || queryPlan.intent === 'brain_web_research';
+  const websiteOwnerTool = ownerTool?.kind === 'website';
 
-  // An explicit web source command has absolute priority. Owner tools and the
-  // generic owner searchVerb heuristic must not intercept it.
-  if (explicitWebIntent) {
+  // An explicit web source command has absolute priority. A website-analytics
+  // question is not a web-research request even when the phrase "what is
+  // happening" would otherwise trigger that classifier.
+  if (explicitWebIntent && !websiteOwnerTool) {
     ownerTool = null;
     resolved.operation =
       queryPlan.intent === 'brain_web_research' ? 'brain_web.search' : 'web.search';
@@ -185,10 +188,15 @@ export function buildPierrotExecutionPlan(
     resolved.fallbackPolicy = 'no_source_substitution';
   }
 
-  if (ownerTool && !explicitWebIntent) {
+  if (ownerTool && (!explicitWebIntent || websiteOwnerTool)) {
     if (ownerTool.kind === 'commercial') {
       resolved.operation = 'commercial.report';
       resolved.tool = 'commercial';
+      resolved.ownerOnly = true;
+      resolved.fallbackPolicy = 'no_source_substitution';
+    } else if (ownerTool.kind === 'website') {
+      resolved.operation = 'website.report';
+      resolved.tool = 'website';
       resolved.ownerOnly = true;
       resolved.fallbackPolicy = 'no_source_substitution';
     } else if (ownerTool.kind === 'analytics') {
@@ -259,9 +267,10 @@ export function buildPierrotExecutionPlan(
     tool: resolved.tool,
     ownerOnly: resolved.ownerOnly,
     requiresWeb:
-      queryPlan.sources.web ||
-      resolved.operation === 'web.search' ||
-      resolved.operation === 'brain_web.search',
+      !websiteOwnerTool &&
+      (queryPlan.sources.web ||
+        resolved.operation === 'web.search' ||
+        resolved.operation === 'brain_web.search'),
     requiresConversationContext: queryPlan.followUp || queryPlan.correction,
     fallbackPolicy: resolved.fallbackPolicy,
     status: 'planned',

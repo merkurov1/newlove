@@ -23,7 +23,7 @@ describe('Pierrot owner tool routing', () => {
     expect(detectOwnerTool('Покажи диагностику workers')?.kind).toBe('diagnostics');
     expect(detectOwnerTool('Аналитика Pierrot за неделю')?.kind).toBe('analytics');
     expect(detectOwnerTool('Сколько реальных посетителей общалось со мной за неделю?')?.kind).toBe(
-      'analytics'
+      'website'
     );
     expect(detectOwnerTool('Сколько сессий пока невозможно классифицировать?')?.kind).toBe(
       'analytics'

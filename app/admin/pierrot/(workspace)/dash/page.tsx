@@ -14,6 +14,7 @@ import {
   loadObservatorySnapshot,
   parseObservatoryFilters,
 } from '@/lib/analytics/observatory';
+import { loadWebsiteDashboard } from '@/lib/analytics/website/dashboard';
 import Sparkline from '@/components/pierrot/workspace/Sparkline';
 
 export const dynamic = 'force-dynamic';
@@ -63,6 +64,11 @@ export default async function DashPage({
       .then((store) => loadAdminRagOverview(store))
       .catch(() => null),
   ]);
+
+  const website = await loadWebsiteDashboard({
+    days: period,
+    store: getServerSupabaseClient({ useServiceRole: true }),
+  }).catch(() => null);
 
   const commercial = overview.commercial;
   const verdict = commercialVerdict(commercial);
@@ -120,6 +126,43 @@ export default async function DashPage({
         ['Темы', formatNumber(rag.media.topics)],
         ['Сущности', formatNumber(rag.media.entities)],
         ['Связи', formatNumber(rag.media.relations)],
+      ]
+    : [];
+
+  const websiteRows: Array<[string, string]> = website
+    ? [
+        [
+          'Сессии GA4',
+          website.dataset.ga4.totals.sessions.available
+            ? formatNumber(website.dataset.ga4.totals.sessions.value)
+            : '—',
+        ],
+        [
+          'Активные пользователи',
+          website.dataset.ga4.totals.activeUsers.available
+            ? formatNumber(website.dataset.ga4.totals.activeUsers.value)
+            : '—',
+        ],
+        [
+          'Клики поиска',
+          website.dataset.gsc.totals.clicks.available
+            ? formatNumber(website.dataset.gsc.totals.clicks.value)
+            : '—',
+        ],
+        [
+          'Показы поиска',
+          website.dataset.gsc.totals.impressions.available
+            ? formatNumber(website.dataset.gsc.totals.impressions.value)
+            : '—',
+        ],
+        [
+          'Подтверждённые подписки',
+          formatNumber(website.dataset.internal.confirmedSubscriptions),
+        ],
+        [
+          'Главный канал',
+          website.dataset.ga4.channels[0]?.label || '—',
+        ],
       ]
     : [];
 
@@ -328,6 +371,36 @@ export default async function DashPage({
             )}
           </section>
         </div>
+
+        <section
+          className="pw-dash-panel pw-dash-website"
+          aria-labelledby="pw-dash-website"
+          style={{ marginTop: '16px' }}
+        >
+          <div className="pw-dash-panel-head">
+            <h2 id="pw-dash-website">Сайт</h2>
+            <Link href="/admin/pierrot/analytics">источники</Link>
+          </div>
+          {websiteRows.length > 0 ? (
+            <>
+              <div className="pw-dash-rows">
+                {websiteRows.map(([label, value]) => (
+                  <div key={label} className="pw-dash-row">
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+              {website && website.sessionsSeries.length > 1 && (
+                <Sparkline series={website.sessionsSeries} label="Сессии GA4" />
+              )}
+            </>
+          ) : (
+            <p className="pw-dash-missing">
+              Внешние источники не подключены. <Link href="/admin/pierrot/analytics">Подключить Google Analytics и Search Console</Link>.
+            </p>
+          )}
+        </section>
 
         <p className="pw-dash-foot">
           Только реальные значения из существующих таблиц и views. Период: {period} дней.

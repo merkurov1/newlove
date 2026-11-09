@@ -8,13 +8,23 @@ import { createBrainGraphStore } from '@/lib/knowledge/graph/store';
 import { answerBrainResearchQuestion } from '@/lib/knowledge/graph/research';
 import { detectCommercialQuestion } from '@/lib/pierrot/commercialQuestion';
 import { answerPierrotCommercialQuestion } from '@/lib/pierrot/commercialIntelligence';
+import { detectWebsiteQuestion } from '@/lib/analytics/website/question';
+import { answerWebsiteAnalyticsQuestion } from '@/lib/analytics/website/answer';
 import type { PierrotQueryPlan } from '@/lib/pierrot/queryUnderstanding';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 assertServerOnly('lib/pierrot/ownerTools');
 
 export type OwnerToolKind =
-  'stats' | 'rag' | 'brain' | 'graph' | 'research' | 'diagnostics' | 'analytics' | 'commercial';
+  | 'stats'
+  | 'rag'
+  | 'brain'
+  | 'graph'
+  | 'research'
+  | 'diagnostics'
+  | 'analytics'
+  | 'commercial'
+  | 'website';
 
 export type OwnerToolRequest = {
   kind: OwnerToolKind;
@@ -35,7 +45,7 @@ export function detectOwnerTool(
 ): OwnerToolRequest | null {
   const text = normalize(message);
   const command = text.match(
-    /^\/(stats|rag|brain|graph|research|diag|analytics|commercial|revenue)\b/
+    /^\/(stats|rag|brain|graph|research|diag|analytics|commercial|revenue|site|website)\b/
   );
 
   if (command) {
@@ -44,13 +54,22 @@ export function detectOwnerTool(
         ? 'diagnostics'
         : command[1] === 'revenue'
           ? 'commercial'
-          : (command[1] as OwnerToolKind);
+          : command[1] === 'site' || command[1] === 'website'
+            ? 'website'
+            : (command[1] as OwnerToolKind);
     return { kind, query: message.trim() };
   }
 
   // A named document must reach Brain lookup before any status/commercial
   // shortcut. Explicit slash commands above remain the deliberate exception.
   if (options.queryPlan?.intent === 'document_lookup') return null;
+
+  // Website intelligence is a first-class owner question: traffic, search,
+  // pages, projects and action funnels. It never replaces the commercial
+  // revenue tool and is recognised before generic statistics.
+  if (detectWebsiteQuestion(message)) {
+    return { kind: 'website', query: message.trim() };
+  }
 
   // Commercial performance questions must be recognised before generic
   // statistics, but after explicit slash commands. Detection itself is pure;
@@ -457,6 +476,21 @@ export async function runOwnerTool(
         return await formatDiagnostics(language);
       case 'analytics':
         return await formatAnalytics(language);
+      case 'website': {
+        const store = getServerSupabaseClient({ useServiceRole: true });
+        const answer = await answerWebsiteAnalyticsQuestion({
+          message: request.query,
+          language,
+          store,
+        });
+
+        return (
+          answer.markdown ||
+          (language === 'ru'
+            ? 'Не распознал вопрос о сайте. Спросите, например: «Что у нас с сайтом за последние 7 дней?»'
+            : 'I did not recognise a website question. Try: “How is the website doing over the last 7 days?”')
+        );
+      }
       case 'commercial': {
         const store = getServerSupabaseClient({ useServiceRole: true });
         const answer = await answerPierrotCommercialQuestion({

@@ -1541,8 +1541,13 @@ export async function POST(req: Request) {
       const ownerLanguage: 'ru' | 'en' = language === 'en' ? 'en' : 'ru';
       const groomingOwnerId = isPierrotUserId(ownerIdentityUserId) ? ownerIdentityUserId : null;
 
+      // Analytical reports are structured and may legitimately exceed the
+      // chat-message input limit. They are owner-only, persisted as one
+      // assistant message and never accepted as user input.
+      const OWNER_REPORT_MAX_LENGTH = 12_000;
+
       const persistOwnerReply = async (text: string, extra: Record<string, unknown> = {}) => {
-        let finalText = text.slice(0, PIERROT_MAX_MESSAGE_LENGTH);
+        let finalText = text.slice(0, OWNER_REPORT_MAX_LENGTH);
 
         if (pierrotStore && canStoreTranscript) {
           try {
