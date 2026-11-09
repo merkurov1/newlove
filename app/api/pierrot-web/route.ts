@@ -227,6 +227,11 @@ import {
 } from '@/lib/pierrot/projects/links';
 import { ensureProjectConversation } from '@/lib/pierrot/projects/conversation';
 import { buildProjectChatContext } from '@/lib/pierrot/projects/history';
+import {
+  loadHistoryContextMessages,
+  resolveHistoryScope,
+  type PierrotHistoryScope,
+} from '@/lib/pierrot/history/store';
 import { runProjectReview } from '@/lib/pierrot/projects/review/service';
 import { createOwnerTask, type OwnerTaskCreationResult } from '@/lib/pierrot/memory/taskCreation';
 import { listDevTasks, updateDevTask } from '@/lib/pierrot/dev/tasks';
@@ -235,7 +240,11 @@ import { formatPierrotAnswerTrace } from '@/lib/pierrot/diagnostics';
 import { detectUnifiedSearchIntent } from '@/lib/pierrot/search/intent';
 import { formatUnifiedSearchReport } from '@/lib/pierrot/search/format';
 import { searchUnifiedOwnerContext } from '@/lib/pierrot/search/unified';
-import { detectGroomingCommand, parseGroomingApproval } from '@/lib/pierrot/grooming/commands';
+import {
+  detectGroomingCommand,
+  parseGroomingApproval,
+  resolveGroomingTarget,
+} from '@/lib/pierrot/grooming/commands';
 import {
   approvePendingGroomingPlan,
   prepareWorkspaceAudit,
@@ -449,6 +458,8 @@ export async function POST(req: Request) {
       context,
       conversationId: rawConversationId,
       sessionId: rawSessionId,
+      historyId: rawHistoryId,
+      episodeId: rawEpisodeId,
       userMessageId: rawUserMessageId,
       visitorId: rawVisitorId,
       consent: rawConsent,
@@ -472,6 +483,8 @@ export async function POST(req: Request) {
     if (
       (rawConversationId !== undefined && !isPierrotId(rawConversationId)) ||
       (rawSessionId !== undefined && !isPierrotId(rawSessionId)) ||
+      (rawHistoryId !== undefined && !isPierrotId(rawHistoryId)) ||
+      (rawEpisodeId !== undefined && !isPierrotId(rawEpisodeId)) ||
       (rawUserMessageId !== undefined && !isPierrotId(rawUserMessageId))
     ) {
       return NextResponse.json({ error: 'Invalid conversation identifiers.' }, { status: 400 });
@@ -589,6 +602,33 @@ export async function POST(req: Request) {
       visitorAllowed: consent.state === 'granted',
     });
 
+    // A caller that brings only a legacy conversation id (Telegram, old
+    // bookmarks) must have that source row before history resolution so the
+    // session can keep its provenance. Requests that already name a permanent
+    // history skip this and use the canonical conversation directly.
+    if (
+      identity.type === 'owner' &&
+      pierrotStore &&
+      rawConversationId &&
+      !rawHistoryId &&
+      !rawEpisodeId
+    ) {
+      try {
+        await ensurePierrotConversation(pierrotStore, {
+          id: rawConversationId,
+          sessionId,
+          startPage: requestedPathname,
+          referrer,
+          language,
+          consentState: consent.state,
+          consentVersion: consent.version,
+          identity,
+        });
+      } catch (error) {
+        persistenceFailure(error, 'legacy_conversation_prepare');
+      }
+    }
+
     if (requestedOwnerMode && !ragOwnerAuthorized) {
       return NextResponse.json({ error: 'Owner mode is not available.' }, { status: 403 });
     }
@@ -618,6 +658,34 @@ export async function POST(req: Request) {
     // “Запомни/Сохрани/Напомни” command is its own permission for that record.
     const memoryStore = ownerMode ? createPierrotStore() : null;
 
+    // Resolve the permanent owner history before any write. MAIN and project
+    // histories are separate; a new session never creates a new history.
+    let historyScope: PierrotHistoryScope | null = null;
+    let ownerEpisodeId: string | null = null;
+    if (ownerMode && memoryStore && isPierrotUserId(ownerIdentityUserId)) {
+      try {
+        historyScope = await resolveHistoryScope(memoryStore, ownerIdentityUserId, {
+          historyId: rawHistoryId || null,
+          episodeId: rawEpisodeId || null,
+          conversationId: rawConversationId || null,
+          projectId: requestedProject || null,
+          createSession: true,
+        });
+        if (historyScope) {
+          conversationId = historyScope.conversationId;
+          sessionId = historyScope.conversationSessionId;
+          ownerEpisodeId = historyScope.session?.id || null;
+          if (historyScope.project) conversationProject = historyScope.project;
+        }
+      } catch (error) {
+        // The old conversation path remains usable before the additive
+        // history migration is applied.
+        historyScope = null;
+        ownerEpisodeId = null;
+        persistenceFailure(error, 'history_scope_resolution');
+      }
+    }
+
     // A project has exactly one canonical conversation. This is enforced
     // server-side so an old link, a refreshed browser or a client that still
     // holds a historical conversation id cannot create a second project chat.
@@ -625,15 +693,17 @@ export async function POST(req: Request) {
     if (ownerMode && memoryStore && isPierrotUserId(ownerIdentityUserId)) {
       try {
         const targetProject =
-          conversationProject ||
-          (requestedProject
-            ? (
-                await resolvePierrotProject({
-                  ownerUserId: ownerIdentityUserId,
-                  explicitProjectId: requestedProject,
-                })
-              ).project
-            : null);
+          historyScope?.history.type === 'main'
+            ? null
+            : conversationProject ||
+              (requestedProject
+                ? (
+                    await resolvePierrotProject({
+                      ownerUserId: ownerIdentityUserId,
+                      explicitProjectId: requestedProject,
+                    })
+                  ).project
+                : null);
 
         if (targetProject) {
           const canonical = await ensureProjectConversation(
@@ -672,6 +742,12 @@ export async function POST(req: Request) {
     // server-verified ownerMode above, not by the response format. Telegram and
     // other JSON consumers keep the existing contract by omitting `stream`.
     const streaming = rawStream === true;
+    const historyResponseFields: { historyId?: string; episodeId?: string } = historyScope
+      ? {
+          historyId: historyScope.history.id,
+          ...(ownerEpisodeId ? { episodeId: ownerEpisodeId } : {}),
+        }
+      : {};
 
     // Format normalized conversation history with hard limits.
     const normalizedHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
@@ -696,6 +772,50 @@ export async function POST(req: Request) {
 
         historyCharacters += content.length;
         normalizedHistory.push({ role, content });
+      }
+    }
+
+    // For a verified owner, the server-side permanent history is authoritative.
+    // It cannot be replaced by a stale browser transcript from MAIN or another
+    // project. Only a bounded window is sent to the model; retrieval still
+    // searches the full history.
+    let ownerHistoryScopeContext: string | null = null;
+    if (historyScope && memoryStore && isPierrotUserId(ownerIdentityUserId)) {
+      try {
+        const storedHistory = await loadHistoryContextMessages(
+          memoryStore,
+          ownerIdentityUserId,
+          historyScope.history.id,
+          PIERROT_MAX_HISTORY_ITEMS
+        );
+
+        normalizedHistory.length = 0;
+        historyCharacters = 0;
+        for (const item of storedHistory.slice(-PIERROT_MAX_HISTORY_ITEMS)) {
+          const content = item.content.trim().slice(0, PIERROT_MAX_HISTORY_ITEM_CHARS);
+          if (!content) continue;
+          if (historyCharacters + content.length > PIERROT_MAX_HISTORY_CHARS) break;
+          historyCharacters += content.length;
+          normalizedHistory.push({ role: item.role, content });
+        }
+
+        const currentSession = historyScope.session;
+        ownerHistoryScopeContext = [
+          `PERMANENT OWNER HISTORY: ${historyScope.history.title} (${historyScope.history.type.toUpperCase()}).`,
+          currentSession
+            ? `CURRENT SESSION: ${currentSession.title}${
+                currentSession.startedAt ? `, started ${currentSession.startedAt.slice(0, 10)}` : ''
+              }.`
+            : null,
+          historyScope.project
+            ? `PROJECT SCOPE: ${historyScope.project.name}. Do not use MAIN-only context or another project as if it were this project.`
+            : 'MAIN SCOPE: do not present project-only context as if it were this history.',
+          'The bounded transcript below comes only from this history. Older episodes remain searchable through retrieval and explicit history search; do not invent missing turns.',
+        ]
+          .filter(Boolean)
+          .join('\n');
+      } catch (error) {
+        persistenceFailure(error, 'history_context_load');
       }
     }
 
@@ -1076,6 +1196,8 @@ export async function POST(req: Request) {
         try {
           ownerHistoryContext = await loadOwnerHistoryContext(memoryStore, ownerIdentityUserId, {
             excludeConversationId: conversationId,
+            historyId: historyScope?.history.id || null,
+            query: retrievalQuery,
             limit: 5,
           });
         } catch {
@@ -1088,6 +1210,7 @@ export async function POST(req: Request) {
       perspective === 'personal' ? PIERROT_PROMPT_OWNER : PIERROT_PROMPT_PUBLIC,
       buildPierrotPerspectivePrompt(perspective),
       ownerProfileContext,
+      ownerHistoryScopeContext,
       ownerMemoryContext,
       ownerConversationSummaryContext,
       ownerHistoryContext,
@@ -1153,6 +1276,8 @@ export async function POST(req: Request) {
         await appendPierrotMessage(pierrotStore, {
           conversationId,
           sessionId,
+          historyId: historyScope?.history.id ?? null,
+          episodeId: ownerEpisodeId,
           messageId: userMessageId,
           role: 'user',
           content: trimmedMessage,
@@ -1192,6 +1317,8 @@ export async function POST(req: Request) {
             await appendPierrotMessage(pierrotStore, {
               conversationId,
               sessionId,
+              historyId: historyScope?.history.id ?? null,
+              episodeId: ownerEpisodeId,
               messageId: humanAssistantId,
               role: 'assistant',
               content: text,
@@ -1422,6 +1549,8 @@ export async function POST(req: Request) {
             const stored = await appendPierrotMessage(pierrotStore, {
               conversationId,
               sessionId,
+              historyId: historyScope?.history.id ?? null,
+              episodeId: ownerEpisodeId,
               messageId: assistantMessageId,
               role: 'assistant',
               content: finalText,
@@ -1454,6 +1583,7 @@ export async function POST(req: Request) {
           admin: true,
           conversationId,
           sessionId,
+          ...historyResponseFields,
           userMessageId,
           assistantMessageId,
           recorded: canStoreTranscript,
@@ -1470,6 +1600,7 @@ export async function POST(req: Request) {
                 version: PIERROT_STREAM_VERSION,
                 conversationId,
                 sessionId,
+                ...historyResponseFields,
                 userMessageId,
                 assistantMessageId,
               });
@@ -1648,6 +1779,76 @@ export async function POST(req: Request) {
               grooming_plan: shown.planView,
             });
           }
+        } else if (groomingApproval.kind === 'repeat') {
+          // "Повтори аудит" re-reads the current state. It never replays the
+          // old proposal list and never approves anything.
+          try {
+            const repeatProjectId = pendingGrooming.projectId;
+            const repeatSnapshot =
+              repeatProjectId && repeatProjectId === conversationProject?.id
+                ? await getPierrotProjectSnapshot(groomingOwnerId, repeatProjectId).catch(
+                    () => null
+                  )
+                : null;
+            if (repeatSnapshot) {
+              const review = await runProjectReview({
+                store: memoryStore,
+                ownerUserId: groomingOwnerId,
+                project: repeatSnapshot,
+                conversationId,
+                requestMessageId: userMessageId,
+                language: ownerLanguage,
+              });
+              return persistOwnerReply(review.reply, {
+                project_command: 'review',
+                project_status: review.status,
+                project_id: repeatSnapshot.id,
+                project_review_id: review.runId || null,
+                project_review_status: review.status,
+                grooming_status: 'prepared',
+                grooming_audit_id: review.runId || null,
+                grooming_proposal_count: Number(review.report?.proposalCount || 0),
+                grooming_plan: review.planView,
+              });
+            }
+
+            const prepared = await prepareWorkspaceAudit({
+              store: memoryStore,
+              userId: groomingOwnerId,
+              conversationId,
+              requestMessageId: userMessageId,
+              scope: pendingGrooming.scope,
+              projectId: repeatProjectId,
+              language: ownerLanguage,
+            });
+            return persistOwnerReply(prepared.reply, {
+              grooming_status: 'prepared',
+              grooming_audit_id: prepared.audit.id,
+              grooming_scope: prepared.audit.scope,
+              grooming_proposal_count: prepared.audit.proposals.length,
+              grooming_health: prepared.health,
+              grooming_plan: prepared.planView,
+            });
+          } catch (error) {
+            if (isGroomingStorageUnavailable(error)) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Журнал grooming-операций недоступен: нужна миграция 2026-11-26_pierrot_workspace_grooming.sql. Ничего не изменено.'
+                  : 'The grooming journal is unavailable: apply 2026-11-26_pierrot_workspace_grooming.sql. Nothing changed.',
+                { grooming_status: 'migration_required' }
+              );
+            }
+            const code =
+              error && typeof error === 'object' && 'code' in error
+                ? String((error as { code?: unknown }).code)
+                : 'GROOMING_AUDIT_FAILED';
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? `Повторный аудит не завершился (${code}). Ничего не изменено.`
+                : `The repeated audit did not complete (${code}). Nothing changed.`,
+              { grooming_status: 'failed', grooming_error: code }
+            );
+          }
         } else {
           const mode =
             groomingApproval.kind === 'reject'
@@ -1714,30 +1915,91 @@ export async function POST(req: Request) {
           );
         }
 
-        let projectId: string | null = null;
-        if (groomingCommand.projectName) {
+        const target = resolveGroomingTarget({
+          command: groomingCommand,
+          conversationProject,
+        });
+        let projectId: string | null = target.projectId;
+        if (target.projectName) {
           const resolved = await resolveExactProject(
             memoryStore,
             groomingOwnerId,
-            groomingCommand.projectName
+            target.projectName
           ).catch(() => ({ project: null, ambiguous: false }));
           if (!resolved.project) {
             return persistOwnerReply(
               ownerLanguage === 'ru'
                 ? resolved.ambiguous
-                  ? `Несколько проектов совпадают с «${groomingCommand.projectName}». Аудит не запущен.`
-                  : `Не нашёл проект «${groomingCommand.projectName}». Аудит не запущен.`
+                  ? `Несколько проектов совпадают с «${target.projectName}». Аудит не запущен.`
+                  : `Не нашёл проект «${target.projectName}». Аудит не запущен.`
                 : 'The project could not be resolved uniquely. Audit not started.',
               { grooming_status: 'clarification_required' }
             );
           }
           projectId = resolved.project.id;
-        } else if (
-          groomingCommand.scope !== 'all' &&
-          groomingCommand.scope !== 'github' &&
-          conversationProject
+        }
+
+        // In a project chat, a bare "наведи порядок" means this project, not
+        // the whole workspace. Use the project review pipeline so the full
+        // project history is analysed, not only the latest messages.
+        if (
+          conversationProject &&
+          projectId === conversationProject.id &&
+          groomingCommand.scope === 'all' &&
+          !groomingCommand.projectName
         ) {
-          projectId = conversationProject.id;
+          const snapshot = await getPierrotProjectSnapshot(
+            groomingOwnerId,
+            conversationProject.id
+          ).catch(() => null);
+          if (!snapshot) {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Не удалось прочитать состояние проекта. Ревизия не запущена, ничего не изменено.'
+                : 'The project state could not be read. The review was not started and nothing changed.',
+              { project_command: 'review', project_status: 'failed' }
+            );
+          }
+          try {
+            const review = await runProjectReview({
+              store: memoryStore,
+              ownerUserId: groomingOwnerId,
+              project: snapshot,
+              conversationId,
+              requestMessageId: userMessageId,
+              language: ownerLanguage,
+            });
+            return persistOwnerReply(review.reply, {
+              project_command: 'review',
+              project_status: review.status,
+              project_id: snapshot.id,
+              project_review_id: review.runId || null,
+              project_review_status: review.status,
+              grooming_status: 'prepared',
+              grooming_audit_id: review.runId || null,
+              grooming_proposal_count: Number(review.report?.proposalCount || 0),
+              grooming_plan: review.planView,
+            });
+          } catch (error) {
+            if (isGroomingStorageUnavailable(error)) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Журнал аудита недоступен: нужна миграция 2026-11-26_pierrot_workspace_grooming.sql. Ничего не изменено.'
+                  : 'The audit journal is unavailable: apply 2026-11-26_pierrot_workspace_grooming.sql. Nothing changed.',
+                { grooming_status: 'migration_required' }
+              );
+            }
+            const code =
+              error && typeof error === 'object' && 'code' in error
+                ? String((error as { code?: unknown }).code)
+                : 'PROJECT_REVIEW_FAILED';
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? `Ревизия проекта не завершилась (${code}). Ничего не изменено.`
+                : `The project review did not complete (${code}). Nothing changed.`,
+              { project_command: 'review', project_status: 'failed', grooming_error: code }
+            );
+          }
         }
 
         try {
@@ -5509,6 +5771,8 @@ export async function POST(req: Request) {
           const stored = await appendPierrotMessage(pierrotStore, {
             conversationId,
             sessionId,
+            historyId: historyScope?.history.id ?? null,
+            episodeId: ownerEpisodeId,
             messageId: assistantMessageId,
             role: 'assistant',
             content: reply,
@@ -5648,6 +5912,7 @@ export async function POST(req: Request) {
           : {}),
         conversationId,
         sessionId,
+        ...historyResponseFields,
         userMessageId,
         assistantMessageId,
         recorded: canStoreTranscript,
@@ -5664,6 +5929,7 @@ export async function POST(req: Request) {
             version: PIERROT_STREAM_VERSION,
             conversationId,
             sessionId,
+            ...historyResponseFields,
             userMessageId,
             assistantMessageId,
           });

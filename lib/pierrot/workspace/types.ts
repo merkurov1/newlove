@@ -93,6 +93,39 @@ export type OwnerChatMessage = {
   createdAt: string | null;
   provider?: string | null;
   messageIndex?: number;
+  /** Episode this message belongs to in the permanent history. */
+  sessionId?: string | null;
+  /** Stable cursor inside the history (not the per-conversation index). */
+  historySequence?: number | null;
+  feedback?: 'up' | 'down' | null;
+};
+
+export type PierrotHistoryType = 'main' | 'project';
+
+export type OwnerHistorySummary = {
+  id: string;
+  type: PierrotHistoryType;
+  title: string;
+  projectId: string | null;
+  projectSlug: string | null;
+  projectName: string | null;
+  canonicalConversationId: string | null;
+  updatedAt: string | null;
+  sessionCount: number;
+  messageCount: number;
+};
+
+export type OwnerSessionListItem = {
+  id: string;
+  historyId: string;
+  title: string;
+  startedAt: string;
+  endedAt: string | null;
+  messageCount: number;
+  ordinal: number;
+  sourceConversationId: string | null;
+  firstMessageSequence: number | null;
+  lastMessageSequence: number | null;
 };
 
 export type OwnerConversation = {
@@ -104,6 +137,21 @@ export type OwnerConversation = {
   /** True when older messages exist before `oldestMessageIndex`. */
   hasMore?: boolean;
   oldestMessageIndex?: number | null;
+  /** Permanent history this transcript belongs to. */
+  historyId?: string | null;
+  historyType?: PierrotHistoryType | null;
+  historyTitle?: string | null;
+  projectId?: string | null;
+  projectSlug?: string | null;
+  projectName?: string | null;
+  currentSessionId?: string | null;
+  currentSessionTitle?: string | null;
+  /** Stable history cursor boundaries for pagination and positioning. */
+  oldestSequence?: number | null;
+  newestSequence?: number | null;
+  hasNewer?: boolean;
+  /** True when the opened session has no messages yet. */
+  emptyCurrentSession?: boolean;
 };
 
 export type BrainRecentSource = {

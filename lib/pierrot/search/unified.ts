@@ -125,7 +125,7 @@ async function searchConversationMessages(input: {
 
   let messageQuery = input.store
     .from('pierrot_messages')
-    .select('id,conversation_id,role,content,created_at,message_index');
+    .select('id,conversation_id,role,content,created_at,message_index,history_id,session_id');
 
   if (input.terms.length > 0) {
     const pattern = input.terms
@@ -216,7 +216,13 @@ async function searchConversationMessages(input: {
       'Диалог';
     const href = project
       ? `/admin/pierrot?project=${encodeURIComponent(project.slug)}`
-      : `/admin/pierrot?conversation=${encodeURIComponent(row.conversation_id)}`;
+      : typeof row.history_id === 'string' && row.history_id
+        ? `/admin/pierrot?history=${encodeURIComponent(row.history_id)}${
+            typeof row.session_id === 'string' && row.session_id
+              ? `&session=${encodeURIComponent(row.session_id)}`
+              : ''
+          }`
+        : `/admin/pierrot?conversation=${encodeURIComponent(row.conversation_id)}`;
 
     hits.push({
       source: 'conversation',

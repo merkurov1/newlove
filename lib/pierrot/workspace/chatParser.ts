@@ -44,6 +44,8 @@ export type ParsedPierrotResponse = {
   reply: string | null;
   conversationId: string | null;
   sessionId: string | null;
+  historyId: string | null;
+  episodeId: string | null;
   assistantMessageId: string | null;
   provider: string | null;
   model: string | null;
@@ -183,6 +185,8 @@ export function parsePierrotResponse(payload: unknown): ParsedPierrotResponse {
     reply: text(root.reply),
     conversationId: text(root.conversationId),
     sessionId: text(root.sessionId),
+    historyId: text(root.historyId),
+    episodeId: text(root.episodeId),
     assistantMessageId: text(root.assistantMessageId),
     provider: text(root.provider),
     model: text(root.model),

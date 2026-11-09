@@ -2,11 +2,7 @@ import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { requireAdmin } from '@/lib/serverAuth';
-import {
-  loadOwnerConversation,
-  loadOwnerConversations,
-  loadWorkspaceOverview,
-} from '@/lib/pierrot/workspace/data';
+import { loadOwnerHistoryView, loadWorkspaceOverview } from '@/lib/pierrot/workspace/data';
 import { buildOverviewSummary } from '@/lib/pierrot/workspace/status';
 import type { WorkspaceOverview } from '@/lib/pierrot/workspace/types';
 import { emptyCommercialSummary } from '@/lib/pierrot/commercialSummary';
@@ -15,8 +11,7 @@ import { loadBrainStatus } from '@/lib/pierrot/memory/brainStatus';
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
 import { overviewCookieName, parseOverviewCache } from '@/lib/pierrot/workspace/cache';
 import ChatWorkspace from '@/components/pierrot/workspace/ChatWorkspace';
-import { getPierrotProject, getPierrotProjectForConversation } from '@/lib/pierrot/projects/store';
-import { ensureProjectConversation } from '@/lib/pierrot/projects/conversation';
+import { getPierrotProject } from '@/lib/pierrot/projects/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +49,12 @@ function unavailableOverview(): WorkspaceOverview {
   };
 }
 
+function param(
+  value: string | string[] | undefined
+): string {
+  return (Array.isArray(value) ? value[0] : value) || '';
+}
+
 export default async function ChatPage({
   searchParams,
 }: {
@@ -61,57 +62,77 @@ export default async function ChatPage({
 }) {
   const user = await requireAdmin();
   const params = searchParams || {};
-  const rawConversation = Array.isArray(params.conversation)
-    ? params.conversation[0]
-    : params.conversation;
-  const requestedNew = (Array.isArray(params.new) ? params.new[0] : params.new) === '1';
-  const projectRef = Array.isArray(params.project) ? params.project[0] : params.project;
+  const requestedHistory = param(params.history);
+  const requestedSession = param(params.session);
+  const rawConversation = param(params.conversation);
+  const projectRef = param(params.project);
+  const requestedNew = param(params.new) === '1';
 
-  const [conversations, loadedConversation, explicitProject] = await Promise.all([
-    loadOwnerConversations(user.id),
-    rawConversation ? loadOwnerConversation(user.id, rawConversation) : Promise.resolve(null),
-    projectRef ? getPierrotProject(user.id, projectRef) : Promise.resolve(null),
-  ]);
-
-  let conversation = loadedConversation;
-  let project =
-    explicitProject ||
-    (conversation ? await getPierrotProjectForConversation(user.id, conversation.id) : null);
-
-  // A project always opens its single canonical conversation. Old links or
-  // bookmarks that point at a historical session are redirected to the one
-  // permanent chat instead of rendering a second project transcript.
-  if (project) {
-    const store = createPierrotStore();
-    const canonical = store
-      ? await ensureProjectConversation(store, user.id, project.id).catch(() => null)
-      : null;
-
-    if (canonical) {
-      const refreshed = await getPierrotProject(user.id, project.id);
-      if (refreshed) project = refreshed;
-
-      if (rawConversation && (!conversation || conversation.id !== canonical.conversationId)) {
-        redirect(`/admin/pierrot?project=${encodeURIComponent(project.slug)}`);
-      }
-      if (!conversation || conversation.id !== canonical.conversationId) {
-        conversation = await loadOwnerConversation(user.id, canonical.conversationId);
-      }
-    }
+  // Old conversation URLs and legacy project links resolve to the permanent
+  // history/session URL. The browser never opens a legacy conversation as an
+  // independent chat again.
+  if (rawConversation && !requestedHistory) {
+    const legacyView = await loadOwnerHistoryView(user.id, {
+      conversationId: rawConversation,
+      createSession: false,
+    });
+    if (!legacyView) redirect('/admin/pierrot');
+    const target = `/admin/pierrot?history=${encodeURIComponent(
+      legacyView.scope.history.id
+    )}${
+      legacyView.scope.session
+        ? `&session=${encodeURIComponent(legacyView.scope.session.id)}`
+        : ''
+    }`;
+    redirect(target);
   }
 
-  if (rawConversation && !conversation) {
-    redirect('/admin/pierrot');
+  if (projectRef && !requestedHistory) {
+    const project = await getPierrotProject(user.id, projectRef);
+    if (!project) redirect('/admin/pierrot');
+    const projectView = await loadOwnerHistoryView(user.id, {
+      projectId: project.id,
+      createSession: false,
+    });
+    if (!projectView) redirect('/admin/pierrot');
+    redirect(`/admin/pierrot?history=${encodeURIComponent(projectView.scope.history.id)}`);
   }
 
-  // A project never starts a "new" parallel chat. The global + button still
-  // creates an ordinary owner chat when no project is open.
-  const startNew = requestedNew && !project;
-  const projectWelcome = false;
+  let view = await loadOwnerHistoryView(user.id, {
+    historyId: requestedHistory || null,
+    sessionId: requestedSession || null,
+    createSession: false,
+  });
+
+  // A completely empty owner account still opens MAIN; the helper creates the
+  // permanent history but not a session until the first message or explicit
+  // “New chat”.
+  if (!view) {
+    view = await loadOwnerHistoryView(user.id, { createSession: true });
+  }
+  if (!view) redirect('/admin/pierrot');
+
+  const canonicalTarget = `/admin/pierrot?history=${encodeURIComponent(
+    view.scope.history.id
+  )}${
+    view.conversation.currentSessionId
+      ? `&session=${encodeURIComponent(view.conversation.currentSessionId)}`
+      : ''
+  }`;
+  if (requestedHistory && requestedHistory !== view.scope.history.id) {
+    redirect(canonicalTarget);
+  }
+
+  const conversation = view.conversation;
+  const project = view.project;
 
   // The five metrics and the commercial report are only rendered by the empty
   // state. Do not spend owner-data queries on a transcript that is already open.
-  const needsOverview = startNew || !conversation || conversation.messages.length === 0;
+  const needsOverview =
+    requestedNew ||
+    !conversation ||
+    conversation.messages.length === 0 ||
+    conversation.emptyCurrentSession === true;
 
   let cachedOverview: ReturnType<typeof parseOverviewCache> = null;
   if (needsOverview) {
@@ -147,13 +168,13 @@ export default async function ChatPage({
 
   return (
     <ChatWorkspace
-      key={conversation?.id || project?.id || 'new'}
+      key={`${view.scope.history.id}:${conversation.currentSessionId || 'latest'}`}
       ownerId={user.id}
       overview={overview}
-      conversations={conversations}
+      histories={view.histories}
+      sessions={view.sessions}
       conversation={conversation}
-      startNew={startNew}
-      projectWelcome={projectWelcome}
+      startNew={false}
       brainStatus={brainStatus}
       project={project}
     />

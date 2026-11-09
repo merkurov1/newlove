@@ -44,6 +44,38 @@ describe('Pierrot server store contracts', () => {
     );
   });
 
+  it('writes history/session provenance through the v2 append function', async () => {
+    const rpc = jest.fn(async (..._args: unknown[]) => ({
+      data: [{ sequence: 9, content: 'Scoped reply', inserted: true, history_sequence: 41 }],
+      error: null,
+    }));
+
+    const result = await appendPierrotMessage({ rpc } as never, {
+      conversationId: 'main-conversation',
+      sessionId: 'conversation-token',
+      historyId: '11111111-1111-4111-8111-111111111111',
+      episodeId: '22222222-2222-4222-8222-222222222222',
+      messageId: 'user-message-2',
+      role: 'user',
+      content: 'Hello again',
+    });
+
+    expect(result).toEqual({
+      sequence: 9,
+      content: 'Scoped reply',
+      inserted: true,
+      historySequence: 41,
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      'pierrot_append_message_v2',
+      expect.objectContaining({
+        p_conversation_id: 'main-conversation',
+        p_history_id: '11111111-1111-4111-8111-111111111111',
+        p_episode_id: '22222222-2222-4222-8222-222222222222',
+      })
+    );
+  });
+
   it('loads chronological history only for an owned conversation', async () => {
     const maybeSingle = jest.fn(async () => ({ data: { id: 'conversation-1' }, error: null }));
     const limit = jest.fn(async (..._args: unknown[]) => ({

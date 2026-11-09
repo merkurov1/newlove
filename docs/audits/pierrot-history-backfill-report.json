@@ -1,0 +1,324 @@
+{
+  "generatedAt": "2026-11-09T10:31:58.063Z",
+  "mode": "apply",
+  "schemaApplied": false,
+  "ownerIds": [
+    "fffa55a9-1ed7-49ff-953d-dfffa9f00844"
+  ],
+  "classification": {
+    "main": 177,
+    "project": 9,
+    "unresolved": 0
+  },
+  "histories": {
+    "main": 1,
+    "project": 3,
+    "projectIssues": []
+  },
+  "sessions": {
+    "created": 1,
+    "reused": 185,
+    "updated": 160
+  },
+  "messages": {
+    "linkedByMergeMap": 0,
+    "linkedByConversation": 6,
+    "sequencesAssigned": 6
+  },
+  "events": {
+    "by_message": 414,
+    "by_event_key": 404,
+    "by_source": 1,
+    "by_canonical": 0
+  },
+  "verification": {
+    "before": {
+      "conversations": 330,
+      "owner_conversations": 187,
+      "messages": 1753,
+      "owner_messages": 1340,
+      "events": 2997,
+      "projects": 3,
+      "message_id_digest": "d2469fa3ef7a833c3cc02c526b779dcf",
+      "conversation_id_digest": "aa1287d96d9300245b16abbf88b8add9"
+    },
+    "after": {
+      "conversations": 330,
+      "owner_conversations": 187,
+      "messages": 1753,
+      "owner_messages": 1340,
+      "events": 2997,
+      "projects": 3,
+      "message_id_digest": "d2469fa3ef7a833c3cc02c526b779dcf",
+      "conversation_id_digest": "aa1287d96d9300245b16abbf88b8add9"
+    },
+    "no_data_loss": true,
+    "histories_by_owner": [
+      {
+        "owner_user_id": "fffa55a9-1ed7-49ff-953d-dfffa9f00844",
+        "main_histories": 1,
+        "project_histories": 3
+      }
+    ],
+    "one_main_per_owner": true,
+    "one_project_history_per_project": true,
+    "project_issues": [],
+    "project_histories": [
+      {
+        "history_id": "ba2e9337-b3b2-438b-b9d6-f95e79a854d3",
+        "project_id": "e9bff78e-e2f9-4e03-a77b-dd14f567bcac",
+        "name": "Art Engine",
+        "canonical_conversation_id": "474df7ed-2573-4ab4-b320-00d3a4fc837f",
+        "sessions": 1,
+        "messages": 14
+      },
+      {
+        "history_id": "84c4aadb-68b7-405b-9c43-1b0df2688ecf",
+        "project_id": "a8c7c7ca-9f06-43b5-8857-d3829a2ebcab",
+        "name": "Heart & Angel",
+        "canonical_conversation_id": "f7b54f96-e4fd-43ed-8570-9424f023886a",
+        "sessions": 1,
+        "messages": 68
+      },
+      {
+        "history_id": "14371312-53b7-4bf3-baa8-56db758a7f30",
+        "project_id": "5a46e05e-aaa3-47b5-898f-41ae6052c219",
+        "name": "Journal",
+        "canonical_conversation_id": "901e9c19-2801-43e6-88df-3c0e7bc94bd2",
+        "sessions": 7,
+        "messages": 132
+      }
+    ],
+    "project_sessions": [
+      {
+        "project_id": "e9bff78e-e2f9-4e03-a77b-dd14f567bcac",
+        "project_name": "Art Engine",
+        "source_conversation_id": "474df7ed-2573-4ab4-b320-00d3a4fc837f",
+        "message_count": 14
+      },
+      {
+        "project_id": "a8c7c7ca-9f06-43b5-8857-d3829a2ebcab",
+        "project_name": "Heart & Angel",
+        "source_conversation_id": "f7b54f96-e4fd-43ed-8570-9424f023886a",
+        "message_count": 68
+      },
+      {
+        "project_id": "5a46e05e-aaa3-47b5-898f-41ae6052c219",
+        "project_name": "Journal",
+        "source_conversation_id": "901e9c19-2801-43e6-88df-3c0e7bc94bd2",
+        "message_count": 44
+      },
+      {
+        "project_id": "5a46e05e-aaa3-47b5-898f-41ae6052c219",
+        "project_name": "Journal",
+        "source_conversation_id": "70338353-08d6-4033-90f3-aa064f7df1cd",
+        "message_count": 48
+      },
+      {
+        "project_id": "5a46e05e-aaa3-47b5-898f-41ae6052c219",
+        "project_name": "Journal",
+        "source_conversation_id": "5ab2f917-4406-430a-b168-b0f699648153",
+        "message_count": 20
+      },
+      {
+        "project_id": "5a46e05e-aaa3-47b5-898f-41ae6052c219",
+        "project_name": "Journal",
+        "source_conversation_id": "ea2d692b-12d6-4639-8c3d-f927b1c86873",
+        "message_count": 6
+      },
+      {
+        "project_id": "5a46e05e-aaa3-47b5-898f-41ae6052c219",
+        "project_name": "Journal",
+        "source_conversation_id": "a9f59139-f9c4-4977-9379-632d1666a860",
+        "message_count": 10
+      },
+      {
+        "project_id": "5a46e05e-aaa3-47b5-898f-41ae6052c219",
+        "project_name": "Journal",
+        "source_conversation_id": "1e28adf6-ac4e-4c17-bb50-83d7b78e1ad0",
+        "message_count": 2
+      },
+      {
+        "project_id": "5a46e05e-aaa3-47b5-898f-41ae6052c219",
+        "project_name": "Journal",
+        "source_conversation_id": "291e2e1f-66ba-43a9-9d09-ae20768fe8bc",
+        "message_count": 2
+      }
+    ],
+    "journal_merge_check": {
+      "map_rows": 92,
+      "skipped": 0,
+      "missing_message_rows": 0,
+      "unmapped_rows": 0
+    },
+    "owner_messages_without_history": 0,
+    "sessions_without_source_coverage": [],
+    "duplicate_history_sequences": [],
+    "feedback": {
+      "feedback_events": 271,
+      "with_message_id": 271,
+      "with_history": 255
+    },
+    "required_candidates": [
+      {
+        "source_conversation_id": "0dff7735-4e36-4281-ba8c-4ee3ae9a0f45",
+        "title": "Задача оптимизация картинок во flow - выполнена - убери в архив, пропала задача по доработке раздела dev",
+        "type": "main",
+        "project_id": null,
+        "project_name": null,
+        "message_count": 32,
+        "session_id": "8b160800-284a-433a-8ae4-0aa4b27a1ae8",
+        "history_id": "f524f3b0-b6ef-4757-bca7-6176dee79c2b"
+      },
+      {
+        "source_conversation_id": "81fb4733-6e4d-4bf1-93a0-1580de24280e",
+        "title": "Напомни подключить DuckDuckGo",
+        "type": "main",
+        "project_id": null,
+        "project_name": null,
+        "message_count": 34,
+        "session_id": "f5eadbca-28f3-4f88-ad9c-41eb36342593",
+        "history_id": "f524f3b0-b6ef-4757-bca7-6176dee79c2b"
+      },
+      {
+        "source_conversation_id": "932e705e-950c-4541-97fa-a26275209468",
+        "title": "А покажи на каком нибудь примере как граф работает?",
+        "type": "main",
+        "project_id": null,
+        "project_name": null,
+        "message_count": 66,
+        "session_id": "4209c0f9-502d-4799-8825-8a710e4e3db8",
+        "history_id": "f524f3b0-b6ef-4757-bca7-6176dee79c2b"
+      },
+      {
+        "source_conversation_id": "d1ff978f-61d9-48c3-8919-0451346e0667",
+        "title": "Как у тебя дела?",
+        "type": "main",
+        "project_id": null,
+        "project_name": null,
+        "message_count": 28,
+        "session_id": "a7528598-7485-4a95-b735-e1698e535440",
+        "history_id": "f524f3b0-b6ef-4757-bca7-6176dee79c2b"
+      },
+      {
+        "source_conversation_id": "d9bb59c0-8e20-4ade-9def-8790ac7b98c5",
+        "title": "Напомни добавить в пьеро вкладку heart and angel так что бы при работе из pwa пьеро сохранялась левая панель",
+        "type": "main",
+        "project_id": null,
+        "project_name": null,
+        "message_count": 50,
+        "session_id": "c8e3dbf5-d3af-4fe5-85e8-b125498686a6",
+        "history_id": "f524f3b0-b6ef-4757-bca7-6176dee79c2b"
+      },
+      {
+        "source_conversation_id": "ed9994f2-f105-4673-83a5-576e0a9abf85",
+        "title": "Изучи про менять все максимально внимательно и расскажи 5 одновременно интересных неожиданных и полезных фактов, важн…",
+        "type": "main",
+        "project_id": null,
+        "project_name": null,
+        "message_count": 32,
+        "session_id": "ee46efb7-1e49-4909-afb0-85f2d0549a43",
+        "history_id": "f524f3b0-b6ef-4757-bca7-6176dee79c2b"
+      }
+    ],
+    "unresolved": [],
+    "ambiguous_project_mentions": [
+      {
+        "conversationId": "2423c8d5-71a6-42bf-ac5a-74e49f37e9b8",
+        "title": "Расскажи коротко, чем отличаются мои проекты Flow, Art Engine и Heart & Angel.",
+        "historyType": "main",
+        "mentions": [
+          {
+            "projectId": "e9bff78e-e2f9-4e03-a77b-dd14f567bcac",
+            "projectName": "Art Engine",
+            "projectSlug": "art-engine"
+          },
+          {
+            "projectId": "a8c7c7ca-9f06-43b5-8857-d3829a2ebcab",
+            "projectName": "Heart & Angel",
+            "projectSlug": "heart-and-angel"
+          }
+        ]
+      },
+      {
+        "conversationId": "85ae26a8-f3f7-4162-8999-8187dfde0d34",
+        "title": "А поищи в памяти и везде - задачи по art engine были?",
+        "historyType": "main",
+        "mentions": [
+          {
+            "projectId": "e9bff78e-e2f9-4e03-a77b-dd14f567bcac",
+            "projectName": "Art Engine",
+            "projectSlug": "art-engine"
+          }
+        ]
+      },
+      {
+        "conversationId": "28c838ef-e1e8-40c5-81ae-47540dc6681e",
+        "title": "Создай проект Art Engine",
+        "historyType": "main",
+        "mentions": [
+          {
+            "projectId": "e9bff78e-e2f9-4e03-a77b-dd14f567bcac",
+            "projectName": "Art Engine",
+            "projectSlug": "art-engine"
+          }
+        ]
+      },
+      {
+        "conversationId": "e8071115-68f7-42ab-a0ca-7e95881e1c22",
+        "title": "Создай проект Art Engine",
+        "historyType": "main",
+        "mentions": [
+          {
+            "projectId": "e9bff78e-e2f9-4e03-a77b-dd14f567bcac",
+            "projectName": "Art Engine",
+            "projectSlug": "art-engine"
+          }
+        ]
+      },
+      {
+        "conversationId": "44abef4c-055b-4558-aab7-7e0e1bfd4577",
+        "title": "В journal сделать переключение языков а не два выпуска на одной странице",
+        "historyType": "main",
+        "mentions": [
+          {
+            "projectId": "5a46e05e-aaa3-47b5-898f-41ae6052c219",
+            "projectName": "Journal",
+            "projectSlug": "journal"
+          }
+        ]
+      },
+      {
+        "conversationId": "b1d761ef-47d4-44b2-9d60-e772b633a872",
+        "title": "Напомни сделать разметку на сайте лучше 1. Для контента, текстов и публикаций (Flow / Journal) ⁠BlogPosting⁠ / ⁠NewsA…",
+        "historyType": "main",
+        "mentions": [
+          {
+            "projectId": "5a46e05e-aaa3-47b5-898f-41ae6052c219",
+            "projectName": "Journal",
+            "projectSlug": "journal"
+          },
+          {
+            "projectId": "a8c7c7ca-9f06-43b5-8857-d3829a2ebcab",
+            "projectName": "Heart & Angel",
+            "projectSlug": "heart-and-angel"
+          }
+        ]
+      },
+      {
+        "conversationId": "9ba025ee-85c7-48e7-9d42-bcdcf7855e58",
+        "title": "# Передача проекта: еженедельный выпуск Flow (merkurov.love) Документ описывает договорённости, принятые в разговоре…",
+        "historyType": "main",
+        "mentions": [
+          {
+            "projectId": "5a46e05e-aaa3-47b5-898f-41ae6052c219",
+            "projectName": "Journal",
+            "projectSlug": "journal"
+          }
+        ]
+      }
+    ],
+    "sessions_created_this_run": 1
+  },
+  "reportPath": "docs/audits/pierrot-history-backfill-report.json"
+}

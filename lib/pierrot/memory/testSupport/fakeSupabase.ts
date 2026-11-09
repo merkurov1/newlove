@@ -95,11 +95,17 @@ export class FakeQuery {
     const parts = expression.split(',').map((part) => part.trim());
     this.filters.push((row) =>
       parts.some((part) => {
-        const match = part.match(/^(\w+)\.ilike\.%(.*)%$/);
-        if (!match) return false;
-        return String(row[match[1]] ?? '')
-          .toLowerCase()
-          .includes(match[2].toLowerCase());
+        const ilikeMatch = part.match(/^(\w+)\.ilike\.%(.*)%$/);
+        if (ilikeMatch) {
+          return String(row[ilikeMatch[1]] ?? '')
+            .toLowerCase()
+            .includes(ilikeMatch[2].toLowerCase());
+        }
+        const eqMatch = part.match(/^(\w+)\.eq\.(.*)$/);
+        if (eqMatch) {
+          return String(row[eqMatch[1]] ?? '') === eqMatch[2];
+        }
+        return false;
       })
     );
     return this;
@@ -130,6 +136,15 @@ export class FakeQuery {
 
   is(column: string, value: unknown) {
     this.filters.push((row) => (value === null ? row[column] == null : row[column] === value));
+    return this;
+  }
+
+  not(column: string, operator: string, value: unknown) {
+    if (operator === 'is') {
+      this.filters.push((row) =>
+        value === null ? row[column] != null : row[column] !== value
+      );
+    }
     return this;
   }
 

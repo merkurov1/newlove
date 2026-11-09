@@ -19,6 +19,8 @@ export type PierrotStreamEvent =
       version: typeof PIERROT_STREAM_VERSION;
       conversationId: string;
       sessionId: string;
+      historyId?: string;
+      episodeId?: string;
       userMessageId: string;
       assistantMessageId: string;
     }
@@ -120,6 +122,8 @@ export function parsePierrotStreamEvent(raw: string): PierrotStreamEvent | null 
       version,
       conversationId: value.conversationId,
       sessionId: value.sessionId,
+      ...(typeof value.historyId === 'string' ? { historyId: value.historyId } : {}),
+      ...(typeof value.episodeId === 'string' ? { episodeId: value.episodeId } : {}),
       userMessageId: value.userMessageId,
       assistantMessageId: value.assistantMessageId,
     };

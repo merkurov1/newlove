@@ -446,6 +446,99 @@
   line-height: 1.45;
 }
 
+.pw-drawer-section {
+  padding: 14px 0 4px;
+}
+
+.pw-drawer-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 18px 8px;
+  color: var(--pw-muted);
+  font-family: var(--pw-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.pw-session-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pw-session-link {
+  display: block;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--pw-line);
+}
+
+.pw-session-link:hover {
+  background: var(--pw-paper);
+}
+
+.pw-session-link[aria-current='page'] {
+  background: var(--pw-paper);
+  box-shadow: inset 2px 0 0 var(--pw-ink);
+}
+
+.pw-session-title {
+  display: block;
+  overflow: hidden;
+  color: var(--pw-ink);
+  font-family: var(--pw-serif);
+  font-size: 14px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pw-session-date {
+  display: block;
+  margin-top: 3px;
+  color: var(--pw-muted);
+  font-family: var(--pw-mono);
+  font-size: 8px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.pw-session-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 18px 4px;
+}
+
+.pw-session-caption {
+  color: var(--pw-muted);
+}
+
+.pw-session-divider {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 22px 0 10px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--pw-line);
+  color: var(--pw-muted);
+  font-family: var(--pw-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.pw-session-start-note {
+  margin: 24px 0 8px;
+  padding: 12px 16px;
+  border: 1px dashed var(--pw-line);
+  color: var(--pw-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
 .pw-center {
   display: flex;
   flex: 1;

@@ -193,12 +193,17 @@ export type AppendPierrotMessageInput = {
   role: 'user' | 'assistant';
   content: string;
   provider?: string | null;
+  /** Permanent history. When both history and episode are set, provenance is written. */
+  historyId?: string | null;
+  /** Episode/session inside the history. */
+  episodeId?: string | null;
 };
 
 export type AppendPierrotMessageResult = {
   sequence: number;
   content: string;
   inserted: boolean;
+  historySequence?: number | null;
 };
 
 function firstRpcRow(value: unknown): Record<string, unknown> | null {
@@ -218,25 +223,38 @@ export async function appendPierrotMessage(
   store: SupabaseClient,
   input: AppendPierrotMessageInput
 ): Promise<AppendPierrotMessageResult> {
-  const { data, error } = await store.rpc('pierrot_append_message', {
+  const useHistory = Boolean(input.historyId && input.episodeId);
+  const rpcName = useHistory ? 'pierrot_append_message_v2' : 'pierrot_append_message';
+  const params: Record<string, unknown> = {
     p_conversation_id: input.conversationId,
     p_session_id: input.sessionId,
     p_message_id: input.messageId,
     p_role: input.role,
     p_content: input.content,
     p_provider: input.provider ?? null,
-  });
+  };
+
+  if (useHistory) {
+    params.p_history_id = input.historyId;
+    params.p_episode_id = input.episodeId;
+  }
+
+  const { data, error } = await store.rpc(rpcName, params);
 
   if (error) throw error;
 
   const row = firstRpcRow(data);
 
-  if (!row) throw new Error('pierrot_append_message returned no row');
+  if (!row) throw new Error(`${rpcName} returned no row`);
 
+  const historySequence = Number(row.history_sequence);
   return {
     sequence: Number(row.sequence),
     content: typeof row.content === 'string' ? row.content : input.content,
     inserted: row.inserted === true,
+    ...(Number.isFinite(historySequence) && historySequence > 0
+      ? { historySequence }
+      : {}),
   };
 }
 
@@ -582,7 +600,35 @@ export async function deletePierrotConversation(
   store: SupabaseClient,
   conversationId: string,
   sessionId: string
-): Promise<void> {
+): Promise<boolean> {
+  // Permanent histories and session provenance own their conversations. A
+  // browser delete must never cascade through preserved history messages.
+  try {
+    const [historyRef, sessionRef] = await Promise.all([
+      store
+        .from('pierrot_histories')
+        .select('id')
+        .eq('canonical_conversation_id', conversationId)
+        .limit(1),
+      store
+        .from('pierrot_sessions')
+        .select('id')
+        .or(
+          `conversation_id.eq.${conversationId},source_conversation_id.eq.${conversationId}`
+        )
+        .limit(1),
+    ]);
+
+    if (
+      (Array.isArray(historyRef.data) && historyRef.data.length > 0) ||
+      (Array.isArray(sessionRef.data) && sessionRef.data.length > 0)
+    ) {
+      return false;
+    }
+  } catch {
+    // If the new tables do not exist yet, keep the legacy delete path.
+  }
+
   const { error } = await store
     .from('pierrot_conversations')
     .delete()
@@ -590,6 +636,7 @@ export async function deletePierrotConversation(
     .eq('session_id', sessionId);
 
   if (error) throw error;
+  return true;
 }
 
 /**

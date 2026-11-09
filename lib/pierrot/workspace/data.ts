@@ -7,6 +7,8 @@ import type {
   BrainRecentSource,
   OwnerConversation,
   OwnerConversationListItem,
+  OwnerHistorySummary,
+  OwnerSessionListItem,
   WorkspaceMetric,
   WorkspaceMetricKey,
   WorkspaceOverview,
@@ -14,6 +16,14 @@ import type {
 } from './types';
 import { buildOverviewSummary, classifyMetricState } from './status';
 import { listPierrotProjects } from '@/lib/pierrot/projects/store';
+import {
+  listHistorySessions,
+  listOwnerHistories,
+  loadHistoryMessagePage,
+  resolveHistoryScope,
+  type PierrotHistoryScope,
+} from '@/lib/pierrot/history/store';
+import type { PierrotProject } from '@/lib/pierrot/projects/types';
 
 assertServerOnly('lib/pierrot/workspace/data');
 
@@ -532,6 +542,96 @@ export async function loadOwnerConversation(
       messages,
       hasMore,
       oldestMessageIndex: messages.length > 0 ? messages[0].messageIndex : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export type OwnerHistoryView = {
+  scope: PierrotHistoryScope;
+  histories: OwnerHistorySummary[];
+  sessions: OwnerSessionListItem[];
+  conversation: OwnerConversation;
+  project: PierrotProject | null;
+};
+
+/**
+ * Loads one permanent history view. The transcript is always scoped to a
+ * history, never to a single legacy conversation. A requested session only
+ * changes the page boundary, not the history.
+ */
+export async function loadOwnerHistoryView(
+  ownerUserId: string,
+  input: {
+    historyId?: string | null;
+    sessionId?: string | null;
+    conversationId?: string | null;
+    projectId?: string | null;
+    createSession?: boolean;
+    limit?: number;
+  } = {}
+): Promise<OwnerHistoryView | null> {
+  try {
+    const store = getServerSupabaseClient({ useServiceRole: true });
+    const scope = await resolveHistoryScope(store, ownerUserId, {
+      historyId: input.historyId || null,
+      episodeId: input.sessionId || null,
+      conversationId: input.conversationId || null,
+      projectId: input.projectId || null,
+      createSession: input.createSession === true,
+    });
+    if (!scope) return null;
+
+    const [histories, sessions] = await Promise.all([
+      listOwnerHistories(store, ownerUserId).catch(() => []),
+      listHistorySessions(store, ownerUserId, scope.history.id).catch(() => []),
+    ]);
+
+    const selectedSession =
+      (input.sessionId ? sessions.find((session) => session.id === input.sessionId) : null) ||
+      (scope.session
+        ? sessions.find((session) => session.id === scope.session?.id) || null
+        : null) ||
+      sessions[0] ||
+      null;
+
+    const page = await loadHistoryMessagePage(store, ownerUserId, scope, {
+      limit: input.limit ?? 120,
+      sessionId: input.sessionId || selectedSession?.id || null,
+    });
+
+    const conversation: OwnerConversation = {
+      id: scope.conversationId,
+      sessionId: scope.conversationSessionId,
+      title: selectedSession?.title || scope.history.title,
+      consentState: 'granted',
+      messages: page.messages,
+      hasMore: page.hasMore,
+      oldestMessageIndex: page.oldestSequence,
+      historyId: scope.history.id,
+      historyType: scope.history.type,
+      historyTitle: scope.history.title,
+      projectId: scope.history.projectId,
+      projectSlug: scope.history.projectSlug,
+      projectName: scope.history.projectName,
+      currentSessionId: selectedSession?.id || scope.session?.id || null,
+      currentSessionTitle: selectedSession?.title || scope.session?.title || null,
+      oldestSequence: page.oldestSequence,
+      newestSequence: page.newestSequence,
+      hasNewer:
+        page.newestSequence != null &&
+        page.historyMaxSequence > 0 &&
+        page.newestSequence < page.historyMaxSequence,
+      emptyCurrentSession: selectedSession ? selectedSession.messageCount === 0 : false,
+    };
+
+    return {
+      scope,
+      histories,
+      sessions,
+      conversation,
+      project: scope.project,
     };
   } catch {
     return null;

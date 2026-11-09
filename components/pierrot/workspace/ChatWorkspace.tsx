@@ -8,6 +8,8 @@ import {
   ArrowUp,
   Bookmark,
   Check,
+  ChevronDown,
+  History,
   MessageSquare,
   PanelLeft,
   Plus,
@@ -17,7 +19,8 @@ import {
 } from 'lucide-react';
 import type {
   OwnerConversation,
-  OwnerConversationListItem,
+  OwnerHistorySummary,
+  OwnerSessionListItem,
   WorkspaceOverview,
 } from '@/lib/pierrot/workspace/types';
 import {
@@ -48,7 +51,6 @@ import type {
 import { memoryKindLabel, memoryStatusLabel } from '@/lib/pierrot/memory/types';
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
 import HomeOverview from './HomeOverview';
-import { sortOwnerConversations } from '@/lib/pierrot/workspace/conversationOrdering';
 import type { PierrotProject } from '@/lib/pierrot/projects/types';
 import type { GroomingPlanView } from '@/lib/pierrot/grooming/types';
 import { detectProjectReviewCommand } from '@/lib/pierrot/projects/commands';
@@ -70,6 +72,8 @@ type UiMessage = {
   interrupted?: boolean;
   /** Local deterministic command acknowledgement; never sent to the model. */
   local?: boolean;
+  sessionId?: string | null;
+  historySequence?: number | null;
 };
 
 type SelectedSources = {
@@ -128,16 +132,19 @@ function initialMessages(conversation: OwnerConversation | null): UiMessage[] {
     createdAt: message.createdAt,
     provider: message.provider || null,
     serverMessageId: message.id,
+    feedback: message.feedback || undefined,
+    sessionId: message.sessionId || null,
+    historySequence: message.historySequence ?? null,
   }));
 }
 
-function ConversationLinks({
+function HistoryLinks({
   items,
-  conversationId,
+  activeHistoryId,
   onOpen,
 }: {
-  items: OwnerConversationListItem[];
-  conversationId: string | null;
+  items: OwnerHistorySummary[];
+  activeHistoryId: string | null;
   onOpen: () => void;
 }) {
   return (
@@ -145,21 +152,57 @@ function ConversationLinks({
       {items.map((item) => (
         <li key={item.id}>
           <Link
-            href={`/admin/pierrot?conversation=${encodeURIComponent(item.id)}`}
+            href={`/admin/pierrot?history=${encodeURIComponent(item.id)}`}
             className="pw-conversation-link"
-            aria-current={conversationId === item.id ? 'page' : undefined}
+            aria-current={activeHistoryId === item.id ? 'page' : undefined}
             onClick={onOpen}
           >
             <span className="pw-conversation-heading">
-              <span className="pw-conversation-title">{item.title}</span>
-              {item.projectId && item.projectName && (
-                <span className="pw-conversation-project" title={`Проект: ${item.projectName}`}>
-                  {item.projectName}
-                </span>
+              <span className="pw-conversation-title">
+                {item.type === 'main' ? 'Главная история' : item.title}
+              </span>
+              {item.type === 'project' && (
+                <span className="pw-conversation-project">проект</span>
               )}
             </span>
             <span className="pw-conversation-date">
-              {formatConversationDate(item.updatedAt)} · {item.messageCount}{' '}
+              {item.sessionCount} {item.sessionCount === 1 ? 'сессия' : 'сессий'} ·{' '}
+              {item.messageCount} сообщений
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SessionLinks({
+  items,
+  historyId,
+  activeSessionId,
+  onOpen,
+}: {
+  items: OwnerSessionListItem[];
+  historyId: string | null;
+  activeSessionId: string | null;
+  onOpen: () => void;
+}) {
+  if (!historyId) return null;
+  return (
+    <ul className="pw-session-list">
+      {items.map((item) => (
+        <li key={item.id}>
+          <Link
+            href={`/admin/pierrot?history=${encodeURIComponent(historyId)}&session=${encodeURIComponent(
+              item.id
+            )}`}
+            className="pw-session-link"
+            aria-current={activeSessionId === item.id ? 'page' : undefined}
+            onClick={onOpen}
+          >
+            <span className="pw-session-title">{item.title}</span>
+            <span className="pw-session-date">
+              {formatConversationDate(item.startedAt)} · {item.messageCount}{' '}
               {item.messageCount === 1 ? 'сообщение' : 'сообщений'}
             </span>
           </Link>
@@ -172,19 +215,19 @@ function ConversationLinks({
 export default function ChatWorkspace({
   ownerId,
   overview,
-  conversations,
+  histories,
+  sessions,
   conversation,
   startNew,
-  projectWelcome,
   brainStatus,
   project,
 }: {
   ownerId: string;
   overview: WorkspaceOverview;
-  conversations: OwnerConversationListItem[];
+  histories: OwnerHistorySummary[];
+  sessions: OwnerSessionListItem[];
   conversation: OwnerConversation | null;
   startNew: boolean;
-  projectWelcome?: boolean;
   brainStatus?: BrainStatusSnapshot | null;
   project?: PierrotProject | null;
 }) {
@@ -200,12 +243,18 @@ export default function ChatWorkspace({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(Boolean(conversation?.hasMore));
   const [oldestIndex, setOldestIndex] = useState<number | null>(
-    conversation?.oldestMessageIndex ?? null
+    conversation?.oldestSequence ?? conversation?.oldestMessageIndex ?? null
   );
   const [conversationId, setConversationId] = useState<string | null>(conversation?.id ?? null);
   const [sessionId, setSessionId] = useState<string | null>(conversation?.sessionId ?? null);
+  const [historyId, setHistoryId] = useState<string | null>(conversation?.historyId ?? null);
+  const [episodeId, setEpisodeId] = useState<string | null>(
+    conversation?.currentSessionId ?? null
+  );
   const [title, setTitle] = useState<string>(conversation?.title ?? 'Новый диалог');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [showAllSessions, setShowAllSessions] = useState(false);
+  const [newSessionLoading, setNewSessionLoading] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [selectedSources, setSelectedSources] = useState<SelectedSources | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -290,52 +339,61 @@ export default function ChatWorkspace({
     return () => window.removeEventListener('pierrot:toggle-drawer', toggle as EventListener);
   }, []);
 
-  const resetConversation = useCallback(() => {
-    abortRef.current?.abort();
-    setMessages([]);
-    setDraft('');
-    setConversationId(null);
-    setSessionId(null);
-    setTitle('Новый диалог');
-    setHasOlder(false);
-    setOldestIndex(null);
-    setSelectedSources(null);
-    setInspectorOpen(false);
-    setMenuOpenId(null);
+  const startNewSession = useCallback(async () => {
+    if (newSessionLoading) return;
+    const targetHistoryId = historyId || conversation?.historyId || null;
+    if (!targetHistoryId) {
+      setError('История ещё не готова. Обнови страницу.');
+      return;
+    }
+    setNewSessionLoading(true);
     setError(null);
-    setStreamStage(null);
-    setRetryPrompt(null);
-    setMemoryOpen(false);
-    setMemoryError(null);
-    setLoading(false);
-    atBottomRef.current = true;
-    streamingMessageIdRef.current = null;
-    deltaBufferRef.current = '';
-    window.requestAnimationFrame(() => inputRef.current?.focus());
-  }, []);
+    try {
+      const response = await fetch('/api/admin/pierrot/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ historyId: targetHistoryId }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        session?: { id?: string };
+        historyId?: string;
+        error?: string;
+      };
+      if (!response.ok || !payload.session?.id) {
+        throw new Error(payload.error || 'Не удалось начать новую сессию.');
+      }
+      setDrawerOpen(false);
+      setMessages([]);
+      setDraft('');
+      setEpisodeId(payload.session.id);
+      setTitle('Новая сессия');
+      setHasOlder(false);
+      setOldestIndex(null);
+      setSelectedSources(null);
+      setInspectorOpen(false);
+      setMenuOpenId(null);
+      setError(null);
+      setStreamStage(null);
+      setRetryPrompt(null);
+      setLoading(false);
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      router.replace(
+        `/admin/pierrot?history=${encodeURIComponent(
+          payload.historyId || targetHistoryId
+        )}&session=${encodeURIComponent(payload.session.id)}`
+      );
+      router.refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Не удалось начать новую сессию.');
+    } finally {
+      setNewSessionLoading(false);
+    }
+  }, [conversation?.historyId, historyId, newSessionLoading, router]);
 
   useEffect(() => {
     if (!startNew) return;
-    resetConversation();
-    if (projectWelcome && project) {
-      setMessages([
-        {
-          id: `project-welcome-${project.id}`,
-          role: 'assistant',
-          content: `Что мне нужно знать о проекте «${project.name}»? Расскажи о его цели, текущем состоянии, важных решениях и ближайших задачах.`,
-          createdAt: new Date().toISOString(),
-          local: true,
-        },
-      ]);
-    }
-    if (!projectWelcome) {
-      router.replace(
-        project?.slug
-          ? `/admin/pierrot?project=${encodeURIComponent(project.slug)}`
-          : '/admin/pierrot'
-      );
-    }
-  }, [project, projectWelcome, resetConversation, router, startNew]);
+    void startNewSession();
+  }, [startNew, startNewSession]);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -366,7 +424,7 @@ export default function ChatWorkspace({
   }, [draft]);
 
   async function loadOlderMessages() {
-    if (!conversationId || loadingOlder || !hasOlder || oldestIndex == null) return;
+    if (!historyId || loadingOlder || !hasOlder || oldestIndex == null) return;
 
     const scrollElement = scrollRef.current;
     const previousHeight = scrollElement?.scrollHeight ?? 0;
@@ -375,9 +433,11 @@ export default function ChatWorkspace({
 
     try {
       const response = await fetch(
-        `/api/admin/pierrot/conversations?conversationId=${encodeURIComponent(
-          conversationId
-        )}&beforeIndex=${oldestIndex}&limit=120`
+        `/api/admin/pierrot/conversations?historyId=${encodeURIComponent(
+          historyId
+        )}&beforeSequence=${oldestIndex}&limit=120${
+          episodeId ? `&sessionId=${encodeURIComponent(episodeId)}` : ''
+        }`
       );
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error || 'Не удалось загрузить старые сообщения.');
@@ -391,6 +451,9 @@ export default function ChatWorkspace({
                 content: string;
                 createdAt: string | null;
                 provider?: string | null;
+                sessionId?: string | null;
+                historySequence?: number | null;
+                feedback?: 'up' | 'down' | null;
               } =>
                 Boolean(message) &&
                 typeof message === 'object' &&
@@ -407,6 +470,9 @@ export default function ChatWorkspace({
                 createdAt: message.createdAt || null,
                 provider: message.provider || null,
                 serverMessageId: message.id,
+                sessionId: message.sessionId || null,
+                historySequence: message.historySequence ?? null,
+                feedback: message.feedback || undefined,
               })
             )
         : [];
@@ -416,7 +482,8 @@ export default function ChatWorkspace({
         return [...incoming.filter((message) => !existing.has(message.id)), ...current];
       });
       setHasOlder(Boolean(data.hasMore));
-      if (typeof data.oldestMessageIndex === 'number') setOldestIndex(data.oldestMessageIndex);
+      if (typeof data.oldestSequence === 'number') setOldestIndex(data.oldestSequence);
+      else if (typeof data.oldestMessageIndex === 'number') setOldestIndex(data.oldestMessageIndex);
 
       window.requestAnimationFrame(() => {
         const element = scrollRef.current;
@@ -470,6 +537,8 @@ export default function ChatWorkspace({
         body: JSON.stringify({
           conversationId,
           sessionId,
+          ...(historyId ? { historyId } : {}),
+          ...(episodeId ? { episodeId } : {}),
           eventName: 'answer_feedback',
           eventKey: message.serverMessageId,
           payload: { rating, message_id: message.serverMessageId },
@@ -825,6 +894,7 @@ export default function ChatWorkspace({
       role: 'user',
       content: text,
       createdAt: new Date().toISOString(),
+      sessionId: episodeId,
     };
     const assistantUiId = `stream-${Date.now()}`;
 
@@ -849,6 +919,7 @@ export default function ChatWorkspace({
           content: '',
           createdAt: new Date().toISOString(),
           streaming: true,
+          sessionId: episodeId,
         },
       ];
     });
@@ -910,6 +981,8 @@ export default function ChatWorkspace({
 
       if (parsed.conversationId) setConversationId(parsed.conversationId);
       if (parsed.sessionId) setSessionId(parsed.sessionId);
+      if (parsed.historyId) setHistoryId(parsed.historyId);
+      if (parsed.episodeId) setEpisodeId(parsed.episodeId);
 
       if (parsed.recorded) {
         router.refresh();
@@ -934,6 +1007,8 @@ export default function ChatWorkspace({
           stream: true,
           ...(conversationId ? { conversationId } : {}),
           ...(sessionId ? { sessionId } : {}),
+          ...(historyId ? { historyId } : {}),
+          ...(episodeId ? { episodeId } : {}),
           consent:
             consent.state === 'granted'
               ? { state: 'granted', version: consent.version }
@@ -957,6 +1032,8 @@ export default function ChatWorkspace({
           onAccepted: (event) => {
             setConversationId(event.conversationId);
             setSessionId(event.sessionId);
+            if (event.historyId) setHistoryId(event.historyId);
+            if (event.episodeId) setEpisodeId(event.episodeId);
           },
           onStatus: (event) => setStreamStage(event.stage),
           onDelta: (chunk) => {
@@ -1042,6 +1119,8 @@ export default function ChatWorkspace({
 
         if (parsed.conversationId) setConversationId(parsed.conversationId);
         if (parsed.sessionId) setSessionId(parsed.sessionId);
+        if (parsed.historyId) setHistoryId(parsed.historyId);
+        if (parsed.episodeId) setEpisodeId(parsed.episodeId);
 
         if (parsed.recorded) {
           router.refresh();
@@ -1187,9 +1266,10 @@ export default function ChatWorkspace({
         : streamStage === 'persisting'
           ? 'Pierrot сохраняет ответ'
           : 'Pierrot формулирует ответ';
-  const orderedConversations = useMemo(
-    () => sortOwnerConversations(conversations),
-    [conversations]
+  const visibleSessions = showAllSessions ? sessions : sessions.slice(0, 12);
+  const sessionById = useMemo(
+    () => new Map(sessions.map((session) => [session.id, session])),
+    [sessions]
   );
 
   return (
@@ -1225,26 +1305,61 @@ export default function ChatWorkspace({
             <button
               type="button"
               className="pw-new-chat"
-              onClick={() => {
-                resetConversation();
-                setDrawerOpen(false);
-                router.replace('/admin/pierrot');
-              }}
+              onClick={() => void startNewSession()}
+              disabled={newSessionLoading || !historyId}
             >
               <Plus size={18} strokeWidth={1.4} aria-hidden="true" />
-              Новый диалог
+              {newSessionLoading ? 'Начинаем…' : 'Новая сессия'}
             </button>
 
             <div className="pw-drawer-section">
-              <div className="pw-drawer-section-title">Все разговоры</div>
-              {orderedConversations.length === 0 ? (
-                <p className="pw-drawer-empty">Сохранённых диалогов пока нет.</p>
+              <div className="pw-drawer-section-title">Истории</div>
+              {histories.length === 0 ? (
+                <p className="pw-drawer-empty">История ещё не создана.</p>
               ) : (
-                <ConversationLinks
-                  items={orderedConversations}
-                  conversationId={conversationId}
+                <HistoryLinks
+                  items={histories}
+                  activeHistoryId={historyId}
                   onOpen={() => setDrawerOpen(false)}
                 />
+              )}
+            </div>
+
+            <div className="pw-drawer-section">
+              <div className="pw-drawer-section-title">
+                <History size={14} strokeWidth={1.5} aria-hidden="true" />
+                Сессии · {sessions.length}
+              </div>
+              {sessions.length === 0 ? (
+                <p className="pw-drawer-empty">Сессий пока нет. Начни новый разговор.</p>
+              ) : (
+                <>
+                  <SessionLinks
+                    items={visibleSessions}
+                    historyId={historyId}
+                    activeSessionId={episodeId}
+                    onOpen={() => setDrawerOpen(false)}
+                  />
+                  {sessions.length > 12 && (
+                    <button
+                      type="button"
+                      className="pw-history-more-button pw-session-toggle"
+                      onClick={() => setShowAllSessions((value) => !value)}
+                    >
+                      <ChevronDown
+                        size={14}
+                        strokeWidth={1.5}
+                        aria-hidden="true"
+                        style={{
+                          transform: showAllSessions ? 'rotate(180deg)' : undefined,
+                        }}
+                      />
+                      {showAllSessions
+                        ? 'Свернуть старые сессии'
+                        : `Показать все сессии (${sessions.length})`}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -1268,7 +1383,9 @@ export default function ChatWorkspace({
           </span>
 
           <div className="pw-chat-head-copy">
-            <h1 className="pw-chat-head-title">{title}</h1>
+            <h1 className="pw-chat-head-title">
+              {conversation?.historyTitle || title}
+            </h1>
             <span className="pw-chat-head-sub">
               owner workspace
               {project && (
@@ -1277,6 +1394,12 @@ export default function ChatWorkspace({
                   <span className="pw-conversation-project" title={`Контекст проекта: ${project.name}`}>
                     {project.name}
                   </span>
+                </>
+              )}
+              {title && title !== (conversation?.historyTitle || title) && (
+                <>
+                  {' · '}
+                  <span className="pw-session-caption">{title}</span>
                 </>
               )}
             </span>
@@ -1321,14 +1444,39 @@ export default function ChatWorkspace({
                   </button>
                 </div>
               )}
-              {messages.map((message) => {
+              {conversation?.hasNewer && historyId && (
+                <div className="pw-history-more">
+                  <Link
+                    className="pw-history-more-button"
+                    href={`/admin/pierrot?history=${encodeURIComponent(historyId)}`}
+                  >
+                    Перейти к последним сообщениям
+                  </Link>
+                </div>
+              )}
+              {messages.map((message, index) => {
+                const previous = messages[index - 1];
+                const showSessionDivider = Boolean(
+                  message.sessionId && message.sessionId !== previous?.sessionId
+                );
+                const session = message.sessionId ? sessionById.get(message.sessionId) : null;
                 const messageSourceCount = message.sources ? totalSourceCount(message.sources) : 0;
 
                 return (
-                  <article
-                    key={message.id}
-                    className={`pw-message ${message.role === 'user' ? 'pw-message-user' : ''}`}
-                  >
+                  <React.Fragment key={message.id}>
+                    {showSessionDivider && (
+                      <div className="pw-session-divider" role="separator">
+                        <span>{session?.title || 'Сессия'}</span>
+                        {session?.startedAt && (
+                          <time dateTime={session.startedAt}>
+                            {formatConversationDate(session.startedAt)}
+                          </time>
+                        )}
+                      </div>
+                    )}
+                    <article
+                      className={`pw-message ${message.role === 'user' ? 'pw-message-user' : ''}`}
+                    >
                     {message.role === 'user' ? (
                       <div className="pw-bubble-user">{message.content}</div>
                     ) : (
@@ -1469,8 +1617,17 @@ export default function ChatWorkspace({
                       </>
                     )}
                   </article>
+                  </React.Fragment>
                 );
               })}
+
+              {conversation?.emptyCurrentSession &&
+                episodeId &&
+                !messages.some((message) => message.sessionId === episodeId) && (
+                  <div className="pw-session-start-note" role="status">
+                    Началась новая сессия. Предыдущая история сохранена выше.
+                  </div>
+                )}
 
               {loading && !hasStreamingContent && (
                 <p className="pw-typing" role="status" aria-live="polite">
