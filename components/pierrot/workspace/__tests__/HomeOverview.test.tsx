@@ -15,16 +15,9 @@ describe('owner home overview', () => {
     expect(screen.queryByText(/Память и Flow открываются слева/)).toBeNull();
   });
 
-  it('shows the statement in a new session and not when disabled by reduced motion', async () => {
-    const matchMedia = jest.fn().mockReturnValue({ matches: true });
-    Object.defineProperty(window, 'matchMedia', {
-      configurable: true,
-      value: matchMedia,
-    });
+  it('renders a new session statement immediately without motion gating', async () => {
+    render(<HomeOverview sessionId="session-new" />);
 
-    render(<HomeOverview sessionId="session-reduced" />);
-
-    expect(await screen.findByText('Structure is the antidote to chaos.')).toBeTruthy();
-    expect(matchMedia).toHaveBeenCalledWith('(prefers-reduced-motion: reduce)');
+    expect(screen.getByText('Structure is the antidote to chaos.')).toBeTruthy();
   });
 });
