@@ -488,7 +488,13 @@ function PierrotEmptyState() {
   );
 }
 
-export function PierrotMessageList({ className = '' }: { className?: string }) {
+export function PierrotMessageList({
+  className = '',
+  onScrollStateChange,
+}: {
+  className?: string;
+  onScrollStateChange?: (scrolled: boolean) => void;
+}) {
   const { messages, isLoading, runAction, closeConversation, isHumanActive } = usePierrot();
   const pathname = usePathname() || '/';
   const interfaceLanguage = useInterfaceLanguage();
@@ -532,6 +538,7 @@ export function PierrotMessageList({ className = '' }: { className?: string }) {
       onScroll={(event) => {
         const element = event.currentTarget;
         atBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 96;
+        onScrollStateChange?.(element.scrollTop > 0);
       }}
       style={{
         // Keep the transcript usable on a keyboard-short landscape viewport

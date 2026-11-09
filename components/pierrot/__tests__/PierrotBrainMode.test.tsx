@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PierrotProvider, usePierrot } from '@/components/pierrot/PierrotContext';
+import PierrotChat from '@/components/PierrotChat';
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
@@ -41,6 +42,16 @@ function Probe() {
   );
 }
 
+function OpenChatButton() {
+  const { openChat } = usePierrot();
+
+  return (
+    <button type="button" onClick={openChat}>
+      Open test modal
+    </button>
+  );
+}
+
 describe('Pierrot Brain reveal', () => {
   beforeEach(() => {
     window.sessionStorage.clear();
@@ -61,6 +72,26 @@ describe('Pierrot Brain reveal', () => {
     });
 
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not expose a Brain toggle in the modal while keeping Brain enabled', async () => {
+    render(
+      <PierrotProvider>
+        <PierrotChat />
+        <OpenChatButton />
+        <Probe />
+      </PierrotProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open test modal' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByTestId('unlocked')).toHaveTextContent('true');
+      expect(screen.getByTestId('mode')).toHaveTextContent('true');
+    });
+
+    expect(screen.queryByRole('button', { name: 'Toggle Brain knowledge mode' })).toBeNull();
   });
 
   it('shows five example questions when Brain is toggled on', async () => {

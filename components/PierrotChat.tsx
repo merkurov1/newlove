@@ -98,8 +98,6 @@ export default function PierrotChat() {
     closeChat,
     clearChat,
     isUnframedMode,
-    canShowBrainMode,
-    toggleUnframedMode,
     isHumanActive,
     isHumanPending,
     humanPresence,
@@ -117,6 +115,11 @@ export default function PierrotChat() {
   const modalRef = useRef<HTMLElement | null>(null);
   const shouldReduceMotion = usePrefersReducedMotion();
   const keyboardViewport = useKeyboardViewportHeight(isOpen);
+  const [isHeaderScrolled, setIsHeaderScrolled] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || messages.length === 0) setIsHeaderScrolled(false);
+  }, [isOpen, messages.length]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -299,7 +302,16 @@ export default function PierrotChat() {
                 >
                   <header
                     data-pierrot-header
-                    className="shrink-0 bg-transparent"
+                    data-pierrot-header-scrolled={isHeaderScrolled ? 'true' : 'false'}
+                    className={`
+                      shrink-0 transition-[background-color,backdrop-filter]
+                      duration-200 ease-out
+                      ${
+                        isHeaderScrolled
+                          ? 'bg-[#FAF8F5]/75 backdrop-blur-md'
+                          : 'bg-[#FAF8F5]'
+                      }
+                    `}
                     style={{
                       paddingTop:
                         'max(0px, env(safe-area-inset-top), var(--tg-safe-area-top, 0px))',
@@ -340,32 +352,6 @@ export default function PierrotChat() {
                       </div>
 
                       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-                        {canShowBrainMode && !isHumanActive && (
-                          <button
-                            type="button"
-                            onClick={toggleUnframedMode}
-                            aria-pressed={isUnframedMode}
-                            title="Private Brain knowledge mode"
-                            aria-label="Toggle Brain knowledge mode"
-                            className={`
-                              flex h-10 items-center gap-1.5 rounded-full border px-3
-                              font-mono text-[9px] uppercase tracking-[0.16em]
-                              shadow-[0_2px_8px_rgba(75,62,45,0.04)]
-                              transition focus:outline-none focus:ring-2
-                              focus:ring-[#CFC3B1] focus:ring-offset-2 sm:px-4 sm:text-[10px]
-                              ${
-                                isUnframedMode
-                                  ? 'border-[#37332D] bg-[#37332D] text-white'
-                                  : 'border-[#E4DCCF] bg-[#F8F5EF] text-[#625B50] hover:border-[#CFC3B1] hover:bg-white hover:text-[#3F3A33]'
-                              }
-                            `}
-                          >
-                            <span className="font-mono text-[9px] uppercase tracking-[0.16em] sm:text-[10px]">
-                              Brain
-                            </span>
-                          </button>
-                        )}
-
                         <button
                           type="button"
                           onClick={() => clearChat()}
@@ -405,7 +391,10 @@ export default function PierrotChat() {
                     </div>
                   </header>
 
-                  <PierrotMessageList className="min-h-0 flex-1" />
+                  <PierrotMessageList
+                    className="min-h-0 flex-1"
+                    onScrollStateChange={setIsHeaderScrolled}
+                  />
 
                   <footer
                     data-pierrot-footer

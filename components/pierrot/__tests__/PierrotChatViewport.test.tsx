@@ -150,6 +150,28 @@ describe('PierrotChat keyboard viewport', () => {
     });
   });
 
+  it('keeps the header opaque at the top and translucent after scrolling', async () => {
+    renderPierrot();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+
+    const header = document.querySelector('[data-pierrot-header]') as HTMLElement | null;
+    const messages = document.querySelector('[data-pierrot-messages]') as HTMLElement | null;
+
+    expect(header).not.toBeNull();
+    expect(messages).not.toBeNull();
+    expect(header).toHaveAttribute('data-pierrot-header-scrolled', 'false');
+
+    fireEvent.scroll(messages as HTMLElement, { target: { scrollTop: 120 } });
+    await waitFor(() => {
+      expect(header).toHaveAttribute('data-pierrot-header-scrolled', 'true');
+    });
+
+    fireEvent.scroll(messages as HTMLElement, { target: { scrollTop: 0 } });
+    await waitFor(() => {
+      expect(header).toHaveAttribute('data-pierrot-header-scrolled', 'false');
+    });
+  });
+
   it('locks document scrolling while the modal is open and restores it on close', async () => {
     renderPierrot();
 
