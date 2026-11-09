@@ -1,47 +1,34 @@
-import { ImageResponse } from 'next/og';
-
-export const runtime = 'edge';
+const ICONS: Record<string, string> = {
+  '16': '/pierrot/icons/favicon-16.png',
+  '32': '/pierrot/icons/favicon-32.png',
+  '180': '/pierrot/icons/apple-touch-icon.png',
+  '192': '/pierrot/icons/icon-192.png',
+  '512': '/pierrot/icons/icon-512.png',
+};
 
 /**
- * Interim typographic PWA mark.
+ * Backwards-compatible icon URL.
  *
- * The repository has no Pierrot mask or square logo source suitable for
- * maskable icons. This restrained monogram reuses the workspace typography
- * and palette. Replace with the real mask/logo assets when supplied.
+ * Older installed manifestations may still request /admin/pierrot-icon/<size>.
+ * Serve the real Pierrot avatar instead of the retired monogram by redirecting
+ * to the static PNG generated from public/pierrot/pierrot-avatar-512.jpg.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ size: string }> | { size: string } }
 ) {
   const params = await context.params;
-  const size = Number(params.size);
+  const target = ICONS[params.size];
 
-  if (![180, 192, 512].includes(size)) {
+  if (!target) {
     return new Response('Not found', { status: 404 });
   }
 
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#F8F6F1',
-          color: '#1D1B18',
-          fontFamily: 'Georgia, Times New Roman, serif',
-          fontSize: Math.round(size * 0.52),
-          lineHeight: 1,
-        }}
-      >
-        P
-      </div>
-    ),
-    {
-      width: size,
-      height: size,
-    }
-  );
+  return new Response(null, {
+    status: 307,
+    headers: {
+      Location: new URL(target, request.url).toString(),
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
 }

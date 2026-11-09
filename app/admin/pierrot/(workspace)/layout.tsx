@@ -20,10 +20,15 @@ export const metadata: Metadata = {
   manifest: '/admin/pierrot/manifest.webmanifest',
   icons: {
     icon: [
-      { url: '/admin/pierrot-icon/192', sizes: '192x192', type: 'image/png' },
-      { url: '/admin/pierrot-icon/512', sizes: '512x512', type: 'image/png' },
+      { url: '/pierrot/icons/favicon-16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/pierrot/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/pierrot/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/pierrot/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
     ],
-    apple: [{ url: '/admin/pierrot-icon/180', sizes: '180x180', type: 'image/png' }],
+    apple: [
+      { url: '/pierrot/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+    shortcut: [{ url: '/pierrot/icons/icon-192.png', type: 'image/png' }],
   },
   appleWebApp: {
     capable: true,

@@ -1,3 +1,4 @@
+/* eslint-env serviceworker */
 /* Pierrot owner PWA service worker.
  *
  * Privacy rules:
@@ -10,13 +11,15 @@
  * public site's manifest or service worker behaviour.
  */
 
-const VERSION = 'pierrot-owner-v1';
+const VERSION = 'pierrot-owner-v2';
 const OFFLINE_URL = '/pierrot-offline.html';
 const PRECACHE = [
   OFFLINE_URL,
   '/admin/pierrot/manifest.webmanifest',
-  '/admin/pierrot-icon/192',
-  '/admin/pierrot-icon/512',
+  '/pierrot/icons/icon-192.png',
+  '/pierrot/icons/icon-512.png',
+  '/pierrot/icons/apple-touch-icon.png',
+  '/pierrot/icons/favicon-32.png',
   '/pierrot/pierrot-avatar-512.jpg',
 ];
 
