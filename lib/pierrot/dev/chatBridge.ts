@@ -1,16 +1,18 @@
 import { assertServerOnly } from '@/lib/serverOnly';
 import type { DevRepoResult } from './repository';
-import { detectDevProjectContext, getDevProjectContext, resolveDevRepository } from './repositories';
-import type {
-  DevProjectContext,
-  DevProjectContextKey,
-  DevRepositoryKey,
-} from './types';
+import {
+  detectDevProjectContext,
+  getDevProjectContext,
+  getDevRepositoryConfigs,
+  resolveDevRepository,
+} from './repositories';
+import type { DevProjectContext, DevProjectContextKey, DevRepositoryKey } from './types';
 import type { PendingGitHubOperationKind } from './pendingOperations';
 
 assertServerOnly('lib/pierrot/dev/chatBridge');
 
 export type GitHubChatOperation =
+  | 'status'
   | 'repo_overview'
   | 'search'
   | 'commits'
@@ -83,9 +85,7 @@ function extractNumber(text: string): number | null {
 }
 
 function extractQuoted(text: string): string | null {
-  const match =
-    text.match(/[«"“']([^»"”']{3,240})[»"”']/) ||
-    text.match(/`([^`]{3,240})`/);
+  const match = text.match(/[«"“']([^»"”']{3,240})[»"”']/) || text.match(/`([^`]{3,240})`/);
   return match ? match[1].trim() : null;
 }
 
@@ -95,7 +95,10 @@ function stripCommand(text: string): string {
       /^(?:пожалуйста[,\s]*)?(?:создай|создать|открой|заведи|добавь|оставь|закрой|обнови|измени|найди|покажи|посмотри|проверь|сравни|create|open|add|leave|close|update|find|show|check|compare)\s+/i,
       ''
     )
-    .replace(/^(?:мне\s+)?(?:issue|ишью|задачу|pull request|pr|ветку|branch|комментарий|comment)\s*/i, '')
+    .replace(
+      /^(?:мне\s+)?(?:issue|ишью|задачу|pull request|pr|ветку|branch|комментарий|comment)\s*/i,
+      ''
+    )
     .trim();
 }
 
@@ -142,6 +145,23 @@ export function detectGitHubChatIntent(message: string): GitHubChatIntent | null
     (codeResearchHint && /(?:найди|где|почему|как|why|where|how)/i.test(normalized));
   if (!mentionsGitHub && !context) return null;
 
+  const readIntent = (operation: GitHubChatOperation): GitHubChatIntent => ({
+    operation,
+    repository,
+    context,
+    requiresConfirmation: false,
+    number: null,
+    query: null,
+    branch: null,
+    head: null,
+    base: null,
+    title: null,
+    body: null,
+    path: null,
+    content: null,
+    issueState: null,
+  });
+
   // Write intents take precedence over read intents.
   if (
     /(?:созда(?:й|ть)|открой|заведи|create|open|file)\s+(?:нов(?:ый|ую)\s+)?(?:issue|ишью)/i.test(
@@ -171,9 +191,7 @@ export function detectGitHubChatIntent(message: string): GitHubChatIntent | null
   }
 
   if (
-    /(?:созда(?:й|ть)|открой|create|open)\s+.*(?:pull request|pr\b|пул.?реквест)/i.test(
-      normalized
-    )
+    /(?:созда(?:й|ть)|открой|create|open)\s+.*(?:pull request|pr\b|пул.?реквест)/i.test(normalized)
   ) {
     return {
       operation: 'create_pull_request',
@@ -216,9 +234,7 @@ export function detectGitHubChatIntent(message: string): GitHubChatIntent | null
     };
   }
 
-  if (
-    /(?:обнови|измени|создай)\s+(?:файл|file)|(?:update|create|write)\s+file/i.test(normalized)
-  ) {
+  if (/(?:обнови|измени|создай)\s+(?:файл|file)|(?:update|create|write)\s+file/i.test(normalized)) {
     return {
       operation: 'create_or_update_file',
       repository,
@@ -277,7 +293,23 @@ export function detectGitHubChatIntent(message: string): GitHubChatIntent | null
     };
   }
 
-  if (/\bissues?\b|ишью|проблем[аы]/i.test(normalized)) {
+  // Natural audit/sync language ("аудит обновлений", "синхронизируй задачи",
+  // "посмотри, что сделано") must reach GitHub reads, not memory completion or
+  // a generic model refusal.
+  if (
+    /(?:аудит|audit|обновлен|update|синхрониз|sync|что\s+сделано|what.*done|посмотри|review)/i.test(
+      normalized
+    )
+  ) {
+    return readIntent('repo_overview');
+  }
+
+  const githubTaskRequest =
+    mentionsGitHub &&
+    /(?:задач[аиу]?|tasks?)/i.test(normalized) &&
+    !/(?:найди|поиск|search|find|locate|где\s)/i.test(normalized);
+
+  if (/\bissues?\b|ишью|проблем[аы]/i.test(normalized) || githubTaskRequest) {
     return {
       operation: number ? 'issue' : 'issues',
       repository,
@@ -353,7 +385,10 @@ export function detectGitHubChatIntent(message: string): GitHubChatIntent | null
     };
   }
 
-  if (/(?:сравн|compare|diff|разниц)/i.test(normalized) && /commit|коммит|ветк|branch/i.test(normalized)) {
+  if (
+    /(?:сравн|compare|diff|разниц)/i.test(normalized) &&
+    /commit|коммит|ветк|branch/i.test(normalized)
+  ) {
     return {
       operation: 'compare',
       repository,
@@ -415,6 +450,15 @@ export function detectGitHubChatIntent(message: string): GitHubChatIntent | null
     };
   }
 
+  // "Включи/подключи GitHub", "доступ к GitHub", "статус GitHub" are
+  // connection-status questions, not write requests. Keep this after search so
+  // "найди задачу включить github" remains a code search.
+  if (
+    /(?:подключ|connect|включ|enable|настро|setup|доступ|access|статус|status)/i.test(normalized)
+  ) {
+    return readIntent('status');
+  }
+
   if (
     /что происходит|что нового|статус|состояни|покажи\s+(?:структур|дерево|обзор)|what.*happening|overview|structure/i.test(
       normalized
@@ -462,9 +506,7 @@ export function detectGitHubChatIntent(message: string): GitHubChatIntent | null
   return null;
 }
 
-export function githubContextFor(
-  key: DevProjectContextKey
-): DevProjectContext {
+export function githubContextFor(key: DevProjectContextKey): DevProjectContext {
   return getDevProjectContext(key);
 }
 
@@ -476,7 +518,11 @@ function shortSha(value: string | null | undefined): string {
   return typeof value === 'string' && value ? value.slice(0, 7) : '—';
 }
 
-function repositoryHeader(result: { repository: string; branch?: string; commitSha?: string | null }): string {
+function repositoryHeader(result: {
+  repository: string;
+  branch?: string;
+  commitSha?: string | null;
+}): string {
   return `${result.repository} · ${result.branch || '—'} · ${shortSha(result.commitSha)}`;
 }
 
@@ -536,19 +582,38 @@ export async function runGitHubReadIntent(
     searchRepo,
   } = await import('./repository');
 
+  if (intent.operation === 'status') {
+    const info = await getRepoInfo({ repository });
+    const configs = getDevRepositoryConfigs();
+    const text = [
+      'GitHub read access активен.',
+      `Доступные репозитории: ${configs
+        .map((repo) => `${repo.fullName}${repo.configured ? '' : ' (токен не настроен)'}`)
+        .join(', ')}`,
+      'Режим: read-only. Запись в GitHub не выполняется автоматически и требует отдельного подтверждения.',
+    ].join('\n');
+    return resultFrom('status', info, text, [info.info.htmlUrl]);
+  }
+
   if (intent.operation === 'repo_overview') {
     const info = await getRepoInfo({ repository });
     const paths = context?.paths.length ? context.paths : [''];
     const trees = await Promise.all(
-      paths.slice(0, 3).map((path) =>
-        getRepoTree({ repository, path: path.replace(/\/$/, ''), ref: info.branch }).catch(() => null)
-      )
+      paths
+        .slice(0, 3)
+        .map((path) =>
+          getRepoTree({ repository, path: path.replace(/\/$/, ''), ref: info.branch }).catch(
+            () => null
+          )
+        )
     );
     const commits = await listCommits({ repository, ref: info.branch, limit: 5 });
     const treeLines = trees
       .filter(Boolean)
       .map((tree) => {
-        const rows = (tree as DevRepoResult<{ entries: Array<{ path: string; type: string }> }>).entries
+        const rows = (
+          tree as DevRepoResult<{ entries: Array<{ path: string; type: string }> }>
+        ).entries
           .slice(0, 10)
           .map((entry) => `  · ${entry.path}${entry.type === 'tree' ? '/' : ''}`)
           .join('\n');
@@ -557,7 +622,10 @@ export async function runGitHubReadIntent(
       .filter(Boolean)
       .join('\n');
     const commitLines = commits.commits
-      .map((commit) => `- ${shortSha(commit.sha)} ${commit.message}${commit.url ? ` — ${link('commit', commit.url)}` : ''}`)
+      .map(
+        (commit) =>
+          `- ${shortSha(commit.sha)} ${commit.message}${commit.url ? ` — ${link('commit', commit.url)}` : ''}`
+      )
       .join('\n');
     const text = [
       `Проект: ${context?.label || info.info.fullName}`,
@@ -583,7 +651,12 @@ export async function runGitHubReadIntent(
                 `- #${issue.number} ${issue.title} · ${issue.author || 'unknown'} · ${link('открыть', issue.url)}`
             )
             .join('\n');
-    return resultFrom('issues', data, `Открытые Issues:\n${text}`, data.issues.map((issue) => issue.url));
+    return resultFrom(
+      'issues',
+      data,
+      `Открытые Issues:\n${text}`,
+      data.issues.map((issue) => issue.url)
+    );
   }
 
   if (intent.operation === 'issue' && intent.number) {
@@ -615,7 +688,12 @@ export async function runGitHubReadIntent(
                 `- ${shortSha(commit.sha)} ${commit.message} · ${commit.author || 'unknown'} · ${commit.date || '—'}${commit.url ? ` — ${link('commit', commit.url)}` : ''}`
             )
             .join('\n');
-    return resultFrom('commits', data, `Последние коммиты:\n${text}`, data.commits.map((commit) => commit.url).filter(Boolean) as string[]);
+    return resultFrom(
+      'commits',
+      data,
+      `Последние коммиты:\n${text}`,
+      data.commits.map((commit) => commit.url).filter(Boolean) as string[]
+    );
   }
 
   if (intent.operation === 'compare') {
@@ -654,7 +732,12 @@ export async function runGitHubReadIntent(
                 `- #${pull.number} ${pull.title} · ${pull.head} → ${pull.base} · ${link('открыть', pull.url)}`
             )
             .join('\n');
-    return resultFrom('pull_requests', data, `Открытые pull requests:\n${text}`, data.pullRequests.map((pull) => pull.url));
+    return resultFrom(
+      'pull_requests',
+      data,
+      `Открытые pull requests:\n${text}`,
+      data.pullRequests.map((pull) => pull.url)
+    );
   }
 
   if (intent.operation === 'pull_request' && intent.number) {
@@ -690,7 +773,12 @@ export async function runGitHubReadIntent(
       failed.length > 0
         ? `\n\nПоследний неуспешный run: ${failed[0].name} (${shortSha(failed[0].sha)}). Открой ${link('лог', failed[0].url)} для причины.`
         : '';
-    return resultFrom('workflows', data, `GitHub Actions:\n${text}${note}`, data.runs.map((run) => run.url));
+    return resultFrom(
+      'workflows',
+      data,
+      `GitHub Actions:\n${text}${note}`,
+      data.runs.map((run) => run.url)
+    );
   }
 
   if (intent.operation === 'checks') {
@@ -707,7 +795,12 @@ export async function runGitHubReadIntent(
     const status = data.combinedStatus
       ? `Combined status: ${data.combinedStatus.state} (${data.combinedStatus.totalCount})`
       : 'Combined status недоступен.';
-    return resultFrom('checks', data, `${text}\n${status}`, data.checks.map((check) => check.url).filter(Boolean) as string[]);
+    return resultFrom(
+      'checks',
+      data,
+      `${text}\n${status}`,
+      data.checks.map((check) => check.url).filter(Boolean) as string[]
+    );
   }
 
   if (intent.operation === 'search') {
@@ -725,7 +818,12 @@ export async function runGitHubReadIntent(
                 `- ${match.path}${match.url ? ` — ${link('открыть', match.url)}` : ''}${match.fragments[0] ? `\n  ${match.fragments[0].slice(0, 180)}` : ''}`
             )
             .join('\n');
-    return resultFrom('search', data, `Поиск «${query}»:\n${text}${data.incomplete ? '\nGitHub вернул неполные результаты.' : ''}`, data.matches.map((match) => match.url).filter(Boolean) as string[]);
+    return resultFrom(
+      'search',
+      data,
+      `Поиск «${query}»:\n${text}${data.incomplete ? '\nGitHub вернул неполные результаты.' : ''}`,
+      data.matches.map((match) => match.url).filter(Boolean) as string[]
+    );
   }
 
   return null;

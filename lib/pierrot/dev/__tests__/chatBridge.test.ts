@@ -24,8 +24,9 @@ import {
   isGitHubConfirmation,
   runGitHubReadIntent,
 } from '../chatBridge';
-import { listIssues } from '../repository';
+import { getRepoInfo, listIssues } from '../repository';
 
+const mockGetRepoInfo = getRepoInfo as unknown as jest.Mock;
 const mockListIssues = listIssues as unknown as jest.Mock;
 
 beforeEach(() => {
@@ -42,6 +43,12 @@ describe('GitHub chat intent detection', () => {
     ['Проверь PR', 'pull_requests', null, null],
     ['Почему последний deployment завершился ошибкой?', 'workflows', null, null],
     ['Покажи Pierrot mobile', 'repo_overview', 'pierrot_mobile', 'pierrot'],
+    ['Проведи аудит последних обновлений гитхаб и текущих задач', 'repo_overview', null, null],
+    ['Синхронизируй задачи с гитхабом посмотри что сделано', 'repo_overview', null, null],
+    ['Какие задачи по гитхабу', 'issues', null, null],
+    ['Включи github', 'status', null, null],
+    ['Подключи GitHub ко всему Пьеро', 'status', null, null],
+    ['Найди задачу включить github', 'search', null, null],
   ])('%s', (message, operation, context, repository) => {
     const intent = detectGitHubChatIntent(message);
     expect(intent).not.toBeNull();
@@ -181,5 +188,44 @@ describe('deterministic read execution', () => {
     expect(result?.text).toContain('merkurov1/newlove');
     expect(result?.text).toContain('#7 Fix menu');
     expect(result?.links).toContain('https://github.com/merkurov1/newlove/issues/7');
+  });
+
+  it('reports GitHub read access without asking for a token', async () => {
+    mockGetRepoInfo.mockResolvedValue({
+      repository: 'merkurov1/newlove',
+      repositoryKey: 'newlove',
+      branch: 'main',
+      commitSha: 'a'.repeat(40),
+      complete: true,
+      warnings: [],
+      source: 'github',
+      info: {
+        fullName: 'merkurov1/newlove',
+        description: 'The platform',
+        defaultBranch: 'main',
+        private: false,
+        language: 'TypeScript',
+        pushedAt: null,
+        htmlUrl: 'https://github.com/merkurov1/newlove',
+        permissions: null,
+      },
+      latestCommit: {
+        sha: 'a'.repeat(40),
+        message: 'Latest commit',
+        author: 'Anton',
+        date: null,
+        url: 'https://github.com/merkurov1/newlove/commit/' + 'a'.repeat(40),
+      },
+      requestedRef: 'main',
+    });
+
+    const intent = detectGitHubChatIntent('Включи GitHub')!;
+    const result = await runGitHubReadIntent(intent);
+
+    expect(result?.operation).toBe('status');
+    expect(result?.text).toContain('GitHub read access активен');
+    expect(result?.text).toContain('read-only');
+    expect(result?.text).not.toContain('provide');
+    expect(result?.text).not.toContain('GITHUB_TOKEN');
   });
 });
