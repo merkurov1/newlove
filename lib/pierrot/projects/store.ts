@@ -57,10 +57,7 @@ async function selectProject(
 
 export class PierrotProjectValidationError extends Error {
   code:
-    | 'PROJECT_NAME_REQUIRED'
-    | 'PROJECT_NAME_TOO_LONG'
-    | 'PROJECT_BRIEF_TOO_LONG'
-    | 'PROJECT_EXISTS';
+    'PROJECT_NAME_REQUIRED' | 'PROJECT_NAME_TOO_LONG' | 'PROJECT_BRIEF_TOO_LONG' | 'PROJECT_EXISTS';
 
   constructor(code: PierrotProjectValidationError['code']) {
     super(code);
@@ -126,7 +123,9 @@ export async function listPierrotProjects(ownerUserId: string): Promise<PierrotP
     if (result.error && isMissingColumn(result.error)) result = await run(PROJECT_COLUMNS_LEGACY);
   }
   if (result.error) throw result.error;
-  return ((result.data || []) as unknown[]).map((row) => mapProject(row as Record<string, unknown>));
+  return ((result.data || []) as unknown[]).map((row) =>
+    mapProject(row as Record<string, unknown>)
+  );
 }
 
 export async function getPierrotProject(
@@ -170,8 +169,8 @@ export async function createPierrotProject(
 
   if (existing) throw new PierrotProjectValidationError('PROJECT_EXISTS');
 
-  const existingByAlias = (await listPierrotProjects(ownerUserId).catch(() => [])).some(
-    (project) => projectMatchesRef(project, name)
+  const existingByAlias = (await listPierrotProjects(ownerUserId).catch(() => [])).some((project) =>
+    projectMatchesRef(project, name)
   );
   if (existingByAlias) throw new PierrotProjectValidationError('PROJECT_EXISTS');
 
@@ -429,14 +428,14 @@ export async function getPierrotProjectSnapshot(
       .select('decision:pierrot_decisions(id,title,content,status,kind,updated_at)')
       .eq('project_id', project.id)
       .eq('owner_user_id', ownerUserId)
-      .limit(12),
+      .limit(500),
     client
       .from('pierrot_dev_prompts')
       .select('id,title,task,status,updated_at')
       .eq('project_id', project.id)
       .eq('user_id', ownerUserId)
       .order('updated_at', { ascending: false })
-      .limit(12),
+      .limit(200),
     project.conversationId
       ? client
           .from('pierrot_conversations')
@@ -449,14 +448,14 @@ export async function getPierrotProjectSnapshot(
       .select('document:knowledge_documents(id,title,status)')
       .eq('project_id', project.id)
       .eq('owner_user_id', ownerUserId)
-      .limit(12),
+      .limit(200),
     client
       .from('pierrot_project_artifacts')
       .select('id,title,artifact_type,updated_at')
       .eq('project_id', project.id)
       .eq('owner_user_id', ownerUserId)
       .order('updated_at', { ascending: false })
-      .limit(12),
+      .limit(200),
     client
       .from('pierrot_project_reviews')
       .select('id,summary,completed_at')

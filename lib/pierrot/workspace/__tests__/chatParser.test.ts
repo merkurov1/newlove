@@ -58,6 +58,45 @@ describe('Pierrot response parser', () => {
     );
   });
 
+  it('parses a structured grooming plan with safe numbers and source links', () => {
+    const parsed = parsePierrotResponse({
+      reply: 'План',
+      grooming_plan: {
+        auditId: 'audit-1',
+        scope: 'tasks',
+        warnings: ['warning'],
+        ambiguous: ['ambiguous'],
+        proposals: [
+          {
+            id: 'p1',
+            ordinal: 1,
+            operation: 'archive_task',
+            title: 'Archive stale task',
+            reason: 'It is stale',
+            expectedResult: 'Task archived',
+            risk: 'confirmation',
+            projectName: 'Journal',
+            sourceRefs: [
+              {
+                type: 'memory_record',
+                id: 'm1',
+                title: 'Task',
+                url: 'javascript:alert(1)',
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(parsed.groomingPlan).toMatchObject({
+      auditId: 'audit-1',
+      scope: 'tasks',
+      proposals: [{ ordinal: 1, risk: 'confirmation' }],
+    });
+    expect(parsed.groomingPlan?.proposals[0].sourceRefs[0].url).toBeNull();
+  });
+
   it('rejects unsafe source URLs', () => {
     expect(safeSourceUrl('javascript:alert(1)')).toBeNull();
     expect(safeSourceUrl('//evil.example')).toBeNull();

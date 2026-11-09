@@ -27,7 +27,9 @@ describe('project review analysis', () => {
   it('keeps a prospective idea separate from actionable tasks', () => {
     const result = analyzeProjectReview({
       ...empty,
-      messages: [msg('m1', 'user', 'Идея: можно было бы сделать серию открыток с архивными письмами.')],
+      messages: [
+        msg('m1', 'user', 'Идея: можно было бы сделать серию открыток с архивными письмами.'),
+      ],
     });
 
     expect(result.ideas).toHaveLength(1);
@@ -106,5 +108,126 @@ describe('project review analysis', () => {
 
     expect(result.tasks).toHaveLength(1);
     expect(result.tasks[0].content).toContain('страницу лота');
+  });
+
+  it('does not turn a one-off chat instruction into a permanent task', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      messages: [msg('m1', 'user', 'Нет, напиши что-то в чат проекта.')],
+    });
+
+    expect(result.tasks).toHaveLength(0);
+    expect(result.reminders).toHaveLength(0);
+  });
+
+  it('keeps an incomplete “add this to tasks” request ambiguous', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      messages: [msg('m1', 'user', 'Просто добавь это в задачи.')],
+    });
+
+    expect(result.tasks).toHaveLength(0);
+    expect(result.ambiguousTaskCandidates).toHaveLength(1);
+  });
+
+  it('stores a project rule as knowledge, not a task', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      messages: [
+        msg('m1', 'user', 'Открытка не должна превращать Heart & Angel в интернет-магазин.'),
+      ],
+    });
+
+    expect(result.tasks).toHaveLength(0);
+    expect(result.knowledge).toHaveLength(1);
+    expect(result.knowledge[0].tags).toContain('constraint');
+  });
+
+  it('recognises an explicit remembered task with its project context intact', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      messages: [msg('m1', 'user', 'Запомни задачу Art Engine — редизайн страницы картины.')],
+    });
+
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].content).toBe('Art Engine — редизайн страницы картины');
+  });
+
+  it('recognises a task written as a concrete infinitive action', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      messages: [msg('m1', 'user', 'Опустить шарик с сердечком ниже на мобильных устройствах.')],
+    });
+
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].content).toContain('Опустить шарик');
+  });
+
+  it('keeps a vague someday proposal as an idea', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      messages: [msg('m1', 'user', 'Давай когда-нибудь подумаем о новом формате.')],
+    });
+
+    expect(result.tasks).toHaveLength(0);
+    expect(result.ideas).toHaveLength(1);
+  });
+
+  it('does not create a new task for work already reported as done', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      messages: [msg('m1', 'user', 'Мы уже исправили переключатель языка.')],
+    });
+
+    expect(result.tasks).toHaveLength(0);
+  });
+
+  it('extracts reminders separately from tasks', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      messages: [msg('m1', 'user', 'Напомни мне проверить макет завтра.')],
+    });
+
+    expect(result.reminders).toHaveLength(1);
+    expect(result.tasks).toHaveLength(0);
+  });
+
+  it('uses a confirmed false-task example for an identical sentence', () => {
+    const source = 'Нет, напиши что-то в чат проекта.';
+    const result = analyzeProjectReview({
+      ...empty,
+      learningExamples: [
+        {
+          id: 'e1',
+          userId: 'owner',
+          conversationId: 'conv-1',
+          sourceMessageId: 'old',
+          sourceText: source,
+          proposedKind: 'task',
+          confirmedKind: null,
+          proposedProjectId: null,
+          confirmedProjectId: null,
+          outcome: 'false_task',
+          reason: 'Owner corrected it.',
+          source: 'grooming',
+          analyzerVersion: 'test',
+          metadata: {},
+          createdAt: '2026-01-01T10:00:00Z',
+        },
+      ],
+      messages: [msg('m1', 'user', source)],
+    });
+
+    expect(result.tasks).toHaveLength(0);
+  });
+
+  it('stores a reference URL as a material rather than a task', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      messages: [msg('m1', 'user', 'Сохрани материал https://example.com/archive/letter')],
+    });
+
+    expect(result.materials).toHaveLength(1);
+    expect(result.tasks).toHaveLength(0);
   });
 });

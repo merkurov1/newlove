@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { PierrotProject } from '@/lib/pierrot/projects/types';
+import WorkspaceHealthCard from './WorkspaceHealthCard';
 
 export default function ProjectsWorkspace({
   initialProjects,
@@ -50,6 +51,7 @@ export default function ProjectsWorkspace({
           <p>Один постоянный чат на проект: история, задачи, решения и материалы.</p>
         </div>
       </header>
+      <WorkspaceHealthCard />
       <div className="pw-project-grid">
         {projects.map((project) => (
           <Link

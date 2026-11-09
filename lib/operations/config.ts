@@ -1,4 +1,4 @@
-export type WorkerScope = 'brain' | 'graph' | 'media' | 'newsletter' | 'retention';
+export type WorkerScope = 'brain' | 'graph' | 'media' | 'newsletter' | 'retention' | 'grooming';
 
 export const WORKER_SCOPES: WorkerScope[] = [
   'brain',
@@ -6,6 +6,7 @@ export const WORKER_SCOPES: WorkerScope[] = [
   'media',
   'newsletter',
   'retention',
+  'grooming',
 ];
 
 export type WorkerLimits = {
@@ -151,6 +152,19 @@ export function workerLimits(scope: WorkerScope): WorkerLimits {
         maxEmbeddings: 0,
         maxLlmCalls: 0,
         maxExternalHttp: 1,
+        maxQueue: 5,
+        maxQueueAgeHours: 24,
+        maxJobsPerHour: 4,
+        maxJobsPerDay: 24,
+        maxRetries: 1,
+      };
+    case 'grooming':
+      return {
+        maxJobs: 1,
+        maxDurationMs: 55_000,
+        maxEmbeddings: 0,
+        maxLlmCalls: 0,
+        maxExternalHttp: 20,
         maxQueue: 5,
         maxQueueAgeHours: 24,
         maxJobsPerHour: 4,

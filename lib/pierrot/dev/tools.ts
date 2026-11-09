@@ -10,6 +10,8 @@ import {
   getWorkflowRuns,
   listBranches,
   listCommits,
+  listIssues,
+  getIssue,
   listPullRequests,
   readFile,
   readFileRange,
@@ -34,6 +36,17 @@ export const DEV_TOOL_NAMES = [
   'get_pull_request',
   'get_workflow_runs',
   'get_check_runs',
+  'list_issues',
+  'get_issue',
+] as const;
+
+export const DEV_WRITE_TOOL_NAMES = [
+  'create_branch',
+  'create_or_update_file',
+  'create_pull_request',
+  'create_issue',
+  'update_issue_state',
+  'add_issue_comment',
 ] as const;
 
 export type DevToolName = (typeof DEV_TOOL_NAMES)[number];
@@ -163,6 +176,20 @@ export function devToolDefinitions(): OpenAI.Chat.Completions.ChatCompletionTool
       ref: refParam,
       limit: { type: 'integer', minimum: 1, maximum: 50 },
     }),
+    tool('list_issues', 'List repository issues, optionally filtered by state or labels.', {
+      state: { type: 'string', enum: ['open', 'closed', 'all'] },
+      labels: { type: 'string', description: 'Comma-separated label names.' },
+      limit: { type: 'integer', minimum: 1, maximum: 50 },
+    }),
+    tool(
+      'get_issue',
+      'Read one issue with its discussion comments.',
+      {
+        number: { type: 'integer', minimum: 1 },
+        includeComments: { type: 'boolean' },
+      },
+      ['repository', 'number']
+    ),
   ];
 }
 
@@ -251,6 +278,13 @@ export function summarizeToolResult(name: string, result: unknown): string {
   if (name === 'get_check_runs') {
     return `${prefix}${Array.isArray(record.checks) ? record.checks.length : 0} checks`;
   }
+  if (name === 'list_issues') {
+    return `${prefix}${Array.isArray(record.issues) ? record.issues.length : 0} issues`;
+  }
+  if (name === 'get_issue') {
+    const number = typeof record.number === 'number' ? `#${record.number}` : 'issue';
+    return `${prefix}${number} · ${Array.isArray(record.comments) ? record.comments.length : 0} comments`;
+  }
 
   return prefix ? `${prefix}ok` : 'ok';
 }
@@ -326,9 +360,10 @@ function repoArg(value: unknown): unknown {
 }
 
 export function isDevWriteTool(name: string): boolean {
-  // Dev Mode deliberately exposes no write tools. This stays as an explicit
-  // guard for future write support.
-  return name === 'create_or_update_file' || name === 'create_pull_request';
+  // Dev Mode deliberately exposes no write tools to the model. The guard also
+  // covers write tools implemented for the deterministic owner confirmation
+  // flow so a model can never execute them directly.
+  return (DEV_WRITE_TOOL_NAMES as readonly string[]).includes(name);
 }
 
 export async function executeDevTool(
@@ -444,6 +479,21 @@ export async function executeDevTool(
           repository: repoArg(args.repository),
           ref: args.ref,
           limit: numeric(args.limit),
+        });
+        break;
+      case 'list_issues':
+        result = await listIssues({
+          repository: repoArg(args.repository),
+          state: args.state,
+          labels: args.labels,
+          limit: numeric(args.limit),
+        });
+        break;
+      case 'get_issue':
+        result = await getIssue({
+          repository: repoArg(args.repository),
+          number: args.number,
+          includeComments: args.includeComments,
         });
         break;
       default:

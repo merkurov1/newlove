@@ -1,5 +1,6 @@
 import type { ProjectHistoryMessage } from '../history';
 import { lexicalSimilarity, normalizeForComparison } from '@/lib/pierrot/memory/similarity';
+import { learnedClassification, type TaskExperienceExample } from '@/lib/pierrot/learning/types';
 
 export type ReviewExistingTask = {
   id: string;
@@ -60,10 +61,25 @@ export type ReviewContradiction = {
   reason: string;
 };
 
+export type ReviewClassification =
+  | 'task'
+  | 'reminder'
+  | 'decision'
+  | 'knowledge'
+  | 'idea'
+  | 'instruction'
+  | 'reference'
+  | 'question'
+  | 'completion'
+  | 'ambiguous'
+  | 'ignore';
+
 export type ProjectReviewAnalysis = {
   tasks: ReviewCandidate[];
+  reminders: ReviewCandidate[];
   ideas: ReviewCandidate[];
   decisions: ReviewCandidate[];
+  knowledge: ReviewCandidate[];
   materials: ReviewMaterialCandidate[];
   openQuestions: ReviewCandidate[];
   completions: ReviewCompletionCandidate[];
@@ -80,16 +96,16 @@ const OBLIGATION =
   /(?:^|[\s,;:])(?:нужно|надо|необходимо|следует|обязательно|должны|должен|have to|need to|should|must)(?:\s|$)/iu;
 
 const IDEA =
-  /(?:^|[\s(])(?:идея|идею|идеи|мысль|предложени[ея]|а\s+что\s+если|можно\s+было\s+бы|хотелось\s+бы|стоит\s+попробовать|вариант|концепци[яю]|idea|what\s+if|maybe\s+we\s+could)(?:\s|[:.,(]|$)/iu;
+  /(?:^|[\s(])(?:идея|идею|идеи|мысль|предложени[ея]|а\s+что\s+если|можно\s+было\s+бы|хотелось\s+бы|стоит\s+попробовать|вариант|концепци[яю]|давай\s+(?:как-нибудь|когда-нибудь|потом)|когда-нибудь\s+(?:подума|сдела|попробу)|idea|what\s+if|maybe\s+we\s+could)(?:\s|[:.,(]|$)/iu;
 
 const DECISION =
   /(?:^|[\s,;:])(?:решили|порешили|решение|договорились|выбираем|выбрали|утверждаю|утвердили|фиксирую|фиксируем|останавливаемся|идём\s+с|идем\s+с|берём|берем|будем\s+использовать|отменяем|отменить|отказались|не\s+будем|передумали|decided|we\s+will\s+use|we\s+chose|approved|let'?s\s+go\s+with|cancel)(?:\s|[:.,;]|$)/iu;
 
 const HYPOTHESIS =
-  /(?:может\s+быть|возможно|наверное|вероятно|предлагаю|предложение|что\s+если|хотелось\s+бы|стоит\s+подумать|maybe|perhaps|might|could|proposal|suggest)/iu;
+  /(?:может\s+быть|возможно|наверное|вероятно|предлагаю|предложение|что\s+если|хотелось\s+бы|стоит\s+подумать|когда-нибудь|как-нибудь|maybe|perhaps|might|could|proposal|suggest)/iu;
 
 const COMPLETION =
-  /(?:^|[\s,;:])(?:готово|сделано|сделал|сделала|завершил|завершила|выполнено|закрыл|закрыла|done|completed|finished)(?:\s|[:.,;!?]|$)/iu;
+  /(?:^|[\s,;:])(?:готово|сделано|сделал|сделала|завершил|завершила|выполнено|закрыл|закрыла|исправил|исправила|исправлено|починил|починила|done|completed|finished|fixed)(?:\s|[:.,;!?]|$)/iu;
 
 const OPEN_QUESTION =
   /(?:^|[\s,;:])(?:вопрос|надо\s+решить|нужно\s+решить|требует\s+решения|осталось\s+решить|не\s+решено|открытый\s+вопрос)(?:\s|[:.,;]|$)/iu;
@@ -98,12 +114,38 @@ const META_COMMAND =
   /(?:наведи\s+(?:всё\s+|все\s+)?(?:в\s+)?порядок|разбери\s+проект|ревизи[яю]\s+проекта|аудит\s+проекта|tidy\s+up\s+(?:the\s+)?project|audit\s+(?:the\s+)?project)/iu;
 
 const EXPLICIT_TASK_COMMAND =
-  /^(?:задача|task)\s*[:—-]|(?:добавь|создай|поставь|заведи)\s+(?:новую\s+)?задачу/iu;
+  /^(?:(?:пожалуйста[,\s]*)?(?:запомни|запомните|remember)\s+(?:новую\s+)?(?:задачу|task)|(?:задача|task)\s*[:—-]|(?:добавь|создай|поставь|заведи)\s+(?:новую\s+)?задачу)/iu;
 
-const NEGATION = /(?:^|[\s(])(?:не|нет|без|никогда|отмен\w*|отказ\w*|против|not|never|cancel\w*|reject\w*)(?:\s|$)/iu;
+const REMINDER_COMMAND =
+  /^(?:пожалуйста[,\s]*)?(?:напомни|напомните|remind\s+me)\b|(?:^|[\s,;:])(?:напомни|напомните)\s+(?:мне\s+)?/iu;
+
+const KNOWLEDGE =
+  /(?:^|[\s,;:])(?:правило[:!]?|принцип|важно[:!]|не\s+должен|не\s+должна|не\s+должно|не\s+превраща|никогда\s+не|нельзя|запрещено|всегда\s+|по\s+умолчанию|имей\s+в\s+виду|запомни,\s+что|remember\s+that|must\s+not|should\s+not|never\s+)(?:\s|$)/iu;
+
+const INSTRUCTION =
+  /(?:^|[\s,;:])(?:напиши|скажи|покажи|ответь|объясни|переведи|сформулируй|дай|приведи)(?=$|[^a-zа-я0-9])[^.!?]{0,120}(?:в\s+чат|в\s+ответ|здесь|сейчас|мне|по-русски|по-английски)|(?:^|[^a-zа-я0-9])(?:в\s+этот\s+чат|в\s+чат\s+проекта|в\s+чат|здесь\s+же|прямо\s+сейчас)(?=$|[^a-zа-я0-9])/iu;
+
+const INCOMPLETE_TASK_COMMAND =
+  /^(?:просто\s+)?(?:добавь|добавить|запиши|записать|add)\s+(?:это|это\s+всё|это\s+все|всё\s+это|this|all\s+this)\s+(?:в\s+|to\s+)?(?:задачи|задачу|таски|tasks?)[.!]?$/iu;
+
+const INFINITIVE_TASK =
+  /^(?:пожалуйста[,\s]*)?(?:опустить|поднять|изменить|перенести|удалить|заменить|увеличить|уменьшить|поправить|настроить|проверить|добавить|исправить|обновить|переписать|сверстать|реализовать|сделать|подготовить|опубликовать|написать|создать|убрать|подключить|загрузить|выгрузить|починить|протестировать|оптимизировать)(?=$|[^a-zа-я0-9])/iu;
+
+const CONVERSATIONAL_DISCUSSION =
+  /(?:^|[\s,;:])(?:обсудить|обсуждать|подумать|решить|уточнить|выяснить|понять|discuss|think|clarify|decide)(?=$|[^a-zа-я0-9])/iu;
+
+const CONCRETE_ACTION =
+  /(?:напиши|подготовь|проверь|создай|исправь|добавь|опубликуй|опусти|подними|измени|перенеси|удали|замени|настрой|обнови|сверстай|реализуй|сделай|почини|write|prepare|check|create|fix|add|publish)/iu;
+
+const NEGATION =
+  /(?:^|[\s(])(?:не|нет|без|никогда|отмен\w*|отказ\w*|против|not|never|cancel\w*|reject\w*)(?:\s|$)/iu;
 
 function clean(value: string): string {
-  return value.replace(/\s+/g, ' ').replace(/^[\s:—–,.-]+/, '').replace(/[\s,;:]+$/, '').trim();
+  return value
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s:—–,.-]+/, '')
+    .replace(/[\s,;:]+$/, '')
+    .trim();
 }
 
 function sentences(content: string): string[] {
@@ -128,7 +170,71 @@ function tagsFor(value: string): string[] {
   const tags = ['project-review'];
   if (IDEA.test(value)) tags.push('idea');
   if (DECISION.test(value)) tags.push('decision');
+  if (KNOWLEDGE.test(value)) tags.push('constraint');
   return tags;
+}
+
+function stripTaskCommand(value: string): string {
+  const stripped = value
+    .replace(
+      /^(?:пожалуйста[,\s]*)?(?:запомни|запомните|remember)\s+(?:новую\s+)?(?:задачу|task)\s*[:—–-]?\s*/iu,
+      ''
+    )
+    .replace(
+      /^(?:пожалуйста[,\s]*)?(?:добавь|добавьте|создай|создайте|поставь|поставьте|заведи|заведите)\s+(?:новую\s+)?(?:задачу|task)\s*[:—–-]?\s*/iu,
+      ''
+    )
+    .replace(/^(?:задача|task)\s*[:—–-]\s*/iu, '')
+    .replace(/^(?:пожалуйста[,\s]*)?(?:напомни|напомните|remind\s+me)\s+(?:мне\s+)?/iu, '')
+    .replace(/[.!?]+$/u, '')
+    .trim();
+  return stripped.length >= 3 ? stripped : value;
+}
+
+export function classifyReviewSentence(value: string, hasUrl = false): ReviewClassification {
+  const sentence = clean(value);
+  if (!sentence) return 'ignore';
+  if (META_COMMAND.test(sentence)) return 'ignore';
+  if (isQuestion(sentence)) return 'question';
+  if (COMPLETION.test(sentence)) return 'completion';
+
+  const explicitTask = EXPLICIT_TASK_COMMAND.test(sentence);
+
+  if (REMINDER_COMMAND.test(sentence)) return 'reminder';
+  if (INCOMPLETE_TASK_COMMAND.test(sentence) && !explicitTask) return 'ambiguous';
+
+  const decisionLike = DECISION.test(sentence);
+  const ideaLike = IDEA.test(sentence);
+
+  if (decisionLike && !HYPOTHESIS.test(sentence) && !ideaLike) return 'decision';
+  if (KNOWLEDGE.test(sentence) && !explicitTask) return 'knowledge';
+  if (ideaLike && !explicitTask) return 'idea';
+  if (INSTRUCTION.test(sentence) && !explicitTask) return 'instruction';
+  if (hasUrl && !explicitTask && !TASK_VERB.test(sentence)) return 'reference';
+
+  const actionable =
+    explicitTask ||
+    TASK_VERB.test(sentence) ||
+    OBLIGATION.test(sentence) ||
+    INFINITIVE_TASK.test(sentence);
+
+  if (!actionable) return 'ignore';
+
+  if (!explicitTask && HYPOTHESIS.test(sentence) && !CONCRETE_ACTION.test(sentence)) {
+    return 'idea';
+  }
+
+  if (
+    CONVERSATIONAL_DISCUSSION.test(sentence) &&
+    !CONCRETE_ACTION.test(sentence) &&
+    !explicitTask
+  ) {
+    return 'ambiguous';
+  }
+
+  if (!explicitTask && NEGATION.test(sentence)) return 'ignore';
+
+  return 'task';
 }
 
 function candidateFor(
@@ -146,6 +252,10 @@ function candidateFor(
   };
 }
 
+function taskCandidateFor(message: ProjectHistoryMessage, sentence: string): ReviewCandidate {
+  return candidateFor(message, stripTaskCommand(sentence), tagsFor(sentence));
+}
+
 function sameCandidate(left: ReviewCandidate, right: ReviewCandidate): boolean {
   return (
     normalizeForComparison(left.title) === normalizeForComparison(right.title) ||
@@ -161,9 +271,7 @@ function pushUnique(list: ReviewCandidate[], candidate: ReviewCandidate): void {
 function extractUrls(value: string): string[] {
   return Array.from(
     new Set(
-      (value.match(/https?:\/\/[^\s<>"')]+/giu) || []).map((url) =>
-        url.replace(/[.,;:!?]+$/g, '')
-      )
+      (value.match(/https?:\/\/[^\s<>"')]+/giu) || []).map((url) => url.replace(/[.,;:!?]+$/g, ''))
     )
   );
 }
@@ -177,7 +285,9 @@ function artifactType(url: string): string {
 }
 
 function materialTitle(sentence: string, url: string): string {
-  const withoutUrl = clean(sentence.replace(url, '')).replace(/[:—–-]+$/g, '').trim();
+  const withoutUrl = clean(sentence.replace(url, ''))
+    .replace(/[:—–-]+$/g, '')
+    .trim();
   if (withoutUrl.length >= 4) return titleFrom(withoutUrl);
   try {
     return new URL(url).hostname;
@@ -198,7 +308,9 @@ function taskIsExisting(candidate: ReviewCandidate, existing: ReviewExistingTask
 
 function duplicateGroups(existing: ReviewExistingTask[]): ReviewDuplicateGroup[] {
   const groups: ReviewDuplicateGroup[] = [];
-  const active = existing.filter((task) => task.status === 'current' || task.status === 'uncertain');
+  const active = existing.filter(
+    (task) => task.status === 'current' || task.status === 'uncertain'
+  );
 
   for (let left = 0; left < active.length; left += 1) {
     for (let right = left + 1; right < active.length; right += 1) {
@@ -208,7 +320,9 @@ function duplicateGroups(existing: ReviewExistingTask[]): ReviewDuplicateGroup[]
       const bTitle = normalizeForComparison(b.title);
       const aFull = normalizeForComparison(`${a.title} ${a.content}`);
       const bFull = normalizeForComparison(`${b.title} ${b.content}`);
-      const exact = aTitle === bTitle && normalizeForComparison(a.content) === normalizeForComparison(b.content);
+      const exact =
+        aTitle === bTitle &&
+        normalizeForComparison(a.content) === normalizeForComparison(b.content);
       const score = lexicalSimilarity(aFull, bFull);
       if (!exact && !(aTitle === bTitle && score >= 0.92)) continue;
 
@@ -293,7 +407,9 @@ function completionCandidates(
           const contained = text.includes(title) && title.length >= 8;
           return {
             task,
-            score: contained ? 1 : lexicalSimilarity(text, normalizeForComparison(`${task.title} ${task.content}`)),
+            score: contained
+              ? 1
+              : lexicalSimilarity(text, normalizeForComparison(`${task.title} ${task.content}`)),
           };
         })
         .sort((left, right) => right.score - left.score);
@@ -317,7 +433,9 @@ function completionCandidates(
   return result;
 }
 
-function ideaLikeTasks(existing: ReviewExistingTask[]): Array<{ id: string; title: string; reason: string }> {
+function ideaLikeTasks(
+  existing: ReviewExistingTask[]
+): Array<{ id: string; title: string; reason: string }> {
   return existing
     .filter((task) => task.status === 'current')
     .filter(
@@ -329,7 +447,8 @@ function ideaLikeTasks(existing: ReviewExistingTask[]): Array<{ id: string; titl
     .map((task) => ({
       id: task.id,
       title: task.title,
-      reason: 'Похоже на идею без конкретного обязательства; не закрываю и не удаляю автоматически.',
+      reason:
+        'Похоже на идею без конкретного обязательства; не закрываю и не удаляю автоматически.',
     }))
     .slice(0, 20);
 }
@@ -339,10 +458,13 @@ export function analyzeProjectReview(input: {
   existingTasks: ReviewExistingTask[];
   existingDecisions: ReviewExistingDecision[];
   existingMaterials: ReviewExistingMaterial[];
+  learningExamples?: TaskExperienceExample[];
 }): ProjectReviewAnalysis {
   const tasks: ReviewCandidate[] = [];
+  const reminders: ReviewCandidate[] = [];
   const ideas: ReviewCandidate[] = [];
   const decisions: ReviewCandidate[] = [];
+  const knowledge: ReviewCandidate[] = [];
   const materials: ReviewMaterialCandidate[] = [];
   const openQuestions: ReviewCandidate[] = [];
   const ambiguousTaskCandidates: ReviewCandidate[] = [];
@@ -372,62 +494,83 @@ export function analyzeProjectReview(input: {
       });
     }
 
-    for (const sentence of sentences(message.content)) {
-      if (META_COMMAND.test(sentence)) continue;
+    const hasUrl = extractUrls(message.content).length > 0;
 
-      if (isQuestion(sentence)) {
-        pushUnique(openQuestions, candidateFor(message, sentence, ['project-review', 'open-question']));
+    for (const sentence of sentences(message.content)) {
+      let classification = classifyReviewSentence(sentence, hasUrl);
+      const learned = input.learningExamples?.length
+        ? learnedClassification(sentence, input.learningExamples)
+        : null;
+
+      if (learned?.outcome === 'false_task') continue;
+      if (learned?.outcome === 'wrong_kind' && learned.confirmedKind) {
+        const confirmedKind = learned.confirmedKind;
+        if (confirmedKind === 'constraint' || confirmedKind === 'knowledge') {
+          classification = 'knowledge';
+        } else if (confirmedKind === 'saved' || confirmedKind === 'idea') {
+          classification = 'idea';
+        } else if (confirmedKind === 'decision') {
+          classification = 'decision';
+        } else if (confirmedKind === 'reminder') {
+          classification = 'reminder';
+        } else if (confirmedKind === 'task') {
+          classification = 'task';
+        }
+      }
+
+      if (classification === 'question') {
+        pushUnique(
+          openQuestions,
+          candidateFor(message, sentence, ['project-review', 'open-question'])
+        );
         continue;
       }
 
-      const decisionLike = DECISION.test(sentence);
-      const ideaLike = IDEA.test(sentence);
-      const explicitTask = TASK_VERB.test(sentence);
-      const obligation = OBLIGATION.test(sentence);
-
-      // A decision must be an owner statement, never a hypothesis, proposal or
-      // a question. Assistant messages never reach this branch.
-      if (decisionLike && !HYPOTHESIS.test(sentence) && !ideaLike) {
+      if (classification === 'decision') {
         pushUnique(decisions, candidateFor(message, sentence, tagsFor(sentence)));
         continue;
       }
 
-      // Ideas stay ideas. They are stored as notes, never as tasks, even when
-      // the wording contains "можно сделать" or "хотелось бы". Only an
-      // explicit task command ("добавь задачу …", "задача: …") overrides this.
-      if (ideaLike && !EXPLICIT_TASK_COMMAND.test(sentence)) {
+      if (classification === 'knowledge') {
+        pushUnique(knowledge, candidateFor(message, sentence, tagsFor(sentence)));
+        continue;
+      }
+
+      if (classification === 'idea') {
         pushUnique(ideas, candidateFor(message, sentence, tagsFor(sentence)));
         continue;
       }
 
-      if (explicitTask || obligation) {
-        const candidate = candidateFor(message, sentence, tagsFor(sentence));
-        if (taskIsExisting(candidate, input.existingTasks)) continue;
-
-        // "Надо обсудить", "нужно решить" are open questions, not executable
-        // tasks until the owner names a concrete next action.
-        if (
-          /(?:обсудить|обсуждать|подумать|решить|уточнить|выяснить|понять|discuss|think|clarify|decide)/iu.test(
-            sentence
-          ) &&
-          !/(?:напиши|подготовь|проверь|создай|исправь|добавь|опубликуй|write|prepare|check|create|fix|add|publish)/iu.test(
-            sentence
-          )
-        ) {
-          pushUnique(ambiguousTaskCandidates, candidate);
-          pushUnique(openQuestions, candidateFor(message, sentence, ['project-review', 'open-question']));
-          continue;
-        }
-
-        pushUnique(tasks, candidate);
+      if (classification === 'reminder') {
+        const candidate = taskCandidateFor(message, sentence);
+        if (!taskIsExisting(candidate, input.existingTasks)) pushUnique(reminders, candidate);
+        continue;
       }
+
+      if (classification === 'ambiguous') {
+        const candidate = taskCandidateFor(message, sentence);
+        pushUnique(ambiguousTaskCandidates, candidate);
+        pushUnique(
+          openQuestions,
+          candidateFor(message, sentence, ['project-review', 'open-question'])
+        );
+        continue;
+      }
+
+      if (classification !== 'task') continue;
+
+      const candidate = taskCandidateFor(message, sentence);
+      if (taskIsExisting(candidate, input.existingTasks)) continue;
+      pushUnique(tasks, candidate);
     }
   }
 
   return {
     tasks,
+    reminders,
     ideas,
     decisions,
+    knowledge,
     materials,
     openQuestions,
     completions: completionCandidates(input.messages, input.existingTasks),

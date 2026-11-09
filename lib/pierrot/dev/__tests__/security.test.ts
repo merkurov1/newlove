@@ -17,10 +17,14 @@ describe('Dev Mode security boundary', () => {
     const names = definitions.map((tool) => tool.function.name);
 
     expect(names).toEqual([...DEV_TOOL_NAMES]);
-    expect(names).toHaveLength(13);
+    expect(names).toHaveLength(15);
     expect(names).not.toContain('create_or_update_file');
     expect(names).not.toContain('create_pull_request');
+    expect(names).not.toContain('create_issue');
+    expect(names).not.toContain('create_branch');
     expect(isDevWriteTool('create_or_update_file')).toBe(true);
+    expect(isDevWriteTool('create_issue')).toBe(true);
+    expect(isDevWriteTool('create_branch')).toBe(true);
     expect(isDevWriteTool('read_file')).toBe(false);
   });
 

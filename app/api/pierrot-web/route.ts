@@ -225,21 +225,67 @@ import {
   moveDecisionToProject,
   resolveExactProject,
 } from '@/lib/pierrot/projects/links';
-import {
-  ensureProjectConversation,
-} from '@/lib/pierrot/projects/conversation';
+import { ensureProjectConversation } from '@/lib/pierrot/projects/conversation';
 import { buildProjectChatContext } from '@/lib/pierrot/projects/history';
-import { prepareProjectReview } from '@/lib/pierrot/projects/review/service';
-import {
-  createOwnerTask,
-  type OwnerTaskCreationResult,
-} from '@/lib/pierrot/memory/taskCreation';
+import { runProjectReview } from '@/lib/pierrot/projects/review/service';
+import { createOwnerTask, type OwnerTaskCreationResult } from '@/lib/pierrot/memory/taskCreation';
 import { listDevTasks, updateDevTask } from '@/lib/pierrot/dev/tasks';
 import { resolvePierrotProject } from '@/lib/pierrot/projects/resolver';
 import { formatPierrotAnswerTrace } from '@/lib/pierrot/diagnostics';
 import { detectUnifiedSearchIntent } from '@/lib/pierrot/search/intent';
 import { formatUnifiedSearchReport } from '@/lib/pierrot/search/format';
 import { searchUnifiedOwnerContext } from '@/lib/pierrot/search/unified';
+import { detectGroomingCommand, parseGroomingApproval } from '@/lib/pierrot/grooming/commands';
+import {
+  approvePendingGroomingPlan,
+  prepareWorkspaceAudit,
+  showPendingGroomingPlan,
+} from '@/lib/pierrot/grooming/service';
+import { recordTaskExperience } from '@/lib/pierrot/learning/store';
+import { isGroomingStorageUnavailable, loadPendingAudit } from '@/lib/pierrot/grooming/store';
+import {
+  loadLatestContextSummary,
+  maybeRefreshContextSummary,
+} from '@/lib/pierrot/grooming/context';
+import { getDevRepositoryConfigs } from '@/lib/pierrot/dev/repositories';
+import {
+  buildPendingDraft,
+  detectGitHubChatIntent,
+  formatGitHubWriteResult,
+  formatPendingOperationPreview,
+  isGitHubCancellation,
+  isGitHubConfirmation,
+  resolveGitHubRepository,
+  runGitHubReadIntent,
+} from '@/lib/pierrot/dev/chatBridge';
+import {
+  closePendingGitHubOperation,
+  isPendingOperationTableMissing,
+  loadPendingGitHubOperation,
+  savePendingGitHubOperation,
+  type PendingGitHubOperation,
+  type PendingGitHubOperationKind,
+} from '@/lib/pierrot/dev/pendingOperations';
+
+import {
+  deleteIntakeLog,
+  detectIntakeMutation,
+  detectIntakeQuery,
+  formatIntakeAnswer,
+  formatIntakeCorrected,
+  formatIntakeDeleted,
+  formatIntakeSaved,
+  getLastIntakeLog,
+  intakeRangeForQuery,
+  isIntakeModelEnabled,
+  isIntakeStorageUnavailable,
+  listIntakeLogs,
+  parseIntakeMessage,
+  parseIntakeWithModel,
+  resolveOwnerTimeZone,
+  saveIntakeItems,
+  updateIntakeLog,
+} from '@/lib/pierrot/intake';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -900,6 +946,7 @@ export async function POST(req: Request) {
 
     let ownerMemoryContext: string | null = null;
     let ownerProjectContext: string | null = null;
+    let ownerConversationSummaryContext: string | null = null;
     let ownerHistoryContext: string | null = null;
     let projectResolutionNote: string | null = null;
     let ownerMemoryUnavailable = false;
@@ -951,7 +998,10 @@ export async function POST(req: Request) {
                 : null,
               project.tasks.length
                 ? `Open/project tasks: ${project.tasks
-                    .filter((item) => !['verified', 'archived', 'completed', 'cancelled'].includes(item.status))
+                    .filter(
+                      (item) =>
+                        !['verified', 'archived', 'completed', 'cancelled'].includes(item.status)
+                    )
                     .map((item) => `${item.title} [${item.status}]`)
                     .join('; ')}`
                 : null,
@@ -988,6 +1038,28 @@ export async function POST(req: Request) {
       }
 
       try {
+        // Automatic compression is local to this conversation. It creates a
+        // versioned summary but never changes tasks, Brain or GitHub.
+        await maybeRefreshContextSummary(memoryStore, {
+          userId: ownerIdentityUserId,
+          conversationId,
+        });
+        const summary = await loadLatestContextSummary(
+          memoryStore,
+          ownerIdentityUserId,
+          conversationId
+        );
+        if (summary) {
+          ownerConversationSummaryContext = [
+            `VERSIONED CONVERSATION SUMMARY (v${summary.version}; original messages are preserved):`,
+            summary.summary,
+          ].join('\n');
+        }
+      } catch {
+        ownerConversationSummaryContext = null;
+      }
+
+      try {
         // Approved skills are a separate concept from memory. Ranking is
         // deterministic; nothing is executed here.
         skillsContext = await buildSkillsContext(memoryStore, ownerIdentityUserId, trimmedMessage);
@@ -1017,6 +1089,7 @@ export async function POST(req: Request) {
       buildPierrotPerspectivePrompt(perspective),
       ownerProfileContext,
       ownerMemoryContext,
+      ownerConversationSummaryContext,
       ownerHistoryContext,
       !ownerHistoryContext &&
       !conversationProject &&
@@ -1339,6 +1412,7 @@ export async function POST(req: Request) {
     // the existing admin pages and never expose another UI or chat.
     if (ownerMode && ragOwnerAuthorized) {
       const ownerLanguage: 'ru' | 'en' = language === 'en' ? 'en' : 'ru';
+      const groomingOwnerId = isPierrotUserId(ownerIdentityUserId) ? ownerIdentityUserId : null;
 
       const persistOwnerReply = async (text: string, extra: Record<string, unknown> = {}) => {
         let finalText = text.slice(0, PIERROT_MAX_MESSAGE_LENGTH);
@@ -1421,20 +1495,17 @@ export async function POST(req: Request) {
           pierrotStore && canStoreMetadata
             ? await loadLastPierrotAssistantTrace(pierrotStore, conversationId).catch(() => null)
             : null;
-        return persistOwnerReply(
-          formatPierrotAnswerTrace(trace, ownerLanguage),
-          {
-            deterministic: true,
-            diagnostic_trace: trace
-              ? {
-                  provider: trace.provider ?? null,
-                  web_requested: trace.web_requested ?? false,
-                  web_reason: trace.web_reason ?? null,
-                  answer_sources: trace.answer_sources ?? null,
-                }
-              : null,
-          }
-        );
+        return persistOwnerReply(formatPierrotAnswerTrace(trace, ownerLanguage), {
+          deterministic: true,
+          diagnostic_trace: trace
+            ? {
+                provider: trace.provider ?? null,
+                web_requested: trace.web_requested ?? false,
+                web_reason: trace.web_reason ?? null,
+                answer_sources: trace.answer_sources ?? null,
+              }
+            : null,
+        });
       }
 
       const projectCorrection =
@@ -1458,8 +1529,7 @@ export async function POST(req: Request) {
             ).catch(() => [])
           ).filter(
             (record) =>
-              (record.kind === 'task' || record.kind === 'reminder') &&
-              record.status === 'current'
+              (record.kind === 'task' || record.kind === 'reminder') && record.status === 'current'
           );
 
           if (candidates.length === 1) {
@@ -1479,6 +1549,25 @@ export async function POST(req: Request) {
               if (!linked.some((record) => record.id === candidates[0].id)) {
                 throw new Error('PROJECT_CORRECTION_NOT_CONFIRMED');
               }
+              await recordTaskExperience(memoryStore, {
+                userId: ownerIdentityUserId,
+                conversationId,
+                sourceMessageId: userMessageId,
+                sourceText: trimmedMessage,
+                proposedKind: 'task',
+                confirmedKind: 'task',
+                proposedProjectId: null,
+                confirmedProjectId: corrected.project.id,
+                outcome: 'wrong_project',
+                reason: `Owner corrected the task project to ${corrected.project.name}.`,
+                source: 'chat_correction',
+                analyzerVersion: 'chat-correction-v1',
+                metadata: {
+                  taskId: candidates[0].id,
+                  taskTitle: candidates[0].title,
+                  correctedProjectSlug: corrected.project.slug,
+                },
+              }).catch(() => null);
               return persistOwnerReply(
                 ownerLanguage === 'ru'
                   ? `Исправил связь: задача «${candidates[0].title}» теперь в проекте «${corrected.project.name}». Дубликат проекта не создавался.`
@@ -1516,6 +1605,178 @@ export async function POST(req: Request) {
               project_status: 'clarification_required',
               project_id: corrected.project.id,
             }
+          );
+        }
+      }
+
+      let pendingGrooming: Awaited<ReturnType<typeof loadPendingAudit>> = null;
+      if (memoryStore && groomingOwnerId) {
+        try {
+          pendingGrooming = await loadPendingAudit(memoryStore, groomingOwnerId, conversationId);
+        } catch (error) {
+          if (!isGroomingStorageUnavailable(error)) {
+            persistenceFailure(error, 'grooming_pending_lookup');
+          }
+        }
+      }
+
+      const groomingCommand = detectGroomingCommand(trimmedMessage);
+      const groomingApproval = pendingGrooming ? parseGroomingApproval(trimmedMessage) : null;
+
+      if (pendingGrooming && groomingApproval) {
+        if (!groomingOwnerId || !memoryStore) {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Хранилище аудита недоступно. Ничего не изменено.'
+              : 'Grooming storage is unavailable. Nothing changed.',
+            { grooming_status: 'storage_unavailable' }
+          );
+        }
+
+        if (groomingApproval.kind === 'show') {
+          const shown = await showPendingGroomingPlan({
+            store: memoryStore,
+            userId: groomingOwnerId,
+            conversationId,
+            language: ownerLanguage,
+          }).catch(() => null);
+          if (shown) {
+            return persistOwnerReply(shown.reply, {
+              grooming_status: 'prepared',
+              grooming_audit_id: shown.audit.id,
+              grooming_proposal_count: shown.audit.proposals.length,
+              grooming_plan: shown.planView,
+            });
+          }
+        } else {
+          const mode =
+            groomingApproval.kind === 'reject'
+              ? 'reject_all'
+              : groomingApproval.mode === 'safe'
+                ? 'safe'
+                : groomingApproval.mode === 'selected'
+                  ? 'selected'
+                  : 'all';
+          try {
+            const execution = await approvePendingGroomingPlan({
+              store: memoryStore,
+              userId: groomingOwnerId,
+              conversationId,
+              mode,
+              ordinals: groomingApproval.kind === 'approve' ? groomingApproval.ordinals : undefined,
+              language: ownerLanguage,
+            });
+            if (execution) {
+              return persistOwnerReply(execution.reply, {
+                grooming_status: execution.report.status,
+                grooming_audit_id: execution.audit.id,
+                grooming_executed: execution.report.executed,
+                grooming_skipped: execution.report.skipped,
+                grooming_failed: execution.report.failed,
+                grooming_stale: execution.report.stale,
+                operation_log: {
+                  intent: 'workspace_grooming',
+                  audit_id: execution.audit.id,
+                  result: execution.report.status,
+                },
+              });
+            }
+          } catch (error) {
+            if (isGroomingStorageUnavailable(error)) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Журнал grooming-операций недоступен: нужна миграция 2026-11-26_pierrot_workspace_grooming.sql. Ничего не изменено.'
+                  : 'The grooming journal is unavailable: apply 2026-11-26_pierrot_workspace_grooming.sql. Nothing changed.',
+                { grooming_status: 'migration_required' }
+              );
+            }
+            const code =
+              error && typeof error === 'object' && 'code' in error
+                ? String((error as { code?: unknown }).code)
+                : 'GROOMING_EXECUTION_FAILED';
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? `План не выполнен (${code}). Успешные операции не отменяются, журнал сохранён. Повтори аудит, если объекты изменились.`
+                : `The plan was not executed (${code}). Successful operations remain and the journal is kept. Re-run the audit if objects changed.`,
+              { grooming_status: 'failed', grooming_error: code }
+            );
+          }
+        }
+      }
+
+      if (groomingCommand) {
+        if (!groomingOwnerId || !memoryStore) {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Хранилище аудита недоступно. Ничего не изменено.'
+              : 'Grooming storage is unavailable. Nothing changed.',
+            { grooming_status: 'storage_unavailable' }
+          );
+        }
+
+        let projectId: string | null = null;
+        if (groomingCommand.projectName) {
+          const resolved = await resolveExactProject(
+            memoryStore,
+            groomingOwnerId,
+            groomingCommand.projectName
+          ).catch(() => ({ project: null, ambiguous: false }));
+          if (!resolved.project) {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? resolved.ambiguous
+                  ? `Несколько проектов совпадают с «${groomingCommand.projectName}». Аудит не запущен.`
+                  : `Не нашёл проект «${groomingCommand.projectName}». Аудит не запущен.`
+                : 'The project could not be resolved uniquely. Audit not started.',
+              { grooming_status: 'clarification_required' }
+            );
+          }
+          projectId = resolved.project.id;
+        } else if (
+          groomingCommand.scope !== 'all' &&
+          groomingCommand.scope !== 'github' &&
+          conversationProject
+        ) {
+          projectId = conversationProject.id;
+        }
+
+        try {
+          const prepared = await prepareWorkspaceAudit({
+            store: memoryStore,
+            userId: groomingOwnerId,
+            conversationId,
+            requestMessageId: userMessageId,
+            scope: groomingCommand.scope,
+            projectId,
+            language: ownerLanguage,
+          });
+
+          return persistOwnerReply(prepared.reply, {
+            grooming_status: 'prepared',
+            grooming_audit_id: prepared.audit.id,
+            grooming_scope: prepared.audit.scope,
+            grooming_proposal_count: prepared.audit.proposals.length,
+            grooming_health: prepared.health,
+            grooming_plan: prepared.planView,
+          });
+        } catch (error) {
+          if (isGroomingStorageUnavailable(error)) {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Аудит рабочей среды ещё не включён: нужна миграция 2026-11-26_pierrot_workspace_grooming.sql. Ничего не изменено.'
+                : 'Workspace audit is not enabled: apply 2026-11-26_pierrot_workspace_grooming.sql. Nothing changed.',
+              { grooming_status: 'migration_required' }
+            );
+          }
+          const code =
+            error && typeof error === 'object' && 'code' in error
+              ? String((error as { code?: unknown }).code)
+              : 'GROOMING_AUDIT_FAILED';
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? `Аудит не завершился (${code}). Ничего не изменено; задачи, память и GitHub не тронуты.`
+              : `The audit did not complete (${code}). Nothing changed; tasks, memory and GitHub were not modified.`,
+            { grooming_status: 'failed', grooming_error: code }
           );
         }
       }
@@ -1566,10 +1827,9 @@ export async function POST(req: Request) {
             );
           }
 
-          const snapshot = await getPierrotProjectSnapshot(
-            ownerIdentityUserId,
-            target.id
-          ).catch(() => null);
+          const snapshot = await getPierrotProjectSnapshot(ownerIdentityUserId, target.id).catch(
+            () => null
+          );
 
           if (!snapshot) {
             return persistOwnerReply(
@@ -1580,7 +1840,7 @@ export async function POST(req: Request) {
             );
           }
 
-          const review = await prepareProjectReview({
+          const review = await runProjectReview({
             store: memoryStore,
             ownerUserId: ownerIdentityUserId,
             project: snapshot,
@@ -1595,6 +1855,10 @@ export async function POST(req: Request) {
             project_id: snapshot.id,
             project_review_id: review.runId || null,
             project_review_status: review.status,
+            grooming_status: 'prepared',
+            grooming_audit_id: review.runId || null,
+            grooming_proposal_count: Number(review.report?.proposalCount || 0),
+            grooming_plan: review.planView,
             operation_log: review.report
               ? {
                   intent: 'project_review',
@@ -1777,11 +2041,9 @@ export async function POST(req: Request) {
           }
 
           try {
-            const updated = await updatePierrotProject(
-              ownerIdentityUserId,
-              resolved.project.id,
-              { ownerRating: projectCommand.rating }
-            );
+            const updated = await updatePierrotProject(ownerIdentityUserId, resolved.project.id, {
+              ownerRating: projectCommand.rating,
+            });
             const verified = updated
               ? await getPierrotProject(ownerIdentityUserId, resolved.project.id)
               : null;
@@ -2090,6 +2352,515 @@ export async function POST(req: Request) {
             ownerLanguage === 'ru'
               ? 'Не удалось собрать анализ работы. Я не буду выдавать это за успешный результат. Подробности доступны в [Skill Foundry](/admin/skills).'
               : 'I could not assemble the work analysis. I will not present that as a successful result. Details are available in [Skill Foundry](/admin/skills).'
+          );
+        }
+      }
+
+      // Private Food & Beverage Tracker. It is owner-only, uses its own table
+      // and never enters Brain/RAG. Questions are answered from intake_logs,
+      // while only actual completed consumption creates new rows.
+      if (pierrotStore && isPierrotUserId(ownerIdentityUserId)) {
+        const intakeZone = resolveOwnerTimeZone();
+
+        const intakeUnavailable = () =>
+          persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Журнал еды и напитков недоступен: нужна миграция 2026-11-25_pierrot_intake_logs.sql. Я ничего не записал.'
+              : 'The food and drink log is unavailable: apply migration 2026-11-25_pierrot_intake_logs.sql. Nothing was recorded.',
+            { intake_status: 'migration_required' }
+          );
+
+        const intakeQuery = detectIntakeQuery(trimmedMessage);
+
+        if (intakeQuery) {
+          try {
+            const range = intakeRangeForQuery(intakeQuery, {
+              timezone: intakeZone.timezone,
+            });
+            const rows = await listIntakeLogs(pierrotStore, {
+              userId: ownerIdentityUserId,
+              from: range.from,
+              to: range.to,
+              type: intakeQuery.kind === 'water' ? 'drink' : null,
+              limit: 500,
+            });
+
+            return persistOwnerReply(
+              formatIntakeAnswer({
+                rows,
+                query: intakeQuery,
+                language: ownerLanguage,
+                timezone: intakeZone.timezone,
+                timezoneKnown: intakeZone.known,
+              }),
+              {
+                intake_query: intakeQuery.kind,
+                intake_period: intakeQuery.period,
+                intake_status: 'answered',
+                intake_rows: rows.length,
+                intake_timezone_known: intakeZone.known,
+              }
+            );
+          } catch (error) {
+            if (isIntakeStorageUnavailable(error)) return intakeUnavailable();
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Не удалось прочитать журнал еды и напитков. Я не буду придумывать записи.'
+                : 'Could not read the food and drink log. I will not invent records.',
+              { intake_query: intakeQuery.kind, intake_status: 'failed' }
+            );
+          }
+        }
+
+        const intakeMutation = detectIntakeMutation(trimmedMessage);
+
+        if (intakeMutation) {
+          try {
+            const latest = await getLastIntakeLog(pierrotStore, ownerIdentityUserId);
+
+            if (!latest) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Не вижу записей о еде или напитках, которые можно изменить.'
+                  : 'I cannot see any food or drink records to change.',
+                { intake_mutation: intakeMutation.kind, intake_status: 'not_found' }
+              );
+            }
+
+            if (intakeMutation.kind === 'delete_last') {
+              const deleted = await deleteIntakeLog(pierrotStore, ownerIdentityUserId, latest.id);
+              return persistOwnerReply(
+                deleted > 0
+                  ? formatIntakeDeleted(ownerLanguage)
+                  : ownerLanguage === 'ru'
+                    ? 'Запись не найдена; ничего не удалено.'
+                    : 'The record was not found; nothing was deleted.',
+                {
+                  intake_mutation: 'delete_last',
+                  intake_status: deleted > 0 ? 'deleted' : 'not_found',
+                  intake_id: latest.id,
+                }
+              );
+            }
+
+            if (!intakeMutation.replacement) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Уточни правильное содержание записи, например: «исправь последнюю запись: это был чай».'
+                  : 'Give the corrected content, for example: “correct the last record: it was tea”.',
+                { intake_mutation: 'correct_last', intake_status: 'clarification_required' }
+              );
+            }
+
+            const correctedParse = parseIntakeMessage(`съел ${intakeMutation.replacement}`, {
+              timezone: intakeZone.timezone,
+              timezoneKnown: intakeZone.known,
+            });
+            const parsedItem = correctedParse.items[0] || null;
+            const drinkHint =
+              /(?:вода|кофе|чай|вино|сок|молоко|пиво|water|coffee|tea|wine|juice|milk|beer)/i.test(
+                intakeMutation.replacement
+              );
+            const updated = await updateIntakeLog(pierrotStore, ownerIdentityUserId, latest.id, {
+              itemName: parsedItem?.itemName || intakeMutation.replacement,
+              type: parsedItem?.type || (drinkHint ? 'drink' : 'food'),
+              ...(parsedItem ? { quantity: parsedItem.quantity, unit: parsedItem.unit } : {}),
+            });
+
+            if (!updated) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Не удалось подтвердить исправление. Я не буду утверждать, что запись изменена.'
+                  : 'The correction could not be confirmed. I will not claim the record changed.',
+                { intake_mutation: 'correct_last', intake_status: 'failed', intake_id: latest.id }
+              );
+            }
+
+            return persistOwnerReply(formatIntakeCorrected(updated, ownerLanguage), {
+              intake_mutation: 'correct_last',
+              intake_status: 'updated',
+              intake_id: updated.id,
+            });
+          } catch (error) {
+            if (isIntakeStorageUnavailable(error)) return intakeUnavailable();
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Не удалось изменить журнал еды и напитков. Я ничего не утверждаю.'
+                : 'Could not change the food and drink log. I am not claiming any change.',
+              { intake_mutation: intakeMutation.kind, intake_status: 'failed' }
+            );
+          }
+        }
+
+        let intakeResult = parseIntakeMessage(trimmedMessage, {
+          timezone: intakeZone.timezone,
+          timezoneKnown: intakeZone.known,
+        });
+
+        const foodHint =
+          /(?:съел|съела|выпил|выпила|ел|ела|пил|пила|завтрак|обед|ужин|перекус|кофе|чай|вода|вино|яблок|паст|тост|яйц|ate|drank|eaten|breakfast|lunch|dinner|coffee|tea|water|wine|food|meal)/i.test(
+            trimmedMessage
+          );
+
+        if (
+          isIntakeModelEnabled() &&
+          foodHint &&
+          (!intakeResult.detected || intakeResult.confidence < 0.65)
+        ) {
+          const modeled = await parseIntakeWithModel(trimmedMessage, {
+            timezone: intakeZone.timezone,
+            timezoneKnown: intakeZone.known,
+          });
+          if (modeled) intakeResult = modeled;
+        }
+
+        if (intakeResult.detected && intakeResult.confidence >= 0.65) {
+          try {
+            const saved = await saveIntakeItems(pierrotStore, {
+              userId: ownerIdentityUserId,
+              items: intakeResult.items,
+              rawText: trimmedMessage,
+              sourceMessageId: userMessageId,
+              confidence: intakeResult.confidence,
+            });
+
+            return persistOwnerReply(
+              [
+                saved.duplicate
+                  ? ownerLanguage === 'ru'
+                    ? 'Эта запись уже была сохранена ранее.'
+                    : 'This record was already saved.'
+                  : formatIntakeSaved(intakeResult.items, ownerLanguage),
+                intakeResult.timezoneKnown
+                  ? null
+                  : ownerLanguage === 'ru'
+                    ? 'Часовой пояс не настроен; время сохранено в UTC.'
+                    : 'The timezone is not configured; the time is stored in UTC.',
+              ]
+                .filter(Boolean)
+                .join('\n\n'),
+              {
+                intake_status: saved.duplicate ? 'duplicate' : 'saved',
+                intake_items: saved.items.map((item) => ({
+                  id: item.id,
+                  type: item.type,
+                  item: item.itemName,
+                  quantity: item.quantity,
+                  unit: item.unit,
+                })),
+                intake_confidence: intakeResult.confidence,
+                intake_source: intakeResult.usedModel ? 'model' : 'rules',
+                intake_timezone_known: intakeResult.timezoneKnown,
+              }
+            );
+          } catch (error) {
+            if (isIntakeStorageUnavailable(error)) return intakeUnavailable();
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Распознал приём пищи, но запись не сохранилась. Я не буду утверждать, что она записана.'
+                : 'I recognised the intake, but the record was not saved. I will not claim it was recorded.',
+              { intake_status: 'failed' }
+            );
+          }
+        }
+      }
+
+      // GitHub integration is available in owner CHAT as well as DEV. The
+      // implementation is shared: deterministic reads use the same repository
+      // adapter as Dev Mode, complex research uses the existing read-only Dev
+      // model, and every write requires a stored proposal plus explicit
+      // confirmation on a later turn.
+      if (pierrotStore && isPierrotUserId(ownerIdentityUserId)) {
+        const executePendingGitHubOperation = async (
+          pendingOperation: PendingGitHubOperation
+        ): Promise<Response> => {
+          try {
+            const write = await import('@/lib/pierrot/dev/write');
+            const payload = pendingOperation.payload;
+            let result: Record<string, unknown>;
+
+            if (pendingOperation.operation === 'create_issue') {
+              result = await write.createDevIssue({
+                repository: pendingOperation.repository,
+                title: payload.title,
+                body: payload.body,
+                confirmed: true,
+              });
+            } else if (pendingOperation.operation === 'create_branch') {
+              result = await write.createDevBranch({
+                repository: pendingOperation.repository,
+                branch: payload.branch,
+                fromRef: payload.fromRef,
+                confirmed: true,
+              });
+            } else if (pendingOperation.operation === 'create_pull_request') {
+              result = await write.createDevPullRequest({
+                repository: pendingOperation.repository,
+                title: payload.title,
+                head: payload.head,
+                base: payload.base,
+                body: payload.body,
+                confirmed: true,
+              });
+            } else if (pendingOperation.operation === 'create_or_update_file') {
+              result = await write.createOrUpdateDevFile({
+                repository: pendingOperation.repository,
+                path: payload.path,
+                content: payload.content,
+                message: payload.message,
+                branch: payload.branch,
+                confirmed: true,
+              });
+            } else if (pendingOperation.operation === 'add_issue_comment') {
+              result = await write.addDevIssueComment({
+                repository: pendingOperation.repository,
+                number: payload.number,
+                body: payload.body,
+                confirmed: true,
+              });
+            } else {
+              result = await write.updateDevIssueState({
+                repository: pendingOperation.repository,
+                number: payload.number,
+                state: payload.state,
+                confirmed: true,
+              });
+            }
+
+            await closePendingGitHubOperation(pierrotStore, {
+              id: pendingOperation.id,
+              status: 'executed',
+              result,
+            }).catch(() => undefined);
+
+            return persistOwnerReply(
+              formatGitHubWriteResult({
+                operation: pendingOperation.operation,
+                result,
+                language: ownerLanguage,
+              }),
+              {
+                github_operation: pendingOperation.operation,
+                github_repository: pendingOperation.repository,
+                github_status: 'executed',
+                github_link: typeof result.url === 'string' ? result.url : null,
+              }
+            );
+          } catch (error) {
+            const code =
+              error && typeof error === 'object' && 'code' in error
+                ? String((error as { code?: unknown }).code || 'GITHUB_WRITE_FAILED')
+                : 'GITHUB_WRITE_FAILED';
+            await closePendingGitHubOperation(pierrotStore, {
+              id: pendingOperation.id,
+              status: 'cancelled',
+            }).catch(() => undefined);
+
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? `GitHub: операция не выполнена (${code}). Я не буду утверждать, что изменение создано.${error instanceof Error && error.message ? ` Причина: ${error.message}` : ''}`
+                : `GitHub: the operation was not completed (${code}). I will not claim the change exists.${error instanceof Error && error.message ? ` Reason: ${error.message}` : ''}`,
+              {
+                github_operation: pendingOperation.operation,
+                github_repository: pendingOperation.repository,
+                github_status: 'failed',
+                github_error: code,
+              }
+            );
+          }
+        };
+
+        const pendingGitHub = await loadPendingGitHubOperation(pierrotStore, {
+          userId: ownerIdentityUserId,
+          conversationId,
+        }).catch(() => null);
+
+        if (pendingGitHub && isGitHubCancellation(trimmedMessage)) {
+          await closePendingGitHubOperation(pierrotStore, {
+            id: pendingGitHub.id,
+            status: 'cancelled',
+          }).catch(() => undefined);
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'GitHub: операция отменена. Ничего не изменено.'
+              : 'GitHub: the operation was cancelled. Nothing changed.',
+            { github_status: 'cancelled', github_operation: pendingGitHub.operation }
+          );
+        }
+
+        if (pendingGitHub && isGitHubConfirmation(trimmedMessage)) {
+          return executePendingGitHubOperation(pendingGitHub);
+        }
+
+        const githubIntent = detectGitHubChatIntent(trimmedMessage);
+
+        if (githubIntent) {
+          if (githubIntent.requiresConfirmation) {
+            const previousAssistant = [...normalizedHistory]
+              .reverse()
+              .find((item) => item.role === 'assistant' && item.content.trim())?.content;
+            const draft = buildPendingDraft({
+              intent: githubIntent,
+              message: trimmedMessage,
+              previousAssistant,
+            });
+
+            if (!draft.payload) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? `Для операции GitHub нужно уточнить: ${draft.missing.join(', ')}. Ничего не изменено.`
+                  : `The GitHub operation needs: ${draft.missing.join(', ')}. Nothing changed.`,
+                {
+                  github_operation: githubIntent.operation,
+                  github_status: 'clarification_required',
+                  github_missing: draft.missing,
+                }
+              );
+            }
+
+            try {
+              const pendingOperation = await savePendingGitHubOperation(pierrotStore, {
+                userId: ownerIdentityUserId,
+                conversationId,
+                repository: resolveGitHubRepository(githubIntent),
+                operation: githubIntent.operation as PendingGitHubOperationKind,
+                payload: draft.payload,
+              });
+
+              return persistOwnerReply(
+                formatPendingOperationPreview({
+                  operation: pendingOperation.operation,
+                  repository:
+                    getDevRepositoryConfigs().find(
+                      (repo) => repo.key === pendingOperation.repository
+                    )?.fullName || pendingOperation.repository,
+                  payload: pendingOperation.payload,
+                  language: ownerLanguage,
+                }),
+                {
+                  github_operation: pendingOperation.operation,
+                  github_repository: pendingOperation.repository,
+                  github_status: 'confirmation_required',
+                  github_pending_id: pendingOperation.id,
+                }
+              );
+            } catch (error) {
+              if (isPendingOperationTableMissing(error)) {
+                return persistOwnerReply(
+                  ownerLanguage === 'ru'
+                    ? 'GitHub-запись отключена: нужна миграция 2026-11-25_pierrot_github_operations.sql. Ничего не изменено.'
+                    : 'GitHub writes are unavailable: apply migration 2026-11-25_pierrot_github_operations.sql. Nothing changed.',
+                  {
+                    github_operation: githubIntent.operation,
+                    github_status: 'migration_required',
+                  }
+                );
+              }
+              throw error;
+            }
+          }
+
+          try {
+            const deterministic = await runGitHubReadIntent(githubIntent);
+            if (deterministic) {
+              return persistOwnerReply(deterministic.text, {
+                github_operation: deterministic.operation,
+                github_repository: deterministic.repository,
+                github_branch: deterministic.branch,
+                github_commit: deterministic.commitSha,
+                github_status: 'completed',
+                github_links: deterministic.links.slice(0, 10),
+              });
+            }
+          } catch (error) {
+            const code =
+              error && typeof error === 'object' && 'code' in error
+                ? String((error as { code?: unknown }).code)
+                : 'GITHUB_READ_FAILED';
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? `GitHub недоступен или вернул ошибку (${code}). Я не буду выдумывать содержимое репозитория.`
+                : `GitHub is unavailable or returned an error (${code}). I will not invent repository content.`,
+              {
+                github_operation: githubIntent.operation,
+                github_status: 'failed',
+                github_error: code,
+              }
+            );
+          }
+
+          // A natural-language repository investigation is routed to the
+          // existing read-only Dev model. Prompt, tools and security policy are
+          // identical to Dev Mode; only the answer surface differs.
+          const devLlm = await import('@/lib/pierrot/dev/llm').catch(() => null);
+
+          if (devLlm?.isDevModelConfigured()) {
+            try {
+              const devResult = await devLlm.callDevModel({
+                history: [...normalizedHistory, { role: 'user', content: trimmedMessage }],
+                requestId: userMessageId,
+                signal: req.signal,
+                repository: resolveGitHubRepository(githubIntent),
+                deadlineMs: 45_000,
+              });
+              const trace = devResult.toolTrace;
+              const repository =
+                trace.find((entry) => entry.repository)?.repository ||
+                resolveGitHubRepository(githubIntent);
+              const commitSha =
+                trace.find((entry) => entry.meta?.commitSha)?.meta?.commitSha || null;
+              const paths = Array.from(
+                new Set(trace.flatMap((entry) => entry.meta?.paths || []))
+              ).slice(0, 12);
+              const links = paths.map(
+                (path) =>
+                  `https://github.com/${repository}/blob/${commitSha || 'main'}/${path.replace(/^\/+/, '')}`
+              );
+              const text = [
+                devResult.reply,
+                '',
+                `GitHub: ${repository} · ${commitSha ? commitSha.slice(0, 7) : 'ref unknown'}`,
+                ...links.map((url) => `- ${url}`),
+              ].join('\n');
+
+              return persistOwnerReply(text, {
+                github_operation: githubIntent.operation,
+                github_repository: repository,
+                github_commit: commitSha,
+                github_status: devResult.status,
+                github_links: links,
+                github_tool_trace: trace.map((entry) => ({
+                  name: entry.name,
+                  ok: entry.ok,
+                  summary: entry.summary,
+                })),
+              });
+            } catch (error) {
+              const code =
+                error && typeof error === 'object' && 'code' in error
+                  ? String((error as { code?: unknown }).code)
+                  : 'GITHUB_RESEARCH_FAILED';
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? `Не удалось завершить исследование GitHub (${code}). Частичные результаты сохранены в trace; я не буду выдумывать вывод.`
+                  : `The GitHub investigation did not complete (${code}). Partial results are kept in the trace; I will not invent a conclusion.`,
+                {
+                  github_operation: githubIntent.operation,
+                  github_status: 'failed',
+                  github_error: code,
+                }
+              );
+            }
+          }
+
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'GitHub-инструменты доступны, но для этого вопроса нужен Dev model provider. Настрой DEEPSEEK_API_KEY или OPENROUTER_API_KEY; я не буду выдумывать ответ по репозиторию.'
+              : 'GitHub tools are available, but this question needs the Dev model provider. Configure DEEPSEEK_API_KEY or OPENROUTER_API_KEY; I will not invent a repository answer.',
+            {
+              github_operation: githubIntent.operation,
+              github_status: 'not_configured',
+            }
           );
         }
       }
@@ -2895,10 +3666,7 @@ export async function POST(req: Request) {
             userId: ownerIdentityUserId,
             content,
             projectRef:
-              memoryIntent.projectRef ||
-              conversationProject?.slug ||
-              turnProject?.slug ||
-              null,
+              memoryIntent.projectRef || conversationProject?.slug || turnProject?.slug || null,
             conversationId,
             messageId: userMessageId,
             originalMessage: trimmedMessage,
@@ -3069,7 +3837,10 @@ export async function POST(req: Request) {
                     : 'Не удалось подтвердить сохранение оценки. Я не буду утверждать, что она записана.'
                   : 'I could not confirm the rating. I will not claim it was saved.',
                 {
-                  memory_status: code === 'PROJECT_RATING_MIGRATION_REQUIRED' ? 'migration_required' : 'write_failed',
+                  memory_status:
+                    code === 'PROJECT_RATING_MIGRATION_REQUIRED'
+                      ? 'migration_required'
+                      : 'write_failed',
                   task_intent: 'rate',
                 }
               );
@@ -3139,7 +3910,9 @@ export async function POST(req: Request) {
                 : 'I could not confirm the task rating. I will not claim it was saved.',
               {
                 memory_status:
-                  code === 'memory_rating_migration_required' ? 'migration_required' : 'write_failed',
+                  code === 'memory_rating_migration_required'
+                    ? 'migration_required'
+                    : 'write_failed',
                 task_intent: 'rate',
                 memory_id: target.id,
               }

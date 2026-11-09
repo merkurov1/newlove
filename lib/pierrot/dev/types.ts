@@ -7,6 +7,26 @@
 
 export type DevRepositoryKey = 'newlove' | 'pierrot';
 
+/**
+ * A project context narrows repository search without creating a second
+ * repository. Several contexts intentionally point at the same repository.
+ */
+export type DevProjectContextKey =
+  | 'heart_angel'
+  | 'art_engine'
+  | 'pierrot_backend'
+  | 'pierrot_mobile'
+  | 'main_platform';
+
+export type DevProjectContext = {
+  key: DevProjectContextKey;
+  label: string;
+  repository: DevRepositoryKey;
+  /** Preferred repository-relative paths, used only to prioritise search. */
+  paths: string[];
+  description: string;
+};
+
 export type DevRepositoryConfig = {
   key: DevRepositoryKey;
   label: string;

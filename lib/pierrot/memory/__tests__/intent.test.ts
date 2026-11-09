@@ -295,4 +295,14 @@ describe('owner memory intent', () => {
       query: null,
     });
   });
+
+  it('turns “запомни задачу” into a task instead of generic memory', () => {
+    expect(
+      detectMemoryIntent('Запомни задачу Art Engine — редизайн страницы картины.')
+    ).toMatchObject({
+      action: 'create_task',
+      kind: null,
+      content: 'Art Engine — редизайн страницы картины.',
+    });
+  });
 });

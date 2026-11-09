@@ -621,7 +621,7 @@ function detectProjectRef(message: string): string | null {
 }
 
 const CREATE_TASK_COMMAND =
-  /^(?:пожалуйста[,\s]*)?(?:добав(?:ь|ьте)|добавить|созда(?:й|йте)|создать|завед(?:и|ите)|завести|постав(?:ь|ьте)|поставить|запиш(?:и|ите)|записать|add|create|make)\s+(?:новую\s+|new\s+)?(?:задачу|задачy|таск|task)(?=\s|$|[:—–-])\s*[:—–-]?\s*/i;
+  /^(?:пожалуйста[,\s]*)?(?:(?:запомни|запомните|remember)\s+(?:новую\s+)?(?:задачу|task)|(?:добав(?:ь|ьте)|добавить|созда(?:й|йте)|создать|завед(?:и|ите)|завести|постав(?:ь|ьте)|поставить|запиш(?:и|ите)|записать|add|create|make)\s+(?:новую\s+|new\s+)?(?:задачу|задачy|таск|task))(?=\s|$|[:—–-])\s*[:—–-]?\s*/i;
 
 const UNNAMED_PROJECT_SCOPE =
   /(?:^|\s)(?:все\s+)?(?:задачи|задач|tasks?)\s+(?:в|во|по|из|для)\s+проект[аеу]?(?=\s|[,.!?]|$)/i;
@@ -685,8 +685,7 @@ function extractTaskCreation(
         // that follows it.
         const start = suffix.index;
         const relative = suffix[0].indexOf(candidate);
-        const end =
-          relative >= 0 ? start + relative + candidate.length : start + suffix[0].length;
+        const end = relative >= 0 ? start + relative + candidate.length : start + suffix[0].length;
         working = `${working.slice(0, start)} ${working.slice(end)}`;
       }
     }

@@ -51,6 +51,7 @@ function queueConfig(scope: WorkerScope): QueueTableConfig | null {
         timestamp: 'created_at',
       };
     case 'retention':
+    case 'grooming':
       return null;
   }
 }

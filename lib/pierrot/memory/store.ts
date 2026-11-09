@@ -185,7 +185,7 @@ export async function listMemoryRecords(
   store: SupabaseClient,
   input: ListMemoryOptions
 ): Promise<PierrotMemoryRecord[]> {
-  const limit = Math.min(Math.max(input.limit ?? 100, 1), 200);
+  const limit = Math.min(Math.max(input.limit ?? 100, 1), 500);
   let query = store
     .from('pierrot_decisions')
     .select('*')

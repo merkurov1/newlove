@@ -1,10 +1,25 @@
 /** @jest-environment node */
 
-import { describe, expect, it } from '@jest/globals';
+import { beforeAll, describe, expect, it, jest } from '@jest/globals';
 import { FakeSupabase, OWNER_ID } from '@/lib/pierrot/memory/testSupport/fakeSupabase';
 import { randomUUID } from 'crypto';
-import { runProjectReview } from '../review/service';
+
+jest.mock('../../dev/repository', () => ({
+  getDevRepositoryStatuses: jest.fn(async () => []),
+}));
+jest.mock('../../dev/tasks', () => ({
+  listDevTasks: jest.fn(async () => ({ tasks: [], migrationRequired: false })),
+}));
+
 import type { PierrotProjectSnapshot } from '../types';
+
+let prepareProjectReview: typeof import('../review/service').prepareProjectReview;
+let approvePendingGroomingPlan: typeof import('@/lib/pierrot/grooming/service').approvePendingGroomingPlan;
+
+beforeAll(async () => {
+  ({ prepareProjectReview } = await import('../review/service'));
+  ({ approvePendingGroomingPlan } = await import('@/lib/pierrot/grooming/service'));
+});
 
 const TABLES = [
   'pierrot_projects',
@@ -13,6 +28,7 @@ const TABLES = [
   'pierrot_messages',
   'pierrot_project_decisions',
   'pierrot_project_artifacts',
+  'pierrot_project_knowledge',
   'pierrot_project_reviews',
   'pierrot_decisions',
   'pierrot_decision_events',
@@ -20,6 +36,11 @@ const TABLES = [
   'pierrot_brain_status_snapshots',
   'pierrot_dev_prompts',
   'pierrot_events',
+  'pierrot_workspace_audits',
+  'pierrot_workspace_proposals',
+  'pierrot_workspace_operations',
+  'pierrot_context_summaries',
+  'pierrot_github_task_links',
 ];
 
 const CONVERSATION_ID = 'project-conv-1';
@@ -105,22 +126,14 @@ function setup() {
   return { db, row, store: db.asClient() };
 }
 
-describe('project review service', () => {
-  it('is idempotent for the same command and does not duplicate tasks', async () => {
+describe('project review preparation and approval', () => {
+  it('creates a plan without mutating tasks, memory or artifacts', async () => {
     const { db, row, store } = setup();
     db.seed('pierrot_messages', [
       message('m1', 'user', 'Проверь публичную страницу лота до пятницы.', 1),
     ]);
 
-    const first = await runProjectReview({
-      store,
-      ownerUserId: OWNER_ID,
-      project: snapshot(row),
-      conversationId: CONVERSATION_ID,
-      requestMessageId: 'user-message-1',
-      language: 'ru',
-    });
-    const second = await runProjectReview({
+    const result = await prepareProjectReview({
       store,
       ownerUserId: OWNER_ID,
       project: snapshot(row),
@@ -129,18 +142,126 @@ describe('project review service', () => {
       language: 'ru',
     });
 
-    expect(first.report?.counts).toMatchObject({ tasksCreated: 1 });
-    expect(second.status).toBe('replayed');
-    expect(db.all('pierrot_decisions').filter((item) => item.kind === 'task')).toHaveLength(1);
+    expect(result.status).toBe('prepared');
+    expect(result.report?.proposalCount).toEqual(expect.any(Number));
+    expect(db.all('pierrot_workspace_audits')).toHaveLength(1);
+    expect(db.all('pierrot_workspace_proposals').length).toBeGreaterThan(0);
+    expect(db.all('pierrot_decisions')).toHaveLength(0);
+    expect(db.all('pierrot_project_artifacts')).toHaveLength(0);
   });
 
-  it('saves ideas as notes and never as tasks', async () => {
+  it('is idempotent for the same command and does not duplicate plans', async () => {
+    const { db, row, store } = setup();
+    db.seed('pierrot_messages', [
+      message('m1', 'user', 'Проверь публичную страницу лота до пятницы.', 1),
+    ]);
+
+    const first = await prepareProjectReview({
+      store,
+      ownerUserId: OWNER_ID,
+      project: snapshot(row),
+      conversationId: CONVERSATION_ID,
+      requestMessageId: 'user-message-1',
+      language: 'ru',
+    });
+    const second = await prepareProjectReview({
+      store,
+      ownerUserId: OWNER_ID,
+      project: snapshot(row),
+      conversationId: CONVERSATION_ID,
+      requestMessageId: 'user-message-1',
+      language: 'ru',
+    });
+
+    expect(second.runId).toBe(first.runId);
+    expect(db.all('pierrot_workspace_audits')).toHaveLength(1);
+    expect(db.all('pierrot_decisions')).toHaveLength(0);
+  });
+
+  it('applies only the approved task proposal and links it to the project', async () => {
+    const { db, row, store } = setup();
+    db.seed('pierrot_messages', [
+      message('m1', 'user', 'Проверь публичную страницу лота до пятницы.', 1),
+    ]);
+
+    const prepared = await prepareProjectReview({
+      store,
+      ownerUserId: OWNER_ID,
+      project: snapshot(row),
+      conversationId: CONVERSATION_ID,
+      requestMessageId: 'user-message-1',
+      language: 'ru',
+    });
+    const audit = db
+      .all('pierrot_workspace_audits')
+      .find((item) => item.id === prepared.runId) as Record<string, unknown>;
+    expect(audit).toBeTruthy();
+    const createTask = db
+      .all('pierrot_workspace_proposals')
+      .find((item) => item.audit_id === prepared.runId && item.operation === 'create_task') as
+      Record<string, unknown> | undefined;
+    expect(createTask).toBeTruthy();
+
+    const execution = await approvePendingGroomingPlan({
+      store,
+      userId: OWNER_ID,
+      conversationId: CONVERSATION_ID,
+      mode: 'selected',
+      ordinals: [Number(createTask?.ordinal)],
+      language: 'ru',
+    });
+
+    expect(execution?.report.executed).toBe(1);
+    const tasks = db.all('pierrot_decisions').filter((item) => item.kind === 'task');
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].title).toContain('Проверь публичную страницу лота');
+    const links = db
+      .all('pierrot_project_decisions')
+      .filter((item) => item.decision_id === tasks[0].id);
+    expect(links).toHaveLength(1);
+    expect(links[0].project_id).toBe(row.id);
+  });
+
+  it('rejecting the plan leaves all workspace records untouched', async () => {
+    const { db, row, store } = setup();
+    db.seed('pierrot_messages', [
+      message('m1', 'user', 'Проверь публичную страницу лота до пятницы.', 1),
+    ]);
+
+    await prepareProjectReview({
+      store,
+      ownerUserId: OWNER_ID,
+      project: snapshot(row),
+      conversationId: CONVERSATION_ID,
+      requestMessageId: 'user-message-1',
+      language: 'ru',
+    });
+
+    await approvePendingGroomingPlan({
+      store,
+      userId: OWNER_ID,
+      conversationId: CONVERSATION_ID,
+      mode: 'reject_all',
+      language: 'ru',
+    });
+
+    expect(db.all('pierrot_decisions')).toHaveLength(0);
+    expect(db.all('pierrot_project_artifacts')).toHaveLength(0);
+    expect(
+      db.all('pierrot_workspace_proposals').every((proposal) => proposal.status === 'rejected')
+    ).toBe(true);
+  });
+
+  it('keeps ideas, rules and reminders out of the task proposals', async () => {
     const { db, row, store } = setup();
     db.seed('pierrot_messages', [
       message('m1', 'user', 'Идея: можно было бы сделать серию открыток с архивными письмами.', 1),
+      message('m2', 'user', 'Открытка не должна превращать Heart & Angel в интернет-магазин.', 2),
+      message('m3', 'user', 'Напомни мне проверить макет завтра.', 3),
+      message('m4', 'assistant', 'Предлагаю решение: использовать Art Engine для лотов.', 4),
     ]);
 
-    const result = await runProjectReview({
+    const prepared = await prepareProjectReview({
       store,
       ownerUserId: OWNER_ID,
       project: snapshot(row),
@@ -149,129 +270,14 @@ describe('project review service', () => {
       language: 'ru',
     });
 
-    expect(result.report?.counts).toMatchObject({ tasksCreated: 0, ideasSaved: 1 });
-    expect(db.all('pierrot_decisions').filter((item) => item.kind === 'task')).toHaveLength(0);
-    expect(db.all('pierrot_decisions').filter((item) => item.kind === 'saved')).toHaveLength(1);
-  });
-
-  it('does not record Pierrot proposals as owner decisions', async () => {
-    const { db, row, store } = setup();
-    db.seed('pierrot_messages', [
-      message('m1', 'assistant', 'Предлагаю решение: использовать Art Engine для лотов.', 1),
-      message('m2', 'user', 'Мне нравится.', 2),
-    ]);
-
-    const result = await runProjectReview({
-      store,
-      ownerUserId: OWNER_ID,
-      project: snapshot(row),
-      conversationId: CONVERSATION_ID,
-      requestMessageId: 'user-message-3',
-      language: 'ru',
-    });
-
-    expect(result.report?.counts).toMatchObject({ decisionsRecorded: 0 });
-    expect(db.all('pierrot_decisions').filter((item) => item.kind === 'decision')).toHaveLength(0);
-  });
-
-  it('does not close an ambiguous task on “Готово” alone', async () => {
-    const { db, row, store } = setup();
-    const taskId = randomUUID();
-    db.seed('pierrot_decisions', [
-      {
-        id: taskId,
-        user_id: OWNER_ID,
-        kind: 'task',
-        title: 'Проверить макет',
-        content: 'Проверить макет',
-        status: 'current',
-        project: 'Journal',
-        tags: [],
-        source_refs: [],
-        importance: 0.6,
-        confidence: 0.8,
-        created_at: '2026-11-01T10:00:00.000Z',
-        updated_at: '2026-11-01T10:00:00.000Z',
-      },
-    ]);
-    db.seed('pierrot_project_decisions', [
-      { project_id: row.id, decision_id: taskId, owner_user_id: OWNER_ID },
-    ]);
-    db.seed('pierrot_messages', [message('m1', 'user', 'Готово.', 1)]);
-
-    await runProjectReview({
-      store,
-      ownerUserId: OWNER_ID,
-      project: snapshot(row),
-      conversationId: CONVERSATION_ID,
-      requestMessageId: 'user-message-4',
-      language: 'ru',
-    });
-
-    expect(db.all('pierrot_decisions').find((item) => item.id === taskId)?.status).toBe('current');
-  });
-
-  it('does not rewrite memory when a new decision contradicts an existing one', async () => {
-    const { db, row, store } = setup();
-    const decisionId = randomUUID();
-    db.seed('pierrot_decisions', [
-      {
-        id: decisionId,
-        user_id: OWNER_ID,
-        kind: 'decision',
-        title: 'Используем светлый фон',
-        content: 'Используем светлый фон на странице выпуска',
-        status: 'current',
-        project: 'Journal',
-        tags: [],
-        source_refs: [],
-        importance: 0.8,
-        confidence: 0.9,
-        created_at: '2026-11-01T10:00:00.000Z',
-        updated_at: '2026-11-01T10:00:00.000Z',
-      },
-    ]);
-    db.seed('pierrot_project_decisions', [
-      { project_id: row.id, decision_id: decisionId, owner_user_id: OWNER_ID },
-    ]);
-    db.seed('pierrot_messages', [
-      message('m1', 'user', 'Не используем светлый фон на странице выпуска, решили тёмный.', 1),
-    ]);
-
-    const result = await runProjectReview({
-      store,
-      ownerUserId: OWNER_ID,
-      project: snapshot(row),
-      conversationId: CONVERSATION_ID,
-      requestMessageId: 'user-message-6',
-      language: 'ru',
-    });
-
-    expect(result.report?.counts).toMatchObject({ decisionsRecorded: 0 });
-    expect(db.all('pierrot_decisions').find((item) => item.id === decisionId)?.status).toBe(
-      'current'
-    );
-    expect(result.reply).toContain('Противоречие');
-  });
-
-  it('reports a partial result and never claims full success when a write fails', async () => {
-    const { db, row, store } = setup();
-    db.seed('pierrot_messages', [
-      message('m1', 'user', 'Сохрани материал https://example.com/journal/archive', 1),
-    ]);
-    db.failTable('pierrot_project_artifacts', '42P01', 'relation does not exist');
-
-    const result = await runProjectReview({
-      store,
-      ownerUserId: OWNER_ID,
-      project: snapshot(row),
-      conversationId: CONVERSATION_ID,
-      requestMessageId: 'user-message-5',
-      language: 'ru',
-    });
-
-    expect(result.status).toBe('partial');
-    expect(result.reply).toContain('частично');
-    expect(result.reply).toContain('Что не удалось');
+    const proposals = db
+      .all('pierrot_workspace_proposals')
+      .filter((item) => item.audit_id === prepared.runId);
+    expect(proposals.filter((item) => item.operation === 'create_task')).toHaveLength(0);
+    expect(proposals.filter((item) => item.operation === 'create_reminder')).toHaveLength(1);
+    const memoryKinds = proposals
+      .filter((item) => item.operation === 'create_memory')
+      .map((item) => (item.params as Record<string, unknown>).kind);
+    expect(memoryKinds).toEqual(expect.arrayContaining(['saved', 'constraint']));
   });
 });

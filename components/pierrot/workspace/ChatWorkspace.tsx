@@ -37,6 +37,7 @@ import { setWorkspaceHandoff } from '@/lib/pierrot/workspace/handoff';
 import { isRefreshStatusCommand } from '@/lib/pierrot/workspace/refreshCommand';
 import { readOverviewCache, writeOverviewCache } from '@/lib/pierrot/workspace/cache';
 import WorkspaceMarkdown from './WorkspaceMarkdown';
+import GroomingPlanCard from './GroomingPlanCard';
 import PierrotAvatar from './PierrotAvatar';
 import { useOnlineStatus } from './useOnlineStatus';
 import type {
@@ -49,6 +50,7 @@ import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes'
 import HomeOverview from './HomeOverview';
 import { sortOwnerConversations } from '@/lib/pierrot/workspace/conversationOrdering';
 import type { PierrotProject } from '@/lib/pierrot/projects/types';
+import type { GroomingPlanView } from '@/lib/pierrot/grooming/types';
 import { detectProjectReviewCommand } from '@/lib/pierrot/projects/commands';
 
 type UiMessage = {
@@ -62,6 +64,7 @@ type UiMessage = {
   feedbackError?: boolean;
   sources?: SourceBundle;
   answerLabel?: string | null;
+  groomingPlan?: GroomingPlanView | null;
   error?: boolean;
   streaming?: boolean;
   interrupted?: boolean;
@@ -896,6 +899,7 @@ export default function ChatWorkspace({
                 serverMessageId: parsed.assistantMessageId,
                 sources: parsed.sources,
                 answerLabel: parsed.answerLabel,
+                groomingPlan: parsed.groomingPlan,
                 streaming: false,
                 interrupted: false,
                 error: false,
@@ -1027,6 +1031,7 @@ export default function ChatWorkspace({
                   serverMessageId: parsed.assistantMessageId,
                   sources: parsed.sources,
                   answerLabel: parsed.answerLabel,
+                  groomingPlan: parsed.groomingPlan,
                   streaming: false,
                   interrupted: false,
                   error: false,
@@ -1140,6 +1145,15 @@ export default function ChatWorkspace({
     setDrawerOpen(false);
     setInspectorOpen(false);
     setMemoryOpen(false);
+  }
+
+  function submitGroomingPlan(command: string) {
+    setMessages((current) =>
+      current.map((message) =>
+        message.groomingPlan ? { ...message, groomingPlan: null } : message
+      )
+    );
+    void send(command);
   }
 
   const streamingMessage = messages.find((message) => message.streaming);
@@ -1384,6 +1398,14 @@ export default function ChatWorkspace({
                           streaming={message.streaming}
                           editorial
                         />
+
+                        {!message.streaming && message.groomingPlan && (
+                          <GroomingPlanCard
+                            plan={message.groomingPlan}
+                            disabled={loading || !online}
+                            onSubmit={submitGroomingPlan}
+                          />
+                        )}
 
                         {message.interrupted && (
                           <p className="pw-stream-note" role="status">

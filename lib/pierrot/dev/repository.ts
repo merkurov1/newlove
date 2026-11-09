@@ -938,6 +938,8 @@ export async function listPullRequests(input: {
     title: string;
     state: string;
     draft: boolean;
+    merged: boolean;
+    mergedAt: string | null;
     head: string;
     base: string;
     author: string | null;
@@ -972,6 +974,8 @@ export async function listPullRequests(input: {
       title: pull.title,
       state: pull.state,
       draft: Boolean(pull.draft),
+      merged: Boolean(pull.merged_at),
+      mergedAt: pull.merged_at ?? null,
       head: pull.head.ref,
       base: pull.base.ref,
       author: pull.user?.login ?? null,
@@ -1001,6 +1005,8 @@ export async function getPullRequest(input: {
   body: string;
   state: string;
   draft: boolean;
+  merged: boolean;
+  mergedAt: string | null;
   head: string;
   base: string;
   author: string | null;
@@ -1075,6 +1081,8 @@ export async function getPullRequest(input: {
         body: response.data.body || '',
         state: response.data.state,
         draft: Boolean(response.data.draft),
+        merged: Boolean(response.data.merged_at),
+        mergedAt: response.data.merged_at ?? null,
         head: response.data.head.ref,
         base: response.data.base.ref,
         author: response.data.user?.login ?? null,
@@ -1087,6 +1095,171 @@ export async function getPullRequest(input: {
       },
       !filesTruncated,
       filesTruncated ? [`Pull request files limited to ${MAX_DIFF_FILES}.`] : []
+    );
+  } catch (error) {
+    throw toDevError(error, config);
+  }
+}
+
+export async function listIssues(input: {
+  repository?: unknown;
+  state?: unknown;
+  labels?: unknown;
+  limit?: unknown;
+}): Promise<DevRepoResult<{
+  issues: Array<{
+    number: number;
+    title: string;
+    state: string;
+    author: string | null;
+    labels: string[];
+    comments: number;
+    url: string;
+    createdAt: string | null;
+    updatedAt: string | null;
+  }>;
+  truncated: boolean;
+}>> {
+  const config = resolveDevRepository(input.repository);
+  const client = getClient();
+  const state = input.state === 'closed' || input.state === 'all' ? input.state : 'open';
+  const limit = Math.min(
+    Math.max(typeof input.limit === 'number' ? Math.floor(input.limit) : 20, 1),
+    50
+  );
+  const labels =
+    typeof input.labels === 'string' && input.labels.trim()
+      ? input.labels
+          .split(',')
+          .map((label) => label.trim())
+          .filter(Boolean)
+          .join(',')
+      : undefined;
+
+  try {
+    const response = await client.rest.issues.listForRepo({
+      owner: config.owner,
+      repo: config.repo,
+      state,
+      ...(labels ? { labels } : {}),
+      sort: 'updated',
+      direction: 'desc',
+      per_page: limit,
+    });
+    const issues = response.data
+      // GitHub returns pull requests through the issues endpoint; they are not
+      // issues and must not be presented as such.
+      .filter((issue) => !issue.pull_request)
+      .map((issue) => ({
+        number: issue.number,
+        title: issue.title,
+        state: issue.state,
+        author: issue.user?.login ?? null,
+        labels: (issue.labels || [])
+          .map((label) => (typeof label === 'string' ? label : label.name || ''))
+          .filter(Boolean),
+        comments: issue.comments,
+        url: issue.html_url,
+        createdAt: issue.created_at ?? null,
+        updatedAt: issue.updated_at ?? null,
+      }));
+    return wrap(
+      config,
+      config.workBranch,
+      null,
+      { issues, truncated: issues.length >= limit },
+      issues.length < limit,
+      issues.length >= limit ? [`Issue list limited to ${limit}.`] : []
+    );
+  } catch (error) {
+    throw toDevError(error, config);
+  }
+}
+
+export async function getIssue(input: {
+  repository?: unknown;
+  number?: unknown;
+  includeComments?: unknown;
+}): Promise<DevRepoResult<{
+  number: number;
+  title: string;
+  body: string;
+  state: string;
+  /** GitHub state_reason: completed / not_planned / reopened, when present. */
+  stateReason: string | null;
+  author: string | null;
+  labels: string[];
+  url: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  comments: Array<{ author: string | null; body: string; url: string; createdAt: string | null }>;
+  commentsTruncated: boolean;
+}>> {
+  const config = resolveDevRepository(input.repository);
+  const client = getClient();
+  const number = typeof input.number === 'number' ? Math.floor(input.number) : Number(input.number);
+
+  if (!Number.isFinite(number) || number <= 0) {
+    throw new DevRepoError('GITHUB_API_ERROR', 'A positive issue number is required.', {
+      repository: config.fullName,
+    });
+  }
+
+  try {
+    const response = await client.rest.issues.get({
+      owner: config.owner,
+      repo: config.repo,
+      issue_number: number,
+    });
+    let comments: Array<{
+      author: string | null;
+      body: string;
+      url: string;
+      createdAt: string | null;
+    }> = [];
+    let commentsTruncated = false;
+
+    if (input.includeComments !== false) {
+      const commentResponse = await client.rest.issues.listComments({
+        owner: config.owner,
+        repo: config.repo,
+        issue_number: number,
+        per_page: 30,
+      });
+      comments = commentResponse.data.slice(0, 30).map((comment) => ({
+        author: comment.user?.login ?? null,
+        body: typeof comment.body === 'string' ? comment.body.slice(0, 4_000) : '',
+        url: comment.html_url,
+        createdAt: comment.created_at ?? null,
+      }));
+      commentsTruncated = commentResponse.data.length >= 30;
+    }
+
+    return wrap(
+      config,
+      config.workBranch,
+      null,
+      {
+        number: response.data.number,
+        title: response.data.title,
+        body: typeof response.data.body === 'string' ? response.data.body.slice(0, 8_000) : '',
+        state: response.data.state,
+        stateReason:
+          typeof (response.data as { state_reason?: unknown }).state_reason === 'string'
+            ? String((response.data as { state_reason?: string }).state_reason)
+            : null,
+        author: response.data.user?.login ?? null,
+        labels: (response.data.labels || [])
+          .map((label) => (typeof label === 'string' ? label : label.name || ''))
+          .filter(Boolean),
+        url: response.data.html_url,
+        createdAt: response.data.created_at ?? null,
+        updatedAt: response.data.updated_at ?? null,
+        comments,
+        commentsTruncated,
+      },
+      !commentsTruncated,
+      commentsTruncated ? ['Issue comments limited to 30.'] : []
     );
   } catch (error) {
     throw toDevError(error, config);
