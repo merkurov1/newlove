@@ -6,12 +6,9 @@ import { useRouter } from 'next/navigation';
 import {
   Archive,
   ArrowUp,
-  Bookmark,
   Check,
   ChevronDown,
   History,
-  MessageSquare,
-  PanelLeft,
   Plus,
   Square,
   Trash2,
@@ -36,7 +33,7 @@ import {
   consumePierrotEventStream,
   type PierrotStreamStage,
 } from '@/lib/pierrot/streamProtocol';
-import { setWorkspaceHandoff } from '@/lib/pierrot/workspace/handoff';
+import FlowWorkspace from './FlowWorkspace';
 import { isRefreshStatusCommand } from '@/lib/pierrot/workspace/refreshCommand';
 import { readOverviewCache, writeOverviewCache } from '@/lib/pierrot/workspace/cache';
 import WorkspaceMarkdown from './WorkspaceMarkdown';
@@ -161,9 +158,7 @@ function HistoryLinks({
               <span className="pw-conversation-title">
                 {item.type === 'main' ? 'Главная история' : item.title}
               </span>
-              {item.type === 'project' && (
-                <span className="pw-conversation-project">проект</span>
-              )}
+              {item.type === 'project' && <span className="pw-conversation-project">проект</span>}
             </span>
             <span className="pw-conversation-date">
               {item.sessionCount} {item.sessionCount === 1 ? 'сессия' : 'сессий'} ·{' '}
@@ -248,11 +243,11 @@ export default function ChatWorkspace({
   const [conversationId, setConversationId] = useState<string | null>(conversation?.id ?? null);
   const [sessionId, setSessionId] = useState<string | null>(conversation?.sessionId ?? null);
   const [historyId, setHistoryId] = useState<string | null>(conversation?.historyId ?? null);
-  const [episodeId, setEpisodeId] = useState<string | null>(
-    conversation?.currentSessionId ?? null
-  );
+  const [episodeId, setEpisodeId] = useState<string | null>(conversation?.currentSessionId ?? null);
   const [title, setTitle] = useState<string>(conversation?.title ?? 'Новый диалог');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [panelSection, setPanelSection] = useState<'memory' | 'flow'>('memory');
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [newSessionLoading, setNewSessionLoading] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -261,7 +256,6 @@ export default function ChatWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [streamStage, setStreamStage] = useState<PierrotStreamStage | null>(null);
   const [retryPrompt, setRetryPrompt] = useState<string | null>(null);
-  const [memoryOpen, setMemoryOpen] = useState(false);
   const [memorySummary, setMemorySummary] = useState<PierrotMemorySummary | null>(null);
   const [memoryRecords, setMemoryRecords] = useState<PierrotMemoryRecord[]>([]);
   const [memoryFilter, setMemoryFilter] = useState<'all' | PierrotMemoryKind>('all');
@@ -333,6 +327,7 @@ export default function ChatWorkspace({
     function toggle() {
       setDrawerOpen((open) => !open);
       setInspectorOpen(false);
+      setHistoryOpen(false);
     }
 
     window.addEventListener('pierrot:toggle-drawer', toggle as EventListener);
@@ -371,6 +366,7 @@ export default function ChatWorkspace({
       setOldestIndex(null);
       setSelectedSources(null);
       setInspectorOpen(false);
+      setHistoryOpen(false);
       setMenuOpenId(null);
       setError(null);
       setStreamStage(null);
@@ -394,6 +390,30 @@ export default function ChatWorkspace({
     if (!startNew) return;
     void startNewSession();
   }, [startNew, startNewSession]);
+
+  useEffect(() => {
+    function onNewSession() {
+      if (
+        draft.trim() &&
+        !window.confirm(
+          'Начать новую сессию? Неотправленный текст будет потерян, а сохранённая история останется.'
+        )
+      ) {
+        return;
+      }
+
+      // The avatar always starts a MAIN-chat session. A project chat keeps its
+      // own canonical history until the owner explicitly opens it again.
+      if (project) {
+        router.push('/admin/pierrot?new=1');
+        return;
+      }
+      void startNewSession();
+    }
+
+    window.addEventListener('pierrot:new-session', onNewSession as EventListener);
+    return () => window.removeEventListener('pierrot:new-session', onNewSession as EventListener);
+  }, [draft, project, router, startNewSession]);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -445,7 +465,9 @@ export default function ChatWorkspace({
       const incoming: UiMessage[] = Array.isArray(data.messages)
         ? (data.messages as unknown[])
             .filter(
-              (message: unknown): message is {
+              (
+                message: unknown
+              ): message is {
                 id: string;
                 role: 'user' | 'assistant';
                 content: string;
@@ -462,19 +484,17 @@ export default function ChatWorkspace({
                   (message as Record<string, unknown>).role === 'assistant') &&
                 typeof (message as Record<string, unknown>).content === 'string'
             )
-            .map(
-              (message): UiMessage => ({
-                id: message.id,
-                role: message.role,
-                content: message.content,
-                createdAt: message.createdAt || null,
-                provider: message.provider || null,
-                serverMessageId: message.id,
-                sessionId: message.sessionId || null,
-                historySequence: message.historySequence ?? null,
-                feedback: message.feedback || undefined,
-              })
-            )
+            .map((message): UiMessage => ({
+              id: message.id,
+              role: message.role,
+              content: message.content,
+              createdAt: message.createdAt || null,
+              provider: message.provider || null,
+              serverMessageId: message.id,
+              sessionId: message.sessionId || null,
+              historySequence: message.historySequence ?? null,
+              feedback: message.feedback || undefined,
+            }))
         : [];
 
       setMessages((current) => {
@@ -563,12 +583,13 @@ export default function ChatWorkspace({
       setMemoryError(null);
 
       try {
+        const projectQuery = project?.slug ? `&project=${encodeURIComponent(project.slug)}` : '';
         const recordsUrl =
           memoryScope === 'archive'
-            ? '/api/pierrot/memory?status=archive&limit=120'
+            ? `/api/pierrot/memory?status=archive&limit=120${projectQuery}`
             : memoryScope === 'all'
-              ? '/api/pierrot/memory?status=all&limit=120'
-              : '/api/pierrot/memory?status=active&limit=100';
+              ? `/api/pierrot/memory?status=all&limit=120${projectQuery}`
+              : `/api/pierrot/memory?status=active&limit=100${projectQuery}`;
 
         const [summaryResponse, recordsResponse] = await Promise.all([
           fetch('/api/pierrot/memory?view=summary'),
@@ -597,7 +618,7 @@ export default function ChatWorkspace({
         if (mountedRef.current) setMemoryLoading(false);
       }
     },
-    [memoryScope]
+    [memoryScope, project?.slug]
   );
 
   useEffect(() => {
@@ -605,8 +626,10 @@ export default function ChatWorkspace({
   }, [conversation?.id, loadMemoryData]);
 
   function openMemory() {
-    setMemoryOpen(true);
+    setPanelSection('memory');
+    setDrawerOpen(true);
     setInspectorOpen(false);
+    setHistoryOpen(false);
     void loadMemoryData(true);
   }
 
@@ -635,8 +658,10 @@ export default function ChatWorkspace({
 
       if (!response.ok) throw new Error('memory_write_failed');
 
-      setMemoryOpen(true);
+      setPanelSection('memory');
+      setDrawerOpen(true);
       setInspectorOpen(false);
+      setHistoryOpen(false);
       await loadMemoryData(true);
     } catch {
       setMemoryError('Не удалось сохранить запись.');
@@ -1202,9 +1227,15 @@ export default function ChatWorkspace({
     void send();
   }
 
-  function handoff(kind: 'brain' | 'flow', message: UiMessage) {
-    setWorkspaceHandoff({ kind, text: message.content });
-    router.push(kind === 'brain' ? '/admin/pierrot/brain' : '/admin/pierrot/flow');
+  function handoff(kind: 'brain' | 'flow', _message: UiMessage) {
+    if (kind === 'brain') {
+      openMemory();
+      return;
+    }
+    setPanelSection('flow');
+    setDrawerOpen(true);
+    setInspectorOpen(false);
+    setHistoryOpen(false);
   }
 
   function openSources(message: UiMessage, index = 0) {
@@ -1217,13 +1248,15 @@ export default function ChatWorkspace({
       index: Math.max(0, Math.min(index, totalSourceCount(message.sources) - 1)),
     });
     setInspectorOpen(true);
+    setDrawerOpen(false);
+    setHistoryOpen(false);
     setMenuOpenId(null);
   }
 
   function closePanels() {
     setDrawerOpen(false);
     setInspectorOpen(false);
-    setMemoryOpen(false);
+    setHistoryOpen(false);
   }
 
   function submitGroomingPlan(command: string) {
@@ -1258,14 +1291,13 @@ export default function ChatWorkspace({
   const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user');
   const reviewInProgress =
     loading && Boolean(lastUserMessage && detectProjectReviewCommand(lastUserMessage.content));
-  const streamStageLabel =
-    reviewInProgress
-      ? 'Pierrot проверяет историю, задачи, решения и материалы проекта'
-      : streamStage === 'retrieving'
-        ? 'Pierrot ищет в архиве'
-        : streamStage === 'persisting'
-          ? 'Pierrot сохраняет ответ'
-          : 'Pierrot формулирует ответ';
+  const streamStageLabel = reviewInProgress
+    ? 'Pierrot проверяет историю, задачи, решения и материалы проекта'
+    : streamStage === 'retrieving'
+      ? 'Pierrot ищет в архиве'
+      : streamStage === 'persisting'
+        ? 'Pierrot сохраняет ответ'
+        : 'Pierrot формулирует ответ';
   const visibleSessions = showAllSessions ? sessions : sessions.slice(0, 12);
   const sessionById = useMemo(
     () => new Map(sessions.map((session) => [session.id, session])),
@@ -1278,7 +1310,7 @@ export default function ChatWorkspace({
       data-drawer={drawerOpen ? 'open' : 'closed'}
       data-inspector={inspectorOpen ? 'open' : 'closed'}
     >
-      {(drawerOpen || inspectorOpen || memoryOpen) && (
+      {(drawerOpen || historyOpen) && (
         <button
           type="button"
           className="pw-scrim"
@@ -1287,28 +1319,46 @@ export default function ChatWorkspace({
         />
       )}
 
-      <aside className="pw-drawer" aria-label="Диалоги">
-        <div className="pw-drawer-inner">
+      <button
+        type="button"
+        className="pw-side-trigger"
+        onClick={() => {
+          setPanelSection('memory');
+          setDrawerOpen(true);
+          setHistoryOpen(false);
+          void loadMemoryData(true);
+        }}
+        aria-label="Открыть память и Flow"
+      >
+        <span>Память</span>
+        <span>Flow</span>
+      </button>
+
+      {historyOpen && (
+        <div className="pw-history-popover" role="dialog" aria-label="История сессий">
           <div className="pw-panel-head">
-            <span className="pw-section-title">Диалоги</span>
+            <div>
+              <span className="pw-section-title">История</span>
+              <p className="pw-inspector-title">{sessions.length} сессий</p>
+            </div>
             <button
               type="button"
               className="pw-icon-button"
-              onClick={() => setDrawerOpen(false)}
-              aria-label="Закрыть список диалогов"
+              onClick={() => setHistoryOpen(false)}
+              aria-label="Закрыть историю"
             >
-              <X size={20} strokeWidth={1.4} aria-hidden="true" />
+              <X size={18} strokeWidth={1.4} aria-hidden="true" />
             </button>
           </div>
 
-          <div className="pw-drawer-scroll">
+          <div className="pw-history-popover-scroll">
             <button
               type="button"
               className="pw-new-chat"
               onClick={() => void startNewSession()}
               disabled={newSessionLoading || !historyId}
             >
-              <Plus size={18} strokeWidth={1.4} aria-hidden="true" />
+              <Plus size={16} strokeWidth={1.4} aria-hidden="true" />
               {newSessionLoading ? 'Начинаем…' : 'Новая сессия'}
             </button>
 
@@ -1320,25 +1370,25 @@ export default function ChatWorkspace({
                 <HistoryLinks
                   items={histories}
                   activeHistoryId={historyId}
-                  onOpen={() => setDrawerOpen(false)}
+                  onOpen={() => setHistoryOpen(false)}
                 />
               )}
             </div>
 
             <div className="pw-drawer-section">
               <div className="pw-drawer-section-title">
-                <History size={14} strokeWidth={1.5} aria-hidden="true" />
-                Сессии · {sessions.length}
+                <History size={13} strokeWidth={1.5} aria-hidden="true" />
+                Сессии
               </div>
               {sessions.length === 0 ? (
-                <p className="pw-drawer-empty">Сессий пока нет. Начни новый разговор.</p>
+                <p className="pw-drawer-empty">Сессий пока нет.</p>
               ) : (
                 <>
                   <SessionLinks
                     items={visibleSessions}
                     historyId={historyId}
                     activeSessionId={episodeId}
-                    onOpen={() => setDrawerOpen(false)}
+                    onOpen={() => setHistoryOpen(false)}
                   />
                   {sessions.length > 12 && (
                     <button
@@ -1354,9 +1404,7 @@ export default function ChatWorkspace({
                           transform: showAllSessions ? 'rotate(180deg)' : undefined,
                         }}
                       />
-                      {showAllSessions
-                        ? 'Свернуть старые сессии'
-                        : `Показать все сессии (${sessions.length})`}
+                      {showAllSessions ? 'Свернуть' : `Показать все (${sessions.length})`}
                     </button>
                   )}
                 </>
@@ -1364,34 +1412,34 @@ export default function ChatWorkspace({
             </div>
           </div>
         </div>
-      </aside>
+      )}
 
       <section className="pw-center" aria-label="Разговор с Pierrot">
         <header className="pw-chat-head">
           <button
             type="button"
-            className="pw-icon-button"
-            onClick={() => setDrawerOpen((open) => !open)}
-            aria-label={drawerOpen ? 'Скрыть список диалогов' : 'Показать список диалогов'}
-            aria-expanded={drawerOpen}
+            className="pw-icon-button pw-history-trigger"
+            onClick={() => {
+              setHistoryOpen((open) => !open);
+              setDrawerOpen(false);
+            }}
+            aria-label={historyOpen ? 'Скрыть историю' : 'Показать историю'}
+            aria-expanded={historyOpen}
           >
-            <PanelLeft size={20} strokeWidth={1.4} aria-hidden="true" />
+            <History size={18} strokeWidth={1.4} aria-hidden="true" />
           </button>
 
-          <span className="pw-chat-head-dialog" aria-hidden="true">
-            <MessageSquare size={16} strokeWidth={1.4} />
-          </span>
-
           <div className="pw-chat-head-copy">
-            <h1 className="pw-chat-head-title">
-              {conversation?.historyTitle || title}
-            </h1>
+            <h1 className="pw-chat-head-title">{conversation?.historyTitle || title}</h1>
             <span className="pw-chat-head-sub">
               owner workspace
               {project && (
                 <>
                   {' · '}
-                  <span className="pw-conversation-project" title={`Контекст проекта: ${project.name}`}>
+                  <span
+                    className="pw-conversation-project"
+                    title={`Контекст проекта: ${project.name}`}
+                  >
                     {project.name}
                   </span>
                 </>
@@ -1410,25 +1458,15 @@ export default function ChatWorkspace({
               offline
             </span>
           )}
-
-          <button
-            type="button"
-            className="pw-memory-trigger"
-            onClick={openMemory}
-            aria-label="Открыть память"
-          >
-            <Bookmark size={15} strokeWidth={1.5} aria-hidden="true" />
-            <span>Память</span>
-            <span className="pw-memory-trigger-count">{memoryTotal}</span>
-          </button>
         </header>
 
         <div className="pw-chat-scroll" ref={scrollRef} onScroll={onTranscriptScroll}>
           {messages.length === 0 ? (
             <HomeOverview
+              key={episodeId || conversation?.currentSessionId || 'new'}
               overview={overviewState}
               brainStatus={brainSnapshot}
-              onBrainStatusChange={setBrainSnapshot}
+              sessionId={episodeId || conversation?.currentSessionId || null}
             />
           ) : (
             <div className="pw-chat-thread">
@@ -1477,146 +1515,146 @@ export default function ChatWorkspace({
                     <article
                       className={`pw-message ${message.role === 'user' ? 'pw-message-user' : ''}`}
                     >
-                    {message.role === 'user' ? (
-                      <div className="pw-bubble-user">{message.content}</div>
-                    ) : (
-                      <>
-                        <div className="pw-message-head">
-                          <div className="pw-message-head-left">
-                            <PierrotAvatar size={24} />
-                            <span className="pw-message-label">
-                              {message.local ? 'Состояние' : 'Pierrot'}
-                              {message.provider ? ` · ${message.provider}` : ''}
-                            </span>
-                          </div>
-                          {!message.streaming && !message.interrupted && !message.local && (
-                            <button
-                              type="button"
-                              className="pw-message-menu"
-                              aria-label="Действия с сообщением"
-                              aria-expanded={menuOpenId === message.id}
-                              onClick={() =>
-                                setMenuOpenId((current) =>
-                                  current === message.id ? null : message.id
-                                )
-                              }
-                            >
-                              ···
-                            </button>
-                          )}
-                        </div>
-
-                        {menuOpenId === message.id &&
-                          !message.streaming &&
-                          !message.interrupted &&
-                          !message.local && (
-                            <div className="pw-message-actions">
-                              <button type="button" onClick={() => handoff('brain', message)}>
-                                В Brain
-                              </button>
-                              <button type="button" onClick={() => handoff('flow', message)}>
-                                Во Flow
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void saveMessageToMemory(message, 'memory')}
-                              >
-                                Запомнить
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void saveMessageToMemory(message, 'saved')}
-                              >
-                                Сохранить
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void saveMessageToMemory(message, 'reminder')}
-                              >
-                                Напомнить
-                              </button>
+                      {message.role === 'user' ? (
+                        <div className="pw-bubble-user">{message.content}</div>
+                      ) : (
+                        <>
+                          <div className="pw-message-head">
+                            <div className="pw-message-head-left">
+                              <PierrotAvatar size={24} />
+                              <span className="pw-message-label">
+                                {message.local ? 'Состояние' : 'Pierrot'}
+                                {message.provider ? ` · ${message.provider}` : ''}
+                              </span>
                             </div>
-                          )}
-
-                        <WorkspaceMarkdown
-                          className="pw-reply"
-                          content={message.content}
-                          citationCount={messageSourceCount}
-                          onCitation={(index) => openSources(message, index)}
-                          streaming={message.streaming}
-                          editorial
-                        />
-
-                        {!message.streaming && message.groomingPlan && (
-                          <GroomingPlanCard
-                            plan={message.groomingPlan}
-                            disabled={loading || !online}
-                            onSubmit={submitGroomingPlan}
-                          />
-                        )}
-
-                        {message.interrupted && (
-                          <p className="pw-stream-note" role="status">
-                            Ответ прерван. Можно повторить запрос.
-                          </p>
-                        )}
-
-                        {!message.streaming && !message.interrupted && !message.local && (
-                          <div className="pw-feedback" role="group" aria-label="Оценка ответа">
-                            <span className="pw-feedback-label">Ответ полезен?</span>
-                            <button
-                              type="button"
-                              className="pw-feedback-button"
-                              aria-label="Ответ полезен"
-                              aria-pressed={message.feedback === 'up'}
-                              disabled={
-                                consent.state !== 'granted' ||
-                                !conversationId ||
-                                !sessionId ||
-                                !message.serverMessageId ||
-                                Boolean(message.feedback)
-                              }
-                              title={
-                                consent.state !== 'granted'
-                                  ? 'Для оценки нужно разрешить сохранение'
-                                  : 'Оценить ответ'
-                              }
-                              onClick={() => void submitFeedback(message, 'up')}
-                            >
-                              Да
-                            </button>
-                            <span className="pw-feedback-sep" aria-hidden="true">
-                              /
-                            </span>
-                            <button
-                              type="button"
-                              className="pw-feedback-button"
-                              aria-label="Ответ не полезен"
-                              aria-pressed={message.feedback === 'down'}
-                              disabled={
-                                consent.state !== 'granted' ||
-                                !conversationId ||
-                                !sessionId ||
-                                !message.serverMessageId ||
-                                Boolean(message.feedback)
-                              }
-                              title={
-                                consent.state !== 'granted'
-                                  ? 'Для оценки нужно разрешить сохранение'
-                                  : 'Оценить ответ'
-                              }
-                              onClick={() => void submitFeedback(message, 'down')}
-                            >
-                              Нет
-                            </button>
-                            {message.feedbackError && (
-                              <span className="pw-feedback-error">не отправлено</span>
+                            {!message.streaming && !message.interrupted && !message.local && (
+                              <button
+                                type="button"
+                                className="pw-message-menu"
+                                aria-label="Действия с сообщением"
+                                aria-expanded={menuOpenId === message.id}
+                                onClick={() =>
+                                  setMenuOpenId((current) =>
+                                    current === message.id ? null : message.id
+                                  )
+                                }
+                              >
+                                ···
+                              </button>
                             )}
                           </div>
-                        )}
-                      </>
-                    )}
-                  </article>
+
+                          {menuOpenId === message.id &&
+                            !message.streaming &&
+                            !message.interrupted &&
+                            !message.local && (
+                              <div className="pw-message-actions">
+                                <button type="button" onClick={() => handoff('brain', message)}>
+                                  В память
+                                </button>
+                                <button type="button" onClick={() => handoff('flow', message)}>
+                                  Во Flow
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void saveMessageToMemory(message, 'memory')}
+                                >
+                                  Запомнить
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void saveMessageToMemory(message, 'saved')}
+                                >
+                                  Сохранить
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void saveMessageToMemory(message, 'reminder')}
+                                >
+                                  Напомнить
+                                </button>
+                              </div>
+                            )}
+
+                          <WorkspaceMarkdown
+                            className="pw-reply"
+                            content={message.content}
+                            citationCount={messageSourceCount}
+                            onCitation={(index) => openSources(message, index)}
+                            streaming={message.streaming}
+                            editorial
+                          />
+
+                          {!message.streaming && message.groomingPlan && (
+                            <GroomingPlanCard
+                              plan={message.groomingPlan}
+                              disabled={loading || !online}
+                              onSubmit={submitGroomingPlan}
+                            />
+                          )}
+
+                          {message.interrupted && (
+                            <p className="pw-stream-note" role="status">
+                              Ответ прерван. Можно повторить запрос.
+                            </p>
+                          )}
+
+                          {!message.streaming && !message.interrupted && !message.local && (
+                            <div className="pw-feedback" role="group" aria-label="Оценка ответа">
+                              <span className="pw-feedback-label">Ответ полезен?</span>
+                              <button
+                                type="button"
+                                className="pw-feedback-button"
+                                aria-label="Ответ полезен"
+                                aria-pressed={message.feedback === 'up'}
+                                disabled={
+                                  consent.state !== 'granted' ||
+                                  !conversationId ||
+                                  !sessionId ||
+                                  !message.serverMessageId ||
+                                  Boolean(message.feedback)
+                                }
+                                title={
+                                  consent.state !== 'granted'
+                                    ? 'Для оценки нужно разрешить сохранение'
+                                    : 'Оценить ответ'
+                                }
+                                onClick={() => void submitFeedback(message, 'up')}
+                              >
+                                Да
+                              </button>
+                              <span className="pw-feedback-sep" aria-hidden="true">
+                                /
+                              </span>
+                              <button
+                                type="button"
+                                className="pw-feedback-button"
+                                aria-label="Ответ не полезен"
+                                aria-pressed={message.feedback === 'down'}
+                                disabled={
+                                  consent.state !== 'granted' ||
+                                  !conversationId ||
+                                  !sessionId ||
+                                  !message.serverMessageId ||
+                                  Boolean(message.feedback)
+                                }
+                                title={
+                                  consent.state !== 'granted'
+                                    ? 'Для оценки нужно разрешить сохранение'
+                                    : 'Оценить ответ'
+                                }
+                                onClick={() => void submitFeedback(message, 'down')}
+                              >
+                                Нет
+                              </button>
+                              {message.feedbackError && (
+                                <span className="pw-feedback-error">не отправлено</span>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </article>
                   </React.Fragment>
                 );
               })}
@@ -1716,270 +1754,295 @@ export default function ChatWorkspace({
         </div>
       </section>
 
-      {memoryOpen && (
-        <aside className="pw-memory" aria-label="Память">
-          <div className="pw-memory-inner">
+      {drawerOpen && (
+        <aside className="pw-side-panel" aria-label="Память и Flow">
+          <div className="pw-side-panel-inner">
             <div className="pw-panel-head">
-              <div>
-                <span className="pw-section-title">Memory</span>
-                <p className="pw-inspector-title">
-                  {memoryScopeTotal} {memoryScopeTotal === 1 ? 'запись' : 'записей'}
-                </p>
+              <div className="pw-side-panel-tabs" role="tablist" aria-label="Боковая панель">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={panelSection === 'memory'}
+                  className={`pw-side-panel-tab${panelSection === 'memory' ? ' is-active' : ''}`}
+                  onClick={() => {
+                    setPanelSection('memory');
+                    void loadMemoryData(true);
+                  }}
+                >
+                  Память
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={panelSection === 'flow'}
+                  className={`pw-side-panel-tab${panelSection === 'flow' ? ' is-active' : ''}`}
+                  onClick={() => setPanelSection('flow')}
+                >
+                  Flow
+                </button>
               </div>
               <button
                 type="button"
                 className="pw-icon-button"
-                onClick={() => setMemoryOpen(false)}
-                aria-label="Закрыть память"
+                onClick={() => setDrawerOpen(false)}
+                aria-label="Закрыть панель"
               >
                 <X size={20} strokeWidth={1.4} aria-hidden="true" />
               </button>
             </div>
 
-            <div className="pw-memory-tabs" role="tablist" aria-label="Раздел памяти">
-              {[
-                ['active', 'Активное'],
-                ['archive', 'Архив'],
-                ['all', 'Всё'],
-              ].map(([value, label]) => (
-                <button
-                  key={String(value)}
-                  type="button"
-                  role="tab"
-                  aria-selected={memoryScope === value}
-                  className={`pw-memory-tab${memoryScope === value ? ' is-active' : ''}`}
-                  onClick={() => {
-                    setMemoryScope(value as 'active' | 'archive' | 'all');
-                    setEditingMemoryId(null);
-                    void loadMemoryData(true);
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            {panelSection === 'memory' ? (
+              <>
+                <div className="pw-side-panel-caption">
+                  {project ? `${project.name} · ` : ''}
+                  {project
+                    ? `${memoryRecords.length} ${memoryRecords.length === 1 ? 'запись' : 'записей'}`
+                    : `${memoryScopeTotal} ${memoryScopeTotal === 1 ? 'запись' : 'записей'}`}
+                </div>
 
-            <div className="pw-memory-tabs" role="tablist" aria-label="Категории памяти">
-              {[
-                ['all', 'Все', memoryScopeTotal],
-                ['memory', 'Запомнено', memoryCounts.memory],
-                ['saved', 'Сохранено', memoryCounts.saved],
-                ['reminder', 'Напомнить', memoryCounts.reminder],
-              ].map(([value, label, count]) => (
-                <button
-                  key={String(value)}
-                  type="button"
-                  role="tab"
-                  aria-selected={memoryFilter === value}
-                  className={`pw-memory-tab${memoryFilter === value ? ' is-active' : ''}`}
-                  onClick={() => setMemoryFilter(value as 'all' | PierrotMemoryKind)}
-                >
-                  {label} <span>{count}</span>
-                </button>
-              ))}
-            </div>
+                <div className="pw-memory-tabs" role="tablist" aria-label="Раздел памяти">
+                  {[
+                    ['active', 'Активное'],
+                    ['archive', 'Архив'],
+                    ['all', 'Всё'],
+                  ].map(([value, label]) => (
+                    <button
+                      key={String(value)}
+                      type="button"
+                      role="tab"
+                      aria-selected={memoryScope === value}
+                      className={`pw-memory-tab${memoryScope === value ? ' is-active' : ''}`}
+                      onClick={() => {
+                        setMemoryScope(value as 'active' | 'archive' | 'all');
+                        setEditingMemoryId(null);
+                        void loadMemoryData(true);
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
 
-            {memoryError && <p className="pw-memory-error">{memoryError}</p>}
+                <div className="pw-memory-tabs" role="tablist" aria-label="Категории памяти">
+                  {[
+                    ['all', 'Все', memoryScopeTotal],
+                    ['memory', 'Запомнено', memoryCounts.memory],
+                    ['saved', 'Сохранено', memoryCounts.saved],
+                    ['reminder', 'Напомнить', memoryCounts.reminder],
+                  ].map(([value, label, count]) => (
+                    <button
+                      key={String(value)}
+                      type="button"
+                      role="tab"
+                      aria-selected={memoryFilter === value}
+                      className={`pw-memory-tab${memoryFilter === value ? ' is-active' : ''}`}
+                      onClick={() => setMemoryFilter(value as 'all' | PierrotMemoryKind)}
+                    >
+                      {label} <span>{count}</span>
+                    </button>
+                  ))}
+                </div>
 
-            <div className="pw-memory-scroll">
-              {memoryLoading ? (
-                <p className="pw-inspector-empty">Загружаю память…</p>
-              ) : filteredMemoryRecords.length === 0 ? (
-                <p className="pw-inspector-empty">
-                  Пока нет записей в этой категории. Можно сказать Пьеро «Запомни», «Сохрани» или
-                  «Напомни».
-                </p>
-              ) : (
-                filteredMemoryRecords.map((record) => (
-                  <article key={record.id} className="pw-memory-record">
-                    <div className="pw-memory-record-head">
-                      <span className="pw-memory-kind">{memoryKindLabel(record.kind)}</span>
-                      <span className="pw-memory-status">{memoryStatusLabel(record.status)}</span>
-                    </div>
-                    <h3 className="pw-memory-title">{record.title}</h3>
-                    <p className="pw-memory-meta">
-                      {[record.reviewAt?.slice(0, 10), record.project]
-                        .filter(Boolean)
-                        .join(' · ') || record.updatedAt.slice(0, 10)}
+                {memoryError && <p className="pw-memory-error">{memoryError}</p>}
+
+                <div className="pw-memory-scroll">
+                  {memoryLoading ? (
+                    <p className="pw-inspector-empty">Загружаю память…</p>
+                  ) : filteredMemoryRecords.length === 0 ? (
+                    <p className="pw-inspector-empty">
+                      Пока нет записей в этой категории. Можно сказать Пьеро «Запомни», «Сохрани»
+                      или «Напомни».
                     </p>
-
-                    {editingMemoryId === record.id ? (
-                      <>
-                        <textarea
-                          className="pw-memory-edit"
-                          value={editingMemoryContent}
-                          onChange={(event) => setEditingMemoryContent(event.target.value)}
-                          rows={4}
-                        />
-                        <div className="pw-memory-actions">
-                          <button type="button" onClick={() => void saveMemoryEdit(record)}>
-                            Сохранить
-                          </button>
-                          <button type="button" onClick={() => setEditingMemoryId(null)}>
-                            Отмена
-                          </button>
+                  ) : (
+                    filteredMemoryRecords.map((record) => (
+                      <article key={record.id} className="pw-memory-record">
+                        <div className="pw-memory-record-head">
+                          <span className="pw-memory-kind">{memoryKindLabel(record.kind)}</span>
+                          <span className="pw-memory-status">
+                            {memoryStatusLabel(record.status)}
+                          </span>
                         </div>
-                      </>
-                    ) : (
-                      <>
-                        <p className="pw-memory-content">{record.content}</p>
-                        <div className="pw-memory-actions">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingMemoryId(record.id);
-                              setEditingMemoryContent(record.content);
-                            }}
-                          >
-                            Изменить
-                          </button>
-                          {(record.kind === 'reminder' || record.kind === 'task') &&
-                            record.status === 'current' && (
+                        <h3 className="pw-memory-title">{record.title}</h3>
+                        <p className="pw-memory-meta">
+                          {[record.reviewAt?.slice(0, 10), record.project]
+                            .filter(Boolean)
+                            .join(' · ') || record.updatedAt.slice(0, 10)}
+                        </p>
+
+                        {editingMemoryId === record.id ? (
+                          <>
+                            <textarea
+                              className="pw-memory-edit"
+                              value={editingMemoryContent}
+                              onChange={(event) => setEditingMemoryContent(event.target.value)}
+                              rows={4}
+                            />
+                            <div className="pw-memory-actions">
+                              <button type="button" onClick={() => void saveMemoryEdit(record)}>
+                                Сохранить
+                              </button>
+                              <button type="button" onClick={() => setEditingMemoryId(null)}>
+                                Отмена
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <p className="pw-memory-content">{record.content}</p>
+                            <div className="pw-memory-actions">
                               <button
                                 type="button"
-                                onClick={() => void updateMemoryStatus(record, 'completed')}
+                                onClick={() => {
+                                  setEditingMemoryId(record.id);
+                                  setEditingMemoryContent(record.content);
+                                }}
                               >
-                                <Check size={12} aria-hidden="true" /> Завершить
+                                Изменить
                               </button>
-                            )}
-                          {record.status === 'current' && (
-                            <button type="button" onClick={() => void archiveMemoryRecord(record)}>
-                              <Archive size={12} aria-hidden="true" /> В архив
-                            </button>
-                          )}
-                          {record.status !== 'current' && (
-                            <button type="button" onClick={() => void restoreMemoryRecord(record)}>
-                              <Archive size={12} aria-hidden="true" /> Вернуть в память
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            className="pw-memory-delete"
-                            onClick={() => void permanentlyDeleteMemoryRecord(record)}
-                          >
-                            <Trash2 size={12} aria-hidden="true" /> Удалить навсегда
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </article>
-                ))
-              )}
-            </div>
+                              {(record.kind === 'reminder' || record.kind === 'task') &&
+                                record.status === 'current' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void updateMemoryStatus(record, 'completed')}
+                                  >
+                                    <Check size={12} aria-hidden="true" /> Завершить
+                                  </button>
+                                )}
+                              {record.status === 'current' && (
+                                <button
+                                  type="button"
+                                  onClick={() => void archiveMemoryRecord(record)}
+                                >
+                                  <Archive size={12} aria-hidden="true" /> В архив
+                                </button>
+                              )}
+                              {record.status !== 'current' && (
+                                <button
+                                  type="button"
+                                  onClick={() => void restoreMemoryRecord(record)}
+                                >
+                                  <Archive size={12} aria-hidden="true" /> Вернуть в память
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="pw-memory-delete"
+                                onClick={() => void permanentlyDeleteMemoryRecord(record)}
+                              >
+                                <Trash2 size={12} aria-hidden="true" /> Удалить навсегда
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </article>
+                    ))
+                  )}
+                </div>
+
+                <div className="pw-side-panel-tools">
+                  <Link href="/admin/pierrot/brain">Brain</Link>
+                  <Link href="/admin/pierrot/dev">Диагностика</Link>
+                </div>
+              </>
+            ) : (
+              <div className="pw-side-flow">
+                <FlowWorkspace />
+              </div>
+            )}
           </div>
         </aside>
       )}
 
-      <aside className="pw-inspector" aria-label="Источники ответа">
-        <div className="pw-inspector-inner">
-          <div className="pw-panel-head">
-            <div>
-              <span className="pw-section-title">Источники</span>
-              <p className="pw-inspector-title">
-                {selectedSources
-                  ? selectedSources.index === null
-                    ? `${sourceCount} ${sourceCount === 1 ? 'источник' : 'источников'}`
-                    : `Источник ${selectedSources.index + 1} из ${sourceCount}`
-                  : 'Не выбрано'}
-              </p>
+      {inspectorOpen && selectedSources && (
+        <div
+          className="pw-source-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Источники ответа"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setInspectorOpen(false);
+          }}
+        >
+          <div className="pw-inspector-inner">
+            <div className="pw-panel-head">
+              <div>
+                <span className="pw-section-title">Источники</span>
+                <p className="pw-inspector-title">
+                  {selectedSources
+                    ? selectedSources.index === null
+                      ? `${sourceCount} ${sourceCount === 1 ? 'источник' : 'источников'}`
+                      : `Источник ${selectedSources.index + 1} из ${sourceCount}`
+                    : 'Не выбрано'}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="pw-icon-button"
+                onClick={() => setInspectorOpen(false)}
+                aria-label="Закрыть источники"
+              >
+                <X size={20} strokeWidth={1.4} aria-hidden="true" />
+              </button>
             </div>
-            <button
-              type="button"
-              className="pw-icon-button"
-              onClick={() => setInspectorOpen(false)}
-              aria-label="Закрыть источники"
-            >
-              <X size={20} strokeWidth={1.4} aria-hidden="true" />
-            </button>
-          </div>
 
-          <div className="pw-inspector-scroll" ref={inspectorScrollRef}>
-            {!selectedSources ? (
-              <p className="pw-inspector-empty">
-                Нажмите на инлайн-бейдж источника в ответе, чтобы открыть его здесь.
-              </p>
-            ) : (
-              <>
-                <div className="pw-inspector-section">
-                  <p className="pw-section-title">Состояние retrieval</p>
-                  <p className="pw-source-title">
-                    {retrievalStateLabel(
-                      selectedSources.bundle.outcome,
-                      selectedSources.bundle.code
-                    )}
-                  </p>
-                  {selectedSources.bundle.code && (
-                    <p className="pw-source-meta">code: {selectedSources.bundle.code}</p>
-                  )}
-                  {selectedSources.bundle.mode && (
-                    <p className="pw-source-meta">mode: {selectedSources.bundle.mode}</p>
-                  )}
-                </div>
-
-                <div className="pw-inspector-section">
-                  {sourceCount === 0 ? (
-                    <p className="pw-inspector-empty" style={{ padding: 0 }}>
-                      Источники не переданы. Запросы не придумываются.
+            <div className="pw-inspector-scroll" ref={inspectorScrollRef}>
+              {!selectedSources ? (
+                <p className="pw-inspector-empty">
+                  Нажмите на инлайн-бейдж источника в ответе, чтобы открыть его здесь.
+                </p>
+              ) : (
+                <>
+                  <div className="pw-inspector-section">
+                    <p className="pw-section-title">Состояние retrieval</p>
+                    <p className="pw-source-title">
+                      {retrievalStateLabel(
+                        selectedSources.bundle.outcome,
+                        selectedSources.bundle.code
+                      )}
                     </p>
-                  ) : (
-                    <>
-                      {selectedSources.bundle.brain.map((source, index) => (
-                        <div
-                          key={`${source.documentId || 'brain'}-${index}`}
-                          id={`pw-source-${index}`}
-                          className={`pw-inspector-source${
-                            selectedSources.index === index ? ' is-active' : ''
-                          }`}
-                        >
-                          <span className="pw-source-type">{sourceTypeLabel(source)}</span>
-                          <h3 className="pw-source-title">
-                            {source.documentTitle || source.heading || 'Без названия'}
-                          </h3>
-                          <p className="pw-source-meta">
-                            {[source.sourceDomain, source.author, source.publishedAt?.slice(0, 10)]
-                              .filter(Boolean)
-                              .join(' · ') || 'метаданные не переданы'}
-                          </p>
-                          {source.excerpt && <p className="pw-source-excerpt">{source.excerpt}</p>}
-                          {source.canonicalUrl && (
-                            <a
-                              className="pw-source-link"
-                              href={source.canonicalUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              открыть источник
-                            </a>
-                          )}
-                        </div>
-                      ))}
+                    {selectedSources.bundle.code && (
+                      <p className="pw-source-meta">code: {selectedSources.bundle.code}</p>
+                    )}
+                    {selectedSources.bundle.mode && (
+                      <p className="pw-source-meta">mode: {selectedSources.bundle.mode}</p>
+                    )}
+                  </div>
 
-                      {selectedSources.bundle.web.map((source, index) => {
-                        const globalIndex = selectedSources.bundle.brain.length + index;
-                        return (
+                  <div className="pw-inspector-section">
+                    {sourceCount === 0 ? (
+                      <p className="pw-inspector-empty" style={{ padding: 0 }}>
+                        Источники не переданы. Запросы не придумываются.
+                      </p>
+                    ) : (
+                      <>
+                        {selectedSources.bundle.brain.map((source, index) => (
                           <div
-                            key={`web-${index}`}
-                            id={`pw-source-${globalIndex}`}
+                            key={`${source.documentId || 'brain'}-${index}`}
+                            id={`pw-source-${index}`}
                             className={`pw-inspector-source${
-                              selectedSources.index === globalIndex ? ' is-active' : ''
+                              selectedSources.index === index ? ' is-active' : ''
                             }`}
                           >
-                            <span className="pw-source-type">веб</span>
+                            <span className="pw-source-type">{sourceTypeLabel(source)}</span>
                             <h3 className="pw-source-title">
-                              {source.title || source.domain || 'Без названия'}
+                              {source.documentTitle || source.heading || 'Без названия'}
                             </h3>
                             <p className="pw-source-meta">
-                              {[source.domain, source.publishedAt, source.author]
+                              {[
+                                source.sourceDomain,
+                                source.author,
+                                source.publishedAt?.slice(0, 10),
+                              ]
                                 .filter(Boolean)
                                 .join(' · ') || 'метаданные не переданы'}
                             </p>
                             {source.excerpt && (
                               <p className="pw-source-excerpt">{source.excerpt}</p>
                             )}
-                            {source.url && (
+                            {source.canonicalUrl && (
                               <a
                                 className="pw-source-link"
-                                href={source.url}
+                                href={source.canonicalUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
@@ -1987,16 +2050,52 @@ export default function ChatWorkspace({
                               </a>
                             )}
                           </div>
-                        );
-                      })}
-                    </>
-                  )}
-                </div>
-              </>
-            )}
+                        ))}
+
+                        {selectedSources.bundle.web.map((source, index) => {
+                          const globalIndex = selectedSources.bundle.brain.length + index;
+                          return (
+                            <div
+                              key={`web-${index}`}
+                              id={`pw-source-${globalIndex}`}
+                              className={`pw-inspector-source${
+                                selectedSources.index === globalIndex ? ' is-active' : ''
+                              }`}
+                            >
+                              <span className="pw-source-type">веб</span>
+                              <h3 className="pw-source-title">
+                                {source.title || source.domain || 'Без названия'}
+                              </h3>
+                              <p className="pw-source-meta">
+                                {[source.domain, source.publishedAt, source.author]
+                                  .filter(Boolean)
+                                  .join(' · ') || 'метаданные не переданы'}
+                              </p>
+                              {source.excerpt && (
+                                <p className="pw-source-excerpt">{source.excerpt}</p>
+                              )}
+                              {source.url && (
+                                <a
+                                  className="pw-source-link"
+                                  href={source.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  открыть источник
+                                </a>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
-      </aside>
+      )}
     </div>
   );
 }

@@ -15,24 +15,23 @@ const WorkspaceShell = require('../WorkspaceShell')
   .default as typeof import('../WorkspaceShell').default;
 
 describe('WorkspaceShell navigation', () => {
-  it('keeps the Heart & Angel rail item icon-only and points it at the public World inside the shell', () => {
+  it('shows only avatar, chat and projects in the top bar', () => {
     const html = renderToStaticMarkup(
       <WorkspaceShell>
         <div>content</div>
       </WorkspaceShell>
     );
     const $ = cheerio.load(html);
-    const heart = $('a[href="/heartandangel/world"]');
 
-    expect(heart).toHaveLength(1);
-    expect(heart.attr('aria-label')).toBe('HEART & ANGEL');
-    expect(heart.attr('class')).toContain('pw-rail-link--icon-only');
-    expect(heart.find('span')).toHaveLength(0);
-    expect(heart.text().trim()).toBe('');
-    expect(heart.find('svg')).toHaveLength(1);
+    expect($('.pw-topbar-avatar')).toHaveLength(1);
+    expect(
+      $('.pw-topbar-nav a')
+        .map((_, node) => $(node).attr('href'))
+        .get()
+    ).toEqual(['/admin/pierrot', '/admin/pierrot/projects']);
   });
 
-  it('orders the primary workspaces before the separated utility group', () => {
+  it('does not expose Flow, Art, Brain, Dash or Dev as primary navigation', () => {
     const html = renderToStaticMarkup(
       <WorkspaceShell>
         <div>content</div>
@@ -40,50 +39,16 @@ describe('WorkspaceShell navigation', () => {
     );
     const $ = cheerio.load(html);
 
-    const primary = $('.pw-rail-group--primary a')
-      .map((_, node) => $(node).attr('href'))
-      .get();
-    const bottom = $('.pw-rail-group--bottom a')
-      .map((_, node) => $(node).attr('href'))
-      .get();
-
-    expect(primary).toEqual([
-      '/admin/pierrot',
+    for (const href of [
       '/admin/pierrot/flow',
       '/admin/pierrot/art-engine',
-      '/heartandangel/world',
-    ]);
-    expect(bottom).toEqual([
       '/admin/pierrot/brain',
       '/admin/pierrot/dash',
       '/admin/pierrot/dev',
-    ]);
-  });
-
-  it('does not expose Skill Foundry inside the owner PWA rail', () => {
-    const html = renderToStaticMarkup(
-      <WorkspaceShell>
-        <div>content</div>
-      </WorkspaceShell>
-    );
-    const $ = cheerio.load(html);
-
-    expect($('a[href="/admin/pierrot/skills"]')).toHaveLength(0);
-    expect($('a[href="/admin/skills"]')).toHaveLength(0);
-    expect($('.pw-write-link')).toHaveLength(0);
-    expect($.root().text()).not.toContain('Написать');
-  });
-
-  it('keeps labels on the other rail items', () => {
-    const html = renderToStaticMarkup(
-      <WorkspaceShell>
-        <div>content</div>
-      </WorkspaceShell>
-    );
-    const $ = cheerio.load(html);
-    const brain = $('a[href="/admin/pierrot/brain"]');
-
-    expect(brain.find('span').text()).toContain('BRAIN');
-    expect(brain.attr('class')).not.toContain('pw-rail-link--icon-only');
+      '/heartandangel/world',
+    ]) {
+      expect($(`a[href="${href}"]`)).toHaveLength(0);
+    }
+    expect($('.pw-rail')).toHaveLength(0);
   });
 });

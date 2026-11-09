@@ -1,55 +1,27 @@
-export const WORKSPACE_PRIMARY_ROUTES = [
-  { key: 'chat', path: '/admin/pierrot', label: 'CHAT', shortcut: '1' },
-  { key: 'flow', path: '/admin/pierrot/flow', label: 'FLOW', shortcut: '2' },
-  { key: 'art', path: '/admin/pierrot/art-engine', label: 'ART', shortcut: '3' },
-  {
-    key: 'heart',
-    // The heart opens the public World route. For an authenticated owner the
-    // World route is wrapped by the same Pierrot shell (see
-    // app/heartandangel/world/layout.tsx), so the rail is preserved.
-    path: '/heartandangel/world',
-    label: 'HEART & ANGEL',
-    shortLabel: 'HEART',
-    shortcut: '4',
-    iconOnly: true,
-  },
-] as const;
-
 /**
- * Lower utility group. It is separated from the primary workspaces in the
- * rail. Administrative tools such as Skill Foundry live in /admin, outside
- * this owner PWA.
+ * The owner PWA has exactly two primary spaces: the continuous chat and the
+ * project catalog. Memory and Flow live inside the chat-side panel; technical
+ * tools are contextual, not primary navigation.
  */
-export const WORKSPACE_BOTTOM_ROUTES = [
-  { key: 'brain', path: '/admin/pierrot/brain', label: 'BRAIN', shortcut: '5' },
-  { key: 'dash', path: '/admin/pierrot/dash', label: 'DASH', shortcut: '6' },
-  { key: 'dev', path: '/admin/pierrot/dev', label: 'DEV', shortcut: '7' },
+export const WORKSPACE_ROUTES = [
+  { key: 'chat', path: '/admin/pierrot', label: 'Чат', shortcut: '1' },
+  { key: 'projects', path: '/admin/pierrot/projects', label: 'Проекты', shortcut: '2' },
 ] as const;
-
-export const WORKSPACE_ROUTES = [...WORKSPACE_PRIMARY_ROUTES, ...WORKSPACE_BOTTOM_ROUTES] as const;
 
 export type WorkspaceRouteKey = (typeof WORKSPACE_ROUTES)[number]['key'];
 
 export function activeWorkspaceKey(pathname: string): WorkspaceRouteKey {
-  // /heartandangel/world is rendered inside WorkspaceShell for the owner.
-  if (pathname.startsWith('/heartandangel')) return 'heart';
-  if (pathname.startsWith('/admin/pierrot/heart-and-angel')) return 'heart';
-  // The projects workspace still exists in the admin site, but it is no longer
-  // part of the PWA rail. Keep the shell on CHAT as the fallback.
-  if (pathname.startsWith('/admin/pierrot/flow')) return 'flow';
-  if (pathname.startsWith('/admin/pierrot/brain')) return 'brain';
-  if (pathname.startsWith('/admin/pierrot/dash')) return 'dash';
-  if (pathname.startsWith('/admin/pierrot/dev')) return 'dev';
-  if (pathname.startsWith('/admin/pierrot/art-engine')) return 'art';
+  if (pathname.startsWith('/admin/pierrot/projects')) return 'projects';
   return 'chat';
 }
 
 /**
- * Shortcuts must not steal Cmd/Ctrl+N or Cmd/Ctrl+1..8 while the owner is
+ * Shortcuts must not steal Cmd/Ctrl+N or Cmd/Ctrl+1..2 while the owner is
  * typing into a field, a contenteditable surface or a native select.
  */
 export function isTextEntryTarget(target: EventTarget | null): boolean {
   if (!target || typeof target !== 'object') return false;
+
   const element = target as {
     tagName?: unknown;
     isContentEditable?: unknown;

@@ -3,33 +3,12 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {
-  Activity,
-  Brain,
-  Heart,
-  MessageSquare,
-  Palette,
-  Send,
-  Terminal,
-} from 'lucide-react';
 import PierrotAvatar from './PierrotAvatar';
 import {
-  WORKSPACE_BOTTOM_ROUTES,
-  WORKSPACE_PRIMARY_ROUTES,
   WORKSPACE_ROUTES,
   activeWorkspaceKey,
   shortcutRoute,
 } from '@/lib/pierrot/workspace/navigation';
-
-const ICONS = {
-  chat: MessageSquare,
-  brain: Brain,
-  flow: Send,
-  dash: Activity,
-  dev: Terminal,
-  art: Palette,
-  heart: Heart,
-} as const;
 
 function registerServiceWorker() {
   if (process.env.NODE_ENV !== 'production') return;
@@ -38,45 +17,6 @@ function registerServiceWorker() {
   navigator.serviceWorker.register('/pierrot-sw.js', { scope: '/admin/pierrot' }).catch(() => {
     // Offline shell is an enhancement; the workspace stays fully usable.
   });
-}
-
-type RailItem = (typeof WORKSPACE_ROUTES)[number];
-
-function RailLink({
-  item,
-  active,
-}: {
-  item: RailItem;
-  active: ReturnType<typeof activeWorkspaceKey>;
-}) {
-  const Icon = ICONS[item.key];
-  const isActive = active === item.key;
-  const shortLabel = 'shortLabel' in item ? item.shortLabel : item.label;
-  const iconOnly = 'iconOnly' in item && item.iconOnly === true;
-
-  return (
-    <Link
-      href={item.path}
-      className={`pw-rail-link${iconOnly ? ' pw-rail-link--icon-only' : ''}`}
-      aria-current={isActive ? 'page' : undefined}
-      aria-label={item.label}
-      title={`${item.label} · Cmd+${item.shortcut}`}
-      onClick={(event) => {
-        if (item.key === 'chat' && isActive) {
-          event.preventDefault();
-          window.dispatchEvent(new CustomEvent('pierrot:toggle-drawer'));
-        }
-      }}
-    >
-      <Icon size={24} strokeWidth={1.4} aria-hidden="true" />
-      {!iconOnly && (
-        <>
-          <span className="max-[699px]:hidden">{item.label}</span>
-          <span className="hidden max-[699px]:inline">{shortLabel}</span>
-        </>
-      )}
-    </Link>
-  );
 }
 
 export default function WorkspaceShell({ children }: { children: React.ReactNode }) {
@@ -96,7 +36,11 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
       event.preventDefault();
 
       if (route.key === 'new-chat') {
-        router.push('/admin/pierrot?new=1');
+        if (pathname === '/admin/pierrot') {
+          window.dispatchEvent(new CustomEvent('pierrot:new-session'));
+        } else {
+          router.push('/admin/pierrot?new=1');
+        }
         return;
       }
 
@@ -106,29 +50,42 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [router]);
+  }, [pathname, router]);
+
+  function startNewSession() {
+    if (pathname === '/admin/pierrot') {
+      window.dispatchEvent(new CustomEvent('pierrot:new-session'));
+      return;
+    }
+    router.push('/admin/pierrot?new=1');
+  }
 
   return (
     <div className="pw-root">
-      <nav className="pw-rail" aria-label="Pierrot workspace">
-        <Link href="/admin/pierrot" className="pw-rail-brand" aria-label="Pierrot">
-          <PierrotAvatar size={32} />
-        </Link>
+      <header className="pw-topbar" aria-label="Pierrot">
+        <button
+          type="button"
+          className="pw-topbar-avatar"
+          onClick={startNewSession}
+          aria-label="Начать новую сессию Пьеро"
+          title="Новая сессия"
+        >
+          <PierrotAvatar size={30} />
+        </button>
 
-        <div className="pw-rail-list">
-          <div className="pw-rail-group pw-rail-group--primary">
-            {WORKSPACE_PRIMARY_ROUTES.map((item) => (
-              <RailLink key={item.key} item={item} active={active} />
-            ))}
-          </div>
-
-          <div className="pw-rail-group pw-rail-group--bottom" aria-label="Инструменты">
-            {WORKSPACE_BOTTOM_ROUTES.map((item) => (
-              <RailLink key={item.key} item={item} active={active} />
-            ))}
-          </div>
-        </div>
-      </nav>
+        <nav className="pw-topbar-nav" aria-label="Основная навигация">
+          {WORKSPACE_ROUTES.map((item) => (
+            <Link
+              key={item.key}
+              href={item.path}
+              className="pw-topbar-link"
+              aria-current={active === item.key ? 'page' : undefined}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+      </header>
 
       <main className="pw-main">{children}</main>
     </div>

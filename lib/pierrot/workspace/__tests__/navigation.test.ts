@@ -1,6 +1,4 @@
 import {
-  WORKSPACE_BOTTOM_ROUTES,
-  WORKSPACE_PRIMARY_ROUTES,
   WORKSPACE_ROUTES,
   activeWorkspaceKey,
   isTextEntryTarget,
@@ -8,45 +6,21 @@ import {
 } from '../navigation';
 
 describe('workspace navigation', () => {
-  it('keeps the requested primary order and a separated utility group', () => {
-    expect(WORKSPACE_PRIMARY_ROUTES.map((route) => route.key)).toEqual([
-      'chat',
-      'flow',
-      'art',
-      'heart',
-    ]);
-    expect(WORKSPACE_BOTTOM_ROUTES.map((route) => route.key)).toEqual(['brain', 'dash', 'dev']);
-    expect(WORKSPACE_ROUTES.map((route) => route.key)).toEqual([
-      'chat',
-      'flow',
-      'art',
-      'heart',
-      'brain',
-      'dash',
-      'dev',
-    ]);
-    expect(WORKSPACE_ROUTES.map((route) => route.shortcut)).toEqual([
-      '1',
-      '2',
-      '3',
-      '4',
-      '5',
-      '6',
-      '7',
+  it('keeps only the chat and projects spaces', () => {
+    expect(WORKSPACE_ROUTES.map((route) => route.key)).toEqual(['chat', 'projects']);
+    expect(WORKSPACE_ROUTES.map((route) => route.path)).toEqual([
+      '/admin/pierrot',
+      '/admin/pierrot/projects',
     ]);
   });
 
-  it('resolves active route without treating intelligence as the owner shell', () => {
+  it('resolves active route', () => {
     expect(activeWorkspaceKey('/admin/pierrot')).toBe('chat');
-    expect(activeWorkspaceKey('/admin/pierrot/projects')).toBe('chat');
-    expect(activeWorkspaceKey('/admin/pierrot/brain')).toBe('brain');
-    expect(activeWorkspaceKey('/admin/pierrot/flow')).toBe('flow');
-    expect(activeWorkspaceKey('/admin/pierrot/dash')).toBe('dash');
-    expect(activeWorkspaceKey('/admin/pierrot/dev')).toBe('dev');
-    expect(activeWorkspaceKey('/admin/pierrot/art-engine')).toBe('art');
-    expect(activeWorkspaceKey('/heartandangel/world')).toBe('heart');
-    expect(activeWorkspaceKey('/admin/pierrot/heart-and-angel')).toBe('heart');
-    expect(activeWorkspaceKey('/admin/pierrot/intelligence')).toBe('chat');
+    expect(activeWorkspaceKey('/admin/pierrot/projects')).toBe('projects');
+    expect(activeWorkspaceKey('/admin/pierrot/dev')).toBe('chat');
+    expect(activeWorkspaceKey('/admin/pierrot/flow')).toBe('chat');
+    expect(activeWorkspaceKey('/admin/pierrot/art-engine')).toBe('chat');
+    expect(activeWorkspaceKey('/heartandangel/world')).toBe('chat');
   });
 
   it('does not steal shortcuts while typing', () => {
@@ -61,20 +35,13 @@ describe('workspace navigation', () => {
     expect(isTextEntryTarget(document.body)).toBe(false);
   });
 
-  it('maps workspace shortcuts and Cmd/Ctrl+N outside fields', () => {
+  it('maps only chat, projects and new-session shortcuts', () => {
     const base = { metaKey: true, ctrlKey: false, altKey: false, shiftKey: false };
     expect(shortcutRoute({ ...base, key: '1' }, document.body)).toEqual({ key: 'chat' });
-    expect(shortcutRoute({ ...base, key: '8' }, document.body)).toBeNull();
-    expect(shortcutRoute({ ...base, key: '2' }, document.body)).toEqual({ key: 'flow' });
-    expect(shortcutRoute({ ...base, key: '3' }, document.body)).toEqual({ key: 'art' });
-    expect(shortcutRoute({ ...base, key: '4' }, document.body)).toEqual({ key: 'heart' });
-    expect(shortcutRoute({ ...base, key: '5' }, document.body)).toEqual({ key: 'brain' });
-    expect(shortcutRoute({ ...base, key: '6' }, document.body)).toEqual({ key: 'dash' });
-    expect(shortcutRoute({ ...base, key: '7' }, document.body)).toEqual({ key: 'dev' });
+    expect(shortcutRoute({ ...base, key: '2' }, document.body)).toEqual({ key: 'projects' });
+    expect(shortcutRoute({ ...base, key: '3' }, document.body)).toBeNull();
+    expect(shortcutRoute({ ...base, key: '7' }, document.body)).toBeNull();
     expect(shortcutRoute({ ...base, key: 'n' }, document.body)).toEqual({ key: 'new-chat' });
-    expect(
-      shortcutRoute({ ...base, metaKey: false, ctrlKey: true, key: '2' }, document.body)
-    ).toEqual({ key: 'flow' });
   });
 
   it('ignores shortcuts with modifiers or while typing', () => {

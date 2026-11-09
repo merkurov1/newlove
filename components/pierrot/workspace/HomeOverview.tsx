@@ -1,71 +1,72 @@
 'use client';
 
+import { motion } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
 import type { WorkspaceOverview } from '@/lib/pierrot/workspace/types';
-import { buildOwnerOverallStatus } from '@/lib/pierrot/workspace/status';
-import BrainStatusCard from './BrainStatusCard';
-import { CommercialBrief } from './CommercialReport';
-import MetricStatusList from './MetricStatusList';
 
-function formatUpdatedAt(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'время неизвестно';
-
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    // Explicit UTC keeps the server-rendered timestamp identical to the first
-    // client render regardless of the browser timezone.
-    timeZone: 'UTC',
-  }).format(date);
-}
+const ANIMATION_KEY_PREFIX = 'pierrot:home-statement-animated:';
 
 /**
- * Minimal owner home: one deterministic headline, three compact indicators and
- * the chat composer below. This is deliberately not a second dashboard.
+ * The empty chat is a single editorial statement, not a dashboard.
+ *
+ * The overview props remain accepted for compatibility with the workspace
+ * shell, but the new-session screen deliberately renders no metrics or status
+ * copy. Technical state belongs in the side panel and DASH.
  */
 export default function HomeOverview({
-  overview,
-  brainStatus,
-  onBrainStatusChange,
+  sessionId,
+  overview: _overview,
+  brainStatus: _brainStatus,
 }: {
-  overview: WorkspaceOverview;
-  brainStatus: BrainStatusSnapshot | null;
-  onBrainStatusChange: (snapshot: BrainStatusSnapshot) => void;
+  sessionId?: string | null;
+  overview?: WorkspaceOverview;
+  brainStatus?: BrainStatusSnapshot | null;
 }) {
-  const overall = buildOwnerOverallStatus({
-    metrics: overview.metrics,
-    commercial: overview.commercial,
-    brain: brainStatus,
-    projects: overview.projectHealth,
-  });
-  const projectLine =
-    overview.projectHealth &&
-    overview.projectHealth.activeTasks !== null &&
-    overview.projectHealth.activeTasks > 0
-      ? ` В работе задач: ${overview.projectHealth.activeTasks}.`
-      : '';
+  const [ready, setReady] = useState(false);
+  const [animate, setAnimate] = useState(true);
+  const processedSessionRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const key = `${ANIMATION_KEY_PREFIX}${sessionId || 'new'}`;
+    // React Strict Mode invokes effects twice in development. The same session
+    // must not lose its entrance animation because of that second invocation.
+    if (processedSessionRef.current === key) return;
+    processedSessionRef.current = key;
+
+    const reduced =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    let alreadyAnimated = false;
+    try {
+      alreadyAnimated = window.sessionStorage.getItem(key) === '1';
+      if (!alreadyAnimated) window.sessionStorage.setItem(key, '1');
+    } catch {
+      // Storage can be unavailable in private modes. Animate once per session.
+    }
+
+    setAnimate(!reduced && !alreadyAnimated);
+    setReady(true);
+  }, [sessionId]);
+
+  if (!ready) return null;
 
   return (
-    <div className="pw-empty">
-      <p className="pw-kicker">Pierrot · owner workspace</p>
-      <p className="pw-empty-summary" data-state={overall.state} role="status">
-        {overall.headline} {overview.summary}
-        {projectLine}
-      </p>
-
-      <div className="pw-home-indicators" aria-label="Состояние">
-        <BrainStatusCard snapshot={brainStatus} onSnapshotChange={onBrainStatusChange} />
-        <CommercialBrief summary={overview.commercial} />
-        <MetricStatusList metrics={overview.metrics} />
-      </div>
-
-      <p className="pw-home-updated" data-stale={overview.stale ? 'true' : 'false'}>
-        {overview.stale ? 'Последнее известное состояние · ' : 'Обновлено '}
-        {formatUpdatedAt(overview.generatedAt)}
-      </p>
+    <div className="pw-empty pw-home-editorial">
+      <motion.p
+        className="pw-home-statement"
+        initial={animate ? { opacity: 0, y: 8 } : false}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          duration: 1.4,
+          delay: animate ? 0.08 : 0,
+          ease: [0.22, 1, 0.36, 1],
+        }}
+      >
+        Structure is the antidote to chaos.
+      </motion.p>
     </div>
   );
 }

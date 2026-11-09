@@ -174,7 +174,7 @@ export default async function ChatPage({
       histories={view.histories}
       sessions={view.sessions}
       conversation={conversation}
-      startNew={false}
+      startNew={requestedNew}
       brainStatus={brainStatus}
       project={project}
     />
