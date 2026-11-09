@@ -889,7 +889,7 @@ async function internalSnapshot(
   const limitations: string[] = [];
 
   const [
-    confirmedSubscriptions,
+    confirmedRows,
     previousConfirmedSubscriptions,
     subscriptionEvents,
     previousSubscriptionEvents,
@@ -904,8 +904,14 @@ async function internalSnapshot(
     knowledgeDocuments,
     mediaRecords,
   ] = await Promise.all([
-    countQuery(store, 'pierrot_v_subscription_conversions', (query) =>
-      query.gte('confirmed_at', bounds.startIso).lt('confirmed_at', bounds.endIso)
+    readRowsSafe<{ conversation_id: string | null; confirmed_at: string | null }>(
+      store,
+      'pierrot_v_subscription_conversions',
+      (query) =>
+        query
+          .gte('confirmed_at', bounds.startIso)
+          .lt('confirmed_at', bounds.endIso)
+          .limit(5000)
     ),
     countQuery(store, 'pierrot_v_subscription_conversions', (query) =>
       query.gte('confirmed_at', bounds.previousStartIso).lt('confirmed_at', bounds.previousEndIso)
@@ -1009,6 +1015,7 @@ async function internalSnapshot(
       .filter((row) => row.identity_type === 'owner')
       .map((row) => row.id)
   );
+
   const eventCounts = new Map<string, number>();
   for (const row of events) {
     if (row.conversation_id && ownerIds.has(row.conversation_id)) continue;
@@ -1038,6 +1045,42 @@ async function internalSnapshot(
     previousReferrerCounts.set(key, (previousReferrerCounts.get(key) ?? 0) + 1);
   }
 
+  // Confirmed subscriptions are correlated to the conversation that started
+  // the flow. This is a conversation_id link, not proof of the traffic source.
+  const confirmedSubscriptions = confirmedRows.filter(
+    (row) => !(row.conversation_id && ownerIds.has(row.conversation_id))
+  ).length;
+  const knownStartPages = new Map<string, string | null>(
+    conversations.map((row) => [row.id, row.start_page])
+  );
+  const missingIds = Array.from(
+    new Set(
+      confirmedRows
+        .map((row) => row.conversation_id)
+        .filter((id): id is string => Boolean(id) && !knownStartPages.has(id as string))
+    )
+  );
+
+  for (let index = 0; index < missingIds.length; index += 200) {
+    const chunk = missingIds.slice(index, index + 200);
+    const extra = await readRowsSafe<{ id: string; start_page: string | null }>(
+      store,
+      'pierrot_conversations',
+      (query) => query.in('id', chunk)
+    );
+    for (const row of extra) knownStartPages.set(row.id, row.start_page);
+  }
+
+  const confirmedPageCounts = new Map<string, number>();
+  for (const row of confirmedRows) {
+    if (row.conversation_id && ownerIds.has(row.conversation_id)) continue;
+    const page = row.conversation_id
+      ? knownStartPages.get(row.conversation_id) ?? ''
+      : '';
+    const key = normalizePath(page || '') || '(unknown)';
+    confirmedPageCounts.set(key, (confirmedPageCounts.get(key) ?? 0) + 1);
+  }
+
   if (donations.length === 0) {
     limitations.push('Подтверждённых пожертвований за период нет (это ноль строк, а не ошибка источника).');
   }
@@ -1049,6 +1092,7 @@ async function internalSnapshot(
     available: true,
     confirmedSubscriptions,
     previousConfirmedSubscriptions,
+    confirmedSubscriptionsByStartPage: breakdownFromCounts(confirmedPageCounts, new Map()),
     subscriptionEvents: breakdownFromCounts(subEventCounts, previousSubEventCounts),
     donations: {
       count: donations.length,
@@ -1106,17 +1150,42 @@ function projectPerformance(
         : null;
     const internalConversations =
       internalPage.length > 0 ? internalPage.reduce((sum, row) => sum + row.value, 0) : null;
+    const relatedConfirmedRows = internal.confirmedSubscriptionsByStartPage.filter(
+      (row) => projectForPath(row.key)?.key === project.key
+    );
+    const relatedConfirmed =
+      project.key === 'flow' && internal.confirmedSubscriptions !== null
+        ? relatedConfirmedRows.length > 0
+          ? relatedConfirmedRows.reduce((sum, row) => sum + row.value, 0)
+          : 0
+        : null;
+    const relatedDonations =
+      project.key === 'heart'
+        ? internal.donations.available
+          ? internal.donations.byOffer.find((row) => /heart|angel|postcard/i.test(row.key))?.value ?? 0
+          : null
+        : null;
 
     const facts: string[] = [];
     if (sessions !== null) facts.push(`${project.name}: ${Math.round(sessions)} сессий GA4 на landing pages проекта.`);
     if (pageViews !== null) facts.push(`${Math.round(pageViews)} просмотров страниц проекта в GA4.`);
     if (searchClicks !== null) facts.push(`${Math.round(searchClicks)} кликов и ${Math.round(searchImpressions ?? 0)} показов в Google Search.`);
     if (internalConversations !== null) facts.push(`${internalConversations} диалогов Pierrot, начатых на страницах проекта (без владельца).`);
+    if (relatedConfirmed !== null && relatedConfirmed > 0) {
+      facts.push(
+        `${relatedConfirmed} подтверждённых подписок связаны с диалогами, начатыми на страницах проекта (связь по conversation_id, не атрибуция источника).`
+      );
+    }
 
     const interpretation: string[] = [];
     if (sessions !== null && searchClicks !== null && searchClicks > 0 && sessions > 0) {
       interpretation.push(
         'Поиск приводит клики, но связь клика с конкретной подпиской или покупкой не подтверждена.'
+      );
+    }
+    if (relatedConfirmed !== null || relatedDonations !== null) {
+      interpretation.push(
+        'Подтверждённое действие связано с conversation_id или offer_id, но не с источником перехода. Атрибуция остаётся неизвестной.'
       );
     }
 
@@ -1130,8 +1199,8 @@ function projectPerformance(
       searchClicks,
       searchImpressions,
       internalConversations,
-      confirmedSubscriptions: null,
-      confirmedDonations: null,
+      confirmedSubscriptions: relatedConfirmed,
+      confirmedDonations: relatedDonations,
       revenueMinor: null,
       currency: null,
       facts,
@@ -1389,7 +1458,7 @@ export async function loadSourceHealth(store?: SupabaseClient): Promise<{
         coverage.find((row) => row.provider === 'google_analytics') ?? null,
         googleOAuth.configured,
         googleOAuth.configured && !gaConnection?.external_id
-          ? 'OAuth настроен, но GA4 property ещё не выбран.'
+          ? 'OAuth настроен. Подключите Google и выберите GA4 property.'
           : null
       ),
       providerHealth(
@@ -1399,7 +1468,7 @@ export async function loadSourceHealth(store?: SupabaseClient): Promise<{
         coverage.find((row) => row.provider === 'search_console') ?? null,
         gscConfigured,
         googleOAuth.configured && !gscConnection?.external_id
-          ? 'OAuth настроен, но Search Console property ещё не выбран.'
+          ? 'OAuth настроен. Подключите Google и выберите Search Console property.'
           : null
       ),
       providerHealth(
@@ -1500,7 +1569,7 @@ export async function loadAnalyticsDataset(input: {
       coverage.find((row) => row.provider === 'google_analytics') ?? null,
       googleOAuth.configured,
       googleOAuth.configured && !gaConnection?.external_id
-        ? 'OAuth настроен, но GA4 property ещё не выбран.'
+        ? 'OAuth настроен. Подключите Google и выберите GA4 property.'
         : null
     ),
     providerHealth(
@@ -1510,7 +1579,7 @@ export async function loadAnalyticsDataset(input: {
       coverage.find((row) => row.provider === 'search_console') ?? null,
       gscConfigured,
       googleOAuth.configured && !gscSiteConfigured
-        ? 'OAuth настроен, но Search Console property ещё не выбран.'
+        ? 'OAuth настроен. Подключите Google и выберите Search Console property.'
         : null
     ),
     providerHealth(

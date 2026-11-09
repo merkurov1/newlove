@@ -203,6 +203,7 @@ function dataset(): AnalyticsDataset {
       available: true,
       confirmedSubscriptions: 3,
       previousConfirmedSubscriptions: 1,
+      confirmedSubscriptionsByStartPage: [],
       subscriptionEvents: [
         { key: 'subscription_submitted', label: 'subscription_submitted', value: 10, previous: 4, deltaPercent: 150, share: null },
         { key: 'subscription_confirmed', label: 'subscription_confirmed', value: 2, previous: 1, deltaPercent: 100, share: null },

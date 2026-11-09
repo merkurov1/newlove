@@ -711,6 +711,32 @@ export function reportHeadline(dataset: AnalyticsDataset, language: 'ru' | 'en')
       : `Google Search: ${formatNumber(clicks.value, language)} clicks for ${dataset.period.label}.`;
   }
 
+  const failing = dataset.sources.filter(
+    (source) => source.connected && source.status !== 'connected'
+  );
+
+  if (failing.length > 0) {
+    return language === 'ru'
+      ? `Источники подключены, но данные за период недоступны: ${failing
+          .map((source) => source.label)
+          .join(', ')}. Это ошибка или отсутствие синхронизации, а не отсутствие активности.`
+      : `Sources are connected, but data is unavailable for the period: ${failing
+          .map((source) => source.label)
+          .join(', ')}. This is an error or missing sync, not absence of activity.`;
+  }
+
+  const connected = dataset.sources.filter((source) => source.connected);
+
+  if (connected.length > 0) {
+    return language === 'ru'
+      ? `Источники подключены (${connected
+          .map((source) => source.label)
+          .join(', ')}), но за выбранный период нет сохранённых данных. Это не ноль.`
+      : `Sources are connected (${connected
+          .map((source) => source.label)
+          .join(', ')}), but there is no stored data for the period. This is not zero.`;
+  }
+
   return language === 'ru'
     ? 'Внешние источники ещё не подключены. Ниже — только подтверждённые внутренние данные Pierrot; отсутствие данных не заменяется нулём.'
     : 'External sources are not connected yet. Below are only confirmed internal Pierrot facts; missing data is not replaced with zero.';

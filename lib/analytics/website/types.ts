@@ -201,6 +201,7 @@ export type InternalSnapshot = {
   available: boolean;
   confirmedSubscriptions: number | null;
   previousConfirmedSubscriptions: number | null;
+  confirmedSubscriptionsByStartPage: BreakdownRow[];
   subscriptionEvents: BreakdownRow[];
   donations: {
     count: number | null;

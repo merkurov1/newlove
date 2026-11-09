@@ -12,7 +12,9 @@ import {
   getUmamiConfig,
 } from '@/lib/analytics/website/config';
 import { loadSourceHealth } from '@/lib/analytics/website/dataset';
+import { loadWebsiteDashboard } from '@/lib/analytics/website/dashboard';
 import type { ProviderHealth } from '@/lib/analytics/website/types';
+import Sparkline from '@/components/pierrot/workspace/Sparkline';
 
 import './analytics.css';
 
@@ -27,6 +29,11 @@ type SearchParams = Record<string, string | string[] | undefined>;
 function one(params: SearchParams, key: string): string | undefined {
   const value = params[key];
   return Array.isArray(value) ? value[0] : value;
+}
+
+function formatNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value);
 }
 
 function formatDate(value: string | null): string {
@@ -85,6 +92,13 @@ function banner(params: SearchParams): { tone: 'ok' | 'warn' | 'bad'; text: stri
       return {
         tone: 'bad',
         text: 'Google не вернул refresh token. Повторите подключение и подтвердите доступ; при повторном согласии Google должен выдать offline-доступ.',
+      };
+    }
+
+    if (reason === 'oauth_configuration_error' || reason === 'invalid_client') {
+      return {
+        tone: 'bad',
+        text: 'Google отклонил OAuth-запрос. Проверьте OAuth consent screen, список test users (если приложение в Testing), включённые GA4 Data API и Search Console API, а также корректность GOOGLE_CLIENT_ID/SECRET.',
       };
     }
 
@@ -193,6 +207,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
 
   const params = searchParams ?? {};
   const health = await loadSourceHealth();
+  const dashboard = await loadWebsiteDashboard({ days: 30 }).catch(() => null);
   const google = getGoogleOAuthConfig();
   const umami = getUmamiConfig();
   const message = banner(params);
@@ -269,6 +284,46 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
           {ga && <SourceCard source={ga} provider="google_analytics" />}
           {gsc && <SourceCard source={gsc} provider="search_console" />}
           {um && <SourceCard source={um} provider="umami" />}
+        </section>
+
+        <section className="pw-analytics-charts" aria-labelledby="pw-analytics-charts-title">
+          <div className="pw-analytics-charts-head">
+            <div>
+              <p className="pw-kicker">ДИНАМИКА · 30 ДНЕЙ</p>
+              <h2 id="pw-analytics-charts-title">Что уже сохранено</h2>
+            </div>
+            <span className="pw-analytics-hint">
+              Графики строятся только по сохранённым данным; API при открытии страницы не вызывается.
+            </span>
+          </div>
+
+          <div className="pw-analytics-chart-grid">
+            <article className="pw-analytics-chart">
+              <div className="pw-analytics-chart-label">
+                <span>Сессии GA4</span>
+                <strong>{formatNumber(dashboard?.dataset.ga4.totals.sessions.value)}</strong>
+              </div>
+              <Sparkline series={dashboard?.sessionsSeries ?? null} label="Сессии GA4" />
+              <p>
+                {dashboard?.dataset.ga4.available
+                  ? `Период: ${dashboard.period.label}.`
+                  : 'Нет сохранённых данных GA4. Это не ноль.'}
+              </p>
+            </article>
+
+            <article className="pw-analytics-chart">
+              <div className="pw-analytics-chart-label">
+                <span>Клики Google Search</span>
+                <strong>{formatNumber(dashboard?.dataset.gsc.totals.clicks.value)}</strong>
+              </div>
+              <Sparkline series={dashboard?.clicksSeries ?? null} label="Клики Google Search" />
+              <p>
+                {dashboard?.dataset.gsc.available
+                  ? `Период: ${dashboard.period.label}.`
+                  : 'Нет сохранённых данных Search Console. Это не ноль.'}
+              </p>
+            </article>
+          </div>
         </section>
 
         <section className="pw-analytics-sync" aria-labelledby="pw-analytics-sync-title">

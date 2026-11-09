@@ -195,7 +195,8 @@ Pierrot cannot access visitor analytics.
 - Google endpoints were called with an invalid token and correctly returned
   `unauthorized` (401), proving connectivity and error mapping.
 - Google OAuth preflight correctly detected `redirect_uri_mismatch`.
-- TypeScript: `tsc --noEmit` passes.
+- TypeScript: a scoped `tsc` check covering the new module and every touched
+  route/page passes. A full-repo `tsc` run is memory-heavy in this environment.
 
 ## 9. Known limitations
 
@@ -217,3 +218,12 @@ Pierrot cannot access visitor analytics.
 3. Review the first weekly report with the owner and tune thresholds.
 4. Optionally add Google Trends / YouTube Analytics as additional adapters
    using the same connection, sync, snapshot and source-health contracts.
+
+## 11. Report length and history
+
+Analytical replies are displayed up to 24,000 characters. The current chat
+turn always returns the full report. History storage is capped at 15,800
+characters on the v2 history RPC and 4,000 on the legacy RPC; when the stored
+copy is shorter, it is cut at a Markdown section boundary and explicitly
+labelled. The full data remains available through the Analytics screen and the
+owner tools.

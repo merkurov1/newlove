@@ -1544,10 +1544,26 @@ export async function POST(req: Request) {
       // Analytical reports are structured and may legitimately exceed the
       // chat-message input limit. They are owner-only, persisted as one
       // assistant message and never accepted as user input.
-      const OWNER_REPORT_MAX_LENGTH = 12_000;
+      const OWNER_REPORT_MAX_LENGTH = 24_000;
+      const HISTORY_STORAGE_LIMIT = 15_800;
+
+      const truncateForStorage = (value: string, limit: number): string => {
+        if (value.length <= limit) return value;
+        const head = value.slice(0, Math.max(0, limit - 180));
+        const boundary = Math.max(head.lastIndexOf('\n## '), head.lastIndexOf('\n### '));
+        const body = boundary > 0 ? head.slice(0, boundary) : head;
+        return `${body}\n\n_Отчёт сокращён при сохранении истории. Полная версия — в Pierrot → Analytics._`;
+      };
 
       const persistOwnerReply = async (text: string, extra: Record<string, unknown> = {}) => {
-        let finalText = text.slice(0, OWNER_REPORT_MAX_LENGTH);
+        const displayText = text.slice(0, OWNER_REPORT_MAX_LENGTH);
+        // The v2 history RPC accepts 16k characters; the legacy RPC accepts 4k.
+        const storageLimit =
+          historyScope?.history.id && ownerEpisodeId
+            ? HISTORY_STORAGE_LIMIT
+            : PIERROT_MAX_MESSAGE_LENGTH;
+        const storageText = truncateForStorage(displayText, storageLimit);
+        let finalText = displayText;
 
         if (pierrotStore && canStoreTranscript) {
           try {
@@ -1558,11 +1574,15 @@ export async function POST(req: Request) {
               episodeId: ownerEpisodeId,
               messageId: assistantMessageId,
               role: 'assistant',
-              content: finalText,
+              content: storageText,
               provider: null,
             });
 
-            if (!stored.inserted && stored.content) finalText = stored.content;
+            // Keep the full analytical answer in the current turn. The stored
+            // copy may be shorter when the legacy 4k RPC is used.
+            if (!stored.inserted && stored.content && stored.content.length >= displayText.length) {
+              finalText = stored.content;
+            }
 
             await recordPierrotEvent(pierrotStore, {
               conversationId,

@@ -104,7 +104,7 @@ function searchQueryTable(rows: BreakdownRow[], language: AnalyticsLanguage): st
       'CTR',
       language === 'ru' ? 'Позиция' : 'Position',
     ],
-    rows.slice(0, 8).map((row) => [
+    rows.slice(0, 5).map((row) => [
       row.label,
       formatNumber(row.value, language),
       formatNumber(Number(row.extra?.impressions ?? 0), language),
@@ -125,7 +125,7 @@ function searchPageTable(rows: BreakdownRow[], language: AnalyticsLanguage): str
       'CTR',
       language === 'ru' ? 'Позиция' : 'Position',
     ],
-    rows.slice(0, 8).map((row) => [
+    rows.slice(0, 5).map((row) => [
       row.label,
       formatNumber(row.value, language),
       formatNumber(Number(row.extra?.impressions ?? 0), language),
@@ -444,7 +444,11 @@ function searchSection(dataset: AnalyticsDataset, language: AnalyticsLanguage): 
   return blocks.join('\n\n');
 }
 
-function pagesSection(dataset: AnalyticsDataset, language: AnalyticsLanguage): string {
+function pagesSection(
+  dataset: AnalyticsDataset,
+  language: AnalyticsLanguage,
+  compact = false
+): string {
   const { ga4, gsc, contentMatches } = dataset;
   const blocks: string[] = ['### Страницы и материалы'];
 
@@ -477,7 +481,7 @@ function pagesSection(dataset: AnalyticsDataset, language: AnalyticsLanguage): s
     );
   }
 
-  if (gsc.available && gsc.pages.length > 0) {
+  if (!compact && gsc.available && gsc.pages.length > 0) {
     blocks.push(`**${language === 'ru' ? 'Поисковые страницы · Search Console' : 'Search pages · Search Console'}**`);
     blocks.push(searchPageTable(gsc.pages, language));
   }
@@ -489,6 +493,13 @@ function pagesSection(dataset: AnalyticsDataset, language: AnalyticsLanguage): s
     language === 'ru'
       ? `Сопоставлено с материалами или проектами: ${matched.length}. Не сопоставлено: ${unknown.length}. Сопоставление выполняется по URL/slug; при отсутствии совпадения это указывается, а не угадывается.`
       : `Matched to content or projects: ${matched.length}. Unmatched: ${unknown.length}. Matching uses URL/slug; when there is no match it is reported, not guessed.`
+  );
+
+  const matchedBrain = contentMatches.filter((match) => match.brainDocumentId).length;
+  blocks.push(
+    language === 'ru'
+      ? `Brain: ${dataset.internal.content.knowledgeDocuments ?? '—'} документов, ${matchedBrain} сопоставлено с трафиком. Media Intelligence: ${dataset.internal.content.mediaRecords ?? '—'} записей. Это контекст, а не доказательство причинной связи.`
+      : `Brain: ${dataset.internal.content.knowledgeDocuments ?? '—'} documents, ${matchedBrain} matched to traffic. Media Intelligence: ${dataset.internal.content.mediaRecords ?? '—'} records. This is context, not proof of causation.`
   );
 
   if (unknown.length > 0) {
@@ -511,7 +522,8 @@ function pagesSection(dataset: AnalyticsDataset, language: AnalyticsLanguage): s
 function projectsSection(
   dataset: AnalyticsDataset,
   language: AnalyticsLanguage,
-  focus: string | null
+  focus: string | null,
+  compact = false
 ): string {
   const blocks: string[] = ['### Проекты'];
   const projects = focus
@@ -525,13 +537,27 @@ function projectsSection(
 
   blocks.push(projectTable(projects, language));
 
+  const emptyProjects: string[] = [];
+
   for (const project of projects) {
+    const mustShow =
+      !compact ||
+      Boolean(focus) ||
+      project.facts.length > 0 ||
+      project.key === 'flow' ||
+      project.key === 'heart';
+
+    if (!mustShow) {
+      emptyProjects.push(project.name);
+      continue;
+    }
+
     const lines: string[] = [`**${project.name}**`];
     if (project.facts.length === 0) {
       lines.push(
         language === 'ru'
-          ? 'Нет внешних или внутренних данных по проекту за период. Это не ноль.'
-          : 'No external or internal data for the project in this period. This is not zero.'
+          ? 'Нет данных о трафике или диалогах Pierrot по проекту за период. Это не ноль.'
+          : 'No traffic or Pierrot conversation data for the project in this period. This is not zero.'
       );
     } else {
       lines.push(...project.facts.map((fact) => `- ${fact}`));
@@ -545,23 +571,28 @@ function projectsSection(
       const confirmedEvents = dataset.internal.subscriptionEvents.find(
         (row) => row.key === 'subscription_confirmed'
       )?.value;
+      const related = project.confirmedSubscriptions;
       lines.push(
         language === 'ru'
           ? `- Подписки: начато ${formatNumber(submitted ?? null, language)}, подтверждено событиями ${formatNumber(
               confirmedEvents ?? null,
               language
-            )}, подтверждено в базе ${formatNumber(confirmed, language)}. Первое и второе — разные учёты, они не складываются.`
+            )}, подтверждено в базе ${formatNumber(confirmed, language)}${
+              related !== null ? `, из них связаны с диалогами на страницах Flow: ${related}` : ''
+            }. Первое и второе — разные учёты, они не складываются; связь по conversation_id не является атрибуцией источника.`
           : `- Subscriptions: submitted ${formatNumber(submitted ?? null, language)}, confirmed events ${formatNumber(
               confirmedEvents ?? null,
               language
-            )}, confirmed in database ${formatNumber(confirmed, language)}. These are different counts and are not added together.`
+            )}, confirmed in database ${formatNumber(confirmed, language)}${
+              related !== null ? `, of which linked to conversations started on Flow pages: ${related}` : ''
+            }. These are different counts and are not added together; the conversation_id link is not source attribution.`
       );
     }
 
     if (project.key === 'heart') {
       lines.push(
         language === 'ru'
-          ? `- Подтверждённые пожертвования: ${formatNumber(
+          ? `- Всего подтверждённых пожертвований в базе: ${formatNumber(
               dataset.internal.donations.count,
               language
             )}${
@@ -572,9 +603,15 @@ function projectsSection(
                     language
                   )}`
                 : ''
-            }. Связь с посещением Heart & Angel не подтверждена.`
-          : `- Confirmed donations: ${formatNumber(
+            }; из них по offer Heart & Angel: ${formatNumber(
+              project.confirmedDonations,
+              language
+            )}. Связь с посещением Heart & Angel не подтверждена.`
+          : `- Confirmed donations in the database: ${formatNumber(
               dataset.internal.donations.count,
+              language
+            )}; linked to a Heart & Angel offer: ${formatNumber(
+              project.confirmedDonations,
               language
             )}. The link to a Heart & Angel visit is not confirmed.`
       );
@@ -587,6 +624,14 @@ function projectsSection(
     );
 
     blocks.push(lines.join('\n'));
+  }
+
+  if (emptyProjects.length > 0) {
+    blocks.push(
+      language === 'ru'
+        ? `Без данных за период (не ноль): ${emptyProjects.join(' · ')}.`
+        : `No data for the period (not zero): ${emptyProjects.join(' · ')}.`
+    );
   }
 
   return blocks.join('\n\n');
@@ -758,10 +803,18 @@ function comparisonSection(dataset: AnalyticsDataset, language: AnalyticsLanguag
   );
 
   if (available.length === 0) {
+    const anyPrevious = metrics.some(
+      (metric) => metric.previous !== null && metric.previous > 0
+    );
+
     blocks.push(
-      language === 'ru'
-        ? 'Недостаточно данных для сравнения с предыдущим аналогичным периодом. Отсутствие сравнения не равно отсутствию изменений.'
-        : 'Not enough data to compare with the previous equivalent period. Missing comparison does not mean no change.'
+      anyPrevious
+        ? language === 'ru'
+          ? 'Недостаточно сопоставимых данных для расчёта изменения. Отсутствие сравнения не равно отсутствию изменений.'
+          : 'Not enough comparable data to calculate a change. Missing comparison does not mean no change.'
+        : language === 'ru'
+          ? 'За предыдущий аналогичный период нет сохранённых данных ни в одном подключённом источнике. Сравнение не рассчитывается; это не означает, что изменений не было.'
+          : 'The previous equivalent period has no stored data in any connected source. No comparison is calculated; this does not mean nothing changed.'
     );
     return blocks.join('\n\n');
   }
@@ -986,20 +1039,27 @@ function renderReport(
       : `**Period:** ${dataset.period.label}. **Comparison:** ${dataset.period.previousLabel}. **Timezone:** ${dataset.period.timezone}.`
   );
 
-  if (scope === 'overview' || scope === 'traffic') {
+  if (scope === 'overview' || scope === 'traffic' || scope === 'compare') {
     blocks.push(audienceSection(dataset, language));
   }
 
-  if (scope === 'overview' || scope === 'search') {
+  if (scope === 'overview' || scope === 'search' || scope === 'opportunities') {
     blocks.push(searchSection(dataset, language));
   }
 
-  if (scope === 'overview' || scope === 'pages' || scope === 'search') {
-    blocks.push(pagesSection(dataset, language));
+  if (
+    scope === 'overview' ||
+    scope === 'pages' ||
+    scope === 'search' ||
+    scope === 'opportunities'
+  ) {
+    blocks.push(
+      pagesSection(dataset, language, scope === 'overview' || scope === 'opportunities')
+    );
   }
 
   if (scope === 'overview' || scope === 'projects') {
-    blocks.push(projectsSection(dataset, language, question.project));
+    blocks.push(projectsSection(dataset, language, question.project, scope === 'overview'));
   }
 
   if (scope === 'overview' || scope === 'compare') {
