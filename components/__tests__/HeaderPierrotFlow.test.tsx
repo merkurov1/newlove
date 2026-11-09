@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import Header from '@/components/Header';
 import { PierrotProvider } from '@/components/pierrot/PierrotContext';
 
@@ -58,5 +58,39 @@ describe('Header Pierrot and Flow controls', () => {
 
     expect(screen.getByRole('button', { name: 'Create Flow post' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Open Pierrot/ })).toBeInTheDocument();
+  });
+
+  it('keeps the header background transparent after scrolling', async () => {
+    mockAuth = {
+      user: null,
+      profile: null,
+      roles: [],
+      isLoading: false,
+      signOut: jest.fn(),
+    };
+
+    Object.defineProperty(window, 'scrollY', {
+      configurable: true,
+      value: 0,
+    });
+
+    render(app());
+
+    const header = document.querySelector('header.site-header');
+    expect(header).toHaveAttribute('data-scrolled', 'false');
+    expect(header?.className).toContain('bg-transparent');
+
+    Object.defineProperty(window, 'scrollY', {
+      configurable: true,
+      value: 120,
+    });
+    fireEvent.scroll(window);
+
+    await waitFor(() => {
+      expect(header).toHaveAttribute('data-scrolled', 'true');
+    });
+
+    expect(header?.className).toContain('bg-transparent');
+    expect(header?.className).not.toContain('bg-[#FAF8F5]/85');
   });
 });

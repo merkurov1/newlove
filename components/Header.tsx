@@ -177,10 +177,9 @@ export default function Header() {
 
   return (
     <header
+      data-scrolled={scrolled ? 'true' : 'false'}
       className={`site-header fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? 'bg-[#FAF8F5]/85 backdrop-blur-2xl border-b border-stone-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] py-3 sm:py-4'
-          : 'bg-transparent py-4 sm:py-6'
+        scrolled ? 'bg-transparent backdrop-blur-2xl py-3 sm:py-4' : 'bg-transparent py-4 sm:py-6'
       }`}
     >
       <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-10 flex items-center justify-between gap-2 sm:gap-4">
