@@ -2,6 +2,7 @@ import { assertServerOnly } from '@/lib/serverOnly';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import type { PierrotProject, PierrotProjectSnapshot, PierrotProjectStatus } from './types';
 import { projectSlugBase, uniqueProjectSlug } from './slug';
+import { projectMatchesRef } from './matching';
 
 assertServerOnly('lib/pierrot/projects/store');
 
@@ -139,7 +140,13 @@ export async function getPierrotProject(
   }
   const bySlug = await selectProject('slug', projectRef, ownerUserId);
   if (bySlug.error) throw bySlug.error;
-  return bySlug.data ? mapProject(bySlug.data) : null;
+  if (bySlug.data) return mapProject(bySlug.data);
+
+  // The alias resolver accepts “heartandangel”, “heartangel” and similar
+  // spellings without creating another project row.
+  const all = await listPierrotProjects(ownerUserId).catch(() => []);
+  const matches = all.filter((project) => projectMatchesRef(project, projectRef));
+  return matches.length === 1 ? matches[0] : null;
 }
 
 export async function createPierrotProject(
@@ -162,6 +169,11 @@ export async function createPierrotProject(
     .maybeSingle();
 
   if (existing) throw new PierrotProjectValidationError('PROJECT_EXISTS');
+
+  const existingByAlias = (await listPierrotProjects(ownerUserId).catch(() => [])).some(
+    (project) => projectMatchesRef(project, name)
+  );
+  if (existingByAlias) throw new PierrotProjectValidationError('PROJECT_EXISTS');
 
   const requestedSlug = text(input.slug).trim();
   const slug =

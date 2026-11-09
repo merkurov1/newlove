@@ -13,7 +13,7 @@ import type {
   WorkspacePeriod,
 } from './types';
 import { buildOverviewSummary, classifyMetricState } from './status';
-import { getPierrotProject } from '@/lib/pierrot/projects/store';
+import { listPierrotProjects } from '@/lib/pierrot/projects/store';
 
 assertServerOnly('lib/pierrot/workspace/data');
 
@@ -298,6 +298,7 @@ export async function loadOwnerConversations(
       .eq('identity_type', 'owner')
       .eq('user_id', ownerUserId)
       .eq('mode', 'site')
+      .order('last_message_at', { ascending: false, nullsFirst: false })
       .order('updated_at', { ascending: false })
       .limit(limit);
 
@@ -307,6 +308,7 @@ export async function loadOwnerConversations(
         .select(select)
         .eq('identity_type', 'owner')
         .eq('user_id', ownerUserId)
+        .order('last_message_at', { ascending: false, nullsFirst: false })
         .order('updated_at', { ascending: false })
         .limit(limit);
     }
@@ -323,15 +325,8 @@ export async function loadOwnerConversations(
       .select('conversation_id,project_id')
       .eq('owner_user_id', ownerUserId)
       .in('conversation_id', initialIds);
-    const projectIds = Array.from(
-      new Set(
-        (links || [])
-          .map((row) => (typeof row.project_id === 'string' ? row.project_id : null))
-          .filter(Boolean)
-      )
-    ) as string[];
-    const projects = await Promise.all(projectIds.map((id) => getPierrotProject(ownerUserId, id)));
-    const projectById = new Map(projects.filter(Boolean).map((project) => [project!.id, project!]));
+    const projects = await listPierrotProjects(ownerUserId).catch(() => []);
+    const projectById = new Map(projects.map((project) => [project.id, project]));
     const projectByConversation = new Map(
       (links || []).map((row) => [
         String(row.conversation_id),

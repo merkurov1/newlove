@@ -8,7 +8,6 @@ import {
   ArrowUp,
   Bookmark,
   Check,
-  FolderOpen,
   MessageSquare,
   PanelLeft,
   Plus,
@@ -1222,17 +1221,8 @@ export default function ChatWorkspace({
               Новый диалог
             </button>
 
-            <Link
-              href="/admin/pierrot/projects"
-              className="pw-new-chat"
-              onClick={() => setDrawerOpen(false)}
-            >
-              <FolderOpen size={18} strokeWidth={1.4} aria-hidden="true" />
-              Проекты
-            </Link>
-
             <div className="pw-drawer-section">
-              <div className="pw-drawer-section-title">Недавние разговоры</div>
+              <div className="pw-drawer-section-title">Все разговоры</div>
               {orderedConversations.length === 0 ? (
                 <p className="pw-drawer-empty">Сохранённых диалогов пока нет.</p>
               ) : (
@@ -1270,12 +1260,9 @@ export default function ChatWorkspace({
               {project && (
                 <>
                   {' · '}
-                  <Link
-                    className="pw-conversation-project"
-                    href={`/admin/pierrot/projects/${encodeURIComponent(project.slug)}`}
-                  >
+                  <span className="pw-conversation-project" title={`Контекст проекта: ${project.name}`}>
                     {project.name}
-                  </Link>
+                  </span>
                 </>
               )}
             </span>

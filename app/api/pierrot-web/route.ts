@@ -229,7 +229,7 @@ import {
   ensureProjectConversation,
 } from '@/lib/pierrot/projects/conversation';
 import { buildProjectChatContext } from '@/lib/pierrot/projects/history';
-import { runProjectReview } from '@/lib/pierrot/projects/review/service';
+import { prepareProjectReview } from '@/lib/pierrot/projects/review/service';
 import {
   createOwnerTask,
   type OwnerTaskCreationResult,
@@ -237,6 +237,9 @@ import {
 import { listDevTasks, updateDevTask } from '@/lib/pierrot/dev/tasks';
 import { resolvePierrotProject } from '@/lib/pierrot/projects/resolver';
 import { formatPierrotAnswerTrace } from '@/lib/pierrot/diagnostics';
+import { detectUnifiedSearchIntent } from '@/lib/pierrot/search/intent';
+import { formatUnifiedSearchReport } from '@/lib/pierrot/search/format';
+import { searchUnifiedOwnerContext } from '@/lib/pierrot/search/unified';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -549,6 +552,9 @@ export async function POST(req: Request) {
     // context, while an explicitly public owner turn keeps its legacy public
     // perspective.
     let conversationProject: Awaited<ReturnType<typeof getPierrotProjectForConversation>> = null;
+    // Project inferred from this turn only. It can label extracted artifacts
+    // without converting the whole conversation into a project chat.
+    let turnProject: Awaited<ReturnType<typeof resolvePierrotProject>>['project'] = null;
     if (ragOwnerAuthorized && isPierrotUserId(ownerIdentityUserId) && rawConversationId) {
       try {
         conversationProject = await getPierrotProjectForConversation(
@@ -908,6 +914,7 @@ export async function POST(req: Request) {
           conversationProject,
           message: trimmedMessage,
         });
+        turnProject = resolved.project || null;
         resolvedProjectRef = resolved.project?.slug || resolvedProjectRef;
         if (resolved.ambiguous)
           projectResolutionNote =
@@ -1573,7 +1580,7 @@ export async function POST(req: Request) {
             );
           }
 
-          const review = await runProjectReview({
+          const review = await prepareProjectReview({
             store: memoryStore,
             ownerUserId: ownerIdentityUserId,
             project: snapshot,
@@ -2085,6 +2092,49 @@ export async function POST(req: Request) {
               : 'I could not assemble the work analysis. I will not present that as a successful result. Details are available in [Skill Foundry](/admin/skills).'
           );
         }
+      }
+
+      // One owner-wide search across the single conversation stream, memory,
+      // project knowledge and GitHub Issues. It returns source-labelled
+      // excerpts and links; it never copies whole transcripts into the answer.
+      const unifiedSearchIntent = detectUnifiedSearchIntent(trimmedMessage);
+
+      if (unifiedSearchIntent && memoryStore && isPierrotUserId(ownerIdentityUserId)) {
+        let searchProject: Awaited<ReturnType<typeof resolvePierrotProject>>['project'] = null;
+
+        try {
+          const resolved = await resolvePierrotProject({
+            ownerUserId: ownerIdentityUserId,
+            conversationProject,
+            message: trimmedMessage,
+          });
+          searchProject = resolved.project;
+        } catch {
+          searchProject = conversationProject || null;
+        }
+
+        const result = await searchUnifiedOwnerContext({
+          store: memoryStore,
+          ownerUserId: ownerIdentityUserId,
+          query: unifiedSearchIntent.query,
+          scope: unifiedSearchIntent.scope,
+          project: searchProject,
+        }).catch(() => ({
+          query: unifiedSearchIntent.query,
+          project: searchProject
+            ? { id: searchProject.id, name: searchProject.name, slug: searchProject.slug }
+            : null,
+          hits: [],
+          notes: ['Поиск сейчас недоступен. Я не буду выдумывать результаты.'],
+        }));
+
+        return persistOwnerReply(formatUnifiedSearchReport(result, ownerLanguage), {
+          unified_search: true,
+          unified_search_scope: unifiedSearchIntent.scope,
+          unified_search_project_id: result.project?.id || null,
+          unified_search_hits: result.hits.length,
+          unified_search_sources: Array.from(new Set(result.hits.map((hit) => hit.source))),
+        });
       }
 
       const pending = pierrotStore
@@ -2844,7 +2894,11 @@ export async function POST(req: Request) {
             store: memoryStore,
             userId: ownerIdentityUserId,
             content,
-            projectRef: memoryIntent.projectRef,
+            projectRef:
+              memoryIntent.projectRef ||
+              conversationProject?.slug ||
+              turnProject?.slug ||
+              null,
             conversationId,
             messageId: userMessageId,
             originalMessage: trimmedMessage,
@@ -3160,11 +3214,13 @@ export async function POST(req: Request) {
           }
 
           try {
+            const artifactProject = conversationProject || turnProject || null;
             const created = await createMemoryRecord(memoryStore, ownerIdentityUserId, {
               kind: memoryIntent.kind,
               title: memoryIntent.title || content.slice(0, 96),
               content,
               rationale: trimmedMessage,
+              project: artifactProject?.name || null,
               conversationId,
               messageId: userMessageId,
               reviewAt: memoryIntent.reviewAt,
@@ -3173,6 +3229,8 @@ export async function POST(req: Request) {
                 {
                   type: 'owner_command',
                   action: memoryIntent.action,
+                  projectId: artifactProject?.id || null,
+                  projectSlug: artifactProject?.slug || null,
                   originalMessage: trimmedMessage.slice(0, 1_000),
                 },
               ],
@@ -3191,14 +3249,14 @@ export async function POST(req: Request) {
               );
             }
 
-            if (conversationProject) {
-              // A task created inside a project conversation gets the canonical
-              // relation immediately; the text column remains only a mirror.
+            if (artifactProject) {
+              // Project context at the artifact level: the conversation may be
+              // ordinary, but this extracted record has an unambiguous project.
               await moveDecisionToProject(
                 memoryStore,
                 ownerIdentityUserId,
                 created.id,
-                conversationProject
+                artifactProject
               ).catch(() => undefined);
             }
 

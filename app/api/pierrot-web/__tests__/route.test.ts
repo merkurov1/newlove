@@ -17,6 +17,10 @@ function asMock(value: unknown): MockFn {
   return value as unknown as MockFn;
 }
 
+jest.mock('@octokit/rest', () => ({
+  Octokit: class Octokit {},
+}));
+
 jest.mock('@/lib/serverAuth', () => ({
   getCurrentUser: jest.fn(async () => null),
   requireAdminFromRequest: jest.fn(async () => {

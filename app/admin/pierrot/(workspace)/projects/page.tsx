@@ -1,13 +1,11 @@
-import type { Metadata } from 'next';
-import { requireAdmin } from '@/lib/serverAuth';
-import { ensureHeartAndAngelProject, listPierrotProjects } from '@/lib/pierrot/projects/store';
-import ProjectsWorkspace from '@/components/pierrot/workspace/ProjectsWorkspace';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'PROJECTS' };
 
-export default async function ProjectsPage() {
-  const admin = await requireAdmin();
-  await ensureHeartAndAngelProject(admin.id);
-  return <ProjectsWorkspace initialProjects={await listPierrotProjects(admin.id)} />;
+/**
+ * Projects are contexts inside the one conversation stream, not a separate
+ * workspace. Old bookmarks keep working by opening the unified chat.
+ */
+export default function ProjectsPage() {
+  redirect('/admin/pierrot');
 }

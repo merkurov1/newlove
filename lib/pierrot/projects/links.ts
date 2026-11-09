@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PierrotMemoryRecord, PierrotMemoryStatus } from '@/lib/pierrot/memory/types';
 import { listMemoryRecordsByIds } from '@/lib/pierrot/memory/store';
 import { mapProject } from './store';
+import { projectMatchesRef } from './matching';
 import type { PierrotProject } from './types';
 import { buildProjectChatContext } from './history';
 import { getProjectConversationId } from './conversation';
@@ -165,14 +166,9 @@ export async function resolveExactProject(
     .eq('owner_user_id', ownerUserId);
   if (error) throw error;
 
-  const normalized = ref.toLocaleLowerCase();
   const matches = (Array.isArray(data) ? data : [])
     .map((row) => mapProject(row as Record<string, unknown>))
-    .filter(
-      (project) =>
-        project.name.toLocaleLowerCase() === normalized ||
-        project.slug.toLocaleLowerCase() === normalized
-    );
+    .filter((project) => projectMatchesRef(project, ref));
 
   if (matches.length === 1) return { project: matches[0], ambiguous: false };
   return { project: null, ambiguous: matches.length > 1 };

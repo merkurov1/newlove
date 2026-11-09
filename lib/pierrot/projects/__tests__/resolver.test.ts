@@ -1,4 +1,4 @@
-import { matchUniqueProjectMention } from '../matching';
+import { matchUniqueProjectMention, projectAliases, projectMatchesRef } from '../matching';
 import type { PierrotProject } from '../types';
 
 const project = (name: string, slug: string): PierrotProject => ({
@@ -30,5 +30,19 @@ describe('project mention matching', () => {
   it('does not guess when multiple projects match', () => {
     const projects = [project('Art Engine', 'art-engine'), project('Engine', 'engine')];
     expect(matchUniqueProjectMention(projects, 'Fix Art Engine')).toBeNull();
+  });
+
+  it('recognises compact and punctuation variants without new projects', () => {
+    const heart = project('Heart & Angel', 'heart-and-angel');
+
+    expect(projectAliases(heart)).toEqual(
+      expect.arrayContaining(['heart-and-angel', 'heartandangel', 'heart and angel'])
+    );
+    expect(matchUniqueProjectMention([heart], 'В heartandangel поправить шарик')).toBe(heart);
+    expect(matchUniqueProjectMention([heart], 'Heart&Angel: проверить мобильную версию')).toBe(
+      heart
+    );
+    expect(projectMatchesRef(heart, 'heartangel')).toBe(true);
+    expect(projectMatchesRef(heart, 'heart-and-angel')).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import { getPierrotProject, listPierrotProjects } from './store';
-import { matchUniqueProjectMention } from './matching';
+import { matchUniqueProjectMention, projectAliases } from './matching';
 import type { PierrotProject } from './types';
 export { matchUniqueProjectMention } from './matching';
 
@@ -39,8 +39,15 @@ export async function resolvePierrotProject(input: {
     // ending up with no context at all.
     const afterMarker = message.replace(CORRECTION, ' ').trim();
     const first = projects
-      .filter((project) => new RegExp(escapeProjectName(project.name), 'iu').test(afterMarker))
-      .sort((a, b) => afterMarker.indexOf(a.name) - afterMarker.indexOf(b.name))[0];
+      .map((project) => {
+        const index = projectAliases(project)
+          .map((alias) => afterMarker.toLocaleLowerCase().indexOf(alias))
+          .filter((value) => value >= 0)
+          .sort((a, b) => a - b)[0];
+        return { project, index: typeof index === 'number' ? index : Number.MAX_SAFE_INTEGER };
+      })
+      .filter((entry) => entry.index !== Number.MAX_SAFE_INTEGER)
+      .sort((a, b) => a.index - b.index)[0]?.project;
     if (first) return { project: first, ambiguous: false };
   }
 
@@ -55,8 +62,4 @@ export async function resolvePierrotProject(input: {
     (project) => project.name.toLowerCase() === needle || project.slug === needle
   );
   return { project: matches.length === 1 ? matches[0] : null, ambiguous: matches.length > 1 };
-}
-
-function escapeProjectName(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
