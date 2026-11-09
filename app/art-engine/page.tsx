@@ -2,8 +2,9 @@ import React from 'react';
 import type { Metadata } from 'next';
 import ArtEngineClient from './ArtEngineClient';
 import { JsonLd } from '@/components/seo/JsonLd';
+import { PageEvent } from '@/components/analytics/PageEvent';
 import { pageMetadata } from '@/lib/seo';
-import { breadcrumbJsonLd, creativeWorkJsonLd } from '@/lib/structuredData';
+import { breadcrumbJsonLd, webPageJsonLd } from '@/lib/structuredData';
 
 const ART_ENGINE_DESCRIPTION =
   'Institutional-grade art acquisition, liquidity analysis and curatorial dossier synthesis in the Merkurov Art Engine.';
@@ -18,16 +19,18 @@ export const metadata: Metadata = pageMetadata({
 export default function ArtEnginePage() {
   return (
     <>
+      <PageEvent name="art_engine_view" params={{ section: 'art_engine' }} />
       {/* Server-rendered page heading: the interactive terminal is client-only,
           so without this the initial HTML has no h1 for crawlers and assistive
           technology. The visible terminal heading is an h2. */}
       <h1 className="sr-only">Art Engine — Art Market Intelligence</h1>
+      {/* The service itself is a WebPage, not a VisualArtwork. Individual
+          artworks and lots carry their own VisualArtwork entities. */}
       <JsonLd
-        data={creativeWorkJsonLd({
+        data={webPageJsonLd({
           path: '/art-engine',
           name: 'Art Engine — Art Market Intelligence',
           description: ART_ENGINE_DESCRIPTION,
-          genre: 'Art market research tool',
         })}
       />
       <JsonLd

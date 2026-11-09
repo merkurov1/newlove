@@ -6,7 +6,7 @@ import BlockRenderer from '@/components/BlockRenderer';
 import LetterCommentsClient from '@/components/journal/LetterCommentsClient';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { description as seoDescription, pageMetadata, truncate } from '@/lib/seo';
-import { articleJsonLd, breadcrumbJsonLd } from '@/lib/structuredData';
+import { blogPostingJsonLd, breadcrumbJsonLd, newsArticleJsonLd } from '@/lib/structuredData';
 import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 
@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const supabase = createClient();
     const { data: letter } = await supabase
       .from('letters')
-      .select('title, content, publishedAt, createdAt, lang')
+      .select('title, content, publishedAt, createdAt, lang, kind')
       .eq('slug', slug)
       .eq('published', true)
       .single();
@@ -84,7 +84,7 @@ export default async function LetterPage({ params }: PageProps) {
   const { data: letter, error } = await supabase
     .from('letters')
     .select(
-      'id, title, slug, content, published, publishedAt, createdAt, authorId, users(name, email)'
+      'id, title, slug, content, published, publishedAt, createdAt, lang, kind, authorId, users(name, email)'
     )
     .eq('slug', slug)
     .eq('published', true)
@@ -112,18 +112,34 @@ export default async function LetterPage({ params }: PageProps) {
       generateDescription(letter.content || '') ||
         `A journal dispatch by Anton Merkurov: ${letter.title}.`,
     );
+  let articleImage: string | null = null;
+  try {
+    articleImage = await getFirstImage(letter.content || '');
+  } catch {
+    articleImage = null;
+  }
+  const letterKind = String((letter as { kind?: string | null }).kind || '').toLowerCase();
+  // NewsArticle is reserved for an explicit news type. Journal issues and
+  // essays stay BlogPosting even when the headline sounds topical.
+  const isNewsArticle = letterKind === 'news' || letterKind === 'breaking';
+  const articleInput = {
+    path: articlePath,
+    headline: String(letter.title || 'Journal'),
+    description: articleSummary,
+    datePublished: letter.publishedAt || letter.createdAt || undefined,
+    dateModified: letter.publishedAt || letter.createdAt || undefined,
+    image: articleImage || undefined,
+    inLanguage: letter.lang === 'ru' ? 'ru' : 'en',
+  };
 
   return (
     <div className="min-h-screen bg-white text-zinc-900 selection:bg-black selection:text-white font-serif">
       <JsonLd
-        data={articleJsonLd({
-          path: articlePath,
-          headline: String(letter.title || 'Journal'),
-          description: articleSummary,
-          datePublished: letter.publishedAt || letter.createdAt || undefined,
-          dateModified: letter.publishedAt || letter.createdAt || undefined,
-          inLanguage: 'en',
-        })}
+        data={
+          isNewsArticle
+            ? newsArticleJsonLd(articleInput)
+            : blogPostingJsonLd(articleInput)
+        }
       />
       <JsonLd
         data={breadcrumbJsonLd([

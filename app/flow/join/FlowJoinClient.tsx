@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, CheckCircle2, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
+import { GA_EVENTS, trackGaEvent } from '@/lib/analytics/ga4';
 
 type Language = 'ru' | 'en';
 
@@ -80,6 +81,11 @@ export default function FlowJoinClient() {
 
     setStatus('loading');
     setErrorMessage('');
+    trackGaEvent(GA_EVENTS.flowSubscribeStart, {
+      method: 'email',
+      language: lang,
+      source: 'flow_join',
+    });
 
     try {
       const response = await fetch('/api/subscribe', {
@@ -102,8 +108,15 @@ export default function FlowJoinClient() {
         );
       }
 
-      setStatus(data.status === 'already_confirmed' ? 'already' : 'success');
+      const already = data.status === 'already_confirmed';
+      setStatus(already ? 'already' : 'success');
       setEmail('');
+      trackGaEvent(GA_EVENTS.flowSubscribeComplete, {
+        method: 'email',
+        language: lang,
+        status: already ? 'already_confirmed' : 'pending_confirmation',
+        source: 'flow_join',
+      });
     } catch (err: any) {
       console.error('Subscription error:', err);
       setStatus('error');

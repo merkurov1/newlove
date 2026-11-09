@@ -20,6 +20,8 @@ import { getCachedFlowItem } from '@/lib/flow/items-cash';
 import { readDistributionUrl } from '@/lib/flow/distribution';
 import PierrotContextBlock from '@/components/flow/PierrotContextBlock';
 import FlowImageComponent from '@/components/flow/FlowImage';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbJsonLd, flowContentJsonLd } from '@/lib/structuredData';
 
 // Publication data and its ready AI context share one tagged cache entry.
 // Edits, deletes and AI context generation invalidate the same tag.
@@ -576,60 +578,36 @@ export default async function FlowItemPage({ params }: PageProps) {
     readDistributionUrl(bundle?.item.metadata, 'threads') ??
     readDistributionUrl(content.metadata, 'threads');
 
-  const articleSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'BlogPosting',
-    headline: metadata.title,
-    description: metadata.description,
-    image: [metadata.previewImage],
-    datePublished: metadata.publishedAt ?? undefined,
-    dateModified: metadata.updatedAt ?? metadata.publishedAt ?? undefined,
-    inLanguage: content.language,
-    url: metadata.canonicalUrl,
-    mainEntityOfPage: {
-      '@type': 'WebPage',
-      '@id': metadata.canonicalUrl,
-    },
-    author: {
-      '@type': 'Person',
-      name: 'Anton Merkurov',
-      url: SITE_URL,
-    },
-    publisher: {
-      '@type': 'Person',
-      name: 'Anton Merkurov',
-      url: SITE_URL,
-    },
-  };
-
-  const breadcrumbSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
-      { '@type': 'ListItem', position: 2, name: 'Flow', item: `${SITE_URL}/flow` },
-      {
-        '@type': 'ListItem',
-        position: 3,
-        name: metadata.title,
-        item: metadata.canonicalUrl,
-      },
-    ],
-  };
+  const newsFlag =
+    /^(?:news|breaking)$/i.test(
+      String((content.metadata as Record<string, unknown> | null)?.news_type || '')
+    ) ||
+    /^(?:news|breaking)$/i.test(
+      String((content.metadata as Record<string, unknown> | null)?.schema_type || '')
+    );
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(articleSchema).replace(/</g, '\\u003c'),
-        }}
+      <JsonLd
+        data={flowContentJsonLd({
+          path: metadata.canonicalUrl,
+          name: metadata.title,
+          description: metadata.description,
+          contentType: content.contentType,
+          datePublished: metadata.publishedAt,
+          dateModified: metadata.updatedAt ?? metadata.publishedAt,
+          image: metadata.previewImage,
+          inLanguage: content.language,
+          isNews: newsFlag,
+          bodyText: content.bodyText,
+        })}
       />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbSchema).replace(/</g, '\\u003c'),
-        }}
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Flow', path: '/flow' },
+          { name: metadata.title, path: metadata.canonicalUrl },
+        ])}
       />
 
       <div className="min-h-screen bg-white px-5 pb-24 pt-20 text-stone-900 sm:px-8 sm:pt-24">

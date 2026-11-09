@@ -208,6 +208,8 @@ export function collectionPageJsonLd(input: {
   });
 }
 
+export type ArticleSchemaType = 'Article' | 'BlogPosting' | 'NewsArticle';
+
 export function articleJsonLd(input: {
   path: string;
   headline: string;
@@ -220,12 +222,19 @@ export function articleJsonLd(input: {
   inLanguage?: string;
   citation?: string;
   isBasedOn?: string;
+  /** Defaults to Article for backwards compatibility. */
+  type?: ArticleSchemaType;
+  wordCount?: number;
 }) {
   const url = absoluteUrl(input.path);
+  const type = input.type || 'Article';
+  const idSuffix =
+    type === 'BlogPosting' ? 'blogposting' : type === 'NewsArticle' ? 'newsarticle' : 'article';
+
   return compact({
     '@context': 'https://schema.org',
-    '@type': 'Article',
-    '@id': `${url}#article`,
+    '@type': type,
+    '@id': `${url}#${idSuffix}`,
     headline: input.headline,
     description: input.description,
     url,
@@ -233,16 +242,138 @@ export function articleJsonLd(input: {
     datePublished: input.datePublished,
     dateModified: input.dateModified || input.datePublished,
     image: input.image ? [absoluteUrl(input.image)] : [DEFAULT_OG_IMAGE],
-    author: {
-      '@type': 'Person',
-      name: input.authorName || PERSON_NAME,
-      url: SITE_URL,
-    },
-    publisher: { '@id': personId },
+    author: input.authorName
+      ? { '@type': 'Person', name: input.authorName, url: SITE_URL }
+      : { '@id': personId },
+    publisher: { '@id': organizationId },
     articleSection: input.section,
     inLanguage: input.inLanguage || SITE_LANGUAGE,
     citation: input.citation,
     isBasedOn: input.isBasedOn,
+    wordCount: input.wordCount,
+  });
+}
+
+export function blogPostingJsonLd(input: Omit<Parameters<typeof articleJsonLd>[0], 'type'>) {
+  return articleJsonLd({ ...input, type: 'BlogPosting' });
+}
+
+export function newsArticleJsonLd(input: Omit<Parameters<typeof articleJsonLd>[0], 'type'>) {
+  return articleJsonLd({ ...input, type: 'NewsArticle' });
+}
+
+export function webPageJsonLd(input: {
+  path: string;
+  name: string;
+  description: string;
+  inLanguage?: string;
+  datePublished?: string;
+  dateModified?: string;
+  aboutId?: string;
+  mainEntityId?: string;
+}) {
+  const url = absoluteUrl(input.path);
+  return compact({
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    '@id': `${url}#webpage`,
+    url,
+    name: input.name,
+    description: input.description,
+    isPartOf: { '@id': websiteId },
+    about: { '@id': input.aboutId || personId },
+    mainEntity: { '@id': input.mainEntityId || personId },
+    inLanguage: input.inLanguage || SITE_LANGUAGE,
+    datePublished: input.datePublished,
+    dateModified: input.dateModified,
+  });
+}
+
+export function aboutPageJsonLd(input: {
+  path: string;
+  name: string;
+  description: string;
+  inLanguage?: string;
+  mainEntityId?: string;
+  about?: Record<string, unknown>;
+}) {
+  const url = absoluteUrl(input.path);
+  return compact({
+    '@context': 'https://schema.org',
+    '@type': 'AboutPage',
+    '@id': `${url}#aboutpage`,
+    url,
+    name: input.name,
+    description: input.description,
+    isPartOf: { '@id': websiteId },
+    mainEntity: { '@id': input.mainEntityId || personId },
+    about: input.about || { '@id': personId },
+    inLanguage: input.inLanguage || SITE_LANGUAGE,
+  });
+}
+
+export type FlowSchemaContentType =
+  | 'note'
+  | 'article'
+  | 'link'
+  | 'photo'
+  | 'video'
+  | 'quote'
+  | 'mixed';
+
+/**
+ * Maps a real Flow item to one Schema.org entity. NewsArticle is used only when
+ * the item is explicitly marked as news; a photo, link or short note is never
+ * promoted to news automatically.
+ */
+export function flowContentJsonLd(input: {
+  path: string;
+  name: string;
+  description: string;
+  contentType: FlowSchemaContentType;
+  datePublished?: string | null;
+  dateModified?: string | null;
+  image?: string | null;
+  inLanguage?: string;
+  isNews?: boolean;
+  bodyText?: string | null;
+}) {
+  const bodyLength = (input.bodyText || '').trim().length;
+  const isNews = input.isNews === true && (input.contentType === 'article' || input.contentType === 'note');
+
+  if (input.contentType === 'article' || (input.contentType === 'note' && bodyLength >= 280)) {
+    const articleInput = {
+      path: input.path,
+      headline: input.name,
+      description: input.description,
+      datePublished: input.datePublished || undefined,
+      dateModified: input.dateModified || input.datePublished || undefined,
+      image: input.image || undefined,
+      inLanguage: input.inLanguage,
+      wordCount: bodyLength > 0 ? Math.max(1, Math.ceil(bodyLength / 6)) : undefined,
+    };
+    return isNews ? newsArticleJsonLd(articleInput) : blogPostingJsonLd(articleInput);
+  }
+
+  if (input.contentType === 'quote' || input.contentType === 'video') {
+    return creativeWorkJsonLd({
+      path: input.path,
+      name: input.name,
+      description: input.description,
+      datePublished: input.datePublished || undefined,
+      image: input.image || undefined,
+      genre: input.contentType === 'quote' ? 'Quote' : 'Video',
+      inLanguage: input.inLanguage,
+    });
+  }
+
+  return webPageJsonLd({
+    path: input.path,
+    name: input.name,
+    description: input.description,
+    datePublished: input.datePublished || undefined,
+    dateModified: input.dateModified || input.datePublished || undefined,
+    inLanguage: input.inLanguage,
   });
 }
 
@@ -281,8 +412,22 @@ export function visualArtworkJsonLd(input: {
   description: string;
   image?: string;
   dateCreated?: string;
+  /**
+   * Only pass this when the work is by someone other than Anton Merkurov
+   * (for example an auction lot). Omitting it links to the existing Person.
+   */
+  creator?: { name: string; url?: string; id?: string } | null;
 }) {
   const url = absoluteUrl(input.path);
+  const creator =
+    input.creator === null
+      ? undefined
+      : input.creator
+        ? input.creator.id
+          ? { '@id': input.creator.id }
+          : { '@type': 'Person', name: input.creator.name, url: input.creator.url }
+        : { '@id': personId };
+
   return compact({
     '@context': 'https://schema.org',
     '@type': 'VisualArtwork',
@@ -291,9 +436,10 @@ export function visualArtworkJsonLd(input: {
     description: input.description,
     url,
     image: input.image ? [absoluteUrl(input.image)] : undefined,
-    creator: { '@id': personId },
+    creator,
     dateCreated: input.dateCreated,
     inLanguage: SITE_LANGUAGE,
+    isPartOf: { '@id': websiteId },
   });
 }
 

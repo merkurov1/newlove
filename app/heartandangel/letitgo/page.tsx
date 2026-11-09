@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import LetItGoAngel from '@/components/LetItGoAngel';
 import { JsonLd } from '@/components/seo/JsonLd';
+import { PageEvent } from '@/components/analytics/PageEvent';
 import { breadcrumbJsonLd, visualArtworkJsonLd } from '@/lib/structuredData';
 
 export const metadata: Metadata = {
@@ -37,6 +38,10 @@ const LETITGO_DESCRIPTION =
 export default function Page() {
   return (
     <>
+      <PageEvent
+        name="ritual_enter"
+        params={{ ritual: 'let_it_go', project: 'heart_angel' }}
+      />
       <JsonLd
         data={visualArtworkJsonLd({
           path: '/heartandangel/letitgo',

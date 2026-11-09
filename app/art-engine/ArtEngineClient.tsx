@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext';
 import { KeyRound, Mail, CheckCircle2 } from 'lucide-react';
 import ArtEngineWorkspace from '@/components/art-engine/ArtEngineWorkspace';
+import { GA_EVENTS, trackGaEvent } from '@/lib/analytics/ga4';
 
 export default function ArtEngineClient() {
   const auth = useAuth() as any;
@@ -121,6 +122,10 @@ export default function ArtEngineClient() {
   const handleRequestAccess = async (e: any) => {
     e.preventDefault();
     if (!authEmail) return;
+    trackGaEvent(GA_EVENTS.artEngineInteraction, {
+      action: 'request_access',
+      section: 'art_engine',
+    });
     setAuthLoading(true);
     setAuthError('');
 

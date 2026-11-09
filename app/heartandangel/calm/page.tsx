@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import HeartPhysics from '@/components/HeartPhysics';
 import { JsonLd } from '@/components/seo/JsonLd';
+import { PageEvent } from '@/components/analytics/PageEvent';
 import { breadcrumbJsonLd, visualArtworkJsonLd } from '@/lib/structuredData';
 
 const CALM_URL =
@@ -94,6 +95,10 @@ export default function CalmPage() {
 
   return (
     <>
+      <PageEvent
+        name="ritual_enter"
+        params={{ ritual: 'keep_calm', project: 'heart_angel' }}
+      />
       <JsonLd
         data={visualArtworkJsonLd({
           path: '/heartandangel/calm',

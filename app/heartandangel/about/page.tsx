@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { JsonLd } from '@/components/seo/JsonLd';
-import { breadcrumbJsonLd } from '@/lib/structuredData';
+import { aboutPageJsonLd, breadcrumbJsonLd } from '@/lib/structuredData';
 
 export const metadata: Metadata = {
   title: 'About Heart & Angel | A Living Digital Mythology',
@@ -28,20 +28,26 @@ export const metadata: Metadata = {
   },
 };
 
-const aboutJsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'CreativeWork',
-  name: 'Heart & Angel',
-  headline: 'A Living Digital Mythology',
-  description: 'A transmedia digital world where angels, devils, hearts and small rituals help visitors explore love, attention and release.',
-  creator: { '@type': 'Person', name: 'Anton Merkurov' },
-  url: 'https://www.merkurov.love/heartandangel/about',
-};
+const HEART_ANGEL_PROJECT_ID = 'https://www.merkurov.love/heartandangel#project';
 
 export default function HeartAndAngelAboutPage() {
   return (
     <div className="min-h-screen bg-[#FAF8F5] px-5 pb-20 pt-32 text-stone-900 sm:px-8 sm:pt-40">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(aboutJsonLd) }} />
+      <JsonLd
+        data={aboutPageJsonLd({
+          path: '/heartandangel/about',
+          name: 'About Heart & Angel — A Living Digital Mythology',
+          description:
+            'A transmedia digital world where angels, devils, hearts and small rituals help visitors explore love, attention and release.',
+          mainEntityId: HEART_ANGEL_PROJECT_ID,
+          about: {
+            '@type': 'CreativeWork',
+            '@id': HEART_ANGEL_PROJECT_ID,
+            name: 'Heart & Angel',
+            creator: { '@id': 'https://www.merkurov.love/#person' },
+          },
+        })}
+      />
       <JsonLd
         data={breadcrumbJsonLd([
           { name: 'Home', path: '/' },

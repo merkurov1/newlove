@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import HeartAndAngelHub from '@/components/HeartAndAngelHub';
 import { JsonLd } from '@/components/seo/JsonLd';
+import { PageEvent } from '@/components/analytics/PageEvent';
 import { pageMetadata, ROUTE_COPY } from '@/lib/seo';
 import {
   breadcrumbJsonLd,
@@ -49,6 +50,10 @@ export const metadata: Metadata = pageMetadata({
 export default function HeartAndAngelPage() {
   return (
     <>
+      <PageEvent
+        name="project_view"
+        params={{ project: 'heart_angel', section: 'heart_and_angel' }}
+      />
       <JsonLd
         data={collectionPageJsonLd({
           path: '/heartandangel',

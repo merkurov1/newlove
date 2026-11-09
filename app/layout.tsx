@@ -31,6 +31,7 @@ import PierrotChat from '@/components/PierrotChat';
 import { PierrotProvider } from '@/components/pierrot/PierrotContext';
 import TelegramMiniApp from '@/components/TelegramMiniApp';
 import SiteChromeVisibility from '@/components/SiteChromeVisibility';
+import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
 import NextDynamic from 'next/dynamic';
 import { unstable_cache } from 'next/cache';
 
@@ -277,23 +278,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Analytics />
         <SpeedInsights />
 
-        {process.env.NODE_ENV === 'production' && (
-          <>
-            {/* Google tag (gtag.js) — production traffic only. */}
-            <Script
-              src="https://www.googletagmanager.com/gtag/js?id=G-J1F4ZTK9ND"
-              strategy="afterInteractive"
-            />
-            <Script id="google-analytics" strategy="afterInteractive">
-              {`
-                window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                gtag('js', new Date());
-                gtag('config', 'G-J1F4ZTK9ND');
-              `}
-            </Script>
-          </>
-        )}
+        {/* Single GA4 property. The component is a no-op outside production and
+            sends exactly one page_view per App Router navigation. */}
+        <GoogleAnalytics />
 
         {/* Загружаем Telegram Web App асинхронно, чтобы исключить Forced Reflow при первой загрузке */}
         <Script src="https://telegram.org/js/telegram-web-app.js" strategy="lazyOnload" />

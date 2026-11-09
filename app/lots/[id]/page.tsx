@@ -21,7 +21,7 @@ function getAuctionHouseName(lot: any): string {
 
 import { description as seoDescription, pageMetadata, truncate } from '@/lib/seo';
 import { JsonLd } from '@/components/seo/JsonLd';
-import { breadcrumbJsonLd } from '@/lib/structuredData';
+import { breadcrumbJsonLd, visualArtworkJsonLd } from '@/lib/structuredData';
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const { data: lot } = await supabase
@@ -80,24 +80,25 @@ export default async function LotDetailPage({ params }: { params: { id: string }
     ? lot.image_path
     : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/artifacts/${lot.image_path}`;
 
-  const artworkSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'VisualArtwork',
-    name: lot.title || [lot.artist, 'Untitled'].filter(Boolean).join(' — '),
-    artist: {
-      '@type': 'Person',
-      name: lot.artist || 'Unknown Artist',
-    },
-    image: publicImg,
-    description: ai.summary || `Artwork dossier for ${[lot.artist, lot.title].filter(Boolean).join(' — ')}`,
-    url: `https://www.merkurov.love/lots/${encodeURIComponent(params.id)}`,
-  };
+  const artworkName =
+    lot.title || [lot.artist, 'Untitled'].filter(Boolean).join(' — ');
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(artworkSchema) }}
+      <JsonLd
+        data={visualArtworkJsonLd({
+          path: `/lots/${encodeURIComponent(params.id)}`,
+          name: artworkName,
+          description:
+            ai.summary ||
+            `Artwork dossier for ${[lot.artist, lot.title].filter(Boolean).join(' — ')}`,
+          image: publicImg,
+          dateCreated:
+            typeof lot.year === 'string' || typeof lot.year === 'number'
+              ? String(lot.year)
+              : undefined,
+          creator: lot.artist ? { name: String(lot.artist) } : null,
+        })}
       />
       <JsonLd
         data={breadcrumbJsonLd([

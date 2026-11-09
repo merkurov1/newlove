@@ -5,6 +5,9 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import NewPostModal from '@/components/flow/NewPostModal';
 import FlowImageComponent from '@/components/flow/FlowImage';
 import { resolveFlowCardComposition } from '@/lib/flow/cardComposition';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbJsonLd, collectionPageJsonLd } from '@/lib/structuredData';
+import { GA_EVENTS, trackGaEvent } from '@/lib/analytics/ga4';
 
 type FlowImage = {
   url: string;
@@ -544,6 +547,7 @@ export default function FlowPage() {
   const isFetchingRef = useRef(false);
   const itemsRef = useRef<FlowItem[]>([]);
   const mountedRef = useRef(false);
+  const flowViewSentRef = useRef(false);
 
   const loadItems = useCallback(async (reset = false) => {
     if (isFetchingRef.current) return;
@@ -644,6 +648,11 @@ export default function FlowPage() {
   useEffect(() => {
     mountedRef.current = true;
 
+    if (!flowViewSentRef.current) {
+      flowViewSentRef.current = true;
+      trackGaEvent(GA_EVENTS.flowView, { section: 'flow' });
+    }
+
     void loadItems(true);
     void checkAdmin();
 
@@ -685,44 +694,20 @@ export default function FlowPage() {
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type': 'CollectionPage',
-            '@id': 'https://www.merkurov.love/flow#collection',
-            url: 'https://www.merkurov.love/flow',
-            name: 'Flow — notes, signals and artifacts',
-            description:
-              'A stream of notes, links, images, video and signals selected by Anton Merkurov.',
-            isPartOf: { '@id': 'https://www.merkurov.love/#website' },
-            inLanguage: 'en',
-          }).replace(/</g, '\\u003c'),
-        }}
+      <JsonLd
+        data={collectionPageJsonLd({
+          path: '/flow',
+          name: 'Flow — notes, signals and artifacts',
+          description:
+            'A stream of notes, links, images, video and signals selected by Anton Merkurov.',
+          inLanguage: 'en',
+        })}
       />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type': 'BreadcrumbList',
-            itemListElement: [
-              {
-                '@type': 'ListItem',
-                position: 1,
-                name: 'Home',
-                item: 'https://www.merkurov.love',
-              },
-              {
-                '@type': 'ListItem',
-                position: 2,
-                name: 'Flow',
-                item: 'https://www.merkurov.love/flow',
-              },
-            ],
-          }).replace(/</g, '\\u003c'),
-        }}
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Flow', path: '/flow' },
+        ])}
       />
       <div className="min-h-screen bg-white px-5 pb-24 pt-20 text-neutral-900 sm:px-8 sm:pt-24">
         <div className="mx-auto max-w-2xl">

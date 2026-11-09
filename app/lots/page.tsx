@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 import { pageMetadata } from '@/lib/seo';
 import { JsonLd } from '@/components/seo/JsonLd';
+import { PageEvent } from '@/components/analytics/PageEvent';
 import { breadcrumbJsonLd, collectionPageJsonLd } from '@/lib/structuredData';
 
 const LOTS_DESCRIPTION =
@@ -34,6 +35,10 @@ export default async function LotsGalleryPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans pt-12 pb-24 px-6">
+      <PageEvent
+        name="art_engine_view"
+        params={{ section: 'art_engine_vault', project: 'art_engine' }}
+      />
       <JsonLd
         data={collectionPageJsonLd({
           path: '/lots',

@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
 import { JsonLd } from '@/components/seo/JsonLd';
+import { PageEvent } from '@/components/analytics/PageEvent';
 import { pageMetadata, ROUTE_COPY } from '@/lib/seo';
 import { breadcrumbJsonLd, collectionPageJsonLd } from '@/lib/structuredData';
 import { createClient } from '@/lib/supabase/server';
@@ -164,6 +165,7 @@ export default async function JournalPage() {
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] font-sans text-[#111] selection:bg-black selection:text-white">
+      <PageEvent name="section_view" params={{ section: 'journal' }} />
       <JsonLd
         data={collectionPageJsonLd({
           path: '/journal',
