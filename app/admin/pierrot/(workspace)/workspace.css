@@ -5722,18 +5722,31 @@ a.pw-home-indicator:hover {
 
 .pw-topbar-nav {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 22px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pw-topbar-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .pw-topbar-link {
   position: relative;
+  flex: 0 0 auto;
   padding: 22px 0;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .pw-topbar-link:hover,
@@ -6066,7 +6079,11 @@ a.pw-home-indicator:hover {
 
 @media (max-width: 760px) {
   .pw-topbar {
-    gap: 20px;
+    gap: 14px;
+  }
+
+  .pw-topbar-nav {
+    gap: 16px;
   }
 
   .pw-topbar-link {

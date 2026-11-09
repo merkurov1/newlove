@@ -1,22 +1,41 @@
 /**
- * The owner PWA has exactly two primary spaces: the continuous chat and the
- * project catalog. Memory and Flow are compact actions in the topbar; technical
- * tools are contextual, not primary navigation.
+ * The owner PWA topbar starts with the continuous chat, then exposes the same
+ * editorial sections as the public site. Memory and Flow are compact actions
+ * in the topbar; technical tools are contextual, not primary navigation.
  */
 export const WORKSPACE_ROUTES = [
   { key: 'chat', path: '/admin/pierrot', label: 'Чат', shortcut: '1' },
-  { key: 'projects', path: '/admin/pierrot/projects', label: 'Проекты', shortcut: '2' },
+  { key: 'journal', path: '/journal', label: 'Journal', shortcut: '2' },
+  {
+    key: 'heart-and-angel',
+    path: '/heartandangel',
+    label: 'Heart & Angel',
+    shortcut: '3',
+  },
+  { key: 'art-engine', path: '/art-engine', label: 'Art Engine', shortcut: '4' },
+  { key: 'lobby', path: '/lobby', label: 'Lobby', shortcut: '5' },
 ] as const;
 
 export type WorkspaceRouteKey = (typeof WORKSPACE_ROUTES)[number]['key'];
 
 export function activeWorkspaceKey(pathname: string): WorkspaceRouteKey {
-  if (pathname.startsWith('/admin/pierrot/projects')) return 'projects';
+  if (
+    pathname.startsWith('/heartandangel') ||
+    pathname.startsWith('/temple') ||
+    pathname.startsWith('/vigil') ||
+    pathname.startsWith('/absolution') ||
+    pathname.startsWith('/tribute')
+  ) {
+    return 'heart-and-angel';
+  }
+  if (pathname.startsWith('/journal') || pathname.startsWith('/flow')) return 'journal';
+  if (pathname.startsWith('/art-engine') || pathname.startsWith('/selection')) return 'art-engine';
+  if (pathname.startsWith('/lobby') || pathname.startsWith('/unframed')) return 'lobby';
   return 'chat';
 }
 
 /**
- * Shortcuts must not steal Cmd/Ctrl+N or Cmd/Ctrl+1..2 while the owner is
+ * Shortcuts must not steal Cmd/Ctrl+N or Cmd/Ctrl+1..5 while the owner is
  * typing into a field, a contenteditable surface or a native select.
  */
 export function isTextEntryTarget(target: EventTarget | null): boolean {
