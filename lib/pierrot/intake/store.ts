@@ -33,6 +33,10 @@ function isMissingTable(error: { code?: unknown; message?: unknown } | null | un
   return code === '42P01' || code === 'PGRST205' || message.includes('intake_logs');
 }
 
+function isUniqueViolation(error: { code?: unknown } | null | undefined): boolean {
+  return error?.code === '23505';
+}
+
 function toLog(row: Row): IntakeLog | null {
   if (row.type !== 'food' && row.type !== 'drink') return null;
   return {
@@ -82,27 +86,36 @@ export async function saveIntakeItems(
     confidence: input.confidence,
   }));
 
-  const { data, error } = await store
-    .from(TABLE)
-    .upsert(rows, {
-      onConflict: 'user_id,source_message_id,item_index',
-      ignoreDuplicates: true,
-    })
-    .select('*');
+  // PostgreSQL cannot use the production partial unique index as an
+  // `ON CONFLICT` target without its predicate, and PostgREST cannot express
+  // that predicate. Insert one item at a time and treat 23505 as the existing
+  // idempotent outcome instead of failing the whole save.
+  const items: IntakeLog[] = [];
+  let duplicateCount = 0;
 
-  if (error) {
-    if (isMissingTable(error)) throw new IntakeStorageUnavailableError();
-    throw error;
+  for (const row of rows) {
+    const { data, error } = await store.from(TABLE).insert(row).select('*').single();
+
+    if (error) {
+      if (isUniqueViolation(error)) {
+        duplicateCount += 1;
+        continue;
+      }
+      if (isMissingTable(error)) throw new IntakeStorageUnavailableError();
+      throw error;
+    }
+
+    const saved = data ? toLog(data as Row) : null;
+    if (!saved) {
+      throw new Error('INTAKE_SAVE_NOT_VERIFIED');
+    }
+    items.push(saved);
   }
-
-  const items = (Array.isArray(data) ? data : [])
-    .map((row) => toLog(row as Row))
-    .filter((row): row is IntakeLog => Boolean(row));
 
   return {
     inserted: items.length,
     items,
-    duplicate: items.length === 0 && input.sourceMessageId !== null,
+    duplicate: items.length === 0 && duplicateCount > 0,
   };
 }
 

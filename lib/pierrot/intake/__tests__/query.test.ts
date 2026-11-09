@@ -160,40 +160,90 @@ describe('timezone-aware ranges', () => {
 });
 
 describe('duplicate protection', () => {
-  it('uses an idempotent upsert keyed by owner, message and item index', async () => {
-    const upsert = jest.fn().mockReturnValue({
-      select: () => Promise.resolve({ data: [], error: null }),
+  it('inserts one row per item and reports 23505 as duplicate', async () => {
+    const insert = jest.fn().mockReturnValue({
+      select: () => ({
+        single: () =>
+          Promise.resolve({
+            data: null,
+            error: { code: '23505', message: 'duplicate key value violates unique constraint' },
+          }),
+      }),
     });
-    const store = { from: jest.fn(() => ({ upsert })) } as never;
+    const store = { from: jest.fn(() => ({ insert })) } as never;
 
     const result = await saveIntakeItems(store, {
       userId: 'user-1',
       items: [
         {
-          type: 'food',
-          itemName: 'яйца',
-          quantity: 2,
+          type: 'drink',
+          itemName: 'пиво',
+          quantity: null,
           unit: null,
           occurredAt: ROW.occurredAt,
           timezone: 'Europe/London',
         },
       ],
-      rawText: 'Съел два яйца',
+      rawText: 'Выпил пива',
       sourceMessageId: 'msg-1',
       confidence: 0.9,
     });
 
-    expect(upsert).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({
-          user_id: 'user-1',
-          source_message_id: 'msg-1',
-          item_index: 0,
-        }),
-      ]),
-      { onConflict: 'user_id,source_message_id,item_index', ignoreDuplicates: true }
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: 'user-1',
+        source_message_id: 'msg-1',
+        item_index: 0,
+        item_name: 'пиво',
+        type: 'drink',
+      })
     );
     expect(result.duplicate).toBe(true);
+    expect(result.inserted).toBe(0);
+  });
+
+  it('saves a drink when the database accepts the row', async () => {
+    const savedRow = {
+      id: ROW.id,
+      user_id: 'user-1',
+      type: 'drink',
+      item_name: 'пиво',
+      quantity: null,
+      unit: null,
+      raw_text: 'Выпил пива',
+      occurred_at: ROW.occurredAt,
+      timezone: 'Europe/London',
+      source_message_id: 'msg-1',
+      confidence: 0.9,
+      created_at: ROW.createdAt,
+    };
+    const insert = jest.fn().mockReturnValue({
+      select: () => ({
+        single: () => Promise.resolve({ data: savedRow, error: null }),
+      }),
+    });
+    const store = { from: jest.fn(() => ({ insert })) } as never;
+
+    const result = await saveIntakeItems(store, {
+      userId: 'user-1',
+      items: [
+        {
+          type: 'drink',
+          itemName: 'пиво',
+          quantity: null,
+          unit: null,
+          occurredAt: ROW.occurredAt,
+          timezone: 'Europe/London',
+        },
+      ],
+      rawText: 'Выпил пива',
+      sourceMessageId: 'msg-1',
+      confidence: 0.9,
+    });
+
+    expect(result.inserted).toBe(1);
+    expect(result.duplicate).toBe(false);
+    expect(result.items[0]).toMatchObject({ type: 'drink', itemName: 'пиво' });
   });
 
   it('defines RLS and a unique source/item index in the migration', () => {
