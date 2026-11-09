@@ -58,8 +58,12 @@ Supported commands include:
 - Почисти контекст
 - Сверься с GitHub
 
-Project-specific “наведи порядок в проекте X” remains the existing project
-review command.
+Project-specific “наведи порядок в проекте X” now uses the same plan-first
+contract. It reads the canonical project conversation, extracts concrete tasks,
+reminders, decisions, rules, ideas and materials, merges them with the shared
+hygiene proposals, and waits for explicit approval before any write. The legacy
+project-review tables remain read-only history; no mutation happens during the
+preparation pass.
 
 ## 4. GitHub rules
 
@@ -109,6 +113,8 @@ Prepared only:
 
 - `migrations/2026-11-26_pierrot_workspace_grooming.sql`
 - `migrations/rollback/2026-11-26_pierrot_workspace_grooming.rollback.sql`
+- `migrations/2026-11-27_pierrot_task_experience.sql`
+- `migrations/rollback/2026-11-27_pierrot_task_experience.rollback.sql`
 
 Tables:
 
@@ -116,7 +122,25 @@ Tables:
 - `pierrot_workspace_proposals` — concrete operations and approval state;
 - `pierrot_workspace_operations` — append-only execution journal;
 - `pierrot_context_summaries` — versioned summaries;
-- `pierrot_github_task_links` — local task ↔ Issue/PR links.
+- `pierrot_github_task_links` — local task ↔ Issue/PR links;
+- `pierrot_task_experiences` — append-only confirmed/rejected classification
+  examples and owner corrections.
+
+## 7.1 Task experience
+
+The analyzer never trains a model from a single feedback event. It saves
+verifiable examples only:
+
+- executed or rejected grooming proposals;
+- explicit chat corrections such as moving a task to another project;
+- task-related answer feedback, not general answer-quality ratings.
+
+An example stores the source message/text, proposed and confirmed kind,
+proposed and confirmed project, outcome, reason, source, analyzer version and
+metadata. `learnedClassification()` applies only an exact normalized sentence
+match. Approximate similarity is reported as context and never suppresses a new
+task automatically. If the experience migration is absent, review and grooming
+continue normally without learning examples.
 
 Apply manually after review. Until applied, grooming commands return a clear
 `migration_required` message and do not change anything.

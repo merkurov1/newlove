@@ -19,6 +19,7 @@ import {
   recordPierrotEvent,
 } from '@/lib/pierrot/serverStore';
 import { isPierrotUserId, resolvePierrotIdentity } from '@/lib/pierrot/identity';
+import { recordTaskExperience } from '@/lib/pierrot/learning/store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -182,6 +183,11 @@ export async function POST(req: Request) {
             web_source_count: replyPayload.web_source_count ?? null,
             source_status: replyPayload.source_status ?? null,
             evidence_warnings: replyPayload.evidence_warnings ?? null,
+            memory_kind: replyPayload.memory_kind ?? null,
+            task_intent: replyPayload.task_intent ?? null,
+            grooming_status: replyPayload.grooming_status ?? null,
+            project_command: replyPayload.project_command ?? null,
+            project_status: replyPayload.project_status ?? null,
             brain_outcome: brainPayload?.outcome ?? null,
             brain_code: brainPayload?.code ?? null,
             brain_timings: brainPayload?.brain_timings ?? null,
@@ -199,6 +205,53 @@ export async function POST(req: Request) {
       eventKey: `${eventName}:${eventKey}`,
       payload: storedPayload,
     });
+
+    if (
+      eventName === 'answer_feedback' &&
+      ownerUserId &&
+      typeof payload.rating === 'string' &&
+      (payload.rating === 'up' || payload.rating === 'down')
+    ) {
+      const trace =
+        storedPayload.trace && typeof storedPayload.trace === 'object'
+          ? (storedPayload.trace as Record<string, unknown>)
+          : null;
+      const taskRelated =
+        trace &&
+        (trace.memory_kind === 'task' ||
+          typeof trace.task_intent === 'string' ||
+          typeof trace.grooming_status === 'string' ||
+          trace.project_command === 'review');
+      if (taskRelated) {
+        await recordTaskExperience(store, {
+          userId: ownerUserId,
+          conversationId,
+          sourceMessageId: typeof payload.message_id === 'string' ? payload.message_id : null,
+          sourceText: null,
+          proposedKind: typeof trace.memory_kind === 'string' ? trace.memory_kind : 'task',
+          confirmedKind: payload.rating === 'up' ? 'task' : null,
+          proposedProjectId: null,
+          confirmedProjectId: null,
+          outcome:
+            payload.rating === 'up'
+              ? 'confirmed'
+              : typeof trace.grooming_status === 'string'
+                ? 'wrong_status'
+                : 'wrong_kind',
+          reason:
+            payload.rating === 'up'
+              ? 'Owner marked the task-related answer as useful.'
+              : 'Owner marked the task-related answer as not useful.',
+          source: 'feedback',
+          analyzerVersion: 'feedback-v1',
+          metadata: {
+            rating: payload.rating,
+            messageId: payload.message_id ?? null,
+            trace,
+          },
+        }).catch(() => null);
+      }
+    }
 
     if (eventName === 'conversation_ended') {
       await markPierrotConversationEnded(store, conversationId, sessionId);

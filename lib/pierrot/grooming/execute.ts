@@ -7,7 +7,7 @@ import {
   updateMemoryRecord,
 } from '@/lib/pierrot/memory/store';
 import { createOwnerTask } from '@/lib/pierrot/memory/taskCreation';
-import { getPierrotProject, updatePierrotProject } from '@/lib/pierrot/projects/store';
+import { mapProject, updatePierrotProject } from '@/lib/pierrot/projects/store';
 import { listProjectTasks, moveDecisionToProject } from '@/lib/pierrot/projects/links';
 import { createContextSummary, loadLatestContextSummary } from './context';
 import {
@@ -136,7 +136,7 @@ async function validateTarget(
     proposal.operation === 'update_project_summary'
   ) {
     const projectId = text(proposal.params.projectId) || proposal.entityId || '';
-    const project = projectId ? await getPierrotProject(userId, projectId) : null;
+    const project = projectId ? await getProjectFromStore(store, userId, projectId) : null;
     if (!project) return 'missing';
     const expected = proposal.beforeState;
     if (
@@ -218,6 +218,24 @@ function proposalOutcome(
   return null;
 }
 
+function rejectedOutcome(
+  proposal: GroomingProposal
+): import('@/lib/pierrot/learning/types').TaskExperienceOutcome {
+  if (proposal.operation.startsWith('create_') || proposal.operation.startsWith('reclassify_')) {
+    return 'false_task';
+  }
+  if (proposal.operation === 'complete_task' || proposal.operation === 'archive_task') {
+    return 'wrong_status';
+  }
+  if (proposal.operation === 'move_task' || proposal.operation === 'link_project') {
+    return 'wrong_project';
+  }
+  if (proposal.operation === 'merge_tasks' || proposal.operation === 'merge_memory') {
+    return 'duplicate';
+  }
+  return 'display_error';
+}
+
 async function recordProposalExperience(input: {
   store: SupabaseClient;
   userId: string;
@@ -229,10 +247,7 @@ async function recordProposalExperience(input: {
 }): Promise<void> {
   try {
     const outcome = input.rejected
-      ? input.proposal.operation.startsWith('create_') ||
-        input.proposal.operation.startsWith('reclassify_')
-        ? 'false_task'
-        : 'display_error'
+      ? rejectedOutcome(input.proposal)
       : proposalOutcome(input.proposal, input.result);
     if (!outcome) return;
 
@@ -278,9 +293,24 @@ async function recordProposalExperience(input: {
     // Experience capture is advisory and must never fail the approved action.
   }
 }
-async function projectForProposal(userId: string, proposal: GroomingProposal) {
+async function getProjectFromStore(store: SupabaseClient, userId: string, projectId: string) {
+  const { data, error } = await store
+    .from('pierrot_projects')
+    .select('*')
+    .eq('id', projectId)
+    .eq('owner_user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapProject(data as Record<string, unknown>) : null;
+}
+
+async function projectForProposal(
+  store: SupabaseClient,
+  userId: string,
+  proposal: GroomingProposal
+) {
   const projectId = text(proposal.params.projectId) || proposal.projectId || '';
-  return projectId ? getPierrotProject(userId, projectId) : null;
+  return projectId ? getProjectFromStore(store, userId, projectId) : null;
 }
 
 async function linkCreatedRecord(input: {
@@ -290,14 +320,16 @@ async function linkCreatedRecord(input: {
   projectId: string | null;
 }): Promise<boolean> {
   if (!input.projectId) return true;
-  const project = await getPierrotProject(input.userId, input.projectId);
+  const project = await getProjectFromStore(input.store, input.userId, input.projectId);
   if (!project) throw new GroomingExecutionError('PROJECT_NOT_FOUND');
   await moveDecisionToProject(input.store, input.userId, input.decisionId, project);
-  const linked = await listProjectTasks(input.store, input.userId, project.id, {
-    statuses: ['current', 'uncertain', 'completed', 'archived'],
-    limit: 500,
-  });
-  return linked.some((record) => record.id === input.decisionId);
+  const { data, error } = await input.store
+    .from('pierrot_project_decisions')
+    .select('project_id')
+    .eq('owner_user_id', input.userId)
+    .eq('decision_id', input.decisionId);
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []).some((row) => row && row.project_id === project.id);
 }
 
 async function executeProposal(input: {
@@ -358,7 +390,7 @@ async function executeProposal(input: {
   if (proposal.operation === 'create_reminder') {
     const content = text(proposal.params.content);
     if (content.length < 3) throw new GroomingExecutionError('INVALID_REMINDER_CONTENT');
-    const project = await projectForProposal(userId, proposal);
+    const project = await projectForProposal(store, userId, proposal);
     const created = await createMemoryRecord(store, userId, {
       kind: 'reminder',
       title: text(proposal.params.title) || undefined,
@@ -393,7 +425,7 @@ async function executeProposal(input: {
   }
 
   if (proposal.operation === 'create_artifact') {
-    const project = await projectForProposal(userId, proposal);
+    const project = await projectForProposal(store, userId, proposal);
     if (!project) throw new GroomingExecutionError('PROJECT_REQUIRED');
     const url = text(proposal.params.url);
     const title = text(proposal.params.title) || url;
@@ -429,7 +461,7 @@ async function executeProposal(input: {
     const content = text(proposal.params.content);
     const kind = text(proposal.params.kind) || 'saved';
     if (!content) throw new GroomingExecutionError('INVALID_MEMORY_CONTENT');
-    const project = await projectForProposal(userId, proposal);
+    const project = await projectForProposal(store, userId, proposal);
     const created = await createMemoryRecord(store, userId, {
       kind: kind as never,
       title: text(proposal.params.title) || undefined,
@@ -599,7 +631,7 @@ async function executeProposal(input: {
   if (proposal.operation === 'link_project' || proposal.operation === 'move_task') {
     const taskId = text(proposal.params.taskId) || proposal.entityId || '';
     const projectId = text(proposal.params.projectId);
-    const project = projectId ? await getPierrotProject(userId, projectId) : null;
+    const project = projectId ? await getProjectFromStore(store, userId, projectId) : null;
     if (!project) throw new GroomingExecutionError('PROJECT_NOT_FOUND');
     await moveDecisionToProject(store, userId, taskId, project);
     const linked = await listProjectTasks(store, userId, project.id, {
@@ -718,7 +750,7 @@ async function executeProposal(input: {
       briefChangeNote: text(proposal.params.changeNote) || 'Workspace grooming update',
     });
     if (!updated) throw new GroomingExecutionError('PROJECT_NOT_FOUND');
-    const verified = await getPierrotProject(userId, projectId);
+    const verified = await getProjectFromStore(store, userId, projectId);
     if (!verified || verified.projectBrief !== summary) {
       throw new GroomingExecutionError('PROJECT_CONTEXT_NOT_CONFIRMED');
     }
@@ -957,7 +989,12 @@ export async function executeApprovedPlan(input: {
         operation: freshProposal.operation,
         result: 'failed',
         title: freshProposal.title,
-        detail: error instanceof Error ? error.message.slice(0, 500) : 'Операция не выполнена.',
+        detail:
+          error instanceof Error
+            ? error.message.slice(0, 500)
+            : error && typeof error === 'object' && 'message' in error
+              ? String((error as { message?: unknown }).message).slice(0, 500)
+              : 'Операция не выполнена.',
         entityId: freshProposal.entityId,
         errorCode: code,
       };

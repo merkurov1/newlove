@@ -503,6 +503,12 @@ export function analyzeProjectReview(input: {
         : null;
 
       if (learned?.outcome === 'false_task') continue;
+      if (learned?.outcome === 'confirmed' && learned.confirmedKind === 'task') {
+        classification = 'task';
+      }
+      if (learned?.outcome === 'confirmed' && learned.confirmedKind === 'reminder') {
+        classification = 'reminder';
+      }
       if (learned?.outcome === 'wrong_kind' && learned.confirmedKind) {
         const confirmedKind = learned.confirmedKind;
         if (confirmedKind === 'constraint' || confirmedKind === 'knowledge') {

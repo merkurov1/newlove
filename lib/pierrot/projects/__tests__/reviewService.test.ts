@@ -252,6 +252,49 @@ describe('project review preparation and approval', () => {
     ).toBe(true);
   });
 
+  it('applies an approved project rule as memory and links it to the project', async () => {
+    const { db, row, store } = setup();
+    db.seed('pierrot_messages', [
+      message('m1', 'user', 'Открытка не должна превращать Heart & Angel в интернет-магазин.', 1),
+    ]);
+
+    const prepared = await prepareProjectReview({
+      store,
+      ownerUserId: OWNER_ID,
+      project: snapshot(row),
+      conversationId: CONVERSATION_ID,
+      requestMessageId: 'user-message-rule',
+      language: 'ru',
+    });
+    const ruleProposal = db
+      .all('pierrot_workspace_proposals')
+      .find(
+        (item) =>
+          item.audit_id === prepared.runId &&
+          item.operation === 'create_memory' &&
+          (item.params as Record<string, unknown>).kind === 'constraint'
+      );
+    expect(ruleProposal).toBeTruthy();
+
+    const execution = await approvePendingGroomingPlan({
+      store,
+      userId: OWNER_ID,
+      conversationId: CONVERSATION_ID,
+      mode: 'selected',
+      ordinals: [Number(ruleProposal?.ordinal)],
+      language: 'ru',
+    });
+    expect(execution?.report.executed).toBe(1);
+
+    const rules = db.all('pierrot_decisions').filter((item) => item.kind === 'constraint');
+    expect(rules).toHaveLength(1);
+    const links = db
+      .all('pierrot_project_decisions')
+      .filter((item) => item.decision_id === rules[0].id);
+    expect(links).toHaveLength(1);
+    expect(links[0].project_id).toBe(row.id);
+  });
+
   it('keeps ideas, rules and reminders out of the task proposals', async () => {
     const { db, row, store } = setup();
     db.seed('pierrot_messages', [

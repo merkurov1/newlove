@@ -107,6 +107,28 @@ describe('owner memory API authorization', () => {
     expect(memory.getMemorySummary).toHaveBeenCalledWith(expect.anything(), ownerId);
   });
 
+  it('keeps active tasks visible even when the generic memory page is full', async () => {
+    memory.listMemoryRecords
+      .mockResolvedValueOnce([
+        { id: 'm1', kind: 'memory', title: 'Memory', content: 'Memory', status: 'current' },
+      ])
+      .mockResolvedValueOnce([
+        { id: 't1', kind: 'task', title: 'Task', content: 'Task', status: 'current' },
+      ]);
+
+    const response = await GET(
+      request('http://localhost/api/pierrot/memory?status=active&limit=1')
+    );
+    const json = (await response.json()) as { records: Array<{ id: string; kind: string }> };
+
+    expect(response.status).toBe(200);
+    expect(json.records.map((record) => record.id)).toEqual(['m1', 't1']);
+    expect(memory.listMemoryRecords).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ kinds: ['task', 'reminder'], limit: 500 })
+    );
+  });
+
   it('creates only for the verified owner', async () => {
     const response = await POST(
       request('http://localhost/api/pierrot/memory', {

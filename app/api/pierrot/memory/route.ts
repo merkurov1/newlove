@@ -160,24 +160,47 @@ export async function GET(req: Request) {
       });
     }
 
-    const records = await listMemoryRecords(store, {
+    const filters = {
       userId,
-      ...(kind ? { kinds: [kind] } : {}),
       ...(status === 'archive'
         ? { statuses: ['archived', 'completed', 'superseded', 'rejected'] as PierrotMemoryStatus[] }
         : status && status !== 'all'
           ? { status }
           : status === 'all'
             ? {}
-            : { status: 'active' }),
+            : { status: 'active' as const }),
       ...(includeArchive ? { includeArchive: true } : {}),
       query: query || null,
       project: url.searchParams.get('project'),
       tags: parseTags(url.searchParams.get('tags')),
+    };
+    const records = await listMemoryRecords(store, {
+      ...filters,
+      ...(kind ? { kinds: [kind] } : {}),
       limit: Number.isFinite(limit) ? limit : 100,
     });
 
-    return NextResponse.json({ available: true, records });
+    // Task and reminder tabs must never lose records merely because a generic
+    // memory query hit its page limit before reaching them.
+    let responseRecords = records;
+    if (!kind && !query && status !== 'archive') {
+      const taskRecords = await listMemoryRecords(store, {
+        ...filters,
+        kinds: ['task', 'reminder'],
+        limit: 500,
+      });
+      const seen = new Set(records.map((record) => record.id));
+      responseRecords = [
+        ...records,
+        ...taskRecords.filter((record) => {
+          if (seen.has(record.id)) return false;
+          seen.add(record.id);
+          return true;
+        }),
+      ];
+    }
+
+    return NextResponse.json({ available: true, records: responseRecords });
   } catch {
     return NextResponse.json(
       { error: 'Memory is temporarily unavailable.', code: 'memory_unavailable' },
