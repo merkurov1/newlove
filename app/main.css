@@ -69,6 +69,20 @@ body[data-pierrot-workspace='true'] .site-footer {
   display: none !important;
 }
 
+/* The public header is an overlay, not an opaque bar. Every direct control
+ * surface stays transparent in both scroll states; readability is provided by
+ * local text shadows and hairline borders, not by a white backing plate. */
+.site-header,
+.site-header .site-header-surface {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+.site-header::before,
+.site-header::after {
+  background: transparent;
+}
+
 body[data-pierrot-workspace='true'] #main-content {
   padding: 0;
 }

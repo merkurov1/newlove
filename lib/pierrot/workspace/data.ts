@@ -7,7 +7,6 @@ import type {
   BrainRecentSource,
   OwnerConversation,
   OwnerConversationListItem,
-  OwnerHistorySummary,
   OwnerSessionListItem,
   WorkspaceMetric,
   WorkspaceMetricKey,
@@ -18,7 +17,6 @@ import { buildOverviewSummary, classifyMetricState } from './status';
 import { listPierrotProjects } from '@/lib/pierrot/projects/store';
 import {
   listHistorySessions,
-  listOwnerHistories,
   loadHistoryMessagePage,
   resolveHistoryScope,
   type PierrotHistoryScope,
@@ -345,7 +343,9 @@ export async function loadOwnerConversations(
     );
     const projectByCanonicalConversation = new Map(
       projects
-        .filter((project): project is NonNullable<typeof project> => Boolean(project?.conversationId))
+        .filter((project): project is NonNullable<typeof project> =>
+          Boolean(project?.conversationId)
+        )
         .map((project) => [project.conversationId as string, project])
     );
 
@@ -550,7 +550,6 @@ export async function loadOwnerConversation(
 
 export type OwnerHistoryView = {
   scope: PierrotHistoryScope;
-  histories: OwnerHistorySummary[];
   sessions: OwnerSessionListItem[];
   conversation: OwnerConversation;
   project: PierrotProject | null;
@@ -583,13 +582,15 @@ export async function loadOwnerHistoryView(
     });
     if (!scope) return null;
 
-    const [histories, sessions] = await Promise.all([
-      listOwnerHistories(store, ownerUserId).catch(() => []),
-      listHistorySessions(store, ownerUserId, scope.history.id).catch(() => []),
-    ]);
+    const sessions = await listHistorySessions(store, ownerUserId, scope.history.id).catch(
+      () => []
+    );
 
+    const requestedSession = input.sessionId
+      ? sessions.find((session) => session.id === input.sessionId) || null
+      : null;
     const selectedSession =
-      (input.sessionId ? sessions.find((session) => session.id === input.sessionId) : null) ||
+      requestedSession ||
       (scope.session
         ? sessions.find((session) => session.id === scope.session?.id) || null
         : null) ||
@@ -598,7 +599,10 @@ export async function loadOwnerHistoryView(
 
     const page = await loadHistoryMessagePage(store, ownerUserId, scope, {
       limit: input.limit ?? 120,
-      sessionId: input.sessionId || selectedSession?.id || null,
+      // A direct session link opens that episode's message range. The
+      // canonical project chat (no session in the URL) keeps the continuous
+      // history, so older fragments remain reachable above it.
+      sessionId: requestedSession?.id || null,
     });
 
     const conversation: OwnerConversation = {
@@ -628,7 +632,6 @@ export async function loadOwnerHistoryView(
 
     return {
       scope,
-      histories,
       sessions,
       conversation,
       project: scope.project,

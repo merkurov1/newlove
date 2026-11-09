@@ -29,6 +29,8 @@ describe('WorkspaceShell navigation', () => {
         .map((_, node) => $(node).attr('href'))
         .get()
     ).toEqual(['/admin/pierrot', '/admin/pierrot/projects']);
+    expect($('.pw-topbar-actions button[aria-label="Открыть память"]')).toHaveLength(1);
+    expect($('.pw-topbar-actions button[aria-label="Открыть Flow"]')).toHaveLength(1);
   });
 
   it('does not expose Flow, Art, Brain, Dash or Dev as primary navigation', () => {

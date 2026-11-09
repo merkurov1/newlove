@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { requireAdmin } from '@/lib/serverAuth';
 import { loadOwnerHistoryView, loadWorkspaceOverview } from '@/lib/pierrot/workspace/data';
+import { loadProjectRail } from '@/lib/pierrot/workspace/projectRail';
 import { buildOverviewSummary } from '@/lib/pierrot/workspace/status';
 import type { WorkspaceOverview } from '@/lib/pierrot/workspace/types';
 import { emptyCommercialSummary } from '@/lib/pierrot/commercialSummary';
@@ -11,6 +12,7 @@ import { loadBrainStatus } from '@/lib/pierrot/memory/brainStatus';
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
 import { overviewCookieName, parseOverviewCache } from '@/lib/pierrot/workspace/cache';
 import ChatWorkspace from '@/components/pierrot/workspace/ChatWorkspace';
+import ProjectRail from '@/components/pierrot/workspace/ProjectRail';
 import { getPierrotProject } from '@/lib/pierrot/projects/store';
 
 export const dynamic = 'force-dynamic';
@@ -49,9 +51,7 @@ function unavailableOverview(): WorkspaceOverview {
   };
 }
 
-function param(
-  value: string | string[] | undefined
-): string {
+function param(value: string | string[] | undefined): string {
   return (Array.isArray(value) ? value[0] : value) || '';
 }
 
@@ -67,6 +67,9 @@ export default async function ChatPage({
   const rawConversation = param(params.conversation);
   const projectRef = param(params.project);
   const requestedNew = param(params.new) === '1';
+  const requestedPanel = param(params.panel);
+  const initialPanel: 'memory' | 'flow' | null =
+    requestedPanel === 'memory' ? 'memory' : requestedPanel === 'flow' ? 'flow' : null;
 
   // Old conversation URLs and legacy project links resolve to the permanent
   // history/session URL. The browser never opens a legacy conversation as an
@@ -77,12 +80,8 @@ export default async function ChatPage({
       createSession: false,
     });
     if (!legacyView) redirect('/admin/pierrot');
-    const target = `/admin/pierrot?history=${encodeURIComponent(
-      legacyView.scope.history.id
-    )}${
-      legacyView.scope.session
-        ? `&session=${encodeURIComponent(legacyView.scope.session.id)}`
-        : ''
+    const target = `/admin/pierrot?history=${encodeURIComponent(legacyView.scope.history.id)}${
+      legacyView.scope.session ? `&session=${encodeURIComponent(legacyView.scope.session.id)}` : ''
     }`;
     redirect(target);
   }
@@ -112,9 +111,7 @@ export default async function ChatPage({
   }
   if (!view) redirect('/admin/pierrot');
 
-  const canonicalTarget = `/admin/pierrot?history=${encodeURIComponent(
-    view.scope.history.id
-  )}${
+  const canonicalTarget = `/admin/pierrot?history=${encodeURIComponent(view.scope.history.id)}${
     view.conversation.currentSessionId
       ? `&session=${encodeURIComponent(view.conversation.currentSessionId)}`
       : ''
@@ -157,26 +154,34 @@ export default async function ChatPage({
           cachedOverview ? { ...cachedOverview.overview, stale: true } : unavailableOverview()
         );
 
-  const [overview, brainStatus] = await Promise.all([
+  const [overview, brainStatus, projectRail] = await Promise.all([
     overviewPromise,
     needsOverview
       ? loadBrainStatus(createPierrotStore(), user.id, { detailed: false }).catch(
           (): BrainStatusSnapshot | null => null
         )
       : Promise.resolve(null),
+    loadProjectRail(user.id).catch(() => []),
   ]);
 
   return (
-    <ChatWorkspace
-      key={`${view.scope.history.id}:${conversation.currentSessionId || 'latest'}`}
-      ownerId={user.id}
-      overview={overview}
-      histories={view.histories}
-      sessions={view.sessions}
-      conversation={conversation}
-      startNew={requestedNew}
-      brainStatus={brainStatus}
-      project={project}
-    />
+    <div className="pw-chat-page">
+      <ProjectRail
+        projects={projectRail}
+        activeHistoryId={view.scope.history.id}
+        activeSessionId={conversation.currentSessionId || null}
+      />
+      <ChatWorkspace
+        key={`${view.scope.history.id}:${conversation.currentSessionId || 'latest'}`}
+        ownerId={user.id}
+        overview={overview}
+        sessions={view.sessions}
+        conversation={conversation}
+        startNew={requestedNew}
+        brainStatus={brainStatus}
+        project={project}
+        initialPanel={initialPanel}
+      />
+    </div>
   );
 }

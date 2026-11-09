@@ -1,6 +1,6 @@
 /**
  * The owner PWA has exactly two primary spaces: the continuous chat and the
- * project catalog. Memory and Flow live inside the chat-side panel; technical
+ * project catalog. Memory and Flow are compact actions in the topbar; technical
  * tools are contextual, not primary navigation.
  */
 export const WORKSPACE_ROUTES = [

@@ -3,20 +3,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  Archive,
-  ArrowUp,
-  Check,
-  ChevronDown,
-  History,
-  Plus,
-  Square,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { Archive, ArrowUp, Check, Square, Trash2, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import type {
   OwnerConversation,
-  OwnerHistorySummary,
   OwnerSessionListItem,
   WorkspaceOverview,
 } from '@/lib/pierrot/workspace/types';
@@ -135,96 +125,24 @@ function initialMessages(conversation: OwnerConversation | null): UiMessage[] {
   }));
 }
 
-function HistoryLinks({
-  items,
-  activeHistoryId,
-  onOpen,
-}: {
-  items: OwnerHistorySummary[];
-  activeHistoryId: string | null;
-  onOpen: () => void;
-}) {
-  return (
-    <ul className="pw-conversation-list">
-      {items.map((item) => (
-        <li key={item.id}>
-          <Link
-            href={`/admin/pierrot?history=${encodeURIComponent(item.id)}`}
-            className="pw-conversation-link"
-            aria-current={activeHistoryId === item.id ? 'page' : undefined}
-            onClick={onOpen}
-          >
-            <span className="pw-conversation-heading">
-              <span className="pw-conversation-title">
-                {item.type === 'main' ? 'Главная история' : item.title}
-              </span>
-              {item.type === 'project' && <span className="pw-conversation-project">проект</span>}
-            </span>
-            <span className="pw-conversation-date">
-              {item.sessionCount} {item.sessionCount === 1 ? 'сессия' : 'сессий'} ·{' '}
-              {item.messageCount} сообщений
-            </span>
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function SessionLinks({
-  items,
-  historyId,
-  activeSessionId,
-  onOpen,
-}: {
-  items: OwnerSessionListItem[];
-  historyId: string | null;
-  activeSessionId: string | null;
-  onOpen: () => void;
-}) {
-  if (!historyId) return null;
-  return (
-    <ul className="pw-session-list">
-      {items.map((item) => (
-        <li key={item.id}>
-          <Link
-            href={`/admin/pierrot?history=${encodeURIComponent(historyId)}&session=${encodeURIComponent(
-              item.id
-            )}`}
-            className="pw-session-link"
-            aria-current={activeSessionId === item.id ? 'page' : undefined}
-            onClick={onOpen}
-          >
-            <span className="pw-session-title">{item.title}</span>
-            <span className="pw-session-date">
-              {formatConversationDate(item.startedAt)} · {item.messageCount}{' '}
-              {item.messageCount === 1 ? 'сообщение' : 'сообщений'}
-            </span>
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export default function ChatWorkspace({
   ownerId,
   overview,
-  histories,
   sessions,
   conversation,
   startNew,
   brainStatus,
   project,
+  initialPanel,
 }: {
   ownerId: string;
   overview: WorkspaceOverview;
-  histories: OwnerHistorySummary[];
   sessions: OwnerSessionListItem[];
   conversation: OwnerConversation | null;
   startNew: boolean;
   brainStatus?: BrainStatusSnapshot | null;
   project?: PierrotProject | null;
+  initialPanel?: 'memory' | 'flow' | null;
 }) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -246,9 +164,7 @@ export default function ChatWorkspace({
   const [episodeId, setEpisodeId] = useState<string | null>(conversation?.currentSessionId ?? null);
   const [title, setTitle] = useState<string>(conversation?.title ?? 'Новый диалог');
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [panelSection, setPanelSection] = useState<'memory' | 'flow'>('memory');
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [showAllSessions, setShowAllSessions] = useState(false);
+  const [flowOpen, setFlowOpen] = useState(false);
   const [newSessionLoading, setNewSessionLoading] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [selectedSources, setSelectedSources] = useState<SelectedSources | null>(null);
@@ -284,6 +200,7 @@ export default function ChatWorkspace({
   const deltaBufferRef = useRef('');
   const deltaFrameRef = useRef<number | null>(null);
   const streamingMessageIdRef = useRef<string | null>(null);
+  const initialPanelRef = useRef<'memory' | 'flow' | null>(initialPanel ?? null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -326,8 +243,8 @@ export default function ChatWorkspace({
   useEffect(() => {
     function toggle() {
       setDrawerOpen((open) => !open);
+      setFlowOpen(false);
       setInspectorOpen(false);
-      setHistoryOpen(false);
     }
 
     window.addEventListener('pierrot:toggle-drawer', toggle as EventListener);
@@ -366,7 +283,7 @@ export default function ChatWorkspace({
       setOldestIndex(null);
       setSelectedSources(null);
       setInspectorOpen(false);
-      setHistoryOpen(false);
+      setFlowOpen(false);
       setMenuOpenId(null);
       setError(null);
       setStreamStage(null);
@@ -625,13 +542,67 @@ export default function ChatWorkspace({
     void loadMemoryData(false);
   }, [conversation?.id, loadMemoryData]);
 
+  useEffect(() => {
+    if (!flowOpen) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setFlowOpen(false);
+      }
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousBodyOverscroll = document.body.style.overscrollBehavior;
+    document.body.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'none';
+    document.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.overscrollBehavior = previousBodyOverscroll;
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [flowOpen]);
+
   function openMemory() {
-    setPanelSection('memory');
     setDrawerOpen(true);
+    setFlowOpen(false);
     setInspectorOpen(false);
-    setHistoryOpen(false);
     void loadMemoryData(true);
   }
+
+  function openFlow() {
+    setFlowOpen(true);
+    setDrawerOpen(false);
+    setInspectorOpen(false);
+    setSelectedSources(null);
+    setMenuOpenId(null);
+  }
+
+  useEffect(() => {
+    const requested = initialPanelRef.current;
+    if (!requested) return;
+    initialPanelRef.current = null;
+    if (requested === 'flow') openFlow();
+    else openMemory();
+    // Runs once for the server-provided panel request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    function onOpenPanel(event: Event) {
+      const section = (event as CustomEvent<{ section?: string }>).detail?.section;
+      if (section === 'flow') openFlow();
+      else if (section === 'memory') openMemory();
+    }
+
+    window.addEventListener('pierrot:open-panel', onOpenPanel as EventListener);
+    return () => window.removeEventListener('pierrot:open-panel', onOpenPanel as EventListener);
+    // openMemory depends on the current memory filter; the listener must use
+    // the latest loader callback without remounting the workspace.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadMemoryData]);
 
   async function saveMessageToMemory(message: UiMessage, kind: PierrotMemoryKind) {
     if (!conversationId) {
@@ -658,10 +629,9 @@ export default function ChatWorkspace({
 
       if (!response.ok) throw new Error('memory_write_failed');
 
-      setPanelSection('memory');
       setDrawerOpen(true);
+      setFlowOpen(false);
       setInspectorOpen(false);
-      setHistoryOpen(false);
       await loadMemoryData(true);
     } catch {
       setMemoryError('Не удалось сохранить запись.');
@@ -1232,10 +1202,7 @@ export default function ChatWorkspace({
       openMemory();
       return;
     }
-    setPanelSection('flow');
-    setDrawerOpen(true);
-    setInspectorOpen(false);
-    setHistoryOpen(false);
+    openFlow();
   }
 
   function openSources(message: UiMessage, index = 0) {
@@ -1249,14 +1216,14 @@ export default function ChatWorkspace({
     });
     setInspectorOpen(true);
     setDrawerOpen(false);
-    setHistoryOpen(false);
+    setFlowOpen(false);
     setMenuOpenId(null);
   }
 
   function closePanels() {
     setDrawerOpen(false);
     setInspectorOpen(false);
-    setHistoryOpen(false);
+    setFlowOpen(false);
   }
 
   function submitGroomingPlan(command: string) {
@@ -1298,7 +1265,6 @@ export default function ChatWorkspace({
       : streamStage === 'persisting'
         ? 'Pierrot сохраняет ответ'
         : 'Pierrot формулирует ответ';
-  const visibleSessions = showAllSessions ? sessions : sessions.slice(0, 12);
   const sessionById = useMemo(
     () => new Map(sessions.map((session) => [session.id, session])),
     [sessions]
@@ -1309,8 +1275,9 @@ export default function ChatWorkspace({
       className="pw-chat"
       data-drawer={drawerOpen ? 'open' : 'closed'}
       data-inspector={inspectorOpen ? 'open' : 'closed'}
+      data-flow={flowOpen ? 'open' : 'closed'}
     >
-      {(drawerOpen || historyOpen) && (
+      {drawerOpen && (
         <button
           type="button"
           className="pw-scrim"
@@ -1319,116 +1286,8 @@ export default function ChatWorkspace({
         />
       )}
 
-      <button
-        type="button"
-        className="pw-side-trigger"
-        onClick={() => {
-          setPanelSection('memory');
-          setDrawerOpen(true);
-          setHistoryOpen(false);
-          void loadMemoryData(true);
-        }}
-        aria-label="Открыть память и Flow"
-      >
-        <span>Память</span>
-        <span>Flow</span>
-      </button>
-
-      {historyOpen && (
-        <div className="pw-history-popover" role="dialog" aria-label="История сессий">
-          <div className="pw-panel-head">
-            <div>
-              <span className="pw-section-title">История</span>
-              <p className="pw-inspector-title">{sessions.length} сессий</p>
-            </div>
-            <button
-              type="button"
-              className="pw-icon-button"
-              onClick={() => setHistoryOpen(false)}
-              aria-label="Закрыть историю"
-            >
-              <X size={18} strokeWidth={1.4} aria-hidden="true" />
-            </button>
-          </div>
-
-          <div className="pw-history-popover-scroll">
-            <button
-              type="button"
-              className="pw-new-chat"
-              onClick={() => void startNewSession()}
-              disabled={newSessionLoading || !historyId}
-            >
-              <Plus size={16} strokeWidth={1.4} aria-hidden="true" />
-              {newSessionLoading ? 'Начинаем…' : 'Новая сессия'}
-            </button>
-
-            <div className="pw-drawer-section">
-              <div className="pw-drawer-section-title">Истории</div>
-              {histories.length === 0 ? (
-                <p className="pw-drawer-empty">История ещё не создана.</p>
-              ) : (
-                <HistoryLinks
-                  items={histories}
-                  activeHistoryId={historyId}
-                  onOpen={() => setHistoryOpen(false)}
-                />
-              )}
-            </div>
-
-            <div className="pw-drawer-section">
-              <div className="pw-drawer-section-title">
-                <History size={13} strokeWidth={1.5} aria-hidden="true" />
-                Сессии
-              </div>
-              {sessions.length === 0 ? (
-                <p className="pw-drawer-empty">Сессий пока нет.</p>
-              ) : (
-                <>
-                  <SessionLinks
-                    items={visibleSessions}
-                    historyId={historyId}
-                    activeSessionId={episodeId}
-                    onOpen={() => setHistoryOpen(false)}
-                  />
-                  {sessions.length > 12 && (
-                    <button
-                      type="button"
-                      className="pw-history-more-button pw-session-toggle"
-                      onClick={() => setShowAllSessions((value) => !value)}
-                    >
-                      <ChevronDown
-                        size={14}
-                        strokeWidth={1.5}
-                        aria-hidden="true"
-                        style={{
-                          transform: showAllSessions ? 'rotate(180deg)' : undefined,
-                        }}
-                      />
-                      {showAllSessions ? 'Свернуть' : `Показать все (${sessions.length})`}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       <section className="pw-center" aria-label="Разговор с Pierrot">
         <header className="pw-chat-head">
-          <button
-            type="button"
-            className="pw-icon-button pw-history-trigger"
-            onClick={() => {
-              setHistoryOpen((open) => !open);
-              setDrawerOpen(false);
-            }}
-            aria-label={historyOpen ? 'Скрыть историю' : 'Показать историю'}
-            aria-expanded={historyOpen}
-          >
-            <History size={18} strokeWidth={1.4} aria-hidden="true" />
-          </button>
-
           <div className="pw-chat-head-copy">
             <h1 className="pw-chat-head-title">{conversation?.historyTitle || title}</h1>
             <span className="pw-chat-head-sub">
@@ -1755,203 +1614,220 @@ export default function ChatWorkspace({
       </section>
 
       {drawerOpen && (
-        <aside className="pw-side-panel" aria-label="Память и Flow">
+        <aside id="pw-memory-panel" className="pw-side-panel" aria-label="Память">
           <div className="pw-side-panel-inner">
             <div className="pw-panel-head">
-              <div className="pw-side-panel-tabs" role="tablist" aria-label="Боковая панель">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={panelSection === 'memory'}
-                  className={`pw-side-panel-tab${panelSection === 'memory' ? ' is-active' : ''}`}
-                  onClick={() => {
-                    setPanelSection('memory');
-                    void loadMemoryData(true);
-                  }}
-                >
-                  Память
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={panelSection === 'flow'}
-                  className={`pw-side-panel-tab${panelSection === 'flow' ? ' is-active' : ''}`}
-                  onClick={() => setPanelSection('flow')}
-                >
-                  Flow
-                </button>
+              <div>
+                <span className="pw-section-title">Память</span>
+                <p className="pw-inspector-title">Правила и долгосрочный контекст</p>
               </div>
               <button
                 type="button"
                 className="pw-icon-button"
                 onClick={() => setDrawerOpen(false)}
-                aria-label="Закрыть панель"
+                aria-label="Закрыть память"
               >
                 <X size={20} strokeWidth={1.4} aria-hidden="true" />
               </button>
             </div>
 
-            {panelSection === 'memory' ? (
-              <>
-                <div className="pw-side-panel-caption">
-                  {project ? `${project.name} · ` : ''}
-                  {project
-                    ? `${memoryRecords.length} ${memoryRecords.length === 1 ? 'запись' : 'записей'}`
-                    : `${memoryScopeTotal} ${memoryScopeTotal === 1 ? 'запись' : 'записей'}`}
-                </div>
-
-                <div className="pw-memory-tabs" role="tablist" aria-label="Раздел памяти">
-                  {[
-                    ['active', 'Активное'],
-                    ['archive', 'Архив'],
-                    ['all', 'Всё'],
-                  ].map(([value, label]) => (
-                    <button
-                      key={String(value)}
-                      type="button"
-                      role="tab"
-                      aria-selected={memoryScope === value}
-                      className={`pw-memory-tab${memoryScope === value ? ' is-active' : ''}`}
-                      onClick={() => {
-                        setMemoryScope(value as 'active' | 'archive' | 'all');
-                        setEditingMemoryId(null);
-                        void loadMemoryData(true);
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="pw-memory-tabs" role="tablist" aria-label="Категории памяти">
-                  {[
-                    ['all', 'Все', memoryScopeTotal],
-                    ['memory', 'Запомнено', memoryCounts.memory],
-                    ['saved', 'Сохранено', memoryCounts.saved],
-                    ['reminder', 'Напомнить', memoryCounts.reminder],
-                  ].map(([value, label, count]) => (
-                    <button
-                      key={String(value)}
-                      type="button"
-                      role="tab"
-                      aria-selected={memoryFilter === value}
-                      className={`pw-memory-tab${memoryFilter === value ? ' is-active' : ''}`}
-                      onClick={() => setMemoryFilter(value as 'all' | PierrotMemoryKind)}
-                    >
-                      {label} <span>{count}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {memoryError && <p className="pw-memory-error">{memoryError}</p>}
-
-                <div className="pw-memory-scroll">
-                  {memoryLoading ? (
-                    <p className="pw-inspector-empty">Загружаю память…</p>
-                  ) : filteredMemoryRecords.length === 0 ? (
-                    <p className="pw-inspector-empty">
-                      Пока нет записей в этой категории. Можно сказать Пьеро «Запомни», «Сохрани»
-                      или «Напомни».
-                    </p>
-                  ) : (
-                    filteredMemoryRecords.map((record) => (
-                      <article key={record.id} className="pw-memory-record">
-                        <div className="pw-memory-record-head">
-                          <span className="pw-memory-kind">{memoryKindLabel(record.kind)}</span>
-                          <span className="pw-memory-status">
-                            {memoryStatusLabel(record.status)}
-                          </span>
-                        </div>
-                        <h3 className="pw-memory-title">{record.title}</h3>
-                        <p className="pw-memory-meta">
-                          {[record.reviewAt?.slice(0, 10), record.project]
-                            .filter(Boolean)
-                            .join(' · ') || record.updatedAt.slice(0, 10)}
-                        </p>
-
-                        {editingMemoryId === record.id ? (
-                          <>
-                            <textarea
-                              className="pw-memory-edit"
-                              value={editingMemoryContent}
-                              onChange={(event) => setEditingMemoryContent(event.target.value)}
-                              rows={4}
-                            />
-                            <div className="pw-memory-actions">
-                              <button type="button" onClick={() => void saveMemoryEdit(record)}>
-                                Сохранить
-                              </button>
-                              <button type="button" onClick={() => setEditingMemoryId(null)}>
-                                Отмена
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <p className="pw-memory-content">{record.content}</p>
-                            <div className="pw-memory-actions">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingMemoryId(record.id);
-                                  setEditingMemoryContent(record.content);
-                                }}
-                              >
-                                Изменить
-                              </button>
-                              {(record.kind === 'reminder' || record.kind === 'task') &&
-                                record.status === 'current' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => void updateMemoryStatus(record, 'completed')}
-                                  >
-                                    <Check size={12} aria-hidden="true" /> Завершить
-                                  </button>
-                                )}
-                              {record.status === 'current' && (
-                                <button
-                                  type="button"
-                                  onClick={() => void archiveMemoryRecord(record)}
-                                >
-                                  <Archive size={12} aria-hidden="true" /> В архив
-                                </button>
-                              )}
-                              {record.status !== 'current' && (
-                                <button
-                                  type="button"
-                                  onClick={() => void restoreMemoryRecord(record)}
-                                >
-                                  <Archive size={12} aria-hidden="true" /> Вернуть в память
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                className="pw-memory-delete"
-                                onClick={() => void permanentlyDeleteMemoryRecord(record)}
-                              >
-                                <Trash2 size={12} aria-hidden="true" /> Удалить навсегда
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </article>
-                    ))
-                  )}
-                </div>
-
-                <div className="pw-side-panel-tools">
-                  <Link href="/admin/pierrot/brain">Brain</Link>
-                  <Link href="/admin/pierrot/dev">Диагностика</Link>
-                </div>
-              </>
-            ) : (
-              <div className="pw-side-flow">
-                <FlowWorkspace />
+            <>
+              <div className="pw-side-panel-caption">
+                {project ? `${project.name} · ` : ''}
+                {project
+                  ? `${memoryRecords.length} ${memoryRecords.length === 1 ? 'запись' : 'записей'}`
+                  : `${memoryScopeTotal} ${memoryScopeTotal === 1 ? 'запись' : 'записей'}`}
               </div>
-            )}
+
+              <div className="pw-memory-tabs" role="tablist" aria-label="Раздел памяти">
+                {[
+                  ['active', 'Активное'],
+                  ['archive', 'Архив'],
+                  ['all', 'Всё'],
+                ].map(([value, label]) => (
+                  <button
+                    key={String(value)}
+                    type="button"
+                    role="tab"
+                    aria-selected={memoryScope === value}
+                    className={`pw-memory-tab${memoryScope === value ? ' is-active' : ''}`}
+                    onClick={() => {
+                      setMemoryScope(value as 'active' | 'archive' | 'all');
+                      setEditingMemoryId(null);
+                      void loadMemoryData(true);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="pw-memory-tabs" role="tablist" aria-label="Категории памяти">
+                {[
+                  ['all', 'Все', memoryScopeTotal],
+                  ['memory', 'Запомнено', memoryCounts.memory],
+                  ['saved', 'Сохранено', memoryCounts.saved],
+                  ['reminder', 'Напомнить', memoryCounts.reminder],
+                ].map(([value, label, count]) => (
+                  <button
+                    key={String(value)}
+                    type="button"
+                    role="tab"
+                    aria-selected={memoryFilter === value}
+                    className={`pw-memory-tab${memoryFilter === value ? ' is-active' : ''}`}
+                    onClick={() => setMemoryFilter(value as 'all' | PierrotMemoryKind)}
+                  >
+                    {label} <span>{count}</span>
+                  </button>
+                ))}
+              </div>
+
+              {memoryError && <p className="pw-memory-error">{memoryError}</p>}
+
+              <div className="pw-memory-scroll">
+                {memoryLoading ? (
+                  <p className="pw-inspector-empty">Загружаю память…</p>
+                ) : filteredMemoryRecords.length === 0 ? (
+                  <p className="pw-inspector-empty">
+                    Пока нет записей в этой категории. Можно сказать Пьеро «Запомни», «Сохрани» или
+                    «Напомни».
+                  </p>
+                ) : (
+                  filteredMemoryRecords.map((record) => (
+                    <article key={record.id} className="pw-memory-record">
+                      <div className="pw-memory-record-head">
+                        <span className="pw-memory-kind">{memoryKindLabel(record.kind)}</span>
+                        <span className="pw-memory-status">{memoryStatusLabel(record.status)}</span>
+                      </div>
+                      <h3 className="pw-memory-title">{record.title}</h3>
+                      <p className="pw-memory-meta">
+                        {[record.reviewAt?.slice(0, 10), record.project]
+                          .filter(Boolean)
+                          .join(' · ') || record.updatedAt.slice(0, 10)}
+                      </p>
+
+                      {editingMemoryId === record.id ? (
+                        <>
+                          <textarea
+                            className="pw-memory-edit"
+                            value={editingMemoryContent}
+                            onChange={(event) => setEditingMemoryContent(event.target.value)}
+                            rows={4}
+                          />
+                          <div className="pw-memory-actions">
+                            <button type="button" onClick={() => void saveMemoryEdit(record)}>
+                              Сохранить
+                            </button>
+                            <button type="button" onClick={() => setEditingMemoryId(null)}>
+                              Отмена
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="pw-memory-content">{record.content}</p>
+                          <div className="pw-memory-actions">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMemoryId(record.id);
+                                setEditingMemoryContent(record.content);
+                              }}
+                            >
+                              Изменить
+                            </button>
+                            {(record.kind === 'reminder' || record.kind === 'task') &&
+                              record.status === 'current' && (
+                                <button
+                                  type="button"
+                                  onClick={() => void updateMemoryStatus(record, 'completed')}
+                                >
+                                  <Check size={12} aria-hidden="true" /> Завершить
+                                </button>
+                              )}
+                            {record.status === 'current' && (
+                              <button
+                                type="button"
+                                onClick={() => void archiveMemoryRecord(record)}
+                              >
+                                <Archive size={12} aria-hidden="true" /> В архив
+                              </button>
+                            )}
+                            {record.status !== 'current' && (
+                              <button
+                                type="button"
+                                onClick={() => void restoreMemoryRecord(record)}
+                              >
+                                <Archive size={12} aria-hidden="true" /> Вернуть в память
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="pw-memory-delete"
+                              onClick={() => void permanentlyDeleteMemoryRecord(record)}
+                            >
+                              <Trash2 size={12} aria-hidden="true" /> Удалить навсегда
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </article>
+                  ))
+                )}
+              </div>
+
+              <div className="pw-side-panel-tools">
+                <Link href="/admin/pierrot/brain">Долгосрочный контекст</Link>
+                <Link href="/admin/pierrot/dev">Диагностика</Link>
+              </div>
+            </>
           </div>
         </aside>
       )}
+
+      <AnimatePresence>
+        {flowOpen && (
+          <motion.div
+            className="pw-flow-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            onClick={(event: React.MouseEvent<HTMLDivElement>) => {
+              if (event.target === event.currentTarget) setFlowOpen(false);
+            }}
+          >
+            <motion.section
+              className="pw-flow-overlay-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="pw-flow-overlay-title"
+              initial={{ opacity: 0, y: 18, scale: 0.985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.99 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <header className="pw-flow-overlay-head">
+                <h2 id="pw-flow-overlay-title" className="pw-flow-overlay-title">
+                  Flow
+                </h2>
+                <button
+                  type="button"
+                  className="pw-icon-button"
+                  onClick={() => setFlowOpen(false)}
+                  aria-label="Закрыть Flow"
+                  autoFocus
+                >
+                  <X size={20} strokeWidth={1.4} aria-hidden="true" />
+                </button>
+              </header>
+              <div className="pw-flow-overlay-body">
+                <FlowWorkspace />
+              </div>
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {inspectorOpen && selectedSources && (
         <div

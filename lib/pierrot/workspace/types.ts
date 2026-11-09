@@ -128,6 +128,32 @@ export type OwnerSessionListItem = {
   lastMessageSequence: number | null;
 };
 
+export type ProjectRailSession = {
+  id: string;
+  historyId: string;
+  title: string;
+  startedAt: string;
+  /** Last real message activity, never the session creation time. */
+  lastActivityAt: string | null;
+  messageCount: number;
+  ordinal: number;
+};
+
+export type ProjectRailItem = {
+  id: string;
+  slug: string;
+  name: string;
+  status: 'active' | 'paused' | 'archived';
+  historyId: string | null;
+  canonicalConversationId: string | null;
+  /** Canonical project chat URL. */
+  chatHref: string;
+  /** Latest `last_message_at` across the project sessions. */
+  lastActivityAt: string | null;
+  /** Only open sessions with at least one message. */
+  sessions: ProjectRailSession[];
+};
+
 export type OwnerConversation = {
   id: string;
   sessionId: string;

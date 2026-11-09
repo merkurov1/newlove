@@ -178,8 +178,8 @@ export default function Header() {
   return (
     <header
       data-scrolled={scrolled ? 'true' : 'false'}
-      className={`site-header fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? 'bg-transparent backdrop-blur-2xl py-3 sm:py-4' : 'bg-transparent py-4 sm:py-6'
+      className={`site-header fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-transparent ${
+        scrolled ? 'backdrop-blur-2xl py-3 sm:py-4' : 'py-4 sm:py-6'
       }`}
     >
       <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-10 flex items-center justify-between gap-2 sm:gap-4">
@@ -306,7 +306,7 @@ export default function Header() {
                 setIsSiteMenuOpen(!isSiteMenuOpen);
                 setIsProfileOpen(false);
               }}
-              className="w-full sm:w-auto bg-white/90 backdrop-blur-md px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-2xl border border-stone-200/90 shadow-sm font-sans font-bold text-sm sm:text-base tracking-[0.15em] sm:tracking-[0.2em] uppercase text-stone-900 hover:border-stone-400 transition-all cursor-pointer flex items-center justify-between sm:justify-start gap-2.5 truncate"
+              className="site-header-surface w-full sm:w-auto bg-transparent px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-2xl border border-stone-300/60 font-sans font-bold text-sm sm:text-base tracking-[0.15em] sm:tracking-[0.2em] uppercase text-stone-900 hover:border-stone-500 transition-all cursor-pointer flex items-center justify-between sm:justify-start gap-2.5 truncate [text-shadow:0_1px_10px_rgba(255,255,255,0.55)]"
               aria-expanded={isSiteMenuOpen}
               aria-controls="site-menu"
               aria-haspopup="menu"

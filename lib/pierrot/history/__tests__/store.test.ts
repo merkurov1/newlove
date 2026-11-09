@@ -159,6 +159,69 @@ describe('Pierrot permanent history store', () => {
     expect(db.all('pierrot_sessions')).toHaveLength(2);
   });
 
+  it('opens exactly the requested session message range inside the same history', async () => {
+    const { db, historyId, conversationId, sessionId } = buildStore();
+    const laterSessionId = randomUUID();
+
+    db.seed('pierrot_sessions', [
+      ...db.all('pierrot_sessions'),
+      {
+        id: laterSessionId,
+        history_id: historyId,
+        conversation_id: conversationId,
+        source_conversation_id: null,
+        ordinal: 2,
+        title: 'Вторая сессия',
+        started_at: '2026-11-09T11:00:00.000Z',
+        ended_at: null,
+        last_message_at: '2026-11-09T11:03:00.000Z',
+        message_count: 3,
+        first_message_sequence: 6,
+        last_message_sequence: 8,
+        metadata: {},
+        created_at: '2026-11-09T11:00:00.000Z',
+        updated_at: '2026-11-09T11:03:00.000Z',
+      },
+    ]);
+    db.seed('pierrot_messages', [
+      ...db.all('pierrot_messages'),
+      ...Array.from({ length: 3 }, (_, index) => ({
+        id: `later-message-${index + 1}`,
+        conversation_id: conversationId,
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content: `Later ${index + 1}`,
+        message_index: index + 6,
+        provider: null,
+        created_at: `2026-11-09T11:0${index}:00.000Z`,
+        history_id: historyId,
+        session_id: laterSessionId,
+        history_sequence: index + 6,
+      })),
+    ]);
+
+    const scope = await resolveHistoryScope(db.asClient(), OWNER_ID, { historyId });
+
+    const first = await loadHistoryMessagePage(db.asClient(), OWNER_ID, scope!, {
+      limit: 20,
+      sessionId,
+    });
+    const second = await loadHistoryMessagePage(db.asClient(), OWNER_ID, scope!, {
+      limit: 20,
+      sessionId: laterSessionId,
+    });
+    const wholeHistory = await loadHistoryMessagePage(db.asClient(), OWNER_ID, scope!, {
+      limit: 20,
+    });
+
+    expect(first.messages.map((message) => message.historySequence)).toEqual([1, 2, 3, 4, 5]);
+    expect(second.messages.map((message) => message.historySequence)).toEqual([6, 7, 8]);
+    expect(wholeHistory.messages.map((message) => message.historySequence)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8,
+    ]);
+    expect(second.hasMore).toBe(false);
+    expect(second.historyMaxSequence).toBe(8);
+  });
+
   it('loads a cursor page from the whole history and attaches feedback', async () => {
     const { db, historyId } = buildStore();
     const scope = await resolveHistoryScope(db.asClient(), OWNER_ID, { historyId });

@@ -32,12 +32,11 @@ export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
         aria-haspopup="dialog"
         title="Pierrot"
         className="
-          group relative flex h-10 w-10 shrink-0 items-center justify-center
-          rounded-full border border-[#D3C5B2] bg-[#F4EFE7] font-serif
+          site-header-surface group relative flex h-10 w-10 shrink-0 items-center justify-center
+          rounded-full border border-[#D3C5B2] bg-transparent font-serif
           text-[17px] font-semibold text-[#4A443D]
-          shadow-[0_2px_10px_rgba(75,62,45,0.08)]
           transition-colors duration-200 hover:border-[#B9AB98]
-          hover:bg-white hover:text-[#2F2B26] active:scale-95
+          hover:bg-stone-900/5 hover:text-[#2F2B26] active:scale-95
           focus:outline-none focus:ring-2 focus:ring-[#B9AB98]
           focus:ring-offset-2
         "
@@ -306,11 +305,7 @@ export default function PierrotChat() {
                     className={`
                       shrink-0 transition-[background-color,backdrop-filter]
                       duration-200 ease-out
-                      ${
-                        isHeaderScrolled
-                          ? 'bg-[#FAF8F5]/75 backdrop-blur-md'
-                          : 'bg-[#FAF8F5]'
-                      }
+                      ${isHeaderScrolled ? 'bg-[#FAF8F5]/75 backdrop-blur-md' : 'bg-[#FAF8F5]'}
                     `}
                     style={{
                       paddingTop:

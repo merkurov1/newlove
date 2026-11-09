@@ -291,8 +291,8 @@ export async function listOwnerHistories(
     if (history) projectHistories.push(history);
   }
 
-  const histories = [main, ...projectHistories].filter(
-    (row): row is PierrotHistoryRecord => Boolean(row)
+  const histories = [main, ...projectHistories].filter((row): row is PierrotHistoryRecord =>
+    Boolean(row)
   );
   const result: OwnerHistorySummary[] = [];
   for (const history of histories) {
@@ -622,9 +622,7 @@ async function loadFeedbackMap(
 ): Promise<Map<string, 'up' | 'down'>> {
   const map = new Map<string, 'up' | 'down'>();
   if (messageIds.length === 0) return map;
-  const eventKeys = Array.from(
-    new Set(messageIds.flatMap((id) => [id, `answer_feedback:${id}`]))
-  );
+  const eventKeys = Array.from(new Set(messageIds.flatMap((id) => [id, `answer_feedback:${id}`])));
   const { data, error } = await store
     .from('pierrot_events')
     .select('event_key,payload')
@@ -669,15 +667,24 @@ export async function loadHistoryMessagePage(
     .select('id,role,content,message_index,provider,created_at,session_id,history_sequence')
     .eq('history_id', history.id);
 
-  if (typeof options.beforeSequence === 'number' && Number.isFinite(options.beforeSequence)) {
-    query = query.lt('history_sequence', options.beforeSequence);
-  } else if (options.session?.lastMessageSequence != null) {
-    query = query.lte('history_sequence', options.session.lastMessageSequence);
-  } else if (options.sessionId) {
-    const selected = await loadSessionById(store, history.id, options.sessionId);
-    if (selected?.lastMessageSequence != null) {
-      query = query.lte('history_sequence', selected.lastMessageSequence);
+  const selectedSession =
+    options.session ||
+    (options.sessionId ? await loadSessionById(store, history.id, options.sessionId) : null);
+
+  if (selectedSession?.firstMessageSequence != null) {
+    query = query.gte('history_sequence', selectedSession.firstMessageSequence);
+  }
+  if (selectedSession?.lastMessageSequence != null) {
+    if (typeof options.beforeSequence === 'number' && Number.isFinite(options.beforeSequence)) {
+      query = query.lt('history_sequence', options.beforeSequence);
+    } else {
+      query = query.lte('history_sequence', selectedSession.lastMessageSequence);
     }
+  } else if (
+    typeof options.beforeSequence === 'number' &&
+    Number.isFinite(options.beforeSequence)
+  ) {
+    query = query.lt('history_sequence', options.beforeSequence);
   }
 
   const { data, error } = await query

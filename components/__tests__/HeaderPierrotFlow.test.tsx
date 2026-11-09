@@ -93,4 +93,32 @@ describe('Header Pierrot and Flow controls', () => {
     expect(header?.className).toContain('bg-transparent');
     expect(header?.className).not.toContain('bg-[#FAF8F5]/85');
   });
+
+  it('keeps the internal navigation and control surfaces transparent too', () => {
+    mockPathname = '/flow';
+    mockAuth = {
+      user: { id: 'admin-1', email: 'owner@example.com' },
+      profile: { id: 'admin-1', name: 'Owner' },
+      roles: ['ADMIN'],
+      isLoading: false,
+      signOut: jest.fn(),
+    };
+
+    render(app());
+
+    const header = document.querySelector('header.site-header');
+    const surfaces = Array.from(header?.querySelectorAll('.site-header-surface') || []);
+
+    expect(surfaces.length).toBeGreaterThanOrEqual(3);
+    for (const surface of surfaces) {
+      expect(surface.className).toContain('bg-transparent');
+      expect(surface.className).not.toContain('bg-white');
+      expect(surface.className).not.toContain('backdrop-blur-md');
+    }
+
+    const opaqueWhiteSurface = Array.from(header?.querySelectorAll('*') || []).find((element) =>
+      /(^|\s)bg-white(\/\d+)?(\s|$)|(^|\s)bg-\[#F4EFE7\](\s|$)/.test(element.className || '')
+    );
+    expect(opaqueWhiteSurface).toBeUndefined();
+  });
 });

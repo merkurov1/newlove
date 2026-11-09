@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { Brain, PenLine } from 'lucide-react';
 import PierrotAvatar from './PierrotAvatar';
 import {
   WORKSPACE_ROUTES,
@@ -60,6 +61,14 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
     router.push('/admin/pierrot?new=1');
   }
 
+  function openPanel(section: 'memory' | 'flow') {
+    if (pathname === '/admin/pierrot') {
+      window.dispatchEvent(new CustomEvent('pierrot:open-panel', { detail: { section } }));
+      return;
+    }
+    router.push(`/admin/pierrot?panel=${section}`);
+  }
+
   return (
     <div className="pw-root">
       <header className="pw-topbar" aria-label="Pierrot">
@@ -85,6 +94,27 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
             </Link>
           ))}
         </nav>
+
+        <div className="pw-topbar-actions" aria-label="Память и Flow">
+          <button
+            type="button"
+            className="pw-topbar-action"
+            onClick={() => openPanel('memory')}
+            aria-label="Открыть память"
+            title="Память"
+          >
+            <Brain size={18} strokeWidth={1.4} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="pw-topbar-action"
+            onClick={() => openPanel('flow')}
+            aria-label="Открыть Flow"
+            title="Flow"
+          >
+            <PenLine size={17} strokeWidth={1.4} aria-hidden="true" />
+          </button>
+        </div>
       </header>
 
       <main className="pw-main">{children}</main>
