@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Brain, PenLine } from 'lucide-react';
 import PierrotAvatar from './PierrotAvatar';
 import {
-  WORKSPACE_ROUTES,
   activeWorkspaceKey,
+  buildWorkspaceRoutes,
   shortcutRoute,
+  type WorkspaceNavProject,
 } from '@/lib/pierrot/workspace/navigation';
 
 function registerServiceWorker() {
@@ -20,10 +21,20 @@ function registerServiceWorker() {
   });
 }
 
-export default function WorkspaceShell({ children }: { children: React.ReactNode }) {
+export default function WorkspaceShell({
+  children,
+  projects = [],
+}: {
+  children: React.ReactNode;
+  projects?: WorkspaceNavProject[];
+}) {
   const pathname = usePathname() || '/admin/pierrot';
   const router = useRouter();
-  const active = activeWorkspaceKey(pathname);
+  const searchParams = useSearchParams();
+  const historyId = searchParams?.get('history') || null;
+  const projectSlug = searchParams?.get('project') || null;
+  const routes = useMemo(() => buildWorkspaceRoutes(projects), [projects]);
+  const active = activeWorkspaceKey(pathname, projects, historyId, projectSlug);
 
   useEffect(() => {
     if (pathname.startsWith('/admin/pierrot')) registerServiceWorker();
@@ -31,7 +42,7 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      const route = shortcutRoute(event, event.target);
+      const route = shortcutRoute(event, event.target, routes);
       if (!route) return;
 
       event.preventDefault();
@@ -45,13 +56,13 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
         return;
       }
 
-      const item = WORKSPACE_ROUTES.find((entry) => entry.key === route.key);
+      const item = routes.find((entry) => entry.key === route.key);
       if (item) router.push(item.path);
     }
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [pathname, router]);
+  }, [pathname, router, routes]);
 
   function startNewSession() {
     if (pathname === '/admin/pierrot') {
@@ -82,8 +93,8 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
           <PierrotAvatar size={30} />
         </button>
 
-        <nav className="pw-topbar-nav" aria-label="Основная навигация">
-          {WORKSPACE_ROUTES.map((item) => (
+        <nav className="pw-topbar-nav" aria-label="Меню чатов">
+          {routes.map((item) => (
             <Link
               key={item.key}
               href={item.path}

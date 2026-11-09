@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { requireAdmin } from '@/lib/serverAuth';
 import WorkspaceShell from '@/components/pierrot/workspace/WorkspaceShell';
+import { loadProjectRail } from '@/lib/pierrot/workspace/projectRail';
+import type { WorkspaceNavProject } from '@/lib/pierrot/workspace/navigation';
 
 import './workspace.css';
 import './memory.css';
@@ -25,9 +27,7 @@ export const metadata: Metadata = {
       { url: '/pierrot/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
       { url: '/pierrot/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
     ],
-    apple: [
-      { url: '/pierrot/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
-    ],
+    apple: [{ url: '/pierrot/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
     shortcut: [{ url: '/pierrot/icons/icon-192.png', type: 'image/png' }],
   },
   appleWebApp: {
@@ -49,7 +49,15 @@ export const viewport: Viewport = {
 };
 
 export default async function PierrotWorkspaceLayout({ children }: { children: React.ReactNode }) {
-  await requireAdmin();
+  const user = await requireAdmin();
+  const projects = await loadProjectRail(user.id).catch(() => []);
+  const navProjects: WorkspaceNavProject[] = projects.map((project) => ({
+    id: project.id,
+    slug: project.slug,
+    name: project.name,
+    historyId: project.historyId,
+    href: project.chatHref,
+  }));
 
-  return <WorkspaceShell>{children}</WorkspaceShell>;
+  return <WorkspaceShell projects={navProjects}>{children}</WorkspaceShell>;
 }
