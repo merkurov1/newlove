@@ -59,6 +59,7 @@ export async function prepareWorkspaceAudit(input: {
   additionalProposals?: import('./rules').ProposalDraft[];
   additionalWarnings?: string[];
   additionalAmbiguous?: string[];
+  summaryOverrides?: Partial<import('./types').GroomingAuditSummary>;
 }): Promise<PreparedGroomingAudit> {
   const previous = await loadPendingAudit(input.store, input.userId, input.conversationId).catch(
     () => null
@@ -106,13 +107,19 @@ export async function prepareWorkspaceAudit(input: {
     generated.summary.ambiguousCount = generated.ambiguous.length;
   }
 
+  const summary = {
+    ...generated.summary,
+    ...(input.summaryOverrides || {}),
+    ambiguousCount: generated.ambiguous.length,
+  };
+
   const audit = await createAudit(input.store, {
     userId: input.userId,
     conversationId: input.conversationId,
     projectId: input.projectId,
     scope: input.scope,
     requestMessageId: input.requestMessageId,
-    summary: generated.summary,
+    summary,
     snapshot: {
       warnings: generated.warnings,
       ambiguous: generated.ambiguous,

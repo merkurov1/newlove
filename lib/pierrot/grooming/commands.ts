@@ -4,14 +4,64 @@ export type GroomingAuditCommand = {
   kind: 'audit';
   scope: GroomingScope;
   projectName: string | null;
+  /** The owner explicitly asked for the whole workspace, not the current project. */
+  explicitGlobal: boolean;
 };
 
 export type GroomingApprovalCommand =
   | { kind: 'approve'; mode: 'all' | 'safe' | 'selected'; ordinals: number[] }
   | { kind: 'reject'; mode: 'all' | 'selected'; ordinals: number[] }
-  | { kind: 'show'; mode: 'show'; ordinals: [] };
+  | { kind: 'show'; mode: 'show'; ordinals: [] }
+  | { kind: 'repeat'; mode: 'repeat'; ordinals: [] };
 
 export type GroomingCommand = GroomingAuditCommand | GroomingApprovalCommand;
+
+/**
+ * Resolves the actual audit scope. A command written in a project chat is
+ * project-scoped by default; only an explicit "whole workspace" phrase escapes
+ * that boundary. A command in the main chat has no project and therefore audits
+ * the general workspace.
+ */
+export function resolveGroomingTarget(input: {
+  command: GroomingAuditCommand;
+  conversationProject: { id: string; name: string } | null;
+}): {
+  scope: GroomingScope;
+  projectId: string | null;
+  projectName: string | null;
+  global: boolean;
+} {
+  if (input.command.explicitGlobal) {
+    return {
+      scope: input.command.scope,
+      projectId: null,
+      projectName: input.command.projectName,
+      global: true,
+    };
+  }
+  if (input.command.projectName) {
+    return {
+      scope: input.command.scope,
+      projectId: null,
+      projectName: input.command.projectName,
+      global: false,
+    };
+  }
+  if (input.conversationProject) {
+    return {
+      scope: input.command.scope,
+      projectId: input.conversationProject.id,
+      projectName: null,
+      global: false,
+    };
+  }
+  return {
+    scope: input.command.scope,
+    projectId: null,
+    projectName: null,
+    global: true,
+  };
+}
 
 const SCOPE_WORDS: Array<{ scope: GroomingScope; pattern: RegExp }> = [
   { scope: 'conversations', pattern: /диалог|разговор|переписк|conversation|chat/i },
@@ -71,11 +121,29 @@ export function parseGroomingApproval(message: string): GroomingApprovalCommand 
   }
 
   if (
+    /^(?:повтори|повторить|перезапусти|перезапустить|запусти\s+заново|run\s+again)\s+(?:аудит|ревизию|проверку|план)[.!]?$/iu.test(
+      value
+    )
+  ) {
+    return { kind: 'repeat', mode: 'repeat', ordinals: [] };
+  }
+
+  if (
     /^(?:отклони|отклонить|отмен(?:и|ить)|убери|reject|cancel|discard)\s+(?:весь\s+)?(?:план|всё|все|all)[.!]?$/iu.test(
       value
     )
   ) {
     return { kind: 'reject', mode: 'all', ordinals: [] };
+  }
+
+  const cancelProposal = value.match(
+    /^(?:отклони|отклонить|отмен(?:и|ить)|убери|reject|cancel|discard)\s+(?:это\s+)?(?:предложение|пункт|операцию|items?)(?:\s+(.+))?[.!]?$/iu
+  );
+  if (cancelProposal) {
+    const ordinals = cancelProposal[1] ? ordinalList(cancelProposal[1]) : [];
+    return ordinals.length > 0
+      ? { kind: 'reject', mode: 'selected', ordinals }
+      : { kind: 'reject', mode: 'all', ordinals: [] };
   }
 
   const rejectSelected = value.match(
@@ -122,6 +190,10 @@ export function detectGroomingCommand(message: string): GroomingAuditCommand | n
   const value = message.trim();
   if (!value) return null;
   const normalized = value.toLowerCase().replace(/ё/g, 'е');
+  const explicitGlobal =
+    /(?:во\s+вс[её]м\s+рабоч(?:ем|ей)\s+пространств|вс[её]\s+рабочее\s+пространство|в\s+проектах(?:$|[\s,.;:!?])|по\s+всем\s+проектам|все\s+проекты|весь\s+workspace|entire\s+workspace|all\s+projects)/iu.test(
+      value
+    );
 
   const auditPatterns = [
     /^(?:пьеро[,:]?\s*)?(?:наведи|навести|приведи|привести)\s+(?:тут\s+|здесь\s+|сейчас\s+)?(?:всё\s+|все\s+)?(?:в\s+)?порядок(?:\s+(?:в|по|во)\s+(.+))?$/iu,
@@ -134,7 +206,10 @@ export function detectGroomingCommand(message: string): GroomingAuditCommand | n
     const match = value.match(pattern);
     if (!match) continue;
     const scopeText = typeof match[1] === 'string' ? match[1] : '';
-    if (/проект[еу]?\s+/iu.test(scopeText)) {
+    if (
+      /(?:^|\s)в\s+проекте(?:$|\s|[,.;:!?])|проект[аеу]?\s+\S/iu.test(scopeText) ||
+      (!explicitGlobal && /(?:^|\s)в\s+проекте(?:$|\s|[,.;:!?])/iu.test(value))
+    ) {
       // "наведи порядок в проекте Journal" is the existing project review.
       return null;
     }
@@ -142,6 +217,7 @@ export function detectGroomingCommand(message: string): GroomingAuditCommand | n
       kind: 'audit',
       scope: scopeFrom(scopeText || normalized),
       projectName: explicitProject(value),
+      explicitGlobal,
     };
   }
 
@@ -150,29 +226,48 @@ export function detectGroomingCommand(message: string): GroomingAuditCommand | n
       normalized
     )
   ) {
-    return { kind: 'audit', scope: 'context', projectName: explicitProject(value) };
+    return {
+      kind: 'audit',
+      scope: 'context',
+      projectName: explicitProject(value),
+      explicitGlobal,
+    };
   }
-  if (
-    /^(?:пьеро[,:]?\s*)?(?:проверь|проверить)\s+задачи[.!]?$/iu.test(normalized)
-  ) {
-    return { kind: 'audit', scope: 'tasks', projectName: explicitProject(value) };
+  if (/^(?:пьеро[,:]?\s*)?(?:проверь|проверить)\s+задачи[.!]?$/iu.test(normalized)) {
+    return {
+      kind: 'audit',
+      scope: 'tasks',
+      projectName: explicitProject(value),
+      explicitGlobal,
+    };
   }
   if (
     /^(?:пьеро[,:]?\s*)?(?:сверься|сверить|проверь|проверить)\s+(?:с\s+)?github[.!]?$/iu.test(
       normalized
     )
   ) {
-    return { kind: 'audit', scope: 'github', projectName: explicitProject(value) };
+    return {
+      kind: 'audit',
+      scope: 'github',
+      projectName: explicitProject(value),
+      explicitGlobal,
+    };
   }
-  if (
-    /^(?:пьеро[,:]?\s*)?(?:проверь|проверить)\s+проекты[.!]?$/iu.test(normalized)
-  ) {
-    return { kind: 'audit', scope: 'projects', projectName: explicitProject(value) };
+  if (/^(?:пьеро[,:]?\s*)?(?:проверь|проверить)\s+проекты[.!]?$/iu.test(normalized)) {
+    return {
+      kind: 'audit',
+      scope: 'projects',
+      projectName: explicitProject(value),
+      explicitGlobal,
+    };
   }
-  if (
-    /^(?:пьеро[,:]?\s*)?(?:проверь|проверить)\s+диалоги[.!]?$/iu.test(normalized)
-  ) {
-    return { kind: 'audit', scope: 'conversations', projectName: explicitProject(value) };
+  if (/^(?:пьеро[,:]?\s*)?(?:проверь|проверить)\s+диалоги[.!]?$/iu.test(normalized)) {
+    return {
+      kind: 'audit',
+      scope: 'conversations',
+      projectName: explicitProject(value),
+      explicitGlobal,
+    };
   }
 
   return null;

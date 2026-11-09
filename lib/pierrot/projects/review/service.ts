@@ -3,6 +3,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PierrotProjectSnapshot } from '../types';
 import { loadProjectHistoryMessages } from '../history';
 import { listDecisionIdsForProject } from '../links';
+import { listProjectConversationIds } from '../conversation';
+import { listDevTasks } from '@/lib/pierrot/dev/tasks';
 import { listMemoryRecordsByIds } from '@/lib/pierrot/memory/store';
 import type { PierrotMemoryRecord } from '@/lib/pierrot/memory/types';
 import { prepareWorkspaceAudit } from '@/lib/pierrot/grooming/service';
@@ -12,7 +14,7 @@ import { buildProjectReviewProposals } from './plan';
 
 assertServerOnly('lib/pierrot/projects/review/service');
 
-const MAX_REVIEW_MESSAGES = 3_000;
+const MAX_REVIEW_MESSAGES = 5_000;
 
 export type ProjectReviewResult = {
   runId: string;
@@ -113,19 +115,25 @@ export async function prepareProjectReview(input: {
   const { store, ownerUserId, project, conversationId, requestMessageId } = input;
   const language = input.language === 'en' ? 'en' : 'ru';
 
-  const [messages, linkedRecords, artifacts, learningExamples] = await Promise.all([
-    loadProjectHistoryMessages(store, ownerUserId, project.id, {
-      limit: MAX_REVIEW_MESSAGES,
-    }),
-    linkedMemoryRecords(store, ownerUserId, project.id),
-    projectArtifacts(store, ownerUserId, project.id),
-    listTaskExperiences(store, { userId: ownerUserId, limit: 300 }).catch(() => []),
-  ]);
+  const [messages, linkedRecords, artifacts, learningExamples, conversationIds, devTaskResult] =
+    await Promise.all([
+      loadProjectHistoryMessages(store, ownerUserId, project.id, {
+        limit: MAX_REVIEW_MESSAGES,
+      }),
+      linkedMemoryRecords(store, ownerUserId, project.id),
+      projectArtifacts(store, ownerUserId, project.id),
+      listTaskExperiences(store, { userId: ownerUserId, limit: 300 }).catch(() => []),
+      listProjectConversationIds(store, ownerUserId, project.id).catch(() => []),
+      listDevTasks(ownerUserId, 200).catch(() => ({ tasks: [], migrationRequired: false })),
+    ]);
 
   const linkedIds = new Set(linkedRecords.map((record) => record.id));
   const orphans = await orphanMirrorTasks(store, ownerUserId, project, linkedIds);
   const allRecords = [...linkedRecords, ...orphans];
   const tasks = allRecords.filter((record) => record.kind === 'task' || record.kind === 'reminder');
+  const devTasks = devTaskResult.tasks.filter(
+    (task) => !task.projectId || task.projectId === project.id
+  );
   const decisions = allRecords.filter(
     (record) =>
       record.kind === 'decision' ||
@@ -136,13 +144,25 @@ export async function prepareProjectReview(input: {
 
   const analysis = analyzeProjectReview({
     messages,
-    existingTasks: tasks.map((record) => ({
-      id: record.id,
-      title: record.title,
-      content: record.content,
-      status: record.status,
-      createdAt: record.createdAt,
-    })),
+    existingTasks: [
+      ...tasks.map((record) => ({
+        id: record.id,
+        title: record.title,
+        content: record.content,
+        status: record.status,
+        createdAt: record.createdAt,
+      })),
+      // Dev tasks are a separate execution surface, not a second task store.
+      // Treat an equivalent draft/used Dev task as an existing obligation so
+      // project review does not create a duplicate local task.
+      ...devTasks.map((task) => ({
+        id: task.id,
+        title: task.title,
+        content: task.title,
+        status: 'draft',
+        createdAt: task.createdAt,
+      })),
+    ],
     existingDecisions: decisions.map((record) => ({
       id: record.id,
       title: record.title,
@@ -156,9 +176,15 @@ export async function prepareProjectReview(input: {
       url: artifact.url,
     })),
     learningExamples,
+    projectName: project.name,
   });
 
   const plan = buildProjectReviewProposals({ project, analysis });
+  if (messages.length >= MAX_REVIEW_MESSAGES) {
+    plan.warnings.push(
+      `История ограничена последними ${MAX_REVIEW_MESSAGES} сообщениями. Старые сообщения не удалены и доступны в чате; повторный аудит продолжит с сохранённой контрольной точки.`
+    );
+  }
   const prepared = await prepareWorkspaceAudit({
     store,
     userId: ownerUserId,
@@ -170,6 +196,14 @@ export async function prepareProjectReview(input: {
     additionalProposals: plan.proposals,
     additionalWarnings: plan.warnings,
     additionalAmbiguous: plan.ambiguous,
+    summaryOverrides: {
+      sourceMessageCount: messages.length,
+      conversationCount: conversationIds.length,
+      openTaskCount: tasks.filter((record) => record.status === 'current').length,
+      decisionCount: decisions.filter((record) => record.status === 'current').length,
+      materialCount: analysis.materials.length,
+      contradictionCount: analysis.contradictions.length,
+    },
   });
 
   return {
@@ -195,6 +229,7 @@ export async function prepareProjectReview(input: {
         ideas: analysis.ideas.length,
         materials: analysis.materials.length,
         completions: analysis.completions.length,
+        documents: analysis.skippedDocuments.length,
       },
       generatedAt: new Date().toISOString(),
     },

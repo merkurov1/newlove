@@ -230,4 +230,150 @@ describe('project review analysis', () => {
     expect(result.materials).toHaveLength(1);
     expect(result.tasks).toHaveLength(0);
   });
+
+  it('extracts the obligation from an add-task command wrapper', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      projectName: 'Heart & Angel',
+      messages: [msg('m1', 'user', 'Добавь в задачи - подключить гитхаб сюда')],
+    });
+
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].content).toBe('подключить гитхаб в проекте «Heart & Angel»');
+  });
+
+  it('does not turn a task-move command into a new task', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      messages: [msg('m1', 'user', 'Перенеси задачу с секцией Journal в проект Journal')],
+    });
+
+    expect(result.tasks).toHaveLength(0);
+  });
+
+  it('does not mine a pasted specification or audit brief for tasks', () => {
+    const document = [
+      '# Передача проекта: еженедельный выпуск Flow',
+      '',
+      '## 1. Итог',
+      'Документ описывает договорённости. Читай целиком.',
+      '',
+      '## 2. Что сделать',
+      '1. Создай недостающие задачи.',
+      '2. Убери ее в архив.',
+      '3. Из главного сделать главный материал.',
+    ].join('\n');
+    const result = analyzeProjectReview({
+      ...empty,
+      messages: [msg('m1', 'user', document)],
+    });
+
+    expect(result.tasks).toHaveLength(0);
+    expect(result.ambiguousTaskCandidates).toHaveLength(0);
+  });
+
+  it('does not take materials from assistant summaries or one-off link requests', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      messages: [
+        msg(
+          'a1',
+          'assistant',
+          '## Итог\nМатериал: https://example.com/from-summary\nЗадача: подключить гитхаб'
+        ),
+        msg('m1', 'user', 'Посмотри https://example.com/one-off и скажи что думаешь.'),
+      ],
+    });
+
+    expect(result.materials).toHaveLength(0);
+    expect(result.tasks).toHaveLength(0);
+  });
+
+  it('does not create a duplicate when the existing task is contained in a new sentence', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      existingTasks: [
+        {
+          id: 't1',
+          title: 'если ссылка - не дублировать заголовок',
+          content: 'если ссылка - не дублировать заголовок',
+          status: 'current',
+        },
+      ],
+      messages: [
+        msg(
+          'm1',
+          'user',
+          'В проект Journal на главной Flow если ссылка - не дублировать заголовок.'
+        ),
+      ],
+    });
+
+    expect(result.tasks).toHaveLength(0);
+  });
+
+  it('does not duplicate an existing Dev task or a renamed equivalent', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      projectName: 'Heart & Angel',
+      existingTasks: [
+        {
+          id: 'dev-1',
+          title: 'Добавь задачу подключить сюда supabase и статистику temple',
+          content: 'Добавь задачу подключить сюда supabase и статистику temple',
+          status: 'draft',
+        },
+        {
+          id: 't1',
+          title: 'Подключить GitHub к проекту Heart & Angel',
+          content: 'Подключить GitHub к проекту Heart & Angel',
+          status: 'current',
+        },
+      ],
+      messages: [
+        msg('m1', 'user', 'Добавь задачу подключить сюда supabase и статистику temple'),
+        msg('m2', 'user', 'Добавь в задачи - подключить гитхаб сюда'),
+      ],
+    });
+
+    expect(result.tasks).toHaveLength(0);
+  });
+
+  it('does not re-propose a material the owner already rejected', () => {
+    const source = 'Сохрани материал https://example.com/rejected';
+    const result = analyzeProjectReview({
+      ...empty,
+      learningExamples: [
+        {
+          id: 'e1',
+          userId: 'owner',
+          conversationId: 'conv-1',
+          sourceMessageId: 'old',
+          sourceText: source,
+          proposedKind: null,
+          confirmedKind: null,
+          proposedProjectId: null,
+          confirmedProjectId: null,
+          outcome: 'false_task',
+          reason: 'Owner rejected the material.',
+          source: 'grooming',
+          analyzerVersion: 'test',
+          metadata: {},
+          createdAt: '2026-01-01T10:00:00Z',
+        },
+      ],
+      messages: [msg('m1', 'user', source)],
+    });
+
+    expect(result.materials).toHaveLength(0);
+  });
+
+  it('keeps a one-off summary request out of permanent tasks', () => {
+    const result = analyzeProjectReview({
+      ...empty,
+      messages: [msg('m1', 'user', 'Можешь сделать саммари всех переписок по проекту journal')],
+    });
+
+    expect(result.tasks).toHaveLength(0);
+  });
 });

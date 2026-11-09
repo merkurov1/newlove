@@ -80,9 +80,7 @@ export default function GroomingPlanCard({
     () =>
       GROUPS.map((group) => ({
         ...group,
-        items: plan.proposals.filter((proposal) =>
-          group.operations.includes(proposal.operation)
-        ),
+        items: plan.proposals.filter((proposal) => group.operations.includes(proposal.operation)),
       })).filter((group) => group.items.length > 0),
     [plan.proposals]
   );
@@ -165,6 +163,9 @@ export default function GroomingPlanCard({
                                   ) : (
                                     sourceLabel(ref)
                                   )}
+                                  {ref.quote && ref.quote !== sourceLabel(ref) && (
+                                    <span> — «{ref.quote.slice(0, 240)}»</span>
+                                  )}
                                 </li>
                               ))}
                             </ul>
@@ -180,7 +181,9 @@ export default function GroomingPlanCard({
 
           {plan.ambiguous.length > 0 && (
             <details className="pw-grooming-plan-ambiguous">
-              <summary>Неоднозначное — не будет изменено автоматически ({plan.ambiguous.length})</summary>
+              <summary>
+                Неоднозначное — не будет изменено автоматически ({plan.ambiguous.length})
+              </summary>
               <ul>
                 {plan.ambiguous.map((item, index) => (
                   <li key={`ambiguous-${index}`}>{item}</li>

@@ -103,6 +103,14 @@ export function formatGroomingPlan(input: {
     githubLinkCount: number;
     githubErrorCount: number;
     staleSummaryCount: number;
+    sourceMessageCount?: number;
+    conversationCount?: number;
+    openTaskCount?: number;
+    questionableTaskCount?: number;
+    decisionCount?: number;
+    materialCount?: number;
+    contradictionCount?: number;
+    cleanedTaskCount?: number;
   };
   warnings: string[];
   ambiguous: string[];
@@ -116,16 +124,26 @@ export function formatGroomingPlan(input: {
       : '**Workspace audit complete. Nothing changed.**'
   );
   lines.push('');
+  const sourceMessages = input.summary.sourceMessageCount ?? input.summary.messageCount;
+  const conversations = input.summary.conversationCount;
+  const openTasks = input.summary.openTaskCount ?? input.summary.taskCount;
   lines.push(
     ru
-      ? `Проверено: ${input.summary.projectCount} проектов, ${input.summary.taskCount} задач, ${input.summary.memoryCount} записей памяти, ${input.summary.messageCount} сообщений, ${input.summary.githubLinkCount} GitHub-связей.`
-      : `Checked: ${input.summary.projectCount} projects, ${input.summary.taskCount} tasks, ${input.summary.memoryCount} memory records, ${input.summary.messageCount} messages, ${input.summary.githubLinkCount} GitHub links.`
+      ? `Проверено: ${input.summary.projectCount} проектов${conversations ? `, ${conversations} диалогов` : ''}, ${sourceMessages} сообщений, ${openTasks} открытых задач, ${input.summary.decisionCount ?? 0} решений, ${input.summary.materialCount ?? 0} материалов, ${input.summary.memoryCount} записей памяти, ${input.summary.githubLinkCount} GitHub-связей.`
+      : `Checked: ${input.summary.projectCount} projects${conversations ? `, ${conversations} conversations` : ''}, ${sourceMessages} messages, ${openTasks} open tasks, ${input.summary.decisionCount ?? 0} decisions, ${input.summary.materialCount ?? 0} materials, ${input.summary.memoryCount} memory records, ${input.summary.githubLinkCount} GitHub links.`
   );
   lines.push(
     ru
-      ? `Предложений: ${input.proposals.length}. Неоднозначных случаев: ${input.ambiguous.length}. GitHub-ошибок: ${input.summary.githubErrorCount}. Устаревших резюме: ${input.summary.staleSummaryCount}.`
-      : `Proposals: ${input.proposals.length}. Ambiguous cases: ${input.ambiguous.length}. GitHub errors: ${input.summary.githubErrorCount}. Stale summaries: ${input.summary.staleSummaryCount}.`
+      ? `Предложений: ${input.proposals.length}. Сомнительных записей: ${input.summary.questionableTaskCount ?? 0}. Очищено формулировок: ${input.summary.cleanedTaskCount ?? 0}. Неоднозначных случаев: ${input.ambiguous.length}. GitHub-ошибок: ${input.summary.githubErrorCount}. Устаревших резюме: ${input.summary.staleSummaryCount}.`
+      : `Proposals: ${input.proposals.length}. Questionable records: ${input.summary.questionableTaskCount ?? 0}. Cleaned titles: ${input.summary.cleanedTaskCount ?? 0}. Ambiguous cases: ${input.ambiguous.length}. GitHub errors: ${input.summary.githubErrorCount}. Stale summaries: ${input.summary.staleSummaryCount}.`
   );
+  if ((input.summary.contradictionCount ?? 0) > 0) {
+    lines.push(
+      ru
+        ? `Противоречий в решениях: ${input.summary.contradictionCount}.`
+        : `Decision contradictions: ${input.summary.contradictionCount}.`
+    );
+  }
 
   const numbered = input.proposals.map((proposal, index) => ({
     ...proposal,

@@ -1,6 +1,19 @@
 import type { ProjectHistoryMessage } from '../history';
 import { lexicalSimilarity, normalizeForComparison } from '@/lib/pierrot/memory/similarity';
 import { learnedClassification, type TaskExperienceExample } from '@/lib/pierrot/learning/types';
+import {
+  applyTaskAliases,
+  bulkInstructionKind,
+  extractTaskPayload,
+  isMaterialCandidate,
+  isMetaInstruction,
+  isQuotedOrHypothetical,
+  isQuestionLike,
+  materialTitleFromSentence,
+  prepareTaskText,
+  sentenceWithUrl,
+  stripCodeBlocks,
+} from '@/lib/pierrot/grooming/signals';
 
 export type ReviewExistingTask = {
   id: string;
@@ -87,6 +100,8 @@ export type ProjectReviewAnalysis = {
   contradictions: ReviewContradiction[];
   ambiguousTaskCandidates: ReviewCandidate[];
   ideaLikeTasks: Array<{ id: string; title: string; reason: string }>;
+  /** Pasted specifications that were intentionally not mined for tasks. */
+  skippedDocuments: string[];
 };
 
 const TASK_VERB =
@@ -194,8 +209,11 @@ function stripTaskCommand(value: string): string {
 export function classifyReviewSentence(value: string, hasUrl = false): ReviewClassification {
   const sentence = clean(value);
   if (!sentence) return 'ignore';
-  if (META_COMMAND.test(sentence)) return 'ignore';
-  if (isQuestion(sentence)) return 'question';
+  // Quoted examples, hypothetical scenarios and auto-generated summaries are
+  // never sources of owner obligations.
+  if (isQuotedOrHypothetical(sentence)) return 'ignore';
+  if (META_COMMAND.test(sentence) || isMetaInstruction(sentence)) return 'ignore';
+  if (isQuestion(sentence) || isQuestionLike(sentence)) return 'question';
   if (COMPLETION.test(sentence)) return 'completion';
 
   const explicitTask = EXPLICIT_TASK_COMMAND.test(sentence);
@@ -252,8 +270,14 @@ function candidateFor(
   };
 }
 
-function taskCandidateFor(message: ProjectHistoryMessage, sentence: string): ReviewCandidate {
-  return candidateFor(message, stripTaskCommand(sentence), tagsFor(sentence));
+function taskCandidateFor(
+  message: ProjectHistoryMessage,
+  sentence: string,
+  projectName?: string | null
+): ReviewCandidate {
+  const payload = extractTaskPayload(sentence);
+  const text = prepareTaskText(payload || stripTaskCommand(sentence), projectName);
+  return candidateFor(message, text, tagsFor(sentence));
 }
 
 function sameCandidate(left: ReviewCandidate, right: ReviewCandidate): boolean {
@@ -284,24 +308,74 @@ function artifactType(url: string): string {
   return 'link';
 }
 
-function materialTitle(sentence: string, url: string): string {
-  const withoutUrl = clean(sentence.replace(url, ''))
-    .replace(/[:—–-]+$/g, '')
-    .trim();
-  if (withoutUrl.length >= 4) return titleFrom(withoutUrl);
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return url.slice(0, 180);
-  }
-}
-
 function taskIsExisting(candidate: ReviewCandidate, existing: ReviewExistingTask[]): boolean {
-  const normalized = normalizeForComparison(`${candidate.title} ${candidate.content}`);
+  const normalized = normalizeForComparison(
+    applyTaskAliases(`${candidate.title} ${candidate.content}`)
+  );
+  const normalizedTitle = normalizeForComparison(applyTaskAliases(candidate.title));
   for (const task of existing) {
-    const other = normalizeForComparison(`${task.title} ${task.content}`);
+    const other = normalizeForComparison(applyTaskAliases(`${task.title} ${task.content}`));
+    const otherTitle = normalizeForComparison(applyTaskAliases(task.title));
     if (normalized === other) return true;
     if (lexicalSimilarity(normalized, other) >= 0.9) return true;
+    // A new sentence often wraps an existing task in extra context
+    // ("в проект Journal ... если ссылка - не дублировать заголовок").
+    // Treat a contained title as the same obligation, not a new task.
+    if (
+      (otherTitle.length >= 10 && normalized.includes(otherTitle)) ||
+      (normalizedTitle.length >= 10 && other.includes(normalizedTitle))
+    ) {
+      return true;
+    }
+
+    const otherTokens = otherTitle
+      .split(/\s+/u)
+      .filter(
+        (token) =>
+          token.length >= 4 &&
+          ![
+            'проект',
+            'проекте',
+            'проекту',
+            'сюда',
+            'здесь',
+            'этот',
+            'этом',
+            'нашем',
+            'под',
+            'подключить',
+            'добавить',
+            'сделать',
+            'создать',
+            'исправить',
+            'обновить',
+            'настроить',
+            'проверить',
+            'реализовать',
+          ].includes(token)
+      );
+    if (otherTokens.length >= 2 && otherTokens.every((token) => normalized.includes(token))) {
+      return true;
+    }
+
+    // Existing tasks created by an older review may still carry the command
+    // wrapper. Compare the real payload, not the wrapper.
+    const existingPayload =
+      extractTaskPayload(task.title) || extractTaskPayload(task.content) || '';
+    if (existingPayload) {
+      const payload = normalizeForComparison(applyTaskAliases(prepareTaskText(existingPayload)));
+      if (payload && normalized.includes(payload)) return true;
+      const payloadTokens = payload
+        .split(/\s+/u)
+        .filter(
+          (token) =>
+            token.length >= 4 &&
+            !['проект', 'проекте', 'сюда', 'здесь', 'этот', 'этом', 'нашем'].includes(token)
+        );
+      if (payloadTokens.length >= 2 && payloadTokens.every((token) => normalized.includes(token))) {
+        return true;
+      }
+    }
   }
   return false;
 }
@@ -459,6 +533,7 @@ export function analyzeProjectReview(input: {
   existingDecisions: ReviewExistingDecision[];
   existingMaterials: ReviewExistingMaterial[];
   learningExamples?: TaskExperienceExample[];
+  projectName?: string | null;
 }): ProjectReviewAnalysis {
   const tasks: ReviewCandidate[] = [];
   const reminders: ReviewCandidate[] = [];
@@ -468,6 +543,7 @@ export function analyzeProjectReview(input: {
   const materials: ReviewMaterialCandidate[] = [];
   const openQuestions: ReviewCandidate[] = [];
   const ambiguousTaskCandidates: ReviewCandidate[] = [];
+  const skippedDocuments: string[] = [];
   const seenUrls = new Set(
     input.existingMaterials
       .map((material) => material.url)
@@ -477,13 +553,50 @@ export function analyzeProjectReview(input: {
 
   for (const message of input.messages) {
     if (message.role !== 'user') continue;
+    // Pasted specifications and multi-step audit briefs are documents, not a
+    // source of new tasks or materials.
+    const bulkKind = bulkInstructionKind(message.content);
+    if (bulkKind) {
+      if (bulkKind === 'document') {
+        const firstLine =
+          message.content
+            .split('\n')
+            .map((line) => clean(line))
+            .find(Boolean) || 'Документ';
+        const documentTitle = titleFrom(firstLine).replace(
+          /^(?:добавь|запиши|сохрани)\s+(?:это\s+)?в\s+проект\s*/iu,
+          ''
+        );
+        if (
+          !skippedDocuments.some(
+            (item) => normalizeForComparison(item) === normalizeForComparison(documentTitle)
+          )
+        ) {
+          skippedDocuments.push(documentTitle);
+        }
+      }
+      continue;
+    }
 
-    for (const url of extractUrls(message.content)) {
+    const analyzable = stripCodeBlocks(message.content);
+
+    for (const url of extractUrls(analyzable)) {
       const key = url.toLocaleLowerCase();
       if (seenUrls.has(key)) continue;
+      // A plain mention is not a material. Require a real object and a
+      // non-ephemeral sentence; summaries and assistant replies never reach
+      // this branch because only user messages are analysed.
+      if (!isMaterialCandidate(analyzable, url)) continue;
+      const sentence = sentenceWithUrl(analyzable, url);
+      if (
+        input.learningExamples?.length &&
+        learnedClassification(sentence, input.learningExamples)?.outcome === 'false_task'
+      ) {
+        continue;
+      }
       seenUrls.add(key);
       materials.push({
-        title: materialTitle(message.content, url),
+        title: materialTitleFromSentence(sentence, url),
         content: url,
         url,
         artifactType: artifactType(url),
@@ -494,9 +607,24 @@ export function analyzeProjectReview(input: {
       });
     }
 
-    const hasUrl = extractUrls(message.content).length > 0;
+    const hasUrl = extractUrls(analyzable).length > 0;
 
-    for (const sentence of sentences(message.content)) {
+    for (const sentence of sentences(analyzable)) {
+      // An explicit "add task ..." wrapper contains a real obligation. Keep
+      // the payload, drop the wrapper.
+      const taskPayload = extractTaskPayload(sentence);
+      if (taskPayload) {
+        if (
+          input.learningExamples?.length &&
+          learnedClassification(sentence, input.learningExamples)?.outcome === 'false_task'
+        ) {
+          continue;
+        }
+        const candidate = taskCandidateFor(message, sentence, input.projectName);
+        if (!taskIsExisting(candidate, input.existingTasks)) pushUnique(tasks, candidate);
+        continue;
+      }
+
       let classification = classifyReviewSentence(sentence, hasUrl);
       const learned = input.learningExamples?.length
         ? learnedClassification(sentence, input.learningExamples)
@@ -548,13 +676,13 @@ export function analyzeProjectReview(input: {
       }
 
       if (classification === 'reminder') {
-        const candidate = taskCandidateFor(message, sentence);
+        const candidate = taskCandidateFor(message, sentence, input.projectName);
         if (!taskIsExisting(candidate, input.existingTasks)) pushUnique(reminders, candidate);
         continue;
       }
 
       if (classification === 'ambiguous') {
-        const candidate = taskCandidateFor(message, sentence);
+        const candidate = taskCandidateFor(message, sentence, input.projectName);
         pushUnique(ambiguousTaskCandidates, candidate);
         pushUnique(
           openQuestions,
@@ -565,7 +693,7 @@ export function analyzeProjectReview(input: {
 
       if (classification !== 'task') continue;
 
-      const candidate = taskCandidateFor(message, sentence);
+      const candidate = taskCandidateFor(message, sentence, input.projectName);
       if (taskIsExisting(candidate, input.existingTasks)) continue;
       pushUnique(tasks, candidate);
     }
@@ -584,5 +712,6 @@ export function analyzeProjectReview(input: {
     contradictions: contradictionPairs(input.existingDecisions, decisions),
     ambiguousTaskCandidates,
     ideaLikeTasks: ideaLikeTasks(input.existingTasks),
+    skippedDocuments,
   };
 }

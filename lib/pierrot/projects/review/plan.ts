@@ -234,6 +234,11 @@ export function buildProjectReviewProposals(input: {
   for (const ideaTask of analysis.ideaLikeTasks.slice(0, 8)) {
     ambiguous.push(`Задача «${ideaTask.title}» похожа на идею. ${ideaTask.reason}`);
   }
+  for (const document of analysis.skippedDocuments.slice(0, 8)) {
+    ambiguous.push(
+      `Документ «${truncate(document, 180)}» не разобран на задачи автоматически: это вставленный текст или инструкция, а не список обязательств.`
+    );
+  }
   if (analysis.tasks.length > 20 || analysis.reminders.length > 20) {
     warnings.push('Часть найденных поручений не вошла в один план; повтори аудит после обработки.');
   }

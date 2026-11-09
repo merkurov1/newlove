@@ -19,6 +19,7 @@ import {
   updateAuditStatus,
 } from './store';
 import { upsertGithubTaskLink } from './github';
+import { normaliseUrlKey } from './signals';
 import { recordTaskExperience } from '@/lib/pierrot/learning/store';
 import type {
   GroomingExecutionReport,
@@ -152,6 +153,38 @@ async function validateTarget(
     ) {
       return 'stale';
     }
+    return 'ok';
+  }
+
+  if (proposal.operation === 'create_artifact') {
+    const projectId = text(proposal.params.projectId) || proposal.entityId || '';
+    if (!projectId) return 'missing';
+    const project = await getProjectFromStore(store, userId, projectId);
+    return project ? 'ok' : 'missing';
+  }
+
+  if (
+    proposal.operation === 'create_task' ||
+    proposal.operation === 'create_reminder' ||
+    proposal.operation === 'create_memory'
+  ) {
+    return 'ok';
+  }
+
+  if (proposal.operation === 'link_project' || proposal.operation === 'move_task') {
+    const projectId = text(proposal.params.projectId);
+    if (!projectId) return 'missing';
+    const project = await getProjectFromStore(store, userId, projectId);
+    if (!project) return 'missing';
+    const taskId = text(proposal.params.taskId) || proposal.entityId || '';
+    if (!taskId) return 'missing';
+    const task = await getMemoryRecord(store, userId, taskId);
+    if (!task) return 'missing';
+    if (
+      text(proposal.beforeState.updatedAt) &&
+      text(proposal.beforeState.updatedAt) !== task.updatedAt
+    )
+      return 'stale';
     return 'ok';
   }
 
@@ -430,6 +463,34 @@ async function executeProposal(input: {
     const url = text(proposal.params.url);
     const title = text(proposal.params.title) || url;
     if (!url || title.length < 2) throw new GroomingExecutionError('ARTIFACT_FIELDS_REQUIRED');
+
+    // Re-running an audit (or a second audit detecting the same link) must not
+    // create a second material row.
+    const { data: existingArtifacts, error: existingError } = await store
+      .from('pierrot_project_artifacts')
+      .select('id,title,content,metadata')
+      .eq('project_id', project.id)
+      .eq('owner_user_id', userId)
+      .limit(2_000);
+    if (existingError) throw existingError;
+    const wantedKey = normaliseUrlKey(url);
+    const duplicate = (Array.isArray(existingArtifacts) ? existingArtifacts : []).find((row) => {
+      if (!row || typeof row !== 'object') return false;
+      const item = row as Record<string, unknown>;
+      const content = text(item.content);
+      const metadata = object(item.metadata);
+      const candidate = text(metadata.url) || (/https?:\/\//iu.test(content) ? content : '');
+      return Boolean(candidate) && normaliseUrlKey(candidate) === wantedKey;
+    });
+    if (duplicate) {
+      return {
+        ...base,
+        result: 'skipped',
+        detail: `Материал уже существует: «${text((duplicate as Record<string, unknown>).title)}». Дубликат не создан.`,
+        entityId: text((duplicate as Record<string, unknown>).id) || null,
+      };
+    }
+
     const { data, error } = await store
       .from('pierrot_project_artifacts')
       .insert({
@@ -568,6 +629,13 @@ async function executeProposal(input: {
         ? { archivedReason: text(proposal.params.reason) || 'workspace_grooming_archive' }
         : {}),
     });
+
+    if (status && updated.status !== status) {
+      throw new GroomingExecutionError('VERIFICATION_FAILED');
+    }
+    if (text(patch.title) && updated.title !== text(patch.title)) {
+      throw new GroomingExecutionError('VERIFICATION_FAILED');
+    }
 
     if (proposal.operation === 'complete_task' && proposal.params.repository) {
       await upsertGithubTaskLink(store, {
@@ -899,15 +967,7 @@ export async function executeApprovedPlan(input: {
   });
 
   if (selected.length === 0) {
-    return {
-      auditId: audit.id,
-      status: 'completed',
-      results: [],
-      executed: 0,
-      skipped: 0,
-      failed: 0,
-      stale: 0,
-    };
+    throw new GroomingExecutionError('NO_MATCHING_PROPOSALS');
   }
 
   const selectedIds = new Set(selected.map((proposal) => proposal.id));

@@ -1895,6 +1895,14 @@ export async function POST(req: Request) {
               error && typeof error === 'object' && 'code' in error
                 ? String((error as { code?: unknown }).code)
                 : 'GROOMING_EXECUTION_FAILED';
+            if (code === 'NO_MATCHING_PROPOSALS') {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'В плане нет выбранных пунктов с такими номерами. Ничего не изменено. Покажи план и выбери существующие номера.'
+                  : 'The plan has no matching proposal numbers. Nothing changed. Show the plan and choose existing numbers.',
+                { grooming_status: 'failed', grooming_error: code }
+              );
+            }
             return persistOwnerReply(
               ownerLanguage === 'ru'
                 ? `План не выполнен (${code}). Успешные операции не отменяются, журнал сохранён. Повтори аудит, если объекты изменились.`
@@ -2064,17 +2072,17 @@ export async function POST(req: Request) {
             );
           }
 
-          const target =
-            conversationProject ||
-            (projectCommand.projectName
-              ? (
-                  await resolveExactProject(
-                    memoryStore,
-                    ownerIdentityUserId,
-                    projectCommand.projectName
-                  )
-                ).project
-              : null);
+          // An explicitly named project wins over the chat's current project.
+          // Guessing from the surrounding chat would audit the wrong project.
+          const target = projectCommand.projectName
+            ? (
+                await resolveExactProject(
+                  memoryStore,
+                  ownerIdentityUserId,
+                  projectCommand.projectName
+                )
+              ).project
+            : conversationProject;
 
           if (!target) {
             return persistOwnerReply(

@@ -1,4 +1,4 @@
-import { detectGroomingCommand, parseGroomingApproval } from '../commands';
+import { detectGroomingCommand, parseGroomingApproval, resolveGroomingTarget } from '../commands';
 
 describe('workspace grooming commands', () => {
   it.each([
@@ -52,5 +52,51 @@ describe('workspace grooming commands', () => {
     });
     expect(parseGroomingApproval('покажи план')).toMatchObject({ kind: 'show' });
     expect(parseGroomingApproval('да, наверное потом')).toBeNull();
+  });
+
+  it('supports cancelling a proposal and repeating the audit', () => {
+    expect(parseGroomingApproval('отмени предложение 3')).toEqual({
+      kind: 'reject',
+      mode: 'selected',
+      ordinals: [3],
+    });
+    expect(parseGroomingApproval('отмени предложение')).toEqual({
+      kind: 'reject',
+      mode: 'all',
+      ordinals: [],
+    });
+    expect(parseGroomingApproval('повтори аудит')).toMatchObject({ kind: 'repeat' });
+    expect(parseGroomingApproval('перезапусти проверку')).toMatchObject({ kind: 'repeat' });
+  });
+
+  it('scopes a project chat to its project and an explicit request to the workspace', () => {
+    const journal = { id: 'project-journal', name: 'Journal' };
+    expect(
+      resolveGroomingTarget({
+        command: detectGroomingCommand('Наведи порядок')!,
+        conversationProject: journal,
+      })
+    ).toMatchObject({ projectId: journal.id, global: false });
+
+    expect(
+      resolveGroomingTarget({
+        command: detectGroomingCommand('Наведи порядок во всём рабочем пространстве')!,
+        conversationProject: journal,
+      })
+    ).toMatchObject({ projectId: null, global: true });
+
+    expect(
+      resolveGroomingTarget({
+        command: detectGroomingCommand('Наведи порядок')!,
+        conversationProject: null,
+      })
+    ).toMatchObject({ projectId: null, global: true });
+
+    expect(
+      resolveGroomingTarget({
+        command: detectGroomingCommand('Наведи порядок в проектах')!,
+        conversationProject: journal,
+      })
+    ).toMatchObject({ projectId: null, global: true });
   });
 });

@@ -222,6 +222,44 @@ describe('project review preparation and approval', () => {
     expect(links[0].project_id).toBe(row.id);
   });
 
+  it('saves an approved project material without treating the project id as a task', async () => {
+    const { db, row, store } = setup();
+    db.seed('pierrot_messages', [
+      message('m1', 'user', 'Сохрани материал https://example.com/archive/letter', 1),
+    ]);
+
+    const prepared = await prepareProjectReview({
+      store,
+      ownerUserId: OWNER_ID,
+      project: snapshot(row),
+      conversationId: CONVERSATION_ID,
+      requestMessageId: 'user-message-material',
+      language: 'ru',
+    });
+    const material = db
+      .all('pierrot_workspace_proposals')
+      .find((item) => item.audit_id === prepared.runId && item.operation === 'create_artifact') as
+      Record<string, unknown> | undefined;
+    expect(material).toBeTruthy();
+
+    const execution = await approvePendingGroomingPlan({
+      store,
+      userId: OWNER_ID,
+      conversationId: CONVERSATION_ID,
+      mode: 'selected',
+      ordinals: [Number(material?.ordinal)],
+      language: 'ru',
+    });
+
+    expect(execution?.report.executed).toBe(1);
+    expect(execution?.report.failed).toBe(0);
+    const artifacts = db.all('pierrot_project_artifacts');
+    expect(artifacts).toHaveLength(1);
+    expect((artifacts[0].metadata as Record<string, unknown>).url).toBe(
+      'https://example.com/archive/letter'
+    );
+  });
+
   it('rejecting the plan leaves all workspace records untouched', async () => {
     const { db, row, store } = setup();
     db.seed('pierrot_messages', [

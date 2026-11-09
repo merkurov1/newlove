@@ -367,6 +367,53 @@ describe('workspace grooming rules', () => {
     });
   });
 
+  it('cleans a command wrapper while keeping the real obligation', () => {
+    const heart = project('p1', 'Heart & Angel', 'heart-angel');
+    const result = generateGroomingProposals({
+      snapshot: snapshot({
+        projects: [heart],
+        records: [
+          record({
+            id: 'a',
+            title: 'Добавь в задачи - подключить гитхаб сюда',
+            project: 'Heart & Angel',
+          }),
+        ],
+        linked: [['a', [heart.id]]],
+      }),
+      scope: 'projects',
+      projectId: heart.id,
+    });
+
+    expect(result.proposals.find((item) => item.operation === 'update_task')).toMatchObject({
+      params: {
+        taskId: 'a',
+        patch: { title: 'подключить гитхаб в проекте «Heart & Angel»' },
+      },
+      risk: 'reversible',
+    });
+    expect(result.proposals.some((item) => item.operation === 'archive_task')).toBe(false);
+  });
+
+  it('archives a question or a one-off command stored as a task', () => {
+    const result = generateGroomingProposals({
+      snapshot: snapshot({
+        records: [
+          record({ id: 'a', title: 'Можешь сделать саммари всех переписок по проекту journal' }),
+          record({ id: 'b', title: 'Перенеси задачу с секцией Journal в проект Journal' }),
+        ],
+      }),
+      scope: 'tasks',
+      projectId: null,
+    });
+
+    expect(
+      result.proposals.filter(
+        (item) => item.operation === 'archive_task' && item.params.reason === 'command_artifact'
+      )
+    ).toHaveLength(2);
+  });
+
   it('archives an obvious command artifact only as a confirmation proposal', () => {
     const result = generateGroomingProposals({
       snapshot: snapshot({

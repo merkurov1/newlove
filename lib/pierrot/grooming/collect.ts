@@ -18,6 +18,13 @@ import { listDevTasks } from '../dev/tasks';
 import { getDevRepositoryStatuses } from '../dev/repository';
 import type { DevRepositoryStatus, DevTask } from '../dev/types';
 import type { GroomingScope } from './types';
+import {
+  isMaterialCandidate,
+  materialTitleFromSentence,
+  normaliseUrlKey,
+  sentenceWithUrl,
+  stripCodeBlocks,
+} from './signals';
 
 assertServerOnly('lib/pierrot/grooming/collect');
 
@@ -107,7 +114,7 @@ async function loadExistingMaterialUrls(
         ? (row.metadata as Record<string, unknown>)
         : null;
     const url = typeof metadata?.url === 'string' ? metadata.url : extractFirstUrl(content);
-    if (url) urls.add(url.toLowerCase());
+    if (url) urls.add(normaliseUrlKey(url));
   }
   return urls;
 }
@@ -125,20 +132,6 @@ function artifactType(url: string): string {
   return 'link';
 }
 
-function materialTitle(value: string, url: string): string {
-  const withoutUrl = value
-    .replace(url, '')
-    .replace(/\s+/g, ' ')
-    .replace(/[:—–-]+$/g, '')
-    .trim();
-  if (withoutUrl.length >= 4) return withoutUrl.slice(0, 180);
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return url.slice(0, 180);
-  }
-}
-
 async function loadMaterialCandidates(
   store: SupabaseClient,
   userId: string,
@@ -150,25 +143,31 @@ async function loadMaterialCandidates(
 
   for (const project of projects.slice(0, 20)) {
     const messages = await loadProjectHistoryMessages(store, userId, project.id, {
-      limit: 500,
+      limit: 5_000,
     }).catch(() => []);
     for (const message of messages) {
+      // Assistant replies and generated summaries are never a source of new
+      // project materials. Only the owner's own messages can establish one.
+      if (message.role !== 'user') continue;
+      const analyzable = stripCodeBlocks(message.content);
       const urls = Array.from(
         new Set(
-          (message.content.match(/https?:\/\/[^\s<>"')]+/giu) || []).map((url) =>
+          (analyzable.match(/https?:\/\/[^\s<>"')]+/giu) || []).map((url) =>
             url.replace(/[.,;:!?]+$/g, '')
           )
         )
       );
       for (const url of urls) {
-        const key = url.toLowerCase();
+        const key = normaliseUrlKey(url);
         if (seen.has(key)) continue;
+        if (!isMaterialCandidate(analyzable, url)) continue;
         seen.add(key);
+        const sentence = sentenceWithUrl(analyzable, url);
         candidates.push({
           projectId: project.id,
           projectName: project.name,
           url,
-          title: materialTitle(message.content, url),
+          title: materialTitleFromSentence(sentence, url),
           artifactType: artifactType(url),
           sourceMessageId: message.id,
           conversationId: message.conversationId,
@@ -330,15 +329,19 @@ export async function collectWorkspaceSnapshot(input: {
     countByProject(input.store, 'pierrot_project_artifacts', input.userId),
     countByProject(input.store, 'pierrot_project_knowledge', input.userId),
   ]);
-  const existingMaterialUrls = await loadExistingMaterialUrls(input.store, input.userId).catch(
-    () => new Set<string>()
-  );
-  const materialCandidates = await loadMaterialCandidates(
-    input.store,
-    input.userId,
-    projects,
-    existingMaterialUrls
-  ).catch(() => []);
+  const wantsMaterials =
+    input.scope === 'all' ||
+    input.scope === 'projects' ||
+    input.scope === 'conversations' ||
+    input.scope === 'context';
+  const existingMaterialUrls = wantsMaterials
+    ? await loadExistingMaterialUrls(input.store, input.userId).catch(() => new Set<string>())
+    : new Set<string>();
+  const materialCandidates = wantsMaterials
+    ? await loadMaterialCandidates(input.store, input.userId, projects, existingMaterialUrls).catch(
+        () => []
+      )
+    : [];
 
   const [conversations, summaryCandidates, devTaskResult, learningExamples] = await Promise.all([
     loadConversations(input.store, input.userId, projects),

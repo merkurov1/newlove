@@ -6,6 +6,7 @@ import { lexicalSimilarity, normalizeForComparison } from '@/lib/pierrot/memory/
 import { learnedClassification } from '@/lib/pierrot/learning/types';
 import type { WorkspaceSnapshotData } from './collect';
 import { extractGithubLink, resolveTaskProjectContext } from './github';
+import { extractTaskPayload, isCommandArtifact, isQuestionLike, prepareTaskText } from './signals';
 import type {
   GroomingAuditSummary,
   GroomingEntityType,
@@ -25,15 +26,6 @@ export type GroomingRuleResult = {
   ambiguous: string[];
   summary: GroomingAuditSummary;
 };
-
-const JUNK_TASK_PATTERNS = [
-  /^просто\s+добавь\s+это\s+в\s+задачи[.!]?$/iu,
-  /^нет[,!]?\s+напиши\s+что-то\s+в\s+чат\s+проекта[.!]?$/iu,
-  /^вот\s+это\s+к\s+проекту(?:\s+добавь)?[.!]?$/iu,
-  /^перенеси\s+(?:эту\s+)?задачу\s+в\s+проект[^.]*[.!]?$/iu,
-  /^перенеси\s+задачу\b[^.]*[.!]?$/iu,
-  /^создай\s+проект[^.]*\s+и\s+там\s+добавь\s+задачу[^.]*[.!]?$/iu,
-];
 
 const CONSTRAINT_PATTERN =
   /(?:^|[\s,;:])(?:важно[:!]|правило[:!]|принцип|не\s+должен|не\s+должна|не\s+должно|не\s+означает|никогда\s+не|всегда\s+|обязательно\s+не)(?:\s|$)/iu;
@@ -136,8 +128,11 @@ function draft(input: {
 }
 
 function isJunkTask(record: PierrotMemoryRecord): boolean {
-  const value = record.title.replace(/\s+/g, ' ').trim();
-  return JUNK_TASK_PATTERNS.some((pattern) => pattern.test(value));
+  const title = record.title.replace(/\s+/g, ' ').trim();
+  const content = record.content.replace(/\s+/g, ' ').trim();
+  // A wrapper like "Добавь в задачи — ..." is handled by the cleanup pass
+  // first. If the title itself is a question/command/metadata, it is junk.
+  return isCommandArtifact(title) || (isQuestionLike(title) && !extractTaskPayload(content));
 }
 
 function wasRejectedAsFalseTask(
@@ -214,33 +209,88 @@ export function generateGroomingProposals(input: {
   const activeTasks = taskList.filter(
     (task) => task.status === 'current' || task.status === 'uncertain'
   );
-  const memoryList = snapshot.memories.filter((record) => record.status === 'current');
+  const memoryList = snapshot.memories.filter((record) => {
+    if (record.status !== 'current') return false;
+    if (!input.projectId) return true;
+    return projectForTask(record, projects, snapshot.linkedProjectIds)?.id === input.projectId;
+  });
+  const scopedDecisions = snapshot.decisions.filter((record) => {
+    if (record.status !== 'current') return false;
+    if (!input.projectId) return true;
+    return projectForTask(record, projects, snapshot.linkedProjectIds)?.id === input.projectId;
+  });
   const learningExamples = snapshot.learningExamples;
 
-  // --- Obvious command artifacts wrongly stored as tasks -------------------
-  if (input.scope === 'all' || input.scope === 'tasks' || input.scope === 'conversations') {
+  // --- Command wrappers and obvious non-task records ----------------------
+  let cleanedTaskCount = 0;
+  let questionableTaskCount = 0;
+  if (
+    input.scope === 'all' ||
+    input.scope === 'tasks' ||
+    input.scope === 'conversations' ||
+    input.scope === 'projects'
+  ) {
     for (const task of activeTasks
-      .filter(isJunkTask)
       .filter((task) => !wasRejectedAsFalseTask(task, learningExamples))
-      .slice(0, 20)) {
+      .slice(0, 80)) {
       const project = projectForTask(task, projects, snapshot.linkedProjectIds);
-      add(
-        draft({
-          operation: 'archive_task',
-          entityType: 'task',
-          entityId: task.id,
-          project,
-          title: `Убрать из задач служебную команду «${task.title}»`,
-          reason:
-            'Заголовок является командой или мета-репликой, а не конкретным обязательством. Запись ошибочно попала в задачи.',
-          expectedResult: 'Задача архивируется с сохранением исходной записи и источника.',
-          sourceRefs: sourceRefs(task),
-          params: { taskId: task.id, reason: 'command_artifact' },
-          beforeState: beforeState(task),
-          confidence: 0.9,
-          risk: 'confirmation',
-        })
-      );
+      const payload = extractTaskPayload(task.title) || extractTaskPayload(task.content);
+      if (payload) {
+        const cleanedTitle = prepareTaskText(payload, project?.name || task.project).slice(0, 200);
+        const cleanedContent = prepareTaskText(payload, project?.name || task.project).slice(
+          0,
+          4_000
+        );
+        if (
+          cleanedTitle.length >= 4 &&
+          (cleanedTitle !== task.title || cleanedContent !== task.content)
+        ) {
+          cleanedTaskCount += 1;
+          add(
+            draft({
+              operation: 'update_task',
+              entityType: 'task',
+              entityId: task.id,
+              project,
+              title: `Очистить формулировку задачи «${task.title}»`,
+              reason:
+                'Заголовок содержит служебную команду вместо самого обязательства. Смысл задачи сохраняется, оболочка команды убирается.',
+              expectedResult: `Задача остаётся активной с формулировкой «${cleanedTitle}»; исходный текст и источник сохраняются в истории.`,
+              sourceRefs: sourceRefs(task),
+              params: {
+                taskId: task.id,
+                patch: { title: cleanedTitle, content: cleanedContent },
+                reason: 'command_wrapper',
+              },
+              beforeState: beforeState(task),
+              confidence: 0.88,
+              risk: 'reversible',
+            })
+          );
+          continue;
+        }
+      }
+
+      if (isJunkTask(task)) {
+        questionableTaskCount += 1;
+        add(
+          draft({
+            operation: 'archive_task',
+            entityType: 'task',
+            entityId: task.id,
+            project,
+            title: `Убрать из задач служебную запись «${task.title}»`,
+            reason:
+              'Запись является вопросом, командой Пьеро, автоматическим ответом или мета-репликой, а не конкретным незавершённым обязательством.',
+            expectedResult: 'Задача архивируется с сохранением исходной записи и источника.',
+            sourceRefs: sourceRefs(task),
+            params: { taskId: task.id, reason: 'command_artifact' },
+            beforeState: beforeState(task),
+            confidence: 0.9,
+            risk: 'confirmation',
+          })
+        );
+      }
     }
   }
 
@@ -391,7 +441,12 @@ export function generateGroomingProposals(input: {
   }
 
   // --- Misclassified tasks ------------------------------------------------
-  if (input.scope === 'all' || input.scope === 'tasks' || input.scope === 'memory') {
+  if (
+    input.scope === 'all' ||
+    input.scope === 'tasks' ||
+    input.scope === 'memory' ||
+    input.scope === 'projects'
+  ) {
     for (const task of activeTasks.slice(0, 80)) {
       const text = `${task.title} ${task.content}`;
       if (isJunkTask(task)) continue;
@@ -440,7 +495,7 @@ export function generateGroomingProposals(input: {
   }
 
   // --- Stale tasks ---------------------------------------------------------
-  if (input.scope === 'all' || input.scope === 'tasks') {
+  if (input.scope === 'all' || input.scope === 'tasks' || input.scope === 'projects') {
     const now = Date.now();
     for (const task of activeTasks) {
       const updated = Date.parse(task.updatedAt);
@@ -668,10 +723,7 @@ export function generateGroomingProposals(input: {
 
   // --- Memory duplicates and classification --------------------------------
   const memoryByKind = new Map<string, PierrotMemoryRecord[]>();
-  for (const record of [
-    ...memoryList,
-    ...snapshot.decisions.filter((item) => item.status === 'current'),
-  ]) {
+  for (const record of [...memoryList, ...scopedDecisions]) {
     const list = memoryByKind.get(record.kind) || [];
     list.push(record);
     memoryByKind.set(record.kind, list);
@@ -816,10 +868,8 @@ export function generateGroomingProposals(input: {
       const projectTasks = activeTasks.filter(
         (task) => projectForTask(task, projects, snapshot.linkedProjectIds)?.id === project.id
       );
-      const projectDecisions = snapshot.decisions.filter(
-        (record) =>
-          record.status === 'current' &&
-          projectForTask(record, projects, snapshot.linkedProjectIds)?.id === project.id
+      const projectDecisions = scopedDecisions.filter(
+        (record) => projectForTask(record, projects, snapshot.linkedProjectIds)?.id === project.id
       );
       if (
         !project.projectBrief.trim() &&
@@ -865,7 +915,12 @@ export function generateGroomingProposals(input: {
   }
 
   // --- Context summaries ---------------------------------------------------
-  if (input.scope === 'all' || input.scope === 'context' || input.scope === 'conversations') {
+  if (
+    input.scope === 'all' ||
+    input.scope === 'context' ||
+    input.scope === 'conversations' ||
+    input.scope === 'projects'
+  ) {
     const projectConversationIds = new Set(
       projects.map((project) => project.conversationId).filter(Boolean)
     );
@@ -919,13 +974,18 @@ export function generateGroomingProposals(input: {
     warnings.push(`GitHub errors: ${snapshot.githubErrors.length}.`);
   }
 
+  const scopedConversations = input.projectId
+    ? snapshot.conversations.filter((conversation) => conversation.projectId === input.projectId)
+    : snapshot.conversations;
+  const contradictionCount = ambiguous.filter((item) => /^Противоречие/iu.test(item)).length;
+
   const summary: GroomingAuditSummary = {
-    messageCount: snapshot.conversations.reduce(
+    messageCount: scopedConversations.reduce(
       (sum, conversation) => sum + (conversation.messageCount || 0),
       0
     ),
     taskCount: taskList.length,
-    memoryCount: memoryList.length + snapshot.decisions.length,
+    memoryCount: memoryList.length + scopedDecisions.length,
     projectCount: projects.length,
     githubLinkCount: snapshot.githubResults.length,
     githubErrorCount: snapshot.githubErrors.length,
@@ -934,6 +994,17 @@ export function generateGroomingProposals(input: {
       (proposal) => proposal.operation === 'merge_tasks' || proposal.operation === 'merge_memory'
     ).length,
     ambiguousCount: ambiguous.length,
+    sourceMessageCount: scopedConversations.reduce(
+      (sum, conversation) => sum + (conversation.messageCount || 0),
+      0
+    ),
+    conversationCount: scopedConversations.length,
+    openTaskCount: activeTasks.length,
+    questionableTaskCount,
+    decisionCount: scopedDecisions.length,
+    materialCount: snapshot.materialCandidates.length,
+    contradictionCount,
+    cleanedTaskCount,
   };
 
   return { proposals, warnings, ambiguous, summary };

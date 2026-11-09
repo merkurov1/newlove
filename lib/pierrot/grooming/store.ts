@@ -51,8 +51,8 @@ function isMissingTable(error: unknown): boolean {
 function isUniqueViolation(error: unknown): boolean {
   return Boolean(
     error &&
-      typeof error === 'object' &&
-      String((error as { code?: unknown }).code || '') === '23505'
+    typeof error === 'object' &&
+    String((error as { code?: unknown }).code || '') === '23505'
   );
 }
 
@@ -109,6 +109,30 @@ function mapAudit(row: Record<string, unknown>): Omit<StoredAudit, 'proposals'> 
       staleSummaryCount: Number(summary.staleSummaryCount || 0),
       duplicateCandidates: Number(summary.duplicateCandidates || 0),
       ambiguousCount: Number(summary.ambiguousCount || 0),
+      sourceMessageCount:
+        summary.sourceMessageCount === undefined
+          ? undefined
+          : Number(summary.sourceMessageCount || 0),
+      conversationCount:
+        summary.conversationCount === undefined
+          ? undefined
+          : Number(summary.conversationCount || 0),
+      openTaskCount:
+        summary.openTaskCount === undefined ? undefined : Number(summary.openTaskCount || 0),
+      questionableTaskCount:
+        summary.questionableTaskCount === undefined
+          ? undefined
+          : Number(summary.questionableTaskCount || 0),
+      decisionCount:
+        summary.decisionCount === undefined ? undefined : Number(summary.decisionCount || 0),
+      materialCount:
+        summary.materialCount === undefined ? undefined : Number(summary.materialCount || 0),
+      contradictionCount:
+        summary.contradictionCount === undefined
+          ? undefined
+          : Number(summary.contradictionCount || 0),
+      cleanedTaskCount:
+        summary.cleanedTaskCount === undefined ? undefined : Number(summary.cleanedTaskCount || 0),
     },
     warnings: array(summary.warnings).filter((item): item is string => typeof item === 'string'),
     snapshot: object(row.snapshot),
@@ -218,9 +242,7 @@ export async function createAudit(
       status: 'proposed',
       selected: false,
     }));
-    const { error: proposalsError } = await store
-      .from('pierrot_workspace_proposals')
-      .insert(rows);
+    const { error: proposalsError } = await store.from('pierrot_workspace_proposals').insert(rows);
     if (proposalsError) {
       await store
         .from('pierrot_workspace_audits')

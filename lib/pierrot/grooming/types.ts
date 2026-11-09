@@ -114,6 +114,16 @@ export type GroomingAuditSummary = {
   staleSummaryCount: number;
   duplicateCandidates: number;
   ambiguousCount: number;
+  /** Actual messages read, when the collector knows it. */
+  sourceMessageCount?: number;
+  /** Canonical and preserved legacy conversations used by the audit. */
+  conversationCount?: number;
+  openTaskCount?: number;
+  questionableTaskCount?: number;
+  decisionCount?: number;
+  materialCount?: number;
+  contradictionCount?: number;
+  cleanedTaskCount?: number;
 };
 
 export type GroomingAudit = {
