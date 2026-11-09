@@ -15,13 +15,13 @@
 
 @media (max-width: 699px) {
   .pw-art-engine-page {
-    height: calc(100dvh - 62px - env(safe-area-inset-bottom));
+    height: 100%;
     padding-top: max(14px, env(safe-area-inset-top));
   }
 
   .pw-art-engine-composer {
     right: 0;
     left: 0;
-    bottom: calc(62px + env(safe-area-inset-bottom) + var(--ae-keyboard-offset, 0px));
+    bottom: var(--ae-keyboard-offset, 0px);
   }
 }

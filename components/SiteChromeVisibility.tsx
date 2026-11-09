@@ -13,13 +13,7 @@ export default function SiteChromeVisibility() {
 
   useEffect(() => {
     const ownerWorkspace =
-      pathname === '/admin/pierrot' ||
-      pathname.startsWith('/admin/pierrot/brain') ||
-      pathname.startsWith('/admin/pierrot/flow') ||
-      pathname.startsWith('/admin/pierrot/dash') ||
-      pathname.startsWith('/admin/pierrot/dev') ||
-      pathname.startsWith('/admin/pierrot/art-engine') ||
-      pathname.startsWith('/admin/pierrot/heart-and-angel');
+      pathname === '/admin/pierrot' || pathname.startsWith('/admin/pierrot/');
 
     if (ownerWorkspace) {
       document.body.setAttribute('data-pierrot-workspace', 'true');
