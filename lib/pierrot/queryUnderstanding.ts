@@ -21,6 +21,9 @@ export type PierrotQueryIntent =
   | 'personal_analysis'
   | 'views_over_time'
   | 'media_mentions'
+  | 'journal'
+  | 'flow'
+  | 'journal_flow'
   | 'web_research'
   | 'brain_web_research'
   | 'knowledge_graph'
@@ -28,6 +31,8 @@ export type PierrotQueryIntent =
   | 'commercial'
   | 'project'
   | 'general';
+
+export type PierrotQuerySourceName = 'brain' | 'media' | 'journal' | 'flow' | 'web';
 
 export type PierrotQueryPeriod = {
   from: string;
@@ -38,6 +43,8 @@ export type PierrotQueryPeriod = {
 export type PierrotQuerySources = {
   brain: boolean;
   media: boolean;
+  journal: boolean;
+  flow: boolean;
   web: boolean;
   graph: boolean;
   analytics: boolean;
@@ -57,6 +64,13 @@ export type PierrotQueryPlan = {
   period: PierrotQueryPeriod | null;
   correction: boolean;
   followUp: boolean;
+  /**
+   * True when the current message explicitly chooses a new source/topic.
+   * Such a turn must never inherit the previous tool or intent.
+   */
+  topicSwitch: boolean;
+  /** A bounded number of records explicitly requested ("последние два выпуска"). */
+  resultLimit: number | null;
   sources: PierrotQuerySources;
 };
 
@@ -210,6 +224,36 @@ function cleanDocumentTitle(value: string): string | null {
 }
 
 /**
+ * Interface labels are not document titles. This matters because the chat has
+ * buttons and sections named Media, Journal, Flow and Brain; a quoted button
+ * name must not turn into a Brain document lookup.
+ */
+const UI_LABEL =
+  /^(media|медиа|journal|журнал|flow|поток|brain|мозг|graph|граф|analytics|аналитика|stats|статистика|projects?|проекты?|chat|чат|settings|настройки|menu|меню|home|главная|archive|архив|issues?|выпуски?)$/i;
+
+function looksLikeUiLabel(title: string, raw: string): boolean {
+  if (!UI_LABEL.test(title.trim())) return false;
+
+  // Explicit document language overrides the UI-label heuristic:
+  // «документ с названием "Media"» is still a document request.
+  if (
+    /(документ|document|файл|file)[^.!?\n]{0,48}(назван|называется|titled|named|called)/i.test(
+      raw
+    )
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function isUiNavigationRequest(text: string): boolean {
+  return /(нажми|нажать|открой|открыть|перейди|перейти|кликни|click|open|go\s+to|navigate)/i.test(
+    text
+  );
+}
+
+/**
  * Extracts a requested document title from quotes or from the established
  * "Weekly Review" / "document named ..." patterns. It never treats a generic
  * word such as "unframed" alone as a title: manuscript questions keep using
@@ -225,7 +269,7 @@ export function extractRequestedDocumentTitle(
   const quotedPattern = /[«"“„]([^»"”„]{3,180})[»"”„]/g;
   for (const match of raw.matchAll(quotedPattern)) {
     const title = cleanDocumentTitle(match[1]);
-    if (title) quoted.push(title);
+    if (title && !looksLikeUiLabel(title, raw)) quoted.push(title);
   }
 
   const hasDocumentCue =
@@ -233,7 +277,7 @@ export function extractRequestedDocumentTitle(
       text
     ) || /\bbrain\b|базе|архив|archive/.test(text);
 
-  if (quoted.length > 0 && hasDocumentCue) {
+  if (quoted.length > 0 && hasDocumentCue && !isUiNavigationRequest(text)) {
     return { title: quoted[0], kind: 'exact' };
   }
 
@@ -257,6 +301,136 @@ export function extractRequestedDocumentTitle(
   }
 
   return null;
+}
+
+/**
+ * A document request that names the container rather than a title
+ * ("я имел в виду документ в Brain"). It must switch a failed commercial or
+ * media answer back to Brain without inventing a title.
+ */
+function isExplicitBrainDocumentRequest(text: string): boolean {
+  if (/(?:сколько|число|количество|count|how\s+many|list|список|все\s+документ|all\s+documents)/i.test(text)) {
+    return false;
+  }
+
+  return /(?:документ|document|файл|file)(?![а-яёa-z])[^.!?\n]{0,48}(?:в\s+brain|in\s+brain|в\s+базе|in\s+the\s+database|в\s+архиве|in\s+the\s+archive)/i.test(
+    text
+  );
+}
+
+const NUMBER_WORDS: Record<string, number> = {
+  один: 1,
+  одна: 1,
+  одно: 1,
+  два: 2,
+  две: 2,
+  три: 3,
+  четыре: 4,
+  пять: 5,
+  шесть: 6,
+  семь: 7,
+  восемь: 8,
+  девять: 9,
+  десять: 10,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+};
+
+/** "последние два выпуска", "last 3 issues", "две последние записи". */
+export function detectRequestedResultLimit(message: string): number | null {
+  const text = normalize(message);
+  const numeric = text.match(
+    /(?:последн|свеж|нов|last|latest|recent)[а-яёa-z]*\s+(\d{1,2})\b|(\d{1,2})\s+(?:последн|свеж|нов|last|latest|recent)/i
+  );
+  if (numeric) {
+    const value = Number(numeric[1] || numeric[2]);
+    return Number.isFinite(value) && value > 0 ? Math.min(20, Math.trunc(value)) : null;
+  }
+
+  const word = text.match(
+    /(?:последн|свеж|нов|last|latest|recent)[а-яёa-z]*\s+(один|одна|одно|два|две|три|четыре|пять|шесть|семь|восемь|девять|десять|one|two|three|four|five|six|seven|eight|nine|ten)(?=\s|$)|(один|одна|одно|два|две|три|четыре|пять|шесть|семь|восемь|девять|десять|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:последн|свеж|нов|last|latest|recent)/i
+  );
+  if (word) {
+    const value = NUMBER_WORDS[word[1] || word[2]];
+    return value ? Math.min(20, value) : null;
+  }
+
+  return null;
+}
+
+export type PierrotSourceSwitch = 'media' | 'journal' | 'flow' | 'brain' | null;
+
+/**
+ * "Теперь только Media", "А теперь Journal", "переключись на Flow" are explicit
+ * source switches. They must override the previous intent instead of being
+ * interpreted as a vague follow-up.
+ */
+export function detectExplicitSourceSwitch(message: string): PierrotSourceSwitch {
+  const text = normalize(message)
+    .replace(/[.!?,;:]+$/g, '')
+    .trim();
+
+  if (!text) return null;
+
+  const prefix =
+    /^(?:а\s+)?(?:теперь|сейчас|давай|давайте|ладно|ок|ok|now|and\s+now)?\s*(?:только|лишь|only|just)?\s*(?:по\s+)?/i;
+  const rest = text.replace(prefix, '').replace(/(?:пожалуйста|please)$/i, '').trim();
+
+  if (/^(?:медиа|media|сми|пресс[аеуы]?|media\s*archive|медиа\s*архив)$/i.test(rest)) {
+    return 'media';
+  }
+  if (/^(?:journal|журнал|выпуск[а-яё]*|issues?|letters?)$/i.test(rest)) {
+    return 'journal';
+  }
+  if (/^(?:flow|поток|лента)$/i.test(rest)) return 'flow';
+  if (/^(?:brain|мозг|rag|база\s+знаний|knowledge\s+base)$/i.test(rest)) return 'brain';
+
+  return null;
+}
+
+/**
+ * Journal and Flow are separate editorial sources with separate tables. They
+ * stay distinguishable even when a question compares them.
+ */
+export function detectJournalFlowIntent(message: string): {
+  intent: 'journal' | 'flow' | 'journal_flow' | null;
+  signals: string[];
+} {
+  const text = normalize(message);
+  const signals: string[] = [];
+
+  // GitHub issues are a development source, not the Journal.
+  if (/(?:github\s+)?issues?\b/i.test(text) && !/(?:journal|журнал|выпуск)/i.test(text)) {
+    return { intent: null, signals };
+  }
+
+  const journal =
+    /(?:^|[^a-zа-яё])(?:journal|журнал[а-яё]*|выпуск[а-яё]*|issues?|letters?)(?=$|[^a-zа-яё])/i.test(
+      text
+    ) ||
+    /(?:последн|свеж|нов)[а-яё]*\s+(?:два|две|три|\d+)?\s*(?:выпуск|номер)/i.test(text) ||
+    /(?:последн|свеж|нов)[а-яё]*\s+(?:выпуск|номер)/i.test(text);
+
+  const flow =
+    /(?:^|[^a-zа-яё])(?:flow|поток[а-яё]*|лент[а-яё]*)(?=$|[^a-zа-яё])/i.test(text) ||
+    /(?:записи|посты|заметки|публикации)[^.!?\n]{0,32}(?:flow|поток|лент)/i.test(text) ||
+    /(?:flow|поток|лент)[^.!?\n]{0,32}(?:записи|посты|заметки|публикации)/i.test(text);
+
+  if (journal) signals.push('journal:request');
+  if (flow) signals.push('flow:request');
+
+  if (journal && flow) return { intent: 'journal_flow', signals };
+  if (journal) return { intent: 'journal', signals };
+  if (flow) return { intent: 'flow', signals };
+  return { intent: null, signals };
 }
 
 const FOLLOW_UP_PATTERN =
@@ -304,6 +478,8 @@ function sourcesForIntent(intent: PierrotQueryIntent): PierrotQuerySources {
       intent === 'project' ||
       intent === 'brain_web_research',
     media: intent === 'media_mentions',
+    journal: intent === 'journal' || intent === 'journal_flow',
+    flow: intent === 'flow' || intent === 'journal_flow',
     web:
       intent === 'media_mentions' || intent === 'web_research' || intent === 'brain_web_research',
     graph: intent === 'knowledge_graph',
@@ -325,6 +501,37 @@ function classifyIntent(input: {
   if (documentTitle) {
     signals.push('document:title');
     return { intent: 'document_lookup', signals };
+  }
+
+  if (isExplicitBrainDocumentRequest(text)) {
+    signals.push('document:brain_request');
+    return { intent: 'document_lookup', signals };
+  }
+
+  const sourceSwitch = detectExplicitSourceSwitch(message);
+  if (sourceSwitch) {
+    signals.push(`source_switch:${sourceSwitch}`);
+    if (sourceSwitch === 'media') return { intent: 'media_mentions', signals };
+    if (sourceSwitch === 'journal') return { intent: 'journal', signals };
+    if (sourceSwitch === 'flow') return { intent: 'flow', signals };
+    if (sourceSwitch === 'brain') return { intent: 'personal_analysis', signals };
+  }
+
+  // "Как дела с Journal?" is a project-status question, not a request for the
+  // published issue archive. The project resolver supplies the actual state.
+  if (
+    /(?:как\s+дела|how\s+is|how\s+are|как\s+продвигается|как\s+ид[её]т)/i.test(text) &&
+    /(?:journal|журнал|flow|поток)/i.test(text) &&
+    !/(?:выпуск|issue|запис|публикац|archive|архив)/i.test(text)
+  ) {
+    signals.push('project:status');
+    return { intent: 'project', signals };
+  }
+
+  const journalFlow = detectJournalFlowIntent(message);
+  if (journalFlow.intent) {
+    signals.push(...journalFlow.signals);
+    return { intent: journalFlow.intent, signals };
   }
 
   if (
@@ -480,6 +687,8 @@ function mergeSources(
   return {
     brain: base.brain || extra.brain === true,
     media: base.media || extra.media === true,
+    journal: base.journal || extra.journal === true,
+    flow: base.flow || extra.flow === true,
     web: base.web || extra.web === true,
     graph: base.graph || extra.graph === true,
     analytics: base.analytics || extra.analytics === true,
@@ -505,11 +714,15 @@ export function understandPierrotQuery(
   const extracted = extractRequestedDocumentTitle(originalQuery);
   const correction = isCorrection(normalizedQuery);
   const followUp = isFollowUp(normalizedQuery, originalQuery);
+  const topicSwitch = detectExplicitSourceSwitch(originalQuery) !== null;
+  const resultLimit = detectRequestedResultLimit(originalQuery);
   const signals: string[] = [];
 
   if (period) signals.push(`period:${period.label}`);
   if (correction) signals.push('correction');
   if (followUp) signals.push('follow_up');
+  if (topicSwitch) signals.push('topic_switch');
+  if (resultLimit) signals.push(`limit:${resultLimit}`);
 
   let documentTitle = extracted?.title ?? null;
   let documentTitleKind = extracted?.kind ?? null;
@@ -534,6 +747,7 @@ export function understandPierrotQuery(
     else if (intent === 'commercial') confidence = 0.9;
     else if (intent === 'knowledge_graph' || intent === 'analytics') confidence = 0.9;
     else if (intent === 'media_mentions') confidence = 0.85;
+    else if (intent === 'journal' || intent === 'flow' || intent === 'journal_flow') confidence = 0.85;
     else if (intent === 'biography' || intent === 'views_over_time') confidence = 0.8;
     else if (intent === 'personal_analysis' || intent === 'project') confidence = 0.75;
     else if (intent === 'brain_web_research') confidence = 0.8;
@@ -541,7 +755,28 @@ export function understandPierrotQuery(
     else confidence = 0.45;
   }
 
-  const sources = sourcesForIntent(intent);
+  let sources = sourcesForIntent(intent);
+
+  // An explicit source switch means exactly that source. It must not silently
+  // bring the web or a previous source along ("Теперь только Media").
+  if (topicSwitch && intent === 'media_mentions') {
+    sources = { ...sources, web: false };
+  }
+
+  // Combined editorial questions must keep both sources instead of letting the
+  // first classifier win: "Journal и Media", "сопоставь выпуски с прессой".
+  if ((sources.journal || sources.flow) && isMediaArchiveQuery(originalQuery)) {
+    sources = { ...sources, media: true };
+  }
+
+  if (
+    (sources.journal || sources.flow) &&
+    /(?:^|[^a-zа-яё])(?:brain|rag)(?=$|[^a-zа-яё])|баз[ае]\s+знаний|мои\s+(?:текст|запис)/i.test(
+      normalizedQuery
+    )
+  ) {
+    sources = { ...sources, brain: true };
+  }
 
   // Explicit corrections and short follow-ups inherit the previous user
   // request only when the current message does not itself establish a new
@@ -553,11 +788,15 @@ export function understandPierrotQuery(
     options.history &&
     options.history.length > 0 &&
     (correction || followUp) &&
+    !topicSwitch &&
     !documentTitle &&
     (intent === 'general' ||
       intent === 'personal_analysis' ||
       intent === 'web_research' ||
-      intent === 'media_mentions')
+      intent === 'media_mentions' ||
+      intent === 'journal' ||
+      intent === 'flow' ||
+      intent === 'journal_flow')
   ) {
     const lastUser = [...options.history]
       .reverse()
@@ -585,6 +824,8 @@ export function understandPierrotQuery(
           period: period ?? previous.period,
           correction: true,
           followUp,
+          topicSwitch,
+          resultLimit,
           sources: sourcesForIntent('media_mentions'),
         };
       }
@@ -621,6 +862,8 @@ export function understandPierrotQuery(
           period: period ?? previous.period,
           correction,
           followUp,
+          topicSwitch,
+          resultLimit: resultLimit ?? previous.resultLimit,
           sources: merged,
         };
       }
@@ -654,6 +897,8 @@ export function understandPierrotQuery(
     period,
     correction,
     followUp,
+    topicSwitch,
+    resultLimit,
     sources,
   };
 }

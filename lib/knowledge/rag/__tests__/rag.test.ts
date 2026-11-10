@@ -276,6 +276,30 @@ describe('OpenRouter embedding client', () => {
     expect(calls[0].body.encoding_format).toBe('float');
   });
 
+  it('splits batches by character budget as well as item count', async () => {
+    const sizes: number[] = [];
+    const fetchImpl = async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      sizes.push((body.input as string[]).length);
+      return response(embeddingResponse((body.input as string[]).length));
+    };
+    const client = createOpenRouterEmbeddingClient({
+      apiKey: 'test-key',
+      modelId: UNFRAMED_EMBEDDING_MODEL,
+      dimensions: UNFRAMED_EMBEDDING_DIMENSIONS,
+      batchSize: 32,
+      maxBatchChars: 10,
+      fetchImpl,
+    });
+
+    const result = await client.embed(['aaaaaa', 'bbbbbb', 'cc', 'dddddd']);
+
+    expect(result).toHaveLength(4);
+    // Each 6-char text is too large to share the budget; the 2-char text
+    // joins the preceding 6-char text.
+    expect(sizes).toEqual([1, 2, 1]);
+  });
+
   it('accepts provider-prefixed model aliases while keeping the canonical id', async () => {
     for (const model of ['parasail-bge-m3', 'deepinfra-bge-m3', 'BAAI/bge-m3']) {
       const client = createOpenRouterEmbeddingClient({

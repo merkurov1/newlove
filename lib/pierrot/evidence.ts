@@ -21,12 +21,18 @@ export type EvidenceSourceStatuses = {
   brain: SourceStatus;
   media: SourceStatus;
   web: SourceStatus;
+  /** Published Journal issues (letters). */
+  journal?: SourceStatus;
+  /** Published Flow stream items. */
+  flow?: SourceStatus;
 };
 
 export type EvidenceRequestedSources = {
   brain: boolean;
   media: boolean;
   web: boolean;
+  journal?: boolean;
+  flow?: boolean;
 };
 
 export type EvidenceGuardResult = {
@@ -82,6 +88,8 @@ export function webStatusFromResult(
 export function buildSourceStatuses(input: {
   brain?: { outcome?: string | null; code?: string | null } | null;
   media?: { outcome?: string | null; code?: string | null } | null;
+  journal?: { outcome?: string | null; code?: string | null } | null;
+  flow?: { outcome?: string | null; code?: string | null } | null;
   web?: { outcome: string; code?: string | null } | null;
   requested: EvidenceRequestedSources;
 }): EvidenceSourceStatuses {
@@ -92,13 +100,19 @@ export function buildSourceStatuses(input: {
     media: input.requested.media
       ? mediaStatusFromOutcome(input.media?.outcome, input.media?.code)
       : 'not_requested',
+    ...(input.requested.journal
+      ? { journal: brainStatusFromOutcome(input.journal?.outcome, input.journal?.code) }
+      : {}),
+    ...(input.requested.flow
+      ? { flow: brainStatusFromOutcome(input.flow?.outcome, input.flow?.code) }
+      : {}),
     web: webStatusFromResult(input.web ?? null, input.requested.web),
   };
 }
 
 function statusCopy(
   status: SourceStatus,
-  source: 'brain' | 'media' | 'web',
+  source: 'brain' | 'media' | 'web' | 'journal' | 'flow',
   language: EvidenceLanguage
 ): string {
   if (language === 'en') {
@@ -126,6 +140,19 @@ function statusCopy(
       if (status === 'error')
         return 'The Media Archive search failed technically; no absence of coverage is implied.';
       return 'The Media Archive is currently unavailable, so publications and links are unverified.';
+    }
+    if (source === 'journal' || source === 'flow') {
+      if (status === 'empty')
+        return source === 'journal'
+          ? 'The Journal query completed, but no published issues matched this request.'
+          : 'The Flow query completed, but no published entries matched this request.';
+      if (status === 'timeout')
+        return `The ${source === 'journal' ? 'Journal' : 'Flow'} query timed out; this does not mean the records are absent.`;
+      if (status === 'partial')
+        return `Only part of the ${source === 'journal' ? 'Journal' : 'Flow'} query completed, so the result may be incomplete.`;
+      if (status === 'error')
+        return `The ${source === 'journal' ? 'Journal' : 'Flow'} query failed technically; no absence of records is implied.`;
+      return `The ${source === 'journal' ? 'Journal' : 'Flow'} source is currently unavailable, so its records are unverified.`;
     }
     if (status === 'empty') return 'The external web search returned no verified results.';
     if (status === 'timeout')
@@ -157,6 +184,19 @@ function statusCopy(
       return 'Поиск по Media Archive завершился технической ошибкой; это не означает, что публикаций нет.';
     return 'Media Archive сейчас недоступен, поэтому публикации и ссылки не проверены.';
   }
+  if (source === 'journal' || source === 'flow') {
+    if (status === 'empty')
+      return source === 'journal'
+        ? 'Поиск по Journal завершён, но опубликованных выпусков по этому запросу нет.'
+        : 'Поиск по Flow завершён, но опубликованных записей по этому запросу нет.';
+    if (status === 'timeout')
+      return `Поиск по ${source === 'journal' ? 'Journal' : 'Flow'} не завершился вовремя; это не означает, что записей нет.`;
+    if (status === 'partial')
+      return `Поиск по ${source === 'journal' ? 'Journal' : 'Flow'} завершился частично, поэтому результат может быть неполным.`;
+    if (status === 'error')
+      return `Поиск по ${source === 'journal' ? 'Journal' : 'Flow'} завершился технической ошибкой; это не означает, что записей нет.`;
+    return `${source === 'journal' ? 'Journal' : 'Flow'} сейчас недоступен, поэтому его записи не проверены.`;
+  }
   if (status === 'empty') return 'Внешний поиск не нашёл подтверждённых результатов.';
   if (status === 'timeout')
     return 'Внешний поиск не успел завершиться, поэтому внешние источники не проверены.';
@@ -182,6 +222,18 @@ export function buildEvidenceDisclosure(
     lines.push(statusCopy(statuses.web, 'web', language));
   }
 
+  if (
+    requested.journal &&
+    statuses.journal !== 'success' &&
+    statuses.journal !== 'not_requested'
+  ) {
+    lines.push(statusCopy(statuses.journal || 'unavailable', 'journal', language));
+  }
+
+  if (requested.flow && statuses.flow !== 'success' && statuses.flow !== 'not_requested') {
+    lines.push(statusCopy(statuses.flow || 'unavailable', 'flow', language));
+  }
+
   if (lines.length === 0) return null;
 
   return lines.join(' ');
@@ -198,6 +250,12 @@ const BRAIN_CLAIM =
 
 const MEDIA_CLAIM =
   /(в\s+медиа|media\s+archive|публикации\s+в\s+сми|в\s+прессе|media\s+publications|press\s+coverage)/i;
+
+const JOURNAL_CLAIM =
+  /(последн[а-яё]*\s+выпуск|в\s+выпуске|выпуск\s*№|issue\s+\d+|the\s+journal|в\s+журнале|journal\s+issue)/i;
+
+const FLOW_CLAIM =
+  /(в\s+потоке|flow\s+(?:item|entry|stream)|последн[а-яё]*\s+запис[а-яё]*\s+(?:в|из)\s+(?:flow|потока)|в\s+ленте|in\s+the\s+flow)/i;
 
 function normalizeUrl(value: string): string | null {
   try {
@@ -300,13 +358,22 @@ function hasWebClaim(reply: string): boolean {
   );
 }
 
-function safeMessage(kind: 'web' | 'brain' | 'media', language: EvidenceLanguage): string {
+function safeMessage(
+  kind: 'web' | 'brain' | 'media' | 'journal' | 'flow',
+  language: EvidenceLanguage
+): string {
   if (language === 'en') {
     if (kind === 'brain') {
       return 'Brain did not return confirmed context for this request, so I will not present your materials as established fact. I can answer a general question or retry when retrieval is available.';
     }
     if (kind === 'media') {
       return 'The Media Archive did not return usable publications, so I cannot confirm outlets, dates or links. I will not invent them.';
+    }
+    if (kind === 'journal') {
+      return 'The Journal did not return usable issues, so I cannot confirm issue numbers, dates or contents. I will not invent them.';
+    }
+    if (kind === 'flow') {
+      return 'Flow did not return usable entries, so I cannot confirm dates or contents. I will not invent them.';
     }
     return 'The external web search is unavailable, so I cannot confirm external publications, quotes or links. I will not present assumptions as search results.';
   }
@@ -316,6 +383,12 @@ function safeMessage(kind: 'web' | 'brain' | 'media', language: EvidenceLanguage
   }
   if (kind === 'media') {
     return 'Media Archive не вернул пригодных публикаций, поэтому я не могу подтвердить издания, даты и ссылки. Я не буду их выдумывать.';
+  }
+  if (kind === 'journal') {
+    return 'Journal не вернул пригодных выпусков, поэтому я не могу подтвердить номера, даты и содержание. Я не буду их выдумывать.';
+  }
+  if (kind === 'flow') {
+    return 'Flow не вернул пригодных записей, поэтому я не могу подтвердить даты и содержание. Я не буду их выдумывать.';
   }
   return 'Внешний поиск сейчас недоступен, поэтому я не могу подтвердить внешние публикации, цитаты или ссылки. Я не буду выдавать предположения за результаты поиска.';
 }
@@ -349,10 +422,16 @@ export function guardAnswerEvidence(input: {
   const webFailed = input.requested.web && input.statuses.web !== 'success';
   const brainFailed = input.requested.brain && input.statuses.brain !== 'success';
   const mediaFailed = input.requested.media && input.statuses.media !== 'success';
+  const journalFailed =
+    Boolean(input.requested.journal) && (input.statuses.journal || 'unavailable') !== 'success';
+  const flowFailed =
+    Boolean(input.requested.flow) && (input.statuses.flow || 'unavailable') !== 'success';
   const sourceSuccess =
     input.statuses.web === 'success' ||
     input.statuses.media === 'success' ||
-    input.statuses.brain === 'success';
+    input.statuses.brain === 'success' ||
+    input.statuses.journal === 'success' ||
+    input.statuses.flow === 'success';
 
   if (webFailed && !sourceSuccess && hasWebClaim(reply) && !originalNegated) {
     violations.push('web_claim_without_results');
@@ -386,6 +465,16 @@ export function guardAnswerEvidence(input: {
     reply = safeMessage('media', language);
   }
 
+  if (journalFailed && JOURNAL_CLAIM.test(reply) && !originalNegated) {
+    violations.push('journal_claim_without_results');
+    reply = safeMessage('journal', language);
+  }
+
+  if (flowFailed && FLOW_CLAIM.test(reply) && !originalNegated) {
+    violations.push('flow_claim_without_results');
+    reply = safeMessage('flow', language);
+  }
+
   if (violations.length === 0) {
     const externalIntent =
       input.intent === 'web_research' ||
@@ -394,6 +483,8 @@ export function guardAnswerEvidence(input: {
     const shouldDisclose =
       (input.requested.web && externalIntent) ||
       input.requested.media ||
+      Boolean(input.requested.journal) ||
+      Boolean(input.requested.flow) ||
       (input.requested.brain && input.intent !== 'general');
 
     const disclosure = shouldDisclose

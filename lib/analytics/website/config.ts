@@ -120,6 +120,23 @@ export function getUmamiConfig(): UmamiConfig {
   return { baseUrl, apiKey, websiteId, configured: missing.length === 0, missing };
 }
 
+export type BlueskyConfig = {
+  identifier: string;
+  password: string;
+  configured: boolean;
+  missing: string[];
+};
+
+export function getBlueskyConfig(): BlueskyConfig {
+  const identifier = env('BLUESKY_IDENTIFIER');
+  const password = env('BLUESKY_PASSWORD');
+  const missing: string[] = [];
+  if (!identifier) missing.push('BLUESKY_IDENTIFIER');
+  if (!password) missing.push('BLUESKY_PASSWORD');
+
+  return { identifier, password, configured: missing.length === 0, missing };
+}
+
 export function isAnalyticsSyncConfigured(): boolean {
   return Boolean(
     process.env.SUPABASE_SERVICE_ROLE_KEY &&

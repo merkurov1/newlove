@@ -9,7 +9,13 @@ import type { BrainRetrievalResult } from '@/lib/knowledge/rag/brainRetrieval';
 import { recordPierrotEvent } from '@/lib/pierrot/serverStore';
 
 export type PierrotRetrievalMode =
-  'brain_v2' | 'brain_v1' | 'brain_document' | 'media' | 'public_brain' | 'disabled';
+  | 'brain_v2'
+  | 'brain_v1'
+  | 'brain_document'
+  | 'media'
+  | 'journal_flow'
+  | 'public_brain'
+  | 'disabled';
 
 export type PierrotRetrievalTraceInput = {
   conversationId: string;

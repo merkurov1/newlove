@@ -742,6 +742,89 @@ function actionsSection(dataset: AnalyticsDataset, language: AnalyticsLanguage):
   return blocks.join('\n\n');
 }
 
+function newsletterSection(dataset: AnalyticsDataset, language: AnalyticsLanguage): string {
+  const newsletter = dataset.internal.newsletter;
+  const blocks: string[] = [
+    language === 'ru' ? '### Рассылки' : '### Newsletters',
+  ];
+
+  blocks.push(
+    table(
+      [
+        language === 'ru' ? 'Показатель' : 'Metric',
+        language === 'ru' ? 'Значение' : 'Value',
+        language === 'ru' ? 'Источник' : 'Source',
+      ],
+      [
+        [
+          language === 'ru' ? 'Активные подписчики' : 'Active subscribers',
+          formatNumber(newsletter.subscribers.active, language),
+          'subscribers',
+        ],
+        [
+          language === 'ru' ? 'Русская рассылка' : 'Russian newsletter',
+          formatNumber(newsletter.subscribers.ru, language),
+          'subscribers.locale=ru',
+        ],
+        [
+          language === 'ru' ? 'Английская рассылка' : 'English newsletter',
+          formatNumber(newsletter.subscribers.en, language),
+          'subscribers.locale=en',
+        ],
+        [
+          language === 'ru' ? 'Отписавшиеся' : 'Unsubscribed',
+          formatNumber(newsletter.subscribers.unsubscribed, language),
+          'subscribers',
+        ],
+        [
+          language === 'ru' ? 'Писем отправлено за период' : 'Emails sent in period',
+          formatNumber(newsletter.jobs.emailsSent, language),
+          'newsletter_logs',
+        ],
+        [
+          language === 'ru' ? 'Ошибок доставки' : 'Delivery failures',
+          formatNumber(newsletter.jobs.emailsFailed, language),
+          'newsletter_logs',
+        ],
+      ]
+    )
+  );
+
+  if (newsletter.recentIssues.length > 0) {
+    blocks.push(language === 'ru' ? '**Последние выпуски**' : '**Recent issues**');
+    blocks.push(
+      table(
+        [
+          language === 'ru' ? 'Выпуск' : 'Issue',
+          language === 'ru' ? 'Язык' : 'Language',
+          language === 'ru' ? 'Статус' : 'Status',
+          language === 'ru' ? 'Отправлено' : 'Sent',
+          language === 'ru' ? 'Ошибки' : 'Failed',
+        ],
+        newsletter.recentIssues.slice(0, 6).map((issue) => [
+          issue.title,
+          issue.language || '—',
+          issue.status || '—',
+          formatNumber(issue.sentCount, language),
+          formatNumber(issue.failedCount, language),
+        ])
+      )
+    );
+  }
+
+  if (newsletter.limitations.length > 0) {
+    blocks.push(newsletter.limitations.map((line) => `- ${line}`).join('\n'));
+  }
+
+  blocks.push(
+    language === 'ru'
+      ? 'Русская и английская рассылки считаются раздельно. Это разные редакционные продукты, а не одна аудитория с переводом.'
+      : 'Russian and English newsletters are counted separately. They are separate editorial products, not one audience with a translation.'
+  );
+
+  return blocks.join('\n\n');
+}
+
 function comparisonSection(dataset: AnalyticsDataset, language: AnalyticsLanguage): string {
   const blocks: string[] = ['### Что изменилось'];
   const metrics: MetricComparison[] = [
@@ -1080,6 +1163,10 @@ function renderReport(
 
   if (scope === 'overview' || scope === 'compare' || scope === 'anomalies' || scope === 'opportunities' || scope === 'pages') {
     blocks.push(problemsSection(dataset, language, anomalies, opportunities));
+  }
+
+  if (scope === 'newsletter') {
+    blocks.push(newsletterSection(dataset, language));
   }
 
   if (scope === 'health') {

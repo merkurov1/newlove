@@ -165,6 +165,10 @@ function detectScope(
     return 'search';
   }
 
+  if (/(рассылк|newsletter|email\s+newsletter|письм[а-яё]*\s+(рассылк|подписчик)|подписчик[а-яё]*\s+(русск|англ)|russian\s+newsletter|english\s+newsletter)/i.test(text)) {
+    return 'newsletter';
+  }
+
   if (/(трафик|traffic|посещаем|посетител|аудитор|audience|источник|канал|откуда\s+приход|referral|реферал|географ|устройств|device|страны)/i.test(text)) {
     return 'traffic';
   }
@@ -291,6 +295,8 @@ export function websiteQuestionLabel(question: WebsiteQuestion): string {
     anomalies: 'аномалии и проблемы',
     health: 'состояние источников',
     evidence: 'доказательства',
+    bluesky: 'Bluesky',
+    newsletter: 'рассылки',
   };
 
   return labels[question.scope];

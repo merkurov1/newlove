@@ -2,9 +2,12 @@ import { createHash } from 'node:crypto';
 
 import type { EmbeddingClient } from '@/lib/knowledge/rag/embeddings';
 import {
+  EmbeddingDimensionMismatchError,
+  EmbeddingModelMismatchError,
   EmbeddingProviderError,
   EmbeddingTimeoutError,
   KnowledgeDatabaseError,
+  RagConfigurationError,
 } from '@/lib/knowledge/rag/errors';
 import type { KnowledgeChunkWithEmbedding } from '@/lib/knowledge/rag/types';
 import {
@@ -194,6 +197,10 @@ function isRetryable(error: unknown): boolean {
     );
   }
 
+  if (error instanceof RagConfigurationError) return false;
+  if (error instanceof EmbeddingDimensionMismatchError) return false;
+  if (error instanceof EmbeddingModelMismatchError) return false;
+
   if (error instanceof KnowledgeDatabaseError) return true;
 
   const message = error instanceof Error ? error.message : '';
@@ -216,8 +223,18 @@ function errorCode(error: unknown): string {
   if (error instanceof EmbeddingProviderError) {
     if (error.status === 401) return 'embedding_auth_failed';
     if (error.status === 402) return 'embedding_payment_required';
+    if (error.status === 413) return 'embedding_input_too_large';
     return error.status === 429 ? 'embedding_rate_limited' : 'embedding_failed';
   }
+
+  if (error instanceof RagConfigurationError) {
+    return error.message.includes('OPENROUTER_API_KEY')
+      ? 'embedding_not_configured'
+      : 'embedding_configuration_invalid';
+  }
+
+  if (error instanceof EmbeddingDimensionMismatchError) return 'embedding_dimension_mismatch';
+  if (error instanceof EmbeddingModelMismatchError) return 'embedding_model_mismatch';
 
   if (error instanceof KnowledgeDatabaseError) return 'database_failed';
 
@@ -226,6 +243,24 @@ function errorCode(error: unknown): string {
   if (message.startsWith('brain_') || message.startsWith('media_')) return message;
 
   return 'ingestion_failed';
+}
+
+/**
+ * Internal diagnostic only. It is stored on the owner-only job row so the next
+ * worker attempt is not reduced to a generic "Ingestion failed." message.
+ */
+function errorDebug(error: unknown): { name: string; message: string } {
+  if (error instanceof Error) {
+    return {
+      name: error.name.slice(0, 80),
+      message: error.message.replace(/\s+/g, ' ').trim().slice(0, 400),
+    };
+  }
+
+  return {
+    name: 'UnknownError',
+    message: String(error).replace(/\s+/g, ' ').trim().slice(0, 400),
+  };
 }
 
 function safeErrorDetail(code: string): string {
@@ -264,6 +299,16 @@ function safeErrorDetail(code: string): string {
       return 'A concurrent import updated the same document; the job was queued for a safe retry.';
     case 'embedding_rate_limited':
       return 'The embedding provider rate-limited the request.';
+    case 'embedding_input_too_large':
+      return 'The document produced an embedding request larger than the provider accepts.';
+    case 'embedding_configuration_invalid':
+      return 'The embedding configuration is invalid for this document.';
+    case 'embedding_not_configured':
+      return 'The embedding provider is not configured.';
+    case 'embedding_dimension_mismatch':
+      return 'The embedding provider returned vectors with an unexpected dimension.';
+    case 'embedding_model_mismatch':
+      return 'The embedding provider returned a different model than requested.';
     case 'embedding_auth_failed':
       return 'The embedding provider rejected the configured credentials.';
     case 'embedding_payment_required':
@@ -2039,7 +2084,11 @@ export async function processNextBrainJob(options: ProcessNextOptions): Promise<
       retry_after: canRetry ? new Date(Date.now() + delaySeconds * 1000).toISOString() : null,
       error_code: code,
       error_detail: safeErrorDetail(code),
-      extraction_metadata: { ...job.extraction_metadata, stage: 'failed' },
+      extraction_metadata: {
+        ...job.extraction_metadata,
+        stage: 'failed',
+        error_debug: errorDebug(error),
+      },
       processed_at: canRetry ? null : new Date().toISOString(),
       locked_at: null,
       worker_id: null,

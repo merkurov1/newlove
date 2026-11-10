@@ -55,7 +55,8 @@
     "media:analyze": "tsx scripts/media-analysis-run.ts",
     "media:verify": "node scripts/media-audit/verify.mjs",
     "media:audit": "node scripts/media-audit/problems.mjs",
-    "media:repair:consistency": "node scripts/media-audit/repair-media-consistency.mjs --dry-run"
+    "media:repair:consistency": "node scripts/media-audit/repair-media-consistency.mjs --dry-run",
+    "audit:pierrot-intelligence": "node scripts/audit/pierrot-intelligence-audit.mjs"
   },
   "installConfig": {
     "scripts-prepend-node-path": true

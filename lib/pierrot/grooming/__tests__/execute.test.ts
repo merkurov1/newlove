@@ -21,7 +21,9 @@ const TABLES = [
 ];
 
 const NOW = '2026-11-09T10:00:00.000Z';
-const FUTURE = '2026-11-10T10:00:00.000Z';
+// The fixture must stay in the future regardless of the calendar day the test
+// suite runs on; a hard-coded next-day value made the test expire by itself.
+const FUTURE = '2030-01-01T10:00:00.000Z';
 
 function task(id: string, title = 'Task', status = 'current', updatedAt = '2026-11-01T10:00:00.000Z') {
   return {

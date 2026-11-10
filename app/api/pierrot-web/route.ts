@@ -102,6 +102,13 @@ import {
   buildMediaEvidencePrompt,
   buildMediaEvidenceSources,
 } from '@/lib/knowledge/rag/mediaEvidence';
+import {
+  buildJournalFlowPrompt,
+  buildJournalFlowSources,
+  buildJournalFlowUnavailablePrompt,
+  describeJournalFlowEvidence,
+  retrieveJournalFlowEvidence,
+} from '@/lib/knowledge/rag/journalFlowRetrieval';
 import { classifyPierrotFailure, logPierrotFailure } from '@/lib/pierrot/errors';
 import { pierrotErrorCopy, type PierrotErrorLanguage } from '@/lib/pierrot/errorContracts';
 import {
@@ -429,8 +436,8 @@ function isMemoryListPlaceholder(query: string | null | undefined): boolean {
 }
 
 type OwnerRagResponse = {
-  mode: 'unframed' | 'media' | 'public';
-  outcome: RagRetrievalOutcome;
+  mode: 'unframed' | 'media' | 'journal' | 'flow' | 'journal_flow' | 'public';
+  outcome: RagRetrievalOutcome | 'no_match';
   sources: UnframedEvidenceSource[];
 };
 
@@ -5132,6 +5139,7 @@ export async function POST(req: Request) {
       let usedWebContext = false;
       let webSearchResult: WebSearchResult | null = null;
       let mediaOutcome: { outcome: string; code?: string | null } | null = null;
+      let journalFlowOutcome: { outcome: string; code?: string | null } | null = null;
       let brainOutcome: { outcome: string; code?: string | null } | null = null;
 
       if (!useModel) {
@@ -5194,6 +5202,74 @@ export async function POST(req: Request) {
             !foodQuery &&
             (queryPlan.intent === 'media_mentions' || isMediaArchiveQuery(trimmedMessage)) &&
             !requestsManuscript;
+
+          // Journal and Flow are separate editorial sources. They are loaded
+          // from their own published tables and never mixed into an anonymous
+          // Brain chunk collection.
+          if (queryPlan.sources.journal || queryPlan.sources.flow) {
+            const started = Date.now();
+            const evidence = await retrieveJournalFlowEvidence(trimmedMessage, {
+              plan: queryPlan,
+            });
+
+            if (evidence) {
+              journalFlowOutcome = {
+                outcome: evidence.outcome,
+                code: evidence.code ?? null,
+              };
+              retrievalTrace = {
+                conversationId,
+                sessionId,
+                userMessageId,
+                mode: 'journal_flow',
+                outcome: evidence.outcome,
+                code: evidence.code ?? null,
+                selectedSources: [
+                  ...(queryPlan.sources.journal ? ['journal'] : []),
+                  ...(queryPlan.sources.flow ? ['flow'] : []),
+                ],
+                documentIds: [
+                  ...evidence.journal.map((issue) => `journal:${issue.id}`),
+                  ...evidence.flow.map((entry) => `flow:${entry.id}`),
+                ],
+                chunkIds: [],
+                latencyMs: evidence.latencyMs,
+                candidateCount: evidence.journal.length + evidence.flow.length,
+                topSimilarity: null,
+                refined: false,
+                attempts: 1,
+              };
+
+              const prompt =
+                evidence.outcome === 'relevant_results'
+                  ? buildJournalFlowPrompt(evidence)
+                  : buildJournalFlowUnavailablePrompt(evidence);
+
+              if (prompt) {
+                generationSystemPrompt = `${systemPrompt}\n\n${prompt}`;
+              }
+
+              usedRagContext = evidence.outcome === 'relevant_results';
+              ownerRag = {
+                mode: queryPlan.sources.journal && queryPlan.sources.flow
+                  ? 'journal_flow'
+                  : queryPlan.sources.journal
+                    ? 'journal'
+                    : 'flow',
+                outcome: evidence.outcome,
+                sources:
+                  evidence.outcome === 'relevant_results'
+                    ? buildJournalFlowSources(evidence)
+                    : [],
+              };
+
+              console.info('[Pierrot Journal/Flow]', {
+                status: evidence.outcome,
+                summary: describeJournalFlowEvidence(evidence),
+                latency_ms: Date.now() - started,
+              });
+            }
+          }
 
           // Media coverage is available to both the owner and public visitors.
           // Public retrieval is metadata/verified-quote only; semantic media
@@ -5835,11 +5911,15 @@ export async function POST(req: Request) {
       const requestedSources = {
         brain: Boolean(brainOutcome),
         media: Boolean(mediaOutcome),
+        journal: queryPlan.sources.journal,
+        flow: queryPlan.sources.flow,
         web: webRequested,
       };
       const sourceStatus: EvidenceSourceStatuses = buildSourceStatuses({
         brain: brainOutcome,
         media: mediaOutcome,
+        journal: journalFlowOutcome,
+        flow: journalFlowOutcome,
         web: webSearchResult,
         requested: requestedSources,
       });
@@ -5936,11 +6016,14 @@ export async function POST(req: Request) {
               selected_sources: [
                 ...(queryPlan.sources.brain ? ['brain'] : []),
                 ...(queryPlan.sources.media ? ['media'] : []),
+                ...(queryPlan.sources.journal ? ['journal'] : []),
+                ...(queryPlan.sources.flow ? ['flow'] : []),
                 ...(queryPlan.sources.web ? ['web'] : []),
               ],
               executed_sources: [
                 ...(brainOutcome ? ['brain'] : []),
                 ...(mediaOutcome ? ['media'] : []),
+                ...(journalFlowOutcome ? ['journal_flow'] : []),
                 ...(webRequested ? ['web'] : []),
               ],
               action_status: actionGuard.blocked ? 'unsupported' : 'read_only',

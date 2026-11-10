@@ -4,6 +4,7 @@ import { parseCalendarDate } from '@/lib/pierrot/reportingPeriod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { getGoogleOAuthConfig, getUmamiConfig } from './config';
+import { classifyTrafficPath, isInternalPath, isPublicPath } from './traffic';
 import { getSearchConsoleSiteOverride } from './config';
 import {
   getDataCoverage,
@@ -329,10 +330,52 @@ function ga4Snapshot(
     })
   );
 
+  const publicRows = rows.filter((row) => {
+    if (row.report_type === 'page' || row.report_type === 'landing_page') {
+      return isPublicPath(row.dimension_value);
+    }
+    return true;
+  });
+  const trafficPageRows = rows.filter(
+    (row) => row.report_type === 'page' && row.dimension_key === 'page'
+  );
+  const trafficLandingRows = rows.filter(
+    (row) => row.report_type === 'landing_page' && row.dimension_key === 'landing_page'
+  );
+  const sumTraffic = (
+    source: MetricRow[],
+    metric: string,
+    classification: 'public' | 'owner_admin' | 'automated'
+  ) =>
+    source
+      .filter((row) => classifyTrafficPath(row.dimension_value) === classification)
+      .filter((row) => row.metric === metric)
+      .reduce((sum, row) => sum + Number(row.value || 0), 0);
+  const excludedPaths = Array.from(
+    new Set(
+      [...trafficPageRows, ...trafficLandingRows]
+        .filter((row) => classifyTrafficPath(row.dimension_value) !== 'public')
+        .map((row) => row.dimension_value)
+        .filter(Boolean)
+    )
+  ).slice(0, 30);
+  const traffic = {
+    publicPageViews: sumTraffic(trafficPageRows, 'screenPageViews', 'public'),
+    ownerAdminPageViews: sumTraffic(trafficPageRows, 'screenPageViews', 'owner_admin'),
+    automatedPageViews: sumTraffic(trafficPageRows, 'screenPageViews', 'automated'),
+    publicLandingSessions: sumTraffic(trafficLandingRows, 'sessions', 'public'),
+    ownerAdminLandingSessions: sumTraffic(trafficLandingRows, 'sessions', 'owner_admin'),
+    automatedLandingSessions: sumTraffic(trafficLandingRows, 'sessions', 'automated'),
+    excludedPaths,
+    note:
+      'Totals are source totals and can include owner/admin sessions. Page and landing breakdowns exclude structurally internal paths. Owner conversations are excluded separately by identity.',
+  };
+
   return {
     available,
     totals,
     series,
+    traffic,
     channels: groupBreakdown(rows, {
       reportType: 'channel',
       dimensionKey: 'channel',
@@ -346,13 +389,13 @@ function ga4Snapshot(
       previousRows,
       label: (value) => value.replace('|', ' / '),
     }),
-    landingPages: groupBreakdown(rows, {
+    landingPages: groupBreakdown(publicRows, {
       reportType: 'landing_page',
       dimensionKey: 'landing_page',
       metric: 'sessions',
       previousRows,
     }),
-    pages: groupBreakdown(rows, {
+    pages: groupBreakdown(publicRows, {
       reportType: 'page',
       dimensionKey: 'page',
       metric: 'screenPageViews',
@@ -380,6 +423,7 @@ function ga4Snapshot(
     limitations: available
       ? [
           'GA4 не различает владельца и тестовые сессии автоматически; для этого используется внутренняя identity Pierrot.',
+          'Итоговые GA4 sessions могут включать /admin; разбивки по страницам и landing pages исключают структурно внутренние пути.',
           'Метрика «вернувшиеся» рассчитана как activeUsers − newUsers, отдельного измерения returningUsers в GA4 нет.',
           'Конверсии GA4 отражают только события, помеченные как конверсии в настройках свойства.',
         ]
@@ -908,6 +952,10 @@ async function internalSnapshot(
     itemsPublished,
     knowledgeDocuments,
     mediaRecords,
+    subscriberRows,
+    newsletterJobRows,
+    newsletterLogRows,
+    newsletterLetterRows,
   ] = await Promise.all([
     readRowsSafe<{ conversation_id: string | null; confirmed_at: string | null }>(
       store,
@@ -970,14 +1018,49 @@ async function internalSnapshot(
     countQuery(store, 'items', (query) => query.eq('status', 'published')),
     countQuery(store, 'knowledge_documents', () => undefined),
     countQuery(store, 'media_archive_records', () => undefined),
+    readRowsSafe<{
+      id: string;
+      locale: string | null;
+      isActive: boolean | null;
+      unsubscribedAt: string | null;
+      confirmedAt: string | null;
+    }>(store, 'subscribers', (query) => query.limit(50_000)),
+    readRowsSafe<{
+      id: string;
+      letter_id: string;
+      status: string | null;
+      total_count: number | null;
+      sent_count: number | null;
+      failed_count: number | null;
+      created_at: string | null;
+    }>(store, 'newsletter_jobs', (query) =>
+      query.gte('created_at', bounds.startIso).lt('created_at', bounds.endIso).limit(5000)
+    ),
+    readRowsSafe<{ id: string; status: string | null; sent_at: string | null }>(
+      store,
+      'newsletter_logs',
+      (query) =>
+        query.gte('sent_at', bounds.startIso).lt('sent_at', bounds.endIso).limit(50_000)
+    ),
+    readRowsSafe<{
+      id: string;
+      title: string | null;
+      lang: string | null;
+      status: string | null;
+      sentAt: string | null;
+    }>(store, 'letters', (query) => query.order('createdAt', { ascending: false }).limit(100)),
   ]);
 
-  const nonOwnerConversations = conversations.filter((row) => row.identity_type !== 'owner');
-  const nonOwnerPrevious = previousConversations.filter((row) => row.identity_type !== 'owner');
+  const nonOwnerConversations = conversations.filter(
+    (row) => row.identity_type !== 'owner' && !isInternalPath(row.start_page)
+  );
+  const nonOwnerPrevious = previousConversations.filter(
+    (row) => row.identity_type !== 'owner' && !isInternalPath(row.start_page)
+  );
 
   if (conversations.length !== nonOwnerConversations.length) {
     limitations.push(
-      `Из внутренних диалогов исключены сессии владельца: ${
+      `Из внутренних диалогов исключены сессии владельца и внутренние /admin-страницы: ${
         conversations.length - nonOwnerConversations.length
       } за период.`
     );
@@ -1091,6 +1174,64 @@ async function internalSnapshot(
     );
   }
 
+  const newsletterSubscribers = subscriberRows;
+  const localeGroup = (row: { locale: string | null }) =>
+    (row.locale || '').toLowerCase().startsWith('en') ? 'en' : 'ru';
+  const activeSubscribers = newsletterSubscribers.filter((row) => row.isActive === true);
+  const unsubscribedSubscribers = newsletterSubscribers.filter(
+    (row) => Boolean(row.unsubscribedAt)
+  );
+  const newsletterJobs = newsletterJobRows;
+  const newsletterLogs = newsletterLogRows;
+  const newsletterLetters = new Map(
+    newsletterLetterRows.map((row) => [row.id, row] as const)
+  );
+  const newsletterByLanguage = new Map<string, number>();
+  for (const row of activeSubscribers) {
+    const key = localeGroup(row);
+    newsletterByLanguage.set(key, (newsletterByLanguage.get(key) ?? 0) + 1);
+  }
+  const newsletterLanguageRows = Array.from(newsletterByLanguage.entries()).map(
+    ([key, value]) => ({
+      key,
+      label: key === 'en' ? 'English' : 'Russian',
+      value,
+      previous: null,
+      deltaPercent: null,
+      share:
+        activeSubscribers.length > 0 ? (value / activeSubscribers.length) * 100 : null,
+    })
+  );
+  const recentIssues = newsletterJobs
+    .slice()
+    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+    .slice(0, 8)
+    .map((job) => {
+      const letter = newsletterLetters.get(job.letter_id);
+      return {
+        id: job.letter_id,
+        title: letter?.title || '(письмо не найдено)',
+        language: letter?.lang || null,
+        status: job.status,
+        sentAt: job.created_at,
+        sentCount: job.sent_count,
+        failedCount: job.failed_count,
+      };
+    });
+  const newsletterEmailsSent = newsletterLogs.filter((row) => row.status === 'sent').length;
+  const newsletterEmailsFailed = newsletterLogs.filter(
+    (row) => row.status === 'failed' || row.status === 'bounced'
+  ).length;
+  const newsletterLimitations: string[] = [];
+  if (newsletterLogs.length > 0 && newsletterLogs.every((row) => row.status === 'sent')) {
+    newsletterLimitations.push(
+      'Resend logs in this database contain delivery status only; opens and clicks are not stored here. No open/click rate is inferred.'
+    );
+  }
+  if (newsletterJobs.length === 0) {
+    newsletterLimitations.push('За выбранный период нет запусков рассылки (это ноль строк, а не ошибка).');
+  }
+
   return {
     available: true,
     confirmedSubscriptions,
@@ -1112,6 +1253,26 @@ async function internalSnapshot(
       byReferrer: breakdownFromCounts(referrerCounts, previousReferrerCounts),
     },
     events: breakdownFromCounts(eventCounts, new Map()),
+    newsletter: {
+      available: true,
+      subscribers: {
+        total: newsletterSubscribers.length,
+        active: activeSubscribers.length,
+        unsubscribed: unsubscribedSubscribers.length,
+        ru: activeSubscribers.filter((row) => localeGroup(row) === 'ru').length,
+        en: activeSubscribers.filter((row) => localeGroup(row) === 'en').length,
+      },
+      jobs: {
+        total: newsletterJobs.length,
+        sent: newsletterJobs.reduce((sum, row) => sum + Number(row.sent_count || 0), 0),
+        failed: newsletterJobs.reduce((sum, row) => sum + Number(row.failed_count || 0), 0),
+        emailsSent: newsletterEmailsSent,
+        emailsFailed: newsletterEmailsFailed,
+      },
+      byLanguage: newsletterLanguageRows,
+      recentIssues,
+      limitations: newsletterLimitations,
+    },
     content: {
       articlesTotal,
       lettersTotal,
@@ -1573,8 +1734,14 @@ export async function loadAnalyticsDataset(input: {
         : Promise.resolve([] as SearchPerformanceRow[]),
     ]);
 
+  const publicSearchRows = searchRows.filter((row) => isPublicPath(row.page));
+  const publicPreviousSearchRows = previousSearchRows.filter((row) => isPublicPath(row.page));
   const ga4 = ga4Snapshot(gaRows, gaPreviousRows, gaConnection);
-  const gsc = gscSnapshot(searchRows, previousSearchRows, gscConnection?.external_id ?? null);
+  const gsc = gscSnapshot(
+    publicSearchRows,
+    publicPreviousSearchRows,
+    gscConnection?.external_id ?? null
+  );
   const umami = umamiSnapshot(umamiRows, umamiPreviousRows, period, umamiConnection);
   const internal = await internalSnapshot(store, period);
   const { matches } = await contentMatches(store, ga4, gsc);

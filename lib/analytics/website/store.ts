@@ -31,7 +31,7 @@ export type StoredConnection = {
 };
 
 export type MetricRowInput = {
-  provider: 'google_analytics' | 'umami';
+  provider: 'google_analytics' | 'umami' | 'bluesky';
   report_type: string;
   metric_date: string;
   dimension_key: string;
@@ -207,6 +207,36 @@ export async function disableConnection(
   if (error) throw new Error(`analytics_connections disable: ${error.message}`);
 }
 
+/**
+ * A process can die after inserting a `running` row. Recover such rows so the
+ * admin UI does not show a sync that has been running for hours. The lock TTL
+ * already prevents concurrent work; this only repairs the run history.
+ */
+export async function recoverStaleSyncRuns(
+  store: SupabaseClient,
+  olderThanMinutes = 20
+): Promise<number> {
+  const cutoff = new Date(Date.now() - olderThanMinutes * 60_000).toISOString();
+  const { data, error } = await store
+    .from('analytics_sync_runs')
+    .update({
+      status: 'failed',
+      error_code: 'stale_run_recovered',
+      error_message: 'The sync process stopped before finishing. Recovered as failed.',
+      finished_at: new Date().toISOString(),
+    })
+    .eq('status', 'running')
+    .lt('started_at', cutoff)
+    .select('id');
+
+  if (error) {
+    console.error('[website analytics] could not recover stale sync runs');
+    return 0;
+  }
+
+  return Array.isArray(data) ? data.length : 0;
+}
+
 export async function insertSyncRun(
   store: SupabaseClient,
   input: {
@@ -290,13 +320,96 @@ export async function getRecentSyncRuns(
   return (data ?? []) as StoredSyncRun[];
 }
 
+
+/**
+ * GA4 can return more than one row for the same normalized dimension (for
+ * example two page paths that normalize to the same path, or a duplicated
+ * dimension). PostgreSQL refuses an INSERT ... ON CONFLICT statement that
+ * touches the same conflict key twice. Aggregate duplicates before writing.
+ *
+ * Counts and durations are additive. Ratios/percentages are not: keep the
+ * last observation for those units instead of summing them.
+ */
+function dedupeMetricRows(rows: MetricRowInput[]): MetricRowInput[] {
+  const byKey = new Map<string, MetricRowInput>();
+
+  for (const row of rows) {
+    const key = [
+      row.provider,
+      row.report_type,
+      row.metric_date,
+      row.dimension_key,
+      row.dimension_hash,
+      row.metric,
+    ].join('|');
+    const existing = byKey.get(key);
+
+    if (!existing) {
+      byKey.set(key, { ...row, metadata: { ...(row.metadata ?? {}) } });
+      continue;
+    }
+
+    if (existing.unit === 'ratio' || existing.unit === 'percent') {
+      existing.value = row.value;
+    } else {
+      existing.value += row.value;
+    }
+
+    existing.metadata = { ...(existing.metadata ?? {}), ...(row.metadata ?? {}) };
+  }
+
+  return [...byKey.values()];
+}
+
+/**
+ * Search Console rows are aggregated to the same hourly/daily query × page ×
+ * country × device grain. Normalizing page URLs can collapse two raw pages into
+ * one key, so duplicates must be merged before upsert too.
+ */
+function dedupeSearchRows(rows: SearchRowInput[]): SearchRowInput[] {
+  const byKey = new Map<string, SearchRowInput>();
+
+  for (const row of rows) {
+    const key = [
+      row.metric_date,
+      row.site_url,
+      row.query_hash,
+      row.page_hash,
+      row.country,
+      row.device,
+    ].join('|');
+    const existing = byKey.get(key);
+
+    if (!existing) {
+      byKey.set(key, { ...row });
+      continue;
+    }
+
+    const clicks = existing.clicks + row.clicks;
+    const impressions = existing.impressions + row.impressions;
+    const weightedPosition =
+      existing.position !== null && row.position !== null
+        ? (existing.position * existing.impressions + row.position * row.impressions) /
+          Math.max(1, existing.impressions + row.impressions)
+        : existing.position ?? row.position;
+
+    existing.clicks = clicks;
+    existing.impressions = impressions;
+    existing.ctr = impressions > 0 ? clicks / impressions : null;
+    existing.position = weightedPosition;
+  }
+
+  return [...byKey.values()];
+}
+
 export async function writeMetricRows(
   store: SupabaseClient,
   rows: MetricRowInput[]
 ): Promise<number> {
   let written = 0;
+  const deduped = dedupeMetricRows(rows);
 
-  for (const part of chunks(rows, WRITE_CHUNK)) {
+  for (const part of chunks(deduped, WRITE_CHUNK)) {
     const { error } = await store.from('analytics_metrics_daily').upsert(
       part.map((row) => ({
         provider: row.provider,
@@ -328,8 +441,9 @@ export async function writeSearchRows(
   rows: SearchRowInput[]
 ): Promise<number> {
   let written = 0;
+  const deduped = dedupeSearchRows(rows);
 
-  for (const part of chunks(rows, WRITE_CHUNK)) {
+  for (const part of chunks(deduped, WRITE_CHUNK)) {
     const { error } = await store.from('analytics_search_performance').upsert(
       part.map((row) => ({
         metric_date: row.metric_date,

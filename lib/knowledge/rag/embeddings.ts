@@ -32,7 +32,15 @@ export type OpenRouterEmbeddingOptions = {
   endpoint?: string;
   timeoutMs?: number;
   batchSize?: number;
+  /**
+   * Hard character budget per provider request. A batch of 32 long chunks can
+   * exceed the model context even though the chunk count looks reasonable.
+   */
+  maxBatchChars?: number;
 };
+
+/** Conservative default for bge-m3: about 4–6k tokens per request. */
+export const OPENROUTER_EMBEDDING_MAX_BATCH_CHARS = 16_000;
 
 function isAbortError(error: unknown): boolean {
   return Boolean(
@@ -121,13 +129,34 @@ function parseEmbeddingResponse(
   return ordered.map((entry) => entry.embedding);
 }
 
-function batches<T>(items: T[], size: number): T[][] {
-  const result: T[][] = [];
+/**
+ * Splits by both item count and character budget. A single oversized text is
+ * still sent alone (the chunker already caps chunks), while a large document
+ * cannot produce a provider request with tens of thousands of characters.
+ */
+function batchTexts(texts: string[], size: number, maxChars: number): string[][] {
+  const result: string[][] = [];
+  let current: string[] = [];
+  let chars = 0;
 
-  for (let index = 0; index < items.length; index += size) {
-    result.push(items.slice(index, index + size));
+  const flush = () => {
+    if (current.length > 0) {
+      result.push(current);
+      current = [];
+      chars = 0;
+    }
+  };
+
+  for (const text of texts) {
+    const budget = Math.max(1, maxChars);
+    if (current.length >= size || (current.length > 0 && chars + text.length > budget)) {
+      flush();
+    }
+    current.push(text);
+    chars += text.length;
   }
 
+  flush();
   return result;
 }
 
@@ -196,6 +225,7 @@ export function createOpenRouterEmbeddingClient(
   const endpoint = options.endpoint ?? OPENROUTER_EMBEDDINGS_ENDPOINT;
   const timeoutMs = options.timeoutMs ?? UNFRAMED_EMBEDDING_TIMEOUT_MS;
   const batchSize = options.batchSize ?? UNFRAMED_EMBEDDING_BATCH_SIZE;
+  const maxBatchChars = options.maxBatchChars ?? OPENROUTER_EMBEDDING_MAX_BATCH_CHARS;
 
   if (!apiKey) throw new RagConfigurationError('OPENROUTER_API_KEY_missing');
   if (!modelId) throw new RagConfigurationError('embedding_model_missing');
@@ -210,6 +240,9 @@ export function createOpenRouterEmbeddingClient(
   }
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
     throw new RagConfigurationError('embedding_timeout_invalid');
+  }
+  if (!Number.isInteger(maxBatchChars) || maxBatchChars < 1) {
+    throw new RagConfigurationError('embedding_batch_chars_invalid');
   }
 
   async function embedBatch(texts: string[], signal?: AbortSignal): Promise<number[][]> {
@@ -307,7 +340,7 @@ export function createOpenRouterEmbeddingClient(
       });
 
       let cursor = 0;
-      for (const batch of batches(missingTexts, batchSize)) {
+      for (const batch of batchTexts(missingTexts, batchSize, maxBatchChars)) {
         const vectors = await embedBatch(batch, signal);
 
         for (const vector of vectors) {

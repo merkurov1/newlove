@@ -6,7 +6,7 @@
  * are never merged into one anonymous "visitor" number.
  */
 
-export type AnalyticsProvider = 'google_analytics' | 'search_console' | 'umami';
+export type AnalyticsProvider = 'google_analytics' | 'search_console' | 'umami' | 'bluesky';
 export type AnalyticsLanguage = 'ru' | 'en';
 
 export type AnalyticsConnectionStatus =
@@ -108,6 +108,16 @@ export type Ga4Snapshot = {
   countries: BreakdownRow[];
   devices: BreakdownRow[];
   events: BreakdownRow[];
+  traffic: {
+    publicPageViews: number;
+    ownerAdminPageViews: number;
+    automatedPageViews: number;
+    publicLandingSessions: number;
+    ownerAdminLandingSessions: number;
+    automatedLandingSessions: number;
+    excludedPaths: string[];
+    note: string;
+  };
   limitations: string[];
 };
 
@@ -219,6 +229,34 @@ export type InternalSnapshot = {
     byReferrer: BreakdownRow[];
   };
   events: BreakdownRow[];
+  newsletter: {
+    available: boolean;
+    subscribers: {
+      total: number | null;
+      active: number | null;
+      unsubscribed: number | null;
+      ru: number | null;
+      en: number | null;
+    };
+    jobs: {
+      total: number | null;
+      sent: number | null;
+      failed: number | null;
+      emailsSent: number | null;
+      emailsFailed: number | null;
+    };
+    byLanguage: BreakdownRow[];
+    recentIssues: Array<{
+      id: string;
+      title: string;
+      language: string | null;
+      status: string | null;
+      sentAt: string | null;
+      sentCount: number | null;
+      failedCount: number | null;
+    }>;
+    limitations: string[];
+  };
   content: {
     articlesTotal: number | null;
     lettersTotal: number | null;
@@ -229,6 +267,35 @@ export type InternalSnapshot = {
   limitations: string[];
 };
 
+export type BlueskySnapshot = {
+  available: boolean;
+  profile: {
+    handle: string | null;
+    displayName: string | null;
+    did: string | null;
+    followers: number | null;
+    follows: number | null;
+    posts: number | null;
+  };
+  totals: Record<string, MetricComparison>;
+  posts: Array<{
+    uri: string;
+    text: string;
+    createdAt: string | null;
+    url: string | null;
+    likes: number;
+    reposts: number;
+    replies: number;
+    quotes: number;
+    links: number;
+    siteLinks: number;
+    engagement: number;
+  }>;
+  topPosts: BlueskySnapshot['posts'];
+  siteLinkedPosts: BlueskySnapshot['posts'];
+  limitations: string[];
+};
+
 export type AnalyticsDataset = {
   period: AnalyticsPeriod;
   generatedAt: string;
@@ -236,6 +303,7 @@ export type AnalyticsDataset = {
   ga4: Ga4Snapshot;
   gsc: SearchConsoleSnapshot;
   umami: UmamiSnapshot;
+  bluesky: BlueskySnapshot;
   internal: InternalSnapshot;
   projects: ProjectPerformance[];
   contentMatches: ContentMatch[];
@@ -252,7 +320,9 @@ export type WebsiteQuestionScope =
   | 'opportunities'
   | 'anomalies'
   | 'health'
-  | 'evidence';
+  | 'evidence'
+  | 'bluesky'
+  | 'newsletter';
 
 export type WebsiteQuestion = {
   website: true;

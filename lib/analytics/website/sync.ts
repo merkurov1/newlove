@@ -7,6 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   getAnalyticsTimezone,
   getBackfillDays,
+  getBlueskyConfig,
   getIncrementalDays,
   getUmamiConfig,
 } from './config';
@@ -18,6 +19,7 @@ import {
   insertSyncRun,
   markConnectionError,
   markConnectionSynced,
+  recoverStaleSyncRuns,
   saveSnapshot,
   tryLock,
   unlock,
@@ -38,6 +40,7 @@ import {
   umamiDateRange,
 } from './providers/umami';
 import { refreshGoogleAccessToken } from './providers/oauth';
+import { fetchBlueskyAnalytics, postPermalink } from './providers/bluesky';
 import type { AnalyticsProvider } from './types';
 
 assertServerOnly('lib/analytics/website/sync');
@@ -63,7 +66,12 @@ export type ProviderSyncResult = {
   errorMessage: string | null;
 };
 
-const ALL_PROVIDERS: AnalyticsProvider[] = ['google_analytics', 'search_console', 'umami'];
+const ALL_PROVIDERS: AnalyticsProvider[] = [
+  'google_analytics',
+  'search_console',
+  'umami',
+  'bluesky',
+];
 
 function todayInZone(timezone: string, now: Date): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -565,14 +573,110 @@ async function syncUmami(
   };
 }
 
+async function syncBluesky(
+  store: SupabaseClient,
+  range: { start: string; end: string }
+): Promise<{ rows: number; snapshots: number; details: Record<string, unknown> }> {
+  const config = getBlueskyConfig();
+
+  if (!config.configured) {
+    throw new AnalyticsProviderError({
+      provider: 'bluesky',
+      code: 'not_configured',
+      message: `Bluesky is not configured: missing ${config.missing.join(', ')}.`,
+    });
+  }
+
+  const result = await fetchBlueskyAnalytics({
+    identifier: config.identifier,
+    password: config.password,
+  });
+
+  const rows: MetricRowInput[] = [];
+  const add = (
+    reportType: string,
+    dimensionKey: string,
+    dimensionValue: string,
+    metric: string,
+    value: number,
+    metadata: Record<string, unknown> = {}
+  ) => {
+    rows.push({
+      provider: 'bluesky',
+      report_type: reportType,
+      metric_date: range.end,
+      dimension_key: dimensionKey,
+      dimension_value: dimensionValue,
+      dimension_hash: fullHash(dimensionValue),
+      metric,
+      value,
+      unit: 'count',
+      metadata,
+    });
+  };
+
+  for (const [metric, value] of Object.entries({
+    followers: result.profile.followers,
+    follows: result.profile.follows,
+    posts: result.profile.posts,
+  })) {
+    if (value !== null) add('profile', 'total', '', metric, value, { snapshot: true });
+  }
+
+  for (const post of result.posts) {
+    const permalink = postPermalink(result.profile.handle, post.uri);
+    const metadata = {
+      text: post.text.slice(0, 1200),
+      post_created_at: post.createdAt,
+      indexed_at: post.indexedAt,
+      permalink,
+      site_links: post.siteLinks,
+      outbound_links: post.outboundLinks,
+    };
+    const engagement = post.likes + post.reposts + post.replies + post.quotes;
+
+    add('post', 'post', post.uri, 'likes', post.likes, metadata);
+    add('post', 'post', post.uri, 'reposts', post.reposts, metadata);
+    add('post', 'post', post.uri, 'replies', post.replies, metadata);
+    add('post', 'post', post.uri, 'quotes', post.quotes, metadata);
+    add('post', 'post', post.uri, 'links', post.links, metadata);
+    add('post', 'post', post.uri, 'site_links', post.siteLinks, metadata);
+    add('post', 'post', post.uri, 'engagement', engagement, metadata);
+  }
+
+  const written = rows.length > 0 ? await writeMetricRows(store, rows) : 0;
+
+  await saveSnapshot(store, {
+    provider: 'bluesky',
+    reportType: 'author_feed',
+    periodStart: range.start,
+    periodEnd: range.end,
+    checksum: fullHash(JSON.stringify({ profile: result.rawProfile, posts: result.posts })).slice(0, 40),
+    payload: { profile: result.rawProfile, posts: result.posts, truncated: result.truncated },
+  });
+
+  return {
+    rows: written,
+    snapshots: 1,
+    details: {
+      profile: result.profile,
+      posts: result.posts.length,
+      pages: result.pages,
+      truncated: result.truncated,
+    },
+  };
+}
+
 async function syncOne(
   provider: AnalyticsProvider,
   options: Required<Pick<SyncOptions, 'mode' | 'timezone'>> & SyncOptions
 ): Promise<ProviderSyncResult> {
   const store = getServerSupabaseClient({ useServiceRole: true });
   const connection = await getStoredConnection(store, provider);
+  const isBluesky = provider === 'bluesky';
+  const blueskyConfig = getBlueskyConfig();
 
-  if (!connection) {
+  if (!connection && !(isBluesky && blueskyConfig.configured)) {
     return {
       provider,
       status: 'skipped',
@@ -580,12 +684,14 @@ async function syncOne(
       snapshotRows: 0,
       rangeStart: null,
       rangeEnd: null,
-      errorCode: 'not_connected',
-      errorMessage: 'The source has not been connected.',
+      errorCode: isBluesky ? 'not_configured' : 'not_connected',
+      errorMessage: isBluesky
+        ? `Bluesky is not configured: missing ${blueskyConfig.missing.join(', ')}.`
+        : 'The source has not been connected.',
     };
   }
 
-  if (connection.status === 'disabled') {
+  if (connection?.status === 'disabled') {
     return {
       provider,
       status: 'skipped',
@@ -613,7 +719,7 @@ async function syncOne(
         errorMessage: `Umami is not configured: missing ${config.missing.join(', ')}.`,
       };
     }
-  } else if (!connection.token_ciphertext && provider !== 'umami') {
+  } else if (!isBluesky && !connection?.token_ciphertext && provider !== 'umami') {
     return {
       provider,
       status: 'skipped',
@@ -630,7 +736,7 @@ async function syncOne(
     timezone: options.timezone,
     now: options.now,
     explicit: options.range,
-    lastSyncAt: connection.last_sync_at,
+    lastSyncAt: connection?.last_sync_at ?? null,
   });
 
   const runId = randomUUID();
@@ -676,10 +782,12 @@ async function syncOne(
 
     const result =
       provider === 'google_analytics'
-        ? await syncGoogleAnalytics(store, connection, range)
+        ? await syncGoogleAnalytics(store, connection as StoredConnection, range)
         : provider === 'search_console'
-          ? await syncSearchConsole(store, connection, range)
-          : await syncUmami(store, connection, range);
+          ? await syncSearchConsole(store, connection as StoredConnection, range)
+          : provider === 'umami'
+            ? await syncUmami(store, connection as StoredConnection, range)
+            : await syncBluesky(store, range);
 
     const partial = result.details.partial === true;
 
@@ -691,6 +799,26 @@ async function syncOne(
       details: result.details,
     });
     await markConnectionSynced(store, provider, partial ? 'partial' : 'connected');
+
+    if (isBluesky) {
+      const profile = result.details.profile as
+        | { did?: string | null; handle?: string | null; followers?: number | null; posts?: number | null }
+        | undefined;
+      await upsertConnection(store, {
+        provider: 'bluesky',
+        status: 'connected',
+        accountLabel: blueskyConfig.identifier,
+        externalId: profile?.did ?? blueskyConfig.identifier,
+        externalMeta: {
+          handle: profile?.handle ?? null,
+          followers: profile?.followers ?? null,
+          posts: profile?.posts ?? null,
+        },
+        scopes: [],
+        sealed: null,
+        connectedBy: null,
+      });
+    }
 
     return {
       provider,
@@ -758,6 +886,13 @@ export async function runAnalyticsSync(options: SyncOptions = {}): Promise<Provi
   const mode = options.mode ?? 'incremental';
   const timezone = options.timezone ?? getAnalyticsTimezone();
   const providers = options.providers ?? ALL_PROVIDERS;
+  try {
+    await recoverStaleSyncRuns(getServerSupabaseClient({ useServiceRole: true }));
+  } catch (error) {
+    console.error('[website analytics] stale run recovery failed', {
+      code: error instanceof Error ? error.message.slice(0, 120) : 'unknown',
+    });
+  }
   const results: ProviderSyncResult[] = [];
 
   if (providers.includes('umami')) {

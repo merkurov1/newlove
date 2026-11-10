@@ -7,6 +7,8 @@ export type PierrotOperation =
   | 'brain.stats'
   | 'media.search'
   | 'media.stats'
+  | 'journal.search'
+  | 'flow.search'
   | 'commercial.report'
   | 'analytics.report'
   | 'website.report'
@@ -73,6 +75,27 @@ function operationForIntent(plan: PierrotQueryPlan): {
         tool: 'media',
         ownerOnly: false,
         fallbackPolicy: 'media_then_web',
+      };
+    case 'journal':
+      return {
+        operation: 'journal.search',
+        tool: 'journal',
+        ownerOnly: true,
+        fallbackPolicy: 'no_source_substitution',
+      };
+    case 'flow':
+      return {
+        operation: 'flow.search',
+        tool: 'flow',
+        ownerOnly: true,
+        fallbackPolicy: 'no_source_substitution',
+      };
+    case 'journal_flow':
+      return {
+        operation: 'journal.search',
+        tool: 'journal+flow',
+        ownerOnly: true,
+        fallbackPolicy: 'no_source_substitution',
       };
     case 'commercial':
       return {
@@ -159,6 +182,13 @@ export function buildPierrotExecutionPlan(
     queryPlan,
     contextMessages: recoveryContext,
   });
+
+  // Journal/Flow questions are answered from their own published tables. A
+  // generic stats/analytics shortcut must not replace the editorial source.
+  if (queryPlan.sources.journal || queryPlan.sources.flow) {
+    ownerTool = null;
+  }
+
   const resolved = operationForIntent(queryPlan);
   const searchVerb = SEARCH_VERBS.test(message);
   const statsTerms = STATS_TERMS.test(message);

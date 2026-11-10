@@ -30,6 +30,8 @@ export const WEBSITE_ANALYTICS_TOOL_NAMES = [
   'detect_analytics_anomalies',
   'get_source_health',
   'get_analytics_evidence',
+  'get_bluesky_performance',
+  'get_newsletter_performance',
 ] as const;
 
 export type WebsiteAnalyticsToolName = (typeof WEBSITE_ANALYTICS_TOOL_NAMES)[number];
@@ -47,6 +49,8 @@ export function websiteToolForScope(scope: WebsiteQuestionScope): WebsiteAnalyti
     anomalies: 'detect_analytics_anomalies',
     health: 'get_source_health',
     evidence: 'get_analytics_evidence',
+    bluesky: 'get_bluesky_performance',
+    newsletter: 'get_newsletter_performance',
   };
 
   return map[scope];
@@ -166,6 +170,14 @@ export function get_analytics_evidence(options: WebsiteToolOptions = {}) {
   return run('evidence', options);
 }
 
+export function get_bluesky_performance(options: WebsiteToolOptions = {}) {
+  return run('bluesky', options);
+}
+
+export function get_newsletter_performance(options: WebsiteToolOptions = {}) {
+  return run('newsletter', options);
+}
+
 export async function runWebsiteAnalyticsTool(
   name: WebsiteAnalyticsToolName,
   options: WebsiteToolOptions = {}
@@ -193,6 +205,10 @@ export async function runWebsiteAnalyticsTool(
       return get_source_health(options);
     case 'get_analytics_evidence':
       return get_analytics_evidence(options);
+    case 'get_bluesky_performance':
+      return get_bluesky_performance(options);
+    case 'get_newsletter_performance':
+      return get_newsletter_performance(options);
     default:
       return get_website_overview(options);
   }

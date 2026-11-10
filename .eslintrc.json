@@ -19,5 +19,8 @@
     "react"
   ],
   "parser": "@typescript-eslint/parser",
-  "rules": {}
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "react/jsx-uses-react": "off"
+  }
 }
