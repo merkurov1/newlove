@@ -711,46 +711,13 @@ export default function FlowPage() {
       />
       <div className="min-h-screen bg-white px-5 pb-24 pt-20 text-neutral-900 sm:px-8 sm:pt-24">
         <div className="mx-auto max-w-2xl">
-          <header className="mb-10 flex flex-col justify-between gap-3 border-b border-neutral-100 pb-6 sm:flex-row sm:items-baseline">
-            <div>
-              <h1 className="font-serif text-3xl font-light tracking-tight text-neutral-900 sm:text-4xl">
-                Flow
-              </h1>
-              <p className="mt-1 font-serif text-sm text-neutral-400">
-                Stream of thoughts, media &amp; signals
-              </p>
-            </div>
-            <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider text-neutral-400">
-              <a
-                href="https://bsky.app/profile/merkurov.love"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition hover:text-neutral-900"
-              >
-                Bluesky ↗
-              </a>
-              <span className="text-neutral-200">·</span>
-              <a
-                href="https://t.me/unframed_am"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition hover:text-neutral-900"
-              >
-                Telegram ↗
-              </a>
-              <span className="text-neutral-200">·</span>
-              <a href="/flow/rss" className="transition hover:text-neutral-900">
-                RSS ↗
-              </a>
-              <span className="text-neutral-200">·</span>
-              <Link href="/flow-issues" className="transition hover:text-neutral-900">
-                Issues ↗
-              </Link>
-              <span className="text-neutral-200">·</span>
-              <Link href="/journal" className="transition hover:text-neutral-900">
-                Journal ↗
-              </Link>
-            </div>
+          <header className="mb-10 border-b border-neutral-100 pb-6">
+            <h1 className="font-serif text-3xl font-light tracking-tight text-neutral-900 sm:text-4xl">
+              Flow
+            </h1>
+            <p className="mt-1 font-serif text-sm text-neutral-400">
+              Stream of thoughts, media &amp; signals
+            </p>
           </header>
 
           {loadError && items.length === 0 ? (
