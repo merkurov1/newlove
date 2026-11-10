@@ -5,6 +5,7 @@ import { analyticsEncryptionKeySource } from '@/lib/analytics/website/tokenCrypt
 import {
   WEBSITE_ANALYTICS_MEASUREMENT_ID,
   getAnalyticsTimezone,
+  getGoogleAccountOverride,
   getGoogleOAuthConfig,
   getGooglePropertyOverride,
   getSearchConsoleSiteOverride,
@@ -62,6 +63,7 @@ export async function GET(request: Request) {
       googleMissing: google.missing,
       redirectUri: google.redirectUri,
       siteUrl: getSiteUrl(),
+      ga4AccountOverride: getGoogleAccountOverride(),
       ga4PropertyOverride: getGooglePropertyOverride(),
       gscSiteOverride: getSearchConsoleSiteOverride(),
       measurementId: WEBSITE_ANALYTICS_MEASUREMENT_ID,

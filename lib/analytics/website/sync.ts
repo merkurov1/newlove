@@ -28,7 +28,7 @@ import {
   type SearchRowInput,
   type StoredConnection,
 } from './store';
-import { AnalyticsProviderError } from './providers/http';
+import { AnalyticsProviderError, diagnosticFromError, diagnosticSummary } from './providers/http';
 import { buildGa4Reports, ga4DateToIso, runGa4Report } from './providers/googleAnalytics';
 import { fetchSearchConsoleRows } from './providers/searchConsole';
 import {
@@ -168,6 +168,14 @@ function ga4Path(value: string): string {
   return normalizePath(value);
 }
 
+function isGa4PropertyId(value: string): boolean {
+  return /^\d+$/.test(value.trim());
+}
+
+function isSearchConsoleSite(value: string): boolean {
+  return value.startsWith('sc-domain:') || /^https?:\/\//i.test(value);
+}
+
 function metricUnit(name: string): string {
   if (name === 'engagementRate' || name === 'sessionConversionRate') return 'ratio';
   if (name === 'userEngagementDuration' || name === 'averageSessionDuration') return 'seconds';
@@ -187,9 +195,30 @@ async function syncGoogleAnalytics(
     });
   }
 
+  const propertyId = connection.external_id.trim();
+
+  if (!isGa4PropertyId(propertyId)) {
+    throw new AnalyticsProviderError({
+      provider: 'google_analytics',
+      code: 'invalid_property_id',
+      message:
+        'GA4 sync requires a numeric Property ID. Measurement ID and Account ID are different identifiers.',
+    });
+  }
+
   const accessToken = await resolveAccessToken(store, connection);
   const reports = buildGa4Reports();
-  const failures: Array<{ report: string; code: string; message: string }> = [];
+  const failures: Array<{
+    report: string;
+    code: string;
+    message: string;
+    http_status: number | null;
+    google_error_code: string | null;
+    google_error_message: string | null;
+    stage: string | null;
+    scope: string | null;
+    details: string | null;
+  }> = [];
   const reportSummary: Record<string, number> = {};
   let rowsWritten = 0;
   let snapshots = 0;
@@ -198,7 +227,7 @@ async function syncGoogleAnalytics(
     try {
       const report = await runGa4Report({
         accessToken,
-        propertyId: connection.external_id,
+        propertyId,
         definition,
         startDate: range.start,
         endDate: range.end,
@@ -317,15 +346,28 @@ async function syncGoogleAnalytics(
         report: definition.key,
         code: providerError.code,
         message: providerError.message,
+        http_status: providerError.status,
+        google_error_code: providerError.googleCode,
+        google_error_message: providerError.googleMessage,
+        stage: providerError.stage,
+        scope: providerError.scope,
+        details: providerError.details,
       });
     }
   }
 
   if (failures.length === reports.length) {
+    const first = failures[0];
     throw new AnalyticsProviderError({
       provider: 'google_analytics',
-      code: failures[0]?.code || 'all_reports_failed',
-      message: failures[0]?.message || 'All GA4 reports failed.',
+      code: first?.code || 'all_reports_failed',
+      message: first?.message || 'All GA4 reports failed.',
+      status: first?.http_status ?? null,
+      googleCode: first?.google_error_code ?? null,
+      googleMessage: first?.google_error_message ?? null,
+      stage: first?.stage ?? 'reports',
+      scope: first?.scope ?? null,
+      details: first?.details ?? null,
     });
   }
 
@@ -353,17 +395,28 @@ async function syncSearchConsole(
     });
   }
 
+  const siteUrl = connection.external_id.trim();
+
+  if (!isSearchConsoleSite(siteUrl)) {
+    throw new AnalyticsProviderError({
+      provider: 'search_console',
+      code: 'invalid_site_url',
+      message:
+        'Search Console sync requires a real site URL from sites.list (sc-domain:... or https://...).',
+    });
+  }
+
   const accessToken = await resolveAccessToken(store, connection);
   const result = await fetchSearchConsoleRows({
     accessToken,
-    siteUrl: connection.external_id,
+    siteUrl,
     startDate: range.start,
     endDate: range.end,
   });
 
   const rows: SearchRowInput[] = result.rows.map((row) => ({
     metric_date: row.date,
-    site_url: connection.external_id as string,
+    site_url: siteUrl,
     query: row.query,
     page: normalizePath(row.page),
     country: row.country,
@@ -661,15 +714,29 @@ async function syncOne(
             message: error instanceof Error ? error.message : 'Synchronization failed.',
           });
 
-    await markConnectionError(store, provider, providerError.code, providerError.message);
+    const diagnostic = diagnosticFromError(providerError, {
+      provider,
+      stage: providerError.stage || 'sync',
+    });
+
+    await markConnectionError(store, provider, providerError.code, diagnosticSummary(diagnostic));
     await finishSyncRun(store, {
       id: runId,
       status: 'failed',
       rowsWritten: 0,
       snapshotRows: 0,
       errorCode: providerError.code,
-      errorMessage: providerError.message,
-      details: { status: providerError.status, details: providerError.details },
+      errorMessage: diagnosticSummary(diagnostic),
+      details: {
+        status: providerError.status,
+        google_error_code: providerError.googleCode,
+        google_error_message: providerError.googleMessage,
+        stage: providerError.stage,
+        scope: providerError.scope,
+        retryable: providerError.retryable,
+        diagnostic,
+        details: providerError.details,
+      },
     });
 
     return {

@@ -41,7 +41,9 @@ export type Ga4ReportResult = {
 export type Ga4PropertySummary = {
   propertyId: string;
   displayName: string;
+  accountId: string | null;
   accountName: string | null;
+  propertyType: string | null;
   measurementIds: string[];
 };
 

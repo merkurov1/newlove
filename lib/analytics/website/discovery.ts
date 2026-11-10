@@ -5,6 +5,7 @@ import {
   GA4_READONLY_SCOPE,
   GSC_READONLY_SCOPE,
   WEBSITE_ANALYTICS_MEASUREMENT_ID,
+  getGoogleAccountOverride,
   getGooglePropertyOverride,
   getSearchConsoleSiteOverride,
 } from './config';
@@ -13,10 +14,14 @@ import {
   chooseSearchConsoleSite,
   discoverGa4PropertiesDetailed,
   listSearchConsoleSites,
+  normalizeGa4AccountId,
+  normalizeGa4PropertyId,
+  readGa4PropertyDetailed,
 } from './providers/oauth';
 import {
   AnalyticsProviderError,
   diagnosticFromError,
+  diagnosticSummary,
   type ProviderErrorDiagnostic,
 } from './providers/http';
 import {
@@ -52,6 +57,7 @@ type DiscoveryInput = {
   connectedBy?: string | null;
   measurementId?: string;
   propertyOverride?: string | null;
+  accountOverride?: string | null;
   siteOverride?: string | null;
 };
 
@@ -77,6 +83,8 @@ function compactProperties(
   return properties.slice(0, 100).map((property) => ({
     property_id: property.propertyId,
     display_name: property.displayName,
+    property_type: property.propertyType,
+    account_id: property.accountId,
     account_name: property.accountName,
     measurement_ids: property.measurementIds,
   }));
@@ -177,7 +185,7 @@ async function persistError(
     });
   }
 
-  await markConnectionError(store, provider, diagnostic.code, diagnostic.message);
+  await markConnectionError(store, provider, diagnostic.code, diagnosticSummary(diagnostic));
 }
 
 function errorFor(
@@ -228,21 +236,61 @@ export async function runGa4Discovery(
   }
 
   try {
-    const discovery = await discoverGa4PropertiesDetailed(input.accessToken);
+    const measurementId = input.measurementId || WEBSITE_ANALYTICS_MEASUREMENT_ID;
+    const override = normalizeGa4PropertyId(input.propertyOverride ?? getGooglePropertyOverride());
+    const accountOverride = normalizeGa4AccountId(
+      input.accountOverride ?? getGoogleAccountOverride()
+    );
+
+    // With an explicit property id, verify that one resource directly instead
+    // of listing every property and its streams. Without an override, discover
+    // all properties and match the browser measurement id.
+    const discovery = override
+      ? await (async () => {
+          const direct = await readGa4PropertyDetailed(input.accessToken, override);
+          return {
+            properties: [direct.property],
+            warnings: direct.warnings,
+            accountCount: direct.property.accountId ? 1 : 0,
+          };
+        })()
+      : await discoverGa4PropertiesDetailed(input.accessToken);
+
     const property = chooseGa4Property(discovery.properties, {
-      measurementId: input.measurementId || WEBSITE_ANALYTICS_MEASUREMENT_ID,
-      override: input.propertyOverride ?? getGooglePropertyOverride(),
+      measurementId,
+      override,
+      accountId: accountOverride,
     });
 
     if (!property) {
-      const override = input.propertyOverride ?? getGooglePropertyOverride();
-      const code = discovery.properties.length === 0 ? 'discovery_empty' : 'resource_not_found';
-      const message =
-        discovery.properties.length === 0
-          ? 'No GA4 properties are visible to this Google account.'
-          : override
-            ? `ANALYTICS_GA4_PROPERTY_ID points to ${override}, but this Google account cannot access it.`
-            : `No GA4 property exposes measurement id ${input.measurementId || WEBSITE_ANALYTICS_MEASUREMENT_ID}.`;
+      const propertyById = override
+        ? (discovery.properties.find((entry) => entry.propertyId === override) ?? null)
+        : null;
+
+      let code: string;
+      let message: string;
+
+      if (discovery.properties.length === 0) {
+        code = 'discovery_empty';
+        message = 'No GA4 properties are visible to this Google account.';
+      } else if (override && !propertyById) {
+        code = 'resource_not_found';
+        message = `ANALYTICS_GA4_PROPERTY_ID points to ${override}, but this Google account cannot access it.`;
+      } else if (override && accountOverride && propertyById?.accountId !== accountOverride) {
+        code = 'account_mismatch';
+        message = `GA4 property ${override} belongs to account ${
+          propertyById?.accountId || 'unknown'
+        }, not the configured account ${accountOverride}.`;
+      } else if (override) {
+        code = 'measurement_id_mismatch';
+        message = `GA4 property ${override} has no web data stream with measurement id ${measurementId}. Property, account and measurement ids are not interchangeable.`;
+      } else if (accountOverride) {
+        code = 'resource_not_found';
+        message = `No GA4 property in account ${accountOverride} exposes measurement id ${measurementId}.`;
+      } else {
+        code = 'resource_not_found';
+        message = `No GA4 property exposes measurement id ${measurementId}.`;
+      }
 
       const diagnostic = diagnosticFromError(
         errorFor('google_analytics', code, message, 'selection', GA4_READONLY_SCOPE),
@@ -252,7 +300,9 @@ export async function runGa4Discovery(
       await persistError(store, 'google_analytics', existing, input, diagnostic, {
         discovered_properties: compactProperties(discovery.properties),
         discovered_accounts: discovery.accountCount,
-        measurement_id: input.measurementId || WEBSITE_ANALYTICS_MEASUREMENT_ID,
+        requested_property_id: override,
+        requested_account_id: accountOverride,
+        measurement_id: measurementId,
         warnings: discovery.warnings,
       });
 
@@ -267,11 +317,9 @@ export async function runGa4Discovery(
       };
     }
 
-    const matchedMeasurementId = property.measurementIds.includes(
-      input.measurementId || WEBSITE_ANALYTICS_MEASUREMENT_ID
-    )
-      ? input.measurementId || WEBSITE_ANALYTICS_MEASUREMENT_ID
-      : (property.measurementIds[0] ?? null);
+    // chooseGa4Property already required the web stream to contain this exact
+    // measurement id. Never fall back to another stream or to the Account ID.
+    const matchedMeasurementId = measurementId;
 
     const accountLabel = property.accountName
       ? `${property.accountName} · ${property.displayName}`
@@ -285,9 +333,11 @@ export async function runGa4Discovery(
       externalMeta: discoverySuccessMeta('google_analytics', existing, {
         scopes: input.scopes,
         extra: {
-          property_id: property.propertyId,
-          display_name: property.displayName,
+          account_id: property.accountId,
           account_name: property.accountName,
+          property_id: property.propertyId,
+          property_display_name: property.displayName,
+          property_type: property.propertyType,
           measurement_ids: property.measurementIds,
           matched_measurement_id: matchedMeasurementId,
           discovered_properties: compactProperties(discovery.properties),
@@ -363,17 +413,16 @@ export async function runSearchConsoleDiscovery(
 
   try {
     const sites = await listSearchConsoleSites(input.accessToken);
-    const site = chooseSearchConsoleSite(sites, {
-      siteUrl: input.siteOverride ?? getSearchConsoleSiteOverride(),
-    });
+    const override = input.siteOverride ?? getSearchConsoleSiteOverride();
+    const site = chooseSearchConsoleSite(sites, { siteUrl: override });
 
     const compactSites = sites.slice(0, 100).map((entry) => ({
       site_url: entry.siteUrl,
       permission_level: entry.permissionLevel,
+      verified: entry.permissionLevel !== 'siteUnverifiedUser',
     }));
 
     if (!site) {
-      const override = input.siteOverride ?? getSearchConsoleSiteOverride();
       const code = sites.length === 0 ? 'discovery_empty' : 'resource_not_found';
       const message =
         sites.length === 0
@@ -390,6 +439,7 @@ export async function runSearchConsoleDiscovery(
       await persistError(store, 'search_console', existing, input, diagnostic, {
         discovered_sites: compactSites,
         sites_available: sites.length,
+        requested_site_url: override,
       });
 
       return {
@@ -411,7 +461,10 @@ export async function runSearchConsoleDiscovery(
       externalMeta: discoverySuccessMeta('search_console', existing, {
         scopes: input.scopes,
         extra: {
+          site_url: site.siteUrl,
+          selected_site_url: site.siteUrl,
           permission_level: site.permissionLevel,
+          selection_strategy: override ? 'explicit_override' : 'host_and_permission',
           sites_available: sites.length,
           discovered_sites: compactSites,
         },

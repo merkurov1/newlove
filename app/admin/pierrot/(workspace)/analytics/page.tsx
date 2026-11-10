@@ -74,6 +74,14 @@ const ERROR_EXPLANATIONS: Record<string, string> = {
     'У Google-аккаунта нет доступа к этому ресурсу или выданы не все scopes.',
   api_not_enabled: 'Нужный Google API не включён в Google Cloud Console для этого проекта.',
   resource_not_found: 'Указанный ресурс не найден или недоступен авторизованному Google-аккаунту.',
+  account_mismatch:
+    'GA4 Property принадлежит другому Account ID. Account ID и Property ID — разные ресурсы.',
+  measurement_id_mismatch:
+    'У GA4 Property нет web data stream с ожидаемым Measurement ID. Property ID, Account ID и Measurement ID не взаимозаменяемы.',
+  invalid_property_id:
+    'В external_id сохранён не числовой GA4 Property ID. Нужен ID property, а не Measurement ID или Account ID.',
+  invalid_site_url:
+    'В external_id сохранён не URL ресурса Search Console. Нужен точный site URL из sites.list.',
   discovery_empty: 'Google вернул пустой список ресурсов для этого аккаунта.',
   network_error: 'Не удалось связаться с Google API. Повторите попытку позже.',
   timeout: 'Google API не ответил вовремя. Повторите попытку позже.',
@@ -224,6 +232,7 @@ function SourceCard({
     source.status !== 'disabled';
   const propertyId =
     typeof external?.property_id === 'string' ? external.property_id : source.externalId;
+  const accountId = typeof external?.account_id === 'string' ? external.account_id : null;
   const measurementId =
     typeof external?.matched_measurement_id === 'string' ? external.matched_measurement_id : null;
   const permissionLevel =
@@ -268,6 +277,12 @@ function SourceCard({
             {source.dataFrom && source.dataTo ? `${source.dataFrom} — ${source.dataTo}` : '—'}
           </dd>
         </div>
+        {provider === 'google_analytics' && accountId && (
+          <div>
+            <dt>GA4 account</dt>
+            <dd>{accountId}</dd>
+          </div>
+        )}
         {provider === 'google_analytics' && propertyId && (
           <div>
             <dt>GA4 property</dt>
@@ -335,6 +350,9 @@ function SourceCard({
         <p className="pw-analytics-hint">
           Код: {source.lastErrorCode}
           {typeof discovery?.http_status === 'number' ? ` · HTTP ${discovery.http_status}` : ''}
+          {typeof discovery?.google_error_code === 'string'
+            ? ` · Google: ${discovery.google_error_code}`
+            : ''}
           {typeof discovery?.stage === 'string' ? ` · этап: ${discovery.stage}` : ''}
         </p>
       )}

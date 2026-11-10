@@ -8,25 +8,25 @@ definitions separate.
 
 Verified against the production Supabase project on 2026-11-09.
 
-| Area | Existed in code | Existed in production DB | Actually working |
-| --- | --- | --- | --- |
-| GA4 browser tracking (`lib/analytics/ga4.ts`, `G-J1F4ZTK9ND`) | Yes | n/a | Yes, as client-side event tracking only |
-| GA4 Data API (reports) | No | No | No |
-| Search Console API | No | No | No |
-| Umami adapter | No | No | No |
-| Pierrot analytics views (`pierrot_v_*`) | Yes | Yes — 21 views | Yes; data present |
-| `pierrot_v_conversation_overview` | Yes | Yes, 330 rows | Yes |
-| `pierrot_v_purchases` | Yes | Yes, 0 rows | Queryable; no confirmed purchases in the period |
-| `pierrot_v_subscription_conversions` | Yes | Yes, 2 rows | Yes |
-| `pierrot_v_offer_funnel` | Yes | Yes, 4 offers | Yes |
-| `pierrot_v_product_interest` | Yes | Yes, 4 offers | Yes |
-| `pierrot_v_quality_indicators` | Yes | Yes, 330 rows | Yes |
-| `pierrot_v_unanswered_questions` | Yes | Yes, 4 rows | Yes |
-| Observatory / DASH | Yes | n/a | Yes |
-| Owner tools (`/stats`, `/analytics`, `/commercial`, …) | Yes | n/a | Yes |
-| Google OAuth via Supabase Auth | Yes | n/a | Yes, for login only |
-| Analytics OAuth grant + server token storage | No | No | No |
-| External analytics tables | No | No | No |
+| Area                                                          | Existed in code | Existed in production DB | Actually working                                |
+| ------------------------------------------------------------- | --------------- | ------------------------ | ----------------------------------------------- |
+| GA4 browser tracking (`lib/analytics/ga4.ts`, `G-J1F4ZTK9ND`) | Yes             | n/a                      | Yes, as client-side event tracking only         |
+| GA4 Data API (reports)                                        | No              | No                       | No                                              |
+| Search Console API                                            | No              | No                       | No                                              |
+| Umami adapter                                                 | No              | No                       | No                                              |
+| Pierrot analytics views (`pierrot_v_*`)                       | Yes             | Yes — 21 views           | Yes; data present                               |
+| `pierrot_v_conversation_overview`                             | Yes             | Yes, 330 rows            | Yes                                             |
+| `pierrot_v_purchases`                                         | Yes             | Yes, 0 rows              | Queryable; no confirmed purchases in the period |
+| `pierrot_v_subscription_conversions`                          | Yes             | Yes, 2 rows              | Yes                                             |
+| `pierrot_v_offer_funnel`                                      | Yes             | Yes, 4 offers            | Yes                                             |
+| `pierrot_v_product_interest`                                  | Yes             | Yes, 4 offers            | Yes                                             |
+| `pierrot_v_quality_indicators`                                | Yes             | Yes, 330 rows            | Yes                                             |
+| `pierrot_v_unanswered_questions`                              | Yes             | Yes, 4 rows              | Yes                                             |
+| Observatory / DASH                                            | Yes             | n/a                      | Yes                                             |
+| Owner tools (`/stats`, `/analytics`, `/commercial`, …)        | Yes             | n/a                      | Yes                                             |
+| Google OAuth via Supabase Auth                                | Yes             | n/a                      | Yes, for login only                             |
+| Analytics OAuth grant + server token storage                  | No              | No                       | No                                              |
+| External analytics tables                                     | No              | No                       | No                                              |
 
 Important: a Google login session does **not** grant GA4 or Search Console API
 access. Before this work there was no server-side Google refresh token for
@@ -127,10 +127,44 @@ is never used as a property ID.
 Optional overrides:
 
 ```
+ANALYTICS_GA4_ACCOUNT_ID=123456789
 ANALYTICS_GA4_PROPERTY_ID=123456789
 ANALYTICS_GSC_SITE_URL=sc-domain:merkurov.love
 ANALYTICS_GOOGLE_REDIRECT_URI=https://www.merkurov.love/api/auth/google-analytics/callback
 ```
+
+### Identifier rules
+
+Google uses three distinct identifiers and they are never interchangeable:
+
+- **Account ID** — `accounts/176791840` in the Admin API, stored as
+  `external_meta.account_id`.
+- **Property ID** — the numeric GA4 property, stored as
+  `analytics_connections.external_id` and `external_meta.property_id`.
+- **Measurement ID** — the web-stream `G-...` value, stored as
+  `external_meta.matched_measurement_id`.
+
+Discovery only connects a property when its web data stream contains the
+expected measurement ID. With `ANALYTICS_GA4_PROPERTY_ID` set, discovery calls
+`properties.get` and `dataStreams.list` directly and verifies `parent` against
+`ANALYTICS_GA4_ACCOUNT_ID` when that is configured. It does not list every
+property and it never accepts a measurement ID or account ID as a property ID.
+
+Search Console selection always starts from a real `sites.list` response. An
+`ANALYTICS_GSC_SITE_URL` override must exist in that response; a site URL is
+never inferred from GA4 identifiers. The stored `external_meta` keeps the
+selected `site_url`, `permission_level`, `selection_strategy` and the complete
+`discovered_sites` list.
+
+### Error diagnostics
+
+When Google rejects a request, the connection and every sync run retain the
+classified code (`api_not_enabled`, `insufficient_permissions`, …) plus the
+original Google diagnostic: HTTP status, Google reason such as
+`SERVICE_DISABLED`, Google message, API stage and scope. A disabled API is not
+reported as “no data” or “zero”. Existing refresh tokens, `connected_at`, the
+previous `external_id`, discovered resources and sync history are preserved
+when a later discovery attempt fails.
 
 ## 4. Configuration
 

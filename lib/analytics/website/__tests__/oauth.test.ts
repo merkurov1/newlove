@@ -4,6 +4,8 @@ import {
   buildGoogleConsentUrl,
   chooseGa4Property,
   chooseSearchConsoleSite,
+  normalizeGa4AccountId,
+  normalizeGa4PropertyId,
 } from '../providers/oauth';
 
 const previousEnv = { ...process.env };
@@ -14,6 +16,7 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_SITE_URL = 'https://www.merkurov.love';
   delete process.env.ANALYTICS_GOOGLE_REDIRECT_URI;
   delete process.env.ANALYTICS_GA4_PROPERTY_ID;
+  delete process.env.ANALYTICS_GA4_ACCOUNT_ID;
   delete process.env.ANALYTICS_GSC_SITE_URL;
 });
 
@@ -45,13 +48,17 @@ describe('Google consent configuration', () => {
         {
           propertyId: '111',
           displayName: 'Other',
+          accountId: '176791840',
           accountName: 'Account',
+          propertyType: 'GA4',
           measurementIds: ['G-OTHER'],
         },
         {
           propertyId: '222',
           displayName: 'Merkurov',
+          accountId: '176791840',
           accountName: 'Account',
+          propertyType: 'GA4',
           measurementIds: ['G-J1F4ZTK9ND'],
         },
       ],
@@ -59,6 +66,42 @@ describe('Google consent configuration', () => {
     );
 
     expect(property?.propertyId).toBe('222');
+  });
+
+  it('keeps Account ID, Property ID and Measurement ID separate', () => {
+    const properties = [
+      {
+        propertyId: '244838264',
+        displayName: 'Merkurov',
+        accountId: '176791840',
+        accountName: 'Merkurov',
+        propertyType: 'GA4',
+        measurementIds: ['G-J1F4ZTK9ND'],
+      },
+    ];
+
+    expect(normalizeGa4AccountId('accounts/176791840')).toBe('176791840');
+    expect(normalizeGa4PropertyId('properties/244838264')).toBe('244838264');
+    expect(chooseGa4Property(properties, { accountId: '176791840' })?.propertyId).toBe('244838264');
+
+    // The account id must not be accepted as a property id.
+    expect(chooseGa4Property(properties, { override: '176791840' })).toBeNull();
+    expect(chooseGa4Property(properties, { accountId: '999' })).toBeNull();
+  });
+
+  it('does not accept an override when its web stream lacks the expected measurement id', () => {
+    const properties = [
+      {
+        propertyId: '244838264',
+        displayName: 'Merkurov',
+        accountId: '176791840',
+        accountName: 'Merkurov',
+        propertyType: 'GA4',
+        measurementIds: ['G-OTHER'],
+      },
+    ];
+
+    expect(chooseGa4Property(properties, { override: '244838264' })).toBeNull();
   });
 
   it('selects the Search Console property for the site host', () => {

@@ -43,7 +43,9 @@ export function getAnalyticsTimezone(): string {
 
 export function getBackfillDays(): number {
   const value = Number(env('ANALYTICS_BACKFILL_DAYS'));
-  return Number.isFinite(value) && value > 0 ? Math.min(Math.floor(value), 365) : DEFAULT_BACKFILL_DAYS;
+  return Number.isFinite(value) && value > 0
+    ? Math.min(Math.floor(value), 365)
+    : DEFAULT_BACKFILL_DAYS;
 }
 
 export function getIncrementalDays(): number {
@@ -84,6 +86,15 @@ export function getGooglePropertyOverride(): string | null {
   return env('ANALYTICS_GA4_PROPERTY_ID') || null;
 }
 
+/**
+ * Optional expected GA4 Account ID. When set, discovery verifies that the
+ * property's `parent` matches it. Account IDs and Property IDs are different
+ * resources and must never be substituted for one another.
+ */
+export function getGoogleAccountOverride(): string | null {
+  return env('ANALYTICS_GA4_ACCOUNT_ID') || null;
+}
+
 export function getSearchConsoleSiteOverride(): string | null {
   return env('ANALYTICS_GSC_SITE_URL') || null;
 }
@@ -112,14 +123,10 @@ export function getUmamiConfig(): UmamiConfig {
 export function isAnalyticsSyncConfigured(): boolean {
   return Boolean(
     process.env.SUPABASE_SERVICE_ROLE_KEY &&
-      (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)
+    (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)
   );
 }
 
 export function getSyncOwnerSecret(): string {
-  return (
-    env('ANALYTICS_SYNC_SECRET') ||
-    env('CRON_SECRET') ||
-    env('SUPABASE_SERVICE_ROLE_KEY')
-  );
+  return env('ANALYTICS_SYNC_SECRET') || env('CRON_SECRET') || env('SUPABASE_SERVICE_ROLE_KEY');
 }

@@ -172,11 +172,40 @@ type DataStreamsResponse = {
   nextPageToken?: string;
 };
 
+type PropertyResponse = {
+  name?: string;
+  parent?: string;
+  displayName?: string;
+  propertyType?: string;
+};
+
+type AccountResponse = {
+  name?: string;
+  displayName?: string;
+};
+
 export type Ga4DiscoveryResult = {
   properties: Ga4PropertySummary[];
   warnings: ProviderErrorDiagnostic[];
   accountCount: number;
 };
+
+/**
+ * Google uses resource names (`accounts/123`, `properties/456`) while the
+ * stored connection uses bare numeric ids. Keep this conversion in one place
+ * so an Account ID can never be mistaken for a Property ID.
+ */
+export function normalizeGa4AccountId(value: string | null | undefined): string | null {
+  const trimmed = (value || '').trim();
+  if (!trimmed) return null;
+  return trimmed.replace(/^accounts\//, '') || null;
+}
+
+export function normalizeGa4PropertyId(value: string | null | undefined): string | null {
+  const trimmed = (value || '').trim();
+  if (!trimmed) return null;
+  return trimmed.replace(/^properties\//, '') || null;
+}
 
 async function readAllAccountSummaries(accessToken: string): Promise<AccountSummariesResponse[]> {
   const pages: AccountSummariesResponse[] = [];
@@ -213,7 +242,8 @@ async function readAllAccountSummaries(accessToken: string): Promise<AccountSumm
 
 async function readAllDataStreams(
   accessToken: string,
-  propertyId: string
+  propertyId: string,
+  options: { continueOnError?: boolean } = {}
 ): Promise<{ measurementIds: string[]; warnings: ProviderErrorDiagnostic[] }> {
   const measurementIds: string[] = [];
   const warnings: ProviderErrorDiagnostic[] = [];
@@ -248,7 +278,11 @@ async function readAllDataStreams(
 
       pageToken = page.nextPageToken || null;
     } catch (error) {
-      // A single inaccessible property must not hide every other property.
+      // During full enumeration a single inaccessible property must not hide
+      // every other property. During targeted verification the original error
+      // must surface instead of being replaced by a selection mismatch.
+      if (!options.continueOnError) throw error;
+
       warnings.push(
         diagnosticFromError(error, {
           provider: 'google_analytics',
@@ -273,22 +307,27 @@ export async function discoverGa4PropertiesDetailed(
   const properties: Array<{
     propertyId: string;
     displayName: string;
+    accountId: string | null;
     accountName: string | null;
+    propertyType: string | null;
   }> = [];
   let accountCount = 0;
 
   for (const page of summaries) {
     for (const account of page.accountSummaries ?? []) {
       accountCount += 1;
+      const accountId = normalizeGa4AccountId(account.account);
 
       for (const property of account.propertySummaries ?? []) {
-        const propertyId = (property.property || '').replace(/^properties\//, '');
+        const propertyId = normalizeGa4PropertyId(property.property);
         if (!propertyId) continue;
 
         properties.push({
           propertyId,
           displayName: property.displayName || propertyId,
+          accountId: normalizeGa4AccountId(property.parent) ?? accountId,
           accountName: account.displayName || null,
+          propertyType: property.propertyType || null,
         });
       }
     }
@@ -298,7 +337,9 @@ export async function discoverGa4PropertiesDetailed(
   const warnings: ProviderErrorDiagnostic[] = [];
 
   for (const property of properties) {
-    const streams = await readAllDataStreams(accessToken, property.propertyId);
+    const streams = await readAllDataStreams(accessToken, property.propertyId, {
+      continueOnError: true,
+    });
     warnings.push(...streams.warnings);
     resolved.push({ ...property, measurementIds: streams.measurementIds });
   }
@@ -311,20 +352,114 @@ export async function discoverGa4Properties(accessToken: string): Promise<Ga4Pro
   return result.properties;
 }
 
-export function chooseGa4Property(
-  properties: Ga4PropertySummary[],
-  options: { measurementId?: string; override?: string | null } = {}
-): Ga4PropertySummary | null {
-  const measurementId = options.measurementId || WEBSITE_ANALYTICS_MEASUREMENT_ID;
-  const override = (options.override ?? getGooglePropertyOverride())?.replace(/^properties\//, '');
+/**
+ * Targeted verification of one property. This is used when an explicit
+ * ANALYTICS_GA4_PROPERTY_ID is configured: it proves the property exists, is
+ * readable, belongs to the expected account (via `parent`) and exposes the
+ * expected web-stream measurement id. It never trusts the id alone.
+ */
+export async function readGa4PropertyDetailed(
+  accessToken: string,
+  propertyIdInput: string
+): Promise<{ property: Ga4PropertySummary; warnings: ProviderErrorDiagnostic[] }> {
+  const propertyId = normalizeGa4PropertyId(propertyIdInput);
 
-  if (override) {
-    // The environment override is a request to use a specific property, not
-    // proof that the property exists or is readable by this Google account.
-    return properties.find((property) => property.propertyId === override) ?? null;
+  if (!propertyId || !/^\d+$/.test(propertyId)) {
+    throw new AnalyticsProviderError({
+      provider: 'google_analytics',
+      code: 'invalid_property_id',
+      message:
+        'GA4 property discovery requires a numeric Property ID, not a Measurement ID or Account ID.',
+      stage: 'property',
+      scope: GA4_READONLY_SCOPE,
+    });
   }
 
-  return properties.find((property) => property.measurementIds.includes(measurementId)) ?? null;
+  const warnings: ProviderErrorDiagnostic[] = [];
+  const raw = await fetchJson<PropertyResponse>(
+    `${ADMIN_API}/properties/${encodeURIComponent(propertyId)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+    {
+      provider: 'google_analytics',
+      retries: 2,
+      label: 'property',
+      stage: `property:${propertyId}`,
+      scope: GA4_READONLY_SCOPE,
+    }
+  );
+
+  const accountId = normalizeGa4AccountId(raw.parent);
+  let accountName: string | null = null;
+
+  if (accountId) {
+    try {
+      const account = await fetchJson<AccountResponse>(
+        `${ADMIN_API}/accounts/${encodeURIComponent(accountId)}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+        {
+          provider: 'google_analytics',
+          retries: 1,
+          label: 'account',
+          stage: `account:${accountId}`,
+          scope: GA4_READONLY_SCOPE,
+        }
+      );
+      accountName = account.displayName || null;
+    } catch (error) {
+      // The account display name is diagnostic only. The numeric Account ID
+      // from `parent` is authoritative and must not be lost because a label
+      // request failed.
+      warnings.push(
+        diagnosticFromError(error, {
+          provider: 'google_analytics',
+          stage: `account:${accountId}`,
+          scope: GA4_READONLY_SCOPE,
+        })
+      );
+    }
+  }
+
+  const streams = await readAllDataStreams(accessToken, propertyId);
+  warnings.push(...streams.warnings);
+
+  return {
+    property: {
+      propertyId,
+      displayName: raw.displayName || propertyId,
+      accountId,
+      accountName,
+      propertyType: raw.propertyType || null,
+      measurementIds: streams.measurementIds,
+    },
+    warnings,
+  };
+}
+
+export function chooseGa4Property(
+  properties: Ga4PropertySummary[],
+  options: { measurementId?: string; override?: string | null; accountId?: string | null } = {}
+): Ga4PropertySummary | null {
+  const measurementId = options.measurementId || WEBSITE_ANALYTICS_MEASUREMENT_ID;
+  const override = normalizeGa4PropertyId(options.override ?? getGooglePropertyOverride());
+  const accountId = normalizeGa4AccountId(options.accountId);
+
+  const candidates = accountId
+    ? properties.filter((property) => property.accountId === accountId)
+    : properties;
+
+  if (override) {
+    // An environment override is a request to use a specific property, not
+    // proof that it exists, belongs to the account, or carries the expected
+    // measurement id. All three must be verified before connecting.
+    return (
+      candidates.find(
+        (property) =>
+          property.propertyId === override && property.measurementIds.includes(measurementId)
+      ) ?? null
+    );
+  }
+
+  return candidates.find((property) => property.measurementIds.includes(measurementId)) ?? null;
 }
 
 type SitesResponse = {

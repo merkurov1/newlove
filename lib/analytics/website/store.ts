@@ -112,11 +112,15 @@ export async function upsertConnection(
     external_meta: input.externalMeta ?? {},
     scopes: input.scopes ?? [],
     connected_by: input.connectedBy ?? null,
-    connected_at: new Date().toISOString(),
     disabled_at: null,
     updated_at: new Date().toISOString(),
     ...(input.status === 'connected'
-      ? { last_error_code: null, last_error_message: null, last_error_at: null }
+      ? {
+          connected_at: new Date().toISOString(),
+          last_error_code: null,
+          last_error_message: null,
+          last_error_at: null,
+        }
       : {}),
   };
 
@@ -144,7 +148,9 @@ export async function markConnectionError(
     .from('analytics_connections')
     .update({
       status:
-        code === 'unauthorized' || code === 'invalid_grant' ? 'needs_reauthorization' : 'error',
+        code === 'unauthorized' || code === 'invalid_grant' || code === 'needs_reauthorization'
+          ? 'needs_reauthorization'
+          : 'error',
       last_error_code: code.slice(0, 120),
       last_error_message: message.slice(0, 600),
       last_error_at: new Date().toISOString(),

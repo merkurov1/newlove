@@ -268,6 +268,28 @@ export function diagnosticFromError(
 }
 
 /**
+ * Human-readable error text that keeps the original Google diagnostic instead
+ * of replacing it with the classified transport code. Stored in
+ * analytics_connections.last_error_message and analytics_sync_runs.details.
+ */
+export function diagnosticSummary(diagnostic: ProviderErrorDiagnostic): string {
+  const parts = [diagnostic.message];
+
+  if (diagnostic.googleErrorCode && !diagnostic.message.includes(diagnostic.googleErrorCode)) {
+    parts.push(`Google code: ${diagnostic.googleErrorCode}`);
+  }
+
+  if (
+    diagnostic.googleErrorMessage &&
+    !diagnostic.message.includes(diagnostic.googleErrorMessage)
+  ) {
+    parts.push(diagnostic.googleErrorMessage);
+  }
+
+  return parts.filter(Boolean).join(' — ');
+}
+
+/**
  * One controlled HTTP entry point for external analytics APIs.
  *
  * - retries only on 408/429/5xx and network failures;

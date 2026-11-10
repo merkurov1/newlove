@@ -65,6 +65,7 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_SITE_URL = 'https://www.merkurov.love';
   process.env.ANALYTICS_TOKEN_ENCRYPTION_KEY = 'test-encryption-key';
   delete process.env.ANALYTICS_GA4_PROPERTY_ID;
+  delete process.env.ANALYTICS_GA4_ACCOUNT_ID;
   delete process.env.ANALYTICS_GSC_SITE_URL;
 });
 
@@ -92,8 +93,15 @@ describe('GA4 discovery', () => {
           return jsonResponse({
             accountSummaries: [
               {
+                account: 'accounts/276791840',
                 displayName: 'Second account',
-                propertySummaries: [{ property: 'properties/333', displayName: 'Three' }],
+                propertySummaries: [
+                  {
+                    property: 'properties/333',
+                    displayName: 'Three',
+                    parent: 'accounts/276791840',
+                  },
+                ],
               },
             ],
           });
@@ -102,10 +110,19 @@ describe('GA4 discovery', () => {
         return jsonResponse({
           accountSummaries: [
             {
+              account: 'accounts/176791840',
               displayName: 'First account',
               propertySummaries: [
-                { property: 'properties/111', displayName: 'Other' },
-                { property: 'properties/222', displayName: 'Merkurov' },
+                {
+                  property: 'properties/111',
+                  displayName: 'Other',
+                  parent: 'accounts/176791840',
+                },
+                {
+                  property: 'properties/222',
+                  displayName: 'Merkurov',
+                  parent: 'accounts/176791840',
+                },
               ],
             },
           ],
@@ -163,6 +180,8 @@ describe('GA4 discovery', () => {
     expect(result.accountCount).toBe(2);
     expect(result.properties.map((property) => property.propertyId)).toEqual(['111', '222', '333']);
     expect(result.properties[0].measurementIds).toEqual(['G-OTHER']);
+    expect(result.properties[0].accountId).toBe('176791840');
+    expect(result.properties[2].accountId).toBe('276791840');
     expect(chooseGa4Property(result.properties)?.propertyId).toBe('222');
     expect(result.warnings).toHaveLength(0);
   });
@@ -223,7 +242,9 @@ describe('GA4 discovery', () => {
           {
             propertyId: '111',
             displayName: 'Other',
+            accountId: '176791840',
             accountName: 'Account',
+            propertyType: 'GA4',
             measurementIds: ['G-OTHER'],
           },
         ],
@@ -353,6 +374,299 @@ describe('successful discovery persistence', () => {
     expect(
       (rows.get('search_console')?.external_meta as Record<string, unknown>)?.discovered_sites
     ).toHaveLength(3);
+  });
+
+  it('stores the GA4 account id, property id and matched measurement id separately', async () => {
+    const { store, rows } = fakeStore();
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/accountSummaries')) {
+        return jsonResponse({
+          accountSummaries: [
+            {
+              account: 'accounts/176791840',
+              displayName: 'Merkurov',
+              propertySummaries: [
+                {
+                  property: 'properties/244838264',
+                  displayName: 'merkurov.love',
+                  propertyType: 'GA4',
+                  parent: 'accounts/176791840',
+                },
+              ],
+            },
+          ],
+        });
+      }
+
+      if (url.includes('properties/244838264/dataStreams')) {
+        return jsonResponse({
+          dataStreams: [
+            {
+              type: 'WEB_DATA_STREAM',
+              webStreamData: { measurementId: 'G-J1F4ZTK9ND' },
+            },
+          ],
+        });
+      }
+
+      throw new Error(`unexpected url ${url}`);
+    }) as unknown as typeof fetch;
+
+    const results = await runGoogleDiscovery(store, {
+      accessToken: 'access-token',
+      scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
+      providers: ['google_analytics'],
+    });
+
+    expect(results[0]).toMatchObject({
+      provider: 'google_analytics',
+      status: 'connected',
+      externalId: '244838264',
+    });
+    expect(rows.get('google_analytics')).toMatchObject({
+      status: 'connected',
+      external_id: '244838264',
+      account_label: 'Merkurov · merkurov.love',
+    });
+
+    const meta = rows.get('google_analytics')?.external_meta as Record<string, unknown>;
+    expect(meta).toMatchObject({
+      account_id: '176791840',
+      account_name: 'Merkurov',
+      property_id: '244838264',
+      property_type: 'GA4',
+      measurement_ids: ['G-J1F4ZTK9ND'],
+      matched_measurement_id: 'G-J1F4ZTK9ND',
+    });
+  });
+
+  it('verifies an explicit property and account directly without listing every property', async () => {
+    process.env.ANALYTICS_GA4_PROPERTY_ID = '244838264';
+    process.env.ANALYTICS_GA4_ACCOUNT_ID = '176791840';
+
+    const calls: string[] = [];
+    const { store, rows } = fakeStore();
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      calls.push(url);
+
+      if (url.includes('/accountSummaries')) {
+        throw new Error('accountSummaries must not be used with an explicit property id');
+      }
+
+      if (url.endsWith('/properties/244838264')) {
+        return jsonResponse({
+          name: 'properties/244838264',
+          parent: 'accounts/176791840',
+          displayName: 'merkurov.love',
+          propertyType: 'GA4',
+        });
+      }
+
+      if (url.endsWith('/accounts/176791840')) {
+        return jsonResponse({ name: 'accounts/176791840', displayName: 'Merkurov' });
+      }
+
+      if (url.includes('properties/244838264/dataStreams')) {
+        return jsonResponse({
+          dataStreams: [
+            {
+              type: 'WEB_DATA_STREAM',
+              webStreamData: { measurementId: 'G-J1F4ZTK9ND' },
+            },
+          ],
+        });
+      }
+
+      throw new Error(`unexpected url ${url}`);
+    }) as unknown as typeof fetch;
+
+    const results = await runGoogleDiscovery(store, {
+      accessToken: 'access-token',
+      scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
+      providers: ['google_analytics'],
+    });
+
+    expect(results[0].status).toBe('connected');
+    expect(calls.some((url) => url.includes('/accountSummaries'))).toBe(false);
+    expect(rows.get('google_analytics')).toMatchObject({
+      external_id: '244838264',
+    });
+    expect(
+      (rows.get('google_analytics')?.external_meta as Record<string, unknown>)?.account_id
+    ).toBe('176791840');
+  });
+
+  it('refuses an explicit property that belongs to another account', async () => {
+    const { store, rows } = fakeStore({
+      google_analytics: {
+        provider: 'google_analytics',
+        status: 'connected',
+        account_label: 'Existing · Property',
+        external_id: '111',
+        external_meta: { property_id: '111' },
+      },
+    });
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.endsWith('/properties/244838264')) {
+        return jsonResponse({
+          name: 'properties/244838264',
+          parent: 'accounts/999',
+          displayName: 'merkurov.love',
+        });
+      }
+
+      if (url.endsWith('/accounts/999')) {
+        return jsonResponse({ name: 'accounts/999', displayName: 'Other account' });
+      }
+
+      if (url.includes('properties/244838264/dataStreams')) {
+        return jsonResponse({
+          dataStreams: [
+            {
+              type: 'WEB_DATA_STREAM',
+              webStreamData: { measurementId: 'G-J1F4ZTK9ND' },
+            },
+          ],
+        });
+      }
+
+      throw new Error(`unexpected url ${url}`);
+    }) as unknown as typeof fetch;
+
+    const result = await runGoogleDiscovery(store, {
+      accessToken: 'access-token',
+      scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
+      providers: ['google_analytics'],
+      propertyOverride: '244838264',
+      accountOverride: '176791840',
+    });
+
+    expect(result[0].status).toBe('resource_not_found');
+    expect(result[0].code).toBe('account_mismatch');
+    // The previous connection is not destroyed by a failed verification.
+    expect(rows.get('google_analytics')).toMatchObject({
+      status: 'error',
+      external_id: '111',
+      account_label: 'Existing · Property',
+    });
+  });
+
+  it('surfaces a dataStreams API error during targeted verification instead of a measurement mismatch', async () => {
+    const { store } = fakeStore();
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.endsWith('/properties/244838264')) {
+        return jsonResponse({
+          name: 'properties/244838264',
+          parent: 'accounts/176791840',
+          displayName: 'merkurov.love',
+        });
+      }
+
+      if (url.endsWith('/accounts/176791840')) {
+        return jsonResponse({ name: 'accounts/176791840', displayName: 'Merkurov' });
+      }
+
+      if (url.includes('properties/244838264/dataStreams')) {
+        return jsonResponse(
+          {
+            error: {
+              code: 403,
+              status: 'PERMISSION_DENIED',
+              message:
+                'Google Analytics Admin API has not been used in project 1064210118751 before or it is disabled.',
+              details: [{ reason: 'SERVICE_DISABLED' }],
+            },
+          },
+          403
+        );
+      }
+
+      throw new Error(`unexpected url ${url}`);
+    }) as unknown as typeof fetch;
+
+    const result = await runGoogleDiscovery(store, {
+      accessToken: 'access-token',
+      scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
+      providers: ['google_analytics'],
+      propertyOverride: '244838264',
+    });
+
+    expect(result[0]).toMatchObject({
+      status: 'error',
+      code: 'api_not_enabled',
+    });
+    expect(result[0].diagnostic).toMatchObject({
+      stage: 'dataStreams:244838264',
+      httpStatus: 403,
+      googleErrorCode: 'SERVICE_DISABLED',
+    });
+  });
+
+  it('persists the original Google error diagnostic, not only the classified code', async () => {
+    const { store, rows } = fakeStore({
+      google_analytics: {
+        provider: 'google_analytics',
+        status: 'error',
+        account_label: 'Google Analytics',
+        external_id: null,
+        external_meta: {},
+      },
+    });
+
+    global.fetch = jest.fn(async () =>
+      jsonResponse(
+        {
+          error: {
+            code: 403,
+            status: 'PERMISSION_DENIED',
+            message:
+              'Google Analytics Admin API has not been used in project 1064210118751 before or it is disabled.',
+            details: [{ reason: 'SERVICE_DISABLED' }],
+          },
+        },
+        403
+      )
+    ) as unknown as typeof fetch;
+
+    const result = await runGoogleDiscovery(store, {
+      accessToken: 'access-token',
+      scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
+      providers: ['google_analytics'],
+    });
+
+    expect(result[0]).toMatchObject({
+      status: 'error',
+      code: 'api_not_enabled',
+    });
+
+    const row = rows.get('google_analytics') as Record<string, unknown>;
+    expect(row.last_error_code).toBe('api_not_enabled');
+    expect(row.last_error_message).toContain('SERVICE_DISABLED');
+    expect(row.external_id).toBeNull();
+
+    const discovery = (row.external_meta as Record<string, unknown>).discovery as Record<
+      string,
+      unknown
+    >;
+    expect(discovery).toMatchObject({
+      status: 'error',
+      code: 'api_not_enabled',
+      http_status: 403,
+      google_error_code: 'SERVICE_DISABLED',
+      stage: 'accountSummaries',
+    });
+    expect(discovery.google_error_message).toContain('has not been used in project');
   });
 });
 
