@@ -209,6 +209,38 @@ export default function Header() {
   const submenuClass = (active: boolean) =>
     `block py-0.5 transition-colors ${active ? 'text-stone-900' : 'hover:text-stone-900'}`;
 
+  const renderFlowLink = (link: FlowHeaderLink, onClick?: () => void) => {
+    const className = 'whitespace-nowrap transition-colors hover:text-stone-900';
+
+    if (link.external) {
+      return (
+        <a
+          href={link.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={onClick}
+          className={className}
+        >
+          {link.label} ↗
+        </a>
+      );
+    }
+
+    if (link.plain) {
+      return (
+        <a href={link.href} onClick={onClick} className={className}>
+          {link.label} ↗
+        </a>
+      );
+    }
+
+    return (
+      <Link href={link.href} onClick={onClick} className={className}>
+        {link.label} ↗
+      </Link>
+    );
+  };
+
   return (
     <header
       data-scrolled={scrolled ? 'true' : 'false'}
@@ -413,50 +445,13 @@ export default function Header() {
                     </Link>
 
                     <div className="pl-3.5 space-y-1.5 border-l border-stone-200/80 font-bold uppercase tracking-[0.15em] text-xs text-stone-500">
-                      {isFlowRoute && (
-                        <div className="space-y-1.5 lg:hidden">
-                          {FLOW_LINKS.map((link) =>
-                            link.external ? (
-                              <a
-                                key={link.href}
-                                href={link.href}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={closeSiteMenu}
-                                className={submenuClass(false)}
-                              >
-                                {link.label} ↗
-                              </a>
-                            ) : link.plain ? (
-                              <a
-                                key={link.href}
-                                href={link.href}
-                                onClick={closeSiteMenu}
-                                className={submenuClass(false)}
-                              >
-                                {link.label} ↗
-                              </a>
-                            ) : (
-                              <Link
-                                key={link.href}
-                                href={link.href}
-                                onClick={closeSiteMenu}
-                                className={submenuClass(false)}
-                              >
-                                {link.label} ↗
-                              </Link>
-                            )
-                          )}
-                        </div>
-                      )}
-
                       <PierrotSectionLink
                         href="/journal"
                         sectionId="journal"
                         onClick={closeSiteMenu}
-                        className={`${submenuClass(
+                        className={submenuClass(
                           normalizedPath === '/journal' || normalizedPath.startsWith('/journal/')
-                        )}${isFlowRoute ? ' hidden lg:block' : ''}`}
+                        )}
                       >
                         JOURNAL
                       </PierrotSectionLink>
@@ -533,31 +528,7 @@ export default function Header() {
                       ·
                     </span>
                   )}
-
-                  {link.external ? (
-                    <a
-                      href={link.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="whitespace-nowrap transition-colors hover:text-stone-900"
-                    >
-                      {link.label} ↗
-                    </a>
-                  ) : link.plain ? (
-                    <a
-                      href={link.href}
-                      className="whitespace-nowrap transition-colors hover:text-stone-900"
-                    >
-                      {link.label} ↗
-                    </a>
-                  ) : (
-                    <Link
-                      href={link.href}
-                      className="whitespace-nowrap transition-colors hover:text-stone-900"
-                    >
-                      {link.label} ↗
-                    </Link>
-                  )}
+                  {renderFlowLink(link)}
                 </Fragment>
               ))}
             </nav>
@@ -570,6 +541,26 @@ export default function Header() {
           <PierrotTrigger compact />
         </div>
       </div>
+
+      {isFlowRoute && (
+        <nav
+          aria-label="Flow links"
+          className="mx-auto max-w-[1800px] px-4 sm:px-6 lg:px-10 lg:hidden"
+        >
+          <div className="mt-1.5 flex w-full items-center gap-2.5 overflow-x-auto pb-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-stone-500 sm:gap-3 sm:text-[11px] sm:tracking-[0.15em]">
+            {FLOW_LINKS.map((link, index) => (
+              <Fragment key={link.href}>
+                {index > 0 && (
+                  <span aria-hidden="true" className="hidden text-stone-300 sm:inline">
+                    ·
+                  </span>
+                )}
+                {renderFlowLink(link, closeSiteMenu)}
+              </Fragment>
+            ))}
+          </div>
+        </nav>
+      )}
     </header>
   );
 }

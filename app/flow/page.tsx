@@ -739,17 +739,15 @@ export default function FlowPage() {
           { name: 'Flow', path: '/flow' },
         ])}
       />
-      <div className="min-h-screen bg-white px-5 pb-24 pt-20 text-neutral-900 sm:px-8 sm:pt-24">
+      <div className="min-h-screen bg-white px-5 pb-24 pt-28 text-neutral-900 sm:px-8 sm:pt-32 lg:pt-24">
         <div className="mx-auto max-w-2xl">
-          <header className="mb-10 flex flex-col justify-between gap-3 border-b border-neutral-100 pb-6 sm:flex-row sm:items-baseline">
-            <div>
-              <h1 className="font-serif text-3xl font-light tracking-tight text-neutral-900 sm:text-4xl">
-                Flow
-              </h1>
-              <p className="mt-1 font-serif text-sm text-neutral-400">
-                Stream of thoughts, media &amp; signals
-              </p>
-            </div>
+          <header className="mb-10 border-b border-neutral-100 pb-6">
+            <h1 className="font-serif text-3xl font-light tracking-tight text-neutral-900 sm:text-4xl">
+              Flow
+            </h1>
+            <p className="mt-1 font-serif text-sm text-neutral-400">
+              Stream of thoughts, media &amp; signals
+            </p>
           </header>
 
           {loadError && items.length === 0 ? (
