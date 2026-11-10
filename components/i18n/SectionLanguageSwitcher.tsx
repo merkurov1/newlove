@@ -93,7 +93,7 @@ export default function SectionLanguageSwitcher({
       )}
 
       <nav
-        aria-label="Language selection"
+        aria-label={currentLang === 'ru' ? 'Выбор языка' : 'Language selection'}
         className="flex items-center gap-0.5 rounded-full border border-zinc-200/80 bg-zinc-100/90 p-0.5"
       >
         {languages.map((language) => {

@@ -1,15 +1,47 @@
-"use client";
+'use client';
 
-import React, { useRef, useState, useEffect, type ElementRef } from 'react';
+import React, { useId, useRef, useState, useEffect, type ElementRef } from 'react';
 import useSupabaseSession from '@/hooks/useSupabaseSession';
 import AuthLoginModal from '@/components/AuthLoginModal';
 
 interface SubscribeFormClientProps {
   defaultLanguage?: 'ru' | 'en';
+  editorial?: boolean;
+  showLanguageSelector?: boolean;
 }
 
-export default function SubscribeFormClient({ defaultLanguage }: SubscribeFormClientProps) {
+const SUBSCRIPTION_ERROR_COPY = {
+  ru: {
+    invalidEmail: 'Введите корректный email.',
+    delivery: 'Не удалось отправить письмо подтверждения. Подписка не оформлена.',
+    generic: 'Не удалось оформить подписку. Попробуйте позже.',
+  },
+  en: {
+    invalidEmail: 'Enter a valid email address.',
+    delivery: 'The confirmation email could not be sent. Your subscription is not active.',
+    generic: 'Could not complete the subscription. Please try again.',
+  },
+} as const;
+
+function localizedSubscriptionError(message: unknown, language: 'ru' | 'en') {
+  const text = String(message || '').toLowerCase();
+  const copy = SUBSCRIPTION_ERROR_COPY[language];
+
+  if (text.includes('invalid email')) return copy.invalidEmail;
+  if (text.includes('confirmation email') || text.includes('confirmation could not')) {
+    return copy.delivery;
+  }
+
+  return copy.generic;
+}
+
+export default function SubscribeFormClient({
+  defaultLanguage,
+  editorial = false,
+  showLanguageSelector = true,
+}: SubscribeFormClientProps) {
   const { session } = useSupabaseSession();
+  const emailId = useId();
   const [email, setEmail] = useState('');
   const [language, setLanguage] = useState<'ru' | 'en'>(defaultLanguage || 'ru');
   const [ok, setOk] = useState(false);
@@ -17,7 +49,7 @@ export default function SubscribeFormClient({ defaultLanguage }: SubscribeFormCl
   const [pierrotAttribution, setPierrotAttribution] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  
+
   // Автоматически выводим точный тип рефа из компонента AuthLoginModal
   const modalRef = useRef<ElementRef<typeof AuthLoginModal>>(null);
 
@@ -42,9 +74,17 @@ export default function SubscribeFormClient({ defaultLanguage }: SubscribeFormCl
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
+
     const trimmedEmail = email.trim();
     if (!trimmedEmail) return;
-    
+
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmedEmail)) {
+      setOk(false);
+      setErrorMsg(SUBSCRIPTION_ERROR_COPY[language].invalidEmail);
+      return;
+    }
+
     setLoading(true);
     setErrorMsg('');
 
@@ -63,7 +103,7 @@ export default function SubscribeFormClient({ defaultLanguage }: SubscribeFormCl
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.error || (language === 'ru' ? 'Ошибка при оформлении подписки' : 'Subscription failed'));
+        throw new Error(String(data.error || 'subscription_failed'));
       }
 
       setSuccessKind(data.status === 'already_confirmed' ? 'already' : 'pending');
@@ -71,7 +111,11 @@ export default function SubscribeFormClient({ defaultLanguage }: SubscribeFormCl
       setEmail('');
     } catch (err: any) {
       console.error('Subscription error:', err);
-      setErrorMsg(err.message || (language === 'ru' ? 'Произошла ошибка. Попробуйте позже.' : 'An error occurred. Please try again.'));
+      setErrorMsg(
+        err?.message
+          ? localizedSubscriptionError(err.message, language)
+          : SUBSCRIPTION_ERROR_COPY[language].generic
+      );
       setOk(false);
     } finally {
       setLoading(false);
@@ -86,42 +130,55 @@ export default function SubscribeFormClient({ defaultLanguage }: SubscribeFormCl
 
   return (
     <div className="mx-auto w-full max-w-xl">
-      <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/50 p-6 md:p-8 backdrop-blur-sm dark:border-neutral-800 dark:bg-neutral-900/40 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <span className="font-mono text-xs uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
-            {language === 'ru' ? 'Еженедельная рассылка' : 'Weekly Digest'}
-          </span>
-          
-          {/* Selector for Language */}
-          <div className="flex items-center gap-1 bg-neutral-200/60 dark:bg-neutral-800 p-0.5 rounded-lg text-xs font-mono">
-            <button
-              type="button"
-              onClick={() => setLanguage('ru')}
-              className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
-                language === 'ru'
-                  ? 'bg-white dark:bg-neutral-700 font-semibold text-black dark:text-white shadow-sm'
-                  : 'text-neutral-500 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              RU
-            </button>
-            <button
-              type="button"
-              onClick={() => setLanguage('en')}
-              className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
-                language === 'en'
-                  ? 'bg-white dark:bg-neutral-700 font-semibold text-black dark:text-white shadow-sm'
-                  : 'text-neutral-500 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              EN
-            </button>
+      <div
+        className={
+          editorial
+            ? 'w-full'
+            : 'rounded-2xl border border-neutral-200/80 bg-neutral-50/50 p-6 md:p-8 backdrop-blur-sm dark:border-neutral-800 dark:bg-neutral-900/40 shadow-sm'
+        }
+      >
+        {!editorial && (
+          <div className="mb-4 flex items-center justify-between">
+            <span className="font-mono text-xs uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
+              {language === 'ru' ? 'Еженедельная рассылка' : 'Weekly Digest'}
+            </span>
+
+            {showLanguageSelector && (
+              <div className="flex items-center gap-1 bg-neutral-200/60 dark:bg-neutral-800 p-0.5 rounded-lg text-xs font-mono">
+                <button
+                  type="button"
+                  onClick={() => setLanguage('ru')}
+                  className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                    language === 'ru'
+                      ? 'bg-white dark:bg-neutral-700 font-semibold text-black dark:text-white shadow-sm'
+                      : 'text-neutral-500 hover:text-black dark:hover:text-white'
+                  }`}
+                >
+                  RU
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLanguage('en')}
+                  className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                    language === 'en'
+                      ? 'bg-white dark:bg-neutral-700 font-semibold text-black dark:text-white shadow-sm'
+                      : 'text-neutral-500 hover:text-black dark:hover:text-white'
+                  }`}
+                >
+                  EN
+                </button>
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         {ok ? (
           <div className="py-4 text-center space-y-2">
-            <p className="text-base font-medium text-emerald-600 dark:text-emerald-400">
+            <p
+              role="status"
+              aria-live="polite"
+              className="text-base font-medium text-emerald-700 dark:text-emerald-400"
+            >
               {successKind === 'already'
                 ? language === 'ru'
                   ? 'Этот email уже подтверждён.'
@@ -148,33 +205,54 @@ export default function SubscribeFormClient({ defaultLanguage }: SubscribeFormCl
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="flex flex-col sm:flex-row gap-2">
+          <form onSubmit={handleSubmit} noValidate className="space-y-3">
+            <label htmlFor={emailId} className="sr-only">
+              {language === 'ru' ? 'Email для подписки' : 'Subscription email'}
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row">
               <input
+                id={emailId}
                 type="email"
+                inputMode="email"
+                autoComplete="email"
                 required
+                suppressHydrationWarning
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={language === 'ru' ? 'ваш@email.com' : 'you@example.com'}
-                className="flex-1 px-4 py-3 text-sm bg-white dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-white transition-all text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400"
+                className={
+                  editorial
+                    ? 'min-w-0 flex-1 border-0 border-b border-neutral-400 bg-transparent px-0 py-3 text-base text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-0'
+                    : 'flex-1 px-4 py-3 text-sm bg-white dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-white transition-all text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400'
+                }
               />
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-3 bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-200 dark:text-black text-white rounded-xl font-mono text-xs uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap shadow-sm"
+                className={
+                  editorial
+                    ? 'shrink-0 rounded-full border border-neutral-900 bg-neutral-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-white transition-colors hover:bg-[#990F3D] hover:border-[#990F3D] disabled:cursor-not-allowed disabled:opacity-50'
+                    : 'px-6 py-3 bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-200 dark:text-black text-white rounded-xl font-mono text-xs uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap shadow-sm'
+                }
               >
                 {loading
-                  ? (language === 'ru' ? 'Отправка...' : 'Submitting...')
-                  : (language === 'ru' ? 'Подписаться' : 'Subscribe')}
+                  ? language === 'ru'
+                    ? 'Отправка...'
+                    : 'Submitting...'
+                  : language === 'ru'
+                    ? 'Подписаться'
+                    : 'Subscribe'}
               </button>
             </div>
             {errorMsg && (
-              <p className="text-xs font-mono text-rose-500 pt-1">{errorMsg}</p>
+              <p role="alert" aria-live="polite" className="pt-1 font-mono text-xs text-rose-500">
+                {errorMsg}
+              </p>
             )}
           </form>
         )}
 
-        {!session && (
+        {!session && !editorial && (
           <div className="mt-4 pt-3 border-t border-neutral-200/40 dark:border-neutral-800 text-center text-xs text-neutral-500">
             {language === 'ru' ? 'Уже есть аккаунт? ' : 'Already have an account? '}
             <button

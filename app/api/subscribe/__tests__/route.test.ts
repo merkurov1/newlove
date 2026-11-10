@@ -149,6 +149,19 @@ describe('POST /api/subscribe', () => {
     expect(emailCall.pierrotAttribution).toBe('psub_11111111-1111-4111-8111-111111111111');
   });
 
+  it('keeps Russian and English subscription audiences separate', async () => {
+    const { store, inserts } = makeStore();
+    serverAuth.getServerSupabaseClient.mockReturnValue(store);
+
+    const response = await POST(makeRequest({ language: 'ru' }));
+    expect(response.status).toBe(200);
+
+    expect(inserts[0]).toMatchObject({ locale: 'ru' });
+    expect(emailModule.sendSubscriptionConfirmation.mock.calls[0][0]).toMatchObject({
+      locale: 'ru',
+    });
+  });
+
   it('reuses a pending subscriber without duplicating the row', async () => {
     const { store, inserts, subscriberRows } = makeStore({
       existing: { id: 'sub-1', isActive: false, confirmedAt: null },
