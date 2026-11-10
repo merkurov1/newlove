@@ -230,6 +230,9 @@ function createStore(env: RagEnvironment): JournalFlowStore | null {
     const range = periodFilter(request);
     return {
       range,
+      // PostgREST builders are generic over table/row shapes; this helper is
+      // intentionally shared by the two editorial tables.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       apply: (query: any) => {
         let next = query
           .eq('status', 'published')
@@ -246,6 +249,7 @@ function createStore(env: RagEnvironment): JournalFlowStore | null {
   const flowFilters = (request: JournalFlowRequest) => {
     const range = periodFilter(request);
     return {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       apply: (query: any) => {
         let next = query.eq('status', 'published').eq('visibility', 'public');
         if (range.from) next = next.gte('published_at', range.from);

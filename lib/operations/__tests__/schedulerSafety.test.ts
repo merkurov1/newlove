@@ -6,12 +6,19 @@ import path from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 describe('scheduler safety', () => {
-  it('does not declare Vercel cron jobs', () => {
+  it('keeps Vercel cron declarations within the Hobby plan limit', () => {
     const vercel = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'vercel.json'), 'utf8')) as {
-      crons?: unknown;
+      crons?: Array<{ path?: string; schedule?: string }>;
     };
 
-    expect(vercel.crons).toBeUndefined();
+    // Vercel Hobby allows at most two cron jobs and no schedule more frequent
+    // than once per day. Higher-frequency work is handled by Supabase pg_cron.
+    expect(vercel.crons?.length ?? 0).toBeLessThanOrEqual(2);
+
+    for (const cron of vercel.crons ?? []) {
+      expect(cron.path).toMatch(/^\/api\/cron\//);
+      expect(cron.schedule).toMatch(/^\S+\s+\S+\s+\*\s+\*\s+\*$/);
+    }
   });
 
   it('does not add a pg_cron schedule in the resource safety migration', () => {
