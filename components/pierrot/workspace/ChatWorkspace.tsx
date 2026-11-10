@@ -117,6 +117,11 @@ function initialMessages(conversation: OwnerConversation | null): UiMessage[] {
   }));
 }
 
+function conversationViewKey(conversation: OwnerConversation | null): string {
+  if (!conversation) return 'empty';
+  return `${conversation.historyId || 'main'}:${conversation.currentSessionId || 'latest'}`;
+}
+
 export default function ChatWorkspace({
   ownerId,
   overview,
@@ -176,6 +181,21 @@ export default function ChatWorkspace({
   const deltaBufferRef = useRef('');
   const deltaFrameRef = useRef<number | null>(null);
   const streamingMessageIdRef = useRef<string | null>(null);
+  const draftRef = useRef('');
+  const activeViewKeyRef = useRef(conversationViewKey(conversation));
+
+  // The composer owns its draft. Updates to the transcript or to server props
+  // must never write into it; only an explicit send/new-chat clears it.
+  const setComposerDraft = useCallback((value: string) => {
+    draftRef.current = value;
+    setDraft(value);
+  }, []);
+
+  const clearDraftIfUnchanged = useCallback((submittedDraft: string) => {
+    if (draftRef.current !== submittedDraft) return;
+    draftRef.current = '';
+    setDraft('');
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -184,6 +204,41 @@ export default function ChatWorkspace({
       abortRef.current?.abort();
     };
   }, []);
+
+  // The page intentionally keeps this component mounted across history and
+  // session changes. Reconcile the transcript when the selected view changes,
+  // but leave the draft, caret and focus untouched.
+  useEffect(() => {
+    const nextViewKey = conversationViewKey(conversation);
+    if (activeViewKeyRef.current === nextViewKey) return;
+
+    activeViewKeyRef.current = nextViewKey;
+
+    abortRef.current?.abort();
+    abortRef.current = null;
+    abortReasonRef.current = null;
+    streamingMessageIdRef.current = null;
+    deltaBufferRef.current = '';
+    if (deltaFrameRef.current !== null) {
+      window.cancelAnimationFrame(deltaFrameRef.current);
+      deltaFrameRef.current = null;
+    }
+
+    setMessages(initialMessages(conversation));
+    setConversationId(conversation?.id ?? null);
+    setSessionId(conversation?.sessionId ?? null);
+    setHistoryId(conversation?.historyId ?? null);
+    setEpisodeId(conversation?.currentSessionId ?? null);
+    setTitle(conversation?.title ?? 'Новый диалог');
+    setHasOlder(Boolean(conversation?.hasMore));
+    setOldestIndex(conversation?.oldestSequence ?? conversation?.oldestMessageIndex ?? null);
+    setLoading(false);
+    setStreamStage(null);
+    setError(null);
+    setRetryPrompt(null);
+    setSelectedSources(null);
+    setInspectorOpen(false);
+  }, [conversation]);
 
   useEffect(() => {
     const cached = readOverviewCache(ownerId);
@@ -233,7 +288,7 @@ export default function ChatWorkspace({
         throw new Error(payload.error || 'Не удалось начать новую сессию.');
       }
       setMessages([]);
-      setDraft('');
+      setComposerDraft('');
       setEpisodeId(payload.session.id);
       setTitle('Новая сессия');
       setHasOlder(false);
@@ -256,7 +311,7 @@ export default function ChatWorkspace({
     } finally {
       setNewSessionLoading(false);
     }
-  }, [conversation?.historyId, historyId, newSessionLoading, router]);
+  }, [conversation?.historyId, historyId, newSessionLoading, router, setComposerDraft]);
 
   useEffect(() => {
     if (!startNew) return;
@@ -482,7 +537,7 @@ export default function ChatWorkspace({
     void send(retryPrompt, { retry: true });
   }
 
-  async function runRefreshCommand(text: string) {
+  async function runRefreshCommand(text: string, submittedDraft: string = text) {
     if (loading || !online) return;
 
     const userMessage: UiMessage = {
@@ -498,7 +553,7 @@ export default function ChatWorkspace({
     setRetryPrompt(null);
     setStreamStage(null);
     setLoading(true);
-    setDraft('');
+    clearDraftIfUnchanged(submittedDraft);
     atBottomRef.current = true;
     setMessages((current) => [...current, userMessage]);
 
@@ -581,11 +636,12 @@ export default function ChatWorkspace({
   }
 
   async function send(explicitText?: string, options: { retry?: boolean } = {}) {
-    const text = (explicitText ?? draft).trim();
+    const submittedDraft = explicitText ?? draft;
+    const text = submittedDraft.trim();
     if (!text || loading || !online) return;
 
     if (!options.retry && isRefreshStatusCommand(text)) {
-      await runRefreshCommand(text);
+      await runRefreshCommand(text, submittedDraft);
       return;
     }
 
@@ -604,7 +660,6 @@ export default function ChatWorkspace({
     setRetryPrompt(null);
     setStreamStage(null);
     setLoading(true);
-    setDraft('');
     atBottomRef.current = true;
     deltaBufferRef.current = '';
     streamingMessageIdRef.current = assistantUiId;
@@ -722,6 +777,7 @@ export default function ChatWorkspace({
       if (contentType.includes('text/event-stream')) {
         await consumePierrotEventStream(response, {
           onAccepted: (event) => {
+            clearDraftIfUnchanged(submittedDraft);
             setConversationId(event.conversationId);
             setSessionId(event.sessionId);
             if (event.historyId) setHistoryId(event.historyId);
@@ -789,6 +845,7 @@ export default function ChatWorkspace({
           throw new Error('Pierrot не вернул текст ответа.');
         }
 
+        clearDraftIfUnchanged(submittedDraft);
         flushDeltaBuffer(assistantUiId);
         setMessages((current) =>
           current.map((item) =>
@@ -1135,7 +1192,7 @@ export default function ChatWorkspace({
               ref={inputRef}
               className="pw-composer-input"
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => setComposerDraft(event.target.value)}
               onKeyDown={onComposerKeyDown}
               placeholder={online ? 'Напишите Пьеро' : 'Нет соединения'}
               rows={1}

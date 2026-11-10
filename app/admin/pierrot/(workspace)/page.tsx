@@ -160,7 +160,6 @@ export default async function ChatPage({
 
   return (
     <ChatWorkspace
-      key={`${view.scope.history.id}:${conversation.currentSessionId || 'latest'}`}
       ownerId={user.id}
       overview={overview}
       sessions={view.sessions}
