@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 
 import { requireAdminFromRequest } from '@/lib/serverAuth';
-import {
-  analyticsEncryptionKeySource,
-} from '@/lib/analytics/website/tokenCrypto';
+import { analyticsEncryptionKeySource } from '@/lib/analytics/website/tokenCrypto';
 import {
   WEBSITE_ANALYTICS_MEASUREMENT_ID,
   getAnalyticsTimezone,
   getGoogleOAuthConfig,
+  getGooglePropertyOverride,
+  getSearchConsoleSiteOverride,
+  getSiteUrl,
   getUmamiConfig,
 } from '@/lib/analytics/website/config';
 import { loadSourceHealth } from '@/lib/analytics/website/dataset';
@@ -60,6 +61,10 @@ export async function GET(request: Request) {
       googleOAuthConfigured: google.configured,
       googleMissing: google.missing,
       redirectUri: google.redirectUri,
+      siteUrl: getSiteUrl(),
+      ga4PropertyOverride: getGooglePropertyOverride(),
+      gscSiteOverride: getSearchConsoleSiteOverride(),
+      measurementId: WEBSITE_ANALYTICS_MEASUREMENT_ID,
       encryptionKeySource: analyticsEncryptionKeySource(),
       umamiConfigured: umami.configured,
       umamiMissing: umami.missing,

@@ -2,21 +2,15 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
 import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAuth';
+import { getSyncOwnerSecret } from '@/lib/analytics/website/config';
+import { exchangeGoogleCode } from '@/lib/analytics/website/providers/oauth';
+import { AnalyticsProviderError } from '@/lib/analytics/website/providers/http';
 import {
-  GA4_READONLY_SCOPE,
-  GSC_READONLY_SCOPE,
-  WEBSITE_ANALYTICS_MEASUREMENT_ID,
-  getSyncOwnerSecret,
-} from '@/lib/analytics/website/config';
-import {
-  chooseGa4Property,
-  chooseSearchConsoleSite,
-  discoverGa4Properties,
-  exchangeGoogleCode,
-  listSearchConsoleSites,
-} from '@/lib/analytics/website/providers/oauth';
-import { sealSecret, verifyState } from '@/lib/analytics/website/tokenCrypto';
-import { upsertConnection, markConnectionError } from '@/lib/analytics/website/store';
+  resolveGoogleRefreshCredential,
+  runGoogleDiscovery,
+} from '@/lib/analytics/website/discovery';
+import { verifyState } from '@/lib/analytics/website/tokenCrypto';
+import { getStoredConnection } from '@/lib/analytics/website/store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,6 +31,18 @@ function redirect(request: Request, params: Record<string, string>): NextRespons
     if (value) url.searchParams.set(key, value);
   }
   return NextResponse.redirect(url);
+}
+
+function tokenExchangeReason(error: unknown): string {
+  if (error instanceof AnalyticsProviderError) {
+    if (error.code === 'invalid_grant') return 'invalid_grant';
+    if (error.code === 'redirect_uri_mismatch') return 'redirect_uri_mismatch';
+    if (error.code === 'invalid_client') return 'invalid_client';
+    if (error.code === 'network_error' || error.code === 'timeout') return error.code;
+    return error.code || 'token_exchange_failed';
+  }
+
+  return 'token_exchange_failed';
 }
 
 export async function GET(request: Request) {
@@ -77,166 +83,55 @@ export async function GET(request: Request) {
   let tokens;
   try {
     tokens = await exchangeGoogleCode(code);
-  } catch {
-    return redirect(request, { connect: 'error', reason: 'token_exchange_failed' });
-  }
-
-  if (!tokens.refreshToken) {
-    return redirect(request, { connect: 'error', reason: 'no_refresh_token' });
+  } catch (exchangeError) {
+    return redirect(request, {
+      connect: 'error',
+      reason: tokenExchangeReason(exchangeError),
+    });
   }
 
   const store = getServerSupabaseClient({ useServiceRole: true });
-  const sealed = sealSecret(tokens.refreshToken);
+  const [existingGa, existingGsc] = await Promise.all([
+    getStoredConnection(store, 'google_analytics').catch(() => null),
+    getStoredConnection(store, 'search_console').catch(() => null),
+  ]);
+
+  const existingCredential =
+    existingGa?.token_ciphertext || existingGsc?.token_ciphertext
+      ? existingGa?.token_ciphertext
+        ? existingGa
+        : existingGsc
+      : null;
+
+  const credential = resolveGoogleRefreshCredential({
+    newRefreshToken: tokens.refreshToken,
+    existing: existingCredential,
+  });
+
+  // A re-authorization that does not return a new refresh token is normal.
+  // Only fail when there is no previously stored credential to keep using.
+  if (!credential.refreshToken) {
+    return redirect(request, { connect: 'error', reason: 'no_refresh_token' });
+  }
+
   const grantedScopes = (tokens.scope || '').split(' ').filter(Boolean);
-  const gaGranted = grantedScopes.includes(GA4_READONLY_SCOPE);
-  const gscGranted = grantedScopes.includes(GSC_READONLY_SCOPE);
+  const results = await runGoogleDiscovery(store, {
+    accessToken: tokens.accessToken,
+    scopes: grantedScopes,
+    sealed: credential.sealed,
+    connectedBy: user.id,
+  });
 
-  let gaResult = 'not_granted';
-  let gscResult = 'not_granted';
-
-  if (gaGranted) {
-    try {
-      const properties = await discoverGa4Properties(tokens.accessToken);
-      const property = chooseGa4Property(properties, {});
-
-      if (!property) {
-        await upsertConnection(store, {
-          provider: 'google_analytics',
-          status: 'error',
-          accountLabel: 'Google Analytics',
-          externalId: null,
-          externalMeta: {
-            error: 'ga4_property_not_found',
-            measurement_id: WEBSITE_ANALYTICS_MEASUREMENT_ID,
-            properties_seen: properties.map((item) => ({
-              property_id: item.propertyId,
-              display_name: item.displayName,
-              measurement_ids: item.measurementIds,
-            })),
-          },
-          scopes: grantedScopes,
-          sealed,
-          connectedBy: user.id,
-        });
-        await markConnectionError(
-          store,
-          'google_analytics',
-          'ga4_property_not_found',
-          `No GA4 property matched measurement id ${WEBSITE_ANALYTICS_MEASUREMENT_ID}. Set ANALYTICS_GA4_PROPERTY_ID or grant access to the correct property.`
-        );
-        gaResult = 'property_not_found';
-      } else {
-        await upsertConnection(store, {
-          provider: 'google_analytics',
-          status: 'connected',
-          accountLabel: property.accountName
-            ? `${property.accountName} · ${property.displayName}`
-            : property.displayName,
-          externalId: property.propertyId,
-          externalMeta: {
-            property_id: property.propertyId,
-            display_name: property.displayName,
-            account_name: property.accountName,
-            measurement_ids: property.measurementIds,
-            matched_measurement_id: property.measurementIds[0] ?? null,
-          },
-          scopes: grantedScopes,
-          sealed,
-          connectedBy: user.id,
-        });
-        gaResult = 'connected';
-      }
-    } catch {
-      try {
-        await upsertConnection(store, {
-          provider: 'google_analytics',
-          status: 'error',
-          accountLabel: 'Google Analytics',
-          externalId: null,
-          externalMeta: { error: 'ga4_property_discovery_failed' },
-          scopes: grantedScopes,
-          sealed,
-          connectedBy: user.id,
-        });
-        await markConnectionError(
-          store,
-          'google_analytics',
-          'ga4_property_discovery_failed',
-          'Google Admin API property discovery failed. Check that the Analytics Admin API is enabled.'
-        );
-      } catch {
-        // The redirect still reports the failure.
-      }
-      gaResult = 'property_discovery_failed';
-    }
-  }
-
-  if (gscGranted) {
-    try {
-      const sites = await listSearchConsoleSites(tokens.accessToken);
-      const site = chooseSearchConsoleSite(sites, {});
-
-      if (!site) {
-        await upsertConnection(store, {
-          provider: 'search_console',
-          status: 'error',
-          accountLabel: 'Search Console',
-          externalId: null,
-          externalMeta: { error: 'gsc_site_not_found', sites: sites.length },
-          scopes: grantedScopes,
-          sealed,
-          connectedBy: user.id,
-        });
-        await markConnectionError(
-          store,
-          'search_console',
-          'gsc_site_not_found',
-          'No Search Console property matched the site host. Set ANALYTICS_GSC_SITE_URL to sc-domain:merkurov.love or the exact property URL.'
-        );
-        gscResult = 'site_not_found';
-      } else {
-        await upsertConnection(store, {
-          provider: 'search_console',
-          status: 'connected',
-          accountLabel: site.siteUrl,
-          externalId: site.siteUrl,
-          externalMeta: {
-            permission_level: site.permissionLevel,
-            sites_available: sites.length,
-          },
-          scopes: grantedScopes,
-          sealed,
-          connectedBy: user.id,
-        });
-        gscResult = 'connected';
-      }
-    } catch {
-      try {
-        await upsertConnection(store, {
-          provider: 'search_console',
-          status: 'error',
-          accountLabel: 'Search Console',
-          externalId: null,
-          externalMeta: { error: 'gsc_site_discovery_failed' },
-          scopes: grantedScopes,
-          sealed,
-          connectedBy: user.id,
-        });
-        await markConnectionError(
-          store,
-          'search_console',
-          'gsc_site_discovery_failed',
-          'Search Console site discovery failed. Check that the Search Console API is enabled.'
-        );
-      } catch {
-        // The redirect still reports the failure.
-      }
-      gscResult = 'site_discovery_failed';
-    }
-  }
+  const gaResult =
+    results.find((result) => result.provider === 'google_analytics')?.status ?? 'not_granted';
+  const gscResult =
+    results.find((result) => result.provider === 'search_console')?.status ?? 'not_granted';
+  const gaConnected = gaResult === 'connected';
+  const gscConnected = gscResult === 'connected';
 
   const response = redirect(request, {
-    connect: gaResult === 'connected' || gscResult === 'connected' ? 'success' : 'partial',
+    connect:
+      gaConnected && gscConnected ? 'success' : gaConnected || gscConnected ? 'partial' : 'error',
     ga: gaResult,
     gsc: gscResult,
   });

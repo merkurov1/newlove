@@ -28,14 +28,8 @@ import {
   type SearchRowInput,
   type StoredConnection,
 } from './store';
-import {
-  AnalyticsProviderError,
-} from './providers/http';
-import {
-  buildGa4Reports,
-  ga4DateToIso,
-  runGa4Report,
-} from './providers/googleAnalytics';
+import { AnalyticsProviderError } from './providers/http';
+import { buildGa4Reports, ga4DateToIso, runGa4Report } from './providers/googleAnalytics';
 import { fetchSearchConsoleRows } from './providers/searchConsole';
 import {
   fetchUmamiMetrics,
@@ -69,11 +63,7 @@ export type ProviderSyncResult = {
   errorMessage: string | null;
 };
 
-const ALL_PROVIDERS: AnalyticsProvider[] = [
-  'google_analytics',
-  'search_console',
-  'umami',
-];
+const ALL_PROVIDERS: AnalyticsProvider[] = ['google_analytics', 'search_console', 'umami'];
 
 function todayInZone(timezone: string, now: Date): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -315,6 +305,8 @@ async function syncGoogleAnalytics(
       if (
         providerError.code === 'unauthorized' ||
         providerError.code === 'forbidden' ||
+        providerError.code === 'insufficient_permissions' ||
+        providerError.code === 'api_not_enabled' ||
         providerError.code === 'invalid_grant' ||
         providerError.code === 'needs_reauthorization'
       ) {
@@ -402,9 +394,7 @@ async function syncSearchConsole(
     details: {
       truncated: result.truncated,
       rows: written,
-      note: result.truncated
-        ? 'Row cap reached; the range was not fully downloaded.'
-        : null,
+      note: result.truncated ? 'Row cap reached; the range was not fully downloaded.' : null,
     },
   };
 }
@@ -697,9 +687,7 @@ async function syncOne(
   }
 }
 
-export async function runAnalyticsSync(
-  options: SyncOptions = {}
-): Promise<ProviderSyncResult[]> {
+export async function runAnalyticsSync(options: SyncOptions = {}): Promise<ProviderSyncResult[]> {
   const mode = options.mode ?? 'incremental';
   const timezone = options.timezone ?? getAnalyticsTimezone();
   const providers = options.providers ?? ALL_PROVIDERS;

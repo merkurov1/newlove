@@ -116,7 +116,10 @@ function groupBreakdown(
     label?: (value: string, row: MetricRow) => string;
   }
 ): BreakdownRow[] {
-  const current = new Map<string, { value: number; label: string; extra: Record<string, number | string | null> }>();
+  const current = new Map<
+    string,
+    { value: number; label: string; extra: Record<string, number | string | null> }
+  >();
   const previous = new Map<string, number>();
 
   for (const row of rows) {
@@ -148,7 +151,10 @@ function groupBreakdown(
       label: row.label,
       value: row.value,
       previous: previous.has(key) ? (previous.get(key) as number) : null,
-      deltaPercent: deltaPercent(row.value, previous.has(key) ? (previous.get(key) as number) : null),
+      deltaPercent: deltaPercent(
+        row.value,
+        previous.has(key) ? (previous.get(key) as number) : null
+      ),
       share: total > 0 ? (row.value / total) * 100 : null,
       extra: row.extra,
     }))
@@ -259,7 +265,8 @@ function ga4Snapshot(
 
     let adjustedPrev = prev;
     if (key === 'engagementRate' && adjustedPrev !== null) adjustedPrev = adjustedPrev * 100;
-    if (key === 'returningUsersDerived' && adjustedPrev !== null && adjustedPrev < 0) adjustedPrev = 0;
+    if (key === 'returningUsersDerived' && adjustedPrev !== null && adjustedPrev < 0)
+      adjustedPrev = 0;
 
     return metric({
       key,
@@ -275,7 +282,8 @@ function ga4Snapshot(
     });
   };
 
-  const total = (key: string) => sumMetric(rows, { reportType: 'total', metric: key, dimensionKey: 'total' });
+  const total = (key: string) =>
+    sumMetric(rows, { reportType: 'total', metric: key, dimensionKey: 'total' });
   const totalPrev = (key: string) =>
     sumMetric(previousRows, { reportType: 'total', metric: key, dimensionKey: 'total' });
 
@@ -299,7 +307,11 @@ function ga4Snapshot(
         ? Math.max(0, activeUsersPrev - newUsersPrev)
         : null
     ),
-    screenPageViews: make('screenPageViews', total('screenPageViews'), totalPrev('screenPageViews')),
+    screenPageViews: make(
+      'screenPageViews',
+      total('screenPageViews'),
+      totalPrev('screenPageViews')
+    ),
     engagementRate: make('engagementRate', engagementRate, engagementRatePrev),
     averageEngagementTime: make('averageEngagementTime', engagementTime, engagementTimePrev),
     conversions: make('conversions', total('conversions'), totalPrev('conversions')),
@@ -371,9 +383,7 @@ function ga4Snapshot(
           'Метрика «вернувшиеся» рассчитана как activeUsers − newUsers, отдельного измерения returningUsers в GA4 нет.',
           'Конверсии GA4 отражают только события, помеченные как конверсии в настройках свойства.',
         ]
-      : [
-          'GA4 не подключён или за выбранный период нет сохранённых данных. Ноль не подставляется.',
-        ],
+      : ['GA4 не подключён или за выбранный период нет сохранённых данных. Ноль не подставляется.'],
   };
 }
 
@@ -438,18 +448,14 @@ function gscSnapshot(
   const impressions = rows.reduce((sum, row) => sum + row.impressions, 0);
   const previousClicks = previousRows.reduce((sum, row) => sum + row.clicks, 0);
   const previousImpressions = previousRows.reduce((sum, row) => sum + row.impressions, 0);
-  const positionWeight = rows.reduce(
-    (sum, row) => sum + (row.position ?? 0) * row.impressions,
-    0
-  );
+  const positionWeight = rows.reduce((sum, row) => sum + (row.position ?? 0) * row.impressions, 0);
   const previousPositionWeight = previousRows.reduce(
     (sum, row) => sum + (row.position ?? 0) * row.impressions,
     0
   );
 
   const ctr = impressions > 0 ? (clicks / impressions) * 100 : null;
-  const previousCtr =
-    previousImpressions > 0 ? (previousClicks / previousImpressions) * 100 : null;
+  const previousCtr = previousImpressions > 0 ? (previousClicks / previousImpressions) * 100 : null;
   const position = impressions > 0 ? positionWeight / impressions : null;
   const previousPosition =
     previousImpressions > 0 ? previousPositionWeight / previousImpressions : null;
@@ -556,7 +562,9 @@ function gscSnapshot(
     };
   };
 
-  const lowCtrEntries = (source: Map<string, { clicks: number; impressions: number; positionWeight: number }>) =>
+  const lowCtrEntries = (
+    source: Map<string, { clicks: number; impressions: number; positionWeight: number }>
+  ) =>
     Array.from(source.entries())
       .filter(([, value]) => value.impressions >= impressionFloor)
       .filter(([, value]) => {
@@ -613,9 +621,11 @@ function gscSnapshot(
         };
       })
       .filter((row): row is BreakdownRow => row !== null)
-      .sort((a, b) => (direction === 'rising'
-        ? (b.deltaPercent ?? 0) - (a.deltaPercent ?? 0)
-        : (a.deltaPercent ?? 0) - (b.deltaPercent ?? 0)))
+      .sort((a, b) =>
+        direction === 'rising'
+          ? (b.deltaPercent ?? 0) - (a.deltaPercent ?? 0)
+          : (a.deltaPercent ?? 0) - (b.deltaPercent ?? 0)
+      )
       .slice(0, 10);
 
   const lostPages = Array.from(previousPages.entries())
@@ -665,9 +675,7 @@ function gscSnapshot(
           'Запросы с малым числом показов могут быть скрыты Google и не попадать в разбивку.',
           'Показы — не посещения, а CTR — не конверсия.',
         ]
-      : [
-          'Search Console не подключён или за выбранный период нет сохранённых данных.',
-        ],
+      : ['Search Console не подключён или за выбранный период нет сохранённых данных.'],
   };
 }
 
@@ -704,8 +712,7 @@ function umamiSnapshot(
       row.metadata?.period_start === period.start &&
       row.metadata?.period_end === period.end
   );
-  const visitors =
-    periodRows.find((row) => row.metric === 'visitors')?.value ?? null;
+  const visitors = periodRows.find((row) => row.metric === 'visitors')?.value ?? null;
   const previousPeriodRows = previousRows.filter(
     (row) =>
       row.report_type === 'period_total' &&
@@ -756,9 +763,7 @@ function umamiSnapshot(
         'Umami возвращает visitors только для периода синхронизации; для произвольного окна значение может быть недоступно.',
       available: visitors !== null,
       unavailableReason:
-        visitors === null
-          ? 'Нет сохранённого агрегата Umami за этот период — не ноль.'
-          : undefined,
+        visitors === null ? 'Нет сохранённого агрегата Umami за этот период — не ноль.' : undefined,
     }),
   };
 
@@ -908,10 +913,7 @@ async function internalSnapshot(
       store,
       'pierrot_v_subscription_conversions',
       (query) =>
-        query
-          .gte('confirmed_at', bounds.startIso)
-          .lt('confirmed_at', bounds.endIso)
-          .limit(5000)
+        query.gte('confirmed_at', bounds.startIso).lt('confirmed_at', bounds.endIso).limit(5000)
     ),
     countQuery(store, 'pierrot_v_subscription_conversions', (query) =>
       query.gte('confirmed_at', bounds.previousStartIso).lt('confirmed_at', bounds.previousEndIso)
@@ -920,13 +922,13 @@ async function internalSnapshot(
       store,
       'subscription_events',
       (query) =>
-        query
-          .gte('created_at', bounds.startIso)
-          .lt('created_at', bounds.endIso)
-          .limit(5000)
+        query.gte('created_at', bounds.startIso).lt('created_at', bounds.endIso).limit(5000)
     ),
     readRowsSafe<{ event_name: string | null }>(store, 'subscription_events', (query) =>
-      query.gte('created_at', bounds.previousStartIso).lt('created_at', bounds.previousEndIso).limit(5000)
+      query
+        .gte('created_at', bounds.previousStartIso)
+        .lt('created_at', bounds.previousEndIso)
+        .limit(5000)
     ),
     readRowsSafe<{
       offer_id: string | null;
@@ -946,19 +948,22 @@ async function internalSnapshot(
     }>(store, 'pierrot_conversations', (query) =>
       query.gte('started_at', bounds.startIso).lt('started_at', bounds.endIso).limit(5000)
     ),
-    readRowsSafe<{ id: string; start_page: string | null; referrer: string | null; identity_type: string | null }>(
-      store,
-      'pierrot_conversations',
-      (query) =>
-        query
-          .gte('started_at', bounds.previousStartIso)
-          .lt('started_at', bounds.previousEndIso)
-          .limit(5000)
+    readRowsSafe<{
+      id: string;
+      start_page: string | null;
+      referrer: string | null;
+      identity_type: string | null;
+    }>(store, 'pierrot_conversations', (query) =>
+      query
+        .gte('started_at', bounds.previousStartIso)
+        .lt('started_at', bounds.previousEndIso)
+        .limit(5000)
     ),
     readRowsSafe<{ event_name: string | null; conversation_id: string | null }>(
       store,
       'pierrot_events',
-      (query) => query.gte('created_at', bounds.startIso).lt('created_at', bounds.endIso).limit(10_000)
+      (query) =>
+        query.gte('created_at', bounds.startIso).lt('created_at', bounds.endIso).limit(10_000)
     ),
     countQuery(store, 'articles', (query) => query.eq('published', true)),
     countQuery(store, 'letters', (query) => query.eq('published', true)),
@@ -967,12 +972,8 @@ async function internalSnapshot(
     countQuery(store, 'media_archive_records', () => undefined),
   ]);
 
-  const nonOwnerConversations = conversations.filter(
-    (row) => row.identity_type !== 'owner'
-  );
-  const nonOwnerPrevious = previousConversations.filter(
-    (row) => row.identity_type !== 'owner'
-  );
+  const nonOwnerConversations = conversations.filter((row) => row.identity_type !== 'owner');
+  const nonOwnerPrevious = previousConversations.filter((row) => row.identity_type !== 'owner');
 
   if (conversations.length !== nonOwnerConversations.length) {
     limitations.push(
@@ -1074,18 +1075,20 @@ async function internalSnapshot(
   const confirmedPageCounts = new Map<string, number>();
   for (const row of confirmedRows) {
     if (row.conversation_id && ownerIds.has(row.conversation_id)) continue;
-    const page = row.conversation_id
-      ? knownStartPages.get(row.conversation_id) ?? ''
-      : '';
+    const page = row.conversation_id ? (knownStartPages.get(row.conversation_id) ?? '') : '';
     const key = normalizePath(page || '') || '(unknown)';
     confirmedPageCounts.set(key, (confirmedPageCounts.get(key) ?? 0) + 1);
   }
 
   if (donations.length === 0) {
-    limitations.push('Подтверждённых пожертвований за период нет (это ноль строк, а не ошибка источника).');
+    limitations.push(
+      'Подтверждённых пожертвований за период нет (это ноль строк, а не ошибка источника).'
+    );
   }
   if (purchases.length === 0) {
-    limitations.push('Подтверждённых покупок за период нет (это ноль строк, а не ошибка источника).');
+    limitations.push(
+      'Подтверждённых покупок за период нет (это ноль строк, а не ошибка источника).'
+    );
   }
 
   return {
@@ -1127,26 +1130,20 @@ function projectPerformance(
   internal: InternalSnapshot
 ): ProjectPerformance[] {
   return projects.map((project) => {
-    const landing = ga4.landingPages.filter(
-      (row) => projectForPath(row.key)?.key === project.key
-    );
+    const landing = ga4.landingPages.filter((row) => projectForPath(row.key)?.key === project.key);
     const pages = ga4.pages.filter((row) => projectForPath(row.key)?.key === project.key);
     const searchPages = gsc.pages.filter((row) => projectForPath(row.key)?.key === project.key);
     const internalPage = internal.conversations.byStartPage.filter(
       (row) => projectForPath(row.key)?.key === project.key
     );
 
-    const sessions =
-      landing.length > 0 ? landing.reduce((sum, row) => sum + row.value, 0) : null;
+    const sessions = landing.length > 0 ? landing.reduce((sum, row) => sum + row.value, 0) : null;
     const pageViews = pages.length > 0 ? pages.reduce((sum, row) => sum + row.value, 0) : null;
     const searchClicks =
       searchPages.length > 0 ? searchPages.reduce((sum, row) => sum + row.value, 0) : null;
     const searchImpressions =
       searchPages.length > 0
-        ? searchPages.reduce(
-            (sum, row) => sum + Number(row.extra?.impressions ?? 0),
-            0
-          )
+        ? searchPages.reduce((sum, row) => sum + Number(row.extra?.impressions ?? 0), 0)
         : null;
     const internalConversations =
       internalPage.length > 0 ? internalPage.reduce((sum, row) => sum + row.value, 0) : null;
@@ -1162,15 +1159,24 @@ function projectPerformance(
     const relatedDonations =
       project.key === 'heart'
         ? internal.donations.available
-          ? internal.donations.byOffer.find((row) => /heart|angel|postcard/i.test(row.key))?.value ?? 0
+          ? (internal.donations.byOffer.find((row) => /heart|angel|postcard/i.test(row.key))
+              ?.value ?? 0)
           : null
         : null;
 
     const facts: string[] = [];
-    if (sessions !== null) facts.push(`${project.name}: ${Math.round(sessions)} сессий GA4 на landing pages проекта.`);
-    if (pageViews !== null) facts.push(`${Math.round(pageViews)} просмотров страниц проекта в GA4.`);
-    if (searchClicks !== null) facts.push(`${Math.round(searchClicks)} кликов и ${Math.round(searchImpressions ?? 0)} показов в Google Search.`);
-    if (internalConversations !== null) facts.push(`${internalConversations} диалогов Pierrot, начатых на страницах проекта (без владельца).`);
+    if (sessions !== null)
+      facts.push(`${project.name}: ${Math.round(sessions)} сессий GA4 на landing pages проекта.`);
+    if (pageViews !== null)
+      facts.push(`${Math.round(pageViews)} просмотров страниц проекта в GA4.`);
+    if (searchClicks !== null)
+      facts.push(
+        `${Math.round(searchClicks)} кликов и ${Math.round(searchImpressions ?? 0)} показов в Google Search.`
+      );
+    if (internalConversations !== null)
+      facts.push(
+        `${internalConversations} диалогов Pierrot, начатых на страницах проекта (без владельца).`
+      );
     if (relatedConfirmed !== null && relatedConfirmed > 0) {
       facts.push(
         `${relatedConfirmed} подтверждённых подписок связаны с диалогами, начатыми на страницах проекта (связь по conversation_id, не атрибуция источника).`
@@ -1225,16 +1231,18 @@ async function contentMatches(
   const index = new Map<string, ContentIndexEntry>();
 
   const [articles, letters, items, knowledge] = await Promise.all([
-    readRowsSafe<{ id: string; title: string | null; slug: string | null; publishedAt: string | null }>(
-      store,
-      'articles',
-      (query) => query.limit(5000)
-    ),
-    readRowsSafe<{ id: string; title: string | null; slug: string | null; publishedAt: string | null }>(
-      store,
-      'letters',
-      (query) => query.limit(5000)
-    ),
+    readRowsSafe<{
+      id: string;
+      title: string | null;
+      slug: string | null;
+      publishedAt: string | null;
+    }>(store, 'articles', (query) => query.limit(5000)),
+    readRowsSafe<{
+      id: string;
+      title: string | null;
+      slug: string | null;
+      publishedAt: string | null;
+    }>(store, 'letters', (query) => query.limit(5000)),
     readRowsSafe<{
       id: string;
       title: string | null;
@@ -1400,13 +1408,26 @@ function providerHealth(
         ? 'Добавьте ANALYTICS_UMAMI_API_URL, ANALYTICS_UMAMI_API_KEY и ANALYTICS_UMAMI_WEBSITE_ID.'
         : 'Добавьте GOOGLE_CLIENT_ID и GOOGLE_CLIENT_SECRET.';
   } else if (status === 'not_connected') {
-    actionRequired =
-      extraAction || 'Подключите источник и выдайте доступ только на чтение.';
+    actionRequired = extraAction || 'Подключите источник и выдайте доступ только на чтение.';
   } else if (status === 'needs_reauthorization') {
     actionRequired = 'Разрешение Google отозвано или истекло. Подключите источник заново.';
   } else if (status === 'error') {
-    actionRequired = connection?.last_error_message || 'Последняя синхронизация завершилась ошибкой.';
+    actionRequired =
+      connection?.last_error_message || 'Последняя синхронизация завершилась ошибкой.';
   }
+
+  const externalMeta =
+    connection?.external_meta && typeof connection.external_meta === 'object'
+      ? connection.external_meta
+      : null;
+  const discovery =
+    externalMeta && typeof externalMeta.discovery === 'object' && externalMeta.discovery
+      ? (externalMeta.discovery as Record<string, unknown>)
+      : null;
+  const lastCheckedAt =
+    typeof discovery?.checked_at === 'string'
+      ? discovery.checked_at
+      : (connection?.last_error_at ?? null);
 
   return {
     provider,
@@ -1416,6 +1437,9 @@ function providerHealth(
     connected: status === 'connected' || status === 'error' || status === 'needs_reauthorization',
     externalId: connection?.external_id ?? null,
     accountLabel: connection?.account_label ?? null,
+    scopes: connection?.scopes ?? [],
+    externalMeta,
+    lastCheckedAt,
     lastSyncAt: connection?.last_sync_at ?? lastRun?.started_at ?? null,
     lastSuccessAt: lastSuccess?.finished_at ?? lastSuccess?.started_at ?? null,
     lastSyncStatus: connection?.last_sync_status ?? lastRun?.status ?? null,
@@ -1588,9 +1612,7 @@ export async function loadAnalyticsDataset(input: {
       runs,
       coverage.find((row) => row.provider === 'umami') ?? null,
       umamiConfig.configured,
-      !umamiConfig.configured
-        ? `Не заданы: ${umamiConfig.missing.join(', ')}.`
-        : null
+      !umamiConfig.configured ? `Не заданы: ${umamiConfig.missing.join(', ')}.` : null
     ),
   ];
 

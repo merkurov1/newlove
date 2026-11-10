@@ -2,9 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { requireAdmin } from '@/lib/serverAuth';
-import {
-  analyticsEncryptionKeySource,
-} from '@/lib/analytics/website/tokenCrypto';
+import { analyticsEncryptionKeySource } from '@/lib/analytics/website/tokenCrypto';
 import {
   WEBSITE_ANALYTICS_MEASUREMENT_ID,
   getAnalyticsTimezone,
@@ -68,10 +66,73 @@ function tone(source: ProviderHealth): string {
   return 'missing';
 }
 
+const ERROR_EXPLANATIONS: Record<string, string> = {
+  unauthorized: 'Google-доступ истёк или отозван. Нужно заново подключить Google.',
+  invalid_grant:
+    'Google больше не принимает сохранённый refresh token. Нужна повторная авторизация.',
+  insufficient_permissions:
+    'У Google-аккаунта нет доступа к этому ресурсу или выданы не все scopes.',
+  api_not_enabled: 'Нужный Google API не включён в Google Cloud Console для этого проекта.',
+  resource_not_found: 'Указанный ресурс не найден или недоступен авторизованному Google-аккаунту.',
+  discovery_empty: 'Google вернул пустой список ресурсов для этого аккаунта.',
+  network_error: 'Не удалось связаться с Google API. Повторите попытку позже.',
+  timeout: 'Google API не ответил вовремя. Повторите попытку позже.',
+  rate_limited: 'Google временно ограничил частоту запросов. Повторите позже.',
+  upstream_error: 'Временная ошибка на стороне Google.',
+  redirect_uri_mismatch: 'Redirect URI не зарегистрирован в Google Cloud Console.',
+  invalid_client: 'OAuth client отклонён Google. Проверьте GOOGLE_CLIENT_ID/SECRET.',
+  needs_reauthorization: 'Сохранённый Google-доступ непригоден. Нужна повторная авторизация.',
+  ga4_property_discovery_failed:
+    'Обнаружение GA4 не удалось. Нажмите «Повторить обнаружение»; если ошибка останется, проверьте Analytics Admin API.',
+  gsc_site_discovery_failed:
+    'Обнаружение Search Console не удалось. Нажмите «Повторить обнаружение»; если ошибка останется, проверьте Search Console API.',
+};
+
+function explainError(code: string | null, message?: string | null): string | null {
+  if (!code) return message || null;
+  const label = ERROR_EXPLANATIONS[code];
+  if (label && message && !message.includes(label)) return `${label} ${message}`;
+  return label || message || code;
+}
+
+function discoveryBanner(
+  params: SearchParams
+): { tone: 'ok' | 'warn' | 'bad'; text: string } | null {
+  const discovery = one(params, 'discovery');
+  if (!discovery) return null;
+
+  if (discovery === 'error') {
+    const reason = one(params, 'reason') || 'discovery_failed';
+    return {
+      tone: 'bad',
+      text: `Повторное обнаружение не выполнено: ${explainError(reason) || reason}`,
+    };
+  }
+
+  const rows = discovery
+    .split(',')
+    .map((entry) => {
+      const [provider, status] = entry.split(':');
+      const label = provider === 'search_console' ? 'GSC' : 'GA4';
+      return `${label}: ${status || 'unknown'}`;
+    })
+    .join(' · ');
+
+  const allConnected = discovery.split(',').every((entry) => entry.endsWith(':connected'));
+
+  return {
+    tone: allConnected ? 'ok' : 'warn',
+    text: `Повторное обнаружение завершено: ${rows}. Повторная авторизация не потребовалась.`,
+  };
+}
+
 function banner(params: SearchParams): { tone: 'ok' | 'warn' | 'bad'; text: string } | null {
   const connect = one(params, 'connect');
   const sync = one(params, 'sync');
   const disconnected = one(params, 'disconnected');
+  const discovery = discoveryBanner(params);
+
+  if (discovery) return discovery;
 
   if (connect === 'success') {
     return { tone: 'ok', text: 'Google-доступ получен. Оба источника настроены только на чтение.' };
@@ -102,10 +163,12 @@ function banner(params: SearchParams): { tone: 'ok' | 'warn' | 'bad'; text: stri
       };
     }
 
-    const detail = reason || [ga && `GA4: ${ga}`, gsc && `GSC: ${gsc}`].filter(Boolean).join(' · ');
+    const detail =
+      explainError(reason ?? null) ||
+      [ga && `GA4: ${ga}`, gsc && `GSC: ${gsc}`].filter(Boolean).join(' · ');
 
     return {
-      tone: 'warn',
+      tone: ga === 'connected' || gsc === 'connected' ? 'warn' : 'bad',
       text: detail
         ? `Подключение завершилось не полностью: ${detail}. Источники можно подключить отдельно.`
         : 'Подключение завершилось не полностью. Проверьте разрешения и повторите.',
@@ -128,6 +191,18 @@ function banner(params: SearchParams): { tone: 'ok' | 'warn' | 'bad'; text: stri
   return null;
 }
 
+function metaRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function metaList(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.map(metaRecord).filter((entry): entry is Record<string, unknown> => Boolean(entry))
+    : [];
+}
+
 function SourceCard({
   source,
   provider,
@@ -136,6 +211,25 @@ function SourceCard({
   provider: 'google_analytics' | 'search_console' | 'umami';
 }) {
   const connectHref = `/api/admin/analytics/connect?provider=${provider}`;
+  const external = metaRecord(source.externalMeta);
+  const discovery = metaRecord(external?.discovery);
+  const properties = metaList(external?.discovered_properties);
+  const sites = metaList(external?.discovered_sites);
+  const scopes = source.scopes;
+  const googleProvider = provider !== 'umami';
+  const canRetryDiscovery =
+    googleProvider &&
+    source.status !== 'not_connected' &&
+    source.status !== 'not_configured' &&
+    source.status !== 'disabled';
+  const propertyId =
+    typeof external?.property_id === 'string' ? external.property_id : source.externalId;
+  const measurementId =
+    typeof external?.matched_measurement_id === 'string' ? external.matched_measurement_id : null;
+  const permissionLevel =
+    typeof external?.permission_level === 'string' ? external.permission_level : null;
+  const lastDiscoverySuccess =
+    typeof discovery?.last_success_at === 'string' ? discovery.last_success_at : null;
 
   return (
     <article className="pw-analytics-card">
@@ -147,15 +241,25 @@ function SourceCard({
         <span className="pw-analytics-badge">{statusLabel(source)}</span>
       </div>
 
-      <p className="pw-analytics-id">{source.accountLabel || source.externalId || 'Источник не выбран'}</p>
+      <p className="pw-analytics-id">
+        {source.accountLabel || source.externalId || 'Источник не выбран'}
+      </p>
 
       <dl className="pw-analytics-facts">
+        <div>
+          <dt>Последняя проверка</dt>
+          <dd>{formatDate(source.lastCheckedAt)}</dd>
+        </div>
+        <div>
+          <dt>Успешная проверка</dt>
+          <dd>{formatDate(lastDiscoverySuccess)}</dd>
+        </div>
         <div>
           <dt>Последняя синхронизация</dt>
           <dd>{formatDate(source.lastSyncAt)}</dd>
         </div>
         <div>
-          <dt>Последняя успешная</dt>
+          <dt>Успешная синхронизация</dt>
           <dd>{formatDate(source.lastSuccessAt)}</dd>
         </div>
         <div>
@@ -164,14 +268,74 @@ function SourceCard({
             {source.dataFrom && source.dataTo ? `${source.dataFrom} — ${source.dataTo}` : '—'}
           </dd>
         </div>
+        {provider === 'google_analytics' && propertyId && (
+          <div>
+            <dt>GA4 property</dt>
+            <dd>
+              {propertyId}
+              {measurementId ? ` · ${measurementId}` : ''}
+            </dd>
+          </div>
+        )}
+        {provider === 'search_console' && permissionLevel && (
+          <div>
+            <dt>Уровень доступа</dt>
+            <dd>{permissionLevel}</dd>
+          </div>
+        )}
       </dl>
+
+      <p className="pw-analytics-hint">
+        OAuth scopes:{' '}
+        {scopes.length
+          ? scopes.map((scope) => scope.replace('https://www.googleapis.com/auth/', '')).join(', ')
+          : '—'}
+      </p>
+
+      {provider === 'google_analytics' && properties.length > 0 && (
+        <details className="pw-analytics-details">
+          <summary>Найденные GA4 properties: {properties.length}</summary>
+          <ul>
+            {properties.map((property) => (
+              <li key={String(property.property_id)}>
+                {String(property.display_name || property.property_id)}
+                {property.account_name ? ` · ${String(property.account_name)}` : ''}
+                {Array.isArray(property.measurement_ids) && property.measurement_ids.length
+                  ? ` · ${property.measurement_ids.join(', ')}`
+                  : ''}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {provider === 'search_console' && sites.length > 0 && (
+        <details className="pw-analytics-details">
+          <summary>Найденные Search Console sites: {sites.length}</summary>
+          <ul>
+            {sites.map((site) => (
+              <li key={String(site.site_url)}>
+                {String(site.site_url)}
+                {site.permission_level ? ` · ${String(site.permission_level)}` : ''}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       {source.actionRequired && <p className="pw-analytics-action">{source.actionRequired}</p>}
 
       {source.lastErrorCode && (
         <p className="pw-analytics-error">
-          {source.lastErrorCode}
-          {source.lastErrorMessage ? ` — ${source.lastErrorMessage}` : ''}
+          {explainError(source.lastErrorCode, source.lastErrorMessage)}
+        </p>
+      )}
+
+      {source.lastErrorCode && source.lastErrorMessage && (
+        <p className="pw-analytics-hint">
+          Код: {source.lastErrorCode}
+          {typeof discovery?.http_status === 'number' ? ` · HTTP ${discovery.http_status}` : ''}
+          {typeof discovery?.stage === 'string' ? ` · этап: ${discovery.stage}` : ''}
         </p>
       )}
 
@@ -185,6 +349,14 @@ function SourceCard({
             <a className="pw-analytics-link" href={connectHref}>
               Переподключить
             </a>
+            {canRetryDiscovery && (
+              <form action="/api/admin/analytics/retry-discovery" method="post">
+                <input type="hidden" name="provider" value={provider} />
+                <button className="pw-analytics-button pw-analytics-button--quiet" type="submit">
+                  Повторить обнаружение
+                </button>
+              </form>
+            )}
             <form action="/api/admin/analytics/disconnect" method="post">
               <input type="hidden" name="provider" value={provider} />
               <button className="pw-analytics-button pw-analytics-button--quiet" type="submit">
@@ -229,8 +401,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
             <p className="pw-kicker">ANALYTICS · WEBSITE INTELLIGENCE</p>
             <h1 className="pw-page-title">Сайт под наблюдением.</h1>
             <p className="pw-page-lede">
-              Google Analytics, Search Console и Umami остаются независимыми источниками.
-              Пьеро сопоставляет их с Supabase и Brain, но не выдаёт отсутствие данных за ноль.
+              Google Analytics, Search Console и Umami остаются независимыми источниками. Пьеро
+              сопоставляет их с Supabase и Brain, но не выдаёт отсутствие данных за ноль.
             </p>
           </div>
 
@@ -254,12 +426,11 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
               невозможно; имитация доступа не выполняется.
             </p>
             <p>
-              Redirect URI для Google Cloud Console:{' '}
-              <code>{google.redirectUri}</code>
+              Redirect URI для Google Cloud Console: <code>{google.redirectUri}</code>
             </p>
             <p>
-              Добавьте этот URI в тот же OAuth 2.0 Client ID, который используется Supabase
-              Auth. Пользовательская авторизация сайта не меняется.
+              Добавьте этот URI в тот же OAuth 2.0 Client ID, который используется Supabase Auth.
+              Пользовательская авторизация сайта не меняется.
             </p>
           </section>
         )}
@@ -267,14 +438,14 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
         {google.configured && (
           <section className="pw-analytics-config pw-analytics-config--quiet">
             <p>
-              <strong>OAuth настроен.</strong> Redirect URI:{' '}
-              <code>{google.redirectUri}</code>. Запрашиваются только{' '}
-              <code>analytics.readonly</code> и <code>webmasters.readonly</code>.
+              <strong>OAuth настроен.</strong> Redirect URI: <code>{google.redirectUri}</code>.
+              Запрашиваются только <code>analytics.readonly</code> и{' '}
+              <code>webmasters.readonly</code>.
             </p>
             {encryption === 'derived' && (
               <p>
-                Ключ шифрования refresh token выводится из серверного секрета. Для
-                независимой ротации задайте <code>ANALYTICS_TOKEN_ENCRYPTION_KEY</code>.
+                Ключ шифрования refresh token выводится из серверного секрета. Для независимой
+                ротации задайте <code>ANALYTICS_TOKEN_ENCRYPTION_KEY</code>.
               </p>
             )}
           </section>
@@ -293,7 +464,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
               <h2 id="pw-analytics-charts-title">Что уже сохранено</h2>
             </div>
             <span className="pw-analytics-hint">
-              Графики строятся только по сохранённым данным; API при открытии страницы не вызывается.
+              Графики строятся только по сохранённым данным; API при открытии страницы не
+              вызывается.
             </span>
           </div>
 
@@ -331,9 +503,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
             <p className="pw-kicker">СИНХРОНИЗАЦИЯ</p>
             <h2 id="pw-analytics-sync-title">Ручной запуск</h2>
             <p>
-              Работает независимо от scheduler. Повторная загрузка периода идемпотентна:
-              дубликаты не создаются, история сохраняется. Последние дни перезагружаются
-              повторно, потому что Google отдаёт их с задержкой.
+              Работает независимо от scheduler. Повторная загрузка периода идемпотентна: дубликаты
+              не создаются, история сохраняется. Последние дни перезагружаются повторно, потому что
+              Google отдаёт их с задержкой.
             </p>
             <p className="pw-analytics-hint">
               Автоматическое расписание не создаётся. Совместимый endpoint:{' '}
@@ -398,7 +570,13 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
                 <tbody>
                   {recentRuns.map((run) => (
                     <tr key={run.id}>
-                      <td>{run.provider === 'google_analytics' ? 'GA4' : run.provider === 'search_console' ? 'GSC' : 'Umami'}</td>
+                      <td>
+                        {run.provider === 'google_analytics'
+                          ? 'GA4'
+                          : run.provider === 'search_console'
+                            ? 'GSC'
+                            : 'Umami'}
+                      </td>
                       <td>{run.mode}</td>
                       <td>{run.status}</td>
                       <td>
@@ -420,15 +598,26 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
         <section className="pw-analytics-note">
           <h2>Что именно считается</h2>
           <ul>
-            <li>GA4: сессии, пользователи, просмотры, каналы, источники, страницы, устройства, страны, события.</li>
-            <li>Search Console: клики, показы, CTR, средняя позиция, запросы, страницы, страны, устройства.</li>
-            <li>Umami: независимые просмотры, визиты и посетители — только для сравнения, не для суммирования.</li>
-            <li>Supabase: подтверждённые подписки, пожертвования, покупки и внутренние диалоги Pierrot.</li>
+            <li>
+              GA4: сессии, пользователи, просмотры, каналы, источники, страницы, устройства, страны,
+              события.
+            </li>
+            <li>
+              Search Console: клики, показы, CTR, средняя позиция, запросы, страницы, страны,
+              устройства.
+            </li>
+            <li>
+              Umami: независимые просмотры, визиты и посетители — только для сравнения, не для
+              суммирования.
+            </li>
+            <li>
+              Supabase: подтверждённые подписки, пожертвования, покупки и внутренние диалоги
+              Pierrot.
+            </li>
           </ul>
           <p>
-            Measurement ID <code>{WEBSITE_ANALYTICS_MEASUREMENT_ID}</code> — это не GA4
-            Property ID. Числовой Property ID определяется автоматически через Google Admin
-            API при подключении.
+            Measurement ID <code>{WEBSITE_ANALYTICS_MEASUREMENT_ID}</code> — это не GA4 Property ID.
+            Числовой Property ID определяется автоматически через Google Admin API при подключении.
           </p>
           <p>
             Первичная загрузка: до 90 дней (настраивается <code>ANALYTICS_BACKFILL_DAYS</code>).

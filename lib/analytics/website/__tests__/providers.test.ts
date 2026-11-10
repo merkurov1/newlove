@@ -2,11 +2,7 @@
 
 import { AnalyticsProviderError, fetchJson } from '../providers/http';
 import { runGa4Report } from '../providers/googleAnalytics';
-import {
-  normalizeSiteUrl,
-  querySearchConsole,
-  siteMatchesHost,
-} from '../providers/searchConsole';
+import { normalizeSiteUrl, querySearchConsole, siteMatchesHost } from '../providers/searchConsole';
 import { fetchUmamiPageviews } from '../providers/umami';
 
 function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}) {
@@ -44,7 +40,12 @@ describe('GA4 Data API adapter', () => {
     const report = await runGa4Report({
       accessToken: 'access-token',
       propertyId: 'properties/123456789',
-      definition: { key: 'total', dimensions: ['date'], metrics: ['sessions', 'activeUsers'], limit: 10 },
+      definition: {
+        key: 'total',
+        dimensions: ['date'],
+        metrics: ['sessions', 'activeUsers'],
+        limit: 10,
+      },
       startDate: '2026-11-01',
       endDate: '2026-11-07',
     });
@@ -170,5 +171,101 @@ describe('controlled retries', () => {
     ).rejects.toBeInstanceOf(AnalyticsProviderError);
 
     expect(calls).toBe(1);
+  });
+
+  it('keeps the Google API error code and structured diagnostic for a disabled API', async () => {
+    global.fetch = jest.fn(async () =>
+      jsonResponse(
+        {
+          error: {
+            code: 403,
+            status: 'PERMISSION_DENIED',
+            message:
+              'Google Analytics Admin API has not been used in project 123 before or it is disabled.',
+            details: [{ reason: 'SERVICE_DISABLED' }],
+          },
+        },
+        403
+      )
+    ) as typeof fetch;
+
+    try {
+      await fetchJson('https://example.test', {}, { provider: 'google_analytics', retries: 0 });
+      throw new Error('expected failure');
+    } catch (error) {
+      expect(error).toBeInstanceOf(AnalyticsProviderError);
+      const providerError = error as AnalyticsProviderError;
+      expect(providerError.code).toBe('api_not_enabled');
+      expect(providerError.status).toBe(403);
+      expect(providerError.googleCode).toBe('SERVICE_DISABLED');
+      expect(providerError.googleMessage).toContain('has not been used');
+      expect(providerError.retryable).toBe(false);
+    }
+  });
+
+  it('distinguishes insufficient permissions from a disabled API', async () => {
+    global.fetch = jest.fn(async () =>
+      jsonResponse(
+        {
+          error: {
+            code: 403,
+            status: 'PERMISSION_DENIED',
+            message: 'The caller does not have permission',
+            details: [{ reason: 'ACCESS_TOKEN_SCOPE_INSUFFICIENT' }],
+          },
+        },
+        403
+      )
+    ) as typeof fetch;
+
+    await expect(
+      fetchJson('https://example.test', {}, { provider: 'search_console', retries: 0 })
+    ).rejects.toMatchObject({
+      code: 'insufficient_permissions',
+      status: 403,
+      googleCode: 'ACCESS_TOKEN_SCOPE_INSUFFICIENT',
+    });
+  });
+
+  it('maps missing resources, rate limits, timeouts and upstream failures', async () => {
+    const cases: Array<{
+      status: number;
+      code: string;
+      fetchImpl: () => Promise<Response>;
+    }> = [
+      {
+        status: 404,
+        code: 'resource_not_found',
+        fetchImpl: async () => jsonResponse({ error: { code: 404 } }, 404),
+      },
+      {
+        status: 429,
+        code: 'rate_limited',
+        fetchImpl: async () => jsonResponse({ error: { code: 429 } }, 429),
+      },
+      {
+        status: 503,
+        code: 'upstream_error',
+        fetchImpl: async () => jsonResponse({ error: { code: 503 } }, 503),
+      },
+    ];
+
+    for (const testCase of cases) {
+      global.fetch = jest.fn(testCase.fetchImpl) as unknown as typeof fetch;
+
+      await expect(
+        fetchJson('https://example.test', {}, { provider: 'google_analytics', retries: 0 })
+      ).rejects.toMatchObject({ status: testCase.status, code: testCase.code });
+    }
+
+    global.fetch = jest.fn(async () => {
+      const error = new Error('aborted');
+      error.name = 'AbortError';
+      throw error;
+    }) as unknown as typeof fetch;
+
+    await expect(
+      fetchJson('https://example.test', {}, { provider: 'google_analytics', retries: 0 })
+    ).rejects.toMatchObject({ code: 'timeout', retryable: true });
   });
 });

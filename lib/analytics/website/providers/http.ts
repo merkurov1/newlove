@@ -1,11 +1,43 @@
 import type { AnalyticsProvider } from '../types';
 
+export type AnalyticsProviderErrorCode =
+  | 'unauthorized'
+  | 'insufficient_permissions'
+  | 'api_not_enabled'
+  | 'invalid_grant'
+  | 'invalid_client'
+  | 'redirect_uri_mismatch'
+  | 'resource_not_found'
+  | 'network_error'
+  | 'timeout'
+  | 'rate_limited'
+  | 'upstream_error'
+  | 'request_failed';
+
+export type ProviderErrorDiagnostic = {
+  provider: AnalyticsProvider | 'google_oauth';
+  code: string;
+  httpStatus: number | null;
+  googleErrorCode: string | null;
+  googleErrorMessage: string | null;
+  message: string;
+  scope: string | null;
+  stage: string | null;
+  timestamp: string;
+  retryable: boolean;
+};
+
 export class AnalyticsProviderError extends Error {
   provider: AnalyticsProvider | 'google_oauth';
   code: string;
   status: number | null;
   retryable: boolean;
   details: string | null;
+  googleCode: string | null;
+  googleMessage: string | null;
+  scope: string | null;
+  stage: string | null;
+  timestamp: string;
 
   constructor(input: {
     provider: AnalyticsProvider | 'google_oauth';
@@ -14,6 +46,11 @@ export class AnalyticsProviderError extends Error {
     status?: number | null;
     retryable?: boolean;
     details?: string | null;
+    googleCode?: string | null;
+    googleMessage?: string | null;
+    scope?: string | null;
+    stage?: string | null;
+    timestamp?: string;
   }) {
     super(input.message);
     this.name = 'AnalyticsProviderError';
@@ -22,7 +59,162 @@ export class AnalyticsProviderError extends Error {
     this.status = input.status ?? null;
     this.retryable = input.retryable ?? false;
     this.details = input.details ?? null;
+    this.googleCode = input.googleCode ?? null;
+    this.googleMessage = input.googleMessage ?? null;
+    this.scope = input.scope ?? null;
+    this.stage = input.stage ?? null;
+    this.timestamp = input.timestamp ?? new Date().toISOString();
   }
+}
+
+type ParsedGoogleError = {
+  googleCode: string | null;
+  googleMessage: string | null;
+  safeDetails: string | null;
+};
+
+function text(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, 800) : null;
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * Google APIs return two different error envelopes:
+ *   OAuth: { error: "invalid_grant", error_description: "..." }
+ *   API:   { error: { code, status, message, details: [{ reason: "..." }] } }
+ *
+ * Keep only the safe diagnostic fields. Offsets, request bodies and credentials
+ * are never copied into the stored message.
+ */
+function parseGoogleErrorBody(body: string | null): ParsedGoogleError {
+  if (!body) {
+    return { googleCode: null, googleMessage: null, safeDetails: null };
+  }
+
+  try {
+    const root = record(JSON.parse(body));
+    if (!root) {
+      return { googleCode: null, googleMessage: null, safeDetails: null };
+    }
+
+    const rawError = root.error;
+    const errorObject = record(rawError);
+    const details = Array.isArray(errorObject?.details) ? errorObject.details : [];
+    const reasons = details
+      .map((detail) => text(record(detail)?.reason))
+      .filter((value): value is string => Boolean(value));
+
+    const googleCode =
+      reasons[0] ||
+      text(typeof rawError === 'string' ? rawError : errorObject?.status) ||
+      (typeof root.code === 'number' ? String(root.code) : null);
+
+    const googleMessage =
+      text(errorObject?.message) || text(root.error_description) || text(root.message) || null;
+
+    const safeDetails = JSON.stringify({
+      error: typeof rawError === 'string' ? rawError.slice(0, 120) : undefined,
+      error_description: text(root.error_description) || undefined,
+      code: typeof root.code === 'number' ? root.code : undefined,
+      status: text(errorObject?.status) || undefined,
+      message: googleMessage || undefined,
+      reasons: reasons.length ? reasons.slice(0, 8) : undefined,
+    });
+
+    return { googleCode, googleMessage, safeDetails: safeDetails.slice(0, 1200) };
+  } catch {
+    // Non-JSON bodies are deliberately not persisted: they can contain
+    // arbitrary request details. The status code remains available.
+    return { googleCode: null, googleMessage: null, safeDetails: null };
+  }
+}
+
+function classifyHttpFailure(
+  status: number,
+  parsed: ParsedGoogleError
+): { code: AnalyticsProviderErrorCode; message: string } {
+  const probe = `${parsed.googleCode || ''} ${parsed.googleMessage || ''}`.toLowerCase();
+
+  if (status === 400 && (probe.includes('invalid_grant') || probe.includes('expired or revoked'))) {
+    return {
+      code: 'invalid_grant',
+      message: 'Google authorization is no longer valid. Reconnect the source.',
+    };
+  }
+
+  if (status === 400 && probe.includes('redirect_uri_mismatch')) {
+    return {
+      code: 'redirect_uri_mismatch',
+      message: 'The Google OAuth redirect URI is not registered for this client.',
+    };
+  }
+
+  if (status === 400 && probe.includes('invalid_client')) {
+    return {
+      code: 'invalid_client',
+      message: 'The Google OAuth client is not valid.',
+    };
+  }
+
+  if (status === 401) {
+    return {
+      code: 'unauthorized',
+      message: 'Google authorization expired or was revoked.',
+    };
+  }
+
+  if (status === 403) {
+    if (
+      /accessnotconfigured|service_disabled|api_not_enabled|api has not been used|has not been used in project|is disabled/.test(
+        probe
+      )
+    ) {
+      return {
+        code: 'api_not_enabled',
+        message: 'The required Google API is not enabled for this project.',
+      };
+    }
+
+    return {
+      code: 'insufficient_permissions',
+      message: 'The Google account does not grant access to this resource.',
+    };
+  }
+
+  if (status === 404) {
+    return {
+      code: 'resource_not_found',
+      message: 'The requested Google resource was not found or is not accessible.',
+    };
+  }
+
+  if (status === 408) {
+    return { code: 'timeout', message: 'The provider request timed out.' };
+  }
+
+  if (status === 429) {
+    return {
+      code: 'rate_limited',
+      message: 'The provider rate limit was reached.',
+    };
+  }
+
+  if (status >= 500) {
+    return {
+      code: 'upstream_error',
+      message: 'Google returned a temporary server error.',
+    };
+  }
+
+  return {
+    code: 'request_failed',
+    message: `The provider returned HTTP ${status}.`,
+  };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -42,6 +234,39 @@ async function readErrorBody(response: Response): Promise<string | null> {
   }
 }
 
+export function diagnosticFromError(
+  error: unknown,
+  fallback: {
+    provider: AnalyticsProvider | 'google_oauth';
+    stage?: string | null;
+    scope?: string | null;
+  }
+): ProviderErrorDiagnostic {
+  const providerError =
+    error instanceof AnalyticsProviderError
+      ? error
+      : new AnalyticsProviderError({
+          provider: fallback.provider,
+          code: 'request_failed',
+          message: error instanceof Error ? error.message : 'The provider request failed.',
+          stage: fallback.stage,
+          scope: fallback.scope,
+        });
+
+  return {
+    provider: providerError.provider,
+    code: providerError.code,
+    httpStatus: providerError.status,
+    googleErrorCode: providerError.googleCode,
+    googleErrorMessage: providerError.googleMessage,
+    message: providerError.message,
+    scope: providerError.scope || fallback.scope || null,
+    stage: providerError.stage || fallback.stage || null,
+    timestamp: providerError.timestamp,
+    retryable: providerError.retryable,
+  };
+}
+
 /**
  * One controlled HTTP entry point for external analytics APIs.
  *
@@ -59,6 +284,8 @@ export async function fetchJson<T>(
     retries?: number;
     timeoutMs?: number;
     label?: string;
+    stage?: string;
+    scope?: string;
   }
 ): Promise<T> {
   const retries = Math.max(0, options.retries ?? 3);
@@ -79,39 +306,20 @@ export async function fetchJson<T>(
 
       const body = await readErrorBody(response);
       const status = response.status;
-      const bodyCode = body && /invalid_grant/i.test(body)
-        ? 'invalid_grant'
-        : body && /invalid_client/i.test(body)
-          ? 'invalid_client'
-          : null;
-      const code =
-        bodyCode ||
-        (status === 401
-          ? 'unauthorized'
-          : status === 403
-            ? 'forbidden'
-            : status === 429
-              ? 'rate_limited'
-              : status >= 500
-                ? 'upstream_error'
-                : 'request_failed');
+      const parsed = parseGoogleErrorBody(body);
+      const failure = classifyHttpFailure(status, parsed);
 
       lastError = new AnalyticsProviderError({
         provider: options.provider,
-        code,
-        message:
-          code === 'unauthorized' || code === 'invalid_grant'
-            ? 'Google authorization expired or was revoked.'
-            : code === 'invalid_client'
-              ? 'The Google OAuth client is not valid.'
-              : code === 'forbidden'
-                ? 'The account does not grant access to this resource.'
-                : code === 'rate_limited'
-                  ? 'The provider rate limit was reached.'
-                  : `The provider returned HTTP ${status}.`,
+        code: failure.code,
+        message: failure.message,
         status,
         retryable: isRetryableStatus(status),
-        details: body,
+        details: parsed.safeDetails,
+        googleCode: parsed.googleCode,
+        googleMessage: parsed.googleMessage,
+        stage: options.stage ?? options.label,
+        scope: options.scope,
       });
 
       if (!isRetryableStatus(status) || attempt === retries) {
@@ -119,9 +327,10 @@ export async function fetchJson<T>(
       }
 
       const retryAfter = Number(response.headers.get('retry-after'));
-      const delay = Number.isFinite(retryAfter) && retryAfter > 0
-        ? Math.min(retryAfter * 1000, 30_000)
-        : Math.min(500 * 2 ** attempt + Math.round(Math.random() * 250), 15_000);
+      const delay =
+        Number.isFinite(retryAfter) && retryAfter > 0
+          ? Math.min(retryAfter * 1000, 30_000)
+          : Math.min(500 * 2 ** attempt + Math.round(Math.random() * 250), 15_000);
 
       await sleep(delay);
     } catch (error) {
@@ -138,10 +347,10 @@ export async function fetchJson<T>(
       lastError = new AnalyticsProviderError({
         provider: options.provider,
         code: aborted ? 'timeout' : 'network_error',
-        message: aborted
-          ? 'The provider request timed out.'
-          : 'The provider could not be reached.',
+        message: aborted ? 'The provider request timed out.' : 'The provider could not be reached.',
         retryable: true,
+        stage: options.stage ?? options.label,
+        scope: options.scope,
       });
 
       if (attempt === retries) throw lastError;
@@ -156,6 +365,8 @@ export async function fetchJson<T>(
       provider: options.provider,
       code: 'request_failed',
       message: 'The provider request failed.',
+      stage: options.stage ?? options.label,
+      scope: options.scope,
     })
   );
 }

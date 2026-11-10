@@ -8,8 +8,13 @@ import {
   getSearchConsoleSiteOverride,
   getSiteUrl,
 } from '../config';
-import { AnalyticsProviderError, fetchJson } from './http';
-import { siteMatchesHost } from './searchConsole';
+import {
+  AnalyticsProviderError,
+  diagnosticFromError,
+  fetchJson,
+  type ProviderErrorDiagnostic,
+} from './http';
+import { normalizeSiteUrl, siteMatchesHost } from './searchConsole';
 import type { Ga4PropertySummary } from './googleAnalytics';
 
 assertServerOnly('lib/analytics/website/providers/oauth');
@@ -62,10 +67,7 @@ function toTokenSet(raw: RawTokenResponse): GoogleTokenSet {
   };
 }
 
-export function buildGoogleConsentUrl(input: {
-  state: string;
-  loginHint?: string | null;
-}): string {
+export function buildGoogleConsentUrl(input: { state: string; loginHint?: string | null }): string {
   const config = getGoogleOAuthConfig();
 
   if (!config.configured) {
@@ -155,6 +157,7 @@ type AccountSummariesResponse = {
       parent?: string;
     }>;
   }>;
+  nextPageToken?: string;
 };
 
 type DataStreamsResponse = {
@@ -166,55 +169,146 @@ type DataStreamsResponse = {
       defaultUri?: string;
     };
   }>;
+  nextPageToken?: string;
 };
 
-export async function discoverGa4Properties(accessToken: string): Promise<Ga4PropertySummary[]> {
-  const summaries = await fetchJson<AccountSummariesResponse>(
-    `${ADMIN_API}/accountSummaries?pageSize=200`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-    { provider: 'google_analytics', retries: 2, label: 'accountSummaries' }
-  );
+export type Ga4DiscoveryResult = {
+  properties: Ga4PropertySummary[];
+  warnings: ProviderErrorDiagnostic[];
+  accountCount: number;
+};
 
+async function readAllAccountSummaries(accessToken: string): Promise<AccountSummariesResponse[]> {
+  const pages: AccountSummariesResponse[] = [];
+  let pageToken: string | null = null;
+  let pageCount = 0;
+
+  do {
+    const query = new URLSearchParams({ pageSize: '200' });
+    if (pageToken) query.set('pageToken', pageToken);
+
+    const page = await fetchJson<AccountSummariesResponse>(
+      `${ADMIN_API}/accountSummaries?${query.toString()}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+      {
+        provider: 'google_analytics',
+        retries: 2,
+        label: 'accountSummaries',
+        stage: 'accountSummaries',
+        scope: GA4_READONLY_SCOPE,
+      }
+    );
+
+    pages.push(page);
+    pageToken = page.nextPageToken || null;
+    pageCount += 1;
+
+    // Defensive guard against a malformed upstream token loop. Normal
+    // accounts have one page; large agencies may have a handful.
+    if (pageCount >= 100) break;
+  } while (pageToken);
+
+  return pages;
+}
+
+async function readAllDataStreams(
+  accessToken: string,
+  propertyId: string
+): Promise<{ measurementIds: string[]; warnings: ProviderErrorDiagnostic[] }> {
+  const measurementIds: string[] = [];
+  const warnings: ProviderErrorDiagnostic[] = [];
+  let pageToken: string | null = null;
+  let pageCount = 0;
+
+  do {
+    const query = new URLSearchParams({ pageSize: '200' });
+    if (pageToken) query.set('pageToken', pageToken);
+
+    try {
+      const page = await fetchJson<DataStreamsResponse>(
+        `${ADMIN_API}/properties/${encodeURIComponent(propertyId)}/dataStreams?${query.toString()}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+        {
+          provider: 'google_analytics',
+          retries: 1,
+          label: 'dataStreams',
+          stage: `dataStreams:${propertyId}`,
+          scope: GA4_READONLY_SCOPE,
+        }
+      );
+
+      for (const stream of page.dataStreams ?? []) {
+        // A property can also have iOS/Android streams. Only a web stream's
+        // measurement id can match the browser gtag id.
+        const measurementId =
+          stream.type === 'WEB_DATA_STREAM' ? stream.webStreamData?.measurementId || '' : '';
+
+        if (measurementId) measurementIds.push(measurementId);
+      }
+
+      pageToken = page.nextPageToken || null;
+    } catch (error) {
+      // A single inaccessible property must not hide every other property.
+      warnings.push(
+        diagnosticFromError(error, {
+          provider: 'google_analytics',
+          stage: `dataStreams:${propertyId}`,
+          scope: GA4_READONLY_SCOPE,
+        })
+      );
+      break;
+    }
+
+    pageCount += 1;
+    if (pageCount >= 20) break;
+  } while (pageToken);
+
+  return { measurementIds: [...new Set(measurementIds)], warnings };
+}
+
+export async function discoverGa4PropertiesDetailed(
+  accessToken: string
+): Promise<Ga4DiscoveryResult> {
+  const summaries = await readAllAccountSummaries(accessToken);
   const properties: Array<{
     propertyId: string;
     displayName: string;
     accountName: string | null;
   }> = [];
+  let accountCount = 0;
 
-  for (const account of summaries.accountSummaries ?? []) {
-    for (const property of account.propertySummaries ?? []) {
-      const propertyId = (property.property || '').replace(/^properties\//, '');
-      if (!propertyId) continue;
+  for (const page of summaries) {
+    for (const account of page.accountSummaries ?? []) {
+      accountCount += 1;
 
-      properties.push({
-        propertyId,
-        displayName: property.displayName || propertyId,
-        accountName: account.displayName || null,
-      });
+      for (const property of account.propertySummaries ?? []) {
+        const propertyId = (property.property || '').replace(/^properties\//, '');
+        if (!propertyId) continue;
+
+        properties.push({
+          propertyId,
+          displayName: property.displayName || propertyId,
+          accountName: account.displayName || null,
+        });
+      }
     }
   }
 
   const resolved: Ga4PropertySummary[] = [];
+  const warnings: ProviderErrorDiagnostic[] = [];
 
-  for (const property of properties.slice(0, 60)) {
-    try {
-      const streams = await fetchJson<DataStreamsResponse>(
-        `${ADMIN_API}/properties/${encodeURIComponent(property.propertyId)}/dataStreams?pageSize=50`,
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-        { provider: 'google_analytics', retries: 1, label: 'dataStreams' }
-      );
-
-      const measurementIds = (streams.dataStreams ?? [])
-        .map((stream) => stream.webStreamData?.measurementId || '')
-        .filter(Boolean);
-
-      resolved.push({ ...property, measurementIds });
-    } catch {
-      resolved.push({ ...property, measurementIds: [] });
-    }
+  for (const property of properties) {
+    const streams = await readAllDataStreams(accessToken, property.propertyId);
+    warnings.push(...streams.warnings);
+    resolved.push({ ...property, measurementIds: streams.measurementIds });
   }
 
-  return resolved;
+  return { properties: resolved, warnings, accountCount };
+}
+
+export async function discoverGa4Properties(accessToken: string): Promise<Ga4PropertySummary[]> {
+  const result = await discoverGa4PropertiesDetailed(accessToken);
+  return result.properties;
 }
 
 export function chooseGa4Property(
@@ -225,15 +319,9 @@ export function chooseGa4Property(
   const override = (options.override ?? getGooglePropertyOverride())?.replace(/^properties\//, '');
 
   if (override) {
-    const match = properties.find((property) => property.propertyId === override);
-    if (match) return match;
-
-    return {
-      propertyId: override,
-      displayName: override,
-      accountName: null,
-      measurementIds: [],
-    };
+    // The environment override is a request to use a specific property, not
+    // proof that the property exists or is readable by this Google account.
+    return properties.find((property) => property.propertyId === override) ?? null;
   }
 
   return properties.find((property) => property.measurementIds.includes(measurementId)) ?? null;
@@ -248,13 +336,17 @@ export type SearchConsoleSite = {
   permissionLevel: string;
 };
 
-export async function listSearchConsoleSites(
-  accessToken: string
-): Promise<SearchConsoleSite[]> {
+export async function listSearchConsoleSites(accessToken: string): Promise<SearchConsoleSite[]> {
   const raw = await fetchJson<SitesResponse>(
     `${WEBMASTERS_API}/sites`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
-    { provider: 'search_console', retries: 2, label: 'sites' }
+    {
+      provider: 'search_console',
+      retries: 2,
+      label: 'sites',
+      stage: 'sites',
+      scope: GSC_READONLY_SCOPE,
+    }
   );
 
   return (raw.siteEntry ?? [])
@@ -265,23 +357,50 @@ export async function listSearchConsoleSites(
     }));
 }
 
+export function hasSearchConsoleReadPermission(permissionLevel: string): boolean {
+  return (
+    permissionLevel === 'siteOwner' ||
+    permissionLevel === 'siteFullUser' ||
+    permissionLevel === 'siteRestrictedUser' ||
+    permissionLevel === 'unknown'
+  );
+}
+
+function permissionRank(permissionLevel: string): number {
+  if (permissionLevel === 'siteOwner') return 3;
+  if (permissionLevel === 'siteFullUser') return 2;
+  if (permissionLevel === 'siteRestrictedUser') return 1;
+  return 0;
+}
+
 export function chooseSearchConsoleSite(
   sites: SearchConsoleSite[],
   options: { siteUrl?: string | null } = {}
 ): SearchConsoleSite | null {
   const override = options.siteUrl ?? getSearchConsoleSiteOverride();
+
   if (override) {
-    return sites.find((site) => site.siteUrl === override) ?? { siteUrl: override, permissionLevel: 'unknown' };
+    const normalizedOverride = normalizeSiteUrl(override);
+
+    // An explicitly configured site must still be present in the account's
+    // actual site list. Never fabricate a connected property.
+    return sites.find((site) => normalizeSiteUrl(site.siteUrl) === normalizedOverride) ?? null;
   }
 
   const host = new URL(getSiteUrl()).hostname;
-  const matching = sites.filter((site) => siteMatchesHost(site.siteUrl, host));
+  const matching = sites
+    .filter((site) => siteMatchesHost(site.siteUrl, host))
+    .filter((site) => hasSearchConsoleReadPermission(site.permissionLevel));
 
   return (
-    matching.find((site) => site.permissionLevel === 'siteOwner') ??
-    matching.find((site) => site.permissionLevel === 'siteFullUser') ??
-    matching[0] ??
-    null
+    matching.sort((first, second) => {
+      const rank = permissionRank(second.permissionLevel) - permissionRank(first.permissionLevel);
+      if (rank !== 0) return rank;
+
+      const firstDomain = first.siteUrl.startsWith('sc-domain:') ? 1 : 0;
+      const secondDomain = second.siteUrl.startsWith('sc-domain:') ? 1 : 0;
+      return secondDomain - firstDomain;
+    })[0] ?? null
   );
 }
 
@@ -311,10 +430,9 @@ export async function probeGoogleConsentUrl(
       try {
         const authError = new URL(location).searchParams.get('authError');
         if (authError) {
-          decoded = Buffer.from(
-            authError.replace(/-/g, '+').replace(/_/g, '/'),
-            'base64'
-          ).toString('utf8');
+          decoded = Buffer.from(authError.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString(
+            'utf8'
+          );
         }
       } catch {
         // Fall through to the generic configuration error.

@@ -10,12 +10,7 @@ export type AnalyticsProvider = 'google_analytics' | 'search_console' | 'umami';
 export type AnalyticsLanguage = 'ru' | 'en';
 
 export type AnalyticsConnectionStatus =
-  | 'not_connected'
-  | 'connected'
-  | 'error'
-  | 'needs_reauthorization'
-  | 'not_configured'
-  | 'disabled';
+  'not_connected' | 'connected' | 'error' | 'needs_reauthorization' | 'not_configured' | 'disabled';
 
 export type MetricUnit = 'count' | 'percent' | 'seconds' | 'position' | 'ratio';
 
@@ -56,6 +51,9 @@ export type ProviderHealth = {
   connected: boolean;
   externalId: string | null;
   accountLabel: string | null;
+  scopes: string[];
+  externalMeta: Record<string, unknown> | null;
+  lastCheckedAt: string | null;
   lastSyncAt: string | null;
   lastSuccessAt: string | null;
   lastSyncStatus: string | null;

@@ -19,6 +19,7 @@ export type StoredConnection = {
   token_iv: string | null;
   token_tag: string | null;
   token_key_version: string | null;
+  connected_by: string | null;
   connected_at: string | null;
   disabled_at: string | null;
   last_sync_at: string | null;
@@ -114,6 +115,9 @@ export async function upsertConnection(
     connected_at: new Date().toISOString(),
     disabled_at: null,
     updated_at: new Date().toISOString(),
+    ...(input.status === 'connected'
+      ? { last_error_code: null, last_error_message: null, last_error_at: null }
+      : {}),
   };
 
   if (input.sealed) {
@@ -139,7 +143,8 @@ export async function markConnectionError(
   const { error } = await store
     .from('analytics_connections')
     .update({
-      status: code === 'unauthorized' || code === 'invalid_grant' ? 'needs_reauthorization' : 'error',
+      status:
+        code === 'unauthorized' || code === 'invalid_grant' ? 'needs_reauthorization' : 'error',
       last_error_code: code.slice(0, 120),
       last_error_message: message.slice(0, 600),
       last_error_at: new Date().toISOString(),
@@ -301,8 +306,7 @@ export async function writeMetricRows(
         synced_at: new Date().toISOString(),
       })),
       {
-        onConflict:
-          'provider,report_type,metric_date,dimension_key,dimension_hash,metric',
+        onConflict: 'provider,report_type,metric_date,dimension_key,dimension_hash,metric',
       }
     );
 
@@ -457,9 +461,7 @@ export async function readSearchRows(
   for (;;) {
     const { data, error } = await store
       .from('analytics_search_performance')
-      .select(
-        'metric_date,site_url,query,page,country,device,clicks,impressions,ctr,position'
-      )
+      .select('metric_date,site_url,query,page,country,device,clicks,impressions,ctr,position')
       .eq('site_url', input.siteUrl)
       .gte('metric_date', input.from)
       .lte('metric_date', input.to)

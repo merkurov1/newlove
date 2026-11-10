@@ -139,6 +139,27 @@
   word-break: break-word;
 }
 
+.pw-analytics-details {
+  border-top: 1px solid var(--pw-line);
+  padding-top: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--pw-muted);
+}
+
+.pw-analytics-details summary {
+  cursor: pointer;
+  font-family: var(--pw-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.pw-analytics-details ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
 .pw-analytics-card-actions {
   display: flex;
   align-items: center;
