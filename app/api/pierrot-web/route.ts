@@ -209,7 +209,10 @@ import {
   resolvePierrotIdentity,
   type PierrotIdentitySource,
 } from '@/lib/pierrot/identity';
-import type { PierrotQueryPlan } from '@/lib/pierrot/queryUnderstanding';
+import {
+  previousSubstantiveUserMessage,
+  type PierrotQueryPlan,
+} from '@/lib/pierrot/queryUnderstanding';
 import {
   buildSourceStatuses,
   guardAnswerEvidence,
@@ -840,13 +843,18 @@ export async function POST(req: Request) {
     const previousUserMessage = [...normalizedHistory]
       .reverse()
       .find((item) => item.role === 'user')?.content;
+    // A correction can arrive after several follow-ups ("Bluesky" →
+    // "А подробнее?" → "Перечитай вопрос"). Retrieval must anchor to the last
+    // substantive request, not to the immediate "А подробнее?" echo.
+    const contextAnchor =
+      previousSubstantiveUserMessage(normalizedHistory)?.content || previousUserMessage;
     // A short follow-up ("А за 2025 год?", "А теперь все рецепты недели")
     // inherits the topic but not the old intent verbatim. Give retrieval the
-    // previous user turn plus the current sanitized request, capped so history
+    // original request plus the current sanitized request, capped so history
     // cannot grow the query without bound.
     const retrievalQuery =
-      executionPlan.requiresConversationContext && previousUserMessage
-        ? `${previousUserMessage} ${executionPlan.searchQuery}`.trim().slice(0, 1_000)
+      executionPlan.requiresConversationContext && contextAnchor
+        ? `${contextAnchor} ${executionPlan.searchQuery}`.trim().slice(0, 1_000)
         : trimmedMessage;
 
     const openAiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
@@ -5066,9 +5074,22 @@ export async function POST(req: Request) {
       if (ownerTool) {
         const result = await runOwnerToolDetailed(ownerTool, ownerLanguage);
         const mediaUsed = ownerTool.kind === 'media' && Boolean(result.provenance) && result.mediaKind !== 'media_error';
+        // A correction must re-read the original request and source. Say that
+        // briefly when the tool was recovered from context; never pretend the
+        // previous answer was checked when it was not.
+        const correctionPrefix =
+          queryPlan.correction && executionPlan.recoveredFromContext
+            ? ownerLanguage === 'ru'
+              ? `Перепроверил исходный запрос «${ownerTool.query.slice(0, 240)}» и заново получил данные из источника.`
+              : `I re-read the original request “${ownerTool.query.slice(0, 240)}” and fetched the data from the source again.`
+            : null;
+        const ownerToolText = correctionPrefix
+          ? `${correctionPrefix}\n\n${result.text}`
+          : result.text;
 
-        return persistOwnerReply(result.text, {
+        return persistOwnerReply(ownerToolText, {
           owner_tool: ownerTool.kind,
+          ...(result.graph ? { graph_demo: result.graph } : {}),
           ...(ownerTool.kind === 'media'
             ? {
                 action_status: 'read_only',
@@ -5765,6 +5786,16 @@ export async function POST(req: Request) {
           // not silently omitted. Otherwise it invents the missing results.
           if (webStatusPrompt) {
             generationSystemPrompt = `${generationSystemPrompt}\n\n${webStatusPrompt}`;
+          }
+
+          if (queryPlan.correction) {
+            generationSystemPrompt = `${generationSystemPrompt}\n\n${[
+              'CORRECTION_TURN',
+              'The user says the previous answer did not answer the original question or contained an unsupported claim.',
+              'Return to the original request visible in the conversation, re-check the supplied evidence, and answer that request directly.',
+              'State briefly what was wrong, if it is verifiable. Do not defend the previous answer, do not merely rephrase it, and do not switch to an unrelated report.',
+              'If the needed data is unavailable, say which source failed and do not fill the gap.',
+            ].join('\n')}`;
           }
 
           onStatus?.('generating');

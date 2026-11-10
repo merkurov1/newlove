@@ -5,7 +5,7 @@ import {
 } from '@/lib/pierrot/reportingPeriod';
 
 import { DEFAULT_ANALYTICS_TIMEZONE } from './config';
-import { PROJECT_DEFINITIONS } from './normalize';
+import { PROJECT_DEFINITIONS, normalizePath } from './normalize';
 import type { WebsiteQuestion, WebsiteQuestionScope } from './types';
 
 function normalize(value: string): string {
@@ -23,6 +23,31 @@ function has(text: string, pattern: RegExp): boolean {
 
 function iso(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Extract an explicit public URL/path. A path is a precise page selector:
+ * "посещаемость /flow" is about that page, not about the Flow project or the
+ * Flow editorial stream as a whole.
+ */
+export function extractAnalyticsPagePath(message: string): string | null {
+  if (typeof message !== 'string') return null;
+
+  const absolute = message.match(/https?:\/\/[^\s<>"']+/i);
+  if (absolute) {
+    try {
+      const path = normalizePath(new URL(absolute[0]).pathname);
+      return path && path !== '/' ? path : null;
+    } catch {
+      return null;
+    }
+  }
+
+  const relative = message.match(/(^|\s)(\/[a-z0-9][a-z0-9\-/_]*)/i);
+  if (!relative) return null;
+
+  const path = normalizePath(relative[2]);
+  return path && path !== '/' ? path : null;
 }
 
 /**
@@ -92,7 +117,8 @@ export function detectWebsiteQuestion(
     ) &&
     !/(почему|why|что\s+происходит|какие\s+страниц|трафик|поиск|посеща|показ|клик)/i.test(text);
 
-  const explicitWebsite = has(text, websiteTerms);
+  const pagePath = extractAnalyticsPagePath(message);
+  const explicitWebsite = has(text, websiteTerms) || Boolean(pagePath);
   const projectSignal = Boolean(projectTerm) && has(text, projectPerformance);
   const contentSignal = has(text, contentTerms) || has(text, engagementGap);
   const searchSignal = has(text, searchTerms);
@@ -120,13 +146,24 @@ export function detectWebsiteQuestion(
     return null;
   }
 
-  return buildQuestion(message, text, now, timezone, explicitWebsite || projectSignal);
+  return buildQuestion(
+    message,
+    text,
+    now,
+    timezone,
+    explicitWebsite || projectSignal,
+    pagePath
+  );
 }
 
 function detectScope(
   text: string,
-  options: { explicitWebsite: boolean; project: string | null }
+  options: { explicitWebsite: boolean; project: string | null; pagePath?: string | null }
 ): WebsiteQuestionScope {
+  // An explicit URL path is the most precise scope. It wins over a project
+  // name ("/flow" is one page; Flow as a project also includes /subscribe).
+  if (options.pagePath) return 'page';
+
   if (/(подключ|синхрониз|sync|источник[а-яё]*\s+(данных|недоступ|ошиб)|статус\s+данных|доступ[а-яё]*\s+к\s+аналитик|source\s+health|данные\s+обновля|vercel|web\s+vitals|core\s+web\s+vitals|speed\s+insights|скорост[а-яё]*\s+сайта)/i.test(text)) {
     return 'health';
   }
@@ -253,7 +290,8 @@ function buildQuestion(
   text: string,
   now: Date,
   timezone: string,
-  explicitWebsite: boolean
+  explicitWebsite: boolean,
+  pagePath: string | null = null
 ): WebsiteQuestion {
   const projectEntries = PROJECT_DEFINITIONS.map((project) => {
     const names: Record<string, RegExp> = {
@@ -269,8 +307,12 @@ function buildQuestion(
 
   // A question that names several projects must show all of them, not the
   // first one the detector happened to find.
-  const project = projectEntries.length === 1 ? projectEntries[0].key : null;
-  const scope = detectScope(text, { explicitWebsite, project });
+  const project = pagePath
+    ? null
+    : projectEntries.length === 1
+      ? projectEntries[0].key
+      : null;
+  const scope = detectScope(text, { explicitWebsite, project, pagePath });
   const wantsComparison =
     /(сравни|сравнить|compare|что\s+изменилось|what\s+changed|динамик|тренд|по\s+сравнению|было\s+и\s+стало|предыдущ[а-яё]*\s+(период|месяц|недел))/i.test(
       text
@@ -295,6 +337,7 @@ function buildQuestion(
     wantsRecommendations,
     wantsDetailed,
     project,
+    pagePath,
     ...period,
   };
 }
@@ -305,6 +348,7 @@ export function websiteQuestionLabel(question: WebsiteQuestion): string {
     traffic: 'трафик и аудитория',
     search: 'поисковая видимость',
     pages: 'страницы и контент',
+    page: 'метрики страницы',
     compare: 'сравнение периодов',
     projects: 'проекты',
     funnel: 'воронка действий',

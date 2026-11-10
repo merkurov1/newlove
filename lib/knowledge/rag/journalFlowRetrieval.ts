@@ -130,7 +130,13 @@ export function parseJournalFlowRequest(
   options: { plan?: Pick<PierrotQueryPlan, 'language'> | null; now?: Date } = {}
 ): JournalFlowRequest | null {
   const raw = typeof message === 'string' ? message.trim() : '';
-  const text = normalize(raw);
+  // Explicit URL paths belong to website analytics. "/flow" is a page, not the
+  // editorial Flow stream.
+  const text = normalize(
+    raw
+      .replace(/https?:\/\/[^\s]+/gi, ' ')
+      .replace(/(^|\s)\/[a-z0-9][a-z0-9\-/]*/gi, '$1 ')
+  );
 
   if (!text) return null;
 
@@ -151,6 +157,19 @@ export function parseJournalFlowRequest(
     /(?:flow|поток|лент)[^.!?\n]{0,32}(?:записи|посты|заметки)/i.test(text);
 
   if (!journal && !flow) return null;
+
+  // Traffic/visitor language about Flow asks for page analytics, not stream
+  // entries. Journal inventory questions ("статистика Journal") remain here.
+  if (
+    flow &&
+    !journal &&
+    /(посещаем|трафик|просмотр|посетител|визит|visitors?|traffic|pageviews?|analytics|аналитик|статистик|метрик)/i.test(
+      text
+    ) &&
+    !/(выпуск|запис|пост|entries|entry|issues?)/i.test(text)
+  ) {
+    return null;
+  }
 
   const sources: JournalFlowSource[] = [];
   if (journal) sources.push('journal');

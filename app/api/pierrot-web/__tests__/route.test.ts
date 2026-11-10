@@ -26,6 +26,7 @@ jest.mock('@/lib/serverAuth', () => ({
   requireAdminFromRequest: jest.fn(async () => {
     throw new Error('not admin');
   }),
+  getServerSupabaseClient: jest.fn(() => ({ mocked: true })),
 }));
 
 jest.mock('@/lib/knowledge/rag/retrieval', () => ({
@@ -55,6 +56,31 @@ jest.mock('@/lib/knowledge/rag/mediaEvidence', () => {
   return {
     ...actual,
     retrieveMediaEvidence: jest.fn(),
+  };
+});
+
+jest.mock('@/lib/analytics/website/answer', () => ({
+  answerWebsiteAnalyticsQuestion: jest.fn(),
+}));
+
+jest.mock('@/lib/knowledge/graph/store', () => ({
+  createBrainGraphStore: jest.fn(),
+}));
+
+jest.mock('@/lib/knowledge/graph/visualization', () => ({
+  ...(jest.requireActual('@/lib/knowledge/graph/visualization') as Record<string, unknown>),
+  loadBrainGraph: jest.fn(),
+}));
+
+jest.mock('@/lib/knowledge/rag/journalFlowRetrieval', () => {
+  const actual = jest.requireActual('@/lib/knowledge/rag/journalFlowRetrieval') as Record<
+    string,
+    unknown
+  >;
+
+  return {
+    ...actual,
+    retrieveJournalFlowEvidence: jest.fn(),
   };
 });
 
@@ -171,6 +197,37 @@ const mediaEvidence = require('@/lib/knowledge/rag/mediaEvidence') as {
     mock: { calls: unknown[][] };
     mockResolvedValue: (value: unknown) => void;
     mockResolvedValueOnce: (value: unknown) => void;
+  };
+};
+const websiteAnswer = require('@/lib/analytics/website/answer') as {
+  answerWebsiteAnalyticsQuestion: {
+    mock: { calls: unknown[][] };
+    mockResolvedValue: (value: unknown) => void;
+    mockResolvedValueOnce: (value: unknown) => void;
+    mockReset: () => void;
+  };
+};
+const graphStore = require('@/lib/knowledge/graph/store') as {
+  createBrainGraphStore: {
+    mockReturnValue: (value: unknown) => void;
+    mockReset: () => void;
+  };
+};
+const graphVisualization = require('@/lib/knowledge/graph/visualization') as {
+  loadBrainGraph: {
+    mock: { calls: unknown[][] };
+    mockResolvedValue: (value: unknown) => void;
+    mockResolvedValueOnce: (value: unknown) => void;
+    mockRejectedValueOnce: (value: unknown) => void;
+    mockReset: () => void;
+  };
+};
+const journalFlow = require('@/lib/knowledge/rag/journalFlowRetrieval') as {
+  retrieveJournalFlowEvidence: {
+    mock: { calls: unknown[][] };
+    mockResolvedValue: (value: unknown) => void;
+    mockResolvedValueOnce: (value: unknown) => void;
+    mockReset: () => void;
   };
 };
 const memoryStore = jest.requireMock('@/lib/pierrot/memory/store') as {
@@ -305,6 +362,29 @@ beforeEach(() => {
     sources: [],
     latencyMs: 1,
   });
+  websiteAnswer.answerWebsiteAnalyticsQuestion.mockReset();
+  websiteAnswer.answerWebsiteAnalyticsQuestion.mockResolvedValue({
+    answered: true,
+    scope: 'overview',
+    markdown: '## Website\nMocked report',
+  });
+  graphStore.createBrainGraphStore.mockReset();
+  graphStore.createBrainGraphStore.mockReturnValue({ client: {}, listRecentRuns: async () => [] });
+  graphVisualization.loadBrainGraph.mockReset();
+  graphVisualization.loadBrainGraph.mockResolvedValue({
+    nodes: [],
+    edges: [],
+    stats: {
+      documents: 0,
+      entities: 0,
+      relationships: 0,
+      mentions: 0,
+      shownNodes: 0,
+      shownEdges: 0,
+    },
+  });
+  journalFlow.retrieveJournalFlowEvidence.mockReset();
+  journalFlow.retrieveJournalFlowEvidence.mockResolvedValue(null);
   documentLookup.findBrainDocumentByTitle.mockReset();
   documentLookup.findBrainDocumentByTitle.mockResolvedValue(null);
   documentLookup.loadBrainDocumentChunks.mockReset();
@@ -2431,6 +2511,274 @@ describe('Pierrot intelligence regressions', () => {
     expect(json.owner_tool).toBeUndefined();
     expect(json.sourceStatus?.brain).toBe('not_requested');
   });
+  it('answers a Bluesky statistics request from Bluesky analytics only', async () => {
+    owner();
+    websiteAnswer.answerWebsiteAnalyticsQuestion.mockResolvedValueOnce({
+      answered: true,
+      scope: 'bluesky',
+      markdown: '## Bluesky\n\nПодписчики: 33\n\nВзаимодействия (расчётно): 120. Это не охват.',
+    });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Покажи статистику по Bluesky' }))
+    );
+    const json = (await response.json()) as { reply?: string; owner_tool?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.owner_tool).toBe('website');
+    expect(json.reply).toContain('Bluesky');
+    expect(json.reply).toContain('не охват');
+    expect(json.reply).not.toContain('Пользователи:');
+    expect(websiteAnswer.answerWebsiteAnalyticsQuestion).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Покажи статистику по Bluesky' })
+    );
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('continues the Bluesky report on “А подробнее?” from the original query', async () => {
+    owner();
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'А подробнее?',
+          history: [{ role: 'user', content: 'Покажи статистику по Bluesky' }],
+        })
+      )
+    );
+    const json = (await response.json()) as { owner_tool?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.owner_tool).toBe('website');
+    expect(websiteAnswer.answerWebsiteAnalyticsQuestion).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Покажи статистику по Bluesky' })
+    );
+  });
+
+  it('re-fetches the original source after “Ты выдумал статистику”', async () => {
+    owner();
+    websiteAnswer.answerWebsiteAnalyticsQuestion.mockResolvedValueOnce({
+      answered: true,
+      scope: 'bluesky',
+      markdown: '## Bluesky\n\nПроверенные счётчики: подписчики 33.',
+    });
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Ты выдумал статистику',
+          history: [{ role: 'user', content: 'Покажи статистику по Bluesky' }],
+        })
+      )
+    );
+    const json = (await response.json()) as { reply?: string; owner_tool?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.owner_tool).toBe('website');
+    expect(json.reply).toContain('Перепроверил исходный запрос');
+    expect(json.reply).toContain('Bluesky');
+    expect(json.reply).not.toContain('Статистика проекта');
+    expect(websiteAnswer.answerWebsiteAnalyticsQuestion).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Покажи статистику по Bluesky' })
+    );
+  });
+
+  it('re-reads the original question after a chain of follow-ups', async () => {
+    owner();
+
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Перечитай вопрос',
+          history: [
+            { role: 'user', content: 'Покажи статистику по Bluesky' },
+            { role: 'assistant', content: 'Bluesky: подписчики 33.' },
+            { role: 'user', content: 'А подробнее?' },
+            { role: 'assistant', content: 'Ограниченная выборка.' },
+          ],
+        })
+      )
+    );
+    const json = (await response.json()) as { reply?: string; owner_tool?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.owner_tool).toBe('website');
+    expect(json.reply).toContain('Перепроверил исходный запрос');
+    expect(websiteAnswer.answerWebsiteAnalyticsQuestion).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Покажи статистику по Bluesky' })
+    );
+  });
+
+  it('uses exact page analytics for “Посещаемость /flow”', async () => {
+    owner();
+    websiteAnswer.answerWebsiteAnalyticsQuestion.mockResolvedValueOnce({
+      answered: true,
+      scope: 'page',
+      markdown: '## Метрики страницы: /flow\n\nПросмотры страницы: 120 (GA4).',
+    });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Посещаемость /flow' }))
+    );
+    const json = (await response.json()) as { reply?: string; owner_tool?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.owner_tool).toBe('website');
+    expect(json.reply).toContain('/flow');
+    expect(journalFlow.retrieveJournalFlowEvidence).not.toHaveBeenCalled();
+    expect(websiteAnswer.answerWebsiteAnalyticsQuestion).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Посещаемость /flow' })
+    );
+  });
+
+  it('demonstrates graph retrieval instead of graph counters', async () => {
+    owner();
+    graphVisualization.loadBrainGraph.mockResolvedValueOnce({
+      nodes: [
+        { id: 'entity:e1', kind: 'concept', label: 'Digital Temple', subtitle: null },
+        { id: 'entity:e2', kind: 'art_project', label: 'UNFRAMED', subtitle: null },
+      ],
+      edges: [
+        {
+          id: 'rel:1',
+          source: 'entity:e1',
+          target: 'entity:e2',
+          relation: 'part_of',
+          label: 'part of',
+          confidence: 0.9,
+          inference: false,
+          provenance: {
+            documentId: 'd1',
+            documentTitle: 'Weekly Review',
+            chunkId: 'c1',
+            heading: 'Projects',
+            sectionPath: [],
+          },
+        },
+        {
+          id: 'rel:2',
+          source: 'entity:e2',
+          target: 'entity:e1',
+          relation: 'related_to',
+          label: 'related to',
+          confidence: 0.5,
+          inference: true,
+          provenance: null,
+        },
+      ],
+      stats: {
+        documents: 1,
+        entities: 2,
+        relationships: 2,
+        mentions: 2,
+        shownNodes: 2,
+        shownEdges: 2,
+      },
+    });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Покажи, как работает граф' }))
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      owner_tool?: string;
+      graph_demo?: { directEdges?: number; inferenceEdges?: number };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.owner_tool).toBe('graph_demo');
+    expect(json.reply).toContain('Digital Temple');
+    expect(json.reply).toContain('Прямые связи');
+    expect(json.reply).toContain('Гипотезы');
+    expect(json.reply).not.toContain('Очередь Graph');
+    expect(json.graph_demo).toMatchObject({ directEdges: 1, inferenceEdges: 1 });
+    expect(graphVisualization.loadBrainGraph).toHaveBeenCalled();
+  });
+
+  it('discloses a graph retrieval failure without inventing links', async () => {
+    owner();
+    graphVisualization.loadBrainGraph.mockRejectedValueOnce(new Error('graph_query_failed'));
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Покажи, как работает граф' }))
+    );
+    const json = (await response.json()) as { reply?: string; owner_tool?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.owner_tool).toBe('graph_demo');
+    expect(json.reply).toContain('graph retrieval');
+    expect(json.reply).toContain('не означает, что связей нет');
+    expect(json.reply).not.toContain('Сущности:');
+  });
+
+  it('reports an analytics source failure instead of imitating a successful retrieval', async () => {
+    owner();
+    websiteAnswer.answerWebsiteAnalyticsQuestion.mockRejectedValueOnce(
+      new Error('analytics_store_unavailable')
+    );
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Покажи статистику по Bluesky' }))
+    );
+    const json = (await response.json()) as { reply?: string; owner_tool?: string };
+
+    expect(response.status).toBe(200);
+    expect(json.owner_tool).toBe('website');
+    expect(json.reply).toContain('Не удалось получить данные');
+    expect(json.reply).not.toContain('Подписчики: 33');
+  });
+
+  it('keeps Journal statistics on the Journal inventory with honest sample counts', async () => {
+    owner();
+    journalFlow.retrieveJournalFlowEvidence.mockResolvedValueOnce({
+      outcome: 'relevant_results',
+      code: null,
+      latencyMs: 5,
+      request: {
+        sources: ['journal'],
+        limit: 3,
+        language: 'ru',
+        year: null,
+        wantsComparison: false,
+        query: 'Покажи статистику Journal',
+      },
+      journal: [
+        {
+          id: 'j1',
+          title: 'Issue 24',
+          slug: 'issue-24',
+          number: 24,
+          language: 'ru',
+          publishedAt: '2026-11-01T00:00:00.000Z',
+          periodStart: null,
+          periodEnd: null,
+          url: '/letters/issue-24',
+          excerpt: 'Выпуск о таск-менеджерах.',
+          contentChars: 120,
+        },
+      ],
+      flow: [],
+      totalJournal: 24,
+      totalFlow: null,
+    });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Покажи статистику Journal' }))
+    );
+
+    expect(response.status).toBe(200);
+    expect(journalFlow.retrieveJournalFlowEvidence).toHaveBeenCalledWith(
+      'Покажи статистику Journal',
+      expect.anything()
+    );
+    expect(systemPrompt()).toContain('published_issues_matching');
+    expect(systemPrompt()).toContain('Issue 24');
+    expect(systemPrompt()).not.toContain('website');
+  });
+
   it('injects explicit owner memory into the model prompt', async () => {
     memoryOwner();
     memoryStore.buildMemoryContext.mockResolvedValueOnce(

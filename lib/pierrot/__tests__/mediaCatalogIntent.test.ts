@@ -23,6 +23,14 @@ describe('Pierrot media catalogue routing', () => {
     expect(plan?.scope).toBe(scope);
   });
 
+  it('uses the complete catalogue for “публикации в СМИ за 2026 год”', () => {
+    const plan = detectMediaCatalogQuestion('Публикации в СМИ за 2026 год');
+
+    expect(plan?.kind).toBe('list');
+    expect(plan?.scope).toBe('all');
+    expect(plan?.year).toBe(2026);
+  });
+
   it('extracts year, month and outlet filters', () => {
     const plan = detectMediaCatalogQuestion('Сравни мои колонки за октябрь 2026 года');
 

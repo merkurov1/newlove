@@ -42,6 +42,7 @@ export function websiteToolForScope(scope: WebsiteQuestionScope): WebsiteAnalyti
     traffic: 'get_traffic_analytics',
     search: 'get_search_performance',
     pages: 'get_page_performance',
+    page: 'get_page_performance',
     compare: 'compare_analytics_periods',
     projects: 'get_project_performance',
     funnel: 'get_conversion_funnel',
@@ -64,6 +65,7 @@ export type WebsiteToolOptions = {
   customPeriod?: { start: string; end: string };
   days?: 7 | 30 | 90;
   project?: string | null;
+  pagePath?: string | null;
 };
 
 function periodForOptions(options: WebsiteToolOptions): {
@@ -104,6 +106,7 @@ function scopeToQuestion(scope: WebsiteQuestionScope, options: WebsiteToolOption
   return {
     ...websiteQuestionFromScope(scope, {
       project: options.project ?? null,
+      pagePath: options.pagePath ?? null,
       comparison: scope === 'compare',
       periodKey: period.periodKey,
     }),

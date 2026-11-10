@@ -425,6 +425,45 @@ function detectMediaCatalogQuestionBase(message: string): MediaCatalogPlan | nul
   }
 
   // ---------------------------------------------------------------------
+  // Period inventory ("публикации в СМИ за 2026") must use the complete
+  // SQL catalogue, not the 8-result semantic retrieval sample.
+  // ---------------------------------------------------------------------
+  if (
+    publicationWord &&
+    (year || month) &&
+    (explicitMedia || firstPerson) &&
+    !COUNT_WORD.test(text) &&
+    !SEARCH_VERB.test(text)
+  ) {
+    if (firstPerson && !explicitMedia) {
+      return buildPlan('own_period', {
+        originalQuery,
+        text,
+        scope: 'own',
+        signals: [...signals, 'kind:own_period'],
+        confidence: 0.88,
+        outlet,
+        year,
+        month,
+        language,
+      });
+    }
+
+    return buildPlan('list', {
+      originalQuery,
+      text,
+      scope: 'all',
+      signals: [...signals, 'kind:list_period'],
+      confidence: 0.88,
+      outlet,
+      year,
+      month,
+      language,
+      foreign: foreignRequested,
+    });
+  }
+
+  // ---------------------------------------------------------------------
   // Mentions (external coverage, separate from own columns)
   // ---------------------------------------------------------------------
   if (MENTION_OF_ME.test(text) || (MENTION_WORD.test(text) && explicitMedia && !/я\s+упоминал/i.test(text))) {

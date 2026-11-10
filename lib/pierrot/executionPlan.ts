@@ -13,6 +13,7 @@ export type PierrotOperation =
   | 'analytics.report'
   | 'website.report'
   | 'graph.report'
+  | 'graph.demo'
   | 'system.health'
   | 'system.stats'
   | 'web.search'
@@ -33,6 +34,8 @@ export type PierrotExecutionPlan = {
   fallbackPolicy: PierrotFallbackPolicy;
   status: 'planned';
   ownerTool: OwnerToolRequest | null;
+  /** True when a correction recovered the original tool from context. */
+  recoveredFromContext: boolean;
   searchQuery: string;
 };
 
@@ -175,7 +178,7 @@ export function buildPierrotExecutionPlan(
     queryPlan.correction || queryPlan.followUp
       ? (options.history || [])
           .filter((item) => item.role === 'user' && item.content.trim())
-          .slice(-2)
+          .slice(-4)
           .map((item) => item.content)
       : [];
   let ownerTool = detectOwnerTool(message, {
@@ -187,6 +190,19 @@ export function buildPierrotExecutionPlan(
   // generic stats/analytics shortcut must not replace the editorial source.
   if (queryPlan.sources.journal || queryPlan.sources.flow) {
     ownerTool = null;
+  }
+
+  // A demonstration must run graph retrieval/traversal, never the
+  // administrative entity/relationship counters.
+  if (queryPlan.graphDemo) {
+    ownerTool = {
+      kind: 'graph_demo',
+      query:
+        ownerTool?.kind === 'graph_demo' && ownerTool.recoveredFromContext
+          ? ownerTool.query
+          : message.trim(),
+      ...(ownerTool?.recoveredFromContext ? { recoveredFromContext: true } : {}),
+    };
   }
 
   const resolved = operationForIntent(queryPlan);
@@ -271,6 +287,11 @@ export function buildPierrotExecutionPlan(
       resolved.tool = 'graph';
       resolved.ownerOnly = true;
       resolved.fallbackPolicy = 'no_source_substitution';
+    } else if (ownerTool.kind === 'graph_demo') {
+      resolved.operation = 'graph.demo';
+      resolved.tool = 'graph';
+      resolved.ownerOnly = true;
+      resolved.fallbackPolicy = 'no_source_substitution';
     } else if (ownerTool.kind === 'diagnostics') {
       resolved.operation = 'system.health';
       resolved.tool = 'diagnostics';
@@ -327,6 +348,7 @@ export function buildPierrotExecutionPlan(
     fallbackPolicy: resolved.fallbackPolicy,
     status: 'planned',
     ownerTool,
+    recoveredFromContext: ownerTool?.recoveredFromContext === true,
     searchQuery: searchQueryFor(queryPlan.originalQuery, queryPlan.followUp),
   };
 }

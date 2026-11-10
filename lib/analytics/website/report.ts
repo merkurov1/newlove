@@ -17,6 +17,7 @@ import {
   reportHeadline,
   type Finding,
 } from './insights';
+import { normalizePath } from './normalize';
 import { resolveWebsitePeriod } from './period';
 import type {
   AnalyticsDataset,
@@ -778,6 +779,171 @@ function actionsSection(dataset: AnalyticsDataset, language: AnalyticsLanguage):
   return blocks.join('\n\n');
 }
 
+/**
+ * Exact-page report. It never answers a URL question with site-wide totals:
+ * page views, landing sessions, search clicks and internal actions are
+ * different measurements and keep their own source and definition.
+ */
+export function pageDetailSection(
+  dataset: AnalyticsDataset,
+  language: AnalyticsLanguage,
+  rawPath: string | null | undefined
+): string {
+  const path = normalizePath(rawPath || '');
+  const blocks: string[] = [
+    `### ${language === 'ru' ? 'Страница' : 'Page'}: ${path || '—'}`,
+  ];
+
+  if (!path) {
+    blocks.push(
+      language === 'ru'
+        ? 'Не удалось определить URL страницы. Укажите путь, например `/flow`.'
+        : 'Could not determine the page URL. Specify a path such as `/flow`.'
+    );
+    return blocks.join('\n\n');
+  }
+
+  const ga4Page = dataset.ga4.pages.find((row) => normalizePath(row.key) === path) || null;
+  const ga4Landing =
+    dataset.ga4.landingPages.find((row) => normalizePath(row.key) === path) || null;
+  const gscPage = dataset.gsc.pages.find((row) => normalizePath(row.key) === path) || null;
+  const conversations =
+    dataset.internal.conversations.byStartPage.find(
+      (row) => normalizePath(row.key) === path
+    ) || null;
+  const subscriptions =
+    dataset.internal.confirmedSubscriptionsByStartPage.find(
+      (row) => normalizePath(row.key) === path
+    ) || null;
+  const content = dataset.contentMatches.find((match) => match.path === path) || null;
+
+  const rows: string[][] = [];
+
+  if (dataset.ga4.available) {
+    rows.push([
+      language === 'ru' ? 'Просмотры страницы' : 'Page views',
+      ga4Page ? formatNumber(ga4Page.value, language) : language === 'ru' ? 'нет строки' : 'no row',
+      'GA4',
+      language === 'ru'
+        ? 'screenPageViews для page_path; не сессии и не пользователи.'
+        : 'screenPageViews for page_path; not sessions or users.',
+    ]);
+    rows.push([
+      language === 'ru' ? 'Входы на страницу' : 'Landing sessions',
+      ga4Landing
+        ? formatNumber(ga4Landing.value, language)
+        : language === 'ru'
+          ? 'нет строки'
+          : 'no row',
+      'GA4',
+      language === 'ru'
+        ? 'Сессии, начавшиеся с этого landing_page; не просмотры страницы.'
+        : 'Sessions that started on this landing_page; not page views.',
+    ]);
+  }
+
+  if (dataset.gsc.available) {
+    rows.push([
+      language === 'ru' ? 'Клики из поиска' : 'Search clicks',
+      gscPage ? formatNumber(gscPage.value, language) : language === 'ru' ? 'нет строки' : 'no row',
+      'Search Console',
+      language === 'ru'
+        ? 'Клики по URL страницы в Google Search.'
+        : 'Clicks for the page URL in Google Search.',
+    ]);
+    rows.push([
+      language === 'ru' ? 'Показы в поиске' : 'Search impressions',
+      gscPage && gscPage.extra?.impressions !== undefined
+        ? formatNumber(Number(gscPage.extra.impressions), language)
+        : '—',
+      'Search Console',
+      language === 'ru' ? 'Показы страницы в поиске.' : 'Page impressions in search.',
+    ]);
+    rows.push([
+      'CTR',
+      gscPage && gscPage.extra?.ctr !== undefined
+        ? formatPercent(Number(gscPage.extra.ctr) * 100, language)
+        : '—',
+      'Search Console',
+      language === 'ru' ? 'Клики / показы.' : 'Clicks / impressions.',
+    ]);
+    rows.push([
+      language === 'ru' ? 'Средняя позиция' : 'Average position',
+      gscPage && gscPage.extra?.position !== undefined && gscPage.extra.position !== null
+        ? Number(gscPage.extra.position).toFixed(1)
+        : '—',
+      'Search Console',
+      language === 'ru' ? 'Средняя позиция в выдаче.' : 'Average search position.',
+    ]);
+  }
+
+  if (conversations) {
+    rows.push([
+      language === 'ru' ? 'Диалоги Pierrot' : 'Pierrot conversations',
+      formatNumber(conversations.value, language),
+      'Supabase',
+      language === 'ru'
+        ? 'Диалоги, начатые с этого пути. Это не посетители сайта.'
+        : 'Conversations started from this path. Not site visitors.',
+    ]);
+  }
+
+  if (subscriptions) {
+    rows.push([
+      language === 'ru' ? 'Подтверждённые подписки' : 'Confirmed subscriptions',
+      formatNumber(subscriptions.value, language),
+      'Supabase',
+      language === 'ru'
+        ? 'Подтверждённые события подписки с этого пути.'
+        : 'Confirmed subscription events from this path.',
+    ]);
+  }
+
+  if (rows.length > 0) {
+    blocks.push(
+      table(
+        [
+          language === 'ru' ? 'Метрика' : 'Metric',
+          language === 'ru' ? 'Значение' : 'Value',
+          language === 'ru' ? 'Источник' : 'Source',
+          language === 'ru' ? 'Определение' : 'Definition',
+        ],
+        rows
+      )
+    );
+
+    if (!ga4Page && !ga4Landing && !gscPage && !conversations && !subscriptions) {
+      blocks.push(
+        language === 'ru'
+          ? 'Ни в одном подключённом источнике нет строки для этого URL за период. Это не означает, что страница не существует или её не посещают.'
+          : 'No connected source has a row for this URL in the period. This does not mean the page does not exist or receives no visits.'
+      );
+    }
+  } else {
+    blocks.push(
+      language === 'ru'
+        ? 'По этому URL нет строк GA4, Search Console или внутренних действий за период. Это не означает, что страница не существует и не посещается.'
+        : 'There are no GA4, Search Console or internal-action rows for this URL in the period. This does not mean the page does not exist or has no visits.'
+    );
+  }
+
+  if (content) {
+    blocks.push(
+      language === 'ru'
+        ? `Материал: ${contentTitle(content)} · тип: ${content.type}${content.brainDocumentId ? ' · есть в Brain' : ''}.`
+        : `Content: ${contentTitle(content)} · type: ${content.type}${content.brainDocumentId ? ' · present in Brain' : ''}.`
+    );
+  }
+
+  blocks.push(
+    language === 'ru'
+      ? 'Это метрики именно указанного URL. Просмотры страницы, входы, поисковые клики, диалоги и подписки не суммируются и не переводятся друг в друга.'
+      : 'These are metrics for the specified URL only. Page views, landing sessions, search clicks, conversations and subscriptions are not summed or converted into one another.'
+  );
+
+  return blocks.join('\n\n');
+}
+
 function blueskySection(dataset: AnalyticsDataset, language: AnalyticsLanguage): string {
   const bluesky = dataset.bluesky;
   const blocks: string[] = ['### Bluesky'];
@@ -1340,7 +1506,7 @@ export function compactOverviewSection(
   return lines.join('\n');
 }
 
-function renderReport(
+export function renderReport(
   dataset: AnalyticsDataset,
   question: WebsiteQuestion,
   language: AnalyticsLanguage,
@@ -1350,6 +1516,39 @@ function renderReport(
 ): string {
   const blocks: string[] = [];
   const scope = question.scope;
+
+  // A URL question gets an exact-page answer, not the site-wide status block.
+  if (scope === 'page') {
+    blocks.push(
+      `## ${
+        language === 'ru' ? 'Метрики страницы' : 'Page metrics'
+      }: ${question.pagePath || '—'}`
+    );
+    blocks.push(
+      language === 'ru'
+        ? `**Период:** ${dataset.period.label}. **Сравнение:** ${dataset.period.previousLabel}. **Часовой пояс:** ${dataset.period.timezone}.`
+        : `**Period:** ${dataset.period.label}. **Comparison:** ${dataset.period.previousLabel}. **Timezone:** ${dataset.period.timezone}.`
+    );
+    blocks.push(pageDetailSection(dataset, language, question.pagePath));
+    blocks.push(sourcesSection(dataset, language));
+    return blocks.filter(Boolean).join('\n\n');
+  }
+
+  // Source-specific reports answer only that source. They must not repeat the
+  // site-wide headline before the requested numbers.
+  if (scope === 'bluesky' || scope === 'newsletter') {
+    blocks.push(
+      `## ${scope === 'bluesky' ? 'Bluesky' : language === 'ru' ? 'Рассылки' : 'Newsletters'}`
+    );
+    blocks.push(
+      language === 'ru'
+        ? `**Период:** ${dataset.period.label}. **Сравнение:** ${dataset.period.previousLabel}. **Часовой пояс:** ${dataset.period.timezone}.`
+        : `**Period:** ${dataset.period.label}. **Comparison:** ${dataset.period.previousLabel}. **Timezone:** ${dataset.period.timezone}.`
+    );
+    blocks.push(scope === 'bluesky' ? blueskySection(dataset, language) : newsletterSection(dataset, language));
+    blocks.push(sourcesSection(dataset, language));
+    return blocks.filter(Boolean).join('\n\n');
+  }
 
   blocks.push(
     `## ${language === 'ru' ? 'Состояние сайта' : 'Website state'}\n\n${reportHeadline(
@@ -1411,14 +1610,6 @@ function renderReport(
 
   if (scope === 'overview' || scope === 'compare' || scope === 'anomalies' || scope === 'opportunities' || scope === 'pages') {
     blocks.push(problemsSection(dataset, language, anomalies, opportunities));
-  }
-
-  if (scope === 'bluesky') {
-    blocks.push(blueskySection(dataset, language));
-  }
-
-  if (scope === 'newsletter') {
-    blocks.push(newsletterSection(dataset, language));
   }
 
   if (scope === 'health') {
@@ -1485,6 +1676,7 @@ export function websiteQuestionFromScope(
   scope: WebsiteQuestion['scope'],
   options: {
     project?: string | null;
+    pagePath?: string | null;
     comparison?: boolean;
     periodKey?: WebsiteQuestion['periodKey'];
   } = {}
@@ -1496,6 +1688,7 @@ export function websiteQuestionFromScope(
     wantsProblems: scope === 'anomalies' || scope === 'opportunities',
     wantsRecommendations: scope === 'opportunities',
     project: options.project ?? null,
+    pagePath: options.pagePath ?? null,
     periodKey: options.periodKey ?? 'last_7_days',
   };
 }

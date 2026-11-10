@@ -88,6 +88,19 @@ describe('Journal/Flow request parsing', () => {
   it('does not claim GitHub issues as Journal', () => {
     expect(parseJournalFlowRequest('GitHub issues по Art Engine')).toBeNull();
   });
+
+  it('does not treat the /flow URL as the Flow editorial stream', () => {
+    expect(parseJournalFlowRequest('Посещаемость /flow')).toBeNull();
+    expect(parseJournalFlowRequest('Трафик https://merkurov.love/flow')).toBeNull();
+  });
+
+  it('keeps Journal statistics on the Journal inventory', () => {
+    const request = parseJournalFlowRequest('Покажи статистику Journal', {
+      plan: { language: 'ru' },
+    });
+
+    expect(request?.sources).toEqual(['journal']);
+  });
 });
 
 describe('Journal/Flow retrieval', () => {

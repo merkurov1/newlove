@@ -6,6 +6,11 @@ import { loadPierrotIdentityMetrics } from '@/lib/analytics/pierrotIdentity';
 import { loadOperationsSnapshot } from '@/lib/operations/dashboard';
 import { createBrainGraphStore } from '@/lib/knowledge/graph/store';
 import { answerBrainResearchQuestion } from '@/lib/knowledge/graph/research';
+import {
+  loadBrainGraph,
+  type GraphQuery,
+} from '@/lib/knowledge/graph/visualization';
+import type { BrainGraphEdge, BrainGraphPayload } from '@/lib/knowledge/graph/types';
 import { detectCommercialQuestion } from '@/lib/pierrot/commercialQuestion';
 import { answerPierrotCommercialQuestion } from '@/lib/pierrot/commercialIntelligence';
 import { detectWebsiteQuestion } from '@/lib/analytics/website/question';
@@ -15,7 +20,12 @@ import {
   answerMediaArchiveQuestion,
   type MediaAnswerResult,
 } from '@/lib/pierrot/mediaAnswer';
-import type { PierrotQueryPlan } from '@/lib/pierrot/queryUnderstanding';
+import {
+  detectGraphDemoRequest,
+  detectJournalFlowIntent,
+  type PierrotQueryPlan,
+} from '@/lib/pierrot/queryUnderstanding';
+import { isCorrectionMessage, isRepeatRequest } from '@/lib/pierrot/correction';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 assertServerOnly('lib/pierrot/ownerTools');
@@ -25,6 +35,7 @@ export type OwnerToolKind =
   | 'rag'
   | 'brain'
   | 'graph'
+  | 'graph_demo'
   | 'research'
   | 'diagnostics'
   | 'analytics'
@@ -37,12 +48,27 @@ export type OwnerToolRequest = {
   query: string;
   /** Media sub-kind, filled only for kind=media. */
   mediaKind?: string;
+  /**
+   * True when a correction/follow-up recovered the original request from the
+   * bounded conversation context instead of classifying the current words.
+   */
+  recoveredFromContext?: boolean;
+};
+
+export type OwnerToolGraphSummary = {
+  query: string | null;
+  nodes: number;
+  edges: number;
+  directEdges: number;
+  inferenceEdges: number;
+  visualizationUrl: string;
 };
 
 export type OwnerToolDetailedResult = {
   text: string;
   provenance: MediaAnswerResult['provenance'] | null;
   mediaKind: string | null;
+  graph?: OwnerToolGraphSummary | null;
 };
 
 function normalize(value: string): string {
@@ -53,10 +79,10 @@ function normalize(value: string): string {
  * Explicit owner commands only. Ordinary questions about the site, art or
  * books must continue through the normal Pierrot answer path.
  */
-export function detectOwnerTool(
+function detectOwnerToolBase(
   message: string,
   options: {
-    queryPlan?: Pick<PierrotQueryPlan, 'intent' | 'correction' | 'followUp'>;
+    queryPlan?: Pick<PierrotQueryPlan, 'intent' | 'correction' | 'followUp' | 'signals'>;
     contextMessages?: string[];
   } = {}
 ): OwnerToolRequest | null {
@@ -80,6 +106,12 @@ export function detectOwnerTool(
   // A named document must reach Brain lookup before any status/commercial
   // shortcut. Explicit slash commands above remain the deliberate exception.
   if (options.queryPlan?.intent === 'document_lookup') return null;
+
+  // A graph demonstration retrieves and traverses real nodes/edges. It is not
+  // the administrative status report.
+  if (detectGraphDemoRequest(message)) {
+    return { kind: 'graph_demo', query: message.trim() };
+  }
 
   // Website intelligence is a first-class owner question: traffic, search,
   // pages, projects and action funnels. It never replaces the commercial
@@ -165,6 +197,69 @@ export function detectOwnerTool(
   }
 
   return null;
+}
+
+function isRecoveryTurn(options: {
+  queryPlan?: Pick<PierrotQueryPlan, 'intent' | 'correction' | 'followUp' | 'signals'>;
+}): boolean {
+  if (!options.queryPlan) return false;
+  if (!options.queryPlan.correction && !options.queryPlan.followUp) return false;
+
+  // A new, independently classified request must not inherit an old tool.
+  if (options.queryPlan.intent === 'general') return true;
+
+  // An intent explicitly inherited from history is a continuation, not a new
+  // request. "Ты выдумал статистику" after a Bluesky report lands here.
+  return (options.queryPlan.signals || []).some((signal) => signal.startsWith('history:'));
+}
+
+/**
+ * Owner-tool detection with bounded correction recovery.
+ *
+ * The current turn is classified first. Only a general correction/follow-up
+ * may recover a more specific earlier tool ("Покажи статистику Bluesky" →
+ * "Ты выдумал статистику"). In that case the recovered tool is executed with
+ * the original question, so the data is fetched again instead of restating
+ * the previous answer.
+ */
+export function detectOwnerTool(
+  message: string,
+  options: {
+    queryPlan?: Pick<PierrotQueryPlan, 'intent' | 'correction' | 'followUp' | 'signals'>;
+    contextMessages?: string[];
+  } = {}
+): OwnerToolRequest | null {
+  const current = detectOwnerToolBase(message, options);
+  const recovery = isRecoveryTurn(options);
+
+  if (!recovery) return current;
+
+  // A generic "stats" match is exactly what caused a Bluesky/Journal/Media
+  // correction to fall back to the site-wide report. Prefer a specific tool
+  // recovered from the original request.
+  const context = (options.contextMessages || []).filter((item) => item.trim());
+
+  for (let index = context.length - 1; index >= 0; index -= 1) {
+    const previousText = context[index];
+    if (isCorrectionMessage(previousText) || isRepeatRequest(previousText)) continue;
+
+    // Journal/Flow are editorial sources with their own retrieval branch. They
+    // must not be recovered as the website project tool just because the
+    // previous question contained the word "статистика".
+    if (detectJournalFlowIntent(previousText).intent) return null;
+
+    const recovered = detectOwnerToolBase(previousText);
+    if (!recovered) continue;
+    if (recovered.kind === 'stats' && context.length > 1) continue;
+
+    return {
+      ...recovered,
+      query: previousText.trim(),
+      recoveredFromContext: true,
+    };
+  }
+
+  return current;
 }
 
 function number(value: number | null | undefined): string {
@@ -330,6 +425,236 @@ async function formatGraph(language: 'ru' | 'en'): Promise<string> {
       ? `Последний запуск Graph: ${run.status} · ${dateLabel(run.created_at)}`
       : 'Последний запуск Graph: —',
   ].join('\n');
+}
+
+function graphDemoSubject(message: string): string | null {
+  const subject = message
+    .replace(/^\/(?:graph|research)\s*/i, '')
+    .replace(
+      /(покажи|показать|продемонстрир[а-яё]*|объясни|расскажи|как|работает|устроен[а-яё]*|мне|пожалуйста|show|demonstrate|explain|how|does|the|work[s]?|graph|граф[а-яё]*|связ[а-яё]*|relations?(?:hip)?s?|knowledge|знаний|по|on|of|в|with|через|between)/gi,
+      ' '
+    )
+    .replace(/[?!.,:;"«»“”]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (subject.length < 3 || subject.length > 120) return null;
+  return subject;
+}
+
+function edgeProvenance(edge: BrainGraphEdge): string | null {
+  if (!edge.provenance) return null;
+  const heading = edge.provenance.heading ? `, ${edge.provenance.heading}` : '';
+  return `«${edge.provenance.documentTitle}»${heading}`;
+}
+
+function formatGraphEdge(
+  edge: BrainGraphEdge,
+  labels: Map<string, string>,
+  index: number
+): string {
+  const source = labels.get(edge.source) || edge.source;
+  const target = labels.get(edge.target) || edge.target;
+  const provenance = edgeProvenance(edge);
+  const confidence = Number.isFinite(edge.confidence)
+    ? ` · confidence ${edge.confidence.toFixed(2)}`
+    : '';
+  const evidence = provenance ? `\n   Evidence: ${provenance}` : '';
+
+  return `${index}. ${source} —${edge.label}→ ${target}${confidence}${evidence}`;
+}
+
+function findTraversalPath(
+  edges: BrainGraphEdge[],
+  labels: Map<string, string>
+): string | null {
+  const direct = edges.filter((edge) => !edge.inference);
+  const bySource = new Map<string, BrainGraphEdge[]>();
+
+  for (const edge of direct) {
+    const list = bySource.get(edge.source) || [];
+    list.push(edge);
+    bySource.set(edge.source, list);
+  }
+
+  for (const first of direct) {
+    const second = (bySource.get(first.target) || []).find(
+      (candidate) => candidate.id !== first.id && candidate.target !== first.source
+    );
+    if (!second) continue;
+
+    const a = labels.get(first.source) || first.source;
+    const b = labels.get(first.target) || first.target;
+    const c = labels.get(second.target) || second.target;
+
+    return `${a} —${first.label}→ ${b} —${second.label}→ ${c}`;
+  }
+
+  return null;
+}
+
+type GraphLoader = (store: NonNullable<ReturnType<typeof createBrainGraphStore>>, query: GraphQuery) => Promise<BrainGraphPayload>;
+
+async function formatGraphDemo(
+  message: string,
+  language: 'ru' | 'en',
+  deps: { loadGraph?: GraphLoader } = {}
+): Promise<OwnerToolDetailedResult> {
+  const store = createBrainGraphStore();
+
+  if (!store) {
+    return {
+      text:
+        language === 'ru'
+          ? 'Knowledge Graph недоступен: база знаний не настроена. Это не означает, что в графе нет связей — я просто не могу их прочитать.'
+          : 'The Knowledge Graph is unavailable because the knowledge database is not configured. This does not mean the graph has no relationships; I simply cannot read them.',
+      provenance: null,
+      mediaKind: null,
+      graph: null,
+    };
+  }
+
+  const query = graphDemoSubject(message);
+  const loadGraph: GraphLoader = deps.loadGraph || loadBrainGraph;
+
+  try {
+    const payload = await loadGraph(store, {
+      ...(query ? { q: query } : {}),
+      limit: 160,
+    });
+
+    const labels = new Map(payload.nodes.map((node) => [node.id, node.label]));
+    const direct = payload.edges.filter((edge) => !edge.inference);
+    const inference = payload.edges.filter((edge) => edge.inference);
+    const shownDirect = direct.slice(0, 4);
+    const shownInference = inference.slice(0, 3);
+    const path = findTraversalPath(payload.edges, labels);
+    const visualizationUrl = '/admin/brain/graph';
+    const summary: OwnerToolGraphSummary = {
+      query,
+      nodes: payload.nodes.length,
+      edges: payload.edges.length,
+      directEdges: direct.length,
+      inferenceEdges: inference.length,
+      visualizationUrl,
+    };
+
+    if (payload.nodes.length === 0) {
+      return {
+        text:
+          language === 'ru'
+            ? [
+                query
+                  ? `В Knowledge Graph не нашлось сущностей или документов по запросу «${query}».`
+                  : 'Knowledge Graph сейчас не вернул сущностей и документов.',
+                'Это результат конкретного graph-запроса, а не утверждение, что граф пуст.',
+                'Интерактивная визуализация: /admin/brain/graph.',
+              ].join('\n')
+            : [
+                query
+                  ? `The Knowledge Graph returned no entities or documents for “${query}”.`
+                  : 'The Knowledge Graph returned no entities or documents for this query.',
+                'This is the result of this specific graph query, not a claim that the whole graph is empty.',
+                'Interactive view: /admin/brain/graph.',
+              ].join('\n'),
+        provenance: null,
+        mediaKind: null,
+        graph: summary,
+      };
+    }
+
+    if (payload.edges.length === 0) {
+      return {
+        text:
+          language === 'ru'
+            ? [
+                `Граф вернул ${payload.nodes.length} узлов, но ни одной связи для этой выборки.`,
+                'Количество сущностей само по себе не доказывает наличие отношений, поэтому я не буду его выдавать за результат анализа.',
+                'Интерактивная визуализация: /admin/brain/graph.',
+              ].join('\n')
+            : [
+                `The graph returned ${payload.nodes.length} nodes but no relationships for this sample.`,
+                'Entity counts alone do not prove relationships, so I will not present them as an analysis result.',
+                'Interactive view: /admin/brain/graph.',
+              ].join('\n'),
+        provenance: null,
+        mediaKind: null,
+        graph: summary,
+      };
+    }
+
+    const lines: string[] = [];
+
+    if (language === 'ru') {
+      lines.push(query ? `Graph retrieval по запросу «${query}»:` : 'Graph retrieval по текущей выборке:');
+      lines.push(
+        `Найдено ${payload.nodes.length} узлов и ${payload.edges.length} связей в выборке. Ниже — реальные связи, а не статистика очереди.`
+      );
+    } else {
+      lines.push(query ? `Graph retrieval for “${query}”:` : 'Graph retrieval for the current sample:');
+      lines.push(
+        `Found ${payload.nodes.length} nodes and ${payload.edges.length} relationships in the sample. The relationships below are real retrieved edges, not queue statistics.`
+      );
+    }
+
+    if (path) {
+      lines.push('', language === 'ru' ? '**Цепочка связей:**' : '**Relationship path:**', path);
+    }
+
+    if (shownDirect.length > 0) {
+      lines.push('', language === 'ru' ? '**Прямые связи:**' : '**Direct relationships:**');
+      lines.push(
+        ...shownDirect.map((edge, index) => formatGraphEdge(edge, labels, index + 1))
+      );
+    }
+
+    if (shownInference.length > 0) {
+      lines.push(
+        '',
+        language === 'ru'
+          ? '**Гипотезы (inference=true, требуют проверки):**'
+          : '**Hypotheses (inference=true, require verification):**'
+      );
+      lines.push(
+        ...shownInference.map((edge, index) => formatGraphEdge(edge, labels, index + 1))
+      );
+    } else {
+      lines.push(
+        '',
+        language === 'ru'
+          ? 'Связей с inference=true в этой выборке нет. Прямые связи подтверждены провенансом документа.'
+          : 'No inference=true relationships in this sample. Direct relationships carry document provenance.'
+      );
+    }
+
+    lines.push(
+      '',
+      language === 'ru'
+        ? `Визуализация: ${visualizationUrl}. Это выборка из ${payload.nodes.length} узлов; полный граф шире и здесь не утверждается.`
+        : `Visualisation: ${visualizationUrl}. This is a sample of ${payload.nodes.length} nodes; the full graph is larger and is not claimed here.`
+    );
+
+    return {
+      text: lines.join('\n'),
+      provenance: null,
+      mediaKind: null,
+      graph: summary,
+    };
+  } catch (error) {
+    console.error('[Pierrot graph demo]', {
+      code: error instanceof Error ? error.message.slice(0, 120) : 'graph_demo_failed',
+    });
+
+    return {
+      text:
+        language === 'ru'
+          ? 'Не удалось выполнить graph retrieval: запрос к графу завершился ошибкой. Это не означает, что связей нет; я не буду подменять результат количеством сущностей.'
+          : 'Graph retrieval failed: the graph query returned an error. This does not mean there are no relationships; I will not substitute entity counts for the result.',
+      provenance: null,
+      mediaKind: null,
+      graph: null,
+    };
+  }
 }
 
 function stripResearchPrefix(message: string): string {
@@ -510,8 +835,13 @@ async function formatMedia(
 
 export async function runOwnerToolDetailed(
   request: OwnerToolRequest,
-  language: 'ru' | 'en'
+  language: 'ru' | 'en',
+  deps: { loadGraph?: GraphLoader } = {}
 ): Promise<OwnerToolDetailedResult> {
+  if (request.kind === 'graph_demo') {
+    return formatGraphDemo(request.query, language, deps);
+  }
+
   if (request.kind === 'media') {
     try {
       return await formatMedia(request, language);
@@ -537,10 +867,13 @@ export async function runOwnerToolDetailed(
 
 export async function runOwnerTool(
   request: OwnerToolRequest,
-  language: 'ru' | 'en'
+  language: 'ru' | 'en',
+  deps: { loadGraph?: GraphLoader } = {}
 ): Promise<string> {
   try {
     switch (request.kind) {
+      case 'graph_demo':
+        return (await formatGraphDemo(request.query, language, deps)).text;
       case 'media': {
         const result = await formatMedia(request, language);
         return result.text;

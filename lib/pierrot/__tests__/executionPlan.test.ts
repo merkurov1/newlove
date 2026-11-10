@@ -159,6 +159,106 @@ describe('Pierrot execution plan routing', () => {
     expect(plan.searchQuery).toContain('рецепты');
   });
 
+  it('routes Bluesky statistics to the Bluesky analytics tool, not the site report', () => {
+    const plan = buildPierrotExecutionPlan('Покажи статистику по Bluesky', { ownerMode: true });
+
+    expect(plan.ownerTool?.kind).toBe('website');
+    expect(plan.operation).toBe('website.report');
+    expect(plan.operation).not.toBe('system.stats');
+    expect(plan.ownerTool?.query).toBe('Покажи статистику по Bluesky');
+  });
+
+  it('continues a Bluesky report on “А подробнее?” from the original request', () => {
+    const plan = buildPierrotExecutionPlan('А подробнее?', {
+      ownerMode: true,
+      history: history('Покажи статистику по Bluesky'),
+    });
+
+    expect(plan.ownerTool?.kind).toBe('website');
+    expect(plan.ownerTool?.query).toBe('Покажи статистику по Bluesky');
+    expect(plan.recoveredFromContext).toBe(true);
+  });
+
+  it('re-reads the source on “Ты выдумал статистику” instead of returning site stats', () => {
+    const plan = buildPierrotExecutionPlan('Ты выдумал статистику', {
+      ownerMode: true,
+      history: history('Покажи статистику по Bluesky'),
+    });
+
+    expect(plan.ownerTool?.kind).toBe('website');
+    expect(plan.ownerTool?.query).toBe('Покажи статистику по Bluesky');
+    expect(plan.operation).toBe('website.report');
+    expect(plan.operation).not.toBe('system.stats');
+  });
+
+  it('keeps “Посещаемость /flow” as exact page analytics, not Flow entries', () => {
+    const plan = buildPierrotExecutionPlan('Посещаемость /flow', { ownerMode: true });
+
+    expect(plan.queryPlan.sources.flow).toBe(false);
+    expect(plan.ownerTool?.kind).toBe('website');
+    expect(plan.operation).toBe('website.report');
+  });
+
+  it('runs real graph demo retrieval for “Покажи, как работает граф”', () => {
+    const plan = buildPierrotExecutionPlan('Покажи, как работает граф', { ownerMode: true });
+
+    expect(plan.ownerTool?.kind).toBe('graph_demo');
+    expect(plan.operation).toBe('graph.demo');
+    expect(plan.operation).not.toBe('graph.report');
+  });
+
+  it('re-runs the original graph demonstration after a correction', () => {
+    const plan = buildPierrotExecutionPlan('Ты выдумал связи', {
+      ownerMode: true,
+      history: history('Покажи, как работает граф по теме Digital Temple'),
+    });
+
+    expect(plan.ownerTool?.kind).toBe('graph_demo');
+    expect(plan.ownerTool?.query).toBe('Покажи, как работает граф по теме Digital Temple');
+    expect(plan.operation).toBe('graph.demo');
+  });
+
+  it('keeps the Journal inventory on the Journal source', () => {
+    const plan = buildPierrotExecutionPlan('Покажи статистику Journal', { ownerMode: true });
+
+    expect(plan.queryPlan.intent).toBe('journal');
+    expect(plan.queryPlan.sources.journal).toBe(true);
+    expect(plan.ownerTool).toBeNull();
+    expect(plan.operation).toBe('journal.search');
+  });
+
+  it('re-reads Journal data after a correction instead of switching to website stats', () => {
+    const plan = buildPierrotExecutionPlan('Ты выдумал статистику', {
+      ownerMode: true,
+      history: history('Покажи статистику Journal'),
+    });
+
+    expect(plan.queryPlan.intent).toBe('journal');
+    expect(plan.ownerTool).toBeNull();
+    expect(plan.operation).toBe('journal.search');
+  });
+
+  it('sends “публикации в СМИ за 2026 год” to the complete Media catalogue', () => {
+    const plan = buildPierrotExecutionPlan('Публикации в СМИ за 2026 год', {
+      ownerMode: true,
+    });
+
+    expect(plan.ownerTool?.kind).toBe('media');
+    expect(plan.ownerTool?.mediaKind).toBe('list');
+    expect(plan.operation).toBe('media.search');
+  });
+
+  it('does not continue the previous Bluesky tool after a topic change', () => {
+    const plan = buildPierrotExecutionPlan('Как у меня дела?', {
+      ownerMode: true,
+      history: history('Покажи статистику по Bluesky'),
+    });
+
+    expect(plan.ownerTool).toBeNull();
+    expect(plan.queryPlan.intent).toBe('personal_analysis');
+    expect(plan.requiresConversationContext).toBe(false);
+  });
+
   it('continues a source search with a date filter request', () => {
     const plan = buildPierrotExecutionPlan('А за 2025 год?', {
       ownerMode: true,

@@ -315,6 +315,7 @@ export type WebsiteQuestionScope =
   | 'traffic'
   | 'search'
   | 'pages'
+  | 'page'
   | 'compare'
   | 'projects'
   | 'funnel'
@@ -333,6 +334,8 @@ export type WebsiteQuestion = {
   wantsRecommendations: boolean;
   wantsDetailed?: boolean;
   project: string | null;
+  /** Exact public URL path when the question names one (for example /flow). */
+  pagePath?: string | null;
   periodKey:
     | 'last_7_days'
     | 'previous_7_days'

@@ -25,6 +25,7 @@ describe('detectWebsiteQuestion', () => {
       ['Сравни последние 30 дней с предыдущими', 'compare'],
       ['Что происходит с моим публичным присутствием?', 'overview'],
       ['Покажи статистику Bluesky', 'bluesky'],
+      ['Расскажи про Bluesky', 'bluesky'],
       ['Сравни русскую и английскую рассылки', 'newsletter'],
       ['Покажи статистику рассылок', 'newsletter'],
       ['Что Vercel знает о качестве сайта?', 'health'],
@@ -35,6 +36,19 @@ describe('detectWebsiteQuestion', () => {
       const question = ask(message);
       expect({ message, scope: question?.scope }).toEqual({ message, scope });
     }
+  });
+
+  it('scopes a question to an exact URL instead of a whole project', () => {
+    expect(ask('Посещаемость /flow')).toMatchObject({
+      website: true,
+      scope: 'page',
+      pagePath: '/flow',
+    });
+    expect(ask('Покажи метрики https://merkurov.love/flow/')).toMatchObject({
+      scope: 'page',
+      pagePath: '/flow',
+    });
+    expect(ask('Посещаемость /flow')?.project).toBeNull();
   });
 
   it('detects the named project and keeps it attached', () => {

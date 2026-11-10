@@ -33,6 +33,7 @@ export async function answerWebsiteAnalyticsQuestion(input: {
       periodKey: question.periodKey,
       customPeriod: question.customPeriod,
       project: question.project,
+      pagePath: question.pagePath ?? null,
     });
 
     return { answered: true, markdown: report.markdown, scope: report.scope };

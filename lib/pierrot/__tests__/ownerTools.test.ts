@@ -66,4 +66,30 @@ describe('Pierrot owner tool routing', () => {
     expect(detectOwnerTool('What is my biography?')).toBeNull();
     expect(detectOwnerTool('Покажи граф знаний')?.kind).toBe('graph');
   });
+
+  it('distinguishes a graph demonstration from graph status', () => {
+    expect(detectOwnerTool('Покажи, как работает граф')?.kind).toBe('graph_demo');
+    expect(detectOwnerTool('Пройди по связям и покажи evidence')?.kind).toBe('graph_demo');
+    expect(detectOwnerTool('Покажи состояние графа')?.kind).toBe('graph');
+  });
+
+  it('recovers the original analytics tool for a correction', () => {
+    const tool = detectOwnerTool('Ты выдумал статистику', {
+      queryPlan: { intent: 'general', correction: true, followUp: false },
+      contextMessages: ['Покажи статистику по Bluesky'],
+    });
+
+    expect(tool?.kind).toBe('website');
+    expect(tool?.query).toBe('Покажи статистику по Bluesky');
+    expect(tool?.recoveredFromContext).toBe(true);
+  });
+
+  it('does not recover an old tool for a new independent request', () => {
+    const tool = detectOwnerTool('Как у меня дела?', {
+      queryPlan: { intent: 'personal_analysis', correction: false, followUp: false },
+      contextMessages: ['Покажи статистику по Bluesky'],
+    });
+
+    expect(tool).toBeNull();
+  });
 });

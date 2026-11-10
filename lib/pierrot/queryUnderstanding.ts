@@ -65,6 +65,11 @@ export type PierrotQueryPlan = {
   correction: boolean;
   followUp: boolean;
   /**
+   * True when the owner asks to see the graph working (retrieval, traversal,
+   * evidence and a representation), not only its entity/relationship counts.
+   */
+  graphDemo: boolean;
+  /**
    * True when the current message explicitly chooses a new source/topic.
    * Such a turn must never inherit the previous tool or intent.
    */
@@ -90,6 +95,29 @@ function normalize(value: string): string {
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * URL paths are web-analytics subjects, not editorial source names.
+ * "/flow" means the page whose traffic should be measured; it is not the
+ * Flow stream, and "/journal" is not the Journal archive.
+ */
+function stripUrlPathTokens(value: string): string {
+  return value
+    .replace(/https?:\/\/[^\s]+/gi, ' ')
+    .replace(/(^|\s)\/[a-z0-9][a-z0-9\-/]*/gi, '$1 ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function hasTrafficContext(text: string): boolean {
+  return /(посещаем|трафик|просмотр|посетител|визит|visitors?|traffic|pageviews?|page\s*views?|analytics|аналитик|статистик|метрик)/i.test(
+    text
+  );
+}
+
+function hasEditorialRecordContext(text: string): boolean {
+  return /(выпуск|запис|пост|note|entries|entry|issues?|letters?)/i.test(text);
 }
 
 function hasTerm(text: string, term: string): boolean {
@@ -366,6 +394,22 @@ export function detectRequestedResultLimit(message: string): number | null {
   return null;
 }
 
+/**
+ * "Покажи, как работает граф" is a request for a real graph retrieval, not
+ * for the administrative counters. A bare "покажи граф знаний" may still be a
+ * status/visualisation request, so the demo detector requires an explicit
+ * how/traverse/relationships/provenance language.
+ */
+export function detectGraphDemoRequest(message: string): boolean {
+  const text = normalize(message);
+
+  if (!/(граф|graph|связ|relationship|entity|сущност)/i.test(text)) return false;
+
+  return /(как\s+(?:работает|устроен|работают|строится)\s+(?:граф|граф\s+знаний|связ)|продемонстрир|покажи\s+(?:мне\s+)?(?:как\s+(?:работает|работают|строится)\s+(?:граф|связ)|связи|relations)|пройди\s+по\s+связ|multi[-\s]?hop|graph\s+(?:demo|traversal|visuali[sz]ation|search)|поиск\s+по\s+граф|graph\s+retrieval)/i.test(
+    text
+  );
+}
+
 export type PierrotSourceSwitch = 'media' | 'journal' | 'flow' | 'brain' | null;
 
 /**
@@ -404,7 +448,9 @@ export function detectJournalFlowIntent(message: string): {
   intent: 'journal' | 'flow' | 'journal_flow' | null;
   signals: string[];
 } {
-  const text = normalize(message);
+  // Evaluate editorial words after removing explicit URL paths. Otherwise the
+  // page "/flow" would be misrouted to the Flow stream instead of analytics.
+  const text = normalize(stripUrlPathTokens(message));
   const signals: string[] = [];
 
   // GitHub issues are a development source, not the Journal.
@@ -424,6 +470,13 @@ export function detectJournalFlowIntent(message: string): {
     /(?:записи|посты|заметки|публикации)[^.!?\n]{0,32}(?:flow|поток|лент)/i.test(text) ||
     /(?:flow|поток|лент)[^.!?\n]{0,32}(?:записи|посты|заметки|публикации)/i.test(text);
 
+  // "Посещаемость Flow" / "трафик Flow" asks about the project page, not the
+  // editorial stream. Journal keeps its own inventory questions ("статистика
+  // Journal" means issue counts), so this guard is Flow-only.
+  if (flow && !journal && hasTrafficContext(text) && !hasEditorialRecordContext(text)) {
+    return { intent: null, signals: ['flow:traffic_not_editorial'] };
+  }
+
   if (journal) signals.push('journal:request');
   if (flow) signals.push('flow:request');
 
@@ -433,8 +486,13 @@ export function detectJournalFlowIntent(message: string): {
   return { intent: null, signals };
 }
 
+/**
+ * A follow-up changes or continues the *previous* request. A new question that
+ * happens to start with "как", "что" or "почему" is not a follow-up: it must
+ * be classified on its own merits.
+ */
 const FOLLOW_UP_PATTERN =
-  /^(?:а\s+)?(?:теперь|за|есть|только)(?=\s|$)|^(?:а|и|но|and|but|so)?\s*(?:подробнее|дальше|продолжай|еще|ещё|more|continue|go on|почему|why|как|how|what about|а что|и что|and now|and for)(?=\s|$)/i;
+  /^(?:а\s+)?(?:теперь|за|есть|только)(?=\s|$)|^(?:а|и|но|and|but|so)?\s*(?:подробнее|дальше|продолжай|еще|ещё|more|continue|go on|what about|а что|и что|and now|and for)(?=\s|$)/i;
 
 function isCorrection(text: string): boolean {
   return isCorrectionMessage(text);
@@ -534,6 +592,11 @@ function classifyIntent(input: {
     return { intent: journalFlow.intent, signals };
   }
 
+  if (detectGraphDemoRequest(message)) {
+    signals.push('graph:demo_request');
+    return { intent: 'knowledge_graph', signals };
+  }
+
   if (
     /(knowledge\s*graph|граф\s*знаний|состояни[ея]\s+граф|graph\s+(status|state)|покажи\s+граф)/i.test(
       text
@@ -549,6 +612,35 @@ function classifyIntent(input: {
     )
   ) {
     signals.push('explicit:analytics');
+    return { intent: 'analytics', signals };
+  }
+
+  // Website/traffic questions are analytics too. Classifying them here keeps
+  // them from inheriting an unrelated previous intent on a phrase such as
+  // "И что теперь с сайтом?".
+  if (
+    /(сайт|website|веб-?сайт|трафик|traffic|посещаем|посетител|visitor|pageviews?|page\s*views?|ga4|google\s*analytics|search\s*console|seo|органик|organic)/i.test(
+      text
+    ) &&
+    /(статистик|statistics|метрик|metrics|аналитик|analytics|трафик|traffic|посещаем|посетител|visitor|pageviews?|конверси|conversion|seo|органик|organic|изменил|динамик|откуда|источник[а-яё]*\s+трафика|происходит|что\s+(?:у\s+нас\s+)?(?:с|теперь))/i.test(
+      text
+    )
+  ) {
+    signals.push('analytics:website');
+    return { intent: 'analytics', signals };
+  }
+
+  // Analytics for a named public source is still analytics, not a general
+  // site report and not a request for the source's editorial records.
+  if (
+    /(bluesky|bsky|блускай|блюскай|newsletter|рассылк[а-яё]*|public\s+presence|публичн[а-яё]*\s+присутств|digital\s+footprint|цифров[а-яё]*\s+след)/i.test(
+      text
+    ) &&
+    /(статистик|statistics|метрик|metrics|аналитик|analytics|покажи|show|сколько|how\s+many|данные|data|аудитор|audience|подписчик|follower|охват|reach|взаимодейств|engagement|результат|performance)/i.test(
+      text
+    )
+  ) {
+    signals.push('analytics:source');
     return { intent: 'analytics', signals };
   }
 
@@ -698,6 +790,33 @@ function mergeSources(
 }
 
 /**
+ * A correction often follows a chain of follow-ups. The original intent lives
+ * further back than the immediate previous user turn, so walk back to the last
+ * substantive request instead of stopping at "А подробнее?" or "Не то".
+ */
+export function previousSubstantiveUserMessage(
+  history: HistoryItem[] | undefined
+): HistoryItem | null {
+  if (!history) return null;
+
+  let fallback: HistoryItem | null = null;
+
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const item = history[index];
+    if (item.role !== 'user' || !item.content.trim()) continue;
+
+    if (!fallback) fallback = item;
+
+    const normalized = normalize(item.content);
+    if (isCorrection(normalized) || isFollowUp(normalized, item.content)) continue;
+
+    return item;
+  }
+
+  return fallback;
+}
+
+/**
  * Main entry point. The function is deterministic and intentionally cheap.
  * History is inspected only to resolve an explicit correction or a short
  * follow-up, never to keep an old tool alive after a topic change.
@@ -714,6 +833,7 @@ export function understandPierrotQuery(
   const extracted = extractRequestedDocumentTitle(originalQuery);
   const correction = isCorrection(normalizedQuery);
   const followUp = isFollowUp(normalizedQuery, originalQuery);
+  const graphDemo = detectGraphDemoRequest(originalQuery);
   const topicSwitch = detectExplicitSourceSwitch(originalQuery) !== null;
   const resultLimit = detectRequestedResultLimit(originalQuery);
   const signals: string[] = [];
@@ -721,6 +841,7 @@ export function understandPierrotQuery(
   if (period) signals.push(`period:${period.label}`);
   if (correction) signals.push('correction');
   if (followUp) signals.push('follow_up');
+  if (graphDemo) signals.push('graph:demo');
   if (topicSwitch) signals.push('topic_switch');
   if (resultLimit) signals.push(`limit:${resultLimit}`);
 
@@ -780,8 +901,9 @@ export function understandPierrotQuery(
 
   // Explicit corrections and short follow-ups inherit the previous user
   // request only when the current message does not itself establish a new
-  // intent. This is what makes "Не то, я имею в виду документ в Brain" work
-  // without pinning a tool forever.
+  // intent. A classified request ("Как у меня дела?", "Покажи статистику
+  // Journal") is a new request, not a continuation of whatever was discussed
+  // before it.
   if (
     depth === 0 &&
     options.allowHistory !== false &&
@@ -790,17 +912,9 @@ export function understandPierrotQuery(
     (correction || followUp) &&
     !topicSwitch &&
     !documentTitle &&
-    (intent === 'general' ||
-      intent === 'personal_analysis' ||
-      intent === 'web_research' ||
-      intent === 'media_mentions' ||
-      intent === 'journal' ||
-      intent === 'flow' ||
-      intent === 'journal_flow')
+    intent === 'general'
   ) {
-    const lastUser = [...options.history]
-      .reverse()
-      .find((item) => item.role === 'user' && item.content.trim());
+    const lastUser = previousSubstantiveUserMessage(options.history);
 
     if (lastUser) {
       const previous = understandPierrotQuery(lastUser.content, {
@@ -824,6 +938,7 @@ export function understandPierrotQuery(
           period: period ?? previous.period,
           correction: true,
           followUp,
+          graphDemo,
           topicSwitch,
           resultLimit,
           sources: sourcesForIntent('media_mentions'),
@@ -862,6 +977,7 @@ export function understandPierrotQuery(
           period: period ?? previous.period,
           correction,
           followUp,
+          graphDemo: graphDemo || previous.graphDemo,
           topicSwitch,
           resultLimit: resultLimit ?? previous.resultLimit,
           sources: merged,
@@ -897,6 +1013,7 @@ export function understandPierrotQuery(
     period,
     correction,
     followUp,
+    graphDemo,
     topicSwitch,
     resultLimit,
     sources,

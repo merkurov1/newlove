@@ -109,6 +109,67 @@ describe('Pierrot query understanding', () => {
   });
 });
 
+describe('Pierrot follow-up and correction intelligence', () => {
+  it('keeps the original Bluesky analytics intent across “А подробнее?”', () => {
+    const plan = understandPierrotQuery('А подробнее?', {
+      history: [{ role: 'user', content: 'Покажи статистику по Bluesky' }],
+    });
+
+    expect(plan.followUp).toBe(true);
+    expect(plan.intent).toBe('analytics');
+    expect(plan.sources.analytics).toBe(true);
+    expect(plan.sources.brain).toBe(false);
+  });
+
+  it('does not inherit an old intent for a new independent health question', () => {
+    const plan = understandPierrotQuery('Как у меня дела?', {
+      history: [{ role: 'user', content: 'Покажи статистику по Bluesky' }],
+    });
+
+    expect(plan.intent).toBe('personal_analysis');
+    expect(plan.sources.brain).toBe(true);
+    expect(plan.sources.analytics).toBe(false);
+    expect(plan.followUp).toBe(false);
+  });
+
+  it('recovers the original request through a chain of follow-ups', () => {
+    const plan = understandPierrotQuery('Перечитай вопрос', {
+      history: [
+        { role: 'user', content: 'Покажи статистику по Bluesky' },
+        { role: 'assistant', content: 'Bluesky: подписчики 33.' },
+        { role: 'user', content: 'А подробнее?' },
+        { role: 'assistant', content: 'Ограниченная выборка.' },
+      ],
+    });
+
+    expect(plan.correction).toBe(true);
+    expect(plan.intent).toBe('analytics');
+    expect(plan.sources.analytics).toBe(true);
+  });
+
+  it('routes a page visit question away from the Flow editorial stream', () => {
+    const plan = understandPierrotQuery('Посещаемость /flow');
+
+    expect(plan.intent).not.toBe('flow');
+    expect(plan.sources.flow).toBe(false);
+  });
+
+  it('routes a graph demonstration to real graph retrieval, not graph stats', () => {
+    const plan = understandPierrotQuery('Покажи, как работает граф');
+
+    expect(plan.intent).toBe('knowledge_graph');
+    expect(plan.graphDemo).toBe(true);
+    expect(plan.sources.graph).toBe(true);
+  });
+
+  it('keeps an ordinary Graph status question out of demo mode', () => {
+    const plan = understandPierrotQuery('Покажи граф знаний');
+
+    expect(plan.intent).toBe('knowledge_graph');
+    expect(plan.graphDemo).toBe(false);
+  });
+});
+
 describe('document title extraction', () => {
   it('extracts a quoted exact title', () => {
     expect(
