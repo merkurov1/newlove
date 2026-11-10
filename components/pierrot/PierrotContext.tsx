@@ -62,6 +62,12 @@ import {
   type BrainLanguage,
 } from '@/lib/pierrot/brain';
 import {
+  detectArtEngineModeCommand,
+  getArtEngineModeText,
+  isArtEngineExitCommand,
+  type ArtEngineModeLanguage,
+} from '@/lib/pierrot/artEngineMode';
+import {
   normalizePierrotErrorCode,
   pierrotErrorCopy,
   type PierrotErrorLanguage,
@@ -128,6 +134,7 @@ type PierrotContextValue = {
   isUnframedMode: boolean;
   canUseUnframedMode: boolean;
   canShowBrainMode: boolean;
+  isArtEngineMode: boolean;
   humanPresence: HumanPresencePublicState | null;
   isHumanActive: boolean;
   isHumanPending: boolean;
@@ -136,6 +143,8 @@ type PierrotContextValue = {
   openConversation: () => void;
   toggleConversation: () => void;
   toggleUnframedMode: () => void;
+  exitArtEngineMode: (text?: string) => void;
+  tryExitArtEngineMode: (text: string) => boolean;
   closeConversation: () => void;
   closeChat: () => void;
   updateDraft: (value: string, caret?: number | null) => void;
@@ -525,6 +534,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
   const [isAdminSession, setIsAdminSession] = useState(false);
   const [isUnframedMode, setIsUnframedMode] = useState(false);
   const [hasChosenUnframedMode, setHasChosenUnframedMode] = useState(false);
+  const [isArtEngineMode, setIsArtEngineMode] = useState(false);
   const [isBrainUnlocked, setIsBrainUnlocked] = useState(() => {
     if (typeof window === 'undefined') return false;
 
@@ -1086,6 +1096,15 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     return 'en';
   }, []);
 
+  const artEngineLanguage = useCallback(
+    (text: string): ArtEngineModeLanguage => {
+      if (/[а-яё]/i.test(text)) return 'ru';
+      if (/[a-z]/i.test(text)) return 'en';
+      return currentBrainLanguage();
+    },
+    [currentBrainLanguage]
+  );
+
   const appendBrainExamples = useCallback(
     (languageOverride?: BrainLanguage) => {
       const language = languageOverride ?? currentBrainLanguage();
@@ -1158,6 +1177,56 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     setDraft(value);
     setDraftCaret(caret);
   }, []);
+
+  const enterArtEngineMode = useCallback(
+    (languageOverride?: ArtEngineModeLanguage) => {
+      const language = languageOverride ?? currentBrainLanguage();
+
+      setIsArtEngineMode(true);
+      appendMessage({
+        role: 'assistant',
+        content: getArtEngineModeText(language, 'enter'),
+        meta: { kind: 'chat' },
+      });
+    },
+    [appendMessage, currentBrainLanguage]
+  );
+
+  const exitArtEngineMode = useCallback(
+    (text?: string) => {
+      if (!isArtEngineMode) return;
+
+      const language: ArtEngineModeLanguage = text
+        ? artEngineLanguage(text)
+        : currentBrainLanguage();
+
+      if (text) {
+        appendMessage({
+          role: 'user',
+          content: text,
+          meta: { kind: 'chat' },
+        });
+      }
+
+      setIsArtEngineMode(false);
+      appendMessage({
+        role: 'assistant',
+        content: getArtEngineModeText(language, 'exit'),
+        meta: { kind: 'chat' },
+      });
+    },
+    [appendMessage, artEngineLanguage, currentBrainLanguage, isArtEngineMode]
+  );
+
+  const tryExitArtEngineMode = useCallback(
+    (text: string) => {
+      if (!isArtEngineMode || !isArtEngineExitCommand(text)) return false;
+
+      exitArtEngineMode(text);
+      return true;
+    },
+    [exitArtEngineMode, isArtEngineMode]
+  );
 
   const executeNavigation = useCallback(
     (proposal: PierrotNavigationProposal) => {
@@ -1443,6 +1512,28 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (loadingRef.current) return;
+
+      const artEngineCommand = detectArtEngineModeCommand(text);
+
+      if (artEngineCommand === 'enter' && !isArtEngineMode) {
+        appendMessage({
+          role: 'user',
+          content: text,
+          meta: { kind: 'chat' },
+        });
+        setDraft('');
+        setDraftCaret(0);
+
+        enterArtEngineMode(artEngineLanguage(text));
+        return;
+      }
+
+      if (artEngineCommand === 'exit' && isArtEngineMode) {
+        exitArtEngineMode(text);
+        setDraft('');
+        setDraftCaret(0);
+        return;
+      }
 
       if (canUseUnframedMode && isBrainActivationPhrase(text)) {
         const detected = detectPierrotLanguage(text);
@@ -1968,14 +2059,18 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       appendBrainExamples,
       appendMessage,
       applyHumanState,
+      artEngineLanguage,
       canUseUnframedMode,
       cancelOnboarding,
       currentBrainLanguage,
       draft,
+      enterArtEngineMode,
       executeNavigation,
+      exitArtEngineMode,
       hasChosenUnframedMode,
       humanLanguage,
       introduceSection,
+      isArtEngineMode,
       isUnframedMode,
       pathname,
       removeMessage,
@@ -2064,6 +2159,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       setIsAdminSession(false);
       setIsUnframedMode(canUseUnframedMode);
       setHasChosenUnframedMode(false);
+      setIsArtEngineMode(false);
       updatePendingNavigation(null);
 
       try {
@@ -2192,6 +2288,7 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     isUnframedMode,
     canUseUnframedMode,
     canShowBrainMode,
+    isArtEngineMode,
     humanPresence,
     isHumanActive: humanPresence?.status === 'active',
     isHumanPending: humanPresence?.status === 'pending',
@@ -2200,6 +2297,8 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
     openConversation,
     toggleConversation,
     toggleUnframedMode,
+    exitArtEngineMode,
+    tryExitArtEngineMode,
     closeConversation,
     closeChat,
     updateDraft,

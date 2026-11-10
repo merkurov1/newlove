@@ -77,9 +77,13 @@ function failedAttemptFromResponse(url: string, data: any): AttemptSummary {
 export default function ArtEngineWorkspace({
   authFetch,
   embeddedInPierrot = false,
+  embeddedInDialog = false,
+  onModeCommand,
 }: {
   authFetch: AuthFetch;
   embeddedInPierrot?: boolean;
+  embeddedInDialog?: boolean;
+  onModeCommand?: (text: string) => boolean;
 }) {
   const [tab, setTab] = useState<'workspace' | 'vault'>('workspace');
   const [url, setUrl] = useState('');
@@ -326,6 +330,12 @@ export default function ArtEngineWorkspace({
 
     if (!trimmed || processing || action) return;
 
+    if (onModeCommand?.(trimmed)) {
+      setUrl('');
+      if (!processing) setStatus('idle');
+      return;
+    }
+
     let parsed: URL;
     try {
       parsed = new URL(trimmed);
@@ -428,17 +438,31 @@ export default function ArtEngineWorkspace({
   return (
     <div
       className={
-        embeddedInPierrot
-          ? 'relative pb-[calc(12.5rem+env(safe-area-inset-bottom))]'
-          : 'relative pb-[calc(10.5rem+env(safe-area-inset-bottom))]'
+        embeddedInDialog
+          ? 'relative flex h-full min-h-0 flex-col'
+          : embeddedInPierrot
+            ? 'relative pb-[calc(12.5rem+env(safe-area-inset-bottom))]'
+            : 'relative pb-[calc(10.5rem+env(safe-area-inset-bottom))]'
       }
     >
-      <div ref={topRef} className="mx-auto max-w-7xl scroll-mt-28 px-4 sm:px-6">
+      <div
+        ref={topRef}
+        className={
+          embeddedInDialog
+            ? 'mx-auto w-full min-h-0 max-w-7xl flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-2 sm:px-6'
+            : 'mx-auto max-w-7xl scroll-mt-28 px-4 sm:px-6'
+        }
+      >
         <header className="flex flex-col gap-4 pb-4 pt-2 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <h1 className="font-serif text-3xl font-light tracking-tight text-[#211F1F] sm:text-4xl">
               Art Engine
             </h1>
+            {embeddedInDialog && (
+              <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[#8A8175]">
+                Pierrot · Art Engine mode
+              </p>
+            )}
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
@@ -572,6 +596,7 @@ export default function ArtEngineWorkspace({
         processing={processing || action !== null}
         bottomOffset={bottomOffset}
         embeddedInPierrot={embeddedInPierrot}
+        inline={embeddedInDialog}
       />
 
       {publishOpen && detail && (

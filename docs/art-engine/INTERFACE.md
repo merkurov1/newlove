@@ -30,11 +30,30 @@ no Investment Memorandum card.
 
 ## Composer and Pierrot
 
-Pierrot is unchanged. The Art Engine composer is route-scoped, rendered only
-inside `/art-engine`, and uses `z-30` (Pierrot trigger is `z-40`, the Pierrot
-modal is `z-9999`). On small screens the composer reserves right-side space for
-the Pierrot trigger. It respects `env(safe-area-inset-bottom/right)` and is
-lifted by the visual-viewport keyboard gap on iOS.
+The Art Engine composer remains route-scoped inside `/art-engine` and uses
+`z-30` (Pierrot trigger is `z-40`, the Pierrot modal is `z-9999`). On small
+screens the composer reserves right-side space for the Pierrot trigger. It
+respects `env(safe-area-inset-bottom/right)` and is lifted by the
+visual-viewport keyboard gap on iOS.
+
+Art Engine is also available as a mode inside the main Pierrot dialog:
+
+- `«Включи Art Engine»`, `«Запусти Art Engine»`, `«Перейдём в Art Engine»`,
+  `«Хочу создать изображение»` (and the English equivalents) enter the mode.
+- The dialog keeps the same Pierrot header and appends a short confirmation to
+  the existing transcript. No navigation or new page is created.
+- The workspace is mounted with the existing `ArtEngineWorkspace` component and
+  the same admin API calls. The inline composer variant only changes layout and
+  typography; parsing, Vault, Wikipedia, essay and publication logic are
+  unchanged.
+- `«Вернуться в обычный чат»`, `«Выключить Art Engine»`, `«Обычный режим»`
+  (and the English equivalents) leave the mode. The previous dialog is kept.
+- Matching is exact and lives in `lib/pierrot/artEngineMode.ts`; mentioning art,
+  images or Art Engine in ordinary conversation does not switch the mode.
+
+The existing Art Engine is an auction-lot research and editorial workflow. It
+does not contain an image-generation model, so the integration reuses its URL
+ingestion pipeline rather than adding a second generator.
 
 ## Editorial workflow
 

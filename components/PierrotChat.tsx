@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, RotateCcw } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
@@ -9,8 +10,21 @@ import { PierrotInput, PierrotMessageList } from '@/components/pierrot/PierrotCo
 import PierrotDataNotice from '@/components/pierrot/PierrotDataNotice';
 import usePrefersReducedMotion from '@/components/pierrot/usePrefersReducedMotion';
 import useKeyboardViewportHeight from '@/components/pierrot/useKeyboardViewportHeight';
+import { artEngineAuthFetch } from '@/components/art-engine/authFetch';
 import { PIERROT_AVATAR_SRC } from '@/lib/pierrot/config';
 import { getHumanCopy } from '@/lib/pierrot/humanPresenceShared';
+
+const ArtEngineWorkspace = dynamic(
+  () => import('@/components/art-engine/ArtEngineWorkspace'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-0 flex-1 items-center justify-center font-mono text-[9px] uppercase tracking-[0.14em] text-[#8A8175]">
+        Loading Art Engine…
+      </div>
+    ),
+  }
+);
 
 type PierrotTriggerProps = {
   compact?: boolean;
@@ -97,11 +111,13 @@ export default function PierrotChat() {
     closeChat,
     clearChat,
     isUnframedMode,
+    isArtEngineMode,
     isHumanActive,
     isHumanPending,
     humanPresence,
     cancelHumanRequest,
     closeHumanConversation,
+    tryExitArtEngineMode,
   } = usePierrot();
 
   const humanLanguage =
@@ -386,80 +402,99 @@ export default function PierrotChat() {
                     </div>
                   </header>
 
-                  <PierrotMessageList
-                    className="min-h-0 flex-1"
-                    onScrollStateChange={setIsHeaderScrolled}
-                  />
-
-                  <footer
-                    data-pierrot-footer
-                    style={{
-                      paddingBottom:
-                        'max(12px, env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))',
-                    }}
-                    className="
-                      shrink-0 bg-[#FAF8F5]
-                      px-4 pt-2.5 sm:px-7 sm:pt-4
-                    "
-                  >
-                    <div className="mx-auto w-full max-w-3xl">
-                      {isHumanPending && (
-                        <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#8A8175]">
-                          <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[#B08A5A]" />
-                          <span className="min-w-0 break-words">
-                            {humanCopy.waiting}
-                            {humanPresence?.visitorLabel ? ` · ${humanPresence.visitorLabel}` : ''}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => void cancelHumanRequest()}
-                            className="ml-auto shrink-0 border-b border-[#CFC3B1] pb-0.5 transition hover:border-[#37332D] hover:text-[#37332D]"
-                          >
-                            {humanCopy.cancel}
-                          </button>
-                        </div>
-                      )}
-
-                      {isHumanActive && (
-                        <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#4F6B4D]">
-                          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#8CA18A]" />
-                          <span className="min-w-0 break-words">
-                            {humanCopy.activeLabel}
-                            {humanPresence?.visitorLabel ? ` · ${humanPresence.visitorLabel}` : ''}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => void closeHumanConversation()}
-                            className="ml-auto shrink-0 border-b border-[#CFC3B1] pb-0.5 text-[#625B50] transition hover:border-[#37332D] hover:text-[#37332D]"
-                          >
-                            {humanLanguage === 'ru' ? 'Завершить' : 'End'}
-                          </button>
-                        </div>
-                      )}
-
-                      {isUnframedMode && !isHumanActive && (
-                        <div className="mb-2 flex items-center gap-2 px-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[#8A8175]">
-                          <span className="h-1.5 w-1.5 rounded-full bg-[#8CA18A]" />
-                          <span>Private Brain mode · answers use your knowledge base</span>
-                        </div>
-                      )}
-                      <PierrotDataNotice className="mb-2 px-1" />
-                      <PierrotInput
-                        placeholder={
-                          isHumanActive
-                            ? humanCopy.composerPlaceholder
-                            : isUnframedMode
-                              ? 'Ask Brain…'
-                              : 'Write to Pierrot…'
-                        }
+                  {isArtEngineMode ? (
+                    <div
+                      data-pierrot-art-engine
+                      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                    >
+                      <ArtEngineWorkspace
+                        authFetch={artEngineAuthFetch}
+                        embeddedInDialog
+                        onModeCommand={tryExitArtEngineMode}
                       />
-                      {!isHumanActive && (
-                        <p className="mt-2 hidden px-2 font-mono text-[8px] uppercase tracking-[0.12em] text-[#B0A79B] sm:block">
-                          Enter to send · Shift+Enter for a new line
-                        </p>
-                      )}
                     </div>
-                  </footer>
+                  ) : (
+                    <>
+                      <PierrotMessageList
+                        className="min-h-0 flex-1"
+                        onScrollStateChange={setIsHeaderScrolled}
+                      />
+
+                      <footer
+                        data-pierrot-footer
+                        style={{
+                          paddingBottom:
+                            'max(12px, env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))',
+                        }}
+                        className="
+                          shrink-0 bg-[#FAF8F5]
+                          px-4 pt-2.5 sm:px-7 sm:pt-4
+                        "
+                      >
+                        <div className="mx-auto w-full max-w-3xl">
+                          {isHumanPending && (
+                            <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#8A8175]">
+                              <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[#B08A5A]" />
+                              <span className="min-w-0 break-words">
+                                {humanCopy.waiting}
+                                {humanPresence?.visitorLabel
+                                  ? ` · ${humanPresence.visitorLabel}`
+                                  : ''}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => void cancelHumanRequest()}
+                                className="ml-auto shrink-0 border-b border-[#CFC3B1] pb-0.5 transition hover:border-[#37332D] hover:text-[#37332D]"
+                              >
+                                {humanCopy.cancel}
+                              </button>
+                            </div>
+                          )}
+
+                          {isHumanActive && (
+                            <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#4F6B4D]">
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#8CA18A]" />
+                              <span className="min-w-0 break-words">
+                                {humanCopy.activeLabel}
+                                {humanPresence?.visitorLabel
+                                  ? ` · ${humanPresence.visitorLabel}`
+                                  : ''}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => void closeHumanConversation()}
+                                className="ml-auto shrink-0 border-b border-[#CFC3B1] pb-0.5 text-[#625B50] transition hover:border-[#37332D] hover:text-[#37332D]"
+                              >
+                                {humanLanguage === 'ru' ? 'Завершить' : 'End'}
+                              </button>
+                            </div>
+                          )}
+
+                          {isUnframedMode && !isHumanActive && (
+                            <div className="mb-2 flex items-center gap-2 px-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[#8A8175]">
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#8CA18A]" />
+                              <span>Private Brain mode · answers use your knowledge base</span>
+                            </div>
+                          )}
+                          <PierrotDataNotice className="mb-2 px-1" />
+                          <PierrotInput
+                            placeholder={
+                              isHumanActive
+                                ? humanCopy.composerPlaceholder
+                                : isUnframedMode
+                                  ? 'Ask Brain…'
+                                  : 'Write to Pierrot…'
+                            }
+                          />
+                          {!isHumanActive && (
+                            <p className="mt-2 hidden px-2 font-mono text-[8px] uppercase tracking-[0.12em] text-[#B0A79B] sm:block">
+                              Enter to send · Shift+Enter for a new line
+                            </p>
+                          )}
+                        </div>
+                      </footer>
+                    </>
+                  )}
                 </motion.section>
               </motion.div>
             )}
