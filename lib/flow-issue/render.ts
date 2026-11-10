@@ -354,7 +354,10 @@ function issueTheme(payload: IssuePayload) {
     soft: theme?.muted || SOFT,
     line: theme?.rule || LINE,
     accent: theme?.accent || ACCENT,
-    maxWidth: theme?.maxWidth || 1120,
+    // Older issue payloads stored the previous 760px template width. Keep the
+    // stored value as a lower bound only so every published issue benefits
+    // from the wider newspaper composition without rewriting its snapshot.
+    maxWidth: Math.max(theme?.maxWidth || 0, 1440),
     // Keep the site typography when the template still uses its default
     // Georgia/Inter fallbacks. Custom template fonts still win.
     serif:
@@ -377,24 +380,29 @@ function webCss(payload: IssuePayload): string {
 .flow-issue-root,.flow-issue-root *{box-sizing:border-box}
 .flow-issue-root:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.025;mix-blend-mode:overlay;z-index:5;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 .flow-issue-root ::selection{background:var(--ink);color:var(--bg)}
-.flow-issue-root a{color:inherit}.page{max-width:${theme.maxWidth}px;margin:0 auto;padding:22px 20px 64px;position:relative;z-index:10}
+.flow-issue-root{overflow-x:clip}
+.flow-issue-root a{color:inherit;overflow-wrap:anywhere;word-break:break-word}
+.page{max-width:${theme.maxWidth}px;min-width:0;margin:0 auto;padding:clamp(18px,2.2vw,28px) clamp(18px,3vw,44px) 64px;position:relative;z-index:10}
 .top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font:12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--soft);padding-bottom:12px}
 .mast{border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);padding:24px 0 20px;text-align:center}
 .mast .brand{margin:0 0 10px;font:500 12px var(--mono);letter-spacing:.28em;text-transform:uppercase;color:var(--soft)}
-.mast h1{margin:0 auto;max-width:920px;font:400 clamp(28px,4.6vw,54px)/1.12 var(--serif);letter-spacing:-.02em;text-wrap:balance;overflow-wrap:anywhere}
+.mast h1{margin:0 auto;max-width:min(1180px,100%);font:400 clamp(28px,4.6vw,54px)/1.12 var(--serif);letter-spacing:-.02em;text-wrap:balance;overflow-wrap:anywhere}
 .mast .mast-period{margin:14px 0 0;font:12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--soft)}
 .nav{display:flex;gap:10px 30px;justify-content:center;flex-wrap:wrap;font:500 12px var(--mono);letter-spacing:.2em;text-transform:uppercase;padding:14px 0;border-bottom:1px solid var(--line)}
 .nav a{text-decoration:underline;text-underline-offset:8px;text-decoration-color:#D4D4D8;padding:6px 0}.nav a:hover{text-decoration-color:var(--ink)}
-.g{display:grid;grid-template-columns:1fr;gap:0 40px;margin-top:40px}
-@media(min-width:900px){.g{grid-template-columns:repeat(12,1fr)}.c8{grid-column:span 8}.c4{grid-column:span 4}.c6{grid-column:span 6}.c12{grid-column:span 12}}
+.g{display:grid;grid-template-columns:1fr;gap:0 clamp(28px,3vw,52px);margin-top:40px}
+@media(min-width:1200px){.g{grid-template-columns:repeat(12,1fr)}.c8{grid-column:span 8}.c4{grid-column:span 4}.c6{grid-column:span 6}.c12{grid-column:span 12}}
 .flow-issue-root section,.flow-issue-root aside{margin-bottom:48px;min-width:0}
 .k{font:500 12px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--soft);margin:0 0 12px}
 .flow-issue-root h2{font:400 clamp(32px,5vw,52px)/1.1 var(--serif);margin:0 0 14px;letter-spacing:-.015em;overflow-wrap:anywhere}
 .flow-issue-root h3{font:400 21px/1.28 var(--serif);margin:0 0 6px;overflow-wrap:anywhere}
 .by{font:italic 15px var(--serif);color:var(--soft);margin:0 0 20px;padding-bottom:14px;border-bottom:1px solid var(--line)}
-.meta{font:13px var(--sans);color:var(--soft);margin:0}.card p{margin:0 0 8px}
+.meta{font:13px var(--sans);color:var(--soft);margin:0;overflow-wrap:anywhere}
+.card p{margin:0 0 8px}
 .feed{list-style:none;margin:0;padding:0}
-.feed li{display:grid;grid-template-columns:78px 1fr;gap:10px;padding:12px 0;border-top:1px solid var(--line);font-size:16px;line-height:1.35}
+.feed li{display:grid;grid-template-columns:78px minmax(0,1fr);gap:10px;padding:12px 0;border-top:1px solid var(--line);font-size:16px;line-height:1.35;min-width:0}
+.feed li > div{min-width:0}
+.feed li a{overflow-wrap:anywhere}
 .feed li:first-child{border-top:0}.feed time{font:12px var(--mono);color:var(--soft)}
 .feed b{font:500 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--soft);display:block;margin-bottom:2px}
 .nums{display:grid;grid-template-columns:repeat(2,1fr);border-top:1px solid var(--ink);border-bottom:1px solid var(--line)}
@@ -408,16 +416,17 @@ function webCss(payload: IssuePayload): string {
 .metrics b{display:block;font:400 46px/1 var(--serif);overflow-wrap:anywhere}
 .metrics span{display:block;margin-top:6px;font:13px/1.35 var(--sans);color:var(--soft)}
 .metrics .metric-summary b{font:400 clamp(19px,2.4vw,28px)/1.2 var(--serif);letter-spacing:-.01em}
+.lead p{max-width:72ch}
 .intro{border-top:1px solid var(--ink);padding-top:20px}
-.intro p{font:400 18px/1.65 var(--serif);margin:0 0 14px;max-width:76ch;color:var(--ink)}
+.intro p{font:400 18px/1.65 var(--serif);margin:0 0 14px;max-width:76ch;color:var(--ink);overflow-wrap:anywhere}
 .intro p:last-child{margin-bottom:0}
-.issue-feed{display:flex;flex-direction:column}
+.issue-feed{display:flex;flex-direction:column;min-width:0}
 .item{padding:26px 0;border-top:1px solid var(--line);min-width:0}
 .item:first-child{border-top:1px solid var(--ink)}
 .item-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font:11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--soft);margin-bottom:10px}
 .item h3{font:400 clamp(23px,3vw,32px)/1.2 var(--serif);margin:0 0 12px;overflow-wrap:anywhere}
 .item h3 a{text-decoration:none}.item h3 a:hover{text-decoration:underline;text-underline-offset:5px;text-decoration-color:#A1A1AA}
-.item p{font:400 17px/1.7 var(--serif);margin:0 0 12px;color:var(--ink);overflow-wrap:anywhere}
+.item p{font:400 17px/1.7 var(--serif);margin:0 0 12px;max-width:72ch;color:var(--ink);overflow-wrap:anywhere}
 .item .item-dek{font:italic 18px/1.55 var(--serif);color:var(--soft);max-width:76ch}
 .item-image{display:block;margin:14px 0 12px;max-width:760px}
 .item-image img{display:block;width:100%;height:auto;background:var(--tint)}
@@ -432,9 +441,9 @@ function webCss(payload: IssuePayload): string {
 .dl{display:flex;gap:14px;margin-top:6px}.dl span{flex:1;text-align:center;font:12px var(--mono);color:var(--soft)}
 .stack{display:flex;height:34px;margin:10px 0 8px}.stack div{display:flex;align-items:center;padding-left:8px;font:500 12px var(--mono);color:#FAF8F5;overflow:hidden}
 .legend{font:13px var(--sans);color:var(--soft);margin:0}.cap{font:13.5px/1.5 var(--sans);color:var(--soft);margin:12px 0 0}
-.cards{display:grid;grid-template-columns:1fr;gap:30px}@media(min-width:760px){.cards{grid-template-columns:repeat(3,1fr)}}
-.v4{display:grid;grid-template-columns:1fr;gap:28px}@media(min-width:700px){.v4{grid-template-columns:1fr 1fr}}@media(min-width:1000px){.v4{grid-template-columns:repeat(4,1fr)}}
-.card{display:block;text-decoration:none;border-top:1px solid var(--ink);padding-top:14px}.card:hover h3{text-decoration:underline;text-underline-offset:5px;text-decoration-color:#A1A1AA}
+.cards{display:grid;grid-template-columns:1fr;gap:30px;min-width:0}@media(min-width:760px){.cards{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.v4{display:grid;grid-template-columns:1fr;gap:28px;min-width:0}@media(min-width:700px){.v4{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(min-width:1000px){.v4{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.card{display:block;min-width:0;text-decoration:none;border-top:1px solid var(--ink);padding-top:14px;overflow-wrap:anywhere}.card:hover h3{text-decoration:underline;text-underline-offset:5px;text-decoration-color:#A1A1AA}
 .thumb{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;margin:0 0 12px;background:var(--tint)}
 .plate{position:relative;aspect-ratio:16/9;background:var(--tint);margin-bottom:12px;overflow:hidden}
 .plate img{width:100%;height:100%;object-fit:cover;display:block}
@@ -443,9 +452,10 @@ function webCss(payload: IssuePayload): string {
 .frame{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--tint);margin-bottom:8px}
 .strip{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;margin-top:12px}.strip i{height:34px;background:var(--bar)}
 .sl{display:flex;justify-content:space-between;font:12px var(--mono);color:var(--soft);margin-top:4px}
-.flow-issue-root table{width:100%;border-collapse:collapse;font:14px var(--sans)}
-.flow-issue-root th{font:500 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;text-align:left;color:var(--soft);border-bottom:1px solid var(--ink);padding:6px 8px 8px 0}
-.flow-issue-root td{padding:10px 8px 10px 0;border-bottom:1px solid var(--line);vertical-align:top}.scroll{overflow-x:auto}
+.flow-issue-root table{width:100%;max-width:100%;border-collapse:collapse;table-layout:fixed;font:14px var(--sans)}
+.flow-issue-root th{font:500 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;text-align:left;color:var(--soft);border-bottom:1px solid var(--ink);padding:6px 8px 8px 0;overflow-wrap:anywhere;word-break:break-word}
+.flow-issue-root td{padding:10px 8px 10px 0;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere;word-break:break-word}.scroll{max-width:100%;overflow-x:auto}
+.flow-issue-root .scroll th:nth-child(1){width:18%}.flow-issue-root .scroll th:nth-child(2){width:50%}.flow-issue-root .scroll th:nth-child(3){width:18%}.flow-issue-root .scroll th:nth-child(4){width:14%}
 .data{background:var(--tint);padding:16px 18px;font:14px/1.55 var(--sans)}.data p{margin:0 0 6px}
 .statsHead{border-top:1px solid var(--ink);padding-top:16px;margin-bottom:16px}.statsHead .k{margin:0}
 .sub{border-top:1px solid var(--ink);padding-top:22px;text-align:center}.sub h2{font-size:clamp(28px,4vw,42px)}

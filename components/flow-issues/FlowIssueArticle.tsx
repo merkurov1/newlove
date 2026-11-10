@@ -89,9 +89,10 @@ export default function FlowIssueArticle({
         .flow-issue-back {
           position: relative;
           z-index: 11;
-          max-width: 1120px;
+          max-width: 1440px;
+          min-width: 0;
           margin: 0 auto;
-          padding: 0 20px 10px;
+          padding: 0 clamp(18px, 3vw, 44px) 10px;
           display: flex;
           align-items: center;
           flex-wrap: wrap;
@@ -102,6 +103,8 @@ export default function FlowIssueArticle({
           color: #52525B;
         }
         .flow-issue-back a {
+          overflow-wrap: anywhere;
+          word-break: break-word;
           color: inherit;
           text-decoration: none;
           border-bottom: 1px solid transparent;
