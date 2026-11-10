@@ -88,18 +88,6 @@ function toFlow(row: any): FlowEntry {
   };
 }
 
-/**
- * Keep the preview anchored to the current edition, but do not leave the
- * section empty when the stream is currently publishing in the other
- * language. The UI labels the language of any entry from the other edition.
- */
-function flowPreview(allFlow: FlowEntry[], lang: JournalLanguage): FlowEntry[] {
-  const preferred = allFlow.filter((entry) => entry.lang === lang);
-  const other = allFlow.filter((entry) => entry.lang !== lang);
-
-  return [...preferred, ...other].slice(0, 5);
-}
-
 // The Flow preview uses the same public API as /flow so visibility and
 // publication rules stay identical.
 async function loadFlow(): Promise<FlowEntry[]> {
@@ -112,7 +100,10 @@ async function loadFlow(): Promise<FlowEntry[]> {
       h.get('x-forwarded-proto') ||
       (host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https');
 
-    const response = await fetch(`${proto}://${host}/api/flow/items?limit=12&offset=0`, {
+    // Fetch enough of the shared stream so both language editions can get a
+    // real recent preview without asking the Flow API for a language filter
+    // that does not exist.
+    const response = await fetch(`${proto}://${host}/api/flow/items?limit=50&offset=0`, {
       cache: 'no-store',
     });
 
@@ -155,12 +146,10 @@ export default async function JournalPageView({ lang }: { lang: JournalLanguage 
   if (issuesRes.error) console.error('[Journal] Issues:', issuesRes.error);
   else issues = (issuesRes.data || []).map(toIssue);
 
-  const featured = issues.find((issue) => issue.lang === lang) || null;
-  const other = issues.find((issue) => issue.lang !== lang) || null;
-  const archive = issues
-    .filter((issue) => issue.id !== featured?.id && issue.id !== other?.id)
-    .slice(0, 8);
-  const flow = flowPreview(allFlow, lang);
+  const streamIssues = issues.filter((issue) => issue.lang === lang);
+  const featured = streamIssues[0] ?? null;
+  const archive = streamIssues.filter((issue) => issue.id !== featured?.id).slice(0, 8);
+  const flow = allFlow.filter((entry) => entry.lang === lang).slice(0, 5);
 
   const journalItems = issues.map((issue) => ({
     name: issue.headline,
@@ -192,7 +181,6 @@ export default async function JournalPageView({ lang }: { lang: JournalLanguage 
       <FrontPage
         lang={lang}
         featured={featured}
-        other={other}
         flow={flow}
         archive={archive}
         subscribe={

@@ -16,6 +16,14 @@ const enIssue: FrontIssue = {
   periodEnd: '2026-11-20',
 };
 
+const olderEnIssue: FrontIssue = {
+  ...enIssue,
+  id: 'en-2',
+  slug: 'issue-en-old',
+  number: 3,
+  headline: 'An older English issue',
+};
+
 const ruIssue: FrontIssue = {
   id: 'ru-1',
   slug: 'issue-ru',
@@ -38,13 +46,24 @@ const olderRuIssue: FrontIssue = {
   headline: 'Старый русский выпуск',
 };
 
-const flow: FlowEntry[] = [
+const enFlow: FlowEntry[] = [
   {
-    id: 'flow-1',
-    slug: 'flow-entry',
+    id: 'flow-en-1',
+    slug: 'flow-en-entry',
     type: 'note',
     lang: 'en',
     text: 'A recent English note',
+    at: '2026-11-22T10:00:00.000Z',
+  },
+];
+
+const ruFlow: FlowEntry[] = [
+  {
+    id: 'flow-ru-1',
+    slug: 'flow-ru-entry',
+    type: 'article',
+    lang: 'ru',
+    text: 'Свежая русская статья',
     at: '2026-11-22T10:00:00.000Z',
   },
 ];
@@ -54,16 +73,15 @@ function renderPage(lang: 'en' | 'ru') {
     <FrontPage
       lang={lang}
       featured={lang === 'en' ? enIssue : ruIssue}
-      other={lang === 'en' ? ruIssue : enIssue}
-      flow={flow}
-      archive={[olderRuIssue]}
+      flow={lang === 'en' ? enFlow : ruFlow}
+      archive={lang === 'en' ? [olderEnIssue] : [olderRuIssue]}
       subscribe={<div>Subscription form</div>}
     />
   );
 }
 
 describe('Journal FrontPage localization', () => {
-  it('renders a complete English editorial page and links English issues to /en/flow-issues', () => {
+  it('renders a complete English editorial page with only English publications', () => {
     const { container } = renderPage('en');
 
     expect(screen.getByRole('heading', { level: 1, name: 'The Journal' })).toBeInTheDocument();
@@ -75,16 +93,17 @@ describe('Journal FrontPage localization', () => {
     expect(screen.getByText('Note')).toBeInTheDocument();
 
     expect(container.querySelector('a[href="/en/flow-issues/issue-en"]')).not.toBeNull();
-    expect(container.querySelector('a[href="/flow-issues/issue-ru"]')).not.toBeNull();
-    expect(container.querySelector('a[href="/flow-issues/issue-ru-old"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/en/flow-issues/issue-en-old"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/flow-issues/issue-ru"]')).toBeNull();
+    expect(container.querySelector('a[href="/flow-issues/issue-ru-old"]')).toBeNull();
 
-    // Original issue titles are preserved, but interface copy is English only.
-    expect(screen.getByText('Русский заголовок')).toHaveAttribute('lang', 'ru');
+    expect(screen.getByText('The English headline')).toHaveAttribute('lang', 'en');
+    expect(screen.queryByText('Русский заголовок')).not.toBeInTheDocument();
     expect(screen.queryByText('Читать выпуск')).not.toBeInTheDocument();
     expect(screen.queryByText('Архив выпусков')).not.toBeInTheDocument();
   });
 
-  it('renders a complete Russian editorial page without English interface labels', () => {
+  it('renders a complete Russian editorial page with only Russian publications', () => {
     const { container } = renderPage('ru');
 
     expect(screen.getByRole('heading', { level: 1, name: 'Журнал' })).toBeInTheDocument();
@@ -92,31 +111,35 @@ describe('Journal FrontPage localization', () => {
     expect(screen.getByText('Архив выпусков')).toBeInTheDocument();
     expect(screen.getByText('Подписка на еженедельную рассылку')).toBeInTheDocument();
     expect(screen.getAllByText(/Читать выпуск/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Заметка/)).toBeInTheDocument();
-    expect(screen.getByText(/Заметка · EN/)).toBeInTheDocument();
+    expect(screen.getByText('Статья')).toBeInTheDocument();
+    expect(screen.getByText('Свежая русская статья')).toBeInTheDocument();
 
-    expect(container.querySelector('a[href="/en/flow-issues/issue-en"]')).not.toBeNull();
     expect(container.querySelector('a[href="/flow-issues/issue-ru"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/flow-issues/issue-ru-old"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/en/flow-issues/issue-en"]')).toBeNull();
+    expect(container.querySelector('a[href="/en/flow-issues/issue-en-old"]')).toBeNull();
 
-    expect(screen.getByText('The English headline')).toHaveAttribute('lang', 'en');
+    expect(screen.getByText('Русский заголовок')).toHaveAttribute('lang', 'ru');
+    expect(screen.queryByText('The English headline')).not.toBeInTheDocument();
     expect(screen.queryByText('Read the issue')).not.toBeInTheDocument();
     expect(screen.queryByText('Issue archive')).not.toBeInTheDocument();
   });
 
-  it('localizes article labels and marks entries from the other language', () => {
+  it('shows a localized empty state instead of falling back to another language', () => {
     render(
       <FrontPage
-        lang="ru"
-        featured={ruIssue}
-        other={enIssue}
-        flow={[{ ...flow[0], type: 'article', text: 'An English article' }]}
+        lang="en"
+        featured={null}
+        flow={[]}
         archive={[]}
         subscribe={<div>Subscription form</div>}
       />
     );
 
-    expect(screen.getByText('Статья · EN')).toBeInTheDocument();
-    expect(screen.getByText('An English article')).toHaveAttribute('lang', 'en');
+    expect(screen.getByText('The first issue is coming soon.')).toBeInTheDocument();
+    expect(screen.getByText('No recent Flow entries in this language yet.')).toBeInTheDocument();
+    expect(screen.getByText('The issue archive is empty for now.')).toBeInTheDocument();
+    expect(screen.queryByText('Русский заголовок')).not.toBeInTheDocument();
   });
 
   it('offers the correct language switch targets on both versions', () => {

@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import SectionLanguageSwitcher from '@/components/i18n/SectionLanguageSwitcher';
-import { LANGUAGE_META } from '@/lib/i18n/config';
 import {
   JOURNAL_COPY,
   journalArchiveHref,
@@ -37,7 +36,6 @@ export interface FlowEntry {
 interface Props {
   lang: JournalLanguage;
   featured: FrontIssue | null;
-  other: FrontIssue | null;
   flow: FlowEntry[];
   archive: FrontIssue[];
   subscribe: ReactNode;
@@ -203,7 +201,7 @@ function IssueLead({
   );
 }
 
-export default function FrontPage({ lang, featured, other, flow, archive, subscribe }: Props) {
+export default function FrontPage({ lang, featured, flow, archive, subscribe }: Props) {
   const copy = JOURNAL_COPY[lang];
 
   return (
@@ -245,10 +243,9 @@ export default function FrontPage({ lang, featured, other, flow, archive, subscr
       <section
         id="issues"
         aria-label={copy.featured.ariaLabel}
-        className="grid border-b border-neutral-300 md:grid-cols-2 md:divide-x md:divide-neutral-300"
+        className="border-b border-neutral-300"
       >
         <IssueLead issue={featured} uiLang={lang} label={copy.featured.currentEdition} />
-        <IssueLead issue={other} uiLang={lang} label={copy.featured.otherEdition} />
       </section>
 
       <div className="grid gap-x-14 gap-y-14 py-12 lg:grid-cols-12">
@@ -261,8 +258,6 @@ export default function FrontPage({ lang, featured, other, flow, archive, subscr
               {flow.map((entry) => {
                 const when = stamp(entry.at, lang);
                 const label = copy.flow.types[entry.type] || copy.flow.types.mixed;
-                const languageLabel =
-                  entry.lang === lang ? '' : ` · ${LANGUAGE_META[entry.lang].label}`;
                 const href = entry.slug ? `/flow/${encodeURIComponent(entry.slug)}` : '/flow';
                 return (
                   <li key={entry.id} className="border-t border-neutral-300">
@@ -273,10 +268,7 @@ export default function FrontPage({ lang, featured, other, flow, archive, subscr
                         {when.time}
                       </span>
                       <span>
-                        <span className={kicker}>
-                          {label}
-                          {languageLabel}
-                        </span>
+                        <span className={kicker}>{label}</span>
                         <span
                           lang={entry.lang}
                           className="mt-1 block font-serif text-lg leading-snug text-neutral-900 transition-colors group-hover:text-[#990F3D]"
