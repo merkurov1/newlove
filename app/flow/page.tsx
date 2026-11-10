@@ -720,37 +720,6 @@ export default function FlowPage() {
                 Stream of thoughts, media &amp; signals
               </p>
             </div>
-            <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider text-neutral-400">
-              <a
-                href="https://bsky.app/profile/merkurov.love"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition hover:text-neutral-900"
-              >
-                Bluesky ↗
-              </a>
-              <span className="text-neutral-200">·</span>
-              <a
-                href="https://t.me/unframed_am"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition hover:text-neutral-900"
-              >
-                Telegram ↗
-              </a>
-              <span className="text-neutral-200">·</span>
-              <a href="/flow/rss" className="transition hover:text-neutral-900">
-                RSS ↗
-              </a>
-              <span className="text-neutral-200">·</span>
-              <Link href="/flow-issues" className="transition hover:text-neutral-900">
-                Issues ↗
-              </Link>
-              <span className="text-neutral-200">·</span>
-              <Link href="/journal" className="transition hover:text-neutral-900">
-                Journal ↗
-              </Link>
-            </div>
           </header>
 
           {loadError && items.length === 0 ? (

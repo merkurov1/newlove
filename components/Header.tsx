@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/AuthContext';
@@ -10,6 +10,39 @@ import ComposerTrigger from '@/components/flow/ComposerTrigger';
 import { PierrotTrigger } from '@/components/PierrotChat';
 import PierrotSectionLink from '@/components/pierrot/PierrotSectionLink';
 import { isImmersiveRoute } from '@/lib/temple/routes';
+
+type FlowHeaderLink = {
+  label: string;
+  href: string;
+  external?: boolean;
+  plain?: boolean;
+};
+
+const FLOW_LINKS: FlowHeaderLink[] = [
+  {
+    label: 'BLUESKY',
+    href: 'https://bsky.app/profile/merkurov.love',
+    external: true,
+  },
+  {
+    label: 'TELEGRAM',
+    href: 'https://t.me/unframed_am',
+    external: true,
+  },
+  {
+    label: 'RSS',
+    href: '/flow/rss',
+    plain: true,
+  },
+  {
+    label: 'LETTERS',
+    href: '/letters',
+  },
+  {
+    label: 'JOURNAL',
+    href: '/journal',
+  },
+];
 
 export default function Header() {
   const auth = useAuth();
@@ -28,6 +61,7 @@ export default function Header() {
   const telegramApp = useIsTelegram();
   const pathname = usePathname() || '';
   const normalizedPath = pathname.replace(/\/$/, '') || '/';
+  const isFlowRoute = normalizedPath === '/flow';
 
   const profileRef = useRef<HTMLDivElement | null>(null);
   const siteMenuRef = useRef<HTMLDivElement | null>(null);
@@ -379,13 +413,50 @@ export default function Header() {
                     </Link>
 
                     <div className="pl-3.5 space-y-1.5 border-l border-stone-200/80 font-bold uppercase tracking-[0.15em] text-xs text-stone-500">
+                      {isFlowRoute && (
+                        <div className="space-y-1.5 lg:hidden">
+                          {FLOW_LINKS.map((link) =>
+                            link.external ? (
+                              <a
+                                key={link.href}
+                                href={link.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={closeSiteMenu}
+                                className={submenuClass(false)}
+                              >
+                                {link.label} ↗
+                              </a>
+                            ) : link.plain ? (
+                              <a
+                                key={link.href}
+                                href={link.href}
+                                onClick={closeSiteMenu}
+                                className={submenuClass(false)}
+                              >
+                                {link.label} ↗
+                              </a>
+                            ) : (
+                              <Link
+                                key={link.href}
+                                href={link.href}
+                                onClick={closeSiteMenu}
+                                className={submenuClass(false)}
+                              >
+                                {link.label} ↗
+                              </Link>
+                            )
+                          )}
+                        </div>
+                      )}
+
                       <PierrotSectionLink
                         href="/journal"
                         sectionId="journal"
                         onClick={closeSiteMenu}
-                        className={submenuClass(
+                        className={`${submenuClass(
                           normalizedPath === '/journal' || normalizedPath.startsWith('/journal/')
-                        )}
+                        )}${isFlowRoute ? ' hidden lg:block' : ''}`}
                       >
                         JOURNAL
                       </PierrotSectionLink>
@@ -449,6 +520,48 @@ export default function Header() {
               )}
             </AnimatePresence>
           </div>
+
+          {isFlowRoute && (
+            <nav
+              aria-label="Flow links"
+              className="hidden min-w-0 items-center gap-3 font-mono text-[11px] uppercase tracking-[0.15em] text-stone-500 lg:flex"
+            >
+              {FLOW_LINKS.map((link, index) => (
+                <Fragment key={link.href}>
+                  {index > 0 && (
+                    <span aria-hidden="true" className="text-stone-300">
+                      ·
+                    </span>
+                  )}
+
+                  {link.external ? (
+                    <a
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="whitespace-nowrap transition-colors hover:text-stone-900"
+                    >
+                      {link.label} ↗
+                    </a>
+                  ) : link.plain ? (
+                    <a
+                      href={link.href}
+                      className="whitespace-nowrap transition-colors hover:text-stone-900"
+                    >
+                      {link.label} ↗
+                    </a>
+                  ) : (
+                    <Link
+                      href={link.href}
+                      className="whitespace-nowrap transition-colors hover:text-stone-900"
+                    >
+                      {link.label} ↗
+                    </Link>
+                  )}
+                </Fragment>
+              ))}
+            </nav>
+          )}
         </div>
 
         {/* Right section: Composer and Pierrot */}
