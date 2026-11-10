@@ -454,7 +454,7 @@ export default function WorldScene() {
         data-world-heart
         onClick={triggerHeartRain}
         aria-label="Release a rain of hearts"
-        className="absolute top-[26%] sm:top-[28%] left-1/2 z-20 pointer-events-auto flex flex-col items-center transition-transform duration-300 ease-out cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 rounded-full"
+        className="absolute top-[32%] sm:top-[28%] left-1/2 z-20 pointer-events-auto flex flex-col items-center transition-transform duration-300 ease-out cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 rounded-full"
         style={{
           transform:
             'translate(calc(-50% + var(--heart-x, 0px)), calc(-50% + var(--heart-y, 0px)))',
