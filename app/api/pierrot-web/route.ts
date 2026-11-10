@@ -110,6 +110,12 @@ import {
 } from '@/lib/pierrot/brainAnalytics';
 import { detectHumanPresenceIntent } from '@/lib/pierrot/humanIntent';
 import {
+  configurationWriteRefusal,
+  detectConfigurationWriteRequestWithContext,
+  guardUnverifiedActionClaims,
+  recoverArtEngineAction,
+} from '@/lib/pierrot/actionIntegrity';
+import {
   createHumanAccessToken,
   createHumanRequest,
   buildHumanContextSummary,
@@ -4989,6 +4995,46 @@ export async function POST(req: Request) {
         );
       }
 
+      const actionLanguage = /[а-яё]/i.test(trimmedMessage) ? 'ru' : ownerLanguage;
+      const configurationWrite = detectConfigurationWriteRequestWithContext(
+        trimmedMessage,
+        normalizedHistory
+      );
+      if (configurationWrite) {
+        return persistOwnerReply(configurationWriteRefusal(configurationWrite, actionLanguage), {
+          action_status: 'unsupported',
+          write_tool_available: false,
+          answer_sources: 'none',
+          selected_sources: [],
+          executed_sources: [],
+          source_status: {
+            brain: 'not_requested',
+            media: 'not_requested',
+            web: 'not_requested',
+          },
+        });
+      }
+
+      const recoveredArtEngine = recoverArtEngineAction(
+        trimmedMessage,
+        normalizedHistory,
+        actionLanguage
+      );
+      if (recoveredArtEngine) {
+        return persistOwnerReply(recoveredArtEngine.text, {
+          action_status: 'read_only',
+          client_action: recoveredArtEngine.clientAction,
+          answer_sources: 'none',
+          selected_sources: [],
+          executed_sources: [],
+          source_status: {
+            brain: 'not_requested',
+            media: 'not_requested',
+            web: 'not_requested',
+          },
+        });
+      }
+
       if (executionPlan.operation === 'clarify.publications') {
         return persistOwnerReply(
           ownerLanguage === 'ru'
@@ -5012,9 +5058,31 @@ export async function POST(req: Request) {
 
       if (ownerTool) {
         const result = await runOwnerToolDetailed(ownerTool, ownerLanguage);
+        const mediaUsed = ownerTool.kind === 'media' && Boolean(result.provenance) && result.mediaKind !== 'media_error';
 
         return persistOwnerReply(result.text, {
           owner_tool: ownerTool.kind,
+          ...(ownerTool.kind === 'media'
+            ? {
+                action_status: 'read_only',
+                selected_sources: ['media'],
+                executed_sources: mediaUsed ? ['media'] : [],
+                answer_sources: mediaUsed ? 'media' : 'model',
+                answerSources: {
+                  mode: mediaUsed ? 'media' : 'model',
+                  label: mediaUsed ? 'MEDIA' : 'MODEL',
+                  model: !mediaUsed,
+                  brain: false,
+                  media: mediaUsed,
+                  web: false,
+                },
+                source_status: {
+                  brain: 'not_requested',
+                  media: mediaUsed ? 'success' : 'unavailable',
+                  web: 'not_requested',
+                },
+              }
+            : {}),
           ...(result.provenance ? { media_provenance: result.provenance } : {}),
           ...(result.mediaKind ? { media_kind: result.mediaKind } : {}),
         });
@@ -5779,6 +5847,14 @@ export async function POST(req: Request) {
         ...(webUsed ? webSources.map((source) => source.url) : []),
         ...(ownerRag?.sources ?? []).map((source) => source.canonicalUrl),
       ];
+      const actionGuard = guardUnverifiedActionClaims({
+        reply: (reply || 'Silence.').slice(0, PIERROT_MAX_MESSAGE_LENGTH),
+        verifiedWrite: false,
+        request: trimmedMessage,
+        language: language === 'en' ? 'en' : 'ru',
+      });
+      reply = actionGuard.reply;
+
       const evidenceGuard = guardAnswerEvidence({
         reply: (reply || 'Silence.').slice(0, PIERROT_MAX_MESSAGE_LENGTH),
         statuses: sourceStatus,
@@ -5790,8 +5866,11 @@ export async function POST(req: Request) {
 
       reply = evidenceGuard.reply.slice(0, PIERROT_MAX_MESSAGE_LENGTH);
 
+      const mediaUsed =
+        Boolean(ownerRag?.mode === 'media' && mediaOutcome?.outcome === 'relevant_results');
       const answerSources: PierrotAnswerSources = buildPierrotAnswerSources({
         brain: brainUsed,
+        media: mediaUsed,
         web: webUsed,
       });
 
@@ -5854,6 +5933,18 @@ export async function POST(req: Request) {
               web_code: webSearchResult?.code ?? null,
               web_source_count: webSources.length,
               source_status: sourceStatus,
+              selected_sources: [
+                ...(queryPlan.sources.brain ? ['brain'] : []),
+                ...(queryPlan.sources.media ? ['media'] : []),
+                ...(queryPlan.sources.web ? ['web'] : []),
+              ],
+              executed_sources: [
+                ...(brainOutcome ? ['brain'] : []),
+                ...(mediaOutcome ? ['media'] : []),
+                ...(webRequested ? ['web'] : []),
+              ],
+              action_status: actionGuard.blocked ? 'unsupported' : 'read_only',
+              action_guard_reason: actionGuard.reason,
               evidence_warnings: evidenceGuard.violations,
               brain_timings: retrievalTrace?.timings ?? null,
               timeout_stage: retrievalTrace?.timeoutStage ?? null,

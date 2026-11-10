@@ -42,14 +42,31 @@ export type WebSearchResult = {
   code?: WebSearchUnavailableCode;
 };
 
-export type PierrotAnswerSourceMode = 'model' | 'brain' | 'web' | 'brain+web';
+export type PierrotAnswerSourceMode =
+  | 'model'
+  | 'brain'
+  | 'web'
+  | 'media'
+  | 'brain+web'
+  | 'brain+media'
+  | 'media+web'
+  | 'brain+media+web';
 
 export type PierrotAnswerSources = {
   mode: PierrotAnswerSourceMode;
-  label: 'MODEL' | 'BRAIN' | 'WEB' | 'BRAIN + WEB';
+  label:
+    | 'MODEL'
+    | 'BRAIN'
+    | 'WEB'
+    | 'MEDIA'
+    | 'BRAIN + WEB'
+    | 'BRAIN + MEDIA'
+    | 'MEDIA + WEB'
+    | 'BRAIN + MEDIA + WEB';
   model: boolean;
   brain: boolean;
   web: boolean;
+  media: boolean;
 };
 
 /**
@@ -58,18 +75,31 @@ export type PierrotAnswerSources = {
  */
 export function buildPierrotAnswerSources(input: {
   brain: boolean;
+  media?: boolean;
   web: boolean;
 }): PierrotAnswerSources {
   const brain = input.brain;
+  const media = input.media === true;
   const web = input.web;
+  const selected = [
+    brain ? 'brain' : null,
+    media ? 'media' : null,
+    web ? 'web' : null,
+  ].filter((value): value is 'brain' | 'media' | 'web' => Boolean(value));
   const mode: PierrotAnswerSourceMode =
-    brain && web ? 'brain+web' : brain ? 'brain' : web ? 'web' : 'model';
+    selected.length === 0
+      ? 'model'
+      : (selected.join('+') as PierrotAnswerSourceMode);
+  const label = (
+    selected.length === 0 ? 'MODEL' : selected.join(' + ').toUpperCase()
+  ) as PierrotAnswerSources['label'];
 
   return {
     mode,
-    label: mode === 'brain+web' ? 'BRAIN + WEB' : (mode.toUpperCase() as 'MODEL' | 'BRAIN' | 'WEB'),
+    label,
     model: true,
     brain,
+    media,
     web,
   };
 }

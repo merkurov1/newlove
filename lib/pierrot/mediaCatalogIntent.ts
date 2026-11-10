@@ -12,6 +12,7 @@
 
 import type { MediaCatalogFilters, MediaScope } from '@/lib/knowledge/media/catalog';
 import { isLatestMediaQuery } from '@/lib/pierrot/mediaIntent';
+import { isCorrectionMessage, isRepeatRequest } from '@/lib/pierrot/correction';
 
 export type MediaQuestionKind =
   | 'count'
@@ -25,7 +26,8 @@ export type MediaQuestionKind =
   | 'confirmation'
   | 'diagnostics'
   | 'content'
-  | 'analytics';
+  | 'analytics'
+  | 'analysis';
 
 export type MediaCatalogPlan = {
   kind: MediaQuestionKind;
@@ -112,6 +114,7 @@ const MENTION_OF_ME =
 const OWN_WORD =
   /(мои\s+(?:публикац|колонк|стать|текст)|что\s+я\s+(?:писал|писала|публиковал|публиковала)|my\s+(?:publications|columns|articles|texts)|what\s+did\s+i\s+(?:write|publish))/i;
 const TOPIC_VERB = /(обсужда|говорится|говорится\s+о|пишут\s+о|писали\s+о|про|about|on\s+the\s+topic|regulation|регулирован|цензур|искусственн|крипт|(?<![a-z])AI(?![a-z])|(?<![а-яё])ИИ(?![а-яё]))/i;
+const ANALYSIS_WORD = /(анализ|обзор|отчет|отчёт|динамик|распределен|analysis|report|review\s+of|breakdown)/i;
 
 const MONTHS: Array<{ month: number; pattern: RegExp }> = [
   { month: 1, pattern: /(январ|january)/i },
@@ -291,7 +294,7 @@ function buildPlan(
  * intentionally conservative: ambiguous publication questions keep their
  * existing Brain routing.
  */
-export function detectMediaCatalogQuestion(message: string): MediaCatalogPlan | null {
+function detectMediaCatalogQuestionBase(message: string): MediaCatalogPlan | null {
   const originalQuery = message.trim();
   const text = normalize(originalQuery);
 
@@ -517,6 +520,23 @@ export function detectMediaCatalogQuestion(message: string): MediaCatalogPlan | 
   }
 
   // ---------------------------------------------------------------------
+  // Analysis report (complete catalog, not semantic retrieval)
+  // ---------------------------------------------------------------------
+  if (ANALYSIS_WORD.test(text) && (explicitMedia || publicationContext)) {
+    return buildPlan('analysis', {
+      originalQuery,
+      text,
+      scope: 'all',
+      signals: [...signals, 'kind:analysis'],
+      confidence: 0.9,
+      outlet,
+      year,
+      month,
+      language,
+    });
+  }
+
+  // ---------------------------------------------------------------------
   // Analytics / statistics
   // ---------------------------------------------------------------------
   if (
@@ -577,6 +597,77 @@ export function detectMediaCatalogQuestion(message: string): MediaCatalogPlan | 
   }
 
   return null;
+}
+
+export type MediaContextOptions = {
+  /** Bounded prior user messages, oldest first. */
+  contextMessages?: string[];
+};
+
+/**
+ * Media detector with bounded conversation recovery.
+ *
+ * When the current turn is a correction/repeat request, the earliest
+ * non-correction Media plan in the bounded context is treated as the original
+ * task. The current turn may narrow filters (year/outlet), but it cannot
+ * silently replace the task with a fresh generic request.
+ */
+export function detectMediaCatalogQuestion(
+  message: string,
+  options: MediaContextOptions = {}
+): MediaCatalogPlan | null {
+  const current = detectMediaCatalogQuestionBase(message);
+  const context = (options.contextMessages || []).filter((item) => item.trim());
+
+  if (!context.length || !(isCorrectionMessage(message) || isRepeatRequest(message))) {
+    return current;
+  }
+
+  let recovered: MediaCatalogPlan | null = null;
+
+  for (const previousText of context) {
+    if (isCorrectionMessage(previousText)) continue;
+    const previous = detectMediaCatalogQuestionBase(previousText);
+    if (previous) {
+      recovered = previous;
+      break;
+    }
+  }
+
+  if (!recovered) return current;
+  if (!current) {
+    return {
+      ...recovered,
+      signals: [...recovered.signals, 'context:recovered'],
+    };
+  }
+
+  return {
+    ...recovered,
+    filters: {
+      ...recovered.filters,
+      from: current.filters.from ?? recovered.filters.from,
+      to: current.filters.to ?? recovered.filters.to,
+      year: current.filters.year ?? recovered.filters.year,
+      month: current.filters.month ?? recovered.filters.month,
+      outlet: current.filters.outlet ?? recovered.filters.outlet,
+      language: current.filters.language ?? recovered.filters.language,
+      topic: current.filters.topic ?? recovered.filters.topic,
+      kind: current.filters.kind ?? recovered.filters.kind,
+      author: current.filters.author ?? recovered.filters.author,
+      title: recovered.filters.title ?? current.filters.title,
+      query: recovered.filters.query ?? current.filters.query,
+      foreign: current.filters.foreign || recovered.filters.foreign,
+    },
+    page: current.page,
+    titleQuery: recovered.titleQuery || current.titleQuery,
+    semanticQuery: recovered.semanticQuery || current.semanticQuery,
+    signals: Array.from(
+      new Set([...recovered.signals, ...current.signals, 'context:recovered'])
+    ).slice(0, 20),
+    confidence: Math.max(recovered.confidence, current.confidence),
+    originalQuery: `${recovered.originalQuery} ${message}`.trim(),
+  };
 }
 
 export function isMediaCatalogQuestion(message: string): boolean {

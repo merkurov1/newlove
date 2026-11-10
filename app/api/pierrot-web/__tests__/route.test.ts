@@ -3293,6 +3293,60 @@ describe('Pierrot intelligence regressions', () => {
       global.fetch = previousFetch;
     }
   });
+
+  it('refuses a GA4 configuration write instead of claiming success', async () => {
+    owner();
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: [
+            'Вставь сам:',
+            'Account ID: 176791840',
+            'Property ID: 244838264',
+            'Measurement ID: G-J1F4ZTK9ND',
+          ].join('\n'),
+        })
+      )
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      action_status?: string;
+      write_tool_available?: boolean;
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.action_status).toBe('unsupported');
+    expect(json.write_tool_available).toBe(false);
+    expect(json.reply).toContain('Я не изменял конфигурацию');
+    expect(json.reply).toContain('Ничего не записано');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('recovers an ignored Art Engine action after a correction', async () => {
+    owner();
+    const response = await POST(
+      makeRequest(
+        validBody({
+          mode: 'unframed',
+          message: 'Еще раз сделай то, что тебя просят',
+          history: [{ role: 'user', content: 'Включи art engine' }],
+        })
+      )
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      action_status?: string;
+      client_action?: { type?: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.action_status).toBe('read_only');
+    expect(json.client_action?.type).toBe('enter_art_engine');
+    expect(json.reply).toContain('Art Engine');
+    expect(json.reply).not.toContain('описание возможностей');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
 });
 
 describe('Pierrot identity attribution', () => {

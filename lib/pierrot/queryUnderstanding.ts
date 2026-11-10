@@ -1,4 +1,10 @@
 import { detectCommercialQuestion } from '@/lib/pierrot/commercialQuestion';
+import { isMediaArchiveQuery } from '@/lib/pierrot/mediaIntent';
+import {
+  detectSourceCorrection,
+  isCorrectionMessage,
+  isRepeatRequest,
+} from '@/lib/pierrot/correction';
 
 /**
  * One deterministic, side-effect-free understanding layer for a Pierrot turn.
@@ -253,37 +259,25 @@ export function extractRequestedDocumentTitle(
   return null;
 }
 
-const CORRECTION_TERMS = [
-  'не то',
-  'не так',
-  'стоп',
-  'я имею в виду',
-  'я имел в виду',
-  'i mean',
-  'i meant',
-  'not that',
-  'в brain',
-  'в базе',
-  'в архиве',
-  'in brain',
-  'in the archive',
-];
-
 const FOLLOW_UP_PATTERN =
   /^(?:а\s+)?(?:теперь|за|есть|только)(?=\s|$)|^(?:а|и|но|and|but|so)?\s*(?:подробнее|дальше|продолжай|еще|ещё|more|continue|go on|почему|why|как|how|what about|а что|и что|and now|and for)(?=\s|$)/i;
 
 function isCorrection(text: string): boolean {
-  return hasAny(text, CORRECTION_TERMS);
+  return isCorrectionMessage(text);
 }
 
 function isFollowUp(text: string, message: string): boolean {
   const trimmed = message.trim();
   const continuation =
-    /\b(это|этом|этого|его|ее|её|них|them|that|this|it|подробнее|дальше|продолжай|more|continue)\b/i.test(
+    /(это|этом|этого|его|ее|её|них|them|that|this|it|подробнее|дальше|продолжай|more|continue)/i.test(
       text
     );
 
-  return FOLLOW_UP_PATTERN.test(text.trim()) || (trimmed.length <= 40 && continuation);
+  return (
+    isRepeatRequest(message) ||
+    FOLLOW_UP_PATTERN.test(text.trim()) ||
+    (trimmed.length <= 40 && continuation)
+  );
 }
 
 function previousUserTitle(history: HistoryItem[] | undefined): string | null {
@@ -356,7 +350,11 @@ function classifyIntent(input: {
     return { intent: 'commercial', signals };
   }
 
+  // Authoritative Media source detection. This runs before the generic
+  // manuscript/publication heuristics so «анализ медиа», «база медиа» and
+  // «медиа за 2026» cannot fall through to Brain or general.
   if (
+    isMediaArchiveQuery(message) ||
     /(сми|пресс[аеуы]?|media|press|цитир|цитат|упоминани|публикаци[яи]\s+обо\s+мне|публикаци[яи]\s+в\s+сми|quoted|interview|coverage)/i.test(
       text
     )
@@ -556,7 +554,10 @@ export function understandPierrotQuery(
     options.history.length > 0 &&
     (correction || followUp) &&
     !documentTitle &&
-    (intent === 'general' || intent === 'personal_analysis' || intent === 'web_research')
+    (intent === 'general' ||
+      intent === 'personal_analysis' ||
+      intent === 'web_research' ||
+      intent === 'media_mentions')
   ) {
     const lastUser = [...options.history]
       .reverse()
@@ -567,6 +568,26 @@ export function understandPierrotQuery(
         allowHistory: false,
         depth: depth + 1,
       });
+
+      // An explicit source correction ("по базе медиа, а не Brain") changes
+      // only the source constraint. It must not inherit the previous Brain
+      // intent, otherwise the correction is silently ignored.
+      if (detectSourceCorrection(originalQuery) === 'media') {
+        return {
+          originalQuery,
+          normalizedQuery,
+          language,
+          intent: 'media_mentions',
+          confidence: 0.95,
+          signals: Array.from(new Set([...signals, 'correction:source:media'])).slice(0, 12),
+          documentTitle: null,
+          documentTitleKind: null,
+          period: period ?? previous.period,
+          correction: true,
+          followUp,
+          sources: sourcesForIntent('media_mentions'),
+        };
+      }
 
       if (previous.intent !== 'general' || previous.documentTitle) {
         const inheritedTitle = previous.documentTitle ?? previousUserTitle(options.history);

@@ -44,6 +44,31 @@ describe('Pierrot media catalogue routing', () => {
     expect(detectMediaCatalogQuestion(query)).toBeNull();
   });
 
+  it('recovers the original analysis task and year after a correction', () => {
+    const first = 'Сделай анализ медиа за 2026 год';
+    const second = 'Нет, ты всё выдумал, поищи по базе медиа';
+    const third = 'Ещё раз посмотри в базу медиа какие последние записи';
+
+    const secondPlan = detectMediaCatalogQuestion(second, {
+      contextMessages: [first],
+    });
+    const thirdPlan = detectMediaCatalogQuestion(third, {
+      contextMessages: [first, second],
+    });
+
+    expect(secondPlan?.kind).toBe('analysis');
+    expect(secondPlan?.year).toBe(2026);
+    expect(secondPlan?.scope).toBe('all');
+    expect(thirdPlan?.kind).toBe('analysis');
+    expect(thirdPlan?.year).toBe(2026);
+  });
+
+  it('detects a Media analysis report without falling back to semantic list', () => {
+    const plan = detectMediaCatalogQuestion('Сделай анализ медиа за 2026 год');
+    expect(plan?.kind).toBe('analysis');
+    expect(plan?.year).toBe(2026);
+  });
+
   it('extracts a quoted title for content retrieval', () => {
     const plan = detectMediaCatalogQuestion('Что говорится в публикации «Не только MAX»?');
     expect(plan?.titleQuery).toBe('Не только MAX');

@@ -55,7 +55,10 @@ function normalize(value: string): string {
  */
 export function detectOwnerTool(
   message: string,
-  options: { queryPlan?: Pick<PierrotQueryPlan, 'intent'> } = {}
+  options: {
+    queryPlan?: Pick<PierrotQueryPlan, 'intent' | 'correction' | 'followUp'>;
+    contextMessages?: string[];
+  } = {}
 ): OwnerToolRequest | null {
   const text = normalize(message);
   const command = text.match(
@@ -96,7 +99,9 @@ export function detectOwnerTool(
   // SQL-backed tools, not the 8-result semantic retrieval branch. The detector
   // is deliberately conservative and returns null for ambiguous personal
   // writing questions, which keep their Brain routing.
-  const mediaPlan = detectMediaCatalogQuestion(message);
+  const mediaPlan = detectMediaCatalogQuestion(message, {
+    contextMessages: options.contextMessages,
+  });
   if (mediaPlan) {
     return { kind: 'media', query: message.trim(), mediaKind: mediaPlan.kind };
   }

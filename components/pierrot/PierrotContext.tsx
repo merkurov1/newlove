@@ -67,6 +67,7 @@ import {
   isArtEngineExitCommand,
   type ArtEngineModeLanguage,
 } from '@/lib/pierrot/artEngineMode';
+import { recoverArtEngineAction } from '@/lib/pierrot/actionIntegrity';
 import {
   normalizePierrotErrorCode,
   pierrotErrorCopy,
@@ -308,15 +309,37 @@ function normalizeAnswerSources(value: unknown): PierrotAnswerSources | undefine
   const record = value as Record<string, unknown>;
   const mode = record.mode;
 
-  if (mode !== 'model' && mode !== 'brain' && mode !== 'web' && mode !== 'brain+web') {
+  if (
+    mode !== 'model' &&
+    mode !== 'brain' &&
+    mode !== 'web' &&
+    mode !== 'media' &&
+    mode !== 'brain+web' &&
+    mode !== 'brain+media' &&
+    mode !== 'media+web' &&
+    mode !== 'brain+media+web'
+  ) {
     return undefined;
   }
 
+  const label =
+    mode === 'model'
+      ? 'MODEL'
+      : (mode.split('+').map((part) => part.toUpperCase()).join(' + ') as
+          | 'BRAIN'
+          | 'WEB'
+          | 'MEDIA'
+          | 'BRAIN + WEB'
+          | 'BRAIN + MEDIA'
+          | 'MEDIA + WEB'
+          | 'BRAIN + MEDIA + WEB');
+
   return {
     mode,
-    label: mode === 'brain+web' ? 'BRAIN + WEB' : (mode.toUpperCase() as 'MODEL' | 'BRAIN' | 'WEB'),
+    label,
     model: record.model !== false,
     brain: record.brain === true,
+    media: record.media === true,
     web: record.web === true,
   };
 }
@@ -1512,6 +1535,31 @@ export function PierrotProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (loadingRef.current) return;
+
+      // A correction/repeat after an ignored Art Engine command must execute
+      // the unresolved client action, not send a fresh generic prompt.
+      if (!isArtEngineMode) {
+        const recoveredArtEngine = recoverArtEngineAction(
+          text,
+          messagesRef.current.map((message) => ({
+            role: message.role === 'assistant' ? 'assistant' : 'user',
+            content: message.content,
+          })),
+          artEngineLanguage(text)
+        );
+
+        if (recoveredArtEngine) {
+          appendMessage({
+            role: 'user',
+            content: text,
+            meta: { kind: 'chat' },
+          });
+          setDraft('');
+          setDraftCaret(0);
+          enterArtEngineMode(artEngineLanguage(text));
+          return;
+        }
+      }
 
       const artEngineCommand = detectArtEngineModeCommand(text);
 

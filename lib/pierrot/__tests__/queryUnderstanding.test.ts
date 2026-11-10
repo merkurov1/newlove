@@ -124,4 +124,26 @@ describe('document title extraction', () => {
   it('does not treat a bare weekly word as a document title', () => {
     expect(extractRequestedDocumentTitle('Там weekly в базе появился!')).toBeNull();
   });
+
+  it('preserves the Media source across a correction', () => {
+    const plan = understandPierrotQuery('Нет, ты всё выдумал, поищи по базе медиа', {
+      history: [{ role: 'user', content: 'Сделай анализ медиа за 2026 год' }],
+    });
+
+    expect(plan.correction).toBe(true);
+    expect(plan.intent).toBe('media_mentions');
+    expect(plan.sources.media).toBe(true);
+    expect(plan.sources.brain).toBe(false);
+  });
+
+  it('lets an explicit media source correction override a previous Brain task', () => {
+    const plan = understandPierrotQuery('По базе медиа, а не Brain', {
+      history: [{ role: 'user', content: 'Найди в Brain заметку о Sotheby’s' }],
+    });
+
+    expect(plan.intent).toBe('media_mentions');
+    expect(plan.sources.media).toBe(true);
+    expect(plan.sources.brain).toBe(false);
+  });
 });
+

@@ -1098,12 +1098,49 @@ async function answerCompare(
   };
 }
 
+async function fetchCompleteCatalog(
+  deps: MediaAnswerDependencies,
+  filters: MediaCatalogFilters,
+  pageSize = 200,
+  maxRecords = 2000
+): Promise<{ items: MediaCatalogRow[]; total: number; pages: number; complete: boolean }> {
+  const items: MediaCatalogRow[] = [];
+  let total = 0;
+  let page = 1;
+  let complete = true;
+
+  while (items.length < maxRecords) {
+    const batch = await deps.list({ filters, page, pageSize });
+    total = batch.total;
+
+    const known = new Set(items.map((item) => item.id));
+    for (const item of batch.items) {
+      if (!known.has(item.id)) items.push(item);
+    }
+
+    if (!batch.hasMore) break;
+    page += 1;
+
+    if (page > 50) {
+      complete = false;
+      break;
+    }
+  }
+
+  if (items.length < total) complete = false;
+
+  return { items, total, pages: page, complete };
+}
+
 async function answerAnalytics(
   plan: MediaCatalogPlan,
   language: Language,
   deps: MediaAnswerDependencies
 ): Promise<MediaAnswerResult> {
-  const analytics = await deps.analytics(plan.filters);
+  const [analytics, catalog] = await Promise.all([
+    deps.analytics(plan.filters),
+    fetchCompleteCatalog(deps, plan.filters),
+  ]);
   const stats: MediaArchiveStats = analytics.stats;
 
   const years = stats.byYear
@@ -1125,6 +1162,32 @@ async function answerAnalytics(
     .slice(0, 15)
     .map((row) => `${row.key}: ${row.count}`)
     .join(' · ');
+  const catalogKindCounts = new Map<string, number>();
+  const catalogOutletCounts = new Map<string, number>();
+  for (const item of catalog.items) {
+    const kind = item.kind || 'unknown';
+    const outlet = item.outlet || 'unknown';
+    catalogKindCounts.set(kind, (catalogKindCounts.get(kind) || 0) + 1);
+    catalogOutletCounts.set(outlet, (catalogOutletCounts.get(outlet) || 0) + 1);
+  }
+  const fullCatalogKinds = [...catalogKindCounts.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .map(([key, count]) => `${key}: ${count}`)
+    .join(' · ');
+  const fullCatalogOutlets = [...catalogOutletCounts.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 15)
+    .map(([key, count]) => `${key}: ${count}`)
+    .join(' · ');
+  const latestRecords = catalog.items
+    .slice()
+    .sort((left, right) => (right.publishedDate || '').localeCompare(left.publishedDate || ''))
+    .slice(0, 8)
+    .map(
+      (item, index) =>
+        `${index + 1}. ${item.publishedDate || '—'} — «${item.title}» · ${item.outlet} · ${item.kind || '—'}`
+    )
+    .join('\n');
 
   const text = [
     language === 'ru'
@@ -1140,6 +1203,8 @@ async function answerAnalytics(
           `Индексация: completed ${stats.indexing.completed} · failed ${stats.indexing.failed} · partial ${stats.indexing.partial} · blocked ${stats.indexing.blocked} · not_indexed ${stats.indexing.notIndexed}.`,
           `Анализ: ${stats.analysis.runsCompleted} runs completed · ${stats.analysis.runsFailed} failed · ${stats.analysis.currentQuotes} current quotes · ${stats.analysis.topics} topics · ${stats.analysis.entities} entities · ${stats.analysis.relations} relations.`,
           `Brain: ${analytics.brain.documentsWithRelationships} media-документов со связями из ${analytics.brain.mediaDocuments}.`,
+          `Полнота каталога: ${catalog.items.length} из ${catalog.total} записей · страниц: ${catalog.pages} · complete=${catalog.complete}.`,
+          `Семантический поиск при этом не использовался: это SQL-анализ каталога.`,
         ]
       : [
           `Total: ${stats.total} · published: ${stats.published} · drafts: ${stats.draft}.`,
@@ -1149,15 +1214,20 @@ async function answerAnalytics(
           `Indexing: completed ${stats.indexing.completed} · failed ${stats.indexing.failed} · partial ${stats.indexing.partial} · blocked ${stats.indexing.blocked} · not_indexed ${stats.indexing.notIndexed}.`,
           `Analysis: ${stats.analysis.runsCompleted} completed runs · ${stats.analysis.runsFailed} failed · ${stats.analysis.currentQuotes} current quotes · ${stats.analysis.topics} topics · ${stats.analysis.entities} entities · ${stats.analysis.relations} relations.`,
           `Brain: ${analytics.brain.documentsWithRelationships} media documents with relationships out of ${analytics.brain.mediaDocuments}.`,
+          `Catalogue completeness: ${catalog.items.length} of ${catalog.total} records · pages: ${catalog.pages} · complete=${catalog.complete}.`,
+          `Semantic search was not used: this is a SQL catalogue analysis.`,
         ]),
     '',
     `${language === 'ru' ? 'По годам' : 'By year'}: ${years || '—'}`,
-    `${language === 'ru' ? 'По изданиям' : 'By outlet'}: ${outlets || '—'}`,
-    `${language === 'ru' ? 'По типам' : 'By kind'}: ${kinds || '—'}`,
+    `${language === 'ru' ? 'По изданиям (полный каталог)' : 'By outlet (complete catalogue)'}: ${fullCatalogOutlets || outlets || '—'}`,
+    `${language === 'ru' ? 'По типам (полный каталог)' : 'By kind (complete catalogue)'}: ${fullCatalogKinds || kinds || '—'}`,
     `${language === 'ru' ? 'По языкам' : 'By language'}: ${languages || '—'}`,
     `${language === 'ru' ? 'По темам' : 'By topic'}: ${topics || '—'}`,
     `${language === 'ru' ? 'Последние месяцы' : 'Recent months'}: ${months || '—'}`,
     `${language === 'ru' ? 'Страны (inferred)' : 'Countries (inferred)'}: ${countries || '—'}`,
+    '',
+    language === 'ru' ? 'Последние записи каталога:' : 'Latest catalogue records:',
+    latestRecords || (language === 'ru' ? '—' : '—'),
     '',
     provenanceLine(stats.provenance, language),
   ].join('\n');
@@ -1165,9 +1235,9 @@ async function answerAnalytics(
   return {
     text,
     provenance: stats.provenance,
-    kind: 'analytics',
+    kind: plan.kind,
     structured: {
-      kind: 'analytics',
+      kind: plan.kind,
       totalMatching: stats.total,
       returned: stats.total,
       complete: true,
@@ -1209,6 +1279,7 @@ export async function answerMediaArchiveQuestion(
     case 'content':
       return answerContent(plan, language, deps);
     case 'analytics':
+    case 'analysis':
       return answerAnalytics(plan, language, deps);
     default:
       return null;

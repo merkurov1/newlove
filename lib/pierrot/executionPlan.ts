@@ -148,7 +148,17 @@ export function buildPierrotExecutionPlan(
       history: options.history,
     });
 
-  let ownerTool = detectOwnerTool(message, { queryPlan });
+  const recoveryContext =
+    queryPlan.correction || queryPlan.followUp
+      ? (options.history || [])
+          .filter((item) => item.role === 'user' && item.content.trim())
+          .slice(-2)
+          .map((item) => item.content)
+      : [];
+  let ownerTool = detectOwnerTool(message, {
+    queryPlan,
+    contextMessages: recoveryContext,
+  });
   const resolved = operationForIntent(queryPlan);
   const searchVerb = SEARCH_VERBS.test(message);
   const statsTerms = STATS_TERMS.test(message);
@@ -202,7 +212,10 @@ export function buildPierrotExecutionPlan(
     } else if (ownerTool.kind === 'media') {
       const kind = ownerTool.mediaKind || '';
       resolved.operation =
-        kind === 'analytics' || kind === 'count' || kind === 'diagnostics'
+        kind === 'analytics' ||
+        kind === 'analysis' ||
+        kind === 'count' ||
+        kind === 'diagnostics'
           ? 'media.stats'
           : 'media.search';
       resolved.tool = 'media';

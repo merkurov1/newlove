@@ -33,6 +33,16 @@ describe('Pierrot owner tool routing', () => {
     );
   });
 
+  it('routes explicit Media catalogue and analysis requests to the Media tool', () => {
+    expect(detectOwnerTool('Сделай анализ медиа за 2026 год')?.kind).toBe('media');
+    expect(detectOwnerTool('Сделай анализ медиа за 2026 год')?.mediaKind).toBe('analysis');
+    expect(detectOwnerTool('Поищи по базе медиа')?.kind).toBe('media');
+    expect(
+      detectOwnerTool('Посмотри в базу медиа какие последние записи')?.kind
+    ).toBe('media');
+    expect(detectOwnerTool('Сколько у меня упоминаний в прессе?')?.kind).toBe('media');
+  });
+
   it('routes commercial performance questions to the commercial analyst', () => {
     expect(detectOwnerTool('Сколько мы заработали?')?.kind).toBe('commercial');
     expect(detectOwnerTool('Сколько продаж пришло благодаря Пьеро?')?.kind).toBe('commercial');

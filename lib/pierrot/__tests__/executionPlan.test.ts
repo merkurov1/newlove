@@ -74,6 +74,46 @@ describe('Pierrot execution plan routing', () => {
     expect(plan.ownerTool).toBeNull();
   });
 
+  it.each([
+    'Сделай анализ медиа за 2026 год',
+    'Поищи по базе медиа',
+    'Посмотри в базу медиа какие последние записи',
+    'Сколько у меня упоминаний в прессе?',
+    'Покажи все публикации за 2026 год',
+  ])('routes explicit Media request “%s” to Media, never Brain/general', (query) => {
+    const plan = buildPierrotExecutionPlan(query, { ownerMode: true });
+    expect(plan.tool).toBe('media');
+    expect(plan.operation === 'media.search' || plan.operation === 'media.stats').toBe(true);
+    expect(plan.operation).not.toBe('brain.search');
+    expect(plan.operation).not.toBe('general');
+    expect(plan.ownerTool?.kind).toBe('media');
+  });
+
+  it('recovers the original Media task across the correction sequence', () => {
+    const first = 'Сделай анализ медиа за 2026 год';
+    const second = 'Нет, ты всё выдумал, поищи по базе медиа';
+    const third = 'Ещё раз посмотри в базу медиа какие последние записи';
+
+    const secondPlan = buildPierrotExecutionPlan(second, {
+      ownerMode: true,
+      history: history(first),
+    });
+    const thirdPlan = buildPierrotExecutionPlan(third, {
+      ownerMode: true,
+      history: [
+        { role: 'user' as const, content: first },
+        { role: 'user' as const, content: second },
+      ],
+    });
+
+    expect(secondPlan.tool).toBe('media');
+    expect(secondPlan.ownerTool?.kind).toBe('media');
+    expect(thirdPlan.tool).toBe('media');
+    expect(thirdPlan.ownerTool?.kind).toBe('media');
+    expect(secondPlan.operation).not.toBe('brain.search');
+    expect(thirdPlan.operation).not.toBe('brain.search');
+  });
+
   it('routes “Покажи последние материалы из Media Archive” to media.search', () => {
     const plan = buildPierrotExecutionPlan('Покажи последние материалы из Media Archive', {
       ownerMode: true,

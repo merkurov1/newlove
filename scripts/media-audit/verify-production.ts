@@ -94,6 +94,7 @@ async function main(): Promise<void> {
     pageSize: 100,
   });
 
+  await scenario('Сделай анализ медиа за 2026 год', 'analysis', all2026.total);
   await scenario('Сколько у меня публикаций за 2026 год?', 'count', own2026.total);
   await scenario('Покажи все мои публикации за 2026 год', 'own_period', own2026.total);
   await scenario(
@@ -111,6 +112,27 @@ async function main(): Promise<void> {
   await scenario('Сравни мои колонки за октябрь 2026 года', 'compare', null);
   await scenario('Какие публикации ещё не проиндексированы?', 'diagnostics', null);
   await scenario('Статистика Media Archive', 'analytics', null);
+
+  // Mandatory correction sequence: the final plan must remain the original
+  // Media analysis task, including the 2026 year filter.
+  const seqFirst = 'Сделай анализ медиа за 2026 год';
+  const seqSecond = 'Нет, ты всё выдумал, поищи по базе медиа';
+  const seqThird = 'Ещё раз посмотри в базу медиа какие последние записи';
+  const seqPlan2 = detectMediaCatalogQuestion(seqSecond, { contextMessages: [seqFirst] });
+  const seqPlan3 = detectMediaCatalogQuestion(seqThird, {
+    contextMessages: [seqFirst, seqSecond],
+  });
+  check(
+    'correction sequence preserves the Media analysis task',
+    seqPlan2?.kind === 'analysis' &&
+      seqPlan2.year === 2026 &&
+      seqPlan3?.kind === 'analysis' &&
+      seqPlan3.year === 2026,
+    JSON.stringify({
+      second: { kind: seqPlan2?.kind, year: seqPlan2?.year },
+      third: { kind: seqPlan3?.kind, year: seqPlan3?.year },
+    })
+  );
 
   check(
     'own 2026 count is an exact SQL count',

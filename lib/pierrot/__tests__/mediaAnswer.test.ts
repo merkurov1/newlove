@@ -278,6 +278,19 @@ describe('Media Archive answer completeness', () => {
     expect(answer?.text).not.toContain('Показаны все');
   });
 
+  it('builds a Media analysis report from the complete SQL catalogue', async () => {
+    const deps = dependencies({
+      list: jest.fn(async () => list(60, 60)) as unknown as MediaAnswerDependencies['list'],
+    });
+    const answer = await answerMediaArchiveQuestion('Сделай анализ медиа за 2026 год', 'ru', deps);
+
+    expect(answer?.structured.kind).toBe('analysis');
+    expect(answer?.text).toContain('Полнота каталога: 60 из 60');
+    expect(answer?.text).toContain('complete=true');
+    expect(answer?.text).toContain('Семантический поиск при этом не использовался');
+    expect(deps.semantic).not.toHaveBeenCalled();
+  });
+
   it('never turns a zero semantic result into “no publications exist”', async () => {
     const deps = dependencies();
     const answer = await answerMediaArchiveQuestion(
