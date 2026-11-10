@@ -23,6 +23,12 @@ describe('detectWebsiteQuestion', () => {
       ['Какие проблемы и возможности ты обнаружил?', 'anomalies'],
       ['Что происходит с поисковым трафиком?', 'search'],
       ['Сравни последние 30 дней с предыдущими', 'compare'],
+      ['Что происходит с моим публичным присутствием?', 'overview'],
+      ['Покажи статистику Bluesky', 'bluesky'],
+      ['Сравни русскую и английскую рассылки', 'newsletter'],
+      ['Покажи статистику рассылок', 'newsletter'],
+      ['Что Vercel знает о качестве сайта?', 'health'],
+      ['Как быстро загружается сайт по Speed Insights?', 'health'],
     ];
 
     for (const [message, scope] of cases) {
@@ -64,6 +70,11 @@ describe('detectWebsiteQuestion', () => {
 
   it('supports an explicit /site command', () => {
     expect(ask('/site')).toMatchObject({ website: true, scope: 'overview' });
+  });
+
+  it('marks a detailed request explicitly', () => {
+    expect(ask('Подробно покажи статистику сайта за 30 дней')?.wantsDetailed).toBe(true);
+    expect(ask('Что происходит с сайтом?')?.wantsDetailed).toBe(false);
   });
 
   it('resolves periods without inventing a window', () => {

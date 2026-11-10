@@ -216,15 +216,18 @@ function SourceCard({
   provider,
 }: {
   source: ProviderHealth;
-  provider: 'google_analytics' | 'search_console' | 'umami';
+  provider: 'google_analytics' | 'search_console' | 'umami' | 'bluesky';
 }) {
-  const connectHref = `/api/admin/analytics/connect?provider=${provider}`;
+  const connectHref =
+    provider === 'bluesky'
+      ? null
+      : `/api/admin/analytics/connect?provider=${provider}`;
   const external = metaRecord(source.externalMeta);
   const discovery = metaRecord(external?.discovery);
   const properties = metaList(external?.discovered_properties);
   const sites = metaList(external?.discovered_sites);
   const scopes = source.scopes;
-  const googleProvider = provider !== 'umami';
+  const googleProvider = provider === 'google_analytics' || provider === 'search_console';
   const canRetryDiscovery =
     googleProvider &&
     source.status !== 'not_connected' &&
@@ -358,11 +361,13 @@ function SourceCard({
       )}
 
       <div className="pw-analytics-card-actions">
-        {provider === 'umami' ? (
+        {provider === 'umami' || provider === 'bluesky' ? (
           <span className="pw-analytics-hint">
-            Настраивается переменными окружения; синхронизация — кнопкой ниже.
+            {provider === 'bluesky'
+              ? 'Настраивается через BLUESKY_IDENTIFIER / BLUESKY_PASSWORD; синхронизация — кнопкой ниже.'
+              : 'Настраивается переменными окружения; синхронизация — кнопкой ниже.'}
           </span>
-        ) : source.connected ? (
+        ) : source.connected && connectHref ? (
           <>
             <a className="pw-analytics-link" href={connectHref}>
               Переподключить
@@ -383,7 +388,7 @@ function SourceCard({
             </form>
           </>
         ) : (
-          <a className="pw-analytics-button" href={connectHref}>
+          <a className="pw-analytics-button" href={connectHref ?? '#'}>
             Подключить Google
           </a>
         )}
@@ -409,6 +414,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
   const ga = sourceFor('google_analytics');
   const gsc = sourceFor('search_console');
   const um = sourceFor('umami');
+  const bs = sourceFor('bluesky');
   const recentRuns = health.runs.slice(0, 12);
 
   return (
@@ -419,8 +425,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
             <p className="pw-kicker">ANALYTICS · WEBSITE INTELLIGENCE</p>
             <h1 className="pw-page-title">Сайт под наблюдением.</h1>
             <p className="pw-page-lede">
-              Google Analytics, Search Console и Umami остаются независимыми источниками. Пьеро
-              сопоставляет их с Supabase и Brain, но не выдаёт отсутствие данных за ноль.
+              Google Analytics, Search Console, Umami и Bluesky остаются независимыми источниками.
+              Пьеро сопоставляет их с рассылками, Supabase и Brain, но не выдаёт отсутствие данных
+              за ноль.
             </p>
           </div>
 
@@ -473,6 +480,61 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
           {ga && <SourceCard source={ga} provider="google_analytics" />}
           {gsc && <SourceCard source={gsc} provider="search_console" />}
           {um && <SourceCard source={um} provider="umami" />}
+          {bs && <SourceCard source={bs} provider="bluesky" />}
+        </section>
+
+        <section className="pw-analytics-grid" aria-label="Рассылки и инфраструктура">
+          <article className="pw-analytics-card">
+            <div className="pw-analytics-card-head">
+              <div>
+                <span className="pw-dot pw-dot-growth" aria-hidden="true" />
+                <h2>Рассылки</h2>
+              </div>
+              <span className="pw-analytics-badge">Supabase</span>
+            </div>
+            <p className="pw-analytics-id">Русская и английская — отдельные продукты</p>
+            <dl className="pw-analytics-facts">
+              <div>
+                <dt>Активные подписчики</dt>
+                <dd>{formatNumber(dashboard?.dataset.internal.newsletter.subscribers.active)}</dd>
+              </div>
+              <div>
+                <dt>RU / EN</dt>
+                <dd>
+                  {formatNumber(dashboard?.dataset.internal.newsletter.subscribers.ru)} /{' '}
+                  {formatNumber(dashboard?.dataset.internal.newsletter.subscribers.en)}
+                </dd>
+              </div>
+              <div>
+                <dt>Писем за 30 дней</dt>
+                <dd>{formatNumber(dashboard?.dataset.internal.newsletter.jobs.emailsSent)}</dd>
+              </div>
+              <div>
+                <dt>Ошибок доставки</dt>
+                <dd>{formatNumber(dashboard?.dataset.internal.newsletter.jobs.emailsFailed)}</dd>
+              </div>
+            </dl>
+            <p className="pw-analytics-hint">
+              Открытия и клики не сохраняются в текущем Resend-логе; они не рассчитываются и не
+              подставляются.
+            </p>
+          </article>
+
+          <article className="pw-analytics-card">
+            <div className="pw-analytics-card-head">
+              <div>
+                <span className="pw-dot pw-dot-growth" aria-hidden="true" />
+                <h2>Vercel</h2>
+              </div>
+              <span className="pw-analytics-badge">instrumentation</span>
+            </div>
+            <p className="pw-analytics-id">@vercel/analytics · @vercel/speed-insights</p>
+            <p className="pw-analytics-hint">
+              Скрипты Analytics и Speed Insights присутствуют в production-бандле. Vercel API
+              Web Analytics / Speed Insights на текущем тарифе недоступен; эти данные не
+              подменяются оценками.
+            </p>
+          </article>
         </section>
 
         <section className="pw-analytics-charts" aria-labelledby="pw-analytics-charts-title">

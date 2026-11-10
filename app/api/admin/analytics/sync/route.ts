@@ -9,7 +9,12 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const PROVIDERS: AnalyticsProvider[] = ['google_analytics', 'search_console', 'umami'];
+const PROVIDERS: AnalyticsProvider[] = [
+  'google_analytics',
+  'search_console',
+  'umami',
+  'bluesky',
+];
 const MODES: SyncMode[] = ['manual', 'incremental', 'backfill', 'repair'];
 
 function isProvider(value: unknown): value is AnalyticsProvider {

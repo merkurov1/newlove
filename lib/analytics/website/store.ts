@@ -620,7 +620,7 @@ export type DataCoverage = {
 export async function getDataCoverage(store: SupabaseClient): Promise<DataCoverage[]> {
   const result: DataCoverage[] = [];
 
-  for (const provider of ['google_analytics', 'umami'] as const) {
+  for (const provider of ['google_analytics', 'umami', 'bluesky'] as const) {
     const { data, error } = await store
       .from('analytics_metrics_daily')
       .select('metric_date')

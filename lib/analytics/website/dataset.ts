@@ -3,7 +3,7 @@ import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { parseCalendarDate } from '@/lib/pierrot/reportingPeriod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { getGoogleOAuthConfig, getUmamiConfig } from './config';
+import { getBlueskyConfig, getGoogleOAuthConfig, getUmamiConfig } from './config';
 import { classifyTrafficPath, isInternalPath, isPublicPath } from './traffic';
 import { getSearchConsoleSiteOverride } from './config';
 import {
@@ -41,6 +41,7 @@ import type {
   ProviderHealth,
   SearchConsoleSnapshot,
   UmamiSnapshot,
+  BlueskySnapshot,
 } from './types';
 
 assertServerOnly('lib/analytics/website/dataset');
@@ -866,6 +867,177 @@ function umamiSnapshot(
   };
 }
 
+function blueskySnapshot(
+  rows: MetricRow[],
+  previousRows: MetricRow[],
+  connection: StoredConnection | null
+): BlueskySnapshot {
+  const available = rows.length > 0 && Boolean(connection);
+  const profileMetric = (source: MetricRow[], metric: string): number | null => {
+    const matching = source
+      .filter(
+        (row) =>
+          row.provider === 'bluesky' &&
+          row.report_type === 'profile' &&
+          row.metric === metric
+      )
+      .sort((a, b) => a.metric_date.localeCompare(b.metric_date));
+    return matching.length > 0 ? Number(matching[matching.length - 1].value) : null;
+  };
+
+  const postsByUri = new Map<
+    string,
+    {
+      uri: string;
+      text: string;
+      createdAt: string | null;
+      url: string | null;
+      likes: number;
+      reposts: number;
+      replies: number;
+      quotes: number;
+      links: number;
+      siteLinks: number;
+      engagement: number;
+    }
+  >();
+
+  for (const row of rows) {
+    if (row.provider !== 'bluesky' || row.report_type !== 'post') continue;
+    const uri = row.dimension_value;
+    if (!uri) continue;
+    const metadata = row.metadata ?? {};
+    const post = postsByUri.get(uri) ?? {
+      uri,
+      text: typeof metadata.text === 'string' ? metadata.text : '',
+      createdAt:
+        typeof metadata.post_created_at === 'string' ? metadata.post_created_at : null,
+      url: typeof metadata.permalink === 'string' ? metadata.permalink : null,
+      likes: 0,
+      reposts: 0,
+      replies: 0,
+      quotes: 0,
+      links: 0,
+      siteLinks: 0,
+      engagement: 0,
+    };
+
+    const value = Number(row.value || 0);
+    if (row.metric === 'likes') post.likes = value;
+    else if (row.metric === 'reposts') post.reposts = value;
+    else if (row.metric === 'replies') post.replies = value;
+    else if (row.metric === 'quotes') post.quotes = value;
+    else if (row.metric === 'links') post.links = value;
+    else if (row.metric === 'site_links') post.siteLinks = value;
+    else if (row.metric === 'engagement') post.engagement = value;
+    postsByUri.set(uri, post);
+  }
+
+  const posts = [...postsByUri.values()].sort(
+    (left, right) =>
+      right.engagement - left.engagement ||
+      String(right.createdAt || '').localeCompare(String(left.createdAt || ''))
+  );
+  const previousFollowers = profileMetric(previousRows, 'followers');
+  const previousPosts = profileMetric(previousRows, 'posts');
+
+  const makeMetric = (
+    key: string,
+    label: string,
+    value: number | null,
+    previous: number | null,
+    definition: string
+  ) =>
+    metric({
+      key,
+      label,
+      value,
+      previous,
+      unit: 'count',
+      source: 'bluesky',
+      definition,
+      precision:
+        'Публичные счётчики Bluesky на момент синхронизации. Не равно охвату, просмотрам или уникальным читателям.',
+      available,
+      unavailableReason: available ? undefined : 'Bluesky не подключён или нет данных.',
+    });
+
+  return {
+    available,
+    profile: {
+      handle: connection?.external_meta?.handle
+        ? String(connection.external_meta.handle)
+        : connection?.account_label ?? null,
+      displayName: connection?.account_label ?? null,
+      did: connection?.external_id ?? null,
+      followers: profileMetric(rows, 'followers'),
+      follows: profileMetric(rows, 'follows'),
+      posts: profileMetric(rows, 'posts'),
+    },
+    totals: {
+      followers: makeMetric(
+        'followers',
+        'Подписчики Bluesky',
+        profileMetric(rows, 'followers'),
+        previousFollowers,
+        'followersCount из публичного профиля Bluesky.'
+      ),
+      follows: makeMetric(
+        'follows',
+        'Подписки Bluesky',
+        profileMetric(rows, 'follows'),
+        null,
+        'followsCount из публичного профиля Bluesky.'
+      ),
+      posts: makeMetric(
+        'posts',
+        'Посты Bluesky',
+        profileMetric(rows, 'posts'),
+        previousPosts,
+        'postsCount из публичного профиля Bluesky.'
+      ),
+      likes: makeMetric(
+        'likes',
+        'Лайки постов',
+        posts.reduce((sum, post) => sum + post.likes, 0),
+        null,
+        'Сумма likeCount по загруженным постам.'
+      ),
+      reposts: makeMetric(
+        'reposts',
+        'Репосты',
+        posts.reduce((sum, post) => sum + post.reposts, 0),
+        null,
+        'Сумма repostCount по загруженным постам.'
+      ),
+      replies: makeMetric(
+        'replies',
+        'Ответы',
+        posts.reduce((sum, post) => sum + post.replies, 0),
+        null,
+        'Сумма replyCount по загруженным постам.'
+      ),
+      engagement: makeMetric(
+        'engagement',
+        'Взаимодействия (расчётно)',
+        posts.reduce((sum, post) => sum + post.engagement, 0),
+        null,
+        'Расчёт: лайки + репосты + ответы + цитаты. Это не охват.'
+      ),
+    },
+    posts,
+    topPosts: posts.slice(0, 10),
+    siteLinkedPosts: posts.filter((post) => post.siteLinks > 0).slice(0, 10),
+    limitations: available
+      ? [
+          'Bluesky отдаёт публичные счётчики, но не уникальный охват и не число просмотров.',
+          'Загружаются последние доступные посты; лента ограничена пагинацией.',
+          'Связь поста с merkurov.love определяется по ссылке в facets/embed, а не по догадке.',
+        ]
+      : ['Bluesky не подключён или нет сохранённых данных.'],
+  };
+}
+
 function dateBounds(period: AnalyticsPeriod) {
   const start = parseCalendarDate(period.start, period.timezone);
   const end = parseCalendarDate(period.end, period.timezone, true);
@@ -883,6 +1055,9 @@ function dateBounds(period: AnalyticsPeriod) {
 async function countQuery(
   store: SupabaseClient,
   table: string,
+  // Dynamic table helpers cannot express PostgREST's generic builder without
+  // deep type instantiation; the call sites below are all simple filters.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   apply: (query: any) => any
 ): Promise<number | null> {
   try {
@@ -900,6 +1075,7 @@ async function countQuery(
 async function readRowsSafe<T>(
   store: SupabaseClient,
   table: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   apply: (query: any) => any
 ): Promise<T[]> {
   try {
@@ -1411,6 +1587,7 @@ async function contentMatches(
       type: string | null;
       source_url: string | null;
       published_at: string | null;
+      bluesky_uri: string | null;
     }>(store, 'items', (query) => query.limit(5000)),
     readRowsSafe<{
       id: string;
@@ -1433,6 +1610,7 @@ async function contentMatches(
       url: path,
       publishedAt: article.publishedAt,
       brainDocumentId: null,
+      channels: ['site', 'journal'],
     });
   }
 
@@ -1447,6 +1625,7 @@ async function contentMatches(
       url: path,
       publishedAt: letter.publishedAt,
       brainDocumentId: null,
+      channels: ['site', 'newsletter'],
     });
   }
 
@@ -1462,6 +1641,7 @@ async function contentMatches(
       url: item.source_url,
       publishedAt: item.published_at,
       brainDocumentId: null,
+      channels: ['site', 'flow', ...(item.bluesky_uri ? ['bluesky'] : [])],
     });
   }
 
@@ -1516,6 +1696,7 @@ async function contentMatches(
           url: match.url,
           publishedAt: match.publishedAt,
           brainDocumentId: match.brainDocumentId,
+          channels: match.channels ?? ['site'],
         } satisfies ContentMatch;
       }
 
@@ -1547,7 +1728,9 @@ function providerHealth(
       ? 'Google Analytics 4'
       : provider === 'search_console'
         ? 'Google Search Console'
-        : 'Umami';
+        : provider === 'bluesky'
+          ? 'Bluesky'
+          : 'Umami';
 
   const providerRuns = runs.filter((run) => run.provider === provider);
   const lastSuccess = providerRuns.find((run) => run.status === 'completed');
@@ -1567,7 +1750,9 @@ function providerHealth(
     actionRequired =
       provider === 'umami'
         ? 'Добавьте ANALYTICS_UMAMI_API_URL, ANALYTICS_UMAMI_API_KEY и ANALYTICS_UMAMI_WEBSITE_ID.'
-        : 'Добавьте GOOGLE_CLIENT_ID и GOOGLE_CLIENT_SECRET.';
+        : provider === 'bluesky'
+          ? 'Добавьте BLUESKY_IDENTIFIER и BLUESKY_PASSWORD (app password).'
+          : 'Добавьте GOOGLE_CLIENT_ID и GOOGLE_CLIENT_SECRET.';
   } else if (status === 'not_connected') {
     actionRequired = extraAction || 'Подключите источник и выдайте доступ только на чтение.';
   } else if (status === 'needs_reauthorization') {
@@ -1629,9 +1814,11 @@ export async function loadSourceHealth(store?: SupabaseClient): Promise<{
 
   const googleOAuth = getGoogleOAuthConfig();
   const umamiConfig = getUmamiConfig();
+  const blueskyConfig = getBlueskyConfig();
   const gaConnection = connectionFor('google_analytics');
   const gscConnection = connectionFor('search_console');
   const umamiConnection = connectionFor('umami');
+  const blueskyConnection = connectionFor('bluesky');
   const gscConfigured = googleOAuth.configured;
 
   return {
@@ -1664,6 +1851,14 @@ export async function loadSourceHealth(store?: SupabaseClient): Promise<{
         umamiConfig.configured,
         !umamiConfig.configured ? `Не заданы: ${umamiConfig.missing.join(', ')}.` : null
       ),
+      providerHealth(
+        'bluesky',
+        blueskyConnection,
+        runs,
+        coverage.find((row) => row.provider === 'bluesky') ?? null,
+        blueskyConfig.configured,
+        !blueskyConfig.configured ? `Не заданы: ${blueskyConfig.missing.join(', ')}.` : null
+      ),
     ],
     coverage,
     runs,
@@ -1689,9 +1884,18 @@ export async function loadAnalyticsDataset(input: {
   const gaConnection = connectionFor('google_analytics');
   const gscConnection = connectionFor('search_console');
   const umamiConnection = connectionFor('umami');
+  const blueskyConnection = connectionFor('bluesky');
 
-  const [gaRows, gaPreviousRows, umamiRows, umamiPreviousRows, searchRows, previousSearchRows] =
-    await Promise.all([
+  const [
+    gaRows,
+    gaPreviousRows,
+    umamiRows,
+    umamiPreviousRows,
+    searchRows,
+    previousSearchRows,
+    blueskyRows,
+    previousBlueskyRows,
+  ] = await Promise.all([
       gaConnection?.external_id
         ? readMetricRows(store, {
             provider: 'google_analytics',
@@ -1732,6 +1936,20 @@ export async function loadAnalyticsDataset(input: {
             to: period.previousEnd,
           }).catch(() => [] as SearchPerformanceRow[])
         : Promise.resolve([] as SearchPerformanceRow[]),
+      blueskyConnection
+        ? readMetricRows(store, {
+            provider: 'bluesky',
+            from: period.start,
+            to: period.end,
+          }).catch(() => [] as MetricRow[])
+        : Promise.resolve([] as MetricRow[]),
+      blueskyConnection
+        ? readMetricRows(store, {
+            provider: 'bluesky',
+            from: period.previousStart,
+            to: period.previousEnd,
+          }).catch(() => [] as MetricRow[])
+        : Promise.resolve([] as MetricRow[]),
     ]);
 
   const publicSearchRows = searchRows.filter((row) => isPublicPath(row.page));
@@ -1743,11 +1961,13 @@ export async function loadAnalyticsDataset(input: {
     gscConnection?.external_id ?? null
   );
   const umami = umamiSnapshot(umamiRows, umamiPreviousRows, period, umamiConnection);
+  const bluesky = blueskySnapshot(blueskyRows, previousBlueskyRows, blueskyConnection);
   const internal = await internalSnapshot(store, period);
   const { matches } = await contentMatches(store, ga4, gsc);
 
   const googleOAuth = getGoogleOAuthConfig();
   const umamiConfig = getUmamiConfig();
+  const blueskyConfig = getBlueskyConfig();
 
   const gscSiteConfigured = Boolean(gscConnection?.external_id);
   const gscConfigured = googleOAuth.configured;
@@ -1781,6 +2001,14 @@ export async function loadAnalyticsDataset(input: {
       umamiConfig.configured,
       !umamiConfig.configured ? `Не заданы: ${umamiConfig.missing.join(', ')}.` : null
     ),
+    providerHealth(
+      'bluesky',
+      blueskyConnection,
+      runs,
+      coverage.find((row) => row.provider === 'bluesky') ?? null,
+      blueskyConfig.configured,
+      !blueskyConfig.configured ? `Не заданы: ${blueskyConfig.missing.join(', ')}.` : null
+    ),
   ];
 
   return {
@@ -1790,6 +2018,7 @@ export async function loadAnalyticsDataset(input: {
     ga4,
     gsc,
     umami,
+    bluesky,
     internal,
     projects: projectPerformance(PROJECT_DEFINITIONS, ga4, gsc, internal),
     contentMatches: matches,

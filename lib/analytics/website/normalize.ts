@@ -1,5 +1,4 @@
 import { assertServerOnly } from '@/lib/serverOnly';
-import { getSiteUrl } from './config';
 import { fullHash } from './tokenCrypto';
 
 assertServerOnly('lib/analytics/website/normalize');
@@ -25,7 +24,7 @@ function stripTrailingSlash(value: string): string {
   return value.length > 1 ? value.replace(/\/+$/, '') : value;
 }
 
-export function normalizePath(value: string | null | undefined, siteUrl = getSiteUrl()): string {
+export function normalizePath(value: string | null | undefined): string {
   if (!value) return '';
 
   let raw = String(value).trim();
@@ -106,6 +105,7 @@ export type ContentIndexEntry = {
   url: string | null;
   publishedAt: string | null;
   brainDocumentId: string | null;
+  channels?: string[];
 };
 
 export function extractContentSlug(

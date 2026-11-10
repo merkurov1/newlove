@@ -172,6 +172,7 @@ export type ContentMatch = {
   url: string | null;
   publishedAt: string | null;
   brainDocumentId: string | null;
+  channels?: string[];
 };
 
 export type ProjectPerformance = {
@@ -330,6 +331,7 @@ export type WebsiteQuestion = {
   wantsComparison: boolean;
   wantsProblems: boolean;
   wantsRecommendations: boolean;
+  wantsDetailed?: boolean;
   project: string | null;
   periodKey:
     | 'last_7_days'

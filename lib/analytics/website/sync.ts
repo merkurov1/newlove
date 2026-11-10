@@ -704,7 +704,7 @@ async function syncOne(
     };
   }
 
-  if (provider === 'umami' && !connection.external_id) {
+  if (provider === 'umami' && !connection?.external_id) {
     // Umami does not use an OAuth token; a configured website id is enough.
     const config = getUmamiConfig();
     if (!config.configured) {
@@ -798,8 +798,6 @@ async function syncOne(
       snapshotRows: result.snapshots,
       details: result.details,
     });
-    await markConnectionSynced(store, provider, partial ? 'partial' : 'connected');
-
     if (isBluesky) {
       const profile = result.details.profile as
         | { did?: string | null; handle?: string | null; followers?: number | null; posts?: number | null }
@@ -819,6 +817,8 @@ async function syncOne(
         connectedBy: null,
       });
     }
+
+    await markConnectionSynced(store, provider, partial ? 'partial' : 'connected');
 
     return {
       provider,

@@ -48,7 +48,7 @@ export function detectWebsiteQuestion(
   }
 
   const websiteTerms =
-    /(сайт|website|веб-?сайт|трафик|traffic|посещаем|посетител|visitor|аудитор|audience|google\s*analytics|ga4|search\s*console|seo|органик|organic|поисков[а-яё]*\s+(трафик|видимост|запрос)|показы|impressions|клики|ctr|позици[а-яё]*\s+в\s+поиске|реферал|referral|лендинг|landing|источник[а-яё]*\s+трафика|канал[а-яё]*\s+трафика|страниц[а-яё]*\s+(сайта|привлека|просмотр)|просмотр[а-яё]*\s+страниц|конверси[а-яё]*\s+сайта|вовлеченност|bounce|отказы)/i;
+    /(сайт|website|веб-?сайт|трафик|traffic|посещаем|посетител|visitor|аудитор|audience|google\s*analytics|ga4|search\s*console|seo|органик|organic|поисков[а-яё]*\s+(трафик|видимост|запрос)|показы|impressions|клики|ctr|позици[а-яё]*\s+в\s+поиске|реферал|referral|лендинг|landing|источник[а-яё]*\s+трафика|канал[а-яё]*\s+трафика|страниц[а-яё]*\s+(сайта|привлека|просмотр)|просмотр[а-яё]*\s+страниц|конверси[а-яё]*\s+сайта|вовлеченност|bounce|отказы|bluesky|bsky|блускай|блюскай|рассыл[а-яё]*|newsletter|публичн[а-яё]*\s+присутств|public\s+presence|цифров[а-яё]*\s+след|digital\s+footprint|vercel|web\s+vitals|core\s+web\s+vitals|speed\s+insights|скорост[а-яё]*\s+сайта)/i;
 
   const searchTerms =
     /(что\s+люди\s+ищут|поисков[а-яё]*\s+запрос|запрос[а-яё]*\s+в\s+google|google\s*search|search\s*console|показы|клики|ctr|индексац|видимост[а-яё]*\s+в\s+google|позици[а-яё]*|органик)/i;
@@ -127,7 +127,7 @@ function detectScope(
   text: string,
   options: { explicitWebsite: boolean; project: string | null }
 ): WebsiteQuestionScope {
-  if (/(подключ|синхрониз|sync|источник[а-яё]*\s+(данных|недоступ|ошиб)|статус\s+данных|доступ[а-яё]*\s+к\s+аналитик|source\s+health|данные\s+обновля)/i.test(text)) {
+  if (/(подключ|синхрониз|sync|источник[а-яё]*\s+(данных|недоступ|ошиб)|статус\s+данных|доступ[а-яё]*\s+к\s+аналитик|source\s+health|данные\s+обновля|vercel|web\s+vitals|core\s+web\s+vitals|speed\s+insights|скорост[а-яё]*\s+сайта)/i.test(text)) {
     return 'health';
   }
 
@@ -153,6 +153,14 @@ function detectScope(
     return 'projects';
   }
 
+  if (/(bluesky|bsky|блускай|блюскай)/i.test(text)) {
+    return 'bluesky';
+  }
+
+  if (/(рассыл[а-яё]*|newsletter|email\s+newsletter|письм[а-яё]*\s+(рассыл[а-яё]*|подписчик)|подписчик[а-яё]*\s+(русск|англ)|russian\s+newsletter|english\s+newsletter)/i.test(text)) {
+    return 'newsletter';
+  }
+
   if (/(сравни|сравнить|compare|что\s+изменилось|what\s+changed|динамик|тренд|trend|по\s+сравнению|было\s+и\s+стало|предыдущ[а-яё]*\s+(период|месяц|недел)|прошл[а-яё]*\s+(месяц|недел))/i.test(text)) {
     return 'compare';
   }
@@ -165,7 +173,11 @@ function detectScope(
     return 'search';
   }
 
-  if (/(рассылк|newsletter|email\s+newsletter|письм[а-яё]*\s+(рассылк|подписчик)|подписчик[а-яё]*\s+(русск|англ)|russian\s+newsletter|english\s+newsletter)/i.test(text)) {
+  if (/(bluesky|bsky|блускай|блюскай)/i.test(text)) {
+    return 'bluesky';
+  }
+
+  if (/(рассыл[а-яё]*|newsletter|email\s+newsletter|письм[а-яё]*\s+(рассыл[а-яё]*|подписчик)|подписчик[а-яё]*\s+(русск|англ)|russian\s+newsletter|english\s+newsletter)/i.test(text)) {
     return 'newsletter';
   }
 
@@ -269,6 +281,10 @@ function buildQuestion(
     /(что\s+делать|что\s+мне\s+делать|рекоменд|recommend|возможност|потенциал|улучш|следующ[а-яё]*\s+шаг)/i.test(
       text
     );
+  const wantsDetailed =
+    /(подробн|детальн|полный\s+отчет|полный\s+отчёт|все\s+метрик|таблиц|full\s+report|detailed|breakdown)/i.test(
+      text
+    );
   const period = detectPeriod(message, text, now, timezone);
 
   return {
@@ -277,6 +293,7 @@ function buildQuestion(
     wantsComparison,
     wantsProblems,
     wantsRecommendations,
+    wantsDetailed,
     project,
     ...period,
   };

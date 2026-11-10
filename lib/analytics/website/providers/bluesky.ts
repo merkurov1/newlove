@@ -75,7 +75,7 @@ function extractLinks(record: Record<string, unknown>, embed: Record<string, unk
   return [...links];
 }
 
-function normalizePost(entry: unknown): BlueskyPostObservation | null {
+export function normalizeBlueskyPost(entry: unknown): BlueskyPostObservation | null {
   if (!entry || typeof entry !== 'object') return null;
   const item = entry as {
     post?: {
@@ -168,7 +168,7 @@ export async function fetchBlueskyAnalytics(input: {
     const items = Array.isArray(feed.data.feed) ? feed.data.feed : [];
 
     for (const item of items) {
-      const normalized = normalizePost(item);
+      const normalized = normalizeBlueskyPost(item);
       if (!normalized || seen.has(normalized.uri)) continue;
       seen.add(normalized.uri);
       posts.push(normalized);
