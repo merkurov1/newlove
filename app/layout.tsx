@@ -229,7 +229,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const subscriberCount = await getSubscriberCount();
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://txvkqcitalfbjytmnawq.supabase.co" />
         <link rel="dns-prefetch" href="https://txvkqcitalfbjytmnawq.supabase.co" />

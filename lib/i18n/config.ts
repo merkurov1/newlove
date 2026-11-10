@@ -8,7 +8,7 @@ export const LANGUAGES = ['en', 'ru', 'de', 'fr', 'ar'] as const;
 
 export type Language = (typeof LANGUAGES)[number];
 
-export type SectionKey = 'heritage' | 'krass' | 'lobby' | 'advising' | 'isakeyforall';
+export type SectionKey = 'heritage' | 'krass' | 'lobby' | 'advising' | 'isakeyforall' | 'journal';
 
 export type Direction = 'ltr' | 'rtl';
 
@@ -20,6 +20,7 @@ export const SECTION_PATHS: Record<SectionKey, string> = {
   advising: '/advising',
   isakeyforall: '/isakeyforall',
   krass: '/heritage/krass',
+  journal: '/journal',
 };
 
 /** Only these languages have real, edited content for each section. */
@@ -29,6 +30,7 @@ export const SECTION_LANGUAGES: Record<SectionKey, readonly Language[]> = {
   advising: ['en', 'ru', 'de', 'fr', 'ar'],
   isakeyforall: ['en', 'ru', 'de'],
   krass: ['en', 'ru'],
+  journal: ['en', 'ru'],
 };
 
 export const LANGUAGE_META: Record<
@@ -48,6 +50,7 @@ export const SECTION_BY_PATH: Record<string, SectionKey> = {
   [SECTION_PATHS.advising]: 'advising',
   [SECTION_PATHS.isakeyforall]: 'isakeyforall',
   [SECTION_PATHS.krass]: 'krass',
+  [SECTION_PATHS.journal]: 'journal',
 };
 
 export function getDirection(language: Language): Direction {
