@@ -35,10 +35,6 @@ const FLOW_LINKS: FlowHeaderLink[] = [
     plain: true,
   },
   {
-    label: 'LETTERS',
-    href: '/letters',
-  },
-  {
     label: 'JOURNAL',
     href: '/journal',
   },
@@ -209,6 +205,45 @@ export default function Header() {
   const submenuClass = (active: boolean) =>
     `block py-0.5 transition-colors ${active ? 'text-stone-900' : 'hover:text-stone-900'}`;
 
+  const renderFlowNavLinks = () => (
+    <>
+      {FLOW_LINKS.map((link, index) => (
+        <Fragment key={link.href}>
+          {index > 0 && (
+            <span aria-hidden="true" className="text-stone-300">
+              ·
+            </span>
+          )}
+
+          {link.external ? (
+            <a
+              href={link.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="whitespace-nowrap transition-colors hover:text-stone-900"
+            >
+              {link.label} ↗
+            </a>
+          ) : link.plain ? (
+            <a
+              href={link.href}
+              className="whitespace-nowrap transition-colors hover:text-stone-900"
+            >
+              {link.label} ↗
+            </a>
+          ) : (
+            <Link
+              href={link.href}
+              className="whitespace-nowrap transition-colors hover:text-stone-900"
+            >
+              {link.label} ↗
+            </Link>
+          )}
+        </Fragment>
+      ))}
+    </>
+  );
+
   return (
     <header
       data-scrolled={scrolled ? 'true' : 'false'}
@@ -216,7 +251,7 @@ export default function Header() {
         scrolled ? 'backdrop-blur-2xl py-3 sm:py-4' : 'py-4 sm:py-6'
       }`}
     >
-      <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-10 flex items-center justify-between gap-2 sm:gap-4">
+      <div className="relative max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-10 flex items-center justify-between gap-2 sm:gap-4">
         {/* User profile */}
         <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
           <div className="relative shrink-0" ref={profileRef}>
@@ -526,42 +561,9 @@ export default function Header() {
           {isFlowRoute && (
             <nav
               aria-label="Flow links"
-              className="hidden min-w-0 items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em] text-stone-500 md:flex lg:gap-3 lg:text-[11px] lg:tracking-[0.15em]"
+              className="hidden min-w-0 items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em] text-stone-500 md:flex lg:hidden"
             >
-              {FLOW_LINKS.map((link, index) => (
-                <Fragment key={link.href}>
-                  {index > 0 && (
-                    <span aria-hidden="true" className="text-stone-300">
-                      ·
-                    </span>
-                  )}
-
-                  {link.external ? (
-                    <a
-                      href={link.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="whitespace-nowrap transition-colors hover:text-stone-900"
-                    >
-                      {link.label} ↗
-                    </a>
-                  ) : link.plain ? (
-                    <a
-                      href={link.href}
-                      className="whitespace-nowrap transition-colors hover:text-stone-900"
-                    >
-                      {link.label} ↗
-                    </a>
-                  ) : (
-                    <Link
-                      href={link.href}
-                      className="whitespace-nowrap transition-colors hover:text-stone-900"
-                    >
-                      {link.label} ↗
-                    </Link>
-                  )}
-                </Fragment>
-              ))}
+              {renderFlowNavLinks()}
             </nav>
           )}
         </div>
@@ -571,6 +573,21 @@ export default function Header() {
           {canComposeFlow && <ComposerTrigger />}
           <PierrotTrigger compact />
         </div>
+
+        {isFlowRoute && (
+          <div className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center lg:flex">
+            <h1 className="font-serif text-[18px] font-light leading-none text-stone-900">Flow</h1>
+            <p className="mt-1 font-serif text-[11px] leading-none text-stone-400">
+              Stream of thoughts &amp; media
+            </p>
+            <nav
+              aria-label="Flow links"
+              className="pointer-events-auto mt-2 flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.12em] text-stone-500 xl:text-[11px] xl:tracking-[0.15em]"
+            >
+              {renderFlowNavLinks()}
+            </nav>
+          </div>
+        )}
       </div>
     </header>
   );

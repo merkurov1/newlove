@@ -711,12 +711,12 @@ export default function FlowPage() {
       />
       <div className="min-h-screen bg-white px-5 pb-24 pt-20 text-neutral-900 sm:px-8 sm:pt-24">
         <div className="mx-auto max-w-2xl">
-          <header className="mb-10 border-b border-neutral-100 pb-6">
+          <header className="mb-10 border-b border-neutral-100 pb-6 lg:hidden">
             <h1 className="font-serif text-3xl font-light tracking-tight text-neutral-900 sm:text-4xl">
               Flow
             </h1>
             <p className="mt-1 font-serif text-sm text-neutral-400">
-              Stream of thoughts, media &amp; signals
+              Stream of thoughts &amp; media
             </p>
           </header>
 
