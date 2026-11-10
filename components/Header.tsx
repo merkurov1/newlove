@@ -414,7 +414,7 @@ export default function Header() {
 
                     <div className="pl-3.5 space-y-1.5 border-l border-stone-200/80 font-bold uppercase tracking-[0.15em] text-xs text-stone-500">
                       {isFlowRoute && (
-                        <div className="space-y-1.5 lg:hidden">
+                        <div className="space-y-1.5 md:hidden">
                           {FLOW_LINKS.map((link) =>
                             link.external ? (
                               <a
@@ -450,7 +450,7 @@ export default function Header() {
                         </div>
                       )}
 
-                      <div className={isFlowRoute ? 'hidden lg:block' : ''}>
+                      <div className={isFlowRoute ? 'hidden md:block' : ''}>
                         <PierrotSectionLink
                           href="/journal"
                           sectionId="journal"
@@ -526,7 +526,7 @@ export default function Header() {
           {isFlowRoute && (
             <nav
               aria-label="Flow links"
-              className="hidden min-w-0 items-center gap-3 font-mono text-[11px] uppercase tracking-[0.15em] text-stone-500 lg:flex"
+              className="hidden min-w-0 items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em] text-stone-500 md:flex lg:gap-3 lg:text-[11px] lg:tracking-[0.15em]"
             >
               {FLOW_LINKS.map((link, index) => (
                 <Fragment key={link.href}>
