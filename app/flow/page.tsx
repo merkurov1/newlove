@@ -46,6 +46,7 @@ type FlowItem = {
   status: string;
   visibility: string;
   body_md?: string | null;
+  titleSource?: string;
   bodyText?: string;
   bodyExcerpt?: string;
   bodyTruncated?: boolean;
@@ -75,6 +76,13 @@ const PAGE_SIZE = 10;
 
 function itemHref(item: FlowItem) {
   return item.slug ? `/flow/${encodeURIComponent(item.slug)}` : '/flow';
+}
+
+function comparableText(value: string | null | undefined) {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+    .trim();
 }
 
 function formatDate(value?: string | null) {
@@ -119,7 +127,7 @@ function EntryMeta({
   onDelete: () => void;
 }) {
   return (
-    <div className="mb-3 flex items-center justify-between gap-4">
+    <div className="flow-entry__meta flex items-center justify-between gap-4">
       <div className="flex items-center gap-2.5 font-mono text-[11px] text-neutral-400">
         <EntryDate item={item} />
       </div>
@@ -191,9 +199,11 @@ function LinkCard({ preview, itemHref: href }: { preview: FlowLink; itemHref: st
           <FlowImageComponent
             src={preview.image}
             alt=""
-            aspectRatio="1 / 1"
+            aspectRatio="4 / 3"
             sizes="(max-width: 640px) 128px, 160px"
             transformWidth={320}
+            className="h-full"
+            style={{ height: '100%', aspectRatio: 'auto' }}
           />
         </Link>
       )}
@@ -260,7 +270,7 @@ function GalleryGrid({ images, itemHref: href }: { images: FlowImage[]; itemHref
     const image = images[0];
 
     return (
-      <figure className="mb-4">
+      <figure>
         <Link
           href={href}
           className="block w-full overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50 transition hover:border-neutral-300"
@@ -268,9 +278,11 @@ function GalleryGrid({ images, itemHref: href }: { images: FlowImage[]; itemHref
           <FlowImageComponent
             src={image.url}
             alt={altFor(image, 0)}
-            aspectRatio="4 / 3"
+            aspectRatio={image.width && image.height ? `${image.width} / ${image.height}` : '4 / 3'}
             objectFit="contain"
+            natural
             sizes="(max-width: 768px) 100vw, 640px"
+            style={{ maxHeight: '76vh' }}
           />
         </Link>
         {(image.caption || image.alt) && (
@@ -284,7 +296,7 @@ function GalleryGrid({ images, itemHref: href }: { images: FlowImage[]; itemHref
 
   if (images.length === 2) {
     return (
-      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
         {images.slice(0, 2).map((image, index) => (
           <Link
             key={`${image.url}-${index}`}
@@ -305,7 +317,7 @@ function GalleryGrid({ images, itemHref: href }: { images: FlowImage[]; itemHref
 
   if (images.length === 3) {
     return (
-      <div className="mb-4 space-y-2.5 sm:space-y-3">
+      <div className="space-y-2.5 sm:space-y-3">
         <Link
           href={href}
           className="block overflow-hidden rounded-2xl bg-neutral-100 transition hover:opacity-95"
@@ -313,7 +325,7 @@ function GalleryGrid({ images, itemHref: href }: { images: FlowImage[]; itemHref
           <FlowImageComponent
             src={images[0].url}
             alt={altFor(images[0], 0)}
-            aspectRatio="16 / 9"
+            aspectRatio="16 / 10"
             sizes="(max-width: 768px) 100vw, 640px"
           />
         </Link>
@@ -341,7 +353,7 @@ function GalleryGrid({ images, itemHref: href }: { images: FlowImage[]; itemHref
   const remaining = images.length - 4;
 
   return (
-    <div className="mb-4 grid grid-cols-2 gap-2.5 sm:gap-3">
+    <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
       {displayPhotos.map((image, index) => {
         const isLastWithMore = index === 3 && remaining > 0;
 
@@ -354,7 +366,7 @@ function GalleryGrid({ images, itemHref: href }: { images: FlowImage[]; itemHref
             <FlowImageComponent
               src={image.url}
               alt={altFor(image, index)}
-              aspectRatio="1 / 1"
+              aspectRatio="4 / 3"
               sizes="(max-width: 640px) 50vw, 320px"
             />
             {isLastWithMore && (
@@ -375,7 +387,7 @@ function VideoCards({ videos }: { videos: FlowVideo[] }) {
   if (videos.length === 0) return null;
 
   return (
-    <div className="mb-4 space-y-3">
+    <div className="space-y-3">
       {videos.map((video, index) => (
         <Link
           key={`${video.url}-${index}`}
@@ -444,7 +456,13 @@ function Entry({
   const links = (item.links ?? []).filter((link) => !link.inBody);
   const body = item.bodyExcerpt ?? item.bodyText ?? '';
   const showTitle = Boolean(item.showTitle && item.title);
-  const hasText = showTitle || Boolean(body);
+  const singleLink = links.length === 1 ? links[0] : null;
+  const titleRepeatedInLink =
+    Boolean(singleLink?.title) &&
+    !body &&
+    comparableText(singleLink?.title) === comparableText(item.title);
+  const renderTitle = showTitle && !titleRepeatedInLink;
+  const hasText = renderTitle || Boolean(body);
   const hasImages = images.length > 0;
   const hasVideos = videos.length > 0;
   const composition = resolveFlowCardComposition({
@@ -456,55 +474,67 @@ function Entry({
 
   return (
     <article
-      className={`group flow-entry flow-entry--${composition} border-b border-neutral-100 py-8 first:pt-0 last:border-b-0`}
+      className={`group flow-entry flow-entry--${composition}`}
       data-content-type={item.contentType || item.type}
     >
       <EntryMeta item={item} admin={admin} onEdit={onEdit} onDelete={onDelete} />
 
       {/* Image and video are the lead element whenever they exist. The title
        * and body follow, so text can never visually displace the media. */}
-      {hasImages && <GalleryGrid images={images} itemHref={href} />}
-
-      {hasVideos && <VideoCards videos={videos} />}
-
-      {showTitle && (
-        <h2 className="mb-2 text-lg font-medium leading-snug text-neutral-900 sm:text-xl">
-          <Link href={href} className="transition hover:text-neutral-600">
-            {item.title}
-          </Link>
-        </h2>
+      {hasImages && (
+        <div className="flow-entry__media">
+          <GalleryGrid images={images} itemHref={href} />
+        </div>
       )}
 
-      {body && (
-        <div className="mb-4">
-          <Link href={href} className="block">
-            <p className="whitespace-pre-line font-serif text-[16px] leading-[1.7] text-neutral-800 sm:text-[17px]">
-              {body}
-            </p>
-          </Link>
+      {hasVideos && (
+        <div className="flow-entry__media">
+          <VideoCards videos={videos} />
+        </div>
+      )}
 
-          {item.bodyTruncated && (
-            <Link
-              href={href}
-              className="mt-2 inline-block font-mono text-[10px] uppercase tracking-[0.18em] text-neutral-400 transition hover:text-neutral-900"
-            >
-              Read full →
-            </Link>
+      {(renderTitle || body) && (
+        <div className="flow-entry__text">
+          {renderTitle && (
+            <h2 className="flow-entry__title text-lg font-medium leading-snug text-neutral-900 sm:text-xl">
+              <Link href={href} className="transition hover:text-neutral-600">
+                {item.title}
+              </Link>
+            </h2>
+          )}
+
+          {body && (
+            <div className="flow-entry__body">
+              <Link href={href} className="block">
+                <p className="whitespace-pre-line font-serif text-[16px] leading-[1.7] text-neutral-800 sm:text-[17px]">
+                  {body}
+                </p>
+              </Link>
+
+              {item.bodyTruncated && (
+                <Link
+                  href={href}
+                  className="flow-entry__more inline-block font-mono text-[10px] uppercase tracking-[0.18em] text-neutral-400 transition hover:text-neutral-900"
+                >
+                  Read full →
+                </Link>
+              )}
+            </div>
           )}
         </div>
       )}
 
-      {links.length === 1 && (
-        <div className="mt-3">
-          <LinkCard preview={links[0]} itemHref={href} />
-        </div>
-      )}
-
-      {links.length > 1 && (
-        <div className="mt-3 divide-y divide-neutral-200/50 overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50/40">
-          {links.map((preview) => (
-            <CompactLinkRow key={preview.url} preview={preview} itemHref={href} />
-          ))}
+      {links.length > 0 && (
+        <div className="flow-entry__links">
+          {singleLink ? (
+            <LinkCard preview={singleLink} itemHref={href} />
+          ) : (
+            <div className="divide-y divide-neutral-200/50 overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50/40">
+              {links.map((preview) => (
+                <CompactLinkRow key={preview.url} preview={preview} itemHref={href} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </article>

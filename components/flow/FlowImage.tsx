@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useState, type SyntheticEvent } from 'react';
 import { flowImageSrc, canUseNextImage } from '@/lib/flow/image';
 
 export type FlowImageProps = {
@@ -16,6 +16,11 @@ export type FlowImageProps = {
   transformWidth?: number;
   quality?: number;
   style?: React.CSSProperties;
+  /**
+   * Use the image's own proportions once it has loaded. A stable frame is
+   * kept while loading (and on failure), so layout never collapses.
+   */
+  natural?: boolean;
 };
 
 /**
@@ -38,20 +43,35 @@ export default function FlowImage({
   transformWidth = 1200,
   quality = 82,
   style,
+  natural = false,
 }: FlowImageProps) {
   const [nextFailedSrc, setNextFailedSrc] = useState<string | null>(null);
   const [plainFailedSrc, setPlainFailedSrc] = useState<string | null>(null);
+  const [naturalRatio, setNaturalRatio] = useState<string | null>(null);
 
   const source = typeof src === 'string' ? src.trim() : '';
   const plainFailed = Boolean(source && plainFailedSrc === source);
   const nextFailed = Boolean(source && nextFailedSrc === source);
+
+  useEffect(() => {
+    setNaturalRatio(null);
+  }, [source]);
+
+  const handleLoad = (event: SyntheticEvent<HTMLImageElement>) => {
+    if (!natural) return;
+
+    const image = event.currentTarget;
+    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+      setNaturalRatio(`${image.naturalWidth} / ${image.naturalHeight}`);
+    }
+  };
 
   const wrapperStyle: React.CSSProperties = {
     display: 'block',
     position: 'relative',
     overflow: 'hidden',
     width: '100%',
-    aspectRatio,
+    aspectRatio: natural && naturalRatio ? naturalRatio : aspectRatio,
     background: '#f5f3ef',
     ...style,
   };
@@ -79,6 +99,7 @@ export default function FlowImage({
           quality={quality}
           className={`pw-flow-image-el ${imageClassName}`.trim()}
           style={{ objectFit }}
+          onLoad={handleLoad}
           onError={() => setNextFailedSrc(source)}
         />
       </span>
@@ -96,6 +117,7 @@ export default function FlowImage({
         decoding="async"
         className={`pw-flow-image-el ${imageClassName}`.trim()}
         style={{ width: '100%', height: '100%', objectFit }}
+        onLoad={handleLoad}
         onError={() => setPlainFailedSrc(source)}
       />
     </span>

@@ -268,6 +268,7 @@ function ImageFigure({
   aspectRatio,
   objectFit = 'cover',
   priority = false,
+  natural = false,
 }: {
   image: FlowImage;
   index: number;
@@ -276,6 +277,7 @@ function ImageFigure({
   aspectRatio?: string;
   objectFit?: 'cover' | 'contain';
   priority?: boolean;
+  natural?: boolean;
 }) {
   const caption = image.caption ?? image.alt;
 
@@ -298,6 +300,8 @@ function ImageFigure({
           priority={priority || index === 0}
           sizes="(max-width: 768px) 100vw, 720px"
           imageClassName={imageClassName}
+          natural={natural}
+          style={natural ? { maxHeight: '76vh' } : undefined}
         />
       </a>
       {caption && (
@@ -321,6 +325,7 @@ function SmartGallery({ images }: { images: FlowImage[] }) {
         aspectRatio="4 / 3"
         objectFit="contain"
         priority
+        natural
       />
     );
   }

@@ -1,0 +1,71 @@
+/*
+ * Public Flow feed rhythm.
+ *
+ * Entry blocks are spaced by their relationships rather than by ad-hoc
+ * per-element margins: metadata, media, text and links each own one gap.
+ */
+.flow-entry {
+  padding-block: 2rem;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.flow-entry:first-child {
+  padding-top: 0;
+}
+
+.flow-entry:last-child {
+  border-bottom: 0;
+}
+
+.flow-entry__meta {
+  margin-bottom: 0.75rem;
+}
+
+.flow-entry__media {
+  margin-bottom: 1rem;
+}
+
+.flow-entry__text {
+  min-width: 0;
+}
+
+.flow-entry__title {
+  margin: 0 0 0.375rem;
+}
+
+.flow-entry__title:last-child {
+  margin-bottom: 0;
+}
+
+.flow-entry__body p {
+  margin: 0;
+}
+
+.flow-entry__more {
+  margin-top: 0.5rem;
+}
+
+.flow-entry__links {
+  margin-top: 0;
+}
+
+.flow-entry__text + .flow-entry__links {
+  margin-top: 1rem;
+}
+
+/* Media-only posts end on the media, so they need no trailing gap. */
+.flow-entry--image .flow-entry__media,
+.flow-entry--video .flow-entry__media {
+  margin-bottom: 0;
+}
+
+/* Media-led posts get a slightly stronger break before the text begins. */
+.flow-entry--image-text .flow-entry__media,
+.flow-entry--video-text .flow-entry__media {
+  margin-bottom: 1.125rem;
+}
+
+/* Link-only posts are already framed by their preview card. */
+.flow-entry--link .flow-entry__meta {
+  margin-bottom: 0.625rem;
+}

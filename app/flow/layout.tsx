@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { ROUTE_COPY, pageMetadata } from '@/lib/seo';
 
+import './flow.css';
+
 const copy = ROUTE_COPY['/flow'];
 
 export const metadata: Metadata = pageMetadata({
