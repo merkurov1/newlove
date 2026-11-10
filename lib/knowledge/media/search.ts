@@ -8,6 +8,7 @@ import {
 } from '@/lib/knowledge/rag/embeddings';
 import { toPgVector } from '@/lib/knowledge/rag/supabaseStore';
 import type { MediaIntelligenceFilters } from '@/lib/analytics/mediaIntelligenceFilters';
+import type { MediaProvenance } from '@/lib/knowledge/media/catalog';
 
 export type MediaSearchHit = {
   chunkId: string;
@@ -47,7 +48,38 @@ export type MediaSearchResult = {
   insufficient: boolean;
   results: MediaSearchHit[];
   count: number;
+  /**
+   * Provenance is deliberately explicit: semantic retrieval is a relevance
+   * sample, never a complete catalogue. Callers must not present `count` as the
+   * number of archive publications that match the question.
+   */
+  semantic: true;
+  scannedChunks: number;
+  publications: number;
+  minSimilarity: number;
+  complete: false;
+  caveats: string[];
+  provenance: MediaProvenance;
 };
+
+function resolveMinSimilarity(env: NodeJS.ProcessEnv): number {
+  const raw = (env.MEDIA_SEARCH_MIN_SIMILARITY || '').trim();
+  if (!raw) return 0.25;
+
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < -1 || value > 1) return 0.25;
+
+  return value;
+}
+
+function isUsableEmbedding(value: unknown): value is number[] {
+  if (!Array.isArray(value) || value.length !== 1024) return false;
+  if (!value.every((item) => typeof item === 'number' && Number.isFinite(item))) return false;
+
+  // A zero vector is syntactically valid but carries no meaning. Sending it to
+  // the RPC with a negative threshold used to return arbitrary chunks.
+  return value.some((item) => Math.abs(item) > 1e-12);
+}
 
 const answerSchema = z
   .object({
@@ -132,12 +164,30 @@ async function loadQuotes(
 
 function deterministicSummary(hits: MediaSearchHit[]): string {
   if (hits.length === 0) {
-    return 'В архиве недостаточно подтверждающих фрагментов по этому запросу.';
+    return 'В архиве не найдено достаточно близких по смыслу фрагментов по этому запросу. Это результат семантической выборки, а не доказательство отсутствия публикаций.';
   }
 
   const publications = new Set(hits.map((hit) => hit.mediaRecordId)).size;
 
-  return `Найдено ${hits.length} релевантных фрагментов в ${publications} публикациях. Ниже приведены источники и подтверждающие фрагменты.`;
+  return `Найдено ${hits.length} релевантных публикаций (${publications} записей архива). Это семантическая выборка, не полный каталог. Ниже приведены источники и подтверждающие фрагменты.`;
+}
+
+/**
+ * Older deployments of `media_search` returned several chunks from the same
+ * publication. Keep one best row per document even if the database function has
+ * not been migrated yet, so the caller never mistakes fragment count for the
+ * number of publications.
+ */
+function dedupeHitsByDocument(hits: MediaSearchHit[]): MediaSearchHit[] {
+  const best = new Map<string, MediaSearchHit>();
+
+  for (const hit of hits) {
+    const key = hit.documentId || hit.mediaRecordId || hit.chunkId;
+    const current = best.get(key);
+    if (!current || hit.similarity > current.similarity) best.set(key, hit);
+  }
+
+  return [...best.values()].sort((left, right) => right.similarity - left.similarity);
 }
 
 function fallbackFacts(hits: MediaSearchHit[]): MediaSearchResult['facts'] {
@@ -206,17 +256,20 @@ export async function searchMediaIntelligence(input: {
   const vectors = await embeddingClient.embed([query]);
   const embedding = vectors[0];
 
-  if (!Array.isArray(embedding) || embedding.length !== 1024) {
+  if (!isUsableEmbedding(embedding)) {
     throw new Error('media_search_embedding_invalid');
   }
+
+  const minSimilarity = resolveMinSimilarity(process.env);
+  const requested = Math.min(50, Math.max(1, input.limit ?? 12));
 
   const { data, error } = await client.rpc('media_search', {
     p_query_embedding: toPgVector(embedding),
     p_model_id: embeddingClient.modelId,
     p_dimensions: embeddingClient.dimensions,
     p_access_class: 'owner',
-    p_match_count: Math.min(30, Math.max(1, input.limit ?? 12)),
-    p_min_similarity: -1,
+    p_match_count: requested,
+    p_min_similarity: minSimilarity,
     p_from: input.filters.from,
     p_to: input.filters.to,
     p_topics: input.filters.topic ? [input.filters.topic] : null,
@@ -232,7 +285,7 @@ export async function searchMediaIntelligence(input: {
   ).filter(Boolean);
   const quoteMap = await loadQuotes(client, documentIds);
 
-  const hits: MediaSearchHit[] = rows.flatMap((row) => {
+  const rawHits: MediaSearchHit[] = rows.flatMap((row) => {
     const value = row as Record<string, unknown>;
 
     if (
@@ -267,6 +320,33 @@ export async function searchMediaIntelligence(input: {
     ];
   });
 
+  const hits = dedupeHitsByDocument(rawHits).slice(0, requested);
+  const caveats = [
+    'Семантический поиск возвращает релевантную выборку, а не полный каталог.',
+    `Порог сходства: ${minSimilarity}. Показано публикаций: ${hits.length}.`,
+  ];
+  const provenance = {
+    semantic: true as const,
+    scannedChunks: rows.length,
+    publications: hits.length,
+    minSimilarity,
+    complete: false as const,
+    caveats,
+    provenance: {
+      source: 'media_archive_records' as const,
+      mode: 'semantic_search' as const,
+      totalMatching: hits.length,
+      returned: hits.length,
+      page: 1,
+      pageSize: requested,
+      hasMore: false,
+      complete: false,
+      filters: {},
+      caveats,
+      generatedAt: new Date().toISOString(),
+    },
+  };
+
   if (hits.length === 0) {
     return {
       summary: deterministicSummary([]),
@@ -275,6 +355,7 @@ export async function searchMediaIntelligence(input: {
       insufficient: true,
       results: [],
       count: 0,
+      ...provenance,
     };
   }
 
@@ -286,6 +367,7 @@ export async function searchMediaIntelligence(input: {
       insufficient: false,
       results: hits,
       count: hits.length,
+      ...provenance,
     };
   }
 
@@ -302,6 +384,7 @@ export async function searchMediaIntelligence(input: {
         insufficient: false,
         results: hits,
         count: hits.length,
+        ...provenance,
       };
     }
 
@@ -339,6 +422,7 @@ export async function searchMediaIntelligence(input: {
       insufficient: parsed.data.insufficient,
       results: hits,
       count: hits.length,
+      ...provenance,
     };
   } catch {
     return {
@@ -348,6 +432,7 @@ export async function searchMediaIntelligence(input: {
       insufficient: false,
       results: hits,
       count: hits.length,
+      ...provenance,
     };
   }
 }

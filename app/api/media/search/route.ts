@@ -114,6 +114,12 @@ export async function POST(request: Request) {
 
   let ids: string[] = [];
   let semanticUsed = false;
+  let semanticProvenance: {
+    count: number;
+    scannedChunks: number;
+    minSimilarity: number;
+    caveats: string[];
+  } | null = null;
 
   try {
     const result = await searchMediaIntelligence({
@@ -125,6 +131,12 @@ export async function POST(request: Request) {
 
     ids = Array.from(new Set(result.results.map((hit) => hit.mediaRecordId)));
     semanticUsed = result.results.length > 0;
+    semanticProvenance = {
+      count: result.results.length,
+      scannedChunks: result.scannedChunks,
+      minSimilarity: result.minSimilarity,
+      caveats: result.caveats,
+    };
   } catch {
     // Public search must still work with metadata and verified quotes when
     // embeddings are unavailable.
@@ -141,15 +153,34 @@ export async function POST(request: Request) {
 
   results = results.slice(0, MAX_RESULTS);
 
+  const catalogueTotal = filtered.length;
+
   return json({
     status: 'ok',
     query,
     semantic: semanticUsed,
     count: results.length,
+    catalogueTotal,
+    complete: !semanticUsed && results.length >= catalogueTotal,
+    provenance: {
+      mode: semanticUsed ? 'semantic_sample' : 'metadata_search',
+      catalogueTotal,
+      returned: results.length,
+      complete: !semanticUsed && results.length >= catalogueTotal,
+      caveats: semanticUsed
+        ? [
+            'Semantic search returns a relevance sample, not a complete catalogue.',
+            ...(semanticProvenance?.caveats || []),
+          ]
+        : ['Metadata/verified-quote search. It is not a semantic statement about the whole archive.'],
+      semantic: semanticProvenance,
+    },
     summary:
       results.length === 0
-        ? 'No publications match this query.'
-        : `${results.length} publications match this query. Only verified quotes are shown.`,
+        ? `No publications match this query. The catalogue has ${catalogueTotal} records for these filters; the semantic search did not return a complete list.`
+        : semanticUsed
+          ? `${results.length} relevant publications found (semantic sample, catalogue has ${catalogueTotal}). Only verified quotes are shown.`
+          : `${results.length} publications match this query in metadata. Only verified quotes are shown.`,
     results: results.map(mapRecord),
   });
 }

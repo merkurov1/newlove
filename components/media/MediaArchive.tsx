@@ -265,6 +265,8 @@ export default function MediaArchive({ records, archives }: Props) {
 
     return {
       total: records.length,
+      own: records.filter((record) => record.kind === 'column' || record.kind === 'blog').length,
+      mentions: records.filter((record) => record.kind !== 'column' && record.kind !== 'blog').length,
       outlets,
       languages: [...new Set(records.map((record) => record.lang))].sort(),
       topics: [...new Set(records.map((record) => record.derivedTopic || record.topic))].sort(),
@@ -553,6 +555,14 @@ export default function MediaArchive({ records, archives }: Props) {
         <p className="ma-stats-line" aria-label="Archive summary">
           <span>
             <strong>{stats.total}</strong> records
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            <strong>{stats.own}</strong> own
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            <strong>{stats.mentions}</strong> mentions
           </span>
           <span aria-hidden="true">·</span>
           <span>

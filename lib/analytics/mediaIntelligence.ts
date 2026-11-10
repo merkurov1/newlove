@@ -162,6 +162,7 @@ function baseCte(filters: MediaIntelligenceFilters): {
           m.kind,
           m.topic,
           m.status,
+          m.indexing_status,
           m.ai_metadata,
           d.id AS document_id,
           d.media_coverage_status,
@@ -219,6 +220,8 @@ function pageParams(filters: MediaIntelligenceFilters, params: unknown[]) {
 export type MediaIntelligenceOverview = {
   total: number;
   byStatus: { published: number; draft: number };
+  own: number;
+  mentions: number;
   outlets: number;
   languages: Array<{ language: string; count: number }>;
   range: { from: string | null; to: string | null };
@@ -239,7 +242,16 @@ export type MediaIntelligenceOverview = {
     fullText: number;
     partialText: number;
     blocked: number;
+    metadataOnly: number;
     missing: number;
+  };
+  indexing: {
+    completed: number;
+    failed: number;
+    partial: number;
+    blocked: number;
+    notIndexed: number;
+    noChunks: number;
   };
   analysis: {
     eligible: number;
@@ -261,23 +273,30 @@ export async function loadMediaIntelligenceOverview(
   return cached(key, 60_000, async () => {
     const base = baseCte(filters);
 
-    const [metrics, quoteMetrics, languages, range, awaiting, coverage, analysis, roles, entities] =
+    const [metrics, quoteMetrics, languages, range, awaiting, coverage, indexing, analysis, roles, entities] =
       await Promise.all([
       query<{
         total: number;
         published: number;
         draft: number;
+        own: number;
+        mentions: number;
         outlets: number;
         full_text: number;
         with_text: number;
         missing_dates: number;
         extraction_errors: number;
+        metadata_only: number;
+        not_indexed: number;
+        no_chunks: number;
       }>(
         `${base.sql}
          SELECT
            COUNT(*)::int AS total,
            COUNT(*) FILTER (WHERE status = 'published')::int AS published,
            COUNT(*) FILTER (WHERE status = 'draft')::int AS draft,
+           COUNT(*) FILTER (WHERE lower(kind) IN ('column', 'blog'))::int AS own,
+           COUNT(*) FILTER (WHERE kind IS NOT NULL AND lower(kind) NOT IN ('column', 'blog'))::int AS mentions,
            COUNT(DISTINCT outlet)::int AS outlets,
            COUNT(*) FILTER (WHERE media_text_quality = 'full_text' AND chunk_count > 0)::int AS full_text,
            COUNT(*) FILTER (WHERE media_text_quality IN ('full_text', 'partial_text') AND chunk_count > 0)::int AS with_text,
@@ -285,7 +304,10 @@ export async function loadMediaIntelligenceOverview(
            COUNT(*) FILTER (
              WHERE media_coverage_status IN ('failed', 'blocked')
                 OR media_text_quality IN ('metadata_only', 'blocked')
-           )::int AS extraction_errors
+           )::int AS extraction_errors,
+           COUNT(*) FILTER (WHERE media_text_quality = 'metadata_only')::int AS metadata_only,
+           COUNT(*) FILTER (WHERE indexing_status = 'not_indexed')::int AS not_indexed,
+           COUNT(*) FILTER (WHERE document_id IS NOT NULL AND COALESCE(chunk_count, 0) = 0)::int AS no_chunks
          FROM filtered`,
         base.params
       ),
@@ -366,6 +388,23 @@ export async function loadMediaIntelligenceOverview(
         base.params
       ),
       query<{
+        completed: number;
+        failed: number;
+        partial: number;
+        blocked: number;
+        not_indexed: number;
+      }>(
+        `${base.sql}
+         SELECT
+           COUNT(*) FILTER (WHERE indexing_status = 'completed')::int AS completed,
+           COUNT(*) FILTER (WHERE indexing_status = 'failed')::int AS failed,
+           COUNT(*) FILTER (WHERE indexing_status = 'partial')::int AS partial,
+           COUNT(*) FILTER (WHERE indexing_status = 'blocked')::int AS blocked,
+           COUNT(*) FILTER (WHERE indexing_status = 'not_indexed')::int AS not_indexed
+         FROM filtered`,
+        base.params
+      ),
+      query<{
         eligible: number;
         analyzed: number;
         stale: number;
@@ -431,11 +470,16 @@ export async function loadMediaIntelligenceOverview(
       total: 0,
       published: 0,
       draft: 0,
+      own: 0,
+      mentions: 0,
       outlets: 0,
       full_text: 0,
       with_text: 0,
       missing_dates: 0,
       extraction_errors: 0,
+      metadata_only: 0,
+      not_indexed: 0,
+      no_chunks: 0,
     };
     const quote = quoteMetrics[0] || {
       direct: 0,
@@ -450,6 +494,8 @@ export async function loadMediaIntelligenceOverview(
     return {
       total: metric.total,
       byStatus: { published: metric.published, draft: metric.draft },
+      own: metric.own,
+      mentions: metric.mentions,
       outlets: metric.outlets,
       languages,
       range: range[0] || { from: null, to: null },
@@ -470,7 +516,16 @@ export async function loadMediaIntelligenceOverview(
         fullText: coverage[0]?.full_text || 0,
         partialText: coverage[0]?.partial_text || 0,
         blocked: coverage[0]?.blocked || 0,
+        metadataOnly: metric.metadata_only,
         missing: coverage[0]?.missing || 0,
+      },
+      indexing: {
+        completed: indexing[0]?.completed || 0,
+        failed: indexing[0]?.failed || 0,
+        partial: indexing[0]?.partial || 0,
+        blocked: indexing[0]?.blocked || 0,
+        notIndexed: metric.not_indexed,
+        noChunks: metric.no_chunks,
       },
       analysis: {
         eligible: analysis[0]?.eligible || 0,

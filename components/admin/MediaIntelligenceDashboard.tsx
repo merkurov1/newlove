@@ -13,6 +13,7 @@ type Section =
   | 'roles'
   | 'analysis'
   | 'quality'
+  | 'catalog'
   | 'search';
 
 type Filters = {
@@ -40,6 +41,8 @@ type FilterOptions = {
 type Overview = {
   total: number;
   byStatus: { published: number; draft: number };
+  own: number;
+  mentions: number;
   outlets: number;
   languages: Array<{ language: string; count: number }>;
   range: { from: string | null; to: string | null };
@@ -60,7 +63,16 @@ type Overview = {
     fullText: number;
     partialText: number;
     blocked: number;
+    metadataOnly: number;
     missing: number;
+  };
+  indexing: {
+    completed: number;
+    failed: number;
+    partial: number;
+    blocked: number;
+    notIndexed: number;
+    noChunks: number;
   };
   analysis: {
     eligible: number;
@@ -307,6 +319,40 @@ type RolesData = {
   interactions: Array<{ interaction_type: string; publications: number }>;
 };
 
+type CatalogData = {
+  items: Array<{
+    id: string;
+    title: string;
+    outlet: string;
+    canonicalUrl: string;
+    url: string;
+    slug: string | null;
+    publishedDate: string | null;
+    language: string | null;
+    kind: string | null;
+    topic: string | null;
+    author: string | null;
+    status: string;
+    indexingStatus: string | null;
+    documentId: string | null;
+    coverageStatus: string | null;
+    textQuality: string | null;
+    chunkCount: number;
+    sourceCharCount: number;
+  }>;
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+  provenance: {
+    mode: string;
+    totalMatching: number;
+    returned: number;
+    complete: boolean;
+    caveats: string[];
+  };
+};
+
 type SearchResult = {
   summary: string;
   facts: Array<{
@@ -352,6 +398,7 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'roles', label: 'Роли и участники' },
   { id: 'analysis', label: 'Анализ и очередь' },
   { id: 'quality', label: 'Качество данных' },
+  { id: 'catalog', label: 'Каталог (SQL)' },
   { id: 'search', label: 'Семантический поиск' },
 ];
 
@@ -502,9 +549,11 @@ export default function MediaIntelligenceDashboard() {
     setError('');
 
     try {
-      const response = await fetch(`/api/admin/media/intelligence/${section}?${queryString}`, {
-        cache: 'no-store',
-      });
+      const endpoint =
+        section === 'catalog'
+          ? `/api/admin/media/catalog?${queryString}`
+          : `/api/admin/media/intelligence/${section}?${queryString}`;
+      const response = await fetch(endpoint, { cache: 'no-store' });
       const json = await response.json().catch(() => ({}));
 
       if (!response.ok) throw new Error(json.error || 'Не удалось загрузить аналитику.');
@@ -710,6 +759,7 @@ export default function MediaIntelligenceDashboard() {
   const quality = data as Quality | null;
   const analysisData = data as AnalysisData | null;
   const rolesData = data as RolesData | null;
+  const catalogData = data as CatalogData | null;
 
   return (
     <div className="space-y-7">
@@ -969,6 +1019,8 @@ export default function MediaIntelligenceDashboard() {
             <>
               <div className="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-4">
                 <Metric label="Всего публикаций" value={number(overview.total)} />
+                <Metric label="Собственные" value={number(overview.own)} />
+                <Metric label="Внешние упоминания" value={number(overview.mentions)} />
                 <Metric label="Published" value={number(overview.byStatus.published)} />
                 <Metric label="Draft" value={number(overview.byStatus.draft)} />
                 <Metric label="Изданий" value={number(overview.outlets)} />
@@ -994,8 +1046,10 @@ export default function MediaIntelligenceDashboard() {
                   <div className="grid gap-x-6 sm:grid-cols-2">
                     <Metric label="Full text" value={number(overview.coverage.fullText)} />
                     <Metric label="Partial text" value={number(overview.coverage.partialText)} />
-                    <Metric label="Blocked / metadata" value={number(overview.coverage.blocked)} />
+                    <Metric label="Metadata only" value={number(overview.coverage.metadataOnly)} />
+                    <Metric label="Blocked" value={number(overview.coverage.blocked)} />
                     <Metric label="Нет Brain document" value={number(overview.coverage.missing)} />
+                    <Metric label="Без chunks" value={number(overview.indexing.noChunks)} />
                   </div>
                 </section>
                 <section className="space-y-3">
@@ -1010,6 +1064,10 @@ export default function MediaIntelligenceDashboard() {
                     <Metric label="Not analyzed" value={number(overview.analysis.notAnalyzed)} />
                     <Metric label="В очереди" value={number(overview.analysis.queued)} />
                     <Metric label="Failed" value={number(overview.analysis.failed)} />
+                    <Metric label="Index failed" value={number(overview.indexing.failed)} />
+                    <Metric label="Index partial" value={number(overview.indexing.partial)} />
+                    <Metric label="Index blocked" value={number(overview.indexing.blocked)} />
+                    <Metric label="Not indexed" value={number(overview.indexing.notIndexed)} />
                   </div>
                 </section>
               </div>
@@ -1838,6 +1896,109 @@ export default function MediaIntelligenceDashboard() {
                   ))}
                 </div>
               </section>
+            </>
+          )}
+
+          {section === 'catalog' && catalogData && (
+            <>
+              <SectionTitle
+                title="Каталог архива"
+                description="Точный SQL-каталог с пагинацией. Собственные публикации и внешние упоминания считаются раздельно; семантический поиск сюда не подмешивается."
+              />
+              <div className="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-4">
+                <Metric label="Всего по фильтру" value={number(catalogData.total)} />
+                <Metric label="На странице" value={number(catalogData.items.length)} />
+                <Metric
+                  label="Страница"
+                  value={`${catalogData.page} / ${Math.max(1, Math.ceil(catalogData.total / Math.max(1, catalogData.pageSize)))}`}
+                />
+                <Metric
+                  label="Полнота"
+                  value={catalogData.provenance.complete ? 'полный результат' : 'есть ещё страницы'}
+                  detail={catalogData.provenance.mode}
+                />
+              </div>
+              <div className="overflow-x-auto border border-[#E5E1DC] bg-white/70">
+                <table className="w-full min-w-[980px] text-left text-xs">
+                  <thead className="bg-[#F7F5F2] text-[#89827B]">
+                    <tr>
+                      <th className="px-3 py-2">Дата</th>
+                      <th className="px-3 py-2">Публикация</th>
+                      <th className="px-3 py-2">Издание</th>
+                      <th className="px-3 py-2">Тип</th>
+                      <th className="px-3 py-2">Текст</th>
+                      <th className="px-3 py-2">Индексация</th>
+                      <th className="px-3 py-2">Ссылка</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {catalogData.items.map((item) => (
+                      <tr key={item.id} className="border-t border-[#EEE9E4] align-top">
+                        <td className="whitespace-nowrap px-3 py-2 font-mono text-[10px] text-[#89827B]">
+                          {item.publishedDate || '—'}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className="font-medium text-[#211F1F]">{item.title}</span>
+                          <span className="mt-1 block font-mono text-[9px] text-[#89827B]">
+                            {item.id}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">{item.outlet}</td>
+                        <td className="px-3 py-2">{item.kind || '—'}</td>
+                        <td className="px-3 py-2">
+                          {item.textQuality || 'no-document'}
+                          <span className="mt-1 block text-[10px] text-[#89827B]">
+                            {item.chunkCount} chunks
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">{item.indexingStatus || '—'}</td>
+                        <td className="px-3 py-2">
+                          <Link
+                            href={
+                              item.slug
+                                ? `/media/record/${encodeURIComponent(item.slug)}`
+                                : `/media?q=${encodeURIComponent(item.title)}`
+                            }
+                            className="text-[#8B1E3F] underline underline-offset-2"
+                          >
+                            открыть
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#625D58]">
+                <span>
+                  total_matching={catalogData.provenance.totalMatching} · returned=
+                  {catalogData.provenance.returned} · complete=
+                  {String(catalogData.provenance.complete)}
+                </span>
+                <span className="flex gap-2">
+                  <button
+                    type="button"
+                    className="border border-[#D9D3CD] px-3 py-1.5 disabled:opacity-40"
+                    disabled={catalogData.page <= 1}
+                    onClick={() => updateFilter('page', catalogData.page - 1)}
+                  >
+                    ← Назад
+                  </button>
+                  <button
+                    type="button"
+                    className="border border-[#D9D3CD] px-3 py-1.5 disabled:opacity-40"
+                    disabled={!catalogData.hasMore}
+                    onClick={() => updateFilter('page', catalogData.page + 1)}
+                  >
+                    Вперёд →
+                  </button>
+                </span>
+              </div>
+              {catalogData.provenance.caveats.length > 0 && (
+                <p className="text-[11px] text-[#89827B]">
+                  {catalogData.provenance.caveats.join(' ')}
+                </p>
+              )}
             </>
           )}
 

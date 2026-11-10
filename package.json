@@ -52,7 +52,10 @@
     "mint:local": "node scripts/mint_and_transfer.js",
     "db:diag": "tsc db_diagnostics.ts && node db_diagnostics.js",
     "seo:check": "node --experimental-strip-types scripts/seo-check.ts",
-    "media:analyze": "tsx scripts/media-analysis-run.ts"
+    "media:analyze": "tsx scripts/media-analysis-run.ts",
+    "media:verify": "node scripts/media-audit/verify.mjs",
+    "media:audit": "node scripts/media-audit/problems.mjs",
+    "media:repair:consistency": "node scripts/media-audit/repair-media-consistency.mjs --dry-run"
   },
   "installConfig": {
     "scripts-prepend-node-path": true

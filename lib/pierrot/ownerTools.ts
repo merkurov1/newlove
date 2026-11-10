@@ -10,6 +10,11 @@ import { detectCommercialQuestion } from '@/lib/pierrot/commercialQuestion';
 import { answerPierrotCommercialQuestion } from '@/lib/pierrot/commercialIntelligence';
 import { detectWebsiteQuestion } from '@/lib/analytics/website/question';
 import { answerWebsiteAnalyticsQuestion } from '@/lib/analytics/website/answer';
+import { detectMediaCatalogQuestion } from '@/lib/pierrot/mediaCatalogIntent';
+import {
+  answerMediaArchiveQuestion,
+  type MediaAnswerResult,
+} from '@/lib/pierrot/mediaAnswer';
 import type { PierrotQueryPlan } from '@/lib/pierrot/queryUnderstanding';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -24,11 +29,20 @@ export type OwnerToolKind =
   | 'diagnostics'
   | 'analytics'
   | 'commercial'
-  | 'website';
+  | 'website'
+  | 'media';
 
 export type OwnerToolRequest = {
   kind: OwnerToolKind;
   query: string;
+  /** Media sub-kind, filled only for kind=media. */
+  mediaKind?: string;
+};
+
+export type OwnerToolDetailedResult = {
+  text: string;
+  provenance: MediaAnswerResult['provenance'] | null;
+  mediaKind: string | null;
 };
 
 function normalize(value: string): string {
@@ -76,6 +90,15 @@ export function detectOwnerTool(
   // the financial data is only loaded inside the verified owner branch.
   if (detectCommercialQuestion(message)) {
     return { kind: 'commercial', query: message.trim() };
+  }
+
+  // Media Archive catalogue/count/mentions/diagnostics/content questions need
+  // SQL-backed tools, not the 8-result semantic retrieval branch. The detector
+  // is deliberately conservative and returns null for ambiguous personal
+  // writing questions, which keep their Brain routing.
+  const mediaPlan = detectMediaCatalogQuestion(message);
+  if (mediaPlan) {
+    return { kind: 'media', query: message.trim(), mediaKind: mediaPlan.kind };
   }
 
   if (
@@ -456,12 +479,67 @@ async function formatAnalytics(language: 'ru' | 'en'): Promise<string> {
   ].join('\n');
 }
 
+async function formatMedia(
+  request: OwnerToolRequest,
+  language: 'ru' | 'en'
+): Promise<OwnerToolDetailedResult> {
+  const answer = await answerMediaArchiveQuestion(request.query, language);
+
+  if (!answer) {
+    return {
+      text:
+        language === 'ru'
+          ? 'Не удалось разобрать вопрос о Media Archive. Уточните год, издание или название публикации.'
+          : 'I could not parse the Media Archive question. Specify the year, outlet or publication title.',
+      provenance: null,
+      mediaKind: null,
+    };
+  }
+
+  return {
+    text: answer.text,
+    provenance: answer.provenance,
+    mediaKind: answer.kind,
+  };
+}
+
+export async function runOwnerToolDetailed(
+  request: OwnerToolRequest,
+  language: 'ru' | 'en'
+): Promise<OwnerToolDetailedResult> {
+  if (request.kind === 'media') {
+    try {
+      return await formatMedia(request, language);
+    } catch (error) {
+      console.error('[Pierrot media tool]', {
+        kind: request.mediaKind || 'media',
+        code: error instanceof Error ? error.message : 'media_tool_failed',
+      });
+
+      return {
+        text:
+          language === 'ru'
+            ? 'Не удалось получить данные Media Archive из базы. Это не означает, что публикаций нет: запрос к каталогу не завершился. Повторите позже.'
+            : 'Could not read the Media Archive database. This does not mean there are no publications: the catalogue query did not complete. Try again later.',
+        provenance: null,
+        mediaKind: request.mediaKind || 'media_error',
+      };
+    }
+  }
+
+  return { text: await runOwnerTool(request, language), provenance: null, mediaKind: null };
+}
+
 export async function runOwnerTool(
   request: OwnerToolRequest,
   language: 'ru' | 'en'
 ): Promise<string> {
   try {
     switch (request.kind) {
+      case 'media': {
+        const result = await formatMedia(request, language);
+        return result.text;
+      }
       case 'stats':
         return await formatStats(language);
       case 'rag':

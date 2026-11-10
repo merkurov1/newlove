@@ -199,6 +199,15 @@ export function buildPierrotExecutionPlan(
       resolved.tool = 'website';
       resolved.ownerOnly = true;
       resolved.fallbackPolicy = 'no_source_substitution';
+    } else if (ownerTool.kind === 'media') {
+      const kind = ownerTool.mediaKind || '';
+      resolved.operation =
+        kind === 'analytics' || kind === 'count' || kind === 'diagnostics'
+          ? 'media.stats'
+          : 'media.search';
+      resolved.tool = 'media';
+      resolved.ownerOnly = true;
+      resolved.fallbackPolicy = 'no_source_substitution';
     } else if (ownerTool.kind === 'analytics') {
       const mediaSearch = queryPlan.intent === 'media_mentions' && !mediaStats;
       resolved.operation = mediaStats

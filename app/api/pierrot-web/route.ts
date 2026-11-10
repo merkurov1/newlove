@@ -189,7 +189,7 @@ import {
   previewUrlForPierrot,
   savePendingUrlCandidate,
 } from '@/lib/pierrot/urlIntake';
-import { runOwnerTool } from '@/lib/pierrot/ownerTools';
+import { runOwnerToolDetailed } from '@/lib/pierrot/ownerTools';
 import { buildPierrotExecutionPlan } from '@/lib/pierrot/executionPlan';
 import {
   isPierrotUserId,
@@ -5011,10 +5011,12 @@ export async function POST(req: Request) {
           : executionPlan.ownerTool;
 
       if (ownerTool) {
-        const text = await runOwnerTool(ownerTool, ownerLanguage);
+        const result = await runOwnerToolDetailed(ownerTool, ownerLanguage);
 
-        return persistOwnerReply(text, {
+        return persistOwnerReply(result.text, {
           owner_tool: ownerTool.kind,
+          ...(result.provenance ? { media_provenance: result.provenance } : {}),
+          ...(result.mediaKind ? { media_kind: result.mediaKind } : {}),
         });
       }
     }

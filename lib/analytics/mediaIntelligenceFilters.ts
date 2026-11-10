@@ -110,6 +110,8 @@ export function emptyOverview() {
   return {
     total: 0,
     byStatus: { published: 0, draft: 0 },
+    own: 0,
+    mentions: 0,
     outlets: 0,
     languages: [] as Array<{ language: string; count: number }>,
     range: { from: null as string | null, to: null as string | null },
@@ -130,7 +132,16 @@ export function emptyOverview() {
       fullText: 0,
       partialText: 0,
       blocked: 0,
+      metadataOnly: 0,
       missing: 0,
+    },
+    indexing: {
+      completed: 0,
+      failed: 0,
+      partial: 0,
+      blocked: 0,
+      notIndexed: 0,
+      noChunks: 0,
     },
     analysis: {
       eligible: 0,

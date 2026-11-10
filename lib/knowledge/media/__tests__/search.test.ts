@@ -112,6 +112,54 @@ describe('Media semantic search', () => {
     expect(result.results[0].canonicalUrl).toBe('https://example.com/article');
   });
 
+  it('returns one best chunk per publication and marks the sample incomplete', async () => {
+    const secondHit = {
+      ...hit,
+      chunk_id: 'chk_2',
+      content: 'Another fragment from the same publication.',
+      similarity: 0.7,
+    };
+    const otherDoc = {
+      ...hit,
+      chunk_id: 'chk_3',
+      document_id: 'doc_media_2',
+      media_record_id: '22222222-2222-4222-8222-222222222222',
+      title: 'Second publication',
+      similarity: 0.65,
+    };
+
+    const result = await searchMediaIntelligence({
+      query: 'hardware control',
+      filters,
+      embeddingClient: embeddingClient(),
+      client: fakeClient([hit, secondHit, otherDoc]),
+    });
+
+    expect(result.results).toHaveLength(2);
+    expect(result.count).toBe(2);
+    expect(result.scannedChunks).toBe(3);
+    expect(result.semantic).toBe(true);
+    expect(result.complete).toBe(false);
+    expect(result.caveats.join(' ')).toContain('не полный каталог');
+  });
+
+  it('rejects an empty or zero query embedding instead of returning arbitrary chunks', async () => {
+    const zeroEmbedding = {
+      modelId: 'baai/bge-m3',
+      dimensions: 1024,
+      embed: jest.fn(async () => [Array.from({ length: 1024 }, () => 0)]),
+    } as EmbeddingClient;
+
+    await expect(
+      searchMediaIntelligence({
+        query: 'anything',
+        filters,
+        embeddingClient: zeroEmbedding,
+        client: fakeClient([hit]),
+      })
+    ).rejects.toThrow('media_search_embedding_invalid');
+  });
+
   it('falls back to a deterministic summary without an LLM', async () => {
     const result = await searchMediaIntelligence({
       query: 'hardware control',
