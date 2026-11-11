@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 type MockFn = {
   mock: { calls: unknown[][] };
   mockResolvedValue: (value: unknown) => void;
+  mockRejectedValue: (value: unknown) => void;
 };
 
 const mockRetrieve = jest.fn() as unknown as MockFn;
@@ -104,5 +105,40 @@ describe('GET /api/unframed/verify', () => {
 
     expect(response.status).toBe(400);
     expect(mockRetrieve).not.toHaveBeenCalled();
+  });
+
+  it('can be reopened from the same paid success URL and reissues access', async () => {
+    const first = await GET(makeRequest());
+    const second = await GET(makeRequest());
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(mockCookieSet).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns a clear 404 for an unknown session without leaking Stripe details', async () => {
+    mockRetrieve.mockRejectedValue({
+      type: 'StripeInvalidRequestError',
+      message: 'No such checkout.session: cs_test_missing',
+    });
+
+    const response = await GET(makeRequest());
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: 'Checkout session not found' });
+  });
+
+  it('returns 503 when Stripe verification is temporarily unavailable', async () => {
+    mockRetrieve.mockRejectedValue({
+      type: 'StripeAPIError',
+      message: 'Stripe is down',
+    });
+
+    const response = await GET(makeRequest());
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Verification temporarily unavailable',
+    });
   });
 });

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { SITE_URL } from '@/lib/seo';
 import {
   normalizePierrotUnframedRef,
   pierrotConversationIdFromUnframedRef,
@@ -18,6 +19,31 @@ export const dynamic = 'force-dynamic';
 const UNFRAMED_ACCESS_AMOUNT = 1500;
 const UNFRAMED_ACCESS_CURRENCY = 'usd';
 
+/**
+ * Stripe redirects must never be derived from the request Origin header:
+ * it is browser-controlled. Use the configured application domain, with the
+ * canonical site URL as the final fallback.
+ */
+function applicationBaseUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+
+  if (configured) {
+    try {
+      const url = new URL(configured);
+      if (
+        url.protocol === 'https:' ||
+        (process.env.NODE_ENV !== 'production' && url.protocol === 'http:')
+      ) {
+        return url.origin;
+      }
+    } catch {
+      // Fall through to the canonical domain.
+    }
+  }
+
+  return SITE_URL;
+}
+
 export async function POST(req: Request) {
   const limited = checkRateLimit(getClientIp(req), {
     interval: 60 * 60 * 1000,
@@ -28,7 +54,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const origin = req.headers.get('origin') || 'https://merkurov.love';
+    const baseUrl = applicationBaseUrl();
     const pierrotAttribution = normalizePierrotUnframedRef(body?.pierrotAttribution);
 
     const session = await stripe.checkout.sessions.create({
@@ -47,8 +73,8 @@ export async function POST(req: Request) {
         },
       ],
       mode: 'payment',
-      success_url: `${origin}/unframed/book?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/unframed/book`,
+      success_url: `${baseUrl}/unframed/book?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/unframed/book?checkout=cancelled`,
       metadata: {
         type: 'unframed_book',
         ...(pierrotAttribution ? { pierrotAttribution } : {}),
@@ -75,9 +101,14 @@ export async function POST(req: Request) {
       }
     }
 
+    if (!session.url) {
+      console.error('UNFRAMED checkout error: Stripe returned a session without a URL');
+      return NextResponse.json({ error: 'Checkout temporarily unavailable' }, { status: 503 });
+    }
+
     return NextResponse.json({ url: session.url });
-  } catch (err: any) {
+  } catch (err) {
     console.error('UNFRAMED checkout error:', err);
-    return NextResponse.json({ error: err?.message || 'Checkout unavailable' }, { status: 500 });
+    return NextResponse.json({ error: 'Checkout temporarily unavailable' }, { status: 503 });
   }
 }

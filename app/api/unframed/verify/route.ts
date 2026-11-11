@@ -43,13 +43,8 @@ export async function GET(request: Request) {
       const token = signUnframedToken('access', 60 * 60 * 24 * 365);
 
       if (!token) {
-        console.error(
-          '[unframed/verify] Access token secret is not configured',
-        );
-        return NextResponse.json(
-          { error: 'Access configuration error' },
-          { status: 503 },
-        );
+        console.error('[unframed/verify] Access token secret is not configured');
+        return NextResponse.json({ error: 'Access configuration error' }, { status: 503 });
       }
 
       const cookieStore = await cookies();
@@ -99,7 +94,17 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ error: 'Not paid' }, { status: 400 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || 'Verification failed' }, { status: 500 });
+  } catch (error) {
+    const stripeError = error as { type?: string };
+    const notFound = stripeError?.type === 'StripeInvalidRequestError';
+
+    console.error('[unframed/verify] Verification failed', error);
+
+    return NextResponse.json(
+      {
+        error: notFound ? 'Checkout session not found' : 'Verification temporarily unavailable',
+      },
+      { status: notFound ? 404 : 503 }
+    );
   }
 }

@@ -2,6 +2,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 
 import { describe, expect, it } from '@jest/globals';
 
@@ -69,6 +70,17 @@ function buildSynthetic(body: string, maxChunkChars = 2_400): UnframedBuild {
 }
 
 describe('UNFRAMED Phase B parser and chunker', () => {
+  it('matches the expected source hash and the public manuscript mirror', () => {
+    const actualHash = createHash('sha256').update(realRaw, 'utf8').digest('hex');
+    const publicRaw = fs.readFileSync(
+      path.join(process.cwd(), 'public/unframed/Unframed.markdown'),
+      'utf8',
+    );
+
+    expect(actualHash).toBe(UNFRAMED_EXPECTED_SHA256);
+    expect(publicRaw).toBe(realRaw);
+  });
+
   it('excludes the TOC and starts at the second introduction heading', () => {
     const build = buildSynthetic('Intro paragraph.');
     const bodyHeadingOffset =

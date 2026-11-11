@@ -23,15 +23,21 @@ export async function POST(request: Request) {
   });
   if (limited) return limited;
 
-  try {
-    const { key } = await request.json();
-    const adminSecret = process.env.ADMIN_SECRET_KEY;
+  const adminSecret = process.env.ADMIN_SECRET_KEY;
 
-    if (
-      typeof key !== 'string' ||
-      !adminSecret ||
-      !safeEqual(key, adminSecret)
-    ) {
+  if (!adminSecret) {
+    console.error('[unframed/admin] ADMIN_SECRET_KEY is not configured');
+    return NextResponse.json(
+      { error: 'Administrative access is temporarily unavailable' },
+      { status: 503 }
+    );
+  }
+
+  try {
+    const body = (await request.json().catch(() => null)) as { key?: unknown } | null;
+    const key = body?.key;
+
+    if (typeof key !== 'string' || !safeEqual(key, adminSecret)) {
       return NextResponse.json({ error: 'Invalid key' }, { status: 401 });
     }
 
@@ -39,10 +45,7 @@ export async function POST(request: Request) {
 
     if (!token) {
       console.error('[unframed/admin] Access token secret is not configured');
-      return NextResponse.json(
-        { error: 'Access configuration error' },
-        { status: 503 },
-      );
+      return NextResponse.json({ error: 'Access configuration error' }, { status: 503 });
     }
 
     const cookieStore = await cookies();
@@ -57,7 +60,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (error) {
+    console.error('[unframed/admin] Unexpected error', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

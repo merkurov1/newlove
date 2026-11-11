@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 type MockFn = {
   mock: { calls: unknown[][] };
   mockResolvedValue: (value: unknown) => void;
+  mockRejectedValue: (value: unknown) => void;
 };
 
 const mockCreate = jest.fn() as unknown as MockFn;
@@ -35,6 +36,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockCreate.mockResolvedValue({ id: 'session-1', url: 'https://checkout.stripe.com/session' });
   process.env.STRIPE_SECRET_KEY = 'sk_test_123';
+  delete process.env.NEXT_PUBLIC_SITE_URL;
 });
 
 describe('POST /api/unframed/checkout', () => {
@@ -76,5 +78,64 @@ describe('POST /api/unframed/checkout', () => {
 
     const [session] = mockCreate.mock.calls[0] as [Record<string, any>];
     expect(session.metadata).not.toHaveProperty('pierrotAttribution');
+  });
+
+  it('ignores a spoofed Origin header for Stripe redirects', async () => {
+    await POST(
+      new Request('http://localhost/api/unframed/checkout', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'https://attacker.example',
+        },
+        body: JSON.stringify({}),
+      })
+    );
+
+    const [session] = mockCreate.mock.calls[0] as [Record<string, any>];
+    expect(session.success_url).toBe(
+      'https://www.merkurov.love/unframed/book?session_id={CHECKOUT_SESSION_ID}'
+    );
+    expect(session.cancel_url).toBe('https://www.merkurov.love/unframed/book?checkout=cancelled');
+  });
+
+  it('uses a configured application URL when it is a valid HTTP(S) origin', async () => {
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://preview.merkurov.love/some/path';
+
+    await POST(
+      new Request('http://localhost/api/unframed/checkout', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'https://attacker.example',
+        },
+        body: JSON.stringify({}),
+      })
+    );
+
+    const [session] = mockCreate.mock.calls[0] as [Record<string, any>];
+    expect(session.success_url).toBe(
+      'https://preview.merkurov.love/unframed/book?session_id={CHECKOUT_SESSION_ID}'
+    );
+    expect(session.cancel_url).toBe(
+      'https://preview.merkurov.love/unframed/book?checkout=cancelled'
+    );
+  });
+
+  it('returns a generic 503 without leaking Stripe errors', async () => {
+    mockCreate.mockRejectedValue(new Error('secret Stripe diagnostic'));
+
+    const response = await POST(
+      new Request('http://localhost/api/unframed/checkout', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Checkout temporarily unavailable',
+    });
   });
 });
