@@ -65,8 +65,12 @@ export function resolveBlueskyShareUrl(input: {
   }
 }
 
-function stripUrls(value: string): string {
+export function stripBlueskyUrls(value: string): string {
   return value.replace(URL_PATTERN, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function stripUrls(value: string): string {
+  return stripBlueskyUrls(value);
 }
 
 function neutralDescription(language: 'ru' | 'en'): string {
@@ -75,7 +79,7 @@ function neutralDescription(language: 'ru' | 'en'): string {
     : 'A new publication on Anton Merkurov’s Flow.';
 }
 
-function truncateAtWord(value: string, max: number): string {
+export function truncateAtWord(value: string, max: number): string {
   if (graphemeLength(value) <= max) return value.trim();
 
   const parts = graphemes(value).slice(0, Math.max(1, max - 1));

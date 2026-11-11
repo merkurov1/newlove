@@ -18,6 +18,9 @@ const dataset = {
     comparisonRequested: false,
   },
   generatedAt: '2026-11-10T12:00:00.000Z',
+  coverage: [],
+  previousCoverage: [],
+  dataGaps: [],
   sources: [],
   ga4: {
     available: true,
@@ -139,6 +142,7 @@ describe('exact page analytics', () => {
           followers: 33,
           follows: 10,
           posts: 12,
+          capturedAt: '2026-11-10',
         },
         totals: {
           followers: metric('Подписчики Bluesky', 33),
@@ -151,6 +155,25 @@ describe('exact page analytics', () => {
         posts: [],
         topPosts: [],
         siteLinkedPosts: [],
+        period: {
+          start: '2026-11-04',
+          end: '2026-11-10',
+          label: '4 — 10 нояб. 2026',
+          timezone: 'Europe/London',
+          posts: [],
+          totals: { posts: 0, likes: 0, reposts: 0, replies: 0, quotes: 0, engagement: 0 },
+          previousPosts: 0,
+          coverageComplete: true,
+          coverageEndsAt: '2026-11-10',
+          limitation: 'Текущие счётчики.',
+        },
+        archive: {
+          total: 0,
+          coverageFrom: null,
+          coverageTo: '2026-11-10',
+          lastSyncedAt: '2026-11-10T03:15:00.000Z',
+          truncated: false,
+        },
         limitations: ['Bluesky отдаёт публичные счётчики, но не уникальный охват.'],
       },
     } as unknown as AnalyticsDataset;
@@ -180,7 +203,8 @@ describe('exact page analytics', () => {
     );
 
     expect(markdown.startsWith('## Bluesky')).toBe(true);
-    expect(markdown).toContain('Подписчики Bluesky');
+    expect(markdown).toContain('Профиль — всего');
+    expect(markdown).toContain('постов в профиле');
     expect(markdown).toContain('не уникальный охват');
     expect(markdown).not.toContain('Состояние сайта');
     expect(markdown).not.toContain('PUBLIC PRESENCE');

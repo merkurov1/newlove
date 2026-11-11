@@ -32,6 +32,9 @@ const dataset = {
     comparisonRequested: true,
   },
   generatedAt: '2026-11-10T12:00:00.000Z',
+  coverage: [],
+  previousCoverage: [],
+  dataGaps: [],
   sources: [
     { label: 'Google Analytics 4', status: 'connected', lastSyncStatus: 'connected' },
     { label: 'Bluesky', status: 'connected', lastSyncStatus: 'connected' },
@@ -70,6 +73,25 @@ const dataset = {
 } as unknown as AnalyticsDataset;
 
 describe('compact public presence report', () => {
+  it('never substitutes total GA4 sessions for unavailable public landing sessions', () => {
+    const unavailable = {
+      ...dataset,
+      ga4: {
+        ...dataset.ga4,
+        traffic: {
+          ...dataset.ga4.traffic,
+          publicLandingSessions: null,
+        },
+      },
+    } as unknown as AnalyticsDataset;
+
+    const markdown = compactOverviewSection(unavailable, 'ru', []);
+
+    expect(markdown).toContain('публичные landing-сессии недоступны отдельно');
+    expect(markdown).toContain('всего GA4 sessions: 215');
+    expect(markdown).not.toContain('215 публичных landing-сессий');
+  });
+
   it('returns a short overview using public landing sessions and the unified sources', () => {
     const markdown = compactOverviewSection(dataset, 'ru', []);
 

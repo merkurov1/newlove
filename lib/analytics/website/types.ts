@@ -12,6 +12,36 @@ export type AnalyticsLanguage = 'ru' | 'en';
 export type AnalyticsConnectionStatus =
   'not_connected' | 'connected' | 'error' | 'needs_reauthorization' | 'not_configured' | 'disabled';
 
+export type SourceDataState =
+  | 'complete'
+  | 'partial'
+  | 'stale'
+  | 'unavailable'
+  | 'not_configured';
+
+export type SourceFreshness = 'fresh' | 'delayed' | 'stale' | 'unknown';
+
+export type SourceCoverage = {
+  provider: AnalyticsProvider | 'internal';
+  requestedStart: string;
+  requestedEnd: string;
+  /** Last calendar day for which this provider is expected to have data. */
+  expectedEnd: string;
+  actualDataFrom: string | null;
+  actualDataTo: string | null;
+  coveredDays: number;
+  expectedDays: number;
+  /** 0..1; coveredDays / expectedDays. Null when no expected days exist. */
+  completeness: number | null;
+  lastSyncAt: string | null;
+  /** Days between the latest available data and the requested end. */
+  dataLagDays: number | null;
+  reportingDelayDays: number;
+  freshness: SourceFreshness;
+  state: SourceDataState;
+  note: string | null;
+};
+
 export type MetricUnit = 'count' | 'percent' | 'seconds' | 'position' | 'ratio';
 
 export type MetricComparison = {
@@ -62,6 +92,10 @@ export type ProviderHealth = {
   dataFrom: string | null;
   dataTo: string | null;
   actionRequired: string | null;
+  /** Period-specific completeness, separate from OAuth connectivity. */
+  coverage: SourceCoverage | null;
+  dataState: SourceDataState;
+  freshness: SourceFreshness;
 };
 
 export type SyncRunRow = {
@@ -112,9 +146,10 @@ export type Ga4Snapshot = {
     publicPageViews: number;
     ownerAdminPageViews: number;
     automatedPageViews: number;
-    publicLandingSessions: number;
-    ownerAdminLandingSessions: number;
-    automatedLandingSessions: number;
+    /** Null means GA4 did not expose a public landing-page breakdown. */
+    publicLandingSessions: number | null;
+    ownerAdminLandingSessions: number | null;
+    automatedLandingSessions: number | null;
     excludedPaths: string[];
     note: string;
   };
@@ -266,10 +301,58 @@ export type InternalSnapshot = {
     mediaRecords: number | null;
   };
   limitations: string[];
+  /** Explicit query failures; never silently interpreted as zero activity. */
+  dataGaps: string[];
+  coverage: SourceCoverage;
+  previousCoverage: SourceCoverage;
+};
+
+export type BlueskyPostMetrics = {
+  uri: string;
+  kind: 'post' | 'reply' | 'repost' | 'unknown';
+  authorship: 'owner' | 'other' | 'unknown';
+  text: string;
+  createdAt: string | null;
+  /** Latest stored observation of the counters. */
+  observedAt: string | null;
+  url: string | null;
+  /** Flow item this post links to, resolved through items.bluesky_uri. */
+  flowItemId: string | null;
+  flowUrl: string | null;
+  likes: number;
+  reposts: number;
+  replies: number;
+  quotes: number;
+  links: number;
+  siteLinks: number;
+  engagement: number;
+};
+
+export type BlueskyPeriodActivity = {
+  start: string;
+  end: string;
+  label: string;
+  timezone: string;
+  /** Posts whose own creation date falls inside the selected period. */
+  posts: BlueskyPostMetrics[];
+  totals: {
+    posts: number;
+    likes: number;
+    reposts: number;
+    replies: number;
+    quotes: number;
+    engagement: number;
+  };
+  previousPosts: number;
+  /** True when the stored archive covers the whole selected period. */
+  coverageComplete: boolean;
+  coverageEndsAt: string | null;
+  limitation: string;
 };
 
 export type BlueskySnapshot = {
   available: boolean;
+  /** Current/lifetime profile counters. Never selected-period activity. */
   profile: {
     handle: string | null;
     displayName: string | null;
@@ -277,23 +360,26 @@ export type BlueskySnapshot = {
     followers: number | null;
     follows: number | null;
     posts: number | null;
+    capturedAt: string | null;
   };
+  /**
+   * Lifetime profile counters plus current observed counters across the whole
+   * archived post sample. `totals.likes` etc are NOT selected-period values;
+   * use `period.totals` for the reporting window.
+   */
   totals: Record<string, MetricComparison>;
-  posts: Array<{
-    uri: string;
-    text: string;
-    createdAt: string | null;
-    url: string | null;
-    likes: number;
-    reposts: number;
-    replies: number;
-    quotes: number;
-    links: number;
-    siteLinks: number;
-    engagement: number;
-  }>;
-  topPosts: BlueskySnapshot['posts'];
-  siteLinkedPosts: BlueskySnapshot['posts'];
+  /** All archived posts with their latest observed counters. */
+  posts: BlueskyPostMetrics[];
+  topPosts: BlueskyPostMetrics[];
+  siteLinkedPosts: BlueskyPostMetrics[];
+  period: BlueskyPeriodActivity;
+  archive: {
+    total: number;
+    coverageFrom: string | null;
+    coverageTo: string | null;
+    lastSyncedAt: string | null;
+    truncated: boolean | null;
+  };
   limitations: string[];
 };
 
@@ -301,6 +387,12 @@ export type AnalyticsDataset = {
   period: AnalyticsPeriod;
   generatedAt: string;
   sources: ProviderHealth[];
+  /** Requested-period coverage for every external and internal source. */
+  coverage: SourceCoverage[];
+  /** Coverage of the previous window, used to gate comparisons. */
+  previousCoverage: SourceCoverage[];
+  /** Explicit retrieval failures; missing data is not zero activity. */
+  dataGaps: string[];
   ga4: Ga4Snapshot;
   gsc: SearchConsoleSnapshot;
   umami: UmamiSnapshot;
@@ -333,15 +425,26 @@ export type WebsiteQuestion = {
   wantsProblems: boolean;
   wantsRecommendations: boolean;
   wantsDetailed?: boolean;
+  /** Explicit "full archive / all posts" request. Default reports stay compact. */
+  wantsArchive?: boolean;
+  /** Explicit diagram/schema request. */
+  wantsDiagram?: boolean;
   project: string | null;
   /** Exact public URL path when the question names one (for example /flow). */
   pagePath?: string | null;
   periodKey:
+    | 'today'
+    | 'yesterday'
     | 'last_7_days'
     | 'previous_7_days'
+    | 'this_week'
+    | 'last_week'
     | 'last_30_days'
     | 'current_month'
     | 'previous_month'
+    | 'this_year'
+    | 'previous_year'
+    | 'all_time'
     | 'custom';
   customPeriod?: { start: string; end: string };
 };

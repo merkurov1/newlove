@@ -415,6 +415,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
   const gsc = sourceFor('search_console');
   const um = sourceFor('umami');
   const bs = sourceFor('bluesky');
+  const blueskyDashboard = dashboard?.dataset.bluesky ?? null;
+  const blueskyPeriodPosts = blueskyDashboard?.period.posts ?? [];
   const recentRuns = health.runs.slice(0, 12);
 
   return (
@@ -517,6 +519,72 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
             <p className="pw-analytics-hint">
               Открытия и клики не сохраняются в текущем Resend-логе; они не рассчитываются и не
               подставляются.
+            </p>
+          </article>
+
+          <article className="pw-analytics-card">
+            <div className="pw-analytics-card-head">
+              <div>
+                <span className="pw-dot pw-dot-growth" aria-hidden="true" />
+                <h2>Bluesky</h2>
+              </div>
+              <span className="pw-analytics-badge">public AT Protocol</span>
+            </div>
+            <p className="pw-analytics-id">
+              Профиль — всего; публикации и текущие счётчики — за 30 дней.
+            </p>
+            <dl className="pw-analytics-facts">
+              <div>
+                <dt>Подписчики (всего)</dt>
+                <dd>{formatNumber(blueskyDashboard?.profile.followers)}</dd>
+              </div>
+              <div>
+                <dt>Постов за период</dt>
+                <dd>{formatNumber(blueskyDashboard?.period.totals.posts)}</dd>
+              </div>
+              <div>
+                <dt>Лайки на постах периода</dt>
+                <dd>{formatNumber(blueskyDashboard?.period.totals.likes)}</dd>
+              </div>
+              <div>
+                <dt>Архив постов</dt>
+                <dd>{formatNumber(blueskyDashboard?.archive.total)}</dd>
+              </div>
+            </dl>
+            {blueskyPeriodPosts.length ? (
+              <ul className="mt-3 space-y-2 border-t border-[#E7DFD4] pt-3 text-sm">
+                {blueskyPeriodPosts.slice(0, 3).map((post) => (
+                  <li key={post.uri}>
+                    {post.url ? (
+                      <a
+                        className="underline decoration-[#C9BBA8] underline-offset-2 hover:text-[#211F1F]"
+                        href={post.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {post.text.replace(/\s+/g, ' ').slice(0, 110) || 'Bluesky post'}
+                      </a>
+                    ) : (
+                      post.text.replace(/\s+/g, ' ').slice(0, 110) || 'Bluesky post'
+                    )}
+                    <span className="ml-1 font-mono text-[10px] text-[#948A7D]">
+                      {post.createdAt?.slice(0, 10) || '—'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="pw-analytics-hint">
+                {blueskyDashboard?.period.coverageComplete
+                  ? 'За выбранный период собственных публикаций нет. Это подтверждённый ноль для доступного архива.'
+                  : 'Постов за период не найдено, но архив покрывает не весь период — отсутствие не подтверждено.'}
+              </p>
+            )}
+            <p className="pw-analytics-hint">
+              Лайки и репосты — текущие счётчики постов периода, а не события за период.
+              {blueskyDashboard?.archive.truncated
+                ? ' Последняя загрузка архива была частичной.'
+                : ''}
             </p>
           </article>
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { loadPierrotViewMetrics } from '@/lib/analytics/pierrotViews';
+import { loadPierrotQualitySummary } from '@/lib/analytics/pierrotQuality';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
@@ -15,10 +16,13 @@ export async function GET(request: Request) {
 
   try {
     const store = getServerSupabaseClient({ useServiceRole: true });
-    const metrics = await loadPierrotViewMetrics(store);
+    const [metrics, qualitySummary] = await Promise.all([
+      loadPierrotViewMetrics(store),
+      loadPierrotQualitySummary(store).catch(() => null),
+    ]);
 
     return NextResponse.json(
-      { status: 'ok', metrics },
+      { status: 'ok', metrics, qualitySummary },
       {
         headers: {
           'Cache-Control': 'no-store, max-age=0, must-revalidate',

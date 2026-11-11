@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { assertServerOnly } from '@/lib/serverOnly';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -13,6 +14,8 @@ export type WebsiteAnswer = {
   scope: string | null;
   /** Full structured report for the optional rich response renderer. */
   report?: AnalyticsReport | null;
+  /** Correlation id for logs and user-visible failure reports. */
+  requestId?: string | null;
 };
 
 export async function answerWebsiteAnalyticsQuestion(input: {
@@ -26,6 +29,8 @@ export async function answerWebsiteAnalyticsQuestion(input: {
   if (!question) {
     return { answered: false, markdown: '', scope: null };
   }
+
+  const requestId = randomUUID();
 
   try {
     const report = await runWebsiteAnalyticsTool(websiteToolForScope(question.scope), {
@@ -43,15 +48,22 @@ export async function answerWebsiteAnalyticsQuestion(input: {
       markdown: report.markdown,
       scope: report.scope,
       report,
+      requestId,
     };
   } catch (error) {
-    const code = error instanceof Error ? error.message.slice(0, 120) : 'analytics_failed';
+    const code = error instanceof Error ? error.message.slice(0, 160) : 'analytics_failed';
 
-    console.error('[website analytics] report failed', { code });
+    console.error('[website analytics] report failed', {
+      code,
+      requestId,
+      scope: question.scope,
+      period: question.periodKey,
+    });
 
     return {
       answered: true,
       scope: question.scope,
+      requestId,
       markdown:
         input.language === 'ru'
           ? [
@@ -63,7 +75,7 @@ export async function answerWebsiteAnalyticsQuestion(input: {
               '- последнюю синхронизацию и её ошибку;',
               '- доступность Supabase.',
               '',
-              `Технический код: \`${code}\`.`,
+              `Технический код: \`${code}\`. ID: \`${requestId}\`.`,
             ].join('\n')
           : [
               '## Website state',
@@ -74,7 +86,7 @@ export async function answerWebsiteAnalyticsQuestion(input: {
               '- the last sync and its error;',
               '- Supabase availability.',
               '',
-              `Technical code: \`${code}\`.`,
+              `Technical code: \`${code}\`. ID: \`${requestId}\`.`,
             ].join('\n'),
     };
   }

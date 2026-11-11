@@ -170,24 +170,33 @@ function projectTable(projects: ProjectPerformance[], language: AnalyticsLanguag
 
 function sourceTable(sources: ProviderHealth[], language: AnalyticsLanguage): string {
   const statusText = (source: ProviderHealth): string => {
-    if (source.status === 'connected') {
-      return source.lastSyncStatus === 'partial'
-        ? language === 'ru'
-          ? 'подключён · частично'
-          : 'connected · partial'
-        : language === 'ru'
-          ? 'подключён'
-          : 'connected';
+    if (source.dataState === 'not_configured') {
+      return language === 'ru' ? 'не настроен' : 'not configured';
     }
-    if (source.status === 'error') return language === 'ru' ? 'ошибка' : 'error';
     if (source.status === 'needs_reauthorization') {
       return language === 'ru' ? 'нужно разрешение' : 'needs authorization';
     }
-    if (source.status === 'not_configured') {
-      return language === 'ru' ? 'не настроен' : 'not configured';
+    if (source.status === 'error' || source.dataState === 'unavailable') {
+      return language === 'ru' ? 'ошибка / нет данных' : 'error / no data';
     }
-    if (source.status === 'disabled') {
-      return language === 'ru' ? 'отключён' : 'disabled';
+    if (source.status === 'disabled') return language === 'ru' ? 'отключён' : 'disabled';
+    if (source.dataState === 'partial') {
+      const coverage = source.coverage;
+      const ratio = coverage
+        ? `${coverage.coveredDays}/${coverage.expectedDays}`
+        : language === 'ru'
+          ? 'частично'
+          : 'partial';
+      return language === 'ru' ? `подключён · частично ${ratio}` : `connected · partial ${ratio}`;
+    }
+    if (source.dataState === 'stale') {
+      return language === 'ru' ? 'подключён · устарел' : 'connected · stale';
+    }
+    if (source.freshness === 'delayed') {
+      return language === 'ru' ? 'подключён · с задержкой' : 'connected · delayed';
+    }
+    if (source.status === 'connected') {
+      return language === 'ru' ? 'подключён · свежий' : 'connected · fresh';
     }
     return language === 'ru' ? 'не подключён' : 'not connected';
   };
@@ -254,8 +263,8 @@ function audienceSection(dataset: AnalyticsDataset, language: AnalyticsLanguage)
   } else {
     if (ga4.available) {
       if (
-        ga4.traffic.ownerAdminPageViews > 0 ||
-        ga4.traffic.ownerAdminLandingSessions > 0
+        (ga4.traffic.ownerAdminPageViews ?? 0) > 0 ||
+        (ga4.traffic.ownerAdminLandingSessions ?? 0) > 0
       ) {
         blocks.push(
           language === 'ru'
@@ -944,7 +953,11 @@ export function pageDetailSection(
   return blocks.join('\n\n');
 }
 
-function blueskySection(dataset: AnalyticsDataset, language: AnalyticsLanguage): string {
+function blueskySection(
+  dataset: AnalyticsDataset,
+  language: AnalyticsLanguage,
+  options: { wantsArchive?: boolean } = {}
+): string {
   const bluesky = dataset.bluesky;
   const blocks: string[] = ['### Bluesky'];
 
@@ -957,53 +970,118 @@ function blueskySection(dataset: AnalyticsDataset, language: AnalyticsLanguage):
     return blocks.join('\n\n');
   }
 
+  const ru = language === 'ru';
+  const period = bluesky.period;
+
   blocks.push(
-    kpiTable(
-      [
-        bluesky.totals.followers,
-        bluesky.totals.posts,
-        bluesky.totals.likes,
-        bluesky.totals.reposts,
-        bluesky.totals.replies,
-        bluesky.totals.engagement,
-      ],
-      language
-    )
+    ru
+      ? `**Профиль — всего:** подписчики ${formatNumber(bluesky.profile.followers, language)} · подписки ${formatNumber(bluesky.profile.follows, language)} · постов в профиле ${formatNumber(bluesky.profile.posts, language)}.`
+      : `**Profile — lifetime:** followers ${formatNumber(bluesky.profile.followers, language)} · following ${formatNumber(bluesky.profile.follows, language)} · profile posts ${formatNumber(bluesky.profile.posts, language)}.`
   );
 
-  if (bluesky.topPosts.length > 0) {
-    blocks.push(language === 'ru' ? '**Посты с наибольшим взаимодействием**' : '**Top posts by engagement**');
+  blocks.push(
+    ru
+      ? `**Период ${period.label}:** опубликовано постов ${period.totals.posts} · лайки на этих постах ${formatNumber(period.totals.likes, language)}* · репосты ${formatNumber(period.totals.reposts, language)}* · ответы ${formatNumber(period.totals.replies, language)}* · взаимодействия ${formatNumber(period.totals.engagement, language)}*.`
+      : `**Period ${period.label}:** posts published ${period.totals.posts} · likes on those posts ${formatNumber(period.totals.likes, language)}* · reposts ${formatNumber(period.totals.reposts, language)}* · replies ${formatNumber(period.totals.replies, language)}* · engagement ${formatNumber(period.totals.engagement, language)}*.`
+  );
+
+  const top = period.posts.length > 0 ? period.posts.slice(0, 3) : [];
+
+  if (top.length > 0) {
+    blocks.push(ru ? '**Посты периода**' : '**Posts in the period**');
     blocks.push(
       table(
         [
-          language === 'ru' ? 'Пост' : 'Post',
-          language === 'ru' ? 'Дата' : 'Date',
-          language === 'ru' ? 'Лайки' : 'Likes',
-          language === 'ru' ? 'Репосты' : 'Reposts',
-          language === 'ru' ? 'Ответы' : 'Replies',
-          language === 'ru' ? 'Ссылка' : 'Link',
+          ru ? 'Пост' : 'Post',
+          ru ? 'Дата' : 'Date',
+          ru ? 'Лайки' : 'Likes',
+          ru ? 'Репосты' : 'Reposts',
+          ru ? 'Ответы' : 'Replies',
+          ru ? 'Ссылка' : 'Link',
         ],
-        bluesky.topPosts.slice(0, 6).map((post) => [
-          post.text.replace(/\s+/g, ' ').slice(0, 90) || '(без текста)',
+        top.map((post) => [
+          post.text.replace(/\s+/g, ' ').slice(0, 90) || (ru ? '(без текста)' : '(no text)'),
           post.createdAt ? post.createdAt.slice(0, 10) : '—',
           formatNumber(post.likes, language),
           formatNumber(post.reposts, language),
           formatNumber(post.replies, language),
-          post.url || '—',
+          post.url ? `[Bluesky](${post.url})` : '—',
         ])
       )
     );
-  }
-
-  if (bluesky.siteLinkedPosts.length > 0) {
+  } else if (period.coverageComplete) {
     blocks.push(
-      language === 'ru'
-        ? `Посты со ссылкой на merkurov.love: ${bluesky.siteLinkedPosts.length}. Это факт ссылки, а не доказательство перехода или покупки.`
-        : `Posts linking to merkurov.love: ${bluesky.siteLinkedPosts.length}. This proves the link, not a visit or purchase.`
+      ru
+        ? 'В выбранном периоде не опубликовано ни одного поста. Это подтверждённый ноль для доступного архива, а не отсутствие данных.'
+        : 'No posts were published in the selected period. This is a confirmed zero for the available archive, not missing data.'
+    );
+  } else {
+    blocks.push(
+      ru
+        ? `За выбранный период постов не найдено, но архив заканчивается ${period.coverageEndsAt || 'неизвестной датой'}: конец периода может быть неполным.`
+        : `No posts were found for the period, but the archive ends at ${period.coverageEndsAt || 'an unknown date'}: the end of the period may be incomplete.`
     );
   }
 
-  blocks.push(bluesky.limitations.map((line) => `- ${line}`).join('\n'));
+  blocks.push(
+    ru
+      ? `* Текущие наблюдаемые счётчики постов, опубликованных в периоде. Они могли накопиться за всё время жизни поста и не доказывают, что взаимодействия получены именно в этом периоде.`
+      : `* Current observed counters on posts published during the period. They may have accumulated over the post's lifetime and do not prove interactions were received during this period.`
+  );
+
+  blocks.push(
+    ru
+      ? `Архив: ${bluesky.archive.total} постов, покрытие ${bluesky.archive.coverageFrom || '—'} — ${bluesky.archive.coverageTo || '—'}. Полный архив — по запросу «покажи весь архив Bluesky».`
+      : `Archive: ${bluesky.archive.total} posts, coverage ${bluesky.archive.coverageFrom || '—'} — ${bluesky.archive.coverageTo || '—'}. Ask for the full archive with “show the full Bluesky archive”.`
+  );
+
+  const flowLinked = bluesky.period.posts.filter((post) => post.flowItemId).length;
+  if (flowLinked > 0) {
+    blocks.push(
+      ru
+        ? `Связано с материалами Flow: ${flowLinked} из ${bluesky.period.posts.length} постов периода.`
+        : `Linked to Flow materials: ${flowLinked} of ${bluesky.period.posts.length} posts in the period.`
+    );
+  }
+
+  if (options.wantsArchive && bluesky.posts.length > 0) {
+    blocks.push(
+      ru
+        ? '**Архив постов (по дате публикации)**'
+        : '**Post archive (by publication date)**'
+    );
+    blocks.push(
+      table(
+        [
+          ru ? 'Дата' : 'Date',
+          ru ? 'Пост' : 'Post',
+          ru ? 'Лайки' : 'Likes',
+          ru ? 'Репосты' : 'Reposts',
+          ru ? 'Ответы' : 'Replies',
+          ru ? 'Ссылка' : 'Link',
+          ru ? 'Flow' : 'Flow',
+        ],
+        bluesky.posts.slice(0, 100).map((post) => [
+          post.createdAt ? post.createdAt.slice(0, 10) : '—',
+          post.text.replace(/\s+/g, ' ').slice(0, 90) || (ru ? '(без текста)' : '(no text)'),
+          formatNumber(post.likes, language),
+          formatNumber(post.reposts, language),
+          formatNumber(post.replies, language),
+          post.url ? `[Bluesky](${post.url})` : '—',
+          post.flowUrl ? `[Flow](${post.flowUrl})` : '—',
+        ])
+      )
+    );
+    if (bluesky.posts.length > 100) {
+      blocks.push(
+        ru
+          ? `Показаны первые 100 из ${bluesky.posts.length}. Экспорт полного архива доступен в Pierrot → Analytics.`
+          : `Showing the first 100 of ${bluesky.posts.length}. Export the full archive in Pierrot → Analytics.`
+      );
+    }
+  }
+
+  blocks.push(bluesky.limitations.slice(0, 4).map((line) => `- ${line}`).join('\n'));
 
   return blocks.join('\n\n');
 }
@@ -1379,30 +1457,96 @@ function trendWord(delta: number | null, language: AnalyticsLanguage): string {
 
 function compactSourcesLine(dataset: AnalyticsDataset, language: AnalyticsLanguage): string {
   const parts = dataset.sources.map((source) => {
+    const coverage = source.coverage;
+    const ratio = coverage ? ` ${coverage.coveredDays}/${coverage.expectedDays}` : '';
     const status =
-      source.status === 'connected'
-        ? source.lastSyncStatus === 'partial'
+      source.dataState === 'complete' && source.freshness === 'fresh'
+        ? language === 'ru'
+          ? `свежий${ratio}`
+          : `fresh${ratio}`
+        : source.dataState === 'partial'
           ? language === 'ru'
-            ? 'частично'
-            : 'partial'
-          : language === 'ru'
-            ? 'подключён'
-            : 'connected'
-        : source.status === 'not_configured'
-          ? language === 'ru'
-            ? 'не настроен'
-            : 'not configured'
-          : source.status === 'disabled'
+            ? `частично${ratio}`
+            : `partial${ratio}`
+          : source.dataState === 'stale' || source.freshness === 'stale'
             ? language === 'ru'
-              ? 'отключён'
-              : 'disabled'
-            : language === 'ru'
-              ? 'недоступен'
-              : 'unavailable';
+              ? 'устарел'
+              : 'stale'
+            : source.dataState === 'not_configured'
+              ? language === 'ru'
+                ? 'не настроен'
+                : 'not configured'
+              : language === 'ru'
+                ? 'нет данных'
+                : 'no data';
     return `${source.label}: ${status}`;
   });
 
   return `**${language === 'ru' ? 'Источники' : 'Sources'}:** ${parts.join(' · ')}. ${language === 'ru' ? 'Данные сформированы' : 'Generated'} ${new Date(dataset.generatedAt).toLocaleString(language === 'ru' ? 'ru-RU' : 'en-GB', { timeZone: getAnalyticsTimezone() })}.`;
+}
+
+function coverageProviderLabel(
+  provider: string,
+  language: AnalyticsLanguage
+): string {
+  const labels: Record<string, { ru: string; en: string }> = {
+    google_analytics: { ru: 'GA4', en: 'GA4' },
+    search_console: { ru: 'Search Console', en: 'Search Console' },
+    umami: { ru: 'Umami', en: 'Umami' },
+    bluesky: { ru: 'Bluesky', en: 'Bluesky' },
+    internal: { ru: 'Supabase', en: 'Supabase' },
+  };
+  return labels[provider]?.[language] || provider;
+}
+
+export function coverageNote(
+  dataset: AnalyticsDataset,
+  language: AnalyticsLanguage
+): string {
+  const lines: string[] = [];
+  for (const coverage of dataset.coverage || []) {
+    if (coverage.state === 'not_configured') continue;
+    if (coverage.state === 'complete' && coverage.freshness === 'fresh') continue;
+    const label = coverageProviderLabel(coverage.provider, language);
+    const ratio =
+      coverage.expectedDays > 0
+        ? `${coverage.coveredDays}/${coverage.expectedDays}`
+        : language === 'ru'
+          ? '0 ожидаемых дней'
+          : '0 expected days';
+    const actual =
+      coverage.actualDataFrom && coverage.actualDataTo
+        ? `${coverage.actualDataFrom} — ${coverage.actualDataTo}`
+        : language === 'ru'
+          ? 'нет данных'
+          : 'no data';
+    const delay =
+      coverage.reportingDelayDays > 0
+        ? language === 'ru'
+          ? `; задержка отчёта ${coverage.reportingDelayDays} дн.`
+          : `; reporting delay ${coverage.reportingDelayDays}d`
+        : '';
+    lines.push(
+      language === 'ru'
+        ? `${label}: ${ratio} дней, фактические данные ${actual}${delay}.`
+        : `${label}: ${ratio} days, actual data ${actual}${delay}.`
+    );
+  }
+  if (dataset.period.comparisonRequested) {
+    const incompletePrevious = (dataset.previousCoverage || []).filter(
+      (coverage) => coverage.state !== 'not_configured' && (coverage.completeness ?? 0) < 0.999
+    );
+    if (incompletePrevious.length > 0) {
+      lines.push(
+        language === 'ru'
+          ? 'Сравнение с предыдущим периодом отключено: предыдущий период покрыт неполностью.'
+          : 'Previous-period comparison is disabled: the previous window is not fully covered.'
+      );
+    }
+  }
+  return lines.length
+    ? `${language === 'ru' ? '**Покрытие данных:** ' : '**Data coverage:** '}${lines.join(' ')}`
+    : '';
 }
 
 export function compactOverviewSection(
@@ -1411,10 +1555,9 @@ export function compactOverviewSection(
   findings: Finding[]
 ): string {
   const sessions = dataset.ga4.totals.sessions;
-  const publicSessions =
-    dataset.ga4.traffic.publicLandingSessions > 0
-      ? dataset.ga4.traffic.publicLandingSessions
-      : sessions.value;
+  // Never substitute total GA4 sessions for public landing sessions. They are
+  // different measurements and are displayed under different labels.
+  const publicSessions = dataset.ga4.traffic.publicLandingSessions;
   const users = dataset.ga4.totals.activeUsers;
   const searchClicks = dataset.gsc.totals.clicks;
   const topChannel = dataset.ga4.channels[0];
@@ -1426,16 +1569,25 @@ export function compactOverviewSection(
   const lines: string[] = [
     `## PUBLIC PRESENCE — ${dataset.period.label.toUpperCase()}`,
     '',
+    coverageNote(dataset, language),
     `- ${language === 'ru' ? 'Аудитория' : 'Audience'}: ${
       publicSessions === null
         ? language === 'ru'
-          ? 'данных GA4 нет'
-          : 'no GA4 data'
-        : `${formatNumber(publicSessions, language)} ${language === 'ru' ? 'публичных landing-сессий' : 'public landing sessions'} · ${trendWord(
-            sessions.deltaPercent,
-            language
-          )}`
+          ? `публичные landing-сессии недоступны отдельно${sessions.value !== null ? `; всего GA4 sessions: ${formatNumber(sessions.value, language)}` : ''}`
+          : `public landing sessions are unavailable separately${sessions.value !== null ? `; total GA4 sessions: ${formatNumber(sessions.value, language)}` : ''}`
+        : `${formatNumber(publicSessions, language)} ${language === 'ru' ? 'публичных landing-сессий' : 'public landing sessions'}`
     }${users.value !== null ? ` · ${formatNumber(users.value, language)} ${language === 'ru' ? 'активных пользователей' : 'active users'}` : ''}.`,
+    `- ${language === 'ru' ? 'Трафик GA4 по типам' : 'GA4 traffic types'}: ${
+      language === 'ru'
+        ? `всего ${formatNumber(sessions.value, language)} сессий`
+        : `total ${formatNumber(sessions.value, language)} sessions`
+    } · ${language === 'ru' ? 'public' : 'public'} ${formatNumber(publicSessions, language)} · /admin ${formatNumber(
+      dataset.ga4.traffic.ownerAdminLandingSessions,
+      language
+    )} · ${language === 'ru' ? 'автоматические' : 'automated'} ${formatNumber(
+      dataset.ga4.traffic.automatedLandingSessions,
+      language
+    )}.`,
     `- ${language === 'ru' ? 'Обнаружение' : 'Discovery'}: ${
       topChannel
         ? `${topChannel.label} · ${formatNumber(topChannel.value, language)} ${language === 'ru' ? 'сессий' : 'sessions'}`
@@ -1452,7 +1604,7 @@ export function compactOverviewSection(
     }.`,
     `- ${language === 'ru' ? 'Распространение' : 'Distribution'}: ${
       dataset.bluesky.available
-        ? `Bluesky ${formatNumber(dataset.bluesky.totals.followers.value, language)} ${language === 'ru' ? 'подписчиков' : 'followers'} · ${formatNumber(dataset.bluesky.totals.engagement.value, language)} ${language === 'ru' ? 'взаимодействий' : 'engagements'}`
+        ? `Bluesky ${formatNumber(dataset.bluesky.totals.followers.value, language)} ${language === 'ru' ? 'подписчиков (всего)' : 'followers (lifetime)'} · ${formatNumber(dataset.bluesky.period?.totals.engagement ?? null, language)} ${language === 'ru' ? `взаимодействий на постах периода ${dataset.bluesky.period?.label || dataset.period.label}` : `engagements on posts in ${dataset.bluesky.period?.label || dataset.period.label}`}`
         : language === 'ru'
           ? 'Bluesky нет данных'
           : 'no Bluesky data'
@@ -1545,7 +1697,11 @@ export function renderReport(
         ? `**Период:** ${dataset.period.label}. **Сравнение:** ${dataset.period.previousLabel}. **Часовой пояс:** ${dataset.period.timezone}.`
         : `**Period:** ${dataset.period.label}. **Comparison:** ${dataset.period.previousLabel}. **Timezone:** ${dataset.period.timezone}.`
     );
-    blocks.push(scope === 'bluesky' ? blueskySection(dataset, language) : newsletterSection(dataset, language));
+    blocks.push(
+      scope === 'bluesky'
+        ? blueskySection(dataset, language, { wantsArchive: question.wantsArchive === true })
+        : newsletterSection(dataset, language)
+    );
     blocks.push(sourcesSection(dataset, language));
     return blocks.filter(Boolean).join('\n\n');
   }
@@ -1568,6 +1724,7 @@ export function renderReport(
       ? `**Период:** ${dataset.period.label}. **Сравнение:** ${dataset.period.previousLabel}. **Часовой пояс:** ${dataset.period.timezone}.`
       : `**Period:** ${dataset.period.label}. **Comparison:** ${dataset.period.previousLabel}. **Timezone:** ${dataset.period.timezone}.`
   );
+  blocks.push(coverageNote(dataset, language));
 
   if (scope === 'overview' || scope === 'traffic' || scope === 'compare') {
     blocks.push(audienceSection(dataset, language));

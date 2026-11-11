@@ -9,11 +9,15 @@ import {
 } from '@/lib/flow/content';
 import {
   buildBlueskySummaryPrompt,
-  composeBlueskyPost,
   resolveBlueskyShareUrl,
   BLUESKY_MAX_GRAPHEMES,
 } from '@/lib/flow/blueskyPost';
-import { resolveFlowMetadataFromContent } from '@/lib/flow/metadata';
+import {
+  buildBlueskyPresentation,
+  resolveBlueskyPresentationMode,
+  validateBlueskyPresentation,
+  type BlueskyPresentation,
+} from '@/lib/flow/blueskyPresentation';
 import { generateFlowAIText } from '@/lib/flow/ai';
 
 let cachedAgent: BskyAgent | null = null;
@@ -21,7 +25,18 @@ let cachedAgent: BskyAgent | null = null;
 const THUMB_LIMIT = 950_000;
 
 export type BlueskyPublishResult =
-  { uri: string; cid: string } | { error: string; uncertain?: boolean };
+  | {
+      uri: string;
+      cid: string;
+      presentation?: BlueskyPresentation;
+      warnings?: string[];
+    }
+  | {
+      error: string;
+      uncertain?: boolean;
+      presentation?: BlueskyPresentation;
+      warnings?: string[];
+    };
 
 function blueskyErrorRecord(error: unknown): {
   status: number | null;
@@ -158,16 +173,31 @@ function cleanSummary(value: string | null | undefined): string | null {
   return clean || null;
 }
 
+type UploadedImage = {
+  blob: any;
+  width: number;
+  height: number;
+};
+
+type ImageUploadOutcome = {
+  image: UploadedImage | null;
+  error: string | null;
+};
+
 /**
  * Download and normalize an image before uploading it to Bluesky.
+ *
+ * The outcome is explicit so a failed upload can be logged, surfaced in the
+ * publish result and handled by the external-card fallback instead of silently
+ * dropping the visual.
  */
 async function uploadImage(
   agent: BskyAgent,
   imageUrl: string,
   maxBytes: number
-): Promise<any | null> {
+): Promise<ImageUploadOutcome> {
   const url = validUrl(imageUrl);
-  if (!url) return null;
+  if (!url) return { image: null, error: 'invalid_image_url' };
 
   try {
     const response = await fetch(url, {
@@ -180,23 +210,26 @@ async function uploadImage(
     });
 
     if (!response.ok) {
-      console.warn('[bluesky:image] Image request failed:', response.status);
-      return null;
+      return { image: null, error: `image_http_${response.status}` };
     }
 
-    const contentType = (response.headers.get('content-type') || '')
-      .split(';')[0]
-      .toLowerCase();
+    const contentType = (response.headers.get('content-type') || '').split(';')[0].toLowerCase();
 
-    if (!contentType.startsWith('image/')) return null;
+    if (!contentType.startsWith('image/')) {
+      return { image: null, error: `unsupported_content_type:${contentType || 'unknown'}` };
+    }
 
     const declaredSize = Number(response.headers.get('content-length') || 0);
-    if (declaredSize > 15_000_000) return null;
+    if (declaredSize > 15_000_000) {
+      return { image: null, error: 'image_too_large' };
+    }
 
     const source = Buffer.from(await response.arrayBuffer());
-    if (!source.length || source.length > 15_000_000) return null;
+    if (!source.length || source.length > 15_000_000) {
+      return { image: null, error: 'image_too_large' };
+    }
 
-    let normalized: Buffer | null = null;
+    let normalized: { data: Buffer; width: number; height: number } | null = null;
 
     for (const attempt of [
       { width: 2000, quality: 86 },
@@ -213,39 +246,58 @@ async function uploadImage(
           withoutEnlargement: true,
         })
         .jpeg({ quality: attempt.quality, mozjpeg: true })
-        .toBuffer();
+        .toBuffer({ resolveWithObject: true });
 
-      if (output.length <= maxBytes) {
-        normalized = output;
+      if (output.data.length <= maxBytes) {
+        normalized = {
+          data: output.data,
+          width: output.info.width,
+          height: output.info.height,
+        };
         break;
       }
     }
 
-    if (!normalized) return null;
+    if (!normalized) {
+      return { image: null, error: 'image_normalization_failed' };
+    }
 
-    const uploaded = await agent.uploadBlob(new Uint8Array(normalized), {
+    const uploaded = await agent.uploadBlob(new Uint8Array(normalized.data), {
       encoding: 'image/jpeg',
     });
 
-    return uploaded.data?.blob || null;
+    const blob = uploaded.data?.blob;
+    if (!blob) return { image: null, error: 'empty_blob_response' };
+
+    return {
+      image: {
+        blob,
+        width: normalized.width,
+        height: normalized.height,
+      },
+      error: null,
+    };
   } catch (error) {
-    console.error('[bluesky:image] Processing failed:', error);
-    return null;
+    const message = error instanceof Error ? error.message : 'image_processing_failed';
+    console.error('[bluesky:image] Processing failed:', message);
+    return { image: null, error: message.slice(0, 180) };
   }
 }
 
 async function summarizeForBluesky(
-  content: ReturnType<typeof normalizeFlowItem>
+  content: ReturnType<typeof normalizeFlowItem>,
+  shareUrl: string
 ): Promise<string | null> {
   if (!content.bodyText.trim()) return null;
 
-  const available = BLUESKY_MAX_GRAPHEMES - graphemeLength(content.canonicalUrl) - 4;
-  if (graphemeLength(content.bodyText) <= available) return null;
+  const mode = resolveBlueskyPresentationMode(content);
+  const available = BLUESKY_MAX_GRAPHEMES - graphemeLength(shareUrl) - 2;
+  const threshold = mode === 'article' ? Math.min(available, 220) : available;
+
+  if (graphemeLength(content.bodyText) <= threshold) return null;
 
   try {
-    const generated = await generateFlowAIText(
-      buildBlueskySummaryPrompt(content)
-    );
+    const generated = await generateFlowAIText(buildBlueskySummaryPrompt(content));
     return cleanSummary(generated.content);
   } catch (error) {
     console.warn(
@@ -256,99 +308,284 @@ async function summarizeForBluesky(
   }
 }
 
+function facetValidationIssues(
+  text: string,
+  facets: Array<Record<string, any>> | undefined
+): string[] {
+  const issues: string[] = [];
+  const bytes = Buffer.from(text, 'utf8');
+
+  for (const facet of facets ?? []) {
+    const start = facet?.index?.byteStart;
+    const end = facet?.index?.byteEnd;
+
+    if (
+      !Number.isInteger(start) ||
+      !Number.isInteger(end) ||
+      start < 0 ||
+      end > bytes.length ||
+      start >= end
+    ) {
+      issues.push('facet index is outside the UTF-8 post text');
+      continue;
+    }
+
+    for (const feature of Array.isArray(facet.features) ? facet.features : []) {
+      if (feature?.$type !== 'app.bsky.richtext.facet#link') continue;
+
+      const visible = bytes.subarray(start, end).toString('utf8');
+      if (!validUrl(feature.uri) || visible !== feature.uri) {
+        issues.push(`link facet does not match its UTF-8 slice: ${String(feature.uri)}`);
+      }
+    }
+  }
+
+  return issues;
+}
+
+function externalEmbed(presentation: BlueskyPresentation, thumb: any | null) {
+  return {
+    $type: 'app.bsky.embed.external',
+    external: {
+      uri: presentation.destinationUrl,
+      title: truncateGraphemes(presentation.cardTitle, 200).trim(),
+      description: truncateGraphemes(presentation.cardDescription ?? '', 300).trim(),
+      ...(thumb ? { thumb } : {}),
+    },
+  };
+}
+
+async function buildBlueskyEmbed(
+  agent: BskyAgent,
+  presentation: BlueskyPresentation,
+  warnings: string[]
+): Promise<any> {
+  if (presentation.embedType === 'images' && presentation.nativeImageUrl && presentation.imageAlt) {
+    const uploaded = await uploadImage(agent, presentation.nativeImageUrl, THUMB_LIMIT);
+
+    if (uploaded.image) {
+      const image: Record<string, any> = {
+        alt: presentation.imageAlt,
+        image: uploaded.image.blob,
+      };
+
+      if (uploaded.image.width > 0 && uploaded.image.height > 0) {
+        image.aspectRatio = {
+          width: uploaded.image.width,
+          height: uploaded.image.height,
+        };
+      }
+
+      return {
+        $type: 'app.bsky.embed.images',
+        images: [image],
+      };
+    }
+
+    const warning = `Native image upload failed for ${
+      presentation.nativeImageUrl
+    }: ${uploaded.error ?? 'unknown_error'}`;
+    warnings.push(warning);
+    console.warn('[bluesky:image]', warning);
+
+    // Do not retry the same failed URL as a card thumbnail. Only a different
+    // fallback image (for example a generated Flow card) is worth uploading.
+    let thumb: any | null = null;
+    const fallbackImage =
+      presentation.cardImage && presentation.cardImage !== presentation.nativeImageUrl
+        ? presentation.cardImage
+        : null;
+
+    if (fallbackImage) {
+      const fallback = await uploadImage(agent, fallbackImage, THUMB_LIMIT);
+      if (fallback.image) {
+        thumb = fallback.image.blob;
+      } else {
+        const warning = `Card image upload failed for ${fallbackImage}: ${fallback.error}`;
+        warnings.push(warning);
+        console.warn('[bluesky:image]', warning);
+      }
+    }
+
+    return externalEmbed(presentation, thumb);
+  }
+
+  let thumb: any | null = null;
+
+  if (presentation.cardImage) {
+    const uploaded = await uploadImage(agent, presentation.cardImage, THUMB_LIMIT);
+    if (uploaded.image) {
+      thumb = uploaded.image.blob;
+    } else {
+      const warning = `Card image upload failed for ${presentation.cardImage}: ${uploaded.error}`;
+      warnings.push(warning);
+      console.warn('[bluesky:image]', warning);
+    }
+  }
+
+  return externalEmbed(presentation, thumb);
+}
+
 /**
- * Publish one short Bluesky post with a meaningful summary and the canonical
- * Flow URL. The Flow link is also used as an external embed so every platform
- * shows the same editorial card.
+ * Publish an already-built presentation. Validation happens before any image
+ * upload or post request. Exported so the same publication path can be tested
+ * with an invalid presentation without hitting Bluesky.
+ */
+export async function publishBlueskyPresentation(
+  presentation: BlueskyPresentation,
+  options: { agent: BskyAgent; warnings?: string[] }
+): Promise<BlueskyPublishResult> {
+  const warnings = options.warnings ?? [];
+  let agent = options.agent;
+
+  const issues = validateBlueskyPresentation(presentation);
+
+  if (issues.length > 0) {
+    const detail = issues
+      .map((issue) => `${issue.code}: ${issue.message}`)
+      .join('; ')
+      .slice(0, 500);
+
+    console.warn('[bluesky] Presentation validation failed; refusing to publish.', {
+      issues,
+      presentation,
+    });
+
+    return {
+      error: `Bluesky presentation validation failed: ${detail}`,
+      presentation,
+      warnings,
+    };
+  }
+
+  const richText = new RichText({ text: presentation.postText });
+  richText.detectFacetsWithoutResolution();
+
+  if (richText.graphemeLength > BLUESKY_MAX_GRAPHEMES) {
+    console.warn('[bluesky] Post still exceeds the grapheme limit; refusing.', {
+      graphemes: richText.graphemeLength,
+      shareUrl: presentation.flowUrl,
+    });
+    return {
+      error: `Bluesky rejected the post: ${richText.graphemeLength} graphemes exceeds ${BLUESKY_MAX_GRAPHEMES}.`,
+      presentation,
+      warnings,
+    };
+  }
+
+  const facetIssues = facetValidationIssues(
+    presentation.postText,
+    richText.facets as Array<Record<string, any>> | undefined
+  );
+
+  if (facetIssues.length > 0) {
+    return {
+      error: `Bluesky rich-text validation failed: ${facetIssues.join('; ').slice(0, 400)}`,
+      presentation,
+      warnings,
+    };
+  }
+
+  const embed = await buildBlueskyEmbed(agent, presentation, warnings);
+
+  const record: any = {
+    $type: 'app.bsky.feed.post',
+    text: richText.text,
+    createdAt: new Date().toISOString(),
+    ...(richText.facets?.length ? { facets: richText.facets } : {}),
+    embed,
+  };
+
+  let result: { uri: string; cid: string };
+  try {
+    result = await agent.post(record);
+  } catch (error) {
+    if (!isBlueskyAuthError(error)) throw error;
+
+    // A warm serverless instance can hold an expired session. Drop it and
+    // retry once with a fresh login before reporting a channel failure.
+    console.warn('[bluesky] Session rejected; re-authenticating once.');
+    cachedAgent = null;
+    agent = await getBlueskyAgent();
+    result = await agent.post(record);
+  }
+
+  console.info('[bluesky] Published:', {
+    uri: result.uri,
+    presentationMode: presentation.presentationMode,
+    destinationUrl: presentation.destinationUrl,
+    usedSummary: presentation.usedSummary,
+    graphemes: richText.graphemeLength,
+    facets: richText.facets?.length ?? 0,
+    embedType: embed.$type,
+    cardTitle: presentation.cardTitle,
+    warnings,
+  });
+
+  return {
+    uri: result.uri,
+    cid: result.cid,
+    presentation,
+    warnings,
+  };
+}
+
+/**
+ * Publish one short Bluesky post. The complete presentation is built and
+ * validated before any upload or network publication happens.
  */
 export async function publishToBluesky(input: PublishInput): Promise<BlueskyPublishResult> {
+  let presentation: BlueskyPresentation | undefined;
+  const warnings: string[] = [];
+
   try {
     let agent = await getBlueskyAgent();
 
-    const content = normalizeFlowItem(input, {
-      media: Array.isArray((input as any).media) ? (input as any).media : [],
+    const explicitMedia = [
+      ...(Array.isArray((input as any).media) ? (input as any).media : []),
+      ...(input.imageUrl ? [{ url: input.imageUrl }] : []),
+      ...(Array.isArray(input.imageUrls)
+        ? input.imageUrls
+            .filter((url): url is string => typeof url === 'string' && Boolean(url.trim()))
+            .map((url) => ({ url: url.trim() }))
+        : []),
+    ];
+    const normalized = normalizeFlowItem(input, {
+      media: explicitMedia,
     });
+    const inputDescription = typeof input.description === 'string' ? input.description.trim() : '';
+    const content = inputDescription
+      ? {
+          ...normalized,
+          description: truncateGraphemes(inputDescription, 300).trim(),
+        }
+      : normalized;
 
     const shareUrl = resolveBlueskyShareUrl({
       canonicalUrl: content.canonicalUrl,
       id: content.id,
     });
-    const summary = await summarizeForBluesky(content);
-    const post = composeBlueskyPost({
-      title: content.showTitle ? content.title : null,
-      bodyText: content.bodyText,
-      language: content.language,
-      flowUrl: shareUrl,
+    const summary = await summarizeForBluesky(content, shareUrl);
+    presentation = buildBlueskyPresentation({
+      content,
       summary,
+      flowUrl: shareUrl,
     });
 
-    const richText = new RichText({ text: post.text });
-    richText.detectFacetsWithoutResolution();
-
-    if (richText.graphemeLength > BLUESKY_MAX_GRAPHEMES) {
-      console.warn('[bluesky] Post still exceeds the grapheme limit; refusing.', {
-        graphemes: richText.graphemeLength,
-        shareUrl,
-      });
-      return {
-        error: `Bluesky rejected the post: ${richText.graphemeLength} graphemes exceeds ${BLUESKY_MAX_GRAPHEMES}.`,
-      };
-    }
-
-    const metadata = resolveFlowMetadataFromContent(content);
-    const thumb = metadata.previewImage
-      ? await uploadImage(agent, metadata.previewImage, THUMB_LIMIT)
-      : null;
-
-    const embed = {
-      $type: 'app.bsky.embed.external',
-      external: {
-        uri: shareUrl,
-        title: truncateGraphemes(metadata.title, 200).trim(),
-        description: truncateGraphemes(metadata.description, 300).trim(),
-        ...(thumb ? { thumb } : {}),
-      },
-    };
-
-    const record: any = {
-      $type: 'app.bsky.feed.post',
-      text: richText.text,
-      createdAt: new Date().toISOString(),
-      ...(richText.facets?.length ? { facets: richText.facets } : {}),
-      embed,
-    };
-
-    let result: { uri: string; cid: string };
-    try {
-      result = await agent.post(record);
-    } catch (error) {
-      if (!isBlueskyAuthError(error)) throw error;
-
-      // A warm serverless instance can hold an expired session. Drop it and
-      // retry once with a fresh login before reporting a channel failure.
-      console.warn('[bluesky] Session rejected; re-authenticating once.');
-      cachedAgent = null;
-      agent = await getBlueskyAgent();
-      result = await agent.post(record);
-    }
-
-    console.info('[bluesky] Published:', {
-      uri: result.uri,
-      usedSummary: Boolean(summary),
-      graphemes: richText.graphemeLength,
-      facets: richText.facets?.length ?? 0,
-      embedType: embed.$type,
-      shareUrl,
-    });
-
-    return { uri: result.uri, cid: result.cid };
+    return publishBlueskyPresentation(presentation, { agent, warnings });
   } catch (error) {
     const message = blueskyErrorMessage(error);
     console.error('[bluesky] Publish failed:', {
       message,
       error,
+      warnings,
     });
-    return { error: message, uncertain: isUncertainBlueskyError(error) };
+    return {
+      error: message,
+      uncertain: isUncertainBlueskyError(error),
+      presentation,
+      warnings,
+    };
   }
 }
 

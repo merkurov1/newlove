@@ -1017,6 +1017,7 @@ export async function crosspostFlowItem(
             source_url: content.sourceUrl,
             type: content.rawType,
             lang: content.language,
+            description: content.description,
             imageUrls: content.images.map((image) => image.url),
           }).catch((error) => {
             console.error('[crosspost:bluesky] Publish failed:', error);

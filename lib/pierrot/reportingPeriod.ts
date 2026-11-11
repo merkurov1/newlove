@@ -4,11 +4,18 @@
  */
 
 export type ReportingPeriodKey =
+  | 'today'
+  | 'yesterday'
   | 'last_7_days'
   | 'previous_7_days'
+  | 'this_week'
+  | 'last_week'
   | 'last_30_days'
   | 'current_month'
   | 'previous_month'
+  | 'this_year'
+  | 'previous_year'
+  | 'all_time'
   | 'custom';
 
 export type CustomPeriodInput = {
@@ -29,6 +36,8 @@ export type ReportingPeriod = {
     start: Date;
     end: Date;
   };
+  /** False when no comparable previous window exists (for example all time). */
+  comparisonAvailable?: boolean;
   custom?: CustomPeriodInput;
 };
 
@@ -137,6 +146,27 @@ export function startOfZonedMonth(date: Date, timeZone: string): Date {
   return zonedWallTimeToUtc({ year: parts.year, month: parts.month, day: 1 }, timeZone);
 }
 
+/**
+ * Monday 00:00 in the display zone. Used by "this week" / "last week" so both
+ * the report and its comparison use real calendar weeks, not rolling windows.
+ */
+export function startOfZonedWeek(date: Date, timeZone: string): Date {
+  const parts = zonedParts(date, timeZone);
+  const local = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  const weekday = local.getUTCDay(); // 0 = Sunday
+  const offset = weekday === 0 ? -6 : 1 - weekday;
+  local.setUTCDate(local.getUTCDate() + offset);
+
+  return zonedWallTimeToUtc(
+    {
+      year: local.getUTCFullYear(),
+      month: local.getUTCMonth() + 1,
+      day: local.getUTCDate(),
+    },
+    timeZone
+  );
+}
+
 export function addZonedMonths(date: Date, months: number, timeZone: string): Date {
   const parts = zonedParts(date, timeZone);
   const target = new Date(Date.UTC(parts.year, parts.month - 1 + months, 1));
@@ -186,6 +216,111 @@ export function resolveReportingPeriod(
 ): ReportingPeriod {
   const today = startOfZonedDay(now, timezone);
   const tomorrow = addZonedDays(today, 1, timezone);
+
+  if (key === 'today') {
+    return {
+      key,
+      timezone,
+      start: today,
+      end: tomorrow,
+      previous: { start: addZonedDays(today, -1, timezone), end: today },
+      comparisonAvailable: true,
+    };
+  }
+
+  if (key === 'yesterday') {
+    return {
+      key,
+      timezone,
+      start: addZonedDays(today, -1, timezone),
+      end: today,
+      previous: { start: addZonedDays(today, -2, timezone), end: addZonedDays(today, -1, timezone) },
+      comparisonAvailable: true,
+    };
+  }
+
+  if (key === 'this_week') {
+    const start = startOfZonedWeek(now, timezone);
+    const previousStart = addZonedDays(start, -7, timezone);
+
+    return {
+      key,
+      timezone,
+      start,
+      end: tomorrow,
+      previous: { start: previousStart, end: start },
+      comparisonAvailable: true,
+    };
+  }
+
+  if (key === 'last_week') {
+    const thisWeek = startOfZonedWeek(now, timezone);
+    const start = addZonedDays(thisWeek, -7, timezone);
+    const previousStart = addZonedDays(start, -7, timezone);
+
+    return {
+      key,
+      timezone,
+      start,
+      end: thisWeek,
+      previous: { start: previousStart, end: start },
+      comparisonAvailable: true,
+    };
+  }
+
+  if (key === 'this_year') {
+    const parts = zonedParts(now, timezone);
+    const start = zonedWallTimeToUtc({ year: parts.year, month: 1, day: 1 }, timezone);
+    const previousStart = zonedWallTimeToUtc(
+      { year: parts.year - 1, month: 1, day: 1 },
+      timezone
+    );
+    const previousEnd = zonedWallTimeToUtc(
+      { year: parts.year - 1, month: parts.month, day: parts.day + 1 },
+      timezone
+    );
+
+    return {
+      key,
+      timezone,
+      start,
+      end: tomorrow,
+      previous: { start: previousStart, end: previousEnd },
+      comparisonAvailable: true,
+    };
+  }
+
+  if (key === 'previous_year') {
+    const parts = zonedParts(now, timezone);
+    const start = zonedWallTimeToUtc({ year: parts.year - 1, month: 1, day: 1 }, timezone);
+    const end = zonedWallTimeToUtc({ year: parts.year, month: 1, day: 1 }, timezone);
+    const previousStart = zonedWallTimeToUtc(
+      { year: parts.year - 2, month: 1, day: 1 },
+      timezone
+    );
+
+    return {
+      key,
+      timezone,
+      start,
+      end,
+      previous: { start: previousStart, end: start },
+      comparisonAvailable: true,
+    };
+  }
+
+  if (key === 'all_time') {
+    const start = new Date(Date.UTC(1970, 0, 1));
+
+    return {
+      key,
+      timezone,
+      start,
+      end: tomorrow,
+      previous: { start, end: start },
+      comparisonAvailable: false,
+    };
+  }
 
   if (key === 'last_7_days') {
     const start = addZonedDays(today, -6, timezone);
@@ -304,6 +439,48 @@ export function formatReportingPeriod(
     return language === 'ru'
       ? `текущий месяц, ${start} — ${end} (${period.timezone})`
       : `current month, ${start} — ${end} (${period.timezone})`;
+  }
+
+  if (period.key === 'today') {
+    return language === 'ru'
+      ? `сегодня, ${start} (${period.timezone})`
+      : `today, ${start} (${period.timezone})`;
+  }
+
+  if (period.key === 'yesterday') {
+    return language === 'ru'
+      ? `вчера, ${start} (${period.timezone})`
+      : `yesterday, ${start} (${period.timezone})`;
+  }
+
+  if (period.key === 'this_week') {
+    return language === 'ru'
+      ? `текущая неделя, ${start} — ${end} (${period.timezone})`
+      : `this week, ${start} — ${end} (${period.timezone})`;
+  }
+
+  if (period.key === 'last_week') {
+    return language === 'ru'
+      ? `прошлая неделя, ${start} — ${end} (${period.timezone})`
+      : `last week, ${start} — ${end} (${period.timezone})`;
+  }
+
+  if (period.key === 'this_year') {
+    return language === 'ru'
+      ? `текущий год, ${start} — ${end} (${period.timezone})`
+      : `this year, ${start} — ${end} (${period.timezone})`;
+  }
+
+  if (period.key === 'previous_year') {
+    return language === 'ru'
+      ? `прошлый год, ${start} — ${end} (${period.timezone})`
+      : `previous year, ${start} — ${end} (${period.timezone})`;
+  }
+
+  if (period.key === 'all_time') {
+    return language === 'ru'
+      ? `всё время, по ${end} (${period.timezone})`
+      : `all time, through ${end} (${period.timezone})`;
   }
 
   if (period.key === 'previous_month') {

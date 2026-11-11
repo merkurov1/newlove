@@ -17,6 +17,7 @@ import {
   finishSyncRun,
   getStoredConnection,
   insertSyncRun,
+  listBlueskyPostUris,
   markConnectionError,
   markConnectionSynced,
   recoverStaleSyncRuns,
@@ -24,8 +25,8 @@ import {
   tryLock,
   unlock,
   upsertConnection,
-  writeMetricRows,
-  writeSearchRows,
+  replaceMetricSlice,
+  replaceSearchSlice,
   type MetricRowInput,
   type SearchRowInput,
   type StoredConnection,
@@ -315,9 +316,13 @@ async function syncGoogleAnalytics(
         }
       }
 
-      if (rows.length > 0) {
-        rowsWritten += await writeMetricRows(store, rows);
-      }
+      rowsWritten += await replaceMetricSlice(store, {
+        provider: 'google_analytics',
+        reportTypes: [definition.key],
+        from: range.start,
+        to: range.end,
+        rows,
+      });
       reportSummary[definition.key] = report.rowCount;
 
       await saveSnapshot(store, {
@@ -438,7 +443,12 @@ async function syncSearchConsole(
     data_state: 'final',
   }));
 
-  const written = rows.length > 0 ? await writeSearchRows(store, rows) : 0;
+  const written = await replaceSearchSlice(store, {
+    siteUrl,
+    from: range.start,
+    to: range.end,
+    rows,
+  });
 
   await saveSnapshot(store, {
     provider: 'search_console',
@@ -555,7 +565,13 @@ async function syncUmami(
     push('referrer', range.end, 'referrer', row.x, 'pageviews', row.y, periodMetadata);
   }
 
-  const written = rows.length > 0 ? await writeMetricRows(store, rows) : 0;
+  const written = await replaceMetricSlice(store, {
+    provider: 'umami',
+    reportTypes: ['total', 'period_total', 'page', 'referrer'],
+    from: range.start,
+    to: range.end,
+    rows,
+  });
 
   await saveSnapshot(store, {
     provider: 'umami',
@@ -575,7 +591,8 @@ async function syncUmami(
 
 async function syncBluesky(
   store: SupabaseClient,
-  range: { start: string; end: string }
+  range: { start: string; end: string },
+  options: { mode?: SyncMode } = {}
 ): Promise<{ rows: number; snapshots: number; details: Record<string, unknown> }> {
   const config = getBlueskyConfig();
 
@@ -587,9 +604,16 @@ async function syncBluesky(
     });
   }
 
+  const knownPostUris =
+    options.mode === 'backfill' ? [] : await listBlueskyPostUris(store);
+
   const result = await fetchBlueskyAnalytics({
     identifier: config.identifier,
     password: config.password,
+    // Normal sync refreshes the latest page (100 posts). A full archive walk
+    // is an explicit backfill operation, never the default.
+    maxPages: options.mode === 'backfill' ? 20 : 1,
+    knownPostUris,
   });
 
   const rows: MetricRowInput[] = [];
@@ -628,6 +652,9 @@ async function syncBluesky(
     const metadata = {
       text: post.text.slice(0, 1200),
       post_created_at: post.createdAt,
+      observed_at: new Date().toISOString(),
+      post_kind: post.kind,
+      author_did: post.authorDid,
       indexed_at: post.indexedAt,
       permalink,
       site_links: post.siteLinks,
@@ -644,7 +671,13 @@ async function syncBluesky(
     add('post', 'post', post.uri, 'engagement', engagement, metadata);
   }
 
-  const written = rows.length > 0 ? await writeMetricRows(store, rows) : 0;
+  const written = await replaceMetricSlice(store, {
+    provider: 'bluesky',
+    reportTypes: ['profile', 'post'],
+    from: range.end,
+    to: range.end,
+    rows,
+  });
 
   await saveSnapshot(store, {
     provider: 'bluesky',
@@ -663,6 +696,7 @@ async function syncBluesky(
       posts: result.posts.length,
       pages: result.pages,
       truncated: result.truncated,
+      cursor: result.cursor,
     },
   };
 }
@@ -787,9 +821,16 @@ async function syncOne(
           ? await syncSearchConsole(store, connection as StoredConnection, range)
           : provider === 'umami'
             ? await syncUmami(store, connection as StoredConnection, range)
-            : await syncBluesky(store, range);
+            : await syncBluesky(store, range, { mode: options.mode });
 
-    const partial = result.details.partial === true;
+    // A normal incremental sync deliberately reads only the latest page. That
+    // bounded recent window is not a partial archive. A backfill that still
+    // has a cursor is genuinely incomplete.
+    const partial =
+      result.details.partial === true ||
+      (provider === 'bluesky' &&
+        options.mode === 'backfill' &&
+        result.details.truncated === true);
 
     await finishSyncRun(store, {
       id: runId,
@@ -808,9 +849,18 @@ async function syncOne(
         accountLabel: blueskyConfig.identifier,
         externalId: profile?.did ?? blueskyConfig.identifier,
         externalMeta: {
+          ...(connection?.external_meta ?? {}),
           handle: profile?.handle ?? null,
           followers: profile?.followers ?? null,
           posts: profile?.posts ?? null,
+          feed_truncated:
+            provider === 'bluesky' &&
+            options.mode === 'backfill' &&
+            result.details.truncated === true,
+          last_feed_cursor:
+            typeof result.details.cursor === 'string' ? result.details.cursor : null,
+          last_feed_pages:
+            typeof result.details.pages === 'number' ? result.details.pages : null,
         },
         scopes: [],
         sealed: null,

@@ -436,6 +436,120 @@ export async function writeMetricRows(
   return written;
 }
 
+function isMissingRpc(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  const message = (error.message || '').toLowerCase();
+  return (
+    error.code === '42883' ||
+    error.code === 'PGRST202' ||
+    message.includes('could not find the function') ||
+    message.includes('analytics_replace_')
+  );
+}
+
+/**
+ * Replace one exact provider/report/date slice. The SQL function performs the
+ * delete and insert in one transaction. If the migration is not applied yet,
+ * fall back to an upsert so existing environments keep working (without the
+ * obsolete-dimension cleanup) and log a single non-fatal warning.
+ */
+export async function replaceMetricSlice(
+  store: SupabaseClient,
+  input: {
+    provider: 'google_analytics' | 'umami' | 'bluesky';
+    reportTypes: string[];
+    from: string;
+    to: string;
+    rows: MetricRowInput[];
+  }
+): Promise<number> {
+  const deduped = dedupeMetricRows(input.rows);
+  if (deduped.length === 0) {
+    // An empty successful provider response is meaningful: delete the slice.
+    const { error } = await store.rpc('analytics_replace_metric_slice', {
+      p_provider: input.provider,
+      p_report_types: input.reportTypes,
+      p_from: input.from,
+      p_to: input.to,
+      p_rows: [],
+    });
+    if (!error) return 0;
+    if (isMissingRpc(error)) return 0;
+    throw new Error(`analytics_replace_metric_slice: ${error.message}`);
+  }
+
+  const payload = deduped.map((row) => ({
+    report_type: row.report_type,
+    metric_date: row.metric_date,
+    dimension_key: row.dimension_key,
+    dimension_value: row.dimension_value.slice(0, 2048),
+    dimension_hash: row.dimension_hash,
+    metric: row.metric,
+    value: row.value,
+    unit: row.unit ?? 'count',
+    metadata: row.metadata ?? {},
+  }));
+
+  const { data, error } = await store.rpc('analytics_replace_metric_slice', {
+    p_provider: input.provider,
+    p_report_types: input.reportTypes,
+    p_from: input.from,
+    p_to: input.to,
+    p_rows: payload,
+  });
+
+  if (!error) return Number(data ?? payload.length);
+  if (isMissingRpc(error)) {
+    console.warn(
+      '[website analytics] slice reconciliation migration missing; falling back to upsert'
+    );
+    return await writeMetricRows(store, input.rows);
+  }
+  throw new Error(`analytics_replace_metric_slice: ${error.message}`);
+}
+
+export async function replaceSearchSlice(
+  store: SupabaseClient,
+  input: {
+    siteUrl: string;
+    from: string;
+    to: string;
+    rows: SearchRowInput[];
+  }
+): Promise<number> {
+  const deduped = dedupeSearchRows(input.rows);
+  const payload = deduped.map((row) => ({
+    metric_date: row.metric_date,
+    query: row.query.slice(0, 1024),
+    page: row.page.slice(0, 2048),
+    country: row.country,
+    device: row.device,
+    query_hash: row.query_hash,
+    page_hash: row.page_hash,
+    clicks: Math.round(row.clicks),
+    impressions: Math.round(row.impressions),
+    ctr: row.ctr,
+    position: row.position,
+    data_state: row.data_state ?? 'final',
+  }));
+
+  const { data, error } = await store.rpc('analytics_replace_search_slice', {
+    p_site_url: input.siteUrl,
+    p_from: input.from,
+    p_to: input.to,
+    p_rows: payload,
+  });
+
+  if (!error) return Number(data ?? payload.length);
+  if (isMissingRpc(error)) {
+    console.warn(
+      '[website analytics] search slice reconciliation migration missing; falling back to upsert'
+    );
+    return await writeSearchRows(store, input.rows);
+  }
+  throw new Error(`analytics_replace_search_slice: ${error.message}`);
+}
+
 export async function writeSearchRows(
   store: SupabaseClient,
   rows: SearchRowInput[]
@@ -514,6 +628,32 @@ export type MetricRow = {
   metadata: Record<string, unknown> | null;
   synced_at: string;
 };
+
+export async function listBlueskyPostUris(
+  store: SupabaseClient,
+  limit = 5_000
+): Promise<string[]> {
+  try {
+    const { data, error } = await store
+      .from('analytics_metrics_daily')
+      .select('dimension_value')
+      .eq('provider', 'bluesky')
+      .eq('report_type', 'post')
+      .limit(Math.min(Math.max(limit, 1), 20_000));
+
+    if (error) return [];
+
+    return [
+      ...new Set(
+        (Array.isArray(data) ? data : [])
+          .map((row) => (row as { dimension_value?: unknown }).dimension_value)
+          .filter((value): value is string => typeof value === 'string' && value.length > 0)
+      ),
+    ];
+  } catch {
+    return [];
+  }
+}
 
 export async function readMetricRows(
   store: SupabaseClient,

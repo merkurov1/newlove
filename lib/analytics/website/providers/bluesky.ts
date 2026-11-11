@@ -5,6 +5,9 @@ assertServerOnly('lib/analytics/website/providers/bluesky');
 
 export type BlueskyPostObservation = {
   uri: string;
+  /** Own original post, own reply, own repost or unknown legacy item. */
+  kind: 'post' | 'reply' | 'repost' | 'unknown';
+  authorDid: string | null;
   cid: string | null;
   text: string;
   createdAt: string | null;
@@ -33,6 +36,8 @@ export type BlueskyAnalyticsResult = {
   posts: BlueskyPostObservation[];
   pages: number;
   truncated: boolean;
+  /** Feed cursor after the last fetched page, for diagnostics/backfill. */
+  cursor: string | null;
   rawProfile: unknown;
 };
 
@@ -93,8 +98,10 @@ export function isOwnBlueskyFeedItem(entry: unknown, actorDid: string | null): b
 
 export function normalizeBlueskyPost(entry: unknown): BlueskyPostObservation | null {
   if (!entry || typeof entry !== 'object') return null;
+  const entryRecord = entry as { reason?: { $type?: unknown } };
   const item = entry as {
     post?: {
+      author?: { did?: unknown };
       uri?: unknown;
       cid?: unknown;
       record?: Record<string, unknown>;
@@ -121,8 +128,18 @@ export function normalizeBlueskyPost(entry: unknown): BlueskyPostObservation | n
     }
   });
 
+  const reasonType =
+    typeof entryRecord.reason?.$type === 'string' ? entryRecord.reason.$type : '';
+  const kind: BlueskyPostObservation['kind'] = reasonType.includes('reasonRepost')
+    ? 'repost'
+    : record.reply && typeof record.reply === 'object'
+      ? 'reply'
+      : 'post';
+
   return {
     uri: post.uri,
+    kind,
+    authorDid: typeof item.post?.author?.did === 'string' ? item.post.author.did : null,
     cid: typeof post.cid === 'string' ? post.cid : null,
     text,
     createdAt,
@@ -153,6 +170,11 @@ export async function fetchBlueskyAnalytics(input: {
   identifier: string;
   password: string;
   maxPages?: number;
+  /**
+   * Post URIs already stored. Incremental sync stops as soon as a whole page
+   * contains only known posts, instead of downloading the entire archive again.
+   */
+  knownPostUris?: Iterable<string>;
 }): Promise<BlueskyAnalyticsResult> {
   const agent = new BskyAgent({ service: 'https://bsky.social' });
   await agent.login({ identifier: input.identifier, password: input.password });
@@ -169,9 +191,11 @@ export async function fetchBlueskyAnalytics(input: {
 
   const posts: BlueskyPostObservation[] = [];
   const seen = new Set<string>();
+  const known = new Set(input.knownPostUris ?? []);
   const maxPages = Math.min(Math.max(input.maxPages ?? 10, 1), 20);
   let cursor: string | undefined;
   let pages = 0;
+  let stoppedBecauseKnown = false;
 
   while (pages < maxPages) {
     const feed = await agent.getAuthorFeed({
@@ -182,6 +206,7 @@ export async function fetchBlueskyAnalytics(input: {
 
     pages += 1;
     const items = Array.isArray(feed.data.feed) ? feed.data.feed : [];
+    let newOwnPosts = 0;
 
     for (const item of items) {
       // A repost of another account is not the owner's post. Keep only items
@@ -191,11 +216,23 @@ export async function fetchBlueskyAnalytics(input: {
       const normalized = normalizeBlueskyPost(item);
       if (!normalized || seen.has(normalized.uri)) continue;
       seen.add(normalized.uri);
+
+      // Return known posts too: their counters are current observations and
+      // must be refreshed on every sync. Only the walk through older pages is
+      // short-circuited once a whole page is already archived.
+      if (!known.has(normalized.uri)) newOwnPosts += 1;
       posts.push(normalized);
     }
 
     cursor = feed.data.cursor;
     if (!cursor || items.length === 0) break;
+
+    // An incremental page made only of already-stored posts means the rest of
+    // the feed is older archive we already have.
+    if (known.size > 0 && newOwnPosts === 0) {
+      stoppedBecauseKnown = true;
+      break;
+    }
   }
 
   return {
@@ -209,7 +246,8 @@ export async function fetchBlueskyAnalytics(input: {
     },
     posts,
     pages,
-    truncated: Boolean(cursor) && pages >= maxPages,
+    truncated: Boolean(cursor) && pages >= maxPages && !stoppedBecauseKnown,
+    cursor: cursor ?? null,
     rawProfile: profileResponse.data,
   };
 }

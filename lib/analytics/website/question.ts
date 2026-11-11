@@ -262,6 +262,27 @@ function detectPeriod(
     };
   }
 
+  if (/(вс[её]\s+время|all\s*time|за\s+вс[её]\s+время|lifetime)/i.test(text)) {
+    return { periodKey: 'all_time' };
+  }
+
+  if (/(прошл[а-яё]*\s+год|previous\s+year|last\s+year)/i.test(text)) {
+    return { periodKey: 'previous_year' };
+  }
+
+  if (/(этот\s+год|текущ[а-яё]*\s+год|this\s+year|year\s+to\s+date|ytd)/i.test(text)) {
+    return { periodKey: 'this_year' };
+  }
+
+  if (/(прошл[а-яё]*\s+недел|previous\s+week|last\s+week)/i.test(text)) {
+    if (/(после|since|изменилось|changed)/i.test(text)) return { periodKey: 'last_7_days' };
+    return { periodKey: 'previous_7_days' };
+  }
+
+  if (/(эт[ау]\s+недел|на\s+этой\s+недел|текущ[а-яё]*\s+недел|this\s+week)/i.test(text)) {
+    return { periodKey: 'this_week' };
+  }
+
   if (/(30\s*дней|30\s*days|последн[а-яё]*\s+месяц|last\s+30|past\s+month|за\s+месяц)/i.test(text)) {
     return { periodKey: 'last_30_days' };
   }
@@ -275,11 +296,6 @@ function detectPeriod(
 
   if (/(этот\s+месяц|текущ[а-яё]*\s+месяц|current\s+month)/i.test(text)) {
     return { periodKey: 'current_month' };
-  }
-
-  if (/(прошл[а-яё]*\s+недел|previous\s+week|last\s+week)/i.test(text)) {
-    if (/(после|since|изменилось|changed)/i.test(text)) return { periodKey: 'last_7_days' };
-    return { periodKey: 'previous_7_days' };
   }
 
   return { periodKey: 'last_7_days' };
@@ -327,6 +343,12 @@ function buildQuestion(
     /(подробн|детальн|полный\s+отчет|полный\s+отчёт|все\s+метрик|таблиц|full\s+report|detailed|breakdown)/i.test(
       text
     );
+  const wantsArchive =
+    /(весь\s+архив|все\s+посты|полный\s+архив|full\s+archive|all\s+posts|entire\s+archive)/i.test(
+      text
+    );
+  const wantsDiagram =
+    /(диаграмм|схем[ауы]?|diagram|graph\s*view|visuali[sz]ation)/i.test(text);
   const period = detectPeriod(message, text, now, timezone);
 
   return {
@@ -336,6 +358,8 @@ function buildQuestion(
     wantsProblems,
     wantsRecommendations,
     wantsDetailed,
+    wantsArchive,
+    wantsDiagram,
     project,
     pagePath,
     ...period,
