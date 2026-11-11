@@ -301,6 +301,17 @@ export type InternalSnapshot = {
     mediaRecords: number | null;
   };
   limitations: string[];
+  /** Raw rows read from the database, before grouping for display. */
+  raw: {
+    confirmedSubscriptions: number;
+    subscriptionEvents: number;
+    donations: number;
+    purchases: number;
+    conversations: number;
+    events: number;
+    newsletterJobs: number;
+    newsletterLogs: number;
+  };
   /** Explicit query failures; never silently interpreted as zero activity. */
   dataGaps: string[];
   coverage: SourceCoverage;
