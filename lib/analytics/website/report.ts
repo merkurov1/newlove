@@ -1578,16 +1578,22 @@ export function compactOverviewSection(
         : `${formatNumber(publicSessions, language)} ${language === 'ru' ? 'публичных landing-сессий' : 'public landing sessions'}`
     }${users.value !== null ? ` · ${formatNumber(users.value, language)} ${language === 'ru' ? 'активных пользователей' : 'active users'}` : ''}.`,
     `- ${language === 'ru' ? 'Трафик GA4 по типам' : 'GA4 traffic types'}: ${
-      language === 'ru'
-        ? `всего ${formatNumber(sessions.value, language)} сессий`
-        : `total ${formatNumber(sessions.value, language)} sessions`
-    } · ${language === 'ru' ? 'public' : 'public'} ${formatNumber(publicSessions, language)} · /admin ${formatNumber(
-      dataset.ga4.traffic.ownerAdminLandingSessions,
-      language
-    )} · ${language === 'ru' ? 'автоматические' : 'automated'} ${formatNumber(
-      dataset.ga4.traffic.automatedLandingSessions,
-      language
-    )}.`,
+      sessions.value === null
+        ? language === 'ru'
+          ? 'данных GA4 нет'
+          : 'no GA4 data'
+        : `${
+            language === 'ru'
+              ? `всего ${formatNumber(sessions.value, language)} сессий`
+              : `total ${formatNumber(sessions.value, language)} sessions`
+          } · ${language === 'ru' ? 'public' : 'public'} ${formatNumber(publicSessions, language)} · /admin ${formatNumber(
+            dataset.ga4.traffic.ownerAdminLandingSessions,
+            language
+          )} · ${language === 'ru' ? 'автоматические' : 'automated'} ${formatNumber(
+            dataset.ga4.traffic.automatedLandingSessions,
+            language
+          )}`
+    }.`,
     `- ${language === 'ru' ? 'Обнаружение' : 'Discovery'}: ${
       topChannel
         ? `${topChannel.label} · ${formatNumber(topChannel.value, language)} ${language === 'ru' ? 'сессий' : 'sessions'}`
@@ -1622,8 +1628,8 @@ export function compactOverviewSection(
     `- ${language === 'ru' ? 'Выручка / действия' : 'Revenue / actions'}: ${
       subscriptions === null
         ? language === 'ru'
-          ? 'подтверждённых действий нет'
-          : 'no confirmed actions'
+          ? 'данных о подтверждённых подписках нет'
+          : 'no confirmed-subscription data'
         : `${formatNumber(subscriptions, language)} ${language === 'ru' ? 'подтверждённых подписок' : 'confirmed subscriptions'}${
             subscriptionDelta === null
               ? ''
