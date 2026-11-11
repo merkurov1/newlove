@@ -263,11 +263,8 @@ export async function buildProjectChatContext(input: {
   const activeDecisions = project.decisions.filter(
     (item) => item.kind !== 'task' && item.kind !== 'reminder' && item.status === 'current'
   );
-  const historicalDecisions = project.decisions.filter(
-    (item) =>
-      item.kind !== 'task' &&
-      item.kind !== 'reminder' &&
-      item.status !== 'current'
+  const historicalDecisions = (project.historicalDecisions || []).filter(
+    (item) => item.kind !== 'task' && item.kind !== 'reminder'
   );
 
   const lines: string[] = [
@@ -288,7 +285,7 @@ export async function buildProjectChatContext(input: {
           .map((item) => `${item.title} [${item.status}]`)
           .join('; ')}`
       : '',
-    historicalDecisions.length
+    historicalDecisions.length && shouldSearchHistory
       ? `Historical/superseded decisions: ${historicalDecisions
           .slice(0, 8)
           .map((item) => `${item.title} [${item.status}]`)

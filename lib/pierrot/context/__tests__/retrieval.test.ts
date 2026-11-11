@@ -432,6 +432,109 @@ describe('unified context retrieval', () => {
     expect(result.projectState?.status).toBe('IN_PROGRESS');
   });
 
+  it('excludes archived and superseded records from current project state but keeps them in history', async () => {
+    const { db, projectId, canonicalId } = seedBase();
+    db.seed('pierrot_decisions', [
+      taskRow({
+        id: 'task-current',
+        title: 'Текущая задача',
+        status: 'current',
+      }),
+      taskRow({
+        id: 'task-archived',
+        title: 'Архивная задача',
+        status: 'archived',
+      }),
+      taskRow({
+        id: 'decision-superseded',
+        kind: 'decision',
+        title: 'Старое решение',
+        content: 'Старое решение',
+        status: 'superseded',
+      }),
+      taskRow({
+        id: 'task-expired',
+        title: 'Истёкшая задача',
+        status: 'current',
+        updatedAt: '2026-11-11T09:00:00.000Z',
+      }),
+    ]);
+    // valid_until is written directly because the test helper mirrors the
+    // production row shape.
+    const expired = db
+      .rows('pierrot_decisions')
+      .find((row) => row.id === 'task-expired');
+    if (expired) expired.valid_until = '2026-11-01T00:00:00.000Z';
+
+    db.seed('pierrot_project_decisions', [
+      { project_id: projectId, decision_id: 'task-current', owner_user_id: OWNER_ID },
+      { project_id: projectId, decision_id: 'task-archived', owner_user_id: OWNER_ID },
+      { project_id: projectId, decision_id: 'decision-superseded', owner_user_id: OWNER_ID },
+      { project_id: projectId, decision_id: 'task-expired', owner_user_id: OWNER_ID },
+    ]);
+
+    const statusPlan = detectContextQuery('What is the current state of UNFRAMED?', OPTIONS)!;
+    const current = await runContextQuery({
+      store: db.asClient(),
+      ownerUserId: OWNER_ID,
+      plan: statusPlan,
+      project: project(projectId, canonicalId),
+      embeddingClient: null,
+    });
+    const currentIds = current.hits.map((hit) => hit.id);
+    expect(currentIds).toContain('memory:task-current');
+    expect(currentIds).not.toContain('memory:task-archived');
+    expect(currentIds).not.toContain('memory:decision-superseded');
+    expect(currentIds).not.toContain('memory:task-expired');
+
+    const historyPlan = detectContextQuery('Show the history of UNFRAMED', OPTIONS)!;
+    const history = await runContextQuery({
+      store: db.asClient(),
+      ownerUserId: OWNER_ID,
+      plan: historyPlan,
+      project: project(projectId, canonicalId),
+      embeddingClient: null,
+    });
+    const historyIds = history.hits.map((hit) => hit.id);
+    expect(historyIds).toContain('memory:task-archived');
+    expect(historyIds).toContain('memory:decision-superseded');
+  });
+
+  it('reads more than 600 project events newest-first and renders them chronologically', async () => {
+    const { db, projectId, canonicalId } = seedBase();
+    db.seed(
+      'pierrot_project_events',
+      Array.from({ length: 650 }, (_, index) => ({
+        id: `event-${String(index).padStart(4, '0')}`,
+        project_id: projectId,
+        owner_user_id: OWNER_ID,
+        event_type: 'task',
+        title: `Event ${index}`,
+        description: `Event ${index}`,
+        occurred_at: new Date(Date.UTC(2026, 9, 1, 0, 0, index)).toISOString(),
+        recorded_at: new Date(Date.UTC(2026, 10, 11, 12, 0, index)).toISOString(),
+        evidence_class: 'USER_CONFIRMED',
+        confidence: 0.9,
+        metadata: { completed: true },
+      }))
+    );
+
+    const plan = detectContextQuery('Show the history of UNFRAMED', OPTIONS)!;
+    const result = await runContextQuery({
+      store: db.asClient(),
+      ownerUserId: OWNER_ID,
+      plan,
+      project: project(projectId, canonicalId),
+      embeddingClient: null,
+    });
+
+    expect(result.timeline.some((event) => event.id === 'project_event:event-0649')).toBe(true);
+    const eventTimes = result.timeline
+      .filter((event) => event.id.startsWith('project_event:'))
+      .map((event) => Date.parse(event.occurredAt));
+    expect(eventTimes).toEqual([...eventTimes].sort((a, b) => a - b));
+  });
+
   it('does not count a discussed task as a completed achievement', async () => {
     const { db } = seedBase();
     db.seed('pierrot_decisions', [

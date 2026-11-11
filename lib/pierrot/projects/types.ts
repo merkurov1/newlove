@@ -29,6 +29,7 @@ export type PierrotProjectSnapshot = PierrotProject & {
     completedAt: string;
     runId: string;
   } | null;
+  /** Current decisions only. Historical records stay in historicalDecisions. */
   decisions: Array<{
     id: string;
     title: string;
@@ -37,7 +38,19 @@ export type PierrotProjectSnapshot = PierrotProject & {
     kind?: string;
     updatedAt: string;
   }>;
+  historicalDecisions?: Array<{
+    id: string;
+    title: string;
+    content: string;
+    status: string;
+    kind?: string;
+    updatedAt: string;
+  }>;
+  /** Active tasks only. Completed/archived/superseded are separate. */
   tasks: Array<{ id: string; title: string; status: string; updatedAt: string }>;
+  completedTasks?: Array<{ id: string; title: string; status: string; updatedAt: string }>;
+  archivedTasks?: Array<{ id: string; title: string; status: string; updatedAt: string }>;
+  supersededTasks?: Array<{ id: string; title: string; status: string; updatedAt: string }>;
   conversations: Array<{ id: string; title: string; updatedAt: string }>;
   knowledge: Array<{ id: string; title: string | null; status: string | null }>;
   artifacts: Array<{ id: string; title: string; artifactType: string; updatedAt: string }>;

@@ -218,6 +218,38 @@ describe('Pierrot execution plan routing', () => {
     expect(plan.operation).toBe('graph.demo');
   });
 
+  it('keeps a Bluesky activity follow-up on Bluesky, not general personal context', () => {
+    const plan = buildPierrotExecutionPlan('Что я публиковал за неделю?', {
+      ownerMode: true,
+      history: history('Покажи статистику Bluesky'),
+    });
+
+    expect(plan.ownerTool?.kind).toBe('website');
+    expect(plan.ownerTool?.query).toContain('Bluesky');
+    expect(plan.ownerTool?.query).toContain('публиковал');
+    expect(plan.operation).toBe('website.report');
+  });
+
+  it('keeps a “most notable posts” follow-up on Bluesky', () => {
+    const plan = buildPierrotExecutionPlan('Какие посты наиболее заметные?', {
+      ownerMode: true,
+      history: history('Покажи статистику Bluesky'),
+    });
+
+    expect(plan.ownerTool?.kind).toBe('website');
+    expect(plan.ownerTool?.query).toContain('Bluesky');
+  });
+
+  it('does not hijack a Flow publication question after a Bluesky question', () => {
+    const plan = buildPierrotExecutionPlan('Что я публиковал в Flow за неделю?', {
+      ownerMode: true,
+      history: history('Покажи статистику Bluesky'),
+    });
+
+    expect(plan.ownerTool).toBeNull();
+    expect(plan.queryPlan.sources.flow).toBe(true);
+  });
+
   it('keeps the Journal inventory on the Journal source', () => {
     const plan = buildPierrotExecutionPlan('Покажи статистику Journal', { ownerMode: true });
 

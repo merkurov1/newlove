@@ -192,6 +192,33 @@ export function buildPierrotExecutionPlan(
     ownerTool = null;
   }
 
+  // A short activity follow-up after a Bluesky question belongs to the same
+  // source. Without this, «Что я публиковал за неделю?» falls into general
+  // personal context instead of the prepared Bluesky analytics.
+  if (!ownerTool && options.ownerMode === true) {
+    const blueskyAnchor = (options.history || [])
+      .filter((item) => item.role === 'user' && /(bluesky|bsky|блускай|блюскай)/i.test(item.content))
+      .slice(-1)[0]?.content;
+    const asksPublicationActivity =
+      /(пост|публикац|публиков|активност|заметн|вовлеч|engagement|likes|лайк|репост|ответ)/i.test(
+        message
+      ) &&
+      (/(недел|месяц|день|период|week|month|day|period|7|30|90)/i.test(message) ||
+        /(заметн|популярн|лучш|топ|most\s+notable|top)/i.test(message));
+
+    if (
+      blueskyAnchor &&
+      asksPublicationActivity &&
+      !/(journal|журнал|flow|поток|media|медиа|сми|brain|rag|telegram)/i.test(message)
+    ) {
+      ownerTool = {
+        kind: 'website',
+        query: `${blueskyAnchor} ${message}`.trim(),
+        recoveredFromContext: true,
+      };
+    }
+  }
+
   // A demonstration must run graph retrieval/traversal, never the
   // administrative entity/relationship counters.
   if (queryPlan.graphDemo) {

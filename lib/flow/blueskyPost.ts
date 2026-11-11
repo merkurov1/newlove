@@ -146,9 +146,10 @@ export function buildBlueskySummaryPrompt(
   }.
 
 TASK:
-- Express the main point of the material in 1–2 sentences.
+- Express the main point or argument of the material in 1–2 sentences.
 - Maximum ${max} characters.
 - Preserve the author's meaning and tone.
+- Do not repeat the title verbatim and do not copy the opening sentence.
 - Do not invent facts, quotes, dates, or descriptions of images/video.
 - Do not add hashtags, emojis, calls to action, or a URL.
 - No introductory phrases. Return only the post text.

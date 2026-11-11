@@ -54,6 +54,7 @@ export class FakeQuery {
   private filters: Filter[] = [];
   private orderSpec: OrderSpec | null = null;
   private limitCount: number | null = null;
+  private rangeBounds: { from: number; to: number } | null = null;
   private mode: 'select' | 'insert' | 'update' | 'delete' | 'upsert' = 'select';
   private payload: FakeRow[] | null = null;
   private conflictKey = 'id';
@@ -181,6 +182,11 @@ export class FakeQuery {
     return this;
   }
 
+  range(from: number, to: number) {
+    this.rangeBounds = { from, to };
+    return this;
+  }
+
   single() {
     this.singleMode = 'single';
     return this;
@@ -296,6 +302,9 @@ export class FakeQuery {
     }
 
     if (this.limitCount !== null) found = found.slice(0, this.limitCount);
+    if (this.rangeBounds !== null) {
+      found = found.slice(this.rangeBounds.from, this.rangeBounds.to + 1);
+    }
 
     return this.shape(
       found.map((row) => clone(row)),

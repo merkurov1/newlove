@@ -18,6 +18,10 @@ export type FeedbackErrorCategory =
   | 'INCOMPLETE_ANSWER'
   | 'REPETITION'
   | 'WRONG_FORMAT'
+  | 'RENDERING_FAILURE'
+  | 'ANALYTICS_ERROR'
+  | 'PERIOD_ERROR'
+  | 'PERFORMANCE_ERROR'
   | 'TIMEZONE_ERROR'
   | 'OTHER';
 
@@ -33,6 +37,10 @@ export const FEEDBACK_ERROR_CATEGORIES: FeedbackErrorCategory[] = [
   'INCOMPLETE_ANSWER',
   'REPETITION',
   'WRONG_FORMAT',
+  'RENDERING_FAILURE',
+  'ANALYTICS_ERROR',
+  'PERIOD_ERROR',
+  'PERFORMANCE_ERROR',
   'TIMEZONE_ERROR',
   'OTHER',
 ];
@@ -163,6 +171,42 @@ const RULES: Array<{
     rootCause: 'repeat_question_not_reconciled',
   },
   {
+    category: 'RENDERING_FAILURE',
+    patterns: [
+      /не отображается|не отрисовал|сломался интерфейс|пустой экран|пропал ответ|битая вёрстка/i,
+      /not rendered|rendering failed|blank screen|broken layout|chart did not render/i,
+    ],
+    signal: 'rendering_failure',
+    rootCause: 'structured_block_render_failure',
+  },
+  {
+    category: 'ANALYTICS_ERROR',
+    patterns: [
+      /аналитик[а-яё]*\s+(?:сломалась|ошибка|не работает|упала)|данные\s+(?:не загрузились|не пришли)|отчёт\s+(?:не построился|упал)/i,
+      /analytics\s+(?:failed|error|broken|crash)|report\s+(?:failed|did not build)/i,
+    ],
+    signal: 'analytics_failure',
+    rootCause: 'analytics_pipeline_failure',
+  },
+  {
+    category: 'PERIOD_ERROR',
+    patterns: [
+      /не тот период|неверн[а-яё]*\s+период|неправильн[а-яё]*\s+диапазон|взял[а-яё]*\s+не те даты|сравнил[а-яё]*\s+разные периоды/i,
+      /wrong period|wrong date range|different period lengths|compared different periods/i,
+    ],
+    signal: 'period_semantics_error',
+    rootCause: 'period_resolution_or_comparison_error',
+  },
+  {
+    category: 'PERFORMANCE_ERROR',
+    patterns: [
+      /слишком долго|тормозит|зависа|не отвечает|таймаут|очень медленно/i,
+      /too slow|freezes|hangs|timeout|timed out|takes forever/i,
+    ],
+    signal: 'performance_failure',
+    rootCause: 'latency_or_resource_limit',
+  },
+  {
     category: 'WRONG_FORMAT',
     patterns: [
       /формат|таблиц|слишком длинн|слишком коротк|не нужн[аы] (?:список|таблиц|заголовк)/i,
@@ -283,6 +327,10 @@ export function feedbackCategoryLabel(
     INCOMPLETE_ANSWER: 'Неполный ответ',
     REPETITION: 'Повтор',
     WRONG_FORMAT: 'Неверный формат',
+    RENDERING_FAILURE: 'Ошибка отображения',
+    ANALYTICS_ERROR: 'Ошибка аналитики',
+    PERIOD_ERROR: 'Неверный период',
+    PERFORMANCE_ERROR: 'Медленный ответ',
     TIMEZONE_ERROR: 'Ошибка времени/часового пояса',
     OTHER: 'Другое',
   };
@@ -298,6 +346,10 @@ export function feedbackCategoryLabel(
     INCOMPLETE_ANSWER: 'Incomplete answer',
     REPETITION: 'Repetition',
     WRONG_FORMAT: 'Wrong format',
+    RENDERING_FAILURE: 'Rendering failure',
+    ANALYTICS_ERROR: 'Analytics error',
+    PERIOD_ERROR: 'Wrong period',
+    PERFORMANCE_ERROR: 'Slow response',
     TIMEZONE_ERROR: 'Timezone error',
     OTHER: 'Other',
   };
@@ -340,6 +392,10 @@ export function toRegressionCase(input: {
     INCOMPLETE_ANSWER: 'Cover every part of the request or name the missing part.',
     REPETITION: 'Continue from the previous answer instead of repeating it.',
     WRONG_FORMAT: 'Follow the requested format and length.',
+    RENDERING_FAILURE: 'Validate the structured payload and render a safe Markdown fallback.',
+    ANALYTICS_ERROR: 'Report the failing source and correlation id; never return a misleading zero.',
+    PERIOD_ERROR: 'Resolve the requested period explicitly and compare equal-length windows.',
+    PERFORMANCE_ERROR: 'Bound latency, reuse cached context and avoid duplicate retrieval.',
     TIMEZONE_ERROR: 'Apply the explicit timezone and distinguish event time from ingestion time.',
     OTHER: 'Investigate the failure and add a targeted regression case.',
   };

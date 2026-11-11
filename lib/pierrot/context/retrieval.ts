@@ -320,27 +320,44 @@ async function loadProjectEvents(
   period: ContextPeriod | null,
   gaps: string[]
 ): Promise<ProjectEventInput[]> {
-  let query = store
-    .from('pierrot_project_events')
-    .select('*')
-    .eq('owner_user_id', ownerUserId)
-    .order('occurred_at', { ascending: true })
-    .limit(600);
+  const pageSize = 500;
+  const maxRows = 2000;
+  const rows: Array<Record<string, unknown>> = [];
 
-  if (projectId) query = query.eq('project_id', projectId);
-  if (period) query = query.gte('occurred_at', period.from).lt('occurred_at', period.to);
+  for (let offset = 0; offset < maxRows; offset += pageSize) {
+    let query = store
+      .from('pierrot_project_events')
+      .select('*')
+      .eq('owner_user_id', ownerUserId)
+      .order('occurred_at', { ascending: false })
+      .range(offset, Math.min(offset + pageSize - 1, maxRows - 1));
 
-  const { data, error } = await query;
-  if (error) {
-    if (isMissingRelation(error)) {
-      gaps.push('Таблица событий проекта ещё не применена; таймлайн собран из сообщений, задач и материалов.');
+    if (projectId) query = query.eq('project_id', projectId);
+    if (period) query = query.gte('occurred_at', period.from).lt('occurred_at', period.to);
+
+    const { data, error } = await query;
+    if (error) {
+      if (isMissingRelation(error)) {
+        gaps.push('Таблица событий проекта ещё не применена; таймлайн собран из сообщений, задач и материалов.');
+      } else {
+        gaps.push('События проекта временно недоступны; таймлайн может быть неполным.');
+      }
+      break;
     }
-    return [];
+
+    const page = Array.isArray(data) ? (data as Array<Record<string, unknown>>) : [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
   }
 
-  return (Array.isArray(data) ? data : [])
-    .map((row): ProjectEventInput | null => {
-      const item = row as Record<string, unknown>;
+  if (rows.length >= maxRows) {
+    gaps.push(
+      `События проекта ограничены ${maxRows} самыми новыми записями; более ранние события не показаны.`
+    );
+  }
+
+  return rows
+    .map((item): ProjectEventInput | null => {
       if (typeof item.id !== 'string' || typeof item.occurred_at !== 'string') return null;
       return {
         id: item.id,
@@ -407,10 +424,13 @@ async function loadMemories(input: {
   embeddingClient?: MemoryEmbeddingClient | null;
   gaps: string[];
 }): Promise<PierrotMemoryRecord[]> {
-  const includeArchive =
+  const historyMode =
     input.plan.intent === 'PROJECT_HISTORY' ||
     input.plan.intent === 'CONVERSATION_SEARCH' ||
-    input.plan.intent === 'ACHIEVEMENT_LOG';
+    input.plan.intent === 'ACHIEVEMENT_LOG' ||
+    input.plan.intent === 'ENTITY_DISTINCTION' ||
+    input.plan.intent === 'DOCUMENT_SEARCH' ||
+    input.plan.wantsOriginalSource;
   const byId = new Map<string, PierrotMemoryRecord>();
 
   let linkedIds: string[] = [];
@@ -426,6 +446,8 @@ async function loadMemories(input: {
     }
   }
 
+  // Linked project IDs are provenance, not a status filter bypass. Every
+  // record below still passes the current/history rule.
   if (linkedIds.length > 0) {
     const linked = await listMemoryRecordsByIds(
       input.store,
@@ -441,8 +463,9 @@ async function loadMemories(input: {
       const result = await searchMemory(input.store, {
         userId: input.ownerUserId,
         query,
-        includeArchive,
+        includeArchive: historyMode,
         limit: 40,
+        ...(historyMode ? { historyOnly: true } : {}),
         ...(input.embeddingClient !== undefined
           ? { embeddingClient: input.embeddingClient }
           : {}),
@@ -453,11 +476,19 @@ async function loadMemories(input: {
     }
   }
 
-  if (!query || input.plan.intent === 'DAILY_SUMMARY' || input.plan.intent === 'ACHIEVEMENT_LOG') {
+  if (
+    !query ||
+    input.plan.intent === 'DAILY_SUMMARY' ||
+    input.plan.intent === 'ACHIEVEMENT_LOG' ||
+    input.plan.intent === 'PROJECT_STATUS'
+  ) {
     try {
       const recent = await listMemoryRecords(input.store, {
         userId: input.ownerUserId,
-        includeArchive: true,
+        statuses: historyMode
+          ? ['current', 'uncertain', 'completed', 'archived', 'superseded', 'rejected']
+          : ['current', 'uncertain', 'completed'],
+        includeArchive: historyMode,
         limit: 300,
       });
       for (const record of recent) byId.set(record.id, record);
@@ -466,7 +497,22 @@ async function loadMemories(input: {
     }
   }
 
-  const records = Array.from(byId.values());
+  const now = Date.now();
+  const currentRecord = (record: PierrotMemoryRecord): boolean => {
+    if (historyMode) return true;
+    if (['archived', 'superseded', 'rejected'].includes(record.status)) return false;
+    if (record.validUntil) {
+      const until = Date.parse(record.validUntil);
+      if (Number.isFinite(until) && until <= now) return false;
+    }
+    if (record.validFrom) {
+      const from = Date.parse(record.validFrom);
+      if (Number.isFinite(from) && from > now) return false;
+    }
+    return true;
+  };
+
+  const records = Array.from(byId.values()).filter(currentRecord);
   if (!input.project) return records;
 
   const linked = new Set(linkedIds);

@@ -443,7 +443,7 @@ export async function getPierrotProjectSnapshot(
   const [decisions, tasks, conversations, knowledge, artifacts, review] = await Promise.all([
     client
       .from('pierrot_project_decisions')
-      .select('decision:pierrot_decisions(id,title,content,status,kind,updated_at)')
+      .select('decision:pierrot_decisions(id,title,content,status,kind,updated_at,valid_from,valid_until)')
       .eq('project_id', project.id)
       .eq('owner_user_id', ownerUserId)
       .limit(500),
@@ -500,6 +500,8 @@ export async function getPierrotProjectSnapshot(
       status: text(decision.status),
       kind: text(decision.kind),
       updatedAt: text(decision.updated_at),
+      validFrom: text(decision.valid_from) || null,
+      validUntil: text(decision.valid_until) || null,
     };
   });
 
@@ -511,6 +513,52 @@ export async function getPierrotProjectSnapshot(
       status: row.status,
       updatedAt: row.updatedAt,
     }));
+  const devTasks = ((tasks.data || []) as unknown[]).map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      id: text(row.id),
+      title: text(row.title) || text(row.task),
+      status: text(row.status),
+      updatedAt: text(row.updated_at),
+    };
+  });
+  const allTasks = [...devTasks, ...memoryTasks];
+  const now = Date.now();
+  const expired = (row: { validUntil?: string | null; validFrom?: string | null }) => {
+    if (row.validUntil) {
+      const until = Date.parse(row.validUntil);
+      if (Number.isFinite(until) && until <= now) return true;
+    }
+    if (row.validFrom) {
+      const from = Date.parse(row.validFrom);
+      if (Number.isFinite(from) && from > now) return true;
+    }
+    return false;
+  };
+  const activeTasks = allTasks.filter(
+    (row) =>
+      ['current', 'uncertain', 'active', 'open', 'in_progress'].includes(row.status) &&
+      !expired(row)
+  );
+  const completedTasks = allTasks.filter((row) => row.status === 'completed');
+  const archivedTasks = allTasks.filter((row) => row.status === 'archived');
+  const supersededTasks = allTasks.filter(
+    (row) => row.status === 'superseded' || row.status === 'rejected'
+  );
+  const currentDecisions = decisionRows.filter(
+    (row) =>
+      row.kind !== 'task' &&
+      row.kind !== 'reminder' &&
+      (row.status === 'current' || row.status === 'uncertain') &&
+      !expired(row)
+  );
+  const historicalDecisions = decisionRows.filter(
+    (row) =>
+      row.kind !== 'task' &&
+      row.kind !== 'reminder' &&
+      row.status !== 'current' &&
+      row.status !== 'uncertain'
+  );
 
   return {
     ...project,
@@ -522,16 +570,12 @@ export async function getPierrotProjectSnapshot(
             runId: text((review.data as Record<string, unknown>).id),
           }
         : null,
-    decisions: decisionRows,
-    tasks: [
-      ...(tasks.data || []).map((r: Record<string, unknown>) => ({
-        id: text(r.id),
-        title: text(r.title) || text(r.task),
-        status: text(r.status),
-        updatedAt: text(r.updated_at),
-      })),
-      ...memoryTasks,
-    ],
+    decisions: currentDecisions,
+    historicalDecisions,
+    tasks: activeTasks,
+    completedTasks,
+    archivedTasks,
+    supersededTasks,
     conversations: ((conversations.data || []) as unknown[]).map((r) => {
       const row = r as Record<string, unknown>;
       return {

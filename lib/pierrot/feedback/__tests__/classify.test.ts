@@ -54,6 +54,25 @@ describe('feedback classification', () => {
     expect(classification?.correctionKind).toBe('PREFERENCE');
   });
 
+  it('classifies rendering, analytics, period and performance failures separately', () => {
+    expect(
+      classifyFeedback({ rating: 'down', correctionText: 'График не отображается, пустой экран' })
+        ?.category
+    ).toBe('RENDERING_FAILURE');
+    expect(
+      classifyFeedback({ rating: 'down', correctionText: 'Аналитика сломалась, отчёт не построился' })
+        ?.category
+    ).toBe('ANALYTICS_ERROR');
+    expect(
+      classifyFeedback({ rating: 'down', correctionText: 'Ты взял не тот период и сравнил разные периоды' })
+        ?.category
+    ).toBe('PERIOD_ERROR');
+    expect(
+      classifyFeedback({ rating: 'down', correctionText: 'Слишком долго, ответ зависает' })
+        ?.category
+    ).toBe('PERFORMANCE_ERROR');
+  });
+
   it('returns null for positive feedback', () => {
     expect(classifyFeedback({ rating: 'up' })).toBeNull();
   });
