@@ -55,6 +55,8 @@ describe('POST /api/unframed/checkout', () => {
     expect(response.status).toBe(200);
     const [session] = mockCreate.mock.calls[0] as [Record<string, any>];
     expect(session.line_items[0].price_data.unit_amount).toBe(1500);
+    expect(session.payment_method_types).toEqual(['card', 'link']);
+    expect(session.wallet_options).toEqual({ link: { display: 'auto' } });
     expect(session.metadata.type).toBe('unframed_book');
     expect(session.metadata.pierrotAttribution).toBe('punf_11111111-1111-4111-8111-111111111111');
     expect(eventStore.recordPierrotEventByConversationId).toHaveBeenCalledWith(

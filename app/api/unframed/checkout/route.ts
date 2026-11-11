@@ -9,7 +9,7 @@ import {
 import { createPierrotStore, recordPierrotEventByConversationId } from '@/lib/pierrot/serverStore';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-08-27.basil' as any,
+  apiVersion: '2025-08-27.basil',
 });
 
 export const dynamic = 'force-dynamic';
@@ -58,7 +58,15 @@ export async function POST(req: Request) {
     const pierrotAttribution = normalizePierrotUnframedRef(body?.pierrotAttribution);
 
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      // Card enables Apple Pay and Google Pay on Stripe's hosted Checkout.
+      // Link is added explicitly and left on its default "auto" display so
+      // compatible customers see it as an express wallet.
+      payment_method_types: ['card', 'link'],
+      wallet_options: {
+        link: {
+          display: 'auto',
+        },
+      },
       line_items: [
         {
           price_data: {
