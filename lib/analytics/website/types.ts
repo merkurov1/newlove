@@ -356,6 +356,8 @@ export type EvidenceSection = {
 
 export type AnalyticsReport = {
   scope: WebsiteQuestionScope;
+  /** The exact question that produced this report, including pagePath. */
+  question: WebsiteQuestion;
   period: AnalyticsPeriod;
   markdown: string;
   evidence: EvidenceSection;

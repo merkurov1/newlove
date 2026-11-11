@@ -108,7 +108,9 @@ import {
   buildJournalFlowUnavailablePrompt,
   describeJournalFlowEvidence,
   retrieveJournalFlowEvidence,
+  type JournalFlowEvidence,
 } from '@/lib/knowledge/rag/journalFlowRetrieval';
+import { buildJournalFlowResponse } from '@/lib/pierrot/response/select';
 import { classifyPierrotFailure, logPierrotFailure } from '@/lib/pierrot/errors';
 import { pierrotErrorCopy, type PierrotErrorLanguage } from '@/lib/pierrot/errorContracts';
 import {
@@ -256,6 +258,10 @@ import { formatPierrotAnswerTrace } from '@/lib/pierrot/diagnostics';
 import { detectUnifiedSearchIntent } from '@/lib/pierrot/search/intent';
 import { formatUnifiedSearchReport } from '@/lib/pierrot/search/format';
 import { searchUnifiedOwnerContext } from '@/lib/pierrot/search/unified';
+import { detectContextQuery } from '@/lib/pierrot/context/intent';
+import { formatContextReport } from '@/lib/pierrot/context/report';
+import { resolveContextProject, runContextQuery } from '@/lib/pierrot/context/retrieval';
+import { recordProjectEvent } from '@/lib/pierrot/context/store';
 import {
   detectGroomingCommand,
   parseGroomingApproval,
@@ -1585,6 +1591,10 @@ export async function POST(req: Request) {
             : PIERROT_MAX_MESSAGE_LENGTH;
         const storageText = truncateForStorage(displayText, storageLimit);
         let finalText = displayText;
+        // The validated visual response can be large; it belongs in the HTTP
+        // payload, not in the analytics event body.
+        const eventExtra: Record<string, unknown> = { ...extra };
+        delete eventExtra.response;
 
         if (pierrotStore && canStoreTranscript) {
           try {
@@ -1616,7 +1626,7 @@ export async function POST(req: Request) {
                 provider: null,
                 deterministic: true,
                 length: finalText.length,
-                ...extra,
+                ...eventExtra,
               },
             });
           } catch (error) {
@@ -3181,6 +3191,71 @@ export async function POST(req: Request) {
         }
       }
 
+      // Cross-session context: project history, daily reconstruction,
+      // achievements, entity distinction and provenance searches. This branch
+      // runs before the narrower memory/search tools so a history question is
+      // never answered from durable memory alone.
+      const contextQuery = detectContextQuery(trimmedMessage);
+
+      if (contextQuery && memoryStore && isPierrotUserId(ownerIdentityUserId)) {
+        try {
+          let contextProject: Awaited<ReturnType<typeof resolvePierrotProject>>['project'] =
+            conversationProject || turnProject || null;
+
+          // Daily and achievement reports must not depend on the currently
+          // open chat; they are reconstructed across every owner conversation.
+          if (
+            contextQuery.intent === 'DAILY_SUMMARY' ||
+            contextQuery.intent === 'ACHIEVEMENT_LOG'
+          ) {
+            contextProject = null;
+          } else if (!contextProject) {
+            contextProject = await resolveContextProject(
+              memoryStore,
+              ownerIdentityUserId,
+              contextQuery
+            ).catch(() => null);
+          }
+
+          const contextResult = await runContextQuery({
+            store: memoryStore,
+            ownerUserId: ownerIdentityUserId,
+            plan: contextQuery,
+            project: contextProject,
+            widenIfEmpty: true,
+          });
+
+          return persistOwnerReply(formatContextReport(contextResult, ownerLanguage), {
+            context_intent: contextQuery.intent,
+            context_status: 'completed',
+            context_timezone: contextQuery.timezone,
+            context_timezone_known: contextQuery.timezoneKnown,
+            context_project_id: contextResult.projectState?.projectId || null,
+            context_hits: contextResult.hits.length,
+            context_conversations: contextResult.counts.conversations,
+            context_documents: contextResult.counts.documents,
+            context_tasks: contextResult.counts.tasks,
+            context_decisions: contextResult.counts.decisions,
+            context_ambiguities: contextResult.ambiguities.map((item) => ({
+              name: item.name,
+              types: item.candidates.map((candidate) => candidate.entityType),
+            })),
+            context_gaps: contextResult.gaps.slice(0, 8),
+            context_widened: contextResult.widenedFromProject,
+          });
+        } catch {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Контекст сейчас недоступен: не удалось прочитать историю диалогов, проекты и источники. Я не буду реконструировать её по догадкам.'
+              : 'Context is currently unavailable: I could not read the conversation history, projects and sources. I will not reconstruct it from guesses.',
+            {
+              context_intent: contextQuery.intent,
+              context_status: 'failed',
+            }
+          );
+        }
+      }
+
       // One owner-wide search across the single conversation stream, memory,
       // project knowledge and GitHub Issues. It returns source-labelled
       // excerpts and links; it never copies whole transcripts into the answer.
@@ -4190,7 +4265,7 @@ export async function POST(req: Request) {
 
           const target = candidates[0];
           try {
-            const updated = await updateMemoryRecord(memoryStore, ownerIdentityUserId, target.id, {
+            await updateMemoryRecord(memoryStore, ownerIdentityUserId, target.id, {
               ownerRating: memoryIntent.rating,
               eventReason: 'owner_rating',
               eventSource: 'owner_chat',
@@ -4704,6 +4779,41 @@ export async function POST(req: Request) {
               pending: null,
             };
 
+            // Completion is a confirmed event. Mirror it into the append-only
+            // project timeline so the project chat does not forget it, while
+            // keeping the original message and memory record as evidence.
+            if (
+              resolution.action === 'complete' &&
+              resolution.project &&
+              outcome.changed > 0
+            ) {
+              for (const target of resolution.targets) {
+                if (target.status === 'completed') continue;
+                await recordProjectEvent(memoryStore, ownerIdentityUserId, {
+                  projectId: resolution.project.id,
+                  eventType:
+                    target.kind === 'task' || target.kind === 'reminder'
+                      ? 'task'
+                      : 'decision',
+                  title: `Завершено: ${target.title}`,
+                  description: target.content,
+                  evidenceClass: 'USER_CONFIRMED',
+                  sourceType: 'memory_record',
+                  sourceId: target.id,
+                  sourceConversationId: conversationId,
+                  sourceMessageId: userMessageId,
+                  confidence: 0.95,
+                  metadata: {
+                    status: 'completed',
+                    completed: true,
+                    memory_id: target.id,
+                    kind: target.kind,
+                    action: 'complete',
+                  },
+                }).catch(() => undefined);
+              }
+            }
+
             return persistOwnerReply(formatMemoryOperationOutcome(outcome, ownerLanguage), {
               memory_status:
                 outcome.status === 'partial'
@@ -5090,6 +5200,7 @@ export async function POST(req: Request) {
         return persistOwnerReply(ownerToolText, {
           owner_tool: ownerTool.kind,
           ...(result.graph ? { graph_demo: result.graph } : {}),
+          ...(result.response ? { response: result.response } : {}),
           ...(ownerTool.kind === 'media'
             ? {
                 action_status: 'read_only',
@@ -5161,6 +5272,7 @@ export async function POST(req: Request) {
       let webSearchResult: WebSearchResult | null = null;
       let mediaOutcome: { outcome: string; code?: string | null } | null = null;
       let journalFlowOutcome: { outcome: string; code?: string | null } | null = null;
+      let journalFlowEvidence: JournalFlowEvidence | null = null;
       let brainOutcome: { outcome: string; code?: string | null } | null = null;
 
       if (!useModel) {
@@ -5234,6 +5346,7 @@ export async function POST(req: Request) {
             });
 
             if (evidence) {
+              journalFlowEvidence = evidence;
               journalFlowOutcome = {
                 outcome: evidence.outcome,
                 code: evidence.code ?? null,
@@ -5977,6 +6090,17 @@ export async function POST(req: Request) {
 
       reply = evidenceGuard.reply.slice(0, PIERROT_MAX_MESSAGE_LENGTH);
 
+      // Journal/Flow gets a visual composition only for history, comparison or
+      // count questions. A simple prose answer keeps its Markdown form.
+      const generatedResponse = journalFlowEvidence
+        ? buildJournalFlowResponse(
+            journalFlowEvidence,
+            reply,
+            language === 'en' ? 'en' : 'ru',
+            trimmedMessage
+          )
+        : null;
+
       const mediaUsed =
         Boolean(ownerRag?.mode === 'media' && mediaOutcome?.outcome === 'relevant_results');
       const answerSources: PierrotAnswerSources = buildPierrotAnswerSources({
@@ -6126,6 +6250,7 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         reply: finalReply,
+        ...(generatedResponse ? { response: generatedResponse } : {}),
         provider: usedProvider || undefined,
         model: usedModel || undefined,
         latencyMs: generationLatencyMs || undefined,

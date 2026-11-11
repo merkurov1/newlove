@@ -6,6 +6,8 @@ import { useAuth } from '@/components/AuthContext';
 import type { UnframedEvidenceSource } from '@/lib/knowledge/rag/evidence';
 import type { PierrotAnswerSources } from '@/lib/knowledge/web/types';
 import type { RagRetrievalOutcome } from '@/lib/knowledge/rag/types';
+import { parsePierrotResponse } from '@/lib/pierrot/response/schema';
+import type { PierrotResponse } from '@/lib/pierrot/response/types';
 import {
   PIERROT_SECTIONS,
   createNavigationProposal,
@@ -114,6 +116,8 @@ export type PierrotMessage = {
   evidence?: UnframedEvidenceSource[];
   ragOutcome?: RagRetrievalOutcome;
   answerSources?: PierrotAnswerSources;
+  /** Optional validated visual composition; Markdown content remains fallback. */
+  response?: PierrotResponse;
   author?: 'visitor' | 'pierrot' | 'anton' | 'system';
   createdAt?: string;
   delivery?: PierrotDeliveryState;
@@ -177,6 +181,7 @@ type PierrotWebResponse = {
   rag?: unknown;
   answerSources?: unknown;
   web?: unknown;
+  response?: unknown;
   offerId?: unknown;
   conversationId?: unknown;
   sessionId?: unknown;
@@ -197,6 +202,11 @@ export function usePierrot(): PierrotContextValue {
   }
 
   return context;
+}
+
+/** For standalone editorial previews that reuse Markdown without the chat. */
+export function usePierrotOptional(): PierrotContextValue | null {
+  return useContext(PierrotContext);
 }
 
 function normalizeAction(value: unknown): PierrotChatAction | null {
@@ -421,6 +431,7 @@ function buildAssistantMessage(data: PierrotWebResponse, fallbackId: string): Pi
         .map(normalizeEvidenceSource)
         .filter((source): source is UnframedEvidenceSource => source !== null)
     : [];
+  const response = parsePierrotResponse(data.response) ?? undefined;
 
   return {
     id:
@@ -440,6 +451,7 @@ function buildAssistantMessage(data: PierrotWebResponse, fallbackId: string): Pi
     evidence: evidence.length > 0 ? evidence : undefined,
     ragOutcome: normalizeRagOutcome(ragPayload?.outcome),
     answerSources: normalizeAnswerSources(data.answerSources),
+    response,
     meta: { kind: 'chat' },
   };
 }
@@ -492,6 +504,7 @@ function normalizeMessage(value: unknown, index: number): PierrotMessage | null 
     evidence: evidence.length > 0 ? evidence : undefined,
     ragOutcome: normalizeRagOutcome(message.ragOutcome),
     answerSources: normalizeAnswerSources(message.answerSources),
+    response: parsePierrotResponse(message.response) ?? undefined,
     author:
       message.author === 'visitor' ||
       message.author === 'pierrot' ||

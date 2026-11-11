@@ -15,6 +15,11 @@ import { detectCommercialQuestion } from '@/lib/pierrot/commercialQuestion';
 import { answerPierrotCommercialQuestion } from '@/lib/pierrot/commercialIntelligence';
 import { detectWebsiteQuestion } from '@/lib/analytics/website/question';
 import { answerWebsiteAnalyticsQuestion } from '@/lib/analytics/website/answer';
+import {
+  buildGraphResponse,
+  buildWebsiteResponse,
+} from '@/lib/pierrot/response/select';
+import type { PierrotResponse } from '@/lib/pierrot/response/types';
 import { detectMediaCatalogQuestion } from '@/lib/pierrot/mediaCatalogIntent';
 import {
   answerMediaArchiveQuestion,
@@ -69,6 +74,8 @@ export type OwnerToolDetailedResult = {
   provenance: MediaAnswerResult['provenance'] | null;
   mediaKind: string | null;
   graph?: OwnerToolGraphSummary | null;
+  /** Optional validated visual composition; Markdown `text` remains fallback. */
+  response?: PierrotResponse | null;
 };
 
 function normalize(value: string): string {
@@ -639,6 +646,7 @@ async function formatGraphDemo(
       provenance: null,
       mediaKind: null,
       graph: summary,
+      response: buildGraphResponse(payload, query, language),
     };
   } catch (error) {
     console.error('[Pierrot graph demo]', {
@@ -840,6 +848,42 @@ export async function runOwnerToolDetailed(
 ): Promise<OwnerToolDetailedResult> {
   if (request.kind === 'graph_demo') {
     return formatGraphDemo(request.query, language, deps);
+  }
+
+  if (request.kind === 'website') {
+    try {
+      const store = getServerSupabaseClient({ useServiceRole: true });
+      const answer = await answerWebsiteAnalyticsQuestion({
+        message: request.query,
+        language,
+        store,
+      });
+
+      return {
+        text:
+          answer.markdown ||
+          (language === 'ru'
+            ? 'Не распознал вопрос о сайте. Спросите, например: «Что у нас с сайтом за последние 7 дней?»'
+            : 'I did not recognise a website question. Try: “How is the website doing over the last 7 days?”'),
+        provenance: null,
+        mediaKind: null,
+        response: answer.report ? buildWebsiteResponse(answer.report, language) : null,
+      };
+    } catch (error) {
+      console.error('[Pierrot website tool]', {
+        code: error instanceof Error ? error.message : 'website_tool_failed',
+      });
+
+      return {
+        text:
+          language === 'ru'
+            ? 'Не удалось получить данные. Проверьте состояние базы и workers, затем повторите запрос.'
+            : 'Could not load the data. Check the database and workers, then try again.',
+        provenance: null,
+        mediaKind: null,
+        response: null,
+      };
+    }
   }
 
   if (request.kind === 'media') {

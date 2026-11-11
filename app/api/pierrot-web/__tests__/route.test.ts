@@ -2686,6 +2686,7 @@ describe('Pierrot intelligence regressions', () => {
       reply?: string;
       owner_tool?: string;
       graph_demo?: { directEdges?: number; inferenceEdges?: number };
+      response?: { version?: number; blocks?: Array<{ type?: string }> };
     };
 
     expect(response.status).toBe(200);
@@ -2695,6 +2696,8 @@ describe('Pierrot intelligence regressions', () => {
     expect(json.reply).toContain('Гипотезы');
     expect(json.reply).not.toContain('Очередь Graph');
     expect(json.graph_demo).toMatchObject({ directEdges: 1, inferenceEdges: 1 });
+    expect(json.response?.version).toBe(1);
+    expect(json.response?.blocks?.some((block) => block.type === 'diagram')).toBe(true);
     expect(graphVisualization.loadBrainGraph).toHaveBeenCalled();
   });
 

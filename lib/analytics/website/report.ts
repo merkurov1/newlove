@@ -1665,6 +1665,7 @@ export async function buildWebsiteAnalyticsReport(input: {
 
   return {
     scope: input.question.scope,
+    question: input.question,
     period,
     markdown,
     evidence,

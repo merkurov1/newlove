@@ -244,6 +244,76 @@ describe('Pierrot conversational navigation', () => {
     expect(link).toHaveAttribute('href', '/lobby');
   });
 
+  it('renders a validated structured response while keeping Markdown as fallback', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        reply: 'Fallback Markdown',
+        response: {
+          version: 1,
+          language: 'ru',
+          blocks: [
+            { type: 'heading', level: 1, text: 'Bluesky' },
+            {
+              type: 'metric',
+              metrics: [
+                {
+                  label: 'Подписчики',
+                  value: 33,
+                  unit: 'count',
+                  source: 'Bluesky',
+                  confidence: 'measured',
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    });
+
+    renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
+
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByRole('textbox', { name: 'Message Pierrot' });
+
+    fireEvent.change(input, { target: { value: 'bluesky' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(chatFetchCalls()).toHaveLength(1);
+    });
+
+    expect(await within(dialog).findByRole('heading', { name: 'Bluesky' })).toBeInTheDocument();
+    expect(within(dialog).getByText('33')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Fallback Markdown')).not.toBeInTheDocument();
+  });
+
+  it('keeps an invalid structured response on the Markdown fallback', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        reply: 'Safe **Markdown** answer',
+        response: {
+          version: 1,
+          blocks: [{ type: 'chart', data: [], xKey: 'x', series: [] }],
+        },
+      }),
+    });
+
+    renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle test Pierrot' }));
+
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByRole('textbox', { name: 'Message Pierrot' });
+
+    fireEvent.change(input, { target: { value: 'chart' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(await within(dialog).findByText('Markdown')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Safe');
+  });
+
   it('renders headings, quotes, lists, tables and code with readable structure', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
