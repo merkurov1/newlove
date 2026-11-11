@@ -250,6 +250,137 @@ describe('Telegram publisher', () => {
     expect(photos[0].body.photo).toBe('https://cdn.example.com/2.jpg');
     expect(result.sentImageUrls).toEqual(['https://cdn.example.com/2.jpg']);
   });
+
+  it('sends a short photo post as media with the full caption and no extra message', async () => {
+    const calls = installFetch((call) => {
+      if (call.url.includes('/sendPhoto')) return success(21);
+      return { ok: false, description: 'unexpected endpoint' };
+    });
+
+    const result = await publishTelegramContent(
+      content({
+        type: 'photo',
+        body_md: 'Короткая подпись.',
+        metadata: { image: 'https://cdn.example.com/photo.jpg' },
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toContain('/sendPhoto');
+    expect(calls[0].body.caption).toContain('Короткая подпись.');
+    expect(calls[0].body.caption).toContain('Читать в Flow');
+    expect(calls[0].body.show_caption_above_media).toBe(true);
+  });
+
+  it('sends an opening caption first, then the article continuation in order', async () => {
+    const body = `${'Длинный абзац статьи. '.repeat(120)}ФИНАЛ`;
+    const calls = installFetch((call) => {
+      if (call.url.includes('/sendPhoto')) return success(22);
+      if (call.url.includes('/sendMessage')) return success(23);
+      return { ok: false, description: 'unexpected endpoint' };
+    });
+
+    const result = await publishTelegramContent(
+      content({
+        type: 'article',
+        title: 'Длинная статья',
+        body_md: body,
+        metadata: { image: 'https://cdn.example.com/cover.jpg' },
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    expect(calls[0].url).toContain('/sendPhoto');
+    expect(calls[0].body.caption.length).toBeLessThanOrEqual(1024);
+    expect(calls.slice(1).every((call) => call.url.includes('/sendMessage'))).toBe(true);
+    expect(calls.map((call) => call.body.caption ?? call.body.text).join(' ')).toContain('ФИНАЛ');
+  });
+
+  it('sends a downloadable video as a video, not a photo', async () => {
+    const calls = installFetch((call) => {
+      if (call.url.includes('/sendVideo')) return success(31);
+      return { ok: false, description: 'unexpected endpoint' };
+    });
+
+    const result = await publishTelegramContent(
+      content({
+        type: 'video',
+        body_md: 'Видео.',
+        metadata: {
+          videos: [{ url: 'https://cdn.example.com/clip.mp4', title: 'Clip' }],
+        },
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    expect(calls.some((call) => call.url.includes('/sendVideo'))).toBe(true);
+    expect(calls.some((call) => call.url.includes('/sendPhoto'))).toBe(false);
+    expect(calls[0].body.video).toBe('https://cdn.example.com/clip.mp4');
+  });
+
+  it('falls back to a clearly linked video thumbnail when upload fails', async () => {
+    const calls = installFetch((call) => {
+      if (call.url.includes('/sendVideo')) {
+        return { ok: false, description: 'video unavailable' };
+      }
+      if (call.url.includes('/sendPhoto')) return success(32);
+      return { ok: false, description: 'unexpected endpoint' };
+    });
+
+    const result = await publishTelegramContent(
+      content({
+        type: 'video',
+        body_md: 'Видео.',
+        metadata: {
+          videos: [
+            {
+              url: 'https://www.youtube.com/watch?v=abc123def45',
+              title: 'Clip',
+              thumbnail: 'https://i.ytimg.com/vi/abc123def45/hqdefault.jpg',
+            },
+          ],
+        },
+      })
+    );
+
+    expect(calls.some((call) => call.url.includes('/sendPhoto'))).toBe(true);
+    const photo = calls.find((call) => call.url.includes('/sendPhoto'));
+    expect(photo?.body.photo).toBe('https://i.ytimg.com/vi/abc123def45/hqdefault.jpg');
+    expect(photo?.body.caption).toContain('Видео');
+    expect(result.sentImageUrls).toContain('https://www.youtube.com/watch?v=abc123def45');
+  });
+
+  it('allows one source preview only for text-only external link posts', async () => {
+    const calls = installFetch((call) =>
+      call.url.includes('/sendMessage') ? success(41) : { ok: false, description: 'unexpected endpoint' }
+    );
+
+    await publishTelegramContent(
+      content({
+        type: 'link',
+        title: 'External source',
+        body_md: 'Commentary.',
+        source_url: 'https://example.com/source',
+        metadata: {},
+      })
+    );
+
+    expect(calls[0].body.link_preview_options).toEqual({
+      url: 'https://example.com/source',
+      prefer_large_media: true,
+    });
+  });
+
+  it('disables previews for ordinary notes', async () => {
+    const calls = installFetch((call) =>
+      call.url.includes('/sendMessage') ? success(42) : { ok: false, description: 'unexpected endpoint' }
+    );
+
+    await publishTelegramContent(content({ body_md: 'A note.' }));
+
+    expect(calls[0].body.link_preview_options).toEqual({ is_disabled: true });
+  });
 });
 
 let callCounter = 0;

@@ -9,6 +9,7 @@ import {
   type FlowDistributionChannel as DistributionChannel,
   type FlowDistributionState as ChannelState,
 } from '@/lib/flow/distribution';
+import TelegramPreview from '@/components/flow/TelegramPreview';
 
 type Item = {
   id: string;
@@ -19,6 +20,7 @@ type Item = {
   status: string;
   visibility: string;
   body_md: string;
+  source_url?: string | null;
   rag_allowed?: boolean;
   ai_allowed?: boolean;
   metadata?: Record<string, unknown> | null;
@@ -193,6 +195,10 @@ function DistributionPanel({
             </div>
           );
         })}
+      </div>
+
+      <div className="mt-4">
+        <TelegramPreview item={item} />
       </div>
 
       {message && (

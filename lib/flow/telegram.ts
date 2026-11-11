@@ -1,25 +1,48 @@
 /**
- * Telegram adapter for Flow.
+ * Telegram delivery for Flow.
  *
- * Telegram has two hard limits that matter here: 4096 characters for a text
- * message and 1024 for a media caption. Text is split into valid, balanced
- * HTML chunks instead of being cut mechanically. Albums are limited to ten
- * items and are split into logical batches; failed albums fall back to
- * individual photos so one broken URL does not hide the rest of the material.
+ * Composition is handled by `telegramComposition.ts`. This module only sends
+ * the deterministic plan, preserves delivery/resume state, and keeps the
+ * existing bot/channel configuration.
  */
 
+import type { FlowContent } from './content';
 import {
-  FLOW_SITE_URL,
-  normalizeHttpUrl,
-  type FlowContent,
-} from './content';
+  composeTelegramPublication,
+  stripHtml,
+  type TelegramComposition,
+  type TelegramMedia,
+  type TelegramMediaBatch,
+} from './telegramComposition';
 
-export const TELEGRAM_TEXT_LIMIT = 4096;
-export const TELEGRAM_CAPTION_LIMIT = 1024;
-export const TELEGRAM_MEDIA_GROUP_LIMIT = 10;
+export {
+  TELEGRAM_CAPTION_LIMIT,
+  TELEGRAM_MEDIA_GROUP_LIMIT,
+  TELEGRAM_SAFE_CAPTION_LIMIT,
+  TELEGRAM_SAFE_TEXT_LIMIT,
+  TELEGRAM_TEXT_LIMIT,
+  composeTelegramPublication,
+  escapeHtml,
+  escapeHtmlAttribute,
+  formatTelegramMessage,
+  markdownToTelegramHtml,
+  splitTelegramHtml,
+  stripHtml,
+  takeTelegramHtmlHead,
+  ensureTelegramLinks,
+  FLOW_LINK_LABEL,
+  telegramFlowLabel,
+  telegramLanguage,
+  telegramSourceLabel,
+  telegramVideoLabel,
+} from './telegramComposition';
 
-const SAFE_TEXT_LIMIT = 3900;
-const SAFE_CAPTION_LIMIT = 950;
+export type {
+  TelegramComposition,
+  TelegramMedia,
+  TelegramMediaBatch,
+};
+
 const SEND_TIMEOUT_MS = 15_000;
 
 export type TelegramBotName = 'pierrot' | 'osiris' | 'default';
@@ -45,577 +68,18 @@ export type TelegramResumeState = {
 
 type SendOutcome = {
   ok: boolean;
-  result?: any;
+  result?: unknown;
   description?: string;
   errorCode?: number;
   uncertain?: boolean;
 };
 
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-export function escapeHtmlAttribute(text: string): string {
-  return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-function stripHtml(text: string): string {
-  return text
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(?:p|div|li|h[1-6])>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&');
-}
-
-/** Remove hashtags from visible text without touching tags/attributes. */
-function stripTelegramHashtags(html: string): string {
-  return html
-    .split(/(<[^>]*>)/g)
-    .map((part) => {
-      if (part.startsWith('<') && part.endsWith('>')) return part;
-
-      return part
-        .replace(/(^|[\s([{])#[\p{L}\p{N}_]+/gu, '$1')
-        .replace(/[ \t]{2,}/g, ' ');
-    })
-    .join('')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-/** Convert visible bare URLs to clickable domain labels. */
-function linkifyBareUrls(html: string): string {
-  return html
-    .split(/(<[^>]*>)/g)
-    .map((part) => {
-      if (part.startsWith('<') && part.endsWith('>')) return part;
-
-      return part.replace(/https?:\/\/[^\s<>"']+/gi, (rawUrl) => {
-        const trailing = rawUrl.match(/[.,!?;:)\]]+$/)?.[0] ?? '';
-        const candidate = trailing
-          ? rawUrl.slice(0, -trailing.length)
-          : rawUrl;
-        const url = normalizeHttpUrl(candidate);
-
-        if (!url) return rawUrl;
-
-        let label = 'Открыть ссылку';
-
-        try {
-          label = new URL(url).hostname.replace(/^www\./i, '');
-        } catch {
-          // Keep the generic label if URL parsing fails.
-        }
-
-        return (
-          `<a href="${escapeHtmlAttribute(url)}">` +
-          `${escapeHtml(label)}</a>${trailing}`
-        );
-      });
-    })
-    .join('');
-}
-
-/** Convert common Flow Markdown to the subset of Telegram HTML we allow. */
-export function markdownToTelegramHtml(markdown: string): string {
-  const links: string[] = [];
-
-  let text = markdown
-    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
-    .replace(
-      /\[([^\]]+)\]\(([^)]+)\)/g,
-      (_match, label: string, rawUrl: string) => {
-        const url = normalizeHttpUrl(rawUrl);
-        if (!url) return label;
-
-        const token = `FLOWLINKTOKEN${links.length}END`;
-        links.push(
-          `<a href="${escapeHtmlAttribute(url)}">${escapeHtml(label)}</a>`
-        );
-        return token;
-      }
-    );
-
-  text = escapeHtml(text);
-
-  text = text
-    .replace(/^```[\w-]*\n?([\s\S]*?)```$/gm, '<pre>$1</pre>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([\s\S]+?)\*\*/g, '<b>$1</b>')
-    .replace(/__([\s\S]+?)__/g, '<b>$1</b>')
-    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>')
-    .replace(/(^|[^_])_([^_\n]+)_/g, '$1<i>$2</i>')
-    .replace(/~~([\s\S]+?)~~/g, '<s>$1</s>');
-
-  links.forEach((link, index) => {
-    text = text.replace(`FLOWLINKTOKEN${index}END`, link);
-  });
-
-  return text.trim();
-}
-
-export const FLOW_LINK_LABEL = '&gt;&gt;&gt;';
-
-function flowLinkHtml(flowUrl: string): string {
-  return `<a href="${escapeHtmlAttribute(flowUrl)}">${FLOW_LINK_LABEL}</a>`;
-}
-
-function sourceLinkHtml(sourceUrl: string): string {
-  return `<a href="${escapeHtmlAttribute(sourceUrl)}">Источник</a>`;
-}
-
-function unescapeHref(value: string): string {
-  return value.replace(/&amp;/g, '&');
-}
-
-function hrefMatches(href: string, target: string): boolean {
-  const normalized = normalizeHttpUrl(unescapeHref(href));
-  const expected = normalizeHttpUrl(target);
-
-  if (!normalized || !expected) return false;
-  if (normalized === expected) return true;
-
-  try {
-    const left = new URL(normalized);
-    const right = new URL(expected);
-    const host = (value: string) => value.toLowerCase().replace(/^www\./, '');
-    const path = (value: string) => value.replace(/\/+$/, '') || '/';
-
-    return (
-      host(left.hostname) === host(right.hostname) &&
-      path(left.pathname) === path(right.pathname) &&
-      left.search === right.search &&
-      left.hash === right.hash
-    );
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Deterministically restores the canonical Flow link and the publication
- * source link after optional AI editing.
- */
-export function ensureTelegramLinks(
-  html: string,
-  flowUrl: string,
-  sourceUrl?: string | null
-): string {
-  const anchorPattern =
-    /<a\b[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>[\s\S]*?<\/a>/gi;
-  const canonicalFlow = flowLinkHtml(flowUrl);
-  let flowFound = false;
-
-  let result = html.replace(
-    anchorPattern,
-    (match, doubleHref: string, singleHref: string) => {
-      const href = doubleHref ?? singleHref ?? '';
-      if (!hrefMatches(href, flowUrl)) return match;
-
-      if (flowFound) return '';
-      flowFound = true;
-      return canonicalFlow;
-    }
-  );
-
-  if (!flowFound) {
-    result += `${result.trim() ? '\n\n' : ''}${canonicalFlow}`;
-  }
-
-  if (!sourceUrl) return result.replace(/\n{3,}/g, '\n\n').trim();
-
-  const canonicalSource = sourceLinkHtml(sourceUrl);
-  const sourceAnchorPattern =
-    /<a\b[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/a>/gi;
-  let sourceFound = false;
-
-  result = result.replace(
-    sourceAnchorPattern,
-    (match, doubleHref: string, singleHref: string, inner: string) => {
-      const href = doubleHref ?? singleHref ?? '';
-      if (!hrefMatches(href, sourceUrl)) return match;
-
-      const visible = stripHtml(inner).replace(/\s+/g, ' ').trim().toLowerCase();
-      if (visible !== 'источник' && visible !== 'source') return match;
-
-      if (sourceFound) return '';
-      sourceFound = true;
-      return canonicalSource;
-    }
-  );
-
-  if (!sourceFound) {
-    if (result.includes(canonicalFlow)) {
-      result = result.replace(
-        canonicalFlow,
-        `${canonicalSource}\n\n${canonicalFlow}`
-      );
-    } else {
-      result += `${result.trim() ? '\n\n' : ''}${canonicalSource}`;
-    }
-  }
-
-  return result.replace(/\n{3,}/g, '\n\n').trim();
-}
-
-/**
- * Formats a Flow item for Telegram. DeepSeek is only used for short material;
- * long content always bypasses the model so nothing can be dropped.
- */
-export async function formatTelegramMessage(
-  title: string | null | undefined,
-  bodyMd: string | null | undefined,
-  flowUrl: string,
-  lang = 'ru',
-  sourceUrl?: string | null
-): Promise<string> {
-  const cleanTitle = (title || '').trim();
-  const rawBody = (bodyMd || '').trim();
-  const cleanSourceUrl = normalizeHttpUrl(sourceUrl);
-  const safeFlowUrl = normalizeHttpUrl(flowUrl) || `${FLOW_SITE_URL}/flow`;
-
-  const cleanBody = markdownToTelegramHtml(rawBody);
-
-  const isRedundantTitle =
-    !cleanTitle ||
-    cleanTitle.toLowerCase() === rawBody.toLowerCase() ||
-    rawBody.toLowerCase().startsWith(cleanTitle.toLowerCase());
-
-  let rawContent = '';
-
-  if (!isRedundantTitle && cleanTitle) {
-    if (cleanSourceUrl) {
-      rawContent +=
-        `<b><a href="${escapeHtmlAttribute(cleanSourceUrl)}">` +
-        `${escapeHtml(cleanTitle)}</a></b>\n\n`;
-    } else {
-      rawContent += `<b>${escapeHtml(cleanTitle)}</b>\n\n`;
-    }
-  }
-
-  if (cleanBody) rawContent += cleanBody;
-
-  if (cleanSourceUrl) {
-    rawContent +=
-      `${rawContent ? '\n\n' : ''}` +
-      `<a href="${escapeHtmlAttribute(cleanSourceUrl)}">Источник</a>`;
-  }
-
-  rawContent +=
-    `${rawContent ? '\n\n' : ''}` +
-    flowLinkHtml(safeFlowUrl);
-
-  const finalize = (value: string) =>
-    ensureTelegramLinks(
-      stripTelegramHashtags(linkifyBareUrls(value)),
-      safeFlowUrl,
-      cleanSourceUrl
-    );
-
-  const fallback = () => finalize(rawContent);
-
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-
-  // Never let the model receive only the first 2500 characters of a long
-  // publication. Short texts may be lightly edited; long texts are sent as-is.
-  if (!apiKey || !rawContent.trim() || rawContent.length > 2500) {
-    return fallback();
-  }
-
-  try {
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          {
-            role: 'system',
-            content:
-              `Adapt the supplied publication for Telegram in ${lang}. ` +
-              `Preserve the author's voice, meaning, facts, and tone. ` +
-              `Make only editorial changes needed for readability. ` +
-              `Do not add hashtags, emojis, calls to action, facts, or new links. ` +
-              `Preserve every existing HTML link and its destination exactly; do not rewrite or remove the final Flow link or the publication source link. ` +
-              `Use only these HTML tags: <b>, <i>, <s>, <code>, <pre>, and <a>. ` +
-              `Do not output raw URLs when a named clickable link is possible. ` +
-              `Return only the final message, without commentary.`,
-          },
-          {
-            role: 'user',
-            content: rawContent,
-          },
-        ],
-        temperature: 0.2,
-      }),
-      signal: AbortSignal.timeout(7000),
-    });
-
-    if (!response.ok) {
-      console.warn('[flow/telegram] DeepSeek returned HTTP', response.status);
-      return fallback();
-    }
-
-    const data = await response.json();
-    const formatted = data.choices?.[0]?.message?.content?.trim();
-
-    if (typeof formatted !== 'string' || !formatted) return fallback();
-
-    return finalize(formatted);
-  } catch (error) {
-    console.warn('[flow/telegram] DeepSeek formatting fallback:', error);
-    return fallback();
-  }
-}
-
-/* ------------------------------------------------------------------ */
-/* HTML-safe chunking                                                  */
-/* ------------------------------------------------------------------ */
-
-type HtmlSegment =
-  | { kind: 'text'; value: string }
-  | {
-      kind: 'tag';
-      value: string;
-      name: string;
-      closing: boolean;
-      selfClosing: boolean;
-    }
-  | { kind: 'anchor'; value: string; open: string; close: string; text: string };
-
-function tokenizeHtml(html: string): HtmlSegment[] {
-  const segments: HtmlSegment[] = [];
-  let index = 0;
-
-  while (index < html.length) {
-    const isAnchorOpen =
-      html.startsWith('<a', index) &&
-      /^<a(?:\s|>)/i.test(html.slice(index, index + 3)) &&
-      !html.startsWith('</a', index);
-
-    if (isAnchorOpen) {
-      const openEnd = html.indexOf('>', index);
-      const closeStart = openEnd >= 0 ? html.indexOf('</a>', openEnd) : -1;
-
-      if (openEnd >= 0 && closeStart >= 0) {
-        segments.push({
-          kind: 'anchor',
-          value: html.slice(index, closeStart + 4),
-          open: html.slice(index, openEnd + 1),
-          close: '</a>',
-          text: html.slice(openEnd + 1, closeStart),
-        });
-        index = closeStart + 4;
-        continue;
-      }
-    }
-
-    if (html[index] === '<') {
-      const end = html.indexOf('>', index);
-
-      if (end >= 0) {
-        const raw = html.slice(index, end + 1);
-        const match = raw.match(/^<\/?([a-zA-Z][\w:-]*)/);
-        const name = match?.[1]?.toLowerCase() ?? '';
-        const closing = raw.startsWith('</');
-        const selfClosing = /\/>$/.test(raw) || name === 'br' || name === 'hr';
-
-        segments.push({ kind: 'tag', value: raw, name, closing, selfClosing });
-        index = end + 1;
-        continue;
-      }
-    }
-
-    const next = html.indexOf('<', index);
-    const end = next === -1 ? html.length : next;
-    segments.push({ kind: 'text', value: html.slice(index, end) });
-    index = end;
-  }
-
-  return segments;
-}
-
-function splitTextAtBoundary(
-  text: string,
-  available: number
-): [head: string, tail: string] {
-  if (text.length <= available) return [text, ''];
-
-  let cut = Math.max(1, available);
-
-  // Unicode surrogate pair: never split an emoji in half.
-  const lastCode = text.charCodeAt(cut - 1);
-  if (lastCode >= 0xd800 && lastCode <= 0xdbff) cut -= 1;
-
-  // HTML entity: move before `&` or after `;`.
-  const amp = text.lastIndexOf('&', cut);
-  if (amp >= 0) {
-    const semi = text.indexOf(';', amp);
-    if (semi >= cut) {
-      if (semi + 1 <= available + 10) cut = semi + 1;
-      else cut = amp;
-    }
-  }
-
-  const minimum = Math.max(1, Math.floor(available * 0.5));
-  let boundary = -1;
-
-  for (let index = cut; index >= minimum; index -= 1) {
-    if (/\s/.test(text[index - 1])) {
-      boundary = index;
-      break;
-    }
-  }
-
-  if (boundary > 0) {
-    return [text.slice(0, boundary).trimEnd(), text.slice(boundary).trimStart()];
-  }
-
-  return [text.slice(0, Math.max(1, cut)), text.slice(Math.max(1, cut))];
-}
-
-/**
- * Split Telegram HTML into chunks that stay under the API limit. Inline tags
- * are closed at the end of a chunk and reopened at the start of the next one;
- * anchors are never split unless their label alone exceeds the limit.
- */
-export function splitTelegramHtml(
-  html: string,
-  limit = SAFE_TEXT_LIMIT
-): string[] {
-  if (!html.trim()) return [];
-  if (html.length <= limit) return [html.trim()];
-
-  const chunks: string[] = [];
-  const stack: Array<{ raw: string; name: string }> = [];
-  let current = '';
-
-  const closingTags = () =>
-    stack
-      .slice()
-      .reverse()
-      .map((tag) => `</${tag.name}>`)
-      .join('');
-
-  const reopeningTags = () => stack.map((tag) => tag.raw).join('');
-
-  const hasVisibleContent = (value: string) =>
-    stripHtml(value).trim().length > 0 || /<a\b/i.test(value);
-
-  const flush = () => {
-    const content = `${current}${closingTags()}`.trim();
-    if (hasVisibleContent(content)) chunks.push(content);
-    current = reopeningTags();
-  };
-
-  for (const segment of tokenizeHtml(html)) {
-    if (segment.kind === 'tag') {
-      if (segment.closing) {
-        current += segment.value;
-
-        if (stack.at(-1)?.name === segment.name) {
-          stack.pop();
-        }
-        continue;
-      }
-
-      if (
-        !segment.selfClosing &&
-        current.length + segment.value.length + closingTags().length + 1 >
-          limit
-      ) {
-        flush();
-      }
-
-      current += segment.value;
-      if (!segment.selfClosing) {
-        stack.push({ raw: segment.value, name: segment.name });
-      }
-      continue;
-    }
-
-    if (segment.kind === 'anchor') {
-      if (
-        current.length + segment.value.length + closingTags().length <=
-        limit
-      ) {
-        current += segment.value;
-        continue;
-      }
-
-      if (segment.value.length + reopeningTags().length + closingTags().length <= limit) {
-        flush();
-        current += segment.value;
-        continue;
-      }
-
-      // A single anchor longer than a message: keep the destination intact and
-      // split only its visible label.
-      flush();
-      const open = reopeningTags();
-      const close = closingTags();
-      const available = Math.max(
-        80,
-        limit - open.length - close.length - segment.open.length - segment.close.length
-      );
-      let rest = segment.text;
-
-      while (rest) {
-        const [head, tail] = splitTextAtBoundary(rest, available);
-        current = `${open}${segment.open}${head}${segment.close}`;
-
-        if (!tail) break;
-
-        const content = `${current}${close}`.trim();
-        if (hasVisibleContent(content)) chunks.push(content);
-        current = reopeningTags();
-        rest = tail;
-      }
-      continue;
-    }
-
-    let rest = segment.value;
-
-    while (rest) {
-      const available =
-        limit - current.length - closingTags().length;
-
-      if (available <= 0) {
-        flush();
-        continue;
-      }
-
-      if (rest.length <= available) {
-        current += rest;
-        rest = '';
-        continue;
-      }
-
-      const [head, tail] = splitTextAtBoundary(rest, available);
-      current += head;
-      flush();
-      rest = tail;
-    }
-  }
-
-  flush();
-
-  return chunks.filter((chunk) => chunk.trim());
-}
-
-/* ------------------------------------------------------------------ */
-/* Publisher                                                           */
-/* ------------------------------------------------------------------ */
+type TelegramApiResponse = {
+  ok?: boolean;
+  result?: unknown;
+  description?: unknown;
+  error_code?: unknown;
+};
 
 function telegramConfig() {
   const pierrotToken = process.env.PIERROT_BOT_TOKEN;
@@ -677,7 +141,7 @@ async function callTelegram(
       }
     );
 
-    const data = await response.json().catch(() => null);
+    const data = (await response.json().catch(() => null)) as TelegramApiResponse | null;
 
     if (response.ok && data?.ok === true && data.result) {
       return { ok: true, result: data.result };
@@ -706,28 +170,54 @@ async function callTelegram(
   }
 }
 
-function collectMessages(result: unknown): any[] {
+function collectMessages(result: unknown): unknown[] {
   if (Array.isArray(result)) return result;
   return result ? [result] : [];
 }
 
 function messageIdsFrom(result: unknown): number[] {
   return collectMessages(result)
-    .map((message) =>
-      typeof message?.message_id === 'number' ? message.message_id : null
-    )
+    .map((message) => {
+      if (typeof message !== 'object' || message === null) return null;
+      const id = (message as { message_id?: unknown }).message_id;
+      return typeof id === 'number' ? id : null;
+    })
     .filter((id): id is number => id !== null);
 }
 
 function chatIdFrom(result: unknown): string | undefined {
   const first = collectMessages(result)[0];
-  const id = first?.chat?.id;
+  if (typeof first !== 'object' || first === null) return undefined;
+  const chat = (first as { chat?: { id?: unknown } }).chat;
+  const id = chat?.id;
   return typeof id === 'number' || typeof id === 'string' ? String(id) : undefined;
 }
 
+function isParseError(outcome: SendOutcome): boolean {
+  return (
+    !outcome.ok &&
+    typeof outcome.description === 'string' &&
+    outcome.description.includes("can't parse entities")
+  );
+}
+
+function clamp(value: unknown, min: number, max: number): number {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return min;
+  return Math.max(min, Math.min(max, Math.trunc(number)));
+}
+
+function mediaGroupCaption(composition: TelegramComposition): string | null {
+  if (!composition.media.length) return null;
+  return composition.mediaCaption;
+}
+
 /**
- * Publish normalized Flow content to Telegram. Each call is bounded: no
- * background loop, no unbounded retries, no mechanical truncation.
+ * Publish normalized Flow content to Telegram.
+ *
+ * The same composition object is used for validation, preview and delivery.
+ * Existing per-channel resume state is honoured: already-sent media URLs are
+ * skipped and text parts continue from the confirmed index.
  */
 export async function publishTelegramContent(
   content: FlowContent,
@@ -747,62 +237,26 @@ export async function publishTelegramContent(
     };
   }
 
+  const composition = composeTelegramPublication(content);
+
+  if (!composition.validation.ok) {
+    return {
+      ok: false,
+      messageIds: [],
+      textPartsSent: 0,
+      sentImageUrls: [],
+      failedImages: 0,
+      error: `Telegram composition validation failed: ${composition.validation.errors.join(' ')}`,
+      uncertain: false,
+    };
+  }
+
   const deps = options.deps ?? {};
   const resume = options.resume ?? {};
-  const flowUrl = content.canonicalUrl;
-  const primaryLink = content.links[0] ?? null;
-  const sourceUrl =
-    primaryLink && !primaryLink.inBody
-      ? primaryLink.url
-      : primaryLink
-        ? null
-        : content.sourceUrl;
-
-  // Keep the full body. When the body is empty but a link preview exists, use
-  // its description rather than dropping the source context. Extra links are
-  // appended as named Markdown links so an item with several links keeps all
-  // of them.
-  const extraLinks = content.links
-    .slice(1)
-    .filter((link) => !link.inBody)
-    .map((link) => `[${link.title ?? link.siteName ?? link.url}](${link.url})`)
-    .join('\n');
-
-  const telegramBody =
-    content.body ||
-    (!primaryLink || primaryLink.inBody ? '' : primaryLink.description ?? '');
-
-  const bodyWithLinks = [telegramBody, extraLinks]
-    .filter(Boolean)
-    .join('\n\n');
-
-  const formattedText = await formatTelegramMessage(
-    content.showTitle ? content.title : null,
-    bodyWithLinks,
-    flowUrl,
-    content.language,
-    sourceUrl
-  );
-
-  const textChunks = splitTelegramHtml(formattedText, SAFE_TEXT_LIMIT);
-  const resumeTextParts = Math.max(
-    0,
-    Math.min(Number(resume.textParts) || 0, textChunks.length)
-  );
-
-  const imageUrls = Array.from(
-    new Set(
-      content.images
-        .map((image) => image.url)
-        .filter((url): url is string => Boolean(url))
-    )
-  );
-  const alreadySentImages = new Set(
+  const resumeTextParts = clamp(resume.textParts, 0, composition.textPartCount);
+  const alreadySentMedia = new Set(
     (resume.imageUrls ?? []).filter((url): url is string => typeof url === 'string')
   );
-  const pendingImages = imageUrls.filter((url) => !alreadySentImages.has(url));
-
-  const useSeparateText = formattedText.length > SAFE_CAPTION_LIMIT;
 
   const messageIds: number[] = [];
   const sentImageUrls: string[] = [];
@@ -817,7 +271,16 @@ export async function publishTelegramContent(
     chatId = chatId ?? chatIdFrom(result);
   };
 
-  const sendTextPart = async (html: string): Promise<boolean> => {
+  const sendTextPart = async (
+    html: string,
+    allowPreview = false,
+    previewUrl?: string
+  ): Promise<boolean> => {
+    const previewOptions =
+      allowPreview && previewUrl
+        ? { url: previewUrl, prefer_large_media: true }
+        : { is_disabled: true };
+
     let outcome = await callTelegram(
       botToken,
       'sendMessage',
@@ -825,23 +288,19 @@ export async function publishTelegramContent(
         chat_id: channelId,
         text: html,
         parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
+        link_preview_options: previewOptions,
       },
       deps
     );
 
-    if (
-      !outcome.ok &&
-      typeof outcome.description === 'string' &&
-      outcome.description.includes("can't parse entities")
-    ) {
+    if (isParseError(outcome)) {
       outcome = await callTelegram(
         botToken,
         'sendMessage',
         {
           chat_id: channelId,
           text: stripHtml(html),
-          link_preview_options: { is_disabled: true },
+          link_preview_options: previewOptions,
         },
         deps
       );
@@ -858,31 +317,34 @@ export async function publishTelegramContent(
   };
 
   const sendPhoto = async (
-    url: string,
-    caption?: string
+    item: TelegramMedia,
+    photoUrl: string,
+    caption?: string,
+    showCaptionAboveMedia = false
   ): Promise<boolean> => {
     const basePayload: Record<string, unknown> = {
       chat_id: channelId,
-      photo: url,
+      photo: photoUrl,
     };
 
     if (caption) {
       basePayload.caption = caption;
       basePayload.parse_mode = 'HTML';
+      if (showCaptionAboveMedia) basePayload.show_caption_above_media = true;
     }
 
     let outcome = await callTelegram(botToken, 'sendPhoto', basePayload, deps);
 
-    if (
-      !outcome.ok &&
-      caption &&
-      typeof outcome.description === 'string' &&
-      outcome.description.includes("can't parse entities")
-    ) {
+    if (isParseError(outcome) && caption) {
       outcome = await callTelegram(
         botToken,
         'sendPhoto',
-        { chat_id: channelId, photo: url, caption: stripHtml(caption) },
+        {
+          chat_id: channelId,
+          photo: photoUrl,
+          caption: stripHtml(caption),
+          ...(showCaptionAboveMedia ? { show_caption_above_media: true } : {}),
+        },
         deps
       );
     }
@@ -894,44 +356,71 @@ export async function publishTelegramContent(
       return false;
     }
 
-    sentImageUrls.push(url);
+    sentImageUrls.push(item.url);
     remember(outcome.result);
     return true;
   };
 
-  const captionForFirstImage =
-    !useSeparateText && resumeTextParts === 0
-      ? textChunks.join('\n\n')
-      : undefined;
+  const sendVideo = async (
+    item: TelegramMedia,
+    caption?: string
+  ): Promise<boolean> => {
+    const payload: Record<string, unknown> = {
+      chat_id: channelId,
+      video: item.deliveryUrl,
+      supports_streaming: true,
+    };
 
-  let captionDelivered = false;
-
-  for (let offset = 0; offset < pendingImages.length; offset += TELEGRAM_MEDIA_GROUP_LIMIT) {
-    const batch = pendingImages.slice(
-      offset,
-      offset + TELEGRAM_MEDIA_GROUP_LIMIT
-    );
-
-    const canUseCaption =
-      !useSeparateText &&
-      !captionDelivered &&
-      batch.length > 0 &&
-      captionForFirstImage;
-
-    if (batch.length === 1) {
-      const ok = await sendPhoto(
-        batch[0],
-        canUseCaption ? captionForFirstImage : undefined
-      );
-      if (ok && canUseCaption) captionDelivered = true;
-      continue;
+    if (item.thumbnailUrl) payload.thumbnail = item.thumbnailUrl;
+    if (caption) {
+      payload.caption = caption;
+      payload.parse_mode = 'HTML';
     }
 
-    const media = batch.map((url, index) => ({
+    let outcome = await callTelegram(botToken, 'sendVideo', payload, deps);
+
+    if (isParseError(outcome) && caption) {
+      outcome = await callTelegram(
+        botToken,
+        'sendVideo',
+        {
+          chat_id: channelId,
+          video: item.deliveryUrl,
+          supports_streaming: true,
+          ...(item.thumbnailUrl ? { thumbnail: item.thumbnailUrl } : {}),
+          caption: stripHtml(caption),
+        },
+        deps
+      );
+    }
+
+    if (!outcome.ok) {
+      firstError = firstError ?? outcome.description ?? 'Telegram video failed.';
+      uncertain = uncertain || Boolean(outcome.uncertain);
+
+      // An honest fallback: a clearly linked thumbnail, never a fake video.
+      if (item.thumbnailUrl) {
+        return sendPhoto(item, item.thumbnailUrl, caption);
+      }
+
+      failedImages += 1;
+      return false;
+    }
+
+    sentImageUrls.push(item.url);
+    remember(outcome.result);
+    return true;
+  };
+
+  const sendAlbum = async (
+    items: TelegramMedia[],
+    caption?: string
+  ): Promise<boolean> => {
+    const media = items.map((item, index) => ({
       type: 'photo',
-      media: url,
-      ...(index === 0 && canUseCaption
-        ? { caption: captionForFirstImage, parse_mode: 'HTML' }
+      media: item.deliveryUrl,
+      ...(index === 0 && caption
+        ? { caption, parse_mode: 'HTML' }
         : {}),
     }));
 
@@ -942,68 +431,162 @@ export async function publishTelegramContent(
       deps
     );
 
-    if (
-      !outcome.ok &&
-      canUseCaption &&
-      typeof outcome.description === 'string' &&
-      outcome.description.includes("can't parse entities")
-    ) {
-      const plainMedia = media.map((entry, index) => ({
-        ...entry,
-        ...(index === 0 && canUseCaption
-          ? { caption: stripHtml(captionForFirstImage ?? ''), parse_mode: undefined }
-          : {}),
-      }));
-
+    if (isParseError(outcome) && caption) {
       outcome = await callTelegram(
         botToken,
         'sendMediaGroup',
-        { chat_id: channelId, media: plainMedia },
+        {
+          chat_id: channelId,
+          media: media.map((entry, index) => ({
+            ...entry,
+            ...(index === 0 ? { caption: stripHtml(caption), parse_mode: undefined } : {}),
+          })),
+        },
         deps
       );
     }
 
     if (outcome.ok) {
-      sentImageUrls.push(...batch);
-      if (canUseCaption) captionDelivered = true;
+      sentImageUrls.push(...items.map((item) => item.url));
       remember(outcome.result);
-      continue;
+      return true;
     }
 
     firstError = firstError ?? outcome.description ?? 'Telegram album failed.';
     uncertain = uncertain || Boolean(outcome.uncertain);
 
-    // One invalid image fails the whole album. Retry individually so healthy
-    // images are still delivered and only the broken URL is counted as failed.
-    for (const url of batch) {
+    // One bad URL must not hide the healthy images in the group.
+    let anySent = false;
+    for (const item of items) {
       const ok = await sendPhoto(
-        url,
-        !captionDelivered && canUseCaption ? captionForFirstImage : undefined
+        item,
+        item.deliveryUrl,
+        !anySent ? caption : undefined
       );
-      if (ok && canUseCaption) captionDelivered = true;
+      anySent = anySent || ok;
+    }
+    return anySent;
+  };
+
+  const sendBatch = async (
+    batch: TelegramMediaBatch,
+    caption: string | undefined,
+    showCaptionAboveMedia: boolean
+  ): Promise<boolean> => {
+    const pending = batch.items.filter((item) => !alreadySentMedia.has(item.url));
+    if (!pending.length) return false;
+
+    if (batch.kind === 'video') {
+      const ok = await sendVideo(pending[0], caption);
+      if (ok) alreadySentMedia.add(pending[0].url);
+      return ok;
+    }
+
+    if (pending.length === 1) {
+      const ok = await sendPhoto(
+        pending[0],
+        pending[0].deliveryUrl,
+        caption,
+        showCaptionAboveMedia
+      );
+      if (ok) alreadySentMedia.add(pending[0].url);
+      return ok;
+    }
+
+    const ok = await sendAlbum(pending, caption);
+    if (ok) {
+      const sent = new Set(sentImageUrls);
+      pending.forEach((item) => {
+        if (sent.has(item.url)) alreadySentMedia.add(item.url);
+      });
+    }
+    return ok;
+  };
+
+  let captionConsumed =
+    Boolean(mediaGroupCaption(composition)) && resumeTextParts >= 1;
+
+  for (const batch of composition.mediaBatches) {
+    const caption = captionConsumed ? undefined : mediaGroupCaption(composition) ?? undefined;
+    const firstBatchHasCaption = Boolean(caption);
+    const ok = await sendBatch(
+      batch,
+      caption,
+      batch.items.length === 1 && composition.presentationMode === 'photo'
+    );
+
+    if (ok && firstBatchHasCaption) {
+      captionConsumed = true;
+      textPartsSent = Math.max(textPartsSent, 1);
     }
   }
 
-  const needsTextMessage = useSeparateText || !captionDelivered;
+  // If media was already delivered on a previous attempt but the caption was
+  // not, deliver the caption as a normal message rather than losing it.
+  if (
+    composition.media.length > 0 &&
+    composition.mediaCaption &&
+    !captionConsumed
+  ) {
+    const ok = await sendTextPart(composition.mediaCaption, false);
+    if (ok) {
+      captionConsumed = true;
+      textPartsSent = Math.max(textPartsSent, 1);
+    }
+  }
 
-  if (needsTextMessage) {
-    const remaining = textChunks.slice(textPartsSent);
+  const captionPartCount = composition.media.length && composition.mediaCaption ? 1 : 0;
 
-    for (const chunk of remaining) {
-      const ok = await sendTextPart(chunk);
+  if (
+    composition.media.length > 0 &&
+    composition.mediaCaption &&
+    !captionConsumed
+  ) {
+    // The caption is the editorial opening of a media publication. If it could
+    // not be delivered, do not continue with the body out of order.
+    return {
+      ok: false,
+      messageId: messageIds[0],
+      messageIds,
+      chatId,
+      bot,
+      error: firstError ?? 'Telegram media caption could not be delivered.',
+      uncertain,
+      textPartsSent,
+      sentImageUrls,
+      failedImages,
+    };
+  }
+
+  if (composition.media.length) {
+    const start = clamp(
+      textPartsSent - captionPartCount,
+      0,
+      composition.textContinuation.length
+    );
+
+    for (let index = start; index < composition.textContinuation.length; index += 1) {
+      const ok = await sendTextPart(composition.textContinuation[index], false);
       if (!ok) break;
       textPartsSent += 1;
     }
-
-    // A caption counts as one delivered text part.
-    if (!useSeparateText && captionDelivered) {
-      textPartsSent = textChunks.length;
-    }
   } else {
-    textPartsSent = textChunks.length;
+    const start = clamp(textPartsSent, 0, composition.textOnlyParts.length);
+    const allowPreview =
+      composition.presentationMode === 'link' && Boolean(composition.sourceUrl);
+
+    for (let index = start; index < composition.textOnlyParts.length; index += 1) {
+      const ok = await sendTextPart(
+        composition.textOnlyParts[index],
+        allowPreview && index === 0,
+        composition.sourceUrl ?? undefined
+      );
+      if (!ok) break;
+      textPartsSent += 1;
+    }
   }
 
-  const textComplete = textPartsSent >= textChunks.length;
+  const textComplete = textPartsSent >= composition.textPartCount;
 
   return {
     ok: textComplete && failedImages === 0,
@@ -1013,7 +596,7 @@ export async function publishTelegramContent(
     bot,
     error:
       failedImages > 0
-        ? firstError ?? 'Some Telegram images could not be delivered.'
+        ? firstError ?? 'Some Telegram media could not be delivered.'
         : textComplete
           ? undefined
           : firstError ?? 'Telegram text delivery failed.',
