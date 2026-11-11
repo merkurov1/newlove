@@ -273,7 +273,7 @@ export function parseContextPeriod(
     return period('custom', from, to, timezone);
   }
 
-  if (hasAny(text, ['сегодня', 'today', 'за сегодня', 'за сегодняшний день'])) {
+  if (hasAny(text, ['сегодня', 'today', 'за сегодня', 'за сегодняшний день', 'за день'])) {
     return period('today', today, tomorrow, timezone);
   }
 
@@ -292,7 +292,7 @@ export function parseContextPeriod(
     );
   }
 
-  if (hasAny(text, ['на этой неделе', 'эта неделя', 'эту неделю', 'this week', 'past week'])) {
+  if (hasAny(text, ['на этой неделе', 'эта неделя', 'эту неделю', 'this week', 'past week', 'за неделю', 'за последнюю неделю', 'последнюю неделю'])) {
     return period('this_week', addZonedDays(today, -6, timezone), tomorrow, timezone);
   }
 
@@ -380,11 +380,17 @@ function analyticsHasHistoryMarker(text: string): boolean {
 }
 
 const DAILY_PATTERNS = [
+  /что\s+(?:я|мы)\s+(?:сегодня|вчера)\s+(?:делал|делали|сделал|сделали|успел|успели)/i,
   /что\s+(?:я|мы)\s+(?:делал|делали|сделал|сделали|успел|успели)\s+(?:сегодня|вчера)/i,
   /что\s+(?:было|произошло|случилось)\s+(?:сегодня|вчера)/i,
+  /как\s+прош[её]л\s+(?:мой\s+|наш\s+)?(?:день|вечер|утро)/i,
+  /(?:мой|наш)\s+день\b/i,
+  /(?:покажи|дай|собери)\s+(?:мне\s+)?(?:нормальн[\p{L}]*\s+)?(?:картин[\p{L}]*\s+)?дня/iu,
+  /картин[\p{L}]*\s+(?:моего\s+)?дня/iu,
   /итоги\s+(?:дня|сегодня|вчера)/i,
-  /дневн\w*\s+(?:отчет|отчёт|сводк)/i,
+  /дневн[\p{L}]*\s+(?:отчет|отчёт|сводк)/iu,
   /what\s+did\s+(?:i|we)\s+(?:do|work on|get done)\s+(?:today|yesterday)/i,
+  /how\s+(?:did|was)\s+(?:my|our)\s+day/i,
   /what\s+(?:happened|was done)\s+(?:today|yesterday)/i,
   /daily\s+(?:summary|report|digest)/i,
 ];
@@ -402,9 +408,12 @@ const STATUS_PATTERNS = [
   /состояни\w*\s+проекта/i,
   /статус\s+проекта/i,
   /что\s+(?:сейчас\s+)?(?:завершено|готово|осталось|в\s+работе)/i,
+  /что\s+(?:ещ[её]\s+)?(?:осталось|не\s+завершено|незавершено|не\s+закончено)/i,
+  /что\s+не\s+(?:завершено|закончено|сделано)/i,
   /current\s+(?:state|status)/i,
   /project\s+status/i,
-  /what\s+(?:remains|is left|is completed|is done)/i,
+  /what\s+(?:remains|is left|is completed|is done|is unfinished|is incomplete)/i,
+  /what\s+(?:still\s+)?needs?\s+to\s+be\s+(?:done|finished)/i,
   /what\s+is\s+the\s+state\s+of/i,
 ];
 
@@ -423,20 +432,27 @@ const ENTITY_PATTERNS = [
 
 const HISTORY_PATTERNS = [
   /истори[яю]\s+(?:проекта|диалогов|разговоров|обсуждений|работы)/i,
+  /истори[яю]\s+(?:наших|всех|моих|этих)\s+(?:диалогов|разговоров|обсуждений|чатов)/i,
   /покажи\s+(?:мне\s+)?истори/i,
   /расскажи\s+истори/i,
   /хронологи/i,
   /(?:show|tell)\s+(?:me\s+)?(?:the\s+)?history/i,
   /project\s+history/i,
   /timeline/i,
-  /что\s+(?:мы|я)\s+(?:обсуждал|обсуждали|говорил|говорили|решал|решали)/i,
-  /what\s+did\s+(?:we|i)\s+(?:discuss|talk about|decide)/i,
-  /что\s+(?:изменилось|поменялось)\s+с/i,
-  /what\s+changed\s+since/i,
+  /что\s+(?:мы|я)\s+(?:обсуждал|обсуждали|говорил|говорили|решал|решали|договорил|договаривались)/i,
+  /о\s+ч[её]м\s+(?:мы|я)\s+(?:договорил|договаривал|говорил|обсуждал)/i,
+  /найди,?\s+(?:о\s+ч[её]м\s+)?(?:мы|я)\s+(?:договорил|говорил|обсуждал)/i,
+  /what\s+did\s+(?:we|i)\s+(?:discuss|talk about|decide|agree)/i,
+  /what\s+did\s+(?:we|i)\s+agree\s+(?:on|about)/i,
+  /что\s+(?:произошло|случилось)\s+с\s+(?:проект|книг|сериал|unframed)/i,
+  /что\s+(?:изменилось|поменялось)\s+(?:после|since)/i,
+  /what\s+(?:happened|changed)\s+(?:to|with|since)\s+(?:the\s+)?(?:project|book|series|unframed)/i,
   /(?:последн\w*|last)\s+верси\w*/i,
   /last\s+version\s+of/i,
   /continue\s+from\s+where\s+(?:we|i)\s+(?:stopped|left off)/i,
   /(?:продолжи|продолжить|продолжаем)\s+(?:с|от)\s+(?:того|места)/i,
+  /(?:продолжим|продолжить|продолжаем)\s+(?:проект|работу|книг|сериал|unframed|episode)/i,
+  /(?:верн[её]мся|return)\s+(?:к\s+)?(?:проект|project)/i,
   /где\s+(?:мы|я)\s+остановились/i,
   /what\s+did\s+(?:i|we)\s+(?:explicitly\s+)?(?:exclude|reject|approve|choose|decide|say|write|mention)/i,
   /(?:что|кого)\s+я\s+(?:исключил|исключила|отклонил|отклонила|выбрал|выбрала|решил|решила|сказал|сказала|написал|написала|упомянул|упомянула)/i,
@@ -452,6 +468,8 @@ const CONVERSATION_PATTERNS = [
   /where\s+did\s+(?:we|i)\s+(?:discuss|decide|talk about)/i,
   /show\s+(?:me\s+)?where\s+(?:we|i)\s+(?:decided|discussed)/i,
   /original\s+(?:discussion|message|source)/i,
+  /(?:найди|покажи)[^?.!]{0,40}(?:о\s+ч[её]м|где)\s+(?:мы|я)\s+(?:договорил|говорил|обсуждал|решал)/i,
+  /find[^?.!]{0,40}(?:where|what)\s+(?:we|i)\s+(?:agreed|discussed|decided)/i,
 ];
 
 const DOCUMENT_PATTERNS = [
@@ -459,6 +477,11 @@ const DOCUMENT_PATTERNS = [
   /find\s+(?:the\s+)?(?:document|doc|note)\s+(?:in\s+brain)?/i,
   /найди\s+в\s+brain/i,
   /search\s+(?:the\s+)?brain/i,
+];
+
+const VISUALIZATION_PATTERNS = [
+  /(?:покажи|построй|сделай|show|build|draw)\s+(?:мне\s+)?(?:график|диаграмм|схем|chart|diagram|graph|plot)/i,
+  /(?:график|диаграмм|chart|diagram)\s+(?:и|and)\s+(?:график|диаграмм|chart|diagram)/i,
 ];
 
 const PROJECT_HINT =
@@ -473,6 +496,8 @@ function cleanQuery(value: string, intent: ContextIntentName): string {
     /^(?:покажи|показать|найди|найти|расскажи|рассказать|show|find|tell)\s+(?:мне\s+)?/i,
     /^(?:что|what)\s+(?:я|мы|i|we)\s+(?:делал|делали|сделал|сделали|обсуждал|обсуждали|решал|решали|говорил|говорили|did|do)\s+/i,
     /^(?:что|what)\s+(?:было|произошло|случилось|happened)\s+/i,
+    /^(?:как\s+прош[её]л|how\s+(?:did|was))\s+(?:мой\s+|my\s+)?(?:день|day)\b/i,
+    /^(?:изучи|изучить|study|review|examine)\s+/i,
     /^(?:какова|какой|какое|what\s+is)\s+(?:история|history|состояние|state|статус|status)\s+(?:проекта\s+|of\s+|the\s+)?/i,
     /^(?:история|history|хронология|timeline|статус|status|состояние|state)\s+(?:проекта\s+|of\s+|the\s+)?/i,
     /^(?:найди|find)\s+(?:тот\s+)?(?:диалог|разговор|обсуждение|conversation|chat|discussion)\s*(?:где|where|about|про|о|об)?\s*/i,
@@ -546,6 +571,7 @@ export function detectContextQuery(
 
   const timezone = resolveContextTimezone(originalQuery, options);
   const signals: string[] = [];
+  const visualization = VISUALIZATION_PATTERNS.some((pattern) => pattern.test(originalQuery));
 
   let intent: ContextIntentName | null = null;
 
@@ -580,12 +606,32 @@ export function detectContextQuery(
   } else if (DOCUMENT_PATTERNS.some((pattern) => pattern.test(text))) {
     intent = 'DOCUMENT_SEARCH';
     signals.push('intent:document_search');
+  } else if (visualization) {
+    // "Покажи график" / "построй диаграмму" has no separate data store. It
+    // retrieves the same dated context records and lets the presentation layer
+    // decide whether a real chart or diagram can be drawn without invention.
+    intent = 'PROJECT_HISTORY';
+    signals.push('intent:visualization');
   }
 
   if (!intent) return null;
 
   const defaultToday = intent === 'DAILY_SUMMARY';
-  const period = parseContextPeriod(originalQuery, { ...options, defaultToday });
+  let period = parseContextPeriod(originalQuery, { ...options, defaultToday });
+
+  if (!period && visualization) {
+    const zone = timezone.timezone;
+    const today = startOfZonedDay(options.now || new Date(), zone);
+    const tomorrow = addZonedDays(today, 1, zone);
+    period = {
+      key: 'last_n_days',
+      from: addZonedDays(today, -6, zone).toISOString(),
+      to: tomorrow.toISOString(),
+      label: formatDay(addZonedDays(today, -6, zone), zone),
+    };
+    signals.push('period:last_7_days');
+  }
+
   if (period) signals.push(`period:${period.key}`);
   if (timezone.explicit) signals.push('timezone:explicit');
   if (!timezone.known) signals.push('timezone:fallback');

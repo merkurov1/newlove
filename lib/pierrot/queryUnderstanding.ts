@@ -492,7 +492,7 @@ export function detectJournalFlowIntent(message: string): {
  * be classified on its own merits.
  */
 const FOLLOW_UP_PATTERN =
-  /^(?:а\s+)?(?:теперь|за|есть|только)(?=\s|$)|^(?:а|и|но|and|but|so)?\s*(?:подробнее|дальше|продолжай|еще|ещё|more|continue|go on|what about|а что|и что|and now|and for)(?=\s|$)/i;
+  /^(?:а\s+)?(?:теперь|за|есть|только)(?=\s|$)|^(?:а|и|но|and|but|so)?\s*(?:подробнее|дальше|продолжай|еще|ещё|more|continue|go on|what about|а что|и что|and now|and for)(?=\s|$)|(?:покажи\s+динамик|сравни\s+с\s+(?:прошл|предыдущ)|show\s+(?:the\s+)?trend|compare\s+(?:with|to)\s+(?:the\s+)?(?:previous|last))/i;
 
 function isCorrection(text: string): boolean {
   return isCorrectionMessage(text);
