@@ -172,8 +172,7 @@ export default function SpectralTigerPage() {
 
                 <blockquote className="mt-10 border-l-2 border-sky-400/70 pl-5 sm:mt-12 sm:pl-6">
                   <p className="font-serif text-[clamp(1.35rem,2.5vw,2rem)] italic leading-[1.45] text-sky-100">
-                    “Utility is for the poor. The highest markup on the market is always reserved
-                    for the air.”
+                    “Utility is for the poor. The real markup is always on the Air.”
                   </p>
                 </blockquote>
 
