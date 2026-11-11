@@ -16,6 +16,12 @@ jest.mock('@atproto/api', () => ({
   BskyAgent: jest.fn(),
 }));
 
+jest.mock('@/lib/flow/ai', () => ({
+  generateFlowAIText: jest.fn(async () => {
+    throw new Error('AI provider unavailable');
+  }),
+}));
+
 type PublishModule = typeof import('@/lib/bluesky');
 
 let publishToBluesky: PublishModule['publishToBluesky'];
@@ -84,6 +90,43 @@ describe('Bluesky publication safety', () => {
     expect(record.embed.external.uri).toBe('https://www.merkurov.love/flow/memory-notes');
     expect(record.embed.external.thumb).toBeUndefined();
     expect(record.text).toContain('Фрагмент серии о памяти.');
+  });
+
+  it('15. publishes a deterministic local summary when the AI provider fails', async () => {
+    global.fetch = jest.fn(
+      async () =>
+        new Response('not an image', {
+          status: 200,
+          headers: { 'content-type': 'text/plain' },
+        })
+    ) as unknown as typeof fetch;
+
+    const result = await publishToBluesky({
+      id: 'item-article',
+      slug: 'argument',
+      title: 'Городской аргумент',
+      body_md: [
+        'Городская память перестаёт быть архивом и становится протоколом.',
+        'Инфраструктура определяет, какие истории вообще могут быть услышаны.',
+        'Третье предложение добавляет детали о скорости и доступе.',
+        'Четвёртое предложение описывает последствия для публичной речи.',
+      ].join(' '),
+      type: 'article',
+      lang: 'ru',
+      metadata: {},
+    });
+
+    expect(result).toMatchObject({
+      uri: 'at://did:plc:test/app.bsky.feed.post/1',
+      presentation: expect.objectContaining({
+        presentationMode: 'article',
+        usedSummary: false,
+      }),
+    });
+
+    const record = mockPost.mock.calls[0][0] as any;
+    expect(record.text).toContain('Городская память');
+    expect(record.text).not.toContain('undefined');
   });
 
   it('refuses to post when the complete presentation is invalid', async () => {
