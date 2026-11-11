@@ -106,11 +106,12 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ok: true, result: data });
-  } catch (err: any) {
-    return NextResponse.json({ error: String(err?.message || err) }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 function escapeMarkdown(s: string) {
-  return s.replace(/[_*\[\]()~`>#+\-=|{}.!]/g, (m) => `\\${m}`);
+  return s.replace(/[_*[\]()~`>#+\-=|{}.!]/g, (m) => `\\${m}`);
 }

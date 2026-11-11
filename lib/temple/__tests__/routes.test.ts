@@ -34,4 +34,11 @@ describe('Temple route classification', () => {
     expect(isCustomFooterRoute('/heartandangel/world')).toBe(false);
     expect(isCustomFooterRoute('/heartandangel/about')).toBe(false);
   });
+
+  it('suppresses the duplicate global footer across the UNFRAMED section', () => {
+    expect(isCustomFooterRoute('/unframed')).toBe(true);
+    expect(isCustomFooterRoute('/unframed/book')).toBe(true);
+    expect(isCustomFooterRoute('/unframed/proposal')).toBe(true);
+    expect(isCustomFooterRoute('/unframed/spectral-tiger')).toBe(true);
+  });
 });

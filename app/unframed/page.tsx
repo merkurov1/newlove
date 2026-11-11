@@ -16,6 +16,7 @@ import {
 import Image from 'next/image';
 import Link from 'next/link';
 import { Inter, Space_Mono, Playfair_Display } from 'next/font/google';
+import { GRAIN_BACKGROUND } from '@/lib/unframed/visual';
 
 // --- FONTS ---
 const sans = Inter({
@@ -50,7 +51,15 @@ const ASSETS = {
 };
 
 // --- DATA ---
-const TIMELINE = [
+type TimelineItem = {
+  year: string;
+  title: string;
+  text: string;
+  img?: string;
+  isLast?: boolean;
+};
+
+const TIMELINE: TimelineItem[] = [
   {
     year: '1984',
     title: 'THE FLOOR',
@@ -104,7 +113,7 @@ const Redacted = ({
 );
 
 // PARALLAX SECTION
-const TimelineSection = ({ item }: { item: any }) => {
+const TimelineSection = ({ item }: { item: TimelineItem }) => {
   const ref = useRef<HTMLElement | null>(null);
 
   const [progress, setProgress] = useState(0);
@@ -235,39 +244,9 @@ const TimelineSection = ({ item }: { item: any }) => {
   );
 };
 
-// --- FORM FIELDS ---
-
-const FORM_FIELDS = [
-  {
-    key: 'name',
-    label: 'AGENT NAME',
-    type: 'text',
-  },
-  {
-    key: 'agency',
-    label: 'AGENCY / HOUSE',
-    type: 'text',
-  },
-  {
-    key: 'email',
-    label: 'SECURE EMAIL',
-    type: 'email',
-  },
-] as const;
-
 // --- PAGE ---
 
 export default function UnframedPage() {
-  const [status, setStatus] = useState<
-    'idle' | 'loading' | 'success' | 'error'
-  >('idle');
-
-  const [formData, setFormData] = useState({
-    name: '',
-    agency: '',
-    email: '',
-  });
-
   const [pierrotAttribution, setPierrotAttribution] = useState<string | null>(null);
 
   // --- SCROLL ANIMATION ---
@@ -371,70 +350,6 @@ export default function UnframedPage() {
     100
   );
 
-  // --- FORM SUBMIT ---
-
-  const handleSubmit = async (
-    e: React.FormEvent
-  ) => {
-    e.preventDefault();
-
-    setStatus('loading');
-
-    try {
-      const payload = {
-        form: formData,
-        ...(pierrotAttribution ? { pierrotAttribution } : {}),
-        requestId:
-          typeof crypto !== 'undefined' && 'randomUUID' in crypto
-            ? crypto.randomUUID()
-            : String(Date.now()),
-      };
-
-      const res = await fetch(
-        '/api/unframed/telegram',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type':
-              'application/json',
-          },
-          body: JSON.stringify(
-            payload
-          ),
-        }
-      );
-
-      if (!res.ok) {
-        const text =
-          await res.text();
-
-        console.error(
-          'Telegram API error:',
-          text
-        );
-
-        setStatus('error');
-
-        return;
-      }
-
-      setStatus('success');
-
-      setFormData({
-        name: '',
-        agency: '',
-        email: '',
-      });
-    } catch (err) {
-      console.error(
-        'Submit error',
-        err
-      );
-
-      setStatus('error');
-    }
-  };
-
   return (
     <div
       className={`
@@ -455,8 +370,7 @@ export default function UnframedPage() {
       <div
         className="fixed inset-0 pointer-events-none z-50 opacity-[0.03] mix-blend-overlay"
         style={{
-          backgroundImage:
-            `url("https://grainy-gradients.vercel.app/noise.svg")`,
+          backgroundImage: GRAIN_BACKGROUND,
         }}
       />
 
@@ -494,7 +408,7 @@ export default function UnframedPage() {
       <div className="relative z-10 bg-[#050505] min-h-screen flex items-center justify-center px-6 pt-32 pb-32 border-t border-zinc-900 shadow-[0_-50px_100px_rgba(0,0,0,1)]">
         <div className="max-w-4xl text-center">
           <p className="text-3xl md:text-5xl font-serif text-zinc-100 leading-tight">
-            "I spent forty years running away from the boy on the floor.
+            &quot;I spent forty years running away from the boy on the floor.
 
             <br />
             <br />
@@ -518,7 +432,7 @@ export default function UnframedPage() {
             </span>
 
             But the granite eventually cracks. UNFRAMED is the story of closing the loop. Of
-            returning to the only thing that matters: The Line."
+            returning to the only thing that matters: The Line.&quot;
           </p>
 
           <div className="mt-24 animate-bounce flex flex-col items-center gap-2 text-zinc-700 font-mono text-[10px] uppercase tracking-widest">
@@ -631,9 +545,9 @@ export default function UnframedPage() {
               </h3>
 
               <p className="text-zinc-400 font-serif text-lg mb-10 leading-relaxed border-l border-zinc-800 pl-6">
-                "Two synthetic intelligences deconstruct the manuscript, analyzing the shift from
+                &quot;Two synthetic intelligences deconstruct the manuscript, analyzing the shift from
                 the heavy Granite of the Soviet past to the weightless Ether of the digital
-                present."
+                present.&quot;
               </p>
 
               <div className="bg-zinc-900/50 border border-zinc-800 p-6">
@@ -1016,102 +930,32 @@ export default function UnframedPage() {
               For literary agents, publishers and other professional enquiries.
             </p>
 
-            {/* SUCCESS */}
-
-            {status === 'success' ? (
-              <div className="bg-green-900/10 border border-green-900/30 p-6 text-green-500 font-mono text-xs leading-relaxed">
-                {'>'} TRANSMISSION SUCCESSFUL.
-                <br />
-                {'>'} WE WILL ESTABLISH CONTACT.
-              </div>
-            ) : (
-              <form
-                onSubmit={handleSubmit}
-                className="space-y-6"
-              >
-
-                {FORM_FIELDS.map(
-                  (field) => (
-                    <div
-                      key={field.key}
-                      className="group"
-                    >
-                      <input
-                        type={field.type}
-                        value={
-                          formData[
-                            field.key
-                          ]
-                        }
-                        onChange={(e) =>
-                          setFormData(
-                            (prev) => ({
-                              ...prev,
-                              [field.key]:
-                                e.target.value,
-                            })
-                          )
-                        }
-                        className="
-                          w-full
-                          bg-black
-                          border-b
-                          border-zinc-800
-                          py-3
-                          text-white
-                          font-mono
-                          text-sm
-                          focus:outline-none
-                          focus:border-red-600
-                          transition-colors
-                          uppercase
-                          placeholder-zinc-800
-                        "
-                        placeholder={
-                          field.label
-                        }
-                        required
-                      />
-                    </div>
-                  )
-                )}
-
-                {status === 'error' && (
-                  <div className="border border-red-900/50 bg-red-950/20 p-4 text-red-500 font-mono text-[10px] uppercase tracking-widest">
-                    Transmission failed. Please try again.
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={
-                    status === 'loading'
-                  }
-                  className="
-                    w-full
-                    bg-white
-                    text-black
-                    font-bold
-                    uppercase
-                    tracking-[0.2em]
-                    py-4
-                    hover:bg-red-600
-                    hover:text-white
-                    transition-all
-                    mt-6
-                    font-mono
-                    text-[10px]
-                    disabled:opacity-50
-                    disabled:cursor-wait
-                  "
-                >
-                  {status === 'loading'
-                    ? 'Sending…'
-                    : 'Request Proposal'}
-                </button>
-
-              </form>
-            )}
+            <a
+              href="mailto:merkurov@gmail.com?subject=UNFRAMED%20Enquiry"
+              className="
+                w-full
+                bg-white
+                text-black
+                font-bold
+                uppercase
+                tracking-[0.2em]
+                py-4
+                hover:bg-red-600
+                hover:text-white
+                transition-all
+                mt-6
+                font-mono
+                text-[10px]
+                text-center
+                block
+                focus-visible:outline
+                focus-visible:outline-2
+                focus-visible:outline-offset-2
+                focus-visible:outline-red-600
+              "
+            >
+              CONTACT ANTON
+            </a>
 
           </div>
         </section>

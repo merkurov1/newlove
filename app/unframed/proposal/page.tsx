@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
+import { useState } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, BookOpen, Lock } from 'lucide-react';
+import { BookOpen, Lock, Mail } from 'lucide-react';
 import { Inter, Playfair_Display, Space_Mono } from 'next/font/google';
 
 // --- FONTS ---
@@ -78,22 +79,14 @@ const SAMPLES = [
 
 export default function ProposalPage() {
   const [activeTab, setActiveTab] = useState(SAMPLES[0].id);
-  const [status, setStatus] = useState('idle');
 
   const activeContent = SAMPLES.find(s => s.id === activeTab);
-
-  const handleRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatus('loading');
-    // Simulate API call
-    setTimeout(() => setStatus('success'), 1500);
-  };
 
   return (
     <div className={`min-h-screen bg-[#F5F5F0] text-[#1A1A1A] font-sans selection:bg-red-600 selection:text-white ${sans.variable} ${serif.variable} ${mono.variable}`}>
       
       {/* --- HEADER --- */}
-      <header className="fixed top-0 w-full z-50 bg-[#F5F5F0]/90 backdrop-blur-md border-b border-[#E5E5E5] px-6 py-4 flex justify-between items-center">
+      <header className="mt-20 w-full border-b border-[#E5E5E5] px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-3">
             <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse" />
             <span className="font-mono text-xs tracking-widest uppercase text-zinc-500">
@@ -107,11 +100,11 @@ export default function ProposalPage() {
         </div>
       </header>
 
-      <div className="pt-28 pb-24 max-w-5xl mx-auto px-6">
+      <div className="pt-12 pb-24 max-w-5xl mx-auto px-6">
         
         {/* --- TITLE SECTION --- */}
         <section className="mb-6 text-center">
-            <h1 className="text-6xl md:text-9xl font-black tracking-tighter uppercase mb-4 font-sans leading-none">
+            <h1 className="text-[clamp(2.5rem,13vw,8rem)] font-black tracking-tighter uppercase mb-4 font-sans leading-none whitespace-nowrap">
                 Unframed
             </h1>
             {/* Subheading mirrored from /unframed */}
@@ -138,7 +131,7 @@ export default function ProposalPage() {
                         It is the story of a man who spent twenty years trying to upload the Empire to the cloud, only to watch the server farm burn down.
                     </p>
                     <p className="text-zinc-500 text-base">
-                        From building illegal internet providers on icy rooftops in the 90s to tokenizing historical artifacts during the crypto-boom, this is a look at the "Russian Code" through the eyes of a Digital Strategist.
+                        From building illegal internet providers on icy rooftops in the 90s to tokenizing historical artifacts during the crypto-boom, this is a look at the &quot;Russian Code&quot; through the eyes of a Digital Strategist.
                     </p>
                 </div>
             </div>
@@ -230,32 +223,24 @@ export default function ProposalPage() {
                 The complete 60,000-word manuscript is available for review by authorized literary agents and publishers.
             </p>
 
-            {status === 'success' ? (
-                <div className="bg-green-50 text-green-800 px-6 py-4 border border-green-200 font-mono text-sm">
-                    Request received. A secure link will be sent to your email shortly.
-                </div>
-            ) : (
-                <form onSubmit={handleRequest} className="space-y-4">
-                    <input 
-                        type="email" 
-                        placeholder="Enter your professional email" 
-                        className="w-full px-4 py-3 bg-white border border-zinc-300 focus:outline-none focus:border-red-600 font-mono text-sm transition-colors text-center"
-                        required
-                    />
-                    <button 
-                        type="submit"
-                        disabled={status === 'loading'}
-                        className="w-full bg-black text-white px-8 py-4 font-bold uppercase tracking-[0.2em] text-xs hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
-                    >
-                        {status === 'loading' ? 'Processing...' : 'Request Access'} <Download size={14} />
-                    </button>
-                </form>
-            )}
+            <a
+                href="mailto:merkurov@gmail.com?subject=UNFRAMED%20Manuscript%20Access%20Request"
+                className="w-full bg-black text-white px-8 py-4 font-bold uppercase tracking-[0.2em] text-xs hover:bg-red-600 transition-colors flex items-center justify-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+            >
+                Request Access <Mail size={14} />
+            </a>
             
             <p className="mt-8 font-mono text-[10px] text-zinc-400 uppercase tracking-widest">
                 Representation: Direct Contact <br/>
                 merkurov@gmail.com
             </p>
+
+            <Link
+                href="/unframed"
+                className="mt-12 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-zinc-400 transition-colors hover:text-zinc-900"
+            >
+                ← UNFRAMED
+            </Link>
         </section>
 
       </div>

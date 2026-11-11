@@ -37,6 +37,11 @@ export const TELEGRAM_NAV_HIDDEN_ROUTES = [
 export const CUSTOM_FOOTER_ROUTES = [
   '/heartandangel',
   '/heartandangel/card',
+  '/unframed',
+  '/unframed/book',
+  '/unframed/proposal',
+  '/unframed/spectral-tiger',
+  '/unframed/debug',
 ] as const;
 
 export function normalizeRoute(pathname: string): string {

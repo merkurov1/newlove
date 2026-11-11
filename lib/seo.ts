@@ -195,6 +195,7 @@ export const PUBLIC_ROUTES = [
   '/heartandangel/card',
   '/unframed',
   '/unframed/book',
+  '/unframed/proposal',
   '/unframed/spectral-tiger',
   '/flow',
   '/flow/join',
@@ -296,6 +297,14 @@ export const ROUTE_COPY: Record<
       'A cinematic teaser for UNFRAMED and the complete Spectral Tiger chapter — a proposed six-part docuseries on digital status and virtual sovereignty.',
     image: ogImageUrl('UNFRAMED // Episode 0', 'The Spectral Tiger'),
     imageAlt: 'UNFRAMED // Episode 0: The Spectral Tiger',
+  },
+  '/unframed/proposal': {
+    title: 'UNFRAMED — Publishing Proposal | Anton Merkurov',
+    description:
+      'Publishing proposal for UNFRAMED by Anton Merkurov: synopsis, positioning, audience, author background and information for agents and publishers.',
+    image:
+      'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg',
+    imageAlt: 'UNFRAMED — publishing proposal',
   },
   '/flow': {
     title: 'Flow — Notes, Signals & Artifacts | Anton Merkurov',
