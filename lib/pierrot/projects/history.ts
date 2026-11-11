@@ -232,15 +232,22 @@ export async function buildProjectChatContext(input: {
   const { store, ownerUserId, project, conversationId, query } = input;
   const recentLimit = Math.min(Math.max(input.recentLimit ?? 12, 4), 24);
 
-  const [recent, relevant] = await Promise.all([
+  // Every substantive project turn gets a bounded server-side search across
+  // all conversations linked to the project, not only when the owner uses the
+  // word "history". This is what lets the main project chat continue work
+  // discussed in a separate task conversation without repeating context.
+  const shouldSearchHistory = input.wantsHistory || projectHistoryTerms(query).length > 0;
+
+  const [recent, relevant, linkedConversationIds] = await Promise.all([
     loadProjectHistoryMessages(store, ownerUserId, project.id, {
       limit: recentLimit,
       conversationIds: [conversationId],
       ascending: false,
     }).catch(() => []),
-    input.wantsHistory
-      ? searchProjectHistory(store, ownerUserId, project.id, query, { limit: 10 }).catch(() => [])
+    shouldSearchHistory
+      ? searchProjectHistory(store, ownerUserId, project.id, query, { limit: 12 }).catch(() => [])
       : Promise.resolve([]),
+    listProjectConversationIds(store, ownerUserId, project.id).catch(() => []),
   ]);
 
   const recentOrdered = [...recent].sort((left, right) => {
@@ -305,6 +312,7 @@ export async function buildProjectChatContext(input: {
           .map((item) => `${item.title} (${item.artifactType})`)
           .join('; ')}`
       : '',
+    `Linked project conversations: ${Math.max(linkedConversationIds.length, 1)}. The canonical chat is shown below; older task conversations remain searchable and are never merged into this transcript.`,
     '',
     'PERMANENT PROJECT CHAT HISTORY (most recent messages of the canonical conversation):',
     recentOrdered.length
@@ -312,20 +320,24 @@ export async function buildProjectChatContext(input: {
       : 'No saved messages in this project chat yet.',
   ];
 
-  if (input.wantsHistory) {
-    const recentIds = new Set(recentOrdered.map((message) => message.id));
-    const older = relevant.filter((message) => !recentIds.has(message.id));
+  const recentIds = new Set(recentOrdered.map((message) => message.id));
+  const older = relevant.filter((message) => !recentIds.has(message.id));
+  if (shouldSearchHistory) {
     lines.push(
       '',
-      'RELEVANT OLDER PROJECT HISTORY (server search, not a guess):',
+      input.wantsHistory
+        ? 'RELEVANT OLDER PROJECT HISTORY (server search across every linked conversation, not a guess):'
+        : 'RELATED PROJECT DISCUSSIONS (bounded server search across every linked conversation):',
       older.length
         ? older
             .map((message) => {
               const date = message.createdAt ? message.createdAt.slice(0, 10) : 'undated';
-              return `[${date}] ${speaker(message)}: ${compact(message.content, 420)}`;
+              return `[${date} · ${message.conversationId}] ${speaker(message)}: ${compact(message.content, 420)}`;
             })
             .join('\n')
-        : 'No matching older message was found in this project history.'
+        : input.wantsHistory
+          ? 'No matching older message was found in this project history.'
+          : 'No separate older discussion matched this turn; use the recent transcript above.'
     );
   }
 

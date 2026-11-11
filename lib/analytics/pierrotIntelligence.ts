@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { classifyFeedback } from '@/lib/pierrot/feedback/classify';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import {
   loadPriorVisitorIds,
@@ -182,6 +183,7 @@ export type PierrotSnapshot = {
     };
     feedbackByTool: Array<{ key: string; value: number; up: number; down: number }>;
     feedbackByIntent: Array<{ key: string; value: number; up: number; down: number }>;
+    feedbackByCategory: Array<{ key: string; value: number; up: number; down: number }>;
     retrieval: {
       attempts: number;
       relevant: number;
@@ -989,6 +991,7 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
   const feedbackByConversation = new Map<string, { up: number; down: number }>();
   const feedbackByTool = new Map<string, { up: number; down: number }>();
   const feedbackByIntent = new Map<string, { up: number; down: number }>();
+  const feedbackByCategory = new Map<string, { up: number; down: number }>();
 
   for (const event of filteredEvents) {
     if (event.event_name !== 'answer_feedback') continue;
@@ -1012,6 +1015,21 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
     const intentCounts = feedbackByIntent.get(intent) || { up: 0, down: 0 };
     intentCounts[rating] += 1;
     feedbackByIntent.set(intent, intentCounts);
+
+    // Stored classification is preferred; older events are classified from
+    // their preserved trace on read. A negative rating stays OTHER only when
+    // no deterministic rule can name the failure.
+    const storedCategory = payloadString(event.payload, 'feedback_category');
+    const category =
+      storedCategory ||
+      classifyFeedback({
+        rating,
+        trace,
+      })?.category ||
+      'OTHER';
+    const categoryCounts = feedbackByCategory.get(category) || { up: 0, down: 0 };
+    categoryCounts[rating] += 1;
+    feedbackByCategory.set(category, categoryCounts);
   }
 
   const retrievalEvents = filteredEvents.filter((event) => event.event_name === 'brain_retrieval');
@@ -1191,6 +1209,7 @@ export function buildPierrotSnapshot(input: SnapshotInput): PierrotSnapshot {
       feedback: answerFeedback,
       feedbackByTool: feedbackRows(feedbackByTool),
       feedbackByIntent: feedbackRows(feedbackByIntent),
+      feedbackByCategory: feedbackRows(feedbackByCategory),
       retrieval,
       handover,
       subscribers: subscriberStats,

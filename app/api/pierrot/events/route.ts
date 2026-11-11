@@ -20,6 +20,7 @@ import {
 } from '@/lib/pierrot/serverStore';
 import { isPierrotUserId, resolvePierrotIdentity } from '@/lib/pierrot/identity';
 import { recordTaskExperience } from '@/lib/pierrot/learning/store';
+import { classifyFeedback } from '@/lib/pierrot/feedback/classify';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -194,6 +195,30 @@ export async function POST(req: Request) {
             document_title_matched: brainPayload?.document_title_matched ?? null,
             document_match_type: brainPayload?.document_match_type ?? null,
           },
+        };
+      }
+    }
+
+    // A negative rating is not one generic failure. Classify it from the
+    // stored trace so the quality dashboard can separate a wrong fact from
+    // context loss, entity confusion, a wrong tool or a timezone error.
+    if (eventName === 'answer_feedback') {
+      const trace =
+        storedPayload.trace && typeof storedPayload.trace === 'object'
+          ? (storedPayload.trace as Record<string, unknown>)
+          : null;
+      const classification = classifyFeedback({
+        rating: payload.rating === 'up' || payload.rating === 'down' ? payload.rating : null,
+        trace,
+      });
+      if (classification) {
+        storedPayload = {
+          ...storedPayload,
+          feedback_category: classification.category,
+          feedback_root_cause: classification.rootCause,
+          feedback_confidence: classification.confidence,
+          feedback_signals: classification.signals,
+          correction_kind: classification.correctionKind,
         };
       }
     }

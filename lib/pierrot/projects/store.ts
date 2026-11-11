@@ -3,6 +3,7 @@ import { getServerSupabaseClient } from '@/lib/serverAuth';
 import type { PierrotProject, PierrotProjectSnapshot, PierrotProjectStatus } from './types';
 import { projectSlugBase, uniqueProjectSlug } from './slug';
 import { projectMatchesRef } from './matching';
+import { recordProjectStatusChange } from '@/lib/pierrot/context/store';
 
 assertServerOnly('lib/pierrot/projects/store');
 
@@ -179,7 +180,7 @@ export async function createPierrotProject(
     requestedSlug && /^[a-z0-9][a-z0-9-]*$/.test(requestedSlug)
       ? requestedSlug.slice(0, 80)
       : await uniqueSlug(ownerUserId, name);
-  let inserted: any = await getServerSupabaseClient({ useServiceRole: true })
+  let inserted: { data: Record<string, unknown> | null; error: unknown } = await getServerSupabaseClient({ useServiceRole: true })
     .from('pierrot_projects')
     .insert({
       owner_user_id: ownerUserId,
@@ -302,13 +303,15 @@ export async function updatePierrotProject(
   const client = getServerSupabaseClient({ useServiceRole: true });
   const before = await client
     .from('pierrot_projects')
-    .select('name,project_brief,brief_revision')
+    .select('name,project_brief,brief_revision,status')
     .eq('id', id)
     .eq('owner_user_id', ownerUserId)
     .maybeSingle();
   const previousName = typeof before.data?.name === 'string' ? before.data.name : null;
   const previousBrief =
     typeof before.data?.project_brief === 'string' ? before.data.project_brief : null;
+  const previousStatus =
+    typeof before.data?.status === 'string' ? before.data.status : null;
   const briefChanged =
     patch.projectBrief !== undefined &&
     (previousBrief === null || patch.projectBrief.trim() !== previousBrief.trim());
@@ -338,6 +341,21 @@ export async function updatePierrotProject(
   if (result.error) throw result.error;
   if (!result.data) return null;
   const data = result.data;
+
+  if (
+    patch.status !== undefined &&
+    previousStatus !== null &&
+    patch.status !== previousStatus
+  ) {
+    await recordProjectStatusChange(client, ownerUserId, {
+      projectId: id,
+      fromStatus: previousStatus,
+      toStatus: patch.status,
+      reason: patch.briefChangeNote || 'Owner updated the project status.',
+      evidenceClass: 'USER_CONFIRMED',
+      sourceRefs: [{ type: 'project', id }],
+    }).catch(() => undefined);
+  }
 
   if (briefChanged && patch.projectBrief !== undefined)
     await client.from('pierrot_project_brief_revisions').insert({
@@ -470,14 +488,20 @@ export async function getPierrotProjectSnapshot(
         () => null
       ),
   ]);
-  const decisionRows = (decisions.data || []).map((r: any) => ({
-    id: r.decision?.id || '',
-    title: r.decision?.title || '',
-    content: r.decision?.content || '',
-    status: r.decision?.status || '',
-    kind: r.decision?.kind || '',
-    updatedAt: r.decision?.updated_at || '',
-  }));
+  const decisionRows = (decisions.data || []).map((r: Record<string, unknown>) => {
+    const decision =
+      r.decision && typeof r.decision === 'object'
+        ? (r.decision as Record<string, unknown>)
+        : {};
+    return {
+      id: text(decision.id),
+      title: text(decision.title),
+      content: text(decision.content),
+      status: text(decision.status),
+      kind: text(decision.kind),
+      updatedAt: text(decision.updated_at),
+    };
+  });
 
   const memoryTasks = decisionRows
     .filter((row: { kind: string }) => row.kind === 'task' || row.kind === 'reminder')
@@ -500,29 +524,38 @@ export async function getPierrotProjectSnapshot(
         : null,
     decisions: decisionRows,
     tasks: [
-      ...(tasks.data || []).map((r: any) => ({
-        id: r.id,
-        title: r.title || r.task || '',
-        status: r.status || '',
-        updatedAt: r.updated_at || '',
+      ...(tasks.data || []).map((r: Record<string, unknown>) => ({
+        id: text(r.id),
+        title: text(r.title) || text(r.task),
+        status: text(r.status),
+        updatedAt: text(r.updated_at),
       })),
       ...memoryTasks,
     ],
-    conversations: (conversations.data || []).map((r: any) => ({
-      id: r.id || '',
-      title: r.title || '',
-      updatedAt: r.started_at || '',
-    })),
-    knowledge: (knowledge.data || []).map((r: any) => ({
-      id: r.document?.id || '',
-      title: r.document?.title || null,
-      status: r.document?.status || null,
-    })),
-    artifacts: (artifacts.data || []).map((r: any) => ({
-      id: r.id,
-      title: r.title,
-      artifactType: r.artifact_type,
-      updatedAt: r.updated_at,
+    conversations: ((conversations.data || []) as unknown[]).map((r) => {
+      const row = r as Record<string, unknown>;
+      return {
+        id: text(row.id),
+        title: text(row.title),
+        updatedAt: text(row.started_at),
+      };
+    }),
+    knowledge: (knowledge.data || []).map((r: Record<string, unknown>) => {
+      const document =
+        r.document && typeof r.document === 'object'
+          ? (r.document as Record<string, unknown>)
+          : {};
+      return {
+        id: text(document.id),
+        title: text(document.title) || null,
+        status: text(document.status) || null,
+      };
+    }),
+    artifacts: (artifacts.data || []).map((r: Record<string, unknown>) => ({
+      id: text(r.id),
+      title: text(r.title),
+      artifactType: text(r.artifact_type),
+      updatedAt: text(r.updated_at),
     })),
   };
 }

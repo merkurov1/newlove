@@ -27,6 +27,25 @@ function compare(left: unknown, right: unknown): number {
   return String(left ?? '').localeCompare(String(right ?? ''));
 }
 
+/**
+ * Numeric columns (importance, message_index) compare numerically; ISO
+ * timestamps compare as normalised instants. This keeps the double honest for
+ * date-range retrieval without changing existing numeric assertions.
+ */
+function compareFilterValues(left: unknown, right: unknown): number {
+  const leftNumber = typeof left === 'number' ? left : Number(left);
+  const rightNumber = typeof right === 'number' ? right : Number(right);
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+    return leftNumber - rightNumber;
+  }
+  const leftDate = Date.parse(String(left ?? ''));
+  const rightDate = Date.parse(String(right ?? ''));
+  if (Number.isFinite(leftDate) && Number.isFinite(rightDate)) {
+    return leftDate - rightDate;
+  }
+  return compare(left, right);
+}
+
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -120,17 +139,17 @@ export class FakeQuery {
   }
 
   gte(column: string, value: unknown) {
-    this.filters.push((row) => Number(row[column] ?? 0) >= Number(value));
+    this.filters.push((row) => compareFilterValues(row[column], value) >= 0);
     return this;
   }
 
   lte(column: string, value: unknown) {
-    this.filters.push((row) => Number(row[column] ?? 0) <= Number(value));
+    this.filters.push((row) => compareFilterValues(row[column], value) <= 0);
     return this;
   }
 
   lt(column: string, value: unknown) {
-    this.filters.push((row) => String(row[column] ?? '') < String(value));
+    this.filters.push((row) => compareFilterValues(row[column], value) < 0);
     return this;
   }
 

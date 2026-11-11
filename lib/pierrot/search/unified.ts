@@ -242,6 +242,13 @@ async function searchConversationMessages(input: {
             : typeof row.created_at === 'string'
               ? row.created_at
               : null,
+      messageId: typeof row.id === 'string' ? row.id : null,
+      conversationId: row.conversation_id,
+      eventAt: typeof row.created_at === 'string' ? row.created_at : null,
+      ingestedAt: typeof row.created_at === 'string' ? row.created_at : null,
+      retrievalMethod: 'keyword',
+      confidence: 0.75,
+      evidenceClass: 'DIRECTLY_OBSERVED',
     });
     if (hits.length >= input.limit) break;
   }
@@ -287,6 +294,13 @@ function memoryHits(
       href: sourceProject ? `/admin/pierrot?project=${encodeURIComponent(sourceProject.slug)}` : null,
       status: record.status,
       updatedAt: record.updatedAt || null,
+      messageId: record.messageId,
+      conversationId: record.conversationId,
+      eventAt: record.decidedAt || record.updatedAt || record.createdAt,
+      ingestedAt: record.createdAt,
+      retrievalMethod: 'hybrid',
+      confidence: Math.max(record.confidence || 0.6, record.importance || 0.5),
+      evidenceClass: record.confidence >= 0.6 ? 'USER_CONFIRMED' : 'INFERRED',
     });
     if (hits.length >= limit) break;
   }
