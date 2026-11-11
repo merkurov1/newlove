@@ -190,6 +190,74 @@ export type PierrotInsightBlock = PierrotBlockBase & {
   text: string;
 };
 
+/**
+ * Provenance is part of the answer, not an afterthought. A source block is
+ * closed data (label/url/date), never arbitrary HTML or a model-authored link
+ * component.
+ */
+export type PierrotSourceItem = {
+  label: string;
+  source?: string;
+  url?: string | null;
+  date?: string | null;
+  excerpt?: string | null;
+  confidence?: 'measured' | 'calculated' | 'estimated' | 'unknown';
+  method?: string | null;
+};
+
+export type PierrotSourceBlock = PierrotBlockBase & {
+  type: 'source';
+  sources: PierrotSourceItem[];
+  coverage?: string | null;
+  limitations?: string[];
+};
+
+export type PierrotWarningLevel = 'info' | 'warning' | 'critical';
+
+export type PierrotWarningBlock = PierrotBlockBase & {
+  type: 'warning';
+  level: PierrotWarningLevel;
+  text: string;
+};
+
+export type PierrotProgressItem = {
+  label: string;
+  value: number;
+  target?: number | null;
+  unit?: PierrotMetricUnit;
+  status?: 'on_track' | 'at_risk' | 'blocked' | 'complete' | 'unknown';
+  note?: string | null;
+};
+
+export type PierrotProgressBlock = PierrotBlockBase & {
+  type: 'progress';
+  items: PierrotProgressItem[];
+  period?: string | null;
+};
+
+export type PierrotProjectWorkstream = {
+  name: string;
+  entityType: string;
+  status?: string | null;
+  openTasks?: number | null;
+  completedTasks?: number | null;
+  deliverables?: number | null;
+  note?: string | null;
+};
+
+export type PierrotProjectStatusBlock = PierrotBlockBase & {
+  type: 'project_status';
+  projectName: string;
+  status: 'PROPOSED' | 'IN_PROGRESS' | 'BLOCKED' | 'COMPLETED' | 'CANCELLED' | 'ARCHIVED';
+  statusReason?: string | null;
+  workstreams?: PierrotProjectWorkstream[];
+  completed?: number | null;
+  remaining?: number | null;
+  decisions?: number | null;
+  period?: string | null;
+  href?: string | null;
+};
+
 export type PierrotContentBlock =
   | PierrotTextBlock
   | PierrotHeadingBlock
@@ -202,7 +270,11 @@ export type PierrotContentBlock =
   | PierrotQuoteBlock
   | PierrotGalleryBlock
   | PierrotCodeBlock
-  | PierrotInsightBlock;
+  | PierrotInsightBlock
+  | PierrotSourceBlock
+  | PierrotWarningBlock
+  | PierrotProgressBlock
+  | PierrotProjectStatusBlock;
 
 export type PierrotResponse = {
   version: typeof PIERROT_RESPONSE_VERSION;

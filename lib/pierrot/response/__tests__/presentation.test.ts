@@ -47,6 +47,9 @@ function report(overrides: Partial<AnalyticsDataset> & { scope?: string; pagePat
       comparisonRequested: false,
     },
     generatedAt: '2026-11-10T12:00:00.000Z',
+    coverage: [],
+    previousCoverage: [],
+    dataGaps: [],
     sources: [],
     ga4: {
       available: true,
@@ -119,7 +122,7 @@ function report(overrides: Partial<AnalyticsDataset> & { scope?: string; pagePat
     umami: { available: false, totals: {}, series: [], pages: [], referrers: [], limitations: [] },
     bluesky: {
       available: true,
-      profile: { handle: 'merkurov.bsky.social', displayName: 'Anton', did: null, followers: 33, follows: 10, posts: 12 },
+      profile: { handle: 'merkurov.bsky.social', displayName: 'Anton', did: null, followers: 33, follows: 10, posts: 12, capturedAt: '2026-11-10' },
       totals: {
         followers: metric('followers', 'Подписчики Bluesky', 33, { source: 'bluesky' }),
         posts: metric('posts', 'Посты Bluesky', 12, { source: 'bluesky' }),
@@ -161,6 +164,52 @@ function report(overrides: Partial<AnalyticsDataset> & { scope?: string; pagePat
       ],
       topPosts: [],
       siteLinkedPosts: [],
+      period: {
+        start: '2026-11-04',
+        end: '2026-11-10',
+        label: '4 — 10 Nov 2026',
+        timezone: 'Europe/London',
+        posts: [
+          {
+            uri: 'at://1',
+            text: 'Digital Temple',
+            createdAt: '2026-11-05T10:00:00.000Z',
+            url: '/post/1',
+            likes: 12,
+            reposts: 2,
+            replies: 1,
+            quotes: 0,
+            links: 1,
+            siteLinks: 1,
+            engagement: 15,
+          },
+          {
+            uri: 'at://2',
+            text: 'UNFRAMED',
+            createdAt: '2026-11-06T10:00:00.000Z',
+            url: '/post/2',
+            likes: 8,
+            reposts: 1,
+            replies: 0,
+            quotes: 0,
+            links: 0,
+            siteLinks: 0,
+            engagement: 9,
+          },
+        ],
+        totals: { posts: 2, likes: 20, reposts: 3, replies: 1, quotes: 0, engagement: 24 },
+        previousPosts: 0,
+        coverageComplete: true,
+        coverageEndsAt: '2026-11-10',
+        limitation: 'Current counters.',
+      },
+      archive: {
+        total: 2,
+        coverageFrom: '2026-11-01',
+        coverageTo: '2026-11-10',
+        lastSyncedAt: '2026-11-10T03:15:00.000Z',
+        truncated: false,
+      },
       limitations: ['Bluesky отдаёт публичные счётчики, но не уникальный охват.'],
     },
     internal: {
@@ -317,6 +366,14 @@ describe('Pierrot presentation selection', () => {
   it('does not manufacture a chart for a simple health report', () => {
     const response = buildWebsiteResponse(report({ scope: 'health' }), 'ru');
     expect(response).toBeNull();
+  });
+
+  it('renders a provenance diagram when the owner explicitly asks for one', () => {
+    const input = report({ scope: 'bluesky' });
+    input.question.wantsDiagram = true;
+    const response = buildWebsiteResponse(input, 'ru');
+
+    expect(response?.blocks.some((block) => block.type === 'diagram')).toBe(true);
   });
 
   it('turns real graph edges into a safe diagram and separates inference', () => {

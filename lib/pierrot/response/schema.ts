@@ -204,6 +204,80 @@ const insightBlock = z.object({
   text: mediumText,
 });
 
+const sourceItem = z.object({
+  label: shortText,
+  source: optionalText,
+  url: z.string().trim().max(2_000).nullable().optional(),
+  date: z.string().trim().max(80).nullable().optional(),
+  excerpt: optionalText.nullable().optional(),
+  confidence: z.enum(['measured', 'calculated', 'estimated', 'unknown']).optional(),
+  method: z.string().trim().max(80).nullable().optional(),
+});
+
+const sourceBlock = z.object({
+  ...base,
+  type: z.literal('source'),
+  sources: z.array(sourceItem).min(1).max(24),
+  coverage: optionalText.nullable().optional(),
+  limitations: z.array(z.string().trim().max(400)).max(8).optional(),
+});
+
+const warningBlock = z.object({
+  ...base,
+  type: z.literal('warning'),
+  level: z.enum(['info', 'warning', 'critical']),
+  text: mediumText,
+});
+
+const progressItem = z.object({
+  label: shortText,
+  value: z.number().finite(),
+  target: z.number().finite().nullable().optional(),
+  unit: z
+    .enum(['count', 'percent', 'seconds', 'position', 'ratio', 'currency', 'text'])
+    .optional(),
+  status: z.enum(['on_track', 'at_risk', 'blocked', 'complete', 'unknown']).optional(),
+  note: optionalText.nullable().optional(),
+});
+
+const progressBlock = z.object({
+  ...base,
+  type: z.literal('progress'),
+  items: z.array(progressItem).min(1).max(12),
+  period: optionalText.nullable().optional(),
+});
+
+const projectWorkstream = z.object({
+  name: shortText,
+  entityType: z.string().trim().min(1).max(40),
+  status: z.string().trim().max(40).nullable().optional(),
+  openTasks: z.number().int().min(0).max(100_000).nullable().optional(),
+  completedTasks: z.number().int().min(0).max(100_000).nullable().optional(),
+  deliverables: z.number().int().min(0).max(100_000).nullable().optional(),
+  note: optionalText.nullable().optional(),
+});
+
+const projectStatusBlock = z.object({
+  ...base,
+  type: z.literal('project_status'),
+  projectName: shortText,
+  status: z.enum([
+    'PROPOSED',
+    'IN_PROGRESS',
+    'BLOCKED',
+    'COMPLETED',
+    'CANCELLED',
+    'ARCHIVED',
+  ]),
+  statusReason: optionalText.nullable().optional(),
+  workstreams: z.array(projectWorkstream).max(20).optional(),
+  completed: z.number().int().min(0).max(100_000).nullable().optional(),
+  remaining: z.number().int().min(0).max(100_000).nullable().optional(),
+  decisions: z.number().int().min(0).max(100_000).nullable().optional(),
+  period: optionalText.nullable().optional(),
+  href: z.string().trim().max(2_000).nullable().optional(),
+});
+
 /** A graph edge may only reference a node in the same block. */
 const diagramBlockChecked = diagramBlock.superRefine((value, context) => {
   const ids = new Set(value.nodes.map((node) => node.id));
@@ -233,6 +307,10 @@ const blockSchema = z.discriminatedUnion('type', [
   galleryBlock,
   codeBlock,
   insightBlock,
+  sourceBlock,
+  warningBlock,
+  progressBlock,
+  projectStatusBlock,
 ]);
 
 export const pierrotResponseSchema = z.object({

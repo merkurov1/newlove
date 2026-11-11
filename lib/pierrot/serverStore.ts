@@ -197,6 +197,12 @@ export type AppendPierrotMessageInput = {
   historyId?: string | null;
   /** Episode/session inside the history. */
   episodeId?: string | null;
+  /**
+   * Optional structured payload (for example a validated PierrotResponse).
+   * Stored next to the text so a restored conversation renders the same blocks
+   * as the live answer. The Markdown content remains the fallback.
+   */
+  metadata?: Record<string, unknown> | null;
 };
 
 export type AppendPierrotMessageResult = {
@@ -248,10 +254,34 @@ export async function appendPierrotMessage(
   if (!row) throw new Error(`${rpcName} returned no row`);
 
   const historySequence = Number(row.history_sequence);
+  const inserted = row.inserted === true;
+
+  // Structured metadata is written in a second, best-effort statement. Older
+  // deployments without the metadata column keep the Markdown answer instead
+  // of failing the whole turn.
+  if (inserted && input.metadata && Object.keys(input.metadata).length > 0) {
+    try {
+      const { error: metadataError } = await store
+        .from('pierrot_messages')
+        .update({ metadata: input.metadata })
+        .eq('id', input.messageId)
+        .eq('conversation_id', input.conversationId);
+
+      if (metadataError) {
+        console.warn('[Pierrot persistence] message metadata unavailable', {
+          code: metadataError.code || 'metadata_write_failed',
+        });
+      }
+    } catch {
+      // The text transcript is authoritative. Never fail a turn for optional
+      // visual metadata.
+    }
+  }
+
   return {
     sequence: Number(row.sequence),
     content: typeof row.content === 'string' ? row.content : input.content,
-    inserted: row.inserted === true,
+    inserted,
     ...(Number.isFinite(historySequence) && historySequence > 0
       ? { historySequence }
       : {}),
@@ -558,20 +588,44 @@ export async function findPierrotAssistantReply(
   store: SupabaseClient,
   conversationId: string,
   messageId: string
-): Promise<{ content: string; provider: string | null } | null> {
-  const { data, error } = await store
+): Promise<{
+  content: string;
+  provider: string | null;
+  metadata: Record<string, unknown> | null;
+} | null> {
+  let result = await store
     .from('pierrot_messages')
-    .select('content, provider')
+    .select('content, provider, metadata')
     .eq('conversation_id', conversationId)
     .eq('id', messageId)
     .maybeSingle();
 
+  if (
+    result.error &&
+    /metadata/i.test(String((result.error as { message?: unknown }).message || ''))
+  ) {
+    result = await store
+      .from('pierrot_messages')
+      .select('content, provider')
+      .eq('conversation_id', conversationId)
+      .eq('id', messageId)
+      .maybeSingle();
+  }
+
+  const { data, error } = result;
   if (error) throw error;
   if (!data || typeof data.content !== 'string') return null;
 
   return {
     content: data.content,
     provider: typeof data.provider === 'string' ? data.provider : null,
+    metadata:
+      'metadata' in data &&
+      data.metadata &&
+      typeof data.metadata === 'object' &&
+      !Array.isArray(data.metadata)
+        ? (data.metadata as Record<string, unknown>)
+        : null,
   };
 }
 

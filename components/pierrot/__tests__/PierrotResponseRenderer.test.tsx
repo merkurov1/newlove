@@ -318,4 +318,83 @@ describe('Pierrot structured response renderer', () => {
 
     expect(screen.getByText('Old answer')).toBeInTheDocument();
   });
+
+  it('renders a limitation warning without hiding the answer', () => {
+    render(
+      <PierrotResponseRenderer
+        response={response([
+          { type: 'text', markdown: 'Основной ответ.' },
+          {
+            type: 'warning',
+            level: 'warning',
+            title: 'Ограничение',
+            text: 'Данные за конец периода могут быть неполными.',
+          },
+        ])}
+        fallbackMarkdown="fallback"
+      />
+    );
+
+    expect(screen.getByText('Основной ответ.')).toBeInTheDocument();
+    expect(screen.getByText('Данные за конец периода могут быть неполными.')).toBeInTheDocument();
+    expect(screen.getByRole('note')).toBeInTheDocument();
+  });
+
+  it('renders provenance as a collapsed source list', () => {
+    render(
+      <PierrotResponseRenderer
+        response={response([
+          {
+            type: 'source',
+            title: 'Источники',
+            sources: [
+              {
+                label: 'Разговор 11 ноября',
+                source: 'Conversation archive',
+                date: '2026-11-11',
+                excerpt: 'Обсуждали Episode 0.',
+                confidence: 'measured',
+              },
+            ],
+          },
+        ])}
+        fallbackMarkdown="fallback"
+      />
+    );
+
+    expect(screen.getByText('Источники · 1')).toBeInTheDocument();
+    expect(screen.getByText('Разговор 11 ноября')).toBeInTheDocument();
+  });
+
+  it('renders project status from validated fields, not free-form HTML', () => {
+    render(
+      <PierrotResponseRenderer
+        response={response([
+          {
+            type: 'project_status',
+            projectName: 'UNFRAMED',
+            status: 'IN_PROGRESS',
+            statusReason: 'Книга завершена, серия продолжается.',
+            completed: 3,
+            remaining: 2,
+            decisions: 1,
+            workstreams: [
+              {
+                name: 'UNFRAMED_BOOK',
+                entityType: 'BOOK',
+                status: 'COMPLETED',
+                openTasks: 0,
+                completedTasks: 4,
+              },
+            ],
+          },
+        ])}
+        fallbackMarkdown="fallback"
+      />
+    );
+
+    expect(screen.getByText('UNFRAMED')).toBeInTheDocument();
+    expect(screen.getByText('IN PROGRESS')).toBeInTheDocument();
+    expect(screen.getByText('UNFRAMED_BOOK')).toBeInTheDocument();
+  });
 });

@@ -12,6 +12,7 @@ import {
   PIERROT_RESPONSE_VERSION,
   type PierrotChartBlock,
   type PierrotContentBlock,
+  type PierrotDiagramBlock,
   type PierrotMetricItem,
   type PierrotResponse,
   type PierrotTableBlock,
@@ -112,6 +113,37 @@ function baseResponse(
   };
 }
 
+function coverageWarning(
+  dataset: AnalyticsDataset,
+  language: AnalyticsLanguage
+): PierrotContentBlock | null {
+  const problematic = (dataset.coverage ?? []).filter(
+    (coverage) =>
+      coverage.state === 'partial' ||
+      coverage.state === 'stale' ||
+      coverage.state === 'unavailable'
+  );
+  if (problematic.length === 0) return null;
+
+  const lines = problematic.slice(0, 4).map((coverage) => {
+    const ratio =
+      coverage.expectedDays > 0
+        ? `${coverage.coveredDays}/${coverage.expectedDays}`
+        : '0/0';
+    return `${coverage.provider}: ${coverage.state}, ${ratio}`;
+  });
+
+  return {
+    type: 'warning',
+    level: 'warning',
+    title: language === 'ru' ? 'Покрытие данных' : 'Data coverage',
+    text:
+      language === 'ru'
+        ? `${lines.join(' · ')}. Сравнение отключено там, где окна покрыты неполностью; отсутствующие дни не считаются нулём.`
+        : `${lines.join(' · ')}. Comparison is disabled where the windows are not fully covered; missing days are not treated as zero.`,
+  };
+}
+
 function chartFromGa4(
   dataset: AnalyticsDataset,
   language: AnalyticsLanguage
@@ -145,21 +177,88 @@ function chartFromGa4(
   return null;
 }
 
+function provenanceDiagram(
+  dataset: AnalyticsDataset,
+  language: AnalyticsLanguage,
+  periodLabel: string
+): PierrotDiagramBlock | null {
+  const ru = language === 'ru';
+  const periodId = 'period';
+  const reportId = 'report';
+  const sourceNodes: Array<{ id: string; label: string; detail?: string; group: string }> =
+    dataset.sources.slice(0, 5).map((source, index) => ({
+      id: `source-${index}`,
+      label: source.label,
+      detail: `${source.status}${source.lastSuccessAt ? ` · ${source.lastSuccessAt.slice(0, 10)}` : ''}`,
+      group: 'source',
+    }));
+
+  if (sourceNodes.length === 0) {
+    sourceNodes.push({
+      id: 'source-none',
+      label: ru ? 'Нет подключённых источников' : 'No connected sources',
+      group: 'source',
+    });
+  }
+
+  return {
+    type: 'diagram',
+    diagram: 'flow',
+    title: ru ? 'Как собран отчёт' : 'How the report is assembled',
+    description: ru
+      ? 'Провенанс данных: источники → выбранный период → показатели. Это не причинная модель.'
+      : 'Data provenance: sources → selected period → metrics. This is not a causal model.',
+    nodes: [
+      ...sourceNodes,
+      { id: periodId, label: periodLabel, group: 'period' },
+      { id: reportId, label: ru ? 'Показатели отчёта' : 'Report metrics', group: 'report' },
+    ],
+    edges: [
+      ...sourceNodes.map((node) => ({
+        from: node.id,
+        to: periodId,
+        kind: 'reference' as const,
+        label: ru ? 'данные' : 'data',
+      })),
+      {
+        from: periodId,
+        to: reportId,
+        kind: 'direct' as const,
+        label: ru ? 'агрегация' : 'aggregation',
+      },
+    ],
+  };
+}
+
 function chartFromBluesky(
   dataset: AnalyticsDataset,
   language: AnalyticsLanguage
 ): PierrotChartBlock | null {
-  const posts = dataset.bluesky.posts.slice(0, 7);
-  if (!dataset.bluesky.available || posts.length < 2) return null;
+  if (!dataset.bluesky.available) return null;
+
+  const periodPosts = (dataset.bluesky.period?.posts ?? []).slice(0, 7);
+  const archivePosts = dataset.bluesky.topPosts.slice(0, 7);
+  const posts = periodPosts.length >= 2 ? periodPosts : archivePosts;
+  if (posts.length < 2) return null;
+  const showingArchive = periodPosts.length < 2;
 
   return {
     type: 'chart',
     chart: 'stacked_bar',
-    title: language === 'ru' ? 'Взаимодействие по постам' : 'Engagement by post',
-    description:
-      language === 'ru'
-        ? 'Лайки, репосты и ответы по загруженным постам. Это не охват и не просмотры.'
-        : 'Likes, reposts and replies on loaded posts. This is not reach or views.',
+    title: showingArchive
+      ? language === 'ru'
+        ? 'Взаимодействие по архивным постам'
+        : 'Engagement on archived posts'
+      : language === 'ru'
+        ? 'Взаимодействие по постам периода'
+        : 'Engagement on posts in the period',
+    description: showingArchive
+      ? language === 'ru'
+        ? 'В периоде меньше двух постов; показаны архивные посты с текущими счётчиками, а не активность периода.'
+        : 'Fewer than two posts in the period; archived posts with current counters are shown, not period activity.'
+      : language === 'ru'
+        ? 'Лайки, репосты и ответы по постам, опубликованным в выбранном периоде. Текущие счётчики, не события периода.'
+        : 'Likes, reposts and replies on posts published in the selected period. Current counters, not period events.',
     data: posts.map((post, index) => ({
       post: `#${index + 1} ${post.text.replace(/\s+/g, ' ').slice(0, 38)}`,
       likes: post.likes,
@@ -329,51 +428,163 @@ export function buildWebsiteResponse(
   const period = dataset.period.label;
 
   if (scope === 'bluesky') {
-    const metrics = compactMetricItems(
-      ['followers', 'posts', 'likes', 'reposts', 'replies', 'engagement'].map((key) =>
-        metricItem(dataset.bluesky.totals[key], language, { period })
-      )
-    );
-
-    if (dataset.bluesky.available) {
-      metrics.push({
-        label: language === 'ru' ? 'Постов в выборке' : 'Posts in sample',
-        value: dataset.bluesky.posts.length,
-        unit: 'count',
-        source: 'Bluesky feed',
-        confidence: 'measured',
-        interpretation:
-          language === 'ru'
-            ? 'Сколько последних постов автора загружено для расчёта взаимодействий.'
-            : 'How many recent author posts were loaded for the engagement calculation.',
+    const period = dataset.bluesky.period;
+    const ru = language === 'ru';
+    const profileMetrics = compactMetricItems([
+      metricItem(dataset.bluesky.totals.followers, language, {
         period: null,
+        interpretation: ru
+          ? 'Текущий совокупный счётчик профиля, не активность за период.'
+          : 'Current lifetime profile counter, not period activity.',
+      }),
+      metricItem(dataset.bluesky.totals.posts, language, {
+        period: null,
+        interpretation: ru
+          ? 'Общий postsCount профиля, не число постов за период.'
+          : 'Lifetime profile postsCount, not the number of posts in the period.',
+      }),
+    ]);
+
+    const periodMetrics: PierrotMetricItem[] = [
+      {
+        label: ru ? 'Постов опубликовано' : 'Posts published',
+        value: period.totals.posts,
+        unit: 'count',
+        period: period.label,
+        source: 'Bluesky archive',
+        confidence: 'measured',
+        interpretation: ru
+          ? 'Посты, созданные в выбранном периоде.'
+          : 'Posts created inside the selected period.',
+      },
+      {
+        label: ru ? 'Лайки на этих постах' : 'Likes on those posts',
+        value: period.totals.likes,
+        unit: 'count',
+        period: period.label,
+        source: 'Bluesky archive',
+        confidence: 'estimated',
+        interpretation: period.limitation,
+      },
+      {
+        label: ru ? 'Репосты' : 'Reposts',
+        value: period.totals.reposts,
+        unit: 'count',
+        period: period.label,
+        source: 'Bluesky archive',
+        confidence: 'estimated',
+        interpretation: period.limitation,
+      },
+      {
+        label: ru ? 'Ответы' : 'Replies',
+        value: period.totals.replies,
+        unit: 'count',
+        period: period.label,
+        source: 'Bluesky archive',
+        confidence: 'estimated',
+        interpretation: period.limitation,
+      },
+      {
+        label: ru ? 'Взаимодействия' : 'Engagement',
+        value: period.totals.engagement,
+        unit: 'count',
+        period: period.label,
+        source: 'Bluesky archive',
+        confidence: 'calculated',
+        interpretation: ru
+          ? 'Расчёт: лайки + репосты + ответы + цитаты. Не охват.'
+          : 'Calculated: likes + reposts + replies + quotes. Not reach.',
+      },
+    ];
+
+    const flowLinkedPosts = period.posts.filter((post) => post.flowItemId).length;
+    if (flowLinkedPosts > 0) {
+      periodMetrics.push({
+        label: ru ? 'Связано с Flow' : 'Linked to Flow',
+        value: flowLinkedPosts,
+        unit: 'count',
+        period: period.label,
+        source: 'Flow × Bluesky',
+        confidence: 'measured',
+        interpretation: ru
+          ? 'Посты периода, для которых items.bluesky_uri указывает обратно на материал Flow.'
+          : 'Posts in the period whose items.bluesky_uri points back to a Flow material.',
       });
     }
 
     return baseResponse(language, [
+      { type: 'heading', level: 1, text: 'Bluesky' },
+      profileMetrics.length > 0
+        ? {
+            type: 'metric',
+            title: ru ? 'Профиль · всего' : 'Profile · lifetime',
+            metrics: profileMetrics,
+          }
+        : null,
       {
-        type: 'heading',
-        level: 1,
-        text: 'Bluesky',
+        type: 'metric',
+        title: ru ? `Период · ${period.label}` : `Period · ${period.label}`,
+        metrics: periodMetrics,
       },
-      metrics.length > 0 ? { type: 'metric', title: language === 'ru' ? 'Публичные счётчики' : 'Public counters', metrics } : null,
       chartFromBluesky(dataset, language),
       {
         type: 'insight',
-        label: language === 'ru' ? 'Ограничение' : 'Limitation',
-        text:
-          dataset.bluesky.limitations.slice(0, 2).join(' ') ||
-          (language === 'ru'
-            ? 'Bluesky не отдаёт уникальный охват.'
-            : 'Bluesky does not expose unique reach.'),
+        label: ru ? 'Ограничение' : 'Limitation',
+        text: period.limitation,
       },
       {
         type: 'text',
-        markdown:
-          language === 'ru'
-            ? `Период: ${period}. Источник: публичный профиль Bluesky и сохранённые снимки постов. Счётчики показывают взаимодействия, а не охват.`
-            : `Period: ${period}. Source: public Bluesky profile and stored post snapshots. Counters show engagement, not reach.`,
+        markdown: ru
+          ? `Архив: ${dataset.bluesky.archive.total} постов, покрытие ${dataset.bluesky.archive.coverageFrom || '—'} — ${dataset.bluesky.archive.coverageTo || '—'}. Полный архив доступен по запросу.`
+          : `Archive: ${dataset.bluesky.archive.total} posts, coverage ${dataset.bluesky.archive.coverageFrom || '—'} — ${dataset.bluesky.archive.coverageTo || '—'}. The full archive is available on request.`,
       },
+      report.question.wantsArchive
+        ? {
+            type: 'table',
+            title: ru ? 'Архив постов' : 'Post archive',
+            description: ru
+              ? 'До 40 последних постов с текущими счётчиками. Не активность периода.'
+              : 'Up to 40 recent posts with current counters. Not period activity.',
+            compact: true,
+            columns: [
+              { key: 'date', label: ru ? 'Дата' : 'Date' },
+              { key: 'post', label: ru ? 'Пост' : 'Post' },
+              { key: 'likes', label: ru ? 'Лайки' : 'Likes', align: 'right', format: 'number' },
+              { key: 'reposts', label: ru ? 'Репосты' : 'Reposts', align: 'right', format: 'number' },
+              { key: 'replies', label: ru ? 'Ответы' : 'Replies', align: 'right', format: 'number' },
+            ],
+            rows: dataset.bluesky.posts.slice(0, 40).map((post) => ({
+              date: post.createdAt ? post.createdAt.slice(0, 10) : '—',
+              post: post.text.replace(/\s+/g, ' ').slice(0, 80) || '—',
+              likes: post.likes,
+              reposts: post.reposts,
+              replies: post.replies,
+            })),
+          }
+        : null,
+      {
+        type: 'source',
+        title: ru ? 'Источник и охват' : 'Source and coverage',
+        coverage: ru
+          ? `Период: ${period.start} — ${period.end} (${period.timezone}).`
+          : `Period: ${period.start} — ${period.end} (${period.timezone}).`,
+        limitations: dataset.bluesky.limitations.slice(0, 3),
+        sources: [
+          {
+            label: 'Bluesky public profile',
+            source: 'bluesky',
+            date: dataset.bluesky.archive.lastSyncedAt,
+            confidence: 'measured',
+            method: 'public counters',
+            excerpt: ru
+              ? 'Подписчики и postsCount — совокупные показатели профиля.'
+              : 'Followers and postsCount are lifetime profile counters.',
+          },
+        ],
+      },
+      report.question.wantsDiagram
+        ? provenanceDiagram(dataset, language, period.label)
+        : null,
     ]);
   }
 
@@ -544,6 +755,10 @@ export function buildWebsiteResponse(
             ? 'Сессии — источник GA4. Они могут включать внутренний трафик на уровне итогов; разбивка страниц исключает /admin.'
             : 'Sessions are GA4 source totals and can include internal traffic; page breakdowns exclude /admin.',
       },
+      report.question.wantsDiagram
+        ? provenanceDiagram(dataset, language, dataset.period.label)
+        : null,
+      coverageWarning(dataset, language),
     ]);
   }
 

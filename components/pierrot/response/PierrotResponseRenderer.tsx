@@ -8,9 +8,13 @@ import type {
   PierrotContentBlock,
   PierrotInsightBlock,
   PierrotMetricBlock,
+  PierrotProgressBlock,
+  PierrotProjectStatusBlock,
   PierrotQuoteBlock,
   PierrotResponse,
+  PierrotSourceBlock,
   PierrotTableBlock,
+  PierrotWarningBlock,
 } from '@/lib/pierrot/response/types';
 import {
   formatBlockNumber,
@@ -233,6 +237,219 @@ function ComparisonWrapper({ block }: { block: PierrotComparisonBlock }) {
   return <PierrotComparison block={block} />;
 }
 
+function SourceBlock({ block }: { block: PierrotSourceBlock }) {
+  return (
+    <details className="my-5 border-t border-[#E4DCCF] pt-2.5">
+      <summary className="cursor-pointer select-none font-mono text-[8.5px] uppercase tracking-[0.14em] text-[#8A8175] transition-colors hover:text-[#5B544A]">
+        {block.title || 'Sources'} · {block.sources.length}
+      </summary>
+      <ul className="mt-2.5 space-y-3">
+        {block.sources.map((source, index) => {
+          const href = source.url ? safeMarkdownUrl(source.url) : null;
+
+          return (
+            <li
+              key={`${source.label}-${index}`}
+              className="border-t border-[#E9E1D5] pt-2.5 first:border-0 first:pt-0"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <span className="font-sans text-[11.5px] font-semibold leading-snug text-[#4D463D]">
+                  {source.label}
+                </span>
+                {source.confidence && (
+                  <span className="shrink-0 font-mono text-[8px] uppercase tracking-[0.08em] text-[#9C9284]">
+                    {source.confidence}
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 font-mono text-[8px] uppercase leading-relaxed tracking-[0.08em] text-[#A49A8C]">
+                {[source.source, source.date, source.method].filter(Boolean).join(' · ')}
+              </p>
+              {source.excerpt && (
+                <p className="mt-1.5 font-serif text-[12px] leading-[1.65] text-[#625B50]">
+                  {source.excerpt}
+                </p>
+              )}
+              {href && (
+                <a
+                  href={href}
+                  target={href.startsWith('http') ? '_blank' : undefined}
+                  rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
+                  className="mt-1 inline-flex font-mono text-[8px] uppercase tracking-[0.1em] text-[#8A6A4F] underline decoration-[#B08A5A]/50 underline-offset-2 hover:text-[#5B3F2A]"
+                >
+                  Open source ↗
+                </a>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {block.coverage && (
+        <p className="mt-2 font-mono text-[8px] leading-relaxed text-[#948A7D]">{block.coverage}</p>
+      )}
+      {block.limitations && block.limitations.length > 0 && (
+        <ul className="mt-1.5 space-y-1">
+          {block.limitations.map((limitation) => (
+            <li key={limitation} className="font-serif text-[11px] leading-relaxed text-[#7A7268]">
+              {limitation}
+            </li>
+          ))}
+        </ul>
+      )}
+    </details>
+  );
+}
+
+function WarningBlock({ block }: { block: PierrotWarningBlock }) {
+  const color =
+    block.level === 'critical'
+      ? 'border-[#8A1235]/45 text-[#6E102A]'
+      : block.level === 'warning'
+        ? 'border-[#A5764F]/50 text-[#6B4B33]'
+        : 'border-[#C9BBA8] text-[#5B544A]';
+
+  return (
+    <aside className={`my-5 border-l-2 pl-4 ${color}`} role="note">
+      <p className="font-mono text-[8px] uppercase tracking-[0.16em] opacity-70">
+        {block.title ||
+          (block.level === 'critical'
+            ? 'Failure'
+            : block.level === 'warning'
+              ? 'Limitation'
+              : 'Note')}
+      </p>
+      <p className="mt-1 font-serif text-[13.5px] leading-[1.7]">{block.text}</p>
+    </aside>
+  );
+}
+
+function ProgressBlock({ block }: { block: PierrotProgressBlock }) {
+  return (
+    <section className="my-6 min-w-0" aria-label={block.title || 'Progress'}>
+      {block.title && (
+        <h3 className="mb-2 font-mono text-[8.5px] uppercase tracking-[0.16em] text-[#948A7D]">
+          {block.title}
+        </h3>
+      )}
+      <div className="space-y-3">
+        {block.items.map((item, index) => {
+          const ratio =
+            item.target && item.target > 0
+              ? Math.max(0, Math.min(1, item.value / item.target))
+              : null;
+
+          return (
+            <div key={`${item.label}-${index}`}>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="font-serif text-[13.5px] text-[#37332D]">{item.label}</span>
+                <span className="font-mono text-[9px] text-[#7A7268]">
+                  {formatMetricValue(item.value, item.unit, 'en')}
+                  {item.target != null ? ` / ${formatMetricValue(item.target, item.unit, 'en')}` : ''}
+                </span>
+              </div>
+              <div className="mt-1 h-[3px] w-full overflow-hidden rounded-full bg-[#EDE6DB]">
+                <div
+                  className={`h-full ${
+                    item.status === 'blocked'
+                      ? 'bg-[#8A1235]'
+                      : item.status === 'complete'
+                        ? 'bg-[#5F735A]'
+                        : 'bg-[#A5764F]'
+                  }`}
+                  style={{ width: `${Math.round((ratio ?? 0) * 100)}%` }}
+                />
+              </div>
+              {item.note && (
+                <p className="mt-1 font-serif text-[11px] leading-relaxed text-[#7A7268]">
+                  {item.note}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {block.period && (
+        <p className="mt-2 font-mono text-[8px] text-[#948A7D]">{block.period}</p>
+      )}
+    </section>
+  );
+}
+
+function ProjectStatusBlock({ block }: { block: PierrotProjectStatusBlock }) {
+  const statusLabel = block.status.replace(/_/g, ' ');
+
+  return (
+    <section className="my-6 min-w-0" aria-label={`${block.projectName}: ${statusLabel}`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[#E4DCCF] pb-2">
+        <h3 className="font-serif text-[19px] leading-snug text-[#211F1F]">
+          {block.projectName}
+        </h3>
+        <span className="font-mono text-[8.5px] uppercase tracking-[0.16em] text-[#A5764F]">
+          {statusLabel}
+        </span>
+      </div>
+      {block.statusReason && (
+        <p className="mt-2 max-w-2xl font-serif text-[13px] leading-relaxed text-[#625B50]">
+          {block.statusReason}
+        </p>
+      )}
+      {(block.completed != null || block.remaining != null || block.decisions != null) && (
+        <dl className="mt-4 grid grid-cols-3 gap-4">
+          {[
+            ['Completed', block.completed],
+            ['Remaining', block.remaining],
+            ['Decisions', block.decisions],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="border-t border-[#DED4C6] pt-2">
+              <dt className="font-mono text-[8px] uppercase tracking-[0.14em] text-[#948A7D]">
+                {label}
+              </dt>
+              <dd className="mt-0.5 font-serif text-[22px] leading-none text-[#211F1F]">
+                {value ?? '—'}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {block.workstreams && block.workstreams.length > 0 && (
+        <ul className="mt-4 space-y-2">
+          {block.workstreams.map((stream, index) => (
+            <li
+              key={`${stream.name}-${index}`}
+              className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-[#EEE8DE] pt-2"
+            >
+              <span className="font-serif text-[13.5px] text-[#37332D]">
+                {stream.name}
+                <span className="ml-2 font-mono text-[8px] uppercase tracking-[0.1em] text-[#A49A8C]">
+                  {stream.entityType}
+                </span>
+              </span>
+              <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[#8A8175]">
+                {[
+                  stream.status,
+                  stream.openTasks != null ? `${stream.openTasks} open` : null,
+                  stream.completedTasks != null ? `${stream.completedTasks} done` : null,
+                  stream.deliverables != null ? `${stream.deliverables} deliverables` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+              {stream.note && (
+                <p className="w-full font-serif text-[11px] leading-relaxed text-[#7A7268]">
+                  {stream.note}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {block.period && (
+        <p className="mt-2 font-mono text-[8px] text-[#948A7D]">{block.period}</p>
+      )}
+    </section>
+  );
+}
+
 function renderBlock(
   block: PierrotContentBlock,
   language: 'ru' | 'en',
@@ -263,12 +480,20 @@ function renderBlock(
       return <PierrotCode key={index} block={block} />;
     case 'insight':
       return <InsightBlock key={index} block={block} />;
+    case 'source':
+      return <SourceBlock key={index} block={block} />;
+    case 'warning':
+      return <WarningBlock key={index} block={block} />;
+    case 'progress':
+      return <ProgressBlock key={index} block={block} />;
+    case 'project_status':
+      return <ProjectStatusBlock key={index} block={block} />;
     default:
       return null;
   }
 }
 
-export default function PierrotResponseRenderer({
+export default React.memo(function PierrotResponseRenderer({
   response,
   fallbackMarkdown,
 }: {
@@ -288,4 +513,4 @@ export default function PierrotResponseRenderer({
       {validated.blocks.map((block, index) => renderBlock(block, language, index))}
     </div>
   );
-}
+});

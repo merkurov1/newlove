@@ -27,6 +27,8 @@ import { readOverviewCache, writeOverviewCache } from '@/lib/pierrot/workspace/c
 import WorkspaceMarkdown from './WorkspaceMarkdown';
 import GroomingPlanCard from './GroomingPlanCard';
 import PierrotAvatar from './PierrotAvatar';
+import PierrotResponseRenderer from '@/components/pierrot/response/PierrotResponseRenderer';
+import type { PierrotResponse } from '@/lib/pierrot/response/types';
 import { useOnlineStatus } from './useOnlineStatus';
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
 import HomeOverview from './HomeOverview';
@@ -49,6 +51,8 @@ type UiMessage = {
   error?: boolean;
   streaming?: boolean;
   interrupted?: boolean;
+  /** Validated visual composition persisted with / received for this turn. */
+  response?: PierrotResponse | null;
   /** Local deterministic command acknowledgement; never sent to the model. */
   local?: boolean;
   sessionId?: string | null;
@@ -114,6 +118,7 @@ function initialMessages(conversation: OwnerConversation | null): UiMessage[] {
     feedback: message.feedback || undefined,
     sessionId: message.sessionId || null,
     historySequence: message.historySequence ?? null,
+    response: message.response ?? null,
   }));
 }
 
@@ -478,7 +483,11 @@ export default function ChatWorkspace({
           ...(episodeId ? { episodeId } : {}),
           eventName: 'answer_feedback',
           eventKey: message.serverMessageId,
-          payload: { rating, message_id: message.serverMessageId },
+          payload: {
+            rating,
+            message_id: message.serverMessageId,
+            feedback_category: rating === 'down' ? 'OTHER' : null,
+          },
           consent,
           context: { pathname: '/admin/pierrot' },
         }),
@@ -727,6 +736,7 @@ export default function ChatWorkspace({
                 sources: parsed.sources,
                 answerLabel: parsed.answerLabel,
                 groomingPlan: parsed.groomingPlan,
+                response: parsed.response,
                 streaming: false,
                 interrupted: false,
                 error: false,
@@ -858,6 +868,7 @@ export default function ChatWorkspace({
                   sources: parsed.sources,
                   answerLabel: parsed.answerLabel,
                   groomingPlan: parsed.groomingPlan,
+                  response: parsed.response,
                   streaming: false,
                   interrupted: false,
                   error: false,
@@ -1081,14 +1092,23 @@ export default function ChatWorkspace({
                             </div>
                           </div>
 
-                          <WorkspaceMarkdown
-                            className="pw-reply"
-                            content={message.content}
-                            citationCount={messageSourceCount}
-                            onCitation={(index) => openSources(message, index)}
-                            streaming={message.streaming}
-                            editorial
-                          />
+                          {message.response && !message.streaming ? (
+                            <div className="pw-reply">
+                              <PierrotResponseRenderer
+                                response={message.response}
+                                fallbackMarkdown={message.content}
+                              />
+                            </div>
+                          ) : (
+                            <WorkspaceMarkdown
+                              className="pw-reply"
+                              content={message.content}
+                              citationCount={messageSourceCount}
+                              onCitation={(index) => openSources(message, index)}
+                              streaming={message.streaming}
+                              editorial
+                            />
+                          )}
 
                           {!message.streaming && message.groomingPlan && (
                             <GroomingPlanCard

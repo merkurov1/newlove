@@ -6,6 +6,8 @@
  * legacy JSON path) continue to use the parser unchanged.
  */
 
+import { parsePierrotResponse as parseStructuredPierrotResponse } from '@/lib/pierrot/response/schema';
+
 export type BrainAnswerSource = {
   documentId: string | null;
   documentTitle: string | null;
@@ -53,6 +55,8 @@ export type ParsedPierrotResponse = {
   recorded: boolean;
   sources: SourceBundle;
   groomingPlan: import('@/lib/pierrot/grooming/types').GroomingPlanView | null;
+  /** Validated visual composition; null when the server sent Markdown only. */
+  response: import('@/lib/pierrot/response/types').PierrotResponse | null;
   error: string | null;
   code: string | null;
   retryAfter: number | null;
@@ -201,6 +205,7 @@ export function parsePierrotResponse(payload: unknown): ParsedPierrotResponse {
       sourceStatus: asRecord(root.sourceStatus),
     },
     groomingPlan: parseGroomingPlan(root.grooming_plan),
+    response: parseStructuredPierrotResponse(root.response),
     error: text(root.error),
     code: text(root.code),
     retryAfter: number(root.retryAfter),

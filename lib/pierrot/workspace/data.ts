@@ -19,6 +19,7 @@ import {
   listHistorySessions,
   loadHistoryMessagePage,
   resolveHistoryScope,
+  responseFromMessageMetadata,
   type PierrotHistoryScope,
 } from '@/lib/pierrot/history/store';
 import type { PierrotProject } from '@/lib/pierrot/projects/types';
@@ -485,22 +486,37 @@ export async function loadOwnerConversation(
     }
 
     const limit = Math.min(Math.max(options.limit ?? 160, 1), 500);
-    let query = store
-      .from('pierrot_messages')
-      .select('id,role,content,message_index,provider,created_at')
-      .eq('conversation_id', conversationId);
+    const buildQuery = (columns: string) => {
+      let query = store
+        .from('pierrot_messages')
+        .select(columns)
+        .eq('conversation_id', conversationId);
 
-    if (typeof options.beforeIndex === 'number' && Number.isFinite(options.beforeIndex)) {
-      query = query.lt('message_index', options.beforeIndex);
+      if (typeof options.beforeIndex === 'number' && Number.isFinite(options.beforeIndex)) {
+        query = query.lt('message_index', options.beforeIndex);
+      }
+
+      return query.order('message_index', { ascending: false }).limit(limit + 1);
+    };
+
+    let messagesResult = await buildQuery(
+      'id,role,content,message_index,provider,created_at,metadata'
+    );
+
+    if (
+      messagesResult.error &&
+      /metadata/i.test(
+        String((messagesResult.error as { message?: unknown }).message || '')
+      )
+    ) {
+      messagesResult = await buildQuery('id,role,content,message_index,provider,created_at');
     }
 
-    const { data: rows, error: messagesError } = await query
-      .order('message_index', { ascending: false })
-      .limit(limit + 1);
-
+    const { data: rows, error: messagesError } = messagesResult;
     if (messagesError) return null;
 
-    const descending = (Array.isArray(rows) ? rows : []).filter(
+    const rawRows = (Array.isArray(rows) ? rows : []) as unknown[];
+    const descending = rawRows.filter(
       (
         row
       ): row is {
@@ -510,10 +526,16 @@ export async function loadOwnerConversation(
         message_index: number;
         provider: string | null;
         created_at: string | null;
-      } =>
-        (row.role === 'user' || row.role === 'assistant') &&
-        typeof row.id === 'string' &&
-        typeof row.content === 'string'
+        metadata: Record<string, unknown> | null;
+      } => {
+        const item = row as Record<string, unknown> | null;
+        return (
+          Boolean(item) &&
+          (item?.role === 'user' || item?.role === 'assistant') &&
+          typeof item?.id === 'string' &&
+          typeof item?.content === 'string'
+        );
+      }
     );
     const hasMore = descending.length > limit;
     const page = (hasMore ? descending.slice(0, limit) : descending).reverse();
@@ -525,6 +547,9 @@ export async function loadOwnerConversation(
       createdAt: typeof row.created_at === 'string' ? row.created_at : null,
       provider: typeof row.provider === 'string' ? row.provider : null,
       messageIndex: Number(row.message_index || 0),
+      response: responseFromMessageMetadata(
+        (row as { metadata?: unknown }).metadata
+      ),
     }));
 
     const firstUser = messages.find((message) => message.role === 'user');

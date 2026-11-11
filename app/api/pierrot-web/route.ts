@@ -111,6 +111,7 @@ import {
   type JournalFlowEvidence,
 } from '@/lib/knowledge/rag/journalFlowRetrieval';
 import { buildJournalFlowResponse } from '@/lib/pierrot/response/select';
+import { parsePierrotResponse } from '@/lib/pierrot/response/schema';
 import { classifyPierrotFailure, logPierrotFailure } from '@/lib/pierrot/errors';
 import { pierrotErrorCopy, type PierrotErrorLanguage } from '@/lib/pierrot/errorContracts';
 import {
@@ -258,8 +259,9 @@ import { formatPierrotAnswerTrace } from '@/lib/pierrot/diagnostics';
 import { detectUnifiedSearchIntent } from '@/lib/pierrot/search/intent';
 import { formatUnifiedSearchReport } from '@/lib/pierrot/search/format';
 import { searchUnifiedOwnerContext } from '@/lib/pierrot/search/unified';
-import { detectContextQuery } from '@/lib/pierrot/context/intent';
+import { planPierrotTurn } from '@/lib/pierrot/orchestrator';
 import { formatContextReport } from '@/lib/pierrot/context/report';
+import { buildContextResponse } from '@/lib/pierrot/context/presentation';
 import { resolveContextProject, runContextQuery } from '@/lib/pierrot/context/retrieval';
 import { recordProjectEvent } from '@/lib/pierrot/context/store';
 import {
@@ -1285,10 +1287,15 @@ export async function POST(req: Request) {
         persistenceFailure(error, 'assistant_replay_lookup');
       }
 
+      const replayResponse = replay
+        ? parsePierrotResponse(replay.metadata?.response)
+        : null;
+
       if (replay) {
         return NextResponse.json({
           reply: replay.content,
           provider: replay.provider || undefined,
+          ...(replayResponse ? { response: replayResponse } : {}),
           ...(ragOwnerAuthorized ? { admin: true } : {}),
           conversationId,
           sessionId,
@@ -1607,6 +1614,7 @@ export async function POST(req: Request) {
               role: 'assistant',
               content: storageText,
               provider: null,
+              metadata: extra.response ? { response: extra.response } : null,
             });
 
             // Keep the full analytical answer in the current turn. The stored
@@ -3195,7 +3203,11 @@ export async function POST(req: Request) {
       // achievements, entity distinction and provenance searches. This branch
       // runs before the narrower memory/search tools so a history question is
       // never answered from durable memory alone.
-      const contextQuery = detectContextQuery(trimmedMessage);
+      const turnPlan = planPierrotTurn({
+        message: trimmedMessage,
+        executionPlan,
+      });
+      const contextQuery = turnPlan.contextQuery;
 
       if (contextQuery && memoryStore && isPierrotUserId(ownerIdentityUserId)) {
         try {
@@ -3225,7 +3237,12 @@ export async function POST(req: Request) {
             widenIfEmpty: true,
           });
 
-          return persistOwnerReply(formatContextReport(contextResult, ownerLanguage), {
+          const contextMarkdown = formatContextReport(contextResult, ownerLanguage);
+
+          return persistOwnerReply(contextMarkdown, {
+            response: buildContextResponse(contextResult, contextMarkdown, ownerLanguage),
+            context_route: turnPlan.route,
+            context_visualization: turnPlan.visualization,
             context_intent: contextQuery.intent,
             context_status: 'completed',
             context_timezone: contextQuery.timezone,
@@ -3254,6 +3271,18 @@ export async function POST(req: Request) {
             }
           );
         }
+      }
+
+      if (contextQuery && (!memoryStore || !isPierrotUserId(ownerIdentityUserId))) {
+        return persistOwnerReply(
+          ownerLanguage === 'ru'
+            ? 'Контекст сейчас недоступен: хранилище истории не подключено. Я не буду реконструировать день или проект по догадкам.'
+            : 'Context is currently unavailable: the history store is not connected. I will not reconstruct the day or project from guesses.',
+          {
+            context_intent: contextQuery.intent,
+            context_status: 'unavailable',
+          }
+        );
       }
 
       // One owner-wide search across the single conversation stream, memory,
@@ -6126,6 +6155,7 @@ export async function POST(req: Request) {
             role: 'assistant',
             content: reply,
             provider: usedProvider || null,
+            metadata: generatedResponse ? { response: generatedResponse } : null,
           });
 
           // Concurrent retries may have stored a slightly different response

@@ -243,4 +243,27 @@ describe('PierrotChat keyboard viewport', () => {
     expect(input).not.toHaveAttribute('readonly');
     expect(document.activeElement).not.toBe(input);
   });
+
+  it('keeps a 500-message history scrollable and restores only the visible transcript area', async () => {
+    const messages = Array.from({ length: 500 }, (_, index) => ({
+      id: `message-${index}`,
+      role: index % 2 === 0 ? 'user' : 'assistant',
+      content: `Message ${index}`,
+      createdAt: '2026-11-11T10:00:00.000Z',
+    }));
+
+    window.sessionStorage.setItem('pierrot_chat_history_v2', JSON.stringify(messages));
+
+    renderPierrot();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+
+    const list = document.querySelector('[data-pierrot-messages]') as HTMLElement;
+    expect(list).not.toBeNull();
+    expect(list.className).toContain('overflow-y-auto');
+    expect(screen.getByText('Message 499')).toBeInTheDocument();
+
+    // Reading position is owned by the scroll container; the page itself must
+    // not grow a second scrollbar while the modal is open.
+    expect(document.documentElement.style.overflow).toBe('hidden');
+  });
 });

@@ -76,7 +76,7 @@ function mediaEvidenceLabel(source: UnframedEvidenceSource): string | null {
   return 'Verified media evidence';
 }
 
-function PierrotAssistantContent({
+const PierrotAssistantContent = React.memo(function PierrotAssistantContent({
   content,
   response,
   streaming = false,
@@ -108,7 +108,7 @@ function PierrotAssistantContent({
       )}
     </>
   );
-}
+});
 
 function formatMessageTime(value?: string): string | null {
   if (!value) return null;
@@ -195,6 +195,7 @@ function AnswerFeedback({ messageId }: { messageId: string }) {
     trackPierrotEvent('answer_feedback', messageId, {
       rating: value,
       message_id: messageId,
+      feedback_category: value === 'down' ? 'OTHER' : null,
     });
   };
 

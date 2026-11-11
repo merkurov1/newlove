@@ -48,6 +48,7 @@ export type WorkspaceMetric = {
 export type WorkspacePeriod = 7 | 30;
 
 import type { CommercialSummary } from '@/lib/pierrot/commercialSummary';
+import type { PierrotResponse } from '@/lib/pierrot/response/types';
 
 export type WorkspaceProjectHealth = {
   /** null means the source could not be read; zero is a real value. */
@@ -98,6 +99,11 @@ export type OwnerChatMessage = {
   /** Stable cursor inside the history (not the per-conversation index). */
   historySequence?: number | null;
   feedback?: 'up' | 'down' | null;
+  /**
+   * Validated visual composition persisted with the message. Older rows have
+   * no metadata and keep the Markdown `content` as the complete answer.
+   */
+  response?: PierrotResponse | null;
 };
 
 export type PierrotHistoryType = 'main' | 'project';

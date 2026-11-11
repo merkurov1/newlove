@@ -76,32 +76,36 @@ describe('Pierrot server store contracts', () => {
     );
   });
 
-  it('loads chronological history only for an owned conversation', async () => {
-    const maybeSingle = jest.fn(async () => ({ data: { id: 'conversation-1' }, error: null }));
-    const limit = jest.fn(async (..._args: unknown[]) => ({
-      data: [
-        { role: 'assistant', content: 'Second' },
-        { role: 'user', content: 'First' },
-        { role: 'system', content: 'Ignored' },
-      ],
+  it('stores a validated structured response next to the transcript', async () => {
+    const rpc = jest.fn(async (..._args: unknown[]) => ({
+      data: [{ sequence: 10, content: 'Markdown fallback', inserted: true }],
       error: null,
     }));
-    const order = jest.fn(() => ({ limit }));
-    const eq2 = jest.fn(() => ({ maybeSingle }));
-    const eq1 = jest.fn(() => ({ eq: eq2, order }));
-    const select = jest.fn(() => ({ eq: eq1 }));
-    const store = { from: jest.fn(() => ({ select })) } as never;
+    const eqConversation = jest.fn(async () => ({ error: null }));
+    const eq = jest.fn(() => ({ eq: eqConversation }));
+    const update = jest.fn(() => ({ eq }));
+    const store = { rpc, from: jest.fn(() => ({ update })) } as never;
 
-    const history = await loadPierrotHistory(store, 'conversation-1', 'session-1', 10);
+    const response = {
+      version: 1,
+      language: 'ru',
+      blocks: [{ type: 'text', markdown: 'Короткий ответ.' }],
+    };
 
-    expect(history).toEqual([
-      { role: 'user', content: 'First' },
-      { role: 'assistant', content: 'Second' },
-    ]);
-    expect(limit).toHaveBeenCalledWith(10);
+    await appendPierrotMessage(store, {
+      conversationId: 'conversation-1',
+      sessionId: 'session-1',
+      messageId: 'assistant-1',
+      role: 'assistant',
+      content: 'Markdown fallback',
+      metadata: { response },
+    });
+
+    expect(update).toHaveBeenCalledWith({ metadata: { response } });
+    expect(eq).toHaveBeenCalledWith('id', 'assistant-1');
   });
 
-  it('returns an empty history when the session does not own the conversation', async () => {
+  it('loads chronological history only for an owned conversation', async () => {
     const maybeSingle = jest.fn(async () => ({ data: null, error: null }));
     const eq2 = jest.fn(() => ({ maybeSingle }));
     const eq1 = jest.fn(() => ({ eq: eq2 }));

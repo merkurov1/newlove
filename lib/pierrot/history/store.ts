@@ -7,6 +7,7 @@ import type {
   PierrotHistoryType,
 } from '@/lib/pierrot/workspace/types';
 import { ensureProjectConversation } from '@/lib/pierrot/projects/conversation';
+import { parsePierrotResponse } from '@/lib/pierrot/response/schema';
 import {
   getPierrotProject,
   getPierrotProjectForConversation,
@@ -26,6 +27,13 @@ const numberOrNull = (value: unknown): number | null => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
+
+/** Reads a persisted visual composition without trusting arbitrary JSON. */
+export function responseFromMessageMetadata(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const metadata = value as Record<string, unknown>;
+  return parsePierrotResponse(metadata.response);
+}
 
 export function isMissingHistorySchema(error: unknown): boolean {
   const value =
@@ -662,34 +670,56 @@ export async function loadHistoryMessagePage(
   }
 
   const limit = Math.min(Math.max(options.limit ?? 120, 1), 300);
-  let query = store
-    .from('pierrot_messages')
-    .select('id,role,content,message_index,provider,created_at,session_id,history_sequence')
-    .eq('history_id', history.id);
-
   const selectedSession =
     options.session ||
     (options.sessionId ? await loadSessionById(store, history.id, options.sessionId) : null);
 
-  if (selectedSession?.firstMessageSequence != null) {
-    query = query.gte('history_sequence', selectedSession.firstMessageSequence);
-  }
-  if (selectedSession?.lastMessageSequence != null) {
-    if (typeof options.beforeSequence === 'number' && Number.isFinite(options.beforeSequence)) {
-      query = query.lt('history_sequence', options.beforeSequence);
-    } else {
-      query = query.lte('history_sequence', selectedSession.lastMessageSequence);
-    }
-  } else if (
-    typeof options.beforeSequence === 'number' &&
-    Number.isFinite(options.beforeSequence)
-  ) {
-    query = query.lt('history_sequence', options.beforeSequence);
-  }
+  const buildQuery = (columns: string) => {
+    let query = store
+      .from('pierrot_messages')
+      .select(columns)
+      .eq('history_id', history.id);
 
-  const { data, error } = await query
+    if (selectedSession?.firstMessageSequence != null) {
+      query = query.gte('history_sequence', selectedSession.firstMessageSequence);
+    }
+    if (selectedSession?.lastMessageSequence != null) {
+      if (typeof options.beforeSequence === 'number' && Number.isFinite(options.beforeSequence)) {
+        query = query.lt('history_sequence', options.beforeSequence);
+      } else {
+        query = query.lte('history_sequence', selectedSession.lastMessageSequence);
+      }
+    } else if (
+      typeof options.beforeSequence === 'number' &&
+      Number.isFinite(options.beforeSequence)
+    ) {
+      query = query.lt('history_sequence', options.beforeSequence);
+    }
+
+    return query;
+  };
+
+  const MESSAGE_COLUMNS =
+    'id,role,content,message_index,provider,created_at,session_id,history_sequence,metadata';
+  const LEGACY_MESSAGE_COLUMNS =
+    'id,role,content,message_index,provider,created_at,session_id,history_sequence';
+
+  let result = await buildQuery(MESSAGE_COLUMNS)
     .order('history_sequence', { ascending: false })
     .limit(limit + 1);
+
+  // The metadata column is additive. An older deployment that has not run the
+  // migration yet must keep loading transcripts instead of returning empty.
+  if (
+    result.error &&
+    /metadata/i.test(String((result.error as { message?: unknown }).message || ''))
+  ) {
+    result = await buildQuery(LEGACY_MESSAGE_COLUMNS)
+      .order('history_sequence', { ascending: false })
+      .limit(limit + 1);
+  }
+
+  const { data, error } = result;
   if (error) {
     if (isMissingHistorySchema(error)) {
       return {
@@ -703,7 +733,8 @@ export async function loadHistoryMessagePage(
     throw error;
   }
 
-  const rows = (Array.isArray(data) ? data : []).filter((row) => {
+  const rawRows: unknown[] = Array.isArray(data) ? data : [];
+  const rows = rawRows.filter((row): row is Record<string, unknown> => {
     const item = row as Record<string, unknown> | null;
     return (
       Boolean(item) &&
@@ -711,7 +742,7 @@ export async function loadHistoryMessagePage(
       (item?.role === 'user' || item?.role === 'assistant') &&
       typeof item?.content === 'string'
     );
-  }) as Array<Record<string, unknown>>;
+  });
   const hasMore = rows.length > limit;
   const page = (hasMore ? rows.slice(0, limit) : rows).reverse();
   const feedback = await loadFeedbackMap(
@@ -730,6 +761,7 @@ export async function loadHistoryMessagePage(
     sessionId: typeof row.session_id === 'string' ? row.session_id : null,
     historySequence: numberOrNull(row.history_sequence),
     feedback: feedback.get(String(row.id)) || null,
+    response: responseFromMessageMetadata(row.metadata),
   }));
 
   const maxResult = await store
