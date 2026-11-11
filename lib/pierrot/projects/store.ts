@@ -538,7 +538,7 @@ export async function getPierrotProjectSnapshot(
   const activeTasks = allTasks.filter(
     (row) =>
       ['current', 'uncertain', 'active', 'open', 'in_progress'].includes(row.status) &&
-      !expired(row)
+      !expired(row as { validUntil?: string | null; validFrom?: string | null })
   );
   const completedTasks = allTasks.filter((row) => row.status === 'completed');
   const archivedTasks = allTasks.filter((row) => row.status === 'archived');
@@ -550,7 +550,7 @@ export async function getPierrotProjectSnapshot(
       row.kind !== 'task' &&
       row.kind !== 'reminder' &&
       (row.status === 'current' || row.status === 'uncertain') &&
-      !expired(row)
+      !expired(row as { validUntil?: string | null; validFrom?: string | null })
   );
   const historicalDecisions = decisionRows.filter(
     (row) =>
