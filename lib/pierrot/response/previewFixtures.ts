@@ -189,7 +189,7 @@ export const RESPONSE_PREVIEW_CASES: ResponsePreviewCase[] = [
     id: 'bluesky',
     label: '7 · Bluesky statistics',
     note: 'Real counters and post-level engagement. No invented reach.',
-    fallback: '## Bluesky\n\nПодписчики: 33. Взаимодействия: 59. Это не охват.',
+    fallback: '## Bluesky\n\nПодписчики: 33. Взаимодействия: 59 по загруженным постам. Это не охват и не период.',
     response: response([
       { type: 'heading', level: 1, text: 'Bluesky' },
       {
@@ -197,8 +197,9 @@ export const RESPONSE_PREVIEW_CASES: ResponsePreviewCase[] = [
         title: 'Публичные счётчики',
         metrics: [
           { label: 'Подписчики', value: 33, unit: 'count', source: 'Bluesky', confidence: 'measured' },
-          { label: 'Посты', value: 12, unit: 'count', source: 'Bluesky', confidence: 'measured' },
-          { label: 'Взаимодействия', value: 59, unit: 'count', source: 'Bluesky', confidence: 'calculated' },
+          { label: 'Посты в профиле (всего)', value: 12, unit: 'count', source: 'Bluesky', confidence: 'measured' },
+          { label: 'Постов в выборке', value: 3, unit: 'count', source: 'Bluesky feed', confidence: 'measured' },
+          { label: 'Взаимодействия (выборка)', value: 59, unit: 'count', source: 'Bluesky', confidence: 'calculated' },
         ],
       },
       {
@@ -222,7 +223,7 @@ export const RESPONSE_PREVIEW_CASES: ResponsePreviewCase[] = [
       {
         type: 'insight',
         label: 'Ограничение',
-        text: 'Bluesky отдаёт публичные счётчики, но не уникальный охват и не число просмотров.',
+        text: 'Лайки, репосты и ответы относятся к загруженной выборке постов, а не к периоду. Bluesky не отдаёт уникальный охват.',
       },
     ]),
   },

@@ -1,7 +1,11 @@
 /** @jest-environment node */
 
 import { describe, expect, it } from '@jest/globals';
-import { normalizeBlueskyPost, postPermalink } from '../providers/bluesky';
+import {
+  isOwnBlueskyFeedItem,
+  normalizeBlueskyPost,
+  postPermalink,
+} from '../providers/bluesky';
 
 describe('Bluesky analytics normalization', () => {
   it('extracts public engagement and site links from a feed item', () => {
@@ -65,6 +69,15 @@ describe('Bluesky analytics normalization', () => {
     expect(post?.links).toBe(1);
     expect(post?.siteLinks).toBe(0);
     expect(post?.url).toBeNull();
+  });
+
+  it('does not count a repost of another account as the owner’s post', () => {
+    const owner = { post: { author: { did: 'did:plc:owner' } } };
+    const other = { post: { author: { did: 'did:plc:other' } } };
+
+    expect(isOwnBlueskyFeedItem(owner, 'did:plc:owner')).toBe(true);
+    expect(isOwnBlueskyFeedItem(other, 'did:plc:owner')).toBe(false);
+    expect(isOwnBlueskyFeedItem({ post: {} }, 'did:plc:owner')).toBe(true);
   });
 
   it('builds a public permalink without inventing a post id', () => {

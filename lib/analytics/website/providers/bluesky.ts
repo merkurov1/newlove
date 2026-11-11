@@ -75,6 +75,22 @@ function extractLinks(record: Record<string, unknown>, embed: Record<string, unk
   return [...links];
 }
 
+/**
+ * Author feeds can contain reposts of other people's posts. Those counters
+ * belong to another account and must never be folded into the owner's totals.
+ */
+export function blueskyFeedItemAuthorDid(entry: unknown): string | null {
+  if (!entry || typeof entry !== 'object') return null;
+  const post = (entry as { post?: { author?: { did?: unknown } } }).post;
+  return typeof post?.author?.did === 'string' ? post.author.did : null;
+}
+
+export function isOwnBlueskyFeedItem(entry: unknown, actorDid: string | null): boolean {
+  if (!actorDid) return true;
+  const authorDid = blueskyFeedItemAuthorDid(entry);
+  return authorDid === null || authorDid === actorDid;
+}
+
 export function normalizeBlueskyPost(entry: unknown): BlueskyPostObservation | null {
   if (!entry || typeof entry !== 'object') return null;
   const item = entry as {
@@ -168,6 +184,10 @@ export async function fetchBlueskyAnalytics(input: {
     const items = Array.isArray(feed.data.feed) ? feed.data.feed : [];
 
     for (const item of items) {
+      // A repost of another account is not the owner's post. Keep only items
+      // authored by the profile being measured.
+      if (!isOwnBlueskyFeedItem(item, profile.did ?? null)) continue;
+
       const normalized = normalizeBlueskyPost(item);
       if (!normalized || seen.has(normalized.uri)) continue;
       seen.add(normalized.uri);

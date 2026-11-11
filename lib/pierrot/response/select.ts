@@ -335,6 +335,21 @@ export function buildWebsiteResponse(
       )
     );
 
+    if (dataset.bluesky.available) {
+      metrics.push({
+        label: language === 'ru' ? 'Постов в выборке' : 'Posts in sample',
+        value: dataset.bluesky.posts.length,
+        unit: 'count',
+        source: 'Bluesky feed',
+        confidence: 'measured',
+        interpretation:
+          language === 'ru'
+            ? 'Сколько последних постов автора загружено для расчёта взаимодействий.'
+            : 'How many recent author posts were loaded for the engagement calculation.',
+        period: null,
+      });
+    }
+
     return baseResponse(language, [
       {
         type: 'heading',
@@ -346,7 +361,11 @@ export function buildWebsiteResponse(
       {
         type: 'insight',
         label: language === 'ru' ? 'Ограничение' : 'Limitation',
-        text: dataset.bluesky.limitations[0] || (language === 'ru' ? 'Bluesky не отдаёт уникальный охват.' : 'Bluesky does not expose unique reach.'),
+        text:
+          dataset.bluesky.limitations.slice(0, 2).join(' ') ||
+          (language === 'ru'
+            ? 'Bluesky не отдаёт уникальный охват.'
+            : 'Bluesky does not expose unique reach.'),
       },
       {
         type: 'text',
