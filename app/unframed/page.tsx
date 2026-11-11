@@ -547,6 +547,47 @@ export default function UnframedPage() {
       </div>
 
       {/* =========================================================
+          EPISODE 0
+      ========================================================= */}
+
+      <section className="relative z-10 bg-[#050505] border-t border-zinc-900">
+        <Link
+          href="/unframed/spectral-tiger"
+          className="group block px-6 py-16 md:py-24 transition-colors hover:bg-zinc-950"
+        >
+          <div className="max-w-7xl mx-auto grid md:grid-cols-12 gap-8 items-end">
+            <div className="md:col-span-3 font-mono uppercase tracking-[0.25em]">
+              <span className="block text-[10px] text-sky-400">
+                Episode 0
+              </span>
+
+              <span className="mt-2 block text-[10px] text-zinc-600">
+                2008 / The Spectral Tiger
+              </span>
+            </div>
+
+            <div className="md:col-span-9">
+              <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tighter leading-[0.9] text-white">
+                The Spectral Tiger
+              </h2>
+
+              <p className="mt-4 max-w-2xl font-serif text-lg md:text-xl text-zinc-400 leading-relaxed">
+                Watch the teaser and read the chapter behind the memoir.
+              </p>
+
+              <span className="mt-7 inline-flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.25em] text-sky-400 group-hover:text-white transition-colors">
+                Enter Episode 0
+
+                <span className="text-base transition-transform group-hover:translate-x-1">
+                  →
+                </span>
+              </span>
+            </div>
+          </div>
+        </Link>
+      </section>
+
+      {/* =========================================================
           FOOTER ASSET / ACCESS
       ========================================================= */}
 
