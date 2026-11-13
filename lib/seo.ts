@@ -222,6 +222,8 @@ export const PUBLIC_ROUTES = [
   '/vigil',
   '/absolution',
   '/quiz/guess-estimate',
+  '/question',
+  '/question/about',
   '/liveheart',
   '/liveheart/stat',
   '/liveheart/tv',

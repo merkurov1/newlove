@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
+import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, RotateCcw } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
@@ -32,8 +33,13 @@ type PierrotTriggerProps = {
 
 export function PierrotTrigger({ compact = false }: PierrotTriggerProps) {
   const { toggleConversation, hasUnread } = usePierrot();
+  const pathname = usePathname() || '';
   const [avatarFailed, setAvatarFailed] = useState(false);
   const label = hasUnread ? 'Open Pierrot, new message' : 'Open Pierrot';
+
+  // /question is a self-contained editorial surface with its own Pierrot
+  // synthesis. A second Pierrot chat on the same page would compete with it.
+  if (pathname.replace(/\/+$/, '') === '/question') return null;
 
   if (compact) {
     const showAvatar = Boolean(PIERROT_AVATAR_SRC) && !avatarFailed;
@@ -131,6 +137,12 @@ export default function PierrotChat() {
   const shouldReduceMotion = usePrefersReducedMotion();
   const keyboardViewport = useKeyboardViewportHeight(isOpen);
   const [isHeaderScrolled, setIsHeaderScrolled] = useState(false);
+  const pathname = usePathname() || '';
+  const isQuestionRoute = pathname.replace(/\/+$/, '') === '/question';
+
+  useEffect(() => {
+    if (isQuestionRoute && isOpen) closeChat();
+  }, [isQuestionRoute, isOpen, closeChat]);
 
   useEffect(() => {
     if (!isOpen || messages.length === 0) setIsHeaderScrolled(false);
@@ -244,6 +256,8 @@ export default function PierrotChat() {
 
   const safeLeft = 'max(0px, env(safe-area-inset-left), var(--tg-safe-area-left, 0px))';
   const safeRight = 'max(0px, env(safe-area-inset-right), var(--tg-safe-area-right, 0px))';
+
+  if (isQuestionRoute) return null;
 
   // One geometry model for the shell: the visual viewport rectangle when it is
   // available, otherwise the CSS viewport with dynamic-viewport units. The

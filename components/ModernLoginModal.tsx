@@ -11,7 +11,35 @@ import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 
 const supabase = createBrowserClient();
 
-export default function ModernLoginModal({ onClose }: { onClose?: () => void } = {}) {
+type ModernLoginModalProps = {
+  onClose?: () => void;
+  /** Question is Russian-only; the default keeps every existing caller unchanged. */
+  language?: 'en' | 'ru';
+};
+
+export default function ModernLoginModal({
+  onClose,
+  language = 'en',
+}: ModernLoginModalProps = {}) {
+  const copy =
+    language === 'ru'
+      ? {
+          title: 'Вход',
+          google: 'Войти через Google',
+          googleLoading: 'Вход через Google…',
+          web3: 'Войти через Web3',
+          web3Loading: 'Вход через Web3…',
+          close: 'Закрыть',
+        }
+      : {
+          title: 'Sign In',
+          google: 'Sign in with Google',
+          googleLoading: 'Signing in with Google…',
+          web3: 'Sign in with Web3',
+          web3Loading: 'Signing in with Web3…',
+          close: 'Close',
+        };
+
   const { isLoading, session } = useAuth() as any;
   const status = isLoading ? 'loading' : (session ? 'authenticated' : 'unauthenticated');
   const auth = useAuth();
@@ -189,20 +217,20 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
           boxSizing: 'border-box',
         }}
       >
-        <h2 className="text-2xl font-bold mb-4 text-center tracking-tight text-neutral-900">Sign In</h2>
+        <h2 className="text-2xl font-bold mb-4 text-center tracking-tight text-neutral-900">{copy.title}</h2>
         <button
           onClick={async () => { if (onClose) onClose(); setLoading(true); try { await auth.signInWithGoogle(); } catch (e:any) { setWeb3Error(e.message || String(e)); } setLoading(false); }}
           className="w-full bg-black text-white rounded px-6 py-3 font-semibold text-base hover:bg-neutral-800 transition mb-2 border border-neutral-300 shadow-none"
           disabled={loading}
         >
-          {loading ? 'Signing in with Google…' : 'Sign in with Google'}
+          {loading ? copy.googleLoading : copy.google}
         </button>
         <button
           onClick={async () => { try { if (typeof onClose === 'function') onClose(); await handleWeb3(); } catch (e){ /* ignore */ } }}
           className="w-full bg-white text-black rounded px-6 py-3 font-semibold text-base hover:bg-neutral-100 transition mb-2 border border-neutral-300 shadow-none"
           disabled={loading}
         >
-          {loading ? 'Signing in with Web3…' : 'Sign in with Web3'}
+          {loading ? copy.web3Loading : copy.web3}
         </button>
         {/* Web3 login intentionally removed — Google OAuth only */}
         {error && <div className="text-red-600 text-sm text-center mt-2">{error}</div>}
@@ -211,7 +239,7 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
           onClick={onClose}
           className="absolute top-2 right-2 text-neutral-400 hover:text-neutral-700 text-2xl font-bold bg-transparent border-none cursor-pointer"
           style={{ background: 'none', border: 'none', padding: 0 }}
-          aria-label="Close"
+          aria-label={copy.close}
         >×</button>
       </div>
     </div>
