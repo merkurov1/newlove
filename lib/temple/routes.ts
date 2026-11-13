@@ -41,6 +41,7 @@ export const CUSTOM_FOOTER_ROUTES = [
   '/unframed/book',
   '/unframed/proposal',
   '/unframed/spectral-tiger',
+  '/unframed/container',
   '/unframed/debug',
 ] as const;
 

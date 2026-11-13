@@ -40,5 +40,6 @@ describe('Temple route classification', () => {
     expect(isCustomFooterRoute('/unframed/book')).toBe(true);
     expect(isCustomFooterRoute('/unframed/proposal')).toBe(true);
     expect(isCustomFooterRoute('/unframed/spectral-tiger')).toBe(true);
+    expect(isCustomFooterRoute('/unframed/container')).toBe(true);
   });
 });

@@ -197,6 +197,7 @@ export const PUBLIC_ROUTES = [
   '/unframed/book',
   '/unframed/proposal',
   '/unframed/spectral-tiger',
+  '/unframed/container',
   '/flow',
   '/flow/join',
   '/flow-issues',
@@ -297,6 +298,13 @@ export const ROUTE_COPY: Record<
       'A cinematic teaser for UNFRAMED and the complete Spectral Tiger chapter — a proposed six-part docuseries on digital status and virtual sovereignty.',
     image: ogImageUrl('UNFRAMED // Episode 0', 'The Spectral Tiger'),
     imageAlt: 'UNFRAMED // Episode 0: The Spectral Tiger',
+  },
+  '/unframed/container': {
+    title: 'UNFRAMED // Episode 42: Step Out of the Physical Container | Anton Merkurov',
+    description:
+      'Episode 42 of UNFRAMED: Anton Merkurov on the first modems, FidoNet, Krovatka and the decision to leave the physical world for digital status.',
+    image: ogImageUrl('UNFRAMED // Episode 42', 'Step Out of the Physical Container'),
+    imageAlt: 'UNFRAMED // Episode 42: Step Out of the Physical Container',
   },
   '/unframed/proposal': {
     title: 'UNFRAMED — Publishing Proposal | Anton Merkurov',

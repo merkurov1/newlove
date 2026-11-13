@@ -2,7 +2,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowUpRight, BookOpen, Play } from 'lucide-react';
 import { Inter, Playfair_Display, Space_Mono } from 'next/font/google';
-import { SPECTRAL_TIGER_EPISODE } from '@/lib/unframed/episodes';
+import EpisodeSeriesNav from '@/components/unframed/EpisodeSeriesNav';
+import { CONTAINER_EPISODE, SPECTRAL_TIGER_EPISODE } from '@/lib/unframed/episodes';
 import { GRAIN_BACKGROUND } from '@/lib/unframed/visual';
 
 const sans = Inter({
@@ -22,6 +23,7 @@ const mono = Space_Mono({
 });
 
 const episode = SPECTRAL_TIGER_EPISODE;
+const nextEpisode = CONTAINER_EPISODE;
 const proposalLink = episode.related[0];
 
 const sectionLabel = 'font-mono text-[10px] uppercase tracking-[0.32em] text-zinc-500';
@@ -128,6 +130,15 @@ export default function SpectralTigerPage() {
             </p>
           </div>
         </section>
+
+        {/* A quiet series bridge, placed inside the reading flow rather than
+            appended as a generic button at the bottom of the page. */}
+        <EpisodeSeriesNav
+          direction="Next transmission"
+          title={`Episode ${nextEpisode.number} — ${nextEpisode.title}`}
+          meta="Runtime: ~1 Min / 4K / Cyber-Noir Narrative"
+          href={`/unframed/${nextEpisode.slug}`}
+        />
 
         {/* =====================================================
             03 — THE CASE

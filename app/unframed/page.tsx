@@ -16,6 +16,7 @@ import {
 import Image from 'next/image';
 import Link from 'next/link';
 import { Inter, Space_Mono, Playfair_Display } from 'next/font/google';
+import { CONTAINER_EPISODE, SPECTRAL_TIGER_EPISODE } from '@/lib/unframed/episodes';
 import { GRAIN_BACKGROUND } from '@/lib/unframed/visual';
 
 // --- FONTS ---
@@ -94,6 +95,26 @@ const TIMELINE: TimelineItem[] = [
     isLast: true,
   },
 ];
+
+// Editorial index for the two published transmissions. The newest episode
+// comes first; the composition stays a pair of rows, not a video catalogue.
+const SERIES_ENTRIES = [
+  {
+    episode: CONTAINER_EPISODE,
+    kicker: 'Latest transmission',
+    meta: '~1 Min / 4K / Cyber-Noir Narrative',
+    blurb:
+      'A cyber-noir transmission on the first modems, FidoNet, Krovatka and the decision to move into the machine.',
+    cta: 'Enter Episode 42',
+  },
+  {
+    episode: SPECTRAL_TIGER_EPISODE,
+    kicker: 'Previously published',
+    meta: '2008 / The Spectral Tiger',
+    blurb: 'Watch the teaser and read the chapter behind the memoir.',
+    cta: 'Enter Episode 0',
+  },
+] as const;
 
 // --- COMPONENTS ---
 
@@ -461,44 +482,62 @@ export default function UnframedPage() {
       </div>
 
       {/* =========================================================
-          EPISODE 0
+          THE SERIES — EPISODE 42 / EPISODE 0
       ========================================================= */}
 
       <section className="relative z-10 bg-[#050505] border-t border-zinc-900">
-        <Link
-          href="/unframed/spectral-tiger"
-          className="group block px-6 py-16 md:py-24 transition-colors hover:bg-zinc-950"
-        >
-          <div className="max-w-7xl mx-auto grid md:grid-cols-12 gap-8 items-end">
-            <div className="md:col-span-3 font-mono uppercase tracking-[0.25em]">
-              <span className="block text-[10px] text-sky-400">
-                Episode 0
-              </span>
+        {SERIES_ENTRIES.map(
+          ({ episode, kicker, meta, blurb, cta }, index) => (
+            <Link
+              key={episode.slug}
+              href={`/unframed/${episode.slug}`}
+              className={`
+                group
+                block
+                px-6
+                py-16
+                md:py-24
+                transition-colors
+                hover:bg-zinc-950
+                ${index > 0 ? 'border-t border-zinc-900' : ''}
+              `}
+            >
+              <div className="max-w-7xl mx-auto grid md:grid-cols-12 gap-8 items-end">
+                <div className="md:col-span-3 font-mono uppercase tracking-[0.25em]">
+                  <span className="block text-[10px] text-sky-400">
+                    Episode {episode.number}
+                  </span>
 
-              <span className="mt-2 block text-[10px] text-zinc-600">
-                2008 / The Spectral Tiger
-              </span>
-            </div>
+                  <span className="mt-2 block text-[10px] text-zinc-600">
+                    {kicker}
+                  </span>
 
-            <div className="md:col-span-9">
-              <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tighter leading-[0.9] text-white">
-                The Spectral Tiger
-              </h2>
+                  <span className="mt-1 block text-[10px] text-zinc-700">
+                    {meta}
+                  </span>
+                </div>
 
-              <p className="mt-4 max-w-2xl font-serif text-lg md:text-xl text-zinc-400 leading-relaxed">
-                Watch the teaser and read the chapter behind the memoir.
-              </p>
+                <div className="md:col-span-9">
+                  <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tighter leading-[0.9] text-white">
+                    {episode.title}
+                  </h2>
 
-              <span className="mt-7 inline-flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.25em] text-sky-400 group-hover:text-white transition-colors">
-                Enter Episode 0
+                  <p className="mt-4 max-w-2xl font-serif text-lg md:text-xl text-zinc-400 leading-relaxed">
+                    {blurb}
+                  </p>
 
-                <span className="text-base transition-transform group-hover:translate-x-1">
-                  →
-                </span>
-              </span>
-            </div>
-          </div>
-        </Link>
+                  <span className="mt-7 inline-flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.25em] text-sky-400 group-hover:text-white transition-colors">
+                    {cta}
+
+                    <span className="text-base transition-transform group-hover:translate-x-1">
+                      →
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </Link>
+          )
+        )}
       </section>
 
       {/* =========================================================
