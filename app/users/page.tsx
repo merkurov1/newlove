@@ -3,6 +3,8 @@ import { getServerSupabaseClient, requireAdmin } from '@/lib/serverAuth';
 import { redirect } from 'next/navigation';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = sanitizeMetadata({
   title: 'Users Directory',
   robots: { index: false, follow: false },

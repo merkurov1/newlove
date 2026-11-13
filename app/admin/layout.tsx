@@ -4,10 +4,10 @@ import { redirect } from 'next/navigation';
 import AdminChrome from './AdminChrome';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
+export const dynamic = 'force-dynamic';
+
 const rootTitleDefault =
-  typeof rootMetadata?.title === 'object' &&
-  rootMetadata?.title &&
-  'default' in rootMetadata.title
+  typeof rootMetadata?.title === 'object' && rootMetadata?.title && 'default' in rootMetadata.title
     ? String(rootMetadata.title.default || 'Anton Merkurov')
     : typeof rootMetadata?.title === 'string'
       ? rootMetadata.title
@@ -21,11 +21,7 @@ export const metadata = sanitizeMetadata({
   },
 });
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   try {
     await requireAdmin();
   } catch {

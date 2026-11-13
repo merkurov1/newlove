@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import MediaArchive from '@/components/media/MediaArchive';
 import { archives } from '@/data/media';
 import { getMediaRecords } from '@/lib/mediaRecords';
@@ -55,7 +56,15 @@ export default async function MediaPage() {
           { name: 'Media Archive', path: '/media' },
         ])}
       />
-      <MediaArchive records={records} archives={archives} />
+      <Suspense
+        fallback={
+          <div className="mx-auto max-w-6xl px-6 py-24 font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500">
+            Loading media archive…
+          </div>
+        }
+      >
+        <MediaArchive records={records} archives={archives} />
+      </Suspense>
     </>
   );
 }
