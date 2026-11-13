@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.analytics_metrics_daily_provider_date_idx;

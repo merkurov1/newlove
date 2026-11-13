@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { unstable_cache } from 'next/cache';
 
 import { requireAdmin } from '@/lib/serverAuth';
 import { analyticsEncryptionKeySource } from '@/lib/analytics/website/tokenCrypto';
@@ -17,6 +18,12 @@ import Sparkline from '@/components/pierrot/workspace/Sparkline';
 import './analytics.css';
 
 export const dynamic = 'force-dynamic';
+
+const loadDashboardCached = unstable_cache(
+  async (days: number) => loadWebsiteDashboard({ days: days as 7 | 30 | 90 }),
+  ['website-analytics-dashboard-v1'],
+  { revalidate: 60 }
+);
 
 export const metadata: Metadata = {
   title: 'ANALYTICS',
@@ -402,7 +409,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
 
   const params = searchParams ?? {};
   const health = await loadSourceHealth();
-  const dashboard = await loadWebsiteDashboard({ days: 30 }).catch(() => null);
+  const dashboard = await loadDashboardCached(30).catch(() => null);
   const google = getGoogleOAuthConfig();
   const umami = getUmamiConfig();
   const message = banner(params);
