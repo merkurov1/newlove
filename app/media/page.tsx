@@ -7,7 +7,7 @@ import { ROUTE_COPY, pageMetadata } from '@/lib/seo';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { breadcrumbJsonLd, collectionPageJsonLd } from '@/lib/structuredData';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 export const runtime = 'nodejs';
 
 const copy = ROUTE_COPY['/media'];

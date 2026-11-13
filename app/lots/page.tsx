@@ -15,7 +15,7 @@ export const metadata = pageMetadata({
   languages: { 'x-default': '/lots', en: '/lots' },
 });
 
-export const revalidate = 0; // Всегда свежие данные
+export const revalidate = 300; // Vault changes are infrequent; ISR avoids a DB read per visit
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -85,6 +85,8 @@ export default async function LotsGalleryPage() {
                     <img 
                       src={publicImg} 
                       alt={lot.title}
+                      loading="lazy"
+                      decoding="async"
                       className="object-contain max-h-full max-w-full group-hover:scale-105 transition duration-500 opacity-90 group-hover:opacity-100"
                     />
                   ) : (

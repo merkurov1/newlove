@@ -366,6 +366,7 @@ export async function POST(
   revalidatePath(`/selection/${article.slug}`);
   revalidatePath('/sitemap.xml');
   revalidatePath('/lots');
+  revalidatePath(`/lots/${encodeURIComponent(params.id)}`);
 
   return NextResponse.json({
     success: true,

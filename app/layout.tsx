@@ -7,9 +7,6 @@ import './main.css';
 
 // ПРИМЕЧАНИЕ: Импорты Swiper рекомендовано перенести в сам компонент слайдера,
 // чтобы не раздувать глобальный CSS для всех страниц.
-import 'swiper/css';
-import 'swiper/css/navigation';
-import 'swiper/css/pagination';
 
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';

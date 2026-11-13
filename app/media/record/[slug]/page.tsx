@@ -11,7 +11,7 @@ import {
 } from '@/lib/mediaClassification';
 import { description, pageMetadata, truncate } from '@/lib/seo';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
 export const runtime = 'nodejs';
 
 type Props = { params: { slug: string } };

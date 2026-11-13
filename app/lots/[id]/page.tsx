@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 
-export const revalidate = 0;
+export const revalidate = 3600;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -135,6 +135,7 @@ export default async function LotDetailPage({ params }: { params: { id: string }
                 <img 
                   src={publicImg} 
                   alt={lot.title || lot.artist} 
+                  decoding="async"
                   className="object-contain max-h-[600px] w-full"
                 />
               ) : (
