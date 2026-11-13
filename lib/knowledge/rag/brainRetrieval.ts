@@ -444,10 +444,12 @@ export async function retrieveBrainEvidence(
     }
 
     const maxPerDocument =
-      plan.specificDocument || plan.requestedSources.includes('manuscript') ? 4 : 2;
+      plan.specificDocument || plan.requestedSources.includes('manuscript')
+        ? Math.max(topK, 12)
+        : 2;
     const explicitManuscript = plan.requestedSources.includes('manuscript');
-    const maxManuscript = explicitManuscript ? topK : 1;
-    const maxPerClass = explicitManuscript ? topK : 5;
+    const maxManuscript = explicitManuscript ? Math.max(topK, 12) : 1;
+    const maxPerClass = explicitManuscript ? Math.max(topK, 12) : 5;
     const documentCounts = new Map<string, number>();
     const classCounts = new Map<BrainSourceClass, number>();
     const diverse: Array<{
