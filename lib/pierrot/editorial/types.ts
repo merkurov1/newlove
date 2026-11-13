@@ -23,9 +23,42 @@ export type ProjectOperation =
   | 'project.episodes'
   | 'project.history'
   | 'project.brief'
-  | 'project.link_episode';
+  | 'project.link_episode'
+  | 'episode.discover'
+  | 'episode.open'
+  | 'episode.select'
+  | 'episode.develop'
+  | 'episode.script'
+  | 'episode.status'
+  | 'episode.revise'
+  | 'episode.approve_script'
+  | 'episode.publish_prepare'
+  | 'episode.reject';
 
 export type EditorialOperation = ManuscriptOperation | ProjectOperation;
+
+export type EpisodeStatus =
+  | 'DISCOVERY'
+  | 'SELECTED'
+  | 'DEVELOPMENT'
+  | 'SCRIPT'
+  | 'PRODUCTION'
+  | 'EDITING'
+  | 'READY'
+  | 'PUBLISHED'
+  | 'ARCHIVED';
+
+export const EPISODE_STATUSES: EpisodeStatus[] = [
+  'DISCOVERY',
+  'SELECTED',
+  'DEVELOPMENT',
+  'SCRIPT',
+  'PRODUCTION',
+  'EDITING',
+  'READY',
+  'PUBLISHED',
+  'ARCHIVED',
+];
 
 export type EditorialSourceConstraints = {
   excludedTopics: string[];
@@ -41,6 +74,13 @@ export type EditorialContext = {
   documentId: string | null;
   documentTitle: string | null;
   episodeId: string | null;
+  activeEpisodeRecordId: string | null;
+  activeEpisodeNumber: number | null;
+  activeStage: EpisodeStatus | null;
+  activeScriptId: string | null;
+  approvedScriptId: string | null;
+  discoveryCandidates: DiscoveryCandidate[];
+  lastDiscoveryId: string | null;
   activeChapterNumber: number | null;
   activeTask: string | null;
   currentEditorialObjective: string | null;
@@ -48,6 +88,20 @@ export type EditorialContext = {
   lastEvidenceChunkIds: string[];
   sourceConstraints: EditorialSourceConstraints;
   updatedAt: string | null;
+};
+
+export type DiscoveryCandidate = {
+  number: number;
+  chapterNumber: number | null;
+  chapterLabel: string;
+  title: string;
+  chunkId: string;
+  chunkIndex: number;
+  historicalPeriod: string | null;
+  sourceExcerpt: string;
+  editorialQuestion: string;
+  visualDirection: string;
+  score: number;
 };
 
 export function emptySourceConstraints(): EditorialSourceConstraints {
@@ -62,6 +116,13 @@ export function emptyEditorialContext(): EditorialContext {
     documentId: null,
     documentTitle: null,
     episodeId: null,
+    activeEpisodeRecordId: null,
+    activeEpisodeNumber: null,
+    activeStage: null,
+    activeScriptId: null,
+    approvedScriptId: null,
+    discoveryCandidates: [],
+    lastDiscoveryId: null,
     activeChapterNumber: null,
     activeTask: null,
     currentEditorialObjective: null,
@@ -84,6 +145,9 @@ export type EditorialIntent = {
   chapterNumber: number | null;
   chapterNumbers: number[];
   chapterTitle: string | null;
+  episodeNumber: number | null;
+  targetEpisodeStatus: EpisodeStatus | null;
+  candidateNumber: number | null;
   compareChapters: [number, number] | null;
   quotePhrase: string | null;
   searchQuery: string;
@@ -142,6 +206,12 @@ export type EditorialResult =
       markdownFallback: string;
       contextPatch: Partial<EditorialContext>;
       diagnostic: EditorialDiagnostic;
+      generatedArtifact?: {
+        kind: 'script' | 'development' | 'concept';
+        episodeNumber: number;
+        title: string;
+        sourceChunkIds: string[];
+      };
     }
   | {
       status: 'clarify';

@@ -67,6 +67,34 @@ export function editorialContextFromPayload(payload: unknown): EditorialContext 
   context.documentId = text(row.active_document_id ?? row.documentId) || null;
   context.documentTitle = text(row.active_document_title ?? row.documentTitle) || null;
   context.episodeId = text(row.active_episode_id ?? row.episodeId) || null;
+  context.activeEpisodeRecordId =
+    text(row.active_episode_record_id ?? row.activeEpisodeRecordId) || null;
+  context.activeEpisodeNumber = numberOrNull(
+    row.active_episode_number ?? row.activeEpisodeNumber
+  );
+  context.activeStage = (text(row.active_stage ?? row.activeStage) || null) as EditorialContext['activeStage'];
+  context.activeScriptId = text(row.active_script_id ?? row.activeScriptId) || null;
+  context.approvedScriptId = text(row.approved_script_id ?? row.approvedScriptId) || null;
+  context.lastDiscoveryId = text(row.last_discovery_id ?? row.lastDiscoveryId) || null;
+  context.discoveryCandidates = Array.isArray(row.discovery_candidates)
+    ? (row.discovery_candidates as unknown[])
+        .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+        .slice(0, 5)
+        .map((item) => ({
+          number: Number(item.number || 0),
+          chapterNumber:
+            typeof item.chapter_number === 'number' ? item.chapter_number : null,
+          chapterLabel: text(item.chapter_label),
+          title: text(item.title),
+          chunkId: text(item.chunk_id),
+          chunkIndex: Number(item.chunk_index || 0),
+          historicalPeriod: text(item.historical_period) || null,
+          sourceExcerpt: text(item.source_excerpt),
+          editorialQuestion: text(item.editorial_question),
+          visualDirection: text(item.visual_direction),
+          score: Number(item.score || 0),
+        }))
+    : [];
   context.activeChapterNumber = numberOrNull(
     row.active_chapter_number ?? row.activeChapterNumber
   );
@@ -96,6 +124,25 @@ export function editorialContextToPayload(
     active_document_id: context.documentId,
     active_document_title: context.documentTitle,
     active_episode_id: context.episodeId,
+    active_episode_record_id: context.activeEpisodeRecordId,
+    active_episode_number: context.activeEpisodeNumber,
+    active_stage: context.activeStage,
+    active_script_id: context.activeScriptId,
+    approved_script_id: context.approvedScriptId,
+    last_discovery_id: context.lastDiscoveryId,
+    discovery_candidates: context.discoveryCandidates.slice(0, 5).map((candidate) => ({
+      number: candidate.number,
+      chapter_number: candidate.chapterNumber,
+      chapter_label: candidate.chapterLabel.slice(0, 160),
+      title: candidate.title.slice(0, 160),
+      chunk_id: candidate.chunkId,
+      chunk_index: candidate.chunkIndex,
+      historical_period: candidate.historicalPeriod,
+      source_excerpt: '',
+      editorial_question: '',
+      visual_direction: '',
+      score: candidate.score,
+    })),
     active_chapter_number: context.activeChapterNumber,
     active_task: context.activeTask,
     current_editorial_objective: context.currentEditorialObjective,
@@ -173,6 +220,7 @@ export async function saveEditorialContext(input: {
   userMessageId: string;
   context: EditorialContext;
   diagnostic?: Record<string, unknown>;
+  stageKey?: string;
 }): Promise<boolean> {
   if (!input.store) return false;
 
@@ -181,9 +229,10 @@ export async function saveEditorialContext(input: {
       conversationId: input.conversationId,
       sessionId: input.sessionId,
       eventName: EDITORIAL_CONTEXT_EVENT,
-      eventKey: `${EDITORIAL_CONTEXT_KEY_PREFIX}${input.userMessageId}`,
+      eventKey: `${EDITORIAL_CONTEXT_KEY_PREFIX}${input.stageKey ? `${input.stageKey}:` : ''}${input.userMessageId}`,
       payload: editorialContextToPayload(input.context, {
         kind: 'editorial_context',
+        ...(input.stageKey ? { stage: input.stageKey } : {}),
         ...input.diagnostic,
       }),
     });

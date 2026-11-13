@@ -32,6 +32,32 @@ import {
   searchUnframedProjectHistory,
   type ProjectEpisodeView,
 } from './project';
+import {
+  approveScript,
+  createEpisodeRecord,
+  episodeTitle,
+  getEpisodeByNumber,
+  listEpisodeRecords,
+  listRejectedStories,
+  listScripts,
+  mapEpisodeArtifact,
+  recordRejectedStory,
+  saveDiscoverySet,
+  saveEpisodeRecord,
+  savePublicationDraft,
+  saveScriptVersion,
+  seedPublishedEpisodes,
+  updateEpisodeRecord,
+  type EpisodeRecord,
+  type EpisodeSourcePassage,
+  type ScriptVersion,
+} from './episodes';
+import { candidateOverlapMap, discoverEpisodeCandidates } from './discovery';
+import {
+  composeEditorialProfile,
+  loadStoredEditorialProfile,
+  saveEditorialProfile,
+} from './profile';
 
 /**
  * Executes one editorial operation against the existing manuscript and project
@@ -1227,6 +1253,1017 @@ async function handleManuscriptOperation(
   };
 }
 
+function nextEpisodeNumber(episodes: EpisodeRecord[]): number {
+  const max = episodes.reduce((value, episode) => Math.max(value, episode.number), -1);
+  return max + 1;
+}
+
+function latestEpisode(episodes: EpisodeRecord[]): EpisodeRecord | null {
+  const active = episodes.filter(
+    (episode) => episode.status !== 'PUBLISHED' && episode.status !== 'ARCHIVED'
+  );
+  return (
+    active.sort((left, right) => right.number - left.number)[0] ||
+    [...episodes].sort((left, right) => right.number - left.number)[0] ||
+    null
+  );
+}
+
+function nextActionFor(episode: EpisodeRecord, scripts: ScriptVersion[]): string {
+  switch (episode.status) {
+    case 'PUBLISHED':
+      return 'Опубликован. Можно открыть страницу, проверить метаданные или вернуться к другому эпизоду.';
+    case 'READY':
+      return 'Видео готово. Следующий шаг — подготовка страницы и метаданных, без автопубликации.';
+    case 'EDITING':
+      return 'Монтаж. Следующий шаг — READY, затем подготовка публикации.';
+    case 'PRODUCTION':
+      return 'Производство. Следующий шаг — монтаж, затем READY.';
+    case 'SCRIPT':
+      return scripts.some((script) => script.status === 'approved')
+        ? 'Сценарий утверждён. Следующий шаг — производство.'
+        : 'Сценарий в работе. Нужно утвердить версию, прежде чем переходить к производству.';
+    case 'DEVELOPMENT':
+      return 'Разработка. Следующий шаг — структура и сценарий по решению автора.';
+    case 'SELECTED':
+      return 'История выбрана. Следующий шаг — разбор источника и редакционная концепция.';
+    case 'DISCOVERY':
+      return 'Кандидат. Нужно выбрать историю и перейти к разработке.';
+    case 'ARCHIVED':
+      return 'Архив. Можно вернуться к идее или выбрать другую историю.';
+    default:
+      return 'Нужен следующий редакционный шаг.';
+  }
+}
+
+function sourcePassagesFromCandidate(candidate: {
+  chunkId: string;
+  chunkIndex: number;
+  chapterLabel: string;
+  sourceExcerpt: string;
+}): EpisodeSourcePassage[] {
+  return [
+    {
+      chunkId: candidate.chunkId,
+      chunkIndex: candidate.chunkIndex,
+      heading: candidate.chapterLabel,
+      sectionPath: [candidate.chapterLabel],
+      excerpt: candidate.sourceExcerpt.slice(0, 1_200),
+      charStart: 0,
+      charEnd: 0,
+    },
+  ];
+}
+
+function episodeMarkdown(episode: EpisodeRecord, scripts: ScriptVersion[], language: 'ru' | 'en'): string {
+  const approved = scripts.find((script) => script.status === 'approved') || null;
+  const latest = scripts[0] || null;
+  const source = episode.sourcePassages[0] || null;
+  return [
+    `## Episode ${episode.number} — ${episode.title}`,
+    '',
+    `**Статус:** ${episode.status} · **Глава:** ${episode.chapterLabel || 'не записана'} · **Период:** ${
+      episode.historicalPeriod || 'не зафиксирован'
+    }`,
+    `**Видео:** ${episode.videoUrl || 'URL не записан'} · **Страница:** ${episode.publicPageUrl || 'не записана'}`,
+    episode.workingTitle && episode.workingTitle !== episode.title
+      ? `**Рабочее название:** ${episode.workingTitle}`
+      : null,
+    '',
+    '### Источник',
+    source
+      ? `- chunk ${source.chunkIndex} · \`${source.chunkId}\` · ${source.heading}\n  > ${source.excerpt}`
+      : '- Source passage не записан.',
+    `- Всего source chunks: ${episode.chunkIds.length}.`,
+    '',
+    '### Редакционная идея',
+    episode.centralStory || episode.description || 'Central story ещё не сформулирована.',
+    episode.thesis ? `\n**Тезис:** ${episode.thesis}` : '',
+    episode.narrativeAngle ? `\n**Угол:** ${episode.narrativeAngle}` : '',
+    '',
+    '### Сценарий',
+    approved
+      ? `Утверждён r${approved.revision} (${approved.approvedAt?.slice(0, 10) || 'дата не записана'}), ${approved.content.length} символов.`
+      : latest
+        ? `Есть черновик r${latest.revision}, ${latest.content.length} символов. Утверждённой версии нет.`
+        : 'Сценария пока нет.',
+    '',
+    '### Производство',
+    `- Visual concept: ${episode.visualConcept || 'не записан'}.`,
+    `- Visual prompts: ${episode.visualPrompts.length}.`,
+    `- Music/sound: ${episode.music || 'не записано'}.`,
+    '',
+    `**Следующий шаг:** ${nextActionFor(episode, scripts)}`,
+  ]
+    .filter((line): line is string => line !== null)
+    .join('\n');
+}
+
+function buildEpisodePrompt(input: {
+  stage: 'develop' | 'script' | 'revise' | 'publication';
+  profileMarkdown: string;
+  episode: EpisodeRecord;
+  chapterLabel: string;
+  blocks: Array<Record<string, unknown>>;
+  currentScript?: ScriptVersion | null;
+  language: 'ru' | 'en';
+}): string {
+  const stageInstructions: Record<typeof input.stage, string[]> = {
+    develop: [
+      'TASK: editorial development, not a full script.',
+      'A. Source examination: what actually happens in the chapter; separate autobiography from commentary.',
+      'B. Editorial concept: the strongest story, central thesis, narrative perspective, opening and ending.',
+      'C. Narrative structure: a sequence of scenes, pacing, transitions, emotional and intellectual turning point.',
+      'D. State what is sourced, what is inference, and what remains unknown. Do not write the voiceover yet.',
+      'E. End with 2–4 concrete decisions the author must make before a script is written.',
+    ],
+    script: [
+      'TASK: write a complete voiceover script for a video essay.',
+      'Preserve the author’s first-person voice and concrete imagery. Do not use generic AI narration or motivational language.',
+      'Use only the supplied source evidence for factual and autobiographical claims. Mark every direct quotation with its source chunk reference.',
+      'Structure the output as: TITLE, LOGLINE, VOICEOVER (numbered scenes with approximate duration), ON-SCREEN TEXT, SOURCE QUOTES, VISUAL SCENES, SOUND/MUSIC, EDITORIAL NOTE.',
+      'Total target: 6–10 minutes of spoken narration. Do not invent names, dates, events or quotations.',
+    ],
+    revise: [
+      'TASK: revise the current script or create an alternative version.',
+      'Do not overwrite the approved version. Produce a new version with a clear change note.',
+      'Follow the author’s requested change (ending, angle, pacing or version). Preserve factual traceability and exact quotations.',
+      'Output the revised script in the same production format: TITLE, LOGLINE, VOICEOVER, SOURCE QUOTES, VISUAL SCENES, SOUND/MUSIC, CHANGE NOTE.',
+    ],
+    publication: [
+      'TASK: prepare publication materials, not publish anything.',
+      'Produce: page title, subtitle, editorial introduction, one exact manuscript quotation, YouTube description, metadata, internal links.',
+      'Do not invent a video URL, publication date, episode number or quotation.',
+    ],
+  };
+
+  return [
+    input.profileMarkdown ? `UNFRAMED_EDITORIAL_PROFILE\n${input.profileMarkdown}` : '',
+    buildAnalysisPrompt({
+      operation: `episode.${input.stage}`,
+      scopes: [`Episode ${input.episode.number} — ${input.episode.title}`, input.chapterLabel],
+      blocks: input.blocks,
+      coverageNotes: [
+        `episode status: ${input.episode.status}`,
+        `source chunks: ${input.episode.chunkIds.length}`,
+        input.currentScript
+          ? `current script: r${input.currentScript.revision}, status ${input.currentScript.status}`
+          : 'current script: none',
+      ],
+      language: input.language,
+    }),
+    'EPISODE_RECORD:',
+    JSON.stringify({
+      number: input.episode.number,
+      title: input.episode.title,
+      working_title: input.episode.workingTitle,
+      status: input.episode.status,
+      chapter: input.chapterLabel,
+      central_story: input.episode.centralStory,
+      thesis: input.episode.thesis,
+      narrative_angle: input.episode.narrativeAngle,
+      historical_period: input.episode.historicalPeriod,
+      visual_concept: input.episode.visualConcept,
+    }),
+    ...stageInstructions[input.stage],
+    `Answer in ${input.language === 'ru' ? 'Russian' : 'English'}, except the English voiceover itself.`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+async function handleEpisodeOperation(input: RunEditorialInput): Promise<EditorialResult> {
+  const started = Date.now();
+  const { intent, context, language } = input;
+  const state = await loadUnframedProject({
+    ownerUserId: input.ownerUserId,
+    store: input.store,
+    env: input.env,
+    includeManuscript: true,
+  });
+  const baseDiagnostic = {
+    requestId: input.requestId,
+    conversationId: input.conversationId,
+    projectId: state.project?.id || context.projectId,
+    documentId: state.manuscript?.document.id || UNFRAMED_MANUSCRIPT_ID,
+    operation: intent.operation,
+    resolvedIntent: intent.signals.join(','),
+    retrievalStrategy: null as string | null,
+    requestedSources: ['project', 'manuscript', 'episode_registry'],
+    selectedSources: [] as string[],
+    returnedChunkIds: [] as string[],
+    chunkCount: 0,
+    coverage: null as number | null,
+    truncated: false,
+    fallbackReason: null as string | null,
+    errors: [] as string[],
+    durationMs: 0,
+    finishReason: null as string | null,
+  };
+
+  if (!state.project) {
+    return {
+      status: 'failed',
+      markdown: state.projectUnavailable
+        ? `Не удалось прочитать проект UNFRAMED: ${state.projectUnavailable}. Это ошибка источника, а не пустой проект.`
+        : 'Проект UNFRAMED не найден в рабочем пространстве. Материалы Brain не объявлены пустыми.',
+      contextPatch: { activeTask: intent.operation },
+      diagnostic: { ...baseDiagnostic, errors: [state.projectUnavailable || 'project_not_found'], durationMs: Date.now() - started },
+    };
+  }
+  if (!state.manuscript) {
+    return {
+      status: 'failed',
+      markdown: `Рукопись недоступна: ${state.manuscriptUnavailable || 'unknown'}. Это сбой чтения источника, а не отсутствие книги.`,
+      contextPatch: { activeTask: intent.operation },
+      diagnostic: { ...baseDiagnostic, errors: [state.manuscriptUnavailable || 'manuscript_unavailable'], durationMs: Date.now() - started },
+    };
+  }
+
+  const inventory = state.manuscript;
+  let episodesResult = await listEpisodeRecords({
+    ownerUserId: input.ownerUserId,
+    projectId: state.project.id,
+    store: input.store,
+    env: input.env,
+    limit: 300,
+  });
+  if (episodesResult.error) {
+    return {
+      status: 'failed',
+      markdown: `Реестр эпизодов не прочитан: ${episodesResult.error}. Это ошибка запроса, а не пустая серия.`,
+      contextPatch: { activeTask: intent.operation },
+      diagnostic: { ...baseDiagnostic, errors: [episodesResult.error], durationMs: Date.now() - started },
+    };
+  }
+  if (episodesResult.episodes.length === 0) {
+    await seedPublishedEpisodes({
+      ownerUserId: input.ownerUserId,
+      projectId: state.project.id,
+      inventory,
+      store: input.store,
+      env: input.env,
+    });
+    episodesResult = await listEpisodeRecords({
+      ownerUserId: input.ownerUserId,
+      projectId: state.project.id,
+      store: input.store,
+      env: input.env,
+      limit: 300,
+    });
+  }
+  const episodes = episodesResult.episodes;
+  const requestedNumber = intent.episodeNumber ?? context.activeEpisodeNumber;
+  const activeEpisode =
+    (requestedNumber !== null
+      ? episodes.find((episode) => episode.number === requestedNumber) || null
+      : null) ||
+    (context.activeEpisodeRecordId
+      ? episodes.find((episode) => episode.id === context.activeEpisodeRecordId) || null
+      : null);
+
+  if (intent.operation === 'episode.discover') {
+    const allChunks = await loadManuscriptText({
+      inventory,
+      store: input.store,
+      env: input.env,
+    });
+    const rejected = await listRejectedStories({
+      ownerUserId: input.ownerUserId,
+      projectId: state.project.id,
+      store: input.store,
+      env: input.env,
+    });
+    const discovery = await discoverEpisodeCandidates({
+      inventory,
+      episodes,
+      rejected: rejected.stories,
+      context,
+      allChunks,
+      limit: 5,
+      query: intent.searchQuery || input.message,
+      fromYear: intent.constraints.fromYear,
+      toYear: intent.constraints.toYear,
+      excludedTopics: intent.constraints.excludedTopics,
+      store: input.store,
+      env: input.env,
+    });
+    const discoverySet = await saveDiscoverySet({
+      ownerUserId: input.ownerUserId,
+      projectId: state.project.id,
+      candidates: discovery.candidates,
+      query: input.message,
+      store: input.store,
+      env: input.env,
+    });
+    const chunkMap = new Map(allChunks.map((chunk) => [chunk.chunkId, chunk]));
+    const overlaps = candidateOverlapMap(discovery.candidates, episodes, chunkMap);
+
+    const markdown = [
+      `## UNFRAMED — кандидаты для следующего эпизода`,
+      '',
+      `Проверено глав: ${discovery.inspectedChapters}. Источник: ${inventory.document.title}, ${inventory.coverage.loadedChunkCount} chunks, ${(inventory.coverage.coverageRatio * 100).toFixed(1)}% coverage.`,
+      `Исключено: ${discovery.excluded.length} глав (использованные, отклонённые, ограничение по арестам/уголовным/силовым темам, неполное покрытие).`,
+      '',
+      ...discovery.candidates.flatMap((candidate) => {
+        const overlap = overlaps.get(candidate.number);
+        return [
+          `### ${candidate.number}. ${candidate.title}`,
+          `- **Chapter:** ${candidate.chapterLabel} · chunk ${candidate.chunkIndex} · \`${candidate.chunkId}\``,
+          `- **Period:** ${candidate.historicalPeriod || 'в тексте нет явной даты'}`,
+          `- **Source (verbatim):** > ${candidate.sourceExcerpt}`,
+          `- **Editorial question (proposal):** ${candidate.editorialQuestion}`,
+          `- **Visual direction (proposal):** ${candidate.visualDirection}`,
+          `- **Overlap:** ${overlap || 'нет совпадений с уже выбранными/опубликованными эпизодами'}`,
+          '',
+        ];
+      }),
+      `Выберите номер кандидата — я создам запись эпизода со статусом SELECTED и сохраню source references.`,
+      `Ни один кандидат не является утверждённой историей, пока вы его не выберете.`,
+    ].join('\n');
+
+    return {
+      status: 'deterministic',
+      markdown,
+      contextPatch: {
+        projectId: state.project.id,
+        projectSlug: state.project.slug,
+        projectName: state.project.name,
+        documentId: inventory.document.id,
+        documentTitle: inventory.document.title,
+        activeTask: 'episode.discover',
+        currentEditorialObjective: input.message,
+        lastRetrievalScope: 'manuscript_full_story_scan',
+        lastDiscoveryId: discoverySet.id,
+        discoveryCandidates: discovery.candidates,
+        lastEvidenceChunkIds: discovery.candidates.map((candidate) => candidate.chunkId),
+      },
+      diagnostic: {
+        ...baseDiagnostic,
+        retrievalStrategy: 'all_chunks_story_ranking',
+        selectedSources: ['manuscript', 'episode_registry', 'rejections'],
+        returnedChunkIds: discovery.candidates.map((candidate) => candidate.chunkId),
+        chunkCount: allChunks.length,
+        coverage: inventory.coverage.coverageRatio,
+        errors: discoverySet.error ? [discoverySet.error] : [],
+        durationMs: Date.now() - started,
+      },
+    };
+  }
+
+  if (intent.operation === 'episode.select') {
+    const candidates = context.discoveryCandidates;
+    if (candidates.length === 0) {
+      return {
+        status: 'clarify',
+        markdown: 'Сначала нужен discovery: скажите «Найди пять историй для следующего эпизода».',
+        contextPatch: { activeTask: 'episode.select' },
+        diagnostic: { ...baseDiagnostic, errors: ['no_discovery_candidates'], durationMs: Date.now() - started },
+      };
+    }
+    const chosen =
+      candidates.find((candidate) => candidate.number === (intent.candidateNumber || 1)) ||
+      candidates[0];
+    const sourceChunk = (
+      await loadManuscriptChunksByIds({
+        inventory,
+        store: input.store,
+        env: input.env,
+        chunkIds: [chosen.chunkId],
+      })
+    )[0];
+    const chosenPassage = sourceChunk
+      ? {
+          ...chosen,
+          sourceExcerpt: sourceChunk.content.slice(0, 1_200),
+          chunkIndex: sourceChunk.chunkIndex,
+        }
+      : chosen;
+    const number = nextEpisodeNumber(episodes);
+    const created = await createEpisodeRecord({
+      ownerUserId: input.ownerUserId,
+      projectId: state.project.id,
+      number,
+      title: chosen.title,
+      workingTitle: chosen.title,
+      status: 'SELECTED',
+      chapterNumber: chosen.chapterNumber,
+      chapterLabel: chosen.chapterLabel,
+      chunkIds: [chosen.chunkId],
+      sourcePassages: sourcePassagesFromCandidate(chosenPassage),
+      centralStory: chosen.editorialQuestion,
+      historicalPeriod: chosen.historicalPeriod || '',
+      visualConcept: chosen.visualDirection,
+      description: chosen.sourceExcerpt,
+      store: input.store,
+      env: input.env,
+    });
+    if (!created.ok) {
+      return {
+        status: 'failed',
+        markdown: `Не удалось создать эпизод: ${created.error}.`,
+        contextPatch: { activeTask: 'episode.select' },
+        diagnostic: { ...baseDiagnostic, errors: [created.error], durationMs: Date.now() - started },
+      };
+    }
+
+    return {
+      status: 'deterministic',
+      markdown: [
+        `## Episode ${created.episode.number} — ${created.episode.title}`,
+        '',
+        `История выбрана из кандидата ${chosen.number}. Статус: **SELECTED**.`,
+        `- Source: ${chosen.chapterLabel}, chunk ${chosen.chunkIndex} · \`${chosen.chunkId}\``,
+        `- Source passage: > ${chosen.sourceExcerpt}`,
+        '',
+        `Следующий шаг: «Разработай эпизод» — я прочитаю главу целиком и предложу редакционную концепцию и структуру. Сценарий не будет написан без вашего решения.`,
+      ].join('\n'),
+      contextPatch: {
+        projectId: state.project.id,
+        projectSlug: state.project.slug,
+        projectName: state.project.name,
+        documentId: inventory.document.id,
+        documentTitle: inventory.document.title,
+        episodeId: null,
+        activeEpisodeRecordId: created.episode.id,
+        activeEpisodeNumber: created.episode.number,
+        activeStage: 'SELECTED',
+        activeChapterNumber: chosen.chapterNumber,
+        activeTask: 'episode.select',
+        currentEditorialObjective: input.message,
+        lastRetrievalScope: `episode:${created.episode.number}:selected`,
+        lastEvidenceChunkIds: [chosen.chunkId],
+      },
+      diagnostic: {
+        ...baseDiagnostic,
+        retrievalStrategy: 'candidate_selection',
+        selectedSources: ['manuscript', 'episode_registry'],
+        returnedChunkIds: [chosen.chunkId],
+        chunkCount: 1,
+        durationMs: Date.now() - started,
+      },
+    };
+  }
+
+  if (intent.operation === 'episode.reject') {
+    const candidate =
+      context.discoveryCandidates.find(
+        (item) => item.number === (intent.candidateNumber || 1)
+      ) ||
+      (activeEpisode
+        ? {
+            number: activeEpisode.number,
+            chapterNumber: activeEpisode.chapterNumber,
+            chapterLabel: activeEpisode.chapterLabel || '',
+            title: activeEpisode.title,
+            chunkId: activeEpisode.chunkIds[0] || '',
+          }
+        : context.discoveryCandidates[0] || null);
+    const rejectingActiveEpisode =
+      Boolean(activeEpisode) &&
+      (!context.discoveryCandidates.length ||
+        activeEpisode?.number === candidate?.number);
+
+    if (!candidate) {
+      return {
+        status: 'clarify',
+        markdown: 'Что именно отклонить? Назовите номер кандидата или эпизод.',
+        contextPatch: { activeTask: 'episode.reject' },
+        diagnostic: { ...baseDiagnostic, errors: ['no_rejection_target'], durationMs: Date.now() - started },
+      };
+    }
+
+    const rejected = await recordRejectedStory({
+      ownerUserId: input.ownerUserId,
+      projectId: state.project.id,
+      number: activeEpisode?.number ?? null,
+      title: candidate.title,
+      chapterNumber: candidate.chapterNumber,
+      chunkIds: [candidate.chunkId],
+      reason: input.message,
+      store: input.store,
+      env: input.env,
+    });
+    if (activeEpisode && rejectingActiveEpisode && rejected.ok) {
+      await updateEpisodeRecord({
+        ownerUserId: input.ownerUserId,
+        projectId: state.project.id,
+        episode: activeEpisode,
+        patch: { status: 'ARCHIVED', editorialNotes: `${activeEpisode.editorialNotes}\nRejected: ${input.message}` },
+        statusNote: 'rejected_by_author',
+        store: input.store,
+        env: input.env,
+      });
+    }
+
+    return {
+      status: rejected.ok ? 'deterministic' : 'failed',
+      markdown: rejected.ok
+        ? `Отклонено и запомнено: «${candidate.title}». Причина: ${input.message}. В следующий discovery эта история не вернётся без нового материала.`
+        : `Не удалось сохранить отклонение: ${rejected.error}.`,
+      contextPatch: {
+        activeTask: 'episode.reject',
+        currentEditorialObjective: input.message,
+        discoveryCandidates: context.discoveryCandidates.filter(
+          (item) => item.number !== candidate.number
+        ),
+        ...(activeEpisode ? { activeStage: 'ARCHIVED' as const } : {}),
+      },
+      diagnostic: {
+        ...baseDiagnostic,
+        retrievalStrategy: 'story_rejection',
+        errors: rejected.ok ? [] : [rejected.error],
+        durationMs: Date.now() - started,
+      },
+    };
+  }
+
+  if (intent.operation === 'episode.open') {
+    const episode = activeEpisode || latestEpisode(episodes);
+    if (!episode) {
+      return {
+        status: 'clarify',
+        markdown: 'В реестре пока нет эпизодов. Начните с discovery: «Найди истории для следующего эпизода».',
+        contextPatch: { activeTask: 'episode.open' },
+        diagnostic: { ...baseDiagnostic, errors: ['episode_registry_empty'], durationMs: Date.now() - started },
+      };
+    }
+    const scripts = await listScripts({
+      ownerUserId: input.ownerUserId,
+      projectId: state.project.id,
+      episodeNumber: episode.number,
+      store: input.store,
+      env: input.env,
+    });
+    const activeScript =
+      scripts.scripts.find((script) => script.status === 'approved') ||
+      scripts.scripts[0] ||
+      null;
+
+    return {
+      status: 'deterministic',
+      markdown: episodeMarkdown(episode, scripts.scripts, language),
+      contextPatch: {
+        projectId: state.project.id,
+        projectSlug: state.project.slug,
+        projectName: state.project.name,
+        documentId: inventory.document.id,
+        documentTitle: inventory.document.title,
+        activeEpisodeRecordId: episode.id,
+        activeEpisodeNumber: episode.number,
+        activeStage: episode.status,
+        activeChapterNumber: episode.chapterNumber,
+        activeScriptId: activeScript?.id || null,
+        approvedScriptId:
+          scripts.scripts.find((script) => script.status === 'approved')?.id || null,
+        activeTask: 'episode.open',
+        currentEditorialObjective: input.message,
+        lastRetrievalScope: `episode:${episode.number}:${episode.status}`,
+        lastEvidenceChunkIds: episode.chunkIds.slice(0, 20),
+      },
+      diagnostic: {
+        ...baseDiagnostic,
+        retrievalStrategy: 'episode_registry',
+        selectedSources: ['episode_registry', 'scripts', 'manuscript'],
+        returnedChunkIds: episode.chunkIds.slice(0, 20),
+        chunkCount: episode.chunkIds.length,
+        errors: scripts.error ? [scripts.error] : [],
+        durationMs: Date.now() - started,
+      },
+    };
+  }
+
+  if (!activeEpisode) {
+    return {
+      status: 'clarify',
+      markdown:
+        'Не вижу активного эпизода. Скажите номер («Go back to episode 42») или выберите историю из discovery.',
+      contextPatch: { activeTask: intent.operation },
+      diagnostic: { ...baseDiagnostic, errors: ['active_episode_missing'], durationMs: Date.now() - started },
+    };
+  }
+
+  if (intent.operation === 'episode.status') {
+    const target = intent.targetEpisodeStatus;
+    if (!target) {
+      return {
+        status: 'clarify',
+        markdown: 'Уточните новый этап: DEVELOPMENT, SCRIPT, PRODUCTION, EDITING, READY или ARCHIVED.',
+        contextPatch: { activeTask: 'episode.status' },
+        diagnostic: { ...baseDiagnostic, errors: ['status_missing'], durationMs: Date.now() - started },
+      };
+    }
+    const updated = await updateEpisodeRecord({
+      ownerUserId: input.ownerUserId,
+      projectId: state.project.id,
+      episode: activeEpisode,
+      patch: { status: target },
+      statusNote: input.message,
+      store: input.store,
+      env: input.env,
+    });
+    if (!updated.ok) {
+      return {
+        status: 'failed',
+        markdown: `Не удалось обновить статус: ${updated.error}.`,
+        contextPatch: { activeTask: 'episode.status' },
+        diagnostic: { ...baseDiagnostic, errors: [updated.error], durationMs: Date.now() - started },
+      };
+    }
+    return {
+      status: 'deterministic',
+      markdown: `Episode ${updated.episode.number} — статус **${updated.episode.status}**.\n\n${nextActionFor(updated.episode, [])}`,
+      contextPatch: {
+        activeEpisodeRecordId: updated.episode.id,
+        activeEpisodeNumber: updated.episode.number,
+        activeStage: updated.episode.status,
+        activeTask: 'episode.status',
+        currentEditorialObjective: input.message,
+      },
+      diagnostic: {
+        ...baseDiagnostic,
+        retrievalStrategy: 'episode_status_transition',
+        selectedSources: ['episode_registry'],
+        durationMs: Date.now() - started,
+      },
+    };
+  }
+
+  if (intent.operation === 'episode.publish_prepare') {
+    const chapter = chapterForNumberSafe(inventory, activeEpisode.chapterNumber);
+    const sourcePassage = activeEpisode.sourcePassages[0] || null;
+    const scripts = await listScripts({
+      ownerUserId: input.ownerUserId,
+      projectId: state.project.id,
+      episodeNumber: activeEpisode.number,
+      store: input.store,
+      env: input.env,
+    });
+    const approved =
+      scripts.scripts.find((script) => script.status === 'approved') || null;
+    const updated =
+      activeEpisode.status === 'READY' || activeEpisode.status === 'PUBLISHED'
+        ? { ok: true as const, episode: activeEpisode }
+        : await updateEpisodeRecord({
+            ownerUserId: input.ownerUserId,
+            projectId: state.project.id,
+            episode: activeEpisode,
+            patch: { status: 'READY' },
+            statusNote: 'video_ready',
+            store: input.store,
+            env: input.env,
+          });
+    if (!updated.ok) {
+      return {
+        status: 'failed',
+        markdown: `Не удалось перевести эпизод в READY: ${updated.error}.`,
+        contextPatch: { activeTask: 'episode.publish_prepare' },
+        diagnostic: { ...baseDiagnostic, errors: [updated.error], durationMs: Date.now() - started },
+      };
+    }
+
+    const related = episodes
+      .filter(
+        (episode) =>
+          episode.number !== updated.episode.number &&
+          (episode.status === 'PUBLISHED' ||
+            episode.relatedEpisodes.includes(updated.episode.number) ||
+            updated.episode.relatedEpisodes.includes(episode.number))
+      )
+      .map((episode) => `Episode ${episode.number} — ${episode.title}`);
+
+    const markdown = [
+      `## Публикационная подготовка · Episode ${updated.episode.number}`,
+      '',
+      `**Статус:** READY. Автопубликация не выполнялась.`,
+      `**Title:** ${updated.episode.title}`,
+      `**Subtitle / logline:** ${updated.episode.centralStory || 'не записан'}`,
+      `**Video:** ${updated.episode.videoUrl || 'URL не записан — не выдумываю.'}`,
+      `**Public page:** ${updated.episode.publicPageUrl || 'ещё не создана'}`,
+      `**Chapter:** ${updated.episode.chapterLabel || 'не записана'}${
+        chapter ? ` · chunks ${chapter.startChunkIndex}–${chapter.endChunkIndex}` : ''
+      }`,
+      '',
+      '### Editorial introduction (draft)',
+      updated.episode.description ||
+        updated.episode.centralStory ||
+        'Черновик вступления ещё не записан.',
+      '',
+      '### Manuscript quotation',
+      sourcePassage
+        ? `> ${sourcePassage.excerpt}\n\nSource: ${sourcePassage.heading}, chunk ${sourcePassage.chunkIndex} · \`${sourcePassage.chunkId}\``
+        : 'Цитата не выбрана; не подставляю выдуманный текст.',
+      '',
+      '### YouTube description (draft)',
+      `${updated.episode.title}\n\n${updated.episode.centralStory || ''}\n\nBased on UNFRAMED by Anton Merkurov. Chapter: ${
+        updated.episode.chapterLabel || 'not recorded'
+      }.`,
+      '',
+      '### Related episodes',
+      ...(related.length > 0 ? related.map((item) => `- ${item}`) : ['- Связи не зафиксированы.']),
+      '',
+      '### Internal links',
+      `- Existing page pattern: /unframed/spectral-tiger and /unframed/container`,
+      `- Proposed page: /unframed/${updated.episode.number > 0 ? `episode-${updated.episode.number}` : 'episode'}`,
+      '',
+      '### Metadata',
+      `- episode_number: ${updated.episode.number}`,
+      `- chapter: ${updated.episode.chapterLabel || 'not recorded'}`,
+      `- source_chunks: ${updated.episode.chunkIds.slice(0, 8).join(', ')}`,
+      `- approved_script: ${approved ? `r${approved.revision}` : 'not approved'}`,
+      '',
+      'Следующий шаг: утвердить страницу и метаданные. Публикация выполняется только отдельным явным решением.',
+    ].join('\n');
+
+    const draft = await savePublicationDraft({
+      ownerUserId: input.ownerUserId,
+      projectId: state.project.id,
+      episodeNumber: updated.episode.number,
+      title: updated.episode.title,
+      content: markdown,
+      metadata: {
+        video_url: updated.episode.videoUrl,
+        chapter: updated.episode.chapterLabel,
+        source_chunk_ids: updated.episode.chunkIds,
+        approved_script_id: approved?.id || null,
+        status: 'draft',
+      },
+      store: input.store,
+      env: input.env,
+    });
+
+    return {
+      status: 'deterministic',
+      markdown,
+      contextPatch: {
+        activeEpisodeRecordId: updated.episode.id,
+        activeEpisodeNumber: updated.episode.number,
+        activeStage: 'READY',
+        activeChapterNumber: updated.episode.chapterNumber,
+        activeTask: 'episode.publish_prepare',
+        currentEditorialObjective: input.message,
+        lastRetrievalScope: `episode:${updated.episode.number}:publication_draft`,
+        lastEvidenceChunkIds: updated.episode.chunkIds.slice(0, 20),
+      },
+      diagnostic: {
+        ...baseDiagnostic,
+        retrievalStrategy: 'publication_draft',
+        selectedSources: ['episode_registry', 'manuscript', 'scripts'],
+        returnedChunkIds: updated.episode.chunkIds.slice(0, 20),
+        chunkCount: updated.episode.chunkIds.length,
+        errors: [scripts.error, draft.error].filter(Boolean) as string[],
+        durationMs: Date.now() - started,
+      },
+    };
+  }
+
+  if (intent.operation === 'episode.approve_script') {
+    const scripts = await listScripts({
+      ownerUserId: input.ownerUserId,
+      projectId: state.project.id,
+      episodeNumber: activeEpisode.number,
+      store: input.store,
+      env: input.env,
+    });
+    const targetId =
+      context.activeScriptId ||
+      scripts.scripts.find((script) => script.status === 'draft')?.id ||
+      scripts.scripts[0]?.id ||
+      null;
+    if (!targetId) {
+      return {
+        status: 'clarify',
+        markdown: 'У этого эпизода ещё нет сценария. Скажите «Напиши сценарий» — сначала появится draft.',
+        contextPatch: { activeTask: 'episode.approve_script' },
+        diagnostic: { ...baseDiagnostic, errors: ['script_missing'], durationMs: Date.now() - started },
+      };
+    }
+    const approved = await approveScript({
+      ownerUserId: input.ownerUserId,
+      projectId: state.project.id,
+      episode: activeEpisode,
+      scriptId: targetId,
+      store: input.store,
+      env: input.env,
+    });
+    if (!approved.ok) {
+      return {
+        status: 'failed',
+        markdown: `Не удалось утвердить сценарий: ${approved.error}.`,
+        contextPatch: { activeTask: 'episode.approve_script' },
+        diagnostic: { ...baseDiagnostic, errors: [approved.error], durationMs: Date.now() - started },
+      };
+    }
+    return {
+      status: 'deterministic',
+      markdown: `Сценарий r${approved.script.revision} утверждён. Предыдущая утверждённая версия сохранена как superseded.\n\nEpisode ${approved.episode.number} — статус ${approved.episode.status}.`,
+      contextPatch: {
+        activeEpisodeRecordId: approved.episode.id,
+        activeEpisodeNumber: approved.episode.number,
+        activeStage: approved.episode.status,
+        activeScriptId: approved.script.id,
+        approvedScriptId: approved.script.id,
+        activeTask: 'episode.approve_script',
+        currentEditorialObjective: input.message,
+      },
+      diagnostic: {
+        ...baseDiagnostic,
+        retrievalStrategy: 'script_approval',
+        selectedSources: ['scripts', 'episode_registry'],
+        durationMs: Date.now() - started,
+      },
+    };
+  }
+
+  // development, script, revision: all require the full chapter and profile.
+  const chapter = chapterForNumberSafe(inventory, activeEpisode.chapterNumber);
+  let chapterChunks: ManuscriptChunk[] = [];
+  if (chapter) {
+    const loaded = await loadChapterText({
+      inventory,
+      chapter,
+      store: input.store,
+      env: input.env,
+    });
+    chapterChunks = normalizeChapterChunks(loaded.chunks, chapter);
+  } else if (activeEpisode.chunkIds.length > 0) {
+    chapterChunks = await loadManuscriptChunksByIds({
+      inventory,
+      store: input.store,
+      env: input.env,
+      chunkIds: activeEpisode.chunkIds,
+    });
+  }
+
+  if (chapterChunks.length === 0) {
+    return {
+      status: 'failed',
+      markdown: 'Не удалось загрузить исходную главу эпизода. Это ошибка чтения источника, а не отсутствие материала.',
+      contextPatch: { activeTask: intent.operation },
+      diagnostic: { ...baseDiagnostic, errors: ['episode_source_unavailable'], durationMs: Date.now() - started },
+    };
+  }
+
+  const storedProfile = await loadStoredEditorialProfile({
+    ownerUserId: input.ownerUserId,
+    projectId: state.project.id,
+    store: input.store,
+    env: input.env,
+  });
+  let profileMarkdown = storedProfile.markdown;
+  if (!profileMarkdown) {
+    const allChunks = await loadManuscriptText({
+      inventory,
+      store: input.store,
+      env: input.env,
+    });
+    const map = buildManuscriptMap({
+      documentId: inventory.document.id,
+      title: inventory.document.title,
+      chunks: allChunks,
+      structure: inventory.structure,
+    });
+    const profile = composeEditorialProfile({
+      state,
+      episodes,
+      manuscriptMotifs: map.recurringMotifs.map((motif) => motif.value),
+      context,
+    });
+    const saved = await saveEditorialProfile({
+      ownerUserId: input.ownerUserId,
+      projectId: state.project.id,
+      profile,
+      store: input.store,
+      env: input.env,
+    });
+    if (saved.ok) profileMarkdown = profile.markdown;
+  }
+
+  const scripts = await listScripts({
+    ownerUserId: input.ownerUserId,
+    projectId: state.project.id,
+    episodeNumber: activeEpisode.number,
+    store: input.store,
+    env: input.env,
+  });
+  const currentScript =
+    scripts.scripts.find((script) => script.id === context.approvedScriptId) ||
+    scripts.scripts.find((script) => script.status === 'approved') ||
+    scripts.scripts[0] ||
+    null;
+
+  if (intent.operation === 'episode.revise' && !currentScript) {
+    return {
+      status: 'clarify',
+      markdown:
+        'У этого эпизода ещё нет сценария, поэтому нечего переписывать. Скажите «Напиши сценарий» — сначала появится draft.',
+      contextPatch: {
+        activeEpisodeRecordId: activeEpisode.id,
+        activeEpisodeNumber: activeEpisode.number,
+        activeStage: activeEpisode.status,
+        activeTask: 'episode.revise',
+      },
+      diagnostic: {
+        ...baseDiagnostic,
+        errors: ['script_missing_for_revision'],
+        durationMs: Date.now() - started,
+      },
+    };
+  }
+
+  if (intent.operation === 'episode.develop' || intent.operation === 'episode.script' || intent.operation === 'episode.revise') {
+    const nextStatus =
+      intent.operation === 'episode.script'
+        ? 'SCRIPT'
+        : intent.operation === 'episode.develop'
+          ? 'DEVELOPMENT'
+          : activeEpisode.status;
+    if (nextStatus !== activeEpisode.status) {
+      await updateEpisodeRecord({
+        ownerUserId: input.ownerUserId,
+        projectId: state.project.id,
+        episode: activeEpisode,
+        patch: { status: nextStatus },
+        statusNote: intent.operation,
+        store: input.store,
+        env: input.env,
+      });
+    }
+
+    const stage =
+      intent.operation === 'episode.script'
+        ? 'script'
+        : intent.operation === 'episode.revise'
+          ? 'revise'
+          : 'develop';
+    const prompt = buildEpisodePrompt({
+      stage,
+      profileMarkdown,
+      episode: activeEpisode,
+      chapterLabel: chapter?.label || activeEpisode.chapterLabel || 'chapter not recorded',
+      blocks: evidenceBlocks({ chunks: chapterChunks, maxChars: 55_000 }),
+      currentScript,
+      language,
+    });
+
+    return {
+      status: 'needs_model',
+      systemPrompt: prompt,
+      markdownFallback: [
+        `## Episode ${activeEpisode.number} — ${activeEpisode.title}`,
+        '',
+        `**Stage:** ${nextStatus}`,
+        `**Chapter:** ${chapter?.label || activeEpisode.chapterLabel || 'not recorded'} · ${chapterChunks.length} chunks loaded.`,
+        currentScript
+          ? `**Current script:** r${currentScript.revision} (${currentScript.status}).`
+          : '**Current script:** none.',
+        '',
+        'Source evidence is loaded. The analytical/script generation did not complete, so I am not inventing the missing text.',
+      ].join('\n'),
+      contextPatch: {
+        projectId: state.project.id,
+        projectSlug: state.project.slug,
+        projectName: state.project.name,
+        documentId: inventory.document.id,
+        documentTitle: inventory.document.title,
+        activeEpisodeRecordId: activeEpisode.id,
+        activeEpisodeNumber: activeEpisode.number,
+        activeStage: nextStatus,
+        activeChapterNumber: activeEpisode.chapterNumber,
+        activeScriptId: currentScript?.id || context.activeScriptId,
+        approvedScriptId: context.approvedScriptId,
+        activeTask: intent.operation,
+        currentEditorialObjective: input.message,
+        lastRetrievalScope: `episode:${activeEpisode.number}:${stage}`,
+        lastEvidenceChunkIds: chapterChunks.map((chunk) => chunk.chunkId),
+      },
+      diagnostic: {
+        ...baseDiagnostic,
+        retrievalStrategy: 'chapter_full_text+episode_registry+profile',
+        selectedSources: ['manuscript', 'episode_registry', 'scripts', 'profile'],
+        returnedChunkIds: chapterChunks.map((chunk) => chunk.chunkId),
+        chunkCount: chapterChunks.length,
+        coverage: 1,
+        errors: [scripts.error, storedProfile.error].filter(Boolean) as string[],
+        durationMs: Date.now() - started,
+      },
+      generatedArtifact: {
+        kind: intent.operation === 'episode.script' ? 'script' : 'development',
+        episodeNumber: activeEpisode.number,
+        title: activeEpisode.title,
+        sourceChunkIds: chapterChunks.map((chunk) => chunk.chunkId),
+      },
+    };
+  }
+
+  return {
+    status: 'clarify',
+    markdown: `Операция ${intent.operation} пока не поддерживается для эпизода ${activeEpisode.number}.`,
+    contextPatch: { activeTask: intent.operation },
+    diagnostic: { ...baseDiagnostic, errors: ['unsupported_episode_operation'], durationMs: Date.now() - started },
+  };
+}
+
 async function saveProjectBrief(input: {
   store: SupabaseClient | null | undefined;
   ownerUserId: string;
@@ -1306,6 +2343,114 @@ async function handleProjectOperation(input: RunEditorialInput): Promise<Editori
   }
 
   if (intent.operation === 'project.overview' || intent.operation === 'project.brief') {
+    const registry = input.store
+      ? await listEpisodeRecords({
+          ownerUserId: input.ownerUserId,
+          projectId: state.project.id,
+          store: input.store,
+          env: input.env,
+          limit: 300,
+        })
+      : { episodes: [], error: null };
+    if (
+      input.store &&
+      !registry.error &&
+      registry.episodes.length === 0 &&
+      state.manuscript
+    ) {
+      await seedPublishedEpisodes({
+        ownerUserId: input.ownerUserId,
+        projectId: state.project.id,
+        inventory: state.manuscript,
+        store: input.store,
+        env: input.env,
+      });
+    }
+    const episodes = registry.error
+      ? []
+      : input.store
+        ? (
+            await listEpisodeRecords({
+              ownerUserId: input.ownerUserId,
+              projectId: state.project.id,
+              store: input.store,
+              env: input.env,
+              limit: 300,
+            })
+          ).episodes
+        : [];
+
+    let profileMarkdown = '';
+    const storedProfile = input.store
+      ? await loadStoredEditorialProfile({
+          ownerUserId: input.ownerUserId,
+          projectId: state.project.id,
+          store: input.store,
+          env: input.env,
+        })
+      : { markdown: '', revision: 0, id: null, data: null, error: null };
+    if (storedProfile.markdown) {
+      profileMarkdown = storedProfile.markdown;
+    } else if (input.store && state.manuscript) {
+      const allChunks = await loadManuscriptText({
+        inventory: state.manuscript,
+        store: input.store,
+        env: input.env,
+      });
+      const map = buildManuscriptMap({
+        documentId: state.manuscript.document.id,
+        title: state.manuscript.document.title,
+        chunks: allChunks,
+        structure: state.manuscript.structure,
+      });
+      const profile = composeEditorialProfile({
+        state,
+        episodes,
+        manuscriptMotifs: map.recurringMotifs.map((motif) => motif.value),
+        context,
+      });
+      const saved = await saveEditorialProfile({
+        ownerUserId: input.ownerUserId,
+        projectId: state.project.id,
+        profile,
+        store: input.store,
+        env: input.env,
+      });
+      if (saved.ok) profileMarkdown = profile.markdown;
+    }
+
+    const published = episodes.filter((episode) => episode.status === 'PUBLISHED');
+    const inProgress = episodes.filter(
+      (episode) => episode.status !== 'PUBLISHED' && episode.status !== 'ARCHIVED'
+    );
+    const unfinished = [...inProgress].sort((left, right) =>
+      right.updatedAt.localeCompare(left.updatedAt)
+    )[0] || null;
+    const episodeLines = [
+      `### Серия`,
+      registry.error
+        ? `- Реестр эпизодов недоступен: ${registry.error}. Это ошибка чтения, а не пустая серия.`
+        : episodes.length === 0
+          ? `- Реестр эпизодов пуст; проверенный repository dataset: ${state.episodes
+              .map((episode) => `Ep ${episode.number}`)
+              .join(', ') || 'нет'}.`
+          : `- Published: ${published.length}${
+              published.length > 0
+                ? ` (${published.map((episode) => `Ep ${episode.number}`).join(', ')})`
+                : ''
+            }`,
+      ...(inProgress.length > 0
+        ? inProgress.map(
+            (episode) =>
+              `- Ep ${episode.number} «${episode.title}» — **${episode.status}** · ${
+                episode.chapterLabel || 'глава не записана'
+              }`
+          )
+        : episodes.length > 0
+          ? ['- В работе нет эпизодов.']
+          : []),
+    ];
+
     const brief = composeProjectBrief(state);
     let saveError: string | null = null;
     if (
@@ -1338,6 +2483,8 @@ async function handleProjectOperation(input: RunEditorialInput): Promise<Editori
       intent.operation === 'project.brief' ? brief.markdown : formatProjectState(state),
       ...(contextNotes.length > 0 ? ['', '### Контекст этой сессии', ...contextNotes] : []),
       '',
+      ...episodeLines,
+      '',
       `### Бриф проекта`,
       state.project.projectBrief.trim()
         ? `Бриф r${state.project.briefRevision} сохранён (${state.project.projectBrief.length} символов).`
@@ -1345,6 +2492,9 @@ async function handleProjectOperation(input: RunEditorialInput): Promise<Editori
           ? `Бриф не сохранён: ${saveError}.`
           : `Бриф пуст; черновик составлен из проверяемых источников (${brief.sourceCount} ссылок).`,
       ...(saveError ? [`- Ошибка сохранения: ${saveError}`] : []),
+      profileMarkdown
+        ? `- Editorial profile: сохранён (${profileMarkdown.length} символов), включая ограничения и visual language.`
+        : '- Editorial profile: ещё не сохранён.',
     ].join('\n');
 
     return {
@@ -1356,6 +2506,16 @@ async function handleProjectOperation(input: RunEditorialInput): Promise<Editori
         projectName: state.project.name,
         documentId: state.manuscript?.document.id || context.documentId,
         documentTitle: state.manuscript?.document.title || context.documentTitle,
+        ...(unfinished
+          ? {
+              activeEpisodeRecordId: unfinished.id,
+              activeEpisodeNumber: unfinished.number,
+              activeStage: unfinished.status,
+              activeChapterNumber: unfinished.chapterNumber,
+              activeScriptId: unfinished.scriptId,
+              approvedScriptId: unfinished.approvedScriptId,
+            }
+          : {}),
         activeTask: intent.operation,
         currentEditorialObjective: input.message,
         lastRetrievalScope: 'project_state',
@@ -1374,20 +2534,47 @@ async function handleProjectOperation(input: RunEditorialInput): Promise<Editori
   }
 
   if (intent.operation === 'project.episodes') {
-    const episodeLines = state.episodes.map(
-      (episode) =>
-        [
-          `### Episode ${episode.number} — ${episode.title}`,
-          `- **Chapter:** ${episode.chapterLabel || 'not recorded'}${episode.chapterNumber ? ` (chapter ${episode.chapterNumber})` : ''}`,
-          `- **Video:** ${episode.videoUrl}`,
-          `- **Series:** ${episode.seriesLabel}`,
-          episode.year ? `- **Year:** ${episode.year}` : null,
-          episode.brainDocumentId ? `- **Brain document:** \`${episode.brainDocumentId}\`` : null,
-          `- **Statement:** ${episode.statement}`,
-        ]
-          .filter((line): line is string => line !== null)
-          .join('\n')
-    );
+    const registry = input.store
+      ? await listEpisodeRecords({
+          ownerUserId: input.ownerUserId,
+          projectId: state.project.id,
+          store: input.store,
+          env: input.env,
+          limit: 300,
+        })
+      : { episodes: [], error: null };
+    const episodeLines =
+      registry.episodes.length > 0
+        ? registry.episodes.map((episode) =>
+            [
+              `### Episode ${episode.number} — ${episode.title}`,
+              `- **Status:** ${episode.status}`,
+              `- **Chapter:** ${episode.chapterLabel || 'not recorded'}${
+                episode.chapterNumber !== null ? ` (chapter ${episode.chapterNumber})` : ''
+              }`,
+              `- **Video:** ${episode.videoUrl || 'not recorded'}`,
+              `- **Public page:** ${episode.publicPageUrl || 'not created'}`,
+              `- **Source chunks:** ${episode.chunkIds.slice(0, 4).join(', ') || 'none'}`,
+              `- **Script:** ${
+                episode.approvedScriptId ? 'approved' : episode.scriptId ? 'draft' : 'none'
+              }`,
+              `- **Next step:** ${nextActionFor(episode, [])}`,
+            ].join('\n')
+          )
+        : state.episodes.map(
+            (episode) =>
+              [
+                `### Episode ${episode.number} — ${episode.title}`,
+                `- **Chapter:** ${episode.chapterLabel || 'not recorded'}${
+                  episode.chapterNumber ? ` (chapter ${episode.chapterNumber})` : ''
+                }`,
+                `- **Video:** ${episode.videoUrl}`,
+                `- **Series:** ${episode.seriesLabel}`,
+                episode.year ? `- **Year:** ${episode.year}` : null,
+              ]
+                .filter((line): line is string => line !== null)
+                .join('\n')
+          );
 
     let manuscriptMatches: string[] = [];
     if (state.manuscript && intent.searchQuery) {
@@ -1622,9 +2809,9 @@ async function handleProjectOperation(input: RunEditorialInput): Promise<Editori
 
 function chapterForNumberSafe(
   inventory: ManuscriptInventory | null,
-  number: number
+  number: number | null
 ): ManuscriptChapter | null {
-  if (!inventory) return null;
+  if (!inventory || number === null) return null;
   return (
     inventory.structure.chapters.find(
       (chapter) => chapter.kind === 'chapter' && chapter.number === number
@@ -1634,6 +2821,10 @@ function chapterForNumberSafe(
 
 export async function runEditorialOperation(input: RunEditorialInput): Promise<EditorialResult> {
   const started = Date.now();
+
+  if (input.intent.operation.startsWith('episode.')) {
+    return handleEpisodeOperation(input);
+  }
 
   if (input.intent.operation.startsWith('project.')) {
     return handleProjectOperation(input);

@@ -10,6 +10,8 @@ import {
   loadEditorialContext,
   loadEditorialDiagnostics,
 } from '@/lib/pierrot/editorial/context';
+import { listEpisodeRecords } from '@/lib/pierrot/editorial/episodes';
+import { loadStoredEditorialProfile } from '@/lib/pierrot/editorial/profile';
 import { formatProjectState, loadUnframedProject } from '@/lib/pierrot/editorial/project';
 import { formatCoverage, manuscriptPartCount } from '@/lib/knowledge/rag/manuscriptStructure';
 import ManuscriptEditingPanel from './ManuscriptEditingPanel';
@@ -37,20 +39,36 @@ export default async function UnframedManuscriptPage() {
   const project = state.project;
   const store = getServerSupabaseClient({ useServiceRole: true });
 
-  const [proposalResult, revisionResult, diagnosticResult, contextResult] = await Promise.all([
-    project
-      ? listManuscriptEditProposals({ ownerUserId: admin.id, projectId: project.id })
-      : Promise.resolve({ proposals: [], error: null }),
-    project
-      ? listManuscriptRevisions({ ownerUserId: admin.id, projectId: project.id })
-      : Promise.resolve({ revisions: [], error: null }),
-    loadEditorialDiagnostics({
-      store,
-      conversationId: project?.conversationId || '',
-      limit: 20,
-    }),
-    loadEditorialContext({ store, conversationId: project?.conversationId || '' }),
-  ]);
+  const [proposalResult, revisionResult, diagnosticResult, contextResult, episodeResult, profileResult] =
+    await Promise.all([
+      project
+        ? listManuscriptEditProposals({ ownerUserId: admin.id, projectId: project.id })
+        : Promise.resolve({ proposals: [], error: null }),
+      project
+        ? listManuscriptRevisions({ ownerUserId: admin.id, projectId: project.id })
+        : Promise.resolve({ revisions: [], error: null }),
+      loadEditorialDiagnostics({
+        store,
+        conversationId: project?.conversationId || '',
+        limit: 20,
+      }),
+      loadEditorialContext({ store, conversationId: project?.conversationId || '' }),
+      project
+        ? listEpisodeRecords({
+            ownerUserId: admin.id,
+            projectId: project.id,
+            store,
+            limit: 300,
+          })
+        : Promise.resolve({ episodes: [], error: null }),
+      project
+        ? loadStoredEditorialProfile({
+            ownerUserId: admin.id,
+            projectId: project.id,
+            store,
+          })
+        : Promise.resolve({ id: null, revision: 0, markdown: '', data: null, error: null }),
+    ]);
 
   const manuscript = state.manuscript;
   const coverage = manuscript?.coverage || null;
@@ -126,6 +144,105 @@ export default async function UnframedManuscriptPage() {
               </tr>
             </tbody>
           </table>
+        </section>
+
+        <section style={{ marginTop: 24 }}>
+          <h2>Текущий эпизод</h2>
+          {episodeResult.error ? (
+            <p style={{ color: '#8a1f1f' }}>Реестр эпизодов недоступен: {episodeResult.error}</p>
+          ) : episodeResult.episodes.length === 0 ? (
+            <p>Эпизодов пока нет. Начните в чате: «Найди пять историй для следующего эпизода».</p>
+          ) : (
+            (() => {
+              const active =
+                episodeResult.episodes.find(
+                  (episode) => episode.number === context?.activeEpisodeNumber
+                ) ||
+                episodeResult.episodes
+                  .filter(
+                    (episode) =>
+                      episode.status !== 'PUBLISHED' && episode.status !== 'ARCHIVED'
+                  )
+                  .sort((left, right) => right.number - left.number)[0] ||
+                episodeResult.episodes[episodeResult.episodes.length - 1];
+              return (
+                <div>
+                  <p>
+                    <strong>
+                      Episode {active.number} — {active.title}
+                    </strong>{' '}
+                    · {active.status} · {active.chapterLabel || 'глава не записана'}
+                  </p>
+                  <p>
+                    Script: {active.approvedScriptId ? 'approved' : active.scriptId ? 'draft' : 'none'} ·
+                    Video: {active.videoUrl || 'not recorded'} · Page:{' '}
+                    {active.publicPageUrl || 'not created'}
+                  </p>
+                  <p>
+                    <Link href="/admin/pierrot?project=unframed">
+                      Продолжить в чате →
+                    </Link>
+                  </p>
+                </div>
+              );
+            })()
+          )}
+        </section>
+
+        <section style={{ marginTop: 24 }}>
+          <h2>Реестр эпизодов</h2>
+          {episodeResult.episodes.length === 0 ? (
+            <p>Пусто.</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left' }}>#</th>
+                    <th style={{ textAlign: 'left' }}>Title</th>
+                    <th style={{ textAlign: 'left' }}>Status</th>
+                    <th style={{ textAlign: 'left' }}>Chapter</th>
+                    <th style={{ textAlign: 'left' }}>Script</th>
+                    <th style={{ textAlign: 'left' }}>Video</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {episodeResult.episodes.map((episode) => (
+                    <tr key={episode.id} style={{ borderTop: '1px solid #e6e0d4' }}>
+                      <td>{episode.number}</td>
+                      <td>{episode.title}</td>
+                      <td>{episode.status}</td>
+                      <td>{episode.chapterLabel || '—'}</td>
+                      <td>
+                        {episode.approvedScriptId
+                          ? 'approved'
+                          : episode.scriptId
+                            ? 'draft'
+                            : '—'}
+                      </td>
+                      <td>{episode.videoUrl ? 'yes' : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section style={{ marginTop: 24 }}>
+          <h2>Editorial profile</h2>
+          {profileResult.error ? (
+            <p style={{ color: '#8a1f1f' }}>Профиль недоступен: {profileResult.error}</p>
+          ) : profileResult.markdown ? (
+            <details>
+              <summary>r{profileResult.revision} · {profileResult.markdown.length} символов</summary>
+              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
+                {profileResult.markdown}
+              </pre>
+            </details>
+          ) : (
+            <p>Профиль ещё не сформирован. Он создастся при первом project overview в чате.</p>
+          )}
         </section>
 
         <section style={{ marginTop: 24 }}>

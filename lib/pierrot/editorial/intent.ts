@@ -3,6 +3,7 @@ import type {
   EditorialIntent,
   EditorialOperation,
   EditorialSourceConstraints,
+  EpisodeStatus,
 } from './types';
 
 /**
@@ -105,6 +106,39 @@ const BRIEF_MARKER = /(?:бриф|brief|опиши\s+проект|describe\s+the
 const EDIT_MARKER =
   /(?:предложи\s+правк|исправь|перепиши|отредактируй|редакторск[а-я]*\s+правк|propose\s+(?:an\s+)?edit|rewrite|edit\s+(?:this|the)\s+(?:passage|paragraph|chapter))/i;
 
+const EPISODE_DISCOVERY_MARKER =
+  /(?:найди|подбери|предложи|поищи|ищи|find|suggest|give me|discover|search).{0,90}(?:истори|сюжет|иде[яйю]|эпизод|выпуск|story|stories|ideas|episode)|(?:next|следующ)[а-яё]*\s+(?:episode|выпуск|эпизод)|(?:new|нов)[а-яё]*\s+(?:episode|выпуск|эпизод)/i;
+
+const EPISODE_RETURN_MARKER =
+  /(?:верн[её]мся|вернуться|возвращаемся|return|go\s+back|back\s+to|открой|open|покажи|show).{0,50}(?:episode|эпизод|выпуск)\s*№?\s*(\d{1,3})|(?:episode|эпизод|выпуск)\s*№?\s*(\d{1,3})/i;
+
+const EPISODE_SCRIPT_MARKER =
+  /(?:сценари|script|voiceover|закадров|черновик\s+текст|draft\s+(?:the\s+)?script|напиши\s+текст)/i;
+
+const EPISODE_APPROVE_MARKER =
+  /(?:утвержда|утверди|approve|финальн[а-яё]*\s+(?:сценари|верси|текст)|lock\s+(?:the\s+)?script|final\s+script)/i;
+
+const EPISODE_REVISE_MARKER =
+  /(?:друг[а-яё]*\s+верси|another\s+version|alternative\s+version|измени\s+(?:финал|концовк|ending)|change\s+the\s+ending|перепиши|rewrite|переделай|revise)/i;
+
+const EPISODE_REJECT_MARKER =
+  /(?:не\s+(?:нравится|подходит|берём|берем|выбираю)|отклон|reject|drop\s+this|не\s+то|не\s+этот)/i;
+
+const EPISODE_SELECT_MARKER =
+  /(?:выбира|выберу|беру|take|select|go\s+with|останавлива|согласен\s+на)/i;
+
+const EPISODE_DEVELOP_MARKER =
+  /(?:разработ|развей|develop|concept|концепц|структур|structure|scene|сцен|narrative\s+angle|угол\s+подачи|editorial\s+concept)/i;
+
+const EPISODE_PUBLISH_MARKER =
+  /(?:видео\s+готов|ролик\s+готов|video\s+is\s+ready|монтаж\s+заверш|editing\s+(?:is\s+)?done|готов[а-яё]*\s+к\s+публикац|ready\s+to\s+publish|prepare\s+the\s+page|подготовь\s+страниц|публикац|publish)/i;
+
+const EPISODE_STATUS_ONLY =
+  /(?:production|продакшн|снима|edited|монтаж|editing|ready|готов[а-яё]*|archived|архив)/i;
+
+const DISCUSSION_HISTORY_MARKER =
+  /(?:уже\s+)?(?:обсуждал|обсуждали|обсужден|решал|решали|договорил|договаривал|discussed|we\s+decided|what\s+did\s+we)/i;
+
 const CONTINUATION_MARKER =
   /^(?:а\s+)?(?:еще|ещё|дальше|продолжай|продолжи|подробнее|more|continue|go\s+on|next|what\s+else|and\s+more|find\s+more|look\s+(?:at|into)\s+(?:another|more)|другую|другие)\b|^(?:а\s+)?теперь\s+(?:следующ|друг)|(?:найди|поищи|ищи)\s+(?:еще|ещё|more|друг|другие|глубже)|(?:search|look)\s+(?:deeper|more)/i;
 
@@ -112,7 +146,7 @@ const CONSTRAINT_MARKER =
   /(?:не\s+(?:рассматрива|трога|бери|включа|ищи)|исключ|без\s+тем|exclude|do\s+not\s+(?:include|consider|use)|without|only\s+|\bищи\b|\bискать\b)/i;
 
 const RETURN_MARKER =
-  /(?:верн[её]мся|вернуться|возвращаемся|return\s+to|back\s+to|продолжим\s+(?:проект|работу|книг|unframed))/i;
+  /(?:верн[её]мся|вернуться|возвращаемся|return\s+to|back\s+to|продолжим\s+(?:проект|работу|книг|unframed)|let'?s\s+continue|continue\s+(?:unframed|the\s+project|working))/i;
 
 const IDENTITY_MARKER =
   /(?:(?:найди|поищи|ищи|покажи|где|find|search|show|locate|where).{0,40}(?:книг|рукопис|manuscript|book|unframed)|(?:книг|рукопис|manuscript|book).{0,40}(?:в\s+brain|in\s+brain|в\s+архиве|in\s+the\s+archive))/i;
@@ -311,6 +345,53 @@ function relativeChapterRequest(message: string): 'previous' | 'next' | null {
   return null;
 }
 
+function episodeNumberFrom(message: string): number | null {
+  const match = message.match(
+    /(?:episode|эпизод|выпуск|\bep\.?)\s*№?\s*(\d{1,3})|(\d{1,3})\s*(?:-?[а-яё]*\s*)?(?:episode|эпизод|выпуск)/i
+  );
+  const value = Number(match?.[1] || match?.[2]);
+  return Number.isFinite(value) && value >= 0 && value <= 999 ? value : null;
+}
+
+function candidateNumberFrom(message: string): number | null {
+  const numeric = message.match(
+    /(?:вариант|варианта|номер|#|№|option|number)\s*(\d{1,2})|(\d{1,2})\s*(?:-?[а-яё]*\s*)?(?:вариант|option)/i
+  );
+  if (numeric) {
+    const value = Number(numeric[1] || numeric[2]);
+    if (Number.isFinite(value) && value > 0) return value;
+  }
+  const words: Record<string, number> = {
+    первый: 1,
+    перва: 1,
+    второй: 2,
+    вторая: 2,
+    третий: 3,
+    третья: 3,
+    четвертый: 4,
+    четвертая: 4,
+    пятый: 5,
+    пятая: 5,
+    first: 1,
+    second: 2,
+    third: 3,
+    fourth: 4,
+    fifth: 5,
+  };
+  const found = message.toLowerCase().match(/\b(первый|перва|второй|вторая|третий|третья|четвертый|четвертая|пятый|пятая|first|second|third|fourth|fifth)\b/i);
+  return found ? words[found[1].toLowerCase()] || null : null;
+}
+
+function statusTransitionFrom(message: string): EpisodeStatus | null {
+  if (/(?:published|опубликован|публикац)/i.test(message)) return 'READY';
+  if (/(?:ready|готов[а-яё]*\s+к\s+публикац|ready\s+to\s+publish)/i.test(message)) return 'READY';
+  if (/(?:editing|монтаж|edit\s+done|смонтирован)/i.test(message)) return 'EDITING';
+  if (/(?:production|продакшн|снима|съёмк|съемк)/i.test(message)) return 'PRODUCTION';
+  if (/(?:script|сценари)/i.test(message)) return 'SCRIPT';
+  if (/(?:development|разработ|развива)/i.test(message)) return 'DEVELOPMENT';
+  return null;
+}
+
 function hasManuscriptMarker(text: string): boolean {
   return MANUSCRIPT_MARKERS.some((pattern) => pattern.test(text));
 }
@@ -384,6 +465,31 @@ export function detectEditorialIntent(input: DetectEditorialIntentInput): Editor
   const constraintUpdate = CONSTRAINT_MARKER.test(text) && constraints.excludedTopics.length > 0;
   const returning = RETURN_MARKER.test(text);
   const relative = relativeChapterRequest(original);
+  const episodeNumber = episodeNumberFrom(original);
+  const candidateNumber = candidateNumberFrom(original);
+  const activeEpisodeNumber = active?.activeEpisodeNumber ?? null;
+  const episodeWork =
+    (EPISODE_MARKER.test(text) || Boolean(activeEpisodeNumber)) &&
+    (Boolean(manuscriptAnchor) ||
+      Boolean(activeProject) ||
+      /\bunframed\b/i.test(text) ||
+      Boolean(activeEpisodeNumber));
+  const discoveryRequest =
+    EPISODE_DISCOVERY_MARKER.test(text) ||
+    /(?:find|найди|подбери|предложи).{0,60}(?:next|следующ).{0,40}(?:episode|выпуск|эпизод)/i.test(
+      original
+    );
+  const episodeReturn = EPISODE_RETURN_MARKER.test(original) || episodeNumber !== null;
+  const scriptRequest = EPISODE_SCRIPT_MARKER.test(text);
+  const approveRequest = EPISODE_APPROVE_MARKER.test(text);
+  const reviseRequest = EPISODE_REVISE_MARKER.test(text);
+  const rejectRequest = EPISODE_REJECT_MARKER.test(text);
+  const selectRequest = EPISODE_SELECT_MARKER.test(text) && Boolean(active?.discoveryCandidates.length);
+  const developRequest = EPISODE_DEVELOP_MARKER.test(text);
+  const publishRequest =
+    EPISODE_PUBLISH_MARKER.test(text) ||
+    /(?:video|видео|ролик).{0,30}(?:ready|готов)/i.test(text);
+  const targetEpisodeStatus = statusTransitionFrom(text);
 
   // A short follow-up is editorial only when this conversation already has an
   // active UNFRAMED document, task or project. It must never inherit UNFRAMED
@@ -424,7 +530,52 @@ export function detectEditorialIntent(input: DetectEditorialIntentInput): Editor
   let operation: EditorialOperation | null = null;
   const signals: string[] = [];
 
-  if (compare && compareList.length >= 2) {
+  if (
+    rejectRequest &&
+    (activeEpisodeNumber !== null || (active?.discoveryCandidates.length || 0) > 0)
+  ) {
+    operation = 'episode.reject';
+    signals.push('episode:reject');
+  } else if (approveRequest && (activeEpisodeNumber !== null || active?.activeScriptId)) {
+    operation = 'episode.approve_script';
+    signals.push('episode:approve_script');
+  } else if (
+    publishRequest &&
+    (activeEpisodeNumber !== null || episodeNumber !== null || Boolean(activeProject))
+  ) {
+    operation = 'episode.publish_prepare';
+    signals.push('episode:publish_prepare');
+  } else if (
+    reviseRequest &&
+    (activeEpisodeNumber !== null || Boolean(active?.activeScriptId) || Boolean(activeProject))
+  ) {
+    operation = 'episode.revise';
+    signals.push('episode:revise');
+  } else if (targetEpisodeStatus && episodeWork) {
+    operation = 'episode.status';
+    signals.push(`episode:status:${targetEpisodeStatus}`);
+  } else if (scriptRequest && (episodeWork || Boolean(activeProject))) {
+    operation = 'episode.script';
+    signals.push('episode:script');
+  } else if (developRequest && (episodeWork || Boolean(activeProject))) {
+    operation = 'episode.develop';
+    signals.push('episode:develop');
+  } else if (selectRequest) {
+    operation = 'episode.select';
+    signals.push('episode:select');
+  } else if (DISCUSSION_HISTORY_MARKER.test(text) && (Boolean(activeProject) || Boolean(manuscriptAnchor))) {
+    operation = 'project.history';
+    signals.push('project:history_request');
+  } else if (episodeReturn && (episodeWork || Boolean(activeProject))) {
+    operation = 'episode.open';
+    signals.push('episode:open');
+  } else if (discoveryRequest && (manuscriptAnchor || Boolean(activeProject))) {
+    operation = 'episode.discover';
+    signals.push('episode:discover');
+  } else if (returning && activeEpisodeNumber !== null) {
+    operation = 'episode.open';
+    signals.push('context:resume_episode');
+  } else if (compare && compareList.length >= 2) {
     operation = 'manuscript.compare';
     signals.push('manuscript:compare');
   } else if (linkEpisode) {
@@ -463,6 +614,8 @@ export function detectEditorialIntent(input: DetectEditorialIntentInput): Editor
     if (active.activeTask.startsWith('manuscript.')) {
       operation = active.activeTask as EditorialOperation;
     } else if (active.activeTask.startsWith('project.')) {
+      operation = active.activeTask as EditorialOperation;
+    } else if (active.activeTask.startsWith('episode.')) {
       operation = active.activeTask as EditorialOperation;
     }
     signals.push('context:inherit_task');
@@ -587,6 +740,9 @@ export function detectEditorialIntent(input: DetectEditorialIntentInput): Editor
     chapterNumber: singleChapter,
     chapterNumbers: chapterList,
     chapterTitle: null,
+    episodeNumber: episodeNumber ?? activeEpisodeNumber,
+    targetEpisodeStatus,
+    candidateNumber,
     compareChapters: comparePair,
     quotePhrase,
     searchQuery,

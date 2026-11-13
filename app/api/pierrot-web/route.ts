@@ -275,6 +275,12 @@ import {
 } from '@/lib/pierrot/editorial/context';
 import { runEditorialOperation } from '@/lib/pierrot/editorial/operations';
 import {
+  attachDraftScript,
+  getEpisodeByNumber,
+  saveDevelopmentDraft,
+  saveScriptVersion,
+} from '@/lib/pierrot/editorial/episodes';
+import {
   appendTruncationNotice,
   editorialContinuationInstruction,
 } from '@/lib/pierrot/editorial/response';
@@ -1782,7 +1788,13 @@ export async function POST(req: Request) {
             },
           }).catch(() => false);
 
-          const editorialTrace = {
+          const editorialTrace: Record<string, unknown> & {
+            errors: string[];
+            fallback_reason: string | null;
+            script_id?: string;
+            script_revision?: number;
+            development_id?: string;
+          } = {
             request_id: correlationId,
             operation: result.diagnostic.operation,
             resolved_intent: result.diagnostic.resolvedIntent,
@@ -1794,7 +1806,7 @@ export async function POST(req: Request) {
             coverage: result.diagnostic.coverage,
             truncated: result.diagnostic.truncated,
             fallback_reason: result.diagnostic.fallbackReason,
-            errors: result.diagnostic.errors,
+            errors: [...result.diagnostic.errors],
             duration_ms: result.diagnostic.durationMs,
             finish_reason: result.diagnostic.finishReason,
             active_project_id: nextContext.projectId,
@@ -1838,6 +1850,7 @@ export async function POST(req: Request) {
           let editorialFinishReason: string | null = null;
           let editorialTruncated = false;
           let modelUsed = false;
+          let generatedArtifactId: string | null = null;
 
           try {
             const policy = resolvePierrotGenerationPolicy({
@@ -1883,6 +1896,86 @@ export async function POST(req: Request) {
             }`;
             editorialTrace.errors = [...editorialTrace.errors, code];
             editorialTrace.fallback_reason = code;
+          }
+
+          if (
+            modelUsed &&
+            !editorialTruncated &&
+            result.generatedArtifact &&
+            nextContext.projectId
+          ) {
+            try {
+              if (result.generatedArtifact.kind === 'script') {
+                const saved = await saveScriptVersion({
+                  ownerUserId: ownerIdentityUserId,
+                  projectId: nextContext.projectId,
+                  episodeNumber: result.generatedArtifact.episodeNumber,
+                  title: result.generatedArtifact.title,
+                  content: editorialReply,
+                  sourceChunkIds: result.generatedArtifact.sourceChunkIds,
+                  note: `generated_in_chat:${correlationId}`,
+                });
+                if (saved.ok) {
+                  generatedArtifactId = saved.script.id;
+                  const episode = await getEpisodeByNumber({
+                    ownerUserId: ownerIdentityUserId,
+                    projectId: nextContext.projectId,
+                    number: result.generatedArtifact.episodeNumber,
+                    store: memoryStore,
+                  }).catch(() => null);
+                  if (episode) {
+                    await attachDraftScript({
+                      ownerUserId: ownerIdentityUserId,
+                      projectId: nextContext.projectId,
+                      episode,
+                      scriptId: saved.script.id,
+                      store: memoryStore,
+                    }).catch(() => ({ ok: false, error: 'script_attach_failed' }));
+                  }
+                  nextContext.activeScriptId = saved.script.id;
+                  nextContext.activeStage = 'SCRIPT';
+                  editorialTrace.script_id = saved.script.id;
+                  editorialTrace.script_revision = saved.script.revision;
+                } else {
+                  editorialTrace.errors = [...editorialTrace.errors, saved.error];
+                }
+              } else {
+                const saved = await saveDevelopmentDraft({
+                  ownerUserId: ownerIdentityUserId,
+                  projectId: nextContext.projectId,
+                  episodeNumber: result.generatedArtifact.episodeNumber,
+                  title: result.generatedArtifact.title,
+                  content: editorialReply,
+                  sourceChunkIds: result.generatedArtifact.sourceChunkIds,
+                  note: `generated_in_chat:${correlationId}`,
+                });
+                if (saved.id) {
+                  generatedArtifactId = saved.id;
+                  editorialTrace.development_id = saved.id;
+                } else if (saved.error) {
+                  editorialTrace.errors = [...editorialTrace.errors, saved.error];
+                }
+              }
+              await saveEditorialContext({
+                store: memoryStore,
+                conversationId,
+                sessionId,
+                userMessageId,
+                context: nextContext,
+                stageKey: 'post_model',
+                diagnostic: {
+                  operation: result.diagnostic.operation,
+                  generated_artifact_id: generatedArtifactId,
+                },
+              }).catch(() => false);
+            } catch (artifactError) {
+              editorialTrace.errors = [
+                ...editorialTrace.errors,
+                artifactError instanceof Error
+                  ? artifactError.message.slice(0, 120)
+                  : 'artifact_persist_failed',
+              ];
+            }
           }
 
           const finalTrace: EditorialDiagnostic = {
