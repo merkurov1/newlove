@@ -59,6 +59,66 @@ describe('Pierrot response schema', () => {
     ).toBeNull();
   });
 
+  it('accepts valid empty chart and table datasets without inventing values', () => {
+    const chart = parsePierrotResponse({
+      version: PIERROT_RESPONSE_VERSION,
+      blocks: [
+        {
+          type: 'chart',
+          chart: 'bar',
+          title: 'Empty',
+          data: [],
+          xKey: 'x',
+          series: [{ key: 'value', label: 'Value' }],
+        },
+      ],
+    });
+    const table = parsePierrotResponse({
+      version: PIERROT_RESPONSE_VERSION,
+      blocks: [
+        {
+          type: 'table',
+          title: 'Empty',
+          columns: [{ key: 'name', label: 'Name' }],
+          rows: [],
+        },
+      ],
+    });
+
+    expect(chart).not.toBeNull();
+    expect(table).not.toBeNull();
+  });
+
+  it('accepts partial rows and rejects invalid numeric chart values', () => {
+    const partial = parsePierrotResponse({
+      version: PIERROT_RESPONSE_VERSION,
+      blocks: [
+        {
+          type: 'chart',
+          chart: 'line',
+          data: [{ day: 'Mon', value: 3 }, { day: 'Tue', value: null }],
+          xKey: 'day',
+          series: [{ key: 'value', label: 'Value' }],
+        },
+      ],
+    });
+    expect(partial).not.toBeNull();
+
+    const malformed = parsePierrotResponse({
+      version: PIERROT_RESPONSE_VERSION,
+      blocks: [
+        {
+          type: 'chart',
+          chart: 'line',
+          data: [{ day: 'Mon', value: Number.POSITIVE_INFINITY }],
+          xKey: 'day',
+          series: [{ key: 'value', label: 'Value' }],
+        },
+      ],
+    });
+    expect(malformed).toBeNull();
+  });
+
   it('rejects diagram edges that reference missing nodes', () => {
     expect(
       parsePierrotResponse({

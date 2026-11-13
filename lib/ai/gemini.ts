@@ -26,6 +26,12 @@ export type GeminiTextResult = {
   model: string;
   provider: 'gemini';
   latencyMs: number;
+  finishReason?: string | null;
+  usage?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    totalTokenCount?: number;
+  } | null;
 };
 
 export type GeminiStreamResult = GeminiTextResult & {
@@ -53,7 +59,13 @@ type GeminiResponse = {
     content?: {
       parts?: Array<{ text?: string }>;
     };
+    finishReason?: string;
   }>;
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    totalTokenCount?: number;
+  };
   error?: {
     message?: string;
   };
@@ -191,6 +203,8 @@ export async function generateGeminiText(input: {
       model: GEMINI_MODEL,
       provider: 'gemini',
       latencyMs: Date.now() - startedAt,
+      finishReason: payload?.candidates?.[0]?.finishReason ?? null,
+      usage: payload?.usageMetadata ?? null,
     };
   } catch (error) {
     if (error instanceof GeminiError) throw error;
@@ -256,6 +270,8 @@ export async function streamGeminiText(input: {
 
   let emitted = false;
   let content = '';
+  let finishReason: string | null = null;
+  let usage: GeminiTextResult['usage'] = null;
 
   try {
     const response = await fetch(
@@ -316,6 +332,11 @@ export async function streamGeminiText(input: {
           );
         }
 
+        if (payload?.candidates?.[0]?.finishReason) {
+          finishReason = payload.candidates[0].finishReason;
+        }
+        if (payload?.usageMetadata) usage = payload.usageMetadata;
+
         const text = extractText(payload || {});
         if (!text) continue;
 
@@ -368,6 +389,8 @@ export async function streamGeminiText(input: {
       provider: 'gemini',
       latencyMs: Date.now() - startedAt,
       emitted,
+      finishReason,
+      usage,
     };
   } catch (error) {
     if (error instanceof GeminiError) throw error;

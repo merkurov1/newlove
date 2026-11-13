@@ -3608,7 +3608,35 @@ describe('Pierrot intelligence regressions', () => {
     }
   });
 
-  it('reports an interrupted stream and does not persist a partial answer', async () => {
+  it('returns a long generated answer without truncating it to the input limit', async () => {
+    owner();
+    const longReply = `${'Аналитический абзац. '.repeat(300)}КОНЕЦ`;
+    mockCreate.mockResolvedValueOnce({
+      choices: [
+        {
+          message: { content: longReply },
+          finish_reason: 'stop',
+        },
+      ],
+      usage: { prompt_tokens: 100, completion_tokens: 5000, total_tokens: 5100 },
+    });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Дай подробный анализ.' }))
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.reply).toContain('КОНЕЦ');
+    expect(payload.reply.length).toBeGreaterThan(4000);
+    expect(payload.generation).toMatchObject({
+      requested_output_tokens: expect.any(Number),
+      finish_reason: 'stop',
+    });
+    expect(['analysis', 'research']).toContain(payload.generation.task);
+  });
+
+  it('persists an interrupted stream as an explicit partial answer', async () => {
     owner();
     const previousKey = process.env.GEMINI_API_KEY;
     const previousFetch = global.fetch;
@@ -3637,7 +3665,10 @@ describe('Pierrot intelligence regressions', () => {
 
       expect(payload.interrupted).toBe(true);
       expect(payload.code).toBeTruthy();
-      expect(mockRecord.filter((item) => item === 'message:assistant')).toHaveLength(0);
+      expect(payload.partialReply).toBe('Partial');
+      expect(mockRecord.filter((item) => item === 'message:assistant')).toHaveLength(1);
+      expect(mockRecord.filter((item) => item === 'event:assistant_partial')).toHaveLength(1);
+      expect(mockRecord.filter((item) => item === 'event:assistant_replied')).toHaveLength(0);
     } finally {
       if (previousKey === undefined) delete process.env.GEMINI_API_KEY;
       else process.env.GEMINI_API_KEY = previousKey;

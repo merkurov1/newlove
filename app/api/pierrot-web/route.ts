@@ -11,6 +11,7 @@ import {
   PIERROT_MAX_HISTORY_ITEM_CHARS,
   PIERROT_MAX_HISTORY_ITEMS,
   PIERROT_MAX_MESSAGE_LENGTH,
+  PIERROT_MAX_REPLY_LENGTH,
   detectPierrotLanguage,
   isPierrotId,
   normalizePierrotConsent,
@@ -148,6 +149,10 @@ import {
   streamPierrotModel,
   PierrotStreamInterruptedError,
 } from '@/lib/pierrot/model';
+import {
+  resolvePierrotGenerationPolicy,
+  type PierrotGenerationPolicy,
+} from '@/lib/pierrot/generationPolicy';
 import { createPierrotStreamResponse } from '@/lib/pierrot/streamResponse';
 import { PIERROT_STREAM_VERSION } from '@/lib/pierrot/streamProtocol';
 import { detectMemoryIntent, type PierrotMemoryAction } from '@/lib/pierrot/memory/intent';
@@ -311,6 +316,7 @@ import {
   getLastIntakeLog,
   intakeRangeForQuery,
   isIntakeModelEnabled,
+  isIntakePartialSaveError,
   isIntakeStorageUnavailable,
   listIntakeLogs,
   parseIntakeMessage,
@@ -322,7 +328,7 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const RETRIEVAL_TIMEOUT_MS = 12_000;
 
@@ -1266,6 +1272,10 @@ export async function POST(req: Request) {
 
     const assistantMessageId = createAssistantMessageId(conversationId, userMessageId);
     const startedAt = Date.now();
+    const correlationId =
+      req.headers.get('x-request-id') ||
+      req.headers.get('x-vercel-id') ||
+      `pierrot-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     let replay: Awaited<ReturnType<typeof findPierrotAssistantReply>> = null;
 
     if (pierrotStore && canStoreTranscript) {
@@ -1578,7 +1588,6 @@ export async function POST(req: Request) {
       // Analytical reports are structured and may legitimately exceed the
       // chat-message input limit. They are owner-only, persisted as one
       // assistant message and never accepted as user input.
-      const OWNER_REPORT_MAX_LENGTH = 24_000;
       const HISTORY_STORAGE_LIMIT = 15_800;
 
       const truncateForStorage = (value: string, limit: number): string => {
@@ -1590,7 +1599,7 @@ export async function POST(req: Request) {
       };
 
       const persistOwnerReply = async (text: string, extra: Record<string, unknown> = {}) => {
-        const displayText = text.slice(0, OWNER_REPORT_MAX_LENGTH);
+        const displayText = text.slice(0, PIERROT_MAX_REPLY_LENGTH);
         // The v2 history RPC accepts 16k characters; the legacy RPC accepts 4k.
         const storageLimit =
           historyScope?.history.id && ownerEpisodeId
@@ -2889,6 +2898,14 @@ export async function POST(req: Request) {
             );
           } catch (error) {
             if (isIntakeStorageUnavailable(error)) return intakeUnavailable();
+            if (isIntakePartialSaveError(error)) {
+              return persistOwnerReply(
+                ownerLanguage === 'ru'
+                  ? 'Запись прервалась: часть позиций могла сохраниться, часть — нет. Я не буду утверждать, что всё записано. Проверь журнал.'
+                  : 'The save was interrupted: some items may have been stored and some may not. I will not claim the whole entry was recorded. Check the log.',
+                { intake_status: 'partial', intake_inserted: error.inserted }
+              );
+            }
             return persistOwnerReply(
               ownerLanguage === 'ru'
                 ? 'Распознал приём пищи, но запись не сохранилась. Я не буду утверждать, что она записана.'
@@ -5303,6 +5320,14 @@ export async function POST(req: Request) {
       let journalFlowOutcome: { outcome: string; code?: string | null } | null = null;
       let journalFlowEvidence: JournalFlowEvidence | null = null;
       let brainOutcome: { outcome: string; code?: string | null } | null = null;
+      let generationPolicy: PierrotGenerationPolicy | null = null;
+      let generationFinishReason: string | null = null;
+      let generationUsage: {
+        promptTokens: number | null;
+        completionTokens: number | null;
+        totalTokens: number | null;
+      } | null = null;
+      let streamedReply = '';
 
       if (!useModel) {
         reply = plan.reply || 'Silence.';
@@ -5942,15 +5967,37 @@ export async function POST(req: Request) {
 
           onStatus?.('generating');
 
+          generationPolicy = resolvePierrotGenerationPolicy({
+            message: trimmedMessage,
+            isReasoning: prefersReasoning,
+            hasRetrievedContext: usedRagContext,
+            hasWebContext: usedWebContext,
+            historyLength: normalizedHistory.length,
+          });
+
+          const modelOptions = {
+            maxOutputTokens: generationPolicy.maxOutputTokens,
+            timeoutMs: generationPolicy.providerTimeoutMs,
+          };
+
           const generated = onDelta
             ? await streamPierrotModel(
                 generationSystemPrompt,
                 openAiMessages,
                 prefersReasoning,
-                onDelta,
-                generationSignal
+                (text) => {
+                  streamedReply += text;
+                  onDelta(text);
+                },
+                generationSignal,
+                modelOptions
               )
-            : await callPierrotModel(generationSystemPrompt, openAiMessages, prefersReasoning);
+            : await callPierrotModel(
+                generationSystemPrompt,
+                openAiMessages,
+                prefersReasoning,
+                modelOptions
+              );
 
           onStatus?.('persisting');
           reply = generated.reply;
@@ -5958,11 +6005,59 @@ export async function POST(req: Request) {
           usedModel = generated.model;
           generationLatencyMs = generated.latencyMs;
           fallbackUsed = generated.fallbackUsed;
+          generationFinishReason = generated.finishReason;
+          generationUsage = generated.usage;
         } catch (aiError) {
           const failure = classifyPierrotFailure(aiError, {
             aborted: generationSignal.aborted,
           });
           const interrupted = aiError instanceof PierrotStreamInterruptedError;
+          const partialReply = interrupted ? streamedReply.trim() : '';
+          const interruptedProvider =
+            aiError instanceof PierrotStreamInterruptedError ? aiError.provider : usedProvider || null;
+
+          if (partialReply && pierrotStore && canStoreTranscript) {
+            try {
+              const stored = await appendPierrotMessage(pierrotStore, {
+                conversationId,
+                sessionId,
+                historyId: historyScope?.history.id ?? null,
+                episodeId: ownerEpisodeId,
+                messageId: assistantMessageId,
+                role: 'assistant',
+                content: partialReply.slice(0, PIERROT_MAX_REPLY_LENGTH),
+                provider: interruptedProvider,
+                metadata: {
+                  partial: true,
+                  interrupted: true,
+                  provider: interruptedProvider,
+                  model: usedModel || null,
+                  finish_reason: generationFinishReason,
+                },
+              });
+
+              if (stored.inserted) {
+                await recordPierrotEvent(pierrotStore, {
+                  conversationId,
+                  sessionId,
+                  eventName: 'assistant_partial',
+                  eventKey: `assistant_partial:${assistantMessageId}`,
+                  payload: {
+                    message_id: assistantMessageId,
+                    in_reply_to: userMessageId,
+                    request_id: correlationId,
+                    provider: interruptedProvider,
+                    model: usedModel || null,
+                    length: partialReply.length,
+                    code: failure.code,
+                    generation_task: generationPolicy?.task ?? null,
+                  },
+                });
+              }
+            } catch (error) {
+              persistenceFailure(error, 'assistant_partial');
+            }
+          }
 
           if (pierrotStore && canStoreTranscript) {
             try {
@@ -6003,7 +6098,19 @@ export async function POST(req: Request) {
             {
               error: pierrotErrorCopy(errorLanguage(language), failure.code),
               code: failure.code,
+              requestId: correlationId,
               ...(interrupted ? { interrupted: true } : {}),
+              ...(partialReply ? { partialReply, recorded: Boolean(pierrotStore && canStoreTranscript) } : {}),
+              ...(generationPolicy
+                ? {
+                    generation: {
+                      task: generationPolicy.task,
+                      requested_output_tokens: generationPolicy.maxOutputTokens,
+                      finish_reason: generationFinishReason,
+                      usage: generationUsage,
+                    },
+                  }
+                : {}),
               ...(failure.retryAfterSeconds ? { retryAfter: failure.retryAfterSeconds } : {}),
             },
             {
@@ -6101,7 +6208,7 @@ export async function POST(req: Request) {
         ...(ownerRag?.sources ?? []).map((source) => source.canonicalUrl),
       ];
       const actionGuard = guardUnverifiedActionClaims({
-        reply: (reply || 'Silence.').slice(0, PIERROT_MAX_MESSAGE_LENGTH),
+        reply: (reply || 'Silence.').slice(0, PIERROT_MAX_REPLY_LENGTH),
         verifiedWrite: false,
         request: trimmedMessage,
         language: language === 'en' ? 'en' : 'ru',
@@ -6109,7 +6216,7 @@ export async function POST(req: Request) {
       reply = actionGuard.reply;
 
       const evidenceGuard = guardAnswerEvidence({
-        reply: (reply || 'Silence.').slice(0, PIERROT_MAX_MESSAGE_LENGTH),
+        reply: (reply || 'Silence.').slice(0, PIERROT_MAX_REPLY_LENGTH),
         statuses: sourceStatus,
         requested: requestedSources,
         allowedExternalUrls,
@@ -6117,7 +6224,7 @@ export async function POST(req: Request) {
         intent: queryPlan.intent,
       });
 
-      reply = evidenceGuard.reply.slice(0, PIERROT_MAX_MESSAGE_LENGTH);
+      reply = evidenceGuard.reply.slice(0, PIERROT_MAX_REPLY_LENGTH);
 
       // Journal/Flow gets a visual composition only for history, comparison or
       // count questions. A simple prose answer keeps its Markdown form.
@@ -6139,7 +6246,7 @@ export async function POST(req: Request) {
       });
 
       if (webUsed) {
-        reply = composeReplyWithWebSources(reply, webSources, PIERROT_MAX_MESSAGE_LENGTH);
+        reply = composeReplyWithWebSources(reply, webSources, PIERROT_MAX_REPLY_LENGTH);
       }
 
       let finalReply = reply;
@@ -6173,10 +6280,16 @@ export async function POST(req: Request) {
             payload: {
               message_id: assistantMessageId,
               in_reply_to: userMessageId,
+              request_id: correlationId,
               provider: usedProvider,
               model: usedModel,
               fallback_used: fallbackUsed,
               generation_latency_ms: generationLatencyMs,
+              generation_task: generationPolicy?.task ?? null,
+              generation_budget_reason: generationPolicy?.reason ?? null,
+              requested_output_tokens: generationPolicy?.maxOutputTokens ?? null,
+              finish_reason: generationFinishReason,
+              usage: generationUsage,
               length: reply.length,
               latency_ms: Date.now() - startedAt,
               answer_sources: answerSources.mode,
@@ -6285,6 +6398,17 @@ export async function POST(req: Request) {
         model: usedModel || undefined,
         latencyMs: generationLatencyMs || undefined,
         fallbackUsed: usedProvider ? fallbackUsed : undefined,
+        ...(generationPolicy
+          ? {
+              generation: {
+                task: generationPolicy.task,
+                reason: generationPolicy.reason,
+                requested_output_tokens: generationPolicy.maxOutputTokens,
+                finish_reason: generationFinishReason,
+                usage: generationUsage,
+              },
+            }
+          : {}),
         ...(ragOwnerAuthorized ? { admin: true } : {}),
         ...(ownerRag ? { rag: ownerRag } : {}),
         ...(useModel ? { answerSources } : {}),
@@ -6307,6 +6431,7 @@ export async function POST(req: Request) {
           : {}),
         conversationId,
         sessionId,
+        requestId: correlationId,
         ...historyResponseFields,
         userMessageId,
         assistantMessageId,
@@ -6353,6 +6478,8 @@ export async function POST(req: Request) {
             const retryAfter =
               payload && typeof payload.retryAfter === 'number' ? payload.retryAfter : undefined;
             const interrupted = payload?.interrupted === true;
+            const partialReply =
+              typeof payload?.partialReply === 'string' ? payload.partialReply : undefined;
 
             emit({
               type: 'error',
@@ -6362,6 +6489,7 @@ export async function POST(req: Request) {
               ...(retryAfter ? { retryAfter } : {}),
               retryable: response.status === 429 || response.status >= 500,
               ...(interrupted ? { interrupted: true } : {}),
+              ...(partialReply ? { partialReply } : {}),
             });
             return;
           }

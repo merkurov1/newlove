@@ -89,6 +89,55 @@ describe('Pierrot streaming model routing', () => {
     expect(deltas).toEqual(['Hel', 'lo']);
   });
 
+  it('passes the task-aware output budget and timeout to providers', async () => {
+    gemini.isGeminiConfigured.mockReturnValue(true);
+    gemini.streamGeminiText.mockImplementationOnce(
+      async (input: { maxOutputTokens: number; timeoutMs: number; onDelta: (text: string) => void }) => {
+        expect(input.maxOutputTokens).toBe(6_000);
+        expect(input.timeoutMs).toBe(90_000);
+        input.onDelta('Budgeted');
+        return {
+          content: 'Budgeted',
+          model: 'gemini-3.5-flash',
+          provider: 'gemini',
+          latencyMs: 1,
+          emitted: true,
+        };
+      }
+    );
+
+    await streamPierrotModel(
+      'system',
+      messages,
+      false,
+      () => undefined,
+      undefined,
+      { maxOutputTokens: 6_000, timeoutMs: 90_000 }
+    );
+
+    expect(gemini.streamGeminiText).toHaveBeenCalledWith(
+      expect.objectContaining({ maxOutputTokens: 6_000, timeoutMs: 90_000 })
+    );
+  });
+
+  it('clamps an unsupported budget before calling DeepSeek', async () => {
+    openaiModule.__create.mockResolvedValueOnce(chunks('Ok'));
+
+    await streamPierrotModel(
+      'system',
+      messages,
+      false,
+      () => undefined,
+      undefined,
+      { maxOutputTokens: 20_000, timeoutMs: 90_000 }
+    );
+
+    expect(openaiModule.__create).toHaveBeenCalledWith(
+      expect.objectContaining({ max_tokens: 8_192 }),
+      expect.anything()
+    );
+  });
+
   it('falls back before the first token when Gemini fails', async () => {
     gemini.isGeminiConfigured.mockReturnValue(true);
     gemini.streamGeminiText.mockRejectedValueOnce(new Error('gemini failed'));

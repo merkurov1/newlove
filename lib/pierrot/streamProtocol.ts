@@ -52,6 +52,7 @@ export type PierrotStreamEvent =
       retryAfter?: number;
       retryable?: boolean;
       interrupted?: boolean;
+      partialReply?: string;
     };
 
 export type PierrotStreamCallbacks = {
@@ -151,6 +152,7 @@ export function parsePierrotStreamEvent(raw: string): PierrotStreamEvent | null 
       ...(typeof value.retryAfter === 'number' ? { retryAfter: value.retryAfter } : {}),
       ...(typeof value.retryable === 'boolean' ? { retryable: value.retryable } : {}),
       ...(typeof value.interrupted === 'boolean' ? { interrupted: value.interrupted } : {}),
+      ...(typeof value.partialReply === 'string' ? { partialReply: value.partialReply } : {}),
     };
   }
 

@@ -73,7 +73,7 @@ export function globalLimits() {
     circuitCooldownSeconds: readInt('OPS_CIRCUIT_COOLDOWN_SECONDS', 300, 30, 3600),
     circuitMaxCooldownSeconds: readInt('OPS_CIRCUIT_MAX_COOLDOWN_SECONDS', 3600, 60, 86_400),
     pierrotLlmTimeoutMs: readInt('OPS_PIERROT_LLM_TIMEOUT_MS', 25_000, 1_000, 55_000),
-    pierrotLlmMaxTokens: readInt('OPS_PIERROT_LLM_MAX_TOKENS', 700, 100, 4_000),
+    pierrotLlmMaxTokens: readInt('OPS_PIERROT_LLM_MAX_TOKENS', 1_400, 100, 12_000),
     flowLlmTimeoutMs: readInt('OPS_FLOW_LLM_TIMEOUT_MS', 20_000, 1_000, 55_000),
     flowLlmMaxTokens: readInt('OPS_FLOW_LLM_MAX_TOKENS', 600, 100, 4_000),
   };

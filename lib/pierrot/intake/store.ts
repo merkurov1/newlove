@@ -26,6 +26,18 @@ export class IntakeStorageUnavailableError extends Error {
   readonly code = 'INTAKE_MIGRATION_REQUIRED';
 }
 
+export class IntakePartialSaveError extends Error {
+  readonly code = 'INTAKE_PARTIAL_SAVE';
+  readonly inserted: number;
+
+  constructor(inserted: number, cause?: unknown) {
+    super('Intake save failed after some rows were written.');
+    this.name = 'IntakePartialSaveError';
+    this.inserted = inserted;
+    this.cause = cause;
+  }
+}
+
 function isMissingTable(error: { code?: unknown; message?: unknown } | null | undefined): boolean {
   if (!error) return false;
   const code = typeof error.code === 'string' ? error.code : '';
@@ -91,7 +103,17 @@ export async function saveIntakeItems(
   // that predicate. Insert one item at a time and treat 23505 as the existing
   // idempotent outcome instead of failing the whole save.
   const items: IntakeLog[] = [];
+  const insertedIds: string[] = [];
   let duplicateCount = 0;
+
+  const rollback = async () => {
+    if (insertedIds.length === 0) return;
+    await store
+      .from(TABLE)
+      .delete()
+      .eq('user_id', input.userId)
+      .in('id', insertedIds);
+  };
 
   for (const row of rows) {
     const { data, error } = await store.from(TABLE).insert(row).select('*').single();
@@ -102,14 +124,28 @@ export async function saveIntakeItems(
         continue;
       }
       if (isMissingTable(error)) throw new IntakeStorageUnavailableError();
-      throw error;
+
+      // Multi-product messages must not leave an unexplained partial record.
+      // Compensate the rows that were already inserted before reporting failure.
+      try {
+        await rollback();
+      } catch {
+        // The caller still receives an explicit partial-save failure.
+      }
+      throw new IntakePartialSaveError(items.length, error);
     }
 
     const saved = data ? toLog(data as Row) : null;
     if (!saved) {
-      throw new Error('INTAKE_SAVE_NOT_VERIFIED');
+      try {
+        await rollback();
+      } catch {
+        // The caller still receives an explicit partial-save failure.
+      }
+      throw new IntakePartialSaveError(items.length, new Error('INTAKE_SAVE_NOT_VERIFIED'));
     }
     items.push(saved);
+    insertedIds.push(saved.id);
   }
 
   return {
@@ -253,6 +289,10 @@ export function intakeRangeForQuery(
     const range = localDayRange({ now, timeZone: timezone, dayOffset: -1, days: 1 });
     return { from: range.from, to: range.to };
   }
+  if (query.period === 'dayBeforeYesterday') {
+    const range = localDayRange({ now, timeZone: timezone, dayOffset: -2, days: 1 });
+    return { from: range.from, to: range.to };
+  }
   if (query.period === 'last7') {
     const range = localDayRange({ now, timeZone: timezone, dayOffset: -6, days: 7 });
     return { from: range.from, to: range.to };
@@ -266,4 +306,8 @@ export function intakeRangeForQuery(
 
 export function isIntakeStorageUnavailable(error: unknown): boolean {
   return error instanceof IntakeStorageUnavailableError;
+}
+
+export function isIntakePartialSaveError(error: unknown): error is IntakePartialSaveError {
+  return error instanceof IntakePartialSaveError;
 }

@@ -33,7 +33,10 @@ describe('intake query detection', () => {
     ['Сколько раз я ел сегодня?', { kind: 'count', period: 'today' }],
     ['Сколько воды выпил?', { kind: 'water', period: 'today' }],
     ['Что я ел на этой неделе?', { kind: 'list', period: 'week' }],
+    ['Покажи всё за неделю', { kind: 'list', period: 'week' }],
     ['Покажи историю за последние семь дней', { kind: 'list', period: 'last7' }],
+    ['Сколько я сегодня выпил воды?', { kind: 'water', period: 'today' }],
+    ['Что я ел позавчера?', { kind: 'list', period: 'dayBeforeYesterday' }],
     ['What did I eat today?', { kind: 'list', period: 'today' }],
   ])('%s', (message, expected) => {
     expect(detectIntakeQuery(message)).toEqual(expected);
@@ -47,6 +50,9 @@ describe('intake query detection', () => {
 describe('intake mutation detection', () => {
   it('detects deleting the last record', () => {
     expect(detectIntakeMutation('Удали последнюю запись о еде')).toEqual({
+      kind: 'delete_last',
+    });
+    expect(detectIntakeMutation('Убери последнюю запись')).toEqual({
       kind: 'delete_last',
     });
   });
@@ -157,6 +163,15 @@ describe('timezone-aware ranges', () => {
     expect(range.from?.toISOString()).toBe('2026-11-08T00:00:00.000Z');
     expect(range.to?.toISOString()).toBe('2026-11-09T00:00:00.000Z');
   });
+
+  it('uses the owner timezone for the day before yesterday', () => {
+    const range = intakeRangeForQuery(
+      { kind: 'list', period: 'dayBeforeYesterday' },
+      { now, timezone: 'Europe/London' }
+    );
+    expect(range.from?.toISOString()).toBe('2026-11-07T00:00:00.000Z');
+    expect(range.to?.toISOString()).toBe('2026-11-08T00:00:00.000Z');
+  });
 });
 
 describe('duplicate protection', () => {
@@ -246,6 +261,76 @@ describe('duplicate protection', () => {
     expect(result.items[0]).toMatchObject({ type: 'drink', itemName: 'пиво' });
   });
 
+  it('rolls back earlier rows when a multi-item save fails halfway', async () => {
+    const savedRow = {
+      id: ROW.id,
+      user_id: 'user-1',
+      type: 'food',
+      item_name: 'яйца',
+      quantity: 2,
+      unit: null,
+      raw_text: 'Съел два яйца и тост',
+      occurred_at: ROW.occurredAt,
+      timezone: 'Europe/London',
+      source_message_id: 'msg-partial',
+      confidence: 0.9,
+      created_at: ROW.createdAt,
+    };
+
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce({
+        select: () => ({
+          single: () => Promise.resolve({ data: savedRow, error: null }),
+        }),
+      })
+      .mockReturnValueOnce({
+        select: () => ({
+          single: () =>
+            Promise.resolve({
+              data: null,
+              error: { code: '23514', message: 'check constraint failed' },
+            }),
+        }),
+      });
+
+    const inFilter = jest.fn().mockResolvedValue({ error: null });
+    const eqFilter = jest.fn(() => ({ in: inFilter }));
+    const deleteRows = jest.fn(() => ({ eq: eqFilter }));
+    const store = { from: jest.fn(() => ({ insert, delete: deleteRows })) } as never;
+
+    await expect(
+      saveIntakeItems(store, {
+        userId: 'user-1',
+        items: [
+          {
+            type: 'food',
+            itemName: 'яйца',
+            quantity: 2,
+            unit: null,
+            occurredAt: ROW.occurredAt,
+            timezone: 'Europe/London',
+          },
+          {
+            type: 'food',
+            itemName: 'тост',
+            quantity: null,
+            unit: null,
+            occurredAt: ROW.occurredAt,
+            timezone: 'Europe/London',
+          },
+        ],
+        rawText: 'Съел два яйца и тост',
+        sourceMessageId: 'msg-partial',
+        confidence: 0.9,
+      })
+    ).rejects.toMatchObject({ code: 'INTAKE_PARTIAL_SAVE', inserted: 1 });
+
+    expect(deleteRows).toHaveBeenCalled();
+    expect(eqFilter).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(inFilter).toHaveBeenCalledWith('id', [ROW.id]);
+  });
+
   it('defines RLS and a unique source/item index in the migration', () => {
     const sql = fs.readFileSync(
       path.join(process.cwd(), 'migrations/2026-11-25_pierrot_intake_logs.sql'),
@@ -253,7 +338,7 @@ describe('duplicate protection', () => {
     );
     expect(sql).toMatch(/enable row level security/i);
     expect(sql).toMatch(/using \(auth\.uid\(\) = user_id\)/i);
-    expect(sql).toMatch(/unique index[^;]+source_message_id[^;]+item_index/is);
+    expect(sql).toMatch(/unique index[^;]+source_message_id[^;]+item_index/i);
     expect(sql).toMatch(/revoke all on public\.intake_logs from anon/i);
   });
 });

@@ -139,6 +139,47 @@ describe('Pierrot structured response renderer', () => {
     expect(screen.getByText('12')).toBeInTheDocument();
   });
 
+  it('renders an explicit empty state for an empty chart instead of crashing', () => {
+    render(
+      <PierrotResponseRenderer
+        response={response([
+          {
+            type: 'chart',
+            chart: 'bar',
+            title: 'Пустой график',
+            data: [],
+            xKey: 'day',
+            series: [{ key: 'value', label: 'Value' }],
+          },
+        ])}
+        fallbackMarkdown="fallback"
+      />
+    );
+
+    expect(screen.getByText('Пустой график')).toBeInTheDocument();
+    expect(screen.getByText('Нет данных для графика')).toBeInTheDocument();
+    expect(screen.queryByTestId('mock-chart')).not.toBeInTheDocument();
+  });
+
+  it('renders an explicit empty state for an empty table', () => {
+    render(
+      <PierrotResponseRenderer
+        response={response([
+          {
+            type: 'table',
+            title: 'Пустая таблица',
+            columns: [{ key: 'name', label: 'Name' }],
+            rows: [],
+          },
+        ])}
+        fallbackMarkdown="fallback"
+      />
+    );
+
+    expect(screen.getByText('Пустая таблица')).toBeInTheDocument();
+    expect(screen.getByText('Нет строк для таблицы')).toBeInTheDocument();
+  });
+
   it('renders an evidence-based timeline with source links', () => {
     render(
       <PierrotResponseRenderer

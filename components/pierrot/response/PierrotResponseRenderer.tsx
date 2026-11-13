@@ -118,7 +118,28 @@ function MetricBlock({ block, language }: { block: PierrotMetricBlock; language:
   );
 }
 
-function TableBlock({ block }: { block: PierrotTableBlock }) {
+function TableBlock({
+  block,
+  language = 'en',
+}: {
+  block: PierrotTableBlock;
+  language?: 'ru' | 'en';
+}) {
+  if (block.rows.length === 0) {
+    return (
+      <figure className="my-6 min-w-0">
+        {block.title && (
+          <figcaption className="mb-1 font-serif text-[17px] leading-snug text-[#211F1F]">
+            {block.title}
+          </figcaption>
+        )}
+        <p className="border-y border-[#E7DFD4] py-4 font-mono text-[9px] uppercase tracking-[0.14em] text-[#948A7D]">
+          {language === 'ru' ? 'Нет строк для таблицы' : 'No rows for this table'}
+        </p>
+      </figure>
+    );
+  }
+
   return (
     <figure className="my-6 min-w-0">
       {block.title && (
@@ -463,9 +484,9 @@ function renderBlock(
     case 'metric':
       return <MetricBlock key={index} block={block} language={language} />;
     case 'chart':
-      return <PierrotChart key={index} block={block} />;
+      return <PierrotChart key={index} block={block} language={language} />;
     case 'table':
-      return <TableBlock key={index} block={block} />;
+      return <TableBlock key={index} block={block} language={language} />;
     case 'timeline':
       return <PierrotTimeline key={index} block={block} />;
     case 'diagram':

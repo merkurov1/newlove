@@ -18,8 +18,10 @@ function phrase(source: string): RegExp {
 }
 
 function periodFrom(text: string): IntakeQueryIntent['period'] {
+  if (phrase('позавчера|day\\s+before\\s+yesterday').test(text)) {
+    return 'dayBeforeYesterday';
+  }
   if (phrase('вчера|yesterday').test(text)) return 'yesterday';
-  if (phrase('позавчера').test(text)) return 'last7';
   if (
     phrase(
       'последние\\s+(?:7|семь)\\s+дн[a-zа-я0-9]*|за\\s+(?:7|семь)\\s+дн[a-zа-я0-9]*|last\\s+(?:7|seven)\\s+days|past\\s+week'
@@ -27,7 +29,11 @@ function periodFrom(text: string): IntakeQueryIntent['period'] {
   ) {
     return 'last7';
   }
-  if (phrase('на\\s+этой\\s+неделе|за\\s+эту\\s+неделю|эта\\s+неделя|this\\s+week').test(text)) {
+  if (
+    phrase(
+      'на\\s+этой\\s+неделе|за\\s+эту\\s+неделю|эта\\s+неделя|за\\s+неделю|за\\s+последнюю\\s+неделю|this\\s+week'
+    ).test(text)
+  ) {
     return 'week';
   }
   if (phrase('сегодня|today').test(text)) return 'today';
@@ -48,9 +54,10 @@ export function detectIntakeQuery(message: string): IntakeQueryIntent | null {
   const asksCount = /(?:сколько\s+раз|how\s+many\s+times|count\s+(?:my\s+)?(?:meals|food|drinks))/i.test(
     text
   );
-  const asksWater = /(?:сколько\s+(?:я\s+)?(?:выпил|пил|воды)|how\s+much\s+water|water\s+intake)/i.test(
-    text
-  );
+  const asksWater =
+    /(?:сколько\s+(?:я\s+)?(?:(?:сегодня|вчера|позавчера|за\s+неделю|за\s+последние\s+7\s+дней)\s+)?(?:выпил|выпила|пил|пила)|сколько\s+(?:я\s+)?(?:воды|water)|how\s+much\s+water|water\s+intake)/i.test(
+      text
+    );
 
   if (!asksWhat && !asksCount && !asksWater) return null;
 
@@ -64,10 +71,10 @@ export function detectIntakeMutation(message: string): IntakeMutationIntent | nu
   const text = normalize(message);
 
   if (
-    /(?:удали|удалить|delete|remove).*(?:последн|last).*(?:запис|прием|приём|еда|еды|пит|food|drink|intake|meal)/i.test(
+    /(?:удали|удалить|убери|убрать|delete|remove).*(?:последн|last).*(?:запис|прием|приём|еда|еды|пит|food|drink|intake|meal)/i.test(
       text
     ) ||
-    /(?:удали|удалить|delete|remove)\s+(?:последн|last)\s+(?:запис|запись|intake|meal|food|drink)/i.test(
+    /(?:удали|удалить|убери|убрать|delete|remove)\s+(?:последн|last)\s+(?:запис|запись|intake|meal|food|drink)/i.test(
       text
     )
   ) {
@@ -95,21 +102,25 @@ function periodLabel(period: IntakeQueryIntent['period'], language: 'ru' | 'en')
       ? 'today'
       : period === 'yesterday'
         ? 'yesterday'
-        : period === 'week'
-          ? 'this week'
-          : period === 'last7'
-            ? 'the last 7 days'
-            : 'the whole history';
+        : period === 'dayBeforeYesterday'
+          ? 'the day before yesterday'
+          : period === 'week'
+            ? 'this week'
+            : period === 'last7'
+              ? 'the last 7 days'
+              : 'the whole history';
   }
   return period === 'today'
     ? 'сегодня'
     : period === 'yesterday'
       ? 'вчера'
-      : period === 'week'
-        ? 'на этой неделе'
-        : period === 'last7'
-          ? 'за последние 7 дней'
-          : 'за всё время';
+      : period === 'dayBeforeYesterday'
+        ? 'позавчера'
+        : period === 'week'
+          ? 'на этой неделе'
+          : period === 'last7'
+            ? 'за последние 7 дней'
+            : 'за всё время';
 }
 
 function quantityLabel(log: IntakeLog): string | null {
@@ -196,7 +207,9 @@ export function formatIntakeAnswer(input: {
       const date = formatLocalDate(row.occurredAt, timezone);
       const quantity = quantityLabel(row);
       const parts = [
-        query.period === 'today' || query.period === 'yesterday'
+        query.period === 'today' ||
+        query.period === 'yesterday' ||
+        query.period === 'dayBeforeYesterday'
           ? time
           : [date, time].filter(Boolean).join(' '),
         row.itemName,

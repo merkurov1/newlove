@@ -41,10 +41,10 @@ const THIRD_PARTY_PATTERN = new RegExp(
 const QUOTE_PATTERN = /^\s*(?:>|«|"|“|')|(?:сказал|сказала|said|says)\s*[:\-—]/i;
 
 const FOOD_VERB_PATTERN = phrase(
-  `съел|съела|съели|поел|поела|поели|ел|ела|ели|перекусил|перекусила|перекусили|попробовал|попробовала|ate|eaten|had|consumed|tasted`
+  `съел|съела|съели|поел|поела|поели|ел|ела|ели|перекусил|перекусила|перекусили|попробовал|попробовала|добавь|добавить|ate|eaten|had|consumed|tasted|add`
 );
 const DRINK_VERB_PATTERN = phrase(
-  `выпил|выпила|выпили|пил|пила|пили|drank|drunk|sipped`
+  `выпил|выпила|выпили|пил|пила|пили|добавь|добавить|drank|drunk|sipped|add`
 );
 const MEAL_PATTERN = new RegExp(
   `(?:^|\\s)(?:на\\s+)?(?:завтрак|обед|ужин|перекус|ланч|breakfast|lunch|dinner|brunch)\\s+(?:был|была|было|были|was|were)${E}|(?:^|\\s)(?:завтракал|завтракала|обедал|обедала|ужинал|ужинала|had\\s+(?:breakfast|lunch|dinner))${E}`,
@@ -148,13 +148,13 @@ const UNIT_ONLY_PREFIX =
   /^(чашк(?:а|и)?|стакан(?:а|ов)?|бокал(?:а|ов)?|рюмк(?:а|и)?|ложк(?:а|и)?|кусок|кусоч(?:ек|ка)|ломтик(?:а|ов)?|порци(?:я|и|й)|тарелк(?:а|и)?|пакет(?:а|ов)?|бутылк(?:а|и)?|банк(?:а|и)?|cup|glass|bowl|slice|piece|serving|bottle|can|clove|pinch)(?=$|[\s-])[\s-]*(.*)$/i;
 
 const TIME_WORDS_PATTERN =
-  /^(?:(?:сегодня|вчера|позавчера|сейчас|только\s+что|утром|днем|вечером|ночью|на\s+завтрак|на\s+обед|на\s+ужин|за\s+завтраком|за\s+обедом|за\s+ужином|today|yesterday|now|just\s+now|this\s+morning|this\s+afternoon|tonight|last\s+night|for\s+breakfast|for\s+lunch|for\s+dinner)\s+)+/i;
+  /^(?:(?:сегодня|вчера|позавчера|сейчас|только\s+что|с\s+(?:самого\s+)?утра|утром|днем|вечером|ночью|на\s+завтрак|на\s+обед|на\s+ужин|за\s+завтраком|за\s+обедом|за\s+ужином|today|yesterday|now|just\s+now|this\s+morning|this\s+afternoon|tonight|last\s+night|for\s+breakfast|for\s+lunch|for\s+dinner)\s+)+/i;
 
 const FILLER_PATTERN =
   /^(?:(?:я|i|и|and|also|еще|ещё|немного|примерно|about|just|пожалуйста|please)\s+)+/i;
 
 const VERB_PATTERN =
-  /^(?:(?:сейчас|just|только\s+что)?\s*)?(?:съел|съела|съели|поел|поела|поели|ел|ела|ели|перекусил|перекусила|перекусили|попробовал|попробовала|выпил|выпила|выпили|пил|пила|пили|ate|eaten|drank|drunk|had|consumed|tasted|sipped)\s+/i;
+  /^(?:(?:сейчас|just|только\s+что)?\s*)?(?:съел|съела|съели|поел|поела|поели|ел|ела|ели|перекусил|перекусила|перекусили|попробовал|попробовала|выпил|выпила|выпили|пил|пила|пили|добавь|добавить|ate|eaten|drank|drunk|had|consumed|tasted|sipped|add)\s+/i;
 
 const RU_NUMBER =
   '(?:один|одна|одно|одну|два|две|двух|три|трех|четыре|пять|шесть|семь|восемь|девять|десять|полтора|половина)';
@@ -217,11 +217,31 @@ function parseQuantity(value: string): {
   name: string;
 } {
   let text = value.trim().toLowerCase().replace(/ё/g, 'е');
-  text = text.replace(TIME_WORDS_PATTERN, '').replace(FILLER_PATTERN, '').replace(VERB_PATTERN, '');
+  text = text
+    .replace(TIME_WORDS_PATTERN, '')
+    .replace(FILLER_PATTERN, '')
+    .replace(VERB_PATTERN, '')
+    .replace(FILLER_PATTERN, '');
   text = text
     .replace(/^(?:на|for)\s+(?:завтрак|обед|ужин|breakfast|lunch|dinner)\s*/i, '')
     .replace(/^(?:был|была|было|были|was|were)\s+/i, '')
     .trim();
+
+  // "пол-литра воды" / "половина яблока" / "half a glass of wine"
+  const halfLitre = text.match(/^пол[-\s]?литра\s+(.+)$/i);
+  if (halfLitre) {
+    return { quantity: 0.5, unit: 'л', name: canonicalItemName(halfLitre[1]) };
+  }
+  const halfGlass = text.match(/^пол[-\s]?стакана\s+(.+)$/i);
+  if (halfGlass) {
+    return { quantity: 0.5, unit: 'стакан', name: canonicalItemName(halfGlass[1]) };
+  }
+  const halfPortion = text.match(
+    /^(?:половин(?:а|ы|ой|ку|кой)?|half(?:\s+an?)?)\s+(?:of\s+)?(.+)$/i
+  );
+  if (halfPortion) {
+    return { quantity: 0.5, unit: null, name: canonicalItemName(halfPortion[1]) };
+  }
 
   // 500 мл воды / 2 cups of coffee / 1 бокал вина
   const measured = text.match(

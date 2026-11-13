@@ -4,6 +4,7 @@ export {
   deleteIntakeLog,
   getLastIntakeLog,
   intakeRangeForQuery,
+  isIntakePartialSaveError,
   isIntakeStorageUnavailable,
   listIntakeLogs,
   saveIntakeItems,

@@ -151,6 +151,63 @@ describe('parseIntakeMessage — false positives', () => {
   });
 });
 
+describe('parseIntakeMessage — natural portions and additions', () => {
+  it('parses a morning coffee with milk without polluting the item name', () => {
+    const result = parse('С утра выпил кофе с молоком.');
+    expect(result.detected).toBe(true);
+    expect(result.items[0]).toMatchObject({
+      type: 'drink',
+      itemName: 'кофе с молоком',
+      quantity: null,
+    });
+  });
+
+  it('parses half an apple as an explicit portion', () => {
+    const result = parse('Перекусил половинкой яблока.');
+    expect(result.detected).toBe(true);
+    expect(result.items[0]).toMatchObject({
+      type: 'food',
+      quantity: 0.5,
+      unit: null,
+    });
+    expect(result.items[0].itemName).toContain('яблок');
+  });
+
+  it('parses half a litre of water as 500 ml-equivalent quantity', () => {
+    const result = parse('Выпил пол-литра воды.');
+    expect(result.detected).toBe(true);
+    expect(result.items[0]).toMatchObject({
+      type: 'drink',
+      itemName: 'вода',
+      quantity: 0.5,
+      unit: 'л',
+    });
+  });
+
+  it('records an explicit add command for one coffee', () => {
+    const result = parse('Добавь ещё один кофе.');
+    expect(result.detected).toBe(true);
+    expect(result.items[0]).toMatchObject({
+      type: 'drink',
+      itemName: 'кофе',
+      quantity: 1,
+    });
+  });
+
+  it('records multiple products in one sentence', () => {
+    const result = parse('Съел два яйца и кусок хлеба.');
+    expect(result.detected).toBe(true);
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]).toMatchObject({ itemName: 'яйца', quantity: 2 });
+    expect(result.items[1]).toMatchObject({ itemName: 'хлеба', quantity: 1, unit: 'кусок' });
+  });
+
+  it('still refuses a future meal and a third-party meal', () => {
+    expect(parse('Завтра съем пиццу.').detected).toBe(false);
+    expect(parse('Он съел пиццу.').detected).toBe(false);
+  });
+});
+
 describe('parseIntakeMessage — timezone honesty', () => {
   it('marks UTC fallback as unknown', () => {
     const result = parseIntakeMessage('Съел яблоко', {

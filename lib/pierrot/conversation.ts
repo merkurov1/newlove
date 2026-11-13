@@ -12,6 +12,8 @@ import {
 } from '@/lib/pierrot/offers';
 
 export const PIERROT_MAX_MESSAGE_LENGTH = 4000;
+/** Generated answers may be substantially longer than a user message. */
+export const PIERROT_MAX_REPLY_LENGTH = 60_000;
 export const PIERROT_MAX_HISTORY_ITEMS = 24;
 export const PIERROT_MAX_HISTORY_CHARS = 16000;
 export const PIERROT_MAX_HISTORY_ITEM_CHARS = 4000;
@@ -43,6 +45,7 @@ export const PIERROT_SERVER_EVENTS = [
   'conversation_started',
   'message_sent',
   'assistant_replied',
+  'assistant_partial',
   'assistant_failed',
   'intent_classified',
   'brain_retrieval',

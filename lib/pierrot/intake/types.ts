@@ -36,10 +36,18 @@ export type IntakeLog = {
   createdAt: string;
 };
 
+export type IntakeQueryPeriod =
+  | 'today'
+  | 'yesterday'
+  | 'dayBeforeYesterday'
+  | 'week'
+  | 'last7'
+  | 'all';
+
 export type IntakeQueryIntent =
-  | { kind: 'list'; period: 'today' | 'yesterday' | 'week' | 'last7' | 'all' }
-  | { kind: 'count'; period: 'today' | 'yesterday' | 'week' | 'last7' | 'all' }
-  | { kind: 'water'; period: 'today' | 'yesterday' | 'week' | 'last7' | 'all' };
+  | { kind: 'list'; period: IntakeQueryPeriod }
+  | { kind: 'count'; period: IntakeQueryPeriod }
+  | { kind: 'water'; period: IntakeQueryPeriod };
 
 export type IntakeMutationIntent =
   | { kind: 'delete_last' }

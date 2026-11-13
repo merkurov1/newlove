@@ -17,6 +17,7 @@ import {
   type SourceBundle,
 } from '@/lib/pierrot/workspace/chatParser';
 import { PIERROT_CONSENT_VERSION } from '@/lib/pierrot/conversation';
+import { PIERROT_CLIENT_TIMEOUT_MS } from '@/lib/pierrot/generationPolicy';
 import {
   PierrotStreamProtocolError,
   consumePierrotEventStream,
@@ -218,6 +219,7 @@ export default function ChatWorkspace({
     if (activeViewKeyRef.current === nextViewKey) return;
 
     activeViewKeyRef.current = nextViewKey;
+    atBottomRef.current = true;
 
     abortRef.current?.abort();
     abortRef.current = null;
@@ -294,6 +296,7 @@ export default function ChatWorkspace({
       }
       setMessages([]);
       setComposerDraft('');
+      atBottomRef.current = true;
       setEpisodeId(payload.session.id);
       setTitle('Новая сессия');
       setHasOlder(false);
@@ -704,7 +707,7 @@ export default function ChatWorkspace({
     const timeout = window.setTimeout(() => {
       abortReasonRef.current = 'timeout';
       controller.abort();
-    }, 60_000);
+    }, PIERROT_CLIENT_TIMEOUT_MS);
 
     let receivedAny = false;
     const streamState: {
@@ -715,6 +718,7 @@ export default function ChatWorkspace({
         retryAfter?: number;
         retryable?: boolean;
         interrupted?: boolean;
+        partialReply?: string;
       } | null;
     } = { completed: null, error: null };
 
@@ -827,10 +831,12 @@ export default function ChatWorkspace({
             code?: string;
             retryAfter?: number;
             interrupted?: boolean;
+            partialReply?: string;
           };
           failure.code = streamState.error.code;
           failure.retryAfter = streamState.error.retryAfter;
           failure.interrupted = streamState.error.interrupted;
+          failure.partialReply = streamState.error.partialReply;
           throw failure;
         }
 
@@ -901,13 +907,32 @@ export default function ChatWorkspace({
         code?: string;
         retryAfter?: number;
         interrupted?: boolean;
+        partialReply?: string;
       };
       const stopReason =
         abortReasonRef.current === 'timeout'
-          ? 'Ответ не пришёл за 60 секунд. Сообщение не отправлено повторно автоматически.'
+          ? `Ответ не пришёл за ${Math.round(PIERROT_CLIENT_TIMEOUT_MS / 1000)} секунд. Сообщение не отправлено повторно автоматически.`
           : 'Генерация остановлена.';
 
-      if (receivedAny) {
+      const partialReply = failure.partialReply?.trim();
+
+      if (!receivedAny && partialReply) {
+        setMessages((current) =>
+          current.map((item) =>
+            item.id === assistantUiId
+              ? {
+                  ...item,
+                  content: partialReply,
+                  streaming: false,
+                  interrupted: true,
+                  error: true,
+                }
+              : item
+          )
+        );
+        setError('Ответ прерван. Сохранена полученная часть; можно повторить запрос.');
+        setRetryPrompt(text);
+      } else if (receivedAny) {
         setMessages((current) =>
           current.map((item) =>
             item.id === assistantUiId

@@ -360,7 +360,9 @@ export async function fetchJson<T>(
 
       if (error instanceof AnalyticsProviderError) {
         if (!error.retryable || attempt === retries) throw error;
-        await sleep(Math.min(500 * 2 ** attempt, 15_000));
+        await sleep(
+          Math.min(500 * 2 ** attempt + Math.round(Math.random() * 250), 15_000)
+        );
         continue;
       }
 
@@ -377,7 +379,9 @@ export async function fetchJson<T>(
 
       if (attempt === retries) throw lastError;
 
-      await sleep(Math.min(500 * 2 ** attempt, 15_000));
+      await sleep(
+        Math.min(500 * 2 ** attempt + Math.round(Math.random() * 250), 15_000)
+      );
     }
   }
 
