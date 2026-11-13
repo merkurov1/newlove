@@ -264,6 +264,21 @@ import { formatPierrotAnswerTrace } from '@/lib/pierrot/diagnostics';
 import { detectUnifiedSearchIntent } from '@/lib/pierrot/search/intent';
 import { formatUnifiedSearchReport } from '@/lib/pierrot/search/format';
 import { searchUnifiedOwnerContext } from '@/lib/pierrot/search/unified';
+import { detectEditorialIntent } from '@/lib/pierrot/editorial/intent';
+import {
+  loadEditorialContext,
+  mergeEditorialContext,
+  saveEditorialContext,
+  saveEditorialDiagnostic,
+  inferEditorialContext,
+  emptyEditorialContext,
+} from '@/lib/pierrot/editorial/context';
+import { runEditorialOperation } from '@/lib/pierrot/editorial/operations';
+import {
+  appendTruncationNotice,
+  editorialContinuationInstruction,
+} from '@/lib/pierrot/editorial/response';
+import type { EditorialDiagnostic } from '@/lib/pierrot/editorial/types';
 import { planPierrotTurn } from '@/lib/pierrot/orchestrator';
 import { formatContextReport } from '@/lib/pierrot/context/report';
 import { buildContextResponse } from '@/lib/pierrot/context/presentation';
@@ -1688,6 +1703,223 @@ export async function POST(req: Request) {
 
         return NextResponse.json(payload);
       };
+
+      // UNFRAMED editorial mode. This runs before the generic context engine
+      // and owner tools so "прочитай главу 14" cannot be swallowed by a
+      // status report or a semantic four-chunk search. The active editorial
+      // context is inherited from the previous turn and persisted as an event.
+      if (
+        memoryStore &&
+        isPierrotUserId(ownerIdentityUserId) &&
+        !documentLookup
+      ) {
+        const editorialProject =
+          conversationProject?.slug === 'unframed'
+            ? conversationProject
+            : turnProject?.slug === 'unframed'
+              ? turnProject
+              : null;
+        const loadedContext = await loadEditorialContext({
+          store: memoryStore,
+          conversationId,
+        }).catch(() => ({ context: null, unavailable: true, error: 'context_unavailable' }));
+        let activeContext = loadedContext.context;
+        if (!activeContext) {
+          activeContext = inferEditorialContext({
+            project: editorialProject
+              ? {
+                  id: editorialProject.id,
+                  slug: editorialProject.slug,
+                  name: editorialProject.name,
+                }
+              : null,
+            documentId: null,
+            documentTitle: null,
+          });
+        } else if (editorialProject) {
+          activeContext = {
+            ...activeContext,
+            projectId: editorialProject.id,
+            projectSlug: editorialProject.slug,
+            projectName: editorialProject.name,
+          };
+        }
+        if (!activeContext) activeContext = emptyEditorialContext();
+
+        const editorialIntent = detectEditorialIntent({
+          message: trimmedMessage,
+          activeContext,
+          conversationProjectSlug: editorialProject?.slug || null,
+        });
+
+        if (editorialIntent) {
+          const editorialStartedAt = Date.now();
+          const result = await runEditorialOperation({
+            ownerUserId: ownerIdentityUserId,
+            conversationId,
+            sessionId,
+            requestId: correlationId,
+            message: trimmedMessage,
+            language: ownerLanguage,
+            intent: editorialIntent,
+            context: activeContext,
+            store: memoryStore,
+            env: process.env,
+            activeEpisodeId: ownerEpisodeId,
+          });
+
+          const nextContext = mergeEditorialContext(activeContext, result.contextPatch);
+          await saveEditorialContext({
+            store: memoryStore,
+            conversationId,
+            sessionId,
+            userMessageId,
+            context: nextContext,
+            diagnostic: {
+              operation: result.diagnostic.operation,
+              retrieval_strategy: result.diagnostic.retrievalStrategy,
+              context_available: !loadedContext.unavailable,
+            },
+          }).catch(() => false);
+
+          const editorialTrace = {
+            request_id: correlationId,
+            operation: result.diagnostic.operation,
+            resolved_intent: result.diagnostic.resolvedIntent,
+            retrieval_strategy: result.diagnostic.retrievalStrategy,
+            requested_sources: result.diagnostic.requestedSources,
+            selected_sources: result.diagnostic.selectedSources,
+            returned_chunk_ids: result.diagnostic.returnedChunkIds.slice(0, 20),
+            chunk_count: result.diagnostic.chunkCount,
+            coverage: result.diagnostic.coverage,
+            truncated: result.diagnostic.truncated,
+            fallback_reason: result.diagnostic.fallbackReason,
+            errors: result.diagnostic.errors,
+            duration_ms: result.diagnostic.durationMs,
+            finish_reason: result.diagnostic.finishReason,
+            active_project_id: nextContext.projectId,
+            active_document_id: nextContext.documentId,
+            active_chapter_number: nextContext.activeChapterNumber,
+            active_task: nextContext.activeTask,
+            context_available: !loadedContext.unavailable,
+          };
+
+          if (result.status !== 'needs_model') {
+            await saveEditorialDiagnostic({
+              store: memoryStore,
+              conversationId,
+              sessionId,
+              userMessageId,
+              payload: editorialTrace,
+            }).catch(() => false);
+
+            return persistOwnerReply(result.markdown, {
+              editorial: editorialTrace,
+              editorial_status: result.status,
+              source_status: {
+                brain:
+                  result.status === 'failed'
+                    ? 'unavailable'
+                    : result.diagnostic.chunkCount > 0
+                      ? 'relevant_results'
+                      : 'empty',
+                media: 'not_requested',
+                journal: 'not_requested',
+                flow: 'not_requested',
+                web: 'not_requested',
+              },
+              ...(result.status === 'failed'
+                ? { editorial_error: result.diagnostic.errors.join(',') || 'retrieval_failed' }
+                : {}),
+            });
+          }
+
+          let editorialReply = result.markdownFallback;
+          let editorialFinishReason: string | null = null;
+          let editorialTruncated = false;
+          let modelUsed = false;
+
+          try {
+            const policy = resolvePierrotGenerationPolicy({
+              message: trimmedMessage,
+              isReasoning: true,
+              hasRetrievedContext: true,
+              historyLength: normalizedHistory.length,
+            });
+            const prompt =
+              editorialIntent.followUp &&
+              ['manuscript.analyze', 'manuscript.compare', 'manuscript.chapter'].includes(
+                editorialIntent.operation
+              )
+                ? `${result.systemPrompt}\n${
+                    editorialContinuationInstruction(ownerLanguage, true) || ''
+                  }`
+                : result.systemPrompt;
+            const generated = await callPierrotModel(prompt, openAiMessages, true, {
+              maxOutputTokens: policy.maxOutputTokens,
+              timeoutMs: policy.providerTimeoutMs,
+            });
+            if (generated.reply.trim()) {
+              editorialReply = generated.reply.trim();
+              modelUsed = true;
+            }
+            editorialFinishReason = generated.finishReason;
+            const truncation = appendTruncationNotice(
+              editorialReply,
+              ownerLanguage,
+              generated.finishReason
+            );
+            editorialReply = truncation.reply;
+            editorialTruncated = truncation.truncated;
+          } catch (error) {
+            const code =
+              error instanceof Error && error.message
+                ? error.message.slice(0, 120)
+                : 'editorial_generation_failed';
+            editorialReply = `${result.markdownFallback}\n\n${
+              ownerLanguage === 'ru'
+                ? `_Аналитическая генерация не завершилась (${code}). Опорные фрагменты выше загружены из источника; я не буду выдавать пересказ за анализ._`
+                : `_Analytical generation did not complete (${code}). The evidence above was loaded from the source; I will not present a retelling as analysis._`
+            }`;
+            editorialTrace.errors = [...editorialTrace.errors, code];
+            editorialTrace.fallback_reason = code;
+          }
+
+          const finalTrace: EditorialDiagnostic = {
+            ...result.diagnostic,
+            truncated: editorialTruncated,
+            finishReason: editorialFinishReason,
+            fallbackReason: editorialTrace.fallback_reason || result.diagnostic.fallbackReason,
+            errors: editorialTrace.errors,
+            durationMs: Date.now() - editorialStartedAt,
+          };
+          await saveEditorialDiagnostic({
+            store: memoryStore,
+            conversationId,
+            sessionId,
+            userMessageId,
+            payload: { ...editorialTrace, ...finalTrace },
+          }).catch(() => false);
+
+          return persistOwnerReply(editorialReply, {
+            editorial: {
+              ...editorialTrace,
+              ...finalTrace,
+              model_used: modelUsed,
+              truncated: editorialTruncated,
+            },
+            editorial_status: 'model',
+            source_status: {
+              brain: 'relevant_results',
+              media: 'not_requested',
+              journal: 'not_requested',
+              flow: 'not_requested',
+              web: 'not_requested',
+            },
+            ...(editorialTruncated ? { editorial_truncated: true } : {}),
+          });
+        }
+      }
 
       const diagnosticQuestion =
         /(?:почему|зачем)\s+ты\s+так\s+(?:ответил|ответила|сказал|сказала|решил|решила)|(?:откуда|на\s+ч[её]м)\s+(?:такой\s+)?ответ|какие\s+(?:контекст|инструменты)\s+ты\s+использовал|why\s+did\s+you\s+(?:answer|say|reply)|explain\s+your\s+answer|what\s+(?:context|tools)\s+did\s+you\s+use/i.test(
