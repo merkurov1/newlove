@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { CookieOptions } from '@supabase/ssr';
+import { needsAuthRefresh } from '@/lib/auth/routeProtection';
 
 type CookieToSet = {
   name: string;
@@ -30,6 +31,12 @@ export async function middleware(request: NextRequest) {
     url.searchParams.set('path', target);
     if (searchParams.toString()) url.searchParams.set('query', searchParams.toString());
     return NextResponse.rewrite(url);
+  }
+
+  // Public pages do not use the cookie session. Avoid an Auth round-trip on
+  // every page view; protected routes still refresh exactly as before.
+  if (!needsAuthRefresh(pathname)) {
+    return NextResponse.next({ request });
   }
 
   let supabaseResponse = NextResponse.next({
