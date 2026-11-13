@@ -302,7 +302,9 @@ export async function buildProjectChatContext(input: {
           .slice(0, 8)
           .map((item) => item.title || item.id)
           .join('; ')}`
-      : '',
+      : project.knowledgeUnavailable
+        ? `Project knowledge unavailable: ${project.knowledgeUnavailable}. This is a read failure, not an empty project.`
+        : '',
     project.artifacts.length
       ? `Project materials: ${project.artifacts
           .slice(0, 8)

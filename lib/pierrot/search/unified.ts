@@ -314,9 +314,9 @@ async function searchProjectMaterials(input: {
   projects: PierrotProject[];
   project: PierrotProject | null;
   limit: number;
-}): Promise<UnifiedSearchHit[]> {
+}): Promise<{ hits: UnifiedSearchHit[]; failures: string[] }> {
   const terms = input.terms;
-  if (terms.length === 0) return [];
+  if (terms.length === 0) return { hits: [], failures: [] };
   const has = (value: string) => terms.some((term) => normalize(value).includes(term));
   const projectById = new Map(input.projects.map((project) => [project.id, project]));
 
@@ -328,10 +328,16 @@ async function searchProjectMaterials(input: {
       .limit(300),
     input.store
       .from('pierrot_project_knowledge')
-      .select('project_id,document:knowledge_documents(id,title,status)')
+      .select(
+        'project_id,document:knowledge_documents(id,title,ingestion_status,extraction_status,chunk_count,source_char_count,access_class)'
+      )
       .eq('owner_user_id', input.ownerUserId)
       .limit(500),
   ]);
+
+  const failures: string[] = [];
+  if (artifactsResult.error) failures.push(`project_artifacts:${artifactsResult.error.message}`);
+  if (knowledgeResult.error) failures.push(`project_knowledge:${knowledgeResult.error.message}`);
 
   const hits: UnifiedSearchHit[] = [];
   for (const row of Array.isArray(artifactsResult.data) ? artifactsResult.data : []) {
@@ -372,13 +378,18 @@ async function searchProjectMaterials(input: {
       projectName: project?.name || null,
       projectSlug: project?.slug || null,
       href: project ? `/admin/pierrot?project=${encodeURIComponent(project.slug)}` : null,
-      status: typeof document.status === 'string' ? document.status : null,
+      status:
+        typeof document.ingestion_status === 'string'
+          ? document.ingestion_status
+          : typeof document.extraction_status === 'string'
+            ? document.extraction_status
+            : null,
       updatedAt: null,
     });
     if (hits.length >= input.limit) break;
   }
 
-  return hits;
+  return { hits, failures };
 }
 
 async function searchBrainDocuments(input: {
@@ -411,21 +422,23 @@ async function searchBrainDocuments(input: {
   const documentIds = Array.from(chunkByDocument.keys());
   if (documentIds.length === 0) return [];
 
-  const { data: documents } = await input.store
+  const { data: documents, error: documentsError } = await input.store
     .from('knowledge_documents')
     .select('id,title,access_class')
     .in('id', documentIds);
+  if (documentsError) throw new Error(`brain_documents:${documentsError.message}`);
   const documentById = new Map(
     (Array.isArray(documents) ? documents : [])
       .filter((row) => row && typeof row.id === 'string')
       .map((row) => [String(row.id), row])
   );
 
-  const { data: knowledgeLinks } = await input.store
+  const { data: knowledgeLinks, error: linkError } = await input.store
     .from('pierrot_project_knowledge')
     .select('project_id,document_id')
     .eq('owner_user_id', input.ownerUserId)
     .in('document_id', documentIds);
+  if (linkError) throw new Error(`project_knowledge:${linkError.message}`);
   const projectById = new Map(input.projects.map((project) => [project.id, project]));
   const projectByDocument = new Map<string, PierrotProject>();
   for (const row of Array.isArray(knowledgeLinks) ? knowledgeLinks : []) {
@@ -579,7 +592,7 @@ export async function searchUnifiedOwnerContext(input: {
   }
 
   if (input.scope === 'all' || input.scope === 'documents') {
-    const [materials, brainDocuments] = await Promise.all([
+    const [materialsResult, brainResult] = await Promise.all([
       searchProjectMaterials({
         store: input.store,
         ownerUserId: input.ownerUserId,
@@ -587,7 +600,10 @@ export async function searchUnifiedOwnerContext(input: {
         projects,
         project: input.project,
         limit,
-      }).catch(() => []),
+      }).catch((error) => ({
+        hits: [] as UnifiedSearchHit[],
+        failures: [error instanceof Error ? error.message : 'project_materials_failed'],
+      })),
       searchBrainDocuments({
         store: input.store,
         ownerUserId: input.ownerUserId,
@@ -595,9 +611,20 @@ export async function searchUnifiedOwnerContext(input: {
         projects,
         project: input.project,
         limit,
-      }).catch(() => []),
+      })
+        .then((hits) => ({ hits, failures: [] as string[] }))
+        .catch((error) => ({
+          hits: [] as UnifiedSearchHit[],
+          failures: [error instanceof Error ? error.message : 'brain_documents_failed'],
+        })),
     ]);
-    hits.push(...materials, ...brainDocuments);
+    const failures = [...materialsResult.failures, ...brainResult.failures];
+    if (failures.length > 0) {
+      notes.push(
+        `Документы проекта или Brain не прочитаны: ${failures.join('; ')}. Это ошибка запроса, а не пустой архив.`
+      );
+    }
+    hits.push(...materialsResult.hits, ...brainResult.hits);
   }
 
   if (

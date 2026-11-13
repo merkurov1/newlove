@@ -52,6 +52,8 @@ export type PierrotProjectSnapshot = PierrotProject & {
   archivedTasks?: Array<{ id: string; title: string; status: string; updatedAt: string }>;
   supersededTasks?: Array<{ id: string; title: string; status: string; updatedAt: string }>;
   conversations: Array<{ id: string; title: string; updatedAt: string }>;
-  knowledge: Array<{ id: string; title: string | null; status: string | null }>;
+  knowledge: Array<{ id: string; title: string | null; status: string | null; ingestionStatus?: string | null; extractionStatus?: string | null; chunkCount?: number; sourceCharCount?: number; accessClass?: string | null }>;
+  /** Explicit failure of the project→document relation query. */
+  knowledgeUnavailable?: string | null;
   artifacts: Array<{ id: string; title: string; artifactType: string; updatedAt: string }>;
 };

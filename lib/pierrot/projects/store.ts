@@ -463,7 +463,9 @@ export async function getPierrotProjectSnapshot(
       : Promise.resolve({ data: [], error: null } as { data: unknown[]; error: null }),
     client
       .from('pierrot_project_knowledge')
-      .select('document:knowledge_documents(id,title,status)')
+      .select(
+        'document:knowledge_documents(id,title,ingestion_status,extraction_status,chunk_count,source_char_count,access_class)'
+      )
       .eq('project_id', project.id)
       .eq('owner_user_id', ownerUserId)
       .limit(200),
@@ -592,9 +594,15 @@ export async function getPierrotProjectSnapshot(
       return {
         id: text(document.id),
         title: text(document.title) || null,
-        status: text(document.status) || null,
+        status: text(document.ingestion_status) || text(document.extraction_status) || null,
+        ingestionStatus: text(document.ingestion_status) || null,
+        extractionStatus: text(document.extraction_status) || null,
+        chunkCount: Number(document.chunk_count || 0),
+        sourceCharCount: Number(document.source_char_count || 0),
+        accessClass: text(document.access_class) || null,
       };
     }),
+    knowledgeUnavailable: knowledge.error ? knowledge.error.message : null,
     artifacts: (artifacts.data || []).map((r: Record<string, unknown>) => ({
       id: text(r.id),
       title: text(r.title),
