@@ -1117,22 +1117,30 @@ export default function ChatWorkspace({
                             </div>
                           </div>
 
-                          {message.response && !message.streaming ? (
-                            <div className="pw-reply">
-                              <PierrotResponseRenderer
-                                response={message.response}
-                                fallbackMarkdown={message.content}
-                              />
-                            </div>
-                          ) : (
+                          {message.streaming ? (
                             <WorkspaceMarkdown
                               className="pw-reply"
                               content={message.content}
                               citationCount={messageSourceCount}
                               onCitation={(index) => openSources(message, index)}
-                              streaming={message.streaming}
+                              streaming
                               editorial
                             />
+                          ) : (
+                            <div className="pw-reply">
+                              <PierrotResponseRenderer
+                                response={message.response}
+                                fallbackMarkdown={message.content}
+                                renderText={(markdown) => (
+                                  <WorkspaceMarkdown
+                                    content={markdown}
+                                    citationCount={messageSourceCount}
+                                    onCitation={(index) => openSources(message, index)}
+                                    editorial
+                                  />
+                                )}
+                              />
+                            </div>
                           )}
 
                           {!message.streaming && message.groomingPlan && (

@@ -1,11 +1,13 @@
+import path from 'node:path';
 import { defineConfig } from '@playwright/test';
 
 const appUrl = process.env.PIERROT_TEST_BASE_URL || 'http://127.0.0.1:3000';
 const supabaseUrl = process.env.PIERROT_TEST_SUPABASE_URL || 'http://127.0.0.1:54321';
+const repoRoot = path.resolve(__dirname, '..');
 
 export default defineConfig({
   testDir: '.',
-  testMatch: 'pierrot-viewport.spec.ts',
+  testMatch: ['pierrot-viewport.spec.ts', 'pierrot-presentation.spec.ts'],
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
@@ -21,12 +23,14 @@ export default defineConfig({
   webServer: [
     {
       command: 'node tests/support/supabase-stub.cjs',
+      cwd: repoRoot,
       url: supabaseUrl,
       reuseExistingServer: !process.env.CI,
       timeout: 15_000,
     },
     {
       command: 'npm run dev',
+      cwd: repoRoot,
       url: appUrl,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

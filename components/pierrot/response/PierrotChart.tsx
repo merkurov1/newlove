@@ -30,12 +30,12 @@ export default function PierrotChart({
         </figcaption>
       )}
       {block.description && (
-        <p className="mb-3 max-w-2xl text-[12.5px] leading-relaxed text-[#7A7268]">
+        <p className="mb-3 max-w-2xl text-[14px] leading-relaxed text-[#7A7268]">
           {block.description}
         </p>
       )}
       {block.data.length === 0 ? (
-        <p className="border-y border-[#E7DFD4] py-6 font-mono text-[9px] uppercase tracking-[0.14em] text-[#948A7D]">
+        <p className="border-y border-[#E7DFD4] py-6 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[#948A7D]">
           {language === 'ru' ? 'Нет данных для графика' : 'No data for this chart'}
         </p>
       ) : (
@@ -45,7 +45,7 @@ export default function PierrotChart({
               {block.series.map((series, index) => (
                 <li
                   key={series.key}
-                  className="flex items-center gap-1.5 font-mono text-[8.5px] uppercase tracking-[0.1em] text-[#8A8175]"
+                  className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[#8A8175]"
                 >
                   <span
                     aria-hidden="true"
@@ -64,7 +64,7 @@ export default function PierrotChart({
             <PierrotChartImpl block={block} />
           </div>
           {block.unit && (
-            <p className="mt-2 font-mono text-[8.5px] uppercase tracking-[0.14em] text-[#948A7D]">
+            <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#948A7D]">
               {block.unit}
             </p>
           )}

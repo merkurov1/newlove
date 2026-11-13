@@ -100,3 +100,7 @@ logs/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Playwright visual artifacts
+test-results/
+playwright-report/

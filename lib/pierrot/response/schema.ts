@@ -197,6 +197,34 @@ const codeBlock = z.object({
   showLineNumbers: z.boolean().optional(),
 });
 
+const stepsBlock = z.object({
+  ...base,
+  type: z.literal('steps'),
+  items: z
+    .array(
+      z.object({
+        title: z.string().trim().max(200).optional(),
+        text: z.string().trim().min(1).max(4_000),
+      })
+    )
+    .min(2)
+    .max(40),
+});
+
+const checklistBlock = z.object({
+  ...base,
+  type: z.literal('checklist'),
+  items: z
+    .array(
+      z.object({
+        text: z.string().trim().min(1).max(2_000),
+        checked: z.boolean().optional(),
+      })
+    )
+    .min(1)
+    .max(60),
+});
+
 const insightBlock = z.object({
   ...base,
   type: z.literal('insight'),
@@ -306,6 +334,8 @@ const blockSchema = z.discriminatedUnion('type', [
   quoteBlock,
   galleryBlock,
   codeBlock,
+  stepsBlock,
+  checklistBlock,
   insightBlock,
   sourceBlock,
   warningBlock,

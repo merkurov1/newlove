@@ -85,29 +85,30 @@ const PierrotAssistantContent = React.memo(function PierrotAssistantContent({
   response?: PierrotResponse;
   streaming?: boolean;
 }) {
-  // Streaming always uses stable Markdown. Once the server has completed the
-  // answer and validated the structured payload, the registry takes over.
-  if (response && !streaming) {
+  // Streaming always uses stable Markdown. After completion, the presentation
+  // adapter runs locally: a validated server payload wins; otherwise the
+  // Markdown is adapted deterministically without another model call.
+  if (!streaming) {
+    const parsed = parseRecipeResponse(content);
+
+    if (parsed) {
+      return (
+        <>
+          {parsed.before && <PierrotMarkdown content={parsed.before} />}
+          <RecipeCard recipe={parsed.recipe} />
+          {parsed.after && (
+            <div className="mt-3">
+              <PierrotMarkdown content={parsed.after} />
+            </div>
+          )}
+        </>
+      );
+    }
+
     return <PierrotResponseRenderer response={response} fallbackMarkdown={content} />;
   }
 
-  const parsed = parseRecipeResponse(content);
-
-  // A recipe structure is only meaningful once the complete reply is known.
-  // While streaming, render the partial text as ordinary Markdown.
-  if (!parsed || streaming) return <PierrotMarkdown content={content} streaming={streaming} />;
-
-  return (
-    <>
-      {parsed.before && <PierrotMarkdown content={parsed.before} />}
-      <RecipeCard recipe={parsed.recipe} />
-      {parsed.after && (
-        <div className="mt-3">
-          <PierrotMarkdown content={parsed.after} />
-        </div>
-      )}
-    </>
-  );
+  return <PierrotMarkdown content={content} streaming={streaming} />;
 });
 
 function formatMessageTime(value?: string): string | null {
@@ -200,7 +201,7 @@ function AnswerFeedback({ messageId }: { messageId: string }) {
   };
 
   return (
-    <div className="mt-4 flex items-center gap-1.5 font-mono text-[8.5px] uppercase tracking-[0.14em] text-[#8F8578]">
+    <div className="mt-4 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[#8F8578]">
       <span className="mr-0.5 normal-case tracking-[0.06em]">Was this useful?</span>
       <button
         type="button"
@@ -249,7 +250,7 @@ function PierrotEmptyState() {
         Structure is the antidote to chaos.
       </p>
 
-      <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#A5764F]">
+      <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-[#A5764F]">
         Pierrot · merkurov.love
       </p>
 
@@ -278,7 +279,7 @@ function PierrotEmptyState() {
               <span className="block font-serif text-[17px] leading-tight text-[#2F2B26] transition-colors group-hover:text-[#111111] sm:text-[18px]">
                 {starter.title}
               </span>
-              <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.12em] text-[#8A8175]">
+              <span className="mt-1 block font-mono text-[10.5px] uppercase tracking-[0.12em] text-[#8A8175]">
                 {starter.description}
               </span>
             </span>
@@ -291,7 +292,7 @@ function PierrotEmptyState() {
         ))}
       </nav>
 
-      <p className="mt-5 font-mono text-[9px] uppercase tracking-[0.14em] text-[#A49A8C]">
+      <p className="mt-5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[#A49A8C]">
         {language === 'ru' ? 'Или просто напишите ниже' : 'Or simply write below'}
       </p>
     </div>
@@ -388,12 +389,12 @@ export function PierrotMessageList({
                   }`}
                 >
                   {message.role === 'system' ? (
-                    <p className="max-w-[92%] text-center font-mono text-[9px] uppercase tracking-[0.14em] text-[#8A8175]">
+                    <p className="max-w-[92%] text-center font-mono text-[10.5px] uppercase tracking-[0.14em] text-[#8A8175]">
                       {message.content}
                     </p>
                   ) : message.role === 'human' ? (
                     <div className="flex max-w-[92%] flex-col items-start sm:max-w-[80%]">
-                      <span className="mb-1 font-mono text-[8px] uppercase tracking-[0.16em] text-[#8A8175]">
+                      <span className="mb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[#8A8175]">
                         Anton
                       </span>
                       <div
@@ -407,7 +408,7 @@ export function PierrotMessageList({
                         {message.content}
                       </div>
                       {shouldShowMessageTime(message) && formatMessageTime(message.createdAt) && (
-                        <span className="mt-1 font-mono text-[8px] text-[#A49A8C]">
+                        <span className="mt-1 font-mono text-[10px] text-[#A49A8C]">
                           {formatMessageTime(message.createdAt)}
                         </span>
                       )}
@@ -424,7 +425,7 @@ export function PierrotMessageList({
                       >
                         {message.content}
                       </div>
-                      <div className="mt-1 flex items-center gap-2 font-mono text-[8px] text-[#A49A8C]">
+                      <div className="mt-1 flex items-center gap-2 font-mono text-[10px] text-[#A49A8C]">
                         {shouldShowMessageTime(message) && formatMessageTime(message.createdAt) && (
                           <span>{formatMessageTime(message.createdAt)}</span>
                         )}
@@ -456,7 +457,7 @@ export function PierrotMessageList({
                         />
                       )}
                       {message.interrupted && (
-                        <p className="mt-3 border-l border-[#C9A97A] pl-2.5 font-mono text-[9px] leading-relaxed tracking-[0.04em] text-[#8A8175]">
+                        <p className="mt-3 border-l border-[#C9A97A] pl-2.5 font-mono text-[10.5px] leading-relaxed tracking-[0.04em] text-[#8A8175]">
                           {interfaceLanguage === 'ru'
                             ? 'Ответ прерван. Сообщение сохранено — можно спросить ещё раз.'
                             : 'The answer was interrupted. Your message is preserved — you can ask again.'}
@@ -465,7 +466,7 @@ export function PierrotMessageList({
                       {shouldShowMessageTime(message) &&
                         !message.streaming &&
                         formatMessageTime(message.createdAt) && (
-                          <span className="mt-1 block font-mono text-[8px] text-[#A49A8C]">
+                          <span className="mt-1 block font-mono text-[10px] text-[#A49A8C]">
                             {formatMessageTime(message.createdAt)}
                           </span>
                         )}
@@ -628,7 +629,7 @@ export function PierrotMessageList({
                             className="
                           inline-flex items-center rounded-full
                           border border-[#D9CDBC] bg-transparent px-3.5 py-1.5
-                          font-mono text-[9.5px] font-medium uppercase
+                          font-mono text-[10.5px] font-medium uppercase
                           tracking-[0.12em] text-[#5B544A]
                           transition hover:border-[#A99B89] hover:bg-[#F7F3EC]
                           focus-visible:outline-none focus-visible:ring-2
@@ -642,7 +643,7 @@ export function PierrotMessageList({
                     )}
 
                   {message.ragOutcome && message.ragOutcome !== 'relevant_results' && (
-                    <p className="mt-3 border-l border-[#D9CDBC] pl-2.5 font-mono text-[9px] leading-relaxed tracking-[0.04em] text-[#8A8175]">
+                    <p className="mt-3 border-l border-[#D9CDBC] pl-2.5 font-mono text-[10.5px] leading-relaxed tracking-[0.04em] text-[#8A8175]">
                       {message.ragOutcome === 'unavailable'
                         ? 'Brain retrieval is unavailable right now.'
                         : 'No sufficiently relevant Brain passage was retrieved.'}
@@ -651,7 +652,7 @@ export function PierrotMessageList({
 
                   {message.evidence && message.evidence.length > 0 && (
                     <details className="mt-4 w-full border-t border-[#E4DCCF] pt-2">
-                      <summary className="cursor-pointer select-none font-mono text-[8.5px] uppercase tracking-[0.14em] text-[#8A8175] transition-colors hover:text-[#5B544A]">
+                      <summary className="cursor-pointer select-none font-mono text-[10px] uppercase tracking-[0.14em] text-[#8A8175] transition-colors hover:text-[#5B544A]">
                         Sources · {message.evidence.length}
                       </summary>
                       <ul className="mt-2.5 space-y-3">
@@ -664,16 +665,16 @@ export function PierrotMessageList({
                               <span className="font-sans text-[11.5px] font-semibold leading-snug text-[#4D463D]">
                                 {source.documentTitle || source.heading}
                               </span>
-                              <span className="shrink-0 font-mono text-[8.5px] text-[#9C9284]">
+                              <span className="shrink-0 font-mono text-[10px] text-[#9C9284]">
                                 {source.similarity.toFixed(3)}
                               </span>
                             </div>
                             {mediaEvidenceLabel(source) && (
-                              <span className="mt-1 inline-flex rounded-[3px] border border-[#D8C9B7] bg-transparent px-1.5 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.1em] text-[#7A5A45]">
+                              <span className="mt-1 inline-flex rounded-[3px] border border-[#D8C9B7] bg-transparent px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[#7A5A45]">
                                 {mediaEvidenceLabel(source)}
                               </span>
                             )}
-                            <p className="mt-0.5 font-mono text-[8px] uppercase leading-relaxed tracking-[0.08em] text-[#A49A8C]">
+                            <p className="mt-0.5 font-mono text-[10px] uppercase leading-relaxed tracking-[0.08em] text-[#A49A8C]">
                               {source.sourceDomain
                                 ? `${source.sourceDomain} · `
                                 : source.sourceClass
@@ -693,7 +694,7 @@ export function PierrotMessageList({
                                 href={source.canonicalUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="mt-1 inline-flex font-mono text-[8px] uppercase tracking-[0.1em] text-[#8A6A4F] underline decoration-[#B08A5A]/50 underline-offset-2 hover:text-[#5B3F2A]"
+                                className="mt-1 inline-flex font-mono text-[10px] uppercase tracking-[0.1em] text-[#8A6A4F] underline decoration-[#B08A5A]/50 underline-offset-2 hover:text-[#5B3F2A]"
                               >
                                 Original publication ↗
                               </a>
@@ -713,7 +714,7 @@ export function PierrotMessageList({
                     !message.error &&
                     !message.streaming &&
                     (message.provider || message.answerSources) && (
-                      <span className="mt-1 font-mono text-[8px] uppercase tracking-[0.14em] text-[#B0A79B]">
+                      <span className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[#B0A79B]">
                         {message.answerSources?.label}
                         {message.answerSources && message.provider ? ' · ' : ''}
                         {message.provider ? `via ${message.provider}` : ''}

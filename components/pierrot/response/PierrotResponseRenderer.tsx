@@ -1,8 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import PierrotMarkdown, { safeMarkdownUrl } from '@/components/pierrot/PierrotMarkdown';
 import { parsePierrotResponse } from '@/lib/pierrot/response/schema';
+import { buildPresentationResponseFromMarkdown } from '@/lib/pierrot/response/fromMarkdown';
+import { PIERROT_PRESENTATION } from './design';
 import type {
   PierrotComparisonBlock,
   PierrotContentBlock,
@@ -11,6 +13,8 @@ import type {
   PierrotProgressBlock,
   PierrotProjectStatusBlock,
   PierrotQuoteBlock,
+  PierrotChecklistBlock,
+  PierrotStepsBlock,
   PierrotResponse,
   PierrotSourceBlock,
   PierrotTableBlock,
@@ -32,13 +36,13 @@ import PierrotTimeline from './PierrotTimeline';
 function HeadingBlock({ block }: { block: Extract<PierrotContentBlock, { type: 'heading' }> }) {
   const className =
     block.level === 1
-      ? 'font-serif text-[24px] leading-[1.18] tracking-[-0.012em] text-[#1F1C18] first:mt-0'
+      ? PIERROT_PRESENTATION.heading1
       : block.level === 2
-        ? 'font-serif text-[19px] leading-snug text-[#211F1F]'
-        : 'font-serif text-[16.5px] leading-snug text-[#2F2B26]';
+        ? PIERROT_PRESENTATION.heading2
+        : PIERROT_PRESENTATION.heading3;
 
   return (
-    <header className="my-5 first:mt-0">
+    <header className="my-6 first:mt-0">
       {block.level === 1 ? (
         <h2 className={className}>{block.text}</h2>
       ) : block.level === 2 ? (
@@ -47,7 +51,7 @@ function HeadingBlock({ block }: { block: Extract<PierrotContentBlock, { type: '
         <h4 className={className}>{block.text}</h4>
       )}
       {block.description && (
-        <p className="mt-1.5 max-w-2xl text-[12.5px] leading-relaxed text-[#7A7268]">
+        <p className={`mt-2 max-w-2xl ${PIERROT_PRESENTATION.bodyMuted}`}>
           {block.description}
         </p>
       )}
@@ -59,7 +63,7 @@ function MetricBlock({ block, language }: { block: PierrotMetricBlock; language:
   return (
     <section className="my-6 min-w-0" aria-label={block.title || 'Metrics'}>
       {block.title && (
-        <h3 className="mb-2 font-mono text-[8.5px] uppercase tracking-[0.16em] text-[#948A7D]">
+        <h3 className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#948A7D]">
           {block.title}
         </h3>
       )}
@@ -70,7 +74,7 @@ function MetricBlock({ block, language }: { block: PierrotMetricBlock; language:
 
           return (
             <div key={`${metric.label}-${index}`} className="min-w-0 border-t border-[#DED4C6] pt-3">
-              <dt className="font-mono text-[8px] uppercase leading-relaxed tracking-[0.14em] text-[#948A7D]">
+              <dt className="font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-[#948A7D]">
                 {metric.label}
               </dt>
               <dd className="mt-1 min-w-0">
@@ -81,13 +85,13 @@ function MetricBlock({ block, language }: { block: PierrotMetricBlock; language:
                   metric.unit !== 'count' &&
                   metric.unit !== 'position' &&
                   metric.unit !== 'text' && (
-                    <span className="ml-1 font-mono text-[9px] uppercase tracking-[0.1em] text-[#948A7D]">
+                    <span className="ml-1 font-mono text-[10.5px] uppercase tracking-[0.1em] text-[#948A7D]">
                       {formatMetricUnit(metric.unit)}
                     </span>
                   )}
                 {change && (
                   <span
-                    className={`ml-2 font-mono text-[9px] ${
+                    className={`ml-2 font-mono text-[10.5px] ${
                       change.startsWith('-') ? 'text-[#8A1235]' : 'text-[#5F735A]'
                     }`}
                   >
@@ -95,18 +99,18 @@ function MetricBlock({ block, language }: { block: PierrotMetricBlock; language:
                   </span>
                 )}
               </dd>
-              <div className="mt-1.5 space-y-0.5 font-mono text-[8px] leading-relaxed tracking-[0.03em] text-[#A49A8C]">
+              <div className="mt-1.5 space-y-0.5 font-mono text-[10px] leading-relaxed tracking-[0.03em] text-[#A49A8C]">
                 {metric.source && <p>{metric.source}</p>}
                 {calculated && <p>расчётно</p>}
                 {metric.period && <p>{metric.period}</p>}
               </div>
               {metric.interpretation && (
-                <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#7A7268]">
+                <p className="mt-1.5 text-[14px] leading-relaxed text-[#7A7268]">
                   {metric.interpretation}
                 </p>
               )}
               {metric.value === null && metric.unavailableReason && (
-                <p className="mt-1 font-mono text-[8px] leading-relaxed text-[#8A1235]">
+                <p className="mt-1 font-mono text-[10px] leading-relaxed text-[#8A1235]">
                   {metric.unavailableReason}
                 </p>
               )}
@@ -133,7 +137,7 @@ function TableBlock({
             {block.title}
           </figcaption>
         )}
-        <p className="border-y border-[#E7DFD4] py-4 font-mono text-[9px] uppercase tracking-[0.14em] text-[#948A7D]">
+        <p className="border-y border-[#E7DFD4] py-4 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[#948A7D]">
           {language === 'ru' ? 'Нет строк для таблицы' : 'No rows for this table'}
         </p>
       </figure>
@@ -148,14 +152,14 @@ function TableBlock({
         </figcaption>
       )}
       {block.description && (
-        <p className="mb-2 max-w-2xl text-[12.5px] leading-relaxed text-[#7A7268]">
+        <p className="mb-2 max-w-2xl text-[14px] leading-relaxed text-[#7A7268]">
           {block.description}
         </p>
       )}
       <div className="w-full overflow-x-auto">
         <table
           className={`w-full table-auto border-collapse text-left ${
-            block.compact ? 'text-[12px]' : 'text-[13px] sm:text-[13.5px]'
+            block.compact ? 'text-[12px]' : 'text-[14px] sm:text-[14px]'
           }`}
         >
           <thead>
@@ -164,7 +168,7 @@ function TableBlock({
                 <th
                   key={column.key}
                   scope="col"
-                  className="border-b border-[#D9D0C3] px-2 py-2 font-mono text-[8px] font-medium uppercase tracking-[0.1em] text-[#7D7468]"
+                  className="border-b border-[#D9D0C3] px-2.5 py-2.5 font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[#6F665B]"
                   style={{ textAlign: column.align || 'left' }}
                 >
                   {column.label}
@@ -188,7 +192,7 @@ function TableBlock({
                   return (
                     <td
                       key={column.key}
-                      className="border-b border-[#EEE8DE] px-2 py-2 align-top text-[#4D463D]"
+                      className="border-b border-[#EEE8DE] px-2.5 py-2.5 align-top text-[#4D463D]"
                       style={{ textAlign: column.align || 'left' }}
                     >
                       {column.format === 'number' && typeof value === 'number'
@@ -204,8 +208,11 @@ function TableBlock({
           </tbody>
         </table>
       </div>
+      <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-[#948A7D] sm:hidden">
+        {language === 'ru' ? '↔ таблица прокручивается' : '↔ scroll table horizontally'}
+      </p>
       {block.caption && (
-        <p className="mt-2 font-mono text-[8.5px] leading-relaxed text-[#948A7D]">
+        <p className="mt-2 font-mono text-[10px] leading-relaxed text-[#948A7D]">
           {block.caption}
         </p>
       )}
@@ -213,16 +220,68 @@ function TableBlock({
   );
 }
 
+function StepsBlock({ block }: { block: PierrotStepsBlock }) {
+  return (
+    <section className={PIERROT_PRESENTATION.section} aria-label={block.title || 'Steps'}>
+      {block.title && <h3 className={`${PIERROT_PRESENTATION.meta} mb-3`}>{block.title}</h3>}
+      <ol className="space-y-3">
+        {block.items.map((item, index) => (
+          <li key={`${item.text.slice(0, 24)}-${index}`} className="grid grid-cols-[28px_1fr] gap-3">
+            <span className="font-serif text-[15px] leading-[1.75] text-[#A5764F]" aria-hidden="true">
+              {index + 1}.
+            </span>
+            <div className="min-w-0">
+              {item.title && (
+                <p className="font-serif text-[15.5px] leading-snug text-[#211F1F]">{item.title}</p>
+              )}
+              <p className="text-[15.5px] leading-[1.75] text-[#3F3A33]">{item.text}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function ChecklistBlock({ block }: { block: PierrotChecklistBlock }) {
+  return (
+    <section className={PIERROT_PRESENTATION.section} aria-label={block.title || 'Checklist'}>
+      {block.title && <h3 className={`${PIERROT_PRESENTATION.meta} mb-3`}>{block.title}</h3>}
+      <ul className="space-y-2.5">
+        {block.items.map((item, index) => (
+          <li key={`${item.text.slice(0, 24)}-${index}`} className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className={`mt-[0.38em] inline-flex h-4 w-4 shrink-0 items-center justify-center border text-[11px] ${
+                item.checked
+                  ? 'border-[#5F735A] bg-[#5F735A] text-[#FFFDF8]'
+                  : 'border-[#C9BBA8] text-transparent'
+              }`}
+            >
+              ✓
+            </span>
+            <span
+              className={`text-[15.5px] leading-[1.7] ${
+                item.checked ? 'text-[#7A7268]' : 'text-[#3F3A33]'
+              }`}
+            >
+              {item.text}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function QuoteBlock({ block }: { block: PierrotQuoteBlock }) {
   const href = block.url ? safeMarkdownUrl(block.url) : null;
 
   return (
-    <figure className="my-6 border-l-2 border-[#A5764F]/70 py-1 pl-5">
-      <blockquote className="font-serif text-[20px] italic leading-[1.55] text-[#3F3A33] sm:text-[22px]">
-        {block.text}
-      </blockquote>
+    <figure className="my-7 border-l-2 border-[#A5764F]/70 py-1 pl-5">
+      <blockquote className={PIERROT_PRESENTATION.quote}>{block.text}</blockquote>
       {(block.attribution || block.source) && (
-        <figcaption className="mt-2 font-mono text-[8.5px] uppercase tracking-[0.14em] text-[#948A7D]">
+        <figcaption className={`mt-2.5 ${PIERROT_PRESENTATION.caption}`}>
           {block.attribution}
           {block.attribution && block.source ? ' · ' : ''}
           {href ? (
@@ -246,7 +305,7 @@ function QuoteBlock({ block }: { block: PierrotQuoteBlock }) {
 function InsightBlock({ block }: { block: PierrotInsightBlock }) {
   return (
     <aside className="my-5 border-l border-[#C9BBA8] pl-4">
-      <p className="font-mono text-[8px] uppercase tracking-[0.16em] text-[#A5764F]">
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#A5764F]">
         {block.label || 'Note'}
       </p>
       <p className="mt-1 font-serif text-[14.5px] leading-[1.7] text-[#5B544A]">{block.text}</p>
@@ -261,7 +320,7 @@ function ComparisonWrapper({ block }: { block: PierrotComparisonBlock }) {
 function SourceBlock({ block }: { block: PierrotSourceBlock }) {
   return (
     <details className="my-5 border-t border-[#E4DCCF] pt-2.5">
-      <summary className="cursor-pointer select-none font-mono text-[8.5px] uppercase tracking-[0.14em] text-[#8A8175] transition-colors hover:text-[#5B544A]">
+      <summary className="cursor-pointer select-none font-mono text-[10px] uppercase tracking-[0.14em] text-[#8A8175] transition-colors hover:text-[#5B544A]">
         {block.title || 'Sources'} · {block.sources.length}
       </summary>
       <ul className="mt-2.5 space-y-3">
@@ -274,16 +333,16 @@ function SourceBlock({ block }: { block: PierrotSourceBlock }) {
               className="border-t border-[#E9E1D5] pt-2.5 first:border-0 first:pt-0"
             >
               <div className="flex items-start justify-between gap-3">
-                <span className="font-sans text-[11.5px] font-semibold leading-snug text-[#4D463D]">
+                <span className="font-sans text-[14px] font-semibold leading-snug text-[#4D463D]">
                   {source.label}
                 </span>
                 {source.confidence && (
-                  <span className="shrink-0 font-mono text-[8px] uppercase tracking-[0.08em] text-[#9C9284]">
+                  <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9C9284]">
                     {source.confidence}
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 font-mono text-[8px] uppercase leading-relaxed tracking-[0.08em] text-[#A49A8C]">
+              <p className="mt-0.5 font-mono text-[10px] uppercase leading-relaxed tracking-[0.08em] text-[#A49A8C]">
                 {[source.source, source.date, source.method].filter(Boolean).join(' · ')}
               </p>
               {source.excerpt && (
@@ -296,7 +355,7 @@ function SourceBlock({ block }: { block: PierrotSourceBlock }) {
                   href={href}
                   target={href.startsWith('http') ? '_blank' : undefined}
                   rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
-                  className="mt-1 inline-flex font-mono text-[8px] uppercase tracking-[0.1em] text-[#8A6A4F] underline decoration-[#B08A5A]/50 underline-offset-2 hover:text-[#5B3F2A]"
+                  className="mt-1 inline-flex font-mono text-[10px] uppercase tracking-[0.1em] text-[#8A6A4F] underline decoration-[#B08A5A]/50 underline-offset-2 hover:text-[#5B3F2A]"
                 >
                   Open source ↗
                 </a>
@@ -306,12 +365,12 @@ function SourceBlock({ block }: { block: PierrotSourceBlock }) {
         })}
       </ul>
       {block.coverage && (
-        <p className="mt-2 font-mono text-[8px] leading-relaxed text-[#948A7D]">{block.coverage}</p>
+        <p className="mt-2 font-mono text-[10px] leading-relaxed text-[#948A7D]">{block.coverage}</p>
       )}
       {block.limitations && block.limitations.length > 0 && (
         <ul className="mt-1.5 space-y-1">
           {block.limitations.map((limitation) => (
-            <li key={limitation} className="font-serif text-[11px] leading-relaxed text-[#7A7268]">
+            <li key={limitation} className="font-serif text-[12px] leading-relaxed text-[#7A7268]">
               {limitation}
             </li>
           ))}
@@ -331,7 +390,7 @@ function WarningBlock({ block }: { block: PierrotWarningBlock }) {
 
   return (
     <aside className={`my-5 border-l-2 pl-4 ${color}`} role="note">
-      <p className="font-mono text-[8px] uppercase tracking-[0.16em] opacity-70">
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] opacity-70">
         {block.title ||
           (block.level === 'critical'
             ? 'Failure'
@@ -339,7 +398,7 @@ function WarningBlock({ block }: { block: PierrotWarningBlock }) {
               ? 'Limitation'
               : 'Note')}
       </p>
-      <p className="mt-1 font-serif text-[13.5px] leading-[1.7]">{block.text}</p>
+      <p className="mt-1 font-serif text-[14px] leading-[1.7]">{block.text}</p>
     </aside>
   );
 }
@@ -348,7 +407,7 @@ function ProgressBlock({ block }: { block: PierrotProgressBlock }) {
   return (
     <section className="my-6 min-w-0" aria-label={block.title || 'Progress'}>
       {block.title && (
-        <h3 className="mb-2 font-mono text-[8.5px] uppercase tracking-[0.16em] text-[#948A7D]">
+        <h3 className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#948A7D]">
           {block.title}
         </h3>
       )}
@@ -362,8 +421,8 @@ function ProgressBlock({ block }: { block: PierrotProgressBlock }) {
           return (
             <div key={`${item.label}-${index}`}>
               <div className="flex items-baseline justify-between gap-3">
-                <span className="font-serif text-[13.5px] text-[#37332D]">{item.label}</span>
-                <span className="font-mono text-[9px] text-[#7A7268]">
+                <span className="font-serif text-[14px] text-[#37332D]">{item.label}</span>
+                <span className="font-mono text-[10.5px] text-[#7A7268]">
                   {formatMetricValue(item.value, item.unit, 'en')}
                   {item.target != null ? ` / ${formatMetricValue(item.target, item.unit, 'en')}` : ''}
                 </span>
@@ -381,7 +440,7 @@ function ProgressBlock({ block }: { block: PierrotProgressBlock }) {
                 />
               </div>
               {item.note && (
-                <p className="mt-1 font-serif text-[11px] leading-relaxed text-[#7A7268]">
+                <p className="mt-1 font-serif text-[12px] leading-relaxed text-[#7A7268]">
                   {item.note}
                 </p>
               )}
@@ -390,7 +449,7 @@ function ProgressBlock({ block }: { block: PierrotProgressBlock }) {
         })}
       </div>
       {block.period && (
-        <p className="mt-2 font-mono text-[8px] text-[#948A7D]">{block.period}</p>
+        <p className="mt-2 font-mono text-[10px] text-[#948A7D]">{block.period}</p>
       )}
     </section>
   );
@@ -405,12 +464,12 @@ function ProjectStatusBlock({ block }: { block: PierrotProjectStatusBlock }) {
         <h3 className="font-serif text-[19px] leading-snug text-[#211F1F]">
           {block.projectName}
         </h3>
-        <span className="font-mono text-[8.5px] uppercase tracking-[0.16em] text-[#A5764F]">
+        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#A5764F]">
           {statusLabel}
         </span>
       </div>
       {block.statusReason && (
-        <p className="mt-2 max-w-2xl font-serif text-[13px] leading-relaxed text-[#625B50]">
+        <p className="mt-2 max-w-2xl font-serif text-[14px] leading-relaxed text-[#625B50]">
           {block.statusReason}
         </p>
       )}
@@ -422,7 +481,7 @@ function ProjectStatusBlock({ block }: { block: PierrotProjectStatusBlock }) {
             ['Decisions', block.decisions],
           ].map(([label, value]) => (
             <div key={String(label)} className="border-t border-[#DED4C6] pt-2">
-              <dt className="font-mono text-[8px] uppercase tracking-[0.14em] text-[#948A7D]">
+              <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#948A7D]">
                 {label}
               </dt>
               <dd className="mt-0.5 font-serif text-[22px] leading-none text-[#211F1F]">
@@ -439,13 +498,13 @@ function ProjectStatusBlock({ block }: { block: PierrotProjectStatusBlock }) {
               key={`${stream.name}-${index}`}
               className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-[#EEE8DE] pt-2"
             >
-              <span className="font-serif text-[13.5px] text-[#37332D]">
+              <span className="font-serif text-[14px] text-[#37332D]">
                 {stream.name}
-                <span className="ml-2 font-mono text-[8px] uppercase tracking-[0.1em] text-[#A49A8C]">
+                <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[#A49A8C]">
                   {stream.entityType}
                 </span>
               </span>
-              <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[#8A8175]">
+              <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#8A8175]">
                 {[
                   stream.status,
                   stream.openTasks != null ? `${stream.openTasks} open` : null,
@@ -456,7 +515,7 @@ function ProjectStatusBlock({ block }: { block: PierrotProjectStatusBlock }) {
                   .join(' · ')}
               </span>
               {stream.note && (
-                <p className="w-full font-serif text-[11px] leading-relaxed text-[#7A7268]">
+                <p className="w-full font-serif text-[12px] leading-relaxed text-[#7A7268]">
                   {stream.note}
                 </p>
               )}
@@ -465,7 +524,7 @@ function ProjectStatusBlock({ block }: { block: PierrotProjectStatusBlock }) {
         </ul>
       )}
       {block.period && (
-        <p className="mt-2 font-mono text-[8px] text-[#948A7D]">{block.period}</p>
+        <p className="mt-2 font-mono text-[10px] text-[#948A7D]">{block.period}</p>
       )}
     </section>
   );
@@ -474,11 +533,16 @@ function ProjectStatusBlock({ block }: { block: PierrotProjectStatusBlock }) {
 function renderBlock(
   block: PierrotContentBlock,
   language: 'ru' | 'en',
-  index: number
+  index: number,
+  renderText?: (markdown: string) => React.ReactNode
 ): React.ReactNode {
   switch (block.type) {
     case 'text':
-      return <PierrotMarkdown key={index} content={block.markdown} />;
+      return (
+        <div key={index} className="min-w-0">
+          {renderText ? renderText(block.markdown) : <PierrotMarkdown content={block.markdown} />}
+        </div>
+      );
     case 'heading':
       return <HeadingBlock key={index} block={block} />;
     case 'metric':
@@ -495,6 +559,10 @@ function renderBlock(
       return <ComparisonWrapper key={index} block={block} />;
     case 'quote':
       return <QuoteBlock key={index} block={block} />;
+    case 'steps':
+      return <StepsBlock key={index} block={block} />;
+    case 'checklist':
+      return <ChecklistBlock key={index} block={block} />;
     case 'gallery':
       return <PierrotGallery key={index} block={block} />;
     case 'code':
@@ -517,21 +585,36 @@ function renderBlock(
 export default React.memo(function PierrotResponseRenderer({
   response,
   fallbackMarkdown,
+  renderText,
 }: {
-  response: PierrotResponse;
+  response?: PierrotResponse | null;
   fallbackMarkdown: string;
+  /** Optional owner renderer that adds citation links without changing blocks. */
+  renderText?: (markdown: string) => React.ReactNode;
 }) {
-  const validated = parsePierrotResponse(response);
+  const adapted = useMemo(() => {
+    const validated = response ? parsePierrotResponse(response) : null;
+    if (validated) return validated;
+    return buildPresentationResponseFromMarkdown(fallbackMarkdown);
+  }, [response, fallbackMarkdown]);
 
-  if (!validated) {
-    return <PierrotMarkdown content={fallbackMarkdown} />;
+  if (!adapted) {
+    return renderText ? (
+      <div data-pierrot-response className={PIERROT_PRESENTATION.root}>
+        {renderText(fallbackMarkdown)}
+      </div>
+    ) : (
+      <div data-pierrot-response className={PIERROT_PRESENTATION.root}>
+        <PierrotMarkdown content={fallbackMarkdown} />
+      </div>
+    );
   }
 
-  const language = validated.language || 'en';
+  const language = adapted.language || 'en';
 
   return (
-    <div data-pierrot-response className="min-w-0">
-      {validated.blocks.map((block, index) => renderBlock(block, language, index))}
+    <div data-pierrot-response className={PIERROT_PRESENTATION.root}>
+      {adapted.blocks.map((block, index) => renderBlock(block, language, index, renderText))}
     </div>
   );
 });

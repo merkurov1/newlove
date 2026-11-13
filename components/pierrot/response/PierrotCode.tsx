@@ -69,13 +69,13 @@ export default function PierrotCode({ block }: { block: PierrotCodeBlock }) {
         .pierrot-code .hljs-title,.pierrot-code .hljs-function{color:#2F2B26}
       `}</style>
       <figcaption className="flex items-center justify-between gap-3 border-b border-[#E4DCCF] px-3 py-2">
-        <span className="min-w-0 truncate font-mono text-[8.5px] uppercase tracking-[0.14em] text-[#8A8175]">
+        <span className="min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.14em] text-[#8A8175]">
           {block.filename || language}
         </span>
         <button
           type="button"
           onClick={copy}
-          className="shrink-0 font-mono text-[8.5px] uppercase tracking-[0.12em] text-[#948A7D] transition hover:text-[#2F2B26] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B9AB98]"
+          className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-[#948A7D] transition hover:text-[#2F2B26] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B9AB98]"
           aria-label="Copy code"
         >
           {copied ? 'copied' : 'copy'}
@@ -86,12 +86,12 @@ export default function PierrotCode({ block }: { block: PierrotCodeBlock }) {
           {block.showLineNumbers && (
             <pre
               aria-hidden="true"
-              className="select-none border-r border-[#E4DCCF] px-2 py-3 text-right font-mono text-[11px] leading-[1.65] text-[#B3A899]"
+              className="select-none border-r border-[#E4DCCF] px-2 py-3 text-right font-mono text-[12px] leading-[1.65] text-[#B3A899]"
             >
               {Array.from({ length: lines }, (_, index) => index + 1).join('\n')}
             </pre>
           )}
-          <pre className="min-w-0 px-3 py-3 font-mono text-[11.5px] leading-[1.65] text-[#37332D] sm:text-[12px]">
+          <pre className="min-w-0 px-3 py-3 font-mono text-[14px] leading-[1.65] text-[#37332D] sm:text-[12px]">
             {html ? (
               <code dangerouslySetInnerHTML={{ __html: html }} />
             ) : (

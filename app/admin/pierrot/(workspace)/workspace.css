@@ -1349,9 +1349,9 @@ a.pw-home-indicator:hover {
 }
 
 .pw-reply {
-  font-size: 23px;
-  line-height: 1.55;
-  letter-spacing: -0.004em;
+  font-size: 16.5px;
+  line-height: 1.72;
+  letter-spacing: -0.002em;
   overflow-wrap: anywhere;
   text-wrap: pretty;
 }

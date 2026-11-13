@@ -14,7 +14,7 @@ export default function PierrotTimeline({ block }: { block: PierrotTimelineBlock
         </h3>
       )}
       {block.description && (
-        <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-[#7A7268]">
+        <p className="mt-1 max-w-2xl text-[14px] leading-relaxed text-[#7A7268]">
           {block.description}
         </p>
       )}
@@ -31,17 +31,17 @@ export default function PierrotTimeline({ block }: { block: PierrotTimelineBlock
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <time
                   dateTime={event.date}
-                  className="font-mono text-[9px] uppercase tracking-[0.12em] text-[#948A7D]"
+                  className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-[#948A7D]"
                 >
                   {formatBlockDate(event.date)}
                 </time>
                 {event.category && (
-                  <span className="font-mono text-[8px] uppercase tracking-[0.14em] text-[#A5764F]">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#A5764F]">
                     {event.category}
                   </span>
                 )}
                 {event.status && (
-                  <span className="font-mono text-[8px] uppercase tracking-[0.14em] text-[#7C8A73]">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#7C8A73]">
                     {event.status}
                   </span>
                 )}
@@ -50,12 +50,12 @@ export default function PierrotTimeline({ block }: { block: PierrotTimelineBlock
                 {event.title}
               </p>
               {event.description && (
-                <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-[#625B50]">
+                <p className="mt-1 max-w-2xl text-[14px] leading-relaxed text-[#625B50]">
                   {event.description}
                 </p>
               )}
               {event.source && (
-                <p className="mt-1 font-mono text-[8.5px] leading-relaxed tracking-[0.04em] text-[#948A7D]">
+                <p className="mt-1 font-mono text-[10px] leading-relaxed tracking-[0.04em] text-[#948A7D]">
                   {href ? (
                     <a
                       href={href}

@@ -29,7 +29,7 @@ export default function PierrotComparison({ block }: { block: PierrotComparisonB
         </h3>
       )}
       {block.description && (
-        <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-[#7A7268]">
+        <p className="mt-1 max-w-2xl text-[14px] leading-relaxed text-[#7A7268]">
           {block.description}
         </p>
       )}
@@ -44,7 +44,7 @@ export default function PierrotComparison({ block }: { block: PierrotComparisonB
                 {column.title}
               </h4>
               {column.subtitle && (
-                <p className="mt-0.5 font-mono text-[8.5px] uppercase tracking-[0.12em] text-[#948A7D]">
+                <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-[#948A7D]">
                   {column.subtitle}
                 </p>
               )}
@@ -55,7 +55,7 @@ export default function PierrotComparison({ block }: { block: PierrotComparisonB
                   key={`${column.id}-${row.label}-${index}`}
                   className="border-b border-[#EEE8DE] py-2 last:border-b-0"
                 >
-                  <dt className="font-mono text-[8px] uppercase tracking-[0.14em] text-[#948A7D]">
+                  <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#948A7D]">
                     {row.label}
                   </dt>
                   <dd

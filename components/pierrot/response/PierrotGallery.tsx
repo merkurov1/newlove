@@ -13,7 +13,7 @@ export default function PierrotGallery({ block }: { block: PierrotGalleryBlock }
 
   if (images.length === 0) {
     return (
-      <div className="my-5 border-l border-[#C9BBA8] pl-3 font-mono text-[9px] leading-relaxed tracking-[0.04em] text-[#8A8175]">
+      <div className="my-5 border-l border-[#C9BBA8] pl-3 font-mono text-[10.5px] leading-relaxed tracking-[0.04em] text-[#8A8175]">
         Изображения не показаны: нет проверенного источника.
       </div>
     );
@@ -33,10 +33,10 @@ export default function PierrotGallery({ block }: { block: PierrotGalleryBlock }
           referrerPolicy="no-referrer"
           className="h-auto max-h-[70vh] w-full border border-[#E4DCCF] object-contain"
         />
-        <figcaption className="mt-2 max-w-2xl text-[12.5px] leading-relaxed text-[#625B50]">
+        <figcaption className="mt-2 max-w-2xl text-[14px] leading-relaxed text-[#625B50]">
           {image.caption || image.alt}
           {image.source && (
-            <span className="mt-1 block font-mono text-[8.5px] uppercase tracking-[0.12em] text-[#948A7D]">
+            <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.12em] text-[#948A7D]">
               {image.source}
             </span>
           )}
@@ -53,7 +53,7 @@ export default function PierrotGallery({ block }: { block: PierrotGalleryBlock }
         </figcaption>
       )}
       {block.description && (
-        <p className="mb-3 max-w-2xl text-[12.5px] leading-relaxed text-[#7A7268]">
+        <p className="mb-3 max-w-2xl text-[14px] leading-relaxed text-[#7A7268]">
           {block.description}
         </p>
       )}
@@ -87,7 +87,7 @@ export default function PierrotGallery({ block }: { block: PierrotGalleryBlock }
               {image.caption || image.alt}
             </p>
             {image.source && (
-              <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[#948A7D]">
+              <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-[#948A7D]">
                 {image.source}
               </p>
             )}

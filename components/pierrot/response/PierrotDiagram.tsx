@@ -97,7 +97,7 @@ export default function PierrotDiagram({ block }: { block: PierrotDiagramBlock }
         </figcaption>
       )}
       {block.description && (
-        <p className="mb-3 max-w-2xl text-[12.5px] leading-relaxed text-[#7A7268]">
+        <p className="mb-3 max-w-2xl text-[14px] leading-relaxed text-[#7A7268]">
           {block.description}
         </p>
       )}
@@ -235,7 +235,7 @@ export default function PierrotDiagram({ block }: { block: PierrotDiagramBlock }
         </svg>
       </div>
       {block.caption && (
-        <p className="mt-2 max-w-2xl font-mono text-[8.5px] leading-relaxed tracking-[0.04em] text-[#948A7D]">
+        <p className="mt-2 max-w-2xl font-mono text-[10px] leading-relaxed tracking-[0.04em] text-[#948A7D]">
           {block.caption}
         </p>
       )}

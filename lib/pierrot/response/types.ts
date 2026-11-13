@@ -184,6 +184,16 @@ export type PierrotCodeBlock = PierrotBlockBase & {
   showLineNumbers?: boolean;
 };
 
+export type PierrotStepsBlock = PierrotBlockBase & {
+  type: 'steps';
+  items: Array<{ title?: string; text: string }>;
+};
+
+export type PierrotChecklistBlock = PierrotBlockBase & {
+  type: 'checklist';
+  items: Array<{ text: string; checked?: boolean }>;
+};
+
 export type PierrotInsightBlock = PierrotBlockBase & {
   type: 'insight';
   label?: string;
@@ -270,6 +280,8 @@ export type PierrotContentBlock =
   | PierrotQuoteBlock
   | PierrotGalleryBlock
   | PierrotCodeBlock
+  | PierrotStepsBlock
+  | PierrotChecklistBlock
   | PierrotInsightBlock
   | PierrotSourceBlock
   | PierrotWarningBlock

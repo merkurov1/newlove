@@ -132,7 +132,7 @@ export default function PierrotChartImpl({ block }: { block: PierrotChartBlock }
       y={line.value}
       stroke="#B08A5A"
       strokeDasharray="4 4"
-      label={{ value: line.label, fill: '#8A8175', fontSize: 9 }}
+      label={{ value: line.label, fill: '#8A8175', fontSize: 10 }}
     />
   ));
 

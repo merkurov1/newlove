@@ -138,14 +138,14 @@ export function PierrotMarkdown({
             component: 'pre',
             props: {
               className:
-                'my-4 max-w-full overflow-x-auto rounded-lg border border-[#E4DCCF] bg-[#F7F3EC] p-3.5 font-mono text-[12px] leading-[1.65] text-[#37332D] sm:text-[13px] [&>code]:bg-transparent [&>code]:p-0 [&>code]:text-[#37332D]',
+                'my-4 max-w-full overflow-x-auto rounded-lg border border-[#E4DCCF] bg-[#F7F3EC] p-3.5 font-mono text-[12px] leading-[1.65] text-[#37332D] sm:text-[14px] [&>code]:bg-transparent [&>code]:p-0 [&>code]:text-[#37332D]',
             },
           },
           blockquote: {
             component: 'blockquote',
             props: {
               className:
-                'my-4 border-l-2 border-[#B08A5A]/70 bg-[#F7F3EC]/60 px-4 py-2.5 italic text-[#5B544A]',
+                'my-7 border-l-2 border-[#B08A5A]/70 py-1 pl-5 font-serif text-[18px] italic leading-[1.62] text-[#3F3A33]',
             },
           },
           hr: {
@@ -156,34 +156,34 @@ export function PierrotMarkdown({
             component: 'h1',
             props: {
               className:
-                'mb-2 mt-5 font-serif text-xl font-normal leading-snug text-[#111111] first:mt-0',
+                'mb-2 mt-5 font-serif text-[24px] font-normal leading-[1.2] text-[#111111] first:mt-0',
             },
           },
           h2: {
             component: 'h2',
             props: {
               className:
-                'mb-2 mt-5 font-serif text-lg font-normal leading-snug text-[#111111] first:mt-0',
+                'mb-2 mt-5 font-serif text-[20px] font-normal leading-[1.3] text-[#111111] first:mt-0',
             },
           },
           h3: {
             component: 'h3',
             props: {
               className:
-                'mb-1.5 mt-4 font-serif text-base font-normal leading-snug text-[#111111] first:mt-0',
+                'mb-1.5 mt-4 font-serif text-[17px] font-normal leading-snug text-[#111111] first:mt-0',
             },
           },
           h4: {
             component: 'h4',
             props: {
               className:
-                'mb-1 mt-3.5 font-serif text-[15px] font-normal leading-snug text-[#111111] first:mt-0',
+                'mb-1 mt-3.5 font-serif text-[16px] font-normal leading-snug text-[#111111] first:mt-0',
             },
           },
           table: {
             component: ({ children }: { children?: React.ReactNode }) => (
               <div className="my-4 w-full overflow-x-auto">
-                <table className="w-full min-w-[340px] table-auto border-collapse text-left text-[13px] leading-relaxed sm:text-[13.5px]">
+                <table className="w-full min-w-[340px] table-auto border-collapse text-left text-[14px] leading-relaxed sm:text-[14px]">
                   {children}
                 </table>
               </div>
@@ -201,7 +201,7 @@ export function PierrotMarkdown({
             component: 'th',
             props: {
               className:
-                'break-words border-b border-[#D9D0C3] px-2.5 py-2 font-mono text-[9px] font-medium uppercase tracking-[0.08em] text-[#7D7468]',
+                'break-words border-b border-[#D9D0C3] px-2.5 py-2 font-mono text-[10.5px] font-medium uppercase tracking-[0.08em] text-[#7D7468]',
             },
           },
           td: {
@@ -216,7 +216,7 @@ export function PierrotMarkdown({
             // contract has no verified image payload and remote images can be
             // used as tracking pixels. The alt text remains readable.
             component: ({ alt }: { alt?: string }) =>
-              alt ? <span className="font-mono text-[11px] text-[#8A8175]">[{alt}]</span> : null,
+              alt ? <span className="font-mono text-[12px] text-[#8A8175]">[{alt}]</span> : null,
           },
         },
       }}

@@ -438,4 +438,56 @@ describe('Pierrot structured response renderer', () => {
     expect(screen.getByText('IN PROGRESS')).toBeInTheDocument();
     expect(screen.getByText('UNFRAMED_BOOK')).toBeInTheDocument();
   });
+
+  it('adapts Markdown-only historical answers into the same visual system', () => {
+    render(
+      <PierrotResponseRenderer
+        fallbackMarkdown={'## Итог\n\nКороткий абзац.\n\n1. Первый шаг.\n2. Второй шаг.'}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Итог' })).toBeInTheDocument();
+    expect(screen.getByText('Короткий абзац.')).toBeInTheDocument();
+    expect(screen.getByText('Первый шаг.')).toBeInTheDocument();
+    expect(screen.getByText('Второй шаг.')).toBeInTheDocument();
+  });
+
+  it('keeps Markdown visible when a structured payload is invalid', () => {
+    render(
+      <PierrotResponseRenderer
+        response={{ version: PIERROT_RESPONSE_VERSION, blocks: [{ type: 'nope' }] } as never}
+        fallbackMarkdown={'Ответ остаётся видимым.'}
+      />
+    );
+
+    expect(screen.getByText('Ответ остаётся видимым.')).toBeInTheDocument();
+  });
+
+  it('renders checklist and procedure blocks', () => {
+    render(
+      <PierrotResponseRenderer
+        response={response([
+          { type: 'steps', title: 'Порядок', items: [{ text: 'Открыть главу.' }, { text: 'Сверить цитату.' }] },
+          { type: 'checklist', items: [{ text: 'Проверено', checked: true }, { text: 'Не проверено' }] },
+        ])}
+        fallbackMarkdown="fallback"
+      />
+    );
+
+    expect(screen.getByText('Порядок')).toBeInTheDocument();
+    expect(screen.getByText('Открыть главу.')).toBeInTheDocument();
+    expect(screen.getByText('Проверено')).toBeInTheDocument();
+    expect(screen.getByText('Не проверено')).toBeInTheDocument();
+  });
+
+  it('uses the owner text renderer for text blocks so citations survive adaptation', () => {
+    render(
+      <PierrotResponseRenderer
+        fallbackMarkdown="Текст с источником [1]."
+        renderText={(markdown) => <span data-testid="owner-text">{markdown}</span>}
+      />
+    );
+
+    expect(screen.getByTestId('owner-text')).toHaveTextContent('Текст с источником [1].');
+  });
 });
