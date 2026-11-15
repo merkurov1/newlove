@@ -69,7 +69,8 @@
   margin: 0 0 1.9rem;
 }
 
-.nextQuestion {
+.nextQuestion,
+.copyQuestion {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
@@ -102,10 +103,16 @@
 }
 
 .nextQuestion:hover:not(:disabled),
-.nextQuestion:focus-visible:not(:disabled) {
+.nextQuestion:focus-visible:not(:disabled),
+.copyQuestion:hover:not(:disabled),
+.copyQuestion:focus-visible:not(:disabled) {
   color: var(--q-ink);
   border-bottom-color: var(--q-ink);
   opacity: 1;
+}
+
+.copyQuestion {
+  color: var(--q-faint);
 }
 
 .nextQuestion:disabled {
@@ -534,7 +541,8 @@
     margin-bottom: 1.5rem;
   }
 
-  .nextQuestion {
+  .nextQuestion,
+  .copyQuestion {
     font-size: 0.58rem;
   }
 

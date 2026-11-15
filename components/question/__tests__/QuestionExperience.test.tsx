@@ -89,6 +89,26 @@ describe('QuestionExperience', () => {
     expect(window.location.pathname).toBe('/question');
   });
 
+  it('copies a direct question link', async () => {
+    const writeText = jest.fn(async () => undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    render(<QuestionExperience {...baseProps} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Скопировать ссылку' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Ссылка скопирована' })).toBeInTheDocument();
+    });
+
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining(`/question?q=${question.id}`)
+    );
+  });
+
   it('requires 25 client-side words before enabling submission', () => {
     render(<QuestionExperience {...baseProps} />);
 

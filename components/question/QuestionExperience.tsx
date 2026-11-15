@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 
@@ -58,6 +58,23 @@ function clearDraft(questionId: string) {
   }
 }
 
+function copyWithSelection(text: string): boolean {
+  const field = document.createElement('textarea');
+  field.value = text;
+  field.setAttribute('readonly', '');
+  field.style.position = 'fixed';
+  field.style.top = '0';
+  field.style.opacity = '0';
+  document.body.appendChild(field);
+  field.select();
+
+  try {
+    return document.execCommand('copy');
+  } finally {
+    document.body.removeChild(field);
+  }
+}
+
 function errorMessage(code: unknown, wordCount: number): string {
   if (code === 'too_short' || code === 'empty_answer') {
     return `Нужно не меньше ${QUESTION_MIN_WORDS} слов. Сейчас ${wordCount}.`;
@@ -102,6 +119,8 @@ export default function QuestionExperience({
   const [currentQuestion, setCurrentQuestion] = useState<PublicQuestion | null>(question);
   const [loadingNext, setLoadingNext] = useState(false);
   const [nextError, setNextError] = useState<string | null>(null);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const copyTimerRef = useRef<number | null>(null);
 
   const questionId = currentQuestion?.id || '';
   const authenticated = Boolean(user) || authFallback;
@@ -113,6 +132,23 @@ export default function QuestionExperience({
   useEffect(() => {
     if (user && loginOpen) setLoginOpen(false);
   }, [user, loginOpen]);
+
+  useEffect(() => {
+    setCopyState('idle');
+
+    if (copyTimerRef.current !== null) {
+      window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
+    }
+  }, [questionId]);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   // Restore a draft after an OAuth round-trip. The draft is scoped to this
   // question and kept in sessionStorage, never sent anywhere before submission.
@@ -278,6 +314,33 @@ export default function QuestionExperience({
     }
   };
 
+  const handleCopyQuestionLink = async () => {
+    if (!questionId) return;
+
+    const link = `${window.location.origin}/question?q=${encodeURIComponent(questionId)}`;
+
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(link);
+      } else if (!copyWithSelection(link)) {
+        throw new Error('copy_failed');
+      }
+
+      setCopyState('copied');
+    } catch {
+      setCopyState('error');
+    }
+
+    if (copyTimerRef.current !== null) {
+      window.clearTimeout(copyTimerRef.current);
+    }
+
+    copyTimerRef.current = window.setTimeout(() => {
+      setCopyState('idle');
+      copyTimerRef.current = null;
+    }, 2400);
+  };
+
   const handleNextQuestion = async () => {
     if (loadingNext) return;
 
@@ -387,6 +450,19 @@ export default function QuestionExperience({
                 disabled={loadingNext}
               >
                 {loadingNext ? 'Загружаем…' : 'Следующий вопрос'}
+              </button>
+              <button
+                type="button"
+                className={styles.copyQuestion}
+                onClick={handleCopyQuestionLink}
+                aria-live="polite"
+                title="Прямая ссылка на этот вопрос"
+              >
+                {copyState === 'copied'
+                  ? 'Ссылка скопирована'
+                  : copyState === 'error'
+                    ? 'Не удалось скопировать'
+                    : 'Скопировать ссылку'}
               </button>
               {nextError && (
                 <span className={styles.nextError} role="alert">
