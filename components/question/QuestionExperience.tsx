@@ -26,6 +26,7 @@ type QuestionExperienceProps = {
   hasAnswers: boolean;
   isAuthenticated: boolean;
   hasAnswered: boolean;
+  isAdmin?: boolean;
   requestedQuestionId: string | null;
 };
 
@@ -83,6 +84,7 @@ export default function QuestionExperience({
   hasAnswers,
   isAuthenticated,
   hasAnswered: initialHasAnswered,
+  isAdmin = false,
   requestedQuestionId,
 }: QuestionExperienceProps) {
   const { user, isLoading } = useAuth();
@@ -329,9 +331,16 @@ export default function QuestionExperience({
         <div className={styles.inner}>
           <header className={styles.masthead}>
             <span className={styles.kicker}>Question</span>
-            <Link href="/question/about" className={styles.mastheadLink}>
-              О проекте
-            </Link>
+            <div className={styles.mastheadLinks}>
+              {isAdmin && (
+                <Link href="/question/dashboard" className={styles.mastheadLink}>
+                  Дашборд
+                </Link>
+              )}
+              <Link href="/question/about" className={styles.mastheadLink}>
+                О проекте
+              </Link>
+            </div>
           </header>
           <div className={styles.emptyPage}>
             <h1 className={styles.emptyTitle}>Пока нет активных вопросов.</h1>
@@ -353,9 +362,16 @@ export default function QuestionExperience({
       <div className={styles.inner}>
         <header className={styles.masthead}>
           <span className={styles.kicker}>Question</span>
-          <Link href="/question/about" className={styles.mastheadLink}>
-            О проекте
-          </Link>
+          <div className={styles.mastheadLinks}>
+            {isAdmin && (
+              <Link href="/question/dashboard" className={styles.mastheadLink}>
+                Дашборд
+              </Link>
+            )}
+            <Link href="/question/about" className={styles.mastheadLink}>
+              О проекте
+            </Link>
+          </div>
         </header>
 
         <article>

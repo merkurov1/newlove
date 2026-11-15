@@ -628,6 +628,18 @@
     border-color 160ms ease;
 }
 
+.mastheadLinks {
+  display: flex;
+  align-items: baseline;
+  gap: 1.15rem;
+}
+
+@media (max-width: 640px) {
+  .mastheadLinks {
+    gap: 0.9rem;
+  }
+}
+
 .mastheadLink:hover,
 .mastheadLink:focus-visible {
   color: var(--q-ink);

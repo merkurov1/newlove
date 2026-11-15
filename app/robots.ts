@@ -20,6 +20,8 @@ const PRIVATE_PATHS = [
   '/draft/*',
   '/unframed/debug',
   '/unframed/debug/*',
+  '/question/dashboard',
+  '/question/dashboard/*',
 ];
 
 export default function robots(): MetadataRoute.Robots {

@@ -45,6 +45,7 @@ export default async function QuestionPage({ searchParams }: QuestionPageProps) 
       hasAnswers={data.hasAnswers}
       isAuthenticated={data.isAuthenticated}
       hasAnswered={data.hasAnswered}
+      isAdmin={user?.role === 'ADMIN'}
       requestedQuestionId={requestedQuestionId}
     />
   );
