@@ -1,13 +1,19 @@
 // next.config.js
+//
+// Next.js 16 uses Turbopack for `next dev` and `next build` by default. The
+// project has no custom webpack loaders/plugins that Turbopack cannot handle,
+// so the previous `webpack()` hook (which only set logging levels) was removed.
+//
+// `@next/bundle-analyzer` still hooks into webpack. It is applied only when
+// ANALYZE=true and is meant to be used together with `next build --webpack`
+// (see `scripts.analyze`). A normal build stays on Turbopack.
 const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 });
 
-// sharp — нативный модуль, его нельзя бандлить webpack'ом.
+// sharp — нативный модуль, его нельзя бандлить.
 // pdf-parse/pdfjs-dist содержат worker и ESM-загрузчик, поэтому остаются
 // внешними серверными пакетами.
-// Ключ конфигурации зависит от мажорной версии Next.
-const nextMajor = parseInt(require('next/package.json').version.split('.')[0], 10);
 const externalPackages = ['sharp', 'pdf-parse', 'pdfjs-dist'];
 
 /** @type {import('next').NextConfig} */
@@ -84,12 +90,6 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   trailingSlash: false,
-  eslint: {
-    // Temporarily disable ESLint during builds to avoid invalid-option failures
-    // (CI/deploy should set DISABLE_ESLINT=1 or fix ESLint config). Set to true
-    // to prevent build-time lint failures stemming from environment/tooling.
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     // TypeScript strict mode enabled - errors will block builds
     ignoreBuildErrors: false,
@@ -98,37 +98,19 @@ const nextConfig = {
   // Vercel doesn't need this, but Render does
   output: 'standalone',
 
-  // Next 15+: внешние серверные пакеты (не бандлятся)
-  ...(nextMajor >= 15 ? { serverExternalPackages: externalPackages } : {}),
+  // Server packages that must stay outside the bundle.
+  serverExternalPackages: externalPackages,
 
   // Автоматический Tree-Shaking для утилит и иконок
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns', '@tiptap/react'],
-    // Temporary production ingestion route needs the canonical manuscript in
-    // its serverless bundle. Removed together with the route after indexing.
-    outputFileTracingIncludes: {
-      '/api/admin/knowledge/**': ['./app/unframed/Unframed.markdown'],
-      '/api/unframed/**': ['./app/unframed/Unframed.markdown'],
-    },
-    // Next 14: тот же эффект через experimental
-    ...(nextMajor < 15 ? { serverComponentsExternalPackages: externalPackages } : {}),
-    ...(process.env.DISABLE_OPTIMIZE_CSS === '1'
-      ? {}
-      : {
-          optimizeCss: process.env.ENABLE_OPTIMIZE_CSS === '1' ? true : false,
-        }),
   },
 
-  // Webpack configuration
-  webpack: (config, { isServer }) => {
-    // Disable webpack cache warnings in production
-    if (process.env.NODE_ENV === 'production') {
-      config.infrastructureLogging = {
-        level: 'error',
-      };
-    }
-
-    return config;
+  // Temporary production ingestion route needs the canonical manuscript in
+  // its serverless bundle. Removed together with the route after indexing.
+  outputFileTracingIncludes: {
+    '/api/admin/knowledge/**': ['./app/unframed/Unframed.markdown'],
+    '/api/unframed/**': ['./app/unframed/Unframed.markdown'],
   },
 
   // Конфигурация изображений
@@ -214,6 +196,9 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'], // AVIF first for best compression
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    // Next 16 defaults to [75] only. The design system uses explicit quality
+    // values that must keep rendering as before.
+    qualities: [50, 75, 84, 88, 92, 100],
     // Long cache TTL for better CDN performance (1 year)
     minimumCacheTTL: 31536000,
     dangerouslyAllowSVG: true,
@@ -222,4 +207,5 @@ const nextConfig = {
   },
 };
 
-module.exports = withBundleAnalyzer(nextConfig);
+module.exports =
+  process.env.ANALYZE === 'true' ? withBundleAnalyzer(nextConfig) : nextConfig;

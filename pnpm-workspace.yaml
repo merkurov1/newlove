@@ -1,11 +1,16 @@
+# pnpm settings for a single-package repository.
+#
+# Native packages are allowed to run their build scripts explicitly instead of
+# approving them interactively. Keep this list minimal: every entry is a
+# package that ships or builds a native binary used at runtime or build time.
 allowBuilds:
-  '@reown/appkit': set this to true or false
-  '@swc/core': set this to true or false
-  '@vercel/speed-insights': set this to true or false
-  bufferutil: set this to true or false
-  es5-ext: set this to true or false
-  esbuild: set this to true or false
-  keccak: set this to true or false
-  sharp: set this to true or false
-  unrs-resolver: set this to true or false
-  utf-8-validate: set this to true or false
+  '@reown/appkit': true
+  '@swc/core': true
+  '@vercel/speed-insights': true
+  bufferutil: true
+  es5-ext: true
+  esbuild: true
+  keccak: true
+  sharp: true
+  unrs-resolver: true
+  utf-8-validate: true

@@ -9,7 +9,7 @@ type CookieToSet = {
   options?: CookieOptions;
 };
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
   // Markdown twins: /path.md and `Accept: text/markdown` are served by the
