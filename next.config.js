@@ -104,6 +104,8 @@ const nextConfig = {
   // Автоматический Tree-Shaking для утилит и иконок
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns', '@tiptap/react'],
+    // Preserve the previous opt-in behaviour (disabled unless explicitly set).
+    ...(process.env.ENABLE_OPTIMIZE_CSS === '1' ? { optimizeCss: true } : {}),
   },
 
   // Temporary production ingestion route needs the canonical manuscript in
