@@ -55,6 +55,40 @@ describe('QuestionExperience', () => {
     );
   });
 
+  it('loads the next random question without a page reload', async () => {
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        question: {
+          id: '22222222-2222-4222-8222-222222222222',
+          text: 'Что делает человека свободным?',
+        },
+        synthesis: { content: '# Новый синтез\n\nТекст.', updatedAt: null, version: 1 },
+        hasAnswers: true,
+      }),
+    }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<QuestionExperience {...baseProps} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Следующий вопрос' }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: 'Что делает человека свободным?' })
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('heading', { name: 'В чём смысл жизни?' })).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/question?excludeQuestionId=${question.id}`,
+      expect.objectContaining({ cache: 'no-store' })
+    );
+    expect(screen.getByRole('heading', { name: 'Новый синтез' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/question');
+  });
+
   it('requires 25 client-side words before enabling submission', () => {
     render(<QuestionExperience {...baseProps} />);
 

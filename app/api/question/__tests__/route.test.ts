@@ -1,4 +1,5 @@
 /** @jest-environment node */
+/* eslint-disable @typescript-eslint/no-require-imports */
 
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
@@ -61,5 +62,32 @@ describe('GET /api/question', () => {
 
     expect(store.getPublicQuestion).toHaveBeenCalledWith(null);
     expect(response.headers.get('cache-control')).toContain('no-store');
+  });
+
+  it('retries the random lookup when it repeats the question being excluded', async () => {
+    store.getPublicQuestion
+      .mockResolvedValueOnce({
+        question: { id: questionId, text: 'Текущий вопрос' },
+        synthesis: null,
+        hasAnswers: false,
+      })
+      .mockResolvedValueOnce({
+        question: {
+          id: '22222222-2222-4222-8222-222222222222',
+          text: 'Следующий вопрос',
+        },
+        synthesis: null,
+        hasAnswers: false,
+      });
+
+    const response = await GET(
+      new Request(
+        `https://www.merkurov.love/api/question?excludeQuestionId=${questionId}`
+      )
+    );
+    const payload = await response.json();
+
+    expect(store.getPublicQuestion).toHaveBeenCalledTimes(2);
+    expect(payload.question).toMatchObject({ text: 'Следующий вопрос' });
   });
 });

@@ -35,6 +35,12 @@ type AnswerResponse = {
   synthesis?: { content?: unknown } | null;
 };
 
+type PublicQuestionResponse = {
+  question?: PublicQuestion | null;
+  synthesis?: PublicSynthesis | null;
+  hasAnswers?: unknown;
+};
+
 function draftKey(questionId: string) {
   return `${QUESTION_DRAFT_STORAGE_PREFIX}${questionId}`;
 }
@@ -91,8 +97,11 @@ export default function QuestionExperience({
   const [localHasAnswers, setLocalHasAnswers] = useState(hasAnswers);
   const [synthesis, setSynthesis] = useState<PublicSynthesis | null>(initialSynthesis);
   const [authFallback, setAuthFallback] = useState(isAuthenticated);
+  const [currentQuestion, setCurrentQuestion] = useState<PublicQuestion | null>(question);
+  const [loadingNext, setLoadingNext] = useState(false);
+  const [nextError, setNextError] = useState<string | null>(null);
 
-  const questionId = question?.id || '';
+  const questionId = currentQuestion?.id || '';
   const authenticated = Boolean(user) || authFallback;
 
   useEffect(() => {
@@ -267,7 +276,54 @@ export default function QuestionExperience({
     }
   };
 
-  if (!question) {
+  const handleNextQuestion = async () => {
+    if (loadingNext) return;
+
+    setLoadingNext(true);
+    setNextError(null);
+
+    try {
+      const params = new URLSearchParams();
+      if (questionId) params.set('excludeQuestionId', questionId);
+
+      const response = await fetch(`/api/question?${params.toString()}`, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+
+      if (!response.ok) throw new Error('question_lookup_failed');
+
+      const payload = (await response.json().catch(() => null)) as PublicQuestionResponse | null;
+      const nextQuestion =
+        payload?.question &&
+        typeof payload.question.id === 'string' &&
+        typeof payload.question.text === 'string'
+          ? payload.question
+          : null;
+
+      setCurrentQuestion(nextQuestion);
+      setSynthesis(payload?.synthesis ?? null);
+      setLocalHasAnswers(payload?.hasAnswers === true);
+      setHasAnswered(false);
+      setConfirmed(false);
+      setContent('');
+      setWordCount(0);
+      setError(null);
+
+      try {
+        window.history.replaceState({}, '', '/question');
+      } catch {
+        // The question still changes if history is unavailable.
+      }
+    } catch {
+      setNextError('Не удалось загрузить следующий вопрос.');
+    } finally {
+      setLoadingNext(false);
+    }
+  };
+
+  if (!currentQuestion) {
     return (
       <main className={styles.page}>
         <div className={styles.inner}>
@@ -305,8 +361,23 @@ export default function QuestionExperience({
         <article>
           <section aria-labelledby="question-title">
             <h1 id="question-title" className={styles.question}>
-              {question.text}
+              {currentQuestion.text}
             </h1>
+            <div className={styles.nextRow}>
+              <button
+                type="button"
+                className={styles.nextQuestion}
+                onClick={handleNextQuestion}
+                disabled={loadingNext}
+              >
+                {loadingNext ? 'Загружаем…' : 'Следующий вопрос'}
+              </button>
+              {nextError && (
+                <span className={styles.nextError} role="alert">
+                  {nextError}
+                </span>
+              )}
+            </div>
           </section>
 
           <div className={styles.sections}>
