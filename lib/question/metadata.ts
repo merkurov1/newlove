@@ -1,4 +1,5 @@
-import { pageMetadata } from '@/lib/seo';
+import { ogImageUrl, pageMetadata, truncate } from '@/lib/seo';
+import type { PublicQuestion } from './constants';
 
 /**
  * Russian-only surface. Titles and descriptions are deliberately distinct so
@@ -21,3 +22,40 @@ export const questionAboutMetadata = pageMetadata({
   type: 'website',
   locale: 'ru_RU',
 });
+
+/**
+ * Per-question social metadata for a shared /question?q=… link.
+ *
+ * The document title keeps the site suffix, while Open Graph and Twitter use
+ * the question itself, so the shared card reads as the question rather than as
+ * a generic product page.
+ */
+export function questionShareMetadata(question: PublicQuestion) {
+  const shortQuestion = truncate(question.text, 96);
+  const description = truncate(
+    `${shortQuestion} Человеческие ответы на Question и синтез Пьеро. Добавьте свой ответ — от 25 слов.`,
+    160
+  );
+
+  const base = pageMetadata({
+    title: `${shortQuestion} — Question | Антон Меркуров`,
+    description,
+    path: `/question?q=${encodeURIComponent(question.id)}`,
+    image: ogImageUrl(question.text, 'Question · человеческие ответы'),
+    imageAlt: question.text,
+    type: 'website',
+    locale: 'ru_RU',
+  });
+
+  return {
+    ...base,
+    openGraph: {
+      ...(base.openGraph || {}),
+      title: question.text,
+    },
+    twitter: {
+      ...(base.twitter || {}),
+      title: question.text,
+    },
+  };
+}

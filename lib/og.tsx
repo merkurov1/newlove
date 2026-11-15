@@ -3,11 +3,18 @@ import { SITE_NAME, SITE_URL } from '@/lib/seo';
 
 export const OG_SIZE = { width: 1200, height: 630 };
 
+export type OgFont = {
+  name: string;
+  data: ArrayBuffer;
+  weight?: 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
+  style?: 'normal' | 'italic';
+};
+
 /**
  * Global social card. Per-page metadata points at /og?title=…&subtitle=…
  * so every page gets a title-specific image while sharing this renderer.
  */
-export function renderOgImage(title: string, subtitle: string) {
+export function renderOgImage(title: string, subtitle: string, fonts?: OgFont[]) {
   const cleanTitle = title.replace(/\s+/g, ' ').trim().slice(0, 110);
   const cleanSubtitle = subtitle.replace(/\s+/g, ' ').trim().slice(0, 120);
   const host = SITE_URL.replace(/^https?:\/\//, '');
@@ -24,7 +31,7 @@ export function renderOgImage(title: string, subtitle: string) {
           backgroundColor: '#FAF8F5',
           color: '#141210',
           padding: '64px 72px',
-          fontFamily: 'sans-serif',
+          fontFamily: "'Noto Sans', sans-serif",
         }}
       >
         <div
@@ -47,7 +54,7 @@ export function renderOgImage(title: string, subtitle: string) {
             style={{
               fontSize: cleanTitle.length > 60 ? 58 : 72,
               lineHeight: 1.05,
-              fontWeight: 500,
+              fontWeight: 400,
               letterSpacing: '-0.035em',
               maxWidth: 1000,
             }}
@@ -77,6 +84,9 @@ export function renderOgImage(title: string, subtitle: string) {
         </div>
       </div>
     ),
-    OG_SIZE,
+    {
+      ...OG_SIZE,
+      ...(fonts && fonts.length > 0 ? { fonts } : {}),
+    }
   );
 }

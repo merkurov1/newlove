@@ -3,21 +3,33 @@ import { unstable_noStore as noStore } from 'next/cache';
 
 import QuestionExperience from '@/components/question/QuestionExperience';
 import { getCurrentUser } from '@/lib/serverAuth';
-import { getQuestionPageData } from '@/lib/question/store';
-import { questionPageMetadata } from '@/lib/question/metadata';
+import { getPublicQuestion, getQuestionPageData } from '@/lib/question/store';
+import { questionPageMetadata, questionShareMetadata } from '@/lib/question/metadata';
 import { isQuestionId } from '@/lib/question/validation';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
-export const metadata: Metadata = questionPageMetadata;
-
 type QuestionPageProps = {
   searchParams?: {
     q?: string | string[];
   };
 };
+
+export async function generateMetadata({
+  searchParams,
+}: QuestionPageProps): Promise<Metadata> {
+  const requested = Array.isArray(searchParams?.q) ? searchParams?.q[0] : searchParams?.q;
+
+  if (!isQuestionId(requested)) {
+    return questionPageMetadata;
+  }
+
+  const { question } = await getPublicQuestion(requested);
+
+  return question ? questionShareMetadata(question) : questionPageMetadata;
+}
 
 export default async function QuestionPage({ searchParams }: QuestionPageProps) {
   noStore();

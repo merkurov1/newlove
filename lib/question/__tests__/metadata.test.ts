@@ -1,7 +1,16 @@
 /** @jest-environment node */
 
 import { PUBLIC_ROUTES } from '@/lib/seo';
-import { questionAboutMetadata, questionPageMetadata } from '../metadata';
+import {
+  questionAboutMetadata,
+  questionPageMetadata,
+  questionShareMetadata,
+} from '../metadata';
+
+const sharedQuestion = {
+  id: '11111111-1111-4111-8111-111111111111',
+  text: 'В чём смысл жизни?',
+};
 
 function absoluteTitle(value: unknown): string {
   if (value && typeof value === 'object' && 'absolute' in value) {
@@ -51,5 +60,23 @@ describe('Question SEO metadata', () => {
   it('does not leak private corpus language into public metadata', () => {
     const serialized = JSON.stringify(questionPageMetadata) + JSON.stringify(questionAboutMetadata);
     expect(serialized).not.toMatch(/user_id|answer_text|question_answers|service_role/i);
+  });
+
+  it('puts a shared question into the social title and image', () => {
+    const metadata = questionShareMetadata(sharedQuestion);
+    const image = Array.isArray(metadata.openGraph?.images)
+      ? String((metadata.openGraph.images[0] as { url?: unknown }).url || '')
+      : '';
+
+    expect(absoluteTitle(metadata.title)).toContain(sharedQuestion.text);
+    expect(metadata.openGraph?.title).toBe(sharedQuestion.text);
+    expect(metadata.twitter?.title).toBe(sharedQuestion.text);
+    expect(metadata.description).toContain('В чём смысл жизни?');
+    expect(metadata.alternates?.canonical).toBe(
+      `https://www.merkurov.love/question?q=${sharedQuestion.id}`
+    );
+    const imageParams = new URL(image).searchParams;
+    expect(imageParams.get('title')).toBe(sharedQuestion.text);
+    expect(image).toContain('/og?title=');
   });
 });
