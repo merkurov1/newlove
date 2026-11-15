@@ -385,13 +385,31 @@ Vitals, а не удалённые метрики Next.
 
 ## 14. Требует ручного решения / production approval
 
-1. **Восстановить `.env.local` и `.env.production.local`.** В процессе
-   проверки сборки без секретов файлы были временно перемещены в `/tmp`, а
-   окружение перезапустилось — файлы утеряны вместе с `/tmp`. В git они не
-   попадали (gitignored), production/Vercel не затронуты. Нужно скопировать
-   значения из Vercel → Settings → Environment Variables (или из локальной
-   копии владельца). Это единственное действие, блокирующее локальный
-   `pnpm dev` с реальными данными.
+1. **Восстановить оставшиеся секреты в `.env.production.local`.**
+   В процессе проверки сборки без секретов файлы `.env.local` и
+   `.env.production.local` были временно перемещены в `/tmp`, а окружение
+   перезапустилось — файлы утеряны вместе с `/tmp`. В git они не попадали
+   (gitignored), production/Vercel не затронуты.
+   Частично восстановлено через `vercel env pull`:
+   - `.env.local` (development) — **50 переменных, полностью**;
+   - `.env.production.local` — **75 переменных**; 23 «sensitive» значения Vercel
+     CLI не отдаёт, они перечислены в файле как закомментированные
+     `# RESTORE FROM VERCEL` строки:
+     `ANALYTICS_GA4_ACCOUNT_ID`, `ANALYTICS_GA4_PROPERTY_ID`, `DEEPSEEK_API_KEY`,
+     `EXA_API_KEY`, `GITHUB_TOKEN`, `META_FACEBOOK_PAGE_ACCESS_TOKEN`,
+     `META_FACEBOOK_PAGE_ID`, `META_THREADS_APP_ID`, `META_THREADS_APP_SECRET`,
+     `OPENROUTER_API_KEY`, `PIERROT_OWNER_TELEGRAM_ID`, `PIERROT_RAG_ENABLED`,
+     `PIERROT_WEB_SEARCH_ENABLED`, `POSTGRES_PASSWORD`, `POSTGRES_PRISMA_URL`,
+     `POSTGRES_URL`, `POSTGRES_URL_NON_POOLING`, `SCRAPINGANT_API_KEY`,
+     `SUPABASE_JWT_SECRET`, `TELEGRAM_ALLOWED_USER_IDS`,
+     `TELEGRAM_CHANNEL_ID`, `TELEGRAM_WEBHOOK_ENFORCE_SECRET`,
+     `TELEGRAM_WEBHOOK_SECRET`.
+   Критические для рантайма ключи (`NEXT_PUBLIC_SUPABASE_*`,
+   `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `RESEND_API_KEY`,
+   Telegram-токены) восстановлены. Для локальной production-симуляции нужно
+   вручную заполнить оставшиеся 23 значения из Vercel Dashboard.
+   `.env.local` для локального `pnpm dev` восстановлен полностью (сам
+   dev-сервер в песочнице не запускался).
 2. **Production deploy** — не выполнялся. Нужен отдельный approve на merge
    `chore/modernization-2026` и деплой.
 3. **Проверить CI workflow** на GitHub (workflow добавлен, но не запускался в
