@@ -3,6 +3,8 @@ import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { getClientIp } from '@/lib/rateLimit';
 import { checkPierrotRateLimit } from '@/lib/pierrot/rateLimit';
 import { formatReviewMarkdown, reviewDevTask } from '@/lib/pierrot/dev/review';
+import { buildAttemptReview } from '@/lib/pierrot/dev/workbench/execution';
+import { listAttempts } from '@/lib/pierrot/dev/workbench/store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,12 +49,33 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await reviewDevTask(admin.id, taskId, { head, base });
+    const attempts = await listAttempts(taskId, 10);
+    const attempt = attempts.find((item) => item.status === 'completed') || attempts[0] || null;
+    const result = await reviewDevTask(admin.id, taskId, { head, base, attempt });
     if (!result) return json({ error: 'Task not found.' }, 404);
+
+    const attemptView = await buildAttemptReview({
+      userId: admin.id,
+      taskId,
+      report: {
+        changedFiles: result.report.changedFiles,
+        checks: result.report.checks.runs,
+        findings: result.report.findings.map((finding) => ({
+          severity: finding.severity,
+          file: finding.file,
+          problem: finding.problem,
+          recommendation: finding.recommendation,
+        })),
+        summary: result.report.summary,
+        limitations: result.report.limitations,
+        verdict: result.report.verdict,
+      },
+    });
 
     return json({
       task: result.task,
       report: result.report,
+      attemptView,
       markdown: formatReviewMarkdown(result.report),
     });
   } catch (error) {

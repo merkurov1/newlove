@@ -180,7 +180,17 @@ export type DevModelResult = {
 };
 
 export type DevTaskStatus =
-  'draft' | 'ready' | 'in_progress' | 'review' | 'verified' | 'rejected' | 'archived';
+  | 'draft'
+  | 'ready'
+  | 'queued'
+  | 'in_progress'
+  | 'review'
+  | 'verified'
+  | 'failed'
+  | 'rejected'
+  | 'cancelled'
+  | 'archived'
+  | 'blocked';
 
 export type DevVerificationStatus =
   'verified' | 'verified_with_warnings' | 'not_verified' | 'rejected';
@@ -293,6 +303,8 @@ export type DevReviewReport = {
     criterion: string;
     evidence: string;
     status: 'satisfied' | 'not_verified' | 'failed';
+    /** Where the evidence came from: diff hint, CI, local command or manual check. */
+    source?: 'diff' | 'ci' | 'local' | 'manual' | 'none';
   }>;
   generatedAt: string;
   limitations: string[];

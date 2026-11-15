@@ -15,6 +15,11 @@
   // Run npm install but also sanity-check the 'vscode' user and log a helpful
   // message. This will make failures visible in Codespaces build logs.
   "postCreateCommand": "echo 'node version:' $(node -v) && echo 'npm version:' $(npm -v) && ./scripts/setup_dev.sh",
+  // Start the Pierrot engineering worker as a controlled background process.
+  // postCreate stays bounded; postStart is idempotent and exits 0 when the
+  // worker is already running or when worker configuration is absent.
+  "postStartCommand": "bash ./scripts/pierrot/dev-worker-start.sh || true",
+  "postAttachCommand": "bash ./scripts/pierrot/dev-worker-start.sh || true",
   "customizations": {
     "vscode": {
       "extensions": [

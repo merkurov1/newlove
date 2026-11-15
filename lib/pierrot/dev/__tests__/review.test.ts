@@ -135,7 +135,7 @@ describe('Engineering Review', () => {
     );
   });
 
-  it('verifies only when a diff and an executed check run exist', async () => {
+  it('does not treat a changed filename as acceptance evidence', async () => {
     mockCompare.mockResolvedValue({
       repository: 'merkurov1/newlove',
       base: 'a'.repeat(40),
@@ -161,10 +161,14 @@ describe('Engineering Review', () => {
 
     const result = await reviewDevTask(baseTask.userId!, baseTask.id);
 
-    expect(result?.report.verdict).toBe('verified');
+    // A passing CI run is real evidence, but a filename in the diff is not.
+    // The task must remain unverified until the criterion is confirmed.
+    expect(result?.report.verdict).toBe('verified_with_warnings');
     expect(result?.report.checks.testsExecuted).toBe(true);
     expect(result?.report.acceptanceCriteria[0]).toMatchObject({
-      status: 'satisfied',
+      status: 'not_verified',
+      source: 'diff',
     });
+    expect(result?.report.acceptanceCriteria[0].evidence).toContain('not proof');
   });
 });

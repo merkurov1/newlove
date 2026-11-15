@@ -43,11 +43,15 @@ type TaskForm = {
 const STATUS_LABELS: Record<DevTaskStatus, string> = {
   draft: 'Draft',
   ready: 'Ready',
+  queued: 'Queued',
   in_progress: 'In Progress',
   review: 'Review',
   verified: 'Verified',
+  failed: 'Failed',
   rejected: 'Rejected',
+  cancelled: 'Cancelled',
   archived: 'Archived',
+  blocked: 'Blocked',
 };
 
 function linesToArray(value: string): string[] {

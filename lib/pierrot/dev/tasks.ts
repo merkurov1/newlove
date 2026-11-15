@@ -20,11 +20,15 @@ const MAX_ARRAY_ITEM = 2_000;
 export const DEV_TASK_STATUSES: DevTaskStatus[] = [
   'draft',
   'ready',
+  'queued',
   'in_progress',
   'review',
   'verified',
+  'failed',
   'rejected',
+  'cancelled',
   'archived',
+  'blocked',
 ];
 
 export const DEV_VERIFICATION_STATUSES: DevVerificationStatus[] = [
@@ -53,6 +57,7 @@ function list(value: unknown): string[] {
 
 function status(value: unknown, fallback: DevTaskStatus = 'draft'): DevTaskStatus {
   const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (normalized === 'used') return 'archived';
   return DEV_TASK_STATUSES.includes(normalized as DevTaskStatus)
     ? (normalized as DevTaskStatus)
     : fallback;

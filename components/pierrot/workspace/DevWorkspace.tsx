@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import WorkspaceMarkdown from './WorkspaceMarkdown';
 import DevTaskStudio from './DevTaskStudio';
+import DevWorkbench from './DevWorkbench';
+import type { DevWorkbenchOverview } from '@/lib/pierrot/dev/workbench/types';
 import { useOnlineStatus } from './useOnlineStatus';
 import type {
   DevDiagnosis,
@@ -287,6 +289,7 @@ export default function DevWorkspace({
   taskMigrationRequired,
   requestStoreAvailable,
   memory,
+  workbench,
 }: {
   conversations: DevConversationListItem[];
   conversation: DevConversation | null;
@@ -296,6 +299,7 @@ export default function DevWorkspace({
   taskMigrationRequired: boolean;
   requestStoreAvailable: boolean;
   memory: DevMemoryEntry[];
+  workbench: DevWorkbenchOverview;
 }) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -311,6 +315,9 @@ export default function DevWorkspace({
   const [threadsOpen, setThreadsOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const [taskCreateNonce, setTaskCreateNonce] = useState(0);
+  const [mode, setMode] = useState<'workbench' | 'chat'>(
+    conversation ? 'chat' : 'workbench'
+  );
   const [activeRepoKey, setActiveRepoKey] = useState<string>(
     () =>
       integration.repositories.find((repo) => repo.accessible)?.key ||
@@ -588,6 +595,15 @@ export default function DevWorkspace({
 
   const writesLabel = integration.github.writesEnabled ? 'writes flag on' : 'read-only';
 
+  if (mode === 'workbench') {
+    return (
+      <DevWorkbench
+        initialOverview={workbench}
+        onOpenChat={() => setMode('chat')}
+      />
+    );
+  }
+
   return (
     <div className="pw-dev">
       <aside
@@ -671,6 +687,13 @@ export default function DevWorkspace({
           </div>
 
           <div className="pw-dev-statuses" aria-label="Статус интеграций">
+            <button
+              type="button"
+              className="pw-wb-button is-quiet"
+              onClick={() => setMode('workbench')}
+            >
+              Workbench
+            </button>
             <StatusChip
               label={
                 integration.github.authenticated

@@ -6,6 +6,7 @@ import { getDevRepositoryConfigs } from '@/lib/pierrot/dev/repositories';
 import { getProjectMemory } from '@/lib/pierrot/dev/memory';
 import { isDevRequestStoreAvailable } from '@/lib/pierrot/dev/requests';
 import { listDevTasks } from '@/lib/pierrot/dev/tasks';
+import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
 import {
   loadDevConversation,
   loadDevConversations,
@@ -28,13 +29,14 @@ export default async function DevPage({
     ? searchParams?.conversation[0]
     : searchParams?.conversation;
 
-  const [list, conversation, integration, taskList, requestStoreAvailable] =
+  const [list, conversation, integration, taskList, requestStoreAvailable, workbench] =
     await Promise.all([
       loadDevConversations(user.id),
       rawConversation ? loadDevConversation(user.id, rawConversation) : Promise.resolve(null),
       getDevIntegrationStatus(),
       listDevTasks(user.id, 40),
       isDevRequestStoreAvailable(),
+      getWorkbenchOverview(user.id),
     ]);
 
   if (rawConversation && !conversation) {
@@ -57,6 +59,7 @@ export default async function DevPage({
       taskMigrationRequired={taskList.migrationRequired}
       requestStoreAvailable={requestStoreAvailable}
       memory={memory}
+      workbench={workbench}
     />
   );
 }

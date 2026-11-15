@@ -2,12 +2,10 @@ import { assertServerOnly } from '@/lib/serverOnly';
 import { compareRefs, getCheckRuns } from './repository';
 import { resolveDevRepository } from './repositories';
 import { getDevTask, saveDevTaskReview } from './tasks';
-import type {
-  DevReviewFinding,
-  DevReviewReport,
-  DevTask,
-  DevVerificationStatus,
-} from './types';
+import { collectAttemptEvidence } from './workbench/evidence';
+import { computeVerdict } from './workbench/state';
+import type { DevAttempt } from './workbench/types';
+import type { DevReviewFinding, DevReviewReport, DevTask } from './types';
 
 assertServerOnly('lib/pierrot/dev/review');
 
@@ -19,70 +17,10 @@ function isSensitiveFile(path: string): boolean {
   return /(^|\/)(\.env|\.env\..+|secrets?|credentials?|id_rsa|.*\.pem)$/i.test(path);
 }
 
-function criterionEvidence(
-  criterion: string,
-  changedFiles: string[],
-  testsExecuted: boolean
-): { evidence: string; status: 'satisfied' | 'not_verified' | 'failed' } {
-  const lower = criterion.toLowerCase();
-
-  const mentionedPath = changedFiles.find((file) => {
-    const normalized = file.toLowerCase();
-    const basename = normalized.split('/').pop() || normalized;
-    return (
-      lower.includes(normalized) ||
-      (basename.length >= 4 && lower.includes(basename))
-    );
-  });
-
-  if (mentionedPath) {
-    return {
-      evidence: `Changed file matches the criterion: ${mentionedPath}. Manual review is still required.`,
-      status: 'satisfied',
-    };
-  }
-
-  if (/(test|tests|тест|сборк|build|lint|typecheck)/i.test(criterion)) {
-    return testsExecuted
-      ? {
-          evidence: 'A test/build check run is attached to the head commit.',
-          status: 'satisfied',
-        }
-      : {
-          evidence: 'No test or build check run was found for the head commit.',
-          status: 'not_verified',
-        };
-  }
-
-  return {
-    evidence:
-      'The diff alone cannot prove this criterion. It requires a manual check or a recorded test result.',
-    status: 'not_verified',
-  };
-}
-
-function verdictFromFindings(
-  findings: DevReviewFinding[],
-  testsExecuted: boolean,
-  hasChanges: boolean
-): DevVerificationStatus {
-  if (findings.some((finding) => finding.severity === 'blocker')) return 'rejected';
-  if (!hasChanges) return 'not_verified';
-  if (!testsExecuted) return 'not_verified';
-  if (
-    findings.some(
-      (finding) => finding.severity === 'high' || finding.severity === 'medium'
-    )
-  ) {
-    return 'verified_with_warnings';
-  }
-  return 'verified';
-}
-
 export async function reviewDevTask(
   userId: string,
   taskId: string,
-  input: { head?: string; base?: string } = {}
+  input: { head?: string; base?: string; attempt?: DevAttempt | null } = {}
 ): Promise<{ task: DevTask; report: DevReviewReport } | null> {
   const task = await getDevTask(userId, taskId);
   if (!task) return null;
@@ -93,7 +31,8 @@ export async function reviewDevTask(
   const generatedAt = new Date().toISOString();
   const findings: DevReviewFinding[] = [];
   const limitations: string[] = [
-    'Pierrot did not execute tests locally. Only GitHub check runs and workflow metadata were inspected.',
+    'Pierrot did not execute the tests itself. CI check runs and executor-reported commands are shown separately.',
+    'Executor-reported commands are self-reported unless the server enables PIERROT_DEV_TRUST_SELF_REPORTED_CHECKS.',
     'A commit or pull request is not proof that the task is complete.',
     'GitHub diff data may be truncated for large changes.',
   ];
@@ -140,11 +79,26 @@ export async function reviewDevTask(
   const changedFiles = compare?.files || [];
   const hasChanges = changedFiles.length > 0;
   const checkRuns = checksData?.checks || [];
-  const testsExecuted = checkRuns.some(
-    (run) =>
-      /(test|tests|ci|build|lint|typecheck|verify)/i.test(run.name) &&
-      Boolean(run.conclusion)
-  );
+
+  const attempt: DevAttempt | null = input.attempt || null;
+  const evidence = await collectAttemptEvidence({
+    task: {
+      id: task.id,
+      repository: task.repository,
+      acceptanceCriteria: task.acceptanceCriteria,
+    },
+    attempt,
+    changedFiles: [
+      ...new Set([...(attempt?.changedFiles || []), ...changedFiles.map((file) => file.filename)]),
+    ],
+    ciChecks: checkRuns.map((run) => ({
+      name: run.name,
+      status: run.status,
+      conclusion: run.conclusion,
+      url: run.url,
+    })),
+  });
+  const testsExecuted = evidence.ciPassed || evidence.localTrusted;
 
   if (!hasChanges) {
     findings.push({
@@ -170,16 +124,41 @@ export async function reviewDevTask(
     });
   }
 
+  if (evidence.ciFailed) {
+    findings.push({
+      severity: 'blocker',
+      file: null,
+      line: null,
+      problem: 'At least one CI check run for the review head concluded with a failure.',
+      impact: 'The result does not pass the real checks.',
+      recommendation: 'Fix the failing check and push a new commit to the working branch.',
+    });
+  }
+
+  if (evidence.localReportedFailed) {
+    findings.push({
+      severity: 'high',
+      file: null,
+      line: null,
+      problem: 'The executor reported at least one failed verification command.',
+      impact: 'A failure cannot be masked by a successful completion message.',
+      recommendation:
+        'Inspect the command output in HISTORY and retry the task or confirm the result manually with evidence.',
+    });
+  }
+
   if (!testsExecuted) {
     findings.push({
       severity: 'high',
       file: null,
       line: null,
-      problem: 'No executed test or build check run was found for the review head.',
+      problem: evidence.localReportedPassed
+        ? 'Only executor-reported command results are available. No CI check run passed.'
+        : 'No executed test or build check run was found for the review head.',
       impact:
-        'Correctness, regressions and the acceptance criteria are not verified.',
+        'Correctness, regressions and the acceptance criteria are not independently verified.',
       recommendation:
-        'Run the relevant lint, typecheck, tests and build, attach the command output, and re-run this review.',
+        'Attach a passing CI check, or confirm the criteria manually in Admin after inspecting the result.',
     });
   }
 
@@ -257,14 +236,10 @@ export async function reviewDevTask(
     });
   }
 
-  const acceptanceCriteria = task.acceptanceCriteria.map((criterion) => ({
-    criterion,
-    ...criterionEvidence(
-      criterion,
-      changedFiles.map((file) => file.filename),
-      testsExecuted
-    ),
-  }));
+  const acceptanceCriteria = evidence.criteria;
+  const unverifiedCriteria = acceptanceCriteria.filter(
+    (criterion) => criterion.status !== 'satisfied'
+  ).length;
 
   const failedCriteria = acceptanceCriteria.filter(
     (criterion) => criterion.status === 'failed'
@@ -278,17 +253,41 @@ export async function reviewDevTask(
       impact: 'The result does not satisfy the task.',
       recommendation: 'Fix the failed criteria and re-run the review.',
     });
+  } else if (unverifiedCriteria > 0 && hasChanges) {
+    findings.push({
+      severity: 'medium',
+      file: null,
+      line: null,
+      problem: `${unverifiedCriteria} acceptance criteria have no real evidence yet.`,
+      impact: 'The task cannot be marked verified without evidence or manual confirmation.',
+      recommendation:
+        'Attach passing CI checks, or confirm each criterion manually after inspecting the result in Admin.',
+    });
   }
 
-  const verdict = verdictFromFindings(findings, testsExecuted, hasChanges);
+  const verdict = computeVerdict({
+    hasChanges,
+    hasBlocker: findings.some((finding) => finding.severity === 'blocker'),
+    hasHighFinding: findings.some((finding) => finding.severity === 'high'),
+    localChecksPassed: evidence.localTrusted,
+    localChecksFailed: evidence.localTrusted && evidence.localReportedFailed,
+    ciPassed: evidence.ciPassed,
+    ciFailed: evidence.ciFailed,
+    criteria: acceptanceCriteria,
+  });
   const summaryParts = [
     `Compared ${base}...${head} in ${config.fullName}.`,
     hasChanges
       ? `${changedFiles.length} changed file(s) were found.`
       : 'No changed files were found.',
-    testsExecuted
-      ? 'CI check runs were found, but Pierrot did not execute them.'
-      : 'No executed test/build check run was found.',
+    evidence.ciPassed
+      ? 'A CI check run passed for the review head.'
+      : 'No passing CI check run was found.',
+    evidence.localReportedPassed
+      ? evidence.localTrusted
+        ? 'Executor-reported local checks are trusted by server policy.'
+        : 'Executor-reported local checks exist but are self-reported and are not treated as proof.'
+      : 'No local check results were reported.',
     `Verdict: ${verdict}.`,
   ];
 
@@ -319,9 +318,9 @@ export async function reviewDevTask(
         conclusion: run.conclusion,
         url: run.url,
       })),
-      note: testsExecuted
-        ? 'GitHub check runs are evidence of CI; they are not proof that the task acceptance criteria are correct.'
-        : 'No executed test or build check run was attached. Tests are explicitly unverified.',
+      note: evidence.ciPassed
+        ? 'CI check runs are real evidence. They still do not prove that behavioural acceptance criteria are correct.'
+        : 'No passing CI check run was attached. Executor-reported local commands are self-reported and are not treated as proof.',
     },
     acceptanceCriteria,
     generatedAt,
