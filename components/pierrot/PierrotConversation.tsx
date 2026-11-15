@@ -767,60 +767,67 @@ export function PierrotInput({
   placeholder?: string;
   className?: string;
 }) {
-  const { draft, draftCaret, isLoading, isHumanActive, updateDraft, sendMessage, stopGeneration } =
+  const { draft, isLoading, isHumanActive, updateDraft, sendMessage, stopGeneration } =
     usePierrot();
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const caretRef = useRef<number | null>(null);
+  // Typing stays local so one keystroke does not re-render the whole provider
+  // and the entire 500-message transcript. The shared draft is updated only on
+  // blur/unmount (so closing the window preserves it) and cleared on submit.
+  const [value, setValue] = useState(() => draft);
+  const valueRef = useRef(value);
 
-  caretRef.current = draftCaret;
+  valueRef.current = value;
 
-  // Restore the caret when the user focuses the composer themselves. The
-  // previous effect focused the textarea whenever loading changed, which
-  // reopened the mobile keyboard on mount and after every response.
-  const handleFocus = () => {
+  // Closing the modal unmounts the composer. Persist one snapshot then, not on
+  // every character.
+  useEffect(
+    () => () => {
+      updateDraft(valueRef.current, null);
+    },
+    [updateDraft]
+  );
+
+  const resizeInput = React.useCallback(() => {
     const input = inputRef.current;
     if (!input) return;
 
-    const position = Math.min(caretRef.current ?? input.value.length, input.value.length);
-    input.setSelectionRange(position, position);
-  };
+    // The CSS max-height is derived from the modal's authoritative viewport
+    // variable, so a short visual viewport (keyboard in landscape) shrinks
+    // the composer before it can push the footer past the screen edge.
+    const cssMaxHeight = Number.parseFloat(window.getComputedStyle(input).maxHeight);
+    const maxHeight = Number.isFinite(cssMaxHeight)
+      ? Math.min(cssMaxHeight, PIERROT_INPUT_MAX_HEIGHT)
+      : PIERROT_INPUT_MAX_HEIGHT;
+
+    const nextHeight = Math.min(
+      Math.max(input.scrollHeight, PIERROT_INPUT_MIN_HEIGHT),
+      maxHeight
+    );
+
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY = input.scrollHeight > nextHeight ? 'auto' : 'hidden';
+  }, []);
+
+  useEffect(() => {
+    resizeInput();
+  }, [resizeInput, value]);
 
   useEffect(() => {
     const input = inputRef.current;
-    if (!input) return;
-
-    const resizeInput = () => {
-      // The CSS max-height is derived from the modal's authoritative viewport
-      // variable, so a short visual viewport (keyboard in landscape) shrinks
-      // the composer before it can push the footer past the screen edge.
-      const cssMaxHeight = Number.parseFloat(window.getComputedStyle(input).maxHeight);
-      const maxHeight = Number.isFinite(cssMaxHeight)
-        ? Math.min(cssMaxHeight, PIERROT_INPUT_MAX_HEIGHT)
-        : PIERROT_INPUT_MAX_HEIGHT;
-
-      const nextHeight = Math.min(
-        Math.max(input.scrollHeight, PIERROT_INPUT_MIN_HEIGHT),
-        maxHeight
-      );
-
-      input.style.height = `${nextHeight}px`;
-      input.style.overflowY = input.scrollHeight > nextHeight ? 'auto' : 'hidden';
-    };
-
-    resizeInput();
-
-    const modal = input.closest('[data-pierrot-modal]');
+    const modal = input?.closest('[data-pierrot-modal]');
     if (!modal || typeof ResizeObserver === 'undefined') return;
 
     const observer = new ResizeObserver(resizeInput);
     observer.observe(modal);
-
     return () => observer.disconnect();
-  }, [draft]);
+  }, [resizeInput]);
 
   const submit = () => {
-    if (!draft.trim() || isLoading) return;
-    void sendMessage();
+    const text = valueRef.current;
+    if (!text.trim() || isLoading) return;
+    setValue('');
+    updateDraft('', null);
+    void sendMessage(text);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -849,11 +856,10 @@ export function PierrotInput({
     >
       <textarea
         ref={inputRef}
-        value={draft}
-        onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) =>
-          updateDraft(event.target.value, event.target.selectionStart)
-        }
-        onFocus={handleFocus}
+        value={value}
+        onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => {
+          setValue(event.target.value);
+        }}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         rows={1}
@@ -898,7 +904,7 @@ export function PierrotInput({
         <button
           type="submit"
           data-pierrot-send
-          disabled={!draft.trim()}
+          disabled={!value.trim()}
           aria-label="Send message"
           className="
             flex h-10 w-10 shrink-0 items-center justify-center
