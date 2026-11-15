@@ -2,7 +2,6 @@
 // Usage: node scripts/check_tokens_for_address.js <address> [rpcUrl]
 
 const { ethers } = require('ethers');
-const fetch = require('node-fetch');
 
 const DEFAULT_RPC = process.env.NEXT_PUBLIC_POLYGON_RPC || 'https://polygon-rpc.com';
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_NEUTRAL_HEART_ADDRESS || '0x731799fd24B2B9ceCd513a1E2d91Cd1C4F565A62';
@@ -56,7 +55,7 @@ async function main() {
                     try {
                         let fetchUrl = uri;
                         if (uri.startsWith('ipfs://')) fetchUrl = 'https://ipfs.io/ipfs/' + uri.slice(7);
-                        const res = await fetch(fetchUrl, { timeout: 10000 });
+                        const res = await fetch(fetchUrl, { signal: AbortSignal.timeout(10_000) });
                         if (res && res.ok) {
                             const j = await res.json();
                             image = j.image || j.image_url || null;

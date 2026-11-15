@@ -4,7 +4,6 @@
   Usage: node scripts/parse-invaluable-lot.js <url>
   Outputs a small JSON summary to stdout.
 */
-import fetch from 'node-fetch'
 import { JSDOM } from 'jsdom'
 
 function textOrNull(el) {

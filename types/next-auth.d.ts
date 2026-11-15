@@ -1,14 +1,8 @@
 // Minimal types used in the repo while migrating away from next-auth.
 
-export enum Role {
-  USER = 'user',
-  ADMIN = 'admin',
-  SUBSCRIBER = 'subscriber',
-  PATRON = 'patron',
-  PREMIUM = 'premium',
-  SPONSOR = 'sponsor',
-}
+import type { Role } from '@/lib/roles';
 
+export type { Role };
 export type RoleType = Role | undefined;
 
 declare module 'next-auth' {

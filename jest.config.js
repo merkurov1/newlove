@@ -24,6 +24,9 @@ const customJestConfig = {
     '/test/',
     '/tests/',
   ],
+  // The production build writes a second package.json into .next/standalone,
+  // which makes Jest's haste map report a naming collision.
+  modulePathIgnorePatterns: ['<rootDir>/.next/'],
   collectCoverageFrom: [
     'app/**/*.{js,jsx,ts,tsx}',
     'components/**/*.{js,jsx,ts,tsx}',

@@ -15,3 +15,6 @@ global.MessagePort = MessagePort;
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
+// Payment routes construct the Stripe SDK lazily and require a key. Tests mock
+// the SDK itself, so the value only has to be present.
+process.env.STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_unit';

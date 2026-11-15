@@ -10,7 +10,7 @@
  * - reply:<whisperId>
  */
 
-const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
+// Native fetch (Node.js 22) is used directly.
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 if (!BOT_TOKEN) {
