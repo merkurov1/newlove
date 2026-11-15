@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase-browser';
 import MediaLinksPanel from '@/components/admin/MediaLinksPanel';
 
 const BUCKET_NAME = 'media';
@@ -30,7 +30,7 @@ function formatBytes(bytes) {
 }
 
 export default function MediaPage() {
-  const supabase = useMemo(() => createClientComponentClient(), []);
+  const supabase = useMemo(() => createClient(), []);
 
   const [mediaFiles, setMediaFiles] = useState([]);
   const [loading, setLoading] = useState(true);

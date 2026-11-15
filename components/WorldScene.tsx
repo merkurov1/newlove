@@ -559,7 +559,7 @@ export default function WorldScene() {
         </div>
       ))}
 
-      {/* eslint-disable-next-line react/no-unknown-property */}
+      { }
       <style jsx global>{`
         @keyframes cloudsMove {
           0% {

@@ -20,8 +20,8 @@ export async function getOnboard() {
         if (wcProject) {
             try {
                 // dynamic import to avoid bundling or init-time side-effects
-                const module = await import('@web3-onboard/walletconnect');
-                const walletConnectModule = module && (module.default || module);
+                const walletConnectImport = await import('@web3-onboard/walletconnect');
+                const walletConnectModule = walletConnectImport && (walletConnectImport.default || walletConnectImport);
                 if (typeof walletConnectModule === 'function') {
                     const walletConnect = walletConnectModule({ projectId: wcProject, requiredChains: [137] });
                     wallets.push(walletConnect);

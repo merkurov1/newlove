@@ -1,9 +1,8 @@
 'use client';
 
 import { useAuth } from '@/components/AuthContext';
-import { useFormState } from 'react-dom';
 import { subscribeToNewsletter } from '@/app/admin/actions';
-import { useEffect, useRef, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 
 const MODAL_STORAGE_KEY = 'newsletter_modal_last_shown';
 const SHOW_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 часа
@@ -28,7 +27,7 @@ export default function NewsletterModal() {
   const hasCheckedRef = useRef(false);
 
   const initialState: any = { message: null, status: null };
-  const [state, formAction]: any = useFormState(subscribeToNewsletter, initialState);
+  const [state, formAction]: any = useActionState(subscribeToNewsletter, initialState);
 
   // Проверка подписки для залогиненных пользователей
   useEffect(() => {

@@ -97,7 +97,7 @@ function buildCustom(
   second: { year?: number; month: number; day: number },
   fallbackYear: number
 ): CustomPeriodInput | null {
-  let startYear = first.year ?? second.year ?? fallbackYear;
+  const startYear = first.year ?? second.year ?? fallbackYear;
   let endYear = second.year ?? first.year ?? fallbackYear;
 
   if (!validDate(startYear, first.month, first.day)) return null;

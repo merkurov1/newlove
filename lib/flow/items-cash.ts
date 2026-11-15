@@ -10,7 +10,7 @@ export const FLOW_ITEMS_CACHE_TAG = 'flow-items';
  * ISR caches so an edit is visible immediately after the admin action.
  */
 export function invalidateFlowCache(): void {
-  revalidateTag(FLOW_ITEMS_CACHE_TAG);
+  revalidateTag(FLOW_ITEMS_CACHE_TAG, 'max');
 
   try {
     revalidatePath('/flow');

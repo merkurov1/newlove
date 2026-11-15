@@ -576,7 +576,8 @@ export default function BlockEditorImproved({ value, onChange }: BlockEditorImpr
           <SortableContext 
             items={sortableItems} 
             strategy={verticalListSortingStrategy}
-            children={blocks.map((block, idx) => (
+          >
+            {blocks.map((block, idx) => (
               <SortableBlock
                 key={`block-${idx}`}
                 block={block}
@@ -588,7 +589,7 @@ export default function BlockEditorImproved({ value, onChange }: BlockEditorImpr
                 onRemove={removeBlock}
               />
             ))}
-          />
+          </SortableContext>
         </DndContext>
       ) : (
         <div className="text-center py-12 px-4 border border-dashed border-neutral-300 rounded-2xl bg-neutral-50/50">

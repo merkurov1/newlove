@@ -3,11 +3,12 @@ import { createClient } from '../../../lib/supabase/server';
 import SharedArtifact from '../SharedArtifactClient';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
-type Props = { params: { slug: string } };
+type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props) {
-  const supabase = createClient({ useServiceRole: true });
-  const { data } = await supabase.from('liveheart_shares').select('*').eq('slug', params.slug).single();
+  const { slug } = await params;
+  const supabase = await createClient({ useServiceRole: true });
+  const { data } = await supabase.from('liveheart_shares').select('*').eq('slug', slug).single();
 
   if (!data) {
     return sanitizeMetadata({ title: 'LiveHeart' });
@@ -17,8 +18,8 @@ export async function generateMetadata({ params }: Props) {
   const description = `A LiveHeart artifact — ${title}`;
 
   const siteUrl = 'https://www.merkurov.love';
-  const svgUrl = `${siteUrl}/api/og/liveheart?slug=${params.slug}`;
-  const fallbackPng = `${siteUrl}/api/og/liveheart?slug=${params.slug}&format=png`;
+  const svgUrl = `${siteUrl}/api/og/liveheart?slug=${slug}`;
+  const fallbackPng = `${siteUrl}/api/og/liveheart?slug=${slug}&format=png`;
 
   return sanitizeMetadata({
     title,
@@ -32,9 +33,9 @@ export async function generateMetadata({ params }: Props) {
         // fallback: PNG (many social crawlers require PNG/JPEG)
         { url: fallbackPng, alt: title, type: 'image/png' },
       ],
-      url: `${siteUrl}/liveheart/${params.slug}`,
+      url: `${siteUrl}/liveheart/${slug}`,
     },
-    alternates: { canonical: `${siteUrl}/liveheart/${encodeURIComponent(params.slug)}` },
+    alternates: { canonical: `${siteUrl}/liveheart/${encodeURIComponent(slug)}` },
     twitter: {
       card: 'summary_large_image',
       images: [fallbackPng],
@@ -43,8 +44,9 @@ export async function generateMetadata({ params }: Props) {
 }
 
 export default async function Page({ params }: Props) {
-  const supabase = createClient({ useServiceRole: true });
-  const { data } = await supabase.from('liveheart_shares').select('*').eq('slug', params.slug).single();
+  const { slug } = await params;
+  const supabase = await createClient({ useServiceRole: true });
+  const { data } = await supabase.from('liveheart_shares').select('*').eq('slug', slug).single();
 
   if (!data) {
     return (
@@ -72,8 +74,8 @@ export default async function Page({ params }: Props) {
 
         <div className="flex gap-3 z-50 relative justify-center">
           <a href="/liveheart" className="px-4 py-2 bg-white/10 border border-white/20">Open Generator</a>
-          <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('Check out my LiveHeart artifact')}&url=${encodeURIComponent(`${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/liveheart/${params.slug}`)}`} target="_blank" rel="noreferrer" className="px-4 py-2 bg-blue-600 text-white">Share on Twitter</a>
-          <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/liveheart/${params.slug}`)}`} target="_blank" rel="noreferrer" className="px-4 py-2 bg-blue-800 text-white">Share on Facebook</a>
+          <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('Check out my LiveHeart artifact')}&url=${encodeURIComponent(`${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/liveheart/${slug}`)}`} target="_blank" rel="noreferrer" className="px-4 py-2 bg-blue-600 text-white">Share on Twitter</a>
+          <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/liveheart/${slug}`)}`} target="_blank" rel="noreferrer" className="px-4 py-2 bg-blue-800 text-white">Share on Facebook</a>
         </div>
       </div>
     </div>

@@ -20,7 +20,7 @@ export default function LetterCommentsClient({
   const [posting, setPosting] = useState(false);
   const modalRef = useRef<any>(null);
   useEffect(() => {
-    let mounted = true;
+    const mounted = true;
     async function load() {
       setLoading(true);
       try {

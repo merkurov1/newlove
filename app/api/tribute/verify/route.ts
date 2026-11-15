@@ -7,9 +7,15 @@ import { confirmTributeCheckoutSession } from '@/lib/tributes/paymentConfirmatio
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+// Constructed lazily: a missing payment key must not fail the production
+// build or any unrelated route. The error surfaces on the first payment call.
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY is not configured');
+  return new Stripe(key, {
   apiVersion: '2025-08-27.basil',
 });
+}
 
 const SESSION_ID_PATTERN = /^cs_[A-Za-z0-9_]{8,200}$/;
 
@@ -56,7 +62,7 @@ export async function GET(req: Request) {
   let session: Stripe.Checkout.Session;
 
   try {
-    session = await stripe.checkout.sessions.retrieve(sessionId);
+    session = await getStripe().checkout.sessions.retrieve(sessionId);
   } catch (error) {
     // A genuinely unknown session is final. A provider/network failure is
     // temporary: keep the donation in `processing` so the visitor can check

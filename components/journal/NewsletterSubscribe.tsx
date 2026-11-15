@@ -5,9 +5,8 @@
 'use client';
 
 import { useAuth } from '@/components/AuthContext';
-import { useFormState } from 'react-dom';
 import { subscribeToNewsletter } from '@/app/admin/actions';
-import { useEffect, useRef, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 
 function SubmitButton() {
   return (
@@ -27,7 +26,7 @@ export default function NewsletterSubscribe() {
   const formRef = useRef<HTMLFormElement>(null);
 
   const initialState: any = { message: null, status: null };
-  const [state, formAction]: any = useFormState(subscribeToNewsletter, initialState);
+  const [state, formAction]: any = useActionState(subscribeToNewsletter, initialState);
 
   useEffect(() => {
     const checkSubscriptionStatus = async () => {

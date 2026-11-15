@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = createClient({ useServiceRole: true });
+    const supabase = await createClient({ useServiceRole: true });
     const optimized = await optimizeUploadImage(
       Buffer.from(await file.arrayBuffer()),
       file.type

@@ -2,9 +2,8 @@ import { notFound, redirect } from 'next/navigation';
 import ContentForm from '@/components/admin/ContentForm';
 import { updateLetter } from '../../../actions';
 import SendLetterForm from '@/components/admin/SendLetterForm';
-import dynamic from 'next/dynamic';
 
-const CloseableHero = dynamic(() => import('@/components/CloseableHero'), { ssr: false });
+import CloseableHero from '@/components/lazy/CloseableHeroLazy';
 
 interface PageProps {
   params: Promise<{ id: string }> | { id: string };

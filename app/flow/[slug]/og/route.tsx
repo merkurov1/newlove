@@ -7,7 +7,6 @@ import {
 } from '@/lib/flow/content';
 import { resolveFlowMetadataFromContent } from '@/lib/flow/metadata';
 
-export const runtime = 'edge';
 
 const size = {
   width: 1200,

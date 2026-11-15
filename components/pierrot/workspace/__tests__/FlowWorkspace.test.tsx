@@ -1,5 +1,5 @@
 /** @jest-environment node */
-/* eslint-disable @typescript-eslint/no-require-imports */
+ 
 
 import React from 'react';
 import { describe, expect, it } from '@jest/globals';

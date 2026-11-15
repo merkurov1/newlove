@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 
     const slug = nanoid(8);
 
-    const supabase = createClient({ useServiceRole: true });
+    const supabase = await createClient({ useServiceRole: true });
     const { data, error } = await supabase
       .from('liveheart_shares')
       .insert({ slug, dna, title })

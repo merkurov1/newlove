@@ -13,10 +13,16 @@ import { recordPierrotPurchaseCompleted } from '@/lib/pierrot/commercialAnalytic
 
 export const dynamic = 'force-dynamic';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+// Constructed lazily: a missing payment key must not fail the production
+// build or any unrelated route. The error surfaces on the first payment call.
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY is not configured');
+  return new Stripe(key, {
   apiVersion: '2025-08-27.basil',
   typescript: true,
 });
+}
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -46,7 +52,7 @@ export async function POST(req: Request) {
     let event: Stripe.Event;
 
     try {
-      event = stripe.webhooks.constructEvent(body, signature, endpointSecret);
+      event = getStripe().webhooks.constructEvent(body, signature, endpointSecret);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'invalid signature';

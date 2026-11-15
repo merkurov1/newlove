@@ -122,7 +122,7 @@ async function loadFlow(): Promise<FlowEntry[]> {
 
 export default async function JournalPageView({ lang }: { lang: JournalLanguage }) {
   const copy = JOURNAL_COPY[lang];
-  const supabase: any = createClient();
+  const supabase: any = await createClient();
 
   let issues: FrontIssue[] = [];
 

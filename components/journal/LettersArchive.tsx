@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 
 interface Letter {
   id: string;
@@ -15,7 +14,7 @@ interface Props {
   lastUpdated?: string | null;
 }
 
-const LettersArchiveClient = dynamic(() => import('./LettersArchiveClient'), { ssr: false });
+import LettersArchiveClient from '@/components/lazy/JournalLettersArchiveClientLazy';
 
 export default function LettersArchive({ initialLetters = [], lastUpdated = null }: Props) {
   const letters = initialLetters || [];

@@ -1,7 +1,6 @@
 import { ImageResponse } from 'next/og';
 import { records } from '@/data/media';
 
-export const runtime = 'edge';
 
 export const alt = 'Media Archive — Anton Merkurov';
 export const size = {
@@ -42,6 +41,7 @@ export default async function Image() {
           </div>
           <div
             style={{
+              display: 'flex',
               fontSize: '18px',
               color: '#888888',
               border: '1px solid #333333',

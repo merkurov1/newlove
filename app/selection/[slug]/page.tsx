@@ -8,9 +8,10 @@ import Markdown from 'markdown-to-jsx';
 
 export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const article = await getArticle(params.slug);
-  const path = `/selection/${encodeURIComponent(params.slug)}`;
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const article = await getArticle(slug);
+  const path = `/selection/${encodeURIComponent(slug)}`;
 
   if (!article) {
     return pageMetadata({
@@ -82,8 +83,9 @@ async function getArticle(slug: string) {
   return article;
 }
 
-export default async function SelectionArticlePage({ params }: { params: { slug: string } }) {
-  const article = await getArticle(params.slug);
+export default async function SelectionArticlePage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const article = await getArticle(slug);
   if (!article) return notFound();
 
   // Destructure fields for layout
@@ -123,7 +125,7 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
   }
 
   const previewImage = extractFirstImage(content);
-  const selectionPath = `/selection/${encodeURIComponent(params.slug)}`;
+  const selectionPath = `/selection/${encodeURIComponent(slug)}`;
   const selectionSummary = seoDescription(
     curatorNote || quote || `${title || 'Artwork'} by ${artist || 'Anton Merkurov'}.`,
   );

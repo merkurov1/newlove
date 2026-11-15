@@ -4,7 +4,7 @@ export function buildSafeDebug(request: Request, opts?: {
     errors?: any[];
 }) {
     // requestId: small unique string
-    let requestId = 'r-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 10000).toString(36);
+    const requestId = 'r-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 10000).toString(36);
 
     const headerSnapshot: Record<string, any> = {
         host: (() => { try { return request.headers.get('host') || undefined } catch { return undefined } })(),

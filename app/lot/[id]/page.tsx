@@ -8,10 +8,11 @@ export const dynamic = 'force-dynamic';
  * working by redirecting to the public archive, which only serves published
  * records.
  */
-export default function LegacyLotPage({
+export default async function LegacyLotPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  redirect(`/lots/${encodeURIComponent(params.id)}`);
+  const { id } = await params;
+  redirect(`/lots/${encodeURIComponent(id)}`);
 }

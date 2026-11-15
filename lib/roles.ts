@@ -1,5 +1,19 @@
 // lib/roles.ts
-import { Role } from '@/types/next-auth.d';
+
+/**
+ * Runtime role values. This enum used to live in `types/next-auth.d.ts`, i.e.
+ * in a declaration file: TypeScript accepted it, but no JavaScript object was
+ * ever emitted, so `Role.USER` was `undefined` at runtime. It lives in a real
+ * module now; the declaration file re-exports the type only.
+ */
+export enum Role {
+  USER = 'user',
+  ADMIN = 'admin',
+  SUBSCRIBER = 'subscriber',
+  PATRON = 'patron',
+  PREMIUM = 'premium',
+  SPONSOR = 'sponsor',
+}
 
 export const ROLE_EMOJIS = {
   [Role.USER]: '',

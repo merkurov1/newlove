@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'node:crypto';
 
 const TELEGRAM_BOT_TOKEN =
   process.env.PIERROT_BOT_TOKEN ||
@@ -36,7 +37,7 @@ export function verifyTelegramWebhookSecret(secret?: string): boolean {
 
   if (expected.length !== received.length) return false;
 
-  return require('crypto').timingSafeEqual(expected, received);
+  return timingSafeEqual(expected, received);
 }
 
 export function isAllowedTelegramUser(userId: number): boolean {

@@ -1,7 +1,6 @@
 import { SITE_NAME } from '@/lib/seo';
 import { renderOgImage, type OgFont } from '@/lib/og';
 
-export const runtime = 'edge';
 
 const FONT_PATH = '/fonts/NotoSans-Regular.ttf';
 let fontPromise: Promise<ArrayBuffer | undefined> | null = null;

@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     : DEFAULT_PAGE_SIZE;
 
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     const columnsWithPayload =
       'id,title,slug,content,published,publishedAt,sentAt,createdAt,kind,lang,number,payload';

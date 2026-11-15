@@ -12,9 +12,15 @@ import { recordPierrotEventByConversationId } from '@/lib/pierrot/serverStore';
 
 export const dynamic = 'force-dynamic';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+// Constructed lazily: a missing payment key must not fail the production
+// build or any unrelated route. The error surfaces on the first payment call.
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY is not configured');
+  return new Stripe(key, {
   apiVersion: '2025-08-27.basil',
 });
+}
 
 const OrderSchema = z.object({
   postcardId: z.string().min(1).max(100),
@@ -128,7 +134,7 @@ export async function POST(request: Request) {
     }
 
     try {
-      const checkout = await stripe.checkout.sessions.create(
+      const checkout = await getStripe().checkout.sessions.create(
         {
           mode: 'payment',
           payment_method_types: ['card'],

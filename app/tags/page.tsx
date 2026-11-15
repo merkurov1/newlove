@@ -19,7 +19,7 @@ export const metadata: Metadata = pageMetadata({
 
 async function getTags() {
   try {
-    const supabase = createClient({ useServiceRole: true });
+    const supabase = await createClient({ useServiceRole: true });
     const { data } = await supabase.from('Tag').select('slug,name').limit(200);
     return (data || [])
       .map((tag: any) => ({

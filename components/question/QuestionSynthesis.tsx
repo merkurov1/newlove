@@ -5,7 +5,7 @@ import Markdown from 'markdown-to-jsx';
 
 import styles from './question.module.css';
 
-/* eslint-disable react/prop-types */
+ 
 
 function safeQuestionUrl(value: string): string | null {
   if (typeof value !== 'string') return null;

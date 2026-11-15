@@ -31,8 +31,9 @@ async function getNewsletterJobs() {
 export default async function NewsletterJobsPage() {
   // Verify admin
   try {
+    const cookieStore = await cookies();
     const buildRequest = () => {
-      const cookieHeader = cookies()
+      const cookieHeader = cookieStore
         .getAll()
         .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
         .join('; ');

@@ -62,7 +62,7 @@ function ArchiveView() {
 
 // Helper: preview view (copied from app/letters/[slug]/page.tsx)
 async function PreviewView({ slug }: { slug: string }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -71,7 +71,7 @@ async function PreviewView({ slug }: { slug: string }) {
     redirect(`/letters/${slug}/full`);
   }
 
-  const supabasePublic = createClient({ useServiceRole: true });
+  const supabasePublic = await createClient({ useServiceRole: true });
   const { data: letter, error } = await supabasePublic
     .from('letters')
     .select(
@@ -128,7 +128,7 @@ async function PreviewView({ slug }: { slug: string }) {
 
 // Helper: full view (copied from app/letters/[slug]/full/page.tsx)
 async function FullView({ slug }: { slug: string }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
     error: authError,

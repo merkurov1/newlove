@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   // Use service role only for verbose debug/all requests. In normal operation
   // prefer the public anon key so the endpoint works without SUPABASE_SERVICE_ROLE_KEY.
   const includeUnpublishedSample = includeDebugForRequest && url.searchParams.get('all') === '1';
-  const supabase = createClient({ useServiceRole: includeUnpublishedSample });
+  const supabase = await createClient({ useServiceRole: includeUnpublishedSample });
 
     let lettersQuery = supabase
       .from('letters')

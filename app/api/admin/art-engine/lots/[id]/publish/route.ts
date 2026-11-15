@@ -78,8 +78,9 @@ async function resolveSlug(
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
   let admin: Awaited<ReturnType<typeof requireAdminFromRequest>>;
 
   try {
@@ -104,7 +105,7 @@ export async function POST(
     );
   }
 
-  const lot = await findLotById(params.id);
+  const lot = await findLotById(id);
   if (!lot) {
     return NextResponse.json({ error: 'Vault record not found.' }, { status: 404 });
   }
@@ -366,7 +367,7 @@ export async function POST(
   revalidatePath(`/selection/${article.slug}`);
   revalidatePath('/sitemap.xml');
   revalidatePath('/lots');
-  revalidatePath(`/lots/${encodeURIComponent(params.id)}`);
+  revalidatePath(`/lots/${encodeURIComponent(id)}`);
 
   return NextResponse.json({
     success: true,

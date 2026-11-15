@@ -36,7 +36,8 @@ async function getVideoDetails(videoIds: string[], apiKey: string) {
   
   const idsString = videoIds.join(',');
   const response = await fetch(
-    `https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${idsString}&key=${apiKey}`
+    `https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${idsString}&key=${apiKey}`,
+    { signal: AbortSignal.timeout(15_000) }
   );
   
   if (!response.ok) {
@@ -63,7 +64,8 @@ function isShortVideo(duration: string): boolean {
 // Функция для получения информации о канале
 async function getChannelInfo(channelId: string, apiKey: string) {
   const response = await fetch(
-    `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelId}&key=${apiKey}`
+    `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelId}&key=${apiKey}`,
+    { signal: AbortSignal.timeout(15_000) }
   );
   
   if (!response.ok) {
@@ -94,7 +96,8 @@ async function fetchYouTubeShorts(): Promise<YouTubeApiResponse> {
   try {
     // Получаем видео с канала
     const searchResponse = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=video&order=date&maxResults=50&key=${apiKey}`
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=video&order=date&maxResults=50&key=${apiKey}`,
+      { signal: AbortSignal.timeout(15_000) }
     );
 
     if (!searchResponse.ok) {

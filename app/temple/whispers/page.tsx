@@ -2,7 +2,6 @@ import React from 'react';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
 import MicrophoneButton from '@/components/MicrophoneButton';
 import WhisperTestClient from '../WhisperTest.client';
-import dynamicImport from 'next/dynamic';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -13,7 +12,7 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
-const WhisperActions = dynamicImport(() => import('../WhisperActions.client'), { ssr: false });
+import WhisperActions from '@/components/lazy/WhisperActionsLazy';
 
 export default async function WhispersPage() {
   // require admin

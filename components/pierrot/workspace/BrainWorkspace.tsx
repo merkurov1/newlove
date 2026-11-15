@@ -207,7 +207,7 @@ export default function BrainWorkspace({ recent }: { recent: BrainRecentSource[]
       void previewSource('text', { text: handoff });
     }, 80);
     return () => window.clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   function resetDraft() {

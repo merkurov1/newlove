@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const supabase = createClient({ useServiceRole: true });
+    const supabase = await createClient({ useServiceRole: true });
 
     // Telegram can redeliver the same update. The unique database
     // constraint on ingest_log.idempotency_key is the concurrency guard.

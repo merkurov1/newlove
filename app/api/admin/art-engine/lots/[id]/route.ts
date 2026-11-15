@@ -23,15 +23,16 @@ function publicImageUrl(imagePath: string | null | undefined): string | null {
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
   try {
     await requireAdminFromRequest(req);
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const lot = await findLotById(params.id);
+  const lot = await findLotById(id);
 
   if (!lot) {
     return NextResponse.json({ error: 'Vault record not found.' }, { status: 404 });

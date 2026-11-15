@@ -140,6 +140,7 @@ export async function revokeGoogleToken(token: string): Promise<void> {
     await fetch(`${REVOKE_URL}?token=${encodeURIComponent(token)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      signal: AbortSignal.timeout(10_000),
     });
   } catch {
     // Revocation is best effort: the local token is deleted regardless.
@@ -552,7 +553,10 @@ export async function probeGoogleConsentUrl(
   consentUrl: string
 ): Promise<{ ok: boolean; reason: string | null }> {
   try {
-    const response = await fetch(consentUrl, { redirect: 'manual' });
+    const response = await fetch(consentUrl, {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(15_000),
+    });
     const location = response.headers.get('location') || '';
 
     if (location.includes('redirect_uri_mismatch')) {

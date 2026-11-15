@@ -14,7 +14,7 @@ import { description, pageMetadata, truncate } from '@/lib/seo';
 export const revalidate = 3600;
 export const runtime = 'nodejs';
 
-type Props = { params: { slug: string } };
+type Props = { params: Promise<{ slug: string }> };
 
 async function getRecord(slug: string) {
   const decoded = decodeURIComponent(slug);
@@ -27,13 +27,14 @@ async function getRecord(slug: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const record = await getRecord(params.slug);
+  const { slug } = await params;
+  const record = await getRecord(slug);
 
   if (!record) {
     return pageMetadata({
       title: 'Media record not found | Anton Merkurov',
       description: 'The requested media archive record could not be found.',
-      path: `/media/record/${encodeURIComponent(params.slug)}`,
+      path: `/media/record/${encodeURIComponent(slug)}`,
       noindex: true,
     });
   }
@@ -57,7 +58,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function MediaRecordPage({ params }: Props) {
-  const record = await getRecord(params.slug);
+  const { slug } = await params;
+  const record = await getRecord(slug);
   if (!record) notFound();
 
   const path = `/media/record/${encodeURIComponent(record.slug)}`;

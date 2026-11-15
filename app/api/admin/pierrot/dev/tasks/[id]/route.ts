@@ -74,7 +74,9 @@ function patchFromBody(body: Record<string, unknown>): Partial<DevTaskInput> {
   return patch;
 }
 
-export async function GET(req: Request, context: { params: { id: string } }) {
+export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+
   let admin: Awaited<ReturnType<typeof requireAdminFromRequest>>;
   try {
     admin = await requireAdminFromRequest(req);
@@ -82,16 +84,18 @@ export async function GET(req: Request, context: { params: { id: string } }) {
     return json({ error: 'Unauthorized' }, 401);
   }
 
-  if (!UUID_PATTERN.test(context.params.id)) {
+  if (!UUID_PATTERN.test(id)) {
     return json({ error: 'Invalid task id.' }, 400);
   }
 
-  const task = await getDevTask(admin.id, context.params.id);
+  const task = await getDevTask(admin.id, id);
   if (!task) return json({ error: 'Task not found.' }, 404);
   return json({ task });
 }
 
-export async function PATCH(req: Request, context: { params: { id: string } }) {
+export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+
   let admin: Awaited<ReturnType<typeof requireAdminFromRequest>>;
   try {
     admin = await requireAdminFromRequest(req);
@@ -99,7 +103,7 @@ export async function PATCH(req: Request, context: { params: { id: string } }) {
     return json({ error: 'Unauthorized' }, 401);
   }
 
-  if (!UUID_PATTERN.test(context.params.id)) {
+  if (!UUID_PATTERN.test(id)) {
     return json({ error: 'Invalid task id.' }, 400);
   }
 
@@ -113,7 +117,7 @@ export async function PATCH(req: Request, context: { params: { id: string } }) {
     if (value.action === 'attach_result') {
       const task = await attachDevTaskResult({
         userId: admin.id,
-        taskId: context.params.id,
+        taskId: id,
         resultCommit: typeof value.resultCommit === 'string' ? value.resultCommit : null,
         pullRequests: arrayValue(value.pullRequests),
         resultNotes: typeof value.resultNotes === 'string' ? value.resultNotes : undefined,
@@ -129,7 +133,7 @@ export async function PATCH(req: Request, context: { params: { id: string } }) {
       return json({ task });
     }
 
-    const task = await updateDevTask(admin.id, context.params.id, patchFromBody(value));
+    const task = await updateDevTask(admin.id, id, patchFromBody(value));
     if (!task) return json({ error: 'Task not found or update failed.' }, 404);
     return json({ task });
   } catch (error) {

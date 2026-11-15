@@ -335,11 +335,11 @@ button:focus {
 }
 
 @media (min-width: 768px) {
-  .prose .md\\:grid-cols-2 {
+  .prose .md\:grid-cols-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
-  .prose .md\\:grid-cols-3 {
+  .prose .md\:grid-cols-3 {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
@@ -452,7 +452,7 @@ select:focus-visible {
   border-width: 0;
 }
 
-.focus\\:not-sr-only:focus {
+.focus\:not-sr-only:focus {
   position: static;
   width: auto;
   height: auto;

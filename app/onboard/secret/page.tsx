@@ -4,20 +4,24 @@ import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 const supabase = createBrowserClient();
 
 export default function OnboardSecretPage() {
-  // Hide this debug page in production
-  if (process.env.NODE_ENV === 'production') {
-    return <div style={{ color: 'red', margin: 40, fontSize: 22 }}>Not Found</div>;
-  }
-
+  // Hide this debug page in production. The check must not return before the
+  // hooks below: hooks have to run in the same order on every render.
+  const isProduction = process.env.NODE_ENV === 'production';
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (isProduction) return;
+
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
       setLoading(false);
     });
-  }, []);
+  }, [isProduction]);
+
+  if (isProduction) {
+    return <div style={{ color: 'red', margin: 40, fontSize: 22 }}>Not Found</div>;
+  }
 
   if (loading) return <div>Загрузка...</div>;
   if (!user) return <div style={{color:'red',margin:40,fontSize:22}}>Доступ запрещён: только для пользователей Supabase!</div>;

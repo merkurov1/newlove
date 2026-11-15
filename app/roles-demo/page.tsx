@@ -1,5 +1,5 @@
 "use client";
-import { Role } from '@/types/next-auth.d';
+import { Role } from '@/lib/roles';
 import { getRoleEmoji, getRoleName, getRoleDescription } from '@/lib/roles';
 import { AnimatePresence, motion } from 'framer-motion';
 

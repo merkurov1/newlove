@@ -28,8 +28,9 @@ export function generateMetadata(): Metadata {
   };
 }
 
-export default function TelegramCasePage({ params }: { params: { slug: string } }) {
-  const data = getPublicTelegramCase(params.slug);
+export default async function TelegramCasePage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const data = getPublicTelegramCase(slug);
 
   if (!data) {
     notFound();

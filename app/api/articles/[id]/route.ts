@@ -8,8 +8,10 @@ import {
 } from '@/lib/serverAuth';
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const articleId = params.id;
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
+  const articleId = id;
 
   if (!articleId || articleId.length > 200) {
     return NextResponse.json({ error: 'Article not found' }, { status: 404 });

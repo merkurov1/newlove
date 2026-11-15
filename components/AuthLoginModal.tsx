@@ -10,7 +10,7 @@ type Ref = {
 
 const AuthLoginModal = forwardRef<Ref, {}>((props, ref) => {
   const [open, setOpen] = useState(false);
-  const auth = (() => { try { return useAuth(); } catch (e) { return null; } })();
+  const auth = useAuth();
 
   useImperativeHandle(ref, () => ({
     open: () => setOpen(true),

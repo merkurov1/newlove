@@ -8,9 +8,15 @@ import {
 } from '@/lib/pierrot/orderAttribution';
 import { createPierrotStore, recordPierrotEventByConversationId } from '@/lib/pierrot/serverStore';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+// Constructed lazily: a missing payment key must not fail the production
+// build or any unrelated route. The error surfaces on the first payment call.
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY is not configured');
+  return new Stripe(key, {
   apiVersion: '2025-08-27.basil',
 });
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -57,7 +63,7 @@ export async function POST(req: Request) {
     const baseUrl = applicationBaseUrl();
     const pierrotAttribution = normalizePierrotUnframedRef(body?.pierrotAttribution);
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       // Card enables Apple Pay and Google Pay on Stripe's hosted Checkout.
       // Link is added explicitly and left on its default "auto" display so
       // compatible customers see it as an express wallet.

@@ -23,6 +23,7 @@ export function createOpsClient(env: OpsEnvironment = process.env): SupabaseClie
         fetch(input, {
           ...init,
           cache: 'no-store',
+          signal: init?.signal ?? AbortSignal.timeout(10_000),
         }),
     },
   });

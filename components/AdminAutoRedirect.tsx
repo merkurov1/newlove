@@ -40,7 +40,7 @@ export default function AdminAutoRedirect() {
           // ?go_admin=1 or a user action to navigate programmatically.
           if (process.env.NODE_ENV === 'development') {
             // Helpful debug message for developers
-            // eslint-disable-next-line no-console
+             
             console.debug('[AdminAutoRedirect] admin detected, auto-redirect suppressed');
           }
         }

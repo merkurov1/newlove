@@ -68,8 +68,14 @@ const token = process.env.PIERROT_BOT_TOKEN;
 const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!token) throw new Error('PIERROT_BOT_TOKEN is unset');
-if (!sbUrl || !sbKey) throw new Error('SUPABASE credentials missing');
+// Module scope must not throw on missing configuration: it would fail the
+// whole build. Requests answer 503 until the bot is configured.
+if (!token) {
+  console.error('[pierrot] PIERROT_BOT_TOKEN is unset; /api/pierrot will answer 503');
+}
+if (!sbUrl || !sbKey) {
+  console.error('[pierrot] Supabase credentials missing; /api/pierrot will answer 503');
+}
 
 const siteUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://www.merkurov.love').replace(
   /\/+$/,
@@ -83,7 +89,7 @@ const allowedAdmins = new Set(
     .filter(Boolean)
 );
 
-const bot = new Bot(token);
+const bot = new Bot(token || '0:unconfigured');
 
 function isTelegramAdmin(userId: number | undefined): boolean {
   return typeof userId === 'number' && allowedAdmins.has(String(userId));
@@ -1428,6 +1434,16 @@ function updateIdFromPayload(payload: unknown): number | string | null {
 }
 
 export async function POST(request: Request) {
+  if (!token || !sbUrl || !sbKey) {
+    return new Response(
+      JSON.stringify({ ok: false, error: 'Pierrot bot is not configured' }),
+      {
+        status: 503,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      }
+    );
+  }
+
   if (enforceWebhookSecret && !webhookSecret) {
     return new Response(
       JSON.stringify({

@@ -14,7 +14,7 @@ type LinkItem = { title: string; url: string; description?: string };
 
 async function getJournalItems(limit = 30): Promise<LinkItem[]> {
   try {
-    const supabase = createClient({ useServiceRole: true });
+    const supabase = await createClient({ useServiceRole: true });
     const { data } = await supabase
       .from('letters')
       .select('title,slug,publishedAt,createdAt,kind,status,published')
@@ -36,7 +36,7 @@ async function getJournalItems(limit = 30): Promise<LinkItem[]> {
 
 async function getFlowItems(limit = 30): Promise<LinkItem[]> {
   try {
-    const supabase = createClient({ useServiceRole: true });
+    const supabase = await createClient({ useServiceRole: true });
     const { data } = await supabase
       .from('items')
       .select('title,slug,published_at')

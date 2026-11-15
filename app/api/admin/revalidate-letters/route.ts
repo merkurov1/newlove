@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   // Build a request with current cookies so requireAdminFromRequest can validate
-  const cookieHeader = cookies()
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore
     .getAll()
     .map((c: any) => `${c.name}=${encodeURIComponent(c.value)}`)
     .join('; ');

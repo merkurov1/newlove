@@ -41,9 +41,10 @@ async function getDigestBySlug(slug: string) {
   }
 }
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const digest = await getDigestBySlug(params.slug);
-  const path = `/digest/${encodeURIComponent(params.slug)}`;
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const digest = await getDigestBySlug(slug);
+  const path = `/digest/${encodeURIComponent(slug)}`;
   const contentText =
     typeof digest.content === 'string'
       ? digest.content.replace(/<[^>]+>/g, ' ')
@@ -62,8 +63,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 }
 
 
-export default async function DigestPage({ params }: { params: { slug: string } }) {
-  const digest = await getDigestBySlug(params.slug);
+export default async function DigestPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const digest = await getDigestBySlug(slug);
   
   // Additional safety check: if digest is null/undefined, show 404
   if (!digest) {
@@ -87,7 +89,7 @@ export default async function DigestPage({ params }: { params: { slug: string } 
   if (!valid) {
     return <div style={{background:'#f00',color:'#fff',padding:'2rem',fontWeight:'bold'}}>Ошибка: структура блоков некорректна!</div>;
   }
-  const digestPath = `/digest/${encodeURIComponent(params.slug)}`;
+  const digestPath = `/digest/${encodeURIComponent(slug)}`;
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">

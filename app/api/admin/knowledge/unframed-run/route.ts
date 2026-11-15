@@ -240,7 +240,13 @@ function createEmbeddingClient() {
 }
 
 async function readBuild() {
-  const sourcePath = path.resolve(process.cwd(), UNFRAMED_SOURCE_PATH);
+  // The manuscript is copied into the serverless bundle explicitly via
+  // `outputFileTracingIncludes` in next.config.js. Opting out of Turbopack's
+  // static analysis keeps the whole repository out of the deployment bundle.
+  const sourcePath = path.resolve(
+    /*turbopackIgnore: true*/ process.cwd(),
+    UNFRAMED_SOURCE_PATH
+  );
   const raw = await fs.readFile(sourcePath, 'utf8');
   const build = buildUnframedManifest({
     raw,

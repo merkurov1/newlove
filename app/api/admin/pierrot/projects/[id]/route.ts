@@ -5,15 +5,17 @@ import { linkConversationToProject, updatePierrotProject } from '@/lib/pierrot/p
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
   try {
     const admin = await requireAdminFromRequest(request);
     const body = await request.json().catch(() => ({}));
     if (body.action === 'link_conversation' && typeof body.conversationId === 'string') {
-      await linkConversationToProject(admin.id, params.id, body.conversationId);
+      await linkConversationToProject(admin.id, id, body.conversationId);
       return NextResponse.json({ ok: true });
     }
-    const project = await updatePierrotProject(admin.id, params.id, body || {});
+    const project = await updatePierrotProject(admin.id, id, body || {});
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     return NextResponse.json({ project });
   } catch (error) {

@@ -169,7 +169,7 @@ const BentoArticlesFeed: FC<BentoArticlesFeedProps> = ({ initialArticles, exclud
   }, [excludeTag, includeTag, infiniteDone]);
 
   // Периодическая ревалидация начальных статей
-  const fetchInitial = useRef<() => Promise<void>>();
+  const fetchInitial = useRef<(() => Promise<void>) | undefined>(undefined);
   fetchInitial.current = async () => {
     try {
       const q = new URLSearchParams({ offset: '0', limit: String(API_PAGE_SIZE) });

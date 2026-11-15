@@ -23,7 +23,7 @@ type LayoutModule = {
 // Deliberately require after the mocks are registered: static ES imports are
 // evaluated before jest.mock() in this setup.
 const { default: TelegramResearchLayout } =
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   require('@/app/research/telegram/layout') as LayoutModule;
 
 describe('TelegramResearchLayout server guard', () => {

@@ -19,7 +19,7 @@ export async function getUserAndSupabaseForRequest(
   req?: Request | null
 ): Promise<SupaRequestResult> {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const authorization = req?.headers?.get('authorization') || '';
     const bearer = authorization.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
 

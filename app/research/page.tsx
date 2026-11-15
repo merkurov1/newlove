@@ -52,7 +52,7 @@ export default function ResearchPage() {
         {/* HEADER */}
         <header className="mb-20 border-l-2 border-[#CC0000] pl-8">
           <div className="font-mono text-xs uppercase tracking-widest text-[#CC0000] mb-3 flex items-center gap-2">
-            <span>// RESEARCH / ARCHIVE</span>
+            <span>{'// RESEARCH / ARCHIVE'}</span>
           </div>
           <h1 className="text-4xl md:text-6xl font-serif font-bold text-black mb-4 leading-tight">
             The Digital Decay:

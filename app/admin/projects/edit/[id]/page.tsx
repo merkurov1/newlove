@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ContentForm from '@/components/admin/ContentForm';
 import { updateProject } from '@/app/admin/actions';
 
-export default function ProjectEditorPage({ params }: { params: { id: string } }) {
+export default function ProjectEditorPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -13,7 +14,7 @@ export default function ProjectEditorPage({ params }: { params: { id: string } }
   useEffect(() => {
     const loadProject = async () => {
       try {
-        const res = await fetch(`/api/projects/${params.id}`);
+        const res = await fetch(`/api/projects/${id}`);
         const data = await res.json();
         setProject(data);
         setLoading(false);
@@ -29,7 +30,7 @@ export default function ProjectEditorPage({ params }: { params: { id: string } }
     };
     
     loadProject();
-  }, [params.id]);
+  }, [id]);
 
   if (loading) {
     return (

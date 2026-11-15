@@ -846,8 +846,8 @@ async function handleManuscriptOperation(
 
   if (intent.operation === 'manuscript.compare') {
     const pair = intent.compareChapters;
-    let leftChapter = pair ? chapterForNumber(inventory, pair[0]) : null;
-    let rightChapter = pair ? chapterForNumber(inventory, pair[1]) : null;
+    const leftChapter = pair ? chapterForNumber(inventory, pair[0]) : null;
+    const rightChapter = pair ? chapterForNumber(inventory, pair[1]) : null;
     let evidenceChunks: ManuscriptChunk[] = [];
 
     if (leftChapter && rightChapter) {

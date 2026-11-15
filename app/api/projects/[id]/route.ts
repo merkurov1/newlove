@@ -6,8 +6,11 @@ import { attachTagsToArticles } from '@/lib/attachTagsToArticles';
 // GET - Получить проект по ID (для админки)
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+
+
   try {
     const supabase = getServerSupabaseClient({ useServiceRole: true });
     
@@ -19,7 +22,7 @@ export async function GET(
       const { data: project, error } = await supabase
         .from('projects')
         .select('*, author:authorId(name,email)')
-        .eq('id', params.id)
+        .eq('id', id)
         .maybeSingle();
       
       if (error) {
@@ -40,7 +43,7 @@ export async function GET(
       const { data: project, error } = await supabase
         .from('projects')
         .select('*, author:authorId(name,email)')
-        .eq('id', params.id)
+        .eq('id', id)
         .eq('published', true)
         .maybeSingle();
       
@@ -64,8 +67,11 @@ export async function GET(
 // PUT - Обновить проект (только для админов)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+
+
   try {
     try {
       await requireAdminFromRequest(request as Request);
@@ -98,7 +104,7 @@ export async function PUT(
     const { data: project, error } = await getServerSupabaseClient({ useServiceRole: true })
       .from('projects')
       .update({ title, slug, content: JSON.stringify(validatedContent), published: Boolean(published), publishedAt: published ? new Date().toISOString() : null })
-      .eq('id', params.id)
+      .eq('id', id)
       .select('*')
       .maybeSingle();
     if (error) throw error;
@@ -116,8 +122,11 @@ export async function PUT(
 // DELETE - Удалить проект (только для админов)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+
+
   try {
     try {
       await requireAdminFromRequest(request as Request);
@@ -126,7 +135,7 @@ export async function DELETE(
     }
 
     const { error } = await getServerSupabaseClient({ useServiceRole: true })
-      .from('projects').delete().eq('id', params.id);
+      .from('projects').delete().eq('id', id);
     if (error) throw error;
     return NextResponse.json({ message: 'Project deleted' });
 

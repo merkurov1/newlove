@@ -47,7 +47,12 @@ function createServiceClient(): SupabaseClient | null {
       detectSessionInUrl: false,
     },
     global: {
-      fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
+      fetch: (input, init) =>
+        fetch(input, {
+          ...init,
+          cache: 'no-store',
+          signal: init?.signal ?? AbortSignal.timeout(20_000),
+        }),
     },
   });
 }

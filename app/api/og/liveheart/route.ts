@@ -8,7 +8,7 @@ export async function GET(req: Request) {
     const slug = url.searchParams.get('slug');
     if (!slug) return new Response('Missing slug', { status: 400 });
 
-    const supabase = createClient({ useServiceRole: true });
+    const supabase = await createClient({ useServiceRole: true });
     const { data } = await supabase.from('liveheart_shares').select('*').eq('slug', slug).single();
 
     if (!data) return new Response('Not found', { status: 404 });
@@ -35,7 +35,7 @@ export async function GET(req: Request) {
       if (publicUrl) {
         // Try fetching the public URL — if object exists this will be 200
         try {
-          const resp = await fetch(publicUrl);
+          const resp = await fetch(publicUrl, { signal: AbortSignal.timeout(10_000) });
           if (resp.ok) {
             const arr = await resp.arrayBuffer();
             return new Response(arr, {

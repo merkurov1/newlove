@@ -304,7 +304,7 @@ export default function LiveHeartTV() {
 
         if (p.size > 0.01 && p.alpha > 0.02) {
           const w = window.innerWidth; const h = window.innerHeight;
-          let drawX = p.x; let drawY = p.y; let drawZ = p.z || 0;
+          let drawX = p.x; const drawY = p.y; let drawZ = p.z || 0;
           const rot = curDNA ? (time * (curDNA.rotationSpeed || 0)) : 0;
           if (curDNA && (curDNA.physics === 'SPIN' || ["ATOM","GALAXY","VORTEX"].includes(curDNA.structure))) {
             const lx = p.x - w/2; const lz = drawZ;

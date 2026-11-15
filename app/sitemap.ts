@@ -77,7 +77,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   };
 
   try {
-    const supabase = createClient({ useServiceRole: true });
+    const supabase = await createClient({ useServiceRole: true });
 
     const [articles, flowItems, letters, tags, lots, media] = await Promise.all([
       supabase

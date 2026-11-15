@@ -46,7 +46,7 @@ export default function GlitchCanvasFallback() {
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, w, h);
 
-      for (let p of particles) {
+      for (const p of particles) {
         p.x += p.vx + Math.sin(t * 0.2 + p.x * 0.001) * 0.2;
         p.y += p.vy + Math.cos(t * 0.3 + p.y * 0.001) * 0.2;
         if (p.x < -10) p.x = w + 10;

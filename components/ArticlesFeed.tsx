@@ -49,7 +49,7 @@ const ArticlesFeed: FC<any> = ({ initialArticles, excludeTag, includeTag }: any)
     hasMoreRef.current = initialArticles.length >= API_PAGE_SIZE;
     // debug: indicate feed reset (helpful in dev to see tag changes)
     if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
+       
       console.debug('[ArticlesFeed] reset', { includeTag, excludeTag, initialCount: initialArticles.length });
     }
   }, [includeTag, excludeTag, initialArticles]);
@@ -74,7 +74,7 @@ const ArticlesFeed: FC<any> = ({ initialArticles, excludeTag, includeTag }: any)
       entries.forEach((entry) => {
         if (entry.isIntersecting && !loadingRef.current && hasMoreRef.current) {
           if (process.env.NODE_ENV !== 'production') {
-            // eslint-disable-next-line no-console
+             
             console.debug('[ArticlesFeed] loading more', { offset: offsetRef.current, includeTag, excludeTag });
           }
           // start loading
@@ -109,11 +109,11 @@ const ArticlesFeed: FC<any> = ({ initialArticles, excludeTag, includeTag }: any)
 
     observer.observe(node);
     return () => observer.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [excludeTag, includeTag, infiniteDone]);
 
   // Periodically revalidate the initial articles (so homepage updates when new articles arrive)
-  const fetchInitial = useRef<() => Promise<void>>();
+  const fetchInitial = useRef<(() => Promise<void>) | undefined>(undefined);
   fetchInitial.current = async () => {
     try {
       const q = new URLSearchParams({ offset: '0', limit: String(API_PAGE_SIZE) });
@@ -135,7 +135,7 @@ const ArticlesFeed: FC<any> = ({ initialArticles, excludeTag, includeTag }: any)
     } catch (e) {
       // swallow errors — keep current list
       if (process.env.NODE_ENV !== 'production') {
-        // eslint-disable-next-line no-console
+         
         console.debug('[ArticlesFeed] revalidate failed', e);
       }
     }
@@ -153,7 +153,7 @@ const ArticlesFeed: FC<any> = ({ initialArticles, excludeTag, includeTag }: any)
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [includeTag, excludeTag]);
 
   return (

@@ -249,7 +249,7 @@ async function listSessionsForHistory(
   historyId: string,
   options: { limit?: number } = {}
 ): Promise<PierrotSessionRecord[]> {
-  let query = store
+  const query = store
     .from('pierrot_sessions')
     .select(SESSION_COLUMNS)
     .eq('history_id', historyId)

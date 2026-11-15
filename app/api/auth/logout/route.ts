@@ -14,7 +14,7 @@ const LEGACY_COOKIES = [
 
 export async function POST() {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     await supabase.auth.signOut();
   } catch {
     // Cookie clearing below still runs even if the remote session is already gone.

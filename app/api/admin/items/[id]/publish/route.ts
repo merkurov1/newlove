@@ -20,9 +20,9 @@ function slugify(value: string): string {
 }
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 async function authorize(req: NextRequest): Promise<NextResponse | null> {
@@ -41,16 +41,17 @@ export async function GET(
   req: NextRequest,
   { params }: RouteContext
 ) {
+  const { id } = await params;
   const denied = await authorize(req);
   if (denied) return denied;
 
   try {
-    const supabase = createClient({ useServiceRole: true });
+    const supabase = await createClient({ useServiceRole: true });
 
     const { data: item, error } = await supabase
       .from('items')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (error) {
@@ -81,13 +82,14 @@ export async function PATCH(
   req: NextRequest,
   { params }: RouteContext
 ) {
+  const { id } = await params;
   const denied = await authorize(req);
   if (denied) return denied;
 
   try {
     const body = await req.json();
 
-    const supabase = createClient({
+    const supabase = await createClient({
       useServiceRole: true,
     });
 
@@ -95,7 +97,7 @@ export async function PATCH(
       await supabase
         .from('items')
         .select('*')
-        .eq('id', params.id)
+        .eq('id', id)
         .single();
 
     if (currentItemError || !currentItem) {
@@ -223,7 +225,7 @@ export async function PATCH(
       await supabase
         .from('items')
         .update(update)
-        .eq('id', params.id)
+        .eq('id', id)
         .select()
         .single();
 

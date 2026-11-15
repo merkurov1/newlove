@@ -22,7 +22,7 @@ interface LotReelData {
  * Скачивает файл по URL во временную директорию
  */
 async function downloadToTemp(url: string, extension: string): Promise<string> {
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
   if (!res.ok) throw new Error(`Failed to download resource from ${url}: ${res.statusText}`);
   const buffer = Buffer.from(await res.arrayBuffer());
   

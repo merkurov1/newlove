@@ -2,12 +2,15 @@ import Stripe from 'stripe';
 
 export const dynamic = 'force-dynamic';
 
-const stripe = new Stripe(
-  process.env.STRIPE_SECRET_KEY || '',
-  {
+// Constructed lazily: a missing payment key must not fail the production
+// build or any unrelated route. The error surfaces on the first payment call.
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY is not configured');
+  return new Stripe(key, {
     apiVersion: '2025-08-27.basil' as any,
-  }
-);
+  });
+}
 
 const SITE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL ||
@@ -59,7 +62,7 @@ export async function POST(req: Request) {
     }
 
     const session =
-      await stripe.checkout.sessions.create({
+      await getStripe().checkout.sessions.create({
         payment_method_types: ['card'],
 
         line_items: [

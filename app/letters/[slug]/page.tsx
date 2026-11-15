@@ -106,7 +106,7 @@ export async function generateMetadata({ params }: PageProps) {
   const { slug } = await params;
 
   try {
-    const supabase = createClient({ useServiceRole: true });
+    const supabase = await createClient({ useServiceRole: true });
 
     const { data: issue } = await supabase
       .from('letters')
@@ -221,7 +221,7 @@ export default async function LetterPage({ params }: PageProps) {
   const { slug } = await params;
 
   // Published Flow issues are public and do not use ordinary-letter auth rules.
-  const supabasePublic = createClient({ useServiceRole: true });
+  const supabasePublic = await createClient({ useServiceRole: true });
 
   const { data: issue, error: issueError } = await supabasePublic
     .from('letters')
@@ -304,7 +304,7 @@ export default async function LetterPage({ params }: PageProps) {
   }
 
   // Original behaviour for ordinary letters remains unchanged.
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

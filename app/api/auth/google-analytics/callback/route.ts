@@ -68,7 +68,8 @@ export async function GET(request: Request) {
   }
 
   const state = verifyState<OAuthState>(stateValue, getSyncOwnerSecret());
-  const cookieNonce = cookies().get(STATE_COOKIE)?.value;
+  const cookieStore = await cookies();
+  const cookieNonce = cookieStore.get(STATE_COOKIE)?.value;
 
   if (
     !state ||

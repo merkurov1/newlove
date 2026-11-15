@@ -148,6 +148,7 @@ export async function collectSkillAnalysisEvidence(input: {
   const periodStart = new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
   const { store, userId } = input;
 
+  // eslint-disable-next-line prefer-const -- reassigned below when the optional column is missing
   let [siteConversationsResult, devConversationsResult] = await Promise.all([
     withTimeout(
       store
@@ -307,6 +308,7 @@ export async function collectSkillAnalysisEvidence(input: {
     }),
   ];
 
+  // eslint-disable-next-line prefer-const -- reassigned below when the optional column is missing
   let [devTasksResult, devRequestsResult, eventsResult, memoriesResult, skillsResult] =
     await Promise.all([
       withTimeout(

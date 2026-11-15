@@ -72,7 +72,7 @@ export async function POST(
     await context.params;
 
   const supabase =
-    createClient({
+    await createClient({
       useServiceRole: true,
     });
 

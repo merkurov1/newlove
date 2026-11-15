@@ -22,7 +22,11 @@ export async function GET() {
       );
     }
 
-    const filePath = path.join(process.cwd(), UNFRAMED_SOURCE_PATH);
+    // Included explicitly through `outputFileTracingIncludes`; see next.config.js.
+    const filePath = path.join(
+      /*turbopackIgnore: true*/ process.cwd(),
+      UNFRAMED_SOURCE_PATH
+    );
     const fileContent = await fs.readFile(filePath, 'utf8');
     const version = createHash('sha256').update(fileContent, 'utf8').digest('hex');
 

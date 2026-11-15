@@ -11,15 +11,15 @@ import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAu
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const { jobId } = await params;
+
   try {
     await requireAdminFromRequest(request);
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
-  const { jobId } = params;
 
   if (!jobId) {
     return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });

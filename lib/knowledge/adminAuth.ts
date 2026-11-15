@@ -39,6 +39,7 @@ export async function authorizeKnowledgeAdmin(
         Accept: 'application/vnd.github+json',
       },
       cache: 'no-store',
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!response.ok) return { ok: false };

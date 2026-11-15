@@ -13,15 +13,16 @@ const CommentSchema = z.object({
 
 // GET: list comments for a letter (public)
 // POST: create a comment (authenticated users only)
-export async function GET(req: Request, { params }: { params: { slug: string } }) {
-    const slug = params.slug;
+export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+
     try {
         // Require authentication for listing comments to prevent public access
         const url = new URL(req.url);
         const wantDebug = url.searchParams.get('_debug') === '1';
         
         // Use server-side Supabase client for authentication
-        const supabase = createClient();
+        const supabase = await createClient();
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         
         if (authError || !user?.id) return new Response(JSON.stringify({ error: 'unauthenticated', debug: wantDebug ? { viewer: null } : undefined }), { status: 401, headers: { 'Content-Type': 'application/json' } });
@@ -46,7 +47,9 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
     }
 }
 
-export async function POST(req: Request, { params }: { params: { slug: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+
     // Rate limiting: 10 comments per 15 minutes per IP
     const clientIp = getClientIp(req);
     const rateLimitResponse = checkRateLimit(clientIp, {
@@ -58,10 +61,9 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
         return rateLimitResponse;
     }
 
-    const slug = params.slug;
     try {
         // Validate user from incoming request (cookies)
-        const supabase = createClient();
+        const supabase = await createClient();
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         
         if (authError || !user?.id) return new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401, headers: { 'Content-Type': 'application/json' } });

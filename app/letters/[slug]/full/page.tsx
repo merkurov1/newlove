@@ -4,10 +4,10 @@ import Link from 'next/link';
 import BlockRenderer from '@/components/BlockRenderer';
 import LetterCommentsClient from '@/components/letters/LetterCommentsClient';
 
-export default async function LetterFullPage({ params }: { params: { slug: string } }) {
-  const slug = params.slug;
+export default async function LetterFullPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
   // Use anon client to check authentication status
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
     error: authError,
@@ -19,7 +19,7 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
   }
 
   // Authenticated: use service-role client for protected reads (joins on User table)
-  const supabaseSvc = createClient({ useServiceRole: true });
+  const supabaseSvc = await createClient({ useServiceRole: true });
   const { data: letter, error } = await supabaseSvc
     .from('letters')
     .select(

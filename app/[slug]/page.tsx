@@ -3,7 +3,6 @@ import { pageMetadata, description as seoDescription, truncate, DEFAULT_OG_IMAGE
 import { notFound } from 'next/navigation';
 import Markdown from 'markdown-to-jsx';
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 import { attachTagsToArticles } from '@/lib/attachTagsToArticles';
@@ -14,7 +13,7 @@ import { EditProvider } from '@/components/EditContext';
 import DebugEditButton from '@/components/DebugEditButton';
 import type { Metadata } from 'next';
 
-const RelatedArticles = dynamic(() => import('@/components/RelatedArticles'), { ssr: false });
+import RelatedArticles from '@/components/lazy/RelatedArticlesLazy';
 
 type ContentResult = {
   type: 'article' | 'project';
@@ -251,12 +250,13 @@ function getStructuredData(
 export async function generateMetadata({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const path = `/${encodeURIComponent(params.slug)}`;
+  const { slug } = await params;
+  const path = `/${encodeURIComponent(slug)}`;
 
   try {
-    const result = await getContent(params.slug);
+    const result = await getContent(slug);
     if (!result) {
       return pageMetadata({
         title: 'Page not found | Anton Merkurov',
@@ -297,8 +297,9 @@ export async function generateMetadata({
   }
 }
 
-export default async function ContentPage({ params }: { params: { slug: string } }) {
-  const result = await getContent(params.slug);
+export default async function ContentPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const result = await getContent(slug);
   if (!result) notFound();
   const { type, content } = result;
 

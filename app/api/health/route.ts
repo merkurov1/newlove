@@ -46,7 +46,7 @@ export async function GET() {
     // readable by the anon role. `users` is protected by RLS and has no anon
     // grant, so it cannot be used as a connectivity probe.
     try {
-      const supabase = createClient();
+      const supabase = await createClient();
       const { error } = await supabase
         .from('letters')
         .select('id')

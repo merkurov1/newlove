@@ -4,7 +4,9 @@ import { getCurrentUser, getServerSupabaseClient, requireAdminFromRequest } from
 
 export const dynamic = 'force-dynamic';
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
   try {
     await requireAdminFromRequest(req);
   } catch {
@@ -21,8 +23,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       { status: authenticated ? 403 : 401 }
     );
   }
-
-  const { id } = params;
 
   if (!id || id.length > 200) {
     return NextResponse.json({ error: 'Invalid subscriber id' }, { status: 400 });

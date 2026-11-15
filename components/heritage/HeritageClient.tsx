@@ -582,7 +582,7 @@ export default function HeritageClient({ initialLang = 'en' }: HeritageClientPro
               <span>{tx('Documented Heritage Archive', 'Документальный архив наследия')}</span>
             </div>
             <span className="font-mono text-xs text-stone-600 tracking-wider">
-              1881 — {new Date().getFullYear()} // MERKUROV
+              1881 — {new Date().getFullYear()}{' // MERKUROV'}
             </span>
           </div>
 

@@ -11,7 +11,9 @@ export const dynamic = 'force-dynamic';
  * Request-body fields are allowlisted; passwords, email and auth metadata are
  * never accepted here.
  */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
   try {
     await requireAdminFromRequest(request);
   } catch {
@@ -29,7 +31,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     );
   }
 
-  const userId = params.id;
+  const userId = id;
 
   if (!userId || userId.length > 200) {
     return NextResponse.json({ error: 'Invalid user id' }, { status: 400 });

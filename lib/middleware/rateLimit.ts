@@ -32,7 +32,8 @@ export function withRateLimit(handler: Function, config: RateLimitConfig = {}) {
   } = config;
 
   return async (req: NextRequest, ...args: any[]) => {
-    const ip = req.headers.get('x-forwarded-for') || req.ip || 'unknown';
+    const forwarded = req.headers.get('x-forwarded-for') || '';
+    const ip = forwarded.split(',')[0]?.trim() || 'unknown';
     const now = Date.now();
     const entry = ipMap.get(ip) || { count: 0, last: now };
 

@@ -23,15 +23,16 @@ import { description as seoDescription, pageMetadata, truncate } from '@/lib/seo
 import { JsonLd } from '@/components/seo/JsonLd';
 import { breadcrumbJsonLd, visualArtworkJsonLd } from '@/lib/structuredData';
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
   const { data: lot } = await supabase
     .from('lots')
     .select('artist, title, image_path, ai_content')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('status', 'published')
     .maybeSingle();
 
-  const path = `/lots/${encodeURIComponent(params.id)}`;
+  const path = `/lots/${encodeURIComponent(id)}`;
 
   if (!lot) {
     return pageMetadata({
@@ -64,11 +65,12 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   });
 }
 
-export default async function LotDetailPage({ params }: { params: { id: string } }) {
+export default async function LotDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const { data: lot, error } = await supabase
     .from('lots')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('status', 'published')
     .maybeSingle();
 
@@ -87,7 +89,7 @@ export default async function LotDetailPage({ params }: { params: { id: string }
     <>
       <JsonLd
         data={visualArtworkJsonLd({
-          path: `/lots/${encodeURIComponent(params.id)}`,
+          path: `/lots/${encodeURIComponent(id)}`,
           name: artworkName,
           description:
             ai.summary ||
@@ -104,7 +106,7 @@ export default async function LotDetailPage({ params }: { params: { id: string }
         data={breadcrumbJsonLd([
           { name: 'Home', path: '/' },
           { name: 'Art Engine Vault', path: '/lots' },
-          { name: [lot.artist, lot.title].filter(Boolean).join(' — ') || 'Lot', path: `/lots/${encodeURIComponent(params.id)}` },
+          { name: [lot.artist, lot.title].filter(Boolean).join(' — ') || 'Lot', path: `/lots/${encodeURIComponent(id)}` },
         ])}
       />
       <div className="min-h-screen bg-black text-white font-sans pt-24 sm:pt-32 pb-24 px-4 sm:px-8">

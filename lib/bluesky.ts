@@ -539,7 +539,7 @@ export async function publishToBluesky(input: PublishInput): Promise<BlueskyPubl
   const warnings: string[] = [];
 
   try {
-    let agent = await getBlueskyAgent();
+    const agent = await getBlueskyAgent();
 
     const explicitMedia = [
       ...(Array.isArray((input as any).media) ? (input as any).media : []),

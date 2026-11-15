@@ -13,9 +13,15 @@ import { recordPierrotPurchaseCompleted } from '@/lib/pierrot/commercialAnalytic
 
 export const dynamic = 'force-dynamic';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+// Constructed lazily: a missing payment key must not fail the production
+// build or any unrelated route. The error surfaces on the first payment call.
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY is not configured');
+  return new Stripe(key, {
   apiVersion: '2025-08-27.basil' as any,
 });
+}
 
 export async function GET(request: Request) {
   const limited = checkRateLimit(getClientIp(request), {
@@ -33,7 +39,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Missing session_id' }, { status: 400 });
     }
 
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const session = await getStripe().checkout.sessions.retrieve(sessionId);
 
     if (session.metadata?.type !== 'unframed_book') {
       return NextResponse.json({ error: 'Not an UNFRAMED access session' }, { status: 400 });

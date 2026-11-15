@@ -7,17 +7,18 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic'; // Делаем динамическим
 
-export async function GET(req: Request, { params }: { params: { slug: string } }) {
-    const slug = params.slug;
+export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+
     const url = new URL(req.url);
     const wantDebug = url.searchParams.get('_debug') === '1';
 
     // ----- НОВАЯ, ПРОСТАЯ ЛОГИКА АУТЕНТИФИКАЦИИ -----
-    const supabase = createClient(); // Обычный клиент
+    const supabase = await createClient(); // Обычный клиент
     const { data: { user: viewer } } = await supabase.auth.getUser(); // Получаем user
 
     // Service-role клиент для чтения
-    const supabaseService = createClient({ useServiceRole: true });
+    const supabaseService = await createClient({ useServiceRole: true });
 
     try {
         const { data: letter, error } = await supabaseService.from('letters').select('*').eq('slug', slug).maybeSingle();

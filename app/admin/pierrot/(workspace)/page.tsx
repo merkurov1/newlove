@@ -128,7 +128,8 @@ export default async function ChatPage({
 
   let cachedOverview: ReturnType<typeof parseOverviewCache> = null;
   if (needsOverview) {
-    const raw = cookies().get(overviewCookieName(user.id))?.value;
+    const cookieStore = await cookies();
+    const raw = cookieStore.get(overviewCookieName(user.id))?.value;
     if (raw) {
       cachedOverview = parseOverviewCache(raw, user.id);
       if (!cachedOverview) {

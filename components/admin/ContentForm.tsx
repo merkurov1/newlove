@@ -16,7 +16,7 @@ interface ContentFormProps {
 
 function parseBlocks(raw: any): EditorJsBlock[] {
   if (!raw) return [];
-  let arr = Array.isArray(raw)
+  const arr = Array.isArray(raw)
     ? raw
     : (() => {
         try {

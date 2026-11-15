@@ -223,7 +223,7 @@ function MarkdownBody({ body }: { body: string }) {
           img: ({ src, alt }) => (
             <figure className="my-7">
               <FlowImageComponent
-                src={src}
+                src={typeof src === 'string' ? src : undefined}
                 alt={alt ?? ''}
                 aspectRatio="4 / 3"
                 objectFit="contain"

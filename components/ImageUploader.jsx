@@ -1,7 +1,7 @@
  'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase-client';
+import { supabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext';
 
 export default function ImageUploader({ onUploadSuccess }) {

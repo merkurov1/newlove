@@ -1,5 +1,5 @@
 import React from 'react';
-import { Role } from '@/types/next-auth.d';
+import { Role } from '@/lib/roles';
 import { getRoleEmoji, getRoleName } from '@/lib/roles';
 
 // Single, clean implementation for UserEditModal. All duplicates removed.

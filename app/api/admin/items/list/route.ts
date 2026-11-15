@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   try {
     await requireAdminFromRequest(req);
 
-    const supabase = createClient({
+    const supabase = await createClient({
       useServiceRole: true,
     });
 

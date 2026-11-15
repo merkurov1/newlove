@@ -1,4 +1,8 @@
-import { renderToStaticMarkup } from 'react-dom/server.node';
+// Next.js 16 does not allow importing `react-dom/server` from a Server
+// Component or Route Handler (react-server condition). The edge build of
+// React DOM exposes the same `renderToStaticMarkup` API and is safe to import
+// in that environment.
+import { renderToStaticMarkup } from 'react-dom/server.edge';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { absoluteMarkdownUrl } from './feed';

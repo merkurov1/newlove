@@ -2,12 +2,8 @@
 import NewsletterSubscribe from '@/components/letters/NewsletterSubscribe';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { createClient } from '@/lib/supabase/server';
-import nextDynamic from 'next/dynamic';
 
-const NewsletterBanner = nextDynamic(
-  () => import('@/components/NewsletterBanner'),
-  { ssr: false },
-);
+import NewsletterBanner from '@/components/lazy/NewsletterBannerLazy';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +35,7 @@ export default async function LettersPage({ searchParams }: Props) {
   let lastUpdated: string | null = null;
 
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     const { data, error } = await supabase
       .from('letters')

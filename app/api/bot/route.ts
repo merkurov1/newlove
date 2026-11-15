@@ -8,10 +8,15 @@ export const runtime = 'nodejs';
 
 const env = process.env as Record<string, string | undefined>;
 
+// Module scope must not throw when an optional integration is not configured:
+// a missing bot token would otherwise fail the whole production build and every
+// unrelated route that shares the build. The webhook answers 503 instead.
 const token = env['TELEGRAM_BOT_TOKEN'];
-if (!token) throw new Error('TELEGRAM_BOT_TOKEN is unset');
+if (!token) {
+    console.error('[telegram] TELEGRAM_BOT_TOKEN is unset; /api/bot will answer 503');
+}
 
-const bot = new Bot(token);
+const bot = new Bot(token || '0:unconfigured');
 
 // ENV & CONSTANTS
 const MY_ID = Number(env['MY_TELEGRAM_ID']);
@@ -276,6 +281,19 @@ const handleUpdate = webhookCallback(
     webhookSecret ? { secretToken: webhookSecret } : undefined
 );
 export async function POST(req: Request) {
+    if (!token) {
+        return new Response(
+            JSON.stringify({ ok: false, error: 'TELEGRAM_BOT_TOKEN is unset' }),
+            {
+                status: 503,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-store',
+                },
+            }
+        );
+    }
+
     if (enforceWebhookSecret && !webhookSecret) {
         return new Response(
             JSON.stringify({

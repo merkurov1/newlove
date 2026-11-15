@@ -4,7 +4,8 @@ import { updateArticle } from '../../../actions';
 
 async function getArticle(id: any) {
   const { cookies } = await import('next/headers');
-  const cookieHeader = cookies()
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore
     .getAll()
     .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
     .join('; ');
@@ -30,8 +31,9 @@ async function getArticle(id: any) {
   return article;
 }
 
-export default async function EditArticlePage({ params }: { params: { id: string } }) {
-  const article = await getArticle(params.id);
+export default async function EditArticlePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const article = await getArticle(id);
 
   return (
     <div>

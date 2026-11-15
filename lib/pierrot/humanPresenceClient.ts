@@ -91,7 +91,7 @@ async function postJson<T>(
       body: JSON.stringify(body),
       cache: 'no-store',
       ...(keepalive ? { keepalive: true } : {}),
-      ...(signal ? { signal } : {}),
+      ...(signal ? { signal } : { signal: AbortSignal.timeout(8_000) }),
     });
 
     const data = (await response.json().catch(() => null)) as T | null;

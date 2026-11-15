@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { use } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 
 import {
@@ -228,8 +229,9 @@ type AiContext = {
 export default function AdminItemDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = use(params);
   const [item, setItem] = useState<Item | null>(null);
   const [aiContext, setAiContext] = useState<AiContext | null>(null);
   const [loading, setLoading] = useState(true);
@@ -242,7 +244,7 @@ export default function AdminItemDetailPage({
       if (!silent) setLoading(true);
 
       try {
-        const res = await fetch(`/api/admin/items/${params.id}`);
+        const res = await fetch(`/api/admin/items/${id}`);
         const json = await res.json();
         setItem(json.item);
         setAiContext(json.aiContext ?? null);
@@ -250,7 +252,7 @@ export default function AdminItemDetailPage({
         if (!silent) setLoading(false);
       }
     },
-    [params.id]
+    [id]
   );
 
   useEffect(() => {
@@ -262,7 +264,7 @@ export default function AdminItemDetailPage({
 
     setSaving(true);
 
-    const res = await fetch(`/api/admin/items/${params.id}`, {
+    const res = await fetch(`/api/admin/items/${id}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -303,7 +305,7 @@ export default function AdminItemDetailPage({
     setAiMessage('');
 
     try {
-      const res = await fetch(`/api/admin/items/${params.id}/ai`, {
+      const res = await fetch(`/api/admin/items/${id}/ai`, {
         method: 'POST',
       });
       const json = await res.json();
@@ -312,7 +314,7 @@ export default function AdminItemDetailPage({
         // The endpoint persists an error row. Reload it so the admin sees the
         // real status/error instead of the previous ready content.
         try {
-          const latest = await fetch(`/api/admin/items/${params.id}`);
+          const latest = await fetch(`/api/admin/items/${id}`);
           const latestJson = await latest.json();
           setAiContext(latestJson.aiContext ?? null);
         } catch {

@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const path = `/journal/${encodeURIComponent(slug)}`;
 
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: letter } = await supabase
       .from('letters')
       .select('title, content, publishedAt, createdAt, lang, kind')
@@ -79,7 +79,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function LetterPage({ params }: PageProps) {
   const resolvedParams = params instanceof Promise ? await params : params;
   const slug = resolvedParams.slug;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: letter, error } = await supabase
     .from('letters')

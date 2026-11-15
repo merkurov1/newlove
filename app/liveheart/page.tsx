@@ -263,7 +263,7 @@ export default function LiveHeartPage() {
 
               // Optionally apply a global spin rotation to each particle in 3D
               let drawX = p.x;
-              let drawY = p.y;
+              const drawY = p.y;
               let drawZ = p.z || 0;
               const rot = curDNA ? (time * (curDNA.rotationSpeed || 0)) : 0;
               if (curDNA && (curDNA.physics === "SPIN" || ["ATOM","GALAXY","VORTEX"].includes(curDNA.structure))) {
@@ -531,7 +531,7 @@ export default function LiveHeartPage() {
              <div className="absolute inset-0 flex flex-col items-center justify-center animate-in fade-in duration-1000">
                 <div className="relative z-50 text-center mix-blend-difference hover:mix-blend-normal transition-all">
                     <div className="text-white text-[9px] font-mono mb-2 uppercase tracking-[0.3em] drop-shadow-md">
-                        {dna.scaleMode} // {dna.physics}
+                        {dna.scaleMode}{' // '}{dna.physics}
                     </div>
                     <div className="text-3xl md:text-5xl font-extralight text-white mb-8 tracking-[0.2em] uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]">
                         {dna.name}

@@ -404,7 +404,7 @@ export async function deleteProject(formData: any) {
 // --- Профиль пользователя (User-Context) ---
 
 export async function updateProfile(prevState: any, formData: any) {
-  const anonClient = createClient();
+  const anonClient = await createClient();
   const {
     data: { user },
     error: authError,
@@ -526,7 +526,7 @@ export async function adminDeleteUser(userId: any) {
 // --- Управление подпиской пользователя ---
 
 export async function toggleUserSubscription(prevState: any, formData: any) {
-  const anonClient = createClient();
+  const anonClient = await createClient();
   const {
     data: { user },
     error: authError,

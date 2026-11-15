@@ -61,11 +61,13 @@ async function getSafeImageUrl(imagePathOrUrl: string): Promise<string> {
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+
   try {
     await requireAdminFromRequest(request);
-    const lotId = params.id;
+    const lotId = id;
 
     // 1. Достаем лот из базы данных
     const { data: lot, error: lotError } = await supabase

@@ -29,10 +29,9 @@ import { PierrotProvider } from '@/components/pierrot/PierrotContext';
 import TelegramMiniApp from '@/components/TelegramMiniApp';
 import SiteChromeVisibility from '@/components/SiteChromeVisibility';
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
-import NextDynamic from 'next/dynamic';
 import { unstable_cache } from 'next/cache';
 
-const UserSidebar = NextDynamic(() => import('@/components/UserSidebar'), { ssr: false });
+import UserSidebar from '@/components/lazy/UserSidebarLazy';
 
 // --- STRATEGIC SEO: GLOBAL POSITIONING ---
 

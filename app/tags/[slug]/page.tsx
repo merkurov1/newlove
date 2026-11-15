@@ -3,10 +3,9 @@ import Link from 'next/link';
 import { pageMetadata, description as seoDescription, truncate } from '@/lib/seo';
 import Image from 'next/image';
 import SafeImage from '@/components/SafeImage';
-import dynamic from 'next/dynamic';
 import type { Metadata } from 'next';
 
-const AuctionGrid = dynamic(() => import('@/components/AuctionGrid'), { ssr: false });
+import AuctionGrid from '@/components/lazy/AuctionGridLazy';
 
 async function getTagData(slug: string) {
   const normalized = String(slug || '').trim();
@@ -70,9 +69,10 @@ async function getTagData(slug: string) {
   return tag;
 }
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const tag = await getTagData(params.slug);
-  const path = `/tags/${encodeURIComponent(params.slug)}`;
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const tag = await getTagData(slug);
+  const path = `/tags/${encodeURIComponent(slug)}`;
 
   return pageMetadata({
     title: truncate(`Материалы по тегу: ${tag.name} | Anton Merkurov`, 60),
@@ -88,10 +88,11 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   });
 }
 
-export default async function TagPage({ params }: { params: { slug: string } }) {
+export default async function TagPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
   let tag;
   try {
-    tag = await getTagData(params.slug);
+    tag = await getTagData(slug);
   } catch (e) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-center p-8">
@@ -132,7 +133,7 @@ export default async function TagPage({ params }: { params: { slug: string } }) 
   }
 
   // Специальная обработка для тега "Auction" - показываем полноэкранный слайдер
-  const isAuctionTag = params.slug.toLowerCase() === 'auction';
+  const isAuctionTag = slug.toLowerCase() === 'auction';
 
   if (isAuctionTag && articles.length > 0) {
     const articlesWithImages = articles.map((article: any) => ({

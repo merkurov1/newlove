@@ -34,7 +34,7 @@ export async function GET() {
   }> = [];
 
   try {
-    const supabase = createClient({ useServiceRole: true });
+    const supabase = await createClient({ useServiceRole: true });
     const { data } = await supabase
       .from('letters')
       .select('title,slug,publishedAt,createdAt,content,kind,status,published')

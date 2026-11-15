@@ -114,8 +114,8 @@ const HeartPreview = () => {
     resize();
     
     const getHeartPos = (t: number, scale: number) => {
-        let x = 16 * Math.pow(Math.sin(t), 3);
-        let y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+        const x = 16 * Math.pow(Math.sin(t), 3);
+        const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
         return { x: x * scale, y: -y * scale };
     };
     for(let i=0; i<particleCount; i++) {
@@ -409,19 +409,19 @@ export default function YearReviewComplete() {
           transition={{ repeat: Infinity, duration: 30, ease: "linear" }}
         >
           <span>MERKUROV.LOVE</span>
-          <span className="text-[#CC0000]">///</span>
+          <span className="text-[#CC0000]">{'///'}</span>
           <span>UNFRAMED STATUS: ACTIVE</span>
-          <span className="text-[#CC0000]">///</span>
+          <span className="text-[#CC0000]">{'///'}</span>
           <span>COMPILED IN 60 DAYS</span>
-          <span className="text-[#CC0000]">///</span>
+          <span className="text-[#CC0000]">{'///'}</span>
           <span>EVERYTHING ELSE IS NOISE</span>
           {/* repeat for continuous loop */}
           <span>MERKUROV.LOVE</span>
-          <span className="text-[#CC0000]">///</span>
+          <span className="text-[#CC0000]">{'///'}</span>
           <span>UNFRAMED STATUS: ACTIVE</span>
-          <span className="text-[#CC0000]">///</span>
+          <span className="text-[#CC0000]">{'///'}</span>
           <span>COMPILED IN 60 DAYS</span>
-          <span className="text-[#CC0000]">///</span>
+          <span className="text-[#CC0000]">{'///'}</span>
           <span>EVERYTHING ELSE IS NOISE</span>
         </motion.div>
       </div>

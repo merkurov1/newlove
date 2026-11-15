@@ -6,10 +6,11 @@ export const dynamic = 'force-dynamic';
  * Vault records now open inside the unified Art Engine workspace. Keep the old
  * deep link working.
  */
-export default function LegacyVaultRecordPage({
+export default async function LegacyVaultRecordPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  redirect(`/art-engine?lot=${encodeURIComponent(params.id)}`);
+  const { id } = await params;
+  redirect(`/art-engine?lot=${encodeURIComponent(id)}`);
 }

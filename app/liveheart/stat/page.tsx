@@ -14,7 +14,7 @@ type ShareData = {
 
 // --- DATA FETCHING ---
 async function fetchShares() {
-  const supabase = createClient({ useServiceRole: true });
+  const supabase = await createClient({ useServiceRole: true });
   const { data, error } = await supabase
     .from('liveheart_shares')
     .select('slug, title, dna, created_at')
@@ -68,7 +68,8 @@ const BigNumber = ({ label, value, icon }: { label: string, value: string | numb
 );
 
 // --- PAGE ---
-export default async function StatisticsPage({ searchParams }: { searchParams?: { debug?: string } }) {
+export default async function StatisticsPage({ searchParams }: { searchParams?: Promise<{ debug?: string }> }) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   let rows: ShareData[] = [];
   try {
     rows = await fetchShares();
@@ -79,7 +80,7 @@ export default async function StatisticsPage({ searchParams }: { searchParams?: 
   // Also fetch exact count using Supabase head/count to verify total rows in DB
   let exactCount: number | null = null;
   try {
-    const supabase = createClient({ useServiceRole: true });
+    const supabase = await createClient({ useServiceRole: true });
     const headRes = await supabase.from('liveheart_shares').select('*', { head: true, count: 'exact' });
     // @ts-ignore
     exactCount = typeof headRes.count === 'number' ? headRes.count : null;
@@ -112,7 +113,7 @@ export default async function StatisticsPage({ searchParams }: { searchParams?: 
 
   const top = rows.slice(0, 32); 
 
-  const showDebug = (searchParams?.debug === '1') || process.env.NODE_ENV === 'development';
+  const showDebug = (resolvedSearchParams?.debug === '1') || process.env.NODE_ENV === 'development';
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-pink-500 selection:text-white pb-20">

@@ -848,7 +848,7 @@ export default function TributePage() {
         </div>
       </section>
 
-      {/* eslint-disable-next-line react/no-unknown-property */}
+      { }
       <style jsx global>{`
         .noise-overlay {
           position: fixed;

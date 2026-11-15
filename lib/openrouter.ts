@@ -6,7 +6,10 @@ export async function parseLotWithAI(url: string, rawText?: string) {
   // 1. Извлечение og:image и текста страницы, если передан URL
   if (url) {
     try {
-      const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(10_000),
+      });
       const html = await res.text();
       
       const imgMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
@@ -64,7 +67,8 @@ export async function parseLotWithAI(url: string, rawText?: string) {
       model: (process.env.DEEPSEEK_MODEL || 'deepseek-chat').trim(),
       messages: [{ role: 'user', content: prompt }],
       response_format: { type: 'json_object' }
-    })
+    }),
+    signal: AbortSignal.timeout(30_000),
   });
 
   const aiData = await deepseekRes.json();
