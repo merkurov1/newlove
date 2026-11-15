@@ -1,6 +1,12 @@
 import { assertServerOnly } from '@/lib/serverOnly';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
-import type { PierrotProject, PierrotProjectSnapshot, PierrotProjectStatus } from './types';
+import type {
+  PierrotProject,
+  PierrotProjectSnapshot,
+  PierrotProjectSnapshotSource,
+  PierrotProjectStatus,
+  PierrotSourceStatus,
+} from './types';
 import { projectSlugBase, uniqueProjectSlug } from './slug';
 import { projectMatchesRef } from './matching';
 import { recordProjectStatusChange } from '@/lib/pierrot/context/store';
@@ -433,6 +439,39 @@ export async function linkConversationToProject(
     .eq('owner_user_id', ownerUserId);
 }
 
+const SOURCE_LIMITS: Record<PierrotProjectSnapshotSource, number> = {
+  decisions: 500,
+  tasks: 200,
+  conversations: 1,
+  artifacts: 200,
+  knowledge: 200,
+  reviews: 1,
+};
+
+function failedSource(error: unknown): PierrotSourceStatus {
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? String((error as { message?: unknown }).message || 'source_unavailable')
+      : error instanceof Error
+        ? error.message
+        : 'source_unavailable';
+  return { state: 'unavailable', error: message, count: 0 };
+}
+
+function sourceFromRows(
+  rows: number,
+  source: PierrotProjectSnapshotSource,
+  options: { partial?: boolean } = {}
+): PierrotSourceStatus {
+  if (rows === 0) return { state: 'empty', count: 0 };
+  // A limit of 1 is a "latest row" read, not a truncation signal. Larger
+  // limits are strict upper bounds, so reaching one means more rows may exist.
+  if (options.partial || (SOURCE_LIMITS[source] > 1 && rows >= SOURCE_LIMITS[source])) {
+    return { state: 'partial', count: rows, truncated: true };
+  }
+  return { state: 'success', count: rows };
+}
+
 export async function getPierrotProjectSnapshot(
   ownerUserId: string,
   projectRef: string
@@ -446,20 +485,20 @@ export async function getPierrotProjectSnapshot(
       .select('decision:pierrot_decisions(id,title,content,status,kind,updated_at,valid_from,valid_until)')
       .eq('project_id', project.id)
       .eq('owner_user_id', ownerUserId)
-      .limit(500),
+      .limit(SOURCE_LIMITS.decisions),
     client
       .from('pierrot_dev_prompts')
       .select('id,title,task,status,updated_at')
       .eq('project_id', project.id)
       .eq('user_id', ownerUserId)
       .order('updated_at', { ascending: false })
-      .limit(200),
+      .limit(SOURCE_LIMITS.tasks),
     project.conversationId
       ? client
           .from('pierrot_conversations')
           .select('id,title,started_at')
           .eq('id', project.conversationId)
-          .limit(1)
+          .limit(SOURCE_LIMITS.conversations)
       : Promise.resolve({ data: [], error: null } as { data: unknown[]; error: null }),
     client
       .from('pierrot_project_knowledge')
@@ -468,14 +507,14 @@ export async function getPierrotProjectSnapshot(
       )
       .eq('project_id', project.id)
       .eq('owner_user_id', ownerUserId)
-      .limit(200),
+      .limit(SOURCE_LIMITS.knowledge),
     client
       .from('pierrot_project_artifacts')
       .select('id,title,artifact_type,updated_at')
       .eq('project_id', project.id)
       .eq('owner_user_id', ownerUserId)
       .order('updated_at', { ascending: false })
-      .limit(200),
+      .limit(SOURCE_LIMITS.artifacts),
     client
       .from('pierrot_project_reviews')
       .select('id,summary,completed_at')
@@ -483,12 +522,8 @@ export async function getPierrotProjectSnapshot(
       .eq('owner_user_id', ownerUserId)
       .in('status', ['completed', 'partial'])
       .order('completed_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(
-        (result) => (result.error ? null : result),
-        () => null
-      ),
+      .limit(SOURCE_LIMITS.reviews)
+      .maybeSingle(),
   ]);
   const decisionRows = (decisions.data || []).map((r: Record<string, unknown>) => {
     const decision =
@@ -562,14 +597,67 @@ export async function getPierrotProjectSnapshot(
       row.status !== 'uncertain'
   );
 
+  const rawDecisionRows = Array.isArray(decisions.data)
+    ? (decisions.data as Array<Record<string, unknown>>)
+    : [];
+  const rawTaskRows = Array.isArray(tasks.data)
+    ? (tasks.data as Array<Record<string, unknown>>)
+    : [];
+  const rawConversationRows = Array.isArray(conversations.data)
+    ? (conversations.data as Array<Record<string, unknown>>)
+    : [];
+  const rawKnowledgeRows = Array.isArray(knowledge.data)
+    ? (knowledge.data as Array<Record<string, unknown>>)
+    : [];
+  const rawArtifactRows = Array.isArray(artifacts.data)
+    ? (artifacts.data as Array<Record<string, unknown>>)
+    : [];
+  const reviewRow =
+    review.data && typeof review.data === 'object'
+      ? (review.data as Record<string, unknown>)
+      : null;
+
+  const sourceStatus: Partial<Record<PierrotProjectSnapshotSource, PierrotSourceStatus>> = {
+    decisions: decisions.error
+      ? failedSource(decisions.error)
+      : sourceFromRows(rawDecisionRows.length, 'decisions', {
+          // A relation row without its decision is incomplete data, not an
+          // empty decision list.
+          partial: rawDecisionRows.some((row) => {
+            const relation = row.decision;
+            return !relation || typeof relation !== 'object';
+          }),
+        }),
+    tasks: tasks.error
+      ? failedSource(tasks.error)
+      : sourceFromRows(rawTaskRows.length, 'tasks'),
+    conversations: conversations.error
+      ? failedSource(conversations.error)
+      : sourceFromRows(rawConversationRows.length, 'conversations'),
+    knowledge: knowledge.error
+      ? failedSource(knowledge.error)
+      : sourceFromRows(rawKnowledgeRows.length, 'knowledge', {
+          partial: rawKnowledgeRows.some((row) => {
+            const document = row.document;
+            return !document || typeof document !== 'object';
+          }),
+        }),
+    artifacts: artifacts.error
+      ? failedSource(artifacts.error)
+      : sourceFromRows(rawArtifactRows.length, 'artifacts'),
+    reviews: review.error
+      ? failedSource(review.error)
+      : sourceFromRows(reviewRow ? 1 : 0, 'reviews'),
+  };
+
   return {
     ...project,
     latestReview:
-      review?.data && typeof (review.data as Record<string, unknown>).summary === 'string'
+      reviewRow && typeof reviewRow.summary === 'string'
         ? {
-            summary: String((review.data as Record<string, unknown>).summary),
-            completedAt: text((review.data as Record<string, unknown>).completed_at),
-            runId: text((review.data as Record<string, unknown>).id),
+            summary: String(reviewRow.summary),
+            completedAt: text(reviewRow.completed_at),
+            runId: text(reviewRow.id),
           }
         : null,
     decisions: currentDecisions,
@@ -578,15 +666,12 @@ export async function getPierrotProjectSnapshot(
     completedTasks,
     archivedTasks,
     supersededTasks,
-    conversations: ((conversations.data || []) as unknown[]).map((r) => {
-      const row = r as Record<string, unknown>;
-      return {
-        id: text(row.id),
-        title: text(row.title),
-        updatedAt: text(row.started_at),
-      };
-    }),
-    knowledge: (knowledge.data || []).map((r: Record<string, unknown>) => {
+    conversations: rawConversationRows.map((row) => ({
+      id: text(row.id),
+      title: text(row.title),
+      updatedAt: text(row.started_at),
+    })),
+    knowledge: rawKnowledgeRows.map((r: Record<string, unknown>) => {
       const document =
         r.document && typeof r.document === 'object'
           ? (r.document as Record<string, unknown>)
@@ -603,11 +688,12 @@ export async function getPierrotProjectSnapshot(
       };
     }),
     knowledgeUnavailable: knowledge.error ? knowledge.error.message : null,
-    artifacts: (artifacts.data || []).map((r: Record<string, unknown>) => ({
+    artifacts: rawArtifactRows.map((r) => ({
       id: text(r.id),
       title: text(r.title),
       artifactType: text(r.artifact_type),
       updatedAt: text(r.updated_at),
     })),
+    sourceStatus,
   };
 }

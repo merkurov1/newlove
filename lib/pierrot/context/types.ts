@@ -226,6 +226,27 @@ export type ContextAmbiguity = {
   hint: string | null;
 };
 
+export type ContextSourceState = 'success' | 'empty' | 'unavailable' | 'partial';
+
+export type ContextSourceStatus = {
+  state: ContextSourceState;
+  error?: string | null;
+  /** True when the read hit its bounded limit or timed out mid-way. */
+  truncated?: boolean;
+  count?: number;
+};
+
+export type ContextSourceKey =
+  | 'projects'
+  | 'conversations'
+  | 'messages'
+  | 'memory'
+  | 'brain'
+  | 'graph'
+  | 'project_events'
+  | 'artifacts'
+  | 'entities';
+
 export type ContextCounts = {
   messages: number;
   conversations: number;
@@ -247,6 +268,11 @@ export type ContextQueryResult = {
   ambiguities: ContextAmbiguity[];
   notes: string[];
   gaps: string[];
+  /**
+   * Per-source read state. Distinguishes a genuinely empty history from a
+   * failed or partial read; an error is never reported as "nothing found".
+   */
+  sources: Record<ContextSourceKey, ContextSourceStatus>;
   counts: ContextCounts;
   /** True when a project-scoped search was widened to every conversation. */
   widenedFromProject: boolean;

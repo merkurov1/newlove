@@ -1,5 +1,6 @@
 import { detectContextQuery } from '@/lib/pierrot/context/intent';
 import type { ContextQueryPlan } from '@/lib/pierrot/context/types';
+import type { EditorialIntent } from '@/lib/pierrot/editorial/types';
 import type { PierrotExecutionPlan } from '@/lib/pierrot/executionPlan';
 
 /**
@@ -58,4 +59,41 @@ export function planPierrotTurn(input: {
 
   reasons.push('general:model');
   return { route: 'general', contextQuery: null, visualization, reasons };
+}
+
+/**
+ * Resolves the one ambiguous ownership boundary left by the existing
+ * detectors: an active UNFRAMED conversation makes editorial context
+ * available, but availability is not an instruction. A global history,
+ * personal-context or visualisation request must stay with the Context Engine
+ * even when the project chat is open.
+ *
+ * Editorial mode wins only when the message itself names editorial material.
+ * This keeps "Прочитай главу 14" inside UNFRAMED while "Как прошёл мой день?"
+ * is reconstructed from the owner's real messages.
+ */
+export function resolveEditorialOwnership(input: {
+  editorialIntent:
+    | Pick<
+        EditorialIntent,
+        'operation' | 'explicitAnchor' | 'explicitDocument' | 'explicitProject'
+      >
+    | null;
+  contextQuery: ContextQueryPlan | null;
+}): 'editorial' | 'context' | null {
+  if (!input.editorialIntent) return null;
+  if (!input.contextQuery) return 'editorial';
+
+  const intent = input.editorialIntent;
+  const explicitAnchor =
+    intent.explicitAnchor === true ||
+    intent.explicitDocument === true ||
+    intent.explicitProject === true;
+
+  if (explicitAnchor) return 'editorial';
+
+  // No explicit editorial material in the message: the deterministic context
+  // plan owns the turn. The route must not fall back to project.overview just
+  // because the active project is UNFRAMED.
+  return 'context';
 }

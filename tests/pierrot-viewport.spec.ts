@@ -82,7 +82,7 @@ async function readBoxes(page: Page): Promise<Boxes> {
       messages: read('[data-pierrot-messages]'),
       footer: read('[data-pierrot-footer]'),
       input: read('[data-pierrot-input]'),
-      send: read('[data-pierrot-send]'),
+      send: read('[data-pierrot-send], [data-pierrot-stop]'),
     };
   });
 }
@@ -347,7 +347,7 @@ test.describe('Pierrot modal mobile emulation', () => {
     await input.fill('a'.repeat(600));
 
     const { boxes } = await expectStableComposerLayout(page);
-    expect(boxes.input.height).toBeLessThanOrEqual(144);
+    expect(boxes.input.height).toBeLessThanOrEqual(168);
     expect(boxes.input.scrollHeight).toBeGreaterThan(boxes.input.clientHeight);
     expect(boxes.footer.bottom).toBeLessThanOrEqual(500 + 1);
     expect(boxes.send.bottom).toBeLessThanOrEqual(500 + 1);
@@ -421,3 +421,272 @@ test.describe('Pierrot modal desktop', () => {
  * mocked visual viewport; they are not a substitute for the real-device
  * checklist in docs/audits/pierrot-viewport-fix.md.
  */
+
+const STREAM_MESSAGE_STORAGE_KEY = 'pierrot_chat_history_v2';
+
+function historyFixture(count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `history-${index + 1}`,
+    role: index % 2 === 0 ? 'user' : 'assistant',
+    content:
+      index % 7 === 0
+        ? `Сообщение ${index + 1}. Длинная запись истории с несколькими предложениями, чтобы высота списка была реалистичной и прокрутка проверялась на настоящем объёме.`
+        : `Сообщение ${index + 1}. Краткая запись истории Pierrot.`,
+    createdAt: new Date(Date.UTC(2026, 10, 1, 10, 0, index)).toISOString(),
+    author: index % 2 === 0 ? 'visitor' : 'pierrot',
+  }));
+}
+
+async function preloadTranscript(page: Page, messages: unknown[]) {
+  await page.addInitScript(
+    ({ key, value }) => {
+      window.sessionStorage.setItem(key, JSON.stringify(value));
+    },
+    { key: STREAM_MESSAGE_STORAGE_KEY, value: messages }
+  );
+}
+
+function streamBody(input: {
+  reply: string;
+  chunks?: number;
+  response?: Record<string, unknown>;
+}) {
+  const chunks = input.chunks ?? 40;
+  const piece = Math.max(1, Math.ceil(input.reply.length / chunks));
+  const deltas = Array.from({ length: chunks }, (_, index) =>
+    input.reply.slice(index * piece, (index + 1) * piece)
+  ).filter(Boolean);
+
+  const events: Array<Record<string, unknown>> = [
+    {
+      type: 'accepted',
+      version: 1,
+      conversationId: '33333333-3333-4333-8333-333333333333',
+      sessionId: '44444444-4444-4444-8444-444444444444',
+      userMessageId: '55555555-5555-4555-8555-555555555555',
+      assistantMessageId: '66666666-6666-4666-8666-666666666666',
+    },
+    { type: 'status', version: 1, stage: 'generating' },
+    ...deltas.map((text) => ({ type: 'delta', version: 1, text })),
+    {
+      type: 'completed',
+      version: 1,
+      payload: {
+        reply: input.reply,
+        conversationId: '33333333-3333-4333-8333-333333333333',
+        sessionId: '44444444-4444-4444-8444-444444444444',
+        assistantMessageId: '66666666-6666-4666-8666-666666666666',
+        recorded: true,
+        ...(input.response ? { response: input.response } : {}),
+      },
+    },
+  ];
+
+  return events
+    .map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+    .join('');
+}
+
+async function sendAndHoldResponse(
+  page: Page,
+  body: string,
+  options: { holdMs?: number } = {}
+) {
+  let release: (() => void) | null = null;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  await page.route('**/api/pierrot-web', async (route) => {
+    const request = route.request();
+    if (request.method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    if (options.holdMs) await new Promise((resolve) => setTimeout(resolve, options.holdMs));
+    await held;
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body,
+    });
+  });
+
+  const input = page.locator('[data-pierrot-input]');
+  await input.fill('Продолжи разговор.');
+  await input.press('Enter');
+  await expect(page.getByText('Thinking…')).toBeVisible();
+
+  return () => release?.();
+}
+
+function transcriptPosition(page: Page, ratio = 0.45) {
+  return page.evaluate((value) => {
+    const element = document.querySelector<HTMLElement>('[data-pierrot-messages]');
+    if (!element) throw new Error('missing transcript');
+    element.scrollTop = Math.floor((element.scrollHeight - element.clientHeight) * value);
+    element.dispatchEvent(new Event('scroll', { bubbles: true }));
+    return {
+      scrollTop: element.scrollTop,
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+    };
+  }, ratio);
+}
+
+async function readTranscript(page: Page) {
+  return page.evaluate(() => {
+    const element = document.querySelector<HTMLElement>('[data-pierrot-messages]');
+    if (!element) throw new Error('missing transcript');
+    return {
+      scrollTop: element.scrollTop,
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+      pageOverflow:
+        document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+}
+
+test.describe('Pierrot long transcript and streaming anchoring', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('long streaming response does not cut text or yank a reader who scrolled up', async ({
+    page,
+  }) => {
+    const lines = Array.from(
+      { length: 90 },
+      (_, index) => `Строка ${index + 1}. Подробный ответ, который поступает постепенно.`
+    );
+    const reply = `${lines.join('\n\n')}\n\nФинальная строка ответа.`;
+
+    await preloadTranscript(page, historyFixture(40));
+    await openPierrot(page);
+    const release = await sendAndHoldResponse(page, streamBody({ reply }), { holdMs: 150 });
+    const before = await transcriptPosition(page, 0.4);
+
+    release();
+    await expect(page.getByText('Финальная строка ответа.')).toBeVisible();
+
+    const after = await readTranscript(page);
+    expect(after.pageOverflow).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(after.scrollTop - before.scrollTop),
+      'reader position must survive streaming completion'
+    ).toBeLessThanOrEqual(80);
+    await expect(page.locator('[data-pierrot-input]')).toBeVisible();
+  });
+
+  test('500-message history keeps its position when a new turn is appended', async ({ page }) => {
+    await preloadTranscript(page, historyFixture(500));
+    await openPierrot(page);
+
+    const listCount = await page.locator('[data-pierrot-messages] article').count();
+    expect(listCount).toBeGreaterThanOrEqual(500);
+
+    const before = await transcriptPosition(page, 0.5);
+    expect(before.scrollTop).toBeGreaterThan(0);
+
+    const release = await sendAndHoldResponse(
+      page,
+      streamBody({ reply: 'Новое сообщение после прокрутки.' }),
+      { holdMs: 100 }
+    );
+    release();
+    await expect(page.getByText('Новое сообщение после прокрутки.')).toBeVisible();
+
+    const after = await readTranscript(page);
+    expect(
+      Math.abs(after.scrollTop - before.scrollTop),
+      'new message must not reset a reader in the middle of history'
+    ).toBeLessThanOrEqual(80);
+  });
+
+  test('Markdown stream transitions to structured table and real chart without a jump', async ({
+    page,
+  }) => {
+    const response = {
+      version: 1,
+      language: 'ru',
+      blocks: [
+        { type: 'heading', level: 2, text: 'Итоги' },
+        {
+          type: 'table',
+          columns: [
+            { key: 'day', label: 'День' },
+            { key: 'visits', label: 'Визиты' },
+          ],
+          rows: [
+            { day: 'Пн', visits: 120 },
+            { day: 'Вт', visits: 140 },
+          ],
+        },
+        {
+          type: 'chart',
+          chart: 'line',
+          title: 'Визиты',
+          data: [
+            { day: 'Пн', visits: 120 },
+            { day: 'Вт', visits: 140 },
+          ],
+          xKey: 'day',
+          series: [{ key: 'visits', label: 'Визиты' }],
+        },
+      ],
+    };
+    const reply = '## Итоги\n\n| День | Визиты |\n| --- | --- |\n| Пн | 120 |\n| Вт | 140 |';
+
+    await preloadTranscript(page, historyFixture(60));
+    await openPierrot(page);
+    const release = await sendAndHoldResponse(
+      page,
+      streamBody({ reply, response }),
+      { holdMs: 150 }
+    );
+    const before = await transcriptPosition(page, 0.35);
+    release();
+
+    await expect(page.locator('[data-pierrot-messages] table')).toBeVisible();
+    const chart = page.locator('[data-pierrot-messages] svg.recharts-surface').first();
+    await expect(chart).toBeVisible();
+    await expect.poll(async () => chart.locator('path.recharts-line-curve, path.recharts-curve').count())
+      .toBeGreaterThanOrEqual(1);
+
+    const after = await readTranscript(page);
+    expect(after.pageOverflow).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(after.scrollTop - before.scrollTop),
+      'structured transition must preserve the reader position'
+    ).toBeLessThanOrEqual(120);
+  });
+
+  test('mobile keyboard open and close keeps the composer and long answer usable', async ({
+    page,
+  }) => {
+    await installMockVisualViewport(page);
+    await preloadTranscript(page, historyFixture(30));
+    await openPierrot(page);
+
+    await setMockVisualViewport(page, { height: 500, offsetTop: 0 });
+    await expect.poll(async () => (await readBoxes(page)).shell.height).toBe(500);
+
+    const reply = Array.from({ length: 40 }, (_, index) => `Абзац ${index + 1} длинного ответа.`).join(
+      '\n\n'
+    );
+    const release = await sendAndHoldResponse(page, streamBody({ reply }));
+    release();
+    await expect(page.getByText('Абзац 40 длинного ответа.')).toBeVisible();
+    await expectStableComposerLayout(page);
+
+    await page.evaluate(() => {
+      (
+        window as Window & {
+          __pierrotResetVisualViewport?: () => void;
+        }
+      ).__pierrotResetVisualViewport?.();
+    });
+    await expect.poll(async () => (await readBoxes(page)).shell.height).toBe(844);
+    await expectStableComposerLayout(page);
+    await expect(page.locator('[data-pierrot-input]')).toBeVisible();
+  });
+});

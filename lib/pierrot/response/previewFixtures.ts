@@ -91,6 +91,88 @@ export const RESPONSE_PREVIEW_CASES: ResponsePreviewCase[] = [
     ]),
   },
   {
+    id: 'bar',
+    label: '3b · Bar chart',
+    note: 'Categorical values with real axis ticks and bars.',
+    fallback:
+      '## Источники трафика\n\n- Direct: 420\n- Search: 260\n- Social: 140',
+    response: response([
+      { type: 'heading', level: 1, text: 'Источники трафика' },
+      {
+        type: 'chart',
+        chart: 'bar',
+        title: 'Визиты по источникам',
+        description: 'Сравнение категорий за один и тот же период.',
+        data: [
+          { source: 'Direct', visits: 420 },
+          { source: 'Search', visits: 260 },
+          { source: 'Social', visits: 140 },
+        ],
+        xKey: 'source',
+        series: [{ key: 'visits', label: 'Визиты', color: '#A5764F' }],
+        unit: 'визиты',
+      },
+    ]),
+  },
+  {
+    id: 'pie',
+    label: '3c · Pie chart',
+    note: 'A composition with one slice per category.',
+    fallback: '## Доли публикаций\n\n- Эссе: 45\n- Заметки: 30\n- Интервью: 25',
+    response: response([
+      { type: 'heading', level: 1, text: 'Доли публикаций' },
+      {
+        type: 'chart',
+        chart: 'pie',
+        title: 'Состав архива',
+        description: 'Доли категорий в выборке, не динамика во времени.',
+        data: [
+          { category: 'Эссе', count: 45 },
+          { category: 'Заметки', count: 30 },
+          { category: 'Интервью', count: 25 },
+        ],
+        xKey: 'category',
+        series: [{ key: 'count', label: 'Публикации' }],
+        unit: 'публикации',
+      },
+    ]),
+  },
+  {
+    id: 'mixed',
+    label: '3d · Mixed text, table and chart',
+    note: 'A normal analytical answer keeps prose, a table and a real chart together.',
+    fallback:
+      '## Неделя\n\nПоказатели выросли умеренно.\n\n| День | Визиты |\n| --- | --- |\n| Пн | 120 |\n| Вт | 140 |\n\nГрафик повторяет значения таблицы.',
+    response: response([
+      { type: 'heading', level: 1, text: 'Неделя' },
+      { type: 'text', markdown: 'Показатели выросли умеренно. Таблица и график используют одни и те же значения.' },
+      {
+        type: 'table',
+        columns: [
+          { key: 'day', label: 'День' },
+          { key: 'visits', label: 'Визиты', align: 'right' },
+        ],
+        rows: [
+          { day: 'Пн', visits: 120 },
+          { day: 'Вт', visits: 140 },
+        ],
+      },
+      {
+        type: 'chart',
+        chart: 'line',
+        title: 'Визиты по дням',
+        data: [
+          { day: 'Пн', visits: 120 },
+          { day: 'Вт', visits: 140 },
+        ],
+        xKey: 'day',
+        series: [{ key: 'visits', label: 'Визиты', color: '#2F2B26' }],
+        unit: 'визиты',
+      },
+      { type: 'text', markdown: 'График повторяет значения таблицы.' },
+    ]),
+  },
+  {
     id: 'timeline',
     label: '4 · Project history',
     note: 'A sourced timeline instead of a paragraph of dates.',

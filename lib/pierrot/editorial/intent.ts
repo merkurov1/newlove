@@ -505,13 +505,23 @@ export function detectEditorialIntent(input: DetectEditorialIntentInput): Editor
     /(?:книг|рукопис|manuscript|book|глав|chapter|текст)/i.test(text);
   const identityLookup = IDENTITY_MARKER.test(text) && !sceneSearch;
 
+  const explicitChapterMarker = /\bглава\b|\bchapter\b|глав[ауеы]/i.test(text);
+  const explicitAnchor =
+    manuscriptMarker ||
+    projectMarker ||
+    explicitChapterMarker ||
+    sceneSearch ||
+    linkEpisode ||
+    episodeNumber !== null ||
+    EPISODE_MARKER.test(text);
+
   const hasManuscriptAnchor =
     manuscriptAnchor ||
     Boolean(activeDocument) ||
     activeProject ||
     sceneSearch ||
     linkEpisode ||
-    /\bглава\b|\bchapter\b|глав[ауеы]/i.test(text);
+    explicitChapterMarker;
 
   if (!hasManuscriptAnchor && !followUp && !projectMarker) return null;
 
@@ -736,6 +746,7 @@ export function detectEditorialIntent(input: DetectEditorialIntentInput): Editor
     projectRequested: projectMarker || operation.startsWith('project.') || Boolean(activeProject),
     explicitDocument,
     explicitProject,
+    explicitAnchor,
     followUp,
     chapterNumber: singleChapter,
     chapterNumbers: chapterList,

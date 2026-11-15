@@ -445,55 +445,72 @@ export function buildWebsiteResponse(
       }),
     ]);
 
+    const periodUnavailable = period.available !== true;
+    const periodValue = (value: number) => (periodUnavailable ? null : value);
+    const periodUnavailableReason = periodUnavailable
+      ? ru
+        ? 'Архив Bluesky недоступен; ноль не подставляется.'
+        : 'The Bluesky archive is unavailable; zero is not substituted.'
+      : undefined;
+
     const periodMetrics: PierrotMetricItem[] = [
       {
         label: ru ? 'Постов опубликовано' : 'Posts published',
-        value: period.totals.posts,
+        value: periodValue(period.totals.posts),
         unit: 'count',
         period: period.label,
         source: 'Bluesky archive',
         confidence: 'measured',
-        interpretation: ru
-          ? 'Посты, созданные в выбранном периоде.'
-          : 'Posts created inside the selected period.',
+        interpretation: periodUnavailable
+          ? periodUnavailableReason
+          : ru
+            ? 'Посты, созданные в выбранном периоде.'
+            : 'Posts created inside the selected period.',
+        ...(periodUnavailableReason ? { unavailableReason: periodUnavailableReason } : {}),
       },
       {
         label: ru ? 'Лайки на этих постах' : 'Likes on those posts',
-        value: period.totals.likes,
+        value: periodValue(period.totals.likes),
         unit: 'count',
         period: period.label,
         source: 'Bluesky archive',
         confidence: 'estimated',
-        interpretation: period.limitation,
+        interpretation: periodUnavailable ? periodUnavailableReason : period.limitation,
+        ...(periodUnavailableReason ? { unavailableReason: periodUnavailableReason } : {}),
       },
       {
         label: ru ? 'Репосты' : 'Reposts',
-        value: period.totals.reposts,
+        value: periodValue(period.totals.reposts),
         unit: 'count',
         period: period.label,
         source: 'Bluesky archive',
         confidence: 'estimated',
-        interpretation: period.limitation,
+        interpretation: periodUnavailable ? periodUnavailableReason : period.limitation,
+        ...(periodUnavailableReason ? { unavailableReason: periodUnavailableReason } : {}),
       },
       {
         label: ru ? 'Ответы' : 'Replies',
-        value: period.totals.replies,
+        value: periodValue(period.totals.replies),
         unit: 'count',
         period: period.label,
         source: 'Bluesky archive',
         confidence: 'estimated',
-        interpretation: period.limitation,
+        interpretation: periodUnavailable ? periodUnavailableReason : period.limitation,
+        ...(periodUnavailableReason ? { unavailableReason: periodUnavailableReason } : {}),
       },
       {
         label: ru ? 'Взаимодействия' : 'Engagement',
-        value: period.totals.engagement,
+        value: periodValue(period.totals.engagement),
         unit: 'count',
         period: period.label,
         source: 'Bluesky archive',
         confidence: 'calculated',
-        interpretation: ru
-          ? 'Расчёт: лайки + репосты + ответы + цитаты. Не охват.'
-          : 'Calculated: likes + reposts + replies + quotes. Not reach.',
+        interpretation: periodUnavailable
+          ? periodUnavailableReason
+          : ru
+            ? 'Расчёт: лайки + репосты + ответы + цитаты. Не охват. Текущие счётчики постов периода, не события периода.'
+            : 'Calculated: likes + reposts + replies + quotes. Not reach. Current counters on posts in the period, not period events.',
+        ...(periodUnavailableReason ? { unavailableReason: periodUnavailableReason } : {}),
       },
     ];
 

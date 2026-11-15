@@ -31,6 +31,29 @@ export function getProjectStatusSummary(project: PierrotProjectSnapshot): Projec
     project.artifacts.length
   );
 
+  const unavailableSources = Object.entries(project.sourceStatus || {})
+    .filter(([, status]) => status?.state === 'unavailable')
+    .map(([source]) => source);
+
+  const sourceCount = Object.keys(project.sourceStatus || {}).length;
+  if (unavailableSources.length > 0 && unavailableSources.length === sourceCount) {
+    return {
+      label: 'Данные источников недоступны',
+      explanation: `Не удалось прочитать ни один источник проекта (${unavailableSources.join(
+        ', '
+      )}). Это ошибка чтения, а не пустой проект; неполные данные не выдаются за полную картину.`,
+    };
+  }
+
+  if (!hasProjectData && unavailableSources.length > 0) {
+    return {
+      label: 'Данные недоступны',
+      explanation: `Не удалось прочитать источники проекта (${unavailableSources.join(
+        ', '
+      )}). Это ошибка чтения, а не пустой проект.`,
+    };
+  }
+
   if (!hasProjectData) {
     return {
       label: 'Недостаточно данных',

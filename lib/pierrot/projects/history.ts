@@ -311,6 +311,18 @@ export async function buildProjectChatContext(input: {
           .map((item) => `${item.title} (${item.artifactType})`)
           .join('; ')}`
       : '',
+    (() => {
+      const states = Object.entries(project.sourceStatus || {}).filter(
+        ([, status]) => status && status.state !== 'success'
+      );
+      if (states.length === 0) return '';
+      return `PROJECT SOURCE STATUS: ${states
+        .map(
+          ([source, status]) =>
+            `${source}=${status?.state}${status?.error ? ` (${status.error})` : ''}`
+        )
+        .join('; ')}. A partial or unavailable source is not complete and is not empty.`;
+    })(),
     `Linked project conversations: ${Math.max(linkedConversationIds.length, 1)}. The canonical chat is shown below; older task conversations remain searchable and are never merged into this transcript.`,
     '',
     'PERMANENT PROJECT CHAT HISTORY (most recent messages of the canonical conversation):',

@@ -129,6 +129,56 @@ jest.mock('@/lib/pierrot/memory/store', () => ({
   updateMemoryRecord: jest.fn(),
 }));
 
+jest.mock('@/lib/pierrot/projects/store', () => {
+  const actual = jest.requireActual('@/lib/pierrot/projects/store') as Record<string, unknown>;
+
+  return {
+    ...actual,
+    getPierrotProjectForConversation: jest.fn(async () => null),
+    getPierrotProjectSnapshot: jest.fn(async () => null),
+    getPierrotProject: jest.fn(async () => null),
+  };
+});
+
+jest.mock('@/lib/pierrot/projects/conversation', () => {
+  const actual = jest.requireActual('@/lib/pierrot/projects/conversation') as Record<
+    string,
+    unknown
+  >;
+
+  return { ...actual, ensureProjectConversation: jest.fn(async () => null) };
+});
+
+jest.mock('@/lib/pierrot/projects/resolver', () => {
+  const actual = jest.requireActual('@/lib/pierrot/projects/resolver') as Record<string, unknown>;
+
+  return {
+    ...actual,
+    resolvePierrotProject: jest.fn(async () => ({ project: null, ambiguous: false })),
+    resolveExactProject: jest.fn(async () => ({ project: null, ambiguous: false })),
+  };
+});
+
+jest.mock('@/lib/pierrot/history/store', () => {
+  const actual = jest.requireActual('@/lib/pierrot/history/store') as Record<string, unknown>;
+
+  return { ...actual, resolveHistoryScope: jest.fn(async () => null) };
+});
+
+jest.mock('@/lib/pierrot/context/retrieval', () => {
+  const actual = jest.requireActual('@/lib/pierrot/context/retrieval') as Record<string, unknown>;
+
+  return {
+    ...actual,
+    runContextQuery: jest.fn(),
+    resolveContextProject: jest.fn(async () => null),
+  };
+});
+
+jest.mock('@/lib/pierrot/editorial/operations', () => ({
+  runEditorialOperation: jest.fn(),
+}));
+
 jest.mock('@/lib/pierrot/memory/context', () => ({
   loadLatestMemoryListRecords: jest.fn(async () => []),
   loadPendingMemoryDelete: jest.fn(async () => null),
@@ -240,6 +290,25 @@ const memoryStore = jest.requireMock('@/lib/pierrot/memory/store') as {
   restoreMemoryRecord: jest.Mock;
   searchMemory: jest.Mock;
   updateMemoryRecord: jest.Mock;
+};
+const projectStore = jest.requireMock('@/lib/pierrot/projects/store') as {
+  getPierrotProjectForConversation: jest.Mock;
+  getPierrotProjectSnapshot: jest.Mock;
+  getPierrotProject: jest.Mock;
+};
+const projectResolver = jest.requireMock('@/lib/pierrot/projects/resolver') as {
+  resolvePierrotProject: jest.Mock;
+  resolveExactProject: jest.Mock;
+};
+const historyStore = jest.requireMock('@/lib/pierrot/history/store') as {
+  resolveHistoryScope: jest.Mock;
+};
+const contextRetrieval = jest.requireMock('@/lib/pierrot/context/retrieval') as {
+  runContextQuery: jest.Mock;
+  resolveContextProject: jest.Mock;
+};
+const editorialOperations = jest.requireMock('@/lib/pierrot/editorial/operations') as {
+  runEditorialOperation: jest.Mock;
 };
 const memoryContext = jest.requireMock('@/lib/pierrot/memory/context') as {
   loadLatestMemoryListRecords: jest.Mock;
@@ -389,6 +458,22 @@ beforeEach(() => {
   documentLookup.findBrainDocumentByTitle.mockResolvedValue(null);
   documentLookup.loadBrainDocumentChunks.mockReset();
   documentLookup.loadBrainDocumentChunks.mockResolvedValue([]);
+  projectStore.getPierrotProjectForConversation.mockReset();
+  projectStore.getPierrotProjectForConversation.mockResolvedValue(null);
+  projectStore.getPierrotProjectSnapshot.mockReset();
+  projectStore.getPierrotProjectSnapshot.mockResolvedValue(null);
+  projectStore.getPierrotProject.mockReset();
+  projectStore.getPierrotProject.mockResolvedValue(null);
+  projectResolver.resolvePierrotProject.mockReset();
+  projectResolver.resolvePierrotProject.mockResolvedValue({ project: null, ambiguous: false });
+  projectResolver.resolveExactProject.mockReset();
+  projectResolver.resolveExactProject.mockResolvedValue({ project: null, ambiguous: false });
+  historyStore.resolveHistoryScope.mockReset();
+  historyStore.resolveHistoryScope.mockResolvedValue(null);
+  contextRetrieval.runContextQuery.mockReset();
+  contextRetrieval.resolveContextProject.mockReset();
+  contextRetrieval.resolveContextProject.mockResolvedValue(null);
+  editorialOperations.runEditorialOperation.mockReset();
   memoryStore.buildMemoryContext.mockReset();
   memoryStore.buildMemoryContext.mockResolvedValue(null);
   memoryStore.createMemoryRecord.mockReset();
@@ -3879,5 +3964,168 @@ describe('Pierrot identity attribution', () => {
       type: 'visitor',
       userId: null,
     });
+  });
+});
+
+describe('POST /api/pierrot-web routing inside an active UNFRAMED chat', () => {
+  const unframedProject = {
+    id: 'project-unframed',
+    ownerUserId: '11111111-1111-4111-8111-111111111111',
+    slug: 'unframed',
+    name: 'UNFRAMED',
+    description: 'Book and series.',
+    objective: 'Develop the book.',
+    status: 'active' as const,
+    priority: 0,
+    ownerRating: null,
+    ownerRatingUpdatedAt: null,
+    conversationId,
+    projectBrief: 'UNFRAMED book and episodes.',
+    briefRevision: 1,
+    lastActivityAt: '2026-11-11T10:00:00.000Z',
+    createdAt: '2026-10-01T10:00:00.000Z',
+    updatedAt: '2026-11-11T10:00:00.000Z',
+  };
+
+  function contextResult(plan: unknown) {
+    return {
+      plan,
+      hits: [],
+      documents: [],
+      timeline: [],
+      daily: null,
+      projectState: null,
+      ambiguities: [],
+      notes: [],
+      gaps: [],
+      sources: {
+        projects: { state: 'success', count: 1 },
+        conversations: { state: 'success', count: 1 },
+        messages: { state: 'empty', count: 0 },
+        memory: { state: 'empty', count: 0 },
+        brain: { state: 'empty', count: 0 },
+        graph: { state: 'empty', count: 0 },
+        project_events: { state: 'empty', count: 0 },
+        artifacts: { state: 'empty', count: 0 },
+        entities: { state: 'empty', count: 0 },
+      },
+      counts: {
+        messages: 0,
+        conversations: 0,
+        projects: 1,
+        tasks: 0,
+        decisions: 0,
+        documents: 0,
+        projectEvents: 0,
+        entities: 0,
+      },
+      widenedFromProject: false,
+    };
+  }
+
+  beforeEach(() => {
+    projectStore.getPierrotProjectForConversation.mockResolvedValue(unframedProject);
+    contextRetrieval.runContextQuery.mockImplementation(async ({ plan }: { plan: unknown }) =>
+      contextResult(plan)
+    );
+  });
+
+  it.each([
+    'Как прошёл мой день?',
+    'Изучи историю наших диалогов за день',
+    'Что мы обсуждали вчера?',
+    'Найди в наших разговорах решение по конкретному вопросу.',
+    'Покажи график активности за неделю.',
+  ])('selects the Context Engine handler, not editorial overview: %s', async (message) => {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+
+    const response = await POST(makeRequest(validBody({ mode: 'unframed', message })));
+    const json = (await response.json()) as {
+      context_status?: string;
+      context_intent?: string;
+      editorial?: unknown;
+      reply?: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(contextRetrieval.runContextQuery).toHaveBeenCalledTimes(1);
+    expect(editorialOperations.runEditorialOperation).not.toHaveBeenCalled();
+    expect(json.context_status).toBe('completed');
+    expect(json.context_intent).toEqual(expect.any(String));
+    expect(json.editorial).toBeUndefined();
+  });
+
+  it('still selects the editorial handler for an explicit chapter request', async () => {
+    asMock(serverAuth.getCurrentUser).mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      role: 'ADMIN',
+      profile: { role: 'ADMIN' },
+    });
+    editorialOperations.runEditorialOperation.mockResolvedValueOnce({
+      status: 'ok',
+      markdown: 'Глава 14 загружена из рукописи.',
+      markdownFallback: 'Глава 14 загружена из рукописи.',
+      diagnostic: {
+        operation: 'manuscript.chapter',
+        resolvedIntent: 'manuscript.chapter',
+        retrievalStrategy: 'chapter',
+        requestedSources: ['manuscript'],
+        selectedSources: ['manuscript'],
+        returnedChunkIds: [],
+        chunkCount: 0,
+        coverage: null,
+        truncated: false,
+        fallbackReason: null,
+        errors: [],
+        durationMs: 1,
+        finishReason: null,
+      },
+      contextPatch: { activeTask: 'manuscript.chapter', activeChapterNumber: 14 },
+      generatedArtifact: null,
+    });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Прочитай главу 14' }))
+    );
+    const json = (await response.json()) as { editorial?: { operation?: string } };
+
+    expect(response.status).toBe(200);
+    expect(editorialOperations.runEditorialOperation).toHaveBeenCalledTimes(1);
+    expect(contextRetrieval.runContextQuery).not.toHaveBeenCalled();
+    expect(json.editorial).toMatchObject({ operation: 'manuscript.chapter' });
+  });
+});
+
+describe('POST /api/pierrot-web persistence failure reporting', () => {
+  it('does not report recorded=true when the assistant transcript write failed', async () => {
+    asMock(pierrotStore.appendPierrotMessage).mockImplementation(async (...args: unknown[]) => {
+      const input = args[1] as { role: string; content: string };
+      if (input.role === 'assistant') throw new Error('write failed');
+      return { sequence: 1, content: input.content, inserted: true };
+    });
+
+    const response = await POST(makeRequest(validBody({ message: 'A normal question.' })));
+    const json = (await response.json()) as {
+      reply?: string;
+      recorded?: boolean;
+      persistenceError?: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.reply).toBeTruthy();
+    expect(json.recorded).toBe(false);
+    expect(json.persistenceError).toBe('transcript_not_stored');
+  });
+
+  it('reports recorded=true only when both transcript writes succeeded', async () => {
+    const response = await POST(makeRequest(validBody({ message: 'A normal question.' })));
+    const json = (await response.json()) as { recorded?: boolean };
+
+    expect(response.status).toBe(200);
+    expect(json.recorded).toBe(true);
   });
 });

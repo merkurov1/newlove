@@ -543,19 +543,19 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
             <dl className="pw-analytics-facts">
               <div>
                 <dt>Подписчики (всего)</dt>
-                <dd>{formatNumber(blueskyDashboard?.profile.followers)}</dd>
+                <dd>{blueskyDashboard?.available ? formatNumber(blueskyDashboard?.profile.followers) : '—'}</dd>
               </div>
               <div>
                 <dt>Постов за период</dt>
-                <dd>{formatNumber(blueskyDashboard?.period.totals.posts)}</dd>
+                <dd>{blueskyDashboard?.period.available ? formatNumber(blueskyDashboard?.period.totals.posts) : '—'}</dd>
               </div>
               <div>
                 <dt>Лайки на постах периода</dt>
-                <dd>{formatNumber(blueskyDashboard?.period.totals.likes)}</dd>
+                <dd>{blueskyDashboard?.period.available ? formatNumber(blueskyDashboard?.period.totals.likes) : '—'}</dd>
               </div>
               <div>
                 <dt>Архив постов</dt>
-                <dd>{formatNumber(blueskyDashboard?.archive.total)}</dd>
+                <dd>{blueskyDashboard?.available ? formatNumber(blueskyDashboard?.archive.total) : '—'}</dd>
               </div>
             </dl>
             {blueskyPeriodPosts.length ? (
@@ -582,9 +582,11 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
               </ul>
             ) : (
               <p className="pw-analytics-hint">
-                {blueskyDashboard?.period.coverageComplete
-                  ? 'За выбранный период собственных публикаций нет. Это подтверждённый ноль для доступного архива.'
-                  : 'Постов за период не найдено, но архив покрывает не весь период — отсутствие не подтверждено.'}
+                {blueskyDashboard?.period.available !== true
+                  ? 'Архив Bluesky недоступен или ещё не прочитан. Ноль не подставляется: отсутствие данных не равно отсутствию публикаций.'
+                  : blueskyDashboard?.period.coverageComplete
+                    ? 'За выбранный период собственных публикаций нет. Это подтверждённый ноль для доступного архива.'
+                    : 'Постов за период не найдено, но архив покрывает не весь период — отсутствие не подтверждено.'}
               </p>
             )}
             <p className="pw-analytics-hint">

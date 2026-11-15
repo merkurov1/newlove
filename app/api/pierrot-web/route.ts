@@ -285,7 +285,7 @@ import {
   editorialContinuationInstruction,
 } from '@/lib/pierrot/editorial/response';
 import type { EditorialDiagnostic } from '@/lib/pierrot/editorial/types';
-import { planPierrotTurn } from '@/lib/pierrot/orchestrator';
+import { planPierrotTurn, resolveEditorialOwnership } from '@/lib/pierrot/orchestrator';
 import { formatContextReport } from '@/lib/pierrot/context/report';
 import { buildContextResponse } from '@/lib/pierrot/context/presentation';
 import { resolveContextProject, runContextQuery } from '@/lib/pierrot/context/retrieval';
@@ -874,6 +874,14 @@ export async function POST(req: Request) {
       history: normalizedHistory,
       ownerMode,
     });
+    // The deterministic turn plan is computed once, before the editorial
+    // branch. Editorial mode checks it so an active UNFRAMED chat cannot
+    // swallow a global history or personal-context request. The same plan is
+    // reused by the Context Engine below; there is no second detector pass.
+    const turnPlan = planPierrotTurn({
+      message: trimmedMessage,
+      executionPlan,
+    });
     const queryPlan: PierrotQueryPlan = executionPlan.queryPlan;
     const previousUserMessage = [...normalizedHistory]
       .reverse()
@@ -1192,6 +1200,15 @@ export async function POST(req: Request) {
               project.latestReview?.summary
                 ? `Latest project review summary: ${project.latestReview.summary}`
                 : null,
+              (() => {
+                const states = Object.entries(project.sourceStatus || {}).filter(
+                  ([, status]) => status && status.state !== 'success'
+                );
+                if (states.length === 0) return null;
+                return `PROJECT SOURCE STATUS: ${states
+                  .map(([source, status]) => `${source}=${status?.state}${status?.error ? ` (${status.error})` : ''}`)
+                  .join('; ')}. Do not describe a partial or unavailable source as complete or empty.`;
+              })(),
               conversationContext,
             ]
               .filter(Boolean)
@@ -1292,6 +1309,10 @@ export async function POST(req: Request) {
       .join('\n\n');
 
     const assistantMessageId = createAssistantMessageId(conversationId, userMessageId);
+    // Set only when a transcript write we attempted actually failed. A
+    // successful model reply with a failed persistence must not be reported as
+    // `recorded: true`.
+    let transcriptWriteFailed = false;
     const startedAt = Date.now();
     const correlationId =
       req.headers.get('x-request-id') ||
@@ -1361,6 +1382,7 @@ export async function POST(req: Request) {
           },
         });
       } catch (error) {
+        transcriptWriteFailed = true;
         persistenceFailure(error, 'user_message');
       }
     }
@@ -1403,6 +1425,7 @@ export async function POST(req: Request) {
               },
             });
           } catch (error) {
+            transcriptWriteFailed = true;
             persistenceFailure(error, 'human_presence_reply');
           }
         };
@@ -1418,7 +1441,10 @@ export async function POST(req: Request) {
             sessionId,
             userMessageId,
             assistantMessageId: humanAssistantId,
-            recorded: canStoreTranscript,
+            recorded: canStoreTranscript && !transcriptWriteFailed,
+            ...(canStoreTranscript && transcriptWriteFailed
+              ? { persistenceError: 'transcript_not_stored' }
+              : {}),
             humanUnavailable: true,
           });
         }
@@ -1448,7 +1474,10 @@ export async function POST(req: Request) {
             sessionId,
             userMessageId,
             assistantMessageId: humanAssistantId,
-            recorded: canStoreTranscript,
+            recorded: canStoreTranscript && !transcriptWriteFailed,
+            ...(canStoreTranscript && transcriptWriteFailed
+              ? { persistenceError: 'transcript_not_stored' }
+              : {}),
             humanUnavailable: true,
           });
         }
@@ -1573,7 +1602,10 @@ export async function POST(req: Request) {
             sessionId,
             userMessageId,
             assistantMessageId: humanAssistantId,
-            recorded: canStoreTranscript,
+            recorded: canStoreTranscript && !transcriptWriteFailed,
+            ...(canStoreTranscript && transcriptWriteFailed
+              ? { persistenceError: 'transcript_not_stored' }
+              : {}),
             ...(notificationFailed ? {} : { human: humanState, humanToken: access.token }),
           });
         }
@@ -1668,10 +1700,12 @@ export async function POST(req: Request) {
               },
             });
           } catch (error) {
+            transcriptWriteFailed = true;
             persistenceFailure(error, 'owner_tool_reply');
           }
         }
 
+        const recorded = canStoreTranscript && !transcriptWriteFailed;
         const payload = {
           reply: finalText,
           admin: true,
@@ -1680,7 +1714,8 @@ export async function POST(req: Request) {
           ...historyResponseFields,
           userMessageId,
           assistantMessageId,
-          recorded: canStoreTranscript,
+          recorded,
+          ...(canStoreTranscript && !recorded ? { persistenceError: 'transcript_not_stored' } : {}),
           ...extra,
           ...(extra.source_status ? { sourceStatus: extra.source_status } : {}),
         };
@@ -1758,7 +1793,16 @@ export async function POST(req: Request) {
           conversationProjectSlug: editorialProject?.slug || null,
         });
 
-        if (editorialIntent) {
+        // An active UNFRAMED project makes editorial context *available*, not
+        // mandatory. Global history/personal-context turns keep the Context
+        // Engine even inside the project chat. Editorial still owns explicit
+        // manuscript, chapter, episode and UNFRAMED-project requests.
+        const editorialOwnership = resolveEditorialOwnership({
+          editorialIntent,
+          contextQuery: turnPlan.contextQuery,
+        });
+
+        if (editorialIntent && editorialOwnership === 'editorial') {
           const editorialStartedAt = Date.now();
           const result = await runEditorialOperation({
             ownerUserId: ownerIdentityUserId,
@@ -3545,10 +3589,6 @@ export async function POST(req: Request) {
       // achievements, entity distinction and provenance searches. This branch
       // runs before the narrower memory/search tools so a history question is
       // never answered from durable memory alone.
-      const turnPlan = planPierrotTurn({
-        message: trimmedMessage,
-        executionPlan,
-      });
       const contextQuery = turnPlan.contextQuery;
 
       if (contextQuery && memoryStore && isPierrotUserId(ownerIdentityUserId)) {
@@ -3599,6 +3639,7 @@ export async function POST(req: Request) {
               name: item.name,
               types: item.candidates.map((candidate) => candidate.entityType),
             })),
+            context_sources: contextResult.sources,
             context_gaps: contextResult.gaps.slice(0, 8),
             context_widened: contextResult.widenedFromProject,
           });
@@ -6380,6 +6421,7 @@ export async function POST(req: Request) {
                 });
               }
             } catch (error) {
+              transcriptWriteFailed = true;
               persistenceFailure(error, 'assistant_partial');
             }
           }
@@ -6425,7 +6467,17 @@ export async function POST(req: Request) {
               code: failure.code,
               requestId: correlationId,
               ...(interrupted ? { interrupted: true } : {}),
-              ...(partialReply ? { partialReply, recorded: Boolean(pierrotStore && canStoreTranscript) } : {}),
+              ...(partialReply
+                ? {
+                    partialReply,
+                    recorded: Boolean(
+                      pierrotStore && canStoreTranscript && !transcriptWriteFailed
+                    ),
+                    ...(partialReply && transcriptWriteFailed
+                      ? { persistenceError: 'partial_reply_not_stored' }
+                      : {}),
+                  }
+                : {}),
               ...(generationPolicy
                 ? {
                     generation: {
@@ -6664,6 +6716,7 @@ export async function POST(req: Request) {
             },
           });
         } catch (error) {
+          transcriptWriteFailed = true;
           persistenceFailure(error, 'assistant_message');
         }
       }
@@ -6760,7 +6813,10 @@ export async function POST(req: Request) {
         ...historyResponseFields,
         userMessageId,
         assistantMessageId,
-        recorded: canStoreTranscript,
+        recorded: canStoreTranscript && !transcriptWriteFailed,
+        ...(canStoreTranscript && transcriptWriteFailed
+          ? { persistenceError: 'transcript_not_stored' }
+          : {}),
         ...responseExtras,
       });
     };

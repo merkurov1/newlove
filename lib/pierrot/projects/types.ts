@@ -1,5 +1,26 @@
 export type PierrotProjectStatus = 'active' | 'paused' | 'archived';
 
+/** Uniform result state for every project snapshot source. */
+export type PierrotSourceState = 'success' | 'empty' | 'unavailable' | 'partial';
+
+export type PierrotSourceStatus = {
+  state: PierrotSourceState;
+  /** Machine-readable reason when the source failed. */
+  error?: string | null;
+  /** True when a bounded read returned the maximum number of rows. */
+  truncated?: boolean;
+  /** Number of rows actually used from this source. */
+  count?: number;
+};
+
+export type PierrotProjectSnapshotSource =
+  | 'decisions'
+  | 'tasks'
+  | 'conversations'
+  | 'artifacts'
+  | 'knowledge'
+  | 'reviews';
+
 export type PierrotProject = {
   id: string;
   ownerUserId: string;
@@ -56,4 +77,10 @@ export type PierrotProjectSnapshot = PierrotProject & {
   /** Explicit failure of the project→document relation query. */
   knowledgeUnavailable?: string | null;
   artifacts: Array<{ id: string; title: string; artifactType: string; updatedAt: string }>;
+  /**
+   * Per-source read state. A failed read is `unavailable`, never `empty`; a
+   * bounded read that reached its limit is `partial`. Consumers that do not
+   * know about this field keep their existing array-based contract.
+   */
+  sourceStatus?: Partial<Record<PierrotProjectSnapshotSource, PierrotSourceStatus>>;
 };

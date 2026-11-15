@@ -60,6 +60,34 @@ export default function PierrotChart({
               ))}
             </ul>
           )}
+          {block.chart === 'pie' && block.series[0] && (
+            <ul className="mb-2 flex flex-wrap gap-x-4 gap-y-1" aria-label="Pie legend">
+              {block.data.map((point, index) => {
+                const label = point[block.xKey];
+                const value = point[block.series[0].key];
+                return (
+                  <li
+                    key={`${String(label)}-${index}`}
+                    className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[#8A8175]"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{
+                        backgroundColor:
+                          block.series[0].color ||
+                          DEFAULT_COLORS[index % DEFAULT_COLORS.length],
+                      }}
+                    />
+                    <span>{label === null || label === undefined ? '—' : String(label)}</span>
+                    {value !== null && value !== undefined && (
+                      <span className="text-[#A49A8C]">{String(value)}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
           <div className="h-[clamp(190px,30vw,280px)] w-full min-w-0">
             <PierrotChartImpl block={block} />
           </div>

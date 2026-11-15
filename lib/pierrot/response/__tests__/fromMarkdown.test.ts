@@ -78,6 +78,33 @@ describe('Markdown presentation adapter', () => {
     expect(parsePierrotResponse(response)).not.toBeNull();
   });
 
+  it('keeps an answer longer than one text block without losing the tail', () => {
+    const first = 'A'.repeat(12_000);
+    const second = 'B'.repeat(12_000);
+    const markdown = `${first}\n\n${second}`;
+    const response = buildPresentationResponseFromMarkdown(markdown);
+
+    expect(response).not.toBeNull();
+    expect(parsePierrotResponse(response)).not.toBeNull();
+    expect(response!.blocks.length).toBeGreaterThan(1);
+    expect(response!.blocks.every((block) => block.type === 'text')).toBe(true);
+    expect(JSON.stringify(response)).toContain('B'.repeat(100));
+  });
+
+  it('falls back to full text when a Markdown shape exceeds a schema limit', () => {
+    const oversizedHeading = `# ${'H'.repeat(500)}`;
+    const body = 'Answer body that must survive.';
+    const response = buildPresentationResponseFromMarkdown(`${oversizedHeading}\n\n${body}`);
+
+    expect(response).not.toBeNull();
+    expect(parsePierrotResponse(response)).not.toBeNull();
+    expect(response!.blocks).toHaveLength(1);
+    expect(response!.blocks[0]?.type).toBe('text');
+    if (response!.blocks[0]?.type === 'text') {
+      expect(response!.blocks[0].markdown).toContain('Answer body that must survive.');
+    }
+  });
+
   it('returns null for empty content and preserves unsupported numeric prose as prose', () => {
     expect(buildPresentationResponseFromMarkdown('')).toBeNull();
     const response = buildPresentationResponseFromMarkdown(

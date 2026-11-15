@@ -344,6 +344,8 @@ export type BlueskyPeriodActivity = {
   end: string;
   label: string;
   timezone: string;
+  /** False when the archive could not be read; totals are not confirmed zero. */
+  available: boolean;
   /** Posts whose own creation date falls inside the selected period. */
   posts: BlueskyPostMetrics[];
   totals: {
@@ -358,6 +360,12 @@ export type BlueskyPeriodActivity = {
   /** True when the stored archive covers the whole selected period. */
   coverageComplete: boolean;
   coverageEndsAt: string | null;
+  /**
+   * Engagement counters are the latest observations on posts published in the
+   * period, not events that happened during the period. There is no historical
+   * counter snapshot at the period boundaries, so an increment is not claimed.
+   */
+  interactionsAreCurrentSnapshot: true;
   limitation: string;
 };
 

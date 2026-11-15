@@ -1,3 +1,4 @@
+import { parsePierrotResponse } from './schema';
 import {
   PIERROT_RESPONSE_VERSION,
   type PierrotChecklistBlock,
@@ -340,6 +341,33 @@ function detectLanguage(markdown: string): 'ru' | 'en' {
   return cyrillic > latin ? 'ru' : 'en';
 }
 
+/**
+ * Contract-safe text fallback. The schema caps one text block at 20 000
+ * characters, so a longer answer is split at line boundaries. This is the
+ * last line of defence: the reader still sees every character of the answer.
+ */
+function textFallbackBlocks(source: string): PierrotContentBlock[] {
+  const maxLength = 20_000;
+  if (source.length <= maxLength) return [{ type: 'text', markdown: source }];
+
+  const chunks: string[] = [];
+  let remaining = source;
+
+  while (remaining.length > 0 && chunks.length < MAX_BLOCKS) {
+    if (remaining.length <= maxLength) {
+      chunks.push(remaining);
+      break;
+    }
+    const window = remaining.slice(0, maxLength);
+    const boundary = Math.max(window.lastIndexOf('\n\n'), window.lastIndexOf('\n'));
+    const cut = boundary > maxLength / 2 ? boundary : maxLength;
+    chunks.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+
+  return chunks.filter(Boolean).map((markdown) => ({ type: 'text', markdown }));
+}
+
 export function buildPresentationResponseFromMarkdown(
   markdown: string,
   options: { language?: 'ru' | 'en' } = {}
@@ -350,18 +378,32 @@ export function buildPresentationResponseFromMarkdown(
   let blocks = mergeAdjacentText(markdownBlocks(source));
 
   if (blocks.length > MAX_BLOCKS) {
-    // Preserve the whole answer rather than dropping blocks. The plain text
-    // block still gets the same typography as the rest of the answer.
-    blocks = mergeAdjacentText([{ type: 'text', markdown: source }]);
+    // Too many blocks for the closed contract. Keep the full answer as
+    // contract-safe text chunks instead of silently dropping blocks.
+    blocks = textFallbackBlocks(source);
   }
 
   if (blocks.length === 0) return null;
 
-  return {
+  const candidate: PierrotResponse = {
     version: PIERROT_RESPONSE_VERSION,
     language: options.language || detectLanguage(source),
     blocks: blocks.slice(0, MAX_BLOCKS),
   };
+
+  // The adapter must never hand a malformed block to the registry. If a
+  // Markdown shape is outside the contract (for example an over-long heading
+  // or a giant code fence), fall back to text chunks that preserve the whole
+  // original answer.
+  const validated = parsePierrotResponse(candidate);
+  if (validated) return validated;
+
+  const fallback: PierrotResponse = {
+    version: PIERROT_RESPONSE_VERSION,
+    language: candidate.language,
+    blocks: textFallbackBlocks(source).slice(0, MAX_BLOCKS),
+  };
+  return parsePierrotResponse(fallback) ?? null;
 }
 
 export function isMarkdownOnlyResponse(value: unknown): boolean {

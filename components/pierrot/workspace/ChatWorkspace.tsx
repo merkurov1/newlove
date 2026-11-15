@@ -178,6 +178,7 @@ export default function ChatWorkspace({
   };
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const threadRef = useRef<HTMLDivElement | null>(null);
   const inspectorScrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -363,6 +364,22 @@ export default function ChatWorkspace({
       element.scrollTop = element.scrollHeight;
     }
   }, [messages, loading, streamStage]);
+
+  // The structured renderer can change height after streaming (lazy chart,
+  // table reflow, font swap). Keep the bottom pinned only while the reader is
+  // already there; a reader who scrolled up keeps their anchor.
+  useEffect(() => {
+    const element = scrollRef.current;
+    const thread = threadRef.current;
+    if (!element || !thread || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(() => {
+      if (!atBottomRef.current) return;
+      element.scrollTop = element.scrollHeight;
+    });
+    observer.observe(thread);
+    return () => observer.disconnect();
+  }, [messages.length, loading]);
 
   function onTranscriptScroll() {
     const element = scrollRef.current;
@@ -1057,7 +1074,7 @@ export default function ChatWorkspace({
               sessionId={episodeId || conversation?.currentSessionId || null}
             />
           ) : (
-            <div className="pw-chat-thread">
+            <div className="pw-chat-thread" ref={threadRef}>
               {hasOlder && (
                 <div className="pw-history-more">
                   <button

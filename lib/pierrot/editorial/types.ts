@@ -141,6 +141,12 @@ export type EditorialIntent = {
   projectRequested: boolean;
   explicitDocument: boolean;
   explicitProject: boolean;
+  /**
+   * True only when the message itself names editorial material (book,
+   * manuscript, chapter, episode, UNFRAMED project). An active project alone is
+   * context, not an explicit instruction to enter editorial mode.
+   */
+  explicitAnchor: boolean;
   followUp: boolean;
   chapterNumber: number | null;
   chapterNumbers: number[];

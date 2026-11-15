@@ -221,11 +221,20 @@ function formatProjectHistory(result: ContextQueryResult, language: 'ru' | 'en')
   );
 
   if (days.length === 0) {
+    const messagesState = result.sources?.messages?.state;
     lines.push(
       '',
-      ru
-        ? 'Сохранённых событий по этому запросу не найдено. Я не буду реконструировать историю по догадкам.'
-        : 'No saved events matched this request. I will not reconstruct history from guesses.'
+      messagesState === 'unavailable'
+        ? ru
+          ? 'Поиск по истории не завершился: источник сообщений недоступен. Отсутствие событий не подтверждено, и я не буду реконструировать историю по догадкам.'
+          : 'The history search did not complete: the message source is unavailable. Absence of events is not confirmed, and I will not reconstruct history from guesses.'
+        : messagesState === 'partial'
+          ? ru
+            ? 'Поиск по истории завершился частично: часть сообщений недоступна или превышает безопасный лимит. Пустая история не подтверждена.'
+            : 'The history search was partial: some messages are unavailable or exceed the safe limit. An empty history is not confirmed.'
+          : ru
+            ? 'Сохранённых событий по этому запросу не найдено. Я не буду реконструировать историю по догадкам.'
+            : 'No saved events matched this request. I will not reconstruct history from guesses.'
     );
   }
 
@@ -274,11 +283,20 @@ function formatConversationSearch(result: ContextQueryResult, language: 'ru' | '
   );
 
   if (hits.length === 0) {
+    const messagesState = result.sources?.messages?.state;
     lines.push(
       '',
-      ru
-        ? 'Совпадений не найдено. Я не буду подменять их общим ответом.'
-        : 'No matches found. I will not substitute a generic answer.'
+      messagesState === 'unavailable'
+        ? ru
+          ? 'Поиск не завершился: источник сообщений недоступен. Отсутствие совпадений не подтверждено; я не буду подменять поиск общим ответом.'
+          : 'The search did not complete: the message source is unavailable. No matches are not confirmed, and I will not substitute a generic answer.'
+        : messagesState === 'partial'
+          ? ru
+            ? 'Поиск завершился частично. Отсутствие совпадений во всей истории не подтверждено.'
+            : 'The search was partial. No matches across the whole history is not confirmed.'
+          : ru
+            ? 'Совпадений не найдено. Я не буду подменять их общим ответом.'
+            : 'No matches found. I will not substitute a generic answer.'
     );
   }
 
@@ -346,9 +364,13 @@ function formatDocumentSearch(result: ContextQueryResult, language: 'ru' | 'en')
   const lines: string[] = [];
   if (result.documents.length === 0) {
     lines.push(
-      ru
-        ? 'Документ в Brain не найден по названию или содержимому. Я не буду пересказывать его по заголовку.'
-        : 'No Brain document matched by title or content. I will not summarise it from the title.'
+      result.sources?.brain?.state === 'unavailable'
+        ? ru
+          ? 'Brain недоступен: документ не найден именно потому, что источник не прочитан. Это не доказательство отсутствия документа.'
+          : 'Brain is unavailable: the document was not found because the source could not be read. This is not proof that it does not exist.'
+        : ru
+          ? 'Документ в Brain не найден по названию или содержимому. Я не буду пересказывать его по заголовку.'
+          : 'No Brain document matched by title or content. I will not summarise it from the title.'
     );
   } else {
     for (const document of result.documents.slice(0, 5)) {

@@ -251,6 +251,34 @@ describe('Bluesky metric semantics', () => {
     expect(snapshot.posts.find((post) => post.uri === 'at://other')?.authorship).toBe('other');
   });
 
+  it('does not present an unavailable archive as a confirmed zero', () => {
+    const snapshot = blueskySnapshot([], [], connection, period);
+
+    expect(snapshot.available).toBe(false);
+    expect(snapshot.period.available).toBe(false);
+    expect(snapshot.period.totals.posts).toBe(0);
+    expect(snapshot.totals.posts.value).toBeNull();
+    expect(snapshot.totals.likes.value).toBeNull();
+    expect(snapshot.limitations.join(' ')).toContain('не подключён или нет сохранённых данных');
+  });
+
+  it('marks period engagement as a current snapshot, never a period increment', () => {
+    const snapshot = blueskySnapshot(archiveRows(), [], connection, period);
+
+    expect(snapshot.period.interactionsAreCurrentSnapshot).toBe(true);
+    expect(snapshot.period.limitation).not.toContain('прирост');
+    expect(snapshot.period.limitation).toContain('могли накопиться');
+  });
+
+  it('uses the latest observed counters when no boundary snapshots exist', () => {
+    const snapshot = blueskySnapshot(archiveRows(), [], connection, period);
+    const inside = snapshot.posts.find((post) => post.uri === 'at://inside');
+
+    expect(inside?.likes).toBe(12);
+    expect(inside?.observedAt).toBe('2026-11-10T03:15:00.000Z');
+    expect(snapshot.period.totals.likes).toBe(12);
+  });
+
   it('counts posts in the comparison window independently', () => {
     const previous = [
       row({

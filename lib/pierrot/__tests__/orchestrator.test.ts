@@ -2,7 +2,9 @@
 
 import { describe, expect, it } from '@jest/globals';
 
-import { planPierrotTurn } from '../orchestrator';
+import { detectEditorialIntent } from '../editorial/intent';
+import { emptyEditorialContext } from '../editorial/types';
+import { planPierrotTurn, resolveEditorialOwnership } from '../orchestrator';
 
 const now = new Date('2026-11-11T12:00:00.000Z');
 const options = { now, timezone: 'Europe/Moscow', timezoneKnown: true };
@@ -43,5 +45,56 @@ describe('turn orchestration', () => {
 
     expect(plan.route).toBe('context');
     expect(plan.visualization).toBe(true);
+  });
+});
+
+describe('editorial ownership inside an active UNFRAMED chat', () => {
+  const activeContext = {
+    ...emptyEditorialContext(),
+    projectId: 'project-1',
+    projectSlug: 'unframed',
+    projectName: 'UNFRAMED',
+    documentId: 'doc_unframed_manuscript',
+    documentTitle: 'UNFRAMED',
+  };
+
+  it.each([
+    'Как прошёл мой день?',
+    'Изучи историю наших диалогов за день',
+    'Что мы обсуждали вчера?',
+    'Найди в наших разговорах решение по конкретному вопросу.',
+    'Покажи график активности за неделю.',
+  ])('keeps the global request with the Context Engine: %s', (message) => {
+    const plan = planPierrotTurn({ message, ...options });
+    const editorialIntent = detectEditorialIntent({
+      message,
+      activeContext,
+      conversationProjectSlug: 'unframed',
+    });
+
+    expect(plan.route).toBe('context');
+    expect(
+      resolveEditorialOwnership({ editorialIntent, contextQuery: plan.contextQuery })
+    ).not.toBe('editorial');
+  });
+
+  it('keeps an explicit manuscript or chapter request in editorial mode', () => {
+    for (const message of [
+      'Прочитай главу 14',
+      'Найди в книге сцены про Лондон',
+      'Что сейчас происходит с проектом UNFRAMED?',
+    ]) {
+      const plan = planPierrotTurn({ message, ...options });
+      const editorialIntent = detectEditorialIntent({
+        message,
+        activeContext,
+        conversationProjectSlug: 'unframed',
+      });
+
+      expect(editorialIntent).not.toBeNull();
+      expect(
+        resolveEditorialOwnership({ editorialIntent, contextQuery: plan.contextQuery })
+      ).toBe('editorial');
+    }
   });
 });

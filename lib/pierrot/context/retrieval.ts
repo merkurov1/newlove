@@ -33,6 +33,7 @@ import type {
   ContextPeriod,
   ContextQueryPlan,
   ContextQueryResult,
+  ContextSourceStatus,
   EvidenceClass,
 } from './types';
 
@@ -136,42 +137,80 @@ function chunk<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
+function errorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as { message?: unknown }).message || 'source_unavailable');
+  }
+  return error instanceof Error ? error.message : 'source_unavailable';
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return /57014|timeout|timed out|statement timeout|canceling statement/i.test(
+    errorMessage(error)
+  );
+}
+
+function sourceStatus(
+  count: number,
+  options: { error?: unknown; partial?: boolean; truncated?: boolean } = {}
+): ContextSourceStatus {
+  if (options.error) {
+    return {
+      // Some rows may have arrived before the failure: that is a partial
+      // read, not an unavailable source and not an empty result.
+      state: count > 0 ? 'partial' : 'unavailable',
+      error: errorMessage(options.error),
+      truncated: options.truncated,
+      count,
+    };
+  }
+  if (count === 0) return { state: 'empty', count: 0 };
+  if (options.partial || options.truncated) {
+    return { state: 'partial', count, truncated: true };
+  }
+  return { state: 'success', count };
+}
+
 async function loadOwnerProjects(
   store: SupabaseClient,
   ownerUserId: string
-): Promise<PierrotProject[]> {
+): Promise<{ items: PierrotProject[]; status: ContextSourceStatus }> {
   const { data, error } = await store
     .from('pierrot_projects')
     .select('*')
     .eq('owner_user_id', ownerUserId)
     .limit(1000);
 
-  if (error || !Array.isArray(data)) return [];
-  return data.map((row) => mapProject(row as Record<string, unknown>));
+  if (error) return { items: [], status: sourceStatus(0, { error }) };
+  const rows = Array.isArray(data) ? data : [];
+  return {
+    items: rows.map((row) => mapProject(row as Record<string, unknown>)),
+    status: sourceStatus(rows.length, { truncated: rows.length >= 1000 }),
+  };
 }
 
 async function loadOwnerConversations(
   store: SupabaseClient,
   ownerUserId: string
-): Promise<ConversationRow[]> {
+): Promise<{ items: ConversationRow[]; status: ContextSourceStatus }> {
   const { data, error } = await store
     .from('pierrot_conversations')
     .select('id,title,started_at,updated_at,last_message_at,user_id,identity_type')
     .eq('user_id', ownerUserId)
     .limit(2000);
 
-  if (error || !Array.isArray(data)) return [];
+  if (error) return { items: [], status: sourceStatus(0, { error }) };
+  const rows = (Array.isArray(data) ? data : []).filter((row) => {
+    const item = row as Record<string, unknown>;
+    return (
+      typeof item.id === 'string' &&
+      item.identity_type !== 'visitor' &&
+      item.identity_type !== 'unknown'
+    );
+  });
 
-  return data
-    .filter((row) => {
-      const item = row as Record<string, unknown>;
-      return (
-        typeof item.id === 'string' &&
-        item.identity_type !== 'visitor' &&
-        item.identity_type !== 'unknown'
-      );
-    })
-    .map((row) => {
+  return {
+    items: rows.map((row) => {
       const item = row as Record<string, unknown>;
       return {
         id: String(item.id),
@@ -180,7 +219,9 @@ async function loadOwnerConversations(
         updatedAt: iso(text(item.updated_at)),
         lastMessageAt: iso(text(item.last_message_at)),
       };
-    });
+    }),
+    status: sourceStatus(rows.length, { truncated: rows.length >= 2000 }),
+  };
 }
 
 async function loadProjectConversationMap(
@@ -223,11 +264,14 @@ async function loadMessages(input: {
   period: ContextPeriod | null;
   limit: number;
   gaps: string[];
-}): Promise<MessageRow[]> {
-  if (input.conversationIds.length === 0) return [];
+}): Promise<{ items: MessageRow[]; status: ContextSourceStatus }> {
+  if (input.conversationIds.length === 0) {
+    return { items: [], status: sourceStatus(0) };
+  }
 
   const patterns = messagePatterns(input.terms);
   const results: MessageRow[] = [];
+  let readError: unknown = null;
 
   for (const batch of chunk(input.conversationIds, 80)) {
     for (const withIngested of [true, false]) {
@@ -251,6 +295,7 @@ async function loadMessages(input: {
 
       if (error) {
         if (withIngested && isMissingRelation(error)) continue;
+        readError = error;
         break;
       }
 
@@ -278,10 +323,11 @@ async function loadMessages(input: {
       }
       break;
     }
+    if (readError) break;
   }
 
   const seen = new Set<string>();
-  return results
+  const items = results
     .filter((message) => {
       if (seen.has(message.id)) return false;
       seen.add(message.id);
@@ -294,6 +340,22 @@ async function loadMessages(input: {
       return left.messageIndex - right.messageIndex;
     })
     .slice(-input.limit);
+
+  if (readError) {
+    input.gaps.push(
+      isTimeoutError(readError)
+        ? 'Поиск по сообщениям не завершился из-за timeout. Это не означает, что история пуста или совпадений нет.'
+        : 'Сообщения не удалось прочитать (ошибка источника). Это не означает, что история пуста или совпадений нет.'
+    );
+  }
+
+  return {
+    items,
+    status: sourceStatus(items.length, {
+      error: readError,
+      truncated: !readError && items.length >= input.limit,
+    }),
+  };
 }
 
 function scoreMessage(message: MessageRow, terms: string[], phrase: string | null): number {
@@ -319,10 +381,11 @@ async function loadProjectEvents(
   projectId: string | null,
   period: ContextPeriod | null,
   gaps: string[]
-): Promise<ProjectEventInput[]> {
+): Promise<{ items: ProjectEventInput[]; status: ContextSourceStatus }> {
   const pageSize = 500;
   const maxRows = 2000;
   const rows: Array<Record<string, unknown>> = [];
+  let readError: unknown = null;
 
   for (let offset = 0; offset < maxRows; offset += pageSize) {
     let query = store
@@ -337,6 +400,7 @@ async function loadProjectEvents(
 
     const { data, error } = await query;
     if (error) {
+      readError = error;
       if (isMissingRelation(error)) {
         gaps.push('Таблица событий проекта ещё не применена; таймлайн собран из сообщений, задач и материалов.');
       } else {
@@ -356,7 +420,7 @@ async function loadProjectEvents(
     );
   }
 
-  return rows
+  const items = rows
     .map((item): ProjectEventInput | null => {
       if (typeof item.id !== 'string' || typeof item.occurred_at !== 'string') return null;
       return {
@@ -377,6 +441,14 @@ async function loadProjectEvents(
       };
     })
     .filter((event): event is ProjectEventInput => Boolean(event));
+
+  return {
+    items,
+    status: sourceStatus(items.length, {
+      error: readError,
+      truncated: rows.length >= maxRows,
+    }),
+  };
 }
 
 async function loadArtifacts(
@@ -384,7 +456,7 @@ async function loadArtifacts(
   ownerUserId: string,
   projectId: string | null,
   gaps: string[]
-): Promise<ProjectArtifactInput[]> {
+): Promise<{ items: ProjectArtifactInput[]; status: ContextSourceStatus }> {
   let query = store
     .from('pierrot_project_artifacts')
     .select('*')
@@ -397,10 +469,10 @@ async function loadArtifacts(
 
   if (error) {
     if (!isMissingRelation(error)) gaps.push('Материалы проекта временно недоступны.');
-    return [];
+    return { items: [], status: sourceStatus(0, { error }) };
   }
 
-  return (Array.isArray(data) ? data : [])
+  const items = (Array.isArray(data) ? data : [])
     .map((row): ProjectArtifactInput | null => {
       const item = row as Record<string, unknown>;
       if (typeof item.id !== 'string') return null;
@@ -414,6 +486,14 @@ async function loadArtifacts(
       };
     })
     .filter((artifact): artifact is ProjectArtifactInput => Boolean(artifact));
+
+  return {
+    items,
+    status: sourceStatus(items.length, {
+      partial: items.length < (Array.isArray(data) ? data.length : 0),
+      truncated: Array.isArray(data) && data.length >= 200,
+    }),
+  };
 }
 
 async function loadMemories(input: {
@@ -423,7 +503,8 @@ async function loadMemories(input: {
   plan: ContextQueryPlan;
   embeddingClient?: MemoryEmbeddingClient | null;
   gaps: string[];
-}): Promise<PierrotMemoryRecord[]> {
+}): Promise<{ items: PierrotMemoryRecord[]; status: ContextSourceStatus }> {
+  let readError: unknown = null;
   const historyMode =
     input.plan.intent === 'PROJECT_HISTORY' ||
     input.plan.intent === 'CONVERSATION_SEARCH' ||
@@ -441,7 +522,8 @@ async function loadMemories(input: {
         input.ownerUserId,
         input.project.id
       );
-    } catch {
+    } catch (error) {
+      readError = readError || error;
       input.gaps.push('Связи решений с проектом временно недоступны.');
     }
   }
@@ -471,7 +553,8 @@ async function loadMemories(input: {
           : {}),
       });
       for (const record of result.records) byId.set(record.id, record);
-    } catch {
+    } catch (error) {
+      readError = readError || error;
       input.gaps.push('Семантический поиск по памяти недоступен; использованы сохранённые записи.');
     }
   }
@@ -492,7 +575,8 @@ async function loadMemories(input: {
         limit: 300,
       });
       for (const record of recent) byId.set(record.id, record);
-    } catch {
+    } catch (error) {
+      readError = readError || error;
       input.gaps.push('Память временно недоступна.');
     }
   }
@@ -513,16 +597,23 @@ async function loadMemories(input: {
   };
 
   const records = Array.from(byId.values()).filter(currentRecord);
-  if (!input.project) return records;
+  const items = !input.project
+    ? records
+    : (() => {
+        const linked = new Set(linkedIds);
+        return records.filter(
+          (record) =>
+            linked.has(record.id) ||
+            (record.project &&
+              (projectMatchesRef(input.project as PierrotProject, record.project) ||
+                record.project === input.project?.name))
+        );
+      })();
 
-  const linked = new Set(linkedIds);
-  return records.filter(
-    (record) =>
-      linked.has(record.id) ||
-      (record.project &&
-        (projectMatchesRef(input.project as PierrotProject, record.project) ||
-          record.project === input.project?.name))
-  );
+  return {
+    items,
+    status: sourceStatus(items.length, { error: readError }),
+  };
 }
 
 async function loadBrain(input: {
@@ -532,22 +623,32 @@ async function loadBrain(input: {
   plan: ContextQueryPlan;
   terms: string[];
   gaps: string[];
-}): Promise<{ hits: ContextHit[]; documents: ContextDocumentBlock[] }> {
-  if (input.terms.length === 0) return { hits: [], documents: [] };
+}): Promise<{
+  hits: ContextHit[];
+  documents: ContextDocumentBlock[];
+  status: ContextSourceStatus;
+}> {
+  if (input.terms.length === 0) {
+    return { hits: [], documents: [], status: sourceStatus(0) };
+  }
 
   const patterns = input.terms.slice(0, 8).map((term) => `title.ilike.%${escapeLike(term)}%`);
   let documents: Array<Record<string, unknown>> = [];
+  let readError: unknown = null;
 
   const titleResult = await input.store
     .from('knowledge_documents')
-    .select('*')
+    .select('id,title,source_type,chunk_count,updated_at,created_at')
     .eq('access_class', 'owner')
     .or(patterns.join(','))
     .limit(24);
 
   if (titleResult.error) {
-    if (!isMissingRelation(titleResult.error)) input.gaps.push('Brain временно недоступен.');
-    return { hits: [], documents: [] };
+    if (!isMissingRelation(titleResult.error)) {
+      input.gaps.push('Brain временно недоступен.');
+      readError = titleResult.error;
+    }
+    return { hits: [], documents: [], status: sourceStatus(0, { error: readError }) };
   }
   documents = Array.isArray(titleResult.data)
     ? (titleResult.data as Array<Record<string, unknown>>)
@@ -565,8 +666,11 @@ async function loadBrain(input: {
       .limit(160);
 
     if (chunkResult.error) {
-      if (!isMissingRelation(chunkResult.error)) input.gaps.push('Тексты Brain временно недоступны.');
-      return { hits: [], documents: [] };
+      if (!isMissingRelation(chunkResult.error)) {
+        input.gaps.push('Тексты Brain временно недоступны.');
+        readError = chunkResult.error;
+      }
+      return { hits: [], documents: [], status: sourceStatus(0, { error: readError }) };
     }
 
     const rows = Array.isArray(chunkResult.data)
@@ -583,15 +687,18 @@ async function loadBrain(input: {
     if (documentIds.length > 0) {
       const docResult = await input.store
         .from('knowledge_documents')
-        .select('*')
+        .select('id,title,source_type,chunk_count,updated_at,created_at')
         .in('id', documentIds);
+      if (docResult.error) readError = readError || docResult.error;
       documents = Array.isArray(docResult.data)
         ? (docResult.data as Array<Record<string, unknown>>)
         : [];
     }
   }
 
-  if (documents.length === 0) return { hits: [], documents: [] };
+  if (documents.length === 0) {
+    return { hits: [], documents: [], status: sourceStatus(0, { error: readError }) };
+  }
 
   const documentIds = documents.map((document) => text(document.id)).filter(Boolean);
   let linkedDocumentIds = new Set<string>();
@@ -634,6 +741,36 @@ async function loadBrain(input: {
   const hits: ContextHit[] = [];
   const blocks: ContextDocumentBlock[] = [];
 
+  // One bounded query for every matched document instead of one query per
+  // document. The old N+1 pattern was the main source of avoidable latency
+  // when several Brain documents matched a title.
+  const chunkLimitPerDocument = 80;
+  const documentIdsForChunks = documents
+    .map((document) => text(document.id))
+    .filter((value) => Boolean(value));
+  const chunksByDocument = new Map<string, Array<Record<string, unknown>>>();
+  if (documentIdsForChunks.length > 0) {
+    const chunkResult = await input.store
+      .from('knowledge_chunks')
+      .select('id,document_id,content,heading,section_path,section_index')
+      .in('document_id', documentIdsForChunks)
+      .order('section_index', { ascending: true })
+      .limit(chunkLimitPerDocument * documentIdsForChunks.length);
+    if (chunkResult.error && !isMissingRelation(chunkResult.error)) {
+      input.gaps.push('Тексты Brain временно недоступны.');
+      readError = readError || chunkResult.error;
+    }
+    for (const row of Array.isArray(chunkResult.data)
+      ? (chunkResult.data as Array<Record<string, unknown>>)
+      : []) {
+      const documentId = text(row.document_id);
+      if (!documentId) continue;
+      const bucket = chunksByDocument.get(documentId) || [];
+      if (bucket.length < chunkLimitPerDocument) bucket.push(row);
+      chunksByDocument.set(documentId, bucket);
+    }
+  }
+
   for (const document of documents) {
     const documentId = text(document.id);
     if (!documentId) continue;
@@ -645,16 +782,7 @@ async function loadBrain(input: {
       continue;
     }
 
-    const { data: chunks } = await input.store
-      .from('knowledge_chunks')
-      .select('id,document_id,content,heading,section_path,section_index')
-      .eq('document_id', documentId)
-      .order('section_index', { ascending: true })
-      .limit(80);
-
-    const chunkRows = Array.isArray(chunks)
-      ? (chunks as Array<Record<string, unknown>>)
-      : [];
+    const chunkRows = chunksByDocument.get(documentId) || [];
     const title = text(document.title) || 'Документ Brain';
     const headings = Array.from(
       new Set(
@@ -670,7 +798,7 @@ async function loadBrain(input: {
       sourceType: text(document.source_type) || 'document',
       sectionCount: Number(document.chunk_count || chunkRows.length || 0),
       headings,
-      truncated: chunkRows.length >= 80,
+      truncated: chunkRows.length >= chunkLimitPerDocument,
     });
 
     for (const row of chunkRows.slice(0, 20)) {
@@ -714,15 +842,22 @@ async function loadBrain(input: {
     }
   }
 
-  return { hits, documents: blocks };
+  return {
+    hits,
+    documents: blocks,
+    status: sourceStatus(blocks.length, {
+      error: readError,
+      truncated: documents.length >= 24,
+    }),
+  };
 }
 
 async function loadGraphHits(input: {
   store: SupabaseClient;
   terms: string[];
   gaps: string[];
-}): Promise<ContextHit[]> {
-  if (input.terms.length === 0) return [];
+}): Promise<{ items: ContextHit[]; status: ContextSourceStatus }> {
+  if (input.terms.length === 0) return { items: [], status: sourceStatus(0) };
   const patterns = input.terms
     .slice(0, 5)
     .flatMap((term) => [
@@ -740,24 +875,48 @@ async function loadGraphHits(input: {
     if (!isMissingRelation(error)) {
       input.gaps.push('Граф знаний временно недоступен.');
     }
-    return [];
+    return { items: [], status: sourceStatus(0, { error }) };
+  }
+
+  const entityRows = Array.isArray(entities)
+    ? (entities as Array<Record<string, unknown>>)
+    : [];
+  const entityIds = entityRows
+    .map((row) => text(row.id))
+    .filter((value) => Boolean(value));
+
+  // Batch mentions. The previous one-query-per-entity loop was a second N+1
+  // pattern in the same retrieval path.
+  const mentionsByEntity = new Map<string, Array<Record<string, unknown>>>();
+  let mentionsError: unknown = null;
+  if (entityIds.length > 0) {
+    const mentionResult = await input.store
+      .from('brain_entity_mentions')
+      .select('entity_id,document_id,chunk_id,evidence,confidence,section_path')
+      .in('entity_id', entityIds)
+      .limit(8 * entityIds.length);
+    if (mentionResult.error && !isMissingRelation(mentionResult.error)) {
+      mentionsError = mentionResult.error;
+      input.gaps.push('Упоминания графа знаний временно недоступны.');
+    }
+    for (const row of Array.isArray(mentionResult.data)
+      ? (mentionResult.data as Array<Record<string, unknown>>)
+      : []) {
+      const entityId = text(row.entity_id);
+      if (!entityId) continue;
+      const bucket = mentionsByEntity.get(entityId) || [];
+      if (bucket.length < 8) bucket.push(row);
+      mentionsByEntity.set(entityId, bucket);
+    }
   }
 
   const hits: ContextHit[] = [];
-  for (const row of Array.isArray(entities) ? (entities as Array<Record<string, unknown>>) : []) {
+  for (const row of entityRows) {
     const entityId = text(row.id);
     const name = text(row.canonical_name);
     if (!entityId || !name) continue;
 
-    const { data: mentions } = await input.store
-      .from('brain_entity_mentions')
-      .select('document_id,chunk_id,evidence,confidence,section_path')
-      .eq('entity_id', entityId)
-      .limit(8);
-
-    const mentionRows = Array.isArray(mentions)
-      ? (mentions as Array<Record<string, unknown>>)
-      : [];
+    const mentionRows = mentionsByEntity.get(entityId) || [];
     if (mentionRows.length === 0) {
       hits.push({
         id: `graph:${entityId}`,
@@ -818,7 +977,13 @@ async function loadGraphHits(input: {
     }
   }
 
-  return hits;
+  return {
+    items: hits,
+    status: sourceStatus(entityRows.length, {
+      error: mentionsError,
+      truncated: entityRows.length >= 16,
+    }),
+  };
 }
 
 function findEntityAmbiguities(
@@ -891,24 +1056,47 @@ async function collect(input: {
   const { store, ownerUserId, plan, project } = input;
   const gaps: string[] = [];
   const notes: string[] = [];
-  const projects = await loadOwnerProjects(store, ownerUserId);
+  const projectsLoaded = await loadOwnerProjects(store, ownerUserId);
+  const projects = projectsLoaded.items;
+  if (projectsLoaded.status.state === 'unavailable') {
+    gaps.push('Проекты не удалось прочитать (ошибка источника). Это не означает, что проектов нет.');
+  }
 
-  let conversations = await loadOwnerConversations(store, ownerUserId);
+  const conversationsLoaded = await loadOwnerConversations(store, ownerUserId);
+  const sources = {
+    projects: projectsLoaded.status,
+    conversations: conversationsLoaded.status,
+  } as Record<keyof ContextQueryResult['sources'], ContextSourceStatus>;
+  if (conversationsLoaded.status.state === 'unavailable') {
+    gaps.push(
+      'Историю диалогов не удалось прочитать (ошибка источника). Это не означает, что история пуста.'
+    );
+  }
+  if (conversationsLoaded.status.state === 'partial') {
+    gaps.push('История диалогов прочитана не полностью; ранние диалоги могут отсутствовать.');
+  }
+
+  let conversations = conversationsLoaded.items;
   let conversationIds = conversations.map((conversation) => conversation.id);
 
   if (project) {
-    const linked = await listProjectConversationIds(store, ownerUserId, project.id).catch(
-      () => []
-    );
-    const projectConversationIds = new Set(
-      [project.conversationId, ...linked].filter(
-        (value): value is string => typeof value === 'string' && value.length > 0
-      )
-    );
-    conversationIds = Array.from(projectConversationIds);
-    conversations = conversations.filter((conversation) =>
-      projectConversationIds.has(conversation.id)
-    );
+    try {
+      const linked = await listProjectConversationIds(store, ownerUserId, project.id);
+      const projectConversationIds = new Set(
+        [project.conversationId, ...linked].filter(
+          (value): value is string => typeof value === 'string' && value.length > 0
+        )
+      );
+      conversationIds = Array.from(projectConversationIds);
+      conversations = conversations.filter((conversation) =>
+        projectConversationIds.has(conversation.id)
+      );
+    } catch (error) {
+      sources.conversations = sourceStatus(conversations.length, { error });
+      gaps.push(
+        'Связи диалогов с проектом недоступны; проектный поиск может быть неполным.'
+      );
+    }
   }
 
   const terms = searchTerms(plan);
@@ -920,7 +1108,7 @@ async function collect(input: {
         ? 240
         : 80;
 
-  const messages =
+  const messagesLoaded =
     conversationIds.length > 0
       ? await loadMessages({
           store,
@@ -930,7 +1118,9 @@ async function collect(input: {
           limit: messageLimit,
           gaps,
         })
-      : [];
+      : { items: [] as MessageRow[], status: sourceStatus(0) };
+  const messages = messagesLoaded.items;
+  sources.messages = messagesLoaded.status;
 
   const projectByConversation = await loadProjectConversationMap(
     store,
@@ -985,7 +1175,7 @@ async function collect(input: {
     })
     .filter((hit): hit is ContextHit => hit !== null);
 
-  const memoryRecords = await loadMemories({
+  const memoryLoaded = await loadMemories({
     store,
     ownerUserId,
     project,
@@ -993,6 +1183,8 @@ async function collect(input: {
     embeddingClient: input.embeddingClient,
     gaps,
   });
+  const memoryRecords = memoryLoaded.items;
+  sources.memory = memoryLoaded.status;
 
   const memoryHits: ContextHit[] = memoryRecords.map((record) => {
     const sourceType =
@@ -1036,15 +1228,19 @@ async function collect(input: {
     } satisfies ContextHit;
   });
 
-  const projectEventInputs = await loadProjectEvents(
+  const eventsLoaded = await loadProjectEvents(
     store,
     ownerUserId,
     project?.id || null,
     plan.intent === 'DAILY_SUMMARY' || plan.intent === 'ACHIEVEMENT_LOG' ? plan.period : null,
     gaps
   );
+  const projectEventInputs = eventsLoaded.items;
+  sources.project_events = eventsLoaded.status;
 
-  const artifacts = await loadArtifacts(store, ownerUserId, project?.id || null, gaps);
+  const artifactsLoaded = await loadArtifacts(store, ownerUserId, project?.id || null, gaps);
+  const artifacts = artifactsLoaded.items;
+  sources.artifacts = artifactsLoaded.status;
 
   const brain = await loadBrain({
     store,
@@ -1054,13 +1250,25 @@ async function collect(input: {
     terms,
     gaps,
   });
+  sources.brain = brain.status;
 
-  const graphHits = await loadGraphHits({ store, terms, gaps });
+  const graph = await loadGraphHits({ store, terms, gaps });
+  const graphHits = graph.items;
+  sources.graph = graph.status;
 
-  const entities = await listEntities(store, ownerUserId, { limit: 1000 });
+  let entities: PierrotEntity[] = [];
+  try {
+    entities = await listEntities(store, ownerUserId, { limit: 1000 });
+    sources.entities = sourceStatus(entities.length, { truncated: entities.length >= 1000 });
+  } catch (error) {
+    sources.entities = sourceStatus(0, { error });
+    gaps.push('Сущности проекта временно недоступны.');
+  }
   const ambiguities = findEntityAmbiguities(entities, plan, project);
   const relations = project
-    ? await listEntityRelations(store, ownerUserId, { projectId: project.id, limit: 500 })
+    ? await listEntityRelations(store, ownerUserId, { projectId: project.id, limit: 500 }).catch(
+        () => []
+      )
     : [];
 
   const timeline = sortTimeline([
@@ -1141,11 +1349,21 @@ async function collect(input: {
       'Часовой пояс владельца не настроен; границы дня рассчитаны в UTC и могут быть приблизительными.'
     );
   }
-  if (conversations.length === 0) {
-    gaps.push('Сохранённых диалогов владельца не найдено.');
+  if (conversations.length === 0 && sources.conversations.state === 'empty') {
+    gaps.push('Сохранённых диалогов владельца не найдено (источник прочитан успешно).');
   }
-  if (plan.period && messages.length === 0) {
+  if (plan.period && messages.length === 0 && sources.messages.state === 'empty') {
     gaps.push('За выбранный период сообщений не найдено. Это не означает отсутствия работы.');
+  }
+  if (sources.messages.state === 'unavailable') {
+    gaps.push(
+      'Историю сообщений прочитать не удалось. Отсутствие совпадений не подтверждено.'
+    );
+  }
+  if (sources.messages.state === 'partial') {
+    gaps.push(
+      'Сообщения прочитаны не полностью: часть истории недоступна или превышает безопасный лимит.'
+    );
   }
   if (messages.length >= messageLimit) {
     gaps.push(
@@ -1166,6 +1384,7 @@ async function collect(input: {
     ambiguities,
     notes,
     gaps: Array.from(new Set([...gaps, ...(daily?.gaps || [])])),
+    sources,
     counts: {
       messages: messages.length,
       conversations: new Set(messages.map((message) => message.conversationId)).size,
@@ -1244,7 +1463,7 @@ export async function resolveContextProject(
   ownerUserId: string,
   plan: ContextQueryPlan
 ): Promise<PierrotProject | null> {
-  const projects = await loadOwnerProjects(store, ownerUserId);
+  const projects = (await loadOwnerProjects(store, ownerUserId)).items;
   if (plan.projectHint) {
     const matches = projects.filter((project) => projectMatchesRef(project, plan.projectHint || ''));
     if (matches.length === 1) return matches[0];

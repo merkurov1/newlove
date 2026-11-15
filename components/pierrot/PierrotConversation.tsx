@@ -310,6 +310,7 @@ export function PierrotMessageList({
   const pathname = usePathname() || '/';
   const interfaceLanguage = useInterfaceLanguage();
   const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
   const shouldReduceMotion = usePrefersReducedMotion();
   const hasStreamingContent = messages.some(
@@ -337,6 +338,22 @@ export function PierrotMessageList({
     return () => window.cancelAnimationFrame(frame);
   }, [messages, isLoading]);
 
+  // Charts mount lazily and tables reflow after fonts settle. If (and only if)
+  // the reader is already at the bottom, keep the newest content visible
+  // without ever pulling a reader who scrolled up back down.
+  useEffect(() => {
+    const container = containerRef.current;
+    const content = contentRef.current;
+    if (!container || !content || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(() => {
+      if (!atBottomRef.current) return;
+      container.scrollTop = container.scrollHeight;
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [messages.length]);
+
   const handleAction = (action: PierrotChatAction) => {
     void runAction(action);
   };
@@ -362,7 +379,10 @@ export function PierrotMessageList({
         ${className}
       `}
     >
-      <div className="mx-auto flex min-h-full w-full min-w-0 max-w-3xl flex-col justify-end">
+      <div
+        ref={contentRef}
+        className="mx-auto flex min-h-full w-full min-w-0 max-w-3xl flex-col justify-end"
+      >
         {messages.length === 0 ? (
           <PierrotEmptyState />
         ) : (

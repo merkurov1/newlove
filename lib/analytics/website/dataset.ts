@@ -1070,7 +1070,9 @@ export function blueskySnapshot(
     metric({
       key,
       label,
-      value,
+      // A failed/empty archive must not become a numeric zero. The metric stays
+      // explicitly unavailable and the UI renders a dash.
+      value: available ? value : null,
       previous,
       unit: 'count',
       source: 'bluesky',
@@ -1184,6 +1186,7 @@ export function blueskySnapshot(
       end: period.end,
       label: period.label,
       timezone,
+      available,
       posts: periodPosts,
       totals: {
         posts: periodPosts.length,
@@ -1196,6 +1199,7 @@ export function blueskySnapshot(
       previousPosts: previousPeriodPosts.length,
       coverageComplete,
       coverageEndsAt: coverageTo,
+      interactionsAreCurrentSnapshot: true,
       limitation: coverageComplete
         ? 'Лайки, репосты и ответы — текущие наблюдаемые счётчики постов, опубликованных в периоде; они могли накопиться за всё время жизни поста. Прирост взаимодействий за период не рассчитывается.'
         : `Архив синхронизирован по ${coverageTo || 'неизвестную дату'}. Посты и взаимодействия после этой даты могут отсутствовать; данные за конец периода могут быть неполными. Прирост взаимодействий за период не рассчитывается.`,
