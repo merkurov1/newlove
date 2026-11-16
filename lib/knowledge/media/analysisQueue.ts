@@ -270,10 +270,14 @@ export async function processMediaAnalysisBatch(input: {
   store?: MediaAnalysisStore | null;
   runAnalysis?: typeof runMediaAnalysis;
 } = {}): Promise<MediaAnalysisBatchResult> {
-  if (!isGraphLlmConfigured()) throw new Error('media_analysis_not_configured');
+  const runAnalysis = input.runAnalysis || runMediaAnalysis;
+  // An injected runner (tests, batch orchestration) does not depend on the
+  // production provider configuration; only the real model path does.
+  if (!input.runAnalysis && !isGraphLlmConfigured()) {
+    throw new Error('media_analysis_not_configured');
+  }
 
   const store = input.store === undefined ? createMediaAnalysisStore() : input.store;
-  const runAnalysis = input.runAnalysis || runMediaAnalysis;
 
   if (!store) throw new Error('media_analysis_database_unavailable');
 
