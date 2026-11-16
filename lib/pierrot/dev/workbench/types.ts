@@ -257,6 +257,7 @@ export type DevWorkbenchAction =
   | 'pause_queue'
   | 'resume_queue'
   | 'create_batch'
+  | 'start_batch'
   | 'update_batch'
   | 'reorder_batch'
   | 'set_batch_dependency'

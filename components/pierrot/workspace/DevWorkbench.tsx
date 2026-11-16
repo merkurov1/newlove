@@ -519,7 +519,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                     Edit
                   </button>
                 )}
-                {task.status === 'ready' ? (
+                {task.status === 'ready' && (
                   <button
                     type="button"
                     className="pw-wb-button is-primary"
@@ -528,7 +528,8 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                   >
                     <ArrowDown size={14} /> В очередь
                   </button>
-                ) : (
+                )}
+                {['draft', 'ready', 'blocked'].includes(task.status) && (
                   <button
                     type="button"
                     className="pw-wb-button"
@@ -828,11 +829,31 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                 ))}
               </ol>
               <div className="pw-wb-actions">
-                {(['draft', 'active', 'paused', 'completed', 'archived'] as const).map((status) => (
+                {(batch.status === 'draft' || batch.status === 'paused') && (
+                  <button
+                    type="button"
+                    className="pw-wb-button is-primary"
+                    onClick={() => void runAction('start_batch', { batchId: batch.id })}
+                  >
+                    Start batch
+                  </button>
+                )}
+                {batch.status === 'active' && (
+                  <button
+                    type="button"
+                    className="pw-wb-button"
+                    onClick={() =>
+                      void runAction('update_batch', { batchId: batch.id, status: 'paused' })
+                    }
+                  >
+                    Pause
+                  </button>
+                )}
+                {(['completed', 'archived'] as const).map((status) => (
                   <button
                     key={status}
                     type="button"
-                    className={`pw-wb-button ${batch.status === status ? 'is-primary' : 'is-quiet'}`}
+                    className="pw-wb-button is-quiet"
                     onClick={() =>
                       void runAction('update_batch', { batchId: batch.id, status })
                     }

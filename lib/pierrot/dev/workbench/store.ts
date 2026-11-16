@@ -777,6 +777,177 @@ export async function createBatch(input: {
   return batches.find((batch) => batch.id === data.id) || null;
 }
 
+export type StartBatchResult = {
+  ok: boolean;
+  queued: number;
+  notReady: Array<{ id: string; title: string; status: string }>;
+  error?: string;
+};
+
+/**
+ * Explicitly start a batch: validate that every task is actionable, enqueue all
+ * ready tasks in batch order, then mark the batch active. Tasks already queued
+ * or in progress are left alone. Terminal tasks remain part of the history.
+ */
+export async function startBatch(userId: string, batchId: string): Promise<StartBatchResult> {
+  if (!isUuid(batchId)) {
+    return { ok: false, queued: 0, notReady: [], error: 'BATCH_NOT_FOUND' };
+  }
+
+  let batchQuery = store()
+    .from('pierrot_dev_batches')
+    .select('id,status')
+    .eq('id', batchId);
+  if (isUuid(userId)) batchQuery = batchQuery.eq('user_id', userId);
+  const { data: batch, error: batchReadError } = await batchQuery.maybeSingle();
+  if (batchReadError || !batch) {
+    return { ok: false, queued: 0, notReady: [], error: 'BATCH_NOT_FOUND' };
+  }
+  if (['completed', 'archived'].includes(String(batch.status))) {
+    return { ok: false, queued: 0, notReady: [], error: 'BATCH_CLOSED' };
+  }
+
+  const { data: items, error: itemError } = await store()
+    .from('pierrot_dev_batch_items')
+    .select('task_id,position')
+    .eq('batch_id', batchId)
+    .order('position', { ascending: true });
+  if (itemError || !Array.isArray(items) || items.length === 0) {
+    return { ok: false, queued: 0, notReady: [], error: 'BATCH_EMPTY' };
+  }
+
+  const taskIds = [...new Set(items.map((item) => String(item.task_id)))];
+  let taskQuery = store()
+    .from('pierrot_dev_prompts')
+    .select('id,title,status,queue_position')
+    .in('id', taskIds);
+  if (isUuid(userId)) taskQuery = taskQuery.eq('user_id', userId);
+  const { data: tasks, error: taskError } = await taskQuery;
+  if (taskError || !Array.isArray(tasks) || tasks.length !== taskIds.length) {
+    return { ok: false, queued: 0, notReady: [], error: 'BATCH_TASK_NOT_FOUND' };
+  }
+
+  const notReady = tasks
+    .filter((task) => ['draft', 'blocked'].includes(String(task.status)))
+    .map((task) => ({
+      id: String(task.id),
+      title: truncateText(task.title, 200) || 'Задача',
+      status: String(task.status),
+    }));
+  if (notReady.length > 0) {
+    return { ok: false, queued: 0, notReady, error: 'BATCH_NOT_READY' };
+  }
+
+  let position = await nextQueuePosition();
+  const queuedAt = new Date().toISOString();
+  let queued = 0;
+  for (const task of tasks) {
+    if (String(task.status) !== 'ready') continue;
+    const { error } = await store()
+      .from('pierrot_dev_prompts')
+      .update({
+        status: 'queued',
+        queue_position: position,
+        queued_at: queuedAt,
+        queue_batch_id: batchId,
+        last_error_code: null,
+        last_error_message: null,
+        updated_at: queuedAt,
+      })
+      .eq('id', String(task.id))
+      .eq('status', 'ready');
+    if (error) {
+      return { ok: false, queued, notReady: [], error: 'BATCH_START_FAILED' };
+    }
+    queued += 1;
+    position += 1;
+  }
+
+  const { error: batchError } = await store()
+    .from('pierrot_dev_batches')
+    .update({ status: 'active', updated_at: queuedAt })
+    .eq('id', batchId);
+  if (batchError) {
+    return { ok: false, queued, notReady: [], error: 'BATCH_START_FAILED' };
+  }
+
+  await appendEvent({
+    type: 'batch.started',
+    message: `Batch started; ${queued} task(s) queued in order.`,
+    payload: { batchId, queued },
+  });
+  await maybeCompleteBatch(batchId);
+  return { ok: true, queued, notReady: [] };
+}
+
+/** Batch id attached to a task, used to settle the batch after a task ends. */
+export async function getBatchIdForTask(taskId: string): Promise<string | null> {
+  if (!isUuid(taskId)) return null;
+  try {
+    const { data } = await store()
+      .from('pierrot_dev_prompts')
+      .select('queue_batch_id')
+      .eq('id', taskId)
+      .maybeSingle();
+    return typeof data?.queue_batch_id === 'string' ? data.queue_batch_id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Mark an active batch completed once every item has left the executable
+ * queue. `review` counts as execution-complete; verification remains a
+ * separate owner decision.
+ */
+export async function maybeCompleteBatch(batchId: string): Promise<boolean> {
+  if (!isUuid(batchId)) return false;
+  try {
+    const { data: batch } = await store()
+      .from('pierrot_dev_batches')
+      .select('id,status')
+      .eq('id', batchId)
+      .maybeSingle();
+    if (!batch || !['active', 'paused'].includes(String(batch.status))) return false;
+
+    const { data: items } = await store()
+      .from('pierrot_dev_batch_items')
+      .select('task_id')
+      .eq('batch_id', batchId);
+    const taskIds = (items || []).map((item) => String(item.task_id));
+    if (taskIds.length === 0) return false;
+
+    const { data: tasks } = await store()
+      .from('pierrot_dev_prompts')
+      .select('id,status')
+      .in('id', taskIds);
+    if (!Array.isArray(tasks) || tasks.length === 0) return false;
+
+    const pending = tasks.some((task) =>
+      ['draft', 'blocked', 'ready', 'queued', 'in_progress'].includes(String(task.status))
+    );
+    if (pending) return false;
+
+    const now = new Date().toISOString();
+    const { data: updated, error } = await store()
+      .from('pierrot_dev_batches')
+      .update({ status: 'completed', updated_at: now })
+      .eq('id', batchId)
+      .in('status', ['active', 'paused'])
+      .select('id');
+    if (error || !Array.isArray(updated) || updated.length === 0) return false;
+
+    await appendEvent({
+      type: 'batch.completed',
+      message: `Batch completed after ${tasks.length} task(s).`,
+      payload: { batchId, tasks: tasks.length },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function updateBatchStatus(
   userId: string,
   batchId: string,

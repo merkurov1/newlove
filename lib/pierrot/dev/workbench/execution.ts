@@ -8,6 +8,7 @@ import {
   expectedBranch,
   getActiveAttempt,
   getAttempt,
+  getBatchIdForTask,
   getSetting,
   getTaskExecutionMaterial,
   getTaskRow,
@@ -15,6 +16,7 @@ import {
   isUuid,
   leaseExpiryIso,
   listAttempts,
+  maybeCompleteBatch,
   nextQueuePosition,
   patchAttempt,
   patchTask,
@@ -77,6 +79,20 @@ function ensureOwnership(attempt: DevAttempt | null, workerId: string): DevAttem
     );
   }
   return attempt;
+}
+
+/**
+ * Execution for a task is finished. If it belongs to a batch, mark the batch
+ * completed once every item has left the executable queue. This is best effort:
+ * a batch bookkeeping failure must never hide the task result.
+ */
+async function settleBatchForTask(taskId: string): Promise<void> {
+  try {
+    const batchId = await getBatchIdForTask(taskId);
+    if (batchId) await maybeCompleteBatch(batchId);
+  } catch {
+    // Best effort only.
+  }
 }
 
 /**
@@ -341,6 +357,7 @@ export async function completeAttempt(
   }
 
   await clearWorkerAttempt(workerId, attemptId);
+  await settleBatchForTask(attempt.taskId);
 
   await appendEvent({
     taskId: attempt.taskId,
@@ -472,6 +489,7 @@ export async function failAttempt(input: {
   }
 
   await clearWorkerAttempt(input.workerId, attempt.id);
+  await settleBatchForTask(attempt.taskId);
 
   await appendEvent({
     taskId: attempt.taskId,
@@ -581,17 +599,18 @@ export async function enqueueTask(
     );
   }
   const position = await nextQueuePosition();
+  const patch: Record<string, unknown> = {
+    queue_position: position,
+    queued_at: new Date().toISOString(),
+    last_error_code: null,
+    last_error_message: null,
+  };
+  if (isUuid(batchId)) patch.queue_batch_id = batchId;
   return transitionTask({
     userId,
     taskId,
     to: 'queued',
-    patch: {
-      queue_position: position,
-      queued_at: new Date().toISOString(),
-      queue_batch_id: isUuid(batchId) ? batchId : null,
-      last_error_code: null,
-      last_error_message: null,
-    },
+    patch,
     event: {
       type: 'task.queued',
       message: `Task added to the queue at position ${position}.`,
@@ -683,6 +702,7 @@ export async function cancelTask(userId: string, taskId: string): Promise<DevWor
       message: 'Task cancelled by the owner.',
     },
   });
+  if (updated) await settleBatchForTask(taskId);
   return updated;
 }
 

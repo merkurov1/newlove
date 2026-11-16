@@ -14,11 +14,12 @@ import {
   recordIntegrationSuccess,
 } from './store';
 import {
-  getCodespace,
   getGitHubRateLimit,
   getRepositoryPermission,
   getVercelIntegrationStatus,
+  resolveCodespace,
 } from './github';
+import type { CodespaceInfo } from './github';
 import { WORKER_OFFLINE_AFTER_SECONDS } from './state';
 import type { DevSetupCheck, DevSetupReport } from './types';
 
@@ -124,58 +125,17 @@ export async function getSetupReport(): Promise<DevSetupReport> {
   });
 
   const codespaceName = getConfiguredCodespaceName();
-  let codespaceState: string | null = null;
-  let codespaceRepository: string | null = null;
-  let codespaceMachine: string | null = null;
+  let codespace: CodespaceInfo | null = null;
   let codespaceError: string | null = null;
 
-  if (!codespaceName) {
-    checks.push({
-      key: 'codespace',
-      label: 'Codespace',
-      status: 'missing',
-      detail: `No Codespace name is configured. Set ${CODESPACE_NAME_ENV} to the existing Codespace name.`,
-      requiredEnv: CODESPACE_NAME_ENV,
-      requiredScope: 'Codespaces read/write on the GitHub token to start and stop it from Admin.',
-      checkedAt: now,
-      action: 'create_codespace',
-    });
-    blocking.push('Configure or create the Codespace.');
-  } else {
-    try {
-      const codespace = await getCodespace(codespaceName);
-      if (!codespace) {
-        codespaceError = `Codespace "${codespaceName}" was not found for this account.`;
-        checks.push({
-          key: 'codespace',
-          label: 'Codespace',
-          status: 'error',
-          detail: codespaceError,
-          requiredEnv: CODESPACE_NAME_ENV,
-          requiredScope: 'Codespaces read/write.',
-          checkedAt: now,
-          action: 'create_codespace',
-        });
-        blocking.push('Create the Codespace.');
-      } else {
-        codespaceState = codespace.state;
-        codespaceRepository = codespace.repository;
-        codespaceMachine = codespace.machine;
-        const running = ['Available', 'Starting', 'Rebuilding'].includes(codespace.state);
-        checks.push({
-          key: 'codespace',
-          label: 'Codespace',
-          status: running ? 'ok' : 'warn',
-          detail: `${codespace.name} · ${codespace.state}${codespace.repository ? ` · ${codespace.repository}` : ''}${codespace.machine ? ` · ${codespace.machine}` : ''}. Start/stop permissions are verified when the action is used.`,
-          requiredEnv: null,
-          requiredScope: 'Codespaces write permission is required to start or stop.',
-          checkedAt: now,
-          action: running ? null : 'start_codespace',
-          data: { state: codespace.state, machine: codespace.machine, repository: codespace.repository },
-        });
-      }
-    } catch (error) {
-      codespaceError = error instanceof Error ? error.message : 'Codespaces API unavailable.';
+  try {
+    codespace = await resolveCodespace(codespaceName);
+  } catch (error) {
+    codespaceError = error instanceof Error ? error.message : 'Codespaces API unavailable.';
+  }
+
+  if (!codespace) {
+    if (codespaceError) {
       checks.push({
         key: 'codespace',
         label: 'Codespace',
@@ -187,8 +147,63 @@ export async function getSetupReport(): Promise<DevSetupReport> {
         action: null,
       });
       blocking.push('Codespaces access is unavailable.');
+    } else if (!codespaceName) {
+      checks.push({
+        key: 'codespace',
+        label: 'Codespace',
+        status: 'missing',
+        detail: `No Codespace was found for this repository. Set ${CODESPACE_NAME_ENV} or create one from Admin.`,
+        requiredEnv: CODESPACE_NAME_ENV,
+        requiredScope: 'Codespaces read/write on the GitHub token to start and stop it from Admin.',
+        checkedAt: now,
+        action: 'create_codespace',
+      });
+      blocking.push('Configure or create the Codespace.');
+    } else {
+      checks.push({
+        key: 'codespace',
+        label: 'Codespace',
+        status: 'error',
+        detail: `Codespace "${codespaceName}" was not found and no Codespace for this repository could be discovered.`,
+        requiredEnv: CODESPACE_NAME_ENV,
+        requiredScope: 'Codespaces read/write.',
+        checkedAt: now,
+        action: 'create_codespace',
+      });
+      blocking.push('Create the Codespace.');
     }
+  } else {
+    const running = ['Available', 'Starting', 'Rebuilding'].includes(codespace.state);
+    const stale = Boolean(codespaceName && codespaceName !== codespace.name);
+    const discovered = !codespaceName;
+    const note = discovered
+      ? ` Auto-discovered from the repository; set ${CODESPACE_NAME_ENV}=${codespace.name}.`
+      : stale
+        ? ` The configured name "${codespaceName}" is stale; the repository Codespace is used instead. Set ${CODESPACE_NAME_ENV}=${codespace.name}.`
+        : '';
+    checks.push({
+      key: 'codespace',
+      label: 'Codespace',
+      status: running ? 'ok' : 'warn',
+      detail: `${codespace.name} · ${codespace.state}${codespace.repository ? ` · ${codespace.repository}` : ''}${codespace.machine ? ` · ${codespace.machine}` : ''}. Start/stop permissions are verified when the action is used.${note}`,
+      requiredEnv: discovered || stale ? CODESPACE_NAME_ENV : null,
+      requiredScope: 'Codespaces write permission is required to start or stop.',
+      checkedAt: now,
+      action: running ? null : 'start_codespace',
+      data: {
+        state: codespace.state,
+        machine: codespace.machine,
+        repository: codespace.repository,
+        resolvedName: codespace.name,
+        configuredName: codespaceName,
+      },
+    });
+    if (!running) blocking.push('Start the Codespace.');
   }
+
+  const codespaceState = codespace?.state || null;
+  const codespaceRepository = codespace?.repository || null;
+  const codespaceMachine = codespace?.machine || null;
 
   const worker =
     workers.find((item) => item.online) ||
@@ -307,8 +322,8 @@ export async function getSetupReport(): Promise<DevSetupReport> {
     checks,
     blocking,
     codespaces: {
-      available: Boolean(codespaceName && codespaceState),
-      name: codespaceName,
+      available: Boolean(codespace && codespaceState),
+      name: codespace?.name || codespaceName,
       state: codespaceState,
       repository: codespaceRepository,
       machine: codespaceMachine,

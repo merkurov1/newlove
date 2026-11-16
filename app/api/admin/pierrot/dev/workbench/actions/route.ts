@@ -28,12 +28,14 @@ import {
   setBatchItemDependency,
   requestWorkerStop,
   setSetting,
+  startBatch,
   transitionTask,
   updateBatchStatus,
 } from '@/lib/pierrot/dev/workbench/store';
 import {
   createCodespace,
   listUserCodespaces,
+  resolveCodespace,
   startCodespace,
   stopCodespace,
 } from '@/lib/pierrot/dev/workbench/github';
@@ -253,6 +255,35 @@ export async function POST(req: Request) {
         if (!batch) return json({ error: 'Unable to create the batch.' }, 500);
         break;
       }
+      case 'start_batch': {
+        const batchId = typeof body.batchId === 'string' ? body.batchId : '';
+        if (!isUuid(batchId)) {
+          return json({ error: 'A valid batchId is required.' }, 400);
+        }
+        const result = await startBatch(admin.id, batchId);
+        if (!result.ok) {
+          const status =
+            result.error === 'BATCH_NOT_FOUND' || result.error === 'BATCH_TASK_NOT_FOUND'
+              ? 404
+              : result.error === 'BATCH_START_FAILED'
+                ? 500
+                : 409;
+          const message =
+            result.error === 'BATCH_NOT_READY'
+              ? 'Every task in the batch must be approved (ready) before the batch can start.'
+              : result.error === 'BATCH_EMPTY'
+                ? 'The batch has no tasks.'
+                : result.error === 'BATCH_CLOSED'
+                  ? 'A completed or archived batch cannot be restarted.'
+                  : result.error === 'BATCH_TASK_NOT_FOUND'
+                    ? 'One or more batch tasks were not found.'
+                    : result.error === 'BATCH_NOT_FOUND'
+                      ? 'Batch not found.'
+                      : 'The batch could not be started.';
+          return json({ error: message, code: result.error, notReady: result.notReady }, status);
+        }
+        break;
+      }
       case 'update_batch': {
         const batchId = typeof body.batchId === 'string' ? body.batchId : '';
         const status = body.status as DevBatchStatus;
@@ -308,38 +339,43 @@ export async function POST(req: Request) {
         return json({ ok: true, codespaces });
       }
       case 'start_codespace': {
-        const name = getConfiguredCodespaceName();
-        if (!name) {
+        const configured = getConfiguredCodespaceName();
+        const resolved = await resolveCodespace(configured);
+        if (!resolved) {
           return json(
             {
-              error: `Set ${CODESPACE_NAME_ENV} to the Codespace name first.`,
-              code: 'CODESPACE_NAME_MISSING',
+              error: `No Codespace was found for this repository. Set ${CODESPACE_NAME_ENV} or create one from Admin.`,
+              code: 'CODESPACE_NOT_FOUND',
             },
             409
           );
         }
-        const codespace = await startCodespace(name);
+        const codespace = await startCodespace(resolved.name);
         await appendEvent({
           type: 'codespace.start_requested',
-          message: `Owner requested Codespace start: ${name} (${codespace.state}).`,
-          payload: { name, state: codespace.state },
+          message: `Owner requested Codespace start: ${resolved.name} (${codespace.state}).`,
+          payload: { name: resolved.name, configuredName: configured, state: codespace.state },
         });
         break;
       }
       case 'stop_codespace': {
-        const name = getConfiguredCodespaceName();
-        if (!name) {
+        const configured = getConfiguredCodespaceName();
+        const resolved = await resolveCodespace(configured);
+        if (!resolved) {
           return json(
-            { error: `Set ${CODESPACE_NAME_ENV} first.`, code: 'CODESPACE_NAME_MISSING' },
+            {
+              error: `No Codespace was found for this repository. Set ${CODESPACE_NAME_ENV} or create one from Admin.`,
+              code: 'CODESPACE_NOT_FOUND',
+            },
             409
           );
         }
-        const codespace = await stopCodespace(name);
+        const codespace = await stopCodespace(resolved.name);
         await appendEvent({
           type: 'codespace.stop_requested',
           level: 'warn',
-          message: `Owner requested Codespace stop: ${name} (${codespace.state}).`,
-          payload: { name, state: codespace.state },
+          message: `Owner requested Codespace stop: ${resolved.name} (${codespace.state}).`,
+          payload: { name: resolved.name, configuredName: configured, state: codespace.state },
         });
         break;
       }

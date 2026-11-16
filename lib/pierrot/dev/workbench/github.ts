@@ -346,6 +346,37 @@ export async function getCodespace(name: string): Promise<CodespaceInfo | null> 
   }
 }
 
+/**
+ * Resolve the executor Codespace without trusting a single stale env value.
+ *
+ * `PIERROT_DEV_CODESPACE_NAME` is a Vercel environment variable and can point
+ * at a deleted Codespace after it is recreated. If the exact name is missing,
+ * discover the Codespace that belongs to the primary repository instead. The
+ * caller still starts/stops by the real name, so a stale variable cannot break
+ * the workflow.
+ */
+export async function resolveCodespace(name?: string | null): Promise<CodespaceInfo | null> {
+  const configured = (name || '').trim();
+  if (configured) {
+    try {
+      const exact = await getCodespace(configured);
+      if (exact) return exact;
+    } catch {
+      // Fall through to discovery. A 404 is expected for a stale name; a
+      // permission failure will surface again from listUserCodespaces().
+    }
+  }
+
+  const primary = getDevRepositoryConfig('newlove').fullName.toLowerCase();
+  const codespaces = await listUserCodespaces();
+  return (
+    codespaces.find(
+      (codespace) =>
+        codespace.repository?.toLowerCase() === primary && codespace.state !== 'Deleted'
+    ) || null
+  );
+}
+
 export async function startCodespace(name: string): Promise<CodespaceInfo> {
   try {
     const response = await client().request('POST /user/codespaces/{codespace_name}/start', {
