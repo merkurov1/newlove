@@ -1010,7 +1010,11 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             <dt>Codespace</dt>
             <dd>
               {overview.lifecycle.codespace
-                ? `${overview.lifecycle.codespace.name} · ${overview.lifecycle.codespace.state || 'unknown'}`
+                ? `${overview.lifecycle.codespace.name} · ${overview.lifecycle.codespace.state || 'unknown'}${
+                    overview.lifecycle.codespace.idleTimeoutMinutes
+                      ? ` · idle ${overview.lifecycle.codespace.idleTimeoutMinutes}m`
+                      : ''
+                  }`
                 : '—'}
             </dd>
           </div>
@@ -1027,7 +1031,11 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
               {overview.lifecycle.worker
                 ? `${overview.lifecycle.worker.online ? 'online' : 'offline'} · ${
                     overview.lifecycle.worker.ready ? 'ready' : 'not ready'
-                  } · heartbeat ${overview.lifecycle.worker.heartbeatAgeSeconds ?? '—'}s`
+                  } · heartbeat ${overview.lifecycle.worker.heartbeatAgeSeconds ?? '—'}s${
+                    overview.lifecycle.worker.currentAttemptId
+                      ? ` · task ${overview.lifecycle.worker.currentTaskId || '—'}`
+                      : ''
+                  }`
                 : 'not registered'}
             </dd>
           </div>
@@ -1041,15 +1049,24 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
           <div>
             <dt>Readiness</dt>
             <dd>
-              API {overview.lifecycle.worker?.readiness?.apiOk ? 'ok' : 'not ready'} · provider
-              auth {overview.lifecycle.worker?.readiness?.authOk ? 'ok' : 'missing'}
+              API {overview.lifecycle.worker?.readiness?.apiOk ? 'ok' : 'not ready'} · Supabase{' '}
+              {overview.lifecycle.worker?.readiness?.supabaseOk ? 'ok' : 'not ready'} · provider
+              auth {overview.lifecycle.worker?.readiness?.authOk ? 'ok' : 'missing'} · checked{' '}
+              {overview.lifecycle.worker?.readinessAgeSeconds ?? '—'}s ago
+              {overview.lifecycle.worker?.readinessFresh === false ? ' · STALE' : ''}
             </dd>
           </div>
           <div>
             <dt>Pending start</dt>
             <dd>
-              {overview.lifecycle.pendingStart
-                ? `yes · attempts ${overview.lifecycle.pendingStartAttempts}`
+              {overview.lifecycle.pendingStartInfo
+                ? `${overview.lifecycle.pendingStartInfo.phase} · attempts ${overview.lifecycle.pendingStartInfo.attempts}/${overview.lifecycle.pendingStartInfo.maxAttempts} · age ${overview.lifecycle.pendingStartInfo.ageSeconds ?? '—'}s · observed ${
+                    overview.lifecycle.pendingStartInfo.lastObservedState || 'unknown'
+                  } · HTTP ${overview.lifecycle.pendingStartInfo.lastHttpStatus ?? '—'}${
+                    overview.lifecycle.pendingStartInfo.lastError
+                      ? ` · ${overview.lifecycle.pendingStartInfo.lastError}`
+                      : ''
+                  }`
                 : 'no'}
             </dd>
           </div>
@@ -1074,10 +1091,22 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             </dd>
           </div>
           <div>
+            <dt>Keepalive</dt>
+            <dd>
+              {overview.lifecycle.lastKeepaliveAt
+                ? `${age(overview.lifecycle.lastKeepaliveAt)} ago`
+                : '—'}
+            </dd>
+          </div>
+          <div>
             <dt>Startup</dt>
             <dd>
               {overview.lifecycle.lastStartAt
-                ? `${age(overview.lifecycle.lastStartAt)} ago${
+                ? `${age(overview.lifecycle.lastStartAt)} ago · requested ${
+                    overview.lifecycle.lastStartState || 'unknown'
+                  } · observed ${overview.lifecycle.lastStartObservedState || 'unknown'} · HTTP ${
+                    overview.lifecycle.lastStartHttpStatus ?? '—'
+                  }${
                     overview.lifecycle.lastReadyAt
                       ? ` · ready ${age(overview.lifecycle.lastReadyAt)} ago`
                       : ''

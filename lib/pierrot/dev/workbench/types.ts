@@ -303,6 +303,8 @@ export type DevLifecycleSnapshot = {
     repository: string | null;
     machine: string | null;
     webUrl: string | null;
+    idleTimeoutMinutes: number | null;
+    lastUsedAt: string | null;
   } | null;
   codespaceError: string | null;
   worker: {
@@ -314,7 +316,11 @@ export type DevLifecycleSnapshot = {
     version: string | null;
     opencodeVersion: string | null;
     readiness: DevWorkerReadiness | null;
+    readinessAgeSeconds: number | null;
+    readinessFresh: boolean;
     heartbeatAgeSeconds: number | null;
+    currentTaskId: string | null;
+    currentAttemptId: string | null;
   } | null;
   workerRegistered: boolean;
   queue: {
@@ -328,9 +334,25 @@ export type DevLifecycleSnapshot = {
   startupGraceSeconds: number;
   pendingStart: boolean;
   pendingStartAttempts: number;
+  pendingStartInfo: {
+    phase: 'requested' | 'starting' | 'available' | 'worker_registered' | 'failed';
+    requestedAt: string;
+    ageSeconds: number | null;
+    attempts: number;
+    maxAttempts: number;
+    nextAttemptAt: string | null;
+    lastObservedState: string | null;
+    lastHttpStatus: number | null;
+    lastError: string | null;
+  } | null;
   shutdownRequested: boolean;
   lastStartAt: string | null;
+  lastStartState: string | null;
+  lastStartObservedState: string | null;
+  lastStartHttpStatus: number | null;
+  lastStartConfirmedAt: string | null;
   lastReadyAt: string | null;
+  lastKeepaliveAt: string | null;
   lastStopAt: string | null;
   lastBoot: {
     at: string;

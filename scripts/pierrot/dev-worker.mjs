@@ -1158,6 +1158,24 @@ async function main() {
     try {
       if (!registered) {
         await bootPhase('connecting_api', `Connecting to the worker API at ${API_BASE}.`);
+        // Prove the API and its Supabase path before registration so the
+        // stored capabilities do not claim apiOk=false/supabaseOk=false while
+        // the worker is in fact able to reach both.
+        let apiProven = false;
+        try {
+          await api('health', {}, 15000);
+          apiProven = true;
+          capabilities = applyReadiness(capabilities, {
+            configOk: true,
+            apiOk: true,
+            supabaseOk: true,
+          });
+        } catch (error) {
+          await log('API preflight failed', {
+            status: error.status || null,
+            message: String(error.message || error).slice(0, 200),
+          });
+        }
         await bootPhase('registering', 'Registering the worker with the Pierrot API.');
         await api('register', {
           name: CODESPACE_NAME || os.hostname(),
@@ -1180,6 +1198,7 @@ async function main() {
         await log('Registered', {
           opencode: capabilities.opencodeVersion,
           ready: capabilities.ready,
+          apiProven,
           reasons: capabilities.readiness?.reasons || [],
         });
         if (capabilities.ready) {

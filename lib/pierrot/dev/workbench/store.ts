@@ -287,6 +287,30 @@ export async function requireWorkbenchSchema(): Promise<void> {
   if (!(await isWorkbenchSchemaReady())) throw new WorkbenchUnavailableError();
 }
 
+/**
+ * Prove that the worker API can reach its Supabase data plane. Unlike the
+ * cached schema probe, this performs a real query and returns the sanitized
+ * error so the worker readiness check cannot claim Supabase is healthy while
+ * every actual read is failing.
+ */
+export async function pingWorkbenchStore(): Promise<{ ok: boolean; error: string | null }> {
+  try {
+    const { error } = await store()
+      .from('pierrot_dev_settings')
+      .select('key')
+      .limit(1);
+    if (error) {
+      return { ok: false, error: errorText(error).slice(0, 500) || 'Supabase query failed.' };
+    }
+    return { ok: true, error: null };
+  } catch (caught) {
+    return {
+      ok: false,
+      error: (caught instanceof Error ? caught.message : 'Supabase query failed.').slice(0, 500),
+    };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------

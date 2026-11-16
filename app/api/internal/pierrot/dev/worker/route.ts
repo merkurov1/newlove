@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import {
   WorkerAuthError,
   readJsonBody,
@@ -21,6 +21,7 @@ import {
   getQueueSnapshot,
   heartbeatWorker,
   isWorkerId,
+  pingWorkbenchStore,
   registerWorker,
 } from '@/lib/pierrot/dev/workbench/store';
 import {
@@ -31,6 +32,7 @@ import {
 } from '@/lib/pierrot/dev/workbench/state';
 import {
   idleGraceSeconds,
+  keepCodespaceAwakeForActiveWork,
   recordBootStatus,
   recordWorkerIdle,
   recordWorkerReady,
@@ -124,6 +126,22 @@ export async function POST(req: Request) {
     }
 
     switch (action) {
+      case 'health': {
+        const ping = await pingWorkbenchStore();
+        if (!ping.ok) {
+          return json(
+            {
+              ok: false,
+              error: 'Supabase is unreachable through the worker API.',
+              code: 'WORKER_DATA_PLANE_UNAVAILABLE',
+              detail: ping.error,
+            },
+            503
+          );
+        }
+        return json({ ok: true, serverTime: new Date().toISOString() });
+      }
+
       case 'register': {
         const capabilities = safeObject(body.capabilities, 32_000);
         const readiness =
@@ -251,6 +269,15 @@ export async function POST(req: Request) {
           dedupeKey: text(body.dedupeKey, 160) || undefined,
           logExcerpt:
             typeof body.logExcerpt === 'string' ? body.logExcerpt.slice(0, 60_000) : undefined,
+        });
+        // Refresh the Codespace idle timer while the executor is busy. This is
+        // scheduled after the response so a slow GitHub call never delays the
+        // attempt heartbeat itself.
+        after(async () => {
+          await keepCodespaceAwakeForActiveWork({
+            source: 'worker:progress',
+            workerId,
+          }).catch(() => {});
         });
         return json({ ok: true, cancelled: result.cancelled, attempt: result.attempt });
       }

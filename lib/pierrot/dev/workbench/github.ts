@@ -310,6 +310,8 @@ export type CodespaceInfo = {
   repository: string | null;
   machine: string | null;
   webUrl: string | null;
+  idleTimeoutMinutes: number | null;
+  lastUsedAt: string | null;
 };
 
 function mapCodespace(data: Record<string, unknown>): CodespaceInfo {
@@ -321,6 +323,11 @@ function mapCodespace(data: Record<string, unknown>): CodespaceInfo {
     repository: typeof repository?.full_name === 'string' ? repository.full_name : null,
     machine: typeof machine?.name === 'string' ? machine.name : null,
     webUrl: typeof data.web_url === 'string' ? data.web_url : null,
+    idleTimeoutMinutes:
+      typeof data.idle_timeout_minutes === 'number' && Number.isFinite(data.idle_timeout_minutes)
+        ? data.idle_timeout_minutes
+        : null,
+    lastUsedAt: typeof data.last_used_at === 'string' ? data.last_used_at : null,
   };
 }
 
