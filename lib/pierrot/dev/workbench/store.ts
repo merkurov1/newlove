@@ -1223,6 +1223,26 @@ export async function heartbeatWorker(input: {
   };
 }
 
+/**
+ * Refresh only the worker liveness timestamp. The main worker loop is blocked
+ * while OpenCode runs, so execution progress is the heartbeat that keeps the
+ * worker visible as online. Status is intentionally untouched: a draining or
+ * busy worker must not be changed by a progress update.
+ */
+export async function touchWorkerHeartbeat(workerId: string): Promise<void> {
+  try {
+    await store()
+      .from('pierrot_dev_workers')
+      .update({
+        last_heartbeat_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', workerId);
+  } catch {
+    // The attempt lease is authoritative; a missed liveness touch is harmless.
+  }
+}
+
 export async function requestWorkerStop(workerId: string): Promise<boolean> {
   const { error } = await store()
     .from('pierrot_dev_workers')

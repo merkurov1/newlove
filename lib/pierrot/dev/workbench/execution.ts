@@ -21,6 +21,7 @@ import {
   patchAttempt,
   patchTask,
   reapExpiredAttempts,
+  touchWorkerHeartbeat,
   transitionTask,
 } from './store';
 import {
@@ -203,6 +204,11 @@ export async function progressAttempt(input: {
   if (!updated) {
     throw new WorkbenchExecutionError('ATTEMPT_NOT_ACTIVE', 'Attempt is not active.');
   }
+
+  // Progress arrives from the executor heartbeat while the worker's main loop
+  // is blocked in OpenCode. It must keep the worker liveness timestamp fresh
+  // too, otherwise a long model call makes Admin report the worker offline.
+  await touchWorkerHeartbeat(input.workerId);
 
   if (input.message) {
     await appendEvent({

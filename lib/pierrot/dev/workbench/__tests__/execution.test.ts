@@ -20,6 +20,7 @@ jest.mock('../store', () => ({
   patchAttempt: jest.fn(),
   patchTask: jest.fn(),
   reapExpiredAttempts: jest.fn(),
+  touchWorkerHeartbeat: jest.fn(),
   transitionTask: jest.fn(),
 }));
 
@@ -42,7 +43,13 @@ jest.mock('../github', () => ({
 }));
 
 import * as store from '../store';
-import { completeAttempt, failAttempt, releaseAttempt, retryTask } from '../execution';
+import {
+  completeAttempt,
+  failAttempt,
+  progressAttempt,
+  releaseAttempt,
+  retryTask,
+} from '../execution';
 
 const attempt = {
   id: 'aaaaaaaa-1111-4111-8111-111111111111',
@@ -60,6 +67,38 @@ const task = {
 function asMock(value: unknown): jest.Mock {
   return value as jest.Mock;
 }
+
+describe('execution progress', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    asMock(store.getAttempt).mockResolvedValue(attempt);
+    asMock(store.patchAttempt).mockResolvedValue({ ...attempt, status: 'running' });
+    asMock(store.leaseExpiryIso).mockReturnValue('2026-01-01T00:30:00.000Z');
+    asMock(store.touchWorkerHeartbeat).mockResolvedValue(undefined);
+    asMock(store.appendEvent).mockResolvedValue(undefined);
+  });
+
+  it('renews the attempt lease and the worker liveness timestamp', async () => {
+    await progressAttempt({
+      workerId: attempt.workerId,
+      attemptId: attempt.id,
+      stage: 'opencode_running',
+    });
+
+    expect(store.patchAttempt).toHaveBeenCalledWith(
+      attempt.id,
+      expect.objectContaining({
+        progress_stage: 'opencode_running',
+        heartbeat_at: expect.any(String),
+        lease_expires_at: expect.any(String),
+      }),
+      ['claimed', 'running']
+    );
+    // The worker main loop is blocked during a long OpenCode call; progress is
+    // the only signal that keeps its heartbeat fresh.
+    expect(store.touchWorkerHeartbeat).toHaveBeenCalledWith(attempt.workerId);
+  });
+});
 
 describe('lease release', () => {
   beforeEach(() => {
