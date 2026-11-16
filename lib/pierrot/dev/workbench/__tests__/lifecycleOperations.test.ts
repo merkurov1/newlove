@@ -39,6 +39,7 @@ import * as github from '../github';
 import * as store from '../store';
 import {
   ensureCodespaceForQueuedWork,
+  keepCodespaceAwakeForActiveWork,
   requestIdleShutdown,
 } from '../lifecycle';
 
@@ -304,7 +305,158 @@ describe('startup recovery', () => {
       source: 'admin:manual',
       allowWorkerRecovery: true,
     });
-    expect(second.action).toBe('blocked');
+    expect(second.action).toBe('start-pending');
+    expect(second.reason).toMatch(/waiting|register|available/i);
     expect(github.stopCodespace).toHaveBeenCalledTimes(1);
   }, 15_000);
+});
+
+describe('pending start verification', () => {
+  it('does not treat an accepted start request as a confirmed transition', async () => {
+    asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
+    asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Shutdown' });
+    asMock(github.getCodespace).mockResolvedValue({ ...codespace, state: 'Shutdown' });
+    asMock(github.startCodespace).mockResolvedValue({ ...codespace, state: 'Shutdown' });
+
+    const result = await ensureCodespaceForQueuedWork({ source: 'admin:overview' });
+
+    expect(result.action).toBe('start-pending');
+    expect(result.reason).toMatch(/still Shutdown|confirmation/i);
+    expect(store.setSetting).toHaveBeenCalledWith(
+      'lifecycle:pending_start',
+      expect.objectContaining({
+        phase: 'requested',
+        lastObservedState: 'Shutdown',
+        lastHttpStatus: 200,
+        attempts: 1,
+      })
+    );
+    expect(store.setSetting).not.toHaveBeenCalledWith(
+      'lifecycle:pending_start',
+      expect.objectContaining({ at: null })
+    );
+  });
+
+  it('does not issue a new start on every overview while a retry is scheduled', async () => {
+    settingsMap({
+      'lifecycle:pending_start': {
+        at: new Date().toISOString(),
+        requestedAt: new Date(Date.now() - 60_000).toISOString(),
+        codespaceName: 'test-codespace',
+        source: 'admin:overview',
+        reason: 'GitHub accepted the start request.',
+        phase: 'requested',
+        attempts: 2,
+        maxAttempts: 6,
+        nextAttemptAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+        lastObservedState: 'Shutdown',
+        lastHttpStatus: 200,
+        lastError: null,
+      },
+    });
+    asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
+    asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Shutdown' });
+
+    const result = await ensureCodespaceForQueuedWork({ source: 'admin:overview' });
+
+    expect(result.action).toBe('start-pending');
+    expect(result.reason).toMatch(/scheduled/i);
+    expect(github.startCodespace).not.toHaveBeenCalled();
+  });
+
+  it('fails pending state when the Codespace is Available but no worker booted', async () => {
+    settingsMap({
+      'lifecycle:pending_start': {
+        at: new Date(Date.now() - 20 * 60_000).toISOString(),
+        requestedAt: new Date(Date.now() - 20 * 60_000).toISOString(),
+        codespaceName: 'test-codespace',
+        source: 'admin:overview',
+        reason: 'GitHub accepted the start request.',
+        phase: 'available',
+        attempts: 1,
+        maxAttempts: 6,
+        nextAttemptAt: new Date().toISOString(),
+        lastObservedState: 'Available',
+        lastHttpStatus: 200,
+        lastError: null,
+      },
+    });
+    asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
+    asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
+    asMock(store.listWorkers).mockResolvedValue([
+      {
+        id: 'codespace:test',
+        online: false,
+        lastHeartbeatAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      },
+    ]);
+
+    const result = await ensureCodespaceForQueuedWork({
+      source: 'admin:overview',
+      allowWorkerRecovery: true,
+    });
+
+    expect(result.action).toBe('blocked');
+    expect(result.reason).toMatch(/lifecycle hook|postStart|Rebuild/i);
+    expect(github.stopCodespace).not.toHaveBeenCalled();
+    expect(github.startCodespace).not.toHaveBeenCalled();
+    expect(store.setSetting).toHaveBeenCalledWith(
+      'lifecycle:pending_start',
+      expect.objectContaining({ phase: 'failed' })
+    );
+  });
+
+  it('finalizes pending state only after a worker is online', async () => {
+    settingsMap({
+      'lifecycle:pending_start': {
+        at: new Date().toISOString(),
+        requestedAt: new Date(Date.now() - 30_000).toISOString(),
+        codespaceName: 'test-codespace',
+        source: 'admin:overview',
+        reason: 'GitHub accepted the start request.',
+        phase: 'available',
+        attempts: 1,
+        maxAttempts: 6,
+        nextAttemptAt: new Date().toISOString(),
+        lastObservedState: 'Available',
+        lastHttpStatus: 200,
+        lastError: null,
+      },
+    });
+    asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
+    asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
+    asMock(store.listWorkers).mockResolvedValue([
+      {
+        id: 'codespace:test',
+        online: true,
+        lastHeartbeatAt: new Date().toISOString(),
+      },
+    ]);
+
+    const result = await ensureCodespaceForQueuedWork({ source: 'admin:overview' });
+
+    expect(result.action).toBe('already-available');
+    expect(store.setSetting).toHaveBeenCalledWith('lifecycle:pending_start', { at: null });
+    expect(store.appendEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'codespace.start_confirmed' })
+    );
+  });
+
+  it('refreshes the Codespace idle timer only while an attempt is active', async () => {
+    asMock(store.getActiveAttempt).mockResolvedValue({ id: 'attempt-1', status: 'running' });
+    asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
+    asMock(github.startCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
+
+    const result = await keepCodespaceAwakeForActiveWork({
+      source: 'worker:progress',
+      workerId: 'codespace:test',
+    });
+
+    expect(result.refreshed).toBe(true);
+    expect(github.startCodespace).toHaveBeenCalledWith('test-codespace');
+    expect(store.setSetting).toHaveBeenCalledWith(
+      'lifecycle:last_keepalive',
+      expect.objectContaining({ name: 'test-codespace', source: 'worker:progress' })
+    );
+  });
 });
