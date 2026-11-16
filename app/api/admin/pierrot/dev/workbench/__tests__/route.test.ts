@@ -25,12 +25,18 @@ jest.mock('@/lib/pierrot/dev/workbench/lifecycle', () => ({
   })),
 }));
 
+jest.mock('@/lib/pierrot/dev/workbench/store', () => ({
+  reapExpiredAttempts: jest.fn(async () => 0),
+}));
+
 import { GET, maxDuration } from '../route';
 import { ensureCodespaceForQueuedWork } from '@/lib/pierrot/dev/workbench/lifecycle';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
+import { reapExpiredAttempts } from '@/lib/pierrot/dev/workbench/store';
 
 const ensure = ensureCodespaceForQueuedWork as jest.Mock;
 const overview = getWorkbenchOverview as jest.Mock;
+const reap = reapExpiredAttempts as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -40,21 +46,28 @@ beforeEach(() => {
     reason: 'Codespace is Available.',
   });
   overview.mockResolvedValue({ schemaReady: true, lifecycle: {} });
+  reap.mockResolvedValue(0);
 });
 
 describe('Admin Dev workbench GET', () => {
-  it('performs a safe reconcile only and never opts into worker recovery', async () => {
+  it('reaps, then allows guarded worker recovery, then builds the snapshot', async () => {
     const request = new Request('http://localhost/api/admin/pierrot/dev/workbench');
     const response = await GET(request);
     const body = (await response.json()) as { overview?: unknown };
 
     expect(response.status).toBe(200);
     expect(body.overview).toBeTruthy();
+    expect(reap).toHaveBeenCalledTimes(1);
     expect(ensure).toHaveBeenCalledTimes(1);
     expect(ensure).toHaveBeenCalledWith({
       source: 'admin:overview',
-      allowWorkerRecovery: false,
+      allowWorkerRecovery: true,
     });
+    expect(overview).toHaveBeenCalledWith(expect.any(String), { skipReap: true });
+
+    // The overview must not be read before recovery has finished.
+    expect(reap.mock.invocationCallOrder[0]).toBeLessThan(ensure.mock.invocationCallOrder[0]);
+    expect(ensure.mock.invocationCallOrder[0]).toBeLessThan(overview.mock.invocationCallOrder[0]);
   });
 
   it('keeps a bounded function budget and does not wait for Codespace boot', async () => {

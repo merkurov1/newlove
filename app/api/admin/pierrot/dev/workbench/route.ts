@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
 import { ensureCodespaceForQueuedWork } from '@/lib/pierrot/dev/workbench/lifecycle';
+import { reapExpiredAttempts } from '@/lib/pierrot/dev/workbench/store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,21 +27,30 @@ export async function GET(req: Request) {
   }
 
   try {
-    // Safe reconcile only: this may start a genuinely stopped Codespace when
-    // queued work exists, but it must never stop or restart an Available one.
-    // Worker recovery is an explicit owner action, not part of the page GET.
-    // No retry loop runs inside this request; pending state is persisted and
-    // completed by the next idempotent overview poll.
+    // Admin is the guaranteed recovery trigger. Order matters:
+    //   1. finalize expired leases and make a retry visible in the queue;
+    //   2. run the guarded lifecycle reconcile against that fresh queue;
+    //   3. build the overview from the post-recovery state.
+    // ensureCodespaceForQueuedWork still enforces every safety rule: an active
+    // attempt, paused queue, startup grace, cooldown and circuit breaker. It
+    // never stops a live Codespace merely because a heartbeat is stale, and it
+    // never starts a second worker over an existing attempt.
+    try {
+      await reapExpiredAttempts();
+    } catch {
+      // A missing migration or transient RPC error must not hide the overview.
+    }
+
     try {
       await ensureCodespaceForQueuedWork({
         source: 'admin:overview',
-        allowWorkerRecovery: false,
+        allowWorkerRecovery: true,
       });
     } catch {
       // The overview must still load when Codespaces is temporarily unavailable.
     }
 
-    const overview = await getWorkbenchOverview(admin.id);
+    const overview = await getWorkbenchOverview(admin.id, { skipReap: true });
     return json({ overview });
   } catch (error) {
     console.error('[Pierrot Dev Workbench] overview failed', {

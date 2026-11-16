@@ -227,6 +227,32 @@ describe('startup recovery', () => {
     expect(github.startCodespace).not.toHaveBeenCalled();
   });
 
+  it('never restarts an Available Codespace while an attempt lease is active', async () => {
+    asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
+    asMock(store.getActiveAttempt).mockResolvedValue({
+      id: 'attempt-active',
+      status: 'running',
+    });
+    asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
+    asMock(store.listWorkers).mockResolvedValue([
+      {
+        id: 'codespace:test',
+        online: false,
+        lastHeartbeatAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      },
+    ]);
+
+    const result = await ensureCodespaceForQueuedWork({
+      source: 'admin:overview',
+      allowWorkerRecovery: true,
+    });
+
+    expect(result.action).toBe('noop');
+    expect(result.reason).toMatch(/active/i);
+    expect(github.stopCodespace).not.toHaveBeenCalled();
+    expect(github.startCodespace).not.toHaveBeenCalled();
+  });
+
   it('does not restart an Available Codespace whose worker is online but not ready', async () => {
     asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
     asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });

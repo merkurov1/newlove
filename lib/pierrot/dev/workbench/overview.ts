@@ -20,17 +20,30 @@ assertServerOnly('lib/pierrot/dev/workbench/overview');
 const HISTORY_STATUSES = ['failed', 'rejected', 'cancelled', 'verified', 'archived'];
 let lastReapAt = 0;
 
-export async function getWorkbenchOverview(userId: string): Promise<DevWorkbenchOverview> {
+export type WorkbenchOverviewOptions = {
+  /**
+   * The caller already ran reapExpiredAttempts in this request. Skip the
+   * throttled duplicate RPC while still building the post-reap snapshot.
+   */
+  skipReap?: boolean;
+};
+
+export async function getWorkbenchOverview(
+  userId: string,
+  options: WorkbenchOverviewOptions = {}
+): Promise<DevWorkbenchOverview> {
   const schemaReady = await isWorkbenchSchemaReady();
-  const lifecycle = await getLifecycleSnapshot();
-  const updatedAt = new Date().toISOString();
 
   // Viewing Admin is enough to detect an expired worker lease. This is a
-  // bounded RPC, not a cron job, and it never creates work.
-  if (schemaReady && Date.now() - lastReapAt > 30_000) {
+  // bounded RPC, not a cron job, and it never creates work. It must finish
+  // before the lifecycle snapshot is read so Admin reports the recovered state.
+  if (schemaReady && !options.skipReap && Date.now() - lastReapAt > 30_000) {
     lastReapAt = Date.now();
     await reapExpiredAttempts();
   }
+
+  const lifecycle = await getLifecycleSnapshot();
+  const updatedAt = new Date().toISOString();
 
   const [allTasks, paused] = await Promise.all([
     listTaskRows({ userId, limit: 200 }),

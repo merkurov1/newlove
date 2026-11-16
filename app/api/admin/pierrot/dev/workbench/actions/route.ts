@@ -450,7 +450,11 @@ export async function POST(req: Request) {
         const reaped = await reapExpiredAttempts();
         await appendEvent({
           type: 'lease.reap',
-          message: `Lease check completed; ${reaped} expired attempt(s) marked timed_out.`,
+          message:
+            reaped > 0
+              ? `Lease check completed; ${reaped} expired attempt(s) finalized. The first expiry requeues the task; later expiries fail it.`
+              : 'Lease check completed; no expired attempts were found.',
+          payload: { reaped },
         });
         break;
       }
