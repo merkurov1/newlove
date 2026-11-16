@@ -268,6 +268,8 @@ export type DevLifecycleStatus =
   | 'offline'
   | 'starting_codespace'
   | 'codespace_available'
+  | 'worker_missing'
+  | 'worker_offline'
   | 'starting_worker'
   | 'checking_opencode'
   | 'checking_provider'
@@ -309,9 +311,12 @@ export type DevLifecycleSnapshot = {
     online: boolean;
     status: string;
     ready: boolean;
+    version: string | null;
+    opencodeVersion: string | null;
     readiness: DevWorkerReadiness | null;
     heartbeatAgeSeconds: number | null;
   } | null;
+  workerRegistered: boolean;
   queue: {
     queued: number;
     active: number;
@@ -322,10 +327,24 @@ export type DevLifecycleSnapshot = {
   idleGraceSeconds: number;
   startupGraceSeconds: number;
   pendingStart: boolean;
+  pendingStartAttempts: number;
   shutdownRequested: boolean;
   lastStartAt: string | null;
   lastReadyAt: string | null;
   lastStopAt: string | null;
+  lastBoot: {
+    at: string;
+    phase: string;
+    message: string;
+    workerId: string;
+  } | null;
+  recovery: {
+    lastAttemptAt: string | null;
+    failures: number;
+    circuitOpenUntil: string | null;
+    lastReason: string | null;
+    blocked: boolean;
+  } | null;
   lastStop: {
     requestedAt: string;
     measuredRuntimeMs: number | null;
@@ -334,6 +353,7 @@ export type DevLifecycleSnapshot = {
     reason: string;
   } | null;
   lastError: string | null;
+  lastErrorCode: string | null;
   cost: DevLifecycleCost;
   updatedAt: string;
 };

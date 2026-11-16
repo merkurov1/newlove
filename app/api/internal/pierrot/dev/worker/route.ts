@@ -302,6 +302,14 @@ export async function POST(req: Request) {
           logExcerpt:
             typeof body.logExcerpt === 'string' ? body.logExcerpt.slice(0, 60_000) : undefined,
           changedFiles: stringArray(body.changedFiles, 200),
+          headSha: text(body.headSha, 40) || null,
+          usage: safeObject(body.usage, 16_000),
+          runtimeMs:
+            typeof body.runtimeMs === 'number' && Number.isFinite(body.runtimeMs)
+              ? Math.max(0, Math.trunc(body.runtimeMs))
+              : null,
+          modelStarted: body.modelStarted !== false,
+          verification: safeObject(body.verification, 32_000),
         });
         return json({ ok: true, attempt });
       }

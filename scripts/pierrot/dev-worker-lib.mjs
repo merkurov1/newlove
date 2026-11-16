@@ -167,3 +167,52 @@ export function computeReadiness(input) {
     checkedAt: new Date().toISOString(),
   };
 }
+
+/**
+ * Automatic commits must use the Codespace's configured GitHub identity when
+ * it exists. A made-up address breaks Codespaces GPG signing with
+ * "403 Author is invalid". The fallback is the repository owner's verified
+ * GitHub noreply address, not an invented mailbox.
+ */
+export const DEFAULT_WORKER_GIT_NAME = 'Pierrot Dev';
+export const DEFAULT_WORKER_GIT_EMAIL = '97518066+merkurov1@users.noreply.github.com';
+
+export function resolveGitIdentity(input = {}) {
+  const clean = (value) => (typeof value === 'string' ? value.trim() : '');
+  const name =
+    clean(input.configuredName) ||
+    clean(input.envName) ||
+    clean(input.fallbackName) ||
+    DEFAULT_WORKER_GIT_NAME;
+  const email =
+    clean(input.configuredEmail) ||
+    clean(input.envEmail) ||
+    clean(input.fallbackEmail) ||
+    DEFAULT_WORKER_GIT_EMAIL;
+  return {
+    name: name.slice(0, 120),
+    email: email.slice(0, 200),
+  };
+}
+
+/** Automatic pushes are only allowed to per-attempt branches. */
+export function isAllowedWorkerBranch(branch) {
+  const value = String(branch || '').trim();
+  if (!value || value === 'main' || value === 'master') return false;
+  return /^pierrot\/dev\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/\d+$/i.test(
+    value
+  );
+}
+
+/** Stable boot phases surfaced through the worker API and Admin. */
+export const BOOT_PHASES = Object.freeze([
+  'starting',
+  'checking_config',
+  'checking_opencode',
+  'checking_auth',
+  'connecting_api',
+  'registering',
+  'ready',
+  'failed',
+  'stopping',
+]);
