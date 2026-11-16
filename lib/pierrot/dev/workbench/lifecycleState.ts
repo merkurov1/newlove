@@ -8,6 +8,10 @@ import type { DevLifecycleStatus } from './types';
 const DEFAULT_IDLE_GRACE_SECONDS = 120;
 const DEFAULT_STARTUP_GRACE_SECONDS = 300;
 
+export const WORKER_RECOVERY_COOLDOWN_SECONDS = 15 * 60;
+export const WORKER_RECOVERY_CIRCUIT_THRESHOLD = 3;
+export const WORKER_RECOVERY_CIRCUIT_SECONDS = 6 * 60 * 60;
+
 function numberFromEnv(name: string, fallback: number, min: number, max: number): number {
   const raw = process.env[name];
   if (raw === undefined || raw.trim() === '') return fallback;
@@ -84,12 +88,126 @@ export function canStopCodespace(input: {
   );
 }
 
+export type RecoveryState = {
+  lastAttemptAt: string | null;
+  failures: number;
+  circuitOpenUntil: string | null;
+  lastReason: string | null;
+};
+
+export type RecoveryDecision = {
+  action: 'skip' | 'recover' | 'blocked';
+  code: string;
+  reason: string;
+};
+
+/**
+ * Controlled last-resort recovery for an Available Codespace without a live
+ * worker. This is deliberately separate from the normal reconcile path: the
+ * normal GET must never stop a running machine, and a restart is only useful
+ * when there is queued work, no active attempt and no online worker.
+ */
+export function decideWorkerRecovery(input: {
+  codespaceState: string | null | undefined;
+  workerOnline: boolean;
+  executing: boolean;
+  queued: number;
+  queuePaused: boolean;
+  hasSignal: boolean;
+  signalAgeSeconds: number | null;
+  startupGraceSeconds: number;
+  recovery: RecoveryState;
+  now?: number;
+}): RecoveryDecision {
+  if (normalizeCodespaceState(input.codespaceState) !== 'available') {
+    return {
+      action: 'skip',
+      code: 'WORKER_RECOVERY_NOT_AVAILABLE',
+      reason: 'The Codespace is not Available; recovery is only for an available machine.',
+    };
+  }
+  if (input.executing) {
+    return {
+      action: 'skip',
+      code: 'WORKER_ACTIVE',
+      reason: 'An execution attempt is active; the machine will not be restarted.',
+    };
+  }
+  if (input.queuePaused || input.queued <= 0) {
+    return {
+      action: 'skip',
+      code: 'NO_QUEUED_WORK',
+      reason: 'There is no runnable queued work.',
+    };
+  }
+  if (input.workerOnline) {
+    return {
+      action: 'skip',
+      code: 'WORKER_ONLINE',
+      reason: 'The worker is online (including a not-ready worker); restart cannot fix it.',
+    };
+  }
+  const now = input.now ?? Date.now();
+  const circuitUntil = input.recovery.circuitOpenUntil
+    ? new Date(input.recovery.circuitOpenUntil).getTime()
+    : 0;
+  if (Number.isFinite(circuitUntil) && circuitUntil > now) {
+    return {
+      action: 'blocked',
+      code: 'WORKER_RECOVERY_CIRCUIT_OPEN',
+      reason:
+        input.recovery.lastReason ||
+        'Worker recovery is paused after repeated failed restarts. It will resume after a confirmed worker ready signal.',
+    };
+  }
+  if (input.recovery.failures >= WORKER_RECOVERY_CIRCUIT_THRESHOLD) {
+    return {
+      action: 'blocked',
+      code: 'WORKER_RECOVERY_CIRCUIT_OPEN',
+      reason:
+        'Worker recovery reached the safe restart limit. Waiting for a confirmed worker ready signal.',
+    };
+  }
+  const lastAttempt = input.recovery.lastAttemptAt
+    ? new Date(input.recovery.lastAttemptAt).getTime()
+    : 0;
+  if (lastAttempt && now - lastAttempt < WORKER_RECOVERY_COOLDOWN_SECONDS * 1000) {
+    return {
+      action: 'blocked',
+      code: 'WORKER_RECOVERY_COOLDOWN',
+      reason: `A worker restart was already attempted ${Math.round(
+        (now - lastAttempt) / 1000
+      )}s ago; waiting for the cooldown.`,
+    };
+  }
+  if (!input.hasSignal || input.signalAgeSeconds === null) {
+    return {
+      action: 'skip',
+      code: 'WORKER_RECOVERY_NO_SIGNAL',
+      reason: 'No lifecycle start or worker heartbeat proves that the machine booted.',
+    };
+  }
+  if (input.signalAgeSeconds < input.startupGraceSeconds) {
+    return {
+      action: 'skip',
+      code: 'WORKER_STARTUP_GRACE',
+      reason: `The Codespace booted ${input.signalAgeSeconds}s ago; waiting for the startup grace period.`,
+    };
+  }
+  return {
+    action: 'recover',
+    code: 'WORKER_RECOVERY_ALLOWED',
+    reason: 'Available Codespace with queued work and no online worker.',
+  };
+}
+
 export type LifecycleStatusInput = {
   schemaReady: boolean;
   codespaceState: string | null;
   codespaceError: string | null;
   workerOnline: boolean;
   workerReady: boolean;
+  workerRegistered: boolean;
   readinessReasons: string[];
   opencodeOk: boolean;
   authOk: boolean;
@@ -101,6 +219,8 @@ export type LifecycleStatusInput = {
   graceSeconds: number;
   shutdownRequested: boolean;
   pendingStart: boolean;
+  recoveryBlocked: boolean;
+  recoveryReason: string | null;
   lastError: string | null;
   lastStartFailed: boolean;
 };
@@ -214,18 +334,38 @@ export function deriveLifecycleStatus(
         detail: 'Codespace is available. Waiting for the worker heartbeat and readiness check.',
       };
     }
-    if (input.lastError) {
+    if (input.recoveryBlocked) {
       return {
         status: 'blocked',
-        label: 'Blocked',
-        detail: input.lastError,
+        label: 'Worker recovery blocked',
+        detail:
+          input.recoveryReason ||
+          'The worker is offline and automatic recovery is waiting for a confirmed new signal.',
+      };
+    }
+    if (!input.workerRegistered) {
+      return {
+        status: 'worker_missing',
+        label: 'Worker not registered',
+        detail: [
+          'GitHub reports the Codespace as available, but no worker has ever registered.',
+          'The Codespace lifecycle hook did not start the worker. Check the boot log and worker credentials.',
+          input.lastError,
+        ]
+          .filter(Boolean)
+          .join(' '),
       };
     }
     return {
-      status: 'codespace_available',
-      label: 'Codespace available',
-      detail:
-        'GitHub reports the Codespace as available but no worker is heartbeating. The backend will restart it after the startup grace period to re-run lifecycle hooks.',
+      status: 'worker_offline',
+      label: 'Worker offline',
+      detail: [
+        'GitHub reports the Codespace as available, but the worker heartbeat is stale.',
+        'The worker process is not running; the normal reconcile will not stop a running machine.',
+        input.lastError,
+      ]
+        .filter(Boolean)
+        .join(' '),
     };
   }
   if (!input.workerReady) {

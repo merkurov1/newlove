@@ -79,24 +79,21 @@ function json(body: unknown, status = 200) {
 }
 
 /**
- * If a stop is in flight, startup is recorded and retried after the response.
- * The enqueue action never waits for the whole Codespace boot.
+ * If a stop is in flight, startup is persisted and retried once after the
+ * response. The request never waits for the Codespace boot. Further attempts
+ * are driven by the next Admin poll and by the persisted pending state, not by
+ * a long retry loop inside one Vercel Function.
  */
 function schedulePendingStart(result: EnsureStartResult, source: string): void {
   if (result.action !== 'start-pending') return;
   after(async () => {
-    // A shutdown can take tens of seconds. Retry within the function budget
-    // instead of giving up after the first GitHub state read.
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 9_000));
-      try {
-        const retried = await retryPendingStart(`${source}:retry`);
-        if (retried.action !== 'start-pending') return;
-      } catch (error) {
-        console.error('[Pierrot Dev Workbench] pending start retry failed', {
-          code: error instanceof Error ? error.name : 'unknown',
-        });
-      }
+    await new Promise((resolve) => setTimeout(resolve, 12_000));
+    try {
+      await retryPendingStart(`${source}:retry`);
+    } catch (error) {
+      console.error('[Pierrot Dev Workbench] pending start retry failed', {
+        code: error instanceof Error ? error.name : 'unknown',
+      });
     }
   });
 }
@@ -192,7 +189,7 @@ export async function POST(req: Request) {
           }
         }
         schedulePendingStart(
-          await ensureCodespaceForQueuedWork({ source: 'admin:approve', waitForStopMs: 0 }),
+          await ensureCodespaceForQueuedWork({ source: 'admin:approve' }),
           'admin:approve'
         );
         break;
@@ -205,7 +202,7 @@ export async function POST(req: Request) {
         );
         if (!task) return json({ error: 'Task not found.' }, 404);
         schedulePendingStart(
-          await ensureCodespaceForQueuedWork({ source: 'admin:enqueue', waitForStopMs: 0 }),
+          await ensureCodespaceForQueuedWork({ source: 'admin:enqueue' }),
           'admin:enqueue'
         );
         break;
@@ -224,7 +221,7 @@ export async function POST(req: Request) {
         const task = await retryTask(admin.id, taskId);
         if (!task) return json({ error: 'Task not found.' }, 404);
         schedulePendingStart(
-          await ensureCodespaceForQueuedWork({ source: 'admin:retry', waitForStopMs: 0 }),
+          await ensureCodespaceForQueuedWork({ source: 'admin:retry' }),
           'admin:retry'
         );
         break;
@@ -293,7 +290,7 @@ export async function POST(req: Request) {
         });
         if (!paused) {
           schedulePendingStart(
-            await ensureCodespaceForQueuedWork({ source: 'admin:resume', waitForStopMs: 0 }),
+            await ensureCodespaceForQueuedWork({ source: 'admin:resume' }),
             'admin:resume'
           );
         }
@@ -342,7 +339,7 @@ export async function POST(req: Request) {
           return json({ error: message, code: result.error, notReady: result.notReady }, status);
         }
         schedulePendingStart(
-          await ensureCodespaceForQueuedWork({ source: 'admin:start_batch', waitForStopMs: 0 }),
+          await ensureCodespaceForQueuedWork({ source: 'admin:start_batch' }),
           'admin:start_batch'
         );
         break;
@@ -402,7 +399,7 @@ export async function POST(req: Request) {
         return json({ ok: true, codespaces });
       }
       case 'start_codespace': {
-        const result = await startCodespaceNow({ source: 'admin:manual', waitForStopMs: 0 });
+        const result = await startCodespaceNow({ source: 'admin:manual', allowWorkerRecovery: true });
         if (result.action === 'blocked') {
           return json(
             {

@@ -105,8 +105,8 @@ function money(value: number | null | undefined): string {
 
 function lifecycleTone(status: string): string {
   if (status === 'ready' || status === 'executing_task') return 'ok';
-  if (status === 'offline') return 'idle';
-  if (status === 'blocked') return 'error';
+  if (status === 'offline' || status === 'worker_offline') return 'idle';
+  if (status === 'blocked' || status === 'worker_missing') return 'error';
   if (status === 'waiting_for_shutdown' || status === 'stopping_codespace') return 'warn';
   return 'busy';
 }
@@ -987,12 +987,22 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         <p className="pw-wb-card-body">{overview.lifecycle.detail}</p>
         {overview.lifecycle.lastError && (
           <p className="pw-wb-warning">
-            <AlertTriangle size={14} /> {overview.lifecycle.lastError}
+            <AlertTriangle size={14} />{' '}
+            {overview.lifecycle.lastErrorCode
+              ? `${overview.lifecycle.lastErrorCode}: `
+              : ''}
+            {overview.lifecycle.lastError}
           </p>
         )}
         {overview.lifecycle.worker?.readiness?.reasons?.length ? (
           <p className="pw-wb-warning">
             <ShieldAlert size={14} /> {overview.lifecycle.worker.readiness.reasons.join(' · ')}
+          </p>
+        ) : null}
+        {overview.lifecycle.lastBoot ? (
+          <p className="pw-wb-meta">
+            boot {overview.lifecycle.lastBoot.phase} · {age(overview.lifecycle.lastBoot.at)} ago
+            {overview.lifecycle.lastBoot.message ? ` · ${overview.lifecycle.lastBoot.message}` : ''}
           </p>
         ) : null}
         <dl className="pw-wb-facts">
@@ -1021,6 +1031,40 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                 : 'not registered'}
             </dd>
           </div>
+          <div>
+            <dt>Versions</dt>
+            <dd>
+              worker {overview.lifecycle.worker?.version || '—'} · OpenCode{' '}
+              {overview.lifecycle.worker?.opencodeVersion || '—'}
+            </dd>
+          </div>
+          <div>
+            <dt>Readiness</dt>
+            <dd>
+              API {overview.lifecycle.worker?.readiness?.apiOk ? 'ok' : 'not ready'} · provider
+              auth {overview.lifecycle.worker?.readiness?.authOk ? 'ok' : 'missing'}
+            </dd>
+          </div>
+          <div>
+            <dt>Pending start</dt>
+            <dd>
+              {overview.lifecycle.pendingStart
+                ? `yes · attempts ${overview.lifecycle.pendingStartAttempts}`
+                : 'no'}
+            </dd>
+          </div>
+          {overview.lifecycle.recovery ? (
+            <div>
+              <dt>Recovery</dt>
+              <dd>
+                failures {overview.lifecycle.recovery.failures}
+                {overview.lifecycle.recovery.blocked ? ' · blocked' : ''}
+                {overview.lifecycle.recovery.lastReason
+                  ? ` · ${overview.lifecycle.recovery.lastReason}`
+                  : ''}
+              </dd>
+            </div>
+          ) : null}
           <div>
             <dt>Idle / grace</dt>
             <dd>

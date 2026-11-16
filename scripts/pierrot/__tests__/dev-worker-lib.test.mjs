@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  BOOT_PHASES,
   computeReadiness,
+  isAllowedWorkerBranch,
   isVersionAtLeast,
   parseOpenCodeCost,
   parseStoredAuth,
   providerFromModel,
+  resolveGitIdentity,
 } from '../dev-worker-lib.mjs';
 
 test('requires OpenCode 2.1.4 or newer', () => {
@@ -89,4 +92,46 @@ test('does not invent a zero cost when OpenCode reports no cost', () => {
 test('derives the provider from the configured model', () => {
   assert.equal(providerFromModel('deepseek/deepseek-flash'), 'deepseek');
   assert.equal(providerFromModel('deepseek-flash'), null);
+});
+
+test('uses the configured GitHub identity for automatic commits', () => {
+  assert.deepEqual(
+    resolveGitIdentity({
+      configuredName: 'Anton Merkurov',
+      configuredEmail: '97518066+merkurov1@users.noreply.github.com',
+    }),
+    {
+      name: 'Anton Merkurov',
+      email: '97518066+merkurov1@users.noreply.github.com',
+    }
+  );
+  const fallback = resolveGitIdentity({ configuredName: '', configuredEmail: '' });
+  assert.equal(fallback.name, 'Pierrot Dev');
+  assert.match(fallback.email, /@users\.noreply\.github\.com$/);
+});
+
+test('automatic pushes are restricted to attempt branches', () => {
+  assert.equal(
+    isAllowedWorkerBranch('pierrot/dev/11111111-1111-4111-8111-111111111111/1'),
+    true
+  );
+  assert.equal(isAllowedWorkerBranch('main'), false);
+  assert.equal(isAllowedWorkerBranch('pierrot/dev/task/1'), false);
+  assert.equal(isAllowedWorkerBranch('feature/x'), false);
+});
+
+test('boot telemetry exposes a closed set of phases', () => {
+  for (const phase of [
+    'starting',
+    'checking_config',
+    'checking_opencode',
+    'checking_auth',
+    'connecting_api',
+    'registering',
+    'ready',
+    'failed',
+    'stopping',
+  ]) {
+    assert.equal(BOOT_PHASES.includes(phase), true);
+  }
 });

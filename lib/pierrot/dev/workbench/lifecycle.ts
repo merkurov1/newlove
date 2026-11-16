@@ -22,11 +22,15 @@ import { getConfiguredCodespaceName } from './setup';
 import { readAttemptCost, summarizeCosts } from './costs';
 import {
   decideCodespaceStart,
+  decideWorkerRecovery,
   deriveLifecycleStatus,
   idleGraceSeconds,
   normalizeCodespaceState,
   startupGraceSeconds,
+  WORKER_RECOVERY_CIRCUIT_SECONDS,
+  WORKER_RECOVERY_CIRCUIT_THRESHOLD,
 } from './lifecycleState';
+import type { RecoveryState } from './lifecycleState';
 import type { DevLifecycleSnapshot, DevWorker } from './types';
 
 assertServerOnly('lib/pierrot/dev/workbench/lifecycle');
@@ -34,12 +38,16 @@ assertServerOnly('lib/pierrot/dev/workbench/lifecycle');
 export {
   canStopCodespace,
   decideCodespaceStart,
+  decideWorkerRecovery,
   deriveLifecycleStatus,
   idleGraceSeconds,
   normalizeCodespaceState,
   startupGraceSeconds,
+  WORKER_RECOVERY_COOLDOWN_SECONDS,
+  WORKER_RECOVERY_CIRCUIT_SECONDS,
+  WORKER_RECOVERY_CIRCUIT_THRESHOLD,
 } from './lifecycleState';
-export type { LifecycleStatusInput, StartDecision } from './lifecycleState';
+export type { LifecycleStatusInput, RecoveryDecision, RecoveryState, StartDecision } from './lifecycleState';
 
 export type StartRecord = {
   at: string;
@@ -80,6 +88,15 @@ export type PendingStart = {
   source: string;
   reason: string;
   attempts: number;
+  nextAttemptAt: string;
+  lastError: string | null;
+};
+
+export type BootRecord = {
+  at: string;
+  workerId: string;
+  phase: string;
+  message: string;
 };
 
 export type LifecycleError = {
@@ -174,16 +191,46 @@ async function readPendingStart(): Promise<PendingStart | null> {
   if (!value) return null;
   const at = iso(value.at);
   if (!at) return null;
+  const attempts =
+    typeof value.attempts === 'number' && Number.isFinite(value.attempts)
+      ? Math.max(0, Math.trunc(value.attempts))
+      : 1;
   return {
     at,
     requestedAt: iso(value.requestedAt) || at,
     codespaceName: typeof value.codespaceName === 'string' ? value.codespaceName : null,
     source: typeof value.source === 'string' ? value.source : 'unknown',
     reason: typeof value.reason === 'string' ? value.reason : 'pending',
-    attempts:
-      typeof value.attempts === 'number' && Number.isFinite(value.attempts)
-        ? Math.max(0, Math.trunc(value.attempts))
-        : 1,
+    attempts,
+    nextAttemptAt: iso(value.nextAttemptAt) || at,
+    lastError: typeof value.lastError === 'string' ? value.lastError.slice(0, 800) : null,
+  };
+}
+
+async function readBoot(): Promise<BootRecord | null> {
+  const value = objectSetting(await getSetting<unknown>('lifecycle:last_boot', null));
+  if (!value) return null;
+  const at = iso(value.at);
+  if (!at) return null;
+  return {
+    at,
+    workerId: typeof value.workerId === 'string' ? value.workerId : 'unknown',
+    phase: typeof value.phase === 'string' ? value.phase : 'unknown',
+    message: typeof value.message === 'string' ? value.message.slice(0, 800) : '',
+  };
+}
+
+async function readRecovery(): Promise<RecoveryState | null> {
+  const value = objectSetting(await getSetting<unknown>('lifecycle:recovery', null));
+  if (!value) return null;
+  return {
+    lastAttemptAt: iso(value.lastAttemptAt),
+    failures:
+      typeof value.failures === 'number' && Number.isFinite(value.failures)
+        ? Math.max(0, Math.trunc(value.failures))
+        : 0,
+    circuitOpenUntil: iso(value.circuitOpenUntil),
+    lastReason: typeof value.lastReason === 'string' ? value.lastReason.slice(0, 800) : null,
   };
 }
 
@@ -191,10 +238,13 @@ async function readError(): Promise<LifecycleError | null> {
   const value = objectSetting(await getSetting<unknown>('lifecycle:last_error', null));
   if (!value) return null;
   const at = iso(value.at);
+  const code = typeof value.code === 'string' ? value.code : '';
+  const message = typeof value.message === 'string' ? value.message.slice(0, 800) : '';
+  if (!at || !code || !message) return null;
   return {
-    at: at || new Date(0).toISOString(),
-    code: typeof value.code === 'string' ? value.code : 'LIFECYCLE_ERROR',
-    message: typeof value.message === 'string' ? value.message.slice(0, 800) : 'Lifecycle error.',
+    at,
+    code,
+    message,
   };
 }
 
@@ -223,7 +273,20 @@ export async function clearLifecycleError(): Promise<void> {
 }
 
 export async function recordWorkerReady(workerId: string): Promise<void> {
-  const [start, ready] = await Promise.all([readStart(), readReady()]);
+  const [start, ready, recovery] = await Promise.all([readStart(), readReady(), readRecovery()]);
+  // A confirmed ready heartbeat is the only signal that resets the controlled
+  // recovery circuit. It also clears stale boot/auth errors.
+  if (
+    recovery &&
+    (recovery.lastAttemptAt || recovery.failures > 0 || recovery.circuitOpenUntil)
+  ) {
+    await setSetting('lifecycle:recovery', {
+      lastAttemptAt: null,
+      failures: 0,
+      circuitOpenUntil: null,
+      lastReason: null,
+    }).catch(() => {});
+  }
   // Keep the first ready timestamp for the current start so startup duration is
   // not inflated by every heartbeat.
   if (ready && (!start || new Date(ready.at).getTime() >= new Date(start.at).getTime())) {
@@ -297,7 +360,7 @@ function secondsBetween(from: string | null, to = Date.now()): number | null {
 export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
   const updatedAt = new Date().toISOString();
   const schemaReady = await isWorkbenchSchemaReady();
-  const [queue, workers, activeAttempt, start, ready, stop, intent, pending, error, idleSince, attempts] =
+  const [queue, workers, activeAttempt, start, ready, stop, intent, pending, error, idleSince, attempts, boot, recovery] =
     await Promise.all([
       getQueueSnapshot(),
       schemaReady ? listWorkers() : Promise.resolve([]),
@@ -310,6 +373,8 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
       readError(),
       readIdleSince(),
       schemaReady ? listRecentAttempts(50) : Promise.resolve([]),
+      readBoot(),
+      readRecovery(),
     ]);
 
   let codespace: CodespaceInfo | null = null;
@@ -352,11 +417,41 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
   const startedRecently = Boolean(
     startedAt && (secondsBetween(startedAt) ?? Infinity) < startupGraceSeconds()
   );
-  const lastError = error?.message || worker?.lastError || codespaceError || null;
+  const errorIsStaleAuth = Boolean(
+    authOk && error?.code && /AUTH|PROVIDER/i.test(error.code)
+  );
+  const lastError =
+    (!errorIsStaleAuth ? error?.message : null) ||
+    (!workerReady ? worker?.lastError : null) ||
+    codespaceError ||
+    null;
   const lastStartFailed = Boolean(error?.code?.startsWith('CODESPACE_START'));
   const shutdownRequested = Boolean(
     intent && Date.now() - new Date(intent.at).getTime() < 180_000
   );
+  const recoveryState: RecoveryState = recovery || {
+    lastAttemptAt: null,
+    failures: 0,
+    circuitOpenUntil: null,
+    lastReason: null,
+  };
+  const circuitOpen = Boolean(
+    recoveryState.circuitOpenUntil &&
+      new Date(recoveryState.circuitOpenUntil).getTime() > Date.now()
+  );
+  const recoveryDecision = decideWorkerRecovery({
+    codespaceState: codespace?.state || null,
+    workerOnline,
+    executing,
+    queued: queue.queued,
+    queuePaused: queue.paused,
+    hasSignal: Boolean(start?.at || worker?.lastHeartbeatAt),
+    signalAgeSeconds: secondsBetween(start?.at || worker?.lastHeartbeatAt || null),
+    startupGraceSeconds: startupGraceSeconds(),
+    recovery: recoveryState,
+  });
+  const recoveryBlocked =
+    recoveryDecision.action === 'blocked' || (!workerOnline && circuitOpen);
 
   const decision = deriveLifecycleStatus({
     schemaReady,
@@ -364,6 +459,7 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
     codespaceError,
     workerOnline,
     workerReady,
+    workerRegistered: Boolean(worker),
     readinessReasons,
     opencodeOk,
     authOk,
@@ -375,6 +471,13 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
     graceSeconds,
     shutdownRequested,
     pendingStart: Boolean(pending),
+    recoveryBlocked,
+    recoveryReason:
+      recoveryDecision.action === 'blocked'
+        ? recoveryDecision.reason
+        : pending
+          ? 'A Codespace startup is pending; waiting for the next safe retry.'
+          : recoveryState.lastReason,
     lastError,
     lastStartFailed,
   });
@@ -404,10 +507,16 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
           online: workerOnline,
           status: worker.status,
           ready: workerReady,
+          version: worker.version,
+          opencodeVersion:
+            typeof worker.capabilities?.opencodeVersion === 'string'
+              ? worker.capabilities.opencodeVersion
+              : null,
           readiness,
           heartbeatAgeSeconds: worker.heartbeatAgeSeconds,
         }
       : null,
+    workerRegistered: Boolean(worker),
     queue: {
       queued: queue.queued,
       active: queue.active,
@@ -418,10 +527,25 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
     idleGraceSeconds: graceSeconds,
     startupGraceSeconds: startupGraceSeconds(),
     pendingStart: Boolean(pending),
+    pendingStartAttempts: pending?.attempts || 0,
     shutdownRequested,
     lastStartAt: start?.at || null,
     lastReadyAt: ready?.at || null,
     lastStopAt: stop?.at || null,
+    lastBoot: boot,
+    recovery: recovery
+      ? {
+          lastAttemptAt: recovery.lastAttemptAt,
+          failures: recovery.failures,
+          circuitOpenUntil: recovery.circuitOpenUntil,
+          lastReason: recovery.lastReason,
+          blocked:
+            Boolean(
+              recovery.circuitOpenUntil &&
+                new Date(recovery.circuitOpenUntil).getTime() > Date.now()
+            ) || recovery.failures >= 3,
+        }
+      : null,
     lastStop: stop
       ? {
           requestedAt: stop.requestedAt,
@@ -432,6 +556,7 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
         }
       : null,
     lastError,
+    lastErrorCode: error?.code || null,
     cost,
     updatedAt,
   };
@@ -474,6 +599,8 @@ async function setLastStart(input: {
   });
 }
 
+const PENDING_RETRY_DELAY_MS = 12_000;
+
 async function clearPendingStart(): Promise<void> {
   await setSetting('lifecycle:pending_start', { at: null });
 }
@@ -482,94 +609,164 @@ async function markPendingStart(input: {
   codespaceName: string | null;
   source: string;
   reason: string;
-  attempts: number;
+  attempts?: number;
+  nextAttemptAt?: string;
+  lastError?: string | null;
 }): Promise<PendingStart> {
   const now = new Date().toISOString();
+  const existing = await readPendingStart();
   const pending: PendingStart = {
     at: now,
-    requestedAt: now,
-    codespaceName: input.codespaceName,
+    requestedAt: existing?.requestedAt || now,
+    codespaceName: input.codespaceName ?? existing?.codespaceName ?? null,
     source: input.source,
     reason: input.reason,
-    attempts: Math.max(0, input.attempts),
+    attempts: Math.max(1, input.attempts ?? (existing?.attempts || 0) + 1),
+    nextAttemptAt:
+      input.nextAttemptAt || new Date(Date.now() + PENDING_RETRY_DELAY_MS).toISOString(),
+    lastError: input.lastError ? input.lastError.slice(0, 800) : existing?.lastError || null,
   };
   await setSetting('lifecycle:pending_start', pending);
   return pending;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+async function saveRecovery(state: RecoveryState): Promise<void> {
+  await setSetting('lifecycle:recovery', state).catch(() => {});
 }
 
 /**
- * Recover a Codespace that is Available but has no live worker.
+ * Controlled, last-resort recovery for an Available Codespace with no live
+ * worker. It is never part of the normal GET reconcile: only an explicit owner
+ * action requests it. Every decision is recorded with a code and a reason.
  *
- * The supervisor normally restarts a crashed worker. If it exhausted its
- * bounded restart budget, a stop/start cycle re-runs the lifecycle hooks. This
- * is throttled to one restart per ten minutes and never runs while a worker is
- * online (including a not-ready worker, which is a configuration problem rather
- * than a dead process).
+ * A restart is destructive (it stops a running machine), so it requires:
+ * queued work, no active attempt, no online worker (including not-ready),
+ * no shutdown intent, a proven boot signal past the startup grace, a cooldown
+ * and an open circuit breaker. The stop is not awaited; the start is persisted
+ * as pending state and completed by a later idempotent retry.
  */
 async function recoverDeadWorker(
   codespace: CodespaceInfo,
   source: string
 ): Promise<EnsureStartResult | null> {
-  if (normalizeCodespaceState(codespace.state) !== 'available') return null;
-  const workers = await listWorkers();
-  if (workers.some((worker) => worker.online)) return null;
-  const start = await readStart();
-  // Use the last worker heartbeat when the Codespace was started manually and
-  // no lifecycle start record exists. Without either signal, do not risk a
-  // restart loop on a freshly created Codespace.
-  const lastSignal = start?.at || workers[0]?.lastHeartbeatAt || null;
-  if (!lastSignal) return null;
-  const ageSeconds = Math.max(0, Math.round((Date.now() - new Date(lastSignal).getTime()) / 1000));
-  if (ageSeconds < startupGraceSeconds()) return null;
-  if (!(await tryAcquireLifecycleLock('restart', source, 600_000))) return null;
+  const [workers, queue, activeAttempt, start, intent, recovery] = await Promise.all([
+    listWorkers(),
+    getQueueSnapshot(),
+    getActiveAttempt(),
+    readStart(),
+    readIntent(),
+    readRecovery(),
+  ]);
+  const worker = chooseWorker(workers, codespace.name);
+  const workerOnline = Boolean(worker?.online);
+  const executing = Boolean(
+    activeAttempt || queue.active > 0 || queue.activeTasks > 0 || worker?.currentAttemptId
+  );
+  const lastSignal = start?.at || worker?.lastHeartbeatAt || null;
+  const recoveryState: RecoveryState = recovery || {
+    lastAttemptAt: null,
+    failures: 0,
+    circuitOpenUntil: null,
+    lastReason: null,
+  };
+  const signalAgeSeconds = lastSignal
+    ? Math.max(0, Math.round((Date.now() - new Date(lastSignal).getTime()) / 1000))
+    : null;
+
+  if (intent && Date.now() - new Date(intent.at).getTime() < 180_000) {
+    return {
+      action: 'blocked',
+      codespace,
+      reason: 'A shutdown intent is still active; recovery will not race it.',
+    };
+  }
+
+  const decision = decideWorkerRecovery({
+    codespaceState: codespace.state,
+    workerOnline,
+    executing,
+    queued: queue.queued,
+    queuePaused: queue.paused,
+    hasSignal: Boolean(lastSignal),
+    signalAgeSeconds,
+    startupGraceSeconds: startupGraceSeconds(),
+    recovery: recoveryState,
+  });
+
+  if (decision.action !== 'recover') {
+    if (decision.action === 'blocked') {
+      await saveRecovery({
+        ...recoveryState,
+        lastReason: decision.reason,
+      });
+      await recordLifecycleError(decision.code, decision.reason);
+    }
+    await appendEvent({
+      type: 'codespace.worker_recovery_skipped',
+      level: decision.action === 'blocked' ? 'warn' : 'info',
+      message: `Worker recovery ${decision.action}: ${decision.reason}`,
+      payload: { source, code: decision.code, signalAgeSeconds },
+      dedupeKey: `worker-recovery:${decision.code}:${Math.floor(Date.now() / 60_000)}`,
+    }).catch(() => {});
+    return decision.action === 'blocked'
+      ? { action: 'blocked', codespace, reason: decision.reason }
+      : null;
+  }
+
+  if (!(await tryAcquireLifecycleLock('restart', source, 600_000))) {
+    return {
+      action: 'blocked',
+      codespace,
+      reason: 'Another lifecycle operation holds the restart lock.',
+    };
+  }
+
+  const attempts = recoveryState.failures + 1;
+  const nextState: RecoveryState = {
+    lastAttemptAt: new Date().toISOString(),
+    failures: attempts,
+    circuitOpenUntil:
+      attempts >= WORKER_RECOVERY_CIRCUIT_THRESHOLD
+        ? new Date(Date.now() + WORKER_RECOVERY_CIRCUIT_SECONDS * 1000).toISOString()
+        : null,
+    lastReason: decision.reason,
+  };
+  await saveRecovery(nextState);
 
   await appendEvent({
     type: 'codespace.worker_recovery',
     level: 'warn',
-    message: `No live worker after ${ageSeconds}s; restarting the Codespace to re-run lifecycle hooks.`,
-    payload: { source, ageSeconds, codespace: codespace.name },
+    message: `No live worker after ${signalAgeSeconds ?? 'unknown'}s; restart attempt ${attempts}/${WORKER_RECOVERY_CIRCUIT_THRESHOLD}.`,
+    payload: { source, signalAgeSeconds, codespace: codespace.name, attempts },
+    dedupeKey: `worker-recovery:${codespace.name}:${Math.floor(Date.now() / 60_000)}`,
   }).catch(() => {});
 
   try {
     await stopCodespace(codespace.name);
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : 'Codespace stop failed.';
+    const failures = attempts;
+    const blockedUntil =
+      failures >= WORKER_RECOVERY_CIRCUIT_THRESHOLD
+        ? new Date(Date.now() + WORKER_RECOVERY_CIRCUIT_SECONDS * 1000).toISOString()
+        : null;
+    await saveRecovery({ ...nextState, failures, circuitOpenUntil: blockedUntil, lastReason: message });
     await recordLifecycleError('CODESPACE_RECOVERY_STOP_FAILED', message);
     return { action: 'blocked', codespace, reason: message };
   }
 
-  const deadline = Date.now() + 45_000;
-  while (Date.now() < deadline) {
-    await sleep(3_000);
-    let current: CodespaceInfo | null = null;
-    try {
-      current = await getCodespace(codespace.name);
-    } catch {}
-    if (current && decideCodespaceStart(current.state) === 'start') {
-      return startResolved(current, source);
-    }
-    if (current && decideCodespaceStart(current.state) === 'noop') {
-      return {
-        action: 'already-available',
-        codespace: current,
-        reason: 'Codespace restart is still settling.',
-      };
-    }
-  }
+  const pending = await markPendingStart({
+    codespaceName: codespace.name,
+    source,
+    reason: 'Recovering an Available Codespace with no live worker.',
+    attempts,
+  });
   return {
     action: 'start-pending',
     codespace,
-    reason: 'Worker recovery stop is in flight; startup is queued.',
-    pendingStart: await markPendingStart({
-      codespaceName: codespace.name,
-      source,
-      reason: 'Recovering a Codespace with no live worker.',
-      attempts: 1,
-    }),
+    reason:
+      'Worker recovery stop is in flight; startup is recorded and will be retried after the cooldown.',
+    pendingStart: pending,
   };
 }
 
@@ -632,14 +829,18 @@ async function startResolved(
  * Idempotent, backend-only startup for queued work.
  *
  * - Never starts when the queue is empty or paused.
- * - `Stopped` -> start.
- * - `Starting`/`Available` -> no-op.
- * - `Stopping`/`ShuttingDown` -> record a pending start and, when allowed,
- *   wait a bounded time for the stop to settle, then start.
+ * - `Stopped`/`Shutdown` -> start immediately (GitHub accepts quickly).
+ * - `Starting`/`Available` -> no-op; worker recovery is opt-in only.
+ * - `Stopping`/`ShuttingDown` -> persist pending state and return. The HTTP
+ *   request never waits for the machine to boot or stop.
+ *
+ * `allowWorkerRecovery` is false by default. Normal GET/overview reconcile must
+ * never stop an Available machine; only an explicit owner action may request
+ * the controlled recovery path.
  */
 export async function ensureCodespaceForQueuedWork(input: {
   source: string;
-  waitForStopMs?: number;
+  allowWorkerRecovery?: boolean;
 }): Promise<EnsureStartResult> {
   if (!(await isWorkbenchSchemaReady())) {
     return {
@@ -689,10 +890,11 @@ export async function ensureCodespaceForQueuedWork(input: {
   }
   await rememberCodespace(codespace);
 
+  const pending = await readPendingStart();
+
   // A stop may already be in flight while GitHub still reports Available. If
-  // the shutdown intent is fresh, record a pending start before deciding. The
-  // retry loop then either sees the stop settle and starts, or sees Available
-  // and clears the stale intent.
+  // the shutdown intent is fresh, record pending state before deciding. No
+  // synchronous wait: a later idempotent retry completes the start.
   const intent = await readIntent();
   const intentFresh = Boolean(
     intent &&
@@ -701,27 +903,60 @@ export async function ensureCodespaceForQueuedWork(input: {
   );
   if (intentFresh) {
     await setSetting('lifecycle:shutdown_intent', { at: null });
-    const pending = await markPendingStart({
+    const recorded = await markPendingStart({
       codespaceName: codespace.name,
       source: input.source,
       reason: 'New work arrived while an idle shutdown was in progress.',
-      attempts: 1,
     });
     const decision = decideCodespaceStart(codespace.state);
     if (decision === 'start') return startResolved(codespace, input.source);
     return {
       action: 'start-pending',
       codespace,
-      reason: 'New work arrived during shutdown; startup will be retried.',
-      pendingStart: pending,
+      reason: 'New work arrived during shutdown; startup is recorded and will be retried.',
+      pendingStart: recorded,
     };
   }
 
   const decision = decideCodespaceStart(codespace.state);
   if (decision === 'noop') {
-    const recovered = await recoverDeadWorker(codespace, input.source);
-    if (recovered) return recovered;
-    await clearPendingStart().catch(() => {});
+    if (input.allowWorkerRecovery) {
+      const recovered = await recoverDeadWorker(codespace, input.source);
+      if (recovered) return recovered;
+    }
+    const workers = await listWorkers();
+    const workerOnline = workers.some((worker) => worker.online);
+    if (workerOnline || !pending) {
+      await clearPendingStart().catch(() => {});
+    }
+    if (pending && !workerOnline) {
+      // The machine is Available but the worker has not confirmed readiness.
+      // Keep the durable pending record instead of pretending the start is
+      // done; a later retry either sees the heartbeat or stays visible as
+      // worker_offline in Admin.
+      const dueAt = new Date(pending.nextAttemptAt).getTime();
+      if (Number.isFinite(dueAt) && dueAt > Date.now()) {
+        return {
+          action: 'start-pending',
+          codespace,
+          reason: 'Codespace is available; waiting for a worker heartbeat.',
+          pendingStart: pending,
+        };
+      }
+      const refreshed = await markPendingStart({
+        codespaceName: codespace.name,
+        source: input.source,
+        reason: pending.reason || 'Waiting for a worker heartbeat.',
+        attempts: pending.attempts || 1,
+        lastError: pending.lastError,
+      });
+      return {
+        action: 'start-pending',
+        codespace,
+        reason: 'Codespace is available; waiting for a worker heartbeat.',
+        pendingStart: refreshed,
+      };
+    }
     return {
       action: 'already-available',
       codespace,
@@ -737,49 +972,24 @@ export async function ensureCodespaceForQueuedWork(input: {
     return { action: 'blocked', codespace, reason: message };
   }
 
-  // A stop is in flight. Record the intent so another request cannot lose it,
-  // then wait a bounded time for GitHub to settle.
-  const pending = await markPendingStart({
+  // A stop is in flight. Persist the intent and return immediately.
+  const recorded = await markPendingStart({
     codespaceName: codespace.name,
     source: input.source,
     reason: `Codespace is ${codespace.state}.`,
-    attempts: 1,
   });
-  const waitMs = Math.min(Math.max(0, input.waitForStopMs ?? 0), 50_000);
-  const deadline = Date.now() + waitMs;
-  while (Date.now() < deadline) {
-    await sleep(3_000);
-    let current: CodespaceInfo | null = null;
-    try {
-      current = await getCodespace(codespace.name);
-    } catch {
-      // Keep waiting until the bounded deadline.
-    }
-    if (!current) continue;
-    if (decideCodespaceStart(current.state) === 'start') {
-      return startResolved(current, input.source);
-    }
-    if (decideCodespaceStart(current.state) === 'noop') {
-      await clearPendingStart();
-      return {
-        action: 'already-available',
-        codespace: current,
-        reason: `Codespace became ${current.state}.`,
-      };
-    }
-  }
   return {
     action: 'start-pending',
     codespace,
-    reason: `Codespace is ${codespace.state}; startup is queued and will be retried.`,
-    pendingStart: pending,
+    reason: `Codespace is ${codespace.state}; startup is recorded and will be retried.`,
+    pendingStart: recorded,
   };
 }
 
 /** Owner-initiated start. Still idempotent and state-aware. */
 export async function startCodespaceNow(input: {
   source: string;
-  waitForStopMs?: number;
+  allowWorkerRecovery?: boolean;
 }): Promise<EnsureStartResult> {
   if (!(await isWorkbenchSchemaReady())) {
     return { action: 'blocked', codespace: null, reason: 'Workbench schema is not ready.' };
@@ -807,9 +1017,14 @@ export async function startCodespaceNow(input: {
   await rememberCodespace(codespace);
   const decision = decideCodespaceStart(codespace.state);
   if (decision === 'noop') {
-    const recovered = await recoverDeadWorker(codespace, input.source);
-    if (recovered) return recovered;
-    await clearPendingStart().catch(() => {});
+    if (input.allowWorkerRecovery) {
+      const recovered = await recoverDeadWorker(codespace, input.source);
+      if (recovered) return recovered;
+    }
+    const workers = await listWorkers();
+    if (workers.some((worker) => worker.online)) {
+      await clearPendingStart().catch(() => {});
+    }
     return { action: 'already-available', codespace, reason: `Codespace is ${codespace.state}.` };
   }
   if (decision === 'start') return startResolved(codespace, input.source);
@@ -822,34 +1037,20 @@ export async function startCodespaceNow(input: {
     codespaceName: codespace.name,
     source: input.source,
     reason: `Codespace is ${codespace.state}.`,
-    attempts: 1,
   });
-  const waitMs = Math.min(Math.max(0, input.waitForStopMs ?? 0), 50_000);
-  const deadline = Date.now() + waitMs;
-  while (Date.now() < deadline) {
-    await sleep(3_000);
-    let current: CodespaceInfo | null = null;
-    try {
-      current = await getCodespace(codespace.name);
-    } catch {}
-    if (!current) continue;
-    if (decideCodespaceStart(current.state) === 'start') {
-      return startResolved(current, input.source);
-    }
-    if (decideCodespaceStart(current.state) === 'noop') {
-      await clearPendingStart();
-      return { action: 'already-available', codespace: current, reason: `Codespace became ${current.state}.` };
-    }
-  }
   return {
     action: 'start-pending',
     codespace,
-    reason: `Codespace is ${codespace.state}; startup is queued and will be retried.`,
+    reason: `Codespace is ${codespace.state}; startup is recorded and will be retried.`,
     pendingStart: pending,
   };
 }
 
-/** Retry a recorded pending start. Safe to call repeatedly. */
+/**
+ * Retry a recorded pending start. Safe to call repeatedly and from concurrent
+ * requests: persisted state, a cooldown and the lifecycle lock make it
+ * idempotent. It performs at most one GitHub transition per call.
+ */
 export async function retryPendingStart(source = 'lifecycle-retry'): Promise<EnsureStartResult> {
   const pending = await readPendingStart();
   if (!pending) {
@@ -860,7 +1061,16 @@ export async function retryPendingStart(source = 'lifecycle-retry'): Promise<Ens
     await clearPendingStart();
     return { action: 'noop', codespace: null, reason: 'No queued work remains.' };
   }
-  return ensureCodespaceForQueuedWork({ source, waitForStopMs: 12_000 });
+  const dueAt = new Date(pending.nextAttemptAt).getTime();
+  if (Number.isFinite(dueAt) && dueAt > Date.now() + 1_000) {
+    return {
+      action: 'start-pending',
+      codespace: null,
+      reason: 'Pending start is scheduled for a later retry.',
+      pendingStart: pending,
+    };
+  }
+  return ensureCodespaceForQueuedWork({ source, allowWorkerRecovery: false });
 }
 
 // ---------------------------------------------------------------------------

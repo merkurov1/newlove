@@ -84,17 +84,41 @@ overwritten.
   queued task exists and the Codespace is stopped.
   Startup is idempotent and state-aware (`Stopped`, `Starting`, `Available`,
   `Stopping`, `ShuttingDown`, unsupported).
-- If a stop is already in flight, the backend records a pending start and
-  retries it after the stop settles. A new task never waits for the owner to
-  click Start.
+- The Admin overview GET is safe: it may start a genuinely stopped Codespace
+  when queued work exists, but it never stops or restarts an Available one.
+  GitHub machine state and worker process state are shown separately
+  (`worker_missing`, `worker_offline`, `starting_worker`, `checking_provider`,
+  `blocked`, ...).
+- If a stop is already in flight, the backend records a durable pending start
+  (attempt count and next attempt time) and returns immediately. The request
+  never waits for the Codespace boot. One short `after()` retry plus the next
+  Admin poll complete the start idempotently.
+- Worker recovery (stop + start an Available machine) is a separate, explicit
+  owner action. It requires queued work, no active attempt, no online worker
+  (including a not-ready worker), no shutdown intent, a proven boot signal past
+  the startup grace, a 15-minute cooldown and a circuit breaker (3 failures /
+  6 hours). Every decision is recorded as `codespace.worker_recovery*`.
+  A confirmed worker ready heartbeat resets the circuit.
 - Starting the Codespace runs `postStartCommand`; a detached supervisor starts
-  the worker and restarts it with bounded exponential backoff after abnormal
-  exits. Lifecycle hooks no longer use `|| true`, so configuration failures are
-  visible.
+  the worker. `postStart` and `postAttach` are serialized with `flock`, PID
+  files are validated against the expected command line, and an orphaned
+  worker is adopted instead of duplicated. Lifecycle hooks no longer use
+  `|| true`, so configuration failures are visible.
+- The supervisor retries transient crashes indefinitely with capped
+  exponential backoff (15s → 120s) and resets the budget after a stable run.
+  Exit code 2 means a permanent configuration failure and is not restarted.
+  `PIERROT_DEV_SUPERVISOR_MAX_RESTARTS` and
+  `PIERROT_DEV_SUPERVISOR_INITIAL_BACKOFF_SECONDS` exist for bounded tests/ops;
+  the default is unlimited transient recovery.
 - The backend does not report Ready just because GitHub says `Available`.
   Admin waits for a fresh worker heartbeat and a readiness proof: worker
   configuration, Pierrot API/Supabase reachability, OpenCode >= 2.1.4 and
   stored provider authentication. A not-ready worker never claims tasks.
+- Boot telemetry (`starting`, `checking_config`, `checking_opencode`,
+  `checking_auth`, `connecting_api`, `registering`, `ready`, `failed`,
+  `stopping`) is written to the local boot log first and then to the worker
+  API. Admin shows the last phase, last failure, heartbeat age, versions, API
+  readiness and provider auth separately from the Codespace state.
 - When the queue is empty and no attempt/task is active, the worker reports its
   idle time. The backend waits the idle grace period (default 120 seconds),
   takes a lifecycle lock, rechecks the queue and active attempts, records the
@@ -120,8 +144,20 @@ overwritten.
 - Runs `opencode run --standalone --format json` in a clean environment inside
   a per-attempt git worktree.
 - Commits and pushes only to the generated attempt branch; PR creation happens
-  on the server after the result is recorded.
+  on the server after the result is recorded. Automatic commits use the
+  Codespace's configured GitHub identity (falling back to the repository
+  owner's verified GitHub noreply address), never an invented author.
+  Signing is disabled per worker commit with `-c commit.gpgsign=false` because
+  the repository does not require signed commits; set
+  `PIERROT_DEV_GIT_SIGN_COMMITS=true` to use the configured signing identity
+  instead. Pushes to `main`/`master` or any non-`pierrot/dev/<task>/<attempt>`
+  branch are refused.
+- If commit or push fails, the branch, local commit SHA and exact reason are
+  kept in `$PIERROT_DEV_WORK_ROOT/push-failures/<attempt>.json`, sent with the
+  failed attempt and retried through the durable outbox if the API is down.
 - Keeps failed completion payloads in a local outbox and retries delivery.
+  Duplicate delivery is idempotent on the server; an attempt's cost and
+  completion are never recorded twice.
 - Parses OpenCode `step_finish` events for actual token usage and model cost.
   Missing cost data is stored as unknown, never zero.
 - On SIGTERM releases the lease and requeues the task.
@@ -144,6 +180,10 @@ overwritten.
 - Model token usage and cost come from OpenCode `step_finish` events. When the
   CLI does not report them they are stored as `null` with a provenance of
   `unavailable`, never as zero.
+- Failed attempts keep cost too: when OpenCode already ran, its usage and
+  measured runtime are sent with the failure. A failure before the model
+  started is labelled `unavailable:model-not-started`. Commit/push failures
+  still keep the measured Codespaces runtime.
 - Codespaces cost is estimated from the machine type and measured wall-clock
   runtime. GitHub does not expose billed Codespaces minutes to this token, so
   the value is always labelled as an estimate. Set

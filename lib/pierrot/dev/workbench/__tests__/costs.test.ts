@@ -41,4 +41,17 @@ describe('Dev Cost Ledger', () => {
     expect(summary.codespaceEstimatedUsd).toBeNull();
     expect(summary.totalUsd).toBeNull();
   });
+
+  it('explains a failure before the model started instead of reporting zero', () => {
+    const cost = buildAttemptCost({
+      usage: null,
+      machine: 'basicLinux32gb',
+      runtimeMs: 30_000,
+      modelStarted: false,
+    });
+    expect(cost.model.costUsd).toBeNull();
+    expect(cost.model.provenance).toBe('unavailable:model-not-started');
+    expect(cost.unknown).toContain('model cost (model did not run)');
+    expect(cost.codespace.estimatedUsd).toBeGreaterThan(0);
+  });
 });

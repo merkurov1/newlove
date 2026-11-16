@@ -126,14 +126,24 @@ export function buildAttemptCost(input: {
   usage?: unknown;
   machine?: string | null;
   runtimeMs?: number | null;
+  /** False when the attempt failed before OpenCode was started. */
+  modelStarted?: boolean;
 }): DevAttemptCost {
+  const modelStarted = input.modelStarted !== false;
   const model = normalizeOpenCodeUsage(input.usage);
+  if ((!modelStarted || model.steps === 0) && model.costUsd === null) {
+    model.provenance = modelStarted
+      ? 'unavailable:opencode-did-not-report-cost'
+      : 'unavailable:model-not-started';
+  }
   const codespace = estimateCodespaceCost({
     machine: input.machine || null,
     runtimeMs: typeof input.runtimeMs === 'number' ? input.runtimeMs : null,
   });
   const unknown: string[] = [];
-  if (model.costUsd === null) unknown.push('model cost');
+  if (model.costUsd === null) {
+    unknown.push(modelStarted ? 'model cost' : 'model cost (model did not run)');
+  }
   if (codespace.estimatedUsd === null) unknown.push('Codespaces cost');
   const totalUsd =
     model.costUsd === null || codespace.estimatedUsd === null

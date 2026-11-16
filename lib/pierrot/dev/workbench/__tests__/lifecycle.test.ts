@@ -3,6 +3,7 @@
 import {
   canStopCodespace,
   decideCodespaceStart,
+  decideWorkerRecovery,
   deriveLifecycleStatus,
 } from '../lifecycleState';
 import type { LifecycleStatusInput } from '../lifecycleState';
@@ -13,6 +14,7 @@ const base: LifecycleStatusInput = {
   codespaceError: null,
   workerOnline: true,
   workerReady: true,
+  workerRegistered: true,
   readinessReasons: [],
   opencodeOk: true,
   authOk: true,
@@ -24,6 +26,8 @@ const base: LifecycleStatusInput = {
   graceSeconds: 120,
   shutdownRequested: false,
   pendingStart: false,
+  recoveryBlocked: false,
+  recoveryReason: null,
   lastError: null,
   lastStartFailed: false,
 };
@@ -60,6 +64,60 @@ describe('Codespaces startup decisions', () => {
       startedRecently: false,
     });
     expect(result.status).toBe('offline');
+  });
+});
+
+describe('controlled worker recovery', () => {
+  const recovery = {
+    lastAttemptAt: null,
+    failures: 0,
+    circuitOpenUntil: null,
+    lastReason: null,
+  };
+  const input = {
+    codespaceState: 'Available',
+    workerOnline: false,
+    executing: false,
+    queued: 1,
+    queuePaused: false,
+    hasSignal: true,
+    signalAgeSeconds: 900,
+    startupGraceSeconds: 300,
+    recovery,
+    now: Date.parse('2026-01-01T00:00:00.000Z'),
+  };
+
+  it('recovers only an Available machine with queued work and no worker', () => {
+    expect(decideWorkerRecovery(input).action).toBe('recover');
+    expect(decideWorkerRecovery({ ...input, workerOnline: true }).action).toBe('skip');
+    expect(decideWorkerRecovery({ ...input, executing: true }).action).toBe('skip');
+    expect(decideWorkerRecovery({ ...input, queued: 0 }).action).toBe('skip');
+    expect(decideWorkerRecovery({ ...input, codespaceState: 'Stopped' }).action).toBe('skip');
+  });
+
+  it('enforces the cooldown and the circuit breaker', () => {
+    expect(
+      decideWorkerRecovery({
+        ...input,
+        recovery: { ...recovery, lastAttemptAt: '2025-12-31T23:55:00.000Z' },
+      }).code
+    ).toBe('WORKER_RECOVERY_COOLDOWN');
+
+    expect(
+      decideWorkerRecovery({
+        ...input,
+        recovery: { ...recovery, failures: 3 },
+      }).code
+    ).toBe('WORKER_RECOVERY_CIRCUIT_OPEN');
+  });
+
+  it('waits for the startup grace and for a proven boot signal', () => {
+    expect(
+      decideWorkerRecovery({ ...input, signalAgeSeconds: 10 }).code
+    ).toBe('WORKER_STARTUP_GRACE');
+    expect(
+      decideWorkerRecovery({ ...input, hasSignal: false, signalAgeSeconds: null }).code
+    ).toBe('WORKER_RECOVERY_NO_SIGNAL');
   });
 });
 
@@ -152,7 +210,32 @@ describe('readiness and lifecycle status', () => {
         workerReady: false,
         startedRecently: false,
       }).status
-    ).toBe('codespace_available');
+    ).toBe('worker_offline');
+  });
+
+  it('distinguishes a never-registered worker from an offline worker', () => {
+    expect(
+      deriveLifecycleStatus({
+        ...base,
+        workerOnline: false,
+        workerReady: false,
+        workerRegistered: false,
+        startedRecently: false,
+      }).status
+    ).toBe('worker_missing');
+  });
+
+  it('surfaces a blocked recovery instead of pretending a restart is running', () => {
+    const result = deriveLifecycleStatus({
+      ...base,
+      workerOnline: false,
+      workerReady: false,
+      startedRecently: false,
+      recoveryBlocked: true,
+      recoveryReason: 'A worker restart was already attempted; waiting for the cooldown.',
+    });
+    expect(result.status).toBe('blocked');
+    expect(result.detail).toMatch(/cooldown/i);
   });
 
   it('surfaces blocked states instead of pretending work can run', () => {
@@ -160,14 +243,14 @@ describe('readiness and lifecycle status', () => {
     expect(deriveLifecycleStatus({ ...base, queuePaused: true, queued: 1 }).status).toBe(
       'blocked'
     );
-    expect(
-      deriveLifecycleStatus({
-        ...base,
-        workerOnline: false,
-        workerReady: false,
-        startedRecently: false,
-        lastError: 'Codespace start failed.',
-      }).status
-    ).toBe('blocked');
+    const offlineWithError = deriveLifecycleStatus({
+      ...base,
+      workerOnline: false,
+      workerReady: false,
+      startedRecently: false,
+      lastError: 'Codespace start failed.',
+    });
+    expect(offlineWithError.status).toBe('worker_offline');
+    expect(offlineWithError.detail).toMatch(/Codespace start failed/);
   });
 });

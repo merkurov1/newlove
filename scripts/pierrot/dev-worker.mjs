@@ -28,11 +28,14 @@ import os from 'node:os';
 import process from 'node:process';
 import { runProcess, terminateProcessGroup } from './dev-worker-process.mjs';
 import {
+  BOOT_PHASES,
   computeReadiness,
+  isAllowedWorkerBranch,
   isVersionAtLeast,
   parseOpenCodeCost,
   parseStoredAuth,
   providerFromModel,
+  resolveGitIdentity,
 } from './dev-worker-lib.mjs';
 
 const API_BASE = (
@@ -80,9 +83,11 @@ const OPENCODE_PROVIDER = (
 const OPENCODE_AGENT = (process.env.PIERROT_DEV_OPENCODE_AGENT || '').trim();
 const LOG_DIR = path.join(WORK_ROOT, 'logs');
 const OUTBOX_DIR = path.join(WORK_ROOT, 'outbox');
+const PUSH_FAILURE_DIR = path.join(WORK_ROOT, 'push-failures');
 const WORKTREE_ROOT = path.join(WORK_ROOT, 'work');
 const RUN_LOG = path.join(LOG_DIR, 'worker.log');
-const WORKER_VERSION = '1.0.0';
+const BOOT_LOG = path.join(LOG_DIR, 'worker-boot.log');
+const WORKER_VERSION = '1.1.0';
 
 let shuttingDown = false;
 let activeAttempt = null;
@@ -91,6 +96,8 @@ let idleSince = Date.now();
 let consecutiveErrors = 0;
 let serverIdleGraceSeconds = IDLE_GRACE_SECONDS;
 let readiness = null;
+let bootApiReachable = true;
+const bootedPhases = new Set();
 
 function clamp(value, min, max) {
   if (!Number.isFinite(value)) return min;
@@ -125,7 +132,7 @@ function sanitize(value) {
 }
 
 async function ensureDirs() {
-  for (const dir of [WORK_ROOT, LOG_DIR, OUTBOX_DIR, WORKTREE_ROOT]) {
+  for (const dir of [WORK_ROOT, LOG_DIR, OUTBOX_DIR, PUSH_FAILURE_DIR, WORKTREE_ROOT]) {
     await fs.mkdir(dir, { recursive: true });
   }
 }
@@ -141,6 +148,35 @@ async function log(message, extra) {
     }
   } catch {
     // Logging must never stop execution.
+  }
+}
+
+/**
+ * Report a boot phase locally first, then to the API when reachable. A local
+ * boot log is always written, so a temporary API outage never hides the
+ * reason a worker did not start.
+ */
+async function bootPhase(phase, message, options = {}) {
+  const safePhase = BOOT_PHASES.includes(phase) ? phase : 'failed';
+  const safeMessage = sanitize(message).slice(0, 800);
+  const line = `${nowIso()} [boot:${safePhase}] ${safeMessage}\n`;
+  process.stdout.write(line);
+  try {
+    await fs.appendFile(BOOT_LOG, line);
+  } catch {}
+  const dedupeKey = `${safePhase}:${safeMessage}`;
+  if (!options.force && bootedPhases.has(dedupeKey)) return;
+  bootedPhases.add(dedupeKey);
+  if (!TOKEN || TOKEN.length < 32 || !/^https?:\/\//.test(API_BASE)) return;
+  if (!bootApiReachable && !['connecting_api', 'registering', 'ready', 'failed'].includes(safePhase)) {
+    return;
+  }
+  try {
+    await api('boot', { phase: safePhase, message: safeMessage }, 8_000);
+    bootApiReachable = true;
+  } catch {
+    // The local boot log above is the durable record while the API is down.
+    bootApiReachable = false;
   }
 }
 
@@ -301,6 +337,7 @@ async function readCapabilities(context = {}) {
     lastCheckedAt: nowIso(),
     hostname: os.hostname(),
   };
+  await bootPhase('checking_opencode', `Checking OpenCode CLI (minimum ${MIN_OPENCODE_VERSION}).`);
   try {
     const version = await run('opencode', ['--version'], {
       env: opencodeEnv(),
@@ -311,6 +348,12 @@ async function readCapabilities(context = {}) {
       capabilities.opencodeVersion = sanitize(version.stdout.trim()).slice(0, 80);
     }
   } catch {}
+  if (!capabilities.opencodeAvailable) {
+    await bootPhase('failed', 'OPENCODE_CLI_MISSING: OpenCode CLI is not available on PATH.', {
+      force: true,
+    });
+  }
+  await bootPhase('checking_auth', `Checking stored ${OPENCODE_PROVIDER} authentication.`);
   try {
     const auth = await run('opencode', ['auth', 'list'], {
       env: opencodeEnv(),
@@ -326,7 +369,21 @@ async function readCapabilities(context = {}) {
     capabilities.opencodeAvailable &&
       isVersionAtLeast(capabilities.opencodeVersion, MIN_OPENCODE_VERSION)
   );
-  return applyReadiness(capabilities, context);
+  applyReadiness(capabilities, context);
+  if (capabilities.opencodeAvailable && !capabilities.versionOk) {
+    await bootPhase(
+      'failed',
+      `OPENCODE_VERSION_UNSUPPORTED: ${capabilities.opencodeVersion || 'unknown'} is older than ${MIN_OPENCODE_VERSION}.`,
+      { force: true }
+    );
+  } else if (!capabilities.opencodeAuthenticated) {
+    await bootPhase(
+      'failed',
+      `OPENCODE_AUTH_MISSING: No stored ${OPENCODE_PROVIDER} authentication was found.`,
+      { force: true }
+    );
+  }
+  return capabilities;
 }
 
 // ---------------------------------------------------------------------------
@@ -521,19 +578,64 @@ async function collectChangedFiles(worktree) {
   return [...new Set(files)].slice(0, 200);
 }
 
-async function commitAndPush({ worktree, branch, taskId, attemptNumber }) {
+async function writePushFailure(attemptId, record) {
+  const file = path.join(PUSH_FAILURE_DIR, `${attemptId}.json`);
+  try {
+    await fs.writeFile(
+      file,
+      JSON.stringify({ attemptId, createdAt: nowIso(), ...record }, null, 2),
+      'utf8'
+    );
+  } catch {}
+  return file;
+}
+
+async function commitIdentity(worktree) {
+  const configuredName = await git(['config', 'user.name'], worktree, 15_000);
+  const configuredEmail = await git(['config', 'user.email'], worktree, 15_000);
+  return resolveGitIdentity({
+    configuredName: configuredName.code === 0 ? configuredName.stdout : '',
+    configuredEmail: configuredEmail.code === 0 ? configuredEmail.stdout : '',
+    envName: process.env.PIERROT_DEV_GIT_NAME,
+    envEmail: process.env.PIERROT_DEV_GIT_EMAIL,
+  });
+}
+
+async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumber }) {
+  if (!isAllowedWorkerBranch(branch)) {
+    const error = new Error(
+      `Refusing to push to ${branch || 'an unknown branch'}: only pierrot/dev/<task>/<attempt> is allowed.`
+    );
+    error.code = 'WORKER_BRANCH_FORBIDDEN';
+    await writePushFailure(attemptId, {
+      taskId,
+      branch,
+      commitSha: null,
+      reason: error.message,
+    });
+    throw error;
+  }
+
   const add = await git(['add', '-A'], worktree, 60000);
   if (add.code !== 0) throw new Error('git add failed.');
   const staged = await git(['diff', '--cached', '--name-only'], worktree, 30000);
   const files = staged.stdout.split('\n').map((line) => line.trim()).filter(Boolean);
   if (files.length === 0) return { commitSha: null, files: [] };
 
+  // Use the Codespace's verified GitHub identity. Never invent an author.
+  // Signing is disabled only for this worker commit (the repository does not
+  // require signed commits). If signing becomes mandatory, set
+  // PIERROT_DEV_GIT_SIGN_COMMITS=true and use the configured gh-gpgsign identity.
+  const identity = await commitIdentity(worktree);
+  const sign = process.env.PIERROT_DEV_GIT_SIGN_COMMITS === 'true' ? 'true' : 'false';
   const commit = await git(
     [
       '-c',
-      'user.name=Pierrot Dev',
+      `user.name=${identity.name}`,
       '-c',
-      'user.email=pierrot-dev@merkurov.love',
+      `user.email=${identity.email}`,
+      '-c',
+      `commit.gpgsign=${sign}`,
       'commit',
       '-m',
       `pierrot(dev): task ${taskId} attempt ${attemptNumber}`,
@@ -541,9 +643,25 @@ async function commitAndPush({ worktree, branch, taskId, attemptNumber }) {
     worktree,
     60000
   );
-  if (commit.code !== 0) throw new Error(`git commit failed: ${commit.stderr.slice(-400)}`);
+  if (commit.code !== 0) {
+    const message = `git commit failed: ${commit.stderr.slice(-400)}`;
+    const error = new Error(message);
+    error.code = /gpg|author is invalid/i.test(commit.stderr)
+      ? 'COMMIT_SIGNING_FAILED'
+      : 'COMMIT_FAILED';
+    await writePushFailure(attemptId, {
+      taskId,
+      branch,
+      commitSha: null,
+      reason: message,
+      identity: { name: identity.name, email: identity.email },
+      signing: sign === 'true',
+    });
+    throw error;
+  }
   const sha = await git(['rev-parse', 'HEAD'], worktree, 30000);
   if (sha.code !== 0) throw new Error('Unable to read the commit SHA.');
+  const commitSha = sha.stdout.trim();
 
   const push = await git(['push', 'origin', `HEAD:refs/heads/${branch}`], worktree, 300000);
   if (push.code !== 0) {
@@ -551,10 +669,19 @@ async function commitAndPush({ worktree, branch, taskId, attemptNumber }) {
     error.code = /rejected|non-fast-forward/i.test(push.stderr)
       ? 'BRANCH_CONFLICT'
       : 'PUSH_FAILED';
+    error.commitSha = commitSha;
+    await writePushFailure(attemptId, {
+      taskId,
+      branch,
+      commitSha,
+      reason: error.message,
+      identity: { name: identity.name, email: identity.email },
+      signing: sign === 'true',
+    });
     throw error;
   }
 
-  return { commitSha: sha.stdout.trim(), files };
+  return { commitSha, files };
 }
 
 async function failWithLog(attemptId, payload) {
@@ -563,7 +690,27 @@ async function failWithLog(attemptId, payload) {
     exitCode: payload.exitCode ?? null,
     timedOut: Boolean(payload.timedOut),
   });
-  await api('fail', payload);
+  try {
+    await api('fail', payload);
+  } catch (error) {
+    if (error.status && error.status >= 400 && error.status < 500 && error.status !== 429) {
+      await log('Failure result rejected by the API', {
+        attemptId,
+        status: error.status,
+        code: error.code || null,
+      });
+      return;
+    }
+    const file = path.join(OUTBOX_DIR, `fail-${attemptId}.json`);
+    try {
+      await fs.writeFile(
+        file,
+        JSON.stringify({ kind: 'fail', attemptId, payload, createdAt: nowIso() }, null, 2),
+        'utf8'
+      );
+      await log('Failure result kept in outbox for later delivery', { attemptId, file });
+    } catch {}
+  }
 }
 
 async function executeClaim(claim) {
@@ -575,6 +722,24 @@ async function executeClaim(claim) {
   });
 
   let workspace = null;
+  let modelStarted = false;
+  let runResult = null;
+  let usage = null;
+  let commitSha = null;
+  let attemptFailed = false;
+
+  const failClaim = async (payload) => {
+    attemptFailed = true;
+    await failWithLog(attempt.id, {
+      attemptId: attempt.id,
+      usage,
+      runtimeMs: runResult?.durationMs ?? null,
+      modelStarted,
+      headSha: payload.headSha ?? commitSha ?? null,
+      ...payload,
+    });
+  };
+
   try {
     await api('start', { attemptId: attempt.id });
     const prepared = await prepareWorktree({ task, attempt });
@@ -586,7 +751,8 @@ async function executeClaim(claim) {
       dedupeKey: `workspace:${attempt.id}`,
     });
 
-    const runResult = await runOpenCode({
+    modelStarted = true;
+    runResult = await runOpenCode({
       worktree: prepared.worktree,
       prompt,
       attemptId: attempt.id,
@@ -595,7 +761,7 @@ async function executeClaim(claim) {
     const output = `${runResult.stdout}\n${runResult.stderr}`;
     const sessionId = extractSessionId(runResult.stdout);
     const report = extractExecutorReport(output);
-    const usage = parseOpenCodeCost(runResult.stdout);
+    usage = parseOpenCodeCost(runResult.stdout);
     const changedFiles = await collectChangedFiles(prepared.worktree);
     const logExcerpt = sanitize(output.slice(-60000));
 
@@ -612,7 +778,7 @@ async function executeClaim(claim) {
     });
 
     if (runResult.cancelled) {
-      await failWithLog(attempt.id, {
+      await failClaim({
         attemptId: attempt.id,
         errorCode: 'CANCELLED_BY_OWNER',
         errorMessage: 'Cancelled during execution.',
@@ -623,7 +789,7 @@ async function executeClaim(claim) {
     }
 
     if (runResult.timedOut) {
-      await failWithLog(attempt.id, {
+      await failClaim({
         attemptId: attempt.id,
         errorCode: 'EXECUTION_TIMEOUT',
         errorMessage: `OpenCode exceeded the ${Math.round(TASK_TIMEOUT_MS / 60000)} minute limit.`,
@@ -636,7 +802,7 @@ async function executeClaim(claim) {
     }
 
     if (changedFiles.length > 120) {
-      await failWithLog(attempt.id, {
+      await failClaim({
         attemptId: attempt.id,
         errorCode: 'TOO_MANY_FILES',
         errorMessage: `The executor changed ${changedFiles.length} files, above the 120 file limit.`,
@@ -649,7 +815,7 @@ async function executeClaim(claim) {
 
     const sensitive = changedFiles.find((file) => SENSITIVE_PATTERN.test(file));
     if (sensitive) {
-      await failWithLog(attempt.id, {
+      await failClaim({
         attemptId: attempt.id,
         errorCode: 'SECURITY_SENSITIVE_FILE',
         errorMessage: `The executor modified a secret-like file: ${sensitive}. Changes were not pushed.`,
@@ -666,7 +832,7 @@ async function executeClaim(claim) {
         runResult.signal === 'SIGTERM' ||
         runResult.code === 130 ||
         runResult.code === 143;
-      await failWithLog(attempt.id, {
+      await failClaim({
         attemptId: attempt.id,
         errorCode: interrupted ? 'OPENCODE_INTERRUPTED' : 'OPENCODE_FAILED',
         errorMessage: interrupted
@@ -680,7 +846,7 @@ async function executeClaim(claim) {
     }
 
     if (!report && changedFiles.length === 0) {
-      await failWithLog(attempt.id, {
+      await failClaim({
         attemptId: attempt.id,
         errorCode: 'OPENCODE_REPORT_MISSING',
         errorMessage: 'OpenCode exited without a final report and without changing any files.',
@@ -702,7 +868,6 @@ async function executeClaim(claim) {
       }).catch(() => {});
     }
 
-    let commitSha = null;
     let pushedFiles = [];
     if (changedFiles.length > 0) {
       try {
@@ -710,16 +875,18 @@ async function executeClaim(claim) {
           worktree: prepared.worktree,
           branch: prepared.branch,
           taskId: task.id,
+          attemptId: attempt.id,
           attemptNumber: attempt.attemptNumber,
         });
         commitSha = pushed.commitSha;
         pushedFiles = pushed.files;
       } catch (error) {
-        await failWithLog(attempt.id, {
+        await failClaim({
           attemptId: attempt.id,
           errorCode: error.code || 'COMMIT_FAILED',
           errorMessage: error.message,
           exitCode: runResult.code,
+          headSha: error.commitSha || null,
           logExcerpt,
           changedFiles,
         });
@@ -771,12 +938,17 @@ async function executeClaim(claim) {
     await submitCompletion(attempt.id, payload);
   } catch (error) {
     // Workspace, git or transport failure: never leave the attempt hanging.
-    await failWithLog(attempt.id, {
-      attemptId: attempt.id,
-      errorCode: error.code || 'EXECUTION_SETUP_FAILED',
-      errorMessage: String(error.message || error).slice(0, 2000),
-      logExcerpt: sanitize(String(error.stack || error)).slice(0, 60000),
-    }).catch(() => {});
+    // A failure that was already recorded above is not sent twice (the server
+    // also treats terminal attempts idempotently).
+    if (!attemptFailed) {
+      await failClaim({
+        attemptId: attempt.id,
+        errorCode: error.code || 'EXECUTION_SETUP_FAILED',
+        errorMessage: String(error.message || error).slice(0, 2000),
+        headSha: error.commitSha || commitSha || null,
+        logExcerpt: sanitize(String(error.stack || error)).slice(0, 60000),
+      }).catch(() => {});
+    }
     throw error;
   } finally {
     activeAttempt = null;
@@ -790,7 +962,7 @@ async function submitCompletion(attemptId, payload) {
   const file = path.join(OUTBOX_DIR, `${attemptId}.json`);
   await fs.writeFile(
     file,
-    JSON.stringify({ attemptId, payload, createdAt: nowIso() }, null, 2),
+    JSON.stringify({ kind: 'complete', attemptId, payload, createdAt: nowIso() }, null, 2),
     'utf8'
   );
 
@@ -826,12 +998,20 @@ async function flushOutbox() {
     const file = path.join(OUTBOX_DIR, entry);
     try {
       const record = JSON.parse(await fs.readFile(file, 'utf8'));
-      await api('complete', { attemptId: record.attemptId, result: record.payload }, 60000);
+      if (record.kind === 'fail') {
+        await api('fail', { attemptId: record.attemptId, ...(record.payload || {}) }, 60000);
+      } else {
+        await api('complete', { attemptId: record.attemptId, result: record.payload }, 60000);
+      }
       await fs.unlink(file).catch(() => {});
-      await log(`Outbox delivered for ${record.attemptId}`);
+      await log(`Outbox delivered for ${record.attemptId}`, { kind: record.kind || 'complete' });
     } catch (error) {
       if (error.status && error.status >= 400 && error.status < 500) {
         await fs.unlink(file).catch(() => {});
+        await log('Outbox entry rejected and removed', {
+          file,
+          status: error.status,
+        });
       }
     }
   }
@@ -906,6 +1086,7 @@ async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   await log(`Received ${signal}; shutting down.`);
+  await bootPhase('stopping', `Worker received ${signal}; releasing any active attempt.`);
   if (activeChildPid) {
     await log('Stopping the active executor process group.', { pid: activeChildPid });
     await terminateProcessGroup(activeChildPid, 5000);
@@ -923,14 +1104,26 @@ async function shutdown(signal) {
 
 async function main() {
   await ensureDirs();
+  await bootPhase('starting', `Pierrot worker ${WORKER_ID} starting.`);
 
+  await bootPhase('checking_config', 'Checking required worker configuration.');
   if (!TOKEN || TOKEN.length < 32) {
+    await bootPhase(
+      'failed',
+      'WORKER_CONFIG_INVALID: PIERROT_DEV_WORKER_TOKEN is missing or shorter than 32 characters. Worker will not start.',
+      { force: true }
+    );
     await log(
       'PIERROT_DEV_WORKER_TOKEN is missing or shorter than 32 characters. Worker will not start.'
     );
     process.exit(2);
   }
   if (!/^https?:\/\//.test(API_BASE)) {
+    await bootPhase(
+      'failed',
+      'WORKER_CONFIG_INVALID: PIERROT_DEV_API_URL is not a valid http(s) URL. Worker will not start.',
+      { force: true }
+    );
     await log('PIERROT_DEV_API_URL is not a valid http(s) URL. Worker will not start.');
     process.exit(2);
   }
@@ -964,6 +1157,8 @@ async function main() {
   while (!shuttingDown) {
     try {
       if (!registered) {
+        await bootPhase('connecting_api', `Connecting to the worker API at ${API_BASE}.`);
+        await bootPhase('registering', 'Registering the worker with the Pierrot API.');
         await api('register', {
           name: CODESPACE_NAME || os.hostname(),
           version: WORKER_VERSION,
@@ -987,6 +1182,18 @@ async function main() {
           ready: capabilities.ready,
           reasons: capabilities.readiness?.reasons || [],
         });
+        if (capabilities.ready) {
+          await bootPhase(
+            'ready',
+            `Worker ${WORKER_ID} ready (OpenCode ${capabilities.opencodeVersion || 'unknown'}).`,
+            { force: true }
+          );
+        } else {
+          const reasons = Array.isArray(capabilities.readiness?.reasons)
+            ? capabilities.readiness.reasons.join(' · ')
+            : 'Readiness check failed.';
+          await bootPhase('failed', `WORKER_NOT_READY: ${reasons}`, { force: true });
+        }
         try {
           const recovered = await api('recover', {}, 30000);
           if (recovered.released) {
@@ -999,12 +1206,25 @@ async function main() {
 
       const capabilityIntervalMs = readiness?.ready ? 10 * 60 * 1000 : 60 * 1000;
       if (Date.now() - lastCapabilitiesAt > capabilityIntervalMs) {
+        const wasReady = readiness?.ready === true;
         capabilities = await readCapabilities({
           configOk: true,
           apiOk: readiness?.apiOk === true,
           supabaseOk: readiness?.supabaseOk === true,
         });
         lastCapabilitiesAt = Date.now();
+        if (!wasReady && capabilities.ready) {
+          await bootPhase(
+            'ready',
+            `Worker ${WORKER_ID} ready (OpenCode ${capabilities.opencodeVersion || 'unknown'}).`,
+            { force: true }
+          );
+        } else if (wasReady && !capabilities.ready) {
+          const reasons = Array.isArray(capabilities.readiness?.reasons)
+            ? capabilities.readiness.reasons.join(' · ')
+            : 'Readiness check failed.';
+          await bootPhase('failed', `WORKER_NOT_READY: ${reasons}`, { force: true });
+        }
       }
 
       await flushOutbox();
@@ -1069,12 +1289,26 @@ async function main() {
         message: String(error.message || error).slice(0, 300),
         backoff,
       });
+      if (!registered) {
+        const code =
+          error.status === 401 || error.status === 403
+            ? 'WORKER_API_UNAUTHORIZED'
+            : 'WORKER_API_UNREACHABLE';
+        await bootPhase(
+          'failed',
+          `${code}: ${String(error.message || error).slice(0, 300)}`,
+          { force: true }
+        );
+      }
       await sleep(backoff);
     }
   }
 }
 
 main().catch(async (error) => {
+  await bootPhase('failed', `WORKER_FATAL: ${String(error?.message || error).slice(0, 500)}`, {
+    force: true,
+  });
   await log('Fatal worker error', { message: String(error.message || error).slice(0, 500) });
   process.exit(1);
 });

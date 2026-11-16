@@ -1,13 +1,11 @@
-import { NextResponse, after } from 'next/server';
+import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
-import {
-  ensureCodespaceForQueuedWork,
-  retryPendingStart,
-} from '@/lib/pierrot/dev/workbench/lifecycle';
+import { ensureCodespaceForQueuedWork } from '@/lib/pierrot/dev/workbench/lifecycle';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -28,23 +26,16 @@ export async function GET(req: Request) {
   }
 
   try {
-    // The Admin page is also a bounded recovery trigger: if a queued task is
-    // stranded because a start failed or a stop raced with submission, this
-    // reconcile pass starts the Codespace without any owner action.
+    // Safe reconcile only: this may start a genuinely stopped Codespace when
+    // queued work exists, but it must never stop or restart an Available one.
+    // Worker recovery is an explicit owner action, not part of the page GET.
+    // No retry loop runs inside this request; pending state is persisted and
+    // completed by the next idempotent overview poll.
     try {
-      const result = await ensureCodespaceForQueuedWork({
+      await ensureCodespaceForQueuedWork({
         source: 'admin:overview',
-        waitForStopMs: 0,
+        allowWorkerRecovery: false,
       });
-      if (result.action === 'start-pending') {
-        after(async () => {
-          try {
-            await retryPendingStart('admin:overview');
-          } catch {
-            // The next overview poll retries again.
-          }
-        });
-      }
     } catch {
       // The overview must still load when Codespaces is temporarily unavailable.
     }

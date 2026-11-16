@@ -103,6 +103,28 @@ describe('automatic startup', () => {
     );
   });
 
+  it('records a pending start instead of waiting when a stop is in flight', async () => {
+    settingsMap({
+      'lifecycle:shutdown_intent': {
+        at: new Date().toISOString(),
+        workerId: 'codespace:test',
+        codespaceName: 'test-codespace',
+        graceSeconds: 120,
+      },
+    });
+    asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
+    asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'ShuttingDown' });
+
+    const result = await ensureCodespaceForQueuedWork({ source: 'test:race' });
+
+    expect(result.action).toBe('start-pending');
+    expect(github.startCodespace).not.toHaveBeenCalled();
+    expect(store.setSetting).toHaveBeenCalledWith(
+      'lifecycle:pending_start',
+      expect.objectContaining({ reason: expect.stringMatching(/shutdown/i) })
+    );
+  });
+
   it('does not start anything when the queue is paused', async () => {
     asMock(store.getQueueSnapshot).mockResolvedValue({
       ...idleQueue,
@@ -168,7 +190,7 @@ describe('safe shutdown', () => {
 });
 
 describe('startup recovery', () => {
-  it('restarts an available Codespace whose worker is dead past the startup grace', async () => {
+  it('does not stop an Available Codespace with an offline worker on a normal reconcile', async () => {
     asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
     asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
     asMock(store.listWorkers).mockResolvedValue([
@@ -178,15 +200,85 @@ describe('startup recovery', () => {
         lastHeartbeatAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       },
     ]);
-    asMock(github.getCodespace).mockResolvedValue({ ...codespace, state: 'Stopped' });
 
-    const result = await ensureCodespaceForQueuedWork({ source: 'test:recovery' });
+    const result = await ensureCodespaceForQueuedWork({ source: 'admin:overview' });
 
+    expect(result.action).toBe('already-available');
+    expect(github.stopCodespace).not.toHaveBeenCalled();
+    expect(github.startCodespace).not.toHaveBeenCalled();
+  });
+
+  it('never runs the recovery loop from repeated normal reconciles', async () => {
+    asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
+    asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
+    asMock(store.listWorkers).mockResolvedValue([
+      {
+        id: 'codespace:test',
+        online: false,
+        lastHeartbeatAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      },
+    ]);
+
+    await ensureCodespaceForQueuedWork({ source: 'admin:overview' });
+    await ensureCodespaceForQueuedWork({ source: 'admin:overview' });
+    await ensureCodespaceForQueuedWork({ source: 'admin:overview' });
+
+    expect(github.stopCodespace).not.toHaveBeenCalled();
+    expect(github.startCodespace).not.toHaveBeenCalled();
+  });
+
+  it('does not restart an Available Codespace whose worker is online but not ready', async () => {
+    asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
+    asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
+    asMock(store.listWorkers).mockResolvedValue([
+      {
+        id: 'codespace:test',
+        online: true,
+        ready: false,
+        capabilities: {
+          ready: false,
+          readiness: { ready: false, authOk: false, reasons: ['OPENCODE_AUTH_MISSING'] },
+        },
+        lastHeartbeatAt: new Date().toISOString(),
+      },
+    ]);
+
+    const result = await ensureCodespaceForQueuedWork({
+      source: 'admin:manual',
+      allowWorkerRecovery: true,
+    });
+
+    expect(result.action).toBe('already-available');
+    expect(github.stopCodespace).not.toHaveBeenCalled();
+  });
+
+  it('recovers an Available Codespace only when explicitly allowed, then honors cooldown', async () => {
+    asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
+    asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
+    asMock(store.listWorkers).mockResolvedValue([
+      {
+        id: 'codespace:test',
+        online: false,
+        lastHeartbeatAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      },
+    ]);
+
+    const first = await ensureCodespaceForQueuedWork({
+      source: 'admin:manual',
+      allowWorkerRecovery: true,
+    });
+    expect(first.action).toBe('start-pending');
     expect(github.stopCodespace).toHaveBeenCalledWith('test-codespace');
-    expect(github.startCodespace).toHaveBeenCalledWith('test-codespace');
-    expect(result.action).toBe('started');
+    expect(github.startCodespace).not.toHaveBeenCalled();
     expect(store.appendEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'codespace.worker_recovery' })
     );
+
+    const second = await ensureCodespaceForQueuedWork({
+      source: 'admin:manual',
+      allowWorkerRecovery: true,
+    });
+    expect(second.action).toBe('blocked');
+    expect(github.stopCodespace).toHaveBeenCalledTimes(1);
   }, 15_000);
 });

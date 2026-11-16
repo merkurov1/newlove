@@ -313,6 +313,7 @@ export async function completeAttempt(
     usage: result.usage,
     machine: typeof codespaceMeta.machine === 'string' ? codespaceMeta.machine : null,
     runtimeMs,
+    modelStarted: true,
   });
 
   const updatedAttempt = await patchAttempt(
@@ -357,7 +358,7 @@ export async function completeAttempt(
         status: 'review',
         result_commit: headSha,
         result_notes: truncateText(result.summary, 12_000),
-        verification_status: null,
+        verification_status: 'not_run',
         verification_notes: '',
         verified_at: null,
         last_error_code: null,
@@ -479,6 +480,13 @@ export async function failAttempt(input: {
   exitCode?: number | null;
   logExcerpt?: string;
   changedFiles?: string[];
+  headSha?: string | null;
+  /** Raw OpenCode step_finish usage, available when the model already ran. */
+  usage?: Record<string, unknown>;
+  runtimeMs?: number | null;
+  /** False when the failure happened before OpenCode started. */
+  modelStarted?: boolean;
+  verification?: Record<string, unknown>;
 }): Promise<DevAttempt> {
   const attempt = ensureOwnership(await getAttempt(input.attemptId), input.workerId);
   const target = input.timedOut ? 'timed_out' : 'failed';
@@ -489,17 +497,50 @@ export async function failAttempt(input: {
   }
   assertAttemptTransition(attempt.status, target);
 
+  // A failed attempt may already have spent money on the model. Preserve the
+  // usage and measured runtime exactly like a successful attempt; unknown data
+  // stays null and is never reported as zero.
+  const codespaceMeta =
+    (await getSetting<Record<string, unknown>>('lifecycle:codespace', {})) || {};
+  const runtimeMs =
+    typeof input.runtimeMs === 'number' && Number.isFinite(input.runtimeMs)
+      ? Math.max(0, Math.trunc(input.runtimeMs))
+      : attempt.startedAt
+        ? Math.max(0, Date.now() - new Date(attempt.startedAt).getTime())
+        : null;
+  const cost = buildAttemptCost({
+    usage: input.usage,
+    machine: typeof codespaceMeta.machine === 'string' ? codespaceMeta.machine : null,
+    runtimeMs,
+    modelStarted: input.modelStarted !== false,
+  });
+  const headSha =
+    typeof input.headSha === 'string' && SHA_PATTERN.test(input.headSha.trim())
+      ? input.headSha.trim().toLowerCase()
+      : null;
+
   const updated = await patchAttempt(
     input.attemptId,
     {
       status: target,
       finished_at: new Date().toISOString(),
       exit_code: typeof input.exitCode === 'number' ? input.exitCode : null,
+      head_sha: headSha ?? attempt.headSha,
       error_code: truncateText(input.errorCode, 120) || 'EXECUTION_FAILED',
       error_message: truncateText(input.errorMessage, 2000),
       log_excerpt: truncateLog(input.logExcerpt),
       changed_files: normalizeFiles(input.changedFiles),
       progress_stage: target,
+      verification: {
+        ...(attempt.verification || {}),
+        ...(input.verification || {}),
+        cost,
+        failure: {
+          code: truncateText(input.errorCode, 120) || 'EXECUTION_FAILED',
+          modelStarted: input.modelStarted !== false,
+          runtimeMs,
+        },
+      },
     },
     ['claimed', 'running']
   );
@@ -529,7 +570,17 @@ export async function failAttempt(input: {
     type: input.timedOut ? 'attempt.timed_out' : 'attempt.failed',
     level: 'error',
     message: truncateText(input.errorMessage, 3800) || 'Execution failed.',
-    payload: { errorCode: input.errorCode, exitCode: input.exitCode ?? null },
+    payload: {
+      errorCode: input.errorCode,
+      exitCode: input.exitCode ?? null,
+      headSha,
+      cost: {
+        modelUsd: cost.model.costUsd,
+        codespaceEstimatedUsd: cost.codespace.estimatedUsd,
+        totalUsd: cost.totalUsd,
+        unknown: cost.unknown,
+      },
+    },
   });
 
   return updated;
@@ -679,7 +730,7 @@ export async function retryTask(userId: string, taskId: string): Promise<DevWork
       queued_at: new Date().toISOString(),
       result_commit: null,
       pull_requests: [],
-      verification_status: null,
+      verification_status: 'not_run',
       verification_notes: '',
       verified_at: null,
       last_error_code: null,
