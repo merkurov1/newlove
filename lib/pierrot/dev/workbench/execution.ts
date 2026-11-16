@@ -32,6 +32,7 @@ import {
 } from './state';
 import { buildExecutionPrompt } from './prompt';
 import { collectAttemptEvidence } from './evidence';
+import { buildAttemptCost } from './costs';
 import type { AttemptEvidence } from './evidence';
 import {
   createPullRequestForAttempt,
@@ -237,6 +238,9 @@ export type AttemptResultInput = {
   }>;
   logExcerpt?: string;
   verification?: Record<string, unknown>;
+  /** Raw OpenCode step_finish usage. Normalized and priced server-side. */
+  usage?: Record<string, unknown>;
+  runtimeMs?: number | null;
 };
 
 function normalizeFiles(value: unknown): string[] {
@@ -295,6 +299,22 @@ export async function completeAttempt(
     ? result.warnings.filter((item): item is string => typeof item === 'string').slice(0, 40)
     : [];
 
+  // Cost is recorded with the attempt. Model cost is actual only when
+  // OpenCode reported it; Codespaces cost is an estimate from measured runtime.
+  const codespaceMeta =
+    (await getSetting<Record<string, unknown>>('lifecycle:codespace', {})) || {};
+  const runtimeMs =
+    typeof result.runtimeMs === 'number' && Number.isFinite(result.runtimeMs)
+      ? Math.max(0, Math.trunc(result.runtimeMs))
+      : attempt.startedAt
+        ? Math.max(0, Date.now() - new Date(attempt.startedAt).getTime())
+        : null;
+  const cost = buildAttemptCost({
+    usage: result.usage,
+    machine: typeof codespaceMeta.machine === 'string' ? codespaceMeta.machine : null,
+    runtimeMs,
+  });
+
   const updatedAttempt = await patchAttempt(
     attemptId,
     {
@@ -308,6 +328,7 @@ export async function completeAttempt(
       verification: {
         ...(result.verification || {}),
         criteria: Array.isArray(result.criteria) ? result.criteria.slice(0, 60) : [],
+        cost,
         selfReported: true,
       },
       warnings,
@@ -365,7 +386,17 @@ export async function completeAttempt(
     workerId,
     type: 'attempt.completed',
     message: `Attempt ${attempt.attemptNumber} completed with ${changedFiles.length} changed file(s). Handed to review; not verified automatically.`,
-    payload: { headSha, changedFiles: changedFiles.length, exitCode: result.exitCode },
+    payload: {
+      headSha,
+      changedFiles: changedFiles.length,
+      exitCode: result.exitCode,
+      cost: {
+        modelUsd: cost.model.costUsd,
+        codespaceEstimatedUsd: cost.codespace.estimatedUsd,
+        totalUsd: cost.totalUsd,
+        unknown: cost.unknown,
+      },
+    },
   });
 
   // PR creation is a side effect. Duplicate completion is guarded above and

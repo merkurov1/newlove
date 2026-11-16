@@ -15,7 +15,9 @@ remains infrastructure; the owner works from Admin.
 | Internal worker API | `app/api/internal/pierrot/dev/worker/route.ts` |
 | Queue / attempts / events | `lib/pierrot/dev/workbench/*` |
 | Codespace worker | `scripts/pierrot/dev-worker.mjs` |
-| Worker lifecycle | `scripts/pierrot/dev-worker-start.sh` / `dev-worker-stop.sh` |
+| Worker lifecycle | `scripts/pierrot/dev-worker-start.sh` / `dev-worker-supervisor.sh` / `dev-worker-stop.sh` |
+| Codespace lifecycle | `lib/pierrot/dev/workbench/lifecycle.ts` |
+| Cost ledger | `lib/pierrot/dev/workbench/costs.ts` |
 | Admin UI | `components/pierrot/workspace/DevWorkbench.tsx` |
 | Migration (additive) | `migrations/2026-11-22_pierrot_dev_workbench.sql` |
 | Existing task table | `public.pierrot_dev_prompts` (reused) |
@@ -74,6 +76,38 @@ overwritten.
    Codespace, OpenCode version/authentication, and worker heartbeat are all
    verified.
 
+## Autonomous lifecycle
+
+- Approving a standalone task also queues it, so the owner never has to trigger
+  the infrastructure. Tasks attached to a batch stay ready until the batch is
+  started. The Vercel backend calls the GitHub Codespaces start API when a
+  queued task exists and the Codespace is stopped.
+  Startup is idempotent and state-aware (`Stopped`, `Starting`, `Available`,
+  `Stopping`, `ShuttingDown`, unsupported).
+- If a stop is already in flight, the backend records a pending start and
+  retries it after the stop settles. A new task never waits for the owner to
+  click Start.
+- Starting the Codespace runs `postStartCommand`; a detached supervisor starts
+  the worker and restarts it with bounded exponential backoff after abnormal
+  exits. Lifecycle hooks no longer use `|| true`, so configuration failures are
+  visible.
+- The backend does not report Ready just because GitHub says `Available`.
+  Admin waits for a fresh worker heartbeat and a readiness proof: worker
+  configuration, Pierrot API/Supabase reachability, OpenCode >= 2.1.4 and
+  stored provider authentication. A not-ready worker never claims tasks.
+- When the queue is empty and no attempt/task is active, the worker reports its
+  idle time. The backend waits the idle grace period (default 120 seconds),
+  takes a lifecycle lock, rechecks the queue and active attempts, records the
+  intent, rechecks again, and only then asks GitHub to stop the Codespace.
+- A task submitted between the two checks cancels the stop. A task submitted
+  after the stop request causes a pending start, which is retried by the
+  backend and by the next Admin overview poll.
+- Shutdown is safe to repeat. Stop failures are recorded with a bounded retry
+  delay; the worker keeps heartbeating instead of exiting.
+- The Codespace `GITHUB_TOKEN` in this environment only has
+  `codespaces=read`. It is never used to stop the Codespace. The server
+  `GITHUB_TOKEN` must have Codespaces read/write.
+
 ## Worker behaviour
 
 - Started by `postStartCommand`/`postAttachCommand`, never by a blocking
@@ -88,8 +122,8 @@ overwritten.
 - Commits and pushes only to the generated attempt branch; PR creation happens
   on the server after the result is recorded.
 - Keeps failed completion payloads in a local outbox and retries delivery.
-- Stops the Codespace after 20 idle minutes by default (`PIERROT_DEV_IDLE_STOP_MINUTES=0`
-  keeps it running).
+- Parses OpenCode `step_finish` events for actual token usage and model cost.
+  Missing cost data is stored as unknown, never zero.
 - On SIGTERM releases the lease and requeues the task.
 
 ## Review and merge
@@ -104,6 +138,20 @@ overwritten.
 - Merge is only available for a `verified` task, with an explicit confirmation,
   and only for the exact reviewed head SHA. After merge the task is archived
   (history preserved) and Vercel deployment status is shown when configured.
+
+## Dev Cost Ledger
+
+- Model token usage and cost come from OpenCode `step_finish` events. When the
+  CLI does not report them they are stored as `null` with a provenance of
+  `unavailable`, never as zero.
+- Codespaces cost is estimated from the machine type and measured wall-clock
+  runtime. GitHub does not expose billed Codespaces minutes to this token, so
+  the value is always labelled as an estimate. Set
+  `PIERROT_DEV_CODESPACE_HOURLY_USD` to override the list price.
+- A total is only produced when both the model and Codespaces components are
+  known. Partial totals are reported as unavailable.
+- Startup, ready, idle, stop-request and measured-runtime timestamps are stored
+  in server-only lifecycle settings and appear in the EXECUTION panel.
 
 ## Security boundaries
 
@@ -123,7 +171,7 @@ overwritten.
 | Symptom | Action |
 | --- | --- |
 | `schema missing` | Apply the migration manually, then Re-check. |
-| `worker offline` | Start the Codespace from EXECUTION/SETUP; check `$HOME/.pierrot-dev-work/logs/worker.log`. |
+| `worker offline` | Queueing a task should start the Codespace automatically. If it does not, check the lifecycle detail in EXECUTION, then `$HOME/.pierrot-dev-work/logs/worker.log` and `worker-boot.log`. |
 | `OpenCode CLI missing` | Install/verify `opencode --version` in the Codespace. |
 | `Stored provider authentication: missing` | Run `opencode auth login` in the Codespace. |
 | Codespace start returns 403 | Grant the fine-grained token **Codespaces: write**. |

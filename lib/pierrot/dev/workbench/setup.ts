@@ -127,6 +127,7 @@ export async function getSetupReport(): Promise<DevSetupReport> {
   const codespaceName = getConfiguredCodespaceName();
   let codespace: CodespaceInfo | null = null;
   let codespaceError: string | null = null;
+  let codespaceIdleStopped = false;
 
   try {
     codespace = await resolveCodespace(codespaceName);
@@ -173,7 +174,12 @@ export async function getSetupReport(): Promise<DevSetupReport> {
       blocking.push('Create the Codespace.');
     }
   } else {
-    const running = ['Available', 'Starting', 'Rebuilding'].includes(codespace.state);
+    const normalizedState = String(codespace.state || '').toLowerCase();
+    const running = ['available', 'starting', 'queued', 'provisioning', 'rebuilding'].includes(
+      normalizedState
+    );
+    const idleStopped = ['stopped', 'shutdown'].includes(normalizedState);
+    codespaceIdleStopped = idleStopped;
     const stale = Boolean(codespaceName && codespaceName !== codespace.name);
     const discovered = !codespaceName;
     const note = discovered
@@ -185,20 +191,26 @@ export async function getSetupReport(): Promise<DevSetupReport> {
       key: 'codespace',
       label: 'Codespace',
       status: running ? 'ok' : 'warn',
-      detail: `${codespace.name} · ${codespace.state}${codespace.repository ? ` · ${codespace.repository}` : ''}${codespace.machine ? ` · ${codespace.machine}` : ''}. Start/stop permissions are verified when the action is used.${note}`,
+      detail: `${codespace.name} · ${codespace.state}${codespace.repository ? ` · ${codespace.repository}` : ''}${codespace.machine ? ` · ${codespace.machine}` : ''}. ${
+        idleStopped
+          ? 'Idle shutdown is normal; the backend starts it automatically when a task is queued.'
+          : 'Start/stop is performed by the backend with the server GITHUB_TOKEN.'
+      }${note}`,
       requiredEnv: discovered || stale ? CODESPACE_NAME_ENV : null,
-      requiredScope: 'Codespaces write permission is required to start or stop.',
+      requiredScope:
+        'Codespaces read/write is required on the server GITHUB_TOKEN. The Codespace worker token only needs Codespaces read.',
       checkedAt: now,
-      action: running ? null : 'start_codespace',
+      action: running ? null : idleStopped ? null : 'start_codespace',
       data: {
         state: codespace.state,
         machine: codespace.machine,
         repository: codespace.repository,
         resolvedName: codespace.name,
         configuredName: codespaceName,
+        idleStopped,
       },
     });
-    if (!running) blocking.push('Start the Codespace.');
+    if (!running && !idleStopped) blocking.push('Start the Codespace.');
   }
 
   const codespaceState = codespace?.state || null;
@@ -209,23 +221,33 @@ export async function getSetupReport(): Promise<DevSetupReport> {
     workers.find((item) => item.online) ||
     workers.sort((a, b) => (b.heartbeatAgeSeconds || 0) - (a.heartbeatAgeSeconds || 0))[0] ||
     null;
+  const capabilities = worker?.capabilities || {};
+  const readiness =
+    capabilities.readiness && typeof capabilities.readiness === 'object'
+      ? capabilities.readiness
+      : null;
+  const readinessReasons = Array.isArray(readiness?.reasons)
+    ? readiness.reasons.filter((item): item is string => typeof item === 'string')
+    : [];
+  const workerReady = Boolean(worker?.online && (capabilities.ready === true || readiness?.ready === true));
   checks.push({
     key: 'worker',
     label: 'Worker registration',
-    status: worker?.online ? 'ok' : worker ? 'error' : 'missing',
+    status: workerReady ? 'ok' : worker?.online ? 'warn' : worker ? 'error' : 'missing',
     detail: worker
       ? worker.online
-        ? `${worker.name} (${worker.id}) is online. Last heartbeat ${worker.heartbeatAgeSeconds ?? '?'}s ago; lease holder ${worker.currentAttemptId ? 'yes' : 'no'}.`
-        : `${worker.name} is offline. Last heartbeat ${worker.heartbeatAgeSeconds ?? '?'}s ago (offline threshold ${WORKER_OFFLINE_AFTER_SECONDS}s). The Codespace may be stopped.`
-      : 'No worker has registered yet. Start the Codespace; the worker starts automatically after the container is ready.',
+        ? `${worker.name} (${worker.id}) is online${workerReady ? ' and ready' : ' but not ready'}. Last heartbeat ${worker.heartbeatAgeSeconds ?? '?'}s ago; lease holder ${worker.currentAttemptId ? 'yes' : 'no'}.${readinessReasons.length ? ` Reasons: ${readinessReasons.join(' · ')}` : ''}`
+        : `${worker.name} is offline. Last heartbeat ${worker.heartbeatAgeSeconds ?? '?'}s ago (offline threshold ${WORKER_OFFLINE_AFTER_SECONDS}s). The Codespace may be stopped or the supervisor may have exhausted its bounded restarts.`
+      : 'No worker has registered yet. The worker starts automatically from postStart; Admin retries the Codespace start when work is queued.',
     requiredEnv: WORKER_TOKEN_ENV,
     requiredScope: null,
     checkedAt: now,
-    action: 'start_codespace',
+    action: workerReady ? null : 'start_codespace',
   });
-  if (!worker?.online) blocking.push('The Codespace worker is not online.');
+  if (!workerReady && !codespaceIdleStopped) {
+    blocking.push('The Codespace worker is not online and ready.');
+  }
 
-  const capabilities = worker?.capabilities || {};
   const opencodeAvailable = capabilities.opencodeAvailable === true;
   const opencodeAuthenticated = capabilities.opencodeAuthenticated === true;
   const minimumOpencode = (process.env.PIERROT_DEV_OPENCODE_MIN_VERSION || '2.1.4').trim();
@@ -245,14 +267,18 @@ export async function getSetupReport(): Promise<DevSetupReport> {
     Number.isFinite(capabilitiesCheckedAt) &&
     Date.now() - capabilitiesCheckedAt < 15 * 60 * 1000;
   const opencodeReady =
-    opencodeAvailable && opencodeAuthenticated && versionAtLeastMinimum && capabilitiesFresh;
+    opencodeAvailable &&
+    opencodeAuthenticated &&
+    versionAtLeastMinimum &&
+    capabilitiesFresh &&
+    (readiness ? readiness.ready === true : true);
   checks.push({
     key: 'opencode',
     label: 'OpenCode CLI',
-    status: opencodeReady ? 'ok' : worker ? 'error' : 'missing',
+    status: opencodeReady ? 'ok' : worker ? 'error' : codespaceIdleStopped ? 'warn' : 'missing',
     detail: worker
       ? opencodeAvailable
-        ? `OpenCode ${String(capabilities.opencodeVersion || 'unknown')} detected in the Codespace (minimum ${minimumOpencode}). Stored provider authentication: ${opencodeAuthenticated ? 'available' : 'missing'}. Model: ${String(capabilities.opencodeModel || 'default')}. Last probe: ${capabilitiesFresh ? 'fresh' : 'stale — restart the worker or wait for its 10-minute refresh'}.`
+        ? `OpenCode ${String(capabilities.opencodeVersion || 'unknown')} detected in the Codespace (minimum ${minimumOpencode}). Stored provider authentication: ${opencodeAuthenticated ? 'available' : 'missing'}. Model: ${String(capabilities.opencodeModel || 'default')}. Last probe: ${capabilitiesFresh ? 'fresh' : 'stale — restart the worker or wait for its 10-minute refresh'}.${readinessReasons.length ? ` Readiness: ${readinessReasons.join(' · ')}` : ''}`
         : 'OpenCode CLI is missing or was not reported by the worker.'
       : 'Not checked yet: the worker has not registered.',
     requiredEnv: 'PIERROT_DEV_OPENCODE_MODEL',
@@ -267,7 +293,7 @@ export async function getSetupReport(): Promise<DevSetupReport> {
       lastCheckedAt: capabilities.lastCheckedAt || null,
     },
   });
-  if (!opencodeReady) {
+  if (!opencodeReady && !codespaceIdleStopped) {
     blocking.push(
       'OpenCode CLI (at least ' +
         minimumOpencode +
@@ -300,6 +326,26 @@ export async function getSetupReport(): Promise<DevSetupReport> {
       : 'The queue is running. At most one task executes at a time.',
     requiredEnv: null,
     requiredScope: null,
+    checkedAt: now,
+    action: null,
+  });
+
+  const idleGrace = (() => {
+    const seconds = process.env.PIERROT_DEV_IDLE_GRACE_SECONDS;
+    if (seconds && Number.isFinite(Number(seconds))) return Math.max(0, Math.trunc(Number(seconds)));
+    const minutes = process.env.PIERROT_DEV_IDLE_STOP_MINUTES;
+    if (minutes && Number.isFinite(Number(minutes))) {
+      return Math.max(0, Math.trunc(Number(minutes) * 60));
+    }
+    return 120;
+  })();
+  checks.push({
+    key: 'lifecycle',
+    label: 'Automatic lifecycle',
+    status: 'ok',
+    detail: `Queued work starts the Codespace from the backend. Idle grace is ${idleGrace}s; the queue and active attempts are rechecked under a lock before shutdown. The worker token never needs Codespaces write.`,
+    requiredEnv: 'PIERROT_DEV_IDLE_GRACE_SECONDS',
+    requiredScope: 'Server GITHUB_TOKEN: Codespaces read/write.',
     checkedAt: now,
     action: null,
   });

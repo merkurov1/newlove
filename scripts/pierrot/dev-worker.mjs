@@ -17,7 +17,8 @@
  *   PIERROT_DEV_PIERROT_DIR    Pierrot checkout (auto-cloned when missing)
  *   PIERROT_DEV_WORK_ROOT      worktrees/outbox root
  *   PIERROT_DEV_TASK_TIMEOUT_MS
- *   PIERROT_DEV_IDLE_STOP_MINUTES  stop the Codespace after N idle minutes (default 20, 0 = off)
+ *   PIERROT_DEV_IDLE_GRACE_SECONDS  idle grace before requesting a backend stop (default 120)
+ *   PIERROT_DEV_IDLE_STOP_MINUTES   alternative idle grace in minutes (default 2, minimum 1)
  *   PIERROT_DEV_OPENCODE_MODEL / PIERROT_DEV_OPENCODE_AGENT
  */
 
@@ -26,6 +27,13 @@ import path from 'node:path';
 import os from 'node:os';
 import process from 'node:process';
 import { runProcess, terminateProcessGroup } from './dev-worker-process.mjs';
+import {
+  computeReadiness,
+  isVersionAtLeast,
+  parseOpenCodeCost,
+  parseStoredAuth,
+  providerFromModel,
+} from './dev-worker-lib.mjs';
 
 const API_BASE = (
   process.env.PIERROT_DEV_API_URL ||
@@ -47,14 +55,28 @@ const POLL_MS = clamp(Number(process.env.PIERROT_DEV_POLL_MS || 20000), 15000, 3
 const MAX_BACKOFF_MS = 120000;
 const TASK_TIMEOUT_MS = Math.max(60000, Number(process.env.PIERROT_DEV_TASK_TIMEOUT_MS || 45 * 60 * 1000));
 const MAX_LOG_BYTES = Math.max(100000, Number(process.env.PIERROT_DEV_MAX_LOG_BYTES || 2000000));
-const IDLE_STOP_MINUTES = (() => {
+const IDLE_GRACE_SECONDS = (() => {
+  // Automatic shutdown is mandatory. A stale `0` from the old documentation
+  // must not leave the Codespace running forever; clamp to the same minimum as
+  // the backend.
+  const seconds = process.env.PIERROT_DEV_IDLE_GRACE_SECONDS;
+  if (seconds !== undefined && seconds.trim() !== '') {
+    const value = Number(seconds);
+    if (Number.isFinite(value)) return Math.min(Math.max(Math.trunc(value), 30), 3600);
+  }
   const raw = process.env.PIERROT_DEV_IDLE_STOP_MINUTES;
-  if (raw === undefined || raw.trim() === '') return 20;
+  if (raw === undefined || raw.trim() === '') return 120;
   const value = Number(raw);
-  return Number.isFinite(value) ? Math.max(0, value) : 20;
+  return Number.isFinite(value) ? Math.min(Math.max(Math.trunc(value * 60), 60), 3600) : 120;
 })();
+const MIN_OPENCODE_VERSION = (process.env.PIERROT_DEV_OPENCODE_MIN_VERSION || '2.1.4').trim();
 const OPENCODE_MODEL =
   (process.env.PIERROT_DEV_OPENCODE_MODEL || 'deepseek/deepseek-flash').trim();
+const OPENCODE_PROVIDER = (
+  process.env.PIERROT_DEV_OPENCODE_PROVIDER ||
+  providerFromModel(OPENCODE_MODEL) ||
+  'deepseek'
+).trim();
 const OPENCODE_AGENT = (process.env.PIERROT_DEV_OPENCODE_AGENT || '').trim();
 const LOG_DIR = path.join(WORK_ROOT, 'logs');
 const OUTBOX_DIR = path.join(WORK_ROOT, 'outbox');
@@ -67,6 +89,8 @@ let activeAttempt = null;
 let activeChildPid = null;
 let idleSince = Date.now();
 let consecutiveErrors = 0;
+let serverIdleGraceSeconds = IDLE_GRACE_SECONDS;
+let readiness = null;
 
 function clamp(value, min, max) {
   if (!Number.isFinite(value)) return min;
@@ -77,11 +101,26 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+const SECRET_ENV_NAMES = [
+  'PIERROT_DEV_WORKER_TOKEN',
+  'GITHUB_TOKEN',
+  'GITHUB_CODESPACE_TOKEN',
+  'DEEPSEEK_API_KEY',
+  'OPENROUTER_API_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'SUPABASE_SERVICE_KEY',
+  'SUPABASE_KEY',
+  'VERCEL_TOKEN',
+  'CRON_SECRET',
+];
+
 function sanitize(value) {
   let text = typeof value === 'string' ? value : String(value ?? '');
+  for (const name of SECRET_ENV_NAMES) {
+    const secret = (process.env[name] || '').trim();
+    if (secret.length >= 8) text = text.split(secret).join('[redacted]');
+  }
   if (TOKEN && TOKEN.length >= 8) text = text.split(TOKEN).join('[redacted]');
-  const github = (process.env.GITHUB_TOKEN || '').trim();
-  if (github && github.length >= 8) text = text.split(github).join('[redacted]');
   return text;
 }
 
@@ -232,12 +271,32 @@ function permissionConfig() {
 // Capabilities
 // ---------------------------------------------------------------------------
 
-async function readCapabilities() {
+function applyReadiness(capabilities, context) {
+  const next = computeReadiness({
+    configOk: context.configOk !== false,
+    apiOk: context.apiOk === true,
+    supabaseOk: context.supabaseOk === true,
+    opencodeAvailable: capabilities.opencodeAvailable === true,
+    opencodeVersion: capabilities.opencodeVersion,
+    minimumVersion: MIN_OPENCODE_VERSION,
+    authenticated: capabilities.opencodeAuthenticated === true,
+    provider: OPENCODE_PROVIDER,
+  });
+  readiness = next;
+  capabilities.ready = next.ready;
+  capabilities.readiness = next;
+  capabilities.configOk = next.configOk;
+  return capabilities;
+}
+
+async function readCapabilities(context = {}) {
   const capabilities = {
     opencodeAvailable: false,
     opencodeVersion: null,
     opencodeAuthenticated: false,
     opencodeModel: OPENCODE_MODEL || null,
+    opencodeProvider: OPENCODE_PROVIDER,
+    minimumOpencodeVersion: MIN_OPENCODE_VERSION,
     nodeVersion: process.version,
     lastCheckedAt: nowIso(),
     hostname: os.hostname(),
@@ -257,10 +316,17 @@ async function readCapabilities() {
       env: opencodeEnv(),
       timeoutMs: 20000,
     });
-    capabilities.opencodeAuthenticated =
-      auth.code === 0 && /stored/i.test(auth.stdout);
+    if (auth.code === 0) {
+      const stored = parseStoredAuth(auth.stdout, OPENCODE_PROVIDER);
+      capabilities.opencodeAuthenticated = stored.authenticated;
+      capabilities.authProviders = stored.providers.slice(0, 12);
+    }
   } catch {}
-  return capabilities;
+  capabilities.versionOk = Boolean(
+    capabilities.opencodeAvailable &&
+      isVersionAtLeast(capabilities.opencodeVersion, MIN_OPENCODE_VERSION)
+  );
+  return applyReadiness(capabilities, context);
 }
 
 // ---------------------------------------------------------------------------
@@ -529,6 +595,7 @@ async function executeClaim(claim) {
     const output = `${runResult.stdout}\n${runResult.stderr}`;
     const sessionId = extractSessionId(runResult.stdout);
     const report = extractExecutorReport(output);
+    const usage = parseOpenCodeCost(runResult.stdout);
     const changedFiles = await collectChangedFiles(prepared.worktree);
     const logExcerpt = sanitize(output.slice(-60000));
 
@@ -538,6 +605,10 @@ async function executeClaim(claim) {
       signal: runResult.signal,
       changedFiles: changedFiles.length,
       report: Boolean(report),
+      modelCostUsd: usage.costUsd,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      steps: usage.steps,
     });
 
     if (runResult.cancelled) {
@@ -689,6 +760,10 @@ async function executeClaim(claim) {
         selfReported: true,
         unverified: Array.isArray(parsedReport.unverified) ? parsedReport.unverified.slice(0, 40) : [],
       },
+      // Model usage is actual only when OpenCode reported step_finish events.
+      // The server normalizes it and adds the measured Codespaces runtime cost.
+      usage,
+      runtimeMs: runResult.durationMs,
     };
 
     // Durable outbox: if the network drops after the work is done, retry the
@@ -766,38 +841,65 @@ async function flushOutbox() {
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-async function maybeStopIdleCodespace() {
-  if (!IDLE_STOP_MINUTES || !idleSince || !CODESPACE_NAME) return;
-  if (Date.now() - idleSince < IDLE_STOP_MINUTES * 60000) return;
-  const token = (process.env.GITHUB_TOKEN || '').trim();
-  if (!token) return;
-  await log(`Idle for ${IDLE_STOP_MINUTES} minutes; requesting Codespace stop.`);
+/**
+ * The Codespace GITHUB_TOKEN only carries `codespaces=read` in this
+ * environment. The worker therefore never calls the GitHub stop API itself.
+ * It reports its idle time to the control plane, which owns the write-capable
+ * token, rechecks the queue under a lock and performs the stop.
+ */
+async function maybeRequestIdleShutdown() {
+  if (!IDLE_GRACE_SECONDS || !idleSince) return;
+  const grace = serverIdleGraceSeconds || IDLE_GRACE_SECONDS;
+  const idleForMs = Date.now() - idleSince;
+  if (idleForMs < grace * 1000) return;
+
+  let response;
   try {
-    const response = await fetch(
-      `${process.env.GITHUB_API_URL || 'https://api.github.com'}/user/codespaces/${encodeURIComponent(
-        CODESPACE_NAME
-      )}/stop`,
+    response = await api(
+      'idle',
       {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/vnd.github+json',
-          'User-Agent': `pierrot-dev-worker/${WORKER_VERSION}`,
-        },
-        signal: AbortSignal.timeout(20000),
-      }
+        idleForMs,
+        graceSeconds: grace,
+        codespaceName: CODESPACE_NAME || undefined,
+      },
+      30000
     );
-    if (response.ok) {
-      await log('Codespace stop requested.');
-    } else {
-      await log('Codespace stop request failed', { status: response.status });
-    }
   } catch (error) {
-    await log('Codespace stop request failed', {
-      message: String(error?.message || error).slice(0, 200),
+    await log('Idle shutdown request failed', {
+      status: error.status || null,
+      message: String(error.message || error).slice(0, 200),
+      retryAfterMs: 120000,
     });
+    idleSince = Date.now() - Math.max(0, grace * 1000 - 60000);
+    return;
   }
-  idleSince = null;
+
+  if (response.action === 'stopping') {
+    await log('Idle shutdown accepted by the backend; waiting for Codespace stop.', {
+      idleForMs,
+      grace,
+    });
+    // If the container does not receive SIGTERM, retry the safe request after
+    // five minutes instead of silently keeping the Codespace alive forever.
+    idleSince = Date.now() - Math.max(0, grace * 1000 - 300000);
+    return;
+  }
+  if (response.action === 'stay') {
+    await log('Idle shutdown stayed: workspace became busy.', { reason: response.reason });
+    idleSince = Date.now();
+    return;
+  }
+  if (response.action === 'disabled') {
+    idleSince = null;
+    return;
+  }
+  await log('Idle shutdown deferred by the backend.', {
+    action: response.action,
+    reason: response.reason,
+    retryAfterMs: response.retryAfterMs || null,
+  });
+  const retryMs = Number(response.retryAfterMs) > 0 ? Number(response.retryAfterMs) : 120000;
+  idleSince = Date.now() - Math.max(0, grace * 1000 - retryMs);
 }
 
 async function shutdown(signal) {
@@ -835,14 +937,27 @@ async function main() {
 
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('unhandledRejection', (error) => {
+    void log('Unhandled rejection', {
+      message: String(error?.message || error).slice(0, 400),
+    });
+  });
+  process.on('uncaughtException', (error) => {
+    void log('Uncaught exception; exiting for supervisor restart', {
+      message: String(error?.message || error).slice(0, 400),
+    }).finally(() => process.exit(1));
+  });
 
   await log(`Starting Pierrot worker ${WORKER_ID}`, {
     api: API_BASE,
     version: WORKER_VERSION,
     pollMs: POLL_MS,
+    idleGraceSeconds: IDLE_GRACE_SECONDS,
+    minimumOpencodeVersion: MIN_OPENCODE_VERSION,
+    provider: OPENCODE_PROVIDER,
   });
 
-  let capabilities = await readCapabilities();
+  let capabilities = await readCapabilities({ configOk: true, apiOk: false, supabaseOk: false });
   let registered = false;
   let lastCapabilitiesAt = Date.now();
 
@@ -859,7 +974,19 @@ async function main() {
         });
         registered = true;
         consecutiveErrors = 0;
-        await log('Registered', { opencode: capabilities.opencodeVersion });
+        // A successful register proves both the Pierrot API and its Supabase
+        // client are reachable. This is the only "Supabase check" the worker
+        // can perform without ever receiving the service-role key.
+        capabilities = applyReadiness(capabilities, {
+          configOk: true,
+          apiOk: true,
+          supabaseOk: true,
+        });
+        await log('Registered', {
+          opencode: capabilities.opencodeVersion,
+          ready: capabilities.ready,
+          reasons: capabilities.readiness?.reasons || [],
+        });
         try {
           const recovered = await api('recover', {}, 30000);
           if (recovered.released) {
@@ -870,23 +997,50 @@ async function main() {
         }
       }
 
-      if (Date.now() - lastCapabilitiesAt > 10 * 60 * 1000) {
-        capabilities = await readCapabilities();
+      const capabilityIntervalMs = readiness?.ready ? 10 * 60 * 1000 : 60 * 1000;
+      if (Date.now() - lastCapabilitiesAt > capabilityIntervalMs) {
+        capabilities = await readCapabilities({
+          configOk: true,
+          apiOk: readiness?.apiOk === true,
+          supabaseOk: readiness?.supabaseOk === true,
+        });
         lastCapabilitiesAt = Date.now();
       }
 
       await flushOutbox();
+      const ready = readiness?.ready === true;
+      const reasons = Array.isArray(readiness?.reasons) ? readiness.reasons : [];
       const beat = await api('heartbeat', {
-        status: activeAttempt ? 'busy' : 'idle',
+        status: activeAttempt ? 'busy' : ready ? 'idle' : 'error',
         capabilities,
-        lastError: consecutiveErrors > 0 ? 'Worker had transient API errors.' : null,
+        idleSince: idleSince ? new Date(idleSince).toISOString() : undefined,
+        lastError: activeAttempt
+          ? consecutiveErrors > 0
+            ? 'Worker had transient API errors during execution.'
+            : null
+          : ready
+            ? null
+            : reasons.join(' · ').slice(0, 1000) || 'Worker is not ready.',
       });
+
+      if (Number.isFinite(beat.idleGraceSeconds) && Number(beat.idleGraceSeconds) >= 0) {
+        serverIdleGraceSeconds = Math.trunc(Number(beat.idleGraceSeconds));
+      }
 
       if (beat.stopRequested) {
         if (!activeAttempt) {
           await log('Owner requested a worker stop; exiting.');
           process.exit(0);
         }
+      }
+
+      if (!ready) {
+        // Never claim work with a broken executor. Keep reporting the reason
+        // through heartbeat so Admin can distinguish OpenCode, auth and API
+        // failures without exposing secrets.
+        await log('Worker not ready; not claiming tasks.', { reasons });
+        await sleep(Math.min(60000, Math.max(15000, POLL_MS)));
+        continue;
       }
 
       if (activeAttempt) {
@@ -897,13 +1051,14 @@ async function main() {
       const claimed = await api('claim', {}, 40000);
       consecutiveErrors = 0;
       if (claimed.claim) {
+        idleSince = Date.now();
         await executeClaim(claimed.claim);
         idleSince = Date.now();
         continue;
       }
 
       idleSince = idleSince || Date.now();
-      await maybeStopIdleCodespace();
+      await maybeRequestIdleShutdown();
       await sleep(POLL_MS);
     } catch (error) {
       consecutiveErrors += 1;

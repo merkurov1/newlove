@@ -1,6 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
+import {
+  ensureCodespaceForQueuedWork,
+  retryPendingStart,
+} from '@/lib/pierrot/dev/workbench/lifecycle';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,6 +28,27 @@ export async function GET(req: Request) {
   }
 
   try {
+    // The Admin page is also a bounded recovery trigger: if a queued task is
+    // stranded because a start failed or a stop raced with submission, this
+    // reconcile pass starts the Codespace without any owner action.
+    try {
+      const result = await ensureCodespaceForQueuedWork({
+        source: 'admin:overview',
+        waitForStopMs: 0,
+      });
+      if (result.action === 'start-pending') {
+        after(async () => {
+          try {
+            await retryPendingStart('admin:overview');
+          } catch {
+            // The next overview poll retries again.
+          }
+        });
+      }
+    } catch {
+      // The overview must still load when Codespaces is temporarily unavailable.
+    }
+
     const overview = await getWorkbenchOverview(admin.id);
     return json({ overview });
   } catch (error) {

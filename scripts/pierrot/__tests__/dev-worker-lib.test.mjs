@@ -1,0 +1,92 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  computeReadiness,
+  isVersionAtLeast,
+  parseOpenCodeCost,
+  parseStoredAuth,
+  providerFromModel,
+} from '../dev-worker-lib.mjs';
+
+test('requires OpenCode 2.1.4 or newer', () => {
+  assert.equal(isVersionAtLeast('opencode v2.1.4', '2.1.4'), true);
+  assert.equal(isVersionAtLeast('2.1.3', '2.1.4'), false);
+  assert.equal(isVersionAtLeast('2.10.0', '2.9.9'), true);
+  assert.equal(isVersionAtLeast('unknown', '2.1.4'), false);
+});
+
+test('parses only stored provider authentication', () => {
+  const output = [
+    'DeepSeek        DeepSeek 2                  stored',
+    'DeepSeek        DEEPSEEK_API_KEY            environment',
+    'GitHub Copilot  GITHUB_TOKEN                environment',
+  ].join('\n');
+  assert.deepEqual(parseStoredAuth(output, 'deepseek'), {
+    authenticated: true,
+    providers: ['deepseek'],
+  });
+  assert.equal(parseStoredAuth(output, 'openai').authenticated, false);
+});
+
+test('readiness fails closed and reports the actual reason', () => {
+  const readiness = computeReadiness({
+    configOk: true,
+    apiOk: true,
+    supabaseOk: true,
+    opencodeAvailable: true,
+    opencodeVersion: '2.1.3',
+    minimumVersion: '2.1.4',
+    authenticated: false,
+    provider: 'deepseek',
+  });
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.versionOk, false);
+  assert.equal(readiness.authOk, false);
+  assert.match(readiness.reasons.join(' '), /older than the required 2\.1\.4/);
+  assert.match(readiness.reasons.join(' '), /stored deepseek authentication/i);
+});
+
+test('parses actual OpenCode step_finish cost and tokens', () => {
+  const output = [
+    JSON.stringify({
+      type: 'step_finish',
+      part: {
+        cost: 0.0015,
+        tokens: { input: 100, output: 50, reasoning: 10, cache: { read: 20, write: 5 } },
+        providerID: 'deepseek',
+        modelID: 'deepseek-flash',
+      },
+    }),
+    JSON.stringify({
+      type: 'step_finish',
+      part: {
+        cost: 0.0005,
+        tokens: { input: 10, output: 5, reasoning: 1, cache: { read: 0, write: 0 } },
+      },
+    }),
+    'not json',
+  ].join('\n');
+  const usage = parseOpenCodeCost(output);
+  assert.equal(usage.steps, 2);
+  assert.equal(usage.costUsd, 0.002);
+  assert.equal(usage.inputTokens, 110);
+  assert.equal(usage.outputTokens, 55);
+  assert.equal(usage.reasoningTokens, 11);
+  assert.equal(usage.cacheReadTokens, 20);
+  assert.equal(usage.provider, 'deepseek');
+  assert.equal(usage.model, 'deepseek-flash');
+});
+
+test('does not invent a zero cost when OpenCode reports no cost', () => {
+  const usage = parseOpenCodeCost(
+    JSON.stringify({ type: 'step_finish', part: { tokens: { input: 1, output: 2 } } })
+  );
+  assert.equal(usage.steps, 1);
+  assert.equal(usage.costUsd, null);
+  assert.equal(usage.provenance, 'unavailable:opencode-did-not-report-cost');
+});
+
+test('derives the provider from the configured model', () => {
+  assert.equal(providerFromModel('deepseek/deepseek-flash'), 'deepseek');
+  assert.equal(providerFromModel('deepseek-flash'), null);
+});

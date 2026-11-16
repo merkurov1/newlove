@@ -454,30 +454,84 @@ export async function clearWorkerAttempt(
 export async function getQueueSnapshot(): Promise<{
   queued: number;
   active: number;
+  activeTasks: number;
   paused: boolean;
   depthByPriority: Array<{ priority: number; count: number }>;
 }> {
   try {
     const client = store();
-    const [{ count: queued }, { count: active }, paused] = await Promise.all([
-      client
-        .from('pierrot_dev_prompts')
-        .select('*', { head: true, count: 'exact' })
-        .eq('status', 'queued'),
-      client
-        .from('pierrot_dev_attempts')
-        .select('*', { head: true, count: 'exact' })
-        .in('status', ['claimed', 'running']),
-      isQueuePaused(),
-    ]);
+    const [{ count: queued }, { count: active }, { count: activeTasks }, paused] =
+      await Promise.all([
+        client
+          .from('pierrot_dev_prompts')
+          .select('*', { head: true, count: 'exact' })
+          .eq('status', 'queued'),
+        client
+          .from('pierrot_dev_attempts')
+          .select('*', { head: true, count: 'exact' })
+          .in('status', ['claimed', 'running']),
+        client
+          .from('pierrot_dev_prompts')
+          .select('*', { head: true, count: 'exact' })
+          .eq('status', 'in_progress'),
+        isQueuePaused(),
+      ]);
     return {
       queued: queued || 0,
       active: active || 0,
+      activeTasks: activeTasks || 0,
       paused,
       depthByPriority: [],
     };
   } catch {
-    return { queued: 0, active: 0, paused: false, depthByPriority: [] };
+    return { queued: 0, active: 0, activeTasks: 0, paused: false, depthByPriority: [] };
+  }
+}
+
+/**
+ * Cross-instance mutual exclusion for Codespaces lifecycle operations.
+ *
+ * GitHub start/stop are mostly idempotent, but two concurrent Vercel instances
+ * must not race a stop against a fresh start. The unique `dedupe_key` on the
+ * append-only event journal gives us an atomic one-winner insert per time
+ * window without a new table or a distributed lock service.
+ */
+export async function tryAcquireLifecycleLock(
+  name: 'start' | 'stop' | 'restart',
+  owner: string,
+  windowMs = 45_000
+): Promise<boolean> {
+  const window = Math.min(Math.max(Math.trunc(windowMs), 10_000), 300_000);
+  const bucket = Math.floor(Date.now() / window);
+  const dedupeKey = `lifecycle-lock:${name}:${bucket}`;
+  try {
+    const { error } = await store().from('pierrot_dev_events').insert({
+      type: 'lifecycle.lock',
+      level: 'debug',
+      message: `${name} lifecycle lock acquired.`,
+      payload: { owner: owner.slice(0, 120), windowMs: window },
+      dedupe_key: dedupeKey,
+    });
+    if (!error) return true;
+    if (isDuplicate(error)) return false;
+    console.error('[dev-workbench] lifecycle lock failed', { code: error.code, name });
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export async function listRecentAttempts(limit = 50): Promise<DevAttempt[]> {
+  try {
+    const { data, error } = await store()
+      .from('pierrot_dev_attempts')
+      .select(ATTEMPT_COLUMNS)
+      .order('created_at', { ascending: false })
+      .limit(Math.min(Math.max(limit, 1), 100));
+    if (error || !Array.isArray(data)) return [];
+    return data.map((row) => mapAttemptRow(row));
+  } catch {
+    return [];
   }
 }
 

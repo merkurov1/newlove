@@ -29,6 +29,14 @@ import {
   WORKER_MIN_POLL_INTERVAL_MS,
   WORKER_POLL_INTERVAL_MS,
 } from '@/lib/pierrot/dev/workbench/state';
+import {
+  idleGraceSeconds,
+  recordBootStatus,
+  recordWorkerIdle,
+  recordWorkerReady,
+  requestIdleShutdown,
+} from '@/lib/pierrot/dev/workbench/lifecycle';
+import { WorkbenchGitHubError } from '@/lib/pierrot/dev/workbench/github';
 import type { AttemptResultInput as DevAttemptResultInput } from '@/lib/pierrot/dev/workbench/execution';
 
 export const runtime = 'nodejs';
@@ -91,6 +99,9 @@ function errorResponse(error: unknown) {
   if (error instanceof WorkbenchExecutionError) {
     return json({ error: error.message, code: error.code }, error.status);
   }
+  if (error instanceof WorkbenchGitHubError) {
+    return json({ error: error.message, code: error.code }, error.status === 403 ? 403 : 502);
+  }
   console.error('[Pierrot Dev Worker API] request failed', {
     code: error instanceof Error ? error.name : 'unknown',
   });
@@ -114,6 +125,11 @@ export async function POST(req: Request) {
 
     switch (action) {
       case 'register': {
+        const capabilities = safeObject(body.capabilities, 32_000);
+        const readiness =
+          capabilities.readiness && typeof capabilities.readiness === 'object'
+            ? (capabilities.readiness as Record<string, unknown>)
+            : {};
         const worker = await registerWorker({
           workerId,
           name: text(body.name, 120) || workerId,
@@ -121,14 +137,18 @@ export async function POST(req: Request) {
           hostname: text(body.hostname, 200) || undefined,
           codespaceName: text(body.codespaceName, 120) || undefined,
           repository: text(body.repository, 120) || undefined,
-          capabilities: safeObject(body.capabilities, 32_000),
+          capabilities,
         });
+        if (capabilities.ready === true || readiness.ready === true) {
+          await recordWorkerReady(workerId);
+        }
         return json({
           ok: true,
           worker,
           serverTime: new Date().toISOString(),
           leaseSeconds: WORKER_LEASE_SECONDS,
           pollIntervalMs: WORKER_POLL_INTERVAL_MS,
+          idleGraceSeconds: idleGraceSeconds(),
         });
       }
 
@@ -165,12 +185,25 @@ export async function POST(req: Request) {
         )
           ? (body.status as 'online' | 'idle' | 'busy' | 'draining' | 'offline' | 'error')
           : undefined;
+        const capabilities = safeObject(body.capabilities, 32_000);
         const result = await heartbeatWorker({
           workerId,
           status,
-          capabilities: safeObject(body.capabilities, 32_000),
+          capabilities,
           lastError:
             typeof body.lastError === 'string' ? body.lastError.slice(0, 1000) : undefined,
+        });
+        const readiness =
+          capabilities.readiness && typeof capabilities.readiness === 'object'
+            ? (capabilities.readiness as Record<string, unknown>)
+            : {};
+        if (capabilities.ready === true || readiness.ready === true) {
+          await recordWorkerReady(workerId);
+        }
+        await recordWorkerIdle({
+          workerId,
+          status: status || 'idle',
+          idleSince: text(body.idleSince, 40) || null,
         });
         return json({
           ok: Boolean(result.worker),
@@ -182,16 +215,21 @@ export async function POST(req: Request) {
           pollIntervalMs: WORKER_POLL_INTERVAL_MS,
           minPollIntervalMs: WORKER_MIN_POLL_INTERVAL_MS,
           maxPollIntervalMs: WORKER_MAX_POLL_INTERVAL_MS,
+          idleGraceSeconds: idleGraceSeconds(),
         });
       }
 
       case 'claim': {
         const claim = await claimTaskForWorker(workerId);
+        if (claim) {
+          await recordWorkerIdle({ workerId, status: 'busy', idleSince: null });
+        }
         return json({
           ok: true,
           claim,
           serverTime: new Date().toISOString(),
           pollIntervalMs: WORKER_POLL_INTERVAL_MS,
+          idleGraceSeconds: idleGraceSeconds(),
         });
       }
 
@@ -236,6 +274,11 @@ export async function POST(req: Request) {
             : [],
           logExcerpt: text(raw.logExcerpt, 60_000),
           verification: safeObject(raw.verification, 32_000),
+          usage: safeObject(raw.usage, 16_000),
+          runtimeMs:
+            typeof raw.runtimeMs === 'number' && Number.isFinite(raw.runtimeMs)
+              ? Math.max(0, Math.trunc(raw.runtimeMs))
+              : null,
         };
         const completed = await completeAttempt(workerId, attemptId, result);
         return json({
@@ -274,6 +317,28 @@ export async function POST(req: Request) {
         return json({ ok: released });
       }
 
+      case 'idle': {
+        const idleForMs =
+          typeof body.idleForMs === 'number' && Number.isFinite(body.idleForMs)
+            ? Math.max(0, Math.trunc(body.idleForMs))
+            : 0;
+        const graceSeconds =
+          typeof body.graceSeconds === 'number' && Number.isFinite(body.graceSeconds)
+            ? Math.max(0, Math.trunc(body.graceSeconds))
+            : idleGraceSeconds();
+        const result = await requestIdleShutdown({ workerId, idleForMs, graceSeconds });
+        return json({ ok: true, ...result, serverTime: new Date().toISOString() });
+      }
+
+      case 'boot': {
+        await recordBootStatus({
+          workerId,
+          phase: text(body.phase, 80) || 'unknown',
+          message: text(body.message, 800) || 'Worker boot hook ran.',
+        });
+        return json({ ok: true });
+      }
+
       case 'queue_status': {
         const queue = await getQueueSnapshot();
         return json({
@@ -281,6 +346,7 @@ export async function POST(req: Request) {
           queue,
           serverTime: new Date().toISOString(),
           pollIntervalMs: WORKER_POLL_INTERVAL_MS,
+          idleGraceSeconds: idleGraceSeconds(),
         });
       }
 

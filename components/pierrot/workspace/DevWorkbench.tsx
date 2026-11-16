@@ -97,6 +97,58 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`pw-wb-badge is-${status}`}>{status.replace(/_/g, ' ')}</span>;
 }
 
+function money(value: number | null | undefined): string {
+  // Unknown is never rendered as $0.
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return `$${value.toFixed(4)}`;
+}
+
+function lifecycleTone(status: string): string {
+  if (status === 'ready' || status === 'executing_task') return 'ok';
+  if (status === 'offline') return 'idle';
+  if (status === 'blocked') return 'error';
+  if (status === 'waiting_for_shutdown' || status === 'stopping_codespace') return 'warn';
+  return 'busy';
+}
+
+type AttemptCostView = {
+  modelUsd?: number | null;
+  codespaceEstimatedUsd?: number | null;
+  totalUsd?: number | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  reasoningTokens?: number | null;
+  unknown?: string[];
+  machine?: string | null;
+  runtimeMs?: number | null;
+};
+
+function attemptCost(attempt: DevAttempt): AttemptCostView | null {
+  const raw = attempt.verification?.cost;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const cost = raw as {
+    model?: Record<string, unknown>;
+    codespace?: Record<string, unknown>;
+    totalUsd?: unknown;
+    unknown?: unknown;
+  };
+  const numberOrNull = (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : null;
+  return {
+    modelUsd: numberOrNull(cost.model?.costUsd),
+    codespaceEstimatedUsd: numberOrNull(cost.codespace?.estimatedUsd),
+    totalUsd: numberOrNull(cost.totalUsd),
+    inputTokens: numberOrNull(cost.model?.inputTokens),
+    outputTokens: numberOrNull(cost.model?.outputTokens),
+    reasoningTokens: numberOrNull(cost.model?.reasoningTokens),
+    unknown: Array.isArray(cost.unknown)
+      ? cost.unknown.filter((item): item is string => typeof item === 'string')
+      : [],
+    machine: typeof cost.codespace?.machine === 'string' ? cost.codespace.machine : null,
+    runtimeMs: numberOrNull(cost.codespace?.runtimeMs),
+  };
+}
+
 function TaskMeta({ task }: { task: DevWorkbenchTask }) {
   return (
     <span className="pw-wb-meta">
@@ -204,6 +256,16 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         }
         if (action === 'start_codespace' || action === 'create_codespace') {
           setNotice('Codespace start requested. The worker starts automatically after boot.');
+        }
+        if (action === 'approve') {
+          const queued = body.overview?.queue.some(
+            (item) => item.id === String(payload.taskId || '')
+          );
+          setNotice(
+            queued
+              ? 'Задание утверждено и поставлено в очередь. Codespace запустится автоматически.'
+              : 'Задание утверждено. Задачи batch запускаются через Start batch.'
+          );
         }
         if (action === 'accept') {
           setNotice('Accepted. Select the verified task in REVIEW again to merge it explicitly.');
@@ -353,6 +415,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         <span className={`pw-wb-chip ${overview.queuePaused ? 'is-warn' : 'is-ok'}`}>
           queue {overview.queuePaused ? 'paused' : 'running'}
         </span>
+        <span className={`pw-wb-chip is-${lifecycleTone(overview.lifecycle.status)}`}>
+          {overview.lifecycle.label}
+        </span>
         <span className={`pw-wb-chip ${worker?.online ? 'is-ok' : 'is-error'}`}>
           worker {worker?.online ? 'online' : 'offline'}
         </span>
@@ -366,7 +431,15 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         </span>
       </div>
     ),
-    [overview.schemaReady, overview.queuePaused, worker, active, counts]
+    [
+      overview.schemaReady,
+      overview.queuePaused,
+      overview.lifecycle.status,
+      overview.lifecycle.label,
+      worker,
+      active,
+      counts,
+    ]
   );
 
   const renderInbox = () => (
@@ -879,10 +952,16 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         <div className="pw-wb-actions">
           <button
             type="button"
-            className="pw-wb-button"
+            className="pw-wb-button is-quiet"
+            disabled={
+              busy === 'start_codespace' ||
+              ['starting_codespace', 'starting_worker', 'stopping_codespace'].includes(
+                overview.lifecycle.status
+              )
+            }
             onClick={() => void runAction('start_codespace')}
           >
-            Start Codespace
+            Start now (automatic)
           </button>
           <button
             type="button"
@@ -893,6 +972,122 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             Cancel attempt
           </button>
         </div>
+      </div>
+
+      <div className="pw-wb-card">
+        <div className="pw-wb-card-head">
+          <div className="pw-wb-card-title">
+            <span className={`pw-wb-dot is-${lifecycleTone(overview.lifecycle.status)}`} />
+            <strong>{overview.lifecycle.label}</strong>
+          </div>
+          <span className="pw-wb-meta">
+            updated {new Date(overview.lifecycle.updatedAt).toLocaleTimeString('ru-RU')}
+          </span>
+        </div>
+        <p className="pw-wb-card-body">{overview.lifecycle.detail}</p>
+        {overview.lifecycle.lastError && (
+          <p className="pw-wb-warning">
+            <AlertTriangle size={14} /> {overview.lifecycle.lastError}
+          </p>
+        )}
+        {overview.lifecycle.worker?.readiness?.reasons?.length ? (
+          <p className="pw-wb-warning">
+            <ShieldAlert size={14} /> {overview.lifecycle.worker.readiness.reasons.join(' · ')}
+          </p>
+        ) : null}
+        <dl className="pw-wb-facts">
+          <div>
+            <dt>Codespace</dt>
+            <dd>
+              {overview.lifecycle.codespace
+                ? `${overview.lifecycle.codespace.name} · ${overview.lifecycle.codespace.state || 'unknown'}`
+                : '—'}
+            </dd>
+          </div>
+          <div>
+            <dt>Queue</dt>
+            <dd>
+              {overview.lifecycle.queue.queued} queued · {overview.lifecycle.queue.active} active
+              {overview.lifecycle.queue.paused ? ' · paused' : ''}
+            </dd>
+          </div>
+          <div>
+            <dt>Worker</dt>
+            <dd>
+              {overview.lifecycle.worker
+                ? `${overview.lifecycle.worker.online ? 'online' : 'offline'} · ${
+                    overview.lifecycle.worker.ready ? 'ready' : 'not ready'
+                  } · heartbeat ${overview.lifecycle.worker.heartbeatAgeSeconds ?? '—'}s`
+                : 'not registered'}
+            </dd>
+          </div>
+          <div>
+            <dt>Idle / grace</dt>
+            <dd>
+              {overview.lifecycle.idleSeconds !== null
+                ? `${overview.lifecycle.idleSeconds}s / ${overview.lifecycle.idleGraceSeconds}s`
+                : `— / ${overview.lifecycle.idleGraceSeconds}s`}
+            </dd>
+          </div>
+          <div>
+            <dt>Startup</dt>
+            <dd>
+              {overview.lifecycle.lastStartAt
+                ? `${age(overview.lifecycle.lastStartAt)} ago${
+                    overview.lifecycle.lastReadyAt
+                      ? ` · ready ${age(overview.lifecycle.lastReadyAt)} ago`
+                      : ''
+                  }`
+                : '—'}
+            </dd>
+          </div>
+          <div>
+            <dt>Last shutdown</dt>
+            <dd>
+              {overview.lifecycle.lastStopAt
+                ? `${age(overview.lifecycle.lastStopAt)} ago${
+                    overview.lifecycle.lastStop?.idleSeconds != null
+                      ? ` · idle ${overview.lifecycle.lastStop.idleSeconds}s`
+                      : ''
+                  }${
+                    overview.lifecycle.lastStop?.startupMs != null
+                      ? ` · startup ${Math.round(overview.lifecycle.lastStop.startupMs / 1000)}s`
+                      : ''
+                  }${
+                    overview.lifecycle.lastStop?.measuredRuntimeMs != null
+                      ? ` · runtime ${Math.round(
+                          overview.lifecycle.lastStop.measuredRuntimeMs / 60000
+                        )}m`
+                      : ''
+                  }`
+                : '—'}
+            </dd>
+          </div>
+          <div>
+            <dt>Cost ledger</dt>
+            <dd>
+              actual model {money(overview.lifecycle.cost.modelUsd)} · Codespaces est.{' '}
+              {money(overview.lifecycle.cost.codespaceEstimatedUsd)} · total{' '}
+              {money(overview.lifecycle.cost.totalUsd)}
+            </dd>
+          </div>
+          <div>
+            <dt>Tokens</dt>
+            <dd>
+              in {overview.lifecycle.cost.inputTokens ?? '—'} · out{' '}
+              {overview.lifecycle.cost.outputTokens ?? '—'} · reasoning{' '}
+              {overview.lifecycle.cost.reasoningTokens ?? '—'}
+            </dd>
+          </div>
+        </dl>
+        <p className="pw-wb-meta">
+          {overview.lifecycle.cost.attemptsWithCost} attempt(s) with cost ·{' '}
+          {overview.lifecycle.cost.attemptsMissingCost} without ·{' '}
+          {overview.lifecycle.cost.provenance}
+          {overview.lifecycle.cost.unknown.length
+            ? ` · unknown: ${overview.lifecycle.cost.unknown.join(', ')}`
+            : ''}
+        </p>
       </div>
 
       {active ? (
@@ -1055,7 +1250,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
     </div>
   );
 
-  const renderAttempt = (attempt: DevAttempt) => (
+  const renderAttempt = (attempt: DevAttempt) => {
+    const cost = attemptCost(attempt);
+    return (
     <div key={attempt.id} className="pw-wb-attempt">
       <button
         type="button"
@@ -1087,7 +1284,32 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
               <dt>OpenCode session</dt>
               <dd>{attempt.opencodeSessionId || '—'}</dd>
             </div>
+            <div>
+              <dt>Model cost</dt>
+              <dd>{cost ? money(cost.modelUsd) : '—'}</dd>
+            </div>
+            <div>
+              <dt>Codespaces est.</dt>
+              <dd>
+                {cost ? `${money(cost.codespaceEstimatedUsd)}${cost.machine ? ` · ${cost.machine}` : ''}` : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt>Total</dt>
+              <dd>{cost ? money(cost.totalUsd) : '—'}</dd>
+            </div>
+            <div>
+              <dt>Tokens</dt>
+              <dd>
+                {cost
+                  ? `${cost.inputTokens ?? '—'} in / ${cost.outputTokens ?? '—'} out`
+                  : '—'}
+              </dd>
+            </div>
           </dl>
+          {cost?.unknown?.length ? (
+            <p className="pw-wb-meta">Cost unavailable for: {cost.unknown.join(', ')}.</p>
+          ) : null}
           {attempt.errorCode && (
             <p className="pw-wb-warning">
               <AlertTriangle size={14} /> {attempt.errorCode}: {attempt.errorMessage}
@@ -1122,7 +1344,8 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         </div>
       )}
     </div>
-  );
+    );
+  };
 
   const renderHistory = () => (
     <div className="pw-wb-section">

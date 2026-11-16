@@ -88,6 +88,20 @@ export type DevAttempt = {
   createdAt: string;
 };
 
+export type DevWorkerReadiness = {
+  ready: boolean;
+  configOk: boolean;
+  apiOk: boolean;
+  supabaseOk: boolean;
+  opencodeOk: boolean;
+  versionOk: boolean;
+  authOk: boolean;
+  minimumVersion: string;
+  provider: string | null;
+  reasons: string[];
+  checkedAt: string;
+};
+
 export type DevWorker = {
   id: string;
   name: string;
@@ -103,6 +117,8 @@ export type DevWorker = {
     opencodeAuthenticated?: boolean;
     nodeVersion?: string;
     lastCheckedAt?: string;
+    ready?: boolean;
+    readiness?: DevWorkerReadiness;
     [key: string]: unknown;
   };
   currentTaskId: string | null;
@@ -182,6 +198,32 @@ export type DevReviewView = {
   deployment: DevDeploymentStatus | null;
 };
 
+/** Actual model usage plus estimated Codespaces runtime for one attempt. */
+export type DevAttemptCost = {
+  model: {
+    provider: string | null;
+    model: string | null;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    reasoningTokens: number | null;
+    cacheReadTokens: number | null;
+    cacheWriteTokens: number | null;
+    costUsd: number | null;
+    steps: number;
+    provenance: string;
+  };
+  codespace: {
+    machine: string | null;
+    runtimeMs: number | null;
+    hourlyUsd: number | null;
+    estimatedUsd: number | null;
+    provenance: string;
+  };
+  totalUsd: number | null;
+  unknown: string[];
+  measuredAt: string;
+};
+
 export type DevDeploymentStatus = {
   state: 'ready' | 'building' | 'error' | 'queued' | 'unavailable' | 'unknown';
   url: string | null;
@@ -222,6 +264,80 @@ export type DevSetupReport = {
   };
 };
 
+export type DevLifecycleStatus =
+  | 'offline'
+  | 'starting_codespace'
+  | 'codespace_available'
+  | 'starting_worker'
+  | 'checking_opencode'
+  | 'checking_provider'
+  | 'ready'
+  | 'executing_task'
+  | 'waiting_for_shutdown'
+  | 'stopping_codespace'
+  | 'blocked';
+
+export type DevLifecycleCost = {
+  modelUsd: number | null;
+  codespaceEstimatedUsd: number | null;
+  totalUsd: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  reasoningTokens: number | null;
+  attemptsWithCost: number;
+  attemptsMissingCost: number;
+  unknown: string[];
+  provenance: string;
+};
+
+export type DevLifecycleSnapshot = {
+  status: DevLifecycleStatus;
+  label: string;
+  detail: string;
+  schemaReady: boolean;
+  codespace: {
+    name: string | null;
+    state: string | null;
+    repository: string | null;
+    machine: string | null;
+    webUrl: string | null;
+  } | null;
+  codespaceError: string | null;
+  worker: {
+    id: string;
+    name: string;
+    online: boolean;
+    status: string;
+    ready: boolean;
+    readiness: DevWorkerReadiness | null;
+    heartbeatAgeSeconds: number | null;
+  } | null;
+  queue: {
+    queued: number;
+    active: number;
+    paused: boolean;
+  };
+  executing: boolean;
+  idleSeconds: number | null;
+  idleGraceSeconds: number;
+  startupGraceSeconds: number;
+  pendingStart: boolean;
+  shutdownRequested: boolean;
+  lastStartAt: string | null;
+  lastReadyAt: string | null;
+  lastStopAt: string | null;
+  lastStop: {
+    requestedAt: string;
+    measuredRuntimeMs: number | null;
+    startupMs: number | null;
+    idleSeconds: number | null;
+    reason: string;
+  } | null;
+  lastError: string | null;
+  cost: DevLifecycleCost;
+  updatedAt: string;
+};
+
 export type DevWorkbenchOverview = {
   schemaReady: boolean;
   migrationFile: string;
@@ -240,6 +356,7 @@ export type DevWorkbenchOverview = {
   review: DevWorkbenchTask[];
   workers: DevWorker[];
   recentEvents: DevEvent[];
+  lifecycle: DevLifecycleSnapshot;
   updatedAt: string;
 };
 

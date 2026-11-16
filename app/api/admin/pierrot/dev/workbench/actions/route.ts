@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto';
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { getClientIp } from '@/lib/rateLimit';
 import { checkPierrotRateLimit } from '@/lib/pierrot/rateLimit';
@@ -19,6 +19,7 @@ import {
   WorkbenchUnavailableError,
   appendEvent,
   createBatch,
+  getBatchIdForTask,
   getTaskRow,
   isUuid,
   patchTask,
@@ -35,14 +36,15 @@ import {
 import {
   createCodespace,
   listUserCodespaces,
-  resolveCodespace,
-  startCodespace,
-  stopCodespace,
 } from '@/lib/pierrot/dev/workbench/github';
 import {
-  CODESPACE_NAME_ENV,
-  getConfiguredCodespaceName,
-} from '@/lib/pierrot/dev/workbench/setup';
+  ensureCodespaceForQueuedWork,
+  retryPendingStart,
+  startCodespaceNow,
+  stopCodespaceNow,
+} from '@/lib/pierrot/dev/workbench/lifecycle';
+import type { EnsureStartResult } from '@/lib/pierrot/dev/workbench/lifecycle';
+import { CODESPACE_NAME_ENV } from '@/lib/pierrot/dev/workbench/setup';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
 import { DevTransitionError } from '@/lib/pierrot/dev/workbench/state';
 import { WorkbenchGitHubError } from '@/lib/pierrot/dev/workbench/github';
@@ -73,6 +75,29 @@ function json(body: unknown, status = 200) {
       'Cache-Control': 'no-store, max-age=0, must-revalidate',
       'X-Robots-Tag': 'noindex, nofollow',
     },
+  });
+}
+
+/**
+ * If a stop is in flight, startup is recorded and retried after the response.
+ * The enqueue action never waits for the whole Codespace boot.
+ */
+function schedulePendingStart(result: EnsureStartResult, source: string): void {
+  if (result.action !== 'start-pending') return;
+  after(async () => {
+    // A shutdown can take tens of seconds. Retry within the function budget
+    // instead of giving up after the first GitHub state read.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 9_000));
+      try {
+        const retried = await retryPendingStart(`${source}:retry`);
+        if (retried.action !== 'start-pending') return;
+      } catch (error) {
+        console.error('[Pierrot Dev Workbench] pending start retry failed', {
+          code: error instanceof Error ? error.name : 'unknown',
+        });
+      }
+    }
   });
 }
 
@@ -150,6 +175,26 @@ export async function POST(req: Request) {
       case 'approve': {
         const task = await approveTask(admin.id, taskId);
         if (!task) return json({ error: 'Task not found.' }, 404);
+        // Approval is the owner's normal entry point. A standalone task enters
+        // the queue immediately (and therefore starts the Codespace). Tasks
+        // already attached to a batch stay ready so the batch owns their order.
+        const batchId = await getBatchIdForTask(task.id);
+        if (!batchId) {
+          try {
+            await enqueueTask(admin.id, taskId);
+          } catch {
+            await appendEvent({
+              taskId,
+              type: 'task.auto_enqueue_failed',
+              level: 'warn',
+              message: 'Task was approved but could not be queued automatically.',
+            }).catch(() => {});
+          }
+        }
+        schedulePendingStart(
+          await ensureCodespaceForQueuedWork({ source: 'admin:approve', waitForStopMs: 0 }),
+          'admin:approve'
+        );
         break;
       }
       case 'enqueue': {
@@ -159,6 +204,10 @@ export async function POST(req: Request) {
           typeof body.batchId === 'string' ? body.batchId : null
         );
         if (!task) return json({ error: 'Task not found.' }, 404);
+        schedulePendingStart(
+          await ensureCodespaceForQueuedWork({ source: 'admin:enqueue', waitForStopMs: 0 }),
+          'admin:enqueue'
+        );
         break;
       }
       case 'dequeue': {
@@ -174,6 +223,10 @@ export async function POST(req: Request) {
       case 'retry': {
         const task = await retryTask(admin.id, taskId);
         if (!task) return json({ error: 'Task not found.' }, 404);
+        schedulePendingStart(
+          await ensureCodespaceForQueuedWork({ source: 'admin:retry', waitForStopMs: 0 }),
+          'admin:retry'
+        );
         break;
       }
       case 'accept': {
@@ -238,6 +291,12 @@ export async function POST(req: Request) {
           level: paused ? 'warn' : 'info',
           message: paused ? 'Queue paused by the owner.' : 'Queue resumed by the owner.',
         });
+        if (!paused) {
+          schedulePendingStart(
+            await ensureCodespaceForQueuedWork({ source: 'admin:resume', waitForStopMs: 0 }),
+            'admin:resume'
+          );
+        }
         break;
       }
       case 'create_batch': {
@@ -282,6 +341,10 @@ export async function POST(req: Request) {
                       : 'The batch could not be started.';
           return json({ error: message, code: result.error, notReady: result.notReady }, status);
         }
+        schedulePendingStart(
+          await ensureCodespaceForQueuedWork({ source: 'admin:start_batch', waitForStopMs: 0 }),
+          'admin:start_batch'
+        );
         break;
       }
       case 'update_batch': {
@@ -339,44 +402,32 @@ export async function POST(req: Request) {
         return json({ ok: true, codespaces });
       }
       case 'start_codespace': {
-        const configured = getConfiguredCodespaceName();
-        const resolved = await resolveCodespace(configured);
-        if (!resolved) {
+        const result = await startCodespaceNow({ source: 'admin:manual', waitForStopMs: 0 });
+        if (result.action === 'blocked') {
           return json(
             {
-              error: `No Codespace was found for this repository. Set ${CODESPACE_NAME_ENV} or create one from Admin.`,
-              code: 'CODESPACE_NOT_FOUND',
+              error:
+                result.reason ||
+                `No Codespace was found for this repository. Set ${CODESPACE_NAME_ENV} or create one from Admin.`,
+              code: 'CODESPACE_START_FAILED',
             },
-            409
+            502
           );
         }
-        const codespace = await startCodespace(resolved.name);
-        await appendEvent({
-          type: 'codespace.start_requested',
-          message: `Owner requested Codespace start: ${resolved.name} (${codespace.state}).`,
-          payload: { name: resolved.name, configuredName: configured, state: codespace.state },
-        });
+        schedulePendingStart(result, 'admin:manual');
         break;
       }
       case 'stop_codespace': {
-        const configured = getConfiguredCodespaceName();
-        const resolved = await resolveCodespace(configured);
-        if (!resolved) {
+        const result = await stopCodespaceNow({ source: 'admin:manual' });
+        if (!result.stopped) {
           return json(
             {
-              error: `No Codespace was found for this repository. Set ${CODESPACE_NAME_ENV} or create one from Admin.`,
-              code: 'CODESPACE_NOT_FOUND',
+              error: result.reason,
+              code: 'CODESPACE_STOP_REFUSED',
             },
             409
           );
         }
-        const codespace = await stopCodespace(resolved.name);
-        await appendEvent({
-          type: 'codespace.stop_requested',
-          level: 'warn',
-          message: `Owner requested Codespace stop: ${resolved.name} (${codespace.state}).`,
-          payload: { name: resolved.name, configuredName: configured, state: codespace.state },
-        });
         break;
       }
       case 'create_codespace': {

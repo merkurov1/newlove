@@ -1,35 +1,46 @@
 #!/usr/bin/env bash
-# Stop the Pierrot Dev Workbench worker gracefully. The worker releases its
-# lease and requeues the active task before exiting.
+# Stop the Pierrot Dev Workbench supervisor and worker gracefully. Safe to
+# repeat: missing PID files and already-dead processes are not errors.
 
 set -u
 
 WORK_ROOT="${PIERROT_DEV_WORK_ROOT:-$HOME/.pierrot-dev-work}"
-PID_FILE="$WORK_ROOT/worker.pid"
+SUPERVISOR_PID_FILE="$WORK_ROOT/supervisor.pid"
+WORKER_PID_FILE="$WORK_ROOT/worker.pid"
+STOP_FILE="$WORK_ROOT/stopping"
 
-if [ ! -f "$PID_FILE" ]; then
-  echo "[dev-worker] not running (no pid file)"
-  exit 0
-fi
+mkdir -p "$WORK_ROOT" 2>/dev/null || true
+: > "$STOP_FILE"
 
-PID="$(cat "$PID_FILE" 2>/dev/null || true)"
-if [ -z "${PID:-}" ] || ! kill -0 "$PID" 2>/dev/null; then
-  rm -f "$PID_FILE"
+stop_pid() {
+  local pid="$1"
+  [ -n "${pid:-}" ] || return 0
+  kill -0 "$pid" 2>/dev/null || return 0
+  kill -TERM "$pid" 2>/dev/null || true
+  for _ in $(seq 1 25); do
+    kill -0 "$pid" 2>/dev/null || return 0
+    sleep 1
+  done
+  kill -KILL "$pid" 2>/dev/null || true
+}
+
+SUPERVISOR_PID="$(cat "$SUPERVISOR_PID_FILE" 2>/dev/null || true)"
+WORKER_PID="$(cat "$WORKER_PID_FILE" 2>/dev/null || true)"
+
+if [ -z "${SUPERVISOR_PID:-}" ] && [ -z "${WORKER_PID:-}" ]; then
+  rm -f "$SUPERVISOR_PID_FILE" "$WORKER_PID_FILE"
   echo "[dev-worker] not running"
   exit 0
 fi
 
-kill -TERM "$PID" 2>/dev/null || true
-for _ in $(seq 1 20); do
-  if ! kill -0 "$PID" 2>/dev/null; then
-    rm -f "$PID_FILE"
-    echo "[dev-worker] stopped"
-    exit 0
-  fi
-  sleep 1
-done
+# Stop the worker first so the supervisor does not immediately restart it.
+if [ -n "${WORKER_PID:-}" ]; then
+  stop_pid "$WORKER_PID"
+fi
+if [ -n "${SUPERVISOR_PID:-}" ]; then
+  stop_pid "$SUPERVISOR_PID"
+fi
 
-kill -KILL "$PID" 2>/dev/null || true
-rm -f "$PID_FILE"
-echo "[dev-worker] force stopped"
+rm -f "$SUPERVISOR_PID_FILE" "$WORKER_PID_FILE"
+echo "[dev-worker] stopped"
 exit 0

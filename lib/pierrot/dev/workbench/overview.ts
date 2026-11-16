@@ -12,6 +12,7 @@ import {
   listTaskRows,
   listWorkers,
 } from './store';
+import { getLifecycleSnapshot } from './lifecycle';
 import type { DevWorkbenchOverview, DevWorkbenchTask } from './types';
 
 assertServerOnly('lib/pierrot/dev/workbench/overview');
@@ -21,6 +22,7 @@ let lastReapAt = 0;
 
 export async function getWorkbenchOverview(userId: string): Promise<DevWorkbenchOverview> {
   const schemaReady = await isWorkbenchSchemaReady();
+  const lifecycle = await getLifecycleSnapshot();
   const updatedAt = new Date().toISOString();
 
   // Viewing Admin is enough to detect an expired worker lease. This is a
@@ -75,6 +77,7 @@ export async function getWorkbenchOverview(userId: string): Promise<DevWorkbench
       review,
       workers: [],
       recentEvents: [],
+      lifecycle,
       updatedAt,
     };
   }
@@ -117,6 +120,7 @@ export async function getWorkbenchOverview(userId: string): Promise<DevWorkbench
     review,
     workers,
     recentEvents,
+    lifecycle,
     updatedAt,
   };
 }

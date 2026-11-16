@@ -7093,6 +7093,10 @@ a.pw-home-indicator:hover {
   background: var(--pw-ochre);
 }
 
+.pw-wb-dot.is-busy {
+  background: var(--pw-flow);
+}
+
 .pw-wb-dot.is-error,
 .pw-wb-dot.is-missing {
   background: #b05345;
