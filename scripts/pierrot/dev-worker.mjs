@@ -17,15 +17,15 @@
  *   PIERROT_DEV_PIERROT_DIR    Pierrot checkout (auto-cloned when missing)
  *   PIERROT_DEV_WORK_ROOT      worktrees/outbox root
  *   PIERROT_DEV_TASK_TIMEOUT_MS
- *   PIERROT_DEV_IDLE_STOP_MINUTES  stop the Codespace after N idle minutes (0 = off)
+ *   PIERROT_DEV_IDLE_STOP_MINUTES  stop the Codespace after N idle minutes (default 20, 0 = off)
  *   PIERROT_DEV_OPENCODE_MODEL / PIERROT_DEV_OPENCODE_AGENT
  */
 
-import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import process from 'node:process';
+import { runProcess, terminateProcessGroup } from './dev-worker-process.mjs';
 
 const API_BASE = (
   process.env.PIERROT_DEV_API_URL ||
@@ -47,7 +47,12 @@ const POLL_MS = clamp(Number(process.env.PIERROT_DEV_POLL_MS || 20000), 15000, 3
 const MAX_BACKOFF_MS = 120000;
 const TASK_TIMEOUT_MS = Math.max(60000, Number(process.env.PIERROT_DEV_TASK_TIMEOUT_MS || 45 * 60 * 1000));
 const MAX_LOG_BYTES = Math.max(100000, Number(process.env.PIERROT_DEV_MAX_LOG_BYTES || 2000000));
-const IDLE_STOP_MINUTES = Math.max(0, Number(process.env.PIERROT_DEV_IDLE_STOP_MINUTES || 0));
+const IDLE_STOP_MINUTES = (() => {
+  const raw = process.env.PIERROT_DEV_IDLE_STOP_MINUTES;
+  if (raw === undefined || raw.trim() === '') return 20;
+  const value = Number(raw);
+  return Number.isFinite(value) ? Math.max(0, value) : 20;
+})();
 const OPENCODE_MODEL =
   (process.env.PIERROT_DEV_OPENCODE_MODEL || 'deepseek/deepseek-flash').trim();
 const OPENCODE_AGENT = (process.env.PIERROT_DEV_OPENCODE_AGENT || '').trim();
@@ -142,39 +147,11 @@ async function api(action, payload = {}, timeoutMs = 30000) {
 
 function run(command, args, options = {}) {
   const { cwd, env, timeoutMs = 120000 } = options;
-  return new Promise((resolve) => {
-    const child = spawn(command, args, {
-      cwd,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      detached: true,
-    });
-    let stdout = '';
-    let stderr = '';
-    let finished = false;
-    const timer = setTimeout(() => {
-      if (finished) return;
-      try {
-        process.kill(-child.pid, 'SIGKILL');
-      } catch {}
-    }, timeoutMs);
-
-    child.stdout.on('data', (chunk) => {
-      stdout = (stdout + chunk.toString()).slice(-MAX_LOG_BYTES);
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr = (stderr + chunk.toString()).slice(-MAX_LOG_BYTES);
-    });
-    child.on('error', (error) => {
-      finished = true;
-      clearTimeout(timer);
-      resolve({ code: -1, stdout, stderr: `${stderr}\n${error.message}` });
-    });
-    child.on('close', (code) => {
-      finished = true;
-      clearTimeout(timer);
-      resolve({ code: typeof code === 'number' ? code : -1, stdout, stderr });
-    });
+  return runProcess(command, args, {
+    cwd,
+    env,
+    timeoutMs,
+    maxCaptureBytes: MAX_LOG_BYTES,
   });
 }
 
@@ -422,90 +399,49 @@ async function runOpenCode({ worktree, prompt, attemptId, title }) {
   if (OPENCODE_AGENT) args.push('--agent', OPENCODE_AGENT);
   args.push(prompt);
 
-  const child = spawn('opencode', args, {
+  await log('OpenCode started', { attemptId, model: OPENCODE_MODEL || null });
+
+  const result = await runProcess('opencode', args, {
     cwd: worktree,
     env: opencodeEnv(),
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: true,
-  });
-  activeChildPid = child.pid;
-
-  let stdout = '';
-  let stderr = '';
-  let truncated = false;
-  const startedAt = Date.now();
-  let timedOut = false;
-  let cancelled = false;
-
-  const capture = (chunk, target) => {
-    if (target === 'out') {
-      if (stdout.length < MAX_LOG_BYTES) stdout += chunk.toString();
-      else truncated = true;
-    } else if (stderr.length < MAX_LOG_BYTES) stderr += chunk.toString();
-    else truncated = true;
-  };
-  child.stdout.on('data', (chunk) => capture(chunk, 'out'));
-  child.stderr.on('data', (chunk) => capture(chunk, 'err'));
-
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    try {
-      process.kill(-child.pid, 'SIGTERM');
-      setTimeout(() => {
-        try {
-          process.kill(-child.pid, 'SIGKILL');
-        } catch {}
-      }, 10000);
-    } catch {}
-  }, TASK_TIMEOUT_MS);
-
-  const heartbeat = setInterval(async () => {
-    if (shuttingDown) {
-      cancelled = true;
+    timeoutMs: TASK_TIMEOUT_MS,
+    maxCaptureBytes: MAX_LOG_BYTES,
+    heartbeatMs: 25000,
+    onSpawn: (child) => {
+      activeChildPid = child.pid ?? null;
+    },
+    onHeartbeat: async ({ stdout }) => {
+      if (shuttingDown) return true;
       try {
-        process.kill(-child.pid, 'SIGTERM');
-      } catch {}
-      return;
-    }
-    try {
-      const response = await api(
-        'progress',
-        {
-          attemptId,
-          stage: 'opencode_running',
-          logExcerpt: sanitize(stdout.slice(-20000)),
-        },
-        20000
-      );
-      if (response.cancelled) {
-        cancelled = true;
-        try {
-          process.kill(-child.pid, 'SIGTERM');
-        } catch {}
+        const response = await api(
+          'progress',
+          {
+            attemptId,
+            stage: 'opencode_running',
+            logExcerpt: sanitize(stdout.slice(-20000)),
+          },
+          20000
+        );
+        return response.cancelled === true;
+      } catch {
+        // Network failures during execution are tolerated; the lease is long.
+        return false;
       }
-    } catch {
-      // Network failures during execution are tolerated; the lease is long.
-    }
-  }, 25000);
-
-  const result = await new Promise((resolve) => {
-    child.on('error', (error) =>
-      resolve({ code: -1, stdout, stderr: `${stderr}\n${error.message}` })
-    );
-    child.on('close', (code) => resolve({ code: typeof code === 'number' ? code : -1, stdout, stderr }));
+    },
   });
 
-  clearTimeout(timeout);
-  clearInterval(heartbeat);
   activeChildPid = null;
+  await log('OpenCode finished', {
+    attemptId,
+    code: result.code,
+    signal: result.signal,
+    durationMs: result.durationMs,
+    timedOut: result.timedOut,
+    cancelled: result.cancelled,
+    truncated: result.truncated,
+  });
 
-  return {
-    ...result,
-    durationMs: Date.now() - startedAt,
-    timedOut,
-    cancelled,
-    truncated,
-  };
+  return result;
 }
 
 async function collectChangedFiles(worktree) {
@@ -555,6 +491,15 @@ async function commitAndPush({ worktree, branch, taskId, attemptNumber }) {
   return { commitSha: sha.stdout.trim(), files };
 }
 
+async function failWithLog(attemptId, payload) {
+  await log(`Attempt failed: ${payload.errorCode || 'EXECUTION_FAILED'}`, {
+    attemptId,
+    exitCode: payload.exitCode ?? null,
+    timedOut: Boolean(payload.timedOut),
+  });
+  await api('fail', payload);
+}
+
 async function executeClaim(claim) {
   const { task, attempt, prompt } = claim;
   activeAttempt = attempt;
@@ -583,12 +528,20 @@ async function executeClaim(claim) {
     });
     const output = `${runResult.stdout}\n${runResult.stderr}`;
     const sessionId = extractSessionId(runResult.stdout);
-    const report = extractExecutorReport(output) || {};
+    const report = extractExecutorReport(output);
     const changedFiles = await collectChangedFiles(prepared.worktree);
     const logExcerpt = sanitize(output.slice(-60000));
 
+    await log('OpenCode result', {
+      attemptId: attempt.id,
+      exitCode: runResult.code,
+      signal: runResult.signal,
+      changedFiles: changedFiles.length,
+      report: Boolean(report),
+    });
+
     if (runResult.cancelled) {
-      await api('fail', {
+      await failWithLog(attempt.id, {
         attemptId: attempt.id,
         errorCode: 'CANCELLED_BY_OWNER',
         errorMessage: 'Cancelled during execution.',
@@ -599,7 +552,7 @@ async function executeClaim(claim) {
     }
 
     if (runResult.timedOut) {
-      await api('fail', {
+      await failWithLog(attempt.id, {
         attemptId: attempt.id,
         errorCode: 'EXECUTION_TIMEOUT',
         errorMessage: `OpenCode exceeded the ${Math.round(TASK_TIMEOUT_MS / 60000)} minute limit.`,
@@ -612,7 +565,7 @@ async function executeClaim(claim) {
     }
 
     if (changedFiles.length > 120) {
-      await api('fail', {
+      await failWithLog(attempt.id, {
         attemptId: attempt.id,
         errorCode: 'TOO_MANY_FILES',
         errorMessage: `The executor changed ${changedFiles.length} files, above the 120 file limit.`,
@@ -625,7 +578,7 @@ async function executeClaim(claim) {
 
     const sensitive = changedFiles.find((file) => SENSITIVE_PATTERN.test(file));
     if (sensitive) {
-      await api('fail', {
+      await failWithLog(attempt.id, {
         attemptId: attempt.id,
         errorCode: 'SECURITY_SENSITIVE_FILE',
         errorMessage: `The executor modified a secret-like file: ${sensitive}. Changes were not pushed.`,
@@ -637,10 +590,29 @@ async function executeClaim(claim) {
     }
 
     if (runResult.code !== 0) {
-      await api('fail', {
+      const interrupted =
+        runResult.signal === 'SIGINT' ||
+        runResult.signal === 'SIGTERM' ||
+        runResult.code === 130 ||
+        runResult.code === 143;
+      await failWithLog(attempt.id, {
         attemptId: attempt.id,
-        errorCode: 'OPENCODE_FAILED',
-        errorMessage: `OpenCode exited with code ${runResult.code}.`,
+        errorCode: interrupted ? 'OPENCODE_INTERRUPTED' : 'OPENCODE_FAILED',
+        errorMessage: interrupted
+          ? 'OpenCode was interrupted before completing the task.'
+          : `OpenCode exited with code ${runResult.code}.`,
+        exitCode: runResult.code,
+        logExcerpt,
+        changedFiles,
+      });
+      return;
+    }
+
+    if (!report && changedFiles.length === 0) {
+      await failWithLog(attempt.id, {
+        attemptId: attempt.id,
+        errorCode: 'OPENCODE_REPORT_MISSING',
+        errorMessage: 'OpenCode exited without a final report and without changing any files.',
         exitCode: runResult.code,
         logExcerpt,
         changedFiles,
@@ -672,7 +644,7 @@ async function executeClaim(claim) {
         commitSha = pushed.commitSha;
         pushedFiles = pushed.files;
       } catch (error) {
-        await api('fail', {
+        await failWithLog(attempt.id, {
           attemptId: attempt.id,
           errorCode: error.code || 'COMMIT_FAILED',
           errorMessage: error.message,
@@ -684,19 +656,30 @@ async function executeClaim(claim) {
       }
     }
 
+    const parsedReport = report || {};
+    const warnings = Array.isArray(parsedReport.warnings)
+      ? parsedReport.warnings.slice(0, 40)
+      : [];
+    if (!report) {
+      warnings.push('OpenCode finished without a structured final report.');
+    }
+    if (runResult.truncated) {
+      warnings.push('OpenCode output exceeded the capture limit; only the tail was kept.');
+    }
+
     const payload = {
       exitCode: runResult.code,
       opencodeSessionId: sessionId,
       headSha: commitSha,
       changedFiles: pushedFiles.length > 0 ? pushedFiles : changedFiles,
-      commands: Array.isArray(report.commands) ? report.commands.slice(0, 30) : [],
+      commands: Array.isArray(parsedReport.commands) ? parsedReport.commands.slice(0, 30) : [],
       summary:
-        typeof report.summary === 'string'
-          ? report.summary
+        typeof parsedReport.summary === 'string'
+          ? parsedReport.summary
           : `OpenCode finished in ${Math.round(runResult.durationMs / 1000)}s.`,
-      warnings: Array.isArray(report.warnings) ? report.warnings.slice(0, 40) : [],
-      criteria: Array.isArray(report.acceptanceCriteria)
-        ? report.acceptanceCriteria.slice(0, 40)
+      warnings,
+      criteria: Array.isArray(parsedReport.acceptanceCriteria)
+        ? parsedReport.acceptanceCriteria.slice(0, 40)
         : [],
       logExcerpt: runResult.truncated ? `${logExcerpt}\n[log truncated]` : logExcerpt,
       verification: {
@@ -704,7 +687,7 @@ async function executeClaim(claim) {
         runner: 'pierrot-dev-worker',
         workerVersion: WORKER_VERSION,
         selfReported: true,
-        unverified: Array.isArray(report.unverified) ? report.unverified.slice(0, 40) : [],
+        unverified: Array.isArray(parsedReport.unverified) ? parsedReport.unverified.slice(0, 40) : [],
       },
     };
 
@@ -713,16 +696,12 @@ async function executeClaim(claim) {
     await submitCompletion(attempt.id, payload);
   } catch (error) {
     // Workspace, git or transport failure: never leave the attempt hanging.
-    await api(
-      'fail',
-      {
-        attemptId: attempt.id,
-        errorCode: error.code || 'EXECUTION_SETUP_FAILED',
-        errorMessage: String(error.message || error).slice(0, 2000),
-        logExcerpt: sanitize(String(error.stack || error)).slice(0, 60000),
-      },
-      30000
-    ).catch(() => {});
+    await failWithLog(attempt.id, {
+      attemptId: attempt.id,
+      errorCode: error.code || 'EXECUTION_SETUP_FAILED',
+      errorMessage: String(error.message || error).slice(0, 2000),
+      logExcerpt: sanitize(String(error.stack || error)).slice(0, 60000),
+    }).catch(() => {});
     throw error;
   } finally {
     activeAttempt = null;
@@ -794,7 +773,7 @@ async function maybeStopIdleCodespace() {
   if (!token) return;
   await log(`Idle for ${IDLE_STOP_MINUTES} minutes; requesting Codespace stop.`);
   try {
-    await fetch(
+    const response = await fetch(
       `${process.env.GITHUB_API_URL || 'https://api.github.com'}/user/codespaces/${encodeURIComponent(
         CODESPACE_NAME
       )}/stop`,
@@ -808,7 +787,16 @@ async function maybeStopIdleCodespace() {
         signal: AbortSignal.timeout(20000),
       }
     );
-  } catch {}
+    if (response.ok) {
+      await log('Codespace stop requested.');
+    } else {
+      await log('Codespace stop request failed', { status: response.status });
+    }
+  } catch (error) {
+    await log('Codespace stop request failed', {
+      message: String(error?.message || error).slice(0, 200),
+    });
+  }
   idleSince = null;
 }
 
@@ -817,9 +805,8 @@ async function shutdown(signal) {
   shuttingDown = true;
   await log(`Received ${signal}; shutting down.`);
   if (activeChildPid) {
-    try {
-      process.kill(-activeChildPid, 'SIGTERM');
-    } catch {}
+    await log('Stopping the active executor process group.', { pid: activeChildPid });
+    await terminateProcessGroup(activeChildPid, 5000);
   }
   if (activeAttempt) {
     try {

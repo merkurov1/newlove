@@ -88,6 +88,8 @@ overwritten.
 - Commits and pushes only to the generated attempt branch; PR creation happens
   on the server after the result is recorded.
 - Keeps failed completion payloads in a local outbox and retries delivery.
+- Stops the Codespace after 20 idle minutes by default (`PIERROT_DEV_IDLE_STOP_MINUTES=0`
+  keeps it running).
 - On SIGTERM releases the lease and requeues the task.
 
 ## Review and merge
