@@ -1,9 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 
 import { requireUser } from '@/lib/serverAuth';
 import { QUESTION_MIN_WORDS } from '@/lib/question/constants';
 import { submitQuestionAnswer } from '@/lib/question/store';
 import { requestQuestionSynthesis } from '@/lib/question/synthesis';
+import { processPendingQuestionNotifications } from '@/lib/question/subscriptions';
 import { isQuestionId, validateQuestionAnswer } from '@/lib/question/validation';
 
 export const dynamic = 'force-dynamic';
@@ -103,6 +104,26 @@ export async function POST(request: Request) {
   // provider failure is contained here: the human answer is already committed
   // and the response still confirms it.
   const synthesis = await requestQuestionSynthesis(questionId);
+
+  // The answer insert trigger has already enqueued notification rows. Delivery
+  // runs after the response and never changes the answer/synthesis result.
+  // The bounded scheduler tick remains the retry path for any failure.
+  try {
+    after(async () => {
+      try {
+        await processPendingQuestionNotifications({ limit: 8 });
+      } catch {
+        // Delivery is best effort; the queued row stays retryable.
+      }
+    });
+  } catch {
+    // Outside a Next request scope (tests/scripts): best-effort inline.
+    try {
+      await processPendingQuestionNotifications({ limit: 8 });
+    } catch {
+      // Delivery is best effort; the queued row stays retryable.
+    }
+  }
 
   return noStoreJson({
     ok: true,

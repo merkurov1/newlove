@@ -30,3 +30,25 @@ export type QuestionPageData = {
   isAuthenticated: boolean;
   hasAnswered: boolean;
 };
+
+/** Shared with the opt-in UI and the server-only subscription module. */
+export type QuestionChannelState =
+  | 'none'
+  | 'pending'
+  | 'active'
+  | 'disabled'
+  | 'error'
+  | 'unavailable';
+
+export type QuestionChannelStatus = {
+  state: QuestionChannelState;
+  available: boolean;
+  deepLinkUrl?: string;
+  devConfirmationUrl?: string;
+  code?: string;
+};
+
+export type QuestionSubscriptionStatus = {
+  email: QuestionChannelStatus;
+  telegram: QuestionChannelStatus;
+};

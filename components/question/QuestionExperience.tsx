@@ -14,6 +14,7 @@ import {
 } from '@/lib/question/constants';
 import { countQuestionWords, validateQuestionAnswer } from '@/lib/question/validation';
 import QuestionSynthesis from './QuestionSynthesis';
+import QuestionSubscription from './QuestionSubscription';
 import styles from './question.module.css';
 
 const ModernLoginModal = dynamic(() => import('@/components/ModernLoginModal'), {
@@ -564,6 +565,11 @@ export default function QuestionExperience({
                 <p className={styles.pendingState}>Ответ Пьеро ещё не готов.</p>
               )}
             </section>
+
+            <QuestionSubscription
+              questionId={currentQuestion.id}
+              isAuthenticated={authenticated}
+            />
           </div>
         </article>
       </div>

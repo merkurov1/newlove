@@ -371,6 +371,167 @@
   color: var(--q-muted);
 }
 
+.subscriptionIntro {
+  max-width: 34rem;
+  margin: 0 0 1.9rem;
+  font-family: var(--site-font-sans);
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: var(--q-muted);
+}
+
+.channelRow {
+  padding: 1.15rem 0 1.25rem;
+  border-top: 1px solid var(--q-rule);
+}
+
+.channelHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  font-family: var(--site-font-sans);
+  font-size: 0.625rem;
+  line-height: 1.5;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.channelLabel {
+  color: var(--q-ink);
+  font-weight: 600;
+}
+
+.channelState {
+  color: var(--q-faint);
+}
+
+.channelActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.channelNote {
+  margin: 0;
+  font-family: var(--site-font-sans);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  color: var(--q-muted);
+}
+
+.channelMessage {
+  margin: 1.1rem 0 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--q-rule);
+  font-family: var(--site-font-sans);
+  font-size: 0.74rem;
+  line-height: 1.6;
+  color: var(--q-body);
+}
+
+.emailForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.65rem;
+}
+
+.emailInput {
+  flex: 1 1 16rem;
+  min-height: 2.65rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--q-rule);
+  border-radius: 0;
+  background: transparent;
+  color: var(--q-ink);
+  font-family: var(--site-font-sans);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color 160ms ease;
+}
+
+.emailInput::placeholder {
+  color: var(--q-faint);
+  opacity: 1;
+}
+
+.emailInput:focus {
+  border-color: var(--q-ink);
+}
+
+.miniButton,
+.miniButtonMuted {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 2.65rem;
+  padding: 0 1.1rem;
+  border: 1px solid var(--q-ink);
+  border-radius: 999px;
+  background: var(--q-ink);
+  color: #fff;
+  font-family: var(--site-font-sans);
+  font-size: 0.5625rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.miniButton:hover:not(:disabled),
+.miniButton:focus-visible:not(:disabled),
+.miniButtonMuted:hover:not(:disabled),
+.miniButtonMuted:focus-visible:not(:disabled) {
+  background: transparent;
+  color: var(--q-ink);
+  opacity: 1;
+}
+
+.miniButton:disabled,
+.miniButtonMuted:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.miniButtonMuted {
+  border-color: var(--q-rule);
+  background: transparent;
+  color: var(--q-muted);
+}
+
+.devLink {
+  margin: 0.8rem 0 0;
+  font-family: var(--site-font-sans);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--q-faint);
+}
+
+.devLink a {
+  color: var(--q-muted);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.unsubscribeAll {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 0.35rem;
+}
+
 /* Synthesis: a closed Markdown subset rendered as editorial prose. */
 
 .synthesis {

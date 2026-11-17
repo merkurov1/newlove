@@ -169,8 +169,11 @@ describe('QuestionExperience', () => {
       expect(screen.getByText('Ответ сохранён.')).toBeInTheDocument();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const postCall = fetchMock.mock.calls.find(
+      ([url]) => String(url) === '/api/question/answer'
+    ) as unknown as [string, RequestInit] | undefined;
+    expect(postCall).toBeDefined();
+    const [, init] = postCall as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toEqual({
       questionId: question.id,
       content: draft,

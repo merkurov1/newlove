@@ -105,6 +105,11 @@ export const RATE_LIMITS = {
     maxRequests: 5,
     keyPrefix: 'newsletter',
   },
+  QUESTION_SUBSCRIPTION: {
+    interval: 15 * 60 * 1000, // 15 minutes
+    maxRequests: 8,
+    keyPrefix: 'question-subscription',
+  },
   UPLOAD: {
     interval: 60 * 60 * 1000, // 1 hour
     maxRequests: 20,

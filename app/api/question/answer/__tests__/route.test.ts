@@ -14,6 +14,10 @@ jest.mock('@/lib/question/synthesis', () => ({
   requestQuestionSynthesis: jest.fn(),
 }));
 
+jest.mock('@/lib/question/subscriptions', () => ({
+  processPendingQuestionNotifications: jest.fn(),
+}));
+
 const auth = require('@/lib/serverAuth') as {
   requireUser: jest.Mock;
 };
@@ -22,6 +26,9 @@ const store = require('@/lib/question/store') as {
 };
 const synthesis = require('@/lib/question/synthesis') as {
   requestQuestionSynthesis: jest.Mock;
+};
+const notifications = require('@/lib/question/subscriptions') as {
+  processPendingQuestionNotifications: jest.Mock;
 };
 const { POST } = require('../route') as {
   POST: (request: Request) => Promise<Response>;
@@ -53,6 +60,12 @@ beforeEach(() => {
   synthesis.requestQuestionSynthesis.mockResolvedValue({
     status: 'ready',
     content: '# Синтез\n\nОтвет Пьеро.',
+  });
+  notifications.processPendingQuestionNotifications.mockResolvedValue({
+    claimed: 0,
+    sent: 0,
+    failed: 0,
+    skipped: 0,
   });
 });
 
@@ -138,6 +151,22 @@ describe('POST /api/question/answer', () => {
       synthesis: null,
     });
     expect(store.submitQuestionAnswer).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the saved answer when notification delivery fails', async () => {
+    notifications.processPendingQuestionNotifications.mockRejectedValueOnce(
+      new Error('mail provider down')
+    );
+
+    const response = await POST(makeRequest({ questionId, content: words(30) }));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({ ok: true });
+    expect(store.submitQuestionAnswer).toHaveBeenCalledTimes(1);
+    expect(notifications.processPendingQuestionNotifications).toHaveBeenCalledWith({
+      limit: 8,
+    });
   });
 
   it('marks generation as pending when another request owns the lock', async () => {

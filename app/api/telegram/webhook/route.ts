@@ -6,6 +6,7 @@ import {
   isAllowedTelegramUser,
   sendTelegramReply,
 } from '@/lib/telegram';
+import { linkQuestionTelegramToken } from '@/lib/question/subscriptions';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,6 +45,50 @@ export async function POST(req: NextRequest) {
 
     if (!message) {
       return NextResponse.json({ ok: true, ignored: true });
+    }
+
+    // Question answer subscriptions use the existing bot as a deep-link
+    // identity check. This path is deliberately narrow: only `/start <token>`
+    // reaches it, and the token is single use, hashed and expiring.
+    const earlyText = (message.text ?? '').trim();
+    const startMatch = earlyText.match(
+      /^\/start(?:@[A-Za-z0-9_]+)?\s+([A-Za-z0-9_-]{32,128})$/,
+    );
+
+    if (startMatch) {
+      if (message.chatId !== message.userId) {
+        await sendTelegramReply(
+          message.chatId,
+          'Подтвердите подписку в личном чате с ботом.',
+        );
+
+        return NextResponse.json({ ok: true, questionLink: 'private_chat_required' });
+      }
+
+      const linked = await linkQuestionTelegramToken({
+        rawToken: startMatch[1],
+        telegramUserId: message.userId,
+        telegramChatId: message.chatId,
+      });
+
+      if (linked.status === 'linked') {
+        await sendTelegramReply(
+          message.chatId,
+          'Готово: вы будете получать уведомления о новых ответах на этот вопрос. Отписаться можно по ссылке в уведомлении.',
+        );
+      } else if (linked.status === 'already_linked') {
+        await sendTelegramReply(
+          message.chatId,
+          'Этот Telegram уже подписан на новые ответы к этому вопросу.',
+        );
+      } else {
+        await sendTelegramReply(
+          message.chatId,
+          'Ссылка недействительна или истекла. Вернитесь на страницу вопроса и запросите новую.',
+        );
+      }
+
+      return NextResponse.json({ ok: true, questionLink: linked.status });
     }
 
     // 3. Only explicitly allowed Telegram users may create drafts.
