@@ -21,6 +21,7 @@ import {
   patchAttempt,
   patchTask,
   reapExpiredAttempts,
+  recordTaskCostEstimate,
   touchWorkerHeartbeat,
   transitionTask,
 } from './store';
@@ -315,10 +316,13 @@ export async function completeAttempt(
       : attempt.startedAt
         ? Math.max(0, Date.now() - new Date(attempt.startedAt).getTime())
         : null;
+  const finishedAt = new Date().toISOString();
   const cost = buildAttemptCost({
     usage: result.usage,
     machine: typeof codespaceMeta.machine === 'string' ? codespaceMeta.machine : null,
     runtimeMs,
+    startedAt: attempt.startedAt,
+    finishedAt,
     modelStarted: true,
   });
 
@@ -326,7 +330,7 @@ export async function completeAttempt(
     attemptId,
     {
       status: 'completed',
-      finished_at: new Date().toISOString(),
+      finished_at: finishedAt,
       exit_code: typeof result.exitCode === 'number' ? result.exitCode : null,
       opencode_session_id: truncateText(result.opencodeSessionId, 200) || null,
       head_sha: headSha,
@@ -514,10 +518,13 @@ export async function failAttempt(input: {
       : attempt.startedAt
         ? Math.max(0, Date.now() - new Date(attempt.startedAt).getTime())
         : null;
+  const finishedAt = new Date().toISOString();
   const cost = buildAttemptCost({
     usage: input.usage,
     machine: typeof codespaceMeta.machine === 'string' ? codespaceMeta.machine : null,
     runtimeMs,
+    startedAt: attempt.startedAt,
+    finishedAt,
     modelStarted: input.modelStarted !== false,
   });
   const headSha =
@@ -529,7 +536,7 @@ export async function failAttempt(input: {
     input.attemptId,
     {
       status: target,
-      finished_at: new Date().toISOString(),
+      finished_at: finishedAt,
       exit_code: typeof input.exitCode === 'number' ? input.exitCode : null,
       head_sha: headSha ?? attempt.headSha,
       error_code: truncateText(input.errorCode, 120) || 'EXECUTION_FAILED',
@@ -621,6 +628,14 @@ export async function releaseAttempt(
       last_error_message: truncateText(reason, 2000),
     });
     const position = await nextQueuePosition();
+    await recordTaskCostEstimate({
+      taskId: task.id,
+      batchId: await getBatchIdForTask(task.id),
+      title: task.title,
+      objective: task.objective,
+      acceptanceCriteria: task.acceptanceCriteria,
+      trigger: 'release',
+    });
     await patchTask(task.id, {
       status: 'queued',
       queue_position: position,
@@ -687,6 +702,24 @@ export async function enqueueTask(
     );
   }
   const position = await nextQueuePosition();
+  // The estimate is durable before the task reaches the queue. If the optional
+  // ledger table is missing, the event payload still preserves the value.
+  const estimate = await recordTaskCostEstimate({
+    taskId: task.id,
+    batchId: isUuid(batchId) ? batchId : null,
+    title: task.title,
+    objective: task.objective,
+    acceptanceCriteria: task.acceptanceCriteria,
+    trigger: 'enqueue',
+  });
+  await appendEvent({
+    taskId: task.id,
+    type: 'cost.estimated',
+    message: `Pre-queue estimate: $${estimate.total.minUsd ?? '—'}–$${
+      estimate.total.maxUsd ?? '—'
+    } (expected $${estimate.total.expectedUsd ?? '—'}), confidence ${estimate.confidence}.`,
+    payload: { estimate: estimate as unknown as Record<string, unknown> },
+  }).catch(() => {});
   const patch: Record<string, unknown> = {
     queue_position: position,
     queued_at: new Date().toISOString(),
@@ -727,6 +760,20 @@ export async function retryTask(userId: string, taskId: string): Promise<DevWork
     );
   }
   const position = await nextQueuePosition();
+  const estimate = await recordTaskCostEstimate({
+    taskId: task.id,
+    batchId: await getBatchIdForTask(task.id),
+    title: task.title,
+    objective: task.objective,
+    acceptanceCriteria: task.acceptanceCriteria,
+    trigger: 'retry',
+  });
+  await appendEvent({
+    taskId: task.id,
+    type: 'cost.estimated',
+    message: `Retry estimate: expected $${estimate.total.expectedUsd ?? '—'} (${estimate.confidence} confidence).`,
+    payload: { estimate: estimate as unknown as Record<string, unknown>, trigger: 'retry' },
+  }).catch(() => {});
   const updated = await transitionTask({
     userId,
     taskId,

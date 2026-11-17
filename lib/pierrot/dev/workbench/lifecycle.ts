@@ -19,7 +19,7 @@ import {
   appendEvent,
 } from './store';
 import { getConfiguredCodespaceName } from './setup';
-import { readAttemptCost, summarizeCosts } from './costs';
+import { estimateCodespaceCost, readAttemptCost, summarizeCosts } from './costs';
 import {
   decideCodespaceStart,
   decideWorkerRecovery,
@@ -194,6 +194,64 @@ async function readStop(): Promise<StopRecord | null> {
         ? Math.max(0, value.startupMs)
         : null,
   };
+}
+
+type CostSessionRecord = {
+  startedAt: string | null;
+  finishedAt: string | null;
+  machine: string | null;
+  runtimeMs: number | null;
+  hourlyUsd: number | null;
+  estimatedUsd: number | null;
+  currency: string;
+  pricingVersion: string | null;
+  source: string;
+  reason: string;
+};
+
+/**
+ * Append-only (bounded) Codespace session history. The cost dashboard shows
+ * this separately from attempt runtime so idle time is visible without being
+ * double-counted against a task or batch.
+ */
+async function recordCostSession(input: {
+  startedAt: string | null;
+  finishedAt: string;
+  machine: string | null;
+  runtimeMs: number | null;
+  reason: string;
+  source: string;
+}): Promise<void> {
+  try {
+    const cost = estimateCodespaceCost({
+      machine: input.machine,
+      runtimeMs: input.runtimeMs,
+      startedAt: input.startedAt,
+      finishedAt: input.finishedAt,
+    });
+    const existing = await getSetting<unknown>('lifecycle:sessions', []);
+    const records: CostSessionRecord[] = Array.isArray(existing)
+      ? existing.filter(
+          (item): item is CostSessionRecord =>
+            Boolean(item) && typeof item === 'object' && !Array.isArray(item)
+        )
+      : [];
+    const record: CostSessionRecord = {
+      startedAt: cost.startedAt,
+      finishedAt: cost.finishedAt,
+      machine: cost.machine,
+      runtimeMs: cost.runtimeMs,
+      hourlyUsd: cost.hourlyUsd,
+      estimatedUsd: cost.estimatedUsd,
+      currency: cost.rate?.currency || 'USD',
+      pricingVersion: cost.rate?.version || null,
+      source: input.source,
+      reason: input.reason,
+    };
+    await setSetting('lifecycle:sessions', [...records.slice(-49), record]);
+  } catch {
+    // Session history is observability, not a blocker for stop/start.
+  }
 }
 
 async function readIntent(): Promise<ShutdownIntent | null> {
@@ -1738,6 +1796,14 @@ export async function requestIdleShutdown(input: {
     const measuredRuntimeMs = start
       ? Math.max(0, Date.now() - new Date(start.at).getTime())
       : null;
+    await recordCostSession({
+      startedAt: start?.at || null,
+      finishedAt: new Date().toISOString(),
+      machine: stopped.machine || codespace.machine,
+      runtimeMs: measuredRuntimeMs,
+      reason: 'idle',
+      source: 'lifecycle:idle',
+    });
     await setSetting('lifecycle:last_stop', {
       at: new Date().toISOString(),
       requestedAt,
@@ -1826,6 +1892,18 @@ export async function stopCodespaceNow(input: {
   }
   try {
     const stopped = await stopCodespace(codespace.name);
+    const start = await readStart();
+    const measuredRuntimeMs = start
+      ? Math.max(0, Date.now() - new Date(start.at).getTime())
+      : null;
+    await recordCostSession({
+      startedAt: start?.at || null,
+      finishedAt: new Date().toISOString(),
+      machine: stopped.machine || codespace.machine,
+      runtimeMs: measuredRuntimeMs,
+      reason: `manual:${input.source}`,
+      source: 'lifecycle:manual',
+    });
     await setSetting('lifecycle:last_stop', {
       at: new Date().toISOString(),
       requestedAt: new Date().toISOString(),
@@ -1833,7 +1911,7 @@ export async function stopCodespaceNow(input: {
       machine: stopped.machine || codespace.machine,
       reason: `manual:${input.source}`,
       idleSeconds: null,
-      measuredRuntimeMs: null,
+      measuredRuntimeMs,
       startupMs: null,
     });
     await setSetting('lifecycle:shutdown_intent', {

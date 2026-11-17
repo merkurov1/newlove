@@ -17,9 +17,11 @@ remains infrastructure; the owner works from Admin.
 | Codespace worker | `scripts/pierrot/dev-worker.mjs` |
 | Worker lifecycle | `scripts/pierrot/dev-worker-start.sh` / `dev-worker-supervisor.sh` / `dev-worker-stop.sh` |
 | Codespace lifecycle | `lib/pierrot/dev/workbench/lifecycle.ts` |
-| Cost ledger | `lib/pierrot/dev/workbench/costs.ts` |
+| Cost ledger | `lib/pierrot/dev/workbench/costs.ts` / `ledger.ts` |
+| Cost dashboard API | `app/api/admin/pierrot/dev/workbench/ledger/route.ts` |
 | Admin UI | `components/pierrot/workspace/DevWorkbench.tsx` |
 | Migration (additive) | `migrations/2026-11-22_pierrot_dev_workbench.sql` |
+| Cost estimate migration (additive) | `migrations/2026-12-10_pierrot_dev_cost_ledger.sql` |
 | Existing task table | `public.pierrot_dev_prompts` (reused) |
 
 ## State machines
@@ -42,7 +44,12 @@ overwritten.
    ```sql
    -- review first
    psql "$DATABASE_URL" -f migrations/2026-11-22_pierrot_dev_workbench.sql
+   psql "$DATABASE_URL" -f migrations/2026-12-10_pierrot_dev_cost_ledger.sql
    ```
+
+   The second migration is additive and stores pre-queue cost estimates. The
+   workbench still enqueues tasks if it is not applied; only the estimate table
+   is missing and the LEDGER dashboard says so.
 
 2. Generate a worker token in Admin → `DEV` → `SETUP` → **Generate worker token**.
    It is shown once and never stored. Store the same value in:
@@ -177,21 +184,41 @@ overwritten.
 
 ## Dev Cost Ledger
 
-- Model token usage and cost come from OpenCode `step_finish` events. When the
-  CLI does not report them they are stored as `null` with a provenance of
-  `unavailable`, never as zero.
+- Before a task enters the queue a deterministic min/expected/max estimate is
+  written to the additive `pierrot_dev_cost_estimates` table. Drafts show the
+  same calculation as a preview; only the queued value is persisted. Assumptions
+  and confidence are stored with the estimate. If the table is not applied the
+  enqueue still succeeds and the immutable event journal keeps the payload.
+- The estimate separates DeepSeek model cost from Codespaces compute and keeps
+  the tariff version, effective date, currency and source URL. Model token
+  ranges are inferred from the task text and acceptance criteria; Codespaces
+  runtime includes startup and an idle buffer, and excludes queue wait, storage
+  and shared account charges.
+- Model token usage and reported cost come from OpenCode `step_finish` events.
+  When the CLI reports tokens but omits a price, the server computes a fallback
+  from the versioned DeepSeek tariff and marks it `estimated`. Without tokens or
+  a matching tariff the value is `null` with a reason, never zero.
 - Failed attempts keep cost too: when OpenCode already ran, its usage and
   measured runtime are sent with the failure. A failure before the model
   started is labelled `unavailable:model-not-started`. Commit/push failures
   still keep the measured Codespaces runtime.
-- Codespaces cost is estimated from the machine type and measured wall-clock
-  runtime. GitHub does not expose billed Codespaces minutes to this token, so
-  the value is always labelled as an estimate. Set
+- Each attempt records the Codespace machine, start/finish timestamps, measured
+  billable duration and compute cost. GitHub billing API access is best-effort:
+  when the token can read account totals they are shown separately as confirmed
+  data and are never allocated to a task. Otherwise per-attempt Codespaces
+  values remain estimates from the public SKU rate. Set
   `PIERROT_DEV_CODESPACE_HOURLY_USD` to override the list price.
 - A total is only produced when both the model and Codespaces components are
-  known. Partial totals are reported as unavailable.
+  known. Partial totals are reported as unavailable, with an explicit
+  incomplete-data note.
+- The LEDGER dashboard shows estimate/actual/variance for tasks, batches and a
+  selectable period (7/30/90/365 days), split by DeepSeek and Codespaces, plus
+  run/retry counts and the average cost of successful tasks. Codespace session
+  and idle values are shown separately and are never added to task actuals,
+  because attempt runtime is already counted there.
 - Startup, ready, idle, stop-request and measured-runtime timestamps are stored
-  in server-only lifecycle settings and appear in the EXECUTION panel.
+  in server-only lifecycle settings and appear in the EXECUTION panel. A bounded
+  session history is kept for the LEDGER dashboard.
 
 ## Security boundaries
 

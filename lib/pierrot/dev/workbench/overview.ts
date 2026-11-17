@@ -9,11 +9,13 @@ import {
   listBatches,
   reapExpiredAttempts,
   listEvents,
+  listLatestCostEstimates,
   listTaskRows,
   listWorkers,
 } from './store';
 import { getLifecycleSnapshot } from './lifecycle';
-import type { DevWorkbenchOverview, DevWorkbenchTask } from './types';
+import { estimateTaskCost } from './costs';
+import type { DevCostEstimate, DevWorkbenchOverview, DevWorkbenchTask } from './types';
 
 assertServerOnly('lib/pierrot/dev/workbench/overview');
 
@@ -50,15 +52,32 @@ export async function getWorkbenchOverview(
     schemaReady ? isQueuePaused() : Promise.resolve(false),
   ]);
 
+  const storedEstimates = schemaReady
+    ? await listLatestCostEstimates(allTasks.map((task) => task.id))
+    : new Map<string, DevCostEstimate>();
+  const tasks = allTasks.map((task) => ({
+    ...task,
+    // A stored estimate exists for tasks that already entered the queue. Drafts
+    // get the same deterministic preview so the owner can see the range before
+    // approving them; only the queued value is persisted.
+    costEstimate:
+      storedEstimates.get(task.id) ||
+      estimateTaskCost({
+        title: task.title,
+        objective: task.objective,
+        acceptanceCriteria: task.acceptanceCriteria,
+      }),
+  }));
+
   const counts: Record<string, number> = {};
-  for (const task of allTasks) {
+  for (const task of tasks) {
     counts[task.status] = (counts[task.status] || 0) + 1;
   }
 
-  const inbox = allTasks.filter((task) =>
+  const inbox = tasks.filter((task) =>
     ['draft', 'ready', 'blocked'].includes(task.status)
   );
-  const queue = allTasks
+  const queue = tasks
     .filter((task) => task.status === 'queued')
     .sort(
       (a, b) =>
@@ -67,12 +86,12 @@ export async function getWorkbenchOverview(
           (b.queuePosition ?? Number.MAX_SAFE_INTEGER) ||
         (a.queuedAt || '').localeCompare(b.queuedAt || '')
     );
-  const review = allTasks.filter(
+  const review = tasks.filter(
     (task) =>
       task.status === 'review' ||
       (task.status === 'verified' && task.pullRequests.length > 0)
   );
-  const historyTasks = allTasks
+  const historyTasks = tasks
     .filter((task) => HISTORY_STATUSES.includes(task.status))
     .slice(0, 24);
 

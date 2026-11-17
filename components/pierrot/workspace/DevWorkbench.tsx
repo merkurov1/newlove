@@ -9,6 +9,7 @@ import {
   Check,
   ChevronDown,
   Circle,
+  Coins,
   GitBranch,
   GitMerge,
   History,
@@ -27,6 +28,9 @@ import {
 } from 'lucide-react';
 import type {
   DevAttempt,
+  DevCostAggregate,
+  DevCostEstimate,
+  DevCostLedger,
   DevDeploymentStatus,
   DevReviewView,
   DevSetupReport,
@@ -34,7 +38,7 @@ import type {
   DevWorkbenchTask,
 } from '@/lib/pierrot/dev/workbench/types';
 
-type Tab = 'inbox' | 'queue' | 'execution' | 'history' | 'review' | 'setup';
+type Tab = 'inbox' | 'queue' | 'execution' | 'ledger' | 'history' | 'review' | 'setup';
 
 type Props = {
   initialOverview: DevWorkbenchOverview;
@@ -45,6 +49,7 @@ const TABS: Array<{ key: Tab; label: string; icon: typeof Inbox }> = [
   { key: 'inbox', label: 'INBOX', icon: Inbox },
   { key: 'queue', label: 'QUEUE', icon: GitBranch },
   { key: 'execution', label: 'EXECUTION', icon: Terminal },
+  { key: 'ledger', label: 'LEDGER', icon: Coins },
   { key: 'history', label: 'HISTORY', icon: History },
   { key: 'review', label: 'REVIEW', icon: Check },
   { key: 'setup', label: 'SETUP', icon: Settings2 },
@@ -103,6 +108,30 @@ function money(value: number | null | undefined): string {
   return `$${value.toFixed(4)}`;
 }
 
+function moneyRange(estimate: DevCostEstimate | null | undefined): string {
+  if (!estimate) return 'estimate unavailable';
+  const { minUsd, expectedUsd, maxUsd } = estimate.total;
+  if (minUsd === null || expectedUsd === null || maxUsd === null) {
+    return `unknown${estimate.unknown.length ? ` (${estimate.unknown.join(', ')})` : ''}`;
+  }
+  return `${money(minUsd)}–${money(maxUsd)} · expected ${money(expectedUsd)} · ${estimate.confidence} confidence`;
+}
+
+function varianceText(aggregate: DevCostAggregate): string {
+  const variance = aggregate.variance;
+  if (variance.status === 'unknown') {
+    return variance.actualUsd === null
+      ? 'actual incomplete'
+      : variance.expectedUsd === null
+        ? 'estimate missing'
+        : 'unknown';
+  }
+  const sign = variance.deltaUsd !== null && variance.deltaUsd > 0 ? '+' : '';
+  return `${variance.status} · ${sign}${money(variance.deltaUsd)}${
+    variance.deltaPct !== null ? ` (${sign}${variance.deltaPct.toFixed(1)}%)` : ''
+  }`;
+}
+
 function lifecycleTone(status: string): string {
   if (status === 'ready' || status === 'executing_task') return 'ok';
   if (status === 'offline' || status === 'worker_offline') return 'idle';
@@ -113,14 +142,27 @@ function lifecycleTone(status: string): string {
 
 type AttemptCostView = {
   modelUsd?: number | null;
+  modelReportedUsd?: number | null;
+  modelEstimatedUsd?: number | null;
   codespaceEstimatedUsd?: number | null;
+  codespaceConfirmedUsd?: number | null;
   totalUsd?: number | null;
   inputTokens?: number | null;
   outputTokens?: number | null;
   reasoningTokens?: number | null;
+  cacheReadTokens?: number | null;
+  cacheWriteTokens?: number | null;
   unknown?: string[];
   machine?: string | null;
   runtimeMs?: number | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  provider?: string | null;
+  model?: string | null;
+  modelCostKind?: string | null;
+  codespaceCostKind?: string | null;
+  modelPricingVersion?: string | null;
+  codespacePricingVersion?: string | null;
 };
 
 function attemptCost(attempt: DevAttempt): AttemptCostView | null {
@@ -134,19 +176,116 @@ function attemptCost(attempt: DevAttempt): AttemptCostView | null {
   };
   const numberOrNull = (value: unknown) =>
     typeof value === 'number' && Number.isFinite(value) ? value : null;
+  const stringOrNull = (value: unknown) =>
+    typeof value === 'string' && value.trim() ? value : null;
+  const rateVersion = (value: unknown) =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? stringOrNull((value as { version?: unknown }).version)
+      : null;
   return {
     modelUsd: numberOrNull(cost.model?.costUsd),
+    modelReportedUsd: numberOrNull(cost.model?.reportedCostUsd),
+    modelEstimatedUsd: numberOrNull(cost.model?.estimatedCostUsd),
     codespaceEstimatedUsd: numberOrNull(cost.codespace?.estimatedUsd),
+    codespaceConfirmedUsd: numberOrNull(cost.codespace?.confirmedUsd),
     totalUsd: numberOrNull(cost.totalUsd),
     inputTokens: numberOrNull(cost.model?.inputTokens),
     outputTokens: numberOrNull(cost.model?.outputTokens),
     reasoningTokens: numberOrNull(cost.model?.reasoningTokens),
+    cacheReadTokens: numberOrNull(cost.model?.cacheReadTokens),
+    cacheWriteTokens: numberOrNull(cost.model?.cacheWriteTokens),
     unknown: Array.isArray(cost.unknown)
       ? cost.unknown.filter((item): item is string => typeof item === 'string')
       : [],
-    machine: typeof cost.codespace?.machine === 'string' ? cost.codespace.machine : null,
+    machine: stringOrNull(cost.codespace?.machine),
     runtimeMs: numberOrNull(cost.codespace?.runtimeMs),
+    startedAt: stringOrNull(cost.codespace?.startedAt),
+    finishedAt: stringOrNull(cost.codespace?.finishedAt),
+    provider: stringOrNull(cost.model?.provider),
+    model: stringOrNull(cost.model?.model),
+    modelCostKind: stringOrNull(cost.model?.costKind),
+    codespaceCostKind: stringOrNull(cost.codespace?.costKind),
+    modelPricingVersion: rateVersion(cost.model?.rate),
+    codespacePricingVersion: rateVersion(cost.codespace?.rate),
   };
+}
+
+function CostAggregateFacts({ aggregate }: { aggregate: DevCostAggregate }) {
+  return (
+    <>
+      <dl className="pw-wb-facts">
+        <div>
+          <dt>Estimate min / expected / max</dt>
+          <dd>
+            {money(aggregate.estimate.minUsd)} / {money(aggregate.estimate.expectedUsd)} /{' '}
+            {money(aggregate.estimate.maxUsd)}
+          </dd>
+        </div>
+        <div>
+          <dt>Actual total</dt>
+          <dd>
+            {money(aggregate.actual.totalUsd)} · variance {varianceText(aggregate)}
+          </dd>
+        </div>
+        <div>
+          <dt>DeepSeek reported</dt>
+          <dd>
+            {money(aggregate.actual.model.reportedUsd)}
+            {aggregate.actual.model.estimatedUsd !== null
+              ? ` + est. ${money(aggregate.actual.model.estimatedUsd)}`
+              : ''}
+            {aggregate.actual.model.effectiveUsd !== null
+              ? ` · effective ${money(aggregate.actual.model.effectiveUsd)}`
+              : ''}
+          </dd>
+        </div>
+        <div>
+          <dt>Codespaces</dt>
+          <dd>
+            est. {money(aggregate.actual.codespaces.estimatedUsd)} · confirmed{' '}
+            {money(aggregate.actual.codespaces.confirmedUsd)} · effective{' '}
+            {money(aggregate.actual.codespaces.effectiveUsd)}
+          </dd>
+        </div>
+        <div>
+          <dt>Tokens in / out / reasoning</dt>
+          <dd>
+            {aggregate.actual.inputTokens ?? '—'} / {aggregate.actual.outputTokens ?? '—'} /{' '}
+            {aggregate.actual.reasoningTokens ?? '—'}
+          </dd>
+        </div>
+        <div>
+          <dt>Runs / retries / checks</dt>
+          <dd>
+            {aggregate.actual.attempts.total} / {aggregate.actual.attempts.retries} /{' '}
+            {aggregate.actual.commands.total}
+            {aggregate.actual.commands.failed
+              ? ` · failed checks ${aggregate.actual.commands.failed}`
+              : ''}
+          </dd>
+        </div>
+        <div>
+          <dt>Average successful task</dt>
+          <dd>
+            {money(aggregate.averageSuccessfulTaskUsd)} · {aggregate.successfulTasksWithCost}/
+            {aggregate.successfulTasks} successful task(s) with cost
+          </dd>
+        </div>
+      </dl>
+      {aggregate.incomplete.unknown.length > 0 ||
+      aggregate.incomplete.missingEstimateTasks > 0 ||
+      aggregate.incomplete.attemptsMissingCost > 0 ? (
+        <p className="pw-wb-warning">
+          <AlertTriangle size={14} /> Incomplete data: {aggregate.incomplete.missingEstimateTasks}{' '}
+          task estimate(s) missing · {aggregate.incomplete.attemptsMissingCost} attempt(s)
+          without complete cost
+          {aggregate.incomplete.unknown.length
+            ? ` · ${aggregate.incomplete.unknown.join(', ')}`
+            : ''}
+        </p>
+      ) : null}
+    </>
+  );
 }
 
 function TaskMeta({ task }: { task: DevWorkbenchTask }) {
@@ -167,6 +306,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [setup, setSetup] = useState<DevSetupReport | null>(null);
+  const [ledger, setLedger] = useState<DevCostLedger | null>(null);
+  const [ledgerDays, setLedgerDays] = useState(30);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
   const [reviewTaskId, setReviewTaskId] = useState<string | null>(null);
   const [review, setReview] = useState<DevReviewView | null>(null);
   const [reviewLoading, setReviewLoading] = useState(false);
@@ -223,6 +365,26 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
       setBusy(null);
     }
   }, []);
+
+  const loadLedger = useCallback(
+    async (days = ledgerDays) => {
+      setLedgerLoading(true);
+      try {
+        const response = await fetch(
+          `/api/admin/pierrot/dev/workbench/ledger?days=${days}`,
+          { cache: 'no-store' }
+        );
+        if (!response.ok) throw new Error(await readError(response));
+        const body = (await response.json()) as { ledger: DevCostLedger };
+        setLedger(body.ledger);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : 'Cost ledger failed.');
+      } finally {
+        setLedgerLoading(false);
+      }
+    },
+    [ledgerDays]
+  );
 
   const runAction = useCallback(
     async (action: string, payload: Record<string, unknown> = {}, label?: string) => {
@@ -555,6 +717,10 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                 <TaskMeta task={task} />
               </div>
               {task.objective && <p className="pw-wb-card-body">{task.objective}</p>}
+              <p className="pw-wb-meta">
+                Cost estimate: {moneyRange(task.costEstimate)}
+                {task.costEstimate?.persisted ? ' · saved' : ' · preview, saved when queued'}
+              </p>
               {task.acceptanceCriteria.length > 0 && (
                 <ul className="pw-wb-criteria">
                   {task.acceptanceCriteria.slice(0, 6).map((criterion) => (
@@ -771,6 +937,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                 </div>
                 <TaskMeta task={task} />
               </div>
+              <p className="pw-wb-meta">Cost estimate: {moneyRange(task.costEstimate)}</p>
               {task.lastErrorCode && (
                 <p className="pw-wb-warning">
                   <AlertTriangle size={14} /> {task.lastErrorCode}: {task.lastErrorMessage}
@@ -1139,7 +1306,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
           <div>
             <dt>Cost ledger</dt>
             <dd>
-              actual model {money(overview.lifecycle.cost.modelUsd)} · Codespaces est.{' '}
+              model {money(overview.lifecycle.cost.modelUsd)} (reported{' '}
+              {money(overview.lifecycle.cost.modelReportedUsd)}, est.{' '}
+              {money(overview.lifecycle.cost.modelEstimatedUsd)}) · Codespaces est.{' '}
               {money(overview.lifecycle.cost.codespaceEstimatedUsd)} · total{' '}
               {money(overview.lifecycle.cost.totalUsd)}
             </dd>
@@ -1156,6 +1325,8 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         <p className="pw-wb-meta">
           {overview.lifecycle.cost.attemptsWithCost} attempt(s) with cost ·{' '}
           {overview.lifecycle.cost.attemptsMissingCost} without ·{' '}
+          {overview.lifecycle.cost.attemptsWithEstimatedModel} model estimate(s) ·{' '}
+          {overview.lifecycle.cost.attemptsWithEstimatedCodespace} Codespaces estimate(s) ·{' '}
           {overview.lifecycle.cost.provenance}
           {overview.lifecycle.cost.unknown.length
             ? ` · unknown: ${overview.lifecycle.cost.unknown.join(', ')}`
@@ -1358,13 +1529,43 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
               <dd>{attempt.opencodeSessionId || '—'}</dd>
             </div>
             <div>
-              <dt>Model cost</dt>
-              <dd>{cost ? money(cost.modelUsd) : '—'}</dd>
+              <dt>Provider / model</dt>
+              <dd>
+                {cost ? `${cost.provider || '—'} / ${cost.model || '—'}` : '—'}
+              </dd>
             </div>
             <div>
-              <dt>Codespaces est.</dt>
+              <dt>Model cost</dt>
               <dd>
-                {cost ? `${money(cost.codespaceEstimatedUsd)}${cost.machine ? ` · ${cost.machine}` : ''}` : '—'}
+                {cost
+                  ? `${money(cost.modelUsd)} · ${cost.modelCostKind || 'unknown'} · reported ${money(
+                      cost.modelReportedUsd
+                    )} · est. ${money(cost.modelEstimatedUsd)}${
+                      cost.modelPricingVersion ? ` · ${cost.modelPricingVersion}` : ''
+                    }`
+                  : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt>Codespaces</dt>
+              <dd>
+                {cost
+                  ? `${money(cost.codespaceEstimatedUsd)} ${cost.codespaceCostKind || 'unknown'}${
+                      cost.machine ? ` · ${cost.machine}` : ''
+                    } · confirmed ${money(cost.codespaceConfirmedUsd)}${
+                      cost.codespacePricingVersion ? ` · ${cost.codespacePricingVersion}` : ''
+                    }`
+                  : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt>Codespace window</dt>
+              <dd>
+                {cost?.startedAt || cost?.finishedAt
+                  ? `${cost.startedAt ? new Date(cost.startedAt).toLocaleString('ru-RU') : '—'} → ${
+                      cost.finishedAt ? new Date(cost.finishedAt).toLocaleString('ru-RU') : '—'
+                    }`
+                  : '—'}
               </dd>
             </div>
             <div>
@@ -1375,7 +1576,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
               <dt>Tokens</dt>
               <dd>
                 {cost
-                  ? `${cost.inputTokens ?? '—'} in / ${cost.outputTokens ?? '—'} out`
+                  ? `${cost.inputTokens ?? '—'} in / ${cost.outputTokens ?? '—'} out · cache read ${
+                      cost.cacheReadTokens ?? '—'
+                    } / write ${cost.cacheWriteTokens ?? '—'}`
                   : '—'}
               </dd>
             </div>
@@ -1419,6 +1622,187 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
     </div>
     );
   };
+
+  const renderLedger = () => (
+    <div className="pw-wb-section">
+      <div className="pw-wb-section-head">
+        <div>
+          <p className="pw-wb-kicker">LEDGER</p>
+          <h2>Экономика разработки</h2>
+        </div>
+        <div className="pw-wb-actions">
+          {[7, 30, 90, 365].map((days) => (
+            <button
+              key={days}
+              type="button"
+              className={`pw-wb-button ${ledgerDays === days ? 'is-primary' : 'is-quiet'}`}
+              onClick={() => {
+                setLedgerDays(days);
+                void loadLedger(days);
+              }}
+            >
+              {days}d
+            </button>
+          ))}
+          <button
+            type="button"
+            className="pw-wb-button"
+            disabled={ledgerLoading}
+            onClick={() => void loadLedger()}
+          >
+            <RefreshCw size={14} /> {ledgerLoading ? 'Считаю…' : 'Refresh'}
+          </button>
+        </div>
+      </div>
+
+      {!ledger && <p className="pw-wb-empty">Загружаю сметы и фактические затраты…</p>}
+      {ledger && (
+        <>
+          <div className="pw-wb-card">
+            <div className="pw-wb-card-head">
+              <div className="pw-wb-card-title">
+                <strong>Всего и за период {ledger.periodDays} дней</strong>
+              </div>
+              <span className="pw-wb-meta">
+                generated {new Date(ledger.generatedAt).toLocaleString('ru-RU')}
+              </span>
+            </div>
+            <h3 className="pw-wb-subtitle">All time</h3>
+            <CostAggregateFacts aggregate={ledger.totals} />
+            <h3 className="pw-wb-subtitle">
+              Period since {new Date(ledger.periodFrom).toLocaleDateString('ru-RU')}
+            </h3>
+            <CostAggregateFacts aggregate={ledger.period} />
+          </div>
+
+          <div className="pw-wb-card">
+            <div className="pw-wb-card-head">
+              <div className="pw-wb-card-title">
+                <strong>Тарифы и подтверждённые данные</strong>
+              </div>
+              <span className="pw-wb-meta">
+                estimates table {ledger.estimatesTableReady ? 'ready' : 'not applied'}
+              </span>
+            </div>
+            <dl className="pw-wb-facts">
+              <div>
+                <dt>Model tariff</dt>
+                <dd>
+                  {ledger.pricing.model.version} · {ledger.pricing.model.currency} · effective{' '}
+                  {new Date(ledger.pricing.model.effectiveAt).toLocaleDateString('ru-RU')} ·{' '}
+                  <a href={ledger.pricing.model.source} target="_blank" rel="noreferrer">
+                    source
+                  </a>
+                </dd>
+              </div>
+              <div>
+                <dt>Codespaces tariff</dt>
+                <dd>
+                  {ledger.pricing.codespaces.version} · {ledger.pricing.codespaces.currency} ·
+                  effective{' '}
+                  {new Date(ledger.pricing.codespaces.effectiveAt).toLocaleDateString('ru-RU')} ·{' '}
+                  <a href={ledger.pricing.codespaces.source} target="_blank" rel="noreferrer">
+                    source
+                  </a>
+                </dd>
+              </div>
+              <div>
+                <dt>GitHub billing API</dt>
+                <dd>
+                  {ledger.confirmedBilling.status} · checked{' '}
+                  {new Date(ledger.confirmedBilling.checkedAt).toLocaleTimeString('ru-RU')}
+                  {ledger.confirmedBilling.reason ? ` · ${ledger.confirmedBilling.reason}` : ''}
+                </dd>
+              </div>
+              <div>
+                <dt>Confirmed account minutes</dt>
+                <dd>
+                  used {ledger.confirmedBilling.totalMinutesUsed ?? '—'} · paid{' '}
+                  {ledger.confirmedBilling.totalPaidMinutesUsed ?? '—'} · included{' '}
+                  {ledger.confirmedBilling.includedMinutes ?? '—'}
+                </dd>
+              </div>
+              <div>
+                <dt>Codespace sessions (period)</dt>
+                <dd>
+                  est. {money(ledger.codespaces.periodSessionEstimatedUsd)} · idle est.{' '}
+                  {money(ledger.codespaces.periodIdleEstimatedUsd)}
+                </dd>
+              </div>
+            </dl>
+            <p className="pw-wb-meta">{ledger.codespaces.note}</p>
+            {ledger.dataQuality.unknown.length > 0 && (
+              <p className="pw-wb-warning">
+                <AlertTriangle size={14} /> Partial data: {ledger.dataQuality.unknown.join(' · ')}
+              </p>
+            )}
+          </div>
+
+          <div className="pw-wb-subhead">
+            <p className="pw-wb-kicker">BATCHES</p>
+          </div>
+          {ledger.batches.length === 0 ? (
+            <p className="pw-wb-empty">Пакетов нет.</p>
+          ) : (
+            <ul className="pw-wb-list">
+              {ledger.batches.map((batch) => (
+                <li key={batch.batchId} className="pw-wb-card">
+                  <div className="pw-wb-card-head">
+                    <div className="pw-wb-card-title">
+                      <StatusBadge status={batch.status} />
+                      <strong>{batch.title}</strong>
+                    </div>
+                    <span className="pw-wb-meta">{batch.taskCount} заданий</span>
+                  </div>
+                  <CostAggregateFacts aggregate={batch} />
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="pw-wb-subhead">
+            <p className="pw-wb-kicker">TASKS</p>
+          </div>
+          {ledger.tasks.length === 0 ? (
+            <p className="pw-wb-empty">Заданий пока нет.</p>
+          ) : (
+            <ul className="pw-wb-list">
+              {ledger.tasks.map((task) => (
+                <li key={task.taskId} className="pw-wb-card">
+                  <div className="pw-wb-card-head">
+                    <div className="pw-wb-card-title">
+                      <StatusBadge status={task.status} />
+                      <strong>{task.title}</strong>
+                    </div>
+                    <span className="pw-wb-meta">
+                      {task.actual.attempts.total} attempt(s) · {task.actual.attempts.retries}{' '}
+                      retry(ies)
+                      {task.costEstimate?.persisted === false ? ' · estimate preview' : ''}
+                    </span>
+                  </div>
+                  <CostAggregateFacts aggregate={task} />
+                  {task.costEstimate ? (
+                    <details className="pw-wb-log">
+                      <summary>Estimate assumptions and tariff source</summary>
+                      <p className="pw-wb-meta">
+                        {task.costEstimate.confidence} confidence ·{' '}
+                        {task.costEstimate.pricingVersion}
+                      </p>
+                      <ul className="pw-wb-criteria">
+                        {task.costEstimate.assumptions.map((assumption) => (
+                          <li key={assumption}>{assumption}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
 
   const renderHistory = () => (
     <div className="pw-wb-section">
@@ -1901,6 +2285,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             onClick={() => {
               setTab(key);
               if (key === 'setup' && !setup) void loadSetup();
+              if (key === 'ledger') void loadLedger(ledgerDays);
             }}
           >
             <Icon size={14} />
@@ -1915,6 +2300,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         {tab === 'inbox' && renderInbox()}
         {tab === 'queue' && renderQueue()}
         {tab === 'execution' && renderExecution()}
+        {tab === 'ledger' && renderLedger()}
         {tab === 'history' && renderHistory()}
         {tab === 'review' && renderReview()}
         {tab === 'setup' && renderSetup()}
