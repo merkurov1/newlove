@@ -35,6 +35,10 @@ export async function GET(req: Request) {
     // attempt, paused queue, startup grace, cooldown and circuit breaker. It
     // never stops a live Codespace merely because a heartbeat is stale, and it
     // never starts a second worker over an existing attempt.
+    //
+    // There is no cron or always-on supervisor: this request-driven Admin poll
+    // is the recovery trigger. While nobody polls Admin, an expired lease stays
+    // visible but is not finalized until the next authorized overview request.
     try {
       await reapExpiredAttempts();
     } catch {
