@@ -31,11 +31,22 @@ jest.mock('../store', () => ({
   isWorkbenchSchemaReady: jest.fn(async () => true),
   listRecentAttempts: jest.fn(async () => []),
   listWorkers: jest.fn(async () => []),
+  promoteStandaloneReadyTasks: jest.fn(async () => 0),
   setSetting: jest.fn(async () => undefined),
   tryAcquireLifecycleLock: jest.fn(async () => true),
 }));
 
+jest.mock('../finalization', () => ({
+  advanceFinalization: jest.fn(async () => null),
+}));
+
+jest.mock('../notifications', () => ({
+  notifyDevOwner: jest.fn(async () => true),
+}));
+
+import * as finalization from '../finalization';
 import * as github from '../github';
+import * as notifications from '../notifications';
 import * as store from '../store';
 import {
   ensureCodespaceForQueuedWork,
@@ -54,8 +65,11 @@ const codespace = {
 
 const idleQueue = {
   queued: 0,
+  ready: 0,
   active: 0,
   activeTasks: 0,
+  review: 0,
+  activeBatches: 0,
   paused: false,
   depthByPriority: [],
 };
@@ -88,6 +102,7 @@ beforeEach(() => {
     },
   ]);
   asMock(store.tryAcquireLifecycleLock).mockResolvedValue(true);
+  asMock(finalization.advanceFinalization).mockResolvedValue(null);
   asMock(github.resolveCodespace).mockResolvedValue(codespace);
   asMock(github.getCodespace).mockResolvedValue(codespace);
   asMock(github.startCodespace).mockResolvedValue({ ...codespace, state: 'Starting' });
@@ -121,6 +136,28 @@ describe('worker ready telemetry', () => {
       code: null,
       message: null,
     });
+  });
+});
+
+describe('worker recovery telemetry', () => {
+  it('records recovery completion after a ready heartbeat', async () => {
+    settingsMap({
+      'lifecycle:recovery': {
+        lastAttemptAt: new Date(Date.now() - 60_000).toISOString(),
+        failures: 2,
+        circuitOpenUntil: null,
+        lastReason: 'No live worker.',
+      },
+    });
+
+    await recordWorkerReady('codespace:test');
+
+    expect(store.appendEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'worker.recovery.completed' })
+    );
+    expect(notifications.notifyDevOwner).toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.stringContaining('worker restored') })
+    );
   });
 });
 
@@ -201,10 +238,45 @@ describe('safe shutdown', () => {
     );
   });
 
+  it('promotes a standalone ready task instead of stopping', async () => {
+    asMock(store.getQueueSnapshot)
+      .mockResolvedValueOnce({ ...idleQueue, ready: 1 })
+      .mockResolvedValue({ ...idleQueue, queued: 1 });
+    asMock(store.promoteStandaloneReadyTasks).mockResolvedValue(1);
+
+    const result = await requestIdleShutdown({
+      workerId: 'codespace:test',
+      idleForMs: 200_000,
+      graceSeconds: 120,
+    });
+
+    expect(store.promoteStandaloneReadyTasks).toHaveBeenCalled();
+    expect(result.action).toBe('stay');
+    expect(github.stopCodespace).not.toHaveBeenCalled();
+  });
+
+  it('keeps the Codespace alive while queue finalization is active', async () => {
+    asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
+    asMock(finalization.advanceFinalization).mockResolvedValue({
+      stage: 'integrating',
+      id: 'finalization-1',
+    });
+
+    const result = await requestIdleShutdown({
+      workerId: 'codespace:test',
+      idleForMs: 200_000,
+      graceSeconds: 120,
+    });
+
+    expect(result.action).toBe('finalizing');
+    expect(github.stopCodespace).not.toHaveBeenCalled();
+  });
+
   it('cancels the stop when new work appears between the two checks', async () => {
     asMock(store.getQueueSnapshot)
-      .mockResolvedValueOnce(idleQueue)
-      .mockResolvedValueOnce({ ...idleQueue, queued: 1 });
+      .mockResolvedValueOnce(idleQueue) // pre-finalization promotion check
+      .mockResolvedValueOnce(idleQueue) // first stop check
+      .mockResolvedValueOnce({ ...idleQueue, queued: 1 }); // durable recheck
     asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
 
     const result = await requestIdleShutdown({

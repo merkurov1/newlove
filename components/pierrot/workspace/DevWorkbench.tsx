@@ -277,8 +277,8 @@ function CostAggregateFacts({ aggregate }: { aggregate: DevCostAggregate }) {
       aggregate.incomplete.attemptsMissingCost > 0 ? (
         <p className="pw-wb-warning">
           <AlertTriangle size={14} /> Incomplete data: {aggregate.incomplete.missingEstimateTasks}{' '}
-          task estimate(s) missing · {aggregate.incomplete.attemptsMissingCost} attempt(s)
-          without complete cost
+          task estimate(s) missing · {aggregate.incomplete.attemptsMissingCost} attempt(s) without
+          complete cost
           {aggregate.incomplete.unknown.length
             ? ` · ${aggregate.incomplete.unknown.join(', ')}`
             : ''}
@@ -370,10 +370,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
     async (days = ledgerDays) => {
       setLedgerLoading(true);
       try {
-        const response = await fetch(
-          `/api/admin/pierrot/dev/workbench/ledger?days=${days}`,
-          { cache: 'no-store' }
-        );
+        const response = await fetch(`/api/admin/pierrot/dev/workbench/ledger?days=${days}`, {
+          cache: 'no-store',
+        });
         if (!response.ok) throw new Error(await readError(response));
         const body = (await response.json()) as { ledger: DevCostLedger };
         setLedger(body.ledger);
@@ -655,9 +654,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             Acceptance criteria — по одному на строку
             <textarea
               value={form.acceptanceCriteria}
-              onChange={(event) =>
-                setForm({ ...form, acceptanceCriteria: event.target.value })
-              }
+              onChange={(event) => setForm({ ...form, acceptanceCriteria: event.target.value })}
               rows={4}
               placeholder={'Очередь сохраняется в Supabase\nЗадание получает только один worker'}
             />
@@ -675,9 +672,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             Security constraints — по одной на строку
             <textarea
               value={form.securityConstraints}
-              onChange={(event) =>
-                setForm({ ...form, securityConstraints: event.target.value })
-              }
+              onChange={(event) => setForm({ ...form, securityConstraints: event.target.value })}
               rows={2}
               placeholder="Не трогать .env и production credentials"
             />
@@ -906,9 +901,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
           <button
             type="button"
             className="pw-wb-button"
-            onClick={() =>
-              void runAction(overview.queuePaused ? 'resume_queue' : 'pause_queue')
-            }
+            onClick={() => void runAction(overview.queuePaused ? 'resume_queue' : 'pause_queue')}
           >
             {overview.queuePaused ? <Play size={14} /> : <Pause size={14} />}
             {overview.queuePaused ? 'Resume queue' : 'Pause queue'}
@@ -924,7 +917,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
       </div>
 
       {overview.queue.length === 0 ? (
-        <p className="pw-wb-empty">Очередь пуста. Утвердите задание во INBOX и поставьте его в очередь.</p>
+        <p className="pw-wb-empty">
+          Очередь пуста. Утвердите задание во INBOX и поставьте его в очередь.
+        </p>
       ) : (
         <ol className="pw-wb-queue">
           {overview.queue.map((task, index) => (
@@ -949,7 +944,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                   className="pw-wb-icon-button"
                   aria-label="Выше"
                   disabled={index === 0}
-                  onClick={() => void runAction('reorder', { taskId: task.id, position: index - 1 })}
+                  onClick={() =>
+                    void runAction('reorder', { taskId: task.id, position: index - 1 })
+                  }
                 >
                   <ArrowUp size={14} />
                 </button>
@@ -958,21 +955,27 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                   className="pw-wb-icon-button"
                   aria-label="Ниже"
                   disabled={index === overview.queue.length - 1}
-                  onClick={() => void runAction('reorder', { taskId: task.id, position: index + 1 })}
+                  onClick={() =>
+                    void runAction('reorder', { taskId: task.id, position: index + 1 })
+                  }
                 >
                   <ArrowDown size={14} />
                 </button>
                 <button
                   type="button"
                   className="pw-wb-button is-quiet"
-                  onClick={() => void runAction('set_priority', { taskId: task.id, priority: task.priority + 1 })}
+                  onClick={() =>
+                    void runAction('set_priority', { taskId: task.id, priority: task.priority + 1 })
+                  }
                 >
                   P+1
                 </button>
                 <button
                   type="button"
                   className="pw-wb-button is-quiet"
-                  onClick={() => void runAction('set_priority', { taskId: task.id, priority: task.priority - 1 })}
+                  onClick={() =>
+                    void runAction('set_priority', { taskId: task.id, priority: task.priority - 1 })
+                  }
                 >
                   P−1
                 </button>
@@ -1094,9 +1097,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                     key={status}
                     type="button"
                     className="pw-wb-button is-quiet"
-                    onClick={() =>
-                      void runAction('update_batch', { batchId: batch.id, status })
-                    }
+                    onClick={() => void runAction('update_batch', { batchId: batch.id, status })}
                   >
                     {status}
                   </button>
@@ -1155,9 +1156,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         {overview.lifecycle.lastError && (
           <p className="pw-wb-warning">
             <AlertTriangle size={14} />{' '}
-            {overview.lifecycle.lastErrorCode
-              ? `${overview.lifecycle.lastErrorCode}: `
-              : ''}
+            {overview.lifecycle.lastErrorCode ? `${overview.lifecycle.lastErrorCode}: ` : ''}
             {overview.lifecycle.lastError}
           </p>
         )}
@@ -1354,7 +1353,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             </div>
             <div>
               <dt>Lease</dt>
-              <dd>{active.attempt.leaseExpiresAt ? `${age(active.attempt.leaseExpiresAt)} left` : '—'}</dd>
+              <dd>
+                {active.attempt.leaseExpiresAt ? `${age(active.attempt.leaseExpiresAt)} left` : '—'}
+              </dd>
             </div>
             <div>
               <dt>Running</dt>
@@ -1366,7 +1367,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             </div>
             <div>
               <dt>Branch</dt>
-              <dd><code>{active.attempt.branch}</code></dd>
+              <dd>
+                <code>{active.attempt.branch}</code>
+              </dd>
             </div>
           </dl>
           <div className="pw-wb-events">
@@ -1384,7 +1387,10 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
           <Terminal size={20} />
           <div>
             <strong>Исполнитель свободен</strong>
-            <p>Очередь обрабатывается автоматически. Следующее задание будет получено в течение ~20 секунд.</p>
+            <p>
+              Очередь обрабатывается автоматически. Следующее задание будет получено в течение ~20
+              секунд.
+            </p>
           </div>
         </div>
       )}
@@ -1479,6 +1485,109 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
       )}
 
       <div className="pw-wb-subhead">
+        <p className="pw-wb-kicker">FINALIZATION</p>
+      </div>
+      {overview.finalization ? (
+        <div className="pw-wb-card">
+          <div className="pw-wb-card-head">
+            <div className="pw-wb-card-title">
+              <StatusBadge status={overview.finalization.stage} />
+              <strong>Queue finalization</strong>
+            </div>
+            <span className="pw-wb-meta">
+              {overview.finalization.integrated}/{overview.finalization.pullRequests} PR ·{' '}
+              {overview.finalization.durationMs !== null
+                ? duration(overview.finalization.startedAt, overview.finalization.completedAt)
+                : 'in progress'}
+            </span>
+          </div>
+          <dl className="pw-wb-facts">
+            <div>
+              <dt>Stage</dt>
+              <dd>{overview.finalization.stage}</dd>
+            </div>
+            <div>
+              <dt>CI</dt>
+              <dd>{overview.finalization.ciStatus}</dd>
+            </div>
+            <div>
+              <dt>Tasks</dt>
+              <dd>{overview.finalization.tasks}</dd>
+            </div>
+            <div>
+              <dt>Commit</dt>
+              <dd>
+                {overview.finalization.commitUrl ? (
+                  <a href={overview.finalization.commitUrl} target="_blank" rel="noreferrer">
+                    {shortSha(overview.finalization.commitSha)}
+                  </a>
+                ) : (
+                  '—'
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Cost</dt>
+              <dd>{money(overview.finalization.cost?.totalUsd ?? null)}</dd>
+            </div>
+          </dl>
+          {overview.finalization.blockedReason && (
+            <p className="pw-wb-warning">{overview.finalization.blockedReason}</p>
+          )}
+          {overview.finalization.prs.length > 0 && (
+            <ul className="pw-wb-criteria">
+              {overview.finalization.prs.map((pr) => (
+                <li key={pr.url}>
+                  <a href={pr.url} target="_blank" rel="noreferrer">
+                    #{pr.number ?? '?'} {pr.taskTitle}
+                  </a>{' '}
+                  · {pr.integrated ? 'integrated' : pr.ciStatus} ·{' '}
+                  {pr.mergeable === false ? 'conflict' : pr.state}
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="pw-wb-actions">
+            <button
+              type="button"
+              className="pw-wb-button"
+              disabled={busy === 'finalize_queue'}
+              onClick={() => void runAction('finalize_queue')}
+            >
+              Finalize now
+            </button>
+            {['blocked', 'failed'].includes(overview.finalization.stage) && (
+              <button
+                type="button"
+                className="pw-wb-button is-quiet"
+                disabled={busy === 'finalize_queue'}
+                onClick={() => void runAction('finalize_queue', { retry: true })}
+              >
+                Retry finalization
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="pw-wb-card">
+          <p className="pw-wb-card-body">
+            Finalization has not run yet. It starts automatically when there are no queued, ready or
+            in-progress tasks, no active attempts and no unfinished batches.
+          </p>
+          <div className="pw-wb-actions">
+            <button
+              type="button"
+              className="pw-wb-button is-quiet"
+              disabled={busy === 'finalize_queue'}
+              onClick={() => void runAction('finalize_queue')}
+            >
+              Check queue and finalize
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="pw-wb-subhead">
         <p className="pw-wb-kicker">RECENT EVENTS</p>
       </div>
       <div className="pw-wb-events">
@@ -1497,129 +1606,129 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
   const renderAttempt = (attempt: DevAttempt) => {
     const cost = attemptCost(attempt);
     return (
-    <div key={attempt.id} className="pw-wb-attempt">
-      <button
-        type="button"
-        className="pw-wb-attempt-head"
-        onClick={() => setExpandedAttempt(expandedAttempt === attempt.id ? null : attempt.id)}
-      >
-        <StatusBadge status={attempt.status} />
-        <span>attempt {attempt.attemptNumber}</span>
-        <code>{shortSha(attempt.headSha)}</code>
-        <span>{age(attempt.startedAt)} ago</span>
-        <ChevronDown size={14} />
-      </button>
-      {expandedAttempt === attempt.id && (
-        <div className="pw-wb-attempt-body">
-          <dl className="pw-wb-facts">
-            <div>
-              <dt>Branch</dt>
-              <dd><code>{attempt.branch || '—'}</code></dd>
-            </div>
-            <div>
-              <dt>Exit code</dt>
-              <dd>{attempt.exitCode ?? '—'}</dd>
-            </div>
-            <div>
-              <dt>Files</dt>
-              <dd>{attempt.changedFiles.length}</dd>
-            </div>
-            <div>
-              <dt>OpenCode session</dt>
-              <dd>{attempt.opencodeSessionId || '—'}</dd>
-            </div>
-            <div>
-              <dt>Provider / model</dt>
-              <dd>
-                {cost ? `${cost.provider || '—'} / ${cost.model || '—'}` : '—'}
-              </dd>
-            </div>
-            <div>
-              <dt>Model cost</dt>
-              <dd>
-                {cost
-                  ? `${money(cost.modelUsd)} · ${cost.modelCostKind || 'unknown'} · reported ${money(
-                      cost.modelReportedUsd
-                    )} · est. ${money(cost.modelEstimatedUsd)}${
-                      cost.modelPricingVersion ? ` · ${cost.modelPricingVersion}` : ''
-                    }`
-                  : '—'}
-              </dd>
-            </div>
-            <div>
-              <dt>Codespaces</dt>
-              <dd>
-                {cost
-                  ? `${money(cost.codespaceEstimatedUsd)} ${cost.codespaceCostKind || 'unknown'}${
-                      cost.machine ? ` · ${cost.machine}` : ''
-                    } · confirmed ${money(cost.codespaceConfirmedUsd)}${
-                      cost.codespacePricingVersion ? ` · ${cost.codespacePricingVersion}` : ''
-                    }`
-                  : '—'}
-              </dd>
-            </div>
-            <div>
-              <dt>Codespace window</dt>
-              <dd>
-                {cost?.startedAt || cost?.finishedAt
-                  ? `${cost.startedAt ? new Date(cost.startedAt).toLocaleString('ru-RU') : '—'} → ${
-                      cost.finishedAt ? new Date(cost.finishedAt).toLocaleString('ru-RU') : '—'
-                    }`
-                  : '—'}
-              </dd>
-            </div>
-            <div>
-              <dt>Total</dt>
-              <dd>{cost ? money(cost.totalUsd) : '—'}</dd>
-            </div>
-            <div>
-              <dt>Tokens</dt>
-              <dd>
-                {cost
-                  ? `${cost.inputTokens ?? '—'} in / ${cost.outputTokens ?? '—'} out · cache read ${
-                      cost.cacheReadTokens ?? '—'
-                    } / write ${cost.cacheWriteTokens ?? '—'}`
-                  : '—'}
-              </dd>
-            </div>
-          </dl>
-          {cost?.unknown?.length ? (
-            <p className="pw-wb-meta">Cost unavailable for: {cost.unknown.join(', ')}.</p>
-          ) : null}
-          {attempt.errorCode && (
-            <p className="pw-wb-warning">
-              <AlertTriangle size={14} /> {attempt.errorCode}: {attempt.errorMessage}
-            </p>
-          )}
-          {typeof attempt.verification?.mergedAt === 'string' && (
-            <p className="pw-wb-meta">
-              merged {String(attempt.verification.mergeSha || '')} · deployment{' '}
-              {String(
-                (attempt.verification.deployment as { state?: string } | undefined)?.state ||
-                  'unknown'
-              )}
-            </p>
-          )}
-          {attempt.commands.length > 0 && (
-            <ul className="pw-wb-criteria">
-              {attempt.commands.map((command, index) => (
-                <li key={`${command.name}-${index}`}>
-                  <strong>{command.status}</strong> {command.name}
-                  {command.detail ? ` — ${command.detail}` : ''}
-                </li>
-              ))}
-            </ul>
-          )}
-          {attempt.resultSummary && <p className="pw-wb-card-body">{attempt.resultSummary}</p>}
-          {attempt.logExcerpt && (
-            <details className="pw-wb-log">
-              <summary>Лог (обрезан)</summary>
-              <pre>{attempt.logExcerpt}</pre>
-            </details>
-          )}
-        </div>
-      )}
-    </div>
+      <div key={attempt.id} className="pw-wb-attempt">
+        <button
+          type="button"
+          className="pw-wb-attempt-head"
+          onClick={() => setExpandedAttempt(expandedAttempt === attempt.id ? null : attempt.id)}
+        >
+          <StatusBadge status={attempt.status} />
+          <span>attempt {attempt.attemptNumber}</span>
+          <code>{shortSha(attempt.headSha)}</code>
+          <span>{age(attempt.startedAt)} ago</span>
+          <ChevronDown size={14} />
+        </button>
+        {expandedAttempt === attempt.id && (
+          <div className="pw-wb-attempt-body">
+            <dl className="pw-wb-facts">
+              <div>
+                <dt>Branch</dt>
+                <dd>
+                  <code>{attempt.branch || '—'}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Exit code</dt>
+                <dd>{attempt.exitCode ?? '—'}</dd>
+              </div>
+              <div>
+                <dt>Files</dt>
+                <dd>{attempt.changedFiles.length}</dd>
+              </div>
+              <div>
+                <dt>OpenCode session</dt>
+                <dd>{attempt.opencodeSessionId || '—'}</dd>
+              </div>
+              <div>
+                <dt>Provider / model</dt>
+                <dd>{cost ? `${cost.provider || '—'} / ${cost.model || '—'}` : '—'}</dd>
+              </div>
+              <div>
+                <dt>Model cost</dt>
+                <dd>
+                  {cost
+                    ? `${money(cost.modelUsd)} · ${cost.modelCostKind || 'unknown'} · reported ${money(
+                        cost.modelReportedUsd
+                      )} · est. ${money(cost.modelEstimatedUsd)}${
+                        cost.modelPricingVersion ? ` · ${cost.modelPricingVersion}` : ''
+                      }`
+                    : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt>Codespaces</dt>
+                <dd>
+                  {cost
+                    ? `${money(cost.codespaceEstimatedUsd)} ${cost.codespaceCostKind || 'unknown'}${
+                        cost.machine ? ` · ${cost.machine}` : ''
+                      } · confirmed ${money(cost.codespaceConfirmedUsd)}${
+                        cost.codespacePricingVersion ? ` · ${cost.codespacePricingVersion}` : ''
+                      }`
+                    : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt>Codespace window</dt>
+                <dd>
+                  {cost?.startedAt || cost?.finishedAt
+                    ? `${cost.startedAt ? new Date(cost.startedAt).toLocaleString('ru-RU') : '—'} → ${
+                        cost.finishedAt ? new Date(cost.finishedAt).toLocaleString('ru-RU') : '—'
+                      }`
+                    : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt>Total</dt>
+                <dd>{cost ? money(cost.totalUsd) : '—'}</dd>
+              </div>
+              <div>
+                <dt>Tokens</dt>
+                <dd>
+                  {cost
+                    ? `${cost.inputTokens ?? '—'} in / ${cost.outputTokens ?? '—'} out · cache read ${
+                        cost.cacheReadTokens ?? '—'
+                      } / write ${cost.cacheWriteTokens ?? '—'}`
+                    : '—'}
+                </dd>
+              </div>
+            </dl>
+            {cost?.unknown?.length ? (
+              <p className="pw-wb-meta">Cost unavailable for: {cost.unknown.join(', ')}.</p>
+            ) : null}
+            {attempt.errorCode && (
+              <p className="pw-wb-warning">
+                <AlertTriangle size={14} /> {attempt.errorCode}: {attempt.errorMessage}
+              </p>
+            )}
+            {typeof attempt.verification?.mergedAt === 'string' && (
+              <p className="pw-wb-meta">
+                merged {String(attempt.verification.mergeSha || '')} · deployment{' '}
+                {String(
+                  (attempt.verification.deployment as { state?: string } | undefined)?.state ||
+                    'unknown'
+                )}
+              </p>
+            )}
+            {attempt.commands.length > 0 && (
+              <ul className="pw-wb-criteria">
+                {attempt.commands.map((command, index) => (
+                  <li key={`${command.name}-${index}`}>
+                    <strong>{command.status}</strong> {command.name}
+                    {command.detail ? ` — ${command.detail}` : ''}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {attempt.resultSummary && <p className="pw-wb-card-body">{attempt.resultSummary}</p>}
+            {attempt.logExcerpt && (
+              <details className="pw-wb-log">
+                <summary>Лог (обрезан)</summary>
+                <pre>{attempt.logExcerpt}</pre>
+              </details>
+            )}
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -1830,7 +1939,8 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
               </div>
               {entry.task.lastErrorCode && (
                 <p className="pw-wb-warning">
-                  <AlertTriangle size={14} /> {entry.task.lastErrorCode}: {entry.task.lastErrorMessage}
+                  <AlertTriangle size={14} /> {entry.task.lastErrorCode}:{' '}
+                  {entry.task.lastErrorMessage}
                 </p>
               )}
               {entry.attempts.map((attempt) => renderAttempt(attempt))}
@@ -1907,7 +2017,8 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                   <StatusBadge status={review.task.status} />
                   <strong>{review.task.title}</strong>
                   <span className="pw-wb-meta">
-                    verdict: {review.verdict || '—'} · attempt {review.attempt?.attemptNumber ?? '—'}
+                    verdict: {review.verdict || '—'} · attempt{' '}
+                    {review.attempt?.attemptNumber ?? '—'}
                   </span>
                   <button
                     type="button"
@@ -1919,7 +2030,10 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                 </div>
                 {review.attempt?.prUrl && (
                   <p className="pw-wb-meta">
-                    PR: <a href={review.attempt.prUrl} target="_blank" rel="noreferrer">{review.attempt.prUrl}</a>
+                    PR:{' '}
+                    <a href={review.attempt.prUrl} target="_blank" rel="noreferrer">
+                      {review.attempt.prUrl}
+                    </a>
                   </p>
                 )}
                 <p className="pw-wb-card-body">{review.summary}</p>
@@ -1934,9 +2048,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                   ))}
                 </ul>
 
-                <h3 className="pw-wb-subtitle">
-                  Changed files ({review.changedFiles.length})
-                </h3>
+                <h3 className="pw-wb-subtitle">Changed files ({review.changedFiles.length})</h3>
                 <ul className="pw-wb-files">
                   {review.changedFiles.map((file) => (
                     <li key={file.filename}>
@@ -1968,7 +2080,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                       {check.url ? (
                         <>
                           {' '}
-                          <a href={check.url} target="_blank" rel="noreferrer">log</a>
+                          <a href={check.url} target="_blank" rel="noreferrer">
+                            log
+                          </a>
                         </>
                       ) : null}
                     </li>
@@ -2054,7 +2168,11 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                     className="pw-wb-button is-merge"
                     disabled={!review.mergeable || review.task.status !== 'verified'}
                     onClick={() => {
-                      if (!window.confirm('Merge this pull request? This is an explicit owner action.')) {
+                      if (
+                        !window.confirm(
+                          'Merge this pull request? This is an explicit owner action.'
+                        )
+                      ) {
                         return;
                       }
                       void runAction('merge', { taskId: review.task.id, confirm: true });
@@ -2144,8 +2262,8 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             <strong>Одноразовый worker token</strong>
             <p className="pw-wb-meta">
               Показывается один раз и не сохраняется. Добавьте его в Vercel как{' '}
-              <code>PIERROT_DEV_WORKER_TOKEN</code> и в Codespaces secrets с тем же именем,
-              затем выполните redeploy и Re-check.
+              <code>PIERROT_DEV_WORKER_TOKEN</code> и в Codespaces secrets с тем же именем, затем
+              выполните redeploy и Re-check.
             </p>
             <pre className="pw-wb-token">{setupToken}</pre>
             <button
@@ -2166,7 +2284,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
       {setup && (
         <>
           <div className={`pw-wb-ready ${setup.ready ? 'is-ok' : 'is-error'}`}>
-            <strong>{setup.ready ? 'Все обязательные интеграции доступны' : 'Система не готова'}</strong>
+            <strong>
+              {setup.ready ? 'Все обязательные интеграции доступны' : 'Система не готова'}
+            </strong>
             {!setup.ready && (
               <ul>
                 {setup.blocking.map((item) => (
@@ -2219,7 +2339,8 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                     )}
                     {check.action === 'apply_migration' && (
                       <span className="pw-wb-meta">
-                        Apply <code>migrations/{overview.migrationFile}</code> manually. It is never applied automatically.
+                        Apply <code>migrations/{overview.migrationFile}</code> manually. It is never
+                        applied automatically.
                       </span>
                     )}
                   </div>

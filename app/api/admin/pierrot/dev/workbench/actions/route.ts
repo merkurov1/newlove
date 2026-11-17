@@ -33,15 +33,13 @@ import {
   transitionTask,
   updateBatchStatus,
 } from '@/lib/pierrot/dev/workbench/store';
-import {
-  createCodespace,
-  listUserCodespaces,
-} from '@/lib/pierrot/dev/workbench/github';
+import { createCodespace, listUserCodespaces } from '@/lib/pierrot/dev/workbench/github';
 import {
   ensureCodespaceForQueuedWork,
   startCodespaceNow,
   stopCodespaceNow,
 } from '@/lib/pierrot/dev/workbench/lifecycle';
+import { advanceFinalization, retryFinalization } from '@/lib/pierrot/dev/workbench/finalization';
 import { CODESPACE_NAME_ENV } from '@/lib/pierrot/dev/workbench/setup';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
 import { DevTransitionError } from '@/lib/pierrot/dev/workbench/state';
@@ -215,7 +213,10 @@ export async function POST(req: Request) {
       case 'merge': {
         if (body.confirm !== true) {
           return json(
-            { error: 'Merge requires an explicit confirmation.', code: 'MERGE_CONFIRMATION_REQUIRED' },
+            {
+              error: 'Merge requires an explicit confirmation.',
+              code: 'MERGE_CONFIRMATION_REQUIRED',
+            },
             409
           );
         }
@@ -362,7 +363,10 @@ export async function POST(req: Request) {
         return json({ ok: true, codespaces });
       }
       case 'start_codespace': {
-        const result = await startCodespaceNow({ source: 'admin:manual', allowWorkerRecovery: true });
+        const result = await startCodespaceNow({
+          source: 'admin:manual',
+          allowWorkerRecovery: true,
+        });
         if (result.action === 'blocked') {
           return json(
             {
@@ -423,6 +427,24 @@ export async function POST(req: Request) {
         });
         break;
       }
+      case 'finalize_queue': {
+        const retry = body.retry === true;
+        const report = retry
+          ? await retryFinalization('admin:retry')
+          : await advanceFinalization({ trigger: 'admin:finalize', force: true });
+        if (!report) {
+          return json(
+            { error: 'Finalization is unavailable until the workbench schema is ready.' },
+            409
+          );
+        }
+        await appendEvent({
+          type: 'batch.finalization.requested',
+          message: `Owner requested queue finalization (${report.stage}).`,
+          payload: { finalizationId: report.id, retry },
+        });
+        break;
+      }
       case 'block': {
         const reason = typeof body.reason === 'string' ? body.reason.slice(0, 2000) : '';
         const task = await getTaskRow(admin.id, taskId);
@@ -432,7 +454,11 @@ export async function POST(req: Request) {
           taskId,
           to: 'blocked' as DevWorkbenchTaskStatus,
           patch: { blocked_reason: reason || 'Blocked by the owner.' },
-          event: { type: 'task.blocked', level: 'warn', message: reason || 'Blocked by the owner.' },
+          event: {
+            type: 'task.blocked',
+            level: 'warn',
+            message: reason || 'Blocked by the owner.',
+          },
         });
         if (!updated) return json({ error: 'Unable to block the task.' }, 409);
         break;

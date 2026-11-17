@@ -24,8 +24,7 @@ import type {
 
 assertServerOnly('lib/pierrot/dev/workbench/store');
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const WORKER_ID_PATTERN = /^[A-Za-z0-9._:-]{4,120}$/;
 export const COST_LEDGER_MIGRATION_FILE = '2026-12-10_pierrot_dev_cost_ledger.sql';
 const TASK_COLUMNS =
@@ -47,9 +46,7 @@ export class WorkbenchUnavailableError extends Error {
   readonly code = 'DEV_WORKBENCH_MIGRATION_REQUIRED';
 
   constructor() {
-    super(
-      `Engineering Workbench requires the additive migration ${WORKBENCH_MIGRATION_FILE}.`
-    );
+    super(`Engineering Workbench requires the additive migration ${WORKBENCH_MIGRATION_FILE}.`);
     this.name = 'WorkbenchUnavailableError';
   }
 }
@@ -78,7 +75,9 @@ function isDuplicate(error: unknown): boolean {
 
 function list(value: unknown): string[] {
   return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string').map((item) => item.slice(0, 4000))
+    ? value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.slice(0, 4000))
     : [];
 }
 
@@ -98,9 +97,7 @@ function normalizeTaskStatus(value: unknown): DevWorkbenchTaskStatus {
     'archived',
     'blocked',
   ];
-  return (allowed as string[]).includes(status)
-    ? (status as DevWorkbenchTaskStatus)
-    : 'draft';
+  return (allowed as string[]).includes(status) ? (status as DevWorkbenchTaskStatus) : 'draft';
 }
 
 function normalizeAttemptStatus(value: unknown): DevAttemptStatus {
@@ -131,18 +128,15 @@ export function mapTaskRow(row: Record<string, unknown>): DevWorkbenchTask {
     baseRef: String(row.base_ref || 'main'),
     status: normalizeTaskStatus(row.status),
     priority: Number(row.priority || 0),
-    queuePosition:
-      typeof row.queue_position === 'number' ? row.queue_position : null,
+    queuePosition: typeof row.queue_position === 'number' ? row.queue_position : null,
     queuedAt: typeof row.queued_at === 'string' ? row.queued_at : null,
     attemptCount: Number(row.attempt_count || 0),
     acceptanceCriteria: list(row.acceptance_criteria),
     verificationStatus:
       typeof row.verification_status === 'string' ? row.verification_status : null,
     blockedReason: typeof row.blocked_reason === 'string' ? row.blocked_reason : null,
-    lastErrorCode:
-      typeof row.last_error_code === 'string' ? row.last_error_code : null,
-    lastErrorMessage:
-      typeof row.last_error_message === 'string' ? row.last_error_message : null,
+    lastErrorCode: typeof row.last_error_code === 'string' ? row.last_error_code : null,
+    lastErrorMessage: typeof row.last_error_message === 'string' ? row.last_error_message : null,
     resultCommit: typeof row.result_commit === 'string' ? row.result_commit : null,
     resultNotes: truncateText(row.result_notes, 12_000),
     pullRequests: list(row.pull_requests),
@@ -181,8 +175,7 @@ export function mapAttemptRow(row: Record<string, unknown>): DevAttempt {
     headSha: typeof row.head_sha === 'string' ? row.head_sha : null,
     prNumber: typeof row.pr_number === 'number' ? row.pr_number : null,
     prUrl: typeof row.pr_url === 'string' ? row.pr_url : null,
-    opencodeSessionId:
-      typeof row.opencode_session_id === 'string' ? row.opencode_session_id : null,
+    opencodeSessionId: typeof row.opencode_session_id === 'string' ? row.opencode_session_id : null,
     exitCode: typeof row.exit_code === 'number' ? row.exit_code : null,
     startedAt: typeof row.started_at === 'string' ? row.started_at : null,
     finishedAt: typeof row.finished_at === 'string' ? row.finished_at : null,
@@ -223,8 +216,7 @@ function mapWorkerRow(row: Record<string, unknown>): DevWorker {
         ? (row.capabilities as DevWorker['capabilities'])
         : {},
     currentTaskId: typeof row.current_task_id === 'string' ? row.current_task_id : null,
-    currentAttemptId:
-      typeof row.current_attempt_id === 'string' ? row.current_attempt_id : null,
+    currentAttemptId: typeof row.current_attempt_id === 'string' ? row.current_attempt_id : null,
     lastHeartbeatAt: heartbeatAt,
     lastError: truncateText(row.last_error, 1000),
     stopRequested: row.stop_requested === true,
@@ -298,10 +290,7 @@ export async function requireWorkbenchSchema(): Promise<void> {
  */
 export async function pingWorkbenchStore(): Promise<{ ok: boolean; error: string | null }> {
   try {
-    const { error } = await store()
-      .from('pierrot_dev_settings')
-      .select('key')
-      .limit(1);
+    const { error } = await store().from('pierrot_dev_settings').select('key').limit(1);
     if (error) {
       return { ok: false, error: errorText(error).slice(0, 500) || 'Supabase query failed.' };
     }
@@ -382,15 +371,17 @@ export async function saveCostEstimate(input: {
 }): Promise<boolean> {
   if (!isUuid(input.taskId)) return false;
   try {
-    const { error } = await store().from('pierrot_dev_cost_estimates').insert({
-      task_id: input.taskId,
-      batch_id: isUuid(input.batchId) ? input.batchId : null,
-      estimate: input.estimate,
-      pricing_version: input.estimate.pricingVersion,
-      currency: input.estimate.currency,
-      source: input.trigger.slice(0, 80),
-      created_at: new Date().toISOString(),
-    });
+    const { error } = await store()
+      .from('pierrot_dev_cost_estimates')
+      .insert({
+        task_id: input.taskId,
+        batch_id: isUuid(input.batchId) ? input.batchId : null,
+        estimate: input.estimate,
+        pricing_version: input.estimate.pricingVersion,
+        currency: input.estimate.currency,
+        source: input.trigger.slice(0, 80),
+        created_at: new Date().toISOString(),
+      });
     if (error) {
       if (!isMissingRelation(error)) {
         console.error('[dev-workbench] cost estimate save failed', { code: error.code });
@@ -544,9 +535,7 @@ export async function listEvents(input: {
     if (input.attemptId) query = query.eq('attempt_id', input.attemptId);
     const { data, error } = await query;
     if (error) return [];
-    return (Array.isArray(data) ? data : [])
-      .map((row) => mapEventRow(row))
-      .reverse();
+    return (Array.isArray(data) ? data : []).map((row) => mapEventRow(row)).reverse();
   } catch {
     return [];
   }
@@ -609,38 +598,146 @@ export async function clearWorkerAttempt(
 
 export async function getQueueSnapshot(): Promise<{
   queued: number;
+  ready: number;
   active: number;
   activeTasks: number;
+  review: number;
+  activeBatches: number;
   paused: boolean;
   depthByPriority: Array<{ priority: number; count: number }>;
 }> {
   try {
     const client = store();
-    const [{ count: queued }, { count: active }, { count: activeTasks }, paused] =
-      await Promise.all([
-        client
-          .from('pierrot_dev_prompts')
-          .select('*', { head: true, count: 'exact' })
-          .eq('status', 'queued'),
-        client
-          .from('pierrot_dev_attempts')
-          .select('*', { head: true, count: 'exact' })
-          .in('status', ['claimed', 'running']),
-        client
-          .from('pierrot_dev_prompts')
-          .select('*', { head: true, count: 'exact' })
-          .eq('status', 'in_progress'),
-        isQueuePaused(),
-      ]);
+    const [
+      { count: queued },
+      { count: ready },
+      { count: active },
+      { count: activeTasks },
+      { count: review },
+      { count: activeBatches },
+      paused,
+    ] = await Promise.all([
+      client
+        .from('pierrot_dev_prompts')
+        .select('*', { head: true, count: 'exact' })
+        .eq('status', 'queued'),
+      client
+        .from('pierrot_dev_prompts')
+        .select('*', { head: true, count: 'exact' })
+        .eq('status', 'ready'),
+      client
+        .from('pierrot_dev_attempts')
+        .select('*', { head: true, count: 'exact' })
+        .in('status', ['claimed', 'running']),
+      client
+        .from('pierrot_dev_prompts')
+        .select('*', { head: true, count: 'exact' })
+        .eq('status', 'in_progress'),
+      client
+        .from('pierrot_dev_prompts')
+        .select('*', { head: true, count: 'exact' })
+        .eq('status', 'review'),
+      client
+        .from('pierrot_dev_batches')
+        .select('*', { head: true, count: 'exact' })
+        .in('status', ['active', 'paused']),
+      isQueuePaused(),
+    ]);
     return {
       queued: queued || 0,
+      ready: ready || 0,
       active: active || 0,
       activeTasks: activeTasks || 0,
+      review: review || 0,
+      activeBatches: activeBatches || 0,
       paused,
       depthByPriority: [],
     };
   } catch {
-    return { queued: 0, active: 0, activeTasks: 0, paused: false, depthByPriority: [] };
+    return {
+      queued: 0,
+      ready: 0,
+      active: 0,
+      activeTasks: 0,
+      review: 0,
+      activeBatches: 0,
+      paused: false,
+      depthByPriority: [],
+    };
+  }
+}
+
+/**
+ * Promote approved standalone tasks that are not attached to a batch.
+ *
+ * `ready` is the approval state. A task with no `queue_batch_id` owns its own
+ * execution and must not sit idle forever just because the owner approved it
+ * before the explicit-batch flow existed. Batch-owned ready tasks are left
+ * untouched: only `start_batch` may enqueue them.
+ */
+export async function promoteStandaloneReadyTasks(limit = 20): Promise<number> {
+  try {
+    const { data, error } = await store()
+      .from('pierrot_dev_prompts')
+      .select('id,priority')
+      .eq('status', 'ready')
+      .is('queue_batch_id', null)
+      .order('priority', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(Math.min(Math.max(limit, 1), 50));
+    if (error || !Array.isArray(data) || data.length === 0) return 0;
+
+    let position = await nextQueuePosition();
+    const queuedAt = new Date().toISOString();
+    let promoted = 0;
+    for (const row of data) {
+      const { error: updateError } = await store()
+        .from('pierrot_dev_prompts')
+        .update({
+          status: 'queued',
+          queue_position: position,
+          queued_at: queuedAt,
+          last_error_code: null,
+          last_error_message: null,
+          updated_at: queuedAt,
+        })
+        .eq('id', String(row.id))
+        .eq('status', 'ready');
+      if (updateError) continue;
+      promoted += 1;
+      position += 1;
+      await appendEvent({
+        taskId: String(row.id),
+        type: 'task.auto_enqueued',
+        message:
+          'Standalone approved task was returned to the execution queue after the queue was empty.',
+        payload: { queuePosition: position - 1 },
+        dedupeKey: `task-auto-enqueued:${row.id}`,
+      }).catch(() => {});
+    }
+    return promoted;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Tasks whose successful attempt still needs integration. A review task with a
+ * pull request is the primary candidate; verified tasks are included so a
+ * restarted finalization can repair an interrupted status update.
+ */
+export async function listFinalizationTasks(limit = 100): Promise<DevWorkbenchTask[]> {
+  try {
+    const { data, error } = await store()
+      .from('pierrot_dev_prompts')
+      .select(TASK_COLUMNS)
+      .in('status', ['review', 'verified'])
+      .order('updated_at', { ascending: true })
+      .limit(Math.min(Math.max(limit, 1), 200));
+    if (error || !Array.isArray(data)) return [];
+    return data.map((row) => mapTaskRow(row)).filter((task) => task.pullRequests.length > 0);
+  } catch {
+    return [];
   }
 }
 
@@ -652,6 +749,32 @@ export async function getQueueSnapshot(): Promise<{
  * append-only event journal gives us an atomic one-winner insert per time
  * window without a new table or a distributed lock service.
  */
+export async function tryAcquireFinalizationLock(
+  owner: string,
+  windowMs = 30_000
+): Promise<boolean> {
+  const window = Math.min(Math.max(Math.trunc(windowMs), 10_000), 300_000);
+  const bucket = Math.floor(Date.now() / window);
+  const dedupeKey = `finalization-lock:${bucket}`;
+  try {
+    const { error } = await store()
+      .from('pierrot_dev_events')
+      .insert({
+        type: 'finalization.lock',
+        level: 'debug',
+        message: 'Queue finalization lock acquired.',
+        payload: { owner: owner.slice(0, 120), windowMs: window },
+        dedupe_key: dedupeKey,
+      });
+    if (!error) return true;
+    if (isDuplicate(error)) return false;
+    console.error('[dev-workbench] finalization lock failed', { code: error.code });
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export async function tryAcquireLifecycleLock(
   name: 'start' | 'stop' | 'restart',
   owner: string,
@@ -661,13 +784,15 @@ export async function tryAcquireLifecycleLock(
   const bucket = Math.floor(Date.now() / window);
   const dedupeKey = `lifecycle-lock:${name}:${bucket}`;
   try {
-    const { error } = await store().from('pierrot_dev_events').insert({
-      type: 'lifecycle.lock',
-      level: 'debug',
-      message: `${name} lifecycle lock acquired.`,
-      payload: { owner: owner.slice(0, 120), windowMs: window },
-      dedupe_key: dedupeKey,
-    });
+    const { error } = await store()
+      .from('pierrot_dev_events')
+      .insert({
+        type: 'lifecycle.lock',
+        level: 'debug',
+        message: `${name} lifecycle lock acquired.`,
+        payload: { owner: owner.slice(0, 120), windowMs: window },
+        dedupe_key: dedupeKey,
+      });
     if (!error) return true;
     if (isDuplicate(error)) return false;
     console.error('[dev-workbench] lifecycle lock failed', { code: error.code, name });
@@ -779,7 +904,11 @@ export async function transitionTask(input: {
   to: DevWorkbenchTaskStatus;
   patch?: Record<string, unknown>;
   event?: { type: string; message: string; level?: 'debug' | 'info' | 'warn' | 'error' };
-  extraEvents?: Array<{ type: string; message: string; level?: 'debug' | 'info' | 'warn' | 'error' }>;
+  extraEvents?: Array<{
+    type: string;
+    message: string;
+    level?: 'debug' | 'info' | 'warn' | 'error';
+  }>;
 }): Promise<DevWorkbenchTask | null> {
   const task = await getTaskRow(input.userId, input.taskId);
   if (!task) return null;
@@ -828,7 +957,11 @@ export async function nextQueuePosition(): Promise<number> {
   }
 }
 
-export async function reorderQueue(userId: string, taskId: string, targetIndex: number): Promise<boolean> {
+export async function reorderQueue(
+  userId: string,
+  taskId: string,
+  targetIndex: number
+): Promise<boolean> {
   const queue = await listTaskRows({
     userId,
     statuses: ['queued'],
@@ -862,10 +995,7 @@ export async function reorderQueue(userId: string, taskId: string, targetIndex: 
 // Batches
 // ---------------------------------------------------------------------------
 
-function mapBatchRow(
-  row: Record<string, unknown>,
-  items: DevBatch['items'] = []
-): DevBatch {
+function mapBatchRow(row: Record<string, unknown>, items: DevBatch['items'] = []): DevBatch {
   return {
     id: String(row.id || ''),
     title: truncateText(row.title, 200) || 'Batch',
@@ -1004,10 +1134,7 @@ export async function startBatch(userId: string, batchId: string): Promise<Start
     return { ok: false, queued: 0, notReady: [], error: 'BATCH_NOT_FOUND' };
   }
 
-  let batchQuery = store()
-    .from('pierrot_dev_batches')
-    .select('id,status')
-    .eq('id', batchId);
+  let batchQuery = store().from('pierrot_dev_batches').select('id,status').eq('id', batchId);
   if (isUuid(userId)) batchQuery = batchQuery.eq('user_id', userId);
   const { data: batch, error: batchReadError } = await batchQuery.maybeSingle();
   if (batchReadError || !batch) {
@@ -1311,6 +1438,20 @@ export async function registerWorker(input: {
     .select('*')
     .single();
   if (error || !data) throw error || new Error('WORKER_REGISTER_FAILED');
+  const registeredReadiness =
+    row.capabilities &&
+    typeof row.capabilities === 'object' &&
+    (row.capabilities as Record<string, unknown>).readiness;
+  if (
+    (row.capabilities as Record<string, unknown> | null)?.ready === true ||
+    (registeredReadiness &&
+      typeof registeredReadiness === 'object' &&
+      (registeredReadiness as Record<string, unknown>).ready === true)
+  ) {
+    // A ready registration is proof that startup succeeded. Clear stale
+    // pending/failed start state without writing on every heartbeat.
+    await setSetting('lifecycle:pending_start', { at: null }).catch(() => {});
+  }
   await appendEvent({
     workerId: input.workerId,
     type: 'worker.registered',
@@ -1366,9 +1507,7 @@ export async function heartbeatWorker(input: {
         .from('pierrot_dev_attempts')
         .update({
           heartbeat_at: new Date().toISOString(),
-          lease_expires_at: new Date(
-            Date.now() + WORKER_LEASE_SECONDS * 1000
-          ).toISOString(),
+          lease_expires_at: new Date(Date.now() + WORKER_LEASE_SECONDS * 1000).toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('id', attempt.id)

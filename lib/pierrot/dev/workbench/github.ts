@@ -170,6 +170,7 @@ export async function getPullRequestStatus(
   state: string;
   merged: boolean;
   mergeable: boolean | null;
+  mergeableState: string | null;
   headSha: string;
   baseBranch: string;
 } | null> {
@@ -186,12 +187,145 @@ export async function getPullRequestStatus(
       state: response.data.state,
       merged: Boolean(response.data.merged),
       mergeable: response.data.mergeable ?? null,
+      mergeableState: response.data.mergeable_state ?? null,
       headSha: response.data.head.sha,
       baseBranch: response.data.base.ref,
     };
   } catch {
     return null;
   }
+}
+
+export type GitHubChecksSummary = {
+  status: 'passed' | 'failed' | 'pending' | 'none' | 'unknown';
+  detail: string;
+  checks: Array<{
+    name: string;
+    status: string | null;
+    conclusion: string | null;
+    url: string | null;
+  }>;
+};
+
+const FAILED_CONCLUSIONS = new Set([
+  'failure',
+  'timed_out',
+  'cancelled',
+  'action_required',
+  'startup_failure',
+]);
+
+/**
+ * Read the real CI state for a commit. Check runs and legacy commit statuses
+ * are both considered; a repository with neither is reported as `none`, never
+ * as a silent pass.
+ */
+export async function getCommitChecks(
+  repository: DevRepositoryKey | string,
+  ref: string
+): Promise<GitHubChecksSummary> {
+  const config = getDevRepositoryConfig(repoKey(repository));
+  const sha = String(ref || '').trim();
+  if (!/^[0-9a-f]{7,40}$/i.test(sha)) {
+    return { status: 'unknown', detail: 'A valid commit SHA is required.', checks: [] };
+  }
+  try {
+    const [runs, statuses] = await Promise.all([
+      client().rest.checks.listForRef({
+        owner: config.owner,
+        repo: config.repo,
+        ref: sha,
+        per_page: 100,
+      }),
+      client()
+        .rest.repos.getCombinedStatusForRef({
+          owner: config.owner,
+          repo: config.repo,
+          ref: sha,
+          per_page: 100,
+        })
+        .catch(() => null),
+    ]);
+
+    const checks = (runs.data.check_runs || []).map((run) => ({
+      name: run.name,
+      status: run.status || null,
+      conclusion: run.conclusion || null,
+      url: run.html_url || run.details_url || null,
+    }));
+    const statusChecks = (statuses?.data.statuses || []).map((status) => ({
+      name: status.context,
+      status: status.state === 'pending' ? 'in_progress' : 'completed',
+      conclusion:
+        status.state === 'success'
+          ? 'success'
+          : status.state === 'failure' || status.state === 'error'
+            ? 'failure'
+            : null,
+      url: status.target_url || null,
+    }));
+    const all = [...checks, ...statusChecks];
+    if (all.length === 0) {
+      return { status: 'none', detail: 'No CI checks are attached to this commit.', checks: [] };
+    }
+    const failed = all.filter(
+      (check) => check.conclusion && FAILED_CONCLUSIONS.has(check.conclusion)
+    );
+    if (failed.length > 0) {
+      return {
+        status: 'failed',
+        detail: `${failed.length} CI check(s) failed: ${failed
+          .map((check) => check.name)
+          .slice(0, 5)
+          .join(', ')}`,
+        checks: all,
+      };
+    }
+    const pending = all.filter((check) => check.status !== 'completed' || !check.conclusion);
+    const combinedPending =
+      statuses?.data.state === 'pending' || statuses?.data.state === 'expected';
+    if (pending.length > 0 || combinedPending) {
+      return {
+        status: 'pending',
+        detail: `${pending.length || 1} CI check(s) are still running.`,
+        checks: all,
+      };
+    }
+    return {
+      status: 'passed',
+      detail: `${all.length} CI check(s) completed successfully.`,
+      checks: all,
+    };
+  } catch (error) {
+    const normalized = toError(error, 'GITHUB_CHECKS_FAILED');
+    return {
+      status: 'unknown',
+      detail: normalized.message,
+      checks: [],
+    };
+  }
+}
+
+export async function getBranchHead(
+  repository: DevRepositoryKey | string,
+  branch: string
+): Promise<string | null> {
+  const config = getDevRepositoryConfig(repoKey(repository));
+  try {
+    const response = await client().rest.repos.getBranch({
+      owner: config.owner,
+      repo: config.repo,
+      branch: safeBranch(branch),
+    });
+    return response.data.commit.sha;
+  } catch {
+    return null;
+  }
+}
+
+export function commitUrl(repository: DevRepositoryKey | string, sha: string): string {
+  const config = getDevRepositoryConfig(repoKey(repository));
+  return `https://github.com/${config.owner}/${config.repo}/commit/${sha}`;
 }
 
 /**
@@ -205,7 +339,10 @@ export async function mergeVerifiedPullRequest(input: {
 }): Promise<{ merged: boolean; sha: string | null; message: string }> {
   const config = getDevRepositoryConfig(repoKey(input.repository));
   if (!/^[0-9a-f]{40}$/i.test(input.expectedHeadSha)) {
-    throw new WorkbenchGitHubError('GITHUB_INVALID_SHA', 'A full 40-character head SHA is required.');
+    throw new WorkbenchGitHubError(
+      'GITHUB_INVALID_SHA',
+      'A full 40-character head SHA is required.'
+    );
   }
 
   try {
@@ -255,9 +392,7 @@ export async function mergeVerifiedPullRequest(input: {
 // Repository permissions
 // ---------------------------------------------------------------------------
 
-export async function getRepositoryPermission(
-  repository: DevRepositoryKey | string
-): Promise<{
+export async function getRepositoryPermission(repository: DevRepositoryKey | string): Promise<{
   fullName: string;
   admin: boolean;
   push: boolean;
@@ -334,7 +469,8 @@ function mapCodespace(data: Record<string, unknown>): CodespaceInfo {
 export async function listUserCodespaces(): Promise<CodespaceInfo[]> {
   try {
     const response = await client().request('GET /user/codespaces', { per_page: 100 });
-    const items = (response.data as { codespaces?: Array<Record<string, unknown>> }).codespaces || [];
+    const items =
+      (response.data as { codespaces?: Array<Record<string, unknown>> }).codespaces || [];
     return items.map(mapCodespace);
   } catch (error) {
     throw toError(error, 'CODESPACE_LIST_FAILED');
@@ -449,7 +585,9 @@ export async function createCodespace(input: {
 
 let vercelProjectCache: { id: string | null; expiresAt: number } | null = null;
 
-async function resolveVercelProjectId(repository: DevRepositoryKey | string): Promise<string | null> {
+async function resolveVercelProjectId(
+  repository: DevRepositoryKey | string
+): Promise<string | null> {
   if (process.env.VERCEL_PROJECT_ID) return process.env.VERCEL_PROJECT_ID;
   if (vercelProjectCache && vercelProjectCache.expiresAt > Date.now()) {
     return vercelProjectCache.id;
