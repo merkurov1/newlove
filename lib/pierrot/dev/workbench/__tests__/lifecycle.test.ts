@@ -119,6 +119,14 @@ describe('controlled worker recovery', () => {
       decideWorkerRecovery({ ...input, hasSignal: false, signalAgeSeconds: null }).code
     ).toBe('WORKER_RECOVERY_NO_SIGNAL');
   });
+
+  it('does not stop an Available Codespace for a single stale heartbeat', () => {
+    // The incident heartbeat was 332s old; that is a polling gap, not proof
+    // that the worker is dead.
+    const decision = decideWorkerRecovery({ ...input, signalAgeSeconds: 332 });
+    expect(decision.action).toBe('skip');
+    expect(decision.code).toBe('WORKER_RECOVERY_NOT_CONFIRMED_DEAD');
+  });
 });
 
 describe('safe shutdown', () => {

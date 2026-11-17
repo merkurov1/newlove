@@ -40,6 +40,7 @@ import * as store from '../store';
 import {
   ensureCodespaceForQueuedWork,
   keepCodespaceAwakeForActiveWork,
+  recordWorkerReady,
   requestIdleShutdown,
 } from '../lifecycle';
 
@@ -91,6 +92,36 @@ beforeEach(() => {
   asMock(github.getCodespace).mockResolvedValue(codespace);
   asMock(github.startCodespace).mockResolvedValue({ ...codespace, state: 'Starting' });
   asMock(github.stopCodespace).mockResolvedValue({ ...codespace, state: 'ShuttingDown' });
+});
+
+describe('worker ready telemetry', () => {
+  it('clears a stale auth error even when the ready timestamp is already recorded', async () => {
+    const now = Date.now();
+    settingsMap({
+      'lifecycle:last_start': {
+        at: new Date(now - 60_000).toISOString(),
+        requestedAt: new Date(now - 60_000).toISOString(),
+        codespaceName: 'test-codespace',
+      },
+      'lifecycle:last_ready': {
+        at: new Date(now - 30_000).toISOString(),
+        workerId: 'codespace:test',
+      },
+      'lifecycle:last_error': {
+        at: new Date(now - 20_000).toISOString(),
+        code: 'OPENCODE_AUTH_MISSING',
+        message: 'No stored deepseek authentication was found.',
+      },
+    });
+
+    await recordWorkerReady('codespace:test');
+
+    expect(store.setSetting).toHaveBeenCalledWith('lifecycle:last_error', {
+      at: null,
+      code: null,
+      message: null,
+    });
+  });
 });
 
 describe('automatic startup', () => {
@@ -254,6 +285,77 @@ describe('startup recovery', () => {
     expect(github.startCodespace).not.toHaveBeenCalled();
   });
 
+  it('uses the newest heartbeat instead of an old start timestamp', async () => {
+    settingsMap({
+      'lifecycle:last_start': {
+        at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        requestedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        codespaceName: 'test-codespace',
+        machine: null,
+        source: 'admin:overview',
+        state: 'Available',
+        observedState: 'Available',
+        lastHttpStatus: 200,
+        confirmedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      },
+    });
+    asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
+    asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
+    asMock(store.listWorkers).mockResolvedValue([
+      {
+        id: 'codespace:test',
+        online: false,
+        // A 60s-old heartbeat is a normal polling gap; the hour-old start
+        // timestamp must not override it.
+        lastHeartbeatAt: new Date(Date.now() - 60_000).toISOString(),
+      },
+    ]);
+
+    const result = await ensureCodespaceForQueuedWork({
+      source: 'admin:overview',
+      allowWorkerRecovery: true,
+    });
+
+    expect(result.action).toBe('already-available');
+    expect(github.stopCodespace).not.toHaveBeenCalled();
+  });
+
+  it('rechecks worker liveness after the restart lock before stopping', async () => {
+    asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
+    asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
+    asMock(store.listWorkers)
+      .mockResolvedValueOnce([
+        {
+          id: 'codespace:test',
+          online: false,
+          lastHeartbeatAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'codespace:test',
+          online: false,
+          lastHeartbeatAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        },
+      ])
+      .mockResolvedValue([
+        {
+          id: 'codespace:test',
+          online: true,
+          lastHeartbeatAt: new Date().toISOString(),
+        },
+      ]);
+
+    const result = await ensureCodespaceForQueuedWork({
+      source: 'admin:overview',
+      allowWorkerRecovery: true,
+    });
+
+    expect(result.action).toBe('already-available');
+    expect(result.reason).toMatch(/came online/i);
+    expect(github.stopCodespace).not.toHaveBeenCalled();
+  });
+
   it('does not restart an Available Codespace whose worker is online but not ready', async () => {
     asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
     asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
@@ -282,6 +384,7 @@ describe('startup recovery', () => {
   it('recovers an Available Codespace only when explicitly allowed, then honors cooldown', async () => {
     asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
     asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
+    asMock(github.getCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
     asMock(store.listWorkers).mockResolvedValue([
       {
         id: 'codespace:test',

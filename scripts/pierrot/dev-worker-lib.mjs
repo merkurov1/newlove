@@ -112,22 +112,34 @@ export function parseOpenCodeCost(output) {
  * Parse `opencode auth list`. Environment credentials are intentionally not
  * accepted: the worker requires a stored login so no provider secret has to be
  * forwarded through the process environment.
+ *
+ * The real 2.1.x output is tabular:
+ *   DeepSeek  DeepSeek 3                  stored
+ *   DeepSeek  DeepSeek                    environment
+ * Only `stored` rows count. Take the first plain token (the provider column)
+ * and ignore ANSI decoration so a colourised terminal cannot produce a false
+ * "auth missing" result.
  */
 export function parseStoredAuth(output, expectedProvider) {
-  const text = String(output || '');
+  const text = String(output || '').replace(/\x1b\[[0-9;]*m/g, '');
   const providers = [];
   for (const line of text.split('\n')) {
     if (!/\bstored\b/i.test(line)) continue;
-    const name = line.trim().split(/\s+/)[0];
+    const name = line
+      .trim()
+      .split(/\s+/)
+      .map((token) => token.replace(/^[^\w.-]+|[^\w.-]+$/g, ''))
+      .find((token) => /^[a-z0-9][a-z0-9._-]*$/i.test(token));
     if (name) providers.push(name.toLowerCase());
   }
+  const unique = [...new Set(providers)];
   const wanted = String(expectedProvider || '').trim().toLowerCase();
   const matched = wanted
-    ? providers.some((provider) => provider.includes(wanted) || wanted.includes(provider))
-    : providers.length > 0;
+    ? unique.some((provider) => provider.includes(wanted) || wanted.includes(provider))
+    : unique.length > 0;
   return {
     authenticated: matched,
-    providers,
+    providers: unique,
   };
 }
 
@@ -138,6 +150,10 @@ export function computeReadiness(input) {
   );
   const opencodeOk = Boolean(input.opencodeAvailable && versionOk);
   const authOk = input.authenticated === true;
+  // A failed probe is not proof that credentials are missing. Keep it distinct
+  // so Admin reports a transient store read error instead of sending the owner
+  // to re-check GitHub Secrets.
+  const authProbeOk = input.authProbeOk !== false;
   const reasons = [];
   if (!input.configOk) reasons.push('Worker configuration is incomplete.');
   if (!input.apiOk) reasons.push('Pierrot worker API is unreachable.');
@@ -150,7 +166,9 @@ export function computeReadiness(input) {
   }
   if (!authOk) {
     reasons.push(
-      `No stored ${input.provider || 'provider'} authentication was found (run opencode auth login).`
+      authProbeOk
+        ? `No stored ${input.provider || 'provider'} authentication was found (run opencode auth login).`
+        : `The OpenCode auth store could not be read (${input.authProbeError || 'probe failed'}); authentication is unverified, not necessarily absent. This is not a GitHub Secrets check.`
     );
   }
   return {
@@ -161,6 +179,7 @@ export function computeReadiness(input) {
     opencodeOk,
     versionOk,
     authOk,
+    authProbeOk,
     minimumVersion,
     provider: input.provider || null,
     reasons,
@@ -174,7 +193,7 @@ export function computeReadiness(input) {
  * "403 Author is invalid". The fallback is the repository owner's verified
  * GitHub noreply address, not an invented mailbox.
  */
-export const DEFAULT_WORKER_GIT_NAME = 'Pierrot Dev';
+export const DEFAULT_WORKER_GIT_NAME = 'Anton Merkurov';
 export const DEFAULT_WORKER_GIT_EMAIL = '97518066+merkurov1@users.noreply.github.com';
 
 export function resolveGitIdentity(input = {}) {
@@ -211,7 +230,9 @@ export const BOOT_PHASES = Object.freeze([
   'checking_opencode',
   'checking_auth',
   'connecting_api',
+  'api_connected',
   'registering',
+  'registered',
   'ready',
   'failed',
   'stopping',

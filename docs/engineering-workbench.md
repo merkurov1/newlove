@@ -147,11 +147,10 @@ overwritten.
   on the server after the result is recorded. Automatic commits use the
   Codespace's configured GitHub identity (falling back to the repository
   owner's verified GitHub noreply address), never an invented author.
-  Signing is disabled per worker commit with `-c commit.gpgsign=false` because
-  the repository does not require signed commits; set
-  `PIERROT_DEV_GIT_SIGN_COMMITS=true` to use the configured signing identity
-  instead. Pushes to `main`/`master` or any non-`pierrot/dev/<task>/<attempt>`
-  branch are refused.
+  Every worker commit is signed with the Codespace `gh-gpgsign` helper, and the
+  worker verifies the effective author/committer and the `gpgsig` header before
+  pushing. An unsigned commit is never pushed. Pushes to `main`/`master` or any
+  non-`pierrot/dev/<task>/<attempt>` branch are refused.
 - If commit or push fails, the branch, local commit SHA and exact reason are
   kept in `$PIERROT_DEV_WORK_ROOT/push-failures/<attempt>.json`, sent with the
   failed attempt and retried through the durable outbox if the API is down.

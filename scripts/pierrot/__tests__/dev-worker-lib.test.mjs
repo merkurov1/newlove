@@ -31,6 +31,40 @@ test('parses only stored provider authentication', () => {
   assert.equal(parseStoredAuth(output, 'openai').authenticated, false);
 });
 
+test('parses the real auth list format even with ANSI colour and duplicates', () => {
+  const output = [
+    '\u001b[32mDeepSeek\u001b[0m  DeepSeek 3                  stored',
+    '\u001b[32mDeepSeek\u001b[0m  DeepSeek 2                  stored',
+    '\u001b[32mDeepSeek\u001b[0m  DeepSeek                    stored',
+    'GitHub Copilot  GITHUB_TOKEN                environment',
+  ].join('\r\n');
+  assert.deepEqual(parseStoredAuth(output, 'deepseek'), {
+    authenticated: true,
+    providers: ['deepseek'],
+  });
+});
+
+test('a failed auth probe is reported as unverified, not as missing credentials', () => {
+  const readiness = computeReadiness({
+    configOk: true,
+    apiOk: true,
+    supabaseOk: true,
+    opencodeAvailable: true,
+    opencodeVersion: '2.1.4',
+    minimumVersion: '2.1.4',
+    authenticated: false,
+    authProbeOk: false,
+    authProbeError: 'timeout',
+    provider: 'deepseek',
+  });
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.authOk, false);
+  assert.equal(readiness.authProbeOk, false);
+  const reasons = readiness.reasons.join(' ');
+  assert.match(reasons, /auth store could not be read \(timeout\)/i);
+  assert.doesNotMatch(reasons, /No stored deepseek authentication was found/i);
+});
+
 test('readiness fails closed and reports the actual reason', () => {
   const readiness = computeReadiness({
     configOk: true,
@@ -106,8 +140,8 @@ test('uses the configured GitHub identity for automatic commits', () => {
     }
   );
   const fallback = resolveGitIdentity({ configuredName: '', configuredEmail: '' });
-  assert.equal(fallback.name, 'Pierrot Dev');
-  assert.match(fallback.email, /@users\.noreply\.github\.com$/);
+  assert.equal(fallback.name, 'Anton Merkurov');
+  assert.equal(fallback.email, '97518066+merkurov1@users.noreply.github.com');
 });
 
 test('automatic pushes are restricted to attempt branches', () => {
@@ -127,7 +161,9 @@ test('boot telemetry exposes a closed set of phases', () => {
     'checking_opencode',
     'checking_auth',
     'connecting_api',
+    'api_connected',
     'registering',
+    'registered',
     'ready',
     'failed',
     'stopping',

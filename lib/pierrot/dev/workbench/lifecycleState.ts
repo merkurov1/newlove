@@ -11,6 +11,13 @@ const DEFAULT_STARTUP_GRACE_SECONDS = 300;
 export const WORKER_RECOVERY_COOLDOWN_SECONDS = 15 * 60;
 export const WORKER_RECOVERY_CIRCUIT_THRESHOLD = 3;
 export const WORKER_RECOVERY_CIRCUIT_SECONDS = 6 * 60 * 60;
+/**
+ * A single stale heartbeat is not proof that a worker is dead: the Codespace
+ * may be resuming, the machine may be under load, or the heartbeat write may
+ * have been delayed. Recovery may only stop an Available machine after the
+ * last confirmed signal is older than this window (and the startup grace).
+ */
+export const WORKER_RECOVERY_MIN_DEAD_SECONDS = 15 * 60;
 
 function numberFromEnv(name: string, fallback: number, min: number, max: number): number {
   const raw = process.env[name];
@@ -192,6 +199,17 @@ export function decideWorkerRecovery(input: {
       action: 'skip',
       code: 'WORKER_STARTUP_GRACE',
       reason: `The Codespace booted ${input.signalAgeSeconds}s ago; waiting for the startup grace period.`,
+    };
+  }
+  const confirmedDeadAfter = Math.max(
+    input.startupGraceSeconds,
+    WORKER_RECOVERY_MIN_DEAD_SECONDS
+  );
+  if (input.signalAgeSeconds < confirmedDeadAfter) {
+    return {
+      action: 'skip',
+      code: 'WORKER_RECOVERY_NOT_CONFIRMED_DEAD',
+      reason: `The last worker signal is ${input.signalAgeSeconds}s old; a restart requires ${confirmedDeadAfter}s without a signal. A single stale heartbeat is not enough to stop the Codespace.`,
     };
   }
   return {

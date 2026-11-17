@@ -347,8 +347,11 @@ export async function recordWorkerReady(workerId: string): Promise<void> {
     }).catch(() => {});
   }
   // Keep the first ready timestamp for the current start so startup duration is
-  // not inflated by every heartbeat.
+  // not inflated by every heartbeat. A later ready heartbeat still has to
+  // clear a stale lifecycle error: without this, the database can show
+  // authOk=true while last_error still says "No stored authentication".
   if (ready && (!start || new Date(ready.at).getTime() >= new Date(start.at).getTime())) {
+    await clearLifecycleError();
     return;
   }
   await setSetting('lifecycle:last_ready', {
@@ -414,6 +417,26 @@ function secondsBetween(from: string | null, to = Date.now()): number | null {
   const start = new Date(from).getTime();
   if (!Number.isFinite(start)) return null;
   return Math.max(0, Math.round((to - start) / 1000));
+}
+
+/**
+ * Use the newest liveness signal, not the first non-null one. The lifecycle
+ * start timestamp can be days old while the worker heartbeat is fresh; reading
+ * them in priority order would restart a live Codespace.
+ */
+function latestSignalAt(...values: Array<string | null | undefined>): string | null {
+  let latest: number | null = null;
+  let latestValue: string | null = null;
+  for (const value of values) {
+    if (!value) continue;
+    const at = new Date(value).getTime();
+    if (!Number.isFinite(at)) continue;
+    if (latest === null || at > latest) {
+      latest = at;
+      latestValue = value;
+    }
+  }
+  return latestValue;
 }
 
 export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
@@ -483,15 +506,37 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
       readinessFresh &&
       (worker?.capabilities?.ready === true || readiness?.ready === true)
   );
-  const readinessReasons = Array.isArray(readiness?.reasons)
-    ? readiness.reasons.filter((item): item is string => typeof item === 'string').slice(0, 8)
-    : [];
   const opencodeOk = Boolean(
-    readiness?.opencodeOk ??
-      (worker?.capabilities?.opencodeAvailable === true &&
-        worker?.capabilities?.opencodeAuthenticated === true)
+    readinessFresh &&
+      (readiness?.opencodeOk ??
+        (worker?.capabilities?.opencodeAvailable === true &&
+          worker?.capabilities?.opencodeAuthenticated === true))
   );
-  const authOk = Boolean(readiness?.authOk ?? worker?.capabilities?.opencodeAuthenticated === true);
+  const authOk = Boolean(
+    readinessFresh &&
+      (readiness?.authOk ?? worker?.capabilities?.opencodeAuthenticated === true)
+  );
+  // A confirmed auth flag must not be reported next to a stale "no stored
+  // authentication" reason. That contradiction sent the owner to re-check
+  // GitHub Secrets when the OpenCode store was already healthy.
+  const rawReadinessReasons = [
+    ...(Array.isArray(readiness?.reasons) ? readiness.reasons : []),
+    ...(workerOnline && !readinessFresh
+      ? ['Worker readiness is stale; waiting for a fresh capability probe.']
+      : []),
+  ];
+  const readinessReasons = rawReadinessReasons
+    .filter((item): item is string => typeof item === 'string')
+    .filter(
+      (reason) =>
+        !(
+          authOk &&
+          /stored .*authentication|OPENCODE_AUTH|auth store|provider authentication/i.test(
+            reason
+          )
+        )
+    )
+    .slice(0, 8);
   const executing = Boolean(
     activeAttempt || queue.active > 0 || queue.activeTasks > 0 || worker?.currentAttemptId
   );
@@ -505,9 +550,16 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
   const errorIsStaleAuth = Boolean(
     authOk && error?.code && /AUTH|PROVIDER/i.test(error.code)
   );
+  const workerErrorIsStaleAuth = Boolean(
+    authOk &&
+      worker?.lastError &&
+      /stored .*authentication|OPENCODE_AUTH|auth store|provider authentication/i.test(
+        worker.lastError
+      )
+  );
   const lastError =
     (!errorIsStaleAuth ? error?.message : null) ||
-    (!workerReady ? worker?.lastError : null) ||
+    (!workerReady && !workerErrorIsStaleAuth ? worker?.lastError : null) ||
     codespaceError ||
     null;
   const lastStartFailed = Boolean(error?.code?.startsWith('CODESPACE_START'));
@@ -524,14 +576,15 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
     recoveryState.circuitOpenUntil &&
       new Date(recoveryState.circuitOpenUntil).getTime() > Date.now()
   );
+  const lastSignal = latestSignalAt(start?.at, worker?.lastHeartbeatAt);
   const recoveryDecision = decideWorkerRecovery({
     codespaceState: codespace?.state || null,
     workerOnline,
     executing,
     queued: queue.queued,
     queuePaused: queue.paused,
-    hasSignal: Boolean(start?.at || worker?.lastHeartbeatAt),
-    signalAgeSeconds: secondsBetween(start?.at || worker?.lastHeartbeatAt || null),
+    hasSignal: Boolean(lastSignal),
+    signalAgeSeconds: secondsBetween(lastSignal),
     startupGraceSeconds: startupGraceSeconds(),
     recovery: recoveryState,
   });
@@ -835,7 +888,7 @@ async function recoverDeadWorker(
   const executing = Boolean(
     activeAttempt || queue.active > 0 || queue.activeTasks > 0 || worker?.currentAttemptId
   );
-  const lastSignal = start?.at || worker?.lastHeartbeatAt || null;
+  const lastSignal = latestSignalAt(start?.at, worker?.lastHeartbeatAt);
   const recoveryState: RecoveryState = recovery || {
     lastAttemptAt: null,
     failures: 0,
@@ -891,6 +944,54 @@ async function recoverDeadWorker(
       action: 'blocked',
       codespace,
       reason: 'Another lifecycle operation holds the restart lock.',
+    };
+  }
+
+  // Re-read every safety signal after taking the lock. A worker may have
+  // registered, claimed a task, or the Codespace may have changed state while
+  // this request waited. Never stop the machine based on the stale snapshot.
+  const [freshWorkers, freshQueue, freshAttempt, freshIntent, freshCodespace] =
+    await Promise.all([
+      listWorkers(),
+      getQueueSnapshot(),
+      getActiveAttempt(),
+      readIntent(),
+      getCodespace(codespace.name).catch(() => null),
+    ]);
+  const freshWorker = chooseWorker(freshWorkers, codespace.name);
+  const freshExecuting = Boolean(
+    freshAttempt ||
+      freshQueue.active > 0 ||
+      freshQueue.activeTasks > 0 ||
+      freshWorker?.currentAttemptId
+  );
+  const freshIntentActive = Boolean(
+    freshIntent && Date.now() - new Date(freshIntent.at).getTime() < 180_000
+  );
+  const freshState = freshCodespace?.state || codespace.state;
+  const skipReason = freshWorker?.online
+    ? `Worker ${freshWorker.id} came online before the restart.`
+    : freshExecuting
+      ? 'An execution attempt became active before the restart.'
+      : freshQueue.paused || freshQueue.queued <= 0
+        ? 'Queued work disappeared before the restart.'
+        : freshIntentActive
+          ? 'A shutdown intent became active before the restart.'
+          : normalizeCodespaceState(freshState) !== 'available'
+            ? `The Codespace changed to ${freshState} before the restart.`
+            : null;
+  if (skipReason) {
+    await appendEvent({
+      type: 'codespace.worker_recovery_skipped',
+      level: 'info',
+      message: `Worker recovery cancelled after lock: ${skipReason}`,
+      payload: { source, signalAgeSeconds, observedState: freshState },
+      dedupeKey: `worker-recovery:race:${codespace.name}:${Math.floor(Date.now() / 60_000)}`,
+    }).catch(() => {});
+    return {
+      action: freshWorker?.online ? 'already-available' : 'noop',
+      codespace: freshCodespace || codespace,
+      reason: skipReason,
     };
   }
 
