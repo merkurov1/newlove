@@ -20,6 +20,10 @@ jest.mock('../store', () => ({
   patchAttempt: jest.fn(),
   patchTask: jest.fn(),
   reapExpiredAttempts: jest.fn(),
+  recordTaskCostEstimate: jest.fn(async () => ({
+    total: { minUsd: null, expectedUsd: null, maxUsd: null },
+    confidence: 'low',
+  })),
   touchWorkerHeartbeat: jest.fn(),
   transitionTask: jest.fn(),
 }));

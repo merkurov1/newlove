@@ -50,6 +50,12 @@ export type DevWorkbenchTask = {
   resultCommit: string | null;
   resultNotes: string;
   pullRequests: string[];
+  /**
+   * Latest persisted estimate when one exists, otherwise a deterministic
+   * preview computed from the task text. The preview is never persisted and
+   * the stored estimate is written before a task enters the queue.
+   */
+  costEstimate?: DevCostEstimate | null;
   updatedAt: string;
   createdAt: string;
 };
@@ -201,7 +207,63 @@ export type DevReviewView = {
   deployment: DevDeploymentStatus | null;
 };
 
-/** Actual model usage plus estimated Codespaces runtime for one attempt. */
+export type DevCostConfidence = 'low' | 'medium' | 'high';
+
+export type DevCostValue = {
+  minUsd: number | null;
+  expectedUsd: number | null;
+  maxUsd: number | null;
+};
+
+/** Immutable tariff metadata stored alongside every estimate and actual cost. */
+export type DevCostRate = {
+  version: string;
+  source: string;
+  effectiveAt: string;
+  currency: string;
+};
+
+export type DevCostModelRate = DevCostRate & {
+  inputPerMillionUsd: number | null;
+  outputPerMillionUsd: number | null;
+  cacheReadPerMillionUsd: number | null;
+  cacheWritePerMillionUsd: number | null;
+};
+
+export type DevCostEstimate = {
+  /** True only for a value read back from the append-only estimate table. */
+  persisted: boolean;
+  pricingVersion: string;
+  currency: string;
+  createdAt: string;
+  confidence: DevCostConfidence;
+  assumptions: string[];
+  model: {
+    provider: string | null;
+    model: string | null;
+    minUsd: number | null;
+    expectedUsd: number | null;
+    maxUsd: number | null;
+    inputTokens: { min: number; expected: number; max: number };
+    outputTokens: { min: number; expected: number; max: number };
+    rate: DevCostModelRate;
+    assumptions: string[];
+  };
+  codespaces: {
+    machine: string | null;
+    minUsd: number | null;
+    expectedUsd: number | null;
+    maxUsd: number | null;
+    runtimeMs: { min: number; expected: number; max: number };
+    hourlyUsd: number | null;
+    rate: DevCostRate;
+    assumptions: string[];
+  };
+  total: DevCostValue;
+  unknown: string[];
+};
+
+/** Actual model usage plus Codespaces runtime for one attempt. */
 export type DevAttemptCost = {
   model: {
     provider: string | null;
@@ -211,20 +273,169 @@ export type DevAttemptCost = {
     reasoningTokens: number | null;
     cacheReadTokens: number | null;
     cacheWriteTokens: number | null;
+    /** Best-known model cost: provider-reported when present, else estimated. */
     costUsd: number | null;
+    /** Provider-reported cost only. */
+    reportedCostUsd: number | null;
+    /** Computed from tokens and a versioned tariff when the provider omitted cost. */
+    estimatedCostUsd: number | null;
+    costKind: 'reported' | 'estimated' | 'unknown';
     steps: number;
     provenance: string;
+    rate: DevCostModelRate | null;
   };
   codespace: {
     machine: string | null;
+    startedAt: string | null;
+    finishedAt: string | null;
     runtimeMs: number | null;
+    billableMs: number | null;
     hourlyUsd: number | null;
+    /** Computed SKU-rate value; never presented as a GitHub invoice. */
     estimatedUsd: number | null;
+    /** Reserved for confirmed per-attempt GitHub billing data. */
+    confirmedUsd: number | null;
+    costKind: 'estimated' | 'confirmed' | 'unknown';
+    billingSource: string;
+    storageUsd: number | null;
+    sharedUsd: number | null;
     provenance: string;
+    rate: DevCostRate | null;
   };
   totalUsd: number | null;
   unknown: string[];
   measuredAt: string;
+};
+
+export type DevCostComponentSummary = {
+  reportedUsd: number | null;
+  estimatedUsd: number | null;
+  confirmedUsd: number | null;
+  effectiveUsd: number | null;
+  reportedAttempts: number;
+  estimatedAttempts: number;
+  confirmedAttempts: number;
+  missingAttempts: number;
+  unknown: string[];
+};
+
+export type DevCostVariance = {
+  expectedUsd: number | null;
+  actualUsd: number | null;
+  deltaUsd: number | null;
+  deltaPct: number | null;
+  status: 'under' | 'over' | 'on_target' | 'unknown';
+};
+
+export type DevCostAttemptTotals = {
+  model: DevCostComponentSummary;
+  codespaces: DevCostComponentSummary;
+  totalUsd: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  reasoningTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
+  attempts: {
+    total: number;
+    completed: number;
+    failed: number;
+    cancelled: number;
+    timedOut: number;
+    retries: number;
+  };
+  commands: {
+    total: number;
+    failed: number;
+  };
+  missingCostAttempts: number;
+};
+
+export type DevCostAggregate = {
+  estimate: DevCostValue;
+  actual: DevCostAttemptTotals;
+  variance: DevCostVariance;
+  taskCount: number;
+  successfulTasks: number;
+  successfulTasksWithCost: number;
+  averageSuccessfulTaskUsd: number | null;
+  incomplete: {
+    missingEstimateTasks: number;
+    attemptsMissingCost: number;
+    unknown: string[];
+  };
+};
+
+export type DevCostLedgerTask = DevCostAggregate & {
+  taskId: string;
+  title: string;
+  status: DevWorkbenchTaskStatus;
+  batchId: string | null;
+  /** The stored or preview estimate detail; aggregate estimate is `estimate`. */
+  costEstimate: DevCostEstimate | null;
+};
+
+export type DevCostLedgerBatch = DevCostAggregate & {
+  batchId: string;
+  title: string;
+  status: DevBatchStatus;
+  taskIds: string[];
+};
+
+export type DevCodespaceBillingSnapshot = {
+  status: 'confirmed' | 'unavailable';
+  source: string;
+  checkedAt: string;
+  reason: string | null;
+  totalMinutesUsed: number | null;
+  totalPaidMinutesUsed: number | null;
+  includedMinutes: number | null;
+  minutesUsedBreakdown: Record<string, number> | null;
+};
+
+export type DevCodespaceSessionCost = {
+  startedAt: string | null;
+  finishedAt: string | null;
+  machine: string | null;
+  runtimeMs: number | null;
+  hourlyUsd: number | null;
+  estimatedUsd: number | null;
+  currency: string;
+  pricingVersion: string | null;
+  source: string;
+  reason: string | null;
+  attemptRuntimeMs: number;
+  idleRuntimeMs: number | null;
+  idleEstimatedUsd: number | null;
+};
+
+export type DevCostLedger = {
+  generatedAt: string;
+  currency: string;
+  periodDays: number;
+  periodFrom: string;
+  pricing: {
+    model: DevCostRate;
+    codespaces: DevCostRate;
+  };
+  estimatesTableReady: boolean;
+  confirmedBilling: DevCodespaceBillingSnapshot;
+  totals: DevCostAggregate;
+  period: DevCostAggregate;
+  tasks: DevCostLedgerTask[];
+  batches: DevCostLedgerBatch[];
+  codespaces: {
+    sessions: DevCodespaceSessionCost[];
+    periodSessionEstimatedUsd: number | null;
+    periodIdleEstimatedUsd: number | null;
+    note: string;
+  };
+  dataQuality: {
+    attemptsExamined: number;
+    attemptsMissingCost: number;
+    missingEstimateTasks: number;
+    unknown: string[];
+  };
 };
 
 export type DevDeploymentStatus = {
@@ -284,13 +495,18 @@ export type DevLifecycleStatus =
 
 export type DevLifecycleCost = {
   modelUsd: number | null;
+  modelReportedUsd: number | null;
+  modelEstimatedUsd: number | null;
   codespaceEstimatedUsd: number | null;
+  codespaceConfirmedUsd: number | null;
   totalUsd: number | null;
   inputTokens: number | null;
   outputTokens: number | null;
   reasoningTokens: number | null;
   attemptsWithCost: number;
   attemptsMissingCost: number;
+  attemptsWithEstimatedModel: number;
+  attemptsWithEstimatedCodespace: number;
   unknown: string[];
   provenance: string;
 };

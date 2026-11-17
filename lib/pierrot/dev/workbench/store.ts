@@ -8,11 +8,13 @@ import {
   truncateLog,
   truncateText,
 } from './state';
+import { estimateTaskCost } from './costs';
 import type {
   DevAttempt,
   DevAttemptStatus,
   DevBatch,
   DevBatchStatus,
+  DevCostEstimate,
   DevEvent,
   DevWorker,
   DevWorkerStatus,
@@ -25,6 +27,7 @@ assertServerOnly('lib/pierrot/dev/workbench/store');
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const WORKER_ID_PATTERN = /^[A-Za-z0-9._:-]{4,120}$/;
+export const COST_LEDGER_MIGRATION_FILE = '2026-12-10_pierrot_dev_cost_ledger.sql';
 const TASK_COLUMNS =
   'id,user_id,title,task,objective,repository,base_ref,status,priority,queue_position,queued_at,attempt_count,acceptance_criteria,verification_status,blocked_reason,last_error_code,last_error_message,result_commit,result_notes,pull_requests,created_at,updated_at';
 const ATTEMPT_COLUMNS =
@@ -365,6 +368,135 @@ export async function recordIntegrationSuccess(key: string): Promise<void> {
 
 export async function isQueuePaused(): Promise<boolean> {
   return (await getSetting<boolean>('queue_paused', false)) === true;
+}
+
+// ---------------------------------------------------------------------------
+// Cost estimate ledger
+// ---------------------------------------------------------------------------
+
+export async function saveCostEstimate(input: {
+  taskId: string;
+  batchId?: string | null;
+  estimate: DevCostEstimate;
+  trigger: string;
+}): Promise<boolean> {
+  if (!isUuid(input.taskId)) return false;
+  try {
+    const { error } = await store().from('pierrot_dev_cost_estimates').insert({
+      task_id: input.taskId,
+      batch_id: isUuid(input.batchId) ? input.batchId : null,
+      estimate: input.estimate,
+      pricing_version: input.estimate.pricingVersion,
+      currency: input.estimate.currency,
+      source: input.trigger.slice(0, 80),
+      created_at: new Date().toISOString(),
+    });
+    if (error) {
+      if (!isMissingRelation(error)) {
+        console.error('[dev-workbench] cost estimate save failed', { code: error.code });
+      }
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Persist a deterministic estimate before a task becomes queued. The optional
+ * estimate table is additive; if it is not applied the enqueue still succeeds
+ * and the event journal keeps the estimate payload.
+ */
+export async function recordTaskCostEstimate(input: {
+  taskId: string;
+  batchId?: string | null;
+  title: string;
+  objective: string;
+  acceptanceCriteria: string[];
+  trigger: string;
+}): Promise<DevCostEstimate> {
+  const codespaceMeta =
+    (await getSetting<Record<string, unknown>>('lifecycle:codespace', {})) || {};
+  const estimate = estimateTaskCost({
+    title: input.title,
+    objective: input.objective,
+    acceptanceCriteria: input.acceptanceCriteria,
+    machine: typeof codespaceMeta.machine === 'string' ? codespaceMeta.machine : null,
+  });
+  await saveCostEstimate({
+    taskId: input.taskId,
+    batchId: input.batchId,
+    estimate,
+    trigger: input.trigger,
+  });
+  return estimate;
+}
+
+export async function isCostLedgerTableReady(): Promise<boolean> {
+  try {
+    const { error } = await store()
+      .from('pierrot_dev_cost_estimates')
+      .select('task_id', { head: true, count: 'exact' })
+      .limit(1);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/** Latest estimate per task from the append-only estimate table. */
+export async function listLatestCostEstimates(
+  taskIds: string[]
+): Promise<Map<string, DevCostEstimate>> {
+  const result = new Map<string, DevCostEstimate>();
+  const ids = taskIds.filter(isUuid).slice(0, 200);
+  if (ids.length === 0) return result;
+  try {
+    const { data, error } = await store()
+      .from('pierrot_dev_cost_estimates')
+      .select('task_id,estimate,created_at')
+      .in('task_id', ids)
+      .order('created_at', { ascending: false })
+      .limit(1000);
+    if (error || !Array.isArray(data)) return result;
+    for (const row of data) {
+      const taskId = String(row.task_id || '');
+      if (!taskId || result.has(taskId)) continue;
+      if (!row.estimate || typeof row.estimate !== 'object' || Array.isArray(row.estimate)) {
+        continue;
+      }
+      result.set(taskId, {
+        ...(row.estimate as DevCostEstimate),
+        persisted: true,
+        createdAt:
+          typeof row.created_at === 'string'
+            ? row.created_at
+            : (row.estimate as DevCostEstimate).createdAt,
+      });
+    }
+    return result;
+  } catch {
+    return result;
+  }
+}
+
+/** All attempts used by the cost dashboard, without the history-list cap. */
+export async function listAttemptsForLedger(taskIds: string[]): Promise<DevAttempt[]> {
+  const ids = taskIds.filter(isUuid).slice(0, 200);
+  if (ids.length === 0) return [];
+  try {
+    const { data, error } = await store()
+      .from('pierrot_dev_attempts')
+      .select(ATTEMPT_COLUMNS)
+      .in('task_id', ids)
+      .order('created_at', { ascending: false })
+      .limit(1000);
+    if (error || !Array.isArray(data)) return [];
+    return data.map((row) => mapAttemptRow(row));
+  } catch {
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -897,7 +1029,7 @@ export async function startBatch(userId: string, batchId: string): Promise<Start
   const taskIds = [...new Set(items.map((item) => String(item.task_id)))];
   let taskQuery = store()
     .from('pierrot_dev_prompts')
-    .select('id,title,status,queue_position')
+    .select('id,title,status,queue_position,objective,acceptance_criteria')
     .in('id', taskIds);
   if (isUuid(userId)) taskQuery = taskQuery.eq('user_id', userId);
   const { data: tasks, error: taskError } = await taskQuery;
@@ -921,6 +1053,14 @@ export async function startBatch(userId: string, batchId: string): Promise<Start
   let queued = 0;
   for (const task of tasks) {
     if (String(task.status) !== 'ready') continue;
+    await recordTaskCostEstimate({
+      taskId: String(task.id),
+      batchId,
+      title: truncateText(task.title, 500) || 'Задача',
+      objective: truncateText(task.objective, 12_000),
+      acceptanceCriteria: list(task.acceptance_criteria),
+      trigger: 'start_batch',
+    });
     const { error } = await store()
       .from('pierrot_dev_prompts')
       .update({
@@ -1453,6 +1593,14 @@ export async function requeueTask(input: {
   const task = await getTaskRow(input.userId, input.taskId);
   if (!task) return null;
   const position = await nextQueuePosition();
+  await recordTaskCostEstimate({
+    taskId: task.id,
+    batchId: await getBatchIdForTask(task.id),
+    title: task.title,
+    objective: task.objective,
+    acceptanceCriteria: task.acceptanceCriteria,
+    trigger: 'requeue',
+  });
   return transitionTask({
     userId: input.userId,
     taskId: input.taskId,
