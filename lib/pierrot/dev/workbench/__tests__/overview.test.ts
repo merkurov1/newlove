@@ -9,6 +9,7 @@ jest.mock('../store', () => ({
   listAttemptsForTasks: jest.fn(async () => new Map()),
   listBatches: jest.fn(async () => []),
   listEvents: jest.fn(async () => []),
+  listLatestCostEstimates: jest.fn(async () => new Map()),
   listTaskRows: jest.fn(async () => []),
   listWorkers: jest.fn(async () => []),
   reapExpiredAttempts: jest.fn(async () => 0),
@@ -16,6 +17,10 @@ jest.mock('../store', () => ({
 
 jest.mock('../lifecycle', () => ({
   getLifecycleSnapshot: jest.fn(async () => ({ status: 'ready' })),
+}));
+
+jest.mock('../finalization', () => ({
+  getFinalizationReport: jest.fn(async () => null),
 }));
 
 import * as lifecycle from '../lifecycle';
@@ -32,6 +37,7 @@ beforeEach(() => {
   asMock(store.isQueuePaused).mockResolvedValue(false);
   asMock(store.listTaskRows).mockResolvedValue([]);
   asMock(store.listAttemptsForTasks).mockResolvedValue(new Map());
+  asMock(store.listLatestCostEstimates).mockResolvedValue(new Map());
   asMock(store.listBatches).mockResolvedValue([]);
   asMock(store.listWorkers).mockResolvedValue([]);
   asMock(store.getActiveAttempt).mockResolvedValue(null);

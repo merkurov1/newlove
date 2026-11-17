@@ -7,22 +7,22 @@ remains infrastructure; the owner works from Admin.
 
 ## Components
 
-| Part | Location |
-| --- | --- |
-| Admin overview API | `app/api/admin/pierrot/dev/workbench/route.ts` |
-| Admin actions API | `app/api/admin/pierrot/dev/workbench/actions/route.ts` |
-| Setup health checks | `app/api/admin/pierrot/dev/workbench/setup/route.ts` |
-| Internal worker API | `app/api/internal/pierrot/dev/worker/route.ts` |
-| Queue / attempts / events | `lib/pierrot/dev/workbench/*` |
-| Codespace worker | `scripts/pierrot/dev-worker.mjs` |
-| Worker lifecycle | `scripts/pierrot/dev-worker-start.sh` / `dev-worker-supervisor.sh` / `dev-worker-stop.sh` |
-| Codespace lifecycle | `lib/pierrot/dev/workbench/lifecycle.ts` |
-| Cost ledger | `lib/pierrot/dev/workbench/costs.ts` / `ledger.ts` |
-| Cost dashboard API | `app/api/admin/pierrot/dev/workbench/ledger/route.ts` |
-| Admin UI | `components/pierrot/workspace/DevWorkbench.tsx` |
-| Migration (additive) | `migrations/2026-11-22_pierrot_dev_workbench.sql` |
-| Cost estimate migration (additive) | `migrations/2026-12-10_pierrot_dev_cost_ledger.sql` |
-| Existing task table | `public.pierrot_dev_prompts` (reused) |
+| Part                               | Location                                                                                  |
+| ---------------------------------- | ----------------------------------------------------------------------------------------- |
+| Admin overview API                 | `app/api/admin/pierrot/dev/workbench/route.ts`                                            |
+| Admin actions API                  | `app/api/admin/pierrot/dev/workbench/actions/route.ts`                                    |
+| Setup health checks                | `app/api/admin/pierrot/dev/workbench/setup/route.ts`                                      |
+| Internal worker API                | `app/api/internal/pierrot/dev/worker/route.ts`                                            |
+| Queue / attempts / events          | `lib/pierrot/dev/workbench/*`                                                             |
+| Codespace worker                   | `scripts/pierrot/dev-worker.mjs`                                                          |
+| Worker lifecycle                   | `scripts/pierrot/dev-worker-start.sh` / `dev-worker-supervisor.sh` / `dev-worker-stop.sh` |
+| Codespace lifecycle                | `lib/pierrot/dev/workbench/lifecycle.ts`                                                  |
+| Cost ledger                        | `lib/pierrot/dev/workbench/costs.ts` / `ledger.ts`                                        |
+| Cost dashboard API                 | `app/api/admin/pierrot/dev/workbench/ledger/route.ts`                                     |
+| Admin UI                           | `components/pierrot/workspace/DevWorkbench.tsx`                                           |
+| Migration (additive)               | `migrations/2026-11-22_pierrot_dev_workbench.sql`                                         |
+| Cost estimate migration (additive) | `migrations/2026-12-10_pierrot_dev_cost_ledger.sql`                                       |
+| Existing task table                | `public.pierrot_dev_prompts` (reused)                                                     |
 
 ## State machines
 
@@ -57,7 +57,6 @@ overwritten.
    - Codespaces secret: `PIERROT_DEV_WORKER_TOKEN`
 
 3. Set the server env:
-
    - `PIERROT_DEV_CODESPACE_NAME` — the existing Codespace name
    - `GITHUB_TOKEN` — fine-grained token with repository contents/PR write and
      Codespaces read/write (read is enough to display state; write is required
@@ -65,7 +64,6 @@ overwritten.
    - `VERCEL_TOKEN` + optional `VERCEL_PROJECT_ID` — read-only deployment status
 
 4. In the Codespace, set:
-
    - `PIERROT_DEV_API_URL` — https origin of the deployed admin app
    - `PIERROT_DEV_WORKER_TOKEN` — same token
    - optionally `PIERROT_DEV_PIERROT_DIR`, `PIERROT_DEV_WORK_ROOT`
@@ -138,6 +136,46 @@ overwritten.
 - The Codespace `GITHUB_TOKEN` in this environment only has
   `codespaces=read`. It is never used to stop the Codespace. The server
   `GITHUB_TOKEN` must have Codespaces read/write.
+
+## Queue finalization
+
+A drained queue is not the end of a development batch. The backend runs a
+separate, idempotent finalization pass when **all** of these are true: no
+`queued`, no `ready`, no `in_progress` tasks, no `claimed`/`running` attempt,
+no active/paused batch and the queue is not paused. It is triggered by the
+worker idle request and by the Admin overview poll; only one instance can
+advance it per 30-second window.
+
+Stages:
+
+1. **Collect** — every `review`/`verified` task with a pull request is read from
+   GitHub. CI checks, mergeability, head SHA and conflicts are recorded.
+2. **Integrate** — one PR per pass is merged (never force-pushed) only when the
+   PR is open, its exact head SHA is unchanged, CI is green and GitHub reports
+   it mergeable. A conflict, branch-protection rejection, failed CI or stale
+   head stops integration with a diagnostic; nothing is discarded.
+3. **Verify** — CI is checked again on the integrated `main` commit.
+4. **Complete** — tasks become `verified` with `verification_status:
+integrated`, the batch is settled, cost and duration are recorded, and the
+   owner is notified.
+
+The report is stored in `pierrot_dev_settings` (`finalization:state`), so a
+retry is idempotent: already integrated PRs are skipped, merge SHAs are
+remembered and main is never rewritten. Admin → `EXECUTION` → `FINALIZATION`
+shows the stage, PR list, CI, commit link, cost and a manual **Retry
+finalization** action. When a conflict needs a product/architecture decision,
+integration is blocked and the owner must decide; the Codespace may stop to
+avoid idle cost. If new work arrives during finalization, the pass is
+superseded (`queue.refilled`) and normal execution resumes.
+
+Events: `queue.drained`, `batch.finalization.started`,
+`batch.finalization.completed`, `batch.finalization.failed`,
+`integration.completed`, `integration.blocked`, `push.completed`.
+Worker recovery adds `worker.recovery.started`, `worker.recovery.completed`,
+`worker.registration.timeout` and `worker.auth.failed`. Notifications are sent
+for worker recovery, a drained queue, each integrated commit, finalization
+completion, blocked/failed finalization and Codespace stop — never for
+heartbeats.
 
 ## Worker behaviour
 
@@ -234,12 +272,12 @@ overwritten.
 
 ## Troubleshooting
 
-| Symptom | Action |
-| --- | --- |
-| `schema missing` | Apply the migration manually, then Re-check. |
-| `worker offline` | Queueing a task should start the Codespace automatically. If it does not, check the lifecycle detail in EXECUTION, then `$HOME/.pierrot-dev-work/logs/worker.log` and `worker-boot.log`. |
-| `OpenCode CLI missing` | Install/verify `opencode --version` in the Codespace. |
-| `Stored provider authentication: missing` | Run `opencode auth login` in the Codespace. |
-| Codespace start returns 403 | Grant the fine-grained token **Codespaces: write**. |
-| No CI checks | Add/verify the repository CI workflow; acceptance then requires manual confirmation. |
-| Vercel `unavailable` | Set `VERCEL_TOKEN` (and `VERCEL_PROJECT_ID` if auto-detection fails). |
+| Symptom                                   | Action                                                                                                                                                                                   |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema missing`                          | Apply the migration manually, then Re-check.                                                                                                                                             |
+| `worker offline`                          | Queueing a task should start the Codespace automatically. If it does not, check the lifecycle detail in EXECUTION, then `$HOME/.pierrot-dev-work/logs/worker.log` and `worker-boot.log`. |
+| `OpenCode CLI missing`                    | Install/verify `opencode --version` in the Codespace.                                                                                                                                    |
+| `Stored provider authentication: missing` | Run `opencode auth login` in the Codespace.                                                                                                                                              |
+| Codespace start returns 403               | Grant the fine-grained token **Codespaces: write**.                                                                                                                                      |
+| No CI checks                              | Add/verify the repository CI workflow; acceptance then requires manual confirmation.                                                                                                     |
+| Vercel `unavailable`                      | Set `VERCEL_TOKEN` (and `VERCEL_PROJECT_ID` if auto-detection fails).                                                                                                                    |

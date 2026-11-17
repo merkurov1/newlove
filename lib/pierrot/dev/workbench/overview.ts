@@ -14,6 +14,7 @@ import {
   listWorkers,
 } from './store';
 import { getLifecycleSnapshot } from './lifecycle';
+import { getFinalizationReport } from './finalization';
 import { estimateTaskCost } from './costs';
 import type { DevCostEstimate, DevWorkbenchOverview, DevWorkbenchTask } from './types';
 
@@ -44,7 +45,10 @@ export async function getWorkbenchOverview(
     await reapExpiredAttempts();
   }
 
-  const lifecycle = await getLifecycleSnapshot();
+  const [lifecycle, finalization] = await Promise.all([
+    getLifecycleSnapshot(),
+    getFinalizationReport(),
+  ]);
   const updatedAt = new Date().toISOString();
 
   const [allTasks, paused] = await Promise.all([
@@ -74,9 +78,7 @@ export async function getWorkbenchOverview(
     counts[task.status] = (counts[task.status] || 0) + 1;
   }
 
-  const inbox = tasks.filter((task) =>
-    ['draft', 'ready', 'blocked'].includes(task.status)
-  );
+  const inbox = tasks.filter((task) => ['draft', 'ready', 'blocked'].includes(task.status));
   const queue = tasks
     .filter((task) => task.status === 'queued')
     .sort(
@@ -88,12 +90,9 @@ export async function getWorkbenchOverview(
     );
   const review = tasks.filter(
     (task) =>
-      task.status === 'review' ||
-      (task.status === 'verified' && task.pullRequests.length > 0)
+      task.status === 'review' || (task.status === 'verified' && task.pullRequests.length > 0)
   );
-  const historyTasks = tasks
-    .filter((task) => HISTORY_STATUSES.includes(task.status))
-    .slice(0, 24);
+  const historyTasks = tasks.filter((task) => HISTORY_STATUSES.includes(task.status)).slice(0, 24);
 
   if (!schemaReady) {
     return {
@@ -110,12 +109,16 @@ export async function getWorkbenchOverview(
       workers: [],
       recentEvents: [],
       lifecycle,
+      finalization,
       updatedAt,
     };
   }
 
   const [attemptsByTask, batches, workers, activeAttempt, recentEvents] = await Promise.all([
-    listAttemptsForTasks(historyTasks.map((task) => task.id), 20),
+    listAttemptsForTasks(
+      historyTasks.map((task) => task.id),
+      20
+    ),
     listBatches(userId),
     listWorkers(),
     getActiveAttempt(),
@@ -153,6 +156,7 @@ export async function getWorkbenchOverview(
     workers,
     recentEvents,
     lifecycle,
+    finalization,
     updatedAt,
   };
 }

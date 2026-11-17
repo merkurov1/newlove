@@ -83,12 +83,50 @@ function stringArray(value: unknown, limit: number): string[] {
 function safeObject(value: unknown, maxBytes = 16_000): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   try {
-    return JSON.stringify(value).length <= maxBytes
-      ? (value as Record<string, unknown>)
-      : {};
+    return JSON.stringify(value).length <= maxBytes ? (value as Record<string, unknown>) : {};
   } catch {
     return {};
   }
+}
+
+function readinessOf(capabilities: Record<string, unknown>): Record<string, unknown> {
+  return capabilities.readiness && typeof capabilities.readiness === 'object'
+    ? (capabilities.readiness as Record<string, unknown>)
+    : {};
+}
+
+/**
+ * Record a provider-authentication failure separately from a generic timeout.
+ * The owner must be able to tell "run opencode auth login" from "the API was
+ * unreachable" without reading the worker log.
+ */
+async function recordAuthFailure(
+  workerId: string,
+  capabilities: Record<string, unknown>
+): Promise<void> {
+  const readiness = readinessOf(capabilities);
+  const authOk = readiness.authOk;
+  const probeOk = capabilities.authProbeOk !== false && readiness.authProbeOk !== false;
+  if (authOk !== false || !probeOk) return;
+  const provider = typeof readiness.provider === 'string' ? readiness.provider : 'deepseek';
+  const reasons = Array.isArray(readiness.reasons)
+    ? readiness.reasons.filter((item): item is string => typeof item === 'string').slice(0, 5)
+    : [];
+  await appendEvent({
+    workerId,
+    type: 'worker.auth.failed',
+    level: 'error',
+    message:
+      reasons[0] ||
+      `No stored ${provider} authentication was found. Run opencode auth login in the Codespace.`,
+    payload: {
+      provider,
+      authOk,
+      authProbeOk: probeOk,
+      reasons,
+    },
+    dedupeKey: `worker-auth-failed:${workerId}:${Math.floor(Date.now() / 300_000)}`,
+  }).catch(() => {});
 }
 
 function errorResponse(error: unknown) {
@@ -144,10 +182,8 @@ export async function POST(req: Request) {
 
       case 'register': {
         const capabilities = safeObject(body.capabilities, 32_000);
-        const readiness =
-          capabilities.readiness && typeof capabilities.readiness === 'object'
-            ? (capabilities.readiness as Record<string, unknown>)
-            : {};
+        const readiness = readinessOf(capabilities);
+        await recordAuthFailure(workerId, capabilities);
         const worker = await registerWorker({
           workerId,
           name: text(body.name, 120) || workerId,
@@ -204,12 +240,12 @@ export async function POST(req: Request) {
           ? (body.status as 'online' | 'idle' | 'busy' | 'draining' | 'offline' | 'error')
           : undefined;
         const capabilities = safeObject(body.capabilities, 32_000);
+        await recordAuthFailure(workerId, capabilities);
         const result = await heartbeatWorker({
           workerId,
           status,
           capabilities,
-          lastError:
-            typeof body.lastError === 'string' ? body.lastError.slice(0, 1000) : undefined,
+          lastError: typeof body.lastError === 'string' ? body.lastError.slice(0, 1000) : undefined,
         });
         const readiness =
           capabilities.readiness && typeof capabilities.readiness === 'object'

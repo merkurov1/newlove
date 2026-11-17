@@ -14,12 +14,15 @@ import {
   isWorkbenchSchemaReady,
   listRecentAttempts,
   listWorkers,
+  promoteStandaloneReadyTasks,
   setSetting,
   tryAcquireLifecycleLock,
   appendEvent,
 } from './store';
 import { getConfiguredCodespaceName } from './setup';
 import { estimateCodespaceCost, readAttemptCost, summarizeCosts } from './costs';
+import { advanceFinalization } from './finalization';
+import { notifyDevOwner } from './notifications';
 import {
   decideCodespaceStart,
   decideWorkerRecovery,
@@ -47,7 +50,12 @@ export {
   WORKER_RECOVERY_CIRCUIT_SECONDS,
   WORKER_RECOVERY_CIRCUIT_THRESHOLD,
 } from './lifecycleState';
-export type { LifecycleStatusInput, RecoveryDecision, RecoveryState, StartDecision } from './lifecycleState';
+export type {
+  LifecycleStatusInput,
+  RecoveryDecision,
+  RecoveryState,
+  StartDecision,
+} from './lifecycleState';
 
 export type StartRecord = {
   at: string;
@@ -280,9 +288,7 @@ const PENDING_PHASES: PendingStartPhase[] = [
 
 function normalizePendingPhase(value: unknown): PendingStartPhase {
   const phase = String(value || '').toLowerCase();
-  return (PENDING_PHASES as string[]).includes(phase)
-    ? (phase as PendingStartPhase)
-    : 'requested';
+  return (PENDING_PHASES as string[]).includes(phase) ? (phase as PendingStartPhase) : 'requested';
 }
 
 async function readPendingStart(): Promise<PendingStart | null> {
@@ -308,8 +314,7 @@ async function readPendingStart(): Promise<PendingStart | null> {
     attempts,
     maxAttempts,
     nextAttemptAt: iso(value.nextAttemptAt) || at,
-    lastObservedState:
-      typeof value.lastObservedState === 'string' ? value.lastObservedState : null,
+    lastObservedState: typeof value.lastObservedState === 'string' ? value.lastObservedState : null,
     lastHttpStatus:
       typeof value.lastHttpStatus === 'number' && Number.isFinite(value.lastHttpStatus)
         ? Math.trunc(value.lastHttpStatus)
@@ -390,18 +395,47 @@ export async function clearLifecycleError(): Promise<void> {
 }
 
 export async function recordWorkerReady(workerId: string): Promise<void> {
-  const [start, ready, recovery] = await Promise.all([readStart(), readReady(), readRecovery()]);
+  const [start, ready, recovery, pending] = await Promise.all([
+    readStart(),
+    readReady(),
+    readRecovery(),
+    readPendingStart(),
+  ]);
+  const wasRecovering = Boolean(
+    recovery && (recovery.lastAttemptAt || recovery.failures > 0 || recovery.circuitOpenUntil)
+  );
   // A confirmed ready heartbeat is the only signal that resets the controlled
   // recovery circuit. It also clears stale boot/auth errors.
-  if (
-    recovery &&
-    (recovery.lastAttemptAt || recovery.failures > 0 || recovery.circuitOpenUntil)
-  ) {
+  if (wasRecovering) {
     await setSetting('lifecycle:recovery', {
       lastAttemptAt: null,
       failures: 0,
       circuitOpenUntil: null,
       lastReason: null,
+    }).catch(() => {});
+  }
+  if (wasRecovering || pending) {
+    const dedupeKey = `worker-recovery-completed:${workerId}:${Math.floor(Date.now() / 3_600_000)}`;
+    await appendEvent({
+      workerId,
+      type: 'worker.recovery.completed',
+      message: `Worker ${workerId} registered and reported ready; startup recovery is complete.`,
+      payload: {
+        recoveredFromCircuit: wasRecovering,
+        pendingStartPhase: pending?.phase || null,
+        readyAt: new Date().toISOString(),
+      },
+      dedupeKey,
+    }).catch(() => {});
+    await notifyDevOwner({
+      eventKey: dedupeKey,
+      title: 'Pierrot Dev · worker restored',
+      lines: [
+        `Worker ${workerId} is online and ready.`,
+        wasRecovering
+          ? 'The controlled recovery circuit has been reset.'
+          : 'The Codespace startup reached a healthy worker.',
+      ],
     }).catch(() => {});
   }
   // Keep the first ready timestamp for the current start so startup duration is
@@ -537,8 +571,7 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
   try {
     codespace = await resolveCodespace(getConfiguredCodespaceName());
   } catch (caught) {
-    codespaceError =
-      caught instanceof Error ? caught.message : 'Codespaces API is unavailable.';
+    codespaceError = caught instanceof Error ? caught.message : 'Codespaces API is unavailable.';
   }
 
   const worker = chooseWorker(workers, codespace?.name || null);
@@ -557,8 +590,7 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
       ? worker.capabilities.lastCheckedAt
       : null);
   const readinessAgeSeconds = secondsBetween(readinessCheckedAt);
-  const readinessFresh =
-    readinessAgeSeconds !== null && readinessAgeSeconds <= 15 * 60;
+  const readinessFresh = readinessAgeSeconds !== null && readinessAgeSeconds <= 15 * 60;
   const workerReady = Boolean(
     workerOnline &&
       readinessFresh &&
@@ -571,8 +603,7 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
           worker?.capabilities?.opencodeAuthenticated === true))
   );
   const authOk = Boolean(
-    readinessFresh &&
-      (readiness?.authOk ?? worker?.capabilities?.opencodeAuthenticated === true)
+    readinessFresh && (readiness?.authOk ?? worker?.capabilities?.opencodeAuthenticated === true)
   );
   // A confirmed auth flag must not be reported next to a stale "no stored
   // authentication" reason. That contradiction sent the owner to re-check
@@ -589,9 +620,7 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
       (reason) =>
         !(
           authOk &&
-          /stored .*authentication|OPENCODE_AUTH|auth store|provider authentication/i.test(
-            reason
-          )
+          /stored .*authentication|OPENCODE_AUTH|auth store|provider authentication/i.test(reason)
         )
     )
     .slice(0, 8);
@@ -605,9 +634,7 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
   const startedRecently = Boolean(
     startedAt && (secondsBetween(startedAt) ?? Infinity) < startupGraceSeconds()
   );
-  const errorIsStaleAuth = Boolean(
-    authOk && error?.code && /AUTH|PROVIDER/i.test(error.code)
-  );
+  const errorIsStaleAuth = Boolean(authOk && error?.code && /AUTH|PROVIDER/i.test(error.code));
   const workerErrorIsStaleAuth = Boolean(
     authOk &&
       worker?.lastError &&
@@ -621,9 +648,7 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
     codespaceError ||
     null;
   const lastStartFailed = Boolean(error?.code?.startsWith('CODESPACE_START'));
-  const shutdownRequested = Boolean(
-    intent && Date.now() - new Date(intent.at).getTime() < 180_000
-  );
+  const shutdownRequested = Boolean(intent && Date.now() - new Date(intent.at).getTime() < 180_000);
   const recoveryState: RecoveryState = recovery || {
     lastAttemptAt: null,
     failures: 0,
@@ -648,9 +673,7 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
   });
   const pendingFailed = pending?.phase === 'failed';
   const recoveryBlocked =
-    pendingFailed ||
-    recoveryDecision.action === 'blocked' ||
-    (!workerOnline && circuitOpen);
+    pendingFailed || recoveryDecision.action === 'blocked' || (!workerOnline && circuitOpen);
 
   const decision = deriveLifecycleStatus({
     schemaReady,
@@ -892,12 +915,8 @@ async function markPendingStart(input: {
     reason: input.reason,
     phase: input.phase || existing?.phase || 'requested',
     attempts,
-    maxAttempts: Math.max(
-      1,
-      input.maxAttempts ?? existing?.maxAttempts ?? PENDING_MAX_ATTEMPTS
-    ),
-    nextAttemptAt:
-      input.nextAttemptAt || existing?.nextAttemptAt || pendingRetryDelay(attempts),
+    maxAttempts: Math.max(1, input.maxAttempts ?? existing?.maxAttempts ?? PENDING_MAX_ATTEMPTS),
+    nextAttemptAt: input.nextAttemptAt || existing?.nextAttemptAt || pendingRetryDelay(attempts),
     lastObservedState:
       input.lastObservedState !== undefined
         ? input.lastObservedState
@@ -905,10 +924,7 @@ async function markPendingStart(input: {
     lastHttpStatus:
       input.lastHttpStatus !== undefined ? input.lastHttpStatus : existing?.lastHttpStatus || null,
     lastCheckedAt: now,
-    lastError:
-      input.lastError !== undefined
-        ? input.lastError
-        : existing?.lastError || null,
+    lastError: input.lastError !== undefined ? input.lastError : existing?.lastError || null,
   };
   await setSetting('lifecycle:pending_start', pending);
   return pending;
@@ -1008,14 +1024,13 @@ async function recoverDeadWorker(
   // Re-read every safety signal after taking the lock. A worker may have
   // registered, claimed a task, or the Codespace may have changed state while
   // this request waited. Never stop the machine based on the stale snapshot.
-  const [freshWorkers, freshQueue, freshAttempt, freshIntent, freshCodespace] =
-    await Promise.all([
-      listWorkers(),
-      getQueueSnapshot(),
-      getActiveAttempt(),
-      readIntent(),
-      getCodespace(codespace.name).catch(() => null),
-    ]);
+  const [freshWorkers, freshQueue, freshAttempt, freshIntent, freshCodespace] = await Promise.all([
+    listWorkers(),
+    getQueueSnapshot(),
+    getActiveAttempt(),
+    readIntent(),
+    getCodespace(codespace.name).catch(() => null),
+  ]);
   const freshWorker = chooseWorker(freshWorkers, codespace.name);
   const freshExecuting = Boolean(
     freshAttempt ||
@@ -1066,9 +1081,22 @@ async function recoverDeadWorker(
   await saveRecovery(nextState);
 
   await appendEvent({
-    type: 'codespace.worker_recovery',
+    type: 'worker.recovery.started',
     level: 'warn',
     message: `No live worker after ${signalAgeSeconds ?? 'unknown'}s; restart attempt ${attempts}/${WORKER_RECOVERY_CIRCUIT_THRESHOLD}.`,
+    payload: {
+      source,
+      signalAgeSeconds,
+      codespace: codespace.name,
+      attempts,
+      maxAttempts: WORKER_RECOVERY_CIRCUIT_THRESHOLD,
+    },
+    dedupeKey: `worker-recovery-started:${codespace.name}:${Math.floor(Date.now() / 60_000)}`,
+  }).catch(() => {});
+  await appendEvent({
+    type: 'codespace.worker_recovery',
+    level: 'warn',
+    message: `Restarting ${codespace.name} to restore a missing worker.`,
     payload: { source, signalAgeSeconds, codespace: codespace.name, attempts },
     dedupeKey: `worker-recovery:${codespace.name}:${Math.floor(Date.now() / 60_000)}`,
   }).catch(() => {});
@@ -1083,7 +1111,12 @@ async function recoverDeadWorker(
       failures >= WORKER_RECOVERY_CIRCUIT_THRESHOLD
         ? new Date(Date.now() + WORKER_RECOVERY_CIRCUIT_SECONDS * 1000).toISOString()
         : null;
-    await saveRecovery({ ...nextState, failures, circuitOpenUntil: blockedUntil, lastReason: message });
+    await saveRecovery({
+      ...nextState,
+      failures,
+      circuitOpenUntil: blockedUntil,
+      lastReason: message,
+    });
     await recordLifecycleError('CODESPACE_RECOVERY_STOP_FAILED', message);
     return { action: 'blocked', codespace, reason: message };
   }
@@ -1235,9 +1268,7 @@ async function startResolved(
       }
     }
     const message =
-      caught instanceof Error
-        ? caught.message
-        : 'The GitHub Codespaces start request failed.';
+      caught instanceof Error ? caught.message : 'The GitHub Codespaces start request failed.';
     const terminal = status === 401 || status === 403 || status === 404;
     const pending = await markPendingStart({
       codespaceName: codespace.name,
@@ -1302,7 +1333,14 @@ export async function ensureCodespaceForQueuedWork(input: {
       reason: 'Workbench schema is not ready.',
     };
   }
-  const queue = await getQueueSnapshot();
+  // A standalone approved task is executable even if it predates the explicit
+  // batch flow. Promote it before deciding that there is no work; batch-owned
+  // ready tasks are untouched and still require `start_batch`.
+  let queue = await getQueueSnapshot();
+  if (!queue.paused && queue.queued <= 0 && (queue.ready || 0) > 0) {
+    const promoted = await promoteStandaloneReadyTasks().catch(() => 0);
+    if (promoted > 0) queue = await getQueueSnapshot();
+  }
   if (queue.paused || queue.queued <= 0) {
     await clearPendingStart().catch(() => {});
     return {
@@ -1333,8 +1371,7 @@ export async function ensureCodespaceForQueuedWork(input: {
   try {
     codespace = await resolveCodespace(getConfiguredCodespaceName());
   } catch (caught) {
-    const message =
-      caught instanceof Error ? caught.message : 'Codespaces API is unavailable.';
+    const message = caught instanceof Error ? caught.message : 'Codespaces API is unavailable.';
     await recordLifecycleError('CODESPACE_RESOLVE_FAILED', message);
     return { action: 'blocked', codespace: null, reason: message };
   }
@@ -1426,6 +1463,21 @@ export async function ensureCodespaceForQueuedWork(input: {
           Math.round((Date.now() - new Date(pending.requestedAt).getTime()) / 1000)
         );
         const bootstrapGraceSeconds = startupGraceSeconds() + 300;
+        if (ageSeconds > startupGraceSeconds()) {
+          await appendEvent({
+            type: 'worker.registration.timeout',
+            level: 'warn',
+            message: `Codespace ${codespace.name} is Available but no worker registered after ${ageSeconds}s. Waiting for the bootstrap hook / supervisor.`,
+            payload: {
+              source: input.source,
+              codespace: codespace.name,
+              ageSeconds,
+              startupGraceSeconds: startupGraceSeconds(),
+              attempts: pending.attempts,
+            },
+            dedupeKey: `worker-registration-timeout:${codespace.name}:${pending.requestedAt}`,
+          }).catch(() => {});
+        }
         if (ageSeconds > bootstrapGraceSeconds) {
           const message = `Codespace is Available but no worker registered within ${ageSeconds}s. The Codespace lifecycle hook did not start the worker. Rebuild the Codespace so the current .devcontainer postStart command is applied, or run scripts/pierrot/dev-worker-start.sh once. Automatic restarts will not fix a missing postStart hook.`;
           const failed = await markPendingStart({
@@ -1511,7 +1563,8 @@ export async function ensureCodespaceForQueuedWork(input: {
         };
       }
       if (pending.attempts >= pending.maxAttempts) {
-        const message = `Codespace start gave up after ${pending.attempts} attempts. Last observed state: ${pending.lastObservedState || codespace.state}. ${pending.lastError || ''}`.trim();
+        const message =
+          `Codespace start gave up after ${pending.attempts} attempts. Last observed state: ${pending.lastObservedState || codespace.state}. ${pending.lastError || ''}`.trim();
         const failed = await markPendingStart({
           codespaceName: codespace.name,
           source: input.source,
@@ -1776,7 +1829,7 @@ export async function keepCodespaceAwakeForActiveWork(input: {
 // ---------------------------------------------------------------------------
 
 export type IdleShutdownResult = {
-  action: 'stay' | 'stopping' | 'wait' | 'disabled' | 'error';
+  action: 'stay' | 'stopping' | 'wait' | 'disabled' | 'error' | 'finalizing';
   reason: string;
   retryAfterMs?: number;
 };
@@ -1805,6 +1858,37 @@ export async function requestIdleShutdown(input: {
   if (!Number.isFinite(input.idleForMs) || input.idleForMs < grace * 1000) {
     return { action: 'stay', reason: 'Idle grace has not elapsed.' };
   }
+
+  // An approved standalone task must not be stranded in `ready` just because
+  // the worker is already idle. Promote it first; batch-owned ready tasks still
+  // wait for `start_batch`.
+  try {
+    const preQueue = await getQueueSnapshot();
+    if (!preQueue.paused && preQueue.queued <= 0 && (preQueue.ready || 0) > 0) {
+      await promoteStandaloneReadyTasks();
+    }
+  } catch {
+    // Promotion is best effort; the stop lock and final queue checks remain.
+  }
+
+  // The queue may be genuinely drained. Run one bounded finalization step
+  // before taking the stop lock so a slow GitHub check never holds it. The
+  // finalizer merges only PRs whose exact head has green CI and is confirmed
+  // mergeable; a blocked finalization still lets the machine stop after
+  // notifying the owner.
+  try {
+    const finalization = await advanceFinalization({ trigger: `idle:${input.workerId}` });
+    if (finalization && ['collecting', 'integrating', 'verifying'].includes(finalization.stage)) {
+      return {
+        action: 'finalizing',
+        reason: `Queue finalization is ${finalization.stage}; the Codespace stays available until it settles.`,
+        retryAfterMs: 20_000,
+      };
+    }
+  } catch {
+    // Finalization must never break the safe stop path.
+  }
+
   if (!(await tryAcquireLifecycleLock('stop', input.workerId, 45_000))) {
     return {
       action: 'wait',
@@ -1894,9 +1978,7 @@ export async function requestIdleShutdown(input: {
       start && ready
         ? Math.max(0, new Date(ready.at).getTime() - new Date(start.at).getTime())
         : null;
-    const measuredRuntimeMs = start
-      ? Math.max(0, Date.now() - new Date(start.at).getTime())
-      : null;
+    const measuredRuntimeMs = start ? Math.max(0, Date.now() - new Date(start.at).getTime()) : null;
     await recordCostSession({
       startedAt: start?.at || null,
       finishedAt: new Date().toISOString(),
@@ -1938,6 +2020,29 @@ export async function requestIdleShutdown(input: {
         reason: 'idle',
       },
       dedupeKey: `codespace-stop:${stopped.name}:${Math.floor(Date.now() / 60_000)}`,
+    }).catch(() => {});
+    await appendEvent({
+      type: 'codespace.stopped',
+      message: `Codespace ${stopped.name} stopped after ${Math.round(
+        input.idleForMs / 1000
+      )}s idle; queue is drained and no attempts are active.`,
+      payload: {
+        machine: stopped.machine || codespace.machine,
+        measuredRuntimeMs,
+        startupMs,
+        reason: 'idle',
+      },
+      dedupeKey: `codespace-stopped:${stopped.name}:${requestedAt}`,
+    }).catch(() => {});
+    await notifyDevOwner({
+      eventKey: `codespace-stopped:${stopped.name}:${requestedAt}`,
+      title: 'Pierrot Dev · Codespace stopped',
+      lines: [
+        `${stopped.name} was stopped after the queue drained.`,
+        `Measured runtime: ${
+          measuredRuntimeMs ? `${Math.round(measuredRuntimeMs / 60_000)}m` : 'unknown'
+        }.`,
+      ],
     }).catch(() => {});
     return { action: 'stopping', reason: 'Codespace stop accepted by GitHub.' };
   } catch (caught) {
@@ -1984,7 +2089,11 @@ export async function stopCodespaceNow(input: {
   if (decideCodespaceStart(codespace.state) === 'start') {
     return { stopped: true, reason: 'Codespace is already stopped.', codespace };
   }
-  if (!['available', 'starting', 'queued', 'provisioning', 'rebuilding'].includes(normalizeCodespaceState(codespace.state))) {
+  if (
+    !['available', 'starting', 'queued', 'provisioning', 'rebuilding'].includes(
+      normalizeCodespaceState(codespace.state)
+    )
+  ) {
     return {
       stopped: false,
       reason: `Codespace is ${codespace.state}; leave stop handling to the lifecycle.`,
@@ -1994,9 +2103,7 @@ export async function stopCodespaceNow(input: {
   try {
     const stopped = await stopCodespace(codespace.name);
     const start = await readStart();
-    const measuredRuntimeMs = start
-      ? Math.max(0, Date.now() - new Date(start.at).getTime())
-      : null;
+    const measuredRuntimeMs = start ? Math.max(0, Date.now() - new Date(start.at).getTime()) : null;
     await recordCostSession({
       startedAt: start?.at || null,
       finishedAt: new Date().toISOString(),
@@ -2031,7 +2138,8 @@ export async function stopCodespaceNow(input: {
     }).catch(() => {});
     return { stopped: true, reason: 'Codespace stop accepted by GitHub.', codespace: stopped };
   } catch (caught) {
-    const message = caught instanceof Error ? caught.message : 'The Codespaces stop request failed.';
+    const message =
+      caught instanceof Error ? caught.message : 'The Codespaces stop request failed.';
     await recordLifecycleError('CODESPACE_STOP_FAILED', message);
     return { stopped: false, reason: message, codespace };
   }

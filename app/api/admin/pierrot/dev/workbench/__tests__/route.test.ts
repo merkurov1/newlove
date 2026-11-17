@@ -29,7 +29,12 @@ jest.mock('@/lib/pierrot/dev/workbench/store', () => ({
   reapExpiredAttempts: jest.fn(async () => 0),
 }));
 
+jest.mock('@/lib/pierrot/dev/workbench/finalization', () => ({
+  advanceFinalization: jest.fn(async () => null),
+}));
+
 import { GET, maxDuration } from '../route';
+import { advanceFinalization } from '@/lib/pierrot/dev/workbench/finalization';
 import { ensureCodespaceForQueuedWork } from '@/lib/pierrot/dev/workbench/lifecycle';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
 import { reapExpiredAttempts } from '@/lib/pierrot/dev/workbench/store';
@@ -37,6 +42,7 @@ import { reapExpiredAttempts } from '@/lib/pierrot/dev/workbench/store';
 const ensure = ensureCodespaceForQueuedWork as jest.Mock;
 const overview = getWorkbenchOverview as jest.Mock;
 const reap = reapExpiredAttempts as jest.Mock;
+const finalize = advanceFinalization as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -47,6 +53,7 @@ beforeEach(() => {
   });
   overview.mockResolvedValue({ schemaReady: true, lifecycle: {} });
   reap.mockResolvedValue(0);
+  finalize.mockResolvedValue(null);
 });
 
 describe('Admin Dev workbench GET', () => {
@@ -64,10 +71,15 @@ describe('Admin Dev workbench GET', () => {
       allowWorkerRecovery: true,
     });
     expect(overview).toHaveBeenCalledWith(expect.any(String), { skipReap: true });
+    expect(finalize).toHaveBeenCalledWith({ trigger: 'admin:overview' });
 
-    // The overview must not be read before recovery has finished.
+    // The overview must not be read before recovery and finalization have
+    // finished. Finalization is bounded to one integration step per poll.
     expect(reap.mock.invocationCallOrder[0]).toBeLessThan(ensure.mock.invocationCallOrder[0]);
-    expect(ensure.mock.invocationCallOrder[0]).toBeLessThan(overview.mock.invocationCallOrder[0]);
+    expect(ensure.mock.invocationCallOrder[0]).toBeLessThan(finalize.mock.invocationCallOrder[0]);
+    expect(finalize.mock.invocationCallOrder[0]).toBeLessThan(
+      overview.mock.invocationCallOrder[0]
+    );
   });
 
   it('keeps a bounded function budget and does not wait for Codespace boot', async () => {

@@ -50,13 +50,15 @@ const WORKER_ID = (
   process.env.PIERROT_DEV_WORKER_ID ||
   (CODESPACE_NAME ? `codespace:${CODESPACE_NAME}` : `codespace:${os.hostname()}`)
 ).slice(0, 120);
-const WORK_ROOT =
-  process.env.PIERROT_DEV_WORK_ROOT || path.join(os.homedir(), '.pierrot-dev-work');
+const WORK_ROOT = process.env.PIERROT_DEV_WORK_ROOT || path.join(os.homedir(), '.pierrot-dev-work');
 const REPO_DIR = process.env.PIERROT_DEV_REPO_DIR || process.cwd();
 const PIERROT_REPO_DIR = process.env.PIERROT_DEV_PIERROT_DIR || '';
 const POLL_MS = clamp(Number(process.env.PIERROT_DEV_POLL_MS || 20000), 15000, 30000);
 const MAX_BACKOFF_MS = 120000;
-const TASK_TIMEOUT_MS = Math.max(60000, Number(process.env.PIERROT_DEV_TASK_TIMEOUT_MS || 45 * 60 * 1000));
+const TASK_TIMEOUT_MS = Math.max(
+  60000,
+  Number(process.env.PIERROT_DEV_TASK_TIMEOUT_MS || 45 * 60 * 1000)
+);
 const MAX_LOG_BYTES = Math.max(100000, Number(process.env.PIERROT_DEV_MAX_LOG_BYTES || 2000000));
 const IDLE_GRACE_SECONDS = (() => {
   // Automatic shutdown is mandatory. A stale `0` from the old documentation
@@ -73,8 +75,7 @@ const IDLE_GRACE_SECONDS = (() => {
   return Number.isFinite(value) ? Math.min(Math.max(Math.trunc(value * 60), 60), 3600) : 120;
 })();
 const MIN_OPENCODE_VERSION = (process.env.PIERROT_DEV_OPENCODE_MIN_VERSION || '2.1.4').trim();
-const OPENCODE_MODEL =
-  (process.env.PIERROT_DEV_OPENCODE_MODEL || 'deepseek/deepseek-flash').trim();
+const OPENCODE_MODEL = (process.env.PIERROT_DEV_OPENCODE_MODEL || 'deepseek/deepseek-flash').trim();
 const OPENCODE_PROVIDER = (
   process.env.PIERROT_DEV_OPENCODE_PROVIDER ||
   providerFromModel(OPENCODE_MODEL) ||
@@ -447,7 +448,9 @@ async function ensureRepoCheckout(repository) {
 }
 
 async function prepareWorktree({ task, attempt }) {
-  const repository = String(task.repository || 'newlove').toLowerCase().includes('pierrot')
+  const repository = String(task.repository || 'newlove')
+    .toLowerCase()
+    .includes('pierrot')
     ? 'pierrot'
     : 'newlove';
   const repoDir = await ensureRepoCheckout(repository);
@@ -469,11 +472,7 @@ async function prepareWorktree({ task, attempt }) {
       : null;
   const startPoint = pinned || `origin/${baseRef}`;
 
-  const add = await git(
-    ['worktree', 'add', '-B', branch, worktree, startPoint],
-    repoDir,
-    120000
-  );
+  const add = await git(['worktree', 'add', '-B', branch, worktree, startPoint], repoDir, 120000);
   if (add.code !== 0) {
     throw new Error(`Unable to create the working branch: ${add.stderr.slice(-500)}`);
   }
@@ -495,8 +494,7 @@ async function cleanupWorktree(repoDir, worktree) {
   } catch {}
 }
 
-const SENSITIVE_PATTERN =
-  /(^|\/)(\.env(\.|$)|.*\.pem$|id_rsa|id_ed25519|credentials|secrets?\/)/i;
+const SENSITIVE_PATTERN = /(^|\/)(\.env(\.|$)|.*\.pem$|id_rsa|id_ed25519|credentials|secrets?\/)/i;
 
 // ---------------------------------------------------------------------------
 // Execution
@@ -507,8 +505,7 @@ function extractSessionId(output) {
     if (!line.trim().startsWith('{')) continue;
     try {
       const event = JSON.parse(line);
-      const candidate =
-        event.sessionID || event.session_id || event.session?.id || event.sessionId;
+      const candidate = event.sessionID || event.session_id || event.session?.id || event.sessionId;
       if (typeof candidate === 'string' && candidate.length >= 8) return candidate.slice(0, 200);
     } catch {}
   }
@@ -645,7 +642,10 @@ async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumbe
   const add = await git(['add', '-A'], worktree, 60000);
   if (add.code !== 0) throw new Error('git add failed.');
   const staged = await git(['diff', '--cached', '--name-only'], worktree, 30000);
-  const files = staged.stdout.split('\n').map((line) => line.trim()).filter(Boolean);
+  const files = staged.stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
   if (files.length === 0) return { commitSha: null, files: [] };
 
   // Use the Codespace's verified GitHub identity. Never invent an author.
@@ -689,14 +689,8 @@ async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumbe
   // Verify the effective author/committer and that a signature object exists
   // before pushing. Local GPG cannot validate GitHub's key, but an absent
   // gpgsig header proves the commit was not signed.
-  const ident = await git(
-    ['log', '-1', '--format=%an%x00%ae%x00%cn%x00%ce'],
-    worktree,
-    30000
-  );
-  const [authorName, authorEmail, committerName, committerEmail] = ident.stdout
-    .trim()
-    .split('\0');
+  const ident = await git(['log', '-1', '--format=%an%x00%ae%x00%cn%x00%ce'], worktree, 30000);
+  const [authorName, authorEmail, committerName, committerEmail] = ident.stdout.trim().split('\0');
   const identityOk =
     authorName === identity.name &&
     authorEmail === identity.email &&
@@ -734,9 +728,7 @@ async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumbe
   const push = await git(['push', 'origin', `HEAD:refs/heads/${branch}`], worktree, 300000);
   if (push.code !== 0) {
     const error = new Error(`git push failed: ${push.stderr.slice(-500)}`);
-    error.code = /rejected|non-fast-forward/i.test(push.stderr)
-      ? 'BRANCH_CONFLICT'
-      : 'PUSH_FAILED';
+    error.code = /rejected|non-fast-forward/i.test(push.stderr) ? 'BRANCH_CONFLICT' : 'PUSH_FAILED';
     error.commitSha = commitSha;
     await writePushFailure(attemptId, {
       taskId,
@@ -963,9 +955,7 @@ async function executeClaim(claim) {
     }
 
     const parsedReport = report || {};
-    const warnings = Array.isArray(parsedReport.warnings)
-      ? parsedReport.warnings.slice(0, 40)
-      : [];
+    const warnings = Array.isArray(parsedReport.warnings) ? parsedReport.warnings.slice(0, 40) : [];
     if (!report) {
       warnings.push('OpenCode finished without a structured final report.');
     }
@@ -993,7 +983,9 @@ async function executeClaim(claim) {
         runner: 'pierrot-dev-worker',
         workerVersion: WORKER_VERSION,
         selfReported: true,
-        unverified: Array.isArray(parsedReport.unverified) ? parsedReport.unverified.slice(0, 40) : [],
+        unverified: Array.isArray(parsedReport.unverified)
+          ? parsedReport.unverified.slice(0, 40)
+          : [],
       },
       // Model usage is actual only when OpenCode reported step_finish events.
       // The server normalizes it and adds the measured Codespaces runtime cost.
@@ -1130,6 +1122,13 @@ async function maybeRequestIdleShutdown() {
     // If the container does not receive SIGTERM, retry the safe request after
     // five minutes instead of silently keeping the Codespace alive forever.
     idleSince = Date.now() - Math.max(0, grace * 1000 - 300000);
+    return;
+  }
+  if (response.action === 'finalizing') {
+    await log('Queue finalization in progress; keeping the Codespace alive.', {
+      reason: response.reason,
+    });
+    idleSince = Date.now() - Math.max(0, grace * 1000 - 30000);
     return;
   }
   if (response.action === 'stay') {
@@ -1272,11 +1271,9 @@ async function main() {
           apiProven,
           reasons: capabilities.readiness?.reasons || [],
         });
-        await bootPhase(
-          'registered',
-          `Worker ${WORKER_ID} registered with the Pierrot API.`,
-          { force: true }
-        );
+        await bootPhase('registered', `Worker ${WORKER_ID} registered with the Pierrot API.`, {
+          force: true,
+        });
         if (capabilities.ready) {
           await bootPhase(
             'ready',
@@ -1389,11 +1386,9 @@ async function main() {
           error.status === 401 || error.status === 403
             ? 'WORKER_API_UNAUTHORIZED'
             : 'WORKER_API_UNREACHABLE';
-        await bootPhase(
-          'failed',
-          `${code}: ${String(error.message || error).slice(0, 300)}`,
-          { force: true }
-        );
+        await bootPhase('failed', `${code}: ${String(error.message || error).slice(0, 300)}`, {
+          force: true,
+        });
       }
       await sleep(backoff);
     }

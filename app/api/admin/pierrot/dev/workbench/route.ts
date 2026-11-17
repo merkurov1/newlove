@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
 import { ensureCodespaceForQueuedWork } from '@/lib/pierrot/dev/workbench/lifecycle';
+import { advanceFinalization } from '@/lib/pierrot/dev/workbench/finalization';
 import { reapExpiredAttempts } from '@/lib/pierrot/dev/workbench/store';
 
 export const runtime = 'nodejs';
@@ -52,6 +53,15 @@ export async function GET(req: Request) {
       });
     } catch {
       // The overview must still load when Codespaces is temporarily unavailable.
+    }
+
+    // Admin is also a finalization pump: when the queue is drained, each poll
+    // advances one bounded integration step. The finalizer is idempotent and
+    // locked, so a concurrent idle poll cannot merge twice.
+    try {
+      await advanceFinalization({ trigger: 'admin:overview' });
+    } catch {
+      // Finalization must not hide the overview when GitHub is unavailable.
     }
 
     const overview = await getWorkbenchOverview(admin.id, { skipReap: true });

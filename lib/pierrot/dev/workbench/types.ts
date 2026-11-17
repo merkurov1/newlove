@@ -599,6 +599,67 @@ export type DevLifecycleSnapshot = {
   updatedAt: string;
 };
 
+export type DevFinalizationStage =
+  | 'idle'
+  | 'collecting'
+  | 'integrating'
+  | 'verifying'
+  | 'completed'
+  | 'blocked'
+  | 'failed';
+
+export type DevFinalizationCheckStatus = 'passed' | 'failed' | 'pending' | 'none' | 'unknown';
+
+export type DevFinalizationCheck = {
+  name: string;
+  status: string | null;
+  conclusion: string | null;
+  url: string | null;
+};
+
+export type DevFinalizationPullRequest = {
+  taskId: string;
+  taskTitle: string;
+  number: number | null;
+  url: string;
+  state: string;
+  merged: boolean;
+  mergeable: boolean | null;
+  mergeableState: string | null;
+  headSha: string | null;
+  ciStatus: DevFinalizationCheckStatus;
+  ciDetail: string;
+  checks: DevFinalizationCheck[];
+  integrated: boolean;
+  integrationSha: string | null;
+  reason: string | null;
+};
+
+export type DevFinalizationReport = {
+  id: string;
+  stage: DevFinalizationStage;
+  trigger: string;
+  startedAt: string | null;
+  updatedAt: string | null;
+  completedAt: string | null;
+  durationMs: number | null;
+  batchId: string | null;
+  tasks: number;
+  completedTasks: number;
+  pullRequests: number;
+  integrated: number;
+  commitSha: string | null;
+  commitUrl: string | null;
+  ciStatus: DevFinalizationCheckStatus;
+  ciDetail: string;
+  checks: DevFinalizationCheck[];
+  cost: DevLifecycleCost | null;
+  prs: DevFinalizationPullRequest[];
+  blockedReason: string | null;
+  failureStage: string | null;
+  attempts: number;
+};
+
 export type DevWorkbenchOverview = {
   schemaReady: boolean;
   migrationFile: string;
@@ -618,6 +679,7 @@ export type DevWorkbenchOverview = {
   workers: DevWorker[];
   recentEvents: DevEvent[];
   lifecycle: DevLifecycleSnapshot;
+  finalization: DevFinalizationReport | null;
   updatedAt: string;
 };
 
@@ -647,4 +709,5 @@ export type DevWorkbenchAction =
   | 'stop_worker'
   | 'release_worker'
   | 'reap'
-  | 'set_priority';
+  | 'set_priority'
+  | 'finalize_queue';
