@@ -2489,7 +2489,7 @@ a.pw-home-indicator:hover {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 56px;
+  min-height: 62.5px;
   padding: max(8px, env(safe-area-inset-top)) 12px 8px 16px;
   border-bottom: 1px solid var(--pw-line);
 }
@@ -2504,6 +2504,11 @@ a.pw-home-indicator:hover {
   text-transform: uppercase;
 }
 
+.pw-dev .pw-dev-label,
+.pw-dev .pw-dev-kicker {
+  font-size: 10px;
+}
+
 @media (min-width: 1100px) {
   .pw-dev-threads-head .pw-icon-button {
     display: none;
@@ -2514,12 +2519,12 @@ a.pw-home-indicator:hover {
   display: flex;
   align-items: center;
   gap: 9px;
-  min-height: 48px;
+  min-height: 54px;
   padding: 0 16px;
   border-bottom: 1px solid var(--pw-line);
   color: var(--pw-ink);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-align: left;
   text-transform: uppercase;
@@ -2533,7 +2538,7 @@ a.pw-home-indicator:hover {
   margin: 0;
   padding: 18px 16px;
   color: var(--pw-muted);
-  font-size: 14px;
+  font-size: 15.5px;
   line-height: 1.45;
 }
 
@@ -2546,7 +2551,7 @@ a.pw-home-indicator:hover {
 
 .pw-dev-thread-link {
   display: block;
-  min-height: 58px;
+  min-height: 65px;
   padding: 11px 16px;
   border-bottom: 1px solid var(--pw-line);
 }
@@ -2566,7 +2571,7 @@ a.pw-home-indicator:hover {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   font-family: var(--pw-serif);
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1.3;
 }
 
@@ -2575,7 +2580,7 @@ a.pw-home-indicator:hover {
   margin-top: 5px;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -2594,7 +2599,7 @@ a.pw-home-indicator:hover {
   align-items: center;
   justify-content: space-between;
   gap: 10px 20px;
-  min-height: 64px;
+  min-height: 71.5px;
   padding: env(safe-area-inset-top) 22px 0;
   border-bottom: 1px solid var(--pw-line);
 }
@@ -2611,7 +2616,7 @@ a.pw-home-indicator:hover {
   margin: 2px 0 0;
   overflow: hidden;
   font-family: var(--pw-serif);
-  font-size: 20px;
+  font-size: 22.5px;
   font-weight: 400;
   letter-spacing: -0.01em;
   line-height: 1.2;
@@ -2623,10 +2628,10 @@ a.pw-home-indicator:hover {
   display: none;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  min-width: 44px;
-  height: 44px;
-  min-height: 44px;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
   color: var(--pw-muted);
 }
 
@@ -2642,12 +2647,12 @@ a.pw-home-indicator:hover {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 24px;
+  min-height: 27px;
   padding: 0 7px;
   border: 1px solid var(--pw-chip-line);
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.05em;
   line-height: 1.2;
   text-transform: uppercase;
@@ -2655,8 +2660,8 @@ a.pw-home-indicator:hover {
 
 .pw-dev-status-dot {
   display: inline-block;
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--pw-ochre);
 }
@@ -2681,7 +2686,7 @@ a.pw-home-indicator:hover {
   border: 1px solid var(--pw-ochre);
   color: var(--pw-flow);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.03em;
   line-height: 1.5;
 }
@@ -2711,7 +2716,7 @@ a.pw-home-indicator:hover {
   padding: 10px 14px;
   border: 1px solid var(--pw-line);
   background: var(--pw-panel);
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -2729,7 +2734,7 @@ a.pw-home-indicator:hover {
   margin-bottom: 7px;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.08em;
   line-height: 1.4;
   text-transform: uppercase;
@@ -2741,7 +2746,7 @@ a.pw-home-indicator:hover {
   background: var(--pw-white);
   color: var(--pw-ink);
   font-family: var(--pw-mono);
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
@@ -2821,7 +2826,7 @@ a.pw-home-indicator:hover {
   border: 1px solid var(--pw-chip-line);
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.04em;
   line-height: 1.3;
 }
@@ -2840,7 +2845,7 @@ a.pw-home-indicator:hover {
   margin: 18px 0 0;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -2851,7 +2856,7 @@ a.pw-home-indicator:hover {
   border: 1px solid var(--pw-chip-line);
   color: var(--pw-flow);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.5;
 }
 
@@ -2865,7 +2870,7 @@ a.pw-home-indicator:hover {
 .pw-dev-empty h2 {
   margin: 12px 0 0;
   font-family: var(--pw-serif);
-  font-size: 34px;
+  font-size: 38px;
   font-weight: 400;
   letter-spacing: -0.02em;
   line-height: 1.1;
@@ -2875,7 +2880,7 @@ a.pw-home-indicator:hover {
   max-width: 38em;
   margin: 14px 0 0;
   color: var(--pw-muted);
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.5;
 }
 
@@ -2887,12 +2892,12 @@ a.pw-home-indicator:hover {
 }
 
 .pw-dev-suggestions button {
-  min-height: 40px;
+  min-height: 45px;
   padding: 0 11px;
   border: 1px solid var(--pw-chip-line);
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -2905,7 +2910,7 @@ a.pw-home-indicator:hover {
 .pw-dev-empty-facts {
   max-width: none !important;
   font-family: var(--pw-mono);
-  font-size: 9px !important;
+  font-size: 10px !important;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -2927,7 +2932,7 @@ a.pw-home-indicator:hover {
 .pw-dev-diagnosis-summary {
   margin: 8px 0 0;
   font-family: var(--pw-serif);
-  font-size: 17px;
+  font-size: 19px;
   line-height: 1.3;
 }
 
@@ -2935,7 +2940,7 @@ a.pw-home-indicator:hover {
   margin: 6px 0 0;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.03em;
   line-height: 1.5;
   text-transform: uppercase;
@@ -2949,7 +2954,7 @@ a.pw-home-indicator:hover {
   color: var(--pw-muted);
   cursor: pointer;
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -2962,14 +2967,14 @@ a.pw-home-indicator:hover {
 .pw-dev-diagnosis-details li {
   margin-bottom: 5px;
   color: var(--pw-muted);
-  font-size: 12px;
+  font-size: 13.5px;
   line-height: 1.45;
 }
 
 .pw-dev-diagnosis-details code {
   color: var(--pw-ink);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .pw-dev-diagnosis .pw-dev-action {
@@ -3002,13 +3007,13 @@ a.pw-home-indicator:hover {
 .pw-dev-composer textarea {
   flex: 1;
   min-width: 0;
-  min-height: 40px;
+  min-height: 45px;
   max-height: 200px;
   padding: 9px 10px;
   border: 0;
   background: transparent;
   font-family: var(--pw-mono);
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.5;
   resize: none;
 }
@@ -3027,10 +3032,10 @@ a.pw-home-indicator:hover {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  min-width: 38px;
-  min-height: 38px;
+  width: 42.5px;
+  height: 42.5px;
+  min-width: 42.5px;
+  min-height: 42.5px;
   margin: 1px 1px 1px 0;
   border-radius: 50%;
   background: var(--pw-ink);
@@ -3038,7 +3043,7 @@ a.pw-home-indicator:hover {
 }
 
 .pw-root .pw-dev-send {
-  min-height: 38px;
+  min-height: 42.5px;
 }
 
 .pw-dev-meta {
@@ -3052,7 +3057,7 @@ a.pw-home-indicator:hover {
   margin: 7px auto 0;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.06em;
   line-height: 1.4;
   text-transform: uppercase;
@@ -3077,10 +3082,10 @@ a.pw-home-indicator:hover {
   display: none;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
-  min-height: 40px;
+  width: 45px;
+  min-width: 45px;
+  height: 45px;
+  min-height: 45px;
   color: var(--pw-muted);
 }
 
@@ -3099,7 +3104,7 @@ a.pw-home-indicator:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 48px;
+  min-height: 54px;
   padding: 0 14px 0 16px;
   border-bottom: 1px solid var(--pw-line);
 }
@@ -3120,7 +3125,7 @@ a.pw-home-indicator:hover {
   margin-bottom: 10px;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   line-height: 1.4;
   text-transform: uppercase;
@@ -3128,13 +3133,13 @@ a.pw-home-indicator:hover {
 
 .pw-dev-repo-select {
   width: 100%;
-  min-height: 38px;
+  min-height: 42.5px;
   padding: 0 8px;
   border: 1px solid var(--pw-field-line);
   background: var(--pw-white);
   color: var(--pw-ink);
   font-family: var(--pw-mono);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .pw-dev-facts {
@@ -3153,7 +3158,7 @@ a.pw-home-indicator:hover {
 .pw-dev-facts dt {
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -3163,7 +3168,7 @@ a.pw-home-indicator:hover {
   margin: 0;
   overflow: hidden;
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.4;
   text-align: right;
   text-overflow: ellipsis;
@@ -3174,13 +3179,13 @@ a.pw-home-indicator:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 34px;
+  min-height: 38px;
   margin-top: 12px;
   padding: 0 9px;
   border: 1px solid var(--pw-chip-line);
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -3193,7 +3198,7 @@ a.pw-home-indicator:hover {
 .pw-dev-context-muted {
   margin: 0;
   color: var(--pw-muted);
-  font-size: 13px;
+  font-size: 14.5px;
   line-height: 1.45;
 }
 
@@ -3219,7 +3224,7 @@ a.pw-home-indicator:hover {
 .pw-dev-research-list span {
   overflow: hidden;
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3236,7 +3241,7 @@ a.pw-home-indicator:hover {
 .pw-dev-research-list small {
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
 }
 
 .pw-dev-memory-list li {
@@ -3255,14 +3260,14 @@ a.pw-home-indicator:hover {
   padding: 8px 0;
   cursor: pointer;
   font-family: var(--pw-serif);
-  font-size: 14px;
+  font-size: 15.5px;
   line-height: 1.3;
 }
 
 .pw-dev-memory-list summary small {
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -3270,13 +3275,13 @@ a.pw-home-indicator:hover {
 .pw-dev-memory-list p {
   margin: 0 0 8px;
   color: var(--pw-muted);
-  font-size: 12px;
+  font-size: 13.5px;
   line-height: 1.5;
 }
 
 .pw-dev-memory-source {
   font-family: var(--pw-mono);
-  font-size: 8px !important;
+  font-size: 9px !important;
   overflow-wrap: anywhere;
 }
 
@@ -3292,13 +3297,13 @@ a.pw-home-indicator:hover {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 28px;
+  min-height: 31.5px;
   padding: 0 7px;
   border: 1px solid var(--pw-chip-line);
   color: var(--pw-muted);
   cursor: pointer;
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -3311,12 +3316,12 @@ a.pw-home-indicator:hover {
 
 .pw-dev-tool-list li {
   display: grid;
-  grid-template-columns: 130px minmax(0, 1fr) 52px;
+  grid-template-columns: 140px minmax(0, 1fr) 56px;
   gap: 8px;
   padding: 4px 0;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1.4;
 }
 
@@ -3340,7 +3345,7 @@ a.pw-home-indicator:hover {
   margin: 2px 0;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.03em;
   text-transform: none;
 }
@@ -3351,7 +3356,7 @@ a.pw-home-indicator:hover {
   border: 1px solid #bfc9b8;
   color: #3f5b3b;
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.5;
 }
 
@@ -3360,7 +3365,7 @@ a.pw-home-indicator:hover {
   border-bottom: 1px solid var(--pw-flow);
   color: var(--pw-flow);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   text-transform: uppercase;
 }
 
@@ -3379,7 +3384,7 @@ a.pw-home-indicator:hover {
 .pw-dev-studio-head h2 {
   margin: 3px 0 0;
   font-family: var(--pw-serif);
-  font-size: 19px;
+  font-size: 21.5px;
   font-weight: 400;
   letter-spacing: -0.01em;
   line-height: 1.2;
@@ -3389,12 +3394,12 @@ a.pw-home-indicator:hover {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 30px;
+  min-height: 33.5px;
   padding: 0 8px;
   border: 1px solid var(--pw-chip-line);
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -3407,7 +3412,7 @@ a.pw-home-indicator:hover {
 .pw-dev-studio-empty {
   margin: 0 0 12px;
   color: var(--pw-muted);
-  font-size: 13px;
+  font-size: 14.5px;
   line-height: 1.5;
 }
 
@@ -3421,7 +3426,7 @@ a.pw-home-indicator:hover {
 .pw-dev-task-item {
   display: block;
   width: 100%;
-  min-height: 54px;
+  min-height: 60.5px;
   padding: 9px 0;
   border-bottom: 1px solid var(--pw-line);
   text-align: left;
@@ -3438,7 +3443,7 @@ a.pw-home-indicator:hover {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   font-family: var(--pw-serif);
-  font-size: 14px;
+  font-size: 15.5px;
   line-height: 1.3;
 }
 
@@ -3447,7 +3452,7 @@ a.pw-home-indicator:hover {
   margin-top: 4px;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.03em;
   line-height: 1.4;
   text-transform: uppercase;
@@ -3459,7 +3464,7 @@ a.pw-home-indicator:hover {
   padding: 2px 5px;
   border: 1px solid var(--pw-chip-line);
   font-family: var(--pw-mono);
-  font-size: 7px;
+  font-size: 8px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -3491,7 +3496,7 @@ a.pw-home-indicator:hover {
 .pw-dev-task-id {
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
 }
 
 .pw-dev-field {
@@ -3504,7 +3509,7 @@ a.pw-home-indicator:hover {
 .pw-dev-field > span {
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.04em;
   line-height: 1.4;
   text-transform: uppercase;
@@ -3514,19 +3519,19 @@ a.pw-home-indicator:hover {
 .pw-dev-field textarea,
 .pw-dev-field select {
   width: 100%;
-  min-height: 34px;
+  min-height: 38px;
   padding: 7px 8px;
   border: 1px solid var(--pw-field-line);
   background: var(--pw-white);
   color: var(--pw-ink);
   font-family: var(--pw-mono);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.45;
   resize: vertical;
 }
 
 .pw-dev-field textarea {
-  min-height: 52px;
+  min-height: 58px;
 }
 
 .pw-dev-field-row {
@@ -3546,12 +3551,12 @@ a.pw-home-indicator:hover {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 34px;
+  min-height: 38px;
   padding: 0 8px;
   border: 1px solid var(--pw-chip-line);
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -3575,11 +3580,11 @@ a.pw-home-indicator:hover {
   display: flex;
   align-items: center;
   gap: 5px;
-  min-height: 30px;
+  min-height: 33.5px;
   color: var(--pw-muted);
   cursor: pointer;
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -3594,7 +3599,7 @@ a.pw-home-indicator:hover {
   background: var(--pw-white);
   color: var(--pw-ink);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -3622,7 +3627,7 @@ a.pw-home-indicator:hover {
   align-items: center;
   gap: 6px;
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -3630,7 +3635,7 @@ a.pw-home-indicator:hover {
 .pw-dev-review-card > p {
   margin: 7px 0 0;
   color: var(--pw-muted);
-  font-size: 12px;
+  font-size: 13.5px;
   line-height: 1.5;
 }
 
@@ -3640,7 +3645,7 @@ a.pw-home-indicator:hover {
   border: 1px solid var(--pw-ochre);
   color: var(--pw-flow);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.5;
 }
 
@@ -5213,7 +5218,7 @@ a.pw-home-indicator:hover {
   }
 
   .pw-dev-tool-list li {
-    grid-template-columns: 104px minmax(0, 1fr);
+    grid-template-columns: 116px minmax(0, 1fr);
   }
 
   .pw-dev-tool-list li span:last-child {
@@ -6301,7 +6306,7 @@ a.pw-home-indicator:hover {
 
 .pw-wb-head h1 {
   margin: 2px 0 0;
-  font-size: clamp(22px, 3.2vw, 34px);
+  font-size: clamp(24.5px, 3.2vw, 38px);
   font-weight: 500;
   letter-spacing: -0.02em;
   line-height: 1.1;
@@ -6311,7 +6316,7 @@ a.pw-home-indicator:hover {
   margin: 0;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
@@ -6335,13 +6340,13 @@ a.pw-home-indicator:hover {
 .pw-wb-chip {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
+  min-height: 24.5px;
   padding: 0 8px;
   border: 1px solid var(--pw-chip-line);
   background: var(--pw-white);
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -6379,7 +6384,7 @@ a.pw-home-indicator:hover {
   padding: 9px 12px;
   border: 1px solid var(--pw-ochre);
   background: #fbf4e6;
-  font-size: 14px;
+  font-size: 15.5px;
 }
 
 .pw-wb-banner.is-error {
@@ -6394,7 +6399,7 @@ a.pw-home-indicator:hover {
 
 .pw-wb-banner code {
   font-family: var(--pw-mono);
-  font-size: 11px;
+  font-size: 12.5px;
 }
 
 .pw-wb-tabs {
@@ -6415,12 +6420,12 @@ a.pw-home-indicator:hover {
   align-items: center;
   gap: 6px;
   flex: 0 0 auto;
-  min-height: 42px;
+  min-height: 47px;
   padding: 0 10px;
   border-bottom: 2px solid transparent;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.1em;
 }
 
@@ -6430,12 +6435,12 @@ a.pw-home-indicator:hover {
 }
 
 .pw-wb-tabs button span {
-  min-width: 16px;
-  padding: 1px 4px;
+  min-width: 18px;
+  padding: 1px 5px;
   border-radius: 999px;
   background: var(--pw-ink);
   color: var(--pw-paper);
-  font-size: 8px;
+  font-size: 9px;
   text-align: center;
 }
 
@@ -6465,7 +6470,7 @@ a.pw-home-indicator:hover {
 
 .pw-wb-section-head h2 {
   margin: 2px 0 0;
-  font-size: clamp(19px, 2.4vw, 26px);
+  font-size: clamp(21px, 2.4vw, 29px);
   font-weight: 500;
   letter-spacing: -0.015em;
 }
@@ -6479,7 +6484,7 @@ a.pw-home-indicator:hover {
 .pw-wb-subtitle {
   margin: 14px 0 6px;
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -6491,13 +6496,13 @@ a.pw-home-indicator:hover {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: 40.5px;
   padding: 0 11px;
   border: 1px solid var(--pw-chip-line);
   background: var(--pw-white);
   color: var(--pw-ink);
   font-family: var(--pw-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.03em;
   line-height: 1.2;
   text-decoration: none;
@@ -6532,8 +6537,8 @@ a.pw-home-indicator:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  min-height: 34px;
+  width: 38px;
+  min-height: 38px;
   border: 1px solid var(--pw-chip-line);
   background: var(--pw-white);
 }
@@ -6581,7 +6586,7 @@ a.pw-home-indicator:hover {
 }
 
 .pw-wb-card-title strong {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 500;
   line-height: 1.3;
 }
@@ -6589,7 +6594,7 @@ a.pw-home-indicator:hover {
 .pw-wb-card-body {
   margin: 8px 0 0;
   color: var(--pw-ink);
-  font-size: 14px;
+  font-size: 15.5px;
   line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -6598,7 +6603,7 @@ a.pw-home-indicator:hover {
 .pw-wb-meta {
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.03em;
   line-height: 1.4;
   overflow-wrap: anywhere;
@@ -6607,13 +6612,13 @@ a.pw-home-indicator:hover {
 .pw-wb-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 20px;
+  min-height: 22.5px;
   padding: 0 6px;
   border: 1px solid var(--pw-chip-line);
   background: var(--pw-panel);
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -6668,17 +6673,17 @@ a.pw-home-indicator:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 25px;
+  height: 25px;
   border: 1px solid var(--pw-ink);
   font-family: var(--pw-mono);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .pw-wb-criteria {
   margin: 8px 0 0;
   padding-left: 18px;
-  font-size: 13px;
+  font-size: 14.5px;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -6705,7 +6710,7 @@ a.pw-home-indicator:hover {
   gap: 6px;
   margin: 8px 0 0;
   color: #8f3427;
-  font-size: 13px;
+  font-size: 14.5px;
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
@@ -6714,7 +6719,7 @@ a.pw-home-indicator:hover {
   margin: 0;
   padding: 12px 0;
   color: var(--pw-muted);
-  font-size: 14px;
+  font-size: 15.5px;
 }
 
 .pw-wb-form {
@@ -6729,7 +6734,7 @@ a.pw-home-indicator:hover {
   display: grid;
   gap: 4px;
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--pw-muted);
@@ -6740,13 +6745,13 @@ a.pw-home-indicator:hover {
 .pw-wb-form select,
 .pw-wb-reject {
   width: 100%;
-  min-height: 40px;
+  min-height: 45px;
   padding: 8px 10px;
   border: 1px solid var(--pw-field-line);
   background: var(--pw-white);
   color: var(--pw-ink);
   font-family: var(--pw-serif);
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1.4;
   text-transform: none;
   letter-spacing: normal;
@@ -6776,7 +6781,7 @@ a.pw-home-indicator:hover {
   padding: 10px 12px;
   border: 1px dashed var(--pw-ochre);
   background: #fbf4e6;
-  font-size: 13px;
+  font-size: 14.5px;
 }
 
 .pw-wb-active {
@@ -6793,7 +6798,7 @@ a.pw-home-indicator:hover {
 }
 
 .pw-wb-active-head strong {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 500;
 }
 
@@ -6811,21 +6816,21 @@ a.pw-home-indicator:hover {
 .pw-wb-facts dt {
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .pw-wb-facts dd {
   margin: 2px 0 0;
-  font-size: 14px;
+  font-size: 15.5px;
   overflow-wrap: anywhere;
 }
 
 .pw-wb-facts code,
 .pw-wb-meta code {
   font-family: var(--pw-mono);
-  font-size: 10px;
+  font-size: 11px;
   overflow-wrap: anywhere;
 }
 
@@ -6840,13 +6845,13 @@ a.pw-home-indicator:hover {
   border: 1px solid var(--pw-line);
   background: var(--pw-paper);
   font-family: var(--pw-mono);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.45;
 }
 
 .pw-wb-event {
   display: grid;
-  grid-template-columns: 62px minmax(0, 1fr);
+  grid-template-columns: 68px minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -6872,14 +6877,14 @@ a.pw-home-indicator:hover {
 }
 
 .pw-wb-idle strong {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 500;
 }
 
 .pw-wb-idle p {
   margin: 2px 0 0;
   color: var(--pw-muted);
-  font-size: 13px;
+  font-size: 14.5px;
 }
 
 .pw-wb-attempt {
@@ -6892,16 +6897,16 @@ a.pw-home-indicator:hover {
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 38px;
+  min-height: 42.5px;
   padding: 6px 10px;
   background: var(--pw-panel);
   font-family: var(--pw-mono);
-  font-size: 10px;
+  font-size: 11px;
   text-align: left;
 }
 
 .pw-wb-attempt-head code {
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .pw-wb-attempt-body {
@@ -6911,14 +6916,14 @@ a.pw-home-indicator:hover {
 
 .pw-wb-log {
   margin-top: 10px;
-  font-size: 12px;
+  font-size: 13.5px;
 }
 
 .pw-wb-log summary {
   cursor: pointer;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -6931,7 +6936,7 @@ a.pw-home-indicator:hover {
   background: var(--pw-paper);
   border: 1px solid var(--pw-line);
   font-family: var(--pw-mono);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -6964,7 +6969,7 @@ a.pw-home-indicator:hover {
   grid-column: 2;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .pw-wb-review-detail {
@@ -6982,7 +6987,7 @@ a.pw-home-indicator:hover {
 }
 
 .pw-wb-review-head strong {
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 500;
 }
 
@@ -7007,7 +7012,7 @@ a.pw-home-indicator:hover {
   padding: 7px 9px;
   cursor: pointer;
   font-family: var(--pw-mono);
-  font-size: 10px;
+  font-size: 11px;
   overflow-wrap: anywhere;
 }
 
@@ -7019,7 +7024,7 @@ a.pw-home-indicator:hover {
   border-top: 1px solid var(--pw-line);
   background: var(--pw-white);
   font-family: var(--pw-mono);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.5;
   white-space: pre;
 }
@@ -7029,7 +7034,7 @@ a.pw-home-indicator:hover {
   align-items: flex-start;
   gap: 8px;
   margin-top: 12px;
-  font-size: 14px;
+  font-size: 15.5px;
 }
 
 .pw-wb-reject {
@@ -7044,7 +7049,7 @@ a.pw-home-indicator:hover {
   padding: 9px 11px;
   border: 1px solid var(--pw-line);
   background: var(--pw-panel);
-  font-size: 13px;
+  font-size: 14.5px;
 }
 
 .pw-wb-deploy.is-ready {
@@ -7059,7 +7064,7 @@ a.pw-home-indicator:hover {
   padding: 12px 14px;
   border: 1px solid var(--pw-line);
   background: var(--pw-panel);
-  font-size: 14px;
+  font-size: 15.5px;
 }
 
 .pw-wb-ready.is-ok {
@@ -7111,7 +7116,7 @@ a.pw-home-indicator:hover {
   background: var(--pw-panel);
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.04em;
 }
 
@@ -7162,8 +7167,8 @@ a.pw-home-indicator:hover {
   }
 
   .pw-wb-tabs button {
-    padding: 0 8px;
-    letter-spacing: 0.04em;
+    padding: 0 7px;
+    letter-spacing: 0.03em;
   }
 
   .pw-wb-facts {
@@ -7195,19 +7200,19 @@ a.pw-home-indicator:hover {
   gap: 4px;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .pw-wb-batch-dep select {
-  min-height: 30px;
+  min-height: 33.5px;
   max-width: 190px;
   padding: 2px 6px;
   border: 1px solid var(--pw-field-line);
   background: var(--pw-white);
   font-family: var(--pw-serif);
-  font-size: 12px;
+  font-size: 13.5px;
   text-transform: none;
 }
 
@@ -7223,6 +7228,6 @@ a.pw-home-indicator:hover {
   border: 1px solid var(--pw-field-line);
   background: var(--pw-white);
   font-family: var(--pw-mono);
-  font-size: 11px;
+  font-size: 12.5px;
   user-select: all;
 }
