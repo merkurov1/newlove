@@ -96,6 +96,7 @@ export type DevWorkerReadiness = {
   opencodeOk: boolean;
   versionOk: boolean;
   authOk: boolean;
+  authProbeOk?: boolean;
   minimumVersion: string;
   provider: string | null;
   reasons: string[];
@@ -115,6 +116,8 @@ export type DevWorker = {
     opencodeVersion?: string;
     opencodeAvailable?: boolean;
     opencodeAuthenticated?: boolean;
+    authProbeOk?: boolean;
+    authProbeError?: string | null;
     nodeVersion?: string;
     lastCheckedAt?: string;
     ready?: boolean;

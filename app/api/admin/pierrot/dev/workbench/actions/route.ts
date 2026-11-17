@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto';
-import { NextResponse, after } from 'next/server';
+import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { getClientIp } from '@/lib/rateLimit';
 import { checkPierrotRateLimit } from '@/lib/pierrot/rateLimit';
@@ -39,11 +39,9 @@ import {
 } from '@/lib/pierrot/dev/workbench/github';
 import {
   ensureCodespaceForQueuedWork,
-  retryPendingStart,
   startCodespaceNow,
   stopCodespaceNow,
 } from '@/lib/pierrot/dev/workbench/lifecycle';
-import type { EnsureStartResult } from '@/lib/pierrot/dev/workbench/lifecycle';
 import { CODESPACE_NAME_ENV } from '@/lib/pierrot/dev/workbench/setup';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
 import { DevTransitionError } from '@/lib/pierrot/dev/workbench/state';
@@ -75,26 +73,6 @@ function json(body: unknown, status = 200) {
       'Cache-Control': 'no-store, max-age=0, must-revalidate',
       'X-Robots-Tag': 'noindex, nofollow',
     },
-  });
-}
-
-/**
- * If a stop is in flight, startup is persisted and retried once after the
- * response. The request never waits for the Codespace boot. Further attempts
- * are driven by the next Admin poll and by the persisted pending state, not by
- * a long retry loop inside one Vercel Function.
- */
-function schedulePendingStart(result: EnsureStartResult, source: string): void {
-  if (result.action !== 'start-pending') return;
-  after(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 12_000));
-    try {
-      await retryPendingStart(`${source}:retry`);
-    } catch (error) {
-      console.error('[Pierrot Dev Workbench] pending start retry failed', {
-        code: error instanceof Error ? error.name : 'unknown',
-      });
-    }
   });
 }
 
@@ -188,10 +166,7 @@ export async function POST(req: Request) {
             }).catch(() => {});
           }
         }
-        schedulePendingStart(
-          await ensureCodespaceForQueuedWork({ source: 'admin:approve' }),
-          'admin:approve'
-        );
+        await ensureCodespaceForQueuedWork({ source: 'admin:approve' });
         break;
       }
       case 'enqueue': {
@@ -201,10 +176,7 @@ export async function POST(req: Request) {
           typeof body.batchId === 'string' ? body.batchId : null
         );
         if (!task) return json({ error: 'Task not found.' }, 404);
-        schedulePendingStart(
-          await ensureCodespaceForQueuedWork({ source: 'admin:enqueue' }),
-          'admin:enqueue'
-        );
+        await ensureCodespaceForQueuedWork({ source: 'admin:enqueue' });
         break;
       }
       case 'dequeue': {
@@ -220,10 +192,7 @@ export async function POST(req: Request) {
       case 'retry': {
         const task = await retryTask(admin.id, taskId);
         if (!task) return json({ error: 'Task not found.' }, 404);
-        schedulePendingStart(
-          await ensureCodespaceForQueuedWork({ source: 'admin:retry' }),
-          'admin:retry'
-        );
+        await ensureCodespaceForQueuedWork({ source: 'admin:retry' });
         break;
       }
       case 'accept': {
@@ -289,10 +258,7 @@ export async function POST(req: Request) {
           message: paused ? 'Queue paused by the owner.' : 'Queue resumed by the owner.',
         });
         if (!paused) {
-          schedulePendingStart(
-            await ensureCodespaceForQueuedWork({ source: 'admin:resume' }),
-            'admin:resume'
-          );
+          await ensureCodespaceForQueuedWork({ source: 'admin:resume' });
         }
         break;
       }
@@ -338,10 +304,7 @@ export async function POST(req: Request) {
                       : 'The batch could not be started.';
           return json({ error: message, code: result.error, notReady: result.notReady }, status);
         }
-        schedulePendingStart(
-          await ensureCodespaceForQueuedWork({ source: 'admin:start_batch' }),
-          'admin:start_batch'
-        );
+        await ensureCodespaceForQueuedWork({ source: 'admin:start_batch' });
         break;
       }
       case 'update_batch': {
@@ -411,7 +374,9 @@ export async function POST(req: Request) {
             502
           );
         }
-        schedulePendingStart(result, 'admin:manual');
+        // Pending startup is persisted by the lifecycle layer. The next
+        // idempotent overview poll completes it; this request never sleeps or
+        // retries inside the function budget.
         break;
       }
       case 'stop_codespace': {

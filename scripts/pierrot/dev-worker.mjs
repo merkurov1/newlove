@@ -168,7 +168,12 @@ async function bootPhase(phase, message, options = {}) {
   if (!options.force && bootedPhases.has(dedupeKey)) return;
   bootedPhases.add(dedupeKey);
   if (!TOKEN || TOKEN.length < 32 || !/^https?:\/\//.test(API_BASE)) return;
-  if (!bootApiReachable && !['connecting_api', 'registering', 'ready', 'failed'].includes(safePhase)) {
+  if (
+    !bootApiReachable &&
+    !['connecting_api', 'api_connected', 'registering', 'registered', 'ready', 'failed'].includes(
+      safePhase
+    )
+  ) {
     return;
   }
   try {
@@ -316,6 +321,8 @@ function applyReadiness(capabilities, context) {
     opencodeVersion: capabilities.opencodeVersion,
     minimumVersion: MIN_OPENCODE_VERSION,
     authenticated: capabilities.opencodeAuthenticated === true,
+    authProbeOk: capabilities.authProbeOk !== false,
+    authProbeError: capabilities.authProbeError || null,
     provider: OPENCODE_PROVIDER,
   });
   readiness = next;
@@ -354,17 +361,34 @@ async function readCapabilities(context = {}) {
     });
   }
   await bootPhase('checking_auth', `Checking stored ${OPENCODE_PROVIDER} authentication.`);
-  try {
-    const auth = await run('opencode', ['auth', 'list'], {
-      env: opencodeEnv(),
-      timeoutMs: 20000,
-    });
-    if (auth.code === 0) {
-      const stored = parseStoredAuth(auth.stdout, OPENCODE_PROVIDER);
-      capabilities.opencodeAuthenticated = stored.authenticated;
-      capabilities.authProviders = stored.providers.slice(0, 12);
+  // The auth store is an OpenCode database, not GitHub Secrets. A cold start can
+  // make `opencode auth list` slow while the DB opens; a timeout is not proof
+  // that credentials are missing. Probe twice before declaring a result, and
+  // keep "unverified" separate from "not stored".
+  let authProbeOk = false;
+  let authProbeError = null;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const auth = await run('opencode', ['auth', 'list'], {
+        env: opencodeEnv(),
+        timeoutMs: 30000,
+      });
+      if (auth.code === 0) {
+        const stored = parseStoredAuth(auth.stdout, OPENCODE_PROVIDER);
+        capabilities.opencodeAuthenticated = stored.authenticated;
+        capabilities.authProviders = stored.providers.slice(0, 12);
+        authProbeOk = true;
+        authProbeError = null;
+        break;
+      }
+      authProbeError = auth.timedOut ? 'timeout' : `exit ${auth.code}`;
+    } catch (error) {
+      authProbeError = sanitize(error?.message || 'probe failed').slice(0, 120);
     }
-  } catch {}
+    if (attempt < 2) await sleep(1000);
+  }
+  capabilities.authProbeOk = authProbeOk;
+  capabilities.authProbeError = authProbeOk ? null : authProbeError || 'probe failed';
   capabilities.versionOk = Boolean(
     capabilities.opencodeAvailable &&
       isVersionAtLeast(capabilities.opencodeVersion, MIN_OPENCODE_VERSION)
@@ -379,7 +403,9 @@ async function readCapabilities(context = {}) {
   } else if (!capabilities.opencodeAuthenticated) {
     await bootPhase(
       'failed',
-      `OPENCODE_AUTH_MISSING: No stored ${OPENCODE_PROVIDER} authentication was found.`,
+      authProbeOk
+        ? `OPENCODE_AUTH_MISSING: No stored ${OPENCODE_PROVIDER} authentication was found.`
+        : `OPENCODE_AUTH_UNVERIFIED: The OpenCode auth store could not be read (${capabilities.authProbeError}). Authentication is unverified, not necessarily absent; do not change GitHub Secrets for this.`,
       { force: true }
     );
   }
@@ -623,11 +649,11 @@ async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumbe
   if (files.length === 0) return { commitSha: null, files: [] };
 
   // Use the Codespace's verified GitHub identity. Never invent an author.
-  // Signing is disabled only for this worker commit (the repository does not
-  // require signed commits). If signing becomes mandatory, set
-  // PIERROT_DEV_GIT_SIGN_COMMITS=true and use the configured gh-gpgsign identity.
+  // Signing is mandatory: an unsigned commit must never be pushed as verified.
+  // The Codespace gh-gpgsign helper signs with the account's GitHub key and
+  // returns 403 Author is invalid when the author identity is wrong, so the
+  // identity is checked together with the signature before the push.
   const identity = await commitIdentity(worktree);
-  const sign = process.env.PIERROT_DEV_GIT_SIGN_COMMITS === 'true' ? 'true' : 'false';
   const commit = await git(
     [
       '-c',
@@ -635,7 +661,7 @@ async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumbe
       '-c',
       `user.email=${identity.email}`,
       '-c',
-      `commit.gpgsign=${sign}`,
+      'commit.gpgsign=true',
       'commit',
       '-m',
       `pierrot(dev): task ${taskId} attempt ${attemptNumber}`,
@@ -655,10 +681,52 @@ async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumbe
       commitSha: null,
       reason: message,
       identity: { name: identity.name, email: identity.email },
-      signing: sign === 'true',
+      signing: true,
     });
     throw error;
   }
+
+  // Verify the effective author/committer and that a signature object exists
+  // before pushing. Local GPG cannot validate GitHub's key, but an absent
+  // gpgsig header proves the commit was not signed.
+  const ident = await git(
+    ['log', '-1', '--format=%an%x00%ae%x00%cn%x00%ce'],
+    worktree,
+    30000
+  );
+  const [authorName, authorEmail, committerName, committerEmail] = ident.stdout
+    .trim()
+    .split('\0');
+  const identityOk =
+    authorName === identity.name &&
+    authorEmail === identity.email &&
+    committerName === identity.name &&
+    committerEmail === identity.email;
+  const rawCommit = await git(['cat-file', 'commit', 'HEAD'], worktree, 30000);
+  const signed = /^gpgsig(-sha256)? /m.test(rawCommit.stdout);
+  if (!identityOk || !signed) {
+    const message = !identityOk
+      ? `The commit identity did not match ${identity.name} <${identity.email}>.`
+      : 'The commit has no GPG signature; refusing to push an unsigned commit.';
+    const error = new Error(message);
+    error.code = !signed ? 'COMMIT_SIGNING_MISSING' : 'COMMIT_IDENTITY_MISMATCH';
+    await writePushFailure(attemptId, {
+      taskId,
+      branch,
+      commitSha: null,
+      reason: message,
+      identity: { name: identity.name, email: identity.email },
+      effective: { authorName, authorEmail, committerName, committerEmail },
+      signing: signed,
+    });
+    throw error;
+  }
+
+  await log('Commit verified', {
+    identity: `${identity.name} <${identity.email}>`,
+    signed: true,
+  });
+
   const sha = await git(['rev-parse', 'HEAD'], worktree, 30000);
   if (sha.code !== 0) throw new Error('Unable to read the commit SHA.');
   const commitSha = sha.stdout.trim();
@@ -1104,7 +1172,7 @@ async function shutdown(signal) {
 
 async function main() {
   await ensureDirs();
-  await bootPhase('starting', `Pierrot worker ${WORKER_ID} starting.`);
+  await bootPhase('starting', `Process started; Pierrot worker ${WORKER_ID} starting.`);
 
   await bootPhase('checking_config', 'Checking required worker configuration.');
   if (!TOKEN || TOKEN.length < 32) {
@@ -1176,6 +1244,9 @@ async function main() {
             message: String(error.message || error).slice(0, 200),
           });
         }
+        if (apiProven) {
+          await bootPhase('api_connected', 'Worker API and Supabase path are reachable.');
+        }
         await bootPhase('registering', 'Registering the worker with the Pierrot API.');
         await api('register', {
           name: CODESPACE_NAME || os.hostname(),
@@ -1201,6 +1272,11 @@ async function main() {
           apiProven,
           reasons: capabilities.readiness?.reasons || [],
         });
+        await bootPhase(
+          'registered',
+          `Worker ${WORKER_ID} registered with the Pierrot API.`,
+          { force: true }
+        );
         if (capabilities.ready) {
           await bootPhase(
             'ready',
