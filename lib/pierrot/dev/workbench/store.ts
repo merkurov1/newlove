@@ -643,7 +643,7 @@ export async function getQueueSnapshot(): Promise<{
     const client = store();
     const [
       { count: queued },
-      { count: ready },
+      readyRows,
       { count: active },
       { count: activeTasks },
       { count: review },
@@ -654,10 +654,7 @@ export async function getQueueSnapshot(): Promise<{
         .from('pierrot_dev_prompts')
         .select('*', { head: true, count: 'exact' })
         .eq('status', 'queued'),
-      client
-        .from('pierrot_dev_prompts')
-        .select('*', { head: true, count: 'exact' })
-        .eq('status', 'ready'),
+      client.from('pierrot_dev_prompts').select('id').eq('status', 'ready').limit(200),
       client
         .from('pierrot_dev_attempts')
         .select('*', { head: true, count: 'exact' })
@@ -676,9 +673,15 @@ export async function getQueueSnapshot(): Promise<{
         .in('status', ['active', 'paused']),
       isQueuePaused(),
     ]);
+    const readyIds = (readyRows.data || []).map((row) => String(row.id));
+    // A task the owner deliberately dequeued is `ready` for state-machine
+    // reasons, but it is not executable and must not block finalization or be
+    // counted as work waiting for a worker.
+    const optedOut = await queueOptOuts(readyIds);
+    const ready = readyIds.filter((id) => !optedOut.has(`queue:optout:${id}`)).length;
     return {
       queued: queued || 0,
-      ready: ready || 0,
+      ready,
       active: active || 0,
       activeTasks: activeTasks || 0,
       review: review || 0,
