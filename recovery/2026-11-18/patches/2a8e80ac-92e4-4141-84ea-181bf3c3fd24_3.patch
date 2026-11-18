@@ -1,0 +1,3916 @@
+From 29d2cf3e218d79bd44602e7707e406fc6757217c Mon Sep 17 00:00:00 2001
+From: Anton Merkurov <97518066+merkurov1@users.noreply.github.com>
+Date: Wed, 18 Nov 2026 12:27:28 +0000
+Subject: [PATCH] wip(recovery): preserve attempt 3 for task
+ 2a8e80ac-92e4-4141-84ea-181bf3c3fd24
+
+---
+ .../pierrot/dev/workbench/actions/route.ts    |   55 +-
+ app/api/admin/pierrot/dev/workbench/route.ts  |   12 +-
+ components/pierrot/workspace/DevWorkbench.tsx |  442 ++++-
+ .../dev/workbench/__tests__/execution.test.ts |   10 +
+ .../__tests__/lifecycleOperations.test.ts     |    7 +-
+ .../dev/workbench/__tests__/overview.test.ts  |   20 +
+ .../dev/workbench/__tests__/release.test.ts   |  501 +++++
+ .../__tests__/releaseMigration.test.ts        |   56 +
+ lib/pierrot/dev/workbench/execution.ts        |  122 +-
+ lib/pierrot/dev/workbench/github.ts           |   43 +
+ lib/pierrot/dev/workbench/lifecycle.ts        |   22 +-
+ lib/pierrot/dev/workbench/overview.ts         |    7 +
+ lib/pierrot/dev/workbench/release.ts          | 1613 +++++++++++++++++
+ lib/pierrot/dev/workbench/types.ts            |   92 +
+ migrations/2026-12-11_pierrot_dev_release.sql |  155 ++
+ .../pierrot/__tests__/dev-worker-lib.test.mjs |   41 +
+ scripts/pierrot/dev-worker-lib.mjs            |   78 +
+ scripts/pierrot/dev-worker.mjs                |  119 +-
+ 18 files changed, 3234 insertions(+), 161 deletions(-)
+ create mode 100644 lib/pierrot/dev/workbench/__tests__/release.test.ts
+ create mode 100644 lib/pierrot/dev/workbench/__tests__/releaseMigration.test.ts
+ create mode 100644 lib/pierrot/dev/workbench/release.ts
+ create mode 100644 migrations/2026-12-11_pierrot_dev_release.sql
+
+diff --git a/app/api/admin/pierrot/dev/workbench/actions/route.ts b/app/api/admin/pierrot/dev/workbench/actions/route.ts
+index fadcb454..ef5bfd36 100644
+--- a/app/api/admin/pierrot/dev/workbench/actions/route.ts
++++ b/app/api/admin/pierrot/dev/workbench/actions/route.ts
+@@ -39,7 +39,12 @@ import {
+   startCodespaceNow,
+   stopCodespaceNow,
+ } from '@/lib/pierrot/dev/workbench/lifecycle';
+-import { advanceFinalization, retryFinalization } from '@/lib/pierrot/dev/workbench/finalization';
++import {
++  DevReleaseError,
++  pushReadyCommits,
++  retryReleaseDeployment,
++  verifyReleases,
++} from '@/lib/pierrot/dev/workbench/release';
+ import { CODESPACE_NAME_ENV } from '@/lib/pierrot/dev/workbench/setup';
+ import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
+ import { DevTransitionError } from '@/lib/pierrot/dev/workbench/state';
+@@ -88,6 +93,9 @@ function errorResponse(error: unknown) {
+   if (error instanceof WorkbenchUnavailableError) {
+     return json({ error: error.message, code: error.code }, 503);
+   }
++  if (error instanceof DevReleaseError) {
++    return json({ error: error.message, code: error.code }, error.status);
++  }
+   if (error instanceof WorkbenchExecutionError) {
+     return json(
+       {
+@@ -427,23 +435,44 @@ export async function POST(req: Request) {
+         });
+         break;
+       }
+-      case 'finalize_queue': {
+-        const retry = body.retry === true;
+-        const report = retry
+-          ? await retryFinalization('admin:retry')
+-          : await advanceFinalization({ trigger: 'admin:finalize', force: true });
+-        if (!report) {
++      case 'push_ready': {
++        // The single explicit owner release action. GitHub branch protection
++        // and required checks are still enforced: this never force-pushes and
++        // never bypasses a failing check.
++        if (body.confirm !== true) {
+           return json(
+-            { error: 'Finalization is unavailable until the workbench schema is ready.' },
++            {
++              error: 'Push ready commits requires an explicit confirmation.',
++              code: 'PUSH_CONFIRMATION_REQUIRED',
++            },
+             409
+           );
+         }
+-        await appendEvent({
+-          type: 'batch.finalization.requested',
+-          message: `Owner requested queue finalization (${report.stage}).`,
+-          payload: { finalizationId: report.id, retry },
++        const taskIds = strings(body.taskIds, 50);
++        if (taskIds.length === 0) {
++          return json({ error: 'Select at least one ready commit.' }, 400);
++        }
++        const result = await pushReadyCommits({
++          userId: admin.id,
++          taskIds,
++          trigger: 'admin:push_ready',
+         });
+-        break;
++        const overview = await getWorkbenchOverview(admin.id);
++        return json({ ok: result.ok, release: result, overview });
++      }
++      case 'verify_release': {
++        const release = await verifyReleases({
++          userId: admin.id,
++          taskIds: strings(body.taskIds, 50),
++        });
++        return json({ ok: true, release, overview: await getWorkbenchOverview(admin.id) });
++      }
++      case 'retry_deployment': {
++        const release = await retryReleaseDeployment({
++          userId: admin.id,
++          taskId,
++        });
++        return json({ ok: true, release, overview: await getWorkbenchOverview(admin.id) });
+       }
+       case 'block': {
+         const reason = typeof body.reason === 'string' ? body.reason.slice(0, 2000) : '';
+diff --git a/app/api/admin/pierrot/dev/workbench/route.ts b/app/api/admin/pierrot/dev/workbench/route.ts
+index e3a91c00..06c9bb89 100644
+--- a/app/api/admin/pierrot/dev/workbench/route.ts
++++ b/app/api/admin/pierrot/dev/workbench/route.ts
+@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
+ import { requireAdminFromRequest } from '@/lib/serverAuth';
+ import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
+ import { ensureCodespaceForQueuedWork } from '@/lib/pierrot/dev/workbench/lifecycle';
+-import { advanceFinalization } from '@/lib/pierrot/dev/workbench/finalization';
+ import { reapExpiredAttempts } from '@/lib/pierrot/dev/workbench/store';
+ 
+ export const runtime = 'nodejs';
+@@ -55,15 +54,8 @@ export async function GET(req: Request) {
+       // The overview must still load when Codespaces is temporarily unavailable.
+     }
+ 
+-    // Admin is also a finalization pump: when the queue is drained, each poll
+-    // advances one bounded integration step. The finalizer is idempotent and
+-    // locked, so a concurrent idle poll cannot merge twice.
+-    try {
+-      await advanceFinalization({ trigger: 'admin:overview' });
+-    } catch {
+-      // Finalization must not hide the overview when GitHub is unavailable.
+-    }
+-
++    // Ready to Push is read-only on this poll. Promotion to main happens only
++    // through the explicit owner action; a page refresh must never merge.
+     const overview = await getWorkbenchOverview(admin.id, { skipReap: true });
+     return json({ overview });
+   } catch (error) {
+diff --git a/components/pierrot/workspace/DevWorkbench.tsx b/components/pierrot/workspace/DevWorkbench.tsx
+index 13ab3846..66a0b536 100644
+--- a/components/pierrot/workspace/DevWorkbench.tsx
++++ b/components/pierrot/workspace/DevWorkbench.tsx
+@@ -11,7 +11,6 @@ import {
+   Circle,
+   Coins,
+   GitBranch,
+-  GitMerge,
+   History,
+   Inbox,
+   Pause,
+@@ -32,13 +31,22 @@ import type {
+   DevCostEstimate,
+   DevCostLedger,
+   DevDeploymentStatus,
++  DevReleaseItem,
+   DevReviewView,
+   DevSetupReport,
+   DevWorkbenchOverview,
+   DevWorkbenchTask,
+ } from '@/lib/pierrot/dev/workbench/types';
+ 
+-type Tab = 'inbox' | 'queue' | 'execution' | 'ledger' | 'history' | 'review' | 'setup';
++type Tab =
++  | 'inbox'
++  | 'queue'
++  | 'release'
++  | 'execution'
++  | 'ledger'
++  | 'history'
++  | 'review'
++  | 'setup';
+ 
+ type Props = {
+   initialOverview: DevWorkbenchOverview;
+@@ -48,6 +56,7 @@ type Props = {
+ const TABS: Array<{ key: Tab; label: string; icon: typeof Inbox }> = [
+   { key: 'inbox', label: 'INBOX', icon: Inbox },
+   { key: 'queue', label: 'QUEUE', icon: GitBranch },
++  { key: 'release', label: 'READY TO PUSH', icon: Send },
+   { key: 'execution', label: 'EXECUTION', icon: Terminal },
+   { key: 'ledger', label: 'LEDGER', icon: Coins },
+   { key: 'history', label: 'HISTORY', icon: History },
+@@ -317,6 +326,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+   const [rejectReason, setRejectReason] = useState('');
+   const [expandedAttempt, setExpandedAttempt] = useState<string | null>(null);
+   const [batchSelection, setBatchSelection] = useState<string[]>([]);
++  const [releaseSelection, setReleaseSelection] = useState<string[]>([]);
+   const [editId, setEditId] = useState<string | null>(null);
+   const [editForm, setEditForm] = useState({
+     title: '',
+@@ -400,6 +410,13 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+         const body = (await response.json()) as {
+           overview?: DevWorkbenchOverview;
+           merge?: { deployment: DevDeploymentStatus | null; mergeSha: string | null };
++          release?: {
++            ok: boolean;
++            status: string;
++            note: string;
++            mergedTaskIds: string[];
++            blocked: Array<{ taskId: string; reasons: string[] }>;
++          };
+           token?: string;
+           codespaces?: Array<{
+             name: string;
+@@ -411,6 +428,23 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+         if (body.token) setSetupToken(body.token);
+         if (body.codespaces) setCodespaceList(body.codespaces);
+         if (body.overview) setOverview(body.overview);
++        if (body.release) {
++          if (action === 'push_ready') {
++            const result = body.release;
++            setNotice(result.note || 'Push ready commits finished.');
++            setReleaseSelection([]);
++            if (Array.isArray(result.blocked) && result.blocked.length > 0) {
++              setError(
++                result.blocked
++                  .map((item) => `${item.taskId.slice(0, 8)}: ${item.reasons.join(' ')}`)
++                  .join(' · ')
++                  .slice(0, 900)
++              );
++            }
++          } else {
++            setNotice('Release state refreshed from GitHub and Vercel.');
++          }
++        }
+         if (body.merge) {
+           setMergeDeployment(body.merge.deployment || null);
+           setNotice(`Merged ${body.merge.mergeSha ? shortSha(body.merge.mergeSha) : ''}`.trim());
+@@ -1485,123 +1519,342 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+       )}
+ 
+       <div className="pw-wb-subhead">
+-        <p className="pw-wb-kicker">FINALIZATION</p>
++        <p className="pw-wb-kicker">RELEASE</p>
+       </div>
+-      {overview.finalization ? (
+-        <div className="pw-wb-card">
+-          <div className="pw-wb-card-head">
+-            <div className="pw-wb-card-title">
+-              <StatusBadge status={overview.finalization.stage} />
+-              <strong>Queue finalization</strong>
+-            </div>
+-            <span className="pw-wb-meta">
+-              {overview.finalization.integrated}/{overview.finalization.pullRequests} PR ·{' '}
+-              {overview.finalization.durationMs !== null
+-                ? duration(overview.finalization.startedAt, overview.finalization.completedAt)
+-                : 'in progress'}
++      <div className="pw-wb-card">
++        <p className="pw-wb-card-body">
++          Release is no longer automatic. Validated commits accumulate in READY TO PUSH and reach
++          main only through the explicit owner action <strong>Push ready commits</strong>. Existing
++          open pull requests are left untouched.
++        </p>
++        <div className="pw-wb-actions">
++          <button
++            type="button"
++            className="pw-wb-button is-quiet"
++            onClick={() => setTab('release')}
++          >
++            Open Ready to Push
++          </button>
++        </div>
++      </div>
++
++      <div className="pw-wb-subhead">
++        <p className="pw-wb-kicker">RECENT EVENTS</p>
++      </div>
++      <div className="pw-wb-events">
++        {overview.recentEvents.map((event) => (
++          <div key={event.id} className={`pw-wb-event is-${event.level}`}>
++            <time>{new Date(event.createdAt).toLocaleTimeString('ru-RU')}</time>
++            <span>
++              {event.type} — {event.message}
+             </span>
+           </div>
++        ))}
++      </div>
++    </div>
++  );
++
++  const renderRelease = () => {
++    const release = overview.release;
++    const selectable = release.items.filter((item) => item.status === 'ready');
++    const selectedItems = release.items.filter((item) =>
++      releaseSelection.includes(item.taskId)
++    );
++    const toggle = (taskId: string) =>
++      setReleaseSelection((current) =>
++        current.includes(taskId)
++          ? current.filter((id) => id !== taskId)
++          : [...current, taskId]
++      );
++    const checkTone = (item: DevReleaseItem) =>
++      item.checks.some((check) => check.status === 'failed')
++        ? 'is-failed'
++        : item.checks.some((check) => check.status === 'passed')
++          ? ''
++          : 'is-warning';
++
++    return (
++      <div className="pw-wb-section">
++        <div className="pw-wb-section-head">
++          <div>
++            <p className="pw-wb-kicker">READY TO PUSH</p>
++            <h2>Release queue</h2>
++          </div>
++          <div className="pw-wb-actions">
++            <button
++              type="button"
++              className="pw-wb-button is-quiet"
++              disabled={busy === 'verify_release'}
++              onClick={() => void runAction('verify_release')}
++            >
++              <RefreshCw size={13} /> Check main &amp; deployment
++            </button>
++          </div>
++        </div>
++
++        {!release.schemaReady && (
++          <p className="pw-wb-warning">
++            Ready to Push requires the additive migration {release.migrationFile}. Execution, review
++            and existing history keep working without it.
++          </p>
++        )}
++
++        <div className="pw-wb-card">
+           <dl className="pw-wb-facts">
+             <div>
+-              <dt>Stage</dt>
+-              <dd>{overview.finalization.stage}</dd>
++              <dt>Ready</dt>
++              <dd>{release.readyCount}</dd>
++            </div>
++            <div>
++              <dt>Blocked</dt>
++              <dd>{release.blockedCount}</dd>
++            </div>
++            <div>
++              <dt>In main</dt>
++              <dd>{release.inMainCount}</dd>
+             </div>
+             <div>
+-              <dt>CI</dt>
+-              <dd>{overview.finalization.ciStatus}</dd>
++              <dt>Deployment pending</dt>
++              <dd>{release.pendingDeploymentCount}</dd>
+             </div>
+             <div>
+-              <dt>Tasks</dt>
+-              <dd>{overview.finalization.tasks}</dd>
++              <dt>Deployed</dt>
++              <dd>{release.deployedCount}</dd>
+             </div>
+             <div>
+-              <dt>Commit</dt>
++              <dt>Main revision</dt>
+               <dd>
+-                {overview.finalization.commitUrl ? (
+-                  <a href={overview.finalization.commitUrl} target="_blank" rel="noreferrer">
+-                    {shortSha(overview.finalization.commitSha)}
++                {release.mainSha ? (
++                  <a
++                    href={`https://github.com/merkurov1/newlove/commit/${release.mainSha}`}
++                    target="_blank"
++                    rel="noreferrer"
++                  >
++                    {shortSha(release.mainSha)}
+                   </a>
+                 ) : (
+-                  '—'
++                  'not checked'
+                 )}
+               </dd>
+             </div>
+             <div>
+-              <dt>Cost</dt>
+-              <dd>{money(overview.finalization.cost?.totalUsd ?? null)}</dd>
++              <dt>Production</dt>
++              <dd>{release.production?.state || 'unknown'}</dd>
++            </div>
++            <div>
++              <dt>Selected</dt>
++              <dd>
++                {releaseSelection.length} / {selectable.length}
++              </dd>
+             </div>
+           </dl>
+-          {overview.finalization.blockedReason && (
+-            <p className="pw-wb-warning">{overview.finalization.blockedReason}</p>
++          {release.production?.url && (
++            <p className="pw-wb-meta">
++              <a href={release.production.url} target="_blank" rel="noreferrer">
++                {release.production.url}
++              </a>
++            </p>
+           )}
+-          {overview.finalization.prs.length > 0 && (
+-            <ul className="pw-wb-criteria">
+-              {overview.finalization.prs.map((pr) => (
+-                <li key={pr.url}>
+-                  <a href={pr.url} target="_blank" rel="noreferrer">
+-                    #{pr.number ?? '?'} {pr.taskTitle}
+-                  </a>{' '}
+-                  · {pr.integrated ? 'integrated' : pr.ciStatus} ·{' '}
+-                  {pr.mergeable === false ? 'conflict' : pr.state}
+-                </li>
+-              ))}
+-            </ul>
++          <p className="pw-wb-meta">{release.limitation}</p>
++          {release.activeBatch && (
++            <p className="pw-wb-warning">
++              Batch {shortSha(release.activeBatch.id)} is {release.activeBatch.status}:{' '}
++              {release.activeBatch.items
++                .map((item) => `${item.taskId.slice(0, 8)}=${item.status}`)
++                .join(', ')}
++            </p>
++          )}
++          {release.lastBatch && !release.activeBatch && (
++            <p className="pw-wb-meta">
++              Last batch {release.lastBatch.status} · main {shortSha(release.lastBatch.mainShaAfter)}{' '}
++              · {release.lastBatch.note}
++            </p>
+           )}
+           <div className="pw-wb-actions">
+             <button
+               type="button"
+-              className="pw-wb-button"
+-              disabled={busy === 'finalize_queue'}
+-              onClick={() => void runAction('finalize_queue')}
++              className="pw-wb-button is-primary"
++              disabled={busy === 'push_ready' || releaseSelection.length === 0}
++              onClick={() => {
++                if (
++                  !window.confirm(
++                    `Push ${releaseSelection.length} selected commit(s) to main? ` +
++                      'Promotion is sequential and stops on the first failure. ' +
++                      'Already merged commits are not rolled back.'
++                  )
++                ) {
++                  return;
++                }
++                void runAction('push_ready', {
++                  taskIds: releaseSelection,
++                  confirm: true,
++                });
++              }}
+             >
+-              Finalize now
++              <Send size={14} /> Push ready commits
++            </button>
++            <button
++              type="button"
++              className="pw-wb-button is-quiet"
++              disabled={selectable.length === 0}
++              onClick={() =>
++                setReleaseSelection(selectable.map((item) => item.taskId))
++              }
++            >
++              Select all ready
+             </button>
+-            {['blocked', 'failed'].includes(overview.finalization.stage) && (
+-              <button
+-                type="button"
+-                className="pw-wb-button is-quiet"
+-                disabled={busy === 'finalize_queue'}
+-                onClick={() => void runAction('finalize_queue', { retry: true })}
+-              >
+-                Retry finalization
+-              </button>
+-            )}
+-          </div>
+-        </div>
+-      ) : (
+-        <div className="pw-wb-card">
+-          <p className="pw-wb-card-body">
+-            Finalization has not run yet. It starts automatically when there are no queued, ready or
+-            in-progress tasks, no active attempts and no unfinished batches.
+-          </p>
+-          <div className="pw-wb-actions">
+             <button
+               type="button"
+               className="pw-wb-button is-quiet"
+-              disabled={busy === 'finalize_queue'}
+-              onClick={() => void runAction('finalize_queue')}
++              disabled={releaseSelection.length === 0}
++              onClick={() => setReleaseSelection([])}
+             >
+-              Check queue and finalize
++              Clear selection
+             </button>
+           </div>
++          {selectedItems.length > 0 && (
++            <p className="pw-wb-meta">
++              Batch: {selectedItems.map((item) => item.title).join(' · ')}
++            </p>
++          )}
+         </div>
+-      )}
+ 
+-      <div className="pw-wb-subhead">
+-        <p className="pw-wb-kicker">RECENT EVENTS</p>
+-      </div>
+-      <div className="pw-wb-events">
+-        {overview.recentEvents.map((event) => (
+-          <div key={event.id} className={`pw-wb-event is-${event.level}`}>
+-            <time>{new Date(event.createdAt).toLocaleTimeString('ru-RU')}</time>
+-            <span>
+-              {event.type} — {event.message}
+-            </span>
+-          </div>
+-        ))}
++        {release.items.length === 0 ? (
++          <p className="pw-wb-empty">
++            Пока нет проверенных коммитов. Завершённая задача с реальным коммитом и пройденными
++            checks появится здесь автоматически.
++          </p>
++        ) : (
++          <ul className="pw-wb-list">
++            {release.items.map((item) => (
++              <li key={item.taskId} className="pw-wb-card">
++                <div className="pw-wb-card-head">
++                  <div className="pw-wb-card-title">
++                    <input
++                      type="checkbox"
++                      aria-label={`Select ${item.title}`}
++                      checked={releaseSelection.includes(item.taskId)}
++                      disabled={item.status !== 'ready'}
++                      onChange={() => toggle(item.taskId)}
++                    />
++                    <StatusBadge status={item.status} />
++                    <strong>{item.title}</strong>
++                    {item.legacy && <span className="pw-wb-meta">legacy attempt</span>}
++                  </div>
++                  <span className="pw-wb-meta">
++                    {item.completedAt ? `${age(item.completedAt)} ago` : 'time unknown'}
++                  </span>
++                </div>
++                <dl className="pw-wb-facts">
++                  <div>
++                    <dt>Task</dt>
++                    <dd>
++                      <code>{item.taskId.slice(0, 8)}</code>
++                    </dd>
++                  </div>
++                  <div>
++                    <dt>Attempt</dt>
++                    <dd>{item.attemptNumber ?? '—'}</dd>
++                  </div>
++                  <div>
++                    <dt>Commit</dt>
++                    <dd>
++                      {item.commitUrl ? (
++                        <a href={item.commitUrl} target="_blank" rel="noreferrer">
++                          {shortSha(item.commitSha)}
++                        </a>
++                      ) : (
++                        '—'
++                      )}
++                    </dd>
++                  </div>
++                  <div>
++                    <dt>Branch</dt>
++                    <dd>
++                      <code>{item.branch || '—'}</code>
++                    </dd>
++                  </div>
++                  <div>
++                    <dt>PR</dt>
++                    <dd>
++                      {item.prUrl ? (
++                        <a href={item.prUrl} target="_blank" rel="noreferrer">
++                          open
++                        </a>
++                      ) : (
++                        'none'
++                      )}
++                    </dd>
++                  </div>
++                  <div>
++                    <dt>Files</dt>
++                    <dd>{item.changedFiles.length}</dd>
++                  </div>
++                  <div>
++                    <dt>Main</dt>
++                    <dd>{item.mainSha ? shortSha(item.mainSha) : '—'}</dd>
++                  </div>
++                  <div>
++                    <dt>Vercel</dt>
++                    <dd>{item.deployment?.state || 'not checked'}</dd>
++                  </div>
++                </dl>
++
++                <div className={`pw-wb-meta ${checkTone(item)}`}>
++                  Validation: {item.validationStatus} · {item.validationDetail}
++                </div>
++                {item.checks.length > 0 && (
++                  <ul className="pw-wb-criteria">
++                    {item.checks.map((check, index) => (
++                      <li key={`${check.name}-${index}`} className={`is-${check.status}`}>
++                        <strong>{check.status}</strong> {check.name}
++                        {check.detail ? ` — ${check.detail}` : ''}
++                      </li>
++                    ))}
++                  </ul>
++                )}
++                {item.dependencies.length > 0 && (
++                  <p className="pw-wb-meta">
++                    Depends on: {item.dependencies.map((id) => id.slice(0, 8)).join(', ')}
++                  </p>
++                )}
++                {item.blockedReasons.length > 0 && (
++                  <p className="pw-wb-warning">{item.blockedReasons.join(' · ')}</p>
++                )}
++                {item.deployment?.reason && (
++                  <p className="pw-wb-warning">{item.deployment.reason}</p>
++                )}
++                <div className="pw-wb-actions">
++                  {['in_main', 'deployment_pending', 'deployment_failed'].includes(item.status) && (
++                    <button
++                      type="button"
++                      className="pw-wb-button is-quiet"
++                      disabled={busy === `retry_deployment:${item.taskId}`}
++                      onClick={() => void runAction('retry_deployment', { taskId: item.taskId })}
++                    >
++                      <RefreshCw size={13} /> Retry deployment check
++                    </button>
++                  )}
++                  {item.commitSha && (
++                    <button
++                      type="button"
++                      className="pw-wb-button is-quiet"
++                      disabled={busy === 'verify_release'}
++                      onClick={() =>
++                        void runAction('verify_release', { taskIds: [item.taskId] })
++                      }
++                    >
++                      Verify in main
++                    </button>
++                  )}
++                </div>
++              </li>
++            ))}
++          </ul>
++        )}
+       </div>
+-    </div>
+-  );
++    );
++  };
+ 
+   const renderAttempt = (attempt: DevAttempt) => {
+     const cost = attemptCost(attempt);
+@@ -2166,22 +2419,17 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+                   <button
+                     type="button"
+                     className="pw-wb-button is-merge"
+-                    disabled={!review.mergeable || review.task.status !== 'verified'}
+-                    onClick={() => {
+-                      if (
+-                        !window.confirm(
+-                          'Merge this pull request? This is an explicit owner action.'
+-                        )
+-                      ) {
+-                        return;
+-                      }
+-                      void runAction('merge', { taskId: review.task.id, confirm: true });
+-                    }}
++                    onClick={() => setTab('release')}
+                   >
+-                    <GitMerge size={14} /> Merge (only after accept)
++                    <Send size={14} /> Release via Ready to Push
+                   </button>
+                 </div>
+ 
++                <p className="pw-wb-meta">
++                  Individual merges are no longer the release path. Validated commits are promoted
++                  only by the single owner action in READY TO PUSH.
++                </p>
++
+                 {mergeDeployment && (
+                   <div className={`pw-wb-deploy is-${mergeDeployment.state}`}>
+                     <strong>Vercel: {mergeDeployment.state}</strong>
+@@ -2413,6 +2661,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+             {label}
+             {key === 'queue' && counts.queued ? <span>{counts.queued}</span> : null}
+             {key === 'review' && counts.review ? <span>{counts.review}</span> : null}
++            {key === 'release' && overview.release.readyCount
++              ? <span>{overview.release.readyCount}</span>
++              : null}
+           </button>
+         ))}
+       </nav>
+@@ -2420,6 +2671,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+       <div className="pw-wb-body">
+         {tab === 'inbox' && renderInbox()}
+         {tab === 'queue' && renderQueue()}
++        {tab === 'release' && renderRelease()}
+         {tab === 'execution' && renderExecution()}
+         {tab === 'ledger' && renderLedger()}
+         {tab === 'history' && renderHistory()}
+diff --git a/lib/pierrot/dev/workbench/__tests__/execution.test.ts b/lib/pierrot/dev/workbench/__tests__/execution.test.ts
+index 1d55e095..9c1adb92 100644
+--- a/lib/pierrot/dev/workbench/__tests__/execution.test.ts
++++ b/lib/pierrot/dev/workbench/__tests__/execution.test.ts
+@@ -47,6 +47,16 @@ jest.mock('../github', () => ({
+   mergeVerifiedPullRequest: jest.fn(),
+ }));
+ 
++jest.mock('../release', () => ({
++  classifyValidation: jest.fn(() => ({
++    status: 'passed',
++    detail: '1 check passed.',
++    checks: [{ name: 'typecheck', status: 'passed', detail: '' }],
++  })),
++  recordReleaseReady: jest.fn(async () => undefined),
++  recordReleaseFailure: jest.fn(async () => undefined),
++}));
++
+ import * as store from '../store';
+ import {
+   completeAttempt,
+diff --git a/lib/pierrot/dev/workbench/__tests__/lifecycleOperations.test.ts b/lib/pierrot/dev/workbench/__tests__/lifecycleOperations.test.ts
+index 7dedf395..4077043b 100644
+--- a/lib/pierrot/dev/workbench/__tests__/lifecycleOperations.test.ts
++++ b/lib/pierrot/dev/workbench/__tests__/lifecycleOperations.test.ts
+@@ -255,7 +255,7 @@ describe('safe shutdown', () => {
+     expect(github.stopCodespace).not.toHaveBeenCalled();
+   });
+ 
+-  it('keeps the Codespace alive while queue finalization is active', async () => {
++  it('never auto-finalizes or merges while idle; it stops instead', async () => {
+     asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
+     asMock(finalization.advanceFinalization).mockResolvedValue({
+       stage: 'integrating',
+@@ -268,8 +268,9 @@ describe('safe shutdown', () => {
+       graceSeconds: 120,
+     });
+ 
+-    expect(result.action).toBe('finalizing');
+-    expect(github.stopCodespace).not.toHaveBeenCalled();
++    expect(finalization.advanceFinalization).not.toHaveBeenCalled();
++    expect(result.action).toBe('stopping');
++    expect(github.stopCodespace).toHaveBeenCalledWith('test-codespace');
+   });
+ 
+   it('cancels the stop when new work appears between the two checks', async () => {
+diff --git a/lib/pierrot/dev/workbench/__tests__/overview.test.ts b/lib/pierrot/dev/workbench/__tests__/overview.test.ts
+index 63726395..8c5c8198 100644
+--- a/lib/pierrot/dev/workbench/__tests__/overview.test.ts
++++ b/lib/pierrot/dev/workbench/__tests__/overview.test.ts
+@@ -23,6 +23,26 @@ jest.mock('../finalization', () => ({
+   getFinalizationReport: jest.fn(async () => null),
+ }));
+ 
++jest.mock('../release', () => ({
++  getReleaseQueue: jest.fn(async () => ({
++    schemaReady: true,
++    migrationFile: '2026-12-11_pierrot_dev_release.sql',
++    items: [],
++    counts: {},
++    readyCount: 0,
++    blockedCount: 0,
++    inMainCount: 0,
++    deployedCount: 0,
++    pendingDeploymentCount: 0,
++    mainSha: null,
++    mainShaCheckedAt: null,
++    production: null,
++    activeBatch: null,
++    lastBatch: null,
++    limitation: 'test',
++  })),
++}));
++
+ import * as lifecycle from '../lifecycle';
+ import * as store from '../store';
+ import { getWorkbenchOverview } from '../overview';
+diff --git a/lib/pierrot/dev/workbench/__tests__/release.test.ts b/lib/pierrot/dev/workbench/__tests__/release.test.ts
+new file mode 100644
+index 00000000..5257b942
+--- /dev/null
++++ b/lib/pierrot/dev/workbench/__tests__/release.test.ts
+@@ -0,0 +1,501 @@
++/** @jest-environment node */
++
++jest.mock('@/lib/serverAuth', () => {
++  const db: Record<string, Array<Record<string, unknown>>> = {
++    pierrot_dev_releases: [],
++    pierrot_dev_release_batches: [],
++    pierrot_dev_release_items: [],
++    pierrot_dev_batch_items: [],
++  };
++  let counter = 0;
++
++  const matches = (row: Record<string, unknown>, filters: Array<[string, unknown]>) =>
++    filters.every(([key, value]) => {
++      if (Array.isArray(value)) return value.includes(row[key]);
++      return row[key] === value;
++    });
++
++  const builder = (table: string) => {
++    let operation: 'select' | 'insert' | 'update' | 'upsert' = 'select';
++    let payload: Record<string, unknown> | null = null;
++    let conflict: string[] = [];
++    const filters: Array<[string, unknown]> = [];
++
++    const rows = () => {
++      if (!db[table]) db[table] = [];
++      return db[table];
++    };
++
++    const api = {
++      select() {
++        return api;
++      },
++      insert(value: Record<string, unknown>) {
++        operation = 'insert';
++        payload = value;
++        return api;
++      },
++      update(value: Record<string, unknown>) {
++        operation = 'update';
++        payload = value;
++        return api;
++      },
++      upsert(value: Record<string, unknown>, options?: { onConflict?: string }) {
++        operation = 'upsert';
++        payload = value;
++        conflict = String(options?.onConflict || '')
++          .split(',')
++          .map((part) => part.trim())
++          .filter(Boolean);
++        return api;
++      },
++      eq(key: string, value: unknown) {
++        filters.push([key, value]);
++        return api;
++      },
++      in(key: string, value: unknown[]) {
++        filters.push([key, value]);
++        return api;
++      },
++      not() {
++        return api;
++      },
++      order() {
++        return api;
++      },
++      limit() {
++        return api;
++      },
++      maybeSingle() {
++        return Promise.resolve(resolve(false));
++      },
++      single() {
++        return Promise.resolve(resolve(false));
++      },
++      then(onFulfilled: (value: unknown) => unknown, onRejected?: (reason: unknown) => unknown) {
++        return Promise.resolve(resolve(true)).then(onFulfilled, onRejected);
++      },
++    };
++
++    function resolve(asList: boolean) {
++      if (operation === 'insert') {
++        const row = { id: `id-${++counter}`, created_at: new Date().toISOString(), ...payload };
++        rows().push(row);
++        return { data: asList ? [row] : row, error: null };
++      }
++      if (operation === 'upsert') {
++        const existing = rows().find((row) =>
++          conflict.every((key) => row[key] === (payload || {})[key])
++        );
++        if (existing) {
++          Object.assign(existing, payload, { id: existing.id });
++          return { data: asList ? [existing] : existing, error: null };
++        }
++        const row = { id: `id-${++counter}`, created_at: new Date().toISOString(), ...payload };
++        rows().push(row);
++        return { data: asList ? [row] : row, error: null };
++      }
++      if (operation === 'update') {
++        const updated = rows().filter((row) => matches(row, filters));
++        for (const row of updated) Object.assign(row, payload);
++        return { data: asList ? updated : updated[0] || null, error: null };
++      }
++      const selected = rows().filter((row) => matches(row, filters));
++      return { data: asList ? selected : selected[0] || null, error: null };
++    }
++
++    return api;
++  };
++
++  return {
++    getServerSupabaseClient: () => ({ from: (table: string) => builder(table) }),
++    __db: db,
++  };
++});
++
++jest.mock('../store', () => {
++  const settings = new Map<string, unknown>();
++  return {
++    __settings: settings,
++    appendEvent: jest.fn(async () => undefined),
++    getSetting: jest.fn(async (key: string, fallback: unknown) =>
++      settings.has(key) ? settings.get(key) : fallback
++    ),
++    setSetting: jest.fn(async (key: string, value: unknown) => {
++      settings.set(key, value);
++    }),
++    listTaskRows: jest.fn(async () => []),
++    listAttemptsForTasks: jest.fn(async () => new Map()),
++    patchTask: jest.fn(async () => null),
++  };
++});
++
++jest.mock('../github', () => ({
++  commitUrl: jest.fn(
++    (_repository: string, sha: string) => `https://github.com/merkurov1/newlove/commit/${sha}`
++  ),
++  compareCommits: jest.fn(),
++  createPullRequestForAttempt: jest.fn(),
++  getBranchHead: jest.fn(),
++  getCommitChecks: jest.fn(),
++  getPullRequestStatus: jest.fn(),
++  getVercelDeploymentStatus: jest.fn(),
++  mergeVerifiedPullRequest: jest.fn(),
++}));
++
++jest.mock('../notifications', () => ({
++  notifyDevOwner: jest.fn(async () => true),
++}));
++
++import * as serverAuth from '@/lib/serverAuth';
++import * as store from '../store';
++import * as github from '../github';
++import {
++  classifyValidation,
++  deploymentReleaseStatus,
++  orderByDependencies,
++  pushReadyCommits,
++  requestKeyFor,
++} from '../release';
++import type { DevWorkbenchTask } from '../types';
++
++const db = (
++  serverAuth as unknown as { __db: Record<string, Array<Record<string, unknown>>> }
++).__db;
++const settings = (store as unknown as { __settings: Map<string, unknown> }).__settings;
++
++const TASK_A = '11111111-1111-4111-8111-111111111111';
++const TASK_B = '22222222-2222-4222-8222-222222222222';
++const COMMIT_A = 'a'.repeat(40);
++const COMMIT_B = 'b'.repeat(40);
++const MERGE_A = 'c'.repeat(40);
++const MAIN_BEFORE = 'e'.repeat(40);
++
++const asMock = (value: unknown) => value as jest.Mock;
++
++function task(id: string, title: string): DevWorkbenchTask {
++  return {
++    id,
++    title,
++    objective: 'Do it.',
++    repository: 'newlove',
++    baseRef: 'main',
++    status: 'review',
++    priority: 0,
++    queuePosition: null,
++    queuedAt: null,
++    attemptCount: 1,
++    acceptanceCriteria: ['tests'],
++    verificationStatus: null,
++    blockedReason: null,
++    lastErrorCode: null,
++    lastErrorMessage: null,
++    resultCommit: id === TASK_A ? COMMIT_A : COMMIT_B,
++    resultNotes: '',
++    pullRequests: [],
++    updatedAt: new Date().toISOString(),
++    createdAt: new Date().toISOString(),
++  };
++}
++
++function release(taskId: string, overrides: Record<string, unknown> = {}) {
++  return {
++    id: `release-${taskId}`,
++    task_id: taskId,
++    attempt_id: `attempt-${taskId}`,
++    attempt_number: 1,
++    repository: 'newlove',
++    branch: `pierrot/dev/${taskId}/1`,
++    commit_sha: taskId === TASK_A ? COMMIT_A : COMMIT_B,
++    changed_files: ['lib/a.ts'],
++    checks: [{ name: 'typecheck', status: 'passed', detail: 'exit 0' }],
++    validation_status: 'passed',
++    validation_detail: '1 check passed.',
++    status: 'ready',
++    blocked_reasons: [],
++    pr_url:
++      taskId === TASK_A
++        ? 'https://github.com/merkurov1/newlove/pull/1'
++        : 'https://github.com/merkurov1/newlove/pull/2',
++    main_sha: null,
++    created_at: new Date().toISOString(),
++    updated_at: new Date().toISOString(),
++    ...overrides,
++  };
++}
++
++function checks(status: 'passed' | 'failed' | 'pending' | 'none' | 'unknown') {
++  return { status, detail: `CI ${status}`, checks: [] };
++}
++
++beforeEach(() => {
++  db.pierrot_dev_releases.length = 0;
++  db.pierrot_dev_release_batches.length = 0;
++  db.pierrot_dev_release_items.length = 0;
++  db.pierrot_dev_batch_items.length = 0;
++  settings.clear();
++  jest.clearAllMocks();
++  asMock(store.listTaskRows).mockResolvedValue([]);
++  asMock(store.listAttemptsForTasks).mockResolvedValue(new Map());
++  asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
++  asMock(github.getPullRequestStatus).mockResolvedValue({
++    number: 1,
++    url: 'https://github.com/merkurov1/newlove/pull/1',
++    state: 'open',
++    merged: false,
++    mergeable: true,
++    mergeableState: 'clean',
++    headSha: COMMIT_A,
++    mergeCommitSha: null,
++    baseBranch: 'main',
++  });
++  asMock(github.getVercelDeploymentStatus).mockResolvedValue({
++    state: 'ready',
++    url: 'https://newlove.vercel.app',
++    target: 'production',
++    commitSha: MERGE_A,
++    checkedAt: new Date().toISOString(),
++    reason: null,
++  });
++  asMock(github.getBranchHead).mockImplementation(async (_repository: string, branch: string) => {
++    if (branch === 'main') return MAIN_BEFORE;
++    return COMMIT_A;
++  });
++  asMock(github.compareCommits).mockImplementation(
++    async (_repository: string, base: string, head: string) => {
++      if (base === MAIN_BEFORE && [COMMIT_A, COMMIT_B].includes(head)) {
++        return { status: 'ahead', aheadBy: 1, behindBy: 0, totalCommits: 1 };
++      }
++      if (base === MERGE_A && head === MAIN_BEFORE) {
++        return { status: 'ahead', aheadBy: 1, behindBy: 0, totalCommits: 1 };
++      }
++      return { status: 'diverged', aheadBy: 1, behindBy: 1, totalCommits: 2 };
++    }
++  );
++  asMock(github.mergeVerifiedPullRequest).mockResolvedValue({
++    merged: true,
++    sha: MERGE_A,
++    message: '',
++  });
++});
++
++describe('release helpers', () => {
++  it('requires a real passing check', () => {
++    expect(classifyValidation([]).status).toBe('not_run');
++    expect(classifyValidation([{ name: 'lint', status: 'passed' }]).status).toBe('passed');
++    expect(
++      classifyValidation([
++        { name: 'lint', status: 'passed' },
++        { name: 'build', status: 'failed' },
++      ]).status
++    ).toBe('failed');
++  });
++
++  it('maps only READY to deployed', () => {
++    expect(
++      deploymentReleaseStatus({
++        state: 'ready',
++        url: null,
++        target: null,
++        commitSha: null,
++        checkedAt: '',
++        reason: null,
++      })
++    ).toBe('deployed');
++    expect(
++      deploymentReleaseStatus({
++        state: 'building',
++        url: null,
++        target: null,
++        commitSha: null,
++        checkedAt: '',
++        reason: null,
++      })
++    ).toBe('deployment_pending');
++    expect(deploymentReleaseStatus(null)).toBe('deployment_pending');
++  });
++
++  it('orders dependencies before dependants and makes request keys stable', () => {
++    const deps = new Map([
++      [TASK_B, [TASK_A]],
++      [TASK_A, []],
++    ]);
++    expect(orderByDependencies([TASK_B, TASK_A], deps)).toEqual([TASK_A, TASK_B]);
++    const first = requestKeyFor([TASK_A, TASK_B], [COMMIT_A, COMMIT_B], 1_000_000);
++    const same = requestKeyFor([TASK_B, TASK_A], [COMMIT_B, COMMIT_A], 1_000_100);
++    const later = requestKeyFor([TASK_A], [COMMIT_A], 1_000_000 + 10 * 60_000);
++    expect(first).toBe(same);
++    expect(later).not.toBe(first);
++  });
++});
++
++describe('push ready commits', () => {
++  it('promotes a validated commit, confirms main and only marks deployed after Vercel READY', async () => {
++    db.pierrot_dev_releases.push(release(TASK_A));
++    asMock(store.listTaskRows).mockResolvedValue([task(TASK_A, 'Task A')]);
++
++    const result = await pushReadyCommits({
++      userId: 'owner',
++      taskIds: [TASK_A],
++      trigger: 'test',
++    });
++
++    expect(result.status).toBe('completed');
++    expect(result.mergedTaskIds).toEqual([TASK_A]);
++    expect(github.mergeVerifiedPullRequest).toHaveBeenCalledWith({
++      repository: 'newlove',
++      number: 1,
++      expectedHeadSha: COMMIT_A,
++    });
++    expect(db.pierrot_dev_releases[0]).toMatchObject({
++      status: 'deployed',
++      main_sha: MERGE_A,
++    });
++    expect(db.pierrot_dev_release_items[0]).toMatchObject({
++      status: 'pushed',
++      main_sha: MERGE_A,
++    });
++    expect(db.pierrot_dev_release_batches[0]).toMatchObject({ status: 'completed' });
++  });
++
++  it('keeps the item deployment_pending when Vercel is still building', async () => {
++    db.pierrot_dev_releases.push(release(TASK_A));
++    asMock(store.listTaskRows).mockResolvedValue([task(TASK_A, 'Task A')]);
++    asMock(github.getVercelDeploymentStatus).mockResolvedValue({
++      state: 'building',
++      url: null,
++      target: 'production',
++      commitSha: MERGE_A,
++      checkedAt: new Date().toISOString(),
++      reason: null,
++    });
++
++    await pushReadyCommits({ userId: 'owner', taskIds: [TASK_A] });
++
++    expect(db.pierrot_dev_releases[0].status).toBe('deployment_pending');
++    expect(db.pierrot_dev_releases[0].status).not.toBe('deployed');
++  });
++
++  it('blocks a merge conflict during preflight and never merges', async () => {
++    db.pierrot_dev_releases.push(release(TASK_A));
++    asMock(store.listTaskRows).mockResolvedValue([task(TASK_A, 'Task A')]);
++    asMock(github.getPullRequestStatus).mockResolvedValue({
++      number: 1,
++      url: 'https://github.com/merkurov1/newlove/pull/1',
++      state: 'open',
++      merged: false,
++      mergeable: false,
++      mergeableState: 'dirty',
++      headSha: COMMIT_A,
++      mergeCommitSha: null,
++      baseBranch: 'main',
++    });
++
++    const result = await pushReadyCommits({ userId: 'owner', taskIds: [TASK_A] });
++
++    expect(result.status).toBe('blocked');
++    expect(github.mergeVerifiedPullRequest).not.toHaveBeenCalled();
++    expect(result.blocked[0].reasons.join(' ')).toMatch(/conflict/i);
++    expect(db.pierrot_dev_releases[0].status).toBe('blocked');
++  });
++
++  it('blocks failed checks and invalid ancestry', async () => {
++    db.pierrot_dev_releases.push(release(TASK_A));
++    asMock(store.listTaskRows).mockResolvedValue([task(TASK_A, 'Task A')]);
++    asMock(github.getCommitChecks).mockResolvedValue(checks('failed'));
++
++    const failed = await pushReadyCommits({ userId: 'owner', taskIds: [TASK_A] });
++    expect(failed.status).toBe('blocked');
++    expect(failed.blocked[0].reasons.join(' ')).toMatch(/CI failed/i);
++
++    db.pierrot_dev_releases.length = 0;
++    db.pierrot_dev_release_batches.length = 0;
++    db.pierrot_dev_release_items.length = 0;
++    db.pierrot_dev_releases.push(release(TASK_A, { pr_url: null }));
++    asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
++    asMock(github.compareCommits).mockResolvedValue({
++      status: 'diverged',
++      aheadBy: 1,
++      behindBy: 2,
++      totalCommits: 3,
++    });
++
++    const diverged = await pushReadyCommits({ userId: 'owner', taskIds: [TASK_A] });
++    expect(diverged.status).toBe('blocked');
++    expect(diverged.blocked[0].reasons.join(' ')).toMatch(/diverged/i);
++    expect(github.mergeVerifiedPullRequest).not.toHaveBeenCalled();
++  });
++
++  it('blocks a missing dependency', async () => {
++    db.pierrot_dev_releases.push(release(TASK_A), release(TASK_B));
++    db.pierrot_dev_batch_items.push({
++      id: 'bi-1',
++      task_id: TASK_B,
++      depends_on_task_id: TASK_A,
++    });
++    asMock(store.listTaskRows).mockResolvedValue([
++      task(TASK_A, 'Task A'),
++      task(TASK_B, 'Task B'),
++    ]);
++
++    const result = await pushReadyCommits({ userId: 'owner', taskIds: [TASK_B] });
++
++    expect(result.status).toBe('blocked');
++    expect(result.blocked[0].reasons.join(' ')).toMatch(/dependenc/i);
++    expect(github.mergeVerifiedPullRequest).not.toHaveBeenCalled();
++  });
++
++  it('handles partial failure without claiming the whole batch was published', async () => {
++    db.pierrot_dev_releases.push(release(TASK_A), release(TASK_B));
++    asMock(store.listTaskRows).mockResolvedValue([
++      task(TASK_A, 'Task A'),
++      task(TASK_B, 'Task B'),
++    ]);
++    let merges = 0;
++    asMock(github.getPullRequestStatus).mockImplementation(async (_repository, number) => ({
++      number,
++      url: `https://github.com/merkurov1/newlove/pull/${number}`,
++      state: 'open',
++      merged: false,
++      mergeable: true,
++      mergeableState: 'clean',
++      headSha: number === 1 ? COMMIT_A : COMMIT_B,
++      mergeCommitSha: null,
++      baseBranch: 'main',
++    }));
++    asMock(github.mergeVerifiedPullRequest).mockImplementation(async () => {
++      merges += 1;
++      if (merges === 2) throw new Error('GitHub rejected the second merge.');
++      return { merged: true, sha: MERGE_A, message: '' };
++    });
++
++    const result = await pushReadyCommits({
++      userId: 'owner',
++      taskIds: [TASK_A, TASK_B],
++    });
++
++    expect(result.status).toBe('partial');
++    expect(result.mergedTaskIds).toEqual([TASK_A]);
++    expect(result.ok).toBe(false);
++    expect(result.blocked[0].taskId).toBe(TASK_B);
++    expect(db.pierrot_dev_release_batches[0].status).toBe('partial');
++    expect(
++      db.pierrot_dev_release_items.find((row) => row.task_id === TASK_A)?.status
++    ).toBe('pushed');
++    expect(
++      db.pierrot_dev_release_items.find((row) => row.task_id === TASK_B)?.status
++    ).toBe('failed');
++  });
++
++  it('returns the existing batch for a duplicate push request', async () => {
++    db.pierrot_dev_releases.push(release(TASK_A));
++    asMock(store.listTaskRows).mockResolvedValue([task(TASK_A, 'Task A')]);
++
++    await pushReadyCommits({ userId: 'owner', taskIds: [TASK_A] });
++    const duplicate = await pushReadyCommits({ userId: 'owner', taskIds: [TASK_A] });
++
++    expect(github.mergeVerifiedPullRequest).toHaveBeenCalledTimes(1);
++    expect(duplicate.batchId).toBe(db.pierrot_dev_release_batches[0].id);
++    expect(duplicate.note).toMatch(/Duplicate/i);
++  });
++});
+diff --git a/lib/pierrot/dev/workbench/__tests__/releaseMigration.test.ts b/lib/pierrot/dev/workbench/__tests__/releaseMigration.test.ts
+new file mode 100644
+index 00000000..aee4d288
+--- /dev/null
++++ b/lib/pierrot/dev/workbench/__tests__/releaseMigration.test.ts
+@@ -0,0 +1,56 @@
++/** @jest-environment node */
++
++import { describe, expect, it } from '@jest/globals';
++import fs from 'fs';
++import path from 'path';
++
++const migration = fs.readFileSync(
++  path.join(process.cwd(), 'migrations', '2026-12-11_pierrot_dev_release.sql'),
++  'utf8'
++);
++
++describe('release migration', () => {
++  it('is additive and keeps execution history intact', () => {
++    expect(migration).toContain('CREATE TABLE IF NOT EXISTS public.pierrot_dev_releases');
++    expect(migration).toContain('CREATE TABLE IF NOT EXISTS public.pierrot_dev_release_batches');
++    expect(migration).toContain('CREATE TABLE IF NOT EXISTS public.pierrot_dev_release_items');
++    expect(migration).not.toMatch(/\bDROP\s+TABLE\b/i);
++    expect(migration).not.toMatch(/\bDROP\s+COLUMN\b/i);
++    expect(migration).not.toMatch(/\bDELETE\s+FROM\b/i);
++    expect(migration).not.toMatch(/ALTER\s+TABLE\s+public\.pierrot_dev_attempts/i);
++  });
++
++  it('is server-only and makes duplicate push requests idempotent', () => {
++    for (const table of [
++      'pierrot_dev_releases',
++      'pierrot_dev_release_batches',
++      'pierrot_dev_release_items',
++    ]) {
++      expect(migration).toContain(`ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY`);
++      expect(migration).toContain(`REVOKE ALL ON TABLE public.${table} FROM PUBLIC, anon, authenticated`);
++      expect(migration).toContain(`GRANT ALL ON TABLE public.${table} TO service_role`);
++    }
++    expect(migration).toMatch(/request_key TEXT NOT NULL UNIQUE/);
++    expect(migration).toContain('UNIQUE (batch_id, task_id)');
++    expect(migration).toContain('task_id UUID NOT NULL UNIQUE');
++  });
++
++  it('defines an explicit release state machine including deployment verification', () => {
++    for (const status of [
++      'not_committed',
++      'validation_failed',
++      'committed',
++      'ready',
++      'blocked',
++      'pushing',
++      'in_main',
++      'deployment_pending',
++      'deployed',
++      'deployment_failed',
++    ]) {
++      expect(migration).toContain(`'${status}'`);
++    }
++    expect(migration).toContain("deployed_at TIMESTAMPTZ");
++    expect(migration).toContain("deployment_state TEXT");
++  });
++});
+diff --git a/lib/pierrot/dev/workbench/execution.ts b/lib/pierrot/dev/workbench/execution.ts
+index d615fa80..bd376b90 100644
+--- a/lib/pierrot/dev/workbench/execution.ts
++++ b/lib/pierrot/dev/workbench/execution.ts
+@@ -38,12 +38,8 @@ import { collectAttemptEvidence } from './evidence';
+ import { buildAttemptCost } from './costs';
+ import { notifyDevOwner } from './notifications';
+ import type { AttemptEvidence } from './evidence';
+-import {
+-  createPullRequestForAttempt,
+-  getPullRequestStatus,
+-  getVercelDeploymentStatus,
+-  mergeVerifiedPullRequest,
+-} from './github';
++import { createPullRequestForAttempt, getPullRequestStatus, getVercelDeploymentStatus, mergeVerifiedPullRequest } from './github';
++import { classifyValidation, recordReleaseFailure, recordReleaseReady } from './release';
+ import type { DevAttempt, DevReviewView, DevWorkbenchTask, DevWorkbenchTaskStatus } from './types';
+ 
+ assertServerOnly('lib/pierrot/dev/workbench/execution');
+@@ -272,6 +268,31 @@ export async function completeAttempt(
+     const existingTask = await getTaskRowUnscoped(attempt.taskId);
+     if (existingTask) {
+       await ensurePullRequest({ task: existingTask, attempt, workerId });
++      const storedValidation = attempt.verification?.validation as
++        | { checks?: unknown }
++        | undefined;
++      const validation = classifyValidation(storedValidation?.checks || attempt.commands);
++      const completedAttempt = (await getAttempt(attemptId)) || attempt;
++      const completedTask = (await getTaskRowUnscoped(attempt.taskId)) || existingTask;
++      if (
++        completedAttempt.headSha &&
++        SHA_PATTERN.test(completedAttempt.headSha) &&
++        completedAttempt.changedFiles.length > 0 &&
++        validation.status === 'passed'
++      ) {
++        await recordReleaseReady({ task: completedTask, attempt: completedAttempt, validation });
++      } else {
++        await recordReleaseFailure({
++          task: completedTask,
++          attempt: completedAttempt,
++          status: completedAttempt.changedFiles.length === 0 ? 'not_committed' : 'validation_failed',
++          reason:
++            validation.status === 'passed'
++              ? 'No commit was recorded for this attempt.'
++              : validation.detail,
++          validation,
++        });
++      }
+     }
+     return {
+       attempt: (await getAttempt(attemptId)) || attempt,
+@@ -303,6 +324,7 @@ export async function completeAttempt(
+   const warnings = Array.isArray(result.warnings)
+     ? result.warnings.filter((item): item is string => typeof item === 'string').slice(0, 40)
+     : [];
++  const validation = classifyValidation(commands);
+ 
+   // Cost is recorded with the attempt. Model cost is actual only when
+   // OpenCode reported it; Codespaces cost is an estimate from measured runtime.
+@@ -339,6 +361,16 @@ export async function completeAttempt(
+         criteria: Array.isArray(result.criteria) ? result.criteria.slice(0, 60) : [],
+         cost,
+         selfReported: true,
++        validation: {
++          status: validation.status,
++          detail: validation.detail,
++          checks: validation.checks,
++        },
++        commit: {
++          sha: headSha,
++          branch: attempt.branch,
++          changedFiles,
++        },
+       },
+       warnings,
+       result_summary: truncateText(result.summary, 12_000),
+@@ -360,18 +392,44 @@ export async function completeAttempt(
+   }
+ 
+   const task = await getTaskRowUnscoped(attempt.taskId);
++  const hasCommit = Boolean(headSha) && changedFiles.length > 0;
++  const commitReady = hasCommit && validation.status === 'passed';
++  const noChanges = !hasCommit;
++  const failureReason = noChanges
++    ? 'No changes were produced. No empty commit was created and the task was not marked Ready.'
++    : validation.status === 'failed'
++      ? validation.detail
++      : validation.status === 'not_run'
++        ? validation.detail
++        : '';
++
+   if (task) {
+     if (task.status === 'in_progress') {
+-      await patchTask(task.id, {
+-        status: 'review',
+-        result_commit: headSha,
+-        result_notes: truncateText(result.summary, 12_000),
+-        verification_status: 'not_run',
+-        verification_notes: '',
+-        verified_at: null,
+-        last_error_code: null,
+-        last_error_message: null,
+-      });
++      if (commitReady) {
++        await patchTask(task.id, {
++          status: 'review',
++          result_commit: headSha,
++          result_notes: truncateText(result.summary, 12_000),
++          verification_status: 'not_run',
++          verification_notes: '',
++          verified_at: null,
++          last_error_code: null,
++          last_error_message: null,
++        });
++      } else {
++        // A task is not complete without a validated commit. `failed` is the
++        // explicit actionable state; validation evidence stays on the attempt.
++        await patchTask(task.id, {
++          status: 'failed',
++          result_commit: headSha,
++          result_notes: truncateText(result.summary, 12_000),
++          verification_status: validation.status === 'failed' ? 'failed' : 'not_run',
++          verification_notes: truncateText(failureReason, 12_000),
++          verified_at: null,
++          last_error_code: noChanges ? 'NO_CHANGES' : 'VALIDATION_FAILED',
++          last_error_message: truncateText(failureReason, 2000),
++        });
++      }
+     } else {
+       // The task was cancelled or otherwise moved while the worker was
+       // running. Keep the attempt history but do not resurrect the task.
+@@ -394,11 +452,17 @@ export async function completeAttempt(
+     attemptId,
+     workerId,
+     type: 'attempt.completed',
+-    message: `Attempt ${attempt.attemptNumber} completed with ${changedFiles.length} changed file(s). Handed to review; not verified automatically.`,
++    message: commitReady
++      ? `Attempt ${attempt.attemptNumber} completed with ${changedFiles.length} changed file(s) and commit ${headSha?.slice(0, 7)}.`
++      : `Attempt ${attempt.attemptNumber} completed without a releasable commit: ${failureReason}`,
+     payload: {
+       headSha,
+       changedFiles: changedFiles.length,
+       exitCode: result.exitCode,
++      validation: {
++        status: validation.status,
++        detail: validation.detail,
++      },
+       cost: {
+         modelUsd: cost.model.costUsd,
+         codespaceEstimatedUsd: cost.codespace.estimatedUsd,
+@@ -408,6 +472,20 @@ export async function completeAttempt(
+     },
+   });
+ 
++  if (task && !commitReady) {
++    await recordReleaseFailure({
++      task: (await getTaskRowUnscoped(task.id)) || task,
++      attempt: updatedAttempt,
++      status: noChanges ? 'not_committed' : 'validation_failed',
++      reason: failureReason,
++      validation,
++    });
++    return {
++      attempt: (await getAttempt(attemptId)) || updatedAttempt,
++      task: await getTaskRowUnscoped(task.id),
++    };
++  }
++
+   // PR creation is a side effect. Duplicate completion is guarded above and
+   // the helper is safe to call again to repair a crash between the attempt and
+   // the pull request.
+@@ -418,13 +496,21 @@ export async function completeAttempt(
+       workerId,
+     });
+     const completedTask = await getTaskRowUnscoped(task.id);
++    const completedAttempt = (await getAttempt(attemptId)) || updatedAttempt;
++    if (completedTask) {
++      await recordReleaseReady({
++        task: completedTask,
++        attempt: completedAttempt,
++        validation,
++      });
++    }
+     if (completedTask && completedTask.priority >= 10) {
+       await notifyDevOwner({
+         eventKey: `task-completed:${completedTask.id}:${attemptId}`,
+         title: 'Pierrot Dev · important task completed',
+         lines: [
+           completedTask.title,
+-          `Attempt ${attempt.attemptNumber} finished and was handed to review.`,
++          `Attempt ${attempt.attemptNumber} finished and is Ready to Push.`,
+         ],
+         url: completedTask.pullRequests.slice(-1)[0] || null,
+       }).catch(() => {});
+diff --git a/lib/pierrot/dev/workbench/github.ts b/lib/pierrot/dev/workbench/github.ts
+index 1d0e22b2..832b4753 100644
+--- a/lib/pierrot/dev/workbench/github.ts
++++ b/lib/pierrot/dev/workbench/github.ts
+@@ -172,6 +172,7 @@ export async function getPullRequestStatus(
+   mergeable: boolean | null;
+   mergeableState: string | null;
+   headSha: string;
++  mergeCommitSha: string | null;
+   baseBranch: string;
+ } | null> {
+   const config = getDevRepositoryConfig(repoKey(repository));
+@@ -189,6 +190,7 @@ export async function getPullRequestStatus(
+       mergeable: response.data.mergeable ?? null,
+       mergeableState: response.data.mergeable_state ?? null,
+       headSha: response.data.head.sha,
++      mergeCommitSha: response.data.merge_commit_sha || null,
+       baseBranch: response.data.base.ref,
+     };
+   } catch {
+@@ -196,6 +198,47 @@ export async function getPullRequestStatus(
+   }
+ }
+ 
++/**
++ * Compare two refs. Preflight uses this to prove that a task commit is a
++ * descendant of the current main revision. A squash merge produces a new SHA,
++ * so post-promotion verification compares the merge SHA with the new main head
++ * instead of expecting the original task SHA to appear in main verbatim.
++ */
++export async function compareCommits(
++  repository: DevRepositoryKey | string,
++  base: string,
++  head: string
++): Promise<{
++  status: 'ahead' | 'behind' | 'diverged' | 'identical' | 'unknown';
++  aheadBy: number;
++  behindBy: number;
++  totalCommits: number;
++} | null> {
++  const config = getDevRepositoryConfig(repoKey(repository));
++  if (!/^[0-9a-f]{7,40}$/i.test(String(base || '').trim())) return null;
++  if (!/^[0-9a-f]{7,40}$/i.test(String(head || '').trim())) return null;
++  try {
++    const response = await client().rest.repos.compareCommits({
++      owner: config.owner,
++      repo: config.repo,
++      base: String(base).trim(),
++      head: String(head).trim(),
++      per_page: 1,
++    });
++    const status = String(response.data.status || 'unknown');
++    return {
++      status: (['ahead', 'behind', 'diverged', 'identical'].includes(status)
++        ? status
++        : 'unknown') as 'ahead' | 'behind' | 'diverged' | 'identical' | 'unknown',
++      aheadBy: Number(response.data.ahead_by || 0),
++      behindBy: Number(response.data.behind_by || 0),
++      totalCommits: Number(response.data.total_commits || 0),
++    };
++  } catch {
++    return null;
++  }
++}
++
+ export type GitHubChecksSummary = {
+   status: 'passed' | 'failed' | 'pending' | 'none' | 'unknown';
+   detail: string;
+diff --git a/lib/pierrot/dev/workbench/lifecycle.ts b/lib/pierrot/dev/workbench/lifecycle.ts
+index a5f0666c..afd0ff7d 100644
+--- a/lib/pierrot/dev/workbench/lifecycle.ts
++++ b/lib/pierrot/dev/workbench/lifecycle.ts
+@@ -21,7 +21,6 @@ import {
+ } from './store';
+ import { getConfiguredCodespaceName } from './setup';
+ import { estimateCodespaceCost, readAttemptCost, summarizeCosts } from './costs';
+-import { advanceFinalization } from './finalization';
+ import { notifyDevOwner } from './notifications';
+ import {
+   decideCodespaceStart,
+@@ -1871,24 +1870,9 @@ export async function requestIdleShutdown(input: {
+     // Promotion is best effort; the stop lock and final queue checks remain.
+   }
+ 
+-  // The queue may be genuinely drained. Run one bounded finalization step
+-  // before taking the stop lock so a slow GitHub check never holds it. The
+-  // finalizer merges only PRs whose exact head has green CI and is confirmed
+-  // mergeable; a blocked finalization still lets the machine stop after
+-  // notifying the owner.
+-  try {
+-    const finalization = await advanceFinalization({ trigger: `idle:${input.workerId}` });
+-    if (finalization && ['collecting', 'integrating', 'verifying'].includes(finalization.stage)) {
+-      return {
+-        action: 'finalizing',
+-        reason: `Queue finalization is ${finalization.stage}; the Codespace stays available until it settles.`,
+-        retryAfterMs: 20_000,
+-      };
+-    }
+-  } catch {
+-    // Finalization must never break the safe stop path.
+-  }
+-
++  // The queue may be genuinely drained. Release is an explicit owner action,
++  // so an idle worker never merges or pushes anything. It only stops its own
++  // Codespace after the existing safe checks.
+   if (!(await tryAcquireLifecycleLock('stop', input.workerId, 45_000))) {
+     return {
+       action: 'wait',
+diff --git a/lib/pierrot/dev/workbench/overview.ts b/lib/pierrot/dev/workbench/overview.ts
+index 4bdab430..d9314d19 100644
+--- a/lib/pierrot/dev/workbench/overview.ts
++++ b/lib/pierrot/dev/workbench/overview.ts
+@@ -15,6 +15,7 @@ import {
+ } from './store';
+ import { getLifecycleSnapshot } from './lifecycle';
+ import { getFinalizationReport } from './finalization';
++import { getReleaseQueue } from './release';
+ import { estimateTaskCost } from './costs';
+ import type { DevCostEstimate, DevWorkbenchOverview, DevWorkbenchTask } from './types';
+ 
+@@ -78,6 +79,10 @@ export async function getWorkbenchOverview(
+     counts[task.status] = (counts[task.status] || 0) + 1;
+   }
+ 
++  const release = schemaReady
++    ? await getReleaseQueue(userId, { tasks })
++    : await getReleaseQueue(userId, { tasks: [] });
++
+   const inbox = tasks.filter((task) => ['draft', 'ready', 'blocked'].includes(task.status));
+   const queue = tasks
+     .filter((task) => task.status === 'queued')
+@@ -110,6 +115,7 @@ export async function getWorkbenchOverview(
+       recentEvents: [],
+       lifecycle,
+       finalization,
++      release,
+       updatedAt,
+     };
+   }
+@@ -157,6 +163,7 @@ export async function getWorkbenchOverview(
+     recentEvents,
+     lifecycle,
+     finalization,
++    release,
+     updatedAt,
+   };
+ }
+diff --git a/lib/pierrot/dev/workbench/release.ts b/lib/pierrot/dev/workbench/release.ts
+new file mode 100644
+index 00000000..ad899a80
+--- /dev/null
++++ b/lib/pierrot/dev/workbench/release.ts
+@@ -0,0 +1,1613 @@
++import { createHash } from 'crypto';
++import { assertServerOnly } from '@/lib/serverOnly';
++import { getServerSupabaseClient } from '@/lib/serverAuth';
++import { resolveDevRepository } from '../repositories';
++import {
++  appendEvent,
++  getSetting,
++  listAttemptsForTasks,
++  listTaskRows,
++  patchTask,
++  setSetting,
++} from './store';
++import {
++  commitUrl,
++  compareCommits,
++  createPullRequestForAttempt,
++  getBranchHead,
++  getCommitChecks,
++  getPullRequestStatus,
++  getVercelDeploymentStatus,
++  mergeVerifiedPullRequest,
++} from './github';
++import { notifyDevOwner } from './notifications';
++import type {
++  DevDeploymentStatus,
++  DevReleaseBatch,
++  DevReleaseBatchItem,
++  DevReleaseCheck,
++  DevReleaseItem,
++  DevReleaseQueue,
++  DevReleaseStatus,
++  DevWorkbenchTask,
++  DevAttempt,
++} from './types';
++
++assertServerOnly('lib/pierrot/dev/workbench/release');
++
++export const RELEASE_MIGRATION_FILE = '2026-12-11_pierrot_dev_release.sql';
++export const RELEASE_SCHEMA_ERROR = 'DEV_RELEASE_MIGRATION_REQUIRED';
++
++const UUID_PATTERN =
++  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
++const SHA_PATTERN = /^[0-9a-f]{40}$/i;
++const MAX_BATCH_TASKS = 50;
++const IDEMPOTENCY_WINDOW_MS = 5 * 60_000;
++
++const RELEASE_STATUSES: DevReleaseStatus[] = [
++  'not_committed',
++  'validation_failed',
++  'committed',
++  'ready',
++  'blocked',
++  'pushing',
++  'in_main',
++  'deployment_pending',
++  'deployed',
++  'deployment_failed',
++];
++
++export class DevReleaseError extends Error {
++  readonly code: string;
++  readonly status: number;
++
++  constructor(code: string, message: string, status = 409) {
++    super(message);
++    this.name = 'DevReleaseError';
++    this.code = code;
++    this.status = status;
++  }
++}
++
++function store() {
++  return getServerSupabaseClient({ useServiceRole: true });
++}
++
++function nowIso(): string {
++  return new Date().toISOString();
++}
++
++function text(value: unknown, limit = 2000): string {
++  return typeof value === 'string' ? value.trim().slice(0, limit) : '';
++}
++
++function strings(value: unknown, limit = 50): string[] {
++  return Array.isArray(value)
++    ? value
++        .filter((item): item is string => typeof item === 'string')
++        .map((item) => item.trim().slice(0, 2000))
++        .filter(Boolean)
++        .slice(0, limit)
++    : [];
++}
++
++export function isUuid(value: unknown): value is string {
++  return typeof value === 'string' && UUID_PATTERN.test(value);
++}
++
++export function isFullSha(value: unknown): value is string {
++  return typeof value === 'string' && SHA_PATTERN.test(value);
++}
++
++// ---------------------------------------------------------------------------
++// Schema probe
++// ---------------------------------------------------------------------------
++
++let schemaCache: { ready: boolean; expiresAt: number } | null = null;
++
++export async function isReleaseSchemaReady(force = false): Promise<boolean> {
++  if (!force && schemaCache && schemaCache.expiresAt > Date.now()) return schemaCache.ready;
++  try {
++    const checks = await Promise.all(
++      ['pierrot_dev_releases', 'pierrot_dev_release_batches', 'pierrot_dev_release_items'].map(
++        (table) => store().from(table).select('*', { head: true, count: 'exact' }).limit(1)
++      )
++    );
++    const ready = checks.every((check) => !check.error);
++    schemaCache = { ready, expiresAt: Date.now() + 60_000 };
++    return ready;
++  } catch {
++    schemaCache = { ready: false, expiresAt: Date.now() + 30_000 };
++    return false;
++  }
++}
++
++async function requireReleaseSchema(): Promise<void> {
++  if (!(await isReleaseSchemaReady())) {
++    throw new DevReleaseError(
++      RELEASE_SCHEMA_ERROR,
++      `Ready to Push requires the additive migration ${RELEASE_MIGRATION_FILE}.`,
++      503
++    );
++  }
++}
++
++// ---------------------------------------------------------------------------
++// Pure helpers (unit-tested without a database)
++// ---------------------------------------------------------------------------
++
++const PASSED = new Set(['passed', 'success']);
++const FAILED = new Set(['failed', 'failure', 'error', 'timed_out', 'cancelled']);
++
++/**
++ * A commit is only releasable when at least one real verification command
++ * passed and nothing failed. Self-reported prose is not a check.
++ */
++export function classifyValidation(commands: unknown): {
++  status: 'passed' | 'failed' | 'not_run';
++  detail: string;
++  checks: DevReleaseCheck[];
++} {
++  const checks: DevReleaseCheck[] = Array.isArray(commands)
++    ? commands
++        .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
++        .slice(0, 40)
++        .map((item) => {
++          const raw = String(item.status || 'unknown').toLowerCase();
++          const status: DevReleaseCheck['status'] = FAILED.has(raw)
++            ? 'failed'
++            : PASSED.has(raw)
++              ? 'passed'
++              : raw === 'skipped'
++                ? 'skipped'
++                : 'unknown';
++          return {
++            name: text(item.name, 300) || 'check',
++            status,
++            detail: text(item.detail, 1000),
++          };
++        })
++    : [];
++
++  const failed = checks.filter((check) => check.status === 'failed');
++  const passed = checks.filter((check) => check.status === 'passed');
++  if (failed.length > 0) {
++    return {
++      status: 'failed',
++      detail: `${failed.length} verification check(s) failed: ${failed
++        .map((check) => check.name)
++        .slice(0, 5)
++        .join(', ')}`,
++      checks,
++    };
++  }
++  if (passed.length === 0) {
++    return {
++      status: 'not_run',
++      detail: 'No passing test, lint, typecheck or build result is attached to this attempt.',
++      checks,
++    };
++  }
++  return {
++    status: 'passed',
++    detail: `${passed.length} verification check(s) passed.`,
++    checks,
++  };
++}
++
++/** Blocker text used by both preflight and the UI. */
++export function releaseStatusLabel(status: DevReleaseStatus): string {
++  const labels: Record<DevReleaseStatus, string> = {
++    not_committed: 'Not committed',
++    validation_failed: 'Validation failed',
++    committed: 'Committed',
++    ready: 'Ready to Push',
++    blocked: 'Blocked',
++    pushing: 'Pushing',
++    in_main: 'In main',
++    deployment_pending: 'Deployment pending',
++    deployed: 'Deployed',
++    deployment_failed: 'Deployment failed',
++  };
++  return labels[status] || status;
++}
++
++export function deploymentReleaseStatus(
++  deployment: DevDeploymentStatus | null
++): 'deployed' | 'deployment_pending' | 'deployment_failed' {
++  if (deployment?.state === 'ready') return 'deployed';
++  if (deployment?.state === 'error') return 'deployment_failed';
++  return 'deployment_pending';
++}
++
++export function requestKeyFor(taskIds: string[], commits: string[], now = Date.now()): string {
++  const hash = createHash('sha256')
++    .update([...taskIds].sort().join(','))
++    .update('|')
++    .update([...commits].sort().join(','))
++    .digest('hex')
++    .slice(0, 40);
++  const bucket = Math.floor(now / IDEMPOTENCY_WINDOW_MS);
++  return `push:${bucket}:${hash}`;
++}
++
++/** Topologically order selected tasks so a dependency is promoted first. */
++export function orderByDependencies(
++  taskIds: string[],
++  dependencies: Map<string, string[]>
++): string[] {
++  const selected = new Set(taskIds);
++  const result: string[] = [];
++  const visiting = new Set<string>();
++  const visited = new Set<string>();
++
++  const visit = (taskId: string) => {
++    if (visited.has(taskId) || !selected.has(taskId)) return;
++    if (visiting.has(taskId)) return; // A cycle is reported by preflight.
++    visiting.add(taskId);
++    for (const dependency of dependencies.get(taskId) || []) {
++      if (selected.has(dependency)) visit(dependency);
++    }
++    visiting.delete(taskId);
++    visited.add(taskId);
++    result.push(taskId);
++  };
++
++  for (const taskId of taskIds) visit(taskId);
++  return result;
++}
++
++// ---------------------------------------------------------------------------
++// Row mapping
++// ---------------------------------------------------------------------------
++
++function mapChecks(value: unknown): DevReleaseCheck[] {
++  if (!Array.isArray(value)) return [];
++  return value
++    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
++    .slice(0, 40)
++    .map((item) => {
++      const status = String(item.status || 'unknown').toLowerCase();
++      return {
++        name: text(item.name, 300) || 'check',
++        status: (['passed', 'failed', 'skipped', 'unknown'].includes(status)
++          ? status
++          : 'unknown') as DevReleaseCheck['status'],
++        detail: text(item.detail, 1000),
++      };
++    });
++}
++
++function mapDeployment(row: Record<string, unknown>): DevDeploymentStatus | null {
++  const state = text(row.deployment_state, 30);
++  if (!state) return null;
++  const mapped =
++    state === 'ready'
++      ? 'ready'
++      : state === 'error'
++        ? 'error'
++        : state === 'building'
++          ? 'building'
++          : state === 'queued'
++            ? 'queued'
++            : state === 'unavailable'
++              ? 'unavailable'
++              : 'unknown';
++  return {
++    state: mapped,
++    url: text(row.deployment_url, 1000) || null,
++    target: null,
++    commitSha: text(row.main_sha, 40) || null,
++    checkedAt: text(row.updated_at, 40) || nowIso(),
++    reason: null,
++  };
++}
++
++type ReleaseRow = Record<string, unknown>;
++
++function mapReleaseRow(row: ReleaseRow, task: DevWorkbenchTask | null): DevReleaseItem {
++  const commit = text(row.commit_sha, 40) || null;
++  const checks = mapChecks(row.checks);
++  return {
++    taskId: String(row.task_id || ''),
++    title: task?.title || 'Задача',
++    repository: text(row.repository, 120) || task?.repository || 'newlove',
++    attemptId: text(row.attempt_id, 40) || null,
++    attemptNumber:
++      typeof row.attempt_number === 'number' && Number.isFinite(row.attempt_number)
++        ? Math.trunc(row.attempt_number)
++        : null,
++    branch: text(row.branch, 300) || null,
++    commitSha: commit,
++    commitUrl: commit ? commitUrl(text(row.repository, 120) || 'newlove', commit) : null,
++    prUrl: text(row.pr_url, 1000) || null,
++    changedFiles: strings(row.changed_files, 200),
++    checks,
++    validationStatus: (['passed', 'failed', 'not_run'].includes(
++      text(row.validation_status, 20)
++    )
++      ? text(row.validation_status, 20)
++      : 'not_run') as DevReleaseItem['validationStatus'],
++    validationDetail: text(row.validation_detail, 2000),
++    completedAt: text(row.committed_at, 40) || null,
++    status: (RELEASE_STATUSES.includes(text(row.status, 40) as DevReleaseStatus)
++      ? text(row.status, 40)
++      : 'committed') as DevReleaseStatus,
++    blockedReasons: strings(row.blocked_reasons, 20),
++    releaseBatchId: text(row.release_batch_id, 40) || null,
++    mainSha: text(row.main_sha, 40) || null,
++    deployment: mapDeployment(row),
++    dependencies: [],
++    legacy: false,
++  };
++}
++
++function legacyItem(
++  task: DevWorkbenchTask,
++  attempt: DevAttempt | null,
++  dependencies: string[]
++): DevReleaseItem {
++  const commit =
++    (attempt?.headSha && isFullSha(attempt.headSha) ? attempt.headSha : null) ||
++    (task.resultCommit && isFullSha(task.resultCommit) ? task.resultCommit : null);
++  const changedFiles = attempt?.changedFiles?.length
++    ? attempt.changedFiles
++    : commit
++      ? ['(recorded by a pre-release attempt)']
++      : [];
++  const validation = classifyValidation(attempt?.commands);
++  let status: DevReleaseStatus = 'not_committed';
++  if (!commit || changedFiles.length === 0) status = 'not_committed';
++  else if (validation.status === 'failed') status = 'validation_failed';
++  else if (validation.status === 'passed') status = 'ready';
++  else status = 'committed';
++  return {
++    taskId: task.id,
++    title: task.title,
++    repository: task.repository,
++    attemptId: attempt?.id || null,
++    attemptNumber: attempt?.attemptNumber || null,
++    branch: attempt?.branch || null,
++    commitSha: commit,
++    commitUrl: commit ? commitUrl(task.repository, commit) : null,
++    prUrl: attempt?.prUrl || task.pullRequests.slice(-1)[0] || null,
++    changedFiles,
++    checks: validation.checks,
++    validationStatus: validation.status,
++    validationDetail: validation.detail,
++    completedAt: attempt?.finishedAt || task.updatedAt || null,
++    status,
++    blockedReasons: [],
++    releaseBatchId: null,
++    mainSha: null,
++    deployment: null,
++    dependencies,
++    legacy: true,
++  };
++}
++
++function emptyCounts(): Record<DevReleaseStatus, number> {
++  return RELEASE_STATUSES.reduce(
++    (counts, status) => ({ ...counts, [status]: 0 }),
++    {} as Record<DevReleaseStatus, number>
++  );
++}
++
++function defaultQueue(schemaReady: boolean): DevReleaseQueue {
++  return {
++    schemaReady,
++    migrationFile: RELEASE_MIGRATION_FILE,
++    items: [],
++    counts: emptyCounts(),
++    readyCount: 0,
++    blockedCount: 0,
++    inMainCount: 0,
++    deployedCount: 0,
++    pendingDeploymentCount: 0,
++    mainSha: null,
++    mainShaCheckedAt: null,
++    production: null,
++    activeBatch: null,
++    lastBatch: null,
++    limitation:
++      'GitHub does not provide a transactional multi-commit merge. Promotion is sequential with per-commit progress; a failure stops the batch and leaves the already promoted commits In main.',
++  };
++}
++
++// ---------------------------------------------------------------------------
++// Reads
++// ---------------------------------------------------------------------------
++
++export type ReleaseQueueOptions = {
++  tasks?: DevWorkbenchTask[];
++  includeLegacy?: boolean;
++};
++
++async function readDependencies(taskIds: string[]): Promise<Map<string, string[]>> {
++  const map = new Map<string, string[]>();
++  if (taskIds.length === 0) return map;
++  try {
++    const { data } = await store()
++      .from('pierrot_dev_batch_items')
++      .select('task_id,depends_on_task_id')
++      .in('task_id', taskIds)
++      .not('depends_on_task_id', 'is', null);
++    for (const row of data || []) {
++      const taskId = String(row.task_id || '');
++      const dependency = String(row.depends_on_task_id || '');
++      if (!taskId || !dependency) continue;
++      map.set(taskId, [...(map.get(taskId) || []), dependency]);
++    }
++  } catch {
++    // Dependencies are best effort when the workbench migration is partial.
++  }
++  return map;
++}
++
++async function readBatch(batch: Record<string, unknown>): Promise<DevReleaseBatch> {
++  let items: DevReleaseBatchItem[] = [];
++  try {
++    const { data } = await store()
++      .from('pierrot_dev_release_items')
++      .select(
++        'task_id,commit_sha,status,main_sha,deployment_state,deployment_url,error,created_at'
++      )
++      .eq('batch_id', String(batch.id))
++      .order('created_at', { ascending: true });
++    items = (data || []).map((row) => ({
++      taskId: String(row.task_id || ''),
++      commitSha: text(row.commit_sha, 40) || null,
++      status: (['pending', 'pushing', 'pushed', 'failed', 'skipped'].includes(
++        String(row.status)
++      )
++        ? String(row.status)
++        : 'pending') as DevReleaseBatchItem['status'],
++      mainSha: text(row.main_sha, 40) || null,
++      deploymentState: text(row.deployment_state, 30) || null,
++      deploymentUrl: text(row.deployment_url, 1000) || null,
++      error: text(row.error, 2000) || null,
++    }));
++  } catch {
++    items = [];
++  }
++  return {
++    id: String(batch.id),
++    status: (['preflight', 'blocked', 'pushing', 'completed', 'partial', 'failed'].includes(
++      String(batch.status)
++    )
++      ? String(batch.status)
++      : 'preflight') as DevReleaseBatch['status'],
++    taskIds: strings(batch.task_ids, MAX_BATCH_TASKS),
++    mainShaBefore: text(batch.main_sha_before, 40) || null,
++    mainShaAfter: text(batch.main_sha_after, 40) || null,
++    note: text(batch.note, 2000) || null,
++    createdAt: text(batch.created_at, 40) || nowIso(),
++    updatedAt: text(batch.updated_at, 40) || nowIso(),
++    completedAt: text(batch.completed_at, 40) || null,
++    items,
++  };
++}
++
++export async function getReleaseQueue(
++  userId: string,
++  options: ReleaseQueueOptions = {}
++): Promise<DevReleaseQueue> {
++  const schemaReady = await isReleaseSchemaReady();
++  const [mainSetting, productionSetting] = await Promise.all([
++    getSetting<{ sha?: string; checkedAt?: string }>('release:main_head', {}),
++    getSetting<DevDeploymentStatus | null>('release:production', null),
++  ]);
++
++  if (!schemaReady) {
++    return {
++      ...defaultQueue(false),
++      mainSha: text(mainSetting?.sha, 40) || null,
++      mainShaCheckedAt: text(mainSetting?.checkedAt, 40) || null,
++      production: productionSetting || null,
++    };
++  }
++
++  const tasks =
++    options.tasks ||
++    (await listTaskRows({ userId: isUuid(userId) ? userId : '', limit: 200 }));
++  const taskById = new Map(tasks.map((task) => [task.id, task]));
++  const taskIds = tasks.map((task) => task.id);
++  const dependencies = await readDependencies(taskIds);
++
++  let rows: ReleaseRow[] = [];
++  try {
++    const { data } = await store()
++      .from('pierrot_dev_releases')
++      .select('*')
++      .order('updated_at', { ascending: false })
++      .limit(300);
++    rows = Array.isArray(data) ? data : [];
++  } catch {
++    rows = [];
++  }
++  const persistedIds = new Set(rows.map((row) => String(row.task_id || '')));
++
++  const items: DevReleaseItem[] = [];
++  for (const row of rows) {
++    const task = taskById.get(String(row.task_id || ''));
++    if (!task) continue;
++    const item = mapReleaseRow(row, task);
++    item.dependencies = dependencies.get(item.taskId) || [];
++    items.push(item);
++  }
++
++  const includeLegacy = options.includeLegacy !== false;
++  if (includeLegacy) {
++    const legacyTasks = tasks.filter(
++      (task) =>
++        !persistedIds.has(task.id) &&
++        ['review', 'verified', 'archived', 'failed'].includes(task.status) &&
++        (task.resultCommit || task.pullRequests.length > 0)
++    );
++    if (legacyTasks.length > 0) {
++      const attemptsByTask = await listAttemptsForTasks(
++        legacyTasks.map((task) => task.id),
++        5
++      );
++      for (const task of legacyTasks) {
++        const attempts = attemptsByTask.get(task.id) || [];
++        const attempt =
++          attempts.find((item) => item.status === 'completed') || attempts[0] || null;
++        const item = legacyItem(task, attempt, dependencies.get(task.id) || []);
++        if (item.status !== 'not_committed' || item.commitSha) items.push(item);
++      }
++    }
++  }
++
++  let activeBatch: DevReleaseBatch | null = null;
++  let lastBatch: DevReleaseBatch | null = null;
++  try {
++    const { data } = await store()
++      .from('pierrot_dev_release_batches')
++      .select('*')
++      .order('created_at', { ascending: false })
++      .limit(10);
++    for (const batch of data || []) {
++      const mapped = await readBatch(batch);
++      if (!activeBatch && ['preflight', 'blocked', 'pushing'].includes(mapped.status)) {
++        activeBatch = mapped;
++      }
++      if (!lastBatch && ['completed', 'partial', 'failed'].includes(mapped.status)) {
++        lastBatch = mapped;
++      }
++    }
++  } catch {
++    activeBatch = null;
++    lastBatch = null;
++  }
++
++  const counts = emptyCounts();
++  for (const item of items) counts[item.status] += 1;
++
++  return {
++    schemaReady: true,
++    migrationFile: RELEASE_MIGRATION_FILE,
++    items,
++    counts,
++    readyCount: counts.ready,
++    blockedCount: counts.blocked + counts.validation_failed + counts.deployment_failed,
++    inMainCount: counts.in_main,
++    deployedCount: counts.deployed,
++    pendingDeploymentCount: counts.deployment_pending,
++    mainSha: text(mainSetting?.sha, 40) || lastBatch?.mainShaAfter || null,
++    mainShaCheckedAt: text(mainSetting?.checkedAt, 40) || null,
++    production: productionSetting || null,
++    activeBatch,
++    lastBatch,
++    limitation:
++      'GitHub has no transactional multi-commit merge. Push ready commits promotes sequentially, records every step and stops on the first failure; already merged commits stay In main and are never rolled back silently.',
++  };
++}
++
++// ---------------------------------------------------------------------------
++// Release state writes
++// ---------------------------------------------------------------------------
++
++export async function recordReleaseReady(input: {
++  task: DevWorkbenchTask;
++  attempt: DevAttempt;
++  validation: ReturnType<typeof classifyValidation>;
++}): Promise<void> {
++  if (!(await isReleaseSchemaReady())) return;
++  const commit = input.attempt.headSha;
++  if (!isFullSha(commit)) return;
++  try {
++    const { data: existing } = await store()
++      .from('pierrot_dev_releases')
++      .select('id,commit_sha,status')
++      .eq('task_id', input.task.id)
++      .maybeSingle();
++
++    const currentStatus = text(existing?.status, 40);
++    const keepStatus =
++      existing &&
++      String(existing.commit_sha || '') === commit &&
++      ['pushing', 'in_main', 'deployment_pending', 'deployed'].includes(currentStatus);
++
++    const row = {
++      user_id: null,
++      task_id: input.task.id,
++      attempt_id: input.attempt.id,
++      attempt_number: input.attempt.attemptNumber,
++      repository: input.task.repository,
++      branch: input.attempt.branch,
++      commit_sha: commit,
++      pr_url: input.attempt.prUrl || input.task.pullRequests.slice(-1)[0] || null,
++      changed_files: input.attempt.changedFiles.slice(0, 200),
++      checks: input.validation.checks,
++      validation_status: input.validation.status,
++      validation_detail: input.validation.detail,
++      status: keepStatus ? currentStatus : 'ready',
++      blocked_reasons: [],
++      committed_at: input.attempt.finishedAt || nowIso(),
++      updated_at: nowIso(),
++    };
++    const { error } = await store()
++      .from('pierrot_dev_releases')
++      .upsert(row, { onConflict: 'task_id' });
++    if (error) {
++      console.error('[dev-release] record ready failed', { code: error.code });
++      return;
++    }
++    if (!keepStatus) {
++      await appendEvent({
++        taskId: input.task.id,
++        attemptId: input.attempt.id,
++        type: 'release.ready',
++        message: `Commit ${commit.slice(0, 7)} on ${input.attempt.branch || 'branch'} is validated and Ready to Push.`,
++        payload: {
++          commitSha: commit,
++          branch: input.attempt.branch,
++          changedFiles: input.attempt.changedFiles.length,
++          validation: input.validation.status,
++        },
++        dedupeKey: `release-ready:${input.attempt.id}:${commit}`,
++      }).catch(() => {});
++    }
++  } catch (error) {
++    console.error('[dev-release] record ready threw', {
++      code: error instanceof Error ? error.name : 'unknown',
++    });
++  }
++}
++
++export async function recordReleaseFailure(input: {
++  task: DevWorkbenchTask;
++  attempt: DevAttempt;
++  status: 'validation_failed' | 'not_committed';
++  reason: string;
++  validation: ReturnType<typeof classifyValidation>;
++}): Promise<void> {
++  if (!(await isReleaseSchemaReady())) return;
++  try {
++    const { error } = await store()
++      .from('pierrot_dev_releases')
++      .upsert(
++        {
++          task_id: input.task.id,
++          attempt_id: input.attempt.id,
++          attempt_number: input.attempt.attemptNumber,
++          repository: input.task.repository,
++          branch: input.attempt.branch,
++          commit_sha: isFullSha(input.attempt.headSha) ? input.attempt.headSha : null,
++          pr_url: input.attempt.prUrl || null,
++          changed_files: input.attempt.changedFiles.slice(0, 200),
++          checks: input.validation.checks,
++          validation_status: input.validation.status,
++          validation_detail: text(input.reason, 2000),
++          status: input.status,
++          blocked_reasons: [text(input.reason, 1000)],
++          committed_at: input.attempt.finishedAt || nowIso(),
++          updated_at: nowIso(),
++        },
++        { onConflict: 'task_id' }
++      );
++    if (error) {
++      console.error('[dev-release] record failure failed', { code: error.code });
++      return;
++    }
++    await appendEvent({
++      taskId: input.task.id,
++      attemptId: input.attempt.id,
++      type: input.status === 'validation_failed' ? 'release.validation_failed' : 'release.no_changes',
++      level: 'error',
++      message: text(input.reason, 2000),
++      payload: {
++        commitSha: input.attempt.headSha,
++        changedFiles: input.attempt.changedFiles.length,
++        validation: input.validation.status,
++      },
++      dedupeKey: `release-failed:${input.attempt.id}`,
++    }).catch(() => {});
++  } catch {
++    // Release bookkeeping must never hide the task failure itself.
++  }
++}
++
++async function ensurePersistedRelease(
++  task: DevWorkbenchTask,
++  item: DevReleaseItem
++): Promise<void> {
++  if (!item.legacy || !item.commitSha) return;
++  const validation = classifyValidation(item.checks);
++  await store()
++    .from('pierrot_dev_releases')
++    .upsert(
++      {
++        task_id: task.id,
++        attempt_id: item.attemptId,
++        attempt_number: item.attemptNumber,
++        repository: task.repository,
++        branch: item.branch,
++        commit_sha: item.commitSha,
++        pr_url: item.prUrl,
++        changed_files: item.changedFiles.slice(0, 200),
++        checks: item.checks,
++        validation_status: validation.status,
++        validation_detail: validation.detail,
++        status: item.status === 'ready' ? 'ready' : 'committed',
++        blocked_reasons: [],
++        committed_at: item.completedAt || nowIso(),
++        updated_at: nowIso(),
++      },
++      { onConflict: 'task_id' }
++    );
++}
++
++async function updateRelease(
++  taskId: string,
++  patch: Record<string, unknown>
++): Promise<void> {
++  try {
++    await store()
++      .from('pierrot_dev_releases')
++      .update({ ...patch, updated_at: nowIso() })
++      .eq('task_id', taskId);
++  } catch {
++    // The batch item remains the durable per-commit progress record.
++  }
++}
++
++// ---------------------------------------------------------------------------
++// Preflight
++// ---------------------------------------------------------------------------
++
++type PreflightResult = {
++  ok: boolean;
++  reasons: string[];
++  mainHead: string | null;
++  merged: boolean;
++  mergeSha: string | null;
++  prNumber: number | null;
++  prUrl: string | null;
++  ciStatus: 'passed' | 'failed' | 'pending' | 'none' | 'unknown';
++};
++
++function parsePrNumber(url: string | null): number | null {
++  const match = String(url || '').match(/\/pull\/(\d+)(?:\b|$)/);
++  if (!match) return null;
++  const number = Number(match[1]);
++  return Number.isSafeInteger(number) && number > 0 ? number : null;
++}
++
++async function preflightItem(input: {
++  item: DevReleaseItem;
++  task: DevWorkbenchTask;
++  dependencyItems: Map<string, DevReleaseItem>;
++}): Promise<PreflightResult> {
++  const reasons: string[] = [];
++  const repository = input.item.repository;
++  const config = resolveDevRepository(repository);
++  const commit = input.item.commitSha;
++  let mainHead: string | null = null;
++  let merged = false;
++  let mergeSha: string | null = null;
++  const prNumber: number | null = parsePrNumber(input.item.prUrl);
++  let prUrl = input.item.prUrl;
++  let ciStatus: PreflightResult['ciStatus'] = 'unknown';
++  let mergeable: boolean | null = null;
++
++  if (!commit || !isFullSha(commit)) {
++    reasons.push('No full commit SHA is recorded for this task.');
++  }
++  if (input.item.validationStatus === 'failed') {
++    reasons.push('Validation failed; the commit cannot be promoted.');
++  }
++  if (input.item.validationStatus === 'not_run') {
++    reasons.push('No passing validation command is recorded.');
++  }
++  if (['not_committed', 'validation_failed'].includes(input.item.status)) {
++    reasons.push(`Release state is ${releaseStatusLabel(input.item.status)}.`);
++  }
++
++  for (const dependencyId of input.item.dependencies) {
++    const dependency = input.dependencyItems.get(dependencyId);
++    if (!dependency || !['in_main', 'deployed'].includes(dependency.status)) {
++      reasons.push(
++        `Dependency ${dependency?.title || dependencyId} is not confirmed In main yet.`
++      );
++    }
++  }
++
++  if (commit && isFullSha(commit)) {
++    const branchHead = input.item.branch
++      ? await getBranchHead(repository, input.item.branch)
++      : null;
++
++    if (prNumber) {
++      const status = await getPullRequestStatus(repository, prNumber);
++      if (!status) {
++        reasons.push(`Could not read pull request #${prNumber}.`);
++      } else {
++        prUrl = status.url;
++        merged = status.merged;
++        mergeSha = status.mergeCommitSha;
++        if (status.merged) {
++          ciStatus = 'passed';
++        } else if (status.state !== 'open') {
++          reasons.push(`Pull request #${prNumber} is ${status.state}, not open.`);
++        } else {
++          if (status.headSha.toLowerCase() !== commit.toLowerCase()) {
++            reasons.push('The pull request head moved since the commit was recorded.');
++          }
++          if (status.mergeable === false) {
++            reasons.push(
++              `Merge conflict detected (${status.mergeableState || 'dirty'}). Rebase the branch and retry.`
++            );
++          } else if (status.mergeable === null) {
++            reasons.push('GitHub has not finished computing mergeability yet.');
++          }
++          mergeable = status.mergeable;
++        }
++      }
++    } else if (branchHead && branchHead.toLowerCase() !== commit.toLowerCase()) {
++      reasons.push('The working branch head no longer matches the recorded commit.');
++    }
++
++    if (!merged) {
++      const checks = await getCommitChecks(repository, commit);
++      ciStatus = checks.status;
++      if (checks.status === 'failed') reasons.push(`CI failed: ${checks.detail}`);
++      else if (checks.status === 'pending') reasons.push('Required CI checks are still running.');
++      else if (checks.status === 'unknown') {
++        reasons.push(`CI status is unknown: ${checks.detail}`);
++      }
++      // `none` is allowed: a repository may not attach checks to task branches.
++      // The local validation result is still required.
++    }
++
++    mainHead = await getBranchHead(repository, config.defaultBranch);
++    if (!mainHead) {
++      reasons.push(`Could not read ${config.defaultBranch}.`);
++    } else if (!merged) {
++      const comparison = await compareCommits(repository, mainHead, commit);
++      if (!comparison) {
++        reasons.push('Could not verify commit ancestry against main.');
++      } else if (!['ahead', 'identical', 'behind', 'diverged'].includes(comparison.status)) {
++        reasons.push('Commit ancestry against main is unknown.');
++      } else if (
++        ['behind', 'diverged'].includes(comparison.status) &&
++        mergeable !== true
++      ) {
++        // A batch may advance main after the first merge. That is safe only
++        // when GitHub confirms the pull request is still mergeable; otherwise
++        // the commit must be rebased or the conflict resolved first.
++        reasons.push(
++          `Commit ${commit.slice(0, 7)} is ${comparison.status} relative to ${config.defaultBranch} and mergeability is not confirmed; rebase onto the current main.`
++        );
++      }
++    }
++  }
++
++  return {
++    ok: reasons.length === 0,
++    reasons: [...new Set(reasons)],
++    mainHead,
++    merged,
++    mergeSha,
++    prNumber,
++    prUrl,
++    ciStatus,
++  };
++}
++
++async function createBatch(input: {
++  requestKey: string;
++  userId: string;
++  taskIds: string[];
++  status: 'blocked' | 'pushing';
++  mainHead: string | null;
++  note: string;
++}): Promise<Record<string, unknown> | null> {
++  const { data, error } = await store()
++    .from('pierrot_dev_release_batches')
++    .insert({
++      user_id: isUuid(input.userId) ? input.userId : null,
++      request_key: input.requestKey,
++      status: input.status,
++      task_ids: input.taskIds,
++      main_sha_before: input.mainHead,
++      note: text(input.note, 2000),
++      updated_at: nowIso(),
++    })
++    .select('*')
++    .single();
++  if (error || !data) return null;
++  return data;
++}
++
++async function setBatchItem(input: {
++  batchId: string;
++  taskId: string;
++  attemptId: string | null;
++  commitSha: string | null;
++  status: DevReleaseBatchItem['status'];
++  mainSha?: string | null;
++  deploymentState?: string | null;
++  deploymentUrl?: string | null;
++  error?: string | null;
++}): Promise<void> {
++  try {
++    await store()
++      .from('pierrot_dev_release_items')
++      .upsert(
++        {
++          batch_id: input.batchId,
++          task_id: input.taskId,
++          attempt_id: input.attemptId,
++          commit_sha: input.commitSha,
++          status: input.status,
++          main_sha: input.mainSha ?? null,
++          deployment_state: input.deploymentState ?? null,
++          deployment_url: input.deploymentUrl ?? null,
++          error: input.error ?? null,
++          updated_at: nowIso(),
++        },
++        { onConflict: 'batch_id,task_id' }
++      );
++  } catch {
++    // Progress is also written to the event journal.
++  }
++}
++
++async function finishBatch(
++  batchId: string,
++  status: DevReleaseBatch['status'],
++  input: { mainShaAfter: string | null; note: string }
++): Promise<void> {
++  try {
++    await store()
++      .from('pierrot_dev_release_batches')
++      .update({
++        status,
++        main_sha_after: input.mainShaAfter,
++        note: text(input.note, 2000),
++        completed_at: nowIso(),
++        updated_at: nowIso(),
++      })
++      .eq('id', batchId);
++  } catch {
++    // The event journal still records the outcome.
++  }
++}
++
++async function findExistingBatch(requestKey: string): Promise<Record<string, unknown> | null> {
++  try {
++    const { data } = await store()
++      .from('pierrot_dev_release_batches')
++      .select('*')
++      .eq('request_key', requestKey)
++      .maybeSingle();
++    return data || null;
++  } catch {
++    return null;
++  }
++}
++
++async function updateMainSetting(repository: string): Promise<{
++  sha: string | null;
++  deployment: DevDeploymentStatus | null;
++}> {
++  const config = resolveDevRepository(repository);
++  const sha = await getBranchHead(repository, config.defaultBranch);
++  let deployment: DevDeploymentStatus | null = null;
++  if (sha) {
++    deployment = await getVercelDeploymentStatus({ repository, commitSha: sha });
++    await setSetting('release:main_head', { sha, checkedAt: nowIso() }).catch(() => {});
++    if (deployment) {
++      await setSetting('release:production', deployment).catch(() => {});
++    }
++  }
++  return { sha, deployment };
++}
++
++async function applyDeployment(
++  taskId: string,
++  repository: string,
++  mainSha: string
++): Promise<DevDeploymentStatus> {
++  const deployment = await getVercelDeploymentStatus({ repository, commitSha: mainSha });
++  const status = deploymentReleaseStatus(deployment);
++  await updateRelease(taskId, {
++    status,
++    main_sha: mainSha,
++    deployment_state: deployment.state,
++    deployment_url: deployment.url,
++    released_at: nowIso(),
++    ...(status === 'deployed' ? { deployed_at: nowIso() } : {}),
++  });
++  await appendEvent({
++    taskId,
++    type:
++      status === 'deployed'
++        ? 'release.deployed'
++        : status === 'deployment_failed'
++          ? 'release.deployment_failed'
++          : 'release.deployment_pending',
++    level: status === 'deployed' ? 'info' : status === 'deployment_failed' ? 'error' : 'warn',
++    message:
++      status === 'deployed'
++        ? `Vercel deployment for ${mainSha.slice(0, 7)} is READY.`
++        : status === 'deployment_failed'
++          ? `Vercel deployment for ${mainSha.slice(0, 7)} failed: ${deployment.reason || deployment.state}.`
++          : `Vercel deployment for ${mainSha.slice(0, 7)} is ${deployment.state}; not marked deployed.`,
++    payload: {
++      mainSha,
++      deploymentState: deployment.state,
++      deploymentUrl: deployment.url,
++      reason: deployment.reason,
++    },
++    dedupeKey: `release-deployment:${taskId}:${mainSha}:${deployment.state}`,
++  }).catch(() => {});
++  return deployment;
++}
++
++export type PushReadyResult = {
++  ok: boolean;
++  status: DevReleaseBatch['status'];
++  batchId: string | null;
++  mergedTaskIds: string[];
++  blocked: Array<{ taskId: string; reasons: string[] }>;
++  note: string;
++  queue: DevReleaseQueue;
++};
++
++export async function pushReadyCommits(input: {
++  userId: string;
++  taskIds: string[];
++  trigger?: string;
++}): Promise<PushReadyResult> {
++  await requireReleaseSchema();
++  if (!input.userId) {
++    throw new DevReleaseError('DEV_RELEASE_FORBIDDEN', 'Owner authorization is required.', 403);
++  }
++  const requested = [...new Set(input.taskIds.filter(isUuid))].slice(0, MAX_BATCH_TASKS);
++  if (requested.length === 0) {
++    throw new DevReleaseError('DEV_RELEASE_EMPTY', 'Select at least one ready commit.', 400);
++  }
++
++  const queue = await getReleaseQueue(input.userId, { includeLegacy: true });
++  const byTask = new Map(queue.items.map((item) => [item.taskId, item]));
++  const tasks = await listTaskRows({ userId: isUuid(input.userId) ? input.userId : '', limit: 200 });
++  const taskById = new Map(tasks.map((task) => [task.id, task]));
++  const missing = requested.filter((taskId) => !byTask.has(taskId) || !taskById.has(taskId));
++  if (missing.length > 0) {
++    throw new DevReleaseError(
++      'DEV_RELEASE_TASK_NOT_FOUND',
++      `Task(s) not found: ${missing.join(', ')}`,
++      404
++    );
++  }
++
++  // Persist legacy candidates before touching GitHub so a crash never loses
++  // the link between task, attempt and commit.
++  for (const taskId of requested) {
++    const item = byTask.get(taskId)!;
++    if (item.legacy) await ensurePersistedRelease(taskById.get(taskId)!, item);
++  }
++
++  const commits = requested.map((taskId) => byTask.get(taskId)?.commitSha || '');
++  const repositories = new Set(
++    requested.map((taskId) => byTask.get(taskId)?.repository || 'newlove')
++  );
++  if (repositories.size > 1) {
++    throw new DevReleaseError(
++      'DEV_RELEASE_MIXED_REPOSITORIES',
++      'A release batch must target one repository. Select commits from newlove or Pierrot separately.',
++      400
++    );
++  }
++  const batchRepository = [...repositories][0] || 'newlove';
++  let requestKey = requestKeyFor(requested, commits);
++  let existing = await findExistingBatch(requestKey);
++  // A blocked/failed/partial batch never claimed the whole selection was
++  // published. Allow an explicit retry without weakening idempotency for a
++  // successful batch: completed batches always return the existing result.
++  if (existing && ['blocked', 'failed', 'partial'].includes(String(existing.status))) {
++    requestKey = `${requestKey}:retry:${Date.now()}`;
++    existing = null;
++  }
++  if (existing) {
++    const batch = await readBatch(existing);
++    const mergedTaskIds = batch.items
++      .filter((item) => item.status === 'pushed')
++      .map((item) => item.taskId);
++    return {
++      ok: batch.status === 'completed',
++      status: batch.status,
++      batchId: batch.id,
++      mergedTaskIds,
++      blocked: batch.items
++        .filter((item) => item.status === 'failed' || item.status === 'skipped')
++        .map((item) => ({ taskId: item.taskId, reasons: [item.error || batch.note || 'Blocked.'] })),
++      note: 'Duplicate Push ready commits request returned the existing batch.',
++      queue: await getReleaseQueue(input.userId),
++    };
++  }
++
++  const dependencyItems = new Map(queue.items.map((item) => [item.taskId, item]));
++  const preflights = new Map<string, PreflightResult>();
++  const blockedReasons = new Map<string, string[]>();
++  let mainHead: string | null = null;
++
++  for (const taskId of requested) {
++    const item = byTask.get(taskId)!;
++    const task = taskById.get(taskId)!;
++    const preflight = await preflightItem({ item, task, dependencyItems });
++    preflights.set(taskId, preflight);
++    if (!preflight.ok) blockedReasons.set(taskId, preflight.reasons);
++    if (preflight.mainHead) mainHead = preflight.mainHead;
++  }
++
++  if (blockedReasons.size > 0) {
++    const batchRow = await createBatch({
++      requestKey,
++      userId: input.userId,
++      taskIds: requested,
++      status: 'blocked',
++      mainHead,
++      note: 'Preflight blocked the batch. No merge was attempted.',
++    });
++    if (!batchRow) {
++      throw new DevReleaseError('DEV_RELEASE_BATCH_FAILED', 'Unable to create release batch.', 500);
++    }
++    const batchId = String(batchRow.id);
++    for (const taskId of requested) {
++      const item = byTask.get(taskId)!;
++      const reasons = blockedReasons.get(taskId) || [];
++      await setBatchItem({
++        batchId,
++        taskId,
++        attemptId: item.attemptId,
++        commitSha: item.commitSha,
++        status: 'skipped',
++        error: reasons.join(' ') || 'Blocked by preflight.',
++      });
++      await updateRelease(taskId, {
++        status: 'blocked',
++        blocked_reasons: reasons,
++        release_batch_id: batchId,
++      });
++      await appendEvent({
++        taskId,
++        type: 'release.blocked',
++        level: 'warn',
++        message: `Push blocked: ${reasons.join(' ') || 'preflight failed.'}`,
++        payload: { batchId, reasons, commitSha: item.commitSha },
++        dedupeKey: `release-blocked:${batchId}:${taskId}`,
++      }).catch(() => {});
++    }
++    await finishBatch(batchId, 'blocked', {
++      mainShaAfter: mainHead,
++      note: 'Preflight blocked the batch. No merge was attempted.',
++    });
++    await notifyDevOwner({
++      eventKey: `release-blocked:${batchId}`,
++      title: 'Pierrot Dev · Push blocked',
++      lines: [
++        `${blockedReasons.size} of ${requested.length} selected commit(s) failed preflight.`,
++        ...[...blockedReasons.values()].flat().slice(0, 8),
++      ],
++    }).catch(() => {});
++    return {
++      ok: false,
++      status: 'blocked',
++      batchId,
++      mergedTaskIds: [],
++      blocked: [...blockedReasons.entries()].map(([taskId, reasons]) => ({ taskId, reasons })),
++      note: 'Preflight blocked the batch. No merge was attempted.',
++      queue: await getReleaseQueue(input.userId),
++    };
++  }
++
++  const ordered = orderByDependencies(
++    requested,
++    new Map(
++      requested.map((taskId) => [taskId, byTask.get(taskId)?.dependencies || []])
++    )
++  );
++
++  const batchRow = await createBatch({
++    requestKey,
++    userId: input.userId,
++    taskIds: ordered,
++    status: 'pushing',
++    mainHead,
++    note: 'Owner triggered Push ready commits.',
++  });
++  if (!batchRow) {
++    throw new DevReleaseError('DEV_RELEASE_BATCH_FAILED', 'Unable to create release batch.', 500);
++  }
++  const batchId = String(batchRow.id);
++  await appendEvent({
++    type: 'release.batch.started',
++    message: `Push ready commits started for ${ordered.length} commit(s).`,
++    payload: { batchId, taskIds: ordered, mainShaBefore: mainHead },
++    dedupeKey: `release-batch-started:${batchId}`,
++  }).catch(() => {});
++
++  const mergedTaskIds: string[] = [];
++  const blocked: Array<{ taskId: string; reasons: string[] }> = [];
++  let stoppedByFailure = false;
++
++  for (const taskId of ordered) {
++    const item = byTask.get(taskId)!;
++    const task = taskById.get(taskId)!;
++    if (stoppedByFailure) {
++      await setBatchItem({
++        batchId,
++        taskId,
++        attemptId: item.attemptId,
++        commitSha: item.commitSha,
++        status: 'skipped',
++        error: 'Skipped because an earlier commit in this batch failed.',
++      });
++      await updateRelease(taskId, {
++        status: 'blocked',
++        blocked_reasons: ['Skipped because an earlier commit in this batch failed.'],
++        release_batch_id: batchId,
++      });
++      blocked.push({
++        taskId,
++        reasons: ['Skipped because an earlier commit in this batch failed.'],
++      });
++      continue;
++    }
++
++    await setBatchItem({
++      batchId,
++      taskId,
++      attemptId: item.attemptId,
++      commitSha: item.commitSha,
++      status: 'pushing',
++    });
++    await updateRelease(taskId, { status: 'pushing', release_batch_id: batchId });
++
++    // Re-run the expensive safety checks immediately before merging. A stale
++    // preflight result must never be used for a real merge.
++    const fresh = await preflightItem({ item, task, dependencyItems });
++    if (!fresh.ok) {
++      const reason = fresh.reasons.join(' ') || 'Preflight failed before merge.';
++      await setBatchItem({
++        batchId,
++        taskId,
++        attemptId: item.attemptId,
++        commitSha: item.commitSha,
++        status: 'failed',
++        error: reason,
++      });
++      await updateRelease(taskId, { status: 'blocked', blocked_reasons: [reason] });
++      await appendEvent({
++        taskId,
++        type: 'release.blocked',
++        level: 'warn',
++        message: reason,
++        payload: { batchId, reasons: fresh.reasons },
++        dedupeKey: `release-recheck-blocked:${batchId}:${taskId}`,
++      }).catch(() => {});
++      blocked.push({ taskId, reasons: fresh.reasons });
++      stoppedByFailure = true;
++      continue;
++    }
++
++    try {
++      let mergeSha = fresh.merged ? fresh.mergeSha : null;
++
++      if (!fresh.merged) {
++        let prNumber = fresh.prNumber;
++        if (!prNumber) {
++          const created = await createPullRequestForAttempt({
++            repository: item.repository,
++            head: item.branch || '',
++            base: resolveDevRepository(item.repository).defaultBranch,
++            title: `[Pierrot] ${task.title}`.slice(0, 240),
++            body: [
++              `Task: ${task.id}`,
++              `Attempt: ${item.attemptNumber ?? '—'} (${item.attemptId ?? '—'})`,
++              `Commit: ${item.commitSha}`,
++              '',
++              'Promoted by the owner with Push ready commits.',
++              'This pull request is merged as part of a selected release batch, not individually approved.',
++            ].join('\n'),
++          });
++          prNumber = created.number;
++          await updateRelease(taskId, { pr_url: created.url });
++        }
++
++        const merged = await mergeVerifiedPullRequest({
++          repository: item.repository,
++          number: prNumber,
++          expectedHeadSha: item.commitSha || '',
++        });
++        if (!merged.merged) {
++          throw new DevReleaseError(
++            'DEV_RELEASE_MERGE_FAILED',
++            `GitHub did not merge PR #${prNumber}: ${merged.message || 'unknown reason'}.`
++          );
++        }
++        mergeSha = merged.sha;
++      }
++
++      const confirmedMain = await getBranchHead(
++        item.repository,
++        resolveDevRepository(item.repository).defaultBranch
++      );
++      if (!confirmedMain) {
++        throw new DevReleaseError(
++          'DEV_RELEASE_MAIN_UNREADABLE',
++          'Could not read main after the merge; the commit stays Pushing until verified.'
++        );
++      }
++      // A squash merge creates a new SHA. Confirm that SHA is an ancestor of
++      // (or equal to) the new main head. Never claim In main from a 200 alone.
++      const reachable = mergeSha
++        ? await compareCommits(item.repository, mergeSha, confirmedMain)
++        : null;
++      if (!mergeSha || !reachable || !['ahead', 'identical'].includes(reachable.status)) {
++        throw new DevReleaseError(
++          'DEV_RELEASE_UNCONFIRMED',
++          'GitHub did not confirm the promoted revision in main. Retry verification; no second merge will be attempted.'
++        );
++      }
++
++      await updateRelease(taskId, {
++        status: 'deployment_pending',
++        main_sha: mergeSha,
++        released_at: nowIso(),
++        blocked_reasons: [],
++        deployment_state: null,
++        deployment_url: null,
++      });
++      const deployment = await applyDeployment(taskId, item.repository, mergeSha);
++      await setBatchItem({
++        batchId,
++        taskId,
++        attemptId: item.attemptId,
++        commitSha: item.commitSha,
++        status: 'pushed',
++        mainSha: mergeSha,
++        deploymentState: deployment.state,
++        deploymentUrl: deployment.url,
++      });
++      mergedTaskIds.push(taskId);
++      await appendEvent({
++        taskId,
++        type: 'release.pushed',
++        message: `Commit ${item.commitSha?.slice(0, 7)} promoted; main now contains ${mergeSha.slice(0, 7)}.`,
++        payload: {
++          batchId,
++          commitSha: item.commitSha,
++          mainSha: mergeSha,
++          previousMain: fresh.mainHead,
++        },
++        dedupeKey: `release-pushed:${batchId}:${taskId}:${mergeSha}`,
++      }).catch(() => {});
++    } catch (error) {
++      const reason =
++        error instanceof Error ? error.message.slice(0, 800) : 'The promotion failed.';
++      await setBatchItem({
++        batchId,
++        taskId,
++        attemptId: item.attemptId,
++        commitSha: item.commitSha,
++        status: 'failed',
++        error: reason,
++      });
++      await updateRelease(taskId, {
++        status: 'blocked',
++        blocked_reasons: [reason],
++        release_batch_id: batchId,
++      });
++      await appendEvent({
++        taskId,
++        type: 'release.failed',
++        level: 'error',
++        message: reason,
++        payload: { batchId, commitSha: item.commitSha, mainShaBefore: fresh.mainHead },
++        dedupeKey: `release-failed:${batchId}:${taskId}`,
++      }).catch(() => {});
++      blocked.push({ taskId, reasons: [reason] });
++      stoppedByFailure = true;
++    }
++  }
++
++  const { sha: finalMain, deployment: production } = await updateMainSetting(batchRepository);
++  const status: DevReleaseBatch['status'] =
++    blocked.length === 0 && mergedTaskIds.length === ordered.length
++      ? 'completed'
++      : mergedTaskIds.length > 0
++        ? 'partial'
++        : 'failed';
++  const note =
++    status === 'completed'
++      ? `All ${mergedTaskIds.length} commit(s) confirmed In main.`
++      : `Promoted ${mergedTaskIds.length}/${ordered.length} commit(s). ${
++          blocked.length
++        } blocked. Already promoted commits remain In main; no rollback was attempted.`;
++  await finishBatch(batchId, status, { mainShaAfter: finalMain, note });
++  await appendEvent({
++    type: 'release.batch.completed',
++    level: status === 'completed' ? 'info' : 'warn',
++    message: note,
++    payload: {
++      batchId,
++      status,
++      mergedTaskIds,
++      blocked,
++      mainShaBefore: mainHead,
++      mainShaAfter: finalMain,
++      production: production?.state || null,
++    },
++    dedupeKey: `release-batch-completed:${batchId}`,
++  }).catch(() => {});
++  await notifyDevOwner({
++    eventKey: `release-batch:${batchId}`,
++    title:
++      status === 'completed'
++        ? 'Pierrot Dev · batch pushed to main'
++        : 'Pierrot Dev · batch partially pushed',
++    lines: [
++      note,
++      `main: ${finalMain ? finalMain.slice(0, 7) : 'unknown'}`,
++      `Vercel: ${production?.state || 'unknown'}`,
++    ],
++  }).catch(() => {});
++
++  return {
++    ok: status === 'completed',
++    status,
++    batchId,
++    mergedTaskIds,
++    blocked,
++    note,
++    queue: await getReleaseQueue(input.userId),
++  };
++}
++
++// ---------------------------------------------------------------------------
++// Verification / recovery
++// ---------------------------------------------------------------------------
++
++/**
++ * Explicit, bounded verification. It never merges anything. It confirms which
++ * recorded commits are in main and re-reads the matching Vercel deployment, so
++ * a crash after a merge can be recovered without merging twice.
++ */
++export async function verifyReleases(input: {
++  userId: string;
++  taskIds?: string[];
++}): Promise<DevReleaseQueue> {
++  if (!(await isReleaseSchemaReady())) {
++    return getReleaseQueue(input.userId);
++  }
++  const queue = await getReleaseQueue(input.userId, { includeLegacy: false });
++  const wanted = new Set((input.taskIds || []).filter(isUuid));
++  const items = queue.items.filter(
++    (item) =>
++      (wanted.size === 0 || wanted.has(item.taskId)) &&
++      ['pushing', 'in_main', 'deployment_pending', 'deployment_failed', 'blocked', 'ready'].includes(
++        item.status
++      )
++  );
++
++  for (const item of items) {
++    const config = resolveDevRepository(item.repository);
++    const mainHead = await getBranchHead(item.repository, config.defaultBranch);
++    if (mainHead) {
++      await setSetting('release:main_head', {
++        sha: mainHead,
++        checkedAt: nowIso(),
++      }).catch(() => {});
++    }
++
++    if (!item.mainSha && item.commitSha && isFullSha(item.commitSha)) {
++      // A merged PR may have completed while the process died. Detect that
++      // before retrying a merge.
++      const prNumber = parsePrNumber(item.prUrl);
++      if (prNumber) {
++        const pr = await getPullRequestStatus(item.repository, prNumber);
++        if (pr?.merged && pr.mergeCommitSha) {
++          await updateRelease(item.taskId, {
++            status: 'deployment_pending',
++            main_sha: pr.mergeCommitSha,
++            released_at: nowIso(),
++          });
++          const deployment = await applyDeployment(
++            item.taskId,
++            item.repository,
++            pr.mergeCommitSha
++          );
++          await appendEvent({
++            taskId: item.taskId,
++            type: 'release.recovered',
++            message: `Recovered a merged PR and recorded main ${pr.mergeCommitSha.slice(0, 7)} (Vercel ${deployment.state}).`,
++            payload: { commitSha: item.commitSha, mainSha: pr.mergeCommitSha },
++            dedupeKey: `release-recovered:${item.taskId}:${pr.mergeCommitSha}`,
++          }).catch(() => {});
++        }
++      }
++      continue;
++    }
++
++    if (!item.mainSha) continue;
++    const reachable = await compareCommits(item.repository, item.mainSha, mainHead || item.mainSha);
++    if (!reachable || !['ahead', 'identical'].includes(reachable.status)) {
++      await updateRelease(item.taskId, {
++        status: 'blocked',
++        blocked_reasons: ['The recorded main commit is no longer reachable from main.'],
++      });
++      continue;
++    }
++    const deployment = await applyDeployment(item.taskId, item.repository, item.mainSha);
++    if (deployment.state !== 'ready' && item.status === 'deployed') {
++      // Never keep Deployed after Vercel stops reporting READY.
++      await updateRelease(item.taskId, {
++        status: deploymentReleaseStatus(deployment),
++      });
++    }
++  }
++
++  if (items.length > 0) {
++    const { deployment } = await updateMainSetting('newlove');
++    if (!deployment) {
++      const mainHead = await getBranchHead('newlove', 'main');
++      if (mainHead) {
++        const prod = await getVercelDeploymentStatus({ repository: 'newlove', commitSha: mainHead });
++        await setSetting('release:production', prod).catch(() => {});
++      }
++    }
++  }
++  return getReleaseQueue(input.userId);
++}
++
++export async function retryReleaseDeployment(input: {
++  userId: string;
++  taskId: string;
++}): Promise<DevReleaseQueue> {
++  await requireReleaseSchema();
++  const queue = await getReleaseQueue(input.userId, { includeLegacy: false });
++  const item = queue.items.find((entry) => entry.taskId === input.taskId);
++  if (!item) {
++    throw new DevReleaseError('DEV_RELEASE_NOT_FOUND', 'Release item not found.', 404);
++  }
++  if (!item.mainSha) {
++    throw new DevReleaseError(
++      'DEV_RELEASE_NOT_IN_MAIN',
++      'This task has no confirmed main commit to verify yet.',
++      409
++    );
++  }
++  const deployment = await applyDeployment(input.taskId, item.repository, item.mainSha);
++  if (deployment.state === 'error') {
++    await patchTask(input.taskId, {
++      last_error_code: 'DEPLOYMENT_FAILED',
++      last_error_message: deployment.reason || 'Vercel deployment failed.',
++    }).catch(() => null);
++  }
++  return getReleaseQueue(input.userId);
++}
+diff --git a/lib/pierrot/dev/workbench/types.ts b/lib/pierrot/dev/workbench/types.ts
+index 608dea32..e5268712 100644
+--- a/lib/pierrot/dev/workbench/types.ts
++++ b/lib/pierrot/dev/workbench/types.ts
+@@ -447,6 +447,97 @@ export type DevDeploymentStatus = {
+   reason: string | null;
+ };
+ 
++/**
++ * Release state is intentionally separate from task execution status.
++ *
++ * A task can be `review` (execution finished) while its commit is only
++ * `committed`, `ready` or `blocked`. `deployed` is only set after Vercel
++ * confirms the matching production deployment is READY.
++ */
++export type DevReleaseStatus =
++  | 'not_committed'
++  | 'validation_failed'
++  | 'committed'
++  | 'ready'
++  | 'blocked'
++  | 'pushing'
++  | 'in_main'
++  | 'deployment_pending'
++  | 'deployed'
++  | 'deployment_failed';
++
++export type DevReleaseCheck = {
++  name: string;
++  status: 'passed' | 'failed' | 'skipped' | 'unknown';
++  detail: string;
++};
++
++export type DevReleaseItem = {
++  taskId: string;
++  title: string;
++  repository: string;
++  attemptId: string | null;
++  attemptNumber: number | null;
++  branch: string | null;
++  commitSha: string | null;
++  commitUrl: string | null;
++  prUrl: string | null;
++  changedFiles: string[];
++  checks: DevReleaseCheck[];
++  validationStatus: 'passed' | 'failed' | 'not_run';
++  validationDetail: string;
++  completedAt: string | null;
++  status: DevReleaseStatus;
++  blockedReasons: string[];
++  releaseBatchId: string | null;
++  mainSha: string | null;
++  deployment: DevDeploymentStatus | null;
++  dependencies: string[];
++  /** Derived from a task that predates the release ledger; still recoverable. */
++  legacy: boolean;
++};
++
++export type DevReleaseBatchItem = {
++  taskId: string;
++  commitSha: string | null;
++  status: 'pending' | 'pushing' | 'pushed' | 'failed' | 'skipped';
++  mainSha: string | null;
++  deploymentState: string | null;
++  deploymentUrl: string | null;
++  error: string | null;
++};
++
++export type DevReleaseBatch = {
++  id: string;
++  status: 'preflight' | 'blocked' | 'pushing' | 'completed' | 'partial' | 'failed';
++  taskIds: string[];
++  mainShaBefore: string | null;
++  mainShaAfter: string | null;
++  note: string | null;
++  createdAt: string;
++  updatedAt: string;
++  completedAt: string | null;
++  items: DevReleaseBatchItem[];
++};
++
++export type DevReleaseQueue = {
++  schemaReady: boolean;
++  migrationFile: string;
++  items: DevReleaseItem[];
++  counts: Record<DevReleaseStatus, number>;
++  readyCount: number;
++  blockedCount: number;
++  inMainCount: number;
++  deployedCount: number;
++  pendingDeploymentCount: number;
++  mainSha: string | null;
++  mainShaCheckedAt: string | null;
++  production: DevDeploymentStatus | null;
++  activeBatch: DevReleaseBatch | null;
++  lastBatch: DevReleaseBatch | null;
++  limitation: string;
++};
++
+ export type DevSetupCheck = {
+   key: string;
+   label: string;
+@@ -680,6 +771,7 @@ export type DevWorkbenchOverview = {
+   recentEvents: DevEvent[];
+   lifecycle: DevLifecycleSnapshot;
+   finalization: DevFinalizationReport | null;
++  release: DevReleaseQueue;
+   updatedAt: string;
+ };
+ 
+diff --git a/migrations/2026-12-11_pierrot_dev_release.sql b/migrations/2026-12-11_pierrot_dev_release.sql
+new file mode 100644
+index 00000000..168b6378
+--- /dev/null
++++ b/migrations/2026-12-11_pierrot_dev_release.sql
+@@ -0,0 +1,155 @@
++-- Pierrot Dev Release — Ready to Push release ledger
++-- Date: 2026-12-11
++--
++-- ADDITIVE ONLY. Do NOT apply automatically to production.
++--
++-- The execution workbench already records attempts, commits and events. This
++-- migration adds the missing release ledger that answers one question:
++-- "which validated task commits have not reached main / production yet?"
++--
++-- It intentionally does not re-implement execution, attempts, worker leases or
++-- the event journal. It only extends the existing workbench with:
++--   * pierrot_dev_releases        — current release state per task/attempt
++--   * pierrot_dev_release_batches — one explicit owner "Push ready commits"
++--   * pierrot_dev_release_items   — per-commit progress inside a batch
++--
++-- All tables are server-only (RLS enabled, no anon/authenticated grants). No
++-- destructive statement and no column is removed.
++
++-- ---------------------------------------------------------------------------
++-- Release batches (one row per explicit owner action)
++-- ---------------------------------------------------------------------------
++
++CREATE TABLE IF NOT EXISTS public.pierrot_dev_release_batches (
++  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++  user_id UUID,
++  -- Stable hash of the selected task/commit set. Makes a duplicate push
++  -- request return the existing batch instead of merging twice.
++  request_key TEXT NOT NULL UNIQUE
++    CHECK (length(btrim(request_key)) BETWEEN 1 AND 200),
++  status TEXT NOT NULL DEFAULT 'preflight'
++    CHECK (status IN ('preflight', 'blocked', 'pushing', 'completed', 'partial', 'failed')),
++  task_ids UUID[] NOT NULL DEFAULT '{}',
++  main_sha_before TEXT,
++  main_sha_after TEXT,
++  note TEXT,
++  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++  completed_at TIMESTAMPTZ
++);
++
++CREATE INDEX IF NOT EXISTS pierrot_dev_release_batches_status_idx
++  ON public.pierrot_dev_release_batches (status, created_at DESC);
++
++-- ---------------------------------------------------------------------------
++-- Per-commit progress inside a release batch
++-- ---------------------------------------------------------------------------
++
++CREATE TABLE IF NOT EXISTS public.pierrot_dev_release_items (
++  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++  batch_id UUID NOT NULL
++    REFERENCES public.pierrot_dev_release_batches(id) ON DELETE CASCADE,
++  task_id UUID NOT NULL
++    REFERENCES public.pierrot_dev_prompts(id) ON DELETE CASCADE,
++  attempt_id UUID
++    REFERENCES public.pierrot_dev_attempts(id) ON DELETE SET NULL,
++  commit_sha TEXT,
++  status TEXT NOT NULL DEFAULT 'pending'
++    CHECK (status IN ('pending', 'pushing', 'pushed', 'failed', 'skipped')),
++  main_sha TEXT,
++  deployment_state TEXT,
++  deployment_url TEXT,
++  error TEXT,
++  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++  UNIQUE (batch_id, task_id)
++);
++
++CREATE INDEX IF NOT EXISTS pierrot_dev_release_items_batch_idx
++  ON public.pierrot_dev_release_items (batch_id, created_at);
++CREATE INDEX IF NOT EXISTS pierrot_dev_release_items_task_idx
++  ON public.pierrot_dev_release_items (task_id);
++
++-- ---------------------------------------------------------------------------
++-- Current release state per task
++-- ---------------------------------------------------------------------------
++--
++-- One row per task is the current state. Prior attempts, commits and branches
++-- are never mutated or deleted: every attempt remains in pierrot_dev_attempts,
++-- and every state transition is appended to pierrot_dev_events.
++
++CREATE TABLE IF NOT EXISTS public.pierrot_dev_releases (
++  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++  user_id UUID,
++  task_id UUID NOT NULL UNIQUE
++    REFERENCES public.pierrot_dev_prompts(id) ON DELETE CASCADE,
++  attempt_id UUID
++    REFERENCES public.pierrot_dev_attempts(id) ON DELETE SET NULL,
++  attempt_number INTEGER,
++  repository TEXT NOT NULL DEFAULT 'newlove',
++  branch TEXT,
++  commit_sha TEXT,
++  pr_url TEXT,
++  changed_files TEXT[] NOT NULL DEFAULT '{}',
++  checks JSONB NOT NULL DEFAULT '[]'::jsonb
++    CHECK (jsonb_typeof(checks) = 'array' AND pg_column_size(checks) <= 65536),
++  validation_status TEXT NOT NULL DEFAULT 'not_run'
++    CHECK (validation_status IN ('passed', 'failed', 'not_run')),
++  validation_detail TEXT,
++  status TEXT NOT NULL DEFAULT 'committed'
++    CHECK (status IN (
++      'not_committed',
++      'validation_failed',
++      'committed',
++      'ready',
++      'blocked',
++      'pushing',
++      'in_main',
++      'deployment_pending',
++      'deployed',
++      'deployment_failed'
++    )),
++  blocked_reasons TEXT[] NOT NULL DEFAULT '{}',
++  release_batch_id UUID
++    REFERENCES public.pierrot_dev_release_batches(id) ON DELETE SET NULL,
++  main_sha TEXT,
++  deployment_state TEXT,
++  deployment_url TEXT,
++  committed_at TIMESTAMPTZ,
++  released_at TIMESTAMPTZ,
++  deployed_at TIMESTAMPTZ,
++  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
++);
++
++CREATE INDEX IF NOT EXISTS pierrot_dev_releases_status_idx
++  ON public.pierrot_dev_releases (status, committed_at DESC);
++
++-- ---------------------------------------------------------------------------
++-- RLS and privileges: server-only
++-- ---------------------------------------------------------------------------
++
++ALTER TABLE public.pierrot_dev_release_batches ENABLE ROW LEVEL SECURITY;
++ALTER TABLE public.pierrot_dev_release_items ENABLE ROW LEVEL SECURITY;
++ALTER TABLE public.pierrot_dev_releases ENABLE ROW LEVEL SECURITY;
++
++REVOKE ALL ON TABLE public.pierrot_dev_release_batches FROM PUBLIC, anon, authenticated;
++REVOKE ALL ON TABLE public.pierrot_dev_release_items FROM PUBLIC, anon, authenticated;
++REVOKE ALL ON TABLE public.pierrot_dev_releases FROM PUBLIC, anon, authenticated;
++
++GRANT ALL ON TABLE public.pierrot_dev_release_batches TO service_role;
++GRANT ALL ON TABLE public.pierrot_dev_release_items TO service_role;
++GRANT ALL ON TABLE public.pierrot_dev_releases TO service_role;
++
++COMMENT ON TABLE public.pierrot_dev_releases IS
++  'Current per-task release state: validated commit, ready/blocked, in main, deployment verification. Attempt history stays in pierrot_dev_attempts.';
++COMMENT ON TABLE public.pierrot_dev_release_batches IS
++  'One explicit owner Push ready commits action. request_key makes duplicate requests idempotent.';
++COMMENT ON TABLE public.pierrot_dev_release_items IS
++  'Per-commit progress and recovery state inside a release batch.';
++
++-- Manual verification (not executed automatically):
++--   SELECT table_name FROM information_schema.tables
++--    WHERE table_schema = 'public' AND table_name LIKE 'pierrot_dev_release%';
++--   SELECT relname, relrowsecurity FROM pg_class
++--    WHERE relname LIKE 'pierrot_dev_release%';
+diff --git a/scripts/pierrot/__tests__/dev-worker-lib.test.mjs b/scripts/pierrot/__tests__/dev-worker-lib.test.mjs
+index d291919e..7a0245ef 100644
+--- a/scripts/pierrot/__tests__/dev-worker-lib.test.mjs
++++ b/scripts/pierrot/__tests__/dev-worker-lib.test.mjs
+@@ -9,6 +9,8 @@ import {
+   parseStoredAuth,
+   providerFromModel,
+   resolveGitIdentity,
++  selectValidationCommands,
++  summarizeValidation,
+ } from '../dev-worker-lib.mjs';
+ 
+ test('requires OpenCode 2.1.4 or newer', () => {
+@@ -171,3 +173,42 @@ test('boot telemetry exposes a closed set of phases', () => {
+     assert.equal(BOOT_PHASES.includes(phase), true);
+   }
+ });
++
++test('selects real repository checks and skips missing scripts', () => {
++  const selection = selectValidationCommands(
++    { scripts: { typecheck: 'tsc --noEmit', lint: 'eslint .' } },
++    { env: {} }
++  );
++  assert.deepEqual(
++    selection.commands.map((command) => command.name),
++    ['typecheck', 'lint']
++  );
++  assert.deepEqual(
++    selection.skipped.map((item) => item.name),
++    ['test']
++  );
++});
++
++test('does not run checks when validation is explicitly disabled', () => {
++  const selection = selectValidationCommands(
++    { scripts: { typecheck: 'tsc --noEmit' } },
++    { env: { PIERROT_DEV_VALIDATION_DISABLED: 'true' } }
++  );
++  assert.equal(selection.commands.length, 0);
++  assert.match(selection.skipped[0].reason, /disabled/i);
++});
++
++test('summarizes validation and never reports an empty run as passed', () => {
++  assert.equal(summarizeValidation([]).status, 'not_run');
++  assert.equal(
++    summarizeValidation([{ name: 'lint', status: 'passed', detail: '' }]).status,
++    'passed'
++  );
++  assert.equal(
++    summarizeValidation([
++      { name: 'lint', status: 'passed', detail: '' },
++      { name: 'test', status: 'failed', detail: 'exit 1' },
++    ]).status,
++    'failed'
++  );
++});
+diff --git a/scripts/pierrot/dev-worker-lib.mjs b/scripts/pierrot/dev-worker-lib.mjs
+index 3e5c538d..97108bb6 100644
+--- a/scripts/pierrot/dev-worker-lib.mjs
++++ b/scripts/pierrot/dev-worker-lib.mjs
+@@ -237,3 +237,81 @@ export const BOOT_PHASES = Object.freeze([
+   'failed',
+   'stopping',
+ ]);
++
++/**
++ * Decide which repository checks the worker must run before a commit can be
++ * marked Ready. The intent is real, relevant checks, not a simulated pass:
++ *   * typecheck and lint run when the repository defines them;
++ *   * tests run when defined and not explicitly disabled;
++ *   * build is opt-in because it is environment-heavy and slow.
++ *
++ * `PIERROT_DEV_VALIDATION_COMMANDS` overrides the list, e.g. "typecheck,lint".
++ * Unknown or unavailable scripts are returned as skipped with a reason.
++ */
++export function selectValidationCommands(packageJson, options = {}) {
++  const scripts =
++    packageJson && typeof packageJson.scripts === 'object' && packageJson.scripts
++      ? packageJson.scripts
++      : {};
++  const env = options.env && typeof options.env === 'object' ? options.env : {};
++  const explicit = String(env.PIERROT_DEV_VALIDATION_COMMANDS || '').trim();
++  const disabled = String(env.PIERROT_DEV_VALIDATION_DISABLED || '') === 'true';
++  const includeBuild =
++    String(env.PIERROT_DEV_VALIDATION_BUILD || '') === 'true' || Boolean(options.includeBuild);
++
++  if (disabled) {
++    return {
++      commands: [],
++      skipped: [
++        {
++          name: 'validation',
++          reason: 'PIERROT_DEV_VALIDATION_DISABLED=true; no check was executed.',
++        },
++      ],
++    };
++  }
++
++  const requested = explicit
++    ? explicit
++        .split(',')
++        .map((item) => item.trim())
++        .filter(Boolean)
++    : ['typecheck', 'lint', 'test', ...(includeBuild ? ['build'] : [])];
++
++  const commands = [];
++  const skipped = [];
++  const seen = new Set();
++  for (const name of requested) {
++    if (seen.has(name)) continue;
++    seen.add(name);
++    if (name === 'build' && !includeBuild && !explicit) {
++      skipped.push({
++        name,
++        reason: 'Production build is opt-in via PIERROT_DEV_VALIDATION_BUILD=true.',
++      });
++      continue;
++    }
++    if (typeof scripts[name] !== 'string' || !scripts[name].trim()) {
++      skipped.push({ name, reason: `No "${name}" script is defined in package.json.` });
++      continue;
++    }
++    commands.push({ name, script: scripts[name] });
++  }
++  return { commands, skipped };
++}
++
++export function summarizeValidation(results) {
++  const checks = Array.isArray(results) ? results : [];
++  const failed = checks.filter((item) => item.status === 'failed');
++  const passed = checks.filter((item) => item.status === 'passed');
++  return {
++    status: failed.length > 0 ? 'failed' : passed.length > 0 ? 'passed' : 'not_run',
++    detail:
++      failed.length > 0
++        ? `${failed.length} check(s) failed: ${failed.map((item) => item.name).join(', ')}`
++        : passed.length > 0
++          ? `${passed.length} check(s) passed.`
++          : 'No validation command was executed.',
++    checks,
++  };
++}
+diff --git a/scripts/pierrot/dev-worker.mjs b/scripts/pierrot/dev-worker.mjs
+index e4254685..da49b56f 100755
+--- a/scripts/pierrot/dev-worker.mjs
++++ b/scripts/pierrot/dev-worker.mjs
+@@ -36,6 +36,8 @@ import {
+   parseStoredAuth,
+   providerFromModel,
+   resolveGitIdentity,
++  selectValidationCommands,
++  summarizeValidation,
+ } from './dev-worker-lib.mjs';
+ 
+ const API_BASE = (
+@@ -60,6 +62,10 @@ const TASK_TIMEOUT_MS = Math.max(
+   Number(process.env.PIERROT_DEV_TASK_TIMEOUT_MS || 45 * 60 * 1000)
+ );
+ const MAX_LOG_BYTES = Math.max(100000, Number(process.env.PIERROT_DEV_MAX_LOG_BYTES || 2000000));
++const VALIDATION_TIMEOUT_MS = Math.max(
++  60000,
++  Number(process.env.PIERROT_DEV_VALIDATION_TIMEOUT_MS || 15 * 60 * 1000)
++);
+ const IDLE_GRACE_SECONDS = (() => {
+   // Automatic shutdown is mandatory. A stale `0` from the old documentation
+   // must not leave the Codespace running forever; clamp to the same minimum as
+@@ -601,6 +607,87 @@ async function collectChangedFiles(worktree) {
+   return [...new Set(files)].slice(0, 200);
+ }
+ 
++async function detectPackageManager(worktree) {
++  for (const [file, manager] of [
++    ['pnpm-lock.yaml', 'pnpm'],
++    ['package-lock.json', 'npm'],
++    ['yarn.lock', 'yarn'],
++  ]) {
++    const exists = await fs
++      .access(path.join(worktree, file))
++      .then(() => true)
++      .catch(() => false);
++    if (exists) return manager;
++  }
++  return 'npm';
++}
++
++/**
++ * Run the repository's real checks before the commit is allowed to become
++ * Ready. A failing check does not discard the work: the commit is still pushed
++ * for recovery, but the attempt is reported as validation_failed and the task
++ * is never marked Ready.
++ */
++async function runValidation({ worktree, attemptId }) {
++  let packageJson = {};
++  try {
++    packageJson = JSON.parse(await fs.readFile(path.join(worktree, 'package.json'), 'utf8'));
++  } catch {
++    return {
++      status: 'not_run',
++      detail: 'No package.json was found; no repository check could be executed.',
++      checks: [],
++    };
++  }
++
++  const selection = selectValidationCommands(packageJson, { env: process.env });
++  const manager = await detectPackageManager(worktree);
++  const results = [];
++
++  for (const skipped of selection.skipped) {
++    results.push({ name: skipped.name, status: 'skipped', detail: skipped.reason });
++  }
++
++  for (const command of selection.commands) {
++    await log('Validation check started', { attemptId, command: command.name, manager });
++    const result = await runProcess(manager, ['run', command.name], {
++      cwd: worktree,
++      env: { ...process.env, CI: '1' },
++      timeoutMs: VALIDATION_TIMEOUT_MS,
++      maxCaptureBytes: Math.min(MAX_LOG_BYTES, 400000),
++    });
++    const detail = [
++      `exit ${result.code}${result.signal ? ` (${result.signal})` : ''}${
++        result.timedOut ? ', timed out' : ''
++      }`,
++      result.stderr.trim().slice(-1200),
++      result.stdout.trim().slice(-600),
++    ]
++      .filter(Boolean)
++      .join(' · ')
++      .slice(0, 1800);
++    results.push({
++      name: command.name,
++      status: result.code === 0 && !result.timedOut ? 'passed' : 'failed',
++      detail,
++    });
++    await log('Validation check finished', {
++      attemptId,
++      command: command.name,
++      status: result.code === 0 ? 'passed' : 'failed',
++      timedOut: result.timedOut,
++    });
++    await api('progress', {
++      attemptId,
++      stage: 'validation',
++      message: `Validation ${command.name}: ${result.code === 0 ? 'passed' : 'failed'}.`,
++      dedupeKey: `validation:${attemptId}:${command.name}`,
++    }).catch(() => {});
++  }
++
++  return summarizeValidation(results);
++}
++
+ async function writePushFailure(attemptId, record) {
+   const file = path.join(PUSH_FAILURE_DIR, `${attemptId}.json`);
+   try {
+@@ -736,7 +823,7 @@ async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumbe
+       commitSha,
+       reason: error.message,
+       identity: { name: identity.name, email: identity.email },
+-      signing: sign === 'true',
++      signing: true,
+     });
+     throw error;
+   }
+@@ -786,6 +873,7 @@ async function executeClaim(claim) {
+   let runResult = null;
+   let usage = null;
+   let commitSha = null;
++  let validation = null;
+   let attemptFailed = false;
+ 
+   const failClaim = async (payload) => {
+@@ -822,7 +910,7 @@ async function executeClaim(claim) {
+     const sessionId = extractSessionId(runResult.stdout);
+     const report = extractExecutorReport(output);
+     usage = parseOpenCodeCost(runResult.stdout);
+-    const changedFiles = await collectChangedFiles(prepared.worktree);
++    let changedFiles = await collectChangedFiles(prepared.worktree);
+     const logExcerpt = sanitize(output.slice(-60000));
+ 
+     await log('OpenCode result', {
+@@ -928,6 +1016,22 @@ async function executeClaim(claim) {
+       }).catch(() => {});
+     }
+ 
++    // The repository's own checks decide whether this commit may become Ready.
++    // Work is still committed on failure so nothing is lost.
++    if (changedFiles.length > 0) {
++      validation = await runValidation({ worktree: prepared.worktree, attemptId: attempt.id });
++      // A check such as lint --fix or a code generator may touch files.
++      changedFiles = await collectChangedFiles(prepared.worktree);
++      await api('event', {
++        attemptId: attempt.id,
++        type: validation.status === 'passed' ? 'validation.passed' : 'validation.failed',
++        level: validation.status === 'passed' ? 'info' : 'error',
++        message: validation.detail,
++        payload: { status: validation.status, checks: validation.checks },
++        dedupeKey: `validation:${attempt.id}:${validation.status}`,
++      }).catch(() => {});
++    }
++
+     let pushedFiles = [];
+     if (changedFiles.length > 0) {
+       try {
+@@ -968,7 +1072,11 @@ async function executeClaim(claim) {
+       opencodeSessionId: sessionId,
+       headSha: commitSha,
+       changedFiles: pushedFiles.length > 0 ? pushedFiles : changedFiles,
+-      commands: Array.isArray(parsedReport.commands) ? parsedReport.commands.slice(0, 30) : [],
++      commands: Array.isArray(validation?.checks)
++        ? validation.checks.slice(0, 30)
++        : Array.isArray(parsedReport.commands)
++          ? parsedReport.commands.slice(0, 30)
++          : [],
+       summary:
+         typeof parsedReport.summary === 'string'
+           ? parsedReport.summary
+@@ -983,6 +1091,11 @@ async function executeClaim(claim) {
+         runner: 'pierrot-dev-worker',
+         workerVersion: WORKER_VERSION,
+         selfReported: true,
++        validation: validation || {
++          status: 'not_run',
++          detail: 'No changes were produced.',
++          checks: [],
++        },
+         unverified: Array.isArray(parsedReport.unverified)
+           ? parsedReport.unverified.slice(0, 40)
+           : [],
+-- 
+2.55.0
+

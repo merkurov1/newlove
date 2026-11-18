@@ -1,0 +1,2007 @@
+diff --git a/app/admin/pierrot/(workspace)/workspace.css b/app/admin/pierrot/(workspace)/workspace.css
+index b9fcf953..f7033d7e 100644
+--- a/app/admin/pierrot/(workspace)/workspace.css
++++ b/app/admin/pierrot/(workspace)/workspace.css
+@@ -6669,6 +6669,43 @@ a.pw-home-indicator:hover {
+   border-style: dashed;
+ }
+ 
++.pw-wb-badge.is-committed,
++.pw-wb-badge.is-already_in_main {
++  border-color: var(--pw-ink);
++  color: var(--pw-ink);
++  background: var(--pw-panel);
++}
++
++.pw-wb-badge.is-ready_to_push,
++.pw-wb-badge.is-pushing {
++  border-color: var(--pw-ochre);
++  color: #7a4b00;
++  background: #fbf4e6;
++}
++
++.pw-wb-badge.is-in_main,
++.pw-wb-badge.is-deployment_pending {
++  border-color: #4b6d8a;
++  color: #31516b;
++  background: #eef4f8;
++}
++
++.pw-wb-badge.is-deployed {
++  border-color: #3f6b4a;
++  color: #2f5539;
++  background: #edf3ee;
++}
++
++.pw-wb-badge.is-validation_failed,
++.pw-wb-badge.is-deployment_failed,
++.pw-wb-badge.is-conflict,
++.pw-wb-badge.is-blocked,
++.pw-wb-badge.is-no_changes {
++  border-color: #b05345;
++  color: #8f3427;
++  background: #fbeceb;
++}
++
+ .pw-wb-position {
+   display: inline-flex;
+   align-items: center;
+diff --git a/app/api/admin/pierrot/dev/workbench/__tests__/route.test.ts b/app/api/admin/pierrot/dev/workbench/__tests__/route.test.ts
+index 0a07d248..74ede8d2 100644
+--- a/app/api/admin/pierrot/dev/workbench/__tests__/route.test.ts
++++ b/app/api/admin/pierrot/dev/workbench/__tests__/route.test.ts
+@@ -29,12 +29,12 @@ jest.mock('@/lib/pierrot/dev/workbench/store', () => ({
+   reapExpiredAttempts: jest.fn(async () => 0),
+ }));
+ 
+-jest.mock('@/lib/pierrot/dev/workbench/finalization', () => ({
+-  advanceFinalization: jest.fn(async () => null),
++jest.mock('@/lib/pierrot/dev/workbench/release', () => ({
++  recoverInterruptedReleases: jest.fn(async () => 0),
+ }));
+ 
+ import { GET, maxDuration } from '../route';
+-import { advanceFinalization } from '@/lib/pierrot/dev/workbench/finalization';
++import { recoverInterruptedReleases } from '@/lib/pierrot/dev/workbench/release';
+ import { ensureCodespaceForQueuedWork } from '@/lib/pierrot/dev/workbench/lifecycle';
+ import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
+ import { reapExpiredAttempts } from '@/lib/pierrot/dev/workbench/store';
+@@ -42,7 +42,7 @@ import { reapExpiredAttempts } from '@/lib/pierrot/dev/workbench/store';
+ const ensure = ensureCodespaceForQueuedWork as jest.Mock;
+ const overview = getWorkbenchOverview as jest.Mock;
+ const reap = reapExpiredAttempts as jest.Mock;
+-const finalize = advanceFinalization as jest.Mock;
++const recover = recoverInterruptedReleases as jest.Mock;
+ 
+ beforeEach(() => {
+   jest.clearAllMocks();
+@@ -53,11 +53,11 @@ beforeEach(() => {
+   });
+   overview.mockResolvedValue({ schemaReady: true, lifecycle: {} });
+   reap.mockResolvedValue(0);
+-  finalize.mockResolvedValue(null);
++  recover.mockResolvedValue(0);
+ });
+ 
+ describe('Admin Dev workbench GET', () => {
+-  it('reaps, then allows guarded worker recovery, then builds the snapshot', async () => {
++  it('reaps, recovers interrupted releases, then builds the snapshot', async () => {
+     const request = new Request('http://localhost/api/admin/pierrot/dev/workbench');
+     const response = await GET(request);
+     const body = (await response.json()) as { overview?: unknown };
+@@ -71,13 +71,13 @@ describe('Admin Dev workbench GET', () => {
+       allowWorkerRecovery: true,
+     });
+     expect(overview).toHaveBeenCalledWith(expect.any(String), { skipReap: true });
+-    expect(finalize).toHaveBeenCalledWith({ trigger: 'admin:overview' });
++    expect(recover).toHaveBeenCalledWith(expect.any(String));
+ 
+-    // The overview must not be read before recovery and finalization have
+-    // finished. Finalization is bounded to one integration step per poll.
++    // The overview must not be read before recovery has finished. Recovery is
++    // read-driven and never merges anything automatically.
+     expect(reap.mock.invocationCallOrder[0]).toBeLessThan(ensure.mock.invocationCallOrder[0]);
+-    expect(ensure.mock.invocationCallOrder[0]).toBeLessThan(finalize.mock.invocationCallOrder[0]);
+-    expect(finalize.mock.invocationCallOrder[0]).toBeLessThan(
++    expect(ensure.mock.invocationCallOrder[0]).toBeLessThan(recover.mock.invocationCallOrder[0]);
++    expect(recover.mock.invocationCallOrder[0]).toBeLessThan(
+       overview.mock.invocationCallOrder[0]
+     );
+   });
+diff --git a/app/api/admin/pierrot/dev/workbench/actions/route.ts b/app/api/admin/pierrot/dev/workbench/actions/route.ts
+index fadcb454..bbf043f2 100644
+--- a/app/api/admin/pierrot/dev/workbench/actions/route.ts
++++ b/app/api/admin/pierrot/dev/workbench/actions/route.ts
+@@ -39,7 +39,11 @@ import {
+   startCodespaceNow,
+   stopCodespaceNow,
+ } from '@/lib/pierrot/dev/workbench/lifecycle';
+-import { advanceFinalization, retryFinalization } from '@/lib/pierrot/dev/workbench/finalization';
++import {
++  buildReleaseQueue,
++  pushReadyCommits,
++  recoverInterruptedReleases,
++} from '@/lib/pierrot/dev/workbench/release';
+ import { CODESPACE_NAME_ENV } from '@/lib/pierrot/dev/workbench/setup';
+ import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
+ import { DevTransitionError } from '@/lib/pierrot/dev/workbench/state';
+@@ -428,22 +432,66 @@ export async function POST(req: Request) {
+         break;
+       }
+       case 'finalize_queue': {
+-        const retry = body.retry === true;
+-        const report = retry
+-          ? await retryFinalization('admin:retry')
+-          : await advanceFinalization({ trigger: 'admin:finalize', force: true });
+-        if (!report) {
++        // Legacy Queue finalization no longer merges anything. Production
++        // promotion is exclusively the explicit "Push ready commits" action.
++        const releaseQueue = await buildReleaseQueue(admin.id, { refresh: true });
++        await appendEvent({
++          type: 'release.preflight.checked',
++          message: `Release preflight refreshed: ${releaseQueue.summary.readyCount} ready, ${releaseQueue.summary.blockedCount + releaseQueue.summary.conflictCount} blocked.`,
++          payload: {
++            ready: releaseQueue.summary.readyCount,
++            blocked: releaseQueue.summary.blockedCount,
++            conflicts: releaseQueue.summary.conflictCount,
++          },
++          dedupeKey: `release-preflight:${Math.floor(Date.now() / 60_000)}`,
++        }).catch(() => {});
++        return json({
++          ok: true,
++          release: releaseQueue,
++          message:
++            'Automatic finalization is disabled. Select ready commits and use Push ready commits.',
++        });
++      }
++      case 'push_ready':
++      case 'push_ready_commits': {
++        if (body.confirm !== true) {
+           return json(
+-            { error: 'Finalization is unavailable until the workbench schema is ready.' },
++            {
++              error: 'Push ready commits requires an explicit confirmation.',
++              code: 'RELEASE_CONFIRMATION_REQUIRED',
++            },
+             409
+           );
+         }
+-        await appendEvent({
+-          type: 'batch.finalization.requested',
+-          message: `Owner requested queue finalization (${report.stage}).`,
+-          payload: { finalizationId: report.id, retry },
++        const taskIds = strings(body.taskIds, 50);
++        if (taskIds.length === 0) {
++          return json({ error: 'Select at least one committed task.' }, 400);
++        }
++        const result = await pushReadyCommits({
++          userId: admin.id,
++          taskIds,
++          idempotencyKey:
++            typeof body.idempotencyKey === 'string' ? body.idempotencyKey : undefined,
+         });
+-        break;
++        const overview = await getWorkbenchOverview(admin.id);
++        return json(
++          {
++            ok: result.ok,
++            code: result.code,
++            message: result.message,
++            release: result.release,
++            releaseOverview: result.overview,
++            duplicate: result.duplicate,
++            warnings: result.warnings,
++            overview,
++          },
++          result.ok ? 200 : result.code === 'RELEASE_PREFLIGHT_BLOCKED' ? 409 : 400
++        );
++      }
++      case 'refresh_release': {
++        await recoverInterruptedReleases(admin.id);
++        const releaseOverview = await buildReleaseQueue(admin.id, { refresh: true });
++        return json({ ok: true, release: releaseOverview, overview: await getWorkbenchOverview(admin.id) });
+       }
+       case 'block': {
+         const reason = typeof body.reason === 'string' ? body.reason.slice(0, 2000) : '';
+diff --git a/app/api/admin/pierrot/dev/workbench/route.ts b/app/api/admin/pierrot/dev/workbench/route.ts
+index e3a91c00..8d3417c3 100644
+--- a/app/api/admin/pierrot/dev/workbench/route.ts
++++ b/app/api/admin/pierrot/dev/workbench/route.ts
+@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
+ import { requireAdminFromRequest } from '@/lib/serverAuth';
+ import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
+ import { ensureCodespaceForQueuedWork } from '@/lib/pierrot/dev/workbench/lifecycle';
+-import { advanceFinalization } from '@/lib/pierrot/dev/workbench/finalization';
++import { recoverInterruptedReleases } from '@/lib/pierrot/dev/workbench/release';
+ import { reapExpiredAttempts } from '@/lib/pierrot/dev/workbench/store';
+ 
+ export const runtime = 'nodejs';
+@@ -55,13 +55,13 @@ export async function GET(req: Request) {
+       // The overview must still load when Codespaces is temporarily unavailable.
+     }
+ 
+-    // Admin is also a finalization pump: when the queue is drained, each poll
+-    // advances one bounded integration step. The finalizer is idempotent and
+-    // locked, so a concurrent idle poll cannot merge twice.
++    // Admin is also a recovery trigger for interrupted release pushes. This is
++    // read-driven and bounded; it never merges anything automatically. The
++    // single owner action "Push ready commits" is the only production path.
+     try {
+-      await advanceFinalization({ trigger: 'admin:overview' });
++      await recoverInterruptedReleases(admin.id);
+     } catch {
+-      // Finalization must not hide the overview when GitHub is unavailable.
++      // Recovery must not hide the overview when GitHub is unavailable.
+     }
+ 
+     const overview = await getWorkbenchOverview(admin.id, { skipReap: true });
+diff --git a/components/pierrot/workspace/DevWorkbench.tsx b/components/pierrot/workspace/DevWorkbench.tsx
+index 13ab3846..df1b35c7 100644
+--- a/components/pierrot/workspace/DevWorkbench.tsx
++++ b/components/pierrot/workspace/DevWorkbench.tsx
+@@ -24,6 +24,7 @@ import {
+   ShieldAlert,
+   Terminal,
+   Trash2,
++  Upload,
+   X,
+ } from 'lucide-react';
+ import type {
+@@ -32,13 +33,23 @@ import type {
+   DevCostEstimate,
+   DevCostLedger,
+   DevDeploymentStatus,
++  DevReleaseItem,
++  DevReleaseOverview,
+   DevReviewView,
+   DevSetupReport,
+   DevWorkbenchOverview,
+   DevWorkbenchTask,
+ } from '@/lib/pierrot/dev/workbench/types';
+ 
+-type Tab = 'inbox' | 'queue' | 'execution' | 'ledger' | 'history' | 'review' | 'setup';
++type Tab =
++  | 'inbox'
++  | 'queue'
++  | 'execution'
++  | 'ledger'
++  | 'history'
++  | 'review'
++  | 'release'
++  | 'setup';
+ 
+ type Props = {
+   initialOverview: DevWorkbenchOverview;
+@@ -52,6 +63,7 @@ const TABS: Array<{ key: Tab; label: string; icon: typeof Inbox }> = [
+   { key: 'ledger', label: 'LEDGER', icon: Coins },
+   { key: 'history', label: 'HISTORY', icon: History },
+   { key: 'review', label: 'REVIEW', icon: Check },
++  { key: 'release', label: 'READY TO PUSH', icon: Upload },
+   { key: 'setup', label: 'SETUP', icon: Settings2 },
+ ];
+ 
+@@ -309,6 +321,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+   const [ledger, setLedger] = useState<DevCostLedger | null>(null);
+   const [ledgerDays, setLedgerDays] = useState(30);
+   const [ledgerLoading, setLedgerLoading] = useState(false);
++  const [release, setRelease] = useState<DevReleaseOverview | null>(null);
++  const [releaseLoading, setReleaseLoading] = useState(false);
++  const [releaseSelection, setReleaseSelection] = useState<string[]>([]);
+   const [reviewTaskId, setReviewTaskId] = useState<string | null>(null);
+   const [review, setReview] = useState<DevReviewView | null>(null);
+   const [reviewLoading, setReviewLoading] = useState(false);
+@@ -385,6 +400,78 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+     [ledgerDays]
+   );
+ 
++  const loadRelease = useCallback(async (refresh = true) => {
++    setReleaseLoading(true);
++    try {
++      const response = await fetch(
++        `/api/admin/pierrot/dev/workbench/release?refresh=${refresh ? '1' : '0'}`,
++        { cache: 'no-store' }
++      );
++      if (!response.ok) throw new Error(await readError(response));
++      const body = (await response.json()) as { release: DevReleaseOverview };
++      setRelease(body.release);
++      const readyIds = body.release.items.filter((item) => item.state === 'ready').map((item) => item.taskId);
++      setReleaseSelection((current) => {
++        const valid = current.filter((id) => readyIds.includes(id));
++        return valid.length > 0 ? valid : readyIds;
++      });
++      return body.release;
++    } catch (caught) {
++      setError(caught instanceof Error ? caught.message : 'Ready to Push failed to load.');
++      return null;
++    } finally {
++      setReleaseLoading(false);
++    }
++  }, []);
++
++  const toggleReleaseItem = useCallback((taskId: string) => {
++    setReleaseSelection((current) =>
++      current.includes(taskId)
++        ? current.filter((id) => id !== taskId)
++        : [...current, taskId]
++    );
++  }, []);
++
++  const pushReadyCommits = useCallback(async () => {
++    if (releaseSelection.length === 0) return;
++    setBusy('push_ready');
++    setError(null);
++    setNotice(null);
++    try {
++      const response = await fetch('/api/admin/pierrot/dev/workbench/release', {
++        method: 'POST',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({
++          confirm: true,
++          taskIds: releaseSelection,
++          idempotencyKey:
++            typeof crypto !== 'undefined' && 'randomUUID' in crypto
++              ? `admin-push-${crypto.randomUUID()}`
++              : `admin-push-${Date.now()}`,
++        }),
++      });
++      const body = (await response.json().catch(() => ({}))) as {
++        ok?: boolean;
++        message?: string;
++        releaseOverview?: DevReleaseOverview;
++        overview?: DevWorkbenchOverview;
++      };
++      if (body.releaseOverview) setRelease(body.releaseOverview);
++      if (body.overview) setOverview(body.overview);
++      if (!response.ok || body.ok === false) {
++        throw new Error(body.message || 'Push ready commits was blocked.');
++      }
++      setReleaseSelection([]);
++      setNotice(body.message || 'Push ready commits completed.');
++      await loadRelease(false);
++    } catch (caught) {
++      setError(caught instanceof Error ? caught.message : 'Push ready commits failed.');
++      await loadRelease(false);
++    } finally {
++      setBusy(null);
++    }
++  }, [loadRelease, releaseSelection]);
++
+   const runAction = useCallback(
+     async (action: string, payload: Record<string, unknown> = {}, label?: string) => {
+       setBusy(label || action);
+@@ -590,6 +677,11 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+         <span className="pw-wb-chip is-quiet">
+           queued {counts.queued || 0} · review {counts.review || 0} · failed {counts.failed || 0}
+         </span>
++        <span
++          className={`pw-wb-chip ${overview.release.readyCount > 0 ? 'is-ok' : 'is-quiet'}`}
++        >
++          release {overview.release.readyCount + overview.release.committedCount} pending · {overview.release.deployedCount} deployed
++        </span>
+       </div>
+     ),
+     [
+@@ -597,6 +689,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+       overview.queuePaused,
+       overview.lifecycle.status,
+       overview.lifecycle.label,
++      overview.release.readyCount,
++      overview.release.committedCount,
++      overview.release.deployedCount,
+       worker,
+       active,
+       counts,
+@@ -1550,38 +1645,36 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+           <div className="pw-wb-actions">
+             <button
+               type="button"
+-              className="pw-wb-button"
+-              disabled={busy === 'finalize_queue'}
+-              onClick={() => void runAction('finalize_queue')}
++              className="pw-wb-button is-primary"
++              onClick={() => {
++                setTab('release');
++                void loadRelease(true);
++              }}
+             >
+-              Finalize now
++              Open Ready to Push
+             </button>
+-            {['blocked', 'failed'].includes(overview.finalization.stage) && (
+-              <button
+-                type="button"
+-                className="pw-wb-button is-quiet"
+-                disabled={busy === 'finalize_queue'}
+-                onClick={() => void runAction('finalize_queue', { retry: true })}
+-              >
+-                Retry finalization
+-              </button>
+-            )}
+           </div>
++          <p className="pw-wb-card-body">
++            Automatic finalization is disabled. Nothing is merged until the owner presses
++            <strong> Push ready commits</strong> in the READY TO PUSH section.
++          </p>
+         </div>
+       ) : (
+         <div className="pw-wb-card">
+           <p className="pw-wb-card-body">
+-            Finalization has not run yet. It starts automatically when there are no queued, ready or
+-            in-progress tasks, no active attempts and no unfinished batches.
++            Automatic finalization is disabled. Completed work accumulates in READY TO PUSH with a
++            real commit per task; the owner promotes a selected batch with one explicit action.
+           </p>
+           <div className="pw-wb-actions">
+             <button
+               type="button"
+               className="pw-wb-button is-quiet"
+-              disabled={busy === 'finalize_queue'}
+-              onClick={() => void runAction('finalize_queue')}
++              onClick={() => {
++                setTab('release');
++                void loadRelease(true);
++              }}
+             >
+-              Check queue and finalize
++              Open Ready to Push
+             </button>
+           </div>
+         </div>
+@@ -2205,6 +2298,241 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+     </div>
+   );
+ 
++  const renderRelease = () => {
++    const summary = release?.summary || overview.release;
++    const items = release?.items || [];
++    const readyItems = items.filter((item) => item.state === 'ready');
++    const selected = releaseSelection.filter((id) =>
++      readyItems.some((item) => item.taskId === id)
++    );
++    const batches = release?.batches || [];
++    const commitHref = (item: DevReleaseItem) => {
++      const repo = item.repository.toLowerCase().includes('pierrot') ? 'Pierrot' : 'newlove';
++      return `https://github.com/merkurov1/${repo}/commit/${item.commitSha}`;
++    };
++    return (
++      <div className="pw-wb-section">
++        <div className="pw-wb-section-head">
++          <div>
++            <p className="pw-wb-kicker">READY TO PUSH</p>
++            <h2>Commits ready for production</h2>
++          </div>
++          <div className="pw-wb-actions">
++            <button
++              type="button"
++              className="pw-wb-button is-quiet"
++              disabled={releaseLoading}
++              onClick={() => void loadRelease(true)}
++            >
++              <RefreshCw size={14} /> {releaseLoading ? 'Checking…' : 'Re-run preflight'}
++            </button>
++            <button
++              type="button"
++              className="pw-wb-button is-primary"
++              disabled={busy === 'push_ready' || selected.length === 0}
++              onClick={() => void pushReadyCommits()}
++            >
++              <Upload size={14} /> Push ready commits ({selected.length})
++            </button>
++          </div>
++        </div>
++
++        {!summary.schemaReady && (
++          <div className="pw-wb-banner is-warn">
++            <AlertTriangle size={15} /> Apply migration {summary.migrationFile}. Ready to Push is
++            disabled until the release tables exist.
++          </div>
++        )}
++        {!release && !releaseLoading && summary.schemaReady && (
++          <p className="pw-wb-empty">
++            Open this tab to run a read-only preflight against GitHub. Nothing is merged until you
++            press Push ready commits.
++          </p>
++        )}
++        {release?.warnings.length ? (
++          <div className="pw-wb-banner is-warn">
++            <AlertTriangle size={15} /> {release.warnings.slice(0, 3).join(' · ')}
++          </div>
++        ) : null}
++
++        <div className="pw-wb-card">
++          <div className="pw-wb-card-head">
++            <div className="pw-wb-card-title">
++              <StatusBadge status={summary.readyCount > 0 ? 'ready' : 'committed'} />
++              <strong>Release summary</strong>
++            </div>
++            <span className="pw-wb-meta">
++              {summary.readyCount} ready · {summary.committedCount} committed ·{' '}
++              {summary.blockedCount + summary.conflictCount} blocked
++            </span>
++          </div>
++          <dl className="pw-wb-facts">
++            <div>
++              <dt>Ready</dt>
++              <dd>{summary.readyCount}</dd>
++            </div>
++            <div>
++              <dt>Blocked / conflict</dt>
++              <dd>
++                {summary.blockedCount} / {summary.conflictCount}
++              </dd>
++            </div>
++            <div>
++              <dt>In main</dt>
++              <dd>{summary.inMainCount}</dd>
++            </div>
++            <div>
++              <dt>Deployment pending</dt>
++              <dd>{summary.deploymentPendingCount}</dd>
++            </div>
++            <div>
++              <dt>Deployed</dt>
++              <dd>{summary.deployedCount}</dd>
++            </div>
++            <div>
++              <dt>Main revision</dt>
++              <dd>{shortSha(summary.mainSha)}</dd>
++            </div>
++            <div>
++              <dt>Vercel</dt>
++              <dd>
++                {summary.latestDeployment ? (
++                  <>
++                    {summary.latestDeployment.state || 'unknown'} ·{' '}
++                    {summary.latestDeployment.url ? (
++                      <a
++                        href={summary.latestDeployment.url}
++                        target="_blank"
++                        rel="noreferrer"
++                      >
++                        production
++                      </a>
++                    ) : (
++                      shortSha(summary.latestDeployment.commitSha)
++                    )}
++                  </>
++                ) : (
++                  '—'
++                )}
++              </dd>
++            </div>
++          </dl>
++          <p className="pw-wb-card-body">
++            A task is <strong>In main</strong> only after GitHub confirms the merge. It becomes{' '}
++            <strong>Deployed</strong> only after Vercel reports the matching production
++            deployment as READY. Promotion uses sequential squash merges through pull requests;
++            GitHub does not support one atomic multi-PR transaction, so each item keeps durable
++            per-commit progress and is safe to retry.
++          </p>
++        </div>
++
++        <div className="pw-wb-subhead">
++          <p className="pw-wb-kicker">READY QUEUE ({items.length})</p>
++        </div>
++        {items.length === 0 ? (
++          <p className="pw-wb-empty">
++            No committed tasks yet. Every successful worker attempt is committed on its isolated
++            branch before it appears here.
++          </p>
++        ) : (
++          <ul className="pw-wb-criteria">
++            {items.map((item) => {
++              const selectable = item.state === 'ready';
++              return (
++                <li key={item.taskId}>
++                  <label className="pw-wb-check">
++                    <input
++                      type="checkbox"
++                      checked={selectable && releaseSelection.includes(item.taskId)}
++                      disabled={!selectable}
++                      onChange={() => toggleReleaseItem(item.taskId)}
++                    />
++                    <StatusBadge status={item.state} />
++                    <strong>{item.taskTitle}</strong>
++                  </label>{' '}
++                  <span className="pw-wb-meta">
++                    task {item.taskId.slice(0, 8)} · attempt {item.attemptNumber ?? '—'} ·{' '}
++                    {item.changedFiles.length} file(s) · committed{' '}
++                    {item.committedAt ? new Date(item.committedAt).toLocaleString('ru-RU') : '—'}
++                  </span>
++                  <br />
++                  <span className="pw-wb-meta">
++                    commit{' '}
++                    <a href={commitHref(item)} target="_blank" rel="noreferrer">
++                      {shortSha(item.commitSha)}
++                    </a>{' '}
++                    · branch {item.branch || '—'} · PR{' '}
++                    {item.prUrl ? (
++                      <a href={item.prUrl} target="_blank" rel="noreferrer">
++                        #{item.prNumber ?? '?'}
++                      </a>
++                    ) : (
++                      'created on push'
++                    )}{' '}
++                    · validation {item.validation.status} · CI{' '}
++                    {item.checks.length > 0
++                      ? `${item.checks.filter((check) => check.conclusion === 'success').length}/${item.checks.length} passed`
++                      : 'none attached'}
++                  </span>
++                  {item.mainSha && (
++                    <>
++                      <br />
++                      <span className="pw-wb-meta">
++                        main {shortSha(item.mainSha)} · deployment {item.deploymentState || 'pending'}
++                        {item.deployedSha ? ` · deployed ${shortSha(item.deployedSha)}` : ''}
++                        {item.deploymentUrl ? (
++                          <>
++                            {' '}
++                            ·{' '}
++                            <a href={item.deploymentUrl} target="_blank" rel="noreferrer">
++                              production URL
++                            </a>
++                          </>
++                        ) : null}
++                      </span>
++                    </>
++                  )}
++                  {item.dependsOn.length > 0 && (
++                    <p className="pw-wb-meta">
++                      Depends on: {item.dependsOn
++                        .map(
++                          (dependency) =>
++                            `${dependency.title || dependency.taskId.slice(0, 8)} (${dependency.satisfied ? 'satisfied' : 'missing'})`
++                        )
++                        .join(', ')}
++                    </p>
++                  )}
++                  {item.blockReason && <p className="pw-wb-warning">{item.blockReason}</p>}
++                </li>
++              );
++            })}
++          </ul>
++        )}
++
++        {batches.length > 0 && (
++          <>
++            <div className="pw-wb-subhead">
++              <p className="pw-wb-kicker">RELEASE HISTORY</p>
++            </div>
++            <ul className="pw-wb-criteria">
++              {batches.map((batch) => (
++                <li key={batch.id}>
++                  <StatusBadge status={batch.status} />{' '}
++                  <span className="pw-wb-meta">
++                    {new Date(batch.createdAt).toLocaleString('ru-RU')} ·{' '}
++                    {batch.items.length} item(s) · main {shortSha(batch.mainAfterSha)} ·
++                    deployment {batch.deploymentState || '—'}
++                  </span>
++                  {batch.blockReason && <p className="pw-wb-warning">{batch.blockReason}</p>}
++                </li>
++              ))}
++            </ul>
++          </>
++        )}
++      </div>
++    );
++  };
++
+   const renderSetup = () => (
+     <div className="pw-wb-section">
+       <div className="pw-wb-section-head">
+@@ -2407,12 +2735,16 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+               setTab(key);
+               if (key === 'setup' && !setup) void loadSetup();
+               if (key === 'ledger') void loadLedger(ledgerDays);
++              if (key === 'release') void loadRelease(true);
+             }}
+           >
+             <Icon size={14} />
+             {label}
+             {key === 'queue' && counts.queued ? <span>{counts.queued}</span> : null}
+             {key === 'review' && counts.review ? <span>{counts.review}</span> : null}
++            {key === 'release' && overview.release.readyCount + overview.release.committedCount > 0 ? (
++              <span>{overview.release.readyCount + overview.release.committedCount}</span>
++            ) : null}
+           </button>
+         ))}
+       </nav>
+@@ -2424,6 +2756,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
+         {tab === 'ledger' && renderLedger()}
+         {tab === 'history' && renderHistory()}
+         {tab === 'review' && renderReview()}
++        {tab === 'release' && renderRelease()}
+         {tab === 'setup' && renderSetup()}
+       </div>
+ 
+diff --git a/lib/pierrot/dev/workbench/__tests__/lifecycleOperations.test.ts b/lib/pierrot/dev/workbench/__tests__/lifecycleOperations.test.ts
+index 7dedf395..de6946ef 100644
+--- a/lib/pierrot/dev/workbench/__tests__/lifecycleOperations.test.ts
++++ b/lib/pierrot/dev/workbench/__tests__/lifecycleOperations.test.ts
+@@ -36,15 +36,10 @@ jest.mock('../store', () => ({
+   tryAcquireLifecycleLock: jest.fn(async () => true),
+ }));
+ 
+-jest.mock('../finalization', () => ({
+-  advanceFinalization: jest.fn(async () => null),
+-}));
+-
+ jest.mock('../notifications', () => ({
+   notifyDevOwner: jest.fn(async () => true),
+ }));
+ 
+-import * as finalization from '../finalization';
+ import * as github from '../github';
+ import * as notifications from '../notifications';
+ import * as store from '../store';
+@@ -102,7 +97,6 @@ beforeEach(() => {
+     },
+   ]);
+   asMock(store.tryAcquireLifecycleLock).mockResolvedValue(true);
+-  asMock(finalization.advanceFinalization).mockResolvedValue(null);
+   asMock(github.resolveCodespace).mockResolvedValue(codespace);
+   asMock(github.getCodespace).mockResolvedValue(codespace);
+   asMock(github.startCodespace).mockResolvedValue({ ...codespace, state: 'Starting' });
+@@ -255,12 +249,8 @@ describe('safe shutdown', () => {
+     expect(github.stopCodespace).not.toHaveBeenCalled();
+   });
+ 
+-  it('keeps the Codespace alive while queue finalization is active', async () => {
++  it('does not merge or deploy when the queue is drained', async () => {
+     asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
+-    asMock(finalization.advanceFinalization).mockResolvedValue({
+-      stage: 'integrating',
+-      id: 'finalization-1',
+-    });
+ 
+     const result = await requestIdleShutdown({
+       workerId: 'codespace:test',
+@@ -268,8 +258,10 @@ describe('safe shutdown', () => {
+       graceSeconds: 120,
+     });
+ 
+-    expect(result.action).toBe('finalizing');
+-    expect(github.stopCodespace).not.toHaveBeenCalled();
++    // Idle handling may stop the Codespace but never promotes commits. The
++    // only production path is the explicit owner action in Ready to Push.
++    expect(result.action).toBe('stopping');
++    expect(github.stopCodespace).toHaveBeenCalledWith('test-codespace');
+   });
+ 
+   it('cancels the stop when new work appears between the two checks', async () => {
+diff --git a/lib/pierrot/dev/workbench/execution.ts b/lib/pierrot/dev/workbench/execution.ts
+index d615fa80..fff3ee79 100644
+--- a/lib/pierrot/dev/workbench/execution.ts
++++ b/lib/pierrot/dev/workbench/execution.ts
+@@ -13,6 +13,7 @@ import {
+   getTaskExecutionMaterial,
+   getTaskRow,
+   getTaskRowUnscoped,
++  isReleaseSchemaReady,
+   isUuid,
+   leaseExpiryIso,
+   listAttempts,
+@@ -37,6 +38,7 @@ import { buildExecutionPrompt } from './prompt';
+ import { collectAttemptEvidence } from './evidence';
+ import { buildAttemptCost } from './costs';
+ import { notifyDevOwner } from './notifications';
++import { deriveCommitOutcome } from './release';
+ import type { AttemptEvidence } from './evidence';
+ import {
+   createPullRequestForAttempt,
+@@ -360,18 +362,106 @@ export async function completeAttempt(
+   }
+ 
+   const task = await getTaskRowUnscoped(attempt.taskId);
++  let commitOutcome: ReturnType<typeof deriveCommitOutcome> | null = null;
+   if (task) {
+     if (task.status === 'in_progress') {
+-      await patchTask(task.id, {
+-        status: 'review',
+-        result_commit: headSha,
+-        result_notes: truncateText(result.summary, 12_000),
+-        verification_status: 'not_run',
+-        verification_notes: '',
+-        verified_at: null,
+-        last_error_code: null,
+-        last_error_message: null,
++      commitOutcome = deriveCommitOutcome({
++        headSha,
++        changedFiles,
++        commands,
++        exitCode: typeof result.exitCode === 'number' ? result.exitCode : null,
++        verification: result.verification || null,
+       });
++      const releaseSchema = await Promise.resolve(
++        typeof isReleaseSchemaReady === 'function' ? isReleaseSchemaReady() : false
++      ).catch(() => false);
++
++      if (!releaseSchema) {
++        // Backward compatible before the additive release migration is
++        // applied: the existing review flow stays available.
++        await patchTask(task.id, {
++          status: 'review',
++          result_commit: headSha,
++          result_notes: truncateText(result.summary, 12_000),
++          verification_status: 'not_run',
++          verification_notes: '',
++          verified_at: null,
++          last_error_code: null,
++          last_error_message: null,
++        });
++      } else if (commitOutcome.status === 'committed') {
++        await patchTask(task.id, {
++          status: 'committed',
++          result_commit: headSha,
++          result_notes: truncateText(result.summary, 12_000),
++          verification_status: 'commit_recorded',
++          verification_notes: commitOutcome.reason,
++          verified_at: null,
++          blocked_reason: null,
++          last_error_code: null,
++          last_error_message: null,
++        });
++        await appendEvent({
++          taskId: task.id,
++          attemptId,
++          workerId,
++          type: 'task.committed',
++          message: `Commit ${headSha?.slice(0, 7)} recorded on ${attempt.branch || 'the task branch'}; Ready to Push.`,
++          payload: {
++            commitSha: headSha,
++            branch: attempt.branch,
++            changedFiles: changedFiles.length,
++            validation: commitOutcome.validation.status,
++            validationDetail: commitOutcome.validation.detail,
++          },
++          dedupeKey: `task-committed:${task.id}:${headSha}`,
++        }).catch(() => {});
++      } else if (commitOutcome.status === 'no_changes') {
++        await patchTask(task.id, {
++          status: 'no_changes',
++          result_commit: null,
++          result_notes: commitOutcome.reason,
++          verification_status: 'not_run',
++          verification_notes: commitOutcome.reason,
++          verified_at: null,
++          last_error_code: 'DEV_NO_CHANGES',
++          last_error_message: commitOutcome.reason,
++        });
++        await appendEvent({
++          taskId: task.id,
++          attemptId,
++          workerId,
++          type: 'task.no_changes',
++          level: 'warn',
++          message: commitOutcome.reason,
++          dedupeKey: `task-no-changes:${task.id}:${attemptId}`,
++        }).catch(() => {});
++      } else {
++        await patchTask(task.id, {
++          status: 'validation_failed',
++          result_commit: headSha,
++          result_notes: truncateText(result.summary, 12_000),
++          verification_status: 'failed',
++          verification_notes: commitOutcome.reason,
++          verified_at: null,
++          blocked_reason: commitOutcome.reason,
++          last_error_code: 'DEV_VALIDATION_FAILED',
++          last_error_message: commitOutcome.reason,
++        });
++        await appendEvent({
++          taskId: task.id,
++          attemptId,
++          workerId,
++          type: 'task.validation_failed',
++          level: 'error',
++          message: commitOutcome.reason,
++          payload: {
++            commitSha: headSha,
++            commands: commitOutcome.validation.commands,
++          },
++          dedupeKey: `task-validation-failed:${task.id}:${attemptId}`,
++        }).catch(() => {});
++      }
+     } else {
+       // The task was cancelled or otherwise moved while the worker was
+       // running. Keep the attempt history but do not resurrect the task.
+@@ -394,11 +484,19 @@ export async function completeAttempt(
+     attemptId,
+     workerId,
+     type: 'attempt.completed',
+-    message: `Attempt ${attempt.attemptNumber} completed with ${changedFiles.length} changed file(s). Handed to review; not verified automatically.`,
++    message:
++      commitOutcome?.status === 'committed'
++        ? `Attempt ${attempt.attemptNumber} completed with ${changedFiles.length} changed file(s) and a recorded commit. Handed to Ready to Push.`
++        : commitOutcome?.status === 'no_changes'
++          ? `Attempt ${attempt.attemptNumber} completed without file changes; no commit was created.`
++          : commitOutcome?.status === 'validation_failed'
++            ? `Attempt ${attempt.attemptNumber} completed but validation failed. The task is not Ready to Push.`
++            : `Attempt ${attempt.attemptNumber} completed with ${changedFiles.length} changed file(s). Handed to review; not verified automatically.`,
+     payload: {
+       headSha,
+       changedFiles: changedFiles.length,
+       exitCode: result.exitCode,
++      commitOutcome: commitOutcome?.status || null,
+       cost: {
+         modelUsd: cost.model.costUsd,
+         codespaceEstimatedUsd: cost.codespace.estimatedUsd,
+@@ -440,6 +538,7 @@ async function ensurePullRequest(input: {
+   workerId: string;
+ }): Promise<void> {
+   const { task, attempt, workerId } = input;
++  if (['validation_failed', 'no_changes'].includes(task.status)) return;
+   if (!attempt.headSha || attempt.changedFiles.length === 0) return;
+   if (task.pullRequests.some((url) => url.includes('/pull/'))) return;
+   if (attempt.prUrl) return;
+diff --git a/lib/pierrot/dev/workbench/github.ts b/lib/pierrot/dev/workbench/github.ts
+index 1d0e22b2..ae7adc08 100644
+--- a/lib/pierrot/dev/workbench/github.ts
++++ b/lib/pierrot/dev/workbench/github.ts
+@@ -142,20 +142,26 @@ export async function createPullRequestForAttempt(input: {
+ 
+ export async function findPullRequestForBranch(
+   repository: DevRepositoryKey | string,
+-  head: string
+-): Promise<{ number: number; url: string; state: string } | null> {
++  head: string,
++  state: 'open' | 'closed' | 'all' = 'open'
++): Promise<{ number: number; url: string; state: string; merged?: boolean } | null> {
+   const config = getDevRepositoryConfig(repoKey(repository));
+   try {
+     const response = await client().rest.pulls.list({
+       owner: config.owner,
+       repo: config.repo,
+       head: `${config.owner}:${safeBranch(head)}`,
+-      state: 'open',
+-      per_page: 1,
++      state,
++      per_page: 5,
+     });
+     const pr = response.data[0];
+     if (!pr) return null;
+-    return { number: pr.number, url: pr.html_url, state: pr.state };
++    return {
++      number: pr.number,
++      url: pr.html_url,
++      state: pr.state,
++      merged: Boolean((pr as { merged_at?: string | null }).merged_at),
++    };
+   } catch {
+     return null;
+   }
+@@ -328,6 +334,62 @@ export function commitUrl(repository: DevRepositoryKey | string, sha: string): s
+   return `https://github.com/${config.owner}/${config.repo}/commit/${sha}`;
+ }
+ 
++/**
++ * Confirm ancestry with GitHub's compare API. `ahead`/`identical` means
++ * `commitSha` is reachable from `branch`, so a squash commit recorded on main
++ * can be verified instead of trusted from a local string.
++ */
++export async function isCommitOnBranch(
++  repository: DevRepositoryKey | string,
++  commitSha: string,
++  branch: string
++): Promise<{ onBranch: boolean; status: string; detail: string }> {
++  const config = getDevRepositoryConfig(repoKey(repository));
++  const sha = String(commitSha || '').trim();
++  if (!/^[0-9a-f]{7,40}$/i.test(sha) || !branch) {
++    return { onBranch: false, status: 'invalid', detail: 'A valid commit and branch are required.' };
++  }
++  try {
++    const response = await client().rest.repos.compareCommits({
++      owner: config.owner,
++      repo: config.repo,
++      base: sha,
++      head: safeBranch(branch),
++      per_page: 1,
++    });
++    const status = String(response.data.status || 'unknown');
++    return {
++      onBranch: status === 'ahead' || status === 'identical',
++      status,
++      detail:
++        status === 'ahead' || status === 'identical'
++          ? `GitHub confirms ${sha.slice(0, 7)} is reachable from ${branch}.`
++          : `GitHub reports compare status ${status}: ${sha.slice(0, 7)} is not an ancestor of ${branch}.`,
++    };
++  } catch (error) {
++    const normalized = toError(error, 'GITHUB_COMPARE_FAILED');
++    return { onBranch: false, status: 'unknown', detail: normalized.message };
++  }
++}
++
++/** True only when GitHub confirms the commit is reachable from the base ref. */
++export async function isCommitInMain(
++  repository: DevRepositoryKey | string,
++  commitSha: string,
++  baseRef = 'main'
++): Promise<{ inMain: boolean; status: string; detail: string }> {
++  const config = getDevRepositoryConfig(repoKey(repository));
++  const branch = baseRef || config.defaultBranch;
++  const result = await isCommitOnBranch(repository, commitSha, branch);
++  return {
++    inMain: result.onBranch,
++    status: result.status,
++    detail: result.onBranch
++      ? `GitHub confirms ${String(commitSha).slice(0, 7)} is in ${branch}.`
++      : result.detail,
++  };
++}
++
+ /**
+  * Merge is only callable by an explicit owner action in Admin and only for an
+  * already verified task. The expected head SHA prevents stale merges.
+@@ -706,6 +768,7 @@ export async function getVercelDeploymentStatus(input: {
+     }
+     const body = (await response.json()) as {
+       deployments?: Array<{
++        uid?: string;
+         url?: string;
+         state?: string;
+         target?: string | null;
+@@ -713,7 +776,9 @@ export async function getVercelDeploymentStatus(input: {
+       }>;
+     };
+     const deployment = (body.deployments || []).find(
+-      (item) => item.meta?.githubCommitSha?.toLowerCase() === input.commitSha?.toLowerCase()
++      (item) =>
++        item.meta?.githubCommitSha?.toLowerCase() === input.commitSha?.toLowerCase() &&
++        String(item.target || '').toLowerCase() === 'production'
+     );
+     if (!deployment) {
+       return {
+@@ -721,8 +786,9 @@ export async function getVercelDeploymentStatus(input: {
+         url: null,
+         target: null,
+         commitSha: input.commitSha,
++        deploymentId: null,
+         checkedAt,
+-        reason: 'Vercel has no deployment for this commit yet.',
++        reason: 'Vercel has no production deployment for this commit yet.',
+       };
+     }
+     const state = String(deployment.state || '').toUpperCase();
+@@ -739,6 +805,7 @@ export async function getVercelDeploymentStatus(input: {
+       url: deployment.url ? `https://${deployment.url}` : null,
+       target: deployment.target || null,
+       commitSha: input.commitSha,
++      deploymentId: deployment.uid || null,
+       checkedAt,
+       reason: null,
+     };
+diff --git a/lib/pierrot/dev/workbench/lifecycle.ts b/lib/pierrot/dev/workbench/lifecycle.ts
+index a5f0666c..3bf2bff6 100644
+--- a/lib/pierrot/dev/workbench/lifecycle.ts
++++ b/lib/pierrot/dev/workbench/lifecycle.ts
+@@ -21,7 +21,6 @@ import {
+ } from './store';
+ import { getConfiguredCodespaceName } from './setup';
+ import { estimateCodespaceCost, readAttemptCost, summarizeCosts } from './costs';
+-import { advanceFinalization } from './finalization';
+ import { notifyDevOwner } from './notifications';
+ import {
+   decideCodespaceStart,
+@@ -1871,23 +1870,17 @@ export async function requestIdleShutdown(input: {
+     // Promotion is best effort; the stop lock and final queue checks remain.
+   }
+ 
+-  // The queue may be genuinely drained. Run one bounded finalization step
+-  // before taking the stop lock so a slow GitHub check never holds it. The
+-  // finalizer merges only PRs whose exact head has green CI and is confirmed
+-  // mergeable; a blocked finalization still lets the machine stop after
+-  // notifying the owner.
+-  try {
+-    const finalization = await advanceFinalization({ trigger: `idle:${input.workerId}` });
+-    if (finalization && ['collecting', 'integrating', 'verifying'].includes(finalization.stage)) {
+-      return {
+-        action: 'finalizing',
+-        reason: `Queue finalization is ${finalization.stage}; the Codespace stays available until it settles.`,
+-        retryAfterMs: 20_000,
+-      };
+-    }
+-  } catch {
+-    // Finalization must never break the safe stop path.
+-  }
++  // The queue may be genuinely drained. Promotion to main is never automatic:
++  // completed commits wait in Ready to Push until the owner presses the single
++  // "Push ready commits" action. That keeps the Codespace stop path fast and
++  // prevents a worker finishing from silently changing production.
++  await appendEvent({
++    type: 'lifecycle.idle_queue_drained',
++    message:
++      'Worker is idle and the queue is drained. Completed commits remain in Ready to Push for the owner.',
++    payload: { queued: 0 },
++    dedupeKey: `idle-drained:${Math.floor(Date.now() / 300_000)}`,
++  }).catch(() => {});
+ 
+   if (!(await tryAcquireLifecycleLock('stop', input.workerId, 45_000))) {
+     return {
+diff --git a/lib/pierrot/dev/workbench/overview.ts b/lib/pierrot/dev/workbench/overview.ts
+index 4bdab430..4c6fb1b6 100644
+--- a/lib/pierrot/dev/workbench/overview.ts
++++ b/lib/pierrot/dev/workbench/overview.ts
+@@ -15,6 +15,7 @@ import {
+ } from './store';
+ import { getLifecycleSnapshot } from './lifecycle';
+ import { getFinalizationReport } from './finalization';
++import { getReleaseSummary } from './release';
+ import { estimateTaskCost } from './costs';
+ import type { DevCostEstimate, DevWorkbenchOverview, DevWorkbenchTask } from './types';
+ 
+@@ -45,9 +46,10 @@ export async function getWorkbenchOverview(
+     await reapExpiredAttempts();
+   }
+ 
+-  const [lifecycle, finalization] = await Promise.all([
++  const [lifecycle, finalization, release] = await Promise.all([
+     getLifecycleSnapshot(),
+     getFinalizationReport(),
++    getReleaseSummary(userId),
+   ]);
+   const updatedAt = new Date().toISOString();
+ 
+@@ -110,6 +112,7 @@ export async function getWorkbenchOverview(
+       recentEvents: [],
+       lifecycle,
+       finalization,
++      release,
+       updatedAt,
+     };
+   }
+@@ -157,6 +160,7 @@ export async function getWorkbenchOverview(
+     recentEvents,
+     lifecycle,
+     finalization,
++    release,
+     updatedAt,
+   };
+ }
+diff --git a/lib/pierrot/dev/workbench/state.ts b/lib/pierrot/dev/workbench/state.ts
+index 69641ed2..6726b99f 100644
+--- a/lib/pierrot/dev/workbench/state.ts
++++ b/lib/pierrot/dev/workbench/state.ts
+@@ -15,14 +15,41 @@ const TASK_TRANSITIONS: Record<DevWorkbenchTaskStatus, DevWorkbenchTaskStatus[]>
+   draft: ['ready', 'blocked', 'cancelled', 'archived'],
+   ready: ['queued', 'draft', 'blocked', 'cancelled', 'archived'],
+   queued: ['ready', 'in_progress', 'blocked', 'cancelled'],
+-  in_progress: ['review', 'failed', 'cancelled'],
+-  review: ['verified', 'rejected', 'failed', 'queued', 'cancelled'],
+-  verified: ['archived'],
++  in_progress: ['review', 'failed', 'cancelled', 'committed', 'validation_failed', 'no_changes'],
++  review: ['verified', 'rejected', 'failed', 'queued', 'cancelled', 'committed'],
++  verified: [
++    'archived',
++    'committed',
++    'ready_to_push',
++    'pushing',
++    'in_main',
++    'deployment_pending',
++    'deployed',
++    'deployment_failed',
++  ],
+   failed: ['queued', 'cancelled', 'archived', 'review'],
+   rejected: ['queued', 'archived', 'cancelled'],
+   cancelled: ['queued', 'archived'],
+   blocked: ['ready', 'cancelled', 'archived'],
+   archived: [],
++  // Commit-first lifecycle. `committed` means the commit exists and its
++  // validation did not fail; `ready_to_push` additionally passed preflight.
++  committed: ['ready_to_push', 'validation_failed', 'queued', 'blocked', 'archived', 'cancelled'],
++  validation_failed: ['committed', 'queued', 'review', 'blocked', 'archived', 'cancelled'],
++  ready_to_push: [
++    'pushing',
++    'committed',
++    'validation_failed',
++    'blocked',
++    'archived',
++    'cancelled',
++  ],
++  pushing: ['in_main', 'ready_to_push', 'blocked', 'archived', 'cancelled'],
++  in_main: ['deployment_pending', 'deployed', 'deployment_failed', 'archived'],
++  deployment_pending: ['in_main', 'deployed', 'deployment_failed', 'archived'],
++  deployment_failed: ['deployment_pending', 'in_main', 'deployed', 'archived'],
++  deployed: ['archived'],
++  no_changes: ['queued', 'review', 'archived', 'cancelled'],
+ };
+ 
+ const ATTEMPT_TRANSITIONS: Record<DevAttemptStatus, DevAttemptStatus[]> = {
+@@ -63,6 +90,33 @@ export function assertTaskTransition(
+   if (!canTransitionTask(from, to)) throw new DevTransitionError('task', from, to);
+ }
+ 
++/**
++ * Shortest legal path between two task states. Release promotion sometimes has
++ * to step `committed → ready_to_push → pushing`; deriving the path from the
++ * closed state machine keeps that legal and auditable.
++ */
++export function taskTransitionPath(
++  from: DevWorkbenchTaskStatus,
++  to: DevWorkbenchTaskStatus
++): DevWorkbenchTaskStatus[] | null {
++  if (from === to) return [to];
++  const queue: Array<{ status: DevWorkbenchTaskStatus; path: DevWorkbenchTaskStatus[] }> = [
++    { status: from, path: [from] },
++  ];
++  const visited = new Set<DevWorkbenchTaskStatus>([from]);
++  while (queue.length > 0) {
++    const current = queue.shift()!;
++    for (const next of TASK_TRANSITIONS[current.status] || []) {
++      if (visited.has(next)) continue;
++      const path = [...current.path, next];
++      if (next === to) return path;
++      visited.add(next);
++      queue.push({ status: next, path });
++    }
++  }
++  return null;
++}
++
+ export function canTransitionAttempt(from: DevAttemptStatus, to: DevAttemptStatus): boolean {
+   if (from === to) return true;
+   return (ATTEMPT_TRANSITIONS[from] || []).includes(to);
+@@ -106,6 +160,15 @@ export function taskStatusLabel(status: DevWorkbenchTaskStatus): string {
+     cancelled: 'Cancelled',
+     archived: 'Archived',
+     blocked: 'Blocked',
++    committed: 'Committed',
++    validation_failed: 'Validation failed',
++    ready_to_push: 'Ready to Push',
++    pushing: 'Pushing',
++    in_main: 'In main',
++    deployment_pending: 'Deployment pending',
++    deployed: 'Deployed',
++    deployment_failed: 'Deployment failed',
++    no_changes: 'No changes',
+   };
+   return labels[status] || status;
+ }
+diff --git a/lib/pierrot/dev/workbench/store.ts b/lib/pierrot/dev/workbench/store.ts
+index 65739715..ed76965e 100644
+--- a/lib/pierrot/dev/workbench/store.ts
++++ b/lib/pierrot/dev/workbench/store.ts
+@@ -16,6 +16,9 @@ import type {
+   DevBatchStatus,
+   DevCostEstimate,
+   DevEvent,
++  DevReleaseBatch,
++  DevReleaseItem,
++  DevReleaseItemState,
+   DevWorker,
+   DevWorkerStatus,
+   DevWorkbenchTask,
+@@ -96,6 +99,15 @@ function normalizeTaskStatus(value: unknown): DevWorkbenchTaskStatus {
+     'cancelled',
+     'archived',
+     'blocked',
++    'committed',
++    'validation_failed',
++    'ready_to_push',
++    'pushing',
++    'in_main',
++    'deployment_pending',
++    'deployed',
++    'deployment_failed',
++    'no_changes',
+   ];
+   return (allowed as string[]).includes(status) ? (status as DevWorkbenchTaskStatus) : 'draft';
+ }
+@@ -1803,4 +1815,528 @@ export function expectedBranch(taskId: string, attemptNumber: number): string {
+   return branchNameForAttempt(taskId, attemptNumber);
+ }
+ 
++// ---------------------------------------------------------------------------
++// Commit-first release pipeline storage
++// ---------------------------------------------------------------------------
++
++export const RELEASE_MIGRATION_FILE = '2026-12-11_pierrot_dev_release_pipeline.sql';
++
++const RELEASE_COLUMNS =
++  'id,user_id,repository,base_ref,status,idempotency_key,selected_task_ids,item_count,main_before_sha,main_after_sha,deployment_id,deployment_url,deployment_state,deployment_checked_at,block_reason,error_code,error_message,preflight,created_at,started_at,finished_at,updated_at';
++const RELEASE_ITEM_COLUMNS =
++  'id,release_id,task_id,task_title,repository,base_ref,attempt_id,position,status,commit_sha,branch,pr_number,pr_url,changed_files,checks,validation,block_reason,committed_at,pushed_at,main_sha,deployed_sha,deployment_id,deployment_url,deployment_state,deployment_checked_at,created_at,updated_at';
++
++const RELEASE_ITEM_STATES: DevReleaseItemState[] = [
++  'committed',
++  'ready',
++  'blocked',
++  'conflict',
++  'already_in_main',
++  'pushing',
++  'in_main',
++  'deployment_pending',
++  'deployed',
++  'deployment_failed',
++  'failed',
++  'skipped',
++];
++
++function normalizeReleaseItemState(value: unknown): DevReleaseItemState {
++  const status = String(value || 'ready').toLowerCase();
++  return (RELEASE_ITEM_STATES as string[]).includes(status)
++    ? (status as DevReleaseItemState)
++    : 'blocked';
++}
++
++function objectValue(value: unknown): Record<string, unknown> {
++  return value && typeof value === 'object' && !Array.isArray(value)
++    ? (value as Record<string, unknown>)
++    : {};
++}
++
++function mapReleaseChecks(value: unknown): DevReleaseItem['checks'] {
++  if (!Array.isArray(value)) return [];
++  return value
++    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
++    .slice(0, 100)
++    .map((item) => ({
++      name: truncateText(item.name, 300) || 'check',
++      status: typeof item.status === 'string' ? item.status : null,
++      conclusion: typeof item.conclusion === 'string' ? item.conclusion : null,
++      url: typeof item.url === 'string' ? item.url : null,
++    }));
++}
++
++function mapReleaseValidation(value: unknown): DevReleaseItem['validation'] {
++  const record = objectValue(value);
++  const status = String(record.status || 'unknown');
++  const commands = Array.isArray(record.commands)
++    ? record.commands
++        .filter(
++          (item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object'
++        )
++        .slice(0, 40)
++        .map((item) => ({
++          name: truncateText(item.name, 300) || 'command',
++          status: String(item.status || 'unknown'),
++          detail: truncateText(item.detail, 1000) || undefined,
++        }))
++    : [];
++  return {
++    status: (['passed', 'failed', 'unknown'].includes(status) ? status : 'unknown') as
++      | 'passed'
++      | 'failed'
++      | 'unknown',
++    detail: truncateText(record.detail, 2000),
++    commands,
++  };
++}
++
++export function mapReleaseItemRow(row: Record<string, unknown>): DevReleaseItem {
++  return {
++    id: typeof row.id === 'string' ? row.id : null,
++    releaseId: typeof row.release_id === 'string' ? row.release_id : null,
++    taskId: String(row.task_id || ''),
++    taskTitle: truncateText(row.task_title, 500) || 'Task',
++    repository: String(row.repository || 'newlove'),
++    baseRef: String(row.base_ref || 'main'),
++    attemptId: typeof row.attempt_id === 'string' ? row.attempt_id : null,
++    attemptNumber: null,
++    commitSha: String(row.commit_sha || ''),
++    branch: String(row.branch || ''),
++    prNumber: typeof row.pr_number === 'number' ? row.pr_number : null,
++    prUrl: typeof row.pr_url === 'string' ? row.pr_url : null,
++    state: normalizeReleaseItemState(row.status),
++    label: '',
++    blockReason: truncateText(row.block_reason, 2000) || null,
++    changedFiles: list(row.changed_files),
++    checks: mapReleaseChecks(row.checks),
++    validation: mapReleaseValidation(row.validation),
++    dependsOn: [],
++    committedAt: typeof row.committed_at === 'string' ? row.committed_at : null,
++    mainSha: typeof row.main_sha === 'string' ? row.main_sha : null,
++    deployedSha: typeof row.deployed_sha === 'string' ? row.deployed_sha : null,
++    deploymentUrl: typeof row.deployment_url === 'string' ? row.deployment_url : null,
++    deploymentState:
++      typeof row.deployment_state === 'string' ? row.deployment_state : null,
++    deploymentCheckedAt:
++      typeof row.deployment_checked_at === 'string' ? row.deployment_checked_at : null,
++    updatedAt: typeof row.updated_at === 'string' ? row.updated_at : null,
++  };
++}
++
++export function mapReleaseBatchRow(
++  row: Record<string, unknown>,
++  items: DevReleaseItem[] = []
++): DevReleaseBatch {
++  const status = String(row.status || 'draft');
++  const allowed = [
++    'draft',
++    'blocked',
++    'pushing',
++    'partial',
++    'in_main',
++    'deployment_pending',
++    'deployed',
++    'failed',
++  ];
++  return {
++    id: String(row.id || ''),
++    status: (allowed.includes(status) ? status : 'failed') as DevReleaseBatch['status'],
++    repository: String(row.repository || 'newlove'),
++    baseRef: String(row.base_ref || 'main'),
++    itemCount: Number(row.item_count || items.length || 0),
++    idempotencyKey: typeof row.idempotency_key === 'string' ? row.idempotency_key : null,
++    mainBeforeSha: typeof row.main_before_sha === 'string' ? row.main_before_sha : null,
++    mainAfterSha: typeof row.main_after_sha === 'string' ? row.main_after_sha : null,
++    deploymentId: typeof row.deployment_id === 'string' ? row.deployment_id : null,
++    deploymentUrl: typeof row.deployment_url === 'string' ? row.deployment_url : null,
++    deploymentState:
++      typeof row.deployment_state === 'string' ? row.deployment_state : null,
++    deploymentCheckedAt:
++      typeof row.deployment_checked_at === 'string' ? row.deployment_checked_at : null,
++    blockReason: truncateText(row.block_reason, 4000) || null,
++    errorCode: typeof row.error_code === 'string' ? row.error_code : null,
++    errorMessage: truncateText(row.error_message, 4000) || null,
++    items,
++    createdAt: String(row.created_at || ''),
++    startedAt: typeof row.started_at === 'string' ? row.started_at : null,
++    finishedAt: typeof row.finished_at === 'string' ? row.finished_at : null,
++    updatedAt: String(row.updated_at || ''),
++  };
++}
++
++let releaseSchemaCache: { ready: boolean; expiresAt: number } | null = null;
++
++/** Separate probe so a missing release migration cannot hide the whole workbench. */
++export async function isReleaseSchemaReady(force = false): Promise<boolean> {
++  if (!force && releaseSchemaCache && releaseSchemaCache.expiresAt > Date.now()) {
++    return releaseSchemaCache.ready;
++  }
++  try {
++    const client = store();
++    const checks = await Promise.all([
++      client.from('pierrot_dev_releases').select('id').limit(1),
++      client.from('pierrot_dev_release_items').select('id').limit(1),
++    ]);
++    const ready = checks.every((check) => !check.error);
++    releaseSchemaCache = { ready, expiresAt: Date.now() + 60_000 };
++    return ready;
++  } catch {
++    releaseSchemaCache = { ready: false, expiresAt: Date.now() + 30_000 };
++    return false;
++  }
++}
++
++export type DevReleaseCandidate = {
++  task: DevWorkbenchTask;
++  attempt: DevAttempt | null;
++};
++
++/**
++ * Completed work that has a real commit and has not been archived. Legacy
++ * review/verified tasks are included so previously completed-but-unmerged work
++ * stays visible and recoverable; they are never merged automatically.
++ */
++export async function listReleaseCandidates(limit = 100): Promise<DevReleaseCandidate[]> {
++  try {
++    const { data, error } = await store()
++      .from('pierrot_dev_prompts')
++      .select(TASK_COLUMNS)
++      .in('status', [
++        'committed',
++        'validation_failed',
++        'ready_to_push',
++        'pushing',
++        'in_main',
++        'deployment_pending',
++        'deployed',
++        'deployment_failed',
++        'review',
++        'verified',
++      ])
++      .order('updated_at', { ascending: false })
++      .limit(Math.min(Math.max(limit, 1), 200));
++    if (error || !Array.isArray(data)) return [];
++    const tasks = data.map((row) => mapTaskRow(row));
++    const attempts = await listAttemptsForTasks(
++      tasks.map((task) => task.id),
++      10
++    );
++    return tasks.map((task) => {
++      const history = attempts.get(task.id) || [];
++      const attempt =
++        history.find(
++          (item) => item.status === 'completed' && Boolean(item.headSha) && item.changedFiles.length > 0
++        ) ||
++        history.find((item) => item.status === 'completed' && Boolean(item.headSha)) ||
++        history.find((item) => Boolean(item.headSha)) ||
++        null;
++      return { task, attempt };
++    });
++  } catch {
++    return [];
++  }
++}
++
++export async function findReleaseByIdempotencyKey(
++  key: string
++): Promise<DevReleaseBatch | null> {
++  if (!key) return null;
++  try {
++    const { data, error } = await store()
++      .from('pierrot_dev_releases')
++      .select(RELEASE_COLUMNS)
++      .eq('idempotency_key', key)
++      .maybeSingle();
++    if (error || !data) return null;
++    return mapReleaseBatchRow(data);
++  } catch {
++    return null;
++  }
++}
++
++export async function getReleaseBatch(releaseId: string): Promise<DevReleaseBatch | null> {
++  if (!isUuid(releaseId)) return null;
++  try {
++    const { data, error } = await store()
++      .from('pierrot_dev_releases')
++      .select(RELEASE_COLUMNS)
++      .eq('id', releaseId)
++      .maybeSingle();
++    if (error || !data) return null;
++    const items = await listReleaseItems(releaseId);
++    return mapReleaseBatchRow(data, items);
++  } catch {
++    return null;
++  }
++}
++
++export async function listReleaseItems(releaseId: string): Promise<DevReleaseItem[]> {
++  if (!isUuid(releaseId)) return [];
++  try {
++    const { data, error } = await store()
++      .from('pierrot_dev_release_items')
++      .select(RELEASE_ITEM_COLUMNS)
++      .eq('release_id', releaseId)
++      .order('position', { ascending: true })
++      .limit(200);
++    if (error || !Array.isArray(data)) return [];
++    return data.map((row) => mapReleaseItemRow(row));
++  } catch {
++    return [];
++  }
++}
++
++export async function listRecentReleaseBatches(limit = 20): Promise<DevReleaseBatch[]> {
++  try {
++    const { data, error } = await store()
++      .from('pierrot_dev_releases')
++      .select(RELEASE_COLUMNS)
++      .order('created_at', { ascending: false })
++      .limit(Math.min(Math.max(limit, 1), 50));
++    if (error || !Array.isArray(data)) return [];
++    const batches: DevReleaseBatch[] = [];
++    for (const row of data) {
++      const items = await listReleaseItems(String(row.id));
++      batches.push(mapReleaseBatchRow(row, items));
++    }
++    return batches;
++  } catch {
++    return [];
++  }
++}
++
++/** Latest release item per task, used for the compact overview badge. */
++export async function listLatestReleaseItemsForTasks(
++  taskIds: string[]
++): Promise<Map<string, DevReleaseItem>> {
++  const map = new Map<string, DevReleaseItem>();
++  const ids = taskIds.filter(isUuid).slice(0, 200);
++  if (ids.length === 0) return map;
++  try {
++    const { data, error } = await store()
++      .from('pierrot_dev_release_items')
++      .select(RELEASE_ITEM_COLUMNS)
++      .in('task_id', ids)
++      .order('created_at', { ascending: false })
++      .limit(1000);
++    if (error || !Array.isArray(data)) return map;
++    for (const row of data) {
++      const item = mapReleaseItemRow(row);
++      if (!map.has(item.taskId)) map.set(item.taskId, item);
++    }
++    return map;
++  } catch {
++    return map;
++  }
++}
++
++export async function insertReleaseBatch(input: {
++  userId: string;
++  repository: string;
++  baseRef: string;
++  idempotencyKey: string;
++  selectedTaskIds: string[];
++  mainBeforeSha: string | null;
++  preflight: Record<string, unknown>;
++}): Promise<{ release: DevReleaseBatch | null; duplicate: boolean }> {
++  const now = new Date().toISOString();
++  try {
++    const { data, error } = await store()
++      .from('pierrot_dev_releases')
++      .insert({
++        user_id: isUuid(input.userId) ? input.userId : null,
++        repository: input.repository,
++        base_ref: input.baseRef,
++        status: 'draft',
++        idempotency_key: input.idempotencyKey,
++        selected_task_ids: input.selectedTaskIds.filter(isUuid),
++        item_count: input.selectedTaskIds.length,
++        main_before_sha: input.mainBeforeSha,
++        preflight: input.preflight,
++        created_at: now,
++        updated_at: now,
++      })
++      .select(RELEASE_COLUMNS)
++      .single();
++    if (error || !data) {
++      if (error && isDuplicate(error)) {
++        const existing = await findReleaseByIdempotencyKey(input.idempotencyKey);
++        return { release: existing, duplicate: true };
++      }
++      return { release: null, duplicate: false };
++    }
++    return { release: mapReleaseBatchRow(data), duplicate: false };
++  } catch {
++    return { release: null, duplicate: false };
++  }
++}
++
++export async function insertReleaseItems(
++  releaseId: string,
++  items: Array<{
++    taskId: string;
++    taskTitle: string;
++    repository: string;
++    baseRef: string;
++    attemptId: string | null;
++    position: number;
++    commitSha: string;
++    branch: string;
++    prNumber: number | null;
++    prUrl: string | null;
++    changedFiles: string[];
++    checks: DevReleaseItem['checks'];
++    validation: DevReleaseItem['validation'];
++    committedAt: string | null;
++  }>
++): Promise<boolean> {
++  if (!isUuid(releaseId) || items.length === 0) return false;
++  const now = new Date().toISOString();
++  try {
++    const { error } = await store()
++      .from('pierrot_dev_release_items')
++      .insert(
++        items.map((item) => ({
++          release_id: releaseId,
++          task_id: item.taskId,
++          task_title: item.taskTitle.slice(0, 500),
++          repository: item.repository,
++          base_ref: item.baseRef,
++          attempt_id: isUuid(item.attemptId || '') ? item.attemptId : null,
++          position: item.position,
++          status: 'ready',
++          commit_sha: item.commitSha,
++          branch: item.branch,
++          pr_number: item.prNumber,
++          pr_url: item.prUrl,
++          changed_files: item.changedFiles.slice(0, 200),
++          checks: item.checks,
++          validation: item.validation,
++          committed_at: item.committedAt,
++          created_at: now,
++          updated_at: now,
++        }))
++      );
++    return !error;
++  } catch {
++    return false;
++  }
++}
++
++export async function updateReleaseBatch(
++  releaseId: string,
++  patch: Record<string, unknown>,
++  expectedStatus?: DevReleaseBatch['status']
++): Promise<DevReleaseBatch | null> {
++  if (!isUuid(releaseId)) return null;
++  try {
++    let query = store()
++      .from('pierrot_dev_releases')
++      .update({ ...patch, updated_at: new Date().toISOString() })
++      .eq('id', releaseId);
++    if (expectedStatus) query = query.eq('status', expectedStatus);
++    const { data, error } = await query.select(RELEASE_COLUMNS).maybeSingle();
++    if (error || !data) return null;
++    return mapReleaseBatchRow(data);
++  } catch {
++    return null;
++  }
++}
++
++export async function updateReleaseItem(
++  itemId: string,
++  patch: Record<string, unknown>
++): Promise<DevReleaseItem | null> {
++  if (!isUuid(itemId)) return null;
++  try {
++    const { data, error } = await store()
++      .from('pierrot_dev_release_items')
++      .update({ ...patch, updated_at: new Date().toISOString() })
++      .eq('id', itemId)
++      .select(RELEASE_ITEM_COLUMNS)
++      .maybeSingle();
++    if (error || !data) return null;
++    return mapReleaseItemRow(data);
++  } catch {
++    return null;
++  }
++}
++
++export async function findActiveReleaseItemsForTasks(
++  taskIds: string[]
++): Promise<DevReleaseItem[]> {
++  const ids = taskIds.filter(isUuid).slice(0, 100);
++  if (ids.length === 0) return [];
++  try {
++    const { data, error } = await store()
++      .from('pierrot_dev_release_items')
++      .select(RELEASE_ITEM_COLUMNS)
++      .in('task_id', ids)
++      .in('status', ['pushing', 'in_main', 'deployment_pending'])
++      .limit(200);
++    if (error || !Array.isArray(data)) return [];
++    return data.map((row) => mapReleaseItemRow(row));
++  } catch {
++    return [];
++  }
++}
++
++export type DevBatchDependency = {
++  taskId: string;
++  dependsOnTaskId: string;
++  dependsOnTitle: string | null;
++  dependsOnStatus: DevWorkbenchTaskStatus | null;
++  batchId: string | null;
++  position: number;
++};
++
++export async function listBatchDependenciesForTasks(
++  taskIds: string[]
++): Promise<DevBatchDependency[]> {
++  const ids = taskIds.filter(isUuid).slice(0, 100);
++  if (ids.length === 0) return [];
++  try {
++    const { data, error } = await store()
++      .from('pierrot_dev_batch_items')
++      .select('task_id,depends_on_task_id,batch_id,position')
++      .in('task_id', ids)
++      .not('depends_on_task_id', 'is', null)
++      .limit(300);
++    if (error || !Array.isArray(data)) return [];
++    const dependencyIds = [
++      ...new Set(data.map((row) => String(row.depends_on_task_id || '')).filter(isUuid)),
++    ];
++    const titles = new Map<string, { title: string; status: DevWorkbenchTaskStatus }>();
++    if (dependencyIds.length > 0) {
++      const { data: tasks } = await store()
++        .from('pierrot_dev_prompts')
++        .select('id,title,status')
++        .in('id', dependencyIds)
++        .limit(200);
++      for (const row of tasks || []) {
++        titles.set(String(row.id), {
++          title: truncateText(row.title, 500),
++          status: normalizeTaskStatus(row.status),
++        });
++      }
++    }
++    return data.map((row) => {
++      const dependsOnTaskId = String(row.depends_on_task_id || '');
++      const meta = titles.get(dependsOnTaskId);
++      return {
++        taskId: String(row.task_id || ''),
++        dependsOnTaskId,
++        dependsOnTitle: meta?.title || null,
++        dependsOnStatus: meta?.status || null,
++        batchId: typeof row.batch_id === 'string' ? row.batch_id : null,
++        position: Number(row.position || 0),
++      };
++    });
++  } catch {
++    return [];
++  }
++}
++
+ export { truncateLog };
+diff --git a/lib/pierrot/dev/workbench/types.ts b/lib/pierrot/dev/workbench/types.ts
+index 608dea32..70c3d3e2 100644
+--- a/lib/pierrot/dev/workbench/types.ts
++++ b/lib/pierrot/dev/workbench/types.ts
+@@ -16,7 +16,18 @@ export type DevWorkbenchTaskStatus =
+   | 'rejected'
+   | 'cancelled'
+   | 'archived'
+-  | 'blocked';
++  | 'blocked'
++  // Commit-first lifecycle. A task only reaches these states through the
++  // durable release pipeline in release.ts.
++  | 'committed'
++  | 'validation_failed'
++  | 'ready_to_push'
++  | 'pushing'
++  | 'in_main'
++  | 'deployment_pending'
++  | 'deployed'
++  | 'deployment_failed'
++  | 'no_changes';
+ 
+ export type DevAttemptStatus =
+   | 'created'
+@@ -56,6 +67,12 @@ export type DevWorkbenchTask = {
+    * the stored estimate is written before a task enters the queue.
+    */
+   costEstimate?: DevCostEstimate | null;
++  /**
++   * Release metadata is read from pierrot_dev_release_items, not from the task
++   * row, so deployments remain queryable without adding columns to the
++   * existing Task Studio table.
++   */
++  release?: DevTaskReleaseState | null;
+   updatedAt: string;
+   createdAt: string;
+ };
+@@ -443,10 +460,143 @@ export type DevDeploymentStatus = {
+   url: string | null;
+   target: string | null;
+   commitSha: string | null;
++  deploymentId?: string | null;
+   checkedAt: string;
+   reason: string | null;
+ };
+ 
++/**
++ * Release lifecycle for one task. Every value is backed by a GitHub or Vercel
++ * confirmation; the UI never infers `deployed` from a merge alone.
++ */
++export type DevReleaseItemState =
++  | 'committed'
++  | 'ready'
++  | 'blocked'
++  | 'conflict'
++  | 'already_in_main'
++  | 'pushing'
++  | 'in_main'
++  | 'deployment_pending'
++  | 'deployed'
++  | 'deployment_failed'
++  | 'failed'
++  | 'skipped';
++
++export type DevReleaseItem = {
++  id: string | null;
++  releaseId: string | null;
++  taskId: string;
++  taskTitle: string;
++  repository: string;
++  baseRef: string;
++  attemptId: string | null;
++  attemptNumber: number | null;
++  commitSha: string;
++  branch: string;
++  prNumber: number | null;
++  prUrl: string | null;
++  state: DevReleaseItemState;
++  label: string;
++  blockReason: string | null;
++  changedFiles: string[];
++  checks: Array<{
++    name: string;
++    status: string | null;
++    conclusion: string | null;
++    url: string | null;
++  }>;
++  validation: {
++    status: 'passed' | 'failed' | 'unknown';
++    detail: string;
++    commands: Array<{ name: string; status: string; detail?: string }>;
++  };
++  dependsOn: Array<{ taskId: string; title: string | null; satisfied: boolean }>;
++  committedAt: string | null;
++  mainSha: string | null;
++  deployedSha: string | null;
++  deploymentUrl: string | null;
++  deploymentState: string | null;
++  deploymentCheckedAt: string | null;
++  updatedAt: string | null;
++};
++
++export type DevReleaseBatch = {
++  id: string;
++  status:
++    | 'draft'
++    | 'blocked'
++    | 'pushing'
++    | 'partial'
++    | 'in_main'
++    | 'deployment_pending'
++    | 'deployed'
++    | 'failed';
++  repository: string;
++  baseRef: string;
++  itemCount: number;
++  idempotencyKey: string | null;
++  mainBeforeSha: string | null;
++  mainAfterSha: string | null;
++  deploymentId: string | null;
++  deploymentUrl: string | null;
++  deploymentState: string | null;
++  deploymentCheckedAt: string | null;
++  blockReason: string | null;
++  errorCode: string | null;
++  errorMessage: string | null;
++  items: DevReleaseItem[];
++  createdAt: string;
++  startedAt: string | null;
++  finishedAt: string | null;
++  updatedAt: string;
++};
++
++export type DevReleaseSummary = {
++  schemaReady: boolean;
++  migrationFile: string;
++  readyCount: number;
++  committedCount: number;
++  blockedCount: number;
++  conflictCount: number;
++  inMainCount: number;
++  deploymentPendingCount: number;
++  deployedCount: number;
++  failedCount: number;
++  selectedCount: number;
++  mainSha: string | null;
++  latestDeployment: {
++    state: string | null;
++    url: string | null;
++    commitSha: string | null;
++    checkedAt: string | null;
++  } | null;
++  updatedAt: string;
++};
++
++export type DevReleaseOverview = {
++  summary: DevReleaseSummary;
++  items: DevReleaseItem[];
++  batches: DevReleaseBatch[];
++  /** True when the queue was refreshed against GitHub. */
++  refreshed: boolean;
++  /** Non-blocking problems that prevented a GitHub refresh. */
++  warnings: string[];
++};
++
++/** Compact release state attached to a task in the workbench overview. */
++export type DevTaskReleaseState = {
++  releaseId: string | null;
++  state: DevReleaseItemState;
++  commitSha: string;
++  branch: string;
++  mainSha: string | null;
++  deployedSha: string | null;
++  deploymentUrl: string | null;
++  deploymentState: string | null;
++  blockReason: string | null;
++};
++
+ export type DevSetupCheck = {
+   key: string;
+   label: string;
+@@ -680,6 +830,7 @@ export type DevWorkbenchOverview = {
+   recentEvents: DevEvent[];
+   lifecycle: DevLifecycleSnapshot;
+   finalization: DevFinalizationReport | null;
++  release: DevReleaseSummary;
+   updatedAt: string;
+ };
+ 

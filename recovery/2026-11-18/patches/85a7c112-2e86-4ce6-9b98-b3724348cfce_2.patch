@@ -1,0 +1,304 @@
+From e1db4cbef8085bf7e4d2177677895af19565db14 Mon Sep 17 00:00:00 2001
+From: Anton Merkurov <97518066+merkurov1@users.noreply.github.com>
+Date: Wed, 18 Nov 2026 12:27:31 +0000
+Subject: [PATCH] wip(recovery): preserve attempt 2 for task
+ 85a7c112-2e86-4ce6-9b98-b3724348cfce
+
+---
+ components/question/QuestionExperience.tsx    | 10 +++-
+ .../__tests__/QuestionExperience.test.tsx     | 23 ++++++++
+ components/question/question.module.css       | 16 ++++++
+ lib/question/__tests__/migration.test.ts      | 18 ++++++
+ lib/question/__tests__/typography.test.ts     | 56 +++++++++++++++++++
+ lib/question/typography.ts                    | 23 ++++++++
+ .../2026-12-11_question_text_limit_2000.sql   | 45 +++++++++++++++
+ 7 files changed, 190 insertions(+), 1 deletion(-)
+ create mode 100644 lib/question/__tests__/typography.test.ts
+ create mode 100644 lib/question/typography.ts
+ create mode 100644 migrations/2026-12-11_question_text_limit_2000.sql
+
+diff --git a/components/question/QuestionExperience.tsx b/components/question/QuestionExperience.tsx
+index 238084b6..7cc41f80 100644
+--- a/components/question/QuestionExperience.tsx
++++ b/components/question/QuestionExperience.tsx
+@@ -12,6 +12,7 @@ import {
+   type PublicQuestion,
+   type PublicSynthesis,
+ } from '@/lib/question/constants';
++import { isLongQuestion } from '@/lib/question/typography';
+ import { countQuestionWords, validateQuestionAnswer } from '@/lib/question/validation';
+ import QuestionSynthesis from './QuestionSynthesis';
+ import styles from './question.module.css';
+@@ -420,6 +421,8 @@ export default function QuestionExperience({
+     content.length <= QUESTION_MAX_CHARS &&
+     content.trim().length > 0;
+ 
++  const questionIsLong = isLongQuestion(currentQuestion.text);
++
+   return (
+     <main className={styles.page}>
+       <div className={styles.inner}>
+@@ -439,7 +442,12 @@ export default function QuestionExperience({
+ 
+         <article>
+           <section aria-labelledby="question-title">
+-            <h1 id="question-title" className={styles.question}>
++            <h1
++              id="question-title"
++              className={
++                questionIsLong ? `${styles.question} ${styles.questionLong}` : styles.question
++              }
++            >
+               {currentQuestion.text}
+             </h1>
+             <div className={styles.nextRow}>
+diff --git a/components/question/__tests__/QuestionExperience.test.tsx b/components/question/__tests__/QuestionExperience.test.tsx
+index 9f0ee662..b127b77d 100644
+--- a/components/question/__tests__/QuestionExperience.test.tsx
++++ b/components/question/__tests__/QuestionExperience.test.tsx
+@@ -55,6 +55,29 @@ describe('QuestionExperience', () => {
+     );
+   });
+ 
++  it('keeps a short question on the existing display treatment', () => {
++    render(<QuestionExperience {...baseProps} />);
++
++    const heading = screen.getByRole('heading', { level: 1 });
++    expect(heading).toHaveTextContent('В чём смысл жизни?');
++    expect(heading).not.toHaveClass('questionLong');
++  });
++
++  it('preserves verbatim line breaks and calms a long restored question', () => {
++    const longText = [
++      'Если бы вы могли сохранить в памяти только один день своей жизни — какой день вы бы выбрали и почему?',
++      'Что в этом дне кажется вам важным сейчас, спустя время, и что вы заметили в нём только позже?',
++      'Отличается ли этот выбор от того, что вы назвали бы важным, если бы отвечали пять лет назад?',
++    ].join('\n\n');
++
++    render(<QuestionExperience {...baseProps} question={{ ...question, text: longText }} />);
++
++    const heading = screen.getByRole('heading', { level: 1 });
++    expect(heading).toHaveClass('questionLong');
++    expect(heading.textContent).toBe(longText);
++    expect(heading.textContent).toContain('\n\n');
++  });
++
+   it('loads the next random question without a page reload', async () => {
+     const fetchMock = jest.fn(async () => ({
+       ok: true,
+diff --git a/components/question/question.module.css b/components/question/question.module.css
+index 40544f7c..7e40bfb6 100644
+--- a/components/question/question.module.css
++++ b/components/question/question.module.css
+@@ -58,9 +58,19 @@
+   letter-spacing: -0.025em;
+   text-wrap: balance;
+   overflow-wrap: anywhere;
++  white-space: pre-line;
+   color: var(--q-ink);
+ }
+ 
++.questionLong {
++  max-width: 46rem;
++  font-size: clamp(1.5rem, 2.4vw, 2.05rem);
++  line-height: 1.46;
++  letter-spacing: -0.008em;
++  text-wrap: pretty;
++  overflow-wrap: break-word;
++}
++
+ .nextRow {
+   display: flex;
+   flex-wrap: wrap;
+@@ -536,6 +546,12 @@
+     letter-spacing: -0.02em;
+   }
+ 
++  .questionLong {
++    font-size: clamp(1.35rem, 5.2vw, 1.62rem);
++    line-height: 1.48;
++    letter-spacing: -0.005em;
++  }
++
+   .nextRow {
+     gap: 0.75rem;
+     margin-bottom: 1.5rem;
+diff --git a/lib/question/__tests__/migration.test.ts b/lib/question/__tests__/migration.test.ts
+index 400ae467..5a0499ad 100644
+--- a/lib/question/__tests__/migration.test.ts
++++ b/lib/question/__tests__/migration.test.ts
+@@ -13,6 +13,11 @@ const seed = fs.readFileSync(
+   'utf8'
+ );
+ 
++const textLimit = fs.readFileSync(
++  path.join(process.cwd(), 'migrations/2026-12-11_question_text_limit_2000.sql'),
++  'utf8'
++);
++
+ describe('Question database migration', () => {
+   it('creates the minimal domain with a one-answer-per-user constraint', () => {
+     expect(migration).toContain('create table if not exists public.questions');
+@@ -76,4 +81,17 @@ describe('Question database migration', () => {
+     expect(tuples).toBe(10);
+     expect(seed).toContain('on conflict (question) do nothing');
+   });
++
++  it('matches the production question text limit of 3..2000 characters', () => {
++    expect(textLimit).toMatch(
++      /check\s*\(\s*char_length\(btrim\(question\)\)\s+between\s+3\s+and\s+2000\s*\)/i
++    );
++    expect(textLimit).toContain('questions_question_length_check');
++    expect(textLimit).toMatch(/validate constraint questions_question_length_check/i);
++  });
++
++  it('changes only constraint metadata, never question rows', () => {
++    expect(textLimit).not.toMatch(/\b(update|delete\s+from)\b/i);
++    expect(textLimit).not.toMatch(/\b(drop\s+table|drop\s+column|truncate)\b/i);
++  });
+ });
+diff --git a/lib/question/__tests__/typography.test.ts b/lib/question/__tests__/typography.test.ts
+new file mode 100644
+index 00000000..c1340a4a
+--- /dev/null
++++ b/lib/question/__tests__/typography.test.ts
+@@ -0,0 +1,56 @@
++/** @jest-environment node */
++
++import fs from 'node:fs';
++import path from 'node:path';
++
++import { isLongQuestion } from '../typography';
++
++const css = fs.readFileSync(
++  path.join(process.cwd(), 'components/question/question.module.css'),
++  'utf8'
++);
++
++function cssRule(selector: string): string {
++  const start = css.indexOf(`${selector} {`);
++  expect(start).toBeGreaterThan(-1);
++
++  const end = css.indexOf('}', start);
++  return css.slice(start, end + 1);
++}
++
++describe('Question typography', () => {
++  it('keeps the existing short seeded questions on the display scale', () => {
++    for (const shortQuestion of [
++      'В чём смысл жизни?',
++      'Что делает человека по-настоящему свободным?',
++      'Почему люди продолжают верить в то, что заведомо не соответствует действительности?',
++    ]) {
++      expect(isLongQuestion(shortQuestion)).toBe(false);
++    }
++  });
++
++  it('treats restored long questions and multi-paragraph text as long', () => {
++    expect(isLongQuestion('а'.repeat(180))).toBe(false);
++    expect(isLongQuestion('а'.repeat(181))).toBe(true);
++    expect(isLongQuestion('Первая строка\nВторая строка\nТретья строка\nЧетвёртая строка')).toBe(
++      true
++    );
++    expect(isLongQuestion('Первая строка\r\nВторая строка\r\nТретья строка')).toBe(false);
++  });
++
++  it('preserves source newlines instead of collapsing the question into one line', () => {
++    expect(cssRule('.question')).toContain('white-space: pre-line;');
++  });
++
++  it('defines a calmer long-question scale for desktop and mobile', () => {
++    const longRule = cssRule('.questionLong');
++    expect(longRule).toContain('font-size:');
++    expect(longRule).toContain('line-height:');
++    expect(longRule).toContain('max-width:');
++
++    const mobileStart = css.indexOf('@media (max-width: 640px)');
++    const mobileEnd = css.indexOf('\n}', mobileStart);
++    expect(mobileStart).toBeGreaterThan(-1);
++    expect(css.slice(mobileStart, mobileEnd)).toContain('.questionLong');
++  });
++});
+diff --git a/lib/question/typography.ts b/lib/question/typography.ts
+new file mode 100644
+index 00000000..d7d70b82
+--- /dev/null
++++ b/lib/question/typography.ts
+@@ -0,0 +1,23 @@
++/** Presentation-only helpers for the verbatim question text. */
++
++/**
++ * Seeded questions are short single lines. Restored verbatim questions are
++ * allowed to be much longer and may contain their original paragraphs, so they
++ * need a calmer scale than the display headline used for short questions.
++ */
++export const QUESTION_LONG_TEXT_MIN_CHARS = 180;
++export const QUESTION_LONG_TEXT_MIN_LINES = 4;
++
++/**
++ * Returns true when the question cannot be shown comfortably as a display
++ * headline. The text is never trimmed, normalized or truncated here.
++ */
++export function isLongQuestion(text: string): boolean {
++  if (typeof text !== 'string' || text.length === 0) return false;
++
++  if (text.length > QUESTION_LONG_TEXT_MIN_CHARS) return true;
++
++  const visibleLines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
++
++  return visibleLines.length >= QUESTION_LONG_TEXT_MIN_LINES;
++}
+diff --git a/migrations/2026-12-11_question_text_limit_2000.sql b/migrations/2026-12-11_question_text_limit_2000.sql
+new file mode 100644
+index 00000000..d2a35e18
+--- /dev/null
++++ b/migrations/2026-12-11_question_text_limit_2000.sql
+@@ -0,0 +1,45 @@
++-- ============================================================================
++-- Question — align the repository schema with the production text limit
++-- Date: 2026-12-11
++--
++-- Production already accepts verbatim restored questions up to 2000 characters.
++-- The original 2026-12-07 domain migration documented a stricter 3..500 limit,
++-- so a fresh environment would reject rows that production accepts.
++--
++-- This migration only replaces the question-length CHECK constraint. It does
++-- not read or modify rows, questions, answers or syntheses.
++--
++-- Idempotent: the DO block removes any previous question-length check (whatever
++-- PostgreSQL named it) before the stable constraint is added.
++-- ============================================================================
++
++begin;
++
++do $$
++declare
++  existing_constraint record;
++begin
++  for existing_constraint in
++    select conname
++    from pg_constraint
++    where conrelid = 'public.questions'::regclass
++      and contype = 'c'
++      and pg_get_constraintdef(oid) ilike '%char_length%'
++      and pg_get_constraintdef(oid) ilike '%question%'
++  loop
++    execute format(
++      'alter table public.questions drop constraint %I',
++      existing_constraint.conname
++    );
++  end loop;
++end;
++$$;
++
++alter table public.questions
++  add constraint questions_question_length_check
++  check (char_length(btrim(question)) between 3 and 2000) not valid;
++
++alter table public.questions
++  validate constraint questions_question_length_check;
++
++commit;
+-- 
+2.55.0
+
