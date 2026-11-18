@@ -410,6 +410,11 @@ function opencodeEnv() {
   env.CI = '1';
   env.NO_COLOR = '1';
   env.OPENCODE_DISABLE_AUTOUPDATE = '1';
+  // The Codespace container is memory-limited in practice. A single executor
+  // command (tsc/next build) must not be able to consume the whole machine and
+  // trigger an environment restart.
+  env.NODE_OPTIONS =
+    process.env.PIERROT_DEV_OPENCODE_NODE_OPTIONS || '--max-old-space-size=2560';
   env.OPENCODE_CONFIG_CONTENT = JSON.stringify(permissionConfig());
   return env;
 }
