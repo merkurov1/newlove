@@ -36,6 +36,7 @@ import {
 import { buildExecutionPrompt } from './prompt';
 import { collectAttemptEvidence } from './evidence';
 import { buildAttemptCost } from './costs';
+import { notifyDevOwner } from './notifications';
 import type { AttemptEvidence } from './evidence';
 import {
   createPullRequestForAttempt,
@@ -416,6 +417,18 @@ export async function completeAttempt(
       attempt: updatedAttempt,
       workerId,
     });
+    const completedTask = await getTaskRowUnscoped(task.id);
+    if (completedTask && completedTask.priority >= 10) {
+      await notifyDevOwner({
+        eventKey: `task-completed:${completedTask.id}:${attemptId}`,
+        title: 'Pierrot Dev · important task completed',
+        lines: [
+          completedTask.title,
+          `Attempt ${attempt.attemptNumber} finished and was handed to review.`,
+        ],
+        url: completedTask.pullRequests.slice(-1)[0] || null,
+      }).catch(() => {});
+    }
   }
 
   return { attempt: (await getAttempt(attemptId)) || updatedAttempt, task };
