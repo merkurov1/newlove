@@ -82,6 +82,17 @@ function storedVerificationStatus(value: DevVerificationStatus | null): string |
   return value;
 }
 
+/**
+ * A review is an advisory preview, not an owner decision. It may update the
+ * evidence fields only while the task is genuinely waiting for review. It must
+ * never move a task to rejected, and it must never regress a merged/verified,
+ * archived, cancelled or explicitly rejected task. Owner rejection is a
+ * separate, explicit action.
+ */
+export function canPersistReviewStatus(status: DevTaskStatus): boolean {
+  return status === 'review';
+}
+
 function missingColumn(error: unknown): boolean {
   const textValue =
     error && typeof error === 'object'
@@ -697,6 +708,14 @@ export async function saveDevTaskReview(input: {
   const existing = await getDevTask(input.userId, input.taskId);
   if (!existing) return null;
 
+  // Review is read-only for every task that is not waiting for review. In
+  // particular, opening a merged/verified task in Admin used to re-run the
+  // diff against the merge commit (empty) and silently persist a rejection.
+  // Never let a read-only review change a terminal or already-decided state.
+  if (!canPersistReviewStatus(existing.status)) {
+    return existing;
+  }
+
   const store = getServerSupabaseClient({ useServiceRole: true });
   // Keep the persisted report compact: findings and file metadata are enough
   // for history. Full patches can be re-read from GitHub when needed.
@@ -733,7 +752,6 @@ export async function saveDevTaskReview(input: {
       verification_report: compactReport,
       result_commit: input.report.headCommit,
       verified_at: new Date().toISOString(),
-      status: input.report.verdict === 'rejected' ? 'rejected' : 'review',
       updated_at: new Date().toISOString(),
     })
     .eq('id', input.taskId)
@@ -747,7 +765,7 @@ export async function saveDevTaskReview(input: {
       resultCommit: input.report.headCommit,
       verificationStatus: input.report.verdict,
       verificationNotes: notes,
-      status: input.report.verdict === 'rejected' ? 'rejected' : 'review',
+      status: existing.status,
     });
   }
 

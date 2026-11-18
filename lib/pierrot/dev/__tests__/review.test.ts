@@ -3,6 +3,11 @@
 jest.mock('../repository', () => ({
   compareRefs: jest.fn(),
   getCheckRuns: jest.fn(),
+  getPullRequest: jest.fn(),
+}));
+
+jest.mock('../workbench/github', () => ({
+  getPullRequestStatus: jest.fn(),
 }));
 
 jest.mock('../repositories', () => ({
@@ -19,13 +24,16 @@ jest.mock('../tasks', () => ({
   saveDevTaskReview: jest.fn(),
 }));
 
-import { compareRefs, getCheckRuns } from '../repository';
+import { compareRefs, getCheckRuns, getPullRequest } from '../repository';
+import { getPullRequestStatus } from '../workbench/github';
 import { getDevTask, saveDevTaskReview } from '../tasks';
 import { reviewDevTask } from '../review';
 import type { DevTask } from '../types';
 
 const mockCompare = compareRefs as jest.Mock;
 const mockChecks = getCheckRuns as jest.Mock;
+const mockPullRequest = getPullRequest as jest.Mock;
+const mockPrStatus = getPullRequestStatus as jest.Mock;
 const mockGetTask = getDevTask as jest.Mock;
 const mockSave = saveDevTaskReview as jest.Mock;
 
@@ -67,6 +75,8 @@ const baseTask: DevTask = {
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetTask.mockResolvedValue(baseTask);
+  mockPrStatus.mockResolvedValue(null);
+  mockPullRequest.mockResolvedValue({ files: [] });
   mockSave.mockImplementation(({ report }) =>
     Promise.resolve({ ...baseTask, verificationStatus: report.verdict })
   );
@@ -170,5 +180,53 @@ describe('Engineering Review', () => {
       source: 'diff',
     });
     expect(result?.report.acceptanceCriteria[0].evidence).toContain('not proof');
+  });
+
+  it('reads the merged PR diff instead of comparing main with the merge commit', async () => {
+    const headSha = 'd'.repeat(40);
+    mockGetTask.mockResolvedValue({
+      ...baseTask,
+      status: 'verified',
+      resultCommit: 'e'.repeat(40),
+      pullRequests: ['https://github.com/merkurov1/newlove/pull/29'],
+    });
+    mockPrStatus.mockResolvedValue({
+      number: 29,
+      url: 'https://github.com/merkurov1/newlove/pull/29',
+      state: 'closed',
+      merged: true,
+      mergeable: null,
+      mergeableState: 'unknown',
+      headSha,
+      baseBranch: 'main',
+    });
+    mockPullRequest.mockResolvedValue({
+      files: [
+        {
+          filename: 'app/admin/pierrot/(workspace)/workspace.css',
+          status: 'modified',
+          additions: 10,
+          deletions: 2,
+          patch: '@@',
+          patchTruncated: false,
+        },
+      ],
+    });
+    mockChecks.mockResolvedValue({
+      repository: 'merkurov1/newlove',
+      commitSha: headSha,
+      checks: [{ name: 'test', status: 'completed', conclusion: 'success', url: null, app: null }],
+    });
+
+    const result = await reviewDevTask(baseTask.userId!, baseTask.id);
+
+    expect(mockCompare).not.toHaveBeenCalled();
+    expect(result?.report.changedFiles).toHaveLength(1);
+    expect(result?.report.findings).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ problem: expect.stringContaining('No changed files') }),
+      ])
+    );
+    expect(result?.report.checks.testsExecuted).toBe(true);
   });
 });

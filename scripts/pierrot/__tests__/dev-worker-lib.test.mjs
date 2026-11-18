@@ -4,6 +4,7 @@ import {
   BOOT_PHASES,
   computeReadiness,
   isAllowedWorkerBranch,
+  isOrphanExecutorProcess,
   isVersionAtLeast,
   parseOpenCodeCost,
   parseStoredAuth,
@@ -154,8 +155,43 @@ test('automatic pushes are restricted to attempt branches', () => {
   assert.equal(isAllowedWorkerBranch('feature/x'), false);
 });
 
-test('boot telemetry exposes a closed set of phases', () => {
-  for (const phase of [
+test('detects orphaned executors left inside attempt worktrees', () => {
+  const root = '/home/vscode/.pierrot-dev-work/work';
+  assert.equal(
+    isOrphanExecutorProcess(
+      {
+        cwd: `${root}/11111111-1111-4111-8111-111111111111/2`,
+        cmdline: 'node /usr/local/bin/opencode run --standalone',
+      },
+      root
+    ),
+    true
+  );
+  assert.equal(
+    isOrphanExecutorProcess(
+      { cwd: `${root}/11111111-1111-4111-8111-111111111111/2`, cmdline: 'node jest --runInBand' },
+      root
+    ),
+    true
+  );
+  assert.equal(
+    isOrphanExecutorProcess(
+      { cwd: '/workspaces/newlove', cmdline: 'node /usr/local/bin/opencode serve --service' },
+      root
+    ),
+    false
+  );
+  assert.equal(
+    isOrphanExecutorProcess(
+      { cwd: `${root}/11111111-1111-4111-8111-111111111111/2`, cmdline: 'vim notes.md' },
+      root
+    ),
+    false
+  );
+  assert.equal(isOrphanExecutorProcess({ cwd: '', cmdline: 'opencode' }, root), false);
+});
+
+test('boot telemetry exposes a closed set of phases', () => {  for (const phase of [
     'starting',
     'checking_config',
     'checking_opencode',

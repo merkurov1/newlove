@@ -31,6 +31,7 @@ import {
   BOOT_PHASES,
   computeReadiness,
   isAllowedWorkerBranch,
+  isOrphanExecutorProcess,
   isVersionAtLeast,
   parseOpenCodeCost,
   parseStoredAuth,
@@ -98,6 +99,10 @@ let consecutiveErrors = 0;
 let serverIdleGraceSeconds = IDLE_GRACE_SECONDS;
 let readiness = null;
 let bootApiReachable = true;
+let leaseHeartbeatTimer = null;
+let leaseHeartbeatStage = 'running';
+let leaseHeartbeatFailures = 0;
+let attemptDeadlineAt = 0;
 const bootedPhases = new Set();
 
 function clamp(value, min, max) {
@@ -252,6 +257,143 @@ function gitEnv() {
 async function git(args, cwd, timeoutMs = 120000) {
   const result = await run('git', args, { cwd, env: gitEnv(), timeoutMs });
   return result;
+}
+
+/**
+ * A previous worker can die without killing the detached OpenCode process
+ * group. Those orphans keep editing an old worktree, consume memory and can
+ * even recreate deleted files. At startup there is no legitimate executor, so
+ * any known executor/test process whose cwd is a per-attempt worktree is
+ * cleaned up. This is recorded locally and in the event journal.
+ */
+async function cleanupOrphanExecutors() {
+  if (process.env.PIERROT_DEV_SKIP_ORPHAN_CLEANUP === 'true') return;
+  let entries = [];
+  try {
+    entries = await fs.readdir('/proc');
+  } catch {
+    return; // Non-Linux hosts have no /proc; skip safely.
+  }
+  const removed = [];
+  for (const name of entries) {
+    if (!/^\d+$/.test(name)) continue;
+    const pid = Number(name);
+    if (pid === process.pid) continue;
+    let cwd = '';
+    let cmdline = '';
+    try {
+      cwd = await fs.readlink(`/proc/${pid}/cwd`);
+    } catch {
+      continue;
+    }
+    try {
+      cmdline = (await fs.readFile(`/proc/${pid}/cmdline`, 'utf8')).replace(/\0/g, ' ').trim();
+    } catch {
+      continue;
+    }
+    if (!isOrphanExecutorProcess({ cwd, cmdline }, WORKTREE_ROOT)) continue;
+    let signalled = false;
+    try {
+      process.kill(-pid, 'SIGTERM');
+      signalled = true;
+    } catch {
+      try {
+        process.kill(pid, 'SIGTERM');
+        signalled = true;
+      } catch {}
+    }
+    if (!signalled) continue;
+    removed.push({
+      pid,
+      cwd: cwd.replace(os.homedir(), '~'),
+      command: cmdline.slice(0, 160),
+    });
+    setTimeout(() => {
+      try {
+        process.kill(-pid, 'SIGKILL');
+      } catch {}
+    }, 5000).unref();
+  }
+  if (removed.length === 0) return;
+  await log('Cleaned up orphaned executor processes', {
+    count: removed.length,
+    processes: removed.slice(0, 10),
+  });
+  await api(
+    'event',
+    {
+      type: 'worker.note',
+      level: 'warn',
+      message: `Cleaned up ${removed.length} orphaned executor process(es) left by a previous attempt.`,
+      payload: { count: removed.length, processes: removed.slice(0, 10) },
+      dedupeKey: `orphan-cleanup:${WORKER_ID}:${Math.floor(Date.now() / 300_000)}`,
+    },
+    15000
+  ).catch(() => {});
+}
+
+/**
+ * The main polling loop is blocked while OpenCode runs. This timer renews the
+ * attempt lease independently of executor output and of the runProcess
+ * heartbeat callback. A silent model request therefore cannot lose the lease,
+ * and a genuinely hung executor is bounded by the absolute attempt deadline.
+ */
+function setAttemptStage(stage) {
+  leaseHeartbeatStage = String(stage || 'running').slice(0, 120);
+}
+
+function stopLeaseHeartbeat() {
+  if (leaseHeartbeatTimer) clearInterval(leaseHeartbeatTimer);
+  leaseHeartbeatTimer = null;
+  leaseHeartbeatFailures = 0;
+  attemptDeadlineAt = 0;
+}
+
+function startLeaseHeartbeat(attemptId) {
+  stopLeaseHeartbeat();
+  leaseHeartbeatStage = 'running';
+  attemptDeadlineAt = Date.now() + TASK_TIMEOUT_MS + 10 * 60 * 1000;
+
+  const tick = async () => {
+    if (shuttingDown || !activeAttempt || activeAttempt.id !== attemptId) return;
+    if (attemptDeadlineAt > 0 && Date.now() > attemptDeadlineAt) {
+      await log('Attempt exceeded the absolute deadline; terminating executor', { attemptId });
+      if (activeChildPid) await terminateProcessGroup(activeChildPid, 5000).catch(() => {});
+      return;
+    }
+    try {
+      const response = await api(
+        'progress',
+        { attemptId, stage: leaseHeartbeatStage },
+        15000
+      );
+      if (leaseHeartbeatFailures > 0) {
+        await log('Lease heartbeat recovered', {
+          attemptId,
+          failures: leaseHeartbeatFailures,
+        });
+      }
+      leaseHeartbeatFailures = 0;
+      if (response.cancelled === true) {
+        await log('Lease heartbeat reported cancellation; stopping executor', { attemptId });
+        if (activeChildPid) await terminateProcessGroup(activeChildPid, 5000).catch(() => {});
+      }
+    } catch (error) {
+      leaseHeartbeatFailures += 1;
+      if (leaseHeartbeatFailures === 1 || leaseHeartbeatFailures % 4 === 0) {
+        await log('Lease heartbeat failed', {
+          attemptId,
+          failures: leaseHeartbeatFailures,
+          status: error.status || null,
+          code: error.code || null,
+          message: String(error.message || error).slice(0, 200),
+        });
+      }
+    }
+  };
+
+  leaseHeartbeatTimer = setInterval(() => void tick(), 20000);
+  void tick();
 }
 
 /**
@@ -624,7 +766,14 @@ async function commitIdentity(worktree) {
   });
 }
 
-async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumber }) {
+async function commitAndPush({
+  worktree,
+  branch,
+  taskId,
+  attemptId,
+  attemptNumber,
+  messagePrefix = 'pierrot(dev)',
+}) {
   if (!isAllowedWorkerBranch(branch)) {
     const error = new Error(
       `Refusing to push to ${branch || 'an unknown branch'}: only pierrot/dev/<task>/<attempt> is allowed.`
@@ -664,7 +813,7 @@ async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumbe
       'commit.gpgsign=true',
       'commit',
       '-m',
-      `pierrot(dev): task ${taskId} attempt ${attemptNumber}`,
+      `${messagePrefix}: task ${taskId} attempt ${attemptNumber}`,
     ],
     worktree,
     60000
@@ -736,12 +885,43 @@ async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumbe
       commitSha,
       reason: error.message,
       identity: { name: identity.name, email: identity.email },
-      signing: sign === 'true',
+      signing: true,
     });
     throw error;
   }
 
   return { commitSha, files };
+}
+
+async function preservePartialWork({ workspace, task, attempt, reason }) {
+  if (!workspace?.worktree || !isAllowedWorkerBranch(workspace.branch)) return null;
+  try {
+    const pushed = await commitAndPush({
+      worktree: workspace.worktree,
+      branch: workspace.branch,
+      taskId: task.id,
+      attemptId: attempt.id,
+      attemptNumber: attempt.attemptNumber,
+      messagePrefix: 'wip(dev)',
+    });
+    if (pushed.commitSha) {
+      await log('Preserved partial attempt work', {
+        attemptId: attempt.id,
+        commitSha: pushed.commitSha,
+        files: pushed.files.length,
+        reason,
+      });
+    }
+    return pushed;
+  } catch (error) {
+    await log('Could not preserve partial attempt work', {
+      attemptId: attempt.id,
+      code: error.code || null,
+      message: String(error.message || error).slice(0, 300),
+      reason,
+    });
+    return null;
+  }
 }
 
 async function failWithLog(attemptId, payload) {
@@ -790,18 +970,45 @@ async function executeClaim(claim) {
 
   const failClaim = async (payload) => {
     attemptFailed = true;
+    let preserved = null;
+    const code = String(payload.errorCode || '');
+    const shouldPreserve =
+      modelStarted &&
+      Boolean(workspace) &&
+      !commitSha &&
+      !payload.headSha &&
+      Array.isArray(payload.changedFiles) &&
+      payload.changedFiles.length > 0 &&
+      !/^(CANCELLED_BY_OWNER|SECURITY_SENSITIVE_FILE|TOO_MANY_FILES|COMMIT_|PUSH_|BRANCH_)/.test(
+        code
+      );
+    if (shouldPreserve && workspace) {
+      // A timeout or executor failure must not destroy useful work. Commit and
+      // push partial changes to the per-attempt branch before the worktree is
+      // removed. The attempt still fails; this is preservation, not completion.
+      preserved = await preservePartialWork({
+        workspace,
+        task,
+        attempt,
+        reason: code || 'EXECUTION_FAILED',
+      });
+    }
     await failWithLog(attempt.id, {
+      ...payload,
       attemptId: attempt.id,
       usage,
       runtimeMs: runResult?.durationMs ?? null,
       modelStarted,
-      headSha: payload.headSha ?? commitSha ?? null,
-      ...payload,
+      headSha: payload.headSha ?? preserved?.commitSha ?? commitSha ?? null,
+      changedFiles:
+        preserved?.files?.length > 0 ? preserved.files : payload.changedFiles,
     });
   };
 
   try {
     await api('start', { attemptId: attempt.id });
+    startLeaseHeartbeat(attempt.id);
+    setAttemptStage('workspace_ready');
     const prepared = await prepareWorktree({ task, attempt });
     workspace = prepared;
     await api('progress', {
@@ -812,12 +1019,14 @@ async function executeClaim(claim) {
     });
 
     modelStarted = true;
+    setAttemptStage('opencode_running');
     runResult = await runOpenCode({
       worktree: prepared.worktree,
       prompt,
       attemptId: attempt.id,
       title: `Pierrot dev: ${task.title}`,
     });
+    setAttemptStage('finalizing');
     const output = `${runResult.stdout}\n${runResult.stderr}`;
     const sessionId = extractSessionId(runResult.stdout);
     const report = extractExecutorReport(output);
@@ -1011,6 +1220,7 @@ async function executeClaim(claim) {
     }
     throw error;
   } finally {
+    stopLeaseHeartbeat();
     activeAttempt = null;
     if (workspace) {
       await cleanupWorktree(workspace.repoDir, workspace.worktree);
@@ -1171,6 +1381,7 @@ async function shutdown(signal) {
 
 async function main() {
   await ensureDirs();
+  await cleanupOrphanExecutors().catch(() => {});
   await bootPhase('starting', `Process started; Pierrot worker ${WORKER_ID} starting.`);
 
   await bootPhase('checking_config', 'Checking required worker configuration.');
