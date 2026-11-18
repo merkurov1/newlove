@@ -10,6 +10,10 @@ import { createPierrotStore } from '@/lib/pierrot/serverStore';
 import { loadBrainStatus } from '@/lib/pierrot/memory/brainStatus';
 import type { BrainStatusSnapshot } from '@/lib/pierrot/memory/brainStatusTypes';
 import { overviewCookieName, parseOverviewCache } from '@/lib/pierrot/workspace/cache';
+import {
+  resolveChatRouteParams,
+  type ChatSearchParamsInput,
+} from '@/lib/pierrot/workspace/chatRoute';
 import ChatWorkspace from '@/components/pierrot/workspace/ChatWorkspace';
 import { getPierrotProject } from '@/lib/pierrot/projects/store';
 
@@ -49,22 +53,22 @@ function unavailableOverview(): WorkspaceOverview {
   };
 }
 
-function param(value: string | string[] | undefined): string {
-  return (Array.isArray(value) ? value[0] : value) || '';
-}
-
 export default async function ChatPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  // Next.js 15+ hands server pages a Promise. It must be awaited before any
+  // property access, otherwise every `?project=`, `?history=` and `?session=`
+  // deep link is silently ignored.
+  searchParams?: ChatSearchParamsInput;
 }) {
   const user = await requireAdmin();
-  const params = searchParams || {};
-  const requestedHistory = param(params.history);
-  const requestedSession = param(params.session);
-  const rawConversation = param(params.conversation);
-  const projectRef = param(params.project);
-  const requestedNew = param(params.new) === '1';
+  const {
+    historyId: requestedHistory,
+    sessionId: requestedSession,
+    conversationId: rawConversation,
+    projectRef,
+    startNew: requestedNew,
+  } = await resolveChatRouteParams(searchParams);
 
   // Old conversation URLs and legacy project links resolve to the permanent
   // history/session URL. The browser never opens a legacy conversation as an
