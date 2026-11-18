@@ -52,6 +52,7 @@ jest.mock('@/lib/serverAuth', () => ({
 import {
   attachDevTaskResult,
   buildTaskPrompt,
+  canPersistReviewStatus,
   createDevTask,
   createTaskInput,
   listDevTasks,
@@ -296,5 +297,15 @@ describe('Task Studio persistence', () => {
 
     expect(task?.resultCommit).toBe('b'.repeat(40));
     expect(task?.verificationStatus).toBe('not_verified');
+  });
+
+  it('never lets a read-only review persist a terminal task state', () => {
+    // Review is advisory. Only a task genuinely waiting for review may have
+    // its evidence fields updated; verified/merged, rejected, archived and
+    // cancelled tasks must keep their state.
+    expect(canPersistReviewStatus('review')).toBe(true);
+    for (const status of ['verified', 'archived', 'rejected', 'cancelled', 'failed'] as const) {
+      expect(canPersistReviewStatus(status)).toBe(false);
+    }
   });
 });

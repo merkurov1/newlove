@@ -1,13 +1,22 @@
 import { assertServerOnly } from '@/lib/serverOnly';
-import { compareRefs, getCheckRuns } from './repository';
+import { compareRefs, getCheckRuns, getPullRequest } from './repository';
 import { resolveDevRepository } from './repositories';
 import { getDevTask, saveDevTaskReview } from './tasks';
 import { collectAttemptEvidence } from './workbench/evidence';
+import { getPullRequestStatus } from './workbench/github';
 import { computeVerdict } from './workbench/state';
 import type { DevAttempt } from './workbench/types';
 import type { DevReviewFinding, DevReviewReport, DevTask } from './types';
 
 assertServerOnly('lib/pierrot/dev/review');
+
+function pullRequestNumber(task: DevTask): number | null {
+  for (const url of task.pullRequests) {
+    const match = String(url).match(/\/pull\/(\d+)(?:$|[/?#])/);
+    if (match) return Number(match[1]);
+  }
+  return null;
+}
 
 function isMigrationFile(path: string): boolean {
   return /(^|\/)migrations?\//i.test(path) || /\.sql$/i.test(path);
@@ -26,8 +35,38 @@ export async function reviewDevTask(
   if (!task) return null;
 
   const config = resolveDevRepository(task.repository);
-  const base = input.base || task.baseCommit || task.baseRef || config.defaultBranch;
-  const head = input.head || task.resultCommit || config.workBranch;
+  const configuredBase = input.base || task.baseCommit || task.baseRef || config.defaultBranch;
+
+  // A merged PR's result_commit is the merge commit already contained in main.
+  // Comparing main...merge_commit is empty and used to produce a false
+  // "no changes" verdict. Read the merged PR's own files and head SHA instead.
+  const prNumber = pullRequestNumber(task);
+  let mergedPr: Awaited<ReturnType<typeof getPullRequestStatus>> = null;
+  let mergedPrFiles: Awaited<ReturnType<typeof getPullRequest>>['files'] | null = null;
+  if (prNumber) {
+    try {
+      const status = await getPullRequestStatus(config.key, prNumber);
+      if (status?.merged) {
+        mergedPr = status;
+        try {
+          const pr = await getPullRequest({
+            repository: config.key,
+            number: prNumber,
+            includeFiles: true,
+          });
+          mergedPrFiles = pr.files;
+        } catch {
+          mergedPrFiles = null;
+        }
+      }
+    } catch {
+      mergedPr = null;
+    }
+  }
+
+  const base = mergedPr?.baseBranch || configuredBase;
+  const head =
+    mergedPr?.headSha || input.head || task.resultCommit || config.workBranch;
   const generatedAt = new Date().toISOString();
   const findings: DevReviewFinding[] = [];
   const limitations: string[] = [
@@ -42,22 +81,24 @@ export async function reviewDevTask(
     | null = null;
   let compareError: string | null = null;
 
-  try {
-    compare = await compareRefs({
-      repository: config.key,
-      base,
-      head,
-    });
-  } catch (error) {
-    compareError = error instanceof Error ? error.message : 'Diff comparison failed.';
-    findings.push({
-      severity: 'blocker',
-      file: null,
-      line: null,
-      problem: `Unable to compare ${base}...${head}: ${compareError}`,
-      impact: 'The actual result cannot be verified.',
-      recommendation: 'Check repository access, refs and the result commit SHA, then retry.',
-    });
+  if (!mergedPr) {
+    try {
+      compare = await compareRefs({
+        repository: config.key,
+        base,
+        head,
+      });
+    } catch (error) {
+      compareError = error instanceof Error ? error.message : 'Diff comparison failed.';
+      findings.push({
+        severity: 'blocker',
+        file: null,
+        line: null,
+        problem: `Unable to compare ${base}...${head}: ${compareError}`,
+        impact: 'The actual result cannot be verified.',
+        recommendation: 'Check repository access, refs and the result commit SHA, then retry.',
+      });
+    }
   }
 
   let checksData:
@@ -76,7 +117,7 @@ export async function reviewDevTask(
     limitations.push(`Check runs unavailable: ${checksError}`);
   }
 
-  const changedFiles = compare?.files || [];
+  const changedFiles = mergedPrFiles || compare?.files || [];
   const hasChanges = changedFiles.length > 0;
   const checkRuns = checksData?.checks || [];
 

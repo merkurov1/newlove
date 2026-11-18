@@ -223,6 +223,22 @@ export function isAllowedWorkerBranch(branch) {
   );
 }
 
+/**
+ * A process is an orphaned executor when it still runs inside a per-attempt
+ * worktree after the owning attempt has been released. The worker itself runs
+ * from the primary repository checkout, so only worktree cwds are considered.
+ * This is intentionally limited to known executor/test commands: it must not
+ * kill an unrelated process that merely happens to keep a worktree as cwd.
+ */
+export function isOrphanExecutorProcess(entry, workRoot) {
+  const cwd = String(entry?.cwd || '');
+  const cmdline = String(entry?.cmdline || '');
+  const root = String(workRoot || '').replace(/\/+$/, '');
+  if (!root || !cwd.startsWith(`${root}/`)) return false;
+  if (/\bopencode(?:\.exe)?\b/i.test(cmdline)) return true;
+  return /\b(?:jest|vitest|playwright|next\s+build|tsc)\b/i.test(cmdline);
+}
+
 /** Stable boot phases surfaced through the worker API and Admin. */
 export const BOOT_PHASES = Object.freeze([
   'starting',

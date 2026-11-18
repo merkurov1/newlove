@@ -192,6 +192,23 @@ describe('failed execution', () => {
     );
   });
 
+  it('resumes a retry from the partial commit preserved by the worker', async () => {
+    const preserved = 'c'.repeat(40);
+    await failAttempt({
+      workerId: attempt.workerId,
+      attemptId: attempt.id,
+      errorCode: 'EXECUTION_TIMEOUT',
+      errorMessage: 'OpenCode exceeded the limit.',
+      timedOut: true,
+      headSha: preserved,
+    });
+
+    expect(store.patchTask).toHaveBeenCalledWith(
+      task.id,
+      expect.objectContaining({ status: 'failed', base_commit: preserved })
+    );
+  });
+
   it('keeps model usage and Codespaces runtime for a failed attempt', async () => {
     asMock(store.getSetting).mockResolvedValue({ machine: 'basicLinux32gb' });
 

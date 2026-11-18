@@ -575,10 +575,21 @@ export async function failAttempt(input: {
 
   const task = await getTaskRowUnscoped(attempt.taskId);
   if (task && task.status === 'in_progress') {
+    // When the worker preserved partial work on the attempt branch, retrying
+    // must resume from that commit instead of throwing the work away. Only a
+    // pushed SHA is ever recorded as the base by the worker.
+    const resumeFrom =
+      headSha &&
+      ['EXECUTION_TIMEOUT', 'OPENCODE_FAILED', 'OPENCODE_INTERRUPTED', 'OPENCODE_REPORT_MISSING'].includes(
+        input.errorCode
+      )
+        ? headSha
+        : null;
     await patchTask(task.id, {
       status: 'failed',
       last_error_code: truncateText(input.errorCode, 120),
       last_error_message: truncateText(input.errorMessage, 2000),
+      ...(resumeFrom ? { base_commit: resumeFrom } : {}),
     });
   }
 

@@ -31,6 +31,15 @@ export type WorkbenchOverviewOptions = {
   skipReap?: boolean;
 };
 
+/**
+ * The OWNER REVIEW list contains only tasks that genuinely wait for an owner
+ * decision. Verified tasks (accepted or merged) belong to history/finalization;
+ * showing a merged task here made the owner re-open already-decided work.
+ */
+export function selectReviewTasks(tasks: DevWorkbenchTask[]): DevWorkbenchTask[] {
+  return tasks.filter((task) => task.status === 'review');
+}
+
 export async function getWorkbenchOverview(
   userId: string,
   options: WorkbenchOverviewOptions = {}
@@ -88,10 +97,7 @@ export async function getWorkbenchOverview(
           (b.queuePosition ?? Number.MAX_SAFE_INTEGER) ||
         (a.queuedAt || '').localeCompare(b.queuedAt || '')
     );
-  const review = tasks.filter(
-    (task) =>
-      task.status === 'review' || (task.status === 'verified' && task.pullRequests.length > 0)
-  );
+  const review = selectReviewTasks(tasks);
   const historyTasks = tasks.filter((task) => HISTORY_STATUSES.includes(task.status)).slice(0, 24);
 
   if (!schemaReady) {

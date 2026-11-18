@@ -25,7 +25,7 @@ jest.mock('../finalization', () => ({
 
 import * as lifecycle from '../lifecycle';
 import * as store from '../store';
-import { getWorkbenchOverview } from '../overview';
+import { getWorkbenchOverview, selectReviewTasks } from '../overview';
 
 function asMock(value: unknown): jest.Mock {
   return value as jest.Mock;
@@ -85,5 +85,40 @@ describe('workbench overview recovery ordering', () => {
 
     expect(store.reapExpiredAttempts).not.toHaveBeenCalled();
     expect(lifecycle.getLifecycleSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps verified or merged tasks out of the owner review list', () => {
+    const base = {
+      repository: 'newlove',
+      baseRef: 'main',
+      priority: 0,
+      queuePosition: null,
+      queuedAt: null,
+      attemptCount: 1,
+      acceptanceCriteria: [],
+      verificationStatus: null,
+      blockedReason: null,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      resultCommit: null,
+      resultNotes: '',
+      pullRequests: [],
+      updatedAt: '',
+      createdAt: '',
+      objective: '',
+      title: 'Task',
+    };
+    const tasks = [
+      { ...base, id: 'review', status: 'review' as const },
+      {
+        ...base,
+        id: 'merged',
+        status: 'verified' as const,
+        pullRequests: ['https://github.com/merkurov1/newlove/pull/29'],
+      },
+      { ...base, id: 'accepted', status: 'verified' as const },
+    ];
+
+    expect(selectReviewTasks(tasks).map((task) => task.id)).toEqual(['review']);
   });
 });

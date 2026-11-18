@@ -189,6 +189,21 @@ heartbeats.
 - Started by `postStartCommand`/`postAttachCommand`, never by a blocking
   `postCreateCommand`.
 - Polls every ~20 seconds with capped exponential backoff.
+- Renews the attempt lease from an independent 20-second timer for the whole
+  attempt, not from executor output. A silent model request cannot lose the
+  lease, and every failed renewal is logged with a bounded retry counter. The
+  timer also enforces an absolute attempt deadline, so a hung subprocess cannot
+  keep an attempt alive indefinitely.
+- Cleans up orphaned OpenCode/test process groups left inside attempt worktrees
+  by a previous worker before claiming new work. The cleanup is recorded as a
+  `worker.note` event. `PIERROT_DEV_SKIP_ORPHAN_CLEANUP=true` disables it.
+- Caps the executor's Node heap (`PIERROT_DEV_OPENCODE_NODE_OPTIONS`, default
+  `--max-old-space-size=2560`) so one `tsc`/`next build` cannot exhaust the
+  Codespace container and trigger an environment restart.
+- On timeout or executor failure, commits and pushes the partial changes to the
+  per-attempt branch before the worktree is removed. The attempt still fails;
+  the preserved SHA becomes the task's base commit so a retry resumes from it.
+  Cancelled, sensitive-file and over-limit failures are never pushed.
 - Claims atomically through `pierrot_dev_claim_next_task`, which uses an
   advisory lock, `FOR UPDATE SKIP LOCKED`, and a partial unique index that
   allows at most one active attempt in the database.
@@ -215,6 +230,13 @@ heartbeats.
 
 ## Review and merge
 
+- Review is advisory and read-only for every task that is not waiting for
+  review. Opening a verified/merged, rejected, archived or cancelled task in
+  Admin never changes its state. A review verdict of `rejected` is not an owner
+  rejection; only the explicit Reject action changes a task to `rejected`.
+- For a merged pull request the review reads the PR head SHA and the PR's own
+  file list. It never compares `main...merge_commit`, which is empty and used
+  to produce a false "no changed files" verdict.
 - A commit or PR is never treated as completion.
 - CI check runs and local, executor-reported commands are shown separately.
 - Executor-reported commands are self-reported unless
