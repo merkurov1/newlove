@@ -44,4 +44,22 @@ describe('Pierrot PWA viewport safety', () => {
     expect(chromeSource).toContain("pathname === '/admin/pierrot'");
     expect(chromeSource).toContain("pathname.startsWith('/admin/pierrot/')");
   });
+
+  it('keeps every project rail link reachable and tappable on a phone', () => {
+    expect(workspaceCss).toContain('.pw-topbar-nav {');
+    expect(workspaceCss).toContain('overflow-x: auto;');
+    expect(workspaceCss).toContain('-webkit-overflow-scrolling: touch;');
+
+    const linkRule = workspaceCss.slice(
+      workspaceCss.indexOf('.pw-topbar-link {'),
+      workspaceCss.indexOf('.pw-topbar-link:hover')
+    );
+    expect(linkRule).toContain('min-height: 44px;');
+    expect(linkRule).toContain('display: inline-flex;');
+
+    const mobileAction = workspaceCss.slice(
+      workspaceCss.indexOf('@media (max-width: 760px)', workspaceCss.indexOf('.pw-topbar-action'))
+    );
+    expect(mobileAction).toContain('min-height: 44px;');
+  });
 });

@@ -11,6 +11,7 @@ import type {
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), refresh: jest.fn() }),
+  useSearchParams: () => new URLSearchParams(''),
 }));
 
 const overview = {
@@ -240,5 +241,86 @@ describe('ChatWorkspace composer stability', () => {
       expect(screen.getByText('accepted')).toBeInTheDocument();
     });
     expect(getComposer()).toHaveValue('next message');
+  });
+
+  it('writes to the open session while a closed episode is being read', async () => {
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ reply: 'ok', recorded: true, episodeId: 'session-2' }),
+    }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(
+      workspace({
+        ...conversation,
+        currentSessionId: 'closed-session',
+        activeSessionId: 'session-2',
+      })
+    );
+
+    fireEvent.change(getComposer(), { target: { value: 'continue the project' } });
+    fireEvent.click(screen.getByLabelText('Отправить сообщение'));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    const request = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
+    const body = JSON.parse(request[1].body) as Record<string, unknown>;
+    expect(body.episodeId).toBe('session-2');
+  });
+
+  it('omits episodeId when the history has no open session yet', async () => {
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ reply: 'ok', recorded: true }),
+    }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(
+      workspace({
+        ...conversation,
+        currentSessionId: 'closed-session',
+        activeSessionId: null,
+      })
+    );
+
+    fireEvent.change(getComposer(), { target: { value: 'first message' } });
+    fireEvent.click(screen.getByLabelText('Отправить сообщение'));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    const request = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
+    const body = JSON.parse(request[1].body) as Record<string, unknown>;
+    expect(body.episodeId).toBeUndefined();
+    expect(body.historyId).toBe('history-1');
+  });
+
+  it('explains a closed episode and offers a project-scoped new session', () => {
+    render(
+      <ChatWorkspace
+        ownerId="owner-1"
+        overview={overview}
+        sessions={[
+          {
+            ...sessions[0],
+            endedAt: '2026-11-08T12:00:00.000Z',
+          },
+        ]}
+        conversation={{
+          ...conversation,
+          currentSessionId: 'session-1',
+          activeSessionId: null,
+        }}
+        startNew={false}
+      />
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent('Эта сессия закрыта');
+    expect(screen.getByRole('button', { name: 'Начать новую сессию' })).toBeInTheDocument();
   });
 });

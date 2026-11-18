@@ -178,6 +178,11 @@ export type OwnerConversation = {
   projectName?: string | null;
   currentSessionId?: string | null;
   currentSessionTitle?: string | null;
+  /**
+   * Open session that will receive the next message. It can differ from
+   * `currentSessionId` when the owner is reading a closed episode.
+   */
+  activeSessionId?: string | null;
   /** Stable history cursor boundaries for pagination and positioning. */
   oldestSequence?: number | null;
   newestSequence?: number | null;

@@ -5,6 +5,7 @@ import { FakeSupabase, OWNER_ID } from '@/lib/pierrot/memory/testSupport/fakeSup
 import {
   createSession,
   ensureMainHistory,
+  findEmptyOpenSession,
   loadHistoryContextMessages,
   loadHistoryMessagePage,
   resolveHistoryScope,
@@ -342,5 +343,330 @@ describe('Pierrot permanent history store', () => {
     expect(first?.id).toBe(historyId);
     expect(second?.id).toBe(historyId);
     expect(db.all('pierrot_histories')).toHaveLength(1);
+  });
+
+  it('keeps a closed session readable without treating it as the write target', async () => {
+    const { db, historyId, conversationId, sessionId } = buildStore();
+    const closedId = randomUUID();
+    db.seed('pierrot_sessions', [
+      ...db.all('pierrot_sessions'),
+      {
+        id: closedId,
+        history_id: historyId,
+        conversation_id: conversationId,
+        source_conversation_id: null,
+        ordinal: 9,
+        title: 'Закрытая сессия',
+        started_at: '2026-11-08T10:00:00.000Z',
+        ended_at: '2026-11-08T12:00:00.000Z',
+        last_message_at: '2026-11-08T12:00:00.000Z',
+        message_count: 4,
+        first_message_sequence: 1,
+        last_message_sequence: 4,
+        metadata: {},
+        created_at: '2026-11-08T10:00:00.000Z',
+        updated_at: '2026-11-08T12:00:00.000Z',
+      },
+    ]);
+
+    const scope = await resolveHistoryScope(db.asClient(), OWNER_ID, {
+      historyId,
+      episodeId: closedId,
+    });
+
+    expect(scope?.session?.id).toBe(closedId);
+    expect(scope?.sessionActive).toBe(false);
+    expect(scope?.activeSession?.id).toBe(sessionId);
+    expect(db.all('pierrot_sessions')).toHaveLength(2);
+  });
+
+  it('continues an open session when the requested episode is closed', async () => {
+    const { db, historyId, conversationId, sessionId } = buildStore();
+    const closedId = randomUUID();
+    db.seed('pierrot_sessions', [
+      ...db.all('pierrot_sessions'),
+      {
+        id: closedId,
+        history_id: historyId,
+        conversation_id: conversationId,
+        ordinal: 9,
+        title: 'Закрытая сессия',
+        started_at: '2026-11-08T10:00:00.000Z',
+        ended_at: '2026-11-08T12:00:00.000Z',
+        last_message_at: '2026-11-08T12:00:00.000Z',
+        message_count: 4,
+        metadata: {},
+        created_at: '2026-11-08T10:00:00.000Z',
+        updated_at: '2026-11-08T12:00:00.000Z',
+      },
+    ]);
+
+    const scope = await resolveHistoryScope(db.asClient(), OWNER_ID, {
+      historyId,
+      episodeId: closedId,
+      createSession: true,
+    });
+
+    expect(scope?.session?.id).toBe(sessionId);
+    expect(scope?.sessionActive).toBe(true);
+    expect(scope?.activeSession?.id).toBe(sessionId);
+    expect(db.all('pierrot_sessions')).toHaveLength(2);
+  });
+
+  it('creates a new open session for a write when every session is closed', async () => {
+    const { db, historyId, conversationId } = buildStore();
+    const closedId = randomUUID();
+    const createdId = randomUUID();
+    db.seed('pierrot_sessions', [
+      {
+        id: closedId,
+        history_id: historyId,
+        conversation_id: conversationId,
+        source_conversation_id: null,
+        ordinal: 1,
+        title: 'Закрытая сессия',
+        started_at: '2026-11-08T10:00:00.000Z',
+        ended_at: '2026-11-08T12:00:00.000Z',
+        last_message_at: '2026-11-08T12:00:00.000Z',
+        message_count: 4,
+        first_message_sequence: 1,
+        last_message_sequence: 4,
+        metadata: {},
+        created_at: '2026-11-08T10:00:00.000Z',
+        updated_at: '2026-11-08T12:00:00.000Z',
+      },
+    ]);
+    db.onRpc('pierrot_create_session', (params) => {
+      const row = {
+        id: createdId,
+        history_id: params.p_history_id,
+        conversation_id: conversationId,
+        source_conversation_id: null,
+        ordinal: 2,
+        title: (params.p_title as string) || 'Новая сессия',
+        started_at: '2026-11-09T11:00:00.000Z',
+        ended_at: null,
+        last_message_at: null,
+        message_count: 0,
+        first_message_sequence: null,
+        last_message_sequence: null,
+        metadata: {},
+        created_at: '2026-11-09T11:00:00.000Z',
+        updated_at: '2026-11-09T11:00:00.000Z',
+      };
+      db.all('pierrot_sessions').push(row);
+      return { data: [row], error: null };
+    });
+
+    const scope = await resolveHistoryScope(db.asClient(), OWNER_ID, {
+      historyId,
+      episodeId: closedId,
+      createSession: true,
+    });
+
+    expect(scope?.session?.id).toBe(createdId);
+    expect(scope?.session?.endedAt).toBeNull();
+    expect(scope?.activeSession?.id).toBe(createdId);
+    expect(db.all('pierrot_sessions')).toHaveLength(2);
+    // The closed episode is preserved untouched.
+    expect(
+      db.all('pierrot_sessions').find((row) => row.id === closedId)?.ended_at
+    ).toBe('2026-11-08T12:00:00.000Z');
+  });
+
+  it('prefers the most recently active open session over ordinal order', async () => {
+    const { db, historyId, conversationId } = buildStore();
+    const olderActivityId = randomUUID();
+    const newerActivityId = randomUUID();
+    db.seed('pierrot_sessions', [
+      {
+        id: olderActivityId,
+        history_id: historyId,
+        conversation_id: conversationId,
+        ordinal: 9,
+        title: 'Ordinal 9, old activity',
+        started_at: '2026-11-01T10:00:00.000Z',
+        ended_at: null,
+        last_message_at: '2026-11-01T12:00:00.000Z',
+        message_count: 3,
+        metadata: {},
+        created_at: '2026-11-01T10:00:00.000Z',
+        updated_at: '2026-11-01T12:00:00.000Z',
+      },
+      {
+        id: newerActivityId,
+        history_id: historyId,
+        conversation_id: conversationId,
+        ordinal: 4,
+        title: 'Ordinal 4, recent activity',
+        started_at: '2026-11-02T10:00:00.000Z',
+        ended_at: null,
+        last_message_at: '2026-11-11T12:00:00.000Z',
+        message_count: 7,
+        metadata: {},
+        created_at: '2026-11-02T10:00:00.000Z',
+        updated_at: '2026-11-11T12:00:00.000Z',
+      },
+    ]);
+
+    const scope = await resolveHistoryScope(db.asClient(), OWNER_ID, {
+      historyId,
+      createSession: true,
+    });
+
+    expect(scope?.session?.id).toBe(newerActivityId);
+    expect(db.all('pierrot_sessions')).toHaveLength(2);
+  });
+
+  it('never creates an empty session just for viewing a history without sessions', async () => {
+    const { db, historyId } = buildStore();
+    db.seed('pierrot_sessions', []);
+
+    const viewScope = await resolveHistoryScope(db.asClient(), OWNER_ID, {
+      historyId,
+      createSession: false,
+    });
+
+    expect(viewScope?.session).toBeNull();
+    expect(viewScope?.activeSession).toBeNull();
+    expect(db.all('pierrot_sessions')).toHaveLength(0);
+
+    // The continuous transcript is still readable.
+    const page = await loadHistoryMessagePage(db.asClient(), OWNER_ID, viewScope!, { limit: 20 });
+    expect(page.messages).toHaveLength(5);
+  });
+
+  it('creates exactly one open session when the first message is written', async () => {
+    const { db, historyId, conversationId } = buildStore();
+    const createdId = randomUUID();
+    db.seed('pierrot_sessions', []);
+    db.onRpc('pierrot_create_session', (params) => {
+      const row = {
+        id: createdId,
+        history_id: params.p_history_id,
+        conversation_id: conversationId,
+        source_conversation_id: null,
+        ordinal: 1,
+        title: (params.p_title as string) || 'Новая сессия',
+        started_at: '2026-11-09T11:00:00.000Z',
+        ended_at: null,
+        last_message_at: null,
+        message_count: 0,
+        metadata: {},
+        created_at: '2026-11-09T11:00:00.000Z',
+        updated_at: '2026-11-09T11:00:00.000Z',
+      };
+      db.all('pierrot_sessions').push(row);
+      return { data: [row], error: null };
+    });
+
+    const writeScope = await resolveHistoryScope(db.asClient(), OWNER_ID, {
+      historyId,
+      createSession: true,
+    });
+
+    expect(writeScope?.session?.id).toBe(createdId);
+    expect(writeScope?.sessionActive).toBe(true);
+    expect(db.all('pierrot_sessions')).toHaveLength(1);
+  });
+
+  it('reuses the newest open empty session for an explicit new chat', async () => {
+    const { db, historyId, conversationId } = buildStore();
+    const emptyId = randomUUID();
+    const closedEmptyId = randomUUID();
+    db.seed('pierrot_sessions', [
+      {
+        id: emptyId,
+        history_id: historyId,
+        conversation_id: conversationId,
+        ordinal: 3,
+        title: 'Пустая',
+        started_at: '2026-11-09T11:00:00.000Z',
+        ended_at: null,
+        last_message_at: null,
+        message_count: 0,
+        metadata: {},
+        created_at: '2026-11-09T11:00:00.000Z',
+        updated_at: '2026-11-09T11:00:00.000Z',
+      },
+      {
+        id: closedEmptyId,
+        history_id: historyId,
+        conversation_id: conversationId,
+        ordinal: 4,
+        title: 'Пустая и закрытая',
+        started_at: '2026-11-09T12:00:00.000Z',
+        ended_at: '2026-11-09T12:30:00.000Z',
+        last_message_at: null,
+        message_count: 0,
+        metadata: {},
+        created_at: '2026-11-09T12:00:00.000Z',
+        updated_at: '2026-11-09T12:30:00.000Z',
+      },
+    ]);
+
+    const session = await findEmptyOpenSession(db.asClient(), historyId);
+
+    expect(session?.id).toBe(emptyId);
+  });
+
+  it('repairs a project history with a missing canonical conversation pointer', async () => {
+    const db = new FakeSupabase(TABLES);
+    const projectId = randomUUID();
+    const conversationId = randomUUID();
+    const historyId = randomUUID();
+    db.seed('pierrot_conversations', [
+      {
+        id: conversationId,
+        session_id: randomUUID(),
+        identity_type: 'owner',
+        user_id: OWNER_ID,
+        mode: 'site',
+        started_at: '2026-11-09T10:00:00.000Z',
+        updated_at: '2026-11-09T10:00:00.000Z',
+      },
+    ]);
+    db.seed('pierrot_projects', [
+      {
+        id: projectId,
+        owner_user_id: OWNER_ID,
+        slug: 'question',
+        name: 'Question',
+        status: 'active',
+        priority: 0,
+        conversation_id: conversationId,
+        last_activity_at: '2026-11-09T10:00:00.000Z',
+        created_at: '2026-11-09T10:00:00.000Z',
+        updated_at: '2026-11-09T10:00:00.000Z',
+      },
+    ]);
+    db.seed('pierrot_histories', [
+      {
+        id: historyId,
+        owner_user_id: OWNER_ID,
+        type: 'project',
+        project_id: projectId,
+        canonical_conversation_id: null,
+        title: 'Question',
+        metadata: {},
+        next_message_sequence: 0,
+        created_at: '2026-11-09T10:00:00.000Z',
+        updated_at: '2026-11-09T10:00:00.000Z',
+      },
+    ]);
+    db.onRpc('pierrot_ensure_project_history', (params) => {
+      const project = db.all('pierrot_projects').find((row) => row.id === params.p_project_id);
+      const history = db.all('pierrot_histories').find((row) => row.id === historyId);
+      if (history) {
+        history.canonical_conversation_id = project?.conversation_id || null;
+      }
+      return { data: historyId, error: null };
+    });
+
+    const scope = await resolveHistoryScope(db.asClient(), OWNER_ID, { historyId });
+
+    expect(scope?.history.id).toBe(historyId);
+    expect(scope?.conversationId).toBe(conversationId);
+    expect(db.all('pierrot_sessions')).toHaveLength(0);
   });
 });
