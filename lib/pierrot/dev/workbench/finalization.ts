@@ -341,7 +341,7 @@ async function verifyTaskIntegrated(input: {
   if (task.status === 'review' || task.status === 'verified') {
     await patchTask(task.id, {
       status: 'verified',
-      verification_status: 'integrated',
+      verification_status: 'passed',
       verification_notes: `Integrated into ${DEFAULT_BRANCH} by queue finalization (${input.prUrl}).`,
       verified_at: nowIso(),
       result_commit: input.sha || task.resultCommit,

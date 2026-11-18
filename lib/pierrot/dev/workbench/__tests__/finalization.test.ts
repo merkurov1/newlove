@@ -222,7 +222,7 @@ describe('queue finalization', () => {
     });
     expect(store.patchTask).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
-      expect.objectContaining({ status: 'verified', verification_status: 'integrated' })
+      expect.objectContaining({ status: 'verified', verification_status: 'passed' })
     );
 
     const second = await advanceFinalization({ trigger: 'test' });
