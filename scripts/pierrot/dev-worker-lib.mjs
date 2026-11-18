@@ -266,7 +266,7 @@ export function isOrphanExecutorProcess(entry, workRoot) {
   const root = String(workRoot || '').replace(/\/+$/, '');
   if (!root || !cwd.startsWith(`${root}/`)) return false;
   if (/\bopencode(?:\.exe)?\b/i.test(cmdline)) return true;
-  return /\b(?:jest|vitest|playwright|next\s+build|tsc)\b/i.test(cmdline);
+  return /\b(?:jest|vitest|playwright|next-build|next-server|next\s+build|tsc)\b/i.test(cmdline);
 }
 
 /** Stable boot phases surfaced through the worker API and Admin. */
