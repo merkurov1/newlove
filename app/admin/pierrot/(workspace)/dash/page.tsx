@@ -176,20 +176,25 @@ export default async function DashPage({
             <p className="pw-dash-summary">{overview.summary}</p>
           </div>
 
-          <nav className="pw-segmented" aria-label="Период наблюдения">
-            <Link
-              href="/admin/pierrot/dash?period=7"
-              aria-current={period === 7 ? 'page' : undefined}
-            >
-              7 дней
+          <div className="pw-dash-head-actions">
+            <nav className="pw-segmented" aria-label="Период наблюдения">
+              <Link
+                href="/admin/pierrot/dash?period=7"
+                aria-current={period === 7 ? 'page' : undefined}
+              >
+                7 дней
+              </Link>
+              <Link
+                href="/admin/pierrot/dash?period=30"
+                aria-current={period === 30 ? 'page' : undefined}
+              >
+                30 дней
+              </Link>
+            </nav>
+            <Link className="pw-dash-infra-link" href="/admin/pierrot/infrastructure">
+              Инфраструктура и Self-Funding →
             </Link>
-            <Link
-              href="/admin/pierrot/dash?period=30"
-              aria-current={period === 30 ? 'page' : undefined}
-            >
-              30 дней
-            </Link>
-          </nav>
+          </div>
         </header>
 
         <section className="pw-dash-metrics" aria-label="Пять показателей">

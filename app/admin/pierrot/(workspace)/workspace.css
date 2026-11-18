@@ -1905,6 +1905,29 @@ a.pw-home-indicator:hover {
   margin-top: 4px;
 }
 
+.pw-dash-head-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.pw-dash-infra-link {
+  padding: 7px 10px;
+  border: 1px solid var(--pw-line);
+  background: var(--pw-white);
+  font-family: var(--pw-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pw-dash-infra-link:hover {
+  border-color: var(--pw-ink);
+}
+
 .pw-dash-metrics {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
