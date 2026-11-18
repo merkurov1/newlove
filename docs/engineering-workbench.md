@@ -58,9 +58,11 @@ overwritten.
 
 3. Set the server env:
    - `PIERROT_DEV_CODESPACE_NAME` — the existing Codespace name
-   - `GITHUB_TOKEN` — fine-grained token with repository contents/PR write and
-     Codespaces read/write (read is enough to display state; write is required
-     to start/stop from Admin)
+   - `GITHUB_TOKEN` — fine-grained token with repository contents/PR write,
+     **Checks: read** (queue finalization reads CI) and Codespaces read/write
+     (read is enough to display state; write is required to start/stop from
+     Admin). The finalizer blocks with `integration.blocked` instead of merging
+     if the token cannot read checks or merge a PR.
    - `VERCEL_TOKEN` + optional `VERCEL_PROJECT_ID` — read-only deployment status
 
 4. In the Codespace, set:
