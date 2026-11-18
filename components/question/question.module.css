@@ -58,7 +58,19 @@
   letter-spacing: -0.025em;
   text-wrap: balance;
   overflow-wrap: anywhere;
+  /* Questions are stored verbatim: keep authored line breaks and paragraphs. */
+  white-space: pre-wrap;
   color: var(--q-ink);
+}
+
+/* A long or multi-paragraph question reads as editorial prose, not a poster. */
+.questionLong {
+  max-width: 46rem;
+  font-size: clamp(1.55rem, 2.6vw, 2.1rem);
+  line-height: 1.42;
+  letter-spacing: -0.006em;
+  text-wrap: pretty;
+  overflow-wrap: break-word;
 }
 
 .nextRow {
@@ -534,6 +546,12 @@
     font-size: clamp(2.2rem, 10.4vw, 3.35rem);
     line-height: 1.07;
     letter-spacing: -0.02em;
+  }
+
+  .questionLong {
+    font-size: clamp(1.35rem, 5.4vw, 1.68rem);
+    line-height: 1.46;
+    letter-spacing: -0.004em;
   }
 
   .nextRow {

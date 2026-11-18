@@ -12,6 +12,7 @@ import {
   type PublicQuestion,
   type PublicSynthesis,
 } from '@/lib/question/constants';
+import { isLongQuestionText } from '@/lib/question/typography';
 import { countQuestionWords, validateQuestionAnswer } from '@/lib/question/validation';
 import QuestionSynthesis from './QuestionSynthesis';
 import styles from './question.module.css';
@@ -420,6 +421,8 @@ export default function QuestionExperience({
     content.length <= QUESTION_MAX_CHARS &&
     content.trim().length > 0;
 
+  const questionIsLong = isLongQuestionText(currentQuestion.text);
+
   return (
     <main className={styles.page}>
       <div className={styles.inner}>
@@ -439,7 +442,13 @@ export default function QuestionExperience({
 
         <article>
           <section aria-labelledby="question-title">
-            <h1 id="question-title" className={styles.question}>
+            <h1
+              id="question-title"
+              className={
+                questionIsLong ? `${styles.question} ${styles.questionLong}` : styles.question
+              }
+              data-question-size={questionIsLong ? 'long' : 'short'}
+            >
               {currentQuestion.text}
             </h1>
             <div className={styles.nextRow}>
