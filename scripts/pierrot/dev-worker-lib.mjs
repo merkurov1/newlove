@@ -224,6 +224,36 @@ export function isAllowedWorkerBranch(branch) {
 }
 
 /**
+ * GitHub's GPG signing helper legitimately rewrites the committer to
+ * `GitHub <noreply@github.com>` while keeping the requested author. Requiring
+ * the committer to equal the author therefore rejected valid signed commits.
+ * The author must always match the configured identity; the committer may be
+ * either that identity or GitHub's signing service.
+ */
+export function checkCommitIdentity(input) {
+  const expectedName = String(input?.expectedName || '').trim();
+  const expectedEmail = String(input?.expectedEmail || '').trim();
+  const authorName = String(input?.authorName || '').trim();
+  const authorEmail = String(input?.authorEmail || '').trim();
+  const committerName = String(input?.committerName || '').trim();
+  const committerEmail = String(input?.committerEmail || '').trim();
+  const authorOk =
+    Boolean(expectedName) &&
+    Boolean(expectedEmail) &&
+    authorName === expectedName &&
+    authorEmail === expectedEmail;
+  const committerIsExpected =
+    committerName === expectedName && committerEmail === expectedEmail;
+  const committerIsGitHubSigner =
+    /^github$/i.test(committerName) && /^noreply@github\.com$/i.test(committerEmail);
+  return {
+    authorOk,
+    committerOk: committerIsExpected || committerIsGitHubSigner,
+    committerIsGitHubSigner,
+  };
+}
+
+/**
  * A process is an orphaned executor when it still runs inside a per-attempt
  * worktree after the owning attempt has been released. The worker itself runs
  * from the primary repository checkout, so only worktree cwds are considered.

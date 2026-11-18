@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BOOT_PHASES,
+  checkCommitIdentity,
   computeReadiness,
   isAllowedWorkerBranch,
   isOrphanExecutorProcess,
@@ -145,8 +146,52 @@ test('uses the configured GitHub identity for automatic commits', () => {
   assert.equal(fallback.email, '97518066+merkurov1@users.noreply.github.com');
 });
 
-test('automatic pushes are restricted to attempt branches', () => {
-  assert.equal(
+test('accepts GitHub as the committer only for signed helper commits', () => {
+  const expected = {
+    expectedName: 'Anton Merkurov',
+    expectedEmail: '97518066+merkurov1@users.noreply.github.com',
+  };
+  const githubCommitter = checkCommitIdentity({
+    ...expected,
+    authorName: expected.expectedName,
+    authorEmail: expected.expectedEmail,
+    committerName: 'GitHub',
+    committerEmail: 'noreply@github.com',
+  });
+  assert.equal(githubCommitter.authorOk, true);
+  assert.equal(githubCommitter.committerOk, true);
+  assert.equal(githubCommitter.committerIsGitHubSigner, true);
+
+  const sameCommitter = checkCommitIdentity({
+    ...expected,
+    authorName: expected.expectedName,
+    authorEmail: expected.expectedEmail,
+    committerName: expected.expectedName,
+    committerEmail: expected.expectedEmail,
+  });
+  assert.equal(sameCommitter.committerOk, true);
+
+  const wrongAuthor = checkCommitIdentity({
+    ...expected,
+    authorName: 'Someone Else',
+    authorEmail: expected.expectedEmail,
+    committerName: 'GitHub',
+    committerEmail: 'noreply@github.com',
+  });
+  assert.equal(wrongAuthor.authorOk, false);
+  assert.equal(wrongAuthor.committerOk, true);
+
+  const wrongCommitter = checkCommitIdentity({
+    ...expected,
+    authorName: expected.expectedName,
+    authorEmail: expected.expectedEmail,
+    committerName: 'Someone Else',
+    committerEmail: 'noreply@example.com',
+  });
+  assert.equal(wrongCommitter.committerOk, false);
+});
+
+test('automatic pushes are restricted to attempt branches', () => {  assert.equal(
     isAllowedWorkerBranch('pierrot/dev/11111111-1111-4111-8111-111111111111/1'),
     true
   );
