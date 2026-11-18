@@ -22,6 +22,7 @@ import {
   patchTask,
   reapExpiredAttempts,
   recordTaskCostEstimate,
+  setQueueOptOut,
   touchWorkerHeartbeat,
   transitionTask,
 } from './store';
@@ -42,12 +43,7 @@ import {
   getVercelDeploymentStatus,
   mergeVerifiedPullRequest,
 } from './github';
-import type {
-  DevAttempt,
-  DevReviewView,
-  DevWorkbenchTask,
-  DevWorkbenchTaskStatus,
-} from './types';
+import type { DevAttempt, DevReviewView, DevWorkbenchTask, DevWorkbenchTaskStatus } from './types';
 
 assertServerOnly('lib/pierrot/dev/workbench/execution');
 
@@ -131,7 +127,8 @@ export async function claimTaskForWorker(
     task: material,
     attemptId: claim.attempt.id,
     attemptNumber: claim.attempt.attemptNumber,
-    branch: claim.attempt.branch || branchNameForAttempt(claim.task.id, claim.attempt.attemptNumber),
+    branch:
+      claim.attempt.branch || branchNameForAttempt(claim.task.id, claim.attempt.attemptNumber),
     repositoryFullName: config.fullName,
     baseRef: claim.attempt.baseRef || material.baseRef,
     baseCommit: claim.attempt.baseCommit || material.baseCommit,
@@ -424,7 +421,6 @@ export async function completeAttempt(
   return { attempt: (await getAttempt(attemptId)) || updatedAttempt, task };
 }
 
-
 async function ensurePullRequest(input: {
   task: DevWorkbenchTask;
   attempt: DevAttempt;
@@ -661,7 +657,10 @@ export async function releaseAttempt(
 // Owner actions
 // ---------------------------------------------------------------------------
 
-export async function approveTask(userId: string, taskId: string): Promise<DevWorkbenchTask | null> {
+export async function approveTask(
+  userId: string,
+  taskId: string
+): Promise<DevWorkbenchTask | null> {
   const task = await getTaskRow(userId, taskId);
   if (!task) return null;
   if (!task.objective.trim()) {
@@ -676,7 +675,7 @@ export async function approveTask(userId: string, taskId: string): Promise<DevWo
       'A task needs at least one acceptance criterion before it can be approved.'
     );
   }
-  return transitionTask({
+  const approved = await transitionTask({
     userId,
     taskId,
     to: 'ready',
@@ -686,6 +685,9 @@ export async function approveTask(userId: string, taskId: string): Promise<DevWo
       message: 'Task approved and ready for the queue.',
     },
   });
+  // A fresh approval re-arms the standalone auto-enqueue path.
+  if (approved) await setQueueOptOut(taskId, false);
+  return approved;
 }
 
 export async function enqueueTask(
@@ -727,7 +729,7 @@ export async function enqueueTask(
     last_error_message: null,
   };
   if (isUuid(batchId)) patch.queue_batch_id = batchId;
-  return transitionTask({
+  const queued = await transitionTask({
     userId,
     taskId,
     to: 'queued',
@@ -737,16 +739,25 @@ export async function enqueueTask(
       message: `Task added to the queue at position ${position}.`,
     },
   });
+  if (queued) await setQueueOptOut(taskId, false);
+  return queued;
 }
 
-export async function dequeueTask(userId: string, taskId: string): Promise<DevWorkbenchTask | null> {
-  return transitionTask({
+export async function dequeueTask(
+  userId: string,
+  taskId: string
+): Promise<DevWorkbenchTask | null> {
+  const dequeued = await transitionTask({
     userId,
     taskId,
     to: 'ready',
     patch: { queue_position: null, queued_at: null },
     event: { type: 'task.dequeued', message: 'Task removed from the queue.' },
   });
+  // `ready` is shared with the approval state. Keep the owner's explicit
+  // removal durable so idle promotion does not resurrect the task.
+  if (dequeued) await setQueueOptOut(taskId, true);
+  return dequeued;
 }
 
 export async function retryTask(userId: string, taskId: string): Promise<DevWorkbenchTask | null> {
@@ -794,6 +805,7 @@ export async function retryTask(userId: string, taskId: string): Promise<DevWork
       message: `Retry requested. Previous attempts are preserved; the next attempt will get a new ID and branch.`,
     },
   });
+  if (updated) await setQueueOptOut(taskId, false);
   return updated;
 }
 
@@ -841,7 +853,10 @@ export async function cancelTask(userId: string, taskId: string): Promise<DevWor
   return updated;
 }
 
-export async function archiveTask(userId: string, taskId: string): Promise<DevWorkbenchTask | null> {
+export async function archiveTask(
+  userId: string,
+  taskId: string
+): Promise<DevWorkbenchTask | null> {
   return transitionTask({
     userId,
     taskId,
@@ -861,13 +876,16 @@ function evidenceNotes(evidence: AttemptEvidence): string {
     `Changed files: ${evidence.changedFiles.length}`,
     `CI checks passed: ${evidence.ciPassed ? 'yes' : 'no'}; failed: ${evidence.ciFailed ? 'yes' : 'no'}`,
     `Executor-reported local commands: ${evidence.localReportedPassed ? 'present' : 'none'}${
-      evidence.localTrusted ? ' (trusted by server policy)' : ' (self-reported, not trusted as proof)'
+      evidence.localTrusted
+        ? ' (trusted by server policy)'
+        : ' (self-reported, not trusted as proof)'
     }`,
     `Manual confirmation: ${evidence.manualAll ? 'all criteria confirmed by owner' : 'not recorded'}`,
     '',
     'Acceptance criteria:',
     ...evidence.criteria.map(
-      (criterion) => `- [${criterion.status}] (${criterion.source}) ${criterion.criterion} — ${criterion.evidence}`
+      (criterion) =>
+        `- [${criterion.status}] (${criterion.source}) ${criterion.criterion} — ${criterion.evidence}`
     ),
   ].join('\n');
 }
@@ -937,7 +955,11 @@ export async function acceptTask(input: {
     status: 'verified',
   });
   if (!updated) {
-    throw new WorkbenchExecutionError('DEV_ACCEPT_FAILED', 'Unable to persist the acceptance.', 500);
+    throw new WorkbenchExecutionError(
+      'DEV_ACCEPT_FAILED',
+      'Unable to persist the acceptance.',
+      500
+    );
   }
 
   // Guard against a regression in the shared validator.
@@ -1020,7 +1042,10 @@ export async function mergeTask(
     throw new WorkbenchExecutionError('DEV_PR_UNAVAILABLE', 'GitHub PR status is unavailable.');
   }
   if (status.merged) {
-    throw new WorkbenchExecutionError('DEV_PR_ALREADY_MERGED', 'The pull request is already merged.');
+    throw new WorkbenchExecutionError(
+      'DEV_PR_ALREADY_MERGED',
+      'The pull request is already merged.'
+    );
   }
   if (status.headSha.toLowerCase() !== attempt.headSha.toLowerCase()) {
     throw new WorkbenchExecutionError(
@@ -1061,7 +1086,8 @@ export async function mergeTask(
     },
   });
   await patchTask(task.id, {
-    result_notes: `${task.resultNotes ? `${task.resultNotes}\n\n` : ''}Merged ${merged.sha || ''} at ${verification.mergedAt}.`.trim(),
+    result_notes:
+      `${task.resultNotes ? `${task.resultNotes}\n\n` : ''}Merged ${merged.sha || ''} at ${verification.mergedAt}.`.trim(),
   });
 
   await appendEvent({

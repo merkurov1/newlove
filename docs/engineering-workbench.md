@@ -168,6 +168,11 @@ integration is blocked and the owner must decide; the Codespace may stop to
 avoid idle cost. If new work arrives during finalization, the pass is
 superseded (`queue.refilled`) and normal execution resumes.
 
+Idle promotion is safe for explicit owner intent: `dequeue` writes a durable
+`queue:optout:<task>` marker, so a task the owner removed is never silently
+re-enqueued. Approving, enqueuing, retrying or starting a batch clears the
+marker.
+
 Events: `queue.drained`, `batch.finalization.started`,
 `batch.finalization.completed`, `batch.finalization.failed`,
 `integration.completed`, `integration.blocked`, `push.completed`.

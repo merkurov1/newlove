@@ -24,6 +24,7 @@ jest.mock('../store', () => ({
     total: { minUsd: null, expectedUsd: null, maxUsd: null },
     confidence: 'low',
   })),
+  setQueueOptOut: jest.fn(),
   touchWorkerHeartbeat: jest.fn(),
   transitionTask: jest.fn(),
 }));
