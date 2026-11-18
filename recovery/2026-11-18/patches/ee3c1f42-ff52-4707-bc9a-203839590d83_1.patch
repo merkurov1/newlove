@@ -1,0 +1,698 @@
+From dee12663abbee6cf84c348a43f5f6ec3d521adcc Mon Sep 17 00:00:00 2001
+From: Anton Merkurov <97518066+merkurov1@users.noreply.github.com>
+Date: Wed, 18 Nov 2026 14:58:08 +0000
+Subject: [PATCH] wip(recovery): preserve interrupted attempt 1 for task
+ ee3c1f42
+
+---
+ .../__tests__/page.searchParams.test.ts       | 205 +++++++++
+ app/admin/pierrot/(workspace)/page.tsx        |  11 +-
+ .../__tests__/projectChatFlow.test.ts         | 433 ++++++++++++++++++
+ 3 files changed, 647 insertions(+), 2 deletions(-)
+ create mode 100644 app/admin/pierrot/(workspace)/__tests__/page.searchParams.test.ts
+ create mode 100644 lib/pierrot/workspace/__tests__/projectChatFlow.test.ts
+
+diff --git a/app/admin/pierrot/(workspace)/__tests__/page.searchParams.test.ts b/app/admin/pierrot/(workspace)/__tests__/page.searchParams.test.ts
+new file mode 100644
+index 00000000..64f8ecb7
+--- /dev/null
++++ b/app/admin/pierrot/(workspace)/__tests__/page.searchParams.test.ts
+@@ -0,0 +1,205 @@
++/** @jest-environment node */
++
++/**
++ * Regression: Next.js 16 passes `searchParams` to a server page as a Promise.
++ * The chat page used to read it synchronously, so every deep link
++ * (`?history=`, `?session=`, `?project=`, `?conversation=`, `?new=1`) was
++ * silently ignored and a project link always rendered the MAIN history.
++ *
++ * These tests call the real page component with the same Promise shape the
++ * Next.js runtime provides. They fail if the page stops awaiting searchParams.
++ */
++
++import { beforeEach, describe, expect, it, jest } from '@jest/globals';
++
++const redirect = jest.fn((url: string) => {
++  throw new Error(`redirect:${url}`);
++});
++
++jest.mock('next/navigation', () => ({
++  redirect: (url: string) => redirect(url),
++}));
++
++jest.mock('next/headers', () => ({
++  cookies: jest.fn(async () => ({ get: () => undefined })),
++}));
++
++jest.mock('@/lib/serverAuth', () => ({
++  requireAdmin: jest.fn(async () => ({ id: 'owner-1' })),
++}));
++
++jest.mock('@/lib/pierrot/workspace/data', () => ({
++  loadOwnerHistoryView: jest.fn(),
++  loadWorkspaceOverview: jest.fn(async () => ({})),
++}));
++
++jest.mock('@/lib/pierrot/serverStore', () => ({
++  createPierrotStore: jest.fn(() => ({})),
++}));
++
++jest.mock('@/lib/pierrot/memory/brainStatus', () => ({
++  loadBrainStatus: jest.fn(async () => null),
++}));
++
++jest.mock('@/lib/pierrot/projects/store', () => ({
++  getPierrotProject: jest.fn(async () => ({
++    id: 'project-1',
++    slug: 'heart-and-angel',
++    name: 'Heart & Angel',
++  })),
++}));
++
++jest.mock('@/lib/pierrot/workspace/cache', () => ({
++  overviewCookieName: (id: string) => `pierrot-overview-${id}`,
++  parseOverviewCache: jest.fn(() => null),
++}));
++
++jest.mock('@/components/pierrot/workspace/ChatWorkspace', () => ({
++  __esModule: true,
++  default: () => null,
++}));
++
++type SearchParams = Record<string, string | string[] | undefined>;
++
++const data = jest.requireMock('@/lib/pierrot/workspace/data') as {
++  loadOwnerHistoryView: jest.Mock;
++};
++const projects = jest.requireMock('@/lib/pierrot/projects/store') as {
++  getPierrotProject: jest.Mock;
++};
++
++function viewFor(historyId: string, sessionId: string | null = null) {
++  return {
++    scope: {
++      history: { id: historyId, type: 'project', title: 'Проект' },
++      session: sessionId ? { id: sessionId } : null,
++      activeSession: null,
++      conversationId: 'conversation-1',
++      conversationSessionId: 'conversation-token',
++      project: null,
++    },
++    sessions: [],
++    conversation: {
++      id: 'conversation-1',
++      sessionId: 'conversation-token',
++      title: 'Проект',
++      consentState: 'granted',
++      messages: [],
++      hasMore: false,
++      oldestMessageIndex: null,
++      historyId,
++      historyType: 'project',
++      historyTitle: 'Проект',
++      projectId: 'project-1',
++      projectSlug: 'heart-and-angel',
++      projectName: 'Heart & Angel',
++      currentSessionId: sessionId,
++      currentSessionTitle: null,
++      activeSessionId: null,
++      oldestSequence: null,
++      newestSequence: null,
++      hasNewer: false,
++      emptyCurrentSession: false,
++    },
++    project: null,
++  };
++}
++
++async function callPage(searchParams: SearchParams | Promise<SearchParams> | undefined) {
++  // Imported lazily so the mocks above are registered first.
++  const { default: ChatPage } = await import('../page');
++
++  // Next.js 16 hands the page a Promise, never a plain object.
++  return (ChatPage as unknown as (props: { searchParams?: unknown }) => Promise<unknown>)({
++    searchParams,
++  });
++}
++
++describe('chat page search params', () => {
++  beforeEach(() => {
++    redirect.mockClear();
++    data.loadOwnerHistoryView.mockReset();
++    projects.getPierrotProject.mockClear();
++  });
++
++  it('opens the project history from a Next.js promise deep link', async () => {
++    data.loadOwnerHistoryView.mockResolvedValue(viewFor('project-history-1'));
++
++    await callPage(Promise.resolve({ history: 'project-history-1' }));
++
++    expect(data.loadOwnerHistoryView).toHaveBeenCalledWith(
++      'owner-1',
++      expect.objectContaining({ historyId: 'project-history-1', createSession: false })
++    );
++  });
++
++  it('keeps a session deep link when the same history is requested', async () => {
++    data.loadOwnerHistoryView.mockResolvedValue(viewFor('project-history-1', 'session-7'));
++
++    await callPage(Promise.resolve({ history: 'project-history-1', session: 'session-7' }));
++
++    expect(data.loadOwnerHistoryView).toHaveBeenCalledWith(
++      'owner-1',
++      expect.objectContaining({
++        historyId: 'project-history-1',
++        sessionId: 'session-7',
++        createSession: false,
++      })
++    );
++  });
++
++  it('redirects a project slug link to the project canonical history', async () => {
++    data.loadOwnerHistoryView.mockResolvedValue(viewFor('project-history-2'));
++
++    await expect(callPage(Promise.resolve({ project: 'heart-and-angel' }))).rejects.toThrow(
++      'redirect:/admin/pierrot?history=project-history-2'
++    );
++
++    expect(projects.getPierrotProject).toHaveBeenCalledWith('owner-1', 'heart-and-angel');
++    expect(data.loadOwnerHistoryView).toHaveBeenCalledWith(
++      'owner-1',
++      expect.objectContaining({ projectId: 'project-1', createSession: false })
++    );
++  });
++
++  it('redirects a legacy conversation link into the permanent history', async () => {
++    data.loadOwnerHistoryView.mockResolvedValue(viewFor('main-history', 'session-legacy'));
++
++    await expect(
++      callPage(Promise.resolve({ conversation: 'legacy-conversation' }))
++    ).rejects.toThrow('redirect:/admin/pierrot?history=main-history&session=session-legacy');
++
++    expect(data.loadOwnerHistoryView).toHaveBeenCalledWith(
++      'owner-1',
++      expect.objectContaining({
++        conversationId: 'legacy-conversation',
++        createSession: false,
++      })
++    );
++  });
++
++  it('honours the explicit new-chat flag', async () => {
++    data.loadOwnerHistoryView.mockResolvedValue(viewFor('main-history'));
++
++    const element = (await callPage(Promise.resolve({ new: '1' }))) as {
++      props?: { startNew?: boolean };
++    };
++
++    expect(data.loadOwnerHistoryView).toHaveBeenCalledWith(
++      'owner-1',
++      expect.objectContaining({ createSession: false })
++    );
++    expect(element.props?.startNew).toBe(true);
++    expect(redirect).not.toHaveBeenCalled();
++  });
++
++  it('does not start a new session for an ordinary history link', async () => {
++    data.loadOwnerHistoryView.mockResolvedValue(viewFor('main-history'));
++
++    const element = (await callPage(Promise.resolve({ history: 'main-history' }))) as {
++      props?: { startNew?: boolean };
++    };
++
++    expect(element.props?.startNew).toBe(false);
++  });
++});
+diff --git a/app/admin/pierrot/(workspace)/page.tsx b/app/admin/pierrot/(workspace)/page.tsx
+index 2d34121d..5b7f84ee 100644
+--- a/app/admin/pierrot/(workspace)/page.tsx
++++ b/app/admin/pierrot/(workspace)/page.tsx
+@@ -49,6 +49,8 @@ function unavailableOverview(): WorkspaceOverview {
+   };
+ }
+ 
++type ChatSearchParams = Record<string, string | string[] | undefined>;
++
+ function param(value: string | string[] | undefined): string {
+   return (Array.isArray(value) ? value[0] : value) || '';
+ }
+@@ -56,10 +58,15 @@ function param(value: string | string[] | undefined): string {
+ export default async function ChatPage({
+   searchParams,
+ }: {
+-  searchParams?: Record<string, string | string[] | undefined>;
++  // Next.js 16 passes searchParams as a Promise. Accepting a plain object too
++  // keeps direct calls (tests, older runtimes) working; `await` handles both.
++  searchParams?: ChatSearchParams | Promise<ChatSearchParams>;
+ }) {
+   const user = await requireAdmin();
+-  const params = searchParams || {};
++  // Reading the promise synchronously silently yields undefined for every
++  // key. That made `?history=`/`?project=`/`?session=` links open MAIN. Await it
++  // before reading any deep link.
++  const params = (await searchParams) || {};
+   const requestedHistory = param(params.history);
+   const requestedSession = param(params.session);
+   const rawConversation = param(params.conversation);
+diff --git a/lib/pierrot/workspace/__tests__/projectChatFlow.test.ts b/lib/pierrot/workspace/__tests__/projectChatFlow.test.ts
+new file mode 100644
+index 00000000..9b580d20
+--- /dev/null
++++ b/lib/pierrot/workspace/__tests__/projectChatFlow.test.ts
+@@ -0,0 +1,433 @@
++/** @jest-environment node */
++
++/**
++ * End-to-end (store-level) regression for the project chat flow that broke in
++ * production after PR #40:
++ *
++ *   open project -> see previous history -> send -> persist -> reload/resume.
++ *
++ * The fixture mirrors the production post-backfill state: the project history
++ * exists, its legacy session is closed (`ended_at` set) and every message has
++ * history/session provenance. The only write that may create a session is the
++ * first message, never a read.
++ */
++
++import { randomUUID } from 'crypto';
++import { describe, expect, it } from '@jest/globals';
++import { FakeSupabase, OWNER_ID } from '@/lib/pierrot/memory/testSupport/fakeSupabase';
++import { appendPierrotMessage } from '@/lib/pierrot/serverStore';
++import { loadOwnerHistoryViewFromStore } from '../data';
++import { resolveHistoryScope } from '@/lib/pierrot/history/store';
++
++const TABLES = [
++  'pierrot_histories',
++  'pierrot_sessions',
++  'pierrot_messages',
++  'pierrot_events',
++  'pierrot_projects',
++  'pierrot_conversations',
++  'pierrot_project_conversations',
++];
++
++type Fixture = Awaited<ReturnType<typeof seedProjectChat>>;
++
++async function seedProjectChat() {
++  const db = new FakeSupabase(TABLES);
++  const now = '2026-11-20T10:00:00.000Z';
++  const projectId = randomUUID();
++  const historyId = randomUUID();
++  const conversationId = randomUUID();
++  const closedSessionId = randomUUID();
++  const createdSessionId = randomUUID();
++
++  db.seed('pierrot_conversations', [
++    {
++      id: conversationId,
++      session_id: `session-token-${randomUUID()}`,
++      identity_type: 'owner',
++      user_id: OWNER_ID,
++      mode: 'site',
++      consent_state: 'granted',
++      title: 'Heart & Angel',
++      started_at: now,
++      updated_at: now,
++    },
++  ]);
++  db.seed('pierrot_projects', [
++    {
++      id: projectId,
++      owner_user_id: OWNER_ID,
++      slug: 'heart-and-angel',
++      name: 'Heart & Angel',
++      description: '',
++      objective: '',
++      status: 'active',
++      priority: 0,
++      project_brief: '',
++      brief_revision: 1,
++      conversation_id: conversationId,
++      last_activity_at: now,
++      created_at: now,
++      updated_at: now,
++    },
++  ]);
++  db.seed('pierrot_histories', [
++    {
++      id: historyId,
++      owner_user_id: OWNER_ID,
++      type: 'project',
++      project_id: projectId,
++      canonical_conversation_id: conversationId,
++      title: 'Heart & Angel',
++      metadata: {},
++      next_message_sequence: 5,
++      created_at: now,
++      updated_at: now,
++    },
++  ]);
++  db.seed('pierrot_sessions', [
++    {
++      id: closedSessionId,
++      history_id: historyId,
++      conversation_id: conversationId,
++      source_conversation_id: null,
++      ordinal: 1,
++      title: 'Прежняя история',
++      started_at: now,
++      // Production backfill closes every migrated legacy episode.
++      ended_at: now,
++      last_message_at: now,
++      message_count: 4,
++      first_message_sequence: 1,
++      last_message_sequence: 4,
++      metadata: {},
++      created_at: now,
++      updated_at: now,
++    },
++  ]);
++  db.seed(
++    'pierrot_messages',
++    Array.from({ length: 4 }, (_, index) => ({
++      id: `old-message-${index + 1}`,
++      conversation_id: conversationId,
++      role: index % 2 === 0 ? 'user' : 'assistant',
++      content: `Previous message ${index + 1}`,
++      message_index: index + 1,
++      provider: null,
++      created_at: `2026-11-20T10:0${index}:00.000Z`,
++      history_id: historyId,
++      session_id: closedSessionId,
++      history_sequence: index + 1,
++    }))
++  );
++
++  db.onRpc('pierrot_ensure_project_history', () => ({ data: historyId, error: null }));
++
++  db.onRpc('pierrot_create_session', (params) => {
++    const sessions = db.all('pierrot_sessions');
++    const ordinal = Math.max(0, ...sessions.map((row) => Number(row.ordinal || 0))) + 1;
++    const row = {
++      id: createdSessionId,
++      history_id: params.p_history_id,
++      conversation_id: conversationId,
++      source_conversation_id: null,
++      ordinal,
++      title: (params.p_title as string) || 'Новая сессия',
++      started_at: '2026-11-20T11:00:00.000Z',
++      ended_at: null,
++      last_message_at: null,
++      message_count: 0,
++      first_message_sequence: null,
++      last_message_sequence: null,
++      metadata: {},
++      created_at: '2026-11-20T11:00:00.000Z',
++      updated_at: '2026-11-20T11:00:00.000Z',
++    };
++    sessions.push(row);
++    return { data: [row], error: null };
++  });
++
++  db.onRpc('pierrot_append_message_v2', (params) => {
++    const messages = db.all('pierrot_messages');
++    const existing = messages.find((row) => row.id === params.p_message_id);
++    if (existing) {
++      return {
++        data: [
++          {
++            sequence: existing.message_index,
++            content: existing.content,
++            inserted: false,
++            history_sequence: existing.history_sequence,
++          },
++        ],
++        error: null,
++      };
++    }
++
++    const history = db.all('pierrot_histories').find((row) => row.id === params.p_history_id);
++    if (!history) return { data: null, error: { code: 'P0002', message: 'history_not_found' } };
++    if (params.p_history_id !== historyId) {
++      return { data: null, error: { code: 'P0002', message: 'wrong_history' } };
++    }
++
++    const episode = db
++      .all('pierrot_sessions')
++      .find((row) => row.id === params.p_episode_id && row.history_id === params.p_history_id);
++    if (!episode) return { data: null, error: { code: 'P0002', message: 'session_not_found' } };
++
++    const sequence = Number(history.next_message_sequence || 1);
++    history.next_message_sequence = sequence + 1;
++    const messageIndex =
++      Math.max(
++        0,
++        ...messages
++          .filter((row) => row.conversation_id === params.p_conversation_id)
++          .map((row) => Number(row.message_index || 0))
++      ) + 1;
++
++    messages.push({
++      id: params.p_message_id,
++      conversation_id: params.p_conversation_id,
++      role: params.p_role,
++      content: params.p_content,
++      message_index: messageIndex,
++      provider: params.p_provider,
++      created_at: '2026-11-20T11:01:00.000Z',
++      history_id: params.p_history_id,
++      session_id: params.p_episode_id,
++      history_sequence: sequence,
++    });
++
++    episode.message_count = Number(episode.message_count || 0) + 1;
++    episode.first_message_sequence = episode.first_message_sequence ?? sequence;
++    episode.last_message_sequence = sequence;
++    episode.last_message_at = '2026-11-20T11:01:00.000Z';
++    episode.updated_at = '2026-11-20T11:01:00.000Z';
++    if (params.p_role === 'user' && episode.title === 'Новая сессия') {
++      episode.title = String(params.p_content).slice(0, 120);
++    }
++
++    return {
++      data: [
++        {
++          sequence: messageIndex,
++          content: params.p_content,
++          inserted: true,
++          history_sequence: sequence,
++        },
++      ],
++      error: null,
++    };
++  });
++
++  return { db, projectId, historyId, conversationId, closedSessionId, createdSessionId };
++}
++
++async function sendRecordedTurn(
++  fixture: Fixture,
++  input: { userText: string; replyText: string }
++): Promise<string> {
++  const scope = await resolveHistoryScope(fixture.db.asClient(), OWNER_ID, {
++    historyId: fixture.historyId,
++    createSession: true,
++  });
++  expect(scope?.session).not.toBeNull();
++  const episodeId = scope!.session!.id;
++
++  const userMessageId = randomUUID();
++  await appendPierrotMessage(fixture.db.asClient(), {
++    conversationId: scope!.conversationId,
++    sessionId: scope!.conversationSessionId,
++    historyId: fixture.historyId,
++    episodeId,
++    messageId: userMessageId,
++    role: 'user',
++    content: input.userText,
++    provider: null,
++  });
++
++  await appendPierrotMessage(fixture.db.asClient(), {
++    conversationId: scope!.conversationId,
++    sessionId: scope!.conversationSessionId,
++    historyId: fixture.historyId,
++    episodeId,
++    messageId: randomUUID(),
++    role: 'assistant',
++    content: input.replyText,
++    provider: 'deepseek',
++  });
++
++  return episodeId;
++}
++
++describe('project chat: open history, send, reload and resume', () => {
++  it('opens the canonical project history without creating an empty session', async () => {
++    const fixture = await seedProjectChat();
++
++    const view = await loadOwnerHistoryViewFromStore(fixture.db.asClient(), OWNER_ID, {
++      historyId: fixture.historyId,
++    });
++
++    expect(view?.scope.history.id).toBe(fixture.historyId);
++    expect(view?.conversation.projectSlug).toBe('heart-and-angel');
++    expect(view?.conversation.messages.map((message) => message.content)).toEqual([
++      'Previous message 1',
++      'Previous message 2',
++      'Previous message 3',
++      'Previous message 4',
++    ]);
++    // The closed legacy episode is readable but is not a write target.
++    expect(view?.conversation.activeSessionId).toBeNull();
++    expect(fixture.db.all('pierrot_sessions')).toHaveLength(1);
++  });
++
++  it('creates exactly one open session on the first message and persists both turns', async () => {
++    const fixture = await seedProjectChat();
++
++    const episodeId = await sendRecordedTurn(fixture, {
++      userText: 'Continue the project chat',
++      replyText: 'The project chat is working.',
++    });
++
++    expect(episodeId).toBe(fixture.createdSessionId);
++    expect(fixture.db.all('pierrot_histories')).toHaveLength(1);
++    expect(fixture.db.all('pierrot_sessions')).toHaveLength(2);
++
++    const created = fixture.db
++      .all('pierrot_sessions')
++      .find((row) => row.id === fixture.createdSessionId);
++    expect(created?.ended_at).toBeNull();
++    expect(created?.message_count).toBe(2);
++    // The closed episode is preserved untouched.
++    const closed = fixture.db
++      .all('pierrot_sessions')
++      .find((row) => row.id === fixture.closedSessionId);
++    expect(closed?.message_count).toBe(4);
++    expect(closed?.last_message_sequence).toBe(4);
++
++    const persisted = fixture.db
++      .all('pierrot_messages')
++      .filter((row) => row.session_id === fixture.createdSessionId);
++    expect(persisted.map((row) => row.content)).toEqual([
++      'Continue the project chat',
++      'The project chat is working.',
++    ]);
++    expect(persisted.map((row) => row.history_sequence)).toEqual([5, 6]);
++  });
++
++  it('shows the saved dialogue after a reload and resumes the same chat', async () => {
++    const fixture = await seedProjectChat();
++    const episodeId = await sendRecordedTurn(fixture, {
++      userText: 'Continue the project chat',
++      replyText: 'The project chat is working.',
++    });
++
++    // Reload of the canonical project URL (no ?session=): continuous history.
++    const reloaded = await loadOwnerHistoryViewFromStore(fixture.db.asClient(), OWNER_ID, {
++      historyId: fixture.historyId,
++    });
++
++    expect(reloaded?.conversation.messages.map((message) => message.content)).toEqual([
++      'Previous message 1',
++      'Previous message 2',
++      'Previous message 3',
++      'Previous message 4',
++      'Continue the project chat',
++      'The project chat is working.',
++    ]);
++    expect(reloaded?.conversation.activeSessionId).toBe(episodeId);
++    expect(reloaded?.conversation.hasNewer).toBe(false);
++
++    // Direct session link (reload of the URL written after the turn).
++    const resumed = await loadOwnerHistoryViewFromStore(fixture.db.asClient(), OWNER_ID, {
++      historyId: fixture.historyId,
++      sessionId: episodeId,
++    });
++    expect(resumed?.conversation.messages.map((message) => message.content)).toEqual([
++      'Continue the project chat',
++      'The project chat is working.',
++    ]);
++    expect(resumed?.conversation.currentSessionId).toBe(episodeId);
++    expect(resumed?.conversation.activeSessionId).toBe(episodeId);
++
++    // A second turn must continue the same open session, not create a third.
++    const secondEpisodeId = await sendRecordedTurn(fixture, {
++      userText: 'Second message',
++      replyText: 'Second answer',
++    });
++    expect(secondEpisodeId).toBe(episodeId);
++    expect(fixture.db.all('pierrot_sessions')).toHaveLength(2);
++
++    const afterSecondTurn = await loadOwnerHistoryViewFromStore(fixture.db.asClient(), OWNER_ID, {
++      historyId: fixture.historyId,
++    });
++    expect(afterSecondTurn?.conversation.messages).toHaveLength(8);
++  });
++
++  it('keeps project histories isolated from MAIN', async () => {
++    const fixture = await seedProjectChat();
++    const mainHistoryId = randomUUID();
++    const mainConversationId = randomUUID();
++
++    fixture.db.seed('pierrot_conversations', [
++      ...fixture.db.all('pierrot_conversations'),
++      {
++        id: mainConversationId,
++        session_id: `main-token-${randomUUID()}`,
++        identity_type: 'owner',
++        user_id: OWNER_ID,
++        mode: 'site',
++        consent_state: 'granted',
++        started_at: '2026-11-20T09:00:00.000Z',
++        updated_at: '2026-11-20T09:00:00.000Z',
++      },
++    ]);
++    fixture.db.seed('pierrot_histories', [
++      ...fixture.db.all('pierrot_histories'),
++      {
++        id: mainHistoryId,
++        owner_user_id: OWNER_ID,
++        type: 'main',
++        project_id: null,
++        canonical_conversation_id: mainConversationId,
++        title: 'Главная история',
++        metadata: {},
++        next_message_sequence: 2,
++        created_at: '2026-11-20T09:00:00.000Z',
++        updated_at: '2026-11-20T09:00:00.000Z',
++      },
++    ]);
++    fixture.db.seed('pierrot_messages', [
++      ...fixture.db.all('pierrot_messages'),
++      {
++        id: 'main-message-1',
++        conversation_id: mainConversationId,
++        role: 'user',
++        content: 'Main-only message',
++        message_index: 1,
++        provider: null,
++        created_at: '2026-11-20T09:00:00.000Z',
++        history_id: mainHistoryId,
++        session_id: null,
++        history_sequence: 1,
++      },
++    ]);
++
++    const projectView = await loadOwnerHistoryViewFromStore(fixture.db.asClient(), OWNER_ID, {
++      historyId: fixture.historyId,
++    });
++    const mainView = await loadOwnerHistoryViewFromStore(fixture.db.asClient(), OWNER_ID, {
++      historyId: mainHistoryId,
++    });
++
++    expect(projectView?.conversation.messages.map((message) => message.content)).not.toContain(
++      'Main-only message'
++    );
++    expect(mainView?.conversation.messages.map((message) => message.content)).toEqual([
++      'Main-only message',
++    ]);
++    expect(
++      fixture.db.all('pierrot_sessions').filter((row) => row.history_id === mainHistoryId)
++    ).toHaveLength(0);
++  });
++});
+-- 
+2.55.0
+

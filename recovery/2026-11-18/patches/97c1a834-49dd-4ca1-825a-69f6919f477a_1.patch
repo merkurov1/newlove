@@ -1,0 +1,864 @@
+From 1f3a616cbe3fefa010613c3bf9e674fdfa2ea8d1 Mon Sep 17 00:00:00 2001
+From: Anton Merkurov <97518066+merkurov1@users.noreply.github.com>
+Date: Wed, 18 Nov 2026 12:27:34 +0000
+Subject: [PATCH] wip(recovery): preserve attempt 1 for task
+ 97c1a834-49dd-4ca1-825a-69f6919f477a
+
+---
+ .../pierrot/dev/workbench/actions/route.ts    |  53 ++-----
+ app/api/internal/pierrot/dev/worker/route.ts  |  39 +++--
+ docs/engineering-workbench.md                 |  13 +-
+ .../__tests__/lifecycleOperations.test.ts     |  31 ++++
+ lib/pierrot/dev/workbench/lifecycle.ts        |  52 ++++++-
+ .../pierrot/__tests__/dev-worker-lib.test.mjs |  71 ++++++++-
+ scripts/pierrot/dev-worker-lib.mjs            | 142 ++++++++++++++----
+ scripts/pierrot/dev-worker.mjs                | 113 +++++++++++---
+ 8 files changed, 392 insertions(+), 122 deletions(-)
+
+diff --git a/app/api/admin/pierrot/dev/workbench/actions/route.ts b/app/api/admin/pierrot/dev/workbench/actions/route.ts
+index 4fe40664..61fba884 100644
+--- a/app/api/admin/pierrot/dev/workbench/actions/route.ts
++++ b/app/api/admin/pierrot/dev/workbench/actions/route.ts
+@@ -1,5 +1,5 @@
+ import { randomBytes } from 'crypto';
+-import { NextResponse, after } from 'next/server';
++import { NextResponse } from 'next/server';
+ import { requireAdminFromRequest } from '@/lib/serverAuth';
+ import { getClientIp } from '@/lib/rateLimit';
+ import { checkPierrotRateLimit } from '@/lib/pierrot/rateLimit';
+@@ -39,11 +39,9 @@ import {
+ } from '@/lib/pierrot/dev/workbench/github';
+ import {
+   ensureCodespaceForQueuedWork,
+-  retryPendingStart,
+   startCodespaceNow,
+   stopCodespaceNow,
+ } from '@/lib/pierrot/dev/workbench/lifecycle';
+-import type { EnsureStartResult } from '@/lib/pierrot/dev/workbench/lifecycle';
+ import { CODESPACE_NAME_ENV } from '@/lib/pierrot/dev/workbench/setup';
+ import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
+ import { DevTransitionError } from '@/lib/pierrot/dev/workbench/state';
+@@ -78,25 +76,9 @@ function json(body: unknown, status = 200) {
+   });
+ }
+ 
+-/**
+- * If a stop is in flight, startup is persisted and retried once after the
+- * response. The request never waits for the Codespace boot. Further attempts
+- * are driven by the next Admin poll and by the persisted pending state, not by
+- * a long retry loop inside one Vercel Function.
+- */
+-function schedulePendingStart(result: EnsureStartResult, source: string): void {
+-  if (result.action !== 'start-pending') return;
+-  after(async () => {
+-    await new Promise((resolve) => setTimeout(resolve, 12_000));
+-    try {
+-      await retryPendingStart(`${source}:retry`);
+-    } catch (error) {
+-      console.error('[Pierrot Dev Workbench] pending start retry failed', {
+-        code: error instanceof Error ? error.name : 'unknown',
+-      });
+-    }
+-  });
+-}
++// Pending startup is persisted by ensureCodespaceForQueuedWork(). No retry
++// loop or sleep runs inside this Vercel Function: the next Admin overview poll
++// performs the next idempotent attempt, so every invocation stays bounded.
+ 
+ function strings(value: unknown, limit = 60): string[] {
+   return Array.isArray(value)
+@@ -188,10 +170,7 @@ export async function POST(req: Request) {
+             }).catch(() => {});
+           }
+         }
+-        schedulePendingStart(
+-          await ensureCodespaceForQueuedWork({ source: 'admin:approve' }),
+-          'admin:approve'
+-        );
++        await ensureCodespaceForQueuedWork({ source: 'admin:approve' });
+         break;
+       }
+       case 'enqueue': {
+@@ -201,10 +180,7 @@ export async function POST(req: Request) {
+           typeof body.batchId === 'string' ? body.batchId : null
+         );
+         if (!task) return json({ error: 'Task not found.' }, 404);
+-        schedulePendingStart(
+-          await ensureCodespaceForQueuedWork({ source: 'admin:enqueue' }),
+-          'admin:enqueue'
+-        );
++        await ensureCodespaceForQueuedWork({ source: 'admin:enqueue' });
+         break;
+       }
+       case 'dequeue': {
+@@ -220,10 +196,7 @@ export async function POST(req: Request) {
+       case 'retry': {
+         const task = await retryTask(admin.id, taskId);
+         if (!task) return json({ error: 'Task not found.' }, 404);
+-        schedulePendingStart(
+-          await ensureCodespaceForQueuedWork({ source: 'admin:retry' }),
+-          'admin:retry'
+-        );
++        await ensureCodespaceForQueuedWork({ source: 'admin:retry' });
+         break;
+       }
+       case 'accept': {
+@@ -289,10 +262,7 @@ export async function POST(req: Request) {
+           message: paused ? 'Queue paused by the owner.' : 'Queue resumed by the owner.',
+         });
+         if (!paused) {
+-          schedulePendingStart(
+-            await ensureCodespaceForQueuedWork({ source: 'admin:resume' }),
+-            'admin:resume'
+-          );
++          await ensureCodespaceForQueuedWork({ source: 'admin:resume' });
+         }
+         break;
+       }
+@@ -338,10 +308,7 @@ export async function POST(req: Request) {
+                       : 'The batch could not be started.';
+           return json({ error: message, code: result.error, notReady: result.notReady }, status);
+         }
+-        schedulePendingStart(
+-          await ensureCodespaceForQueuedWork({ source: 'admin:start_batch' }),
+-          'admin:start_batch'
+-        );
++        await ensureCodespaceForQueuedWork({ source: 'admin:start_batch' });
+         break;
+       }
+       case 'update_batch': {
+@@ -411,7 +378,7 @@ export async function POST(req: Request) {
+             502
+           );
+         }
+-        schedulePendingStart(result, 'admin:manual');
++        // A pending start is durable; the next overview poll retries it.
+         break;
+       }
+       case 'stop_codespace': {
+diff --git a/app/api/internal/pierrot/dev/worker/route.ts b/app/api/internal/pierrot/dev/worker/route.ts
+index 03afaad1..374ea066 100644
+--- a/app/api/internal/pierrot/dev/worker/route.ts
++++ b/app/api/internal/pierrot/dev/worker/route.ts
+@@ -89,6 +89,24 @@ function safeObject(value: unknown, maxBytes = 16_000): Record<string, unknown>
+   }
+ }
+ 
++/**
++ * A worker may only be recorded as ready when the detailed readiness proof
++ * agrees with the top-level flag. This prevents a contradictory payload
++ * (ready=true with authOk=false) from producing a false Ready state in Admin.
++ */
++function readinessIsReady(capabilities: Record<string, unknown>): boolean {
++  const readiness = capabilities.readiness;
++  if (!readiness || typeof readiness !== 'object' || Array.isArray(readiness)) {
++    return capabilities.ready === true;
++  }
++  const value = readiness as Record<string, unknown>;
++  return (
++    (capabilities.ready === true || value.ready === true) &&
++    value.authOk !== false &&
++    value.opencodeOk !== false
++  );
++}
++
+ function errorResponse(error: unknown) {
+   if (error instanceof WorkerAuthError) {
+     return json({ error: error.message, code: error.code }, error.status);
+@@ -126,10 +144,6 @@ export async function POST(req: Request) {
+     switch (action) {
+       case 'register': {
+         const capabilities = safeObject(body.capabilities, 32_000);
+-        const readiness =
+-          capabilities.readiness && typeof capabilities.readiness === 'object'
+-            ? (capabilities.readiness as Record<string, unknown>)
+-            : {};
+         const worker = await registerWorker({
+           workerId,
+           name: text(body.name, 120) || workerId,
+@@ -139,7 +153,7 @@ export async function POST(req: Request) {
+           repository: text(body.repository, 120) || undefined,
+           capabilities,
+         });
+-        if (capabilities.ready === true || readiness.ready === true) {
++        if (readinessIsReady(capabilities)) {
+           await recordWorkerReady(workerId);
+         }
+         return json({
+@@ -190,14 +204,17 @@ export async function POST(req: Request) {
+           workerId,
+           status,
+           capabilities,
++          // `null` is an explicit "the previous error is cleared" signal. Do
++          // not collapse it to `undefined`, or a recovered worker keeps a stale
++          // last_error forever (e.g. an old auth failure after readiness is OK).
+           lastError:
+-            typeof body.lastError === 'string' ? body.lastError.slice(0, 1000) : undefined,
++            body.lastError === null
++              ? null
++              : typeof body.lastError === 'string'
++                ? body.lastError.slice(0, 1000)
++                : undefined,
+         });
+-        const readiness =
+-          capabilities.readiness && typeof capabilities.readiness === 'object'
+-            ? (capabilities.readiness as Record<string, unknown>)
+-            : {};
+-        if (capabilities.ready === true || readiness.ready === true) {
++        if (readinessIsReady(capabilities)) {
+           await recordWorkerReady(workerId);
+         }
+         await recordWorkerIdle({
+diff --git a/docs/engineering-workbench.md b/docs/engineering-workbench.md
+index a14012c7..a99005f5 100644
+--- a/docs/engineering-workbench.md
++++ b/docs/engineering-workbench.md
+@@ -144,13 +144,12 @@ overwritten.
+ - Runs `opencode run --standalone --format json` in a clean environment inside
+   a per-attempt git worktree.
+ - Commits and pushes only to the generated attempt branch; PR creation happens
+-  on the server after the result is recorded. Automatic commits use the
+-  Codespace's configured GitHub identity (falling back to the repository
+-  owner's verified GitHub noreply address), never an invented author.
+-  Signing is disabled per worker commit with `-c commit.gpgsign=false` because
+-  the repository does not require signed commits; set
+-  `PIERROT_DEV_GIT_SIGN_COMMITS=true` to use the configured signing identity
+-  instead. Pushes to `main`/`master` or any non-`pierrot/dev/<task>/<attempt>`
++  on the server after the result is recorded. Automatic commits always use the
++  repository owner's verified GitHub identity
++  (`97518066+merkurov1@users.noreply.github.com`) and are GPG-signed through
++  the Codespace `gh-gpgsign` program. A different mutable Codespace identity is
++  ignored, and an unsigned or identity-mismatched commit is refused rather than
++  pushed. Pushes to `main`/`master` or any non-`pierrot/dev/<task>/<attempt>`
+   branch are refused.
+ - If commit or push fails, the branch, local commit SHA and exact reason are
+   kept in `$PIERROT_DEV_WORK_ROOT/push-failures/<attempt>.json`, sent with the
+diff --git a/lib/pierrot/dev/workbench/__tests__/lifecycleOperations.test.ts b/lib/pierrot/dev/workbench/__tests__/lifecycleOperations.test.ts
+index 727c2136..4ec22dd0 100644
+--- a/lib/pierrot/dev/workbench/__tests__/lifecycleOperations.test.ts
++++ b/lib/pierrot/dev/workbench/__tests__/lifecycleOperations.test.ts
+@@ -281,4 +281,35 @@ describe('startup recovery', () => {
+     expect(second.action).toBe('blocked');
+     expect(github.stopCodespace).toHaveBeenCalledTimes(1);
+   }, 15_000);
++
++  it('cancels a recovery when a worker comes online after the lock', async () => {
++    asMock(store.getQueueSnapshot).mockResolvedValue({ ...idleQueue, queued: 1 });
++    asMock(github.resolveCodespace).mockResolvedValue({ ...codespace, state: 'Available' });
++    asMock(store.listWorkers)
++      .mockResolvedValueOnce([
++        {
++          id: 'codespace:test',
++          online: false,
++          lastHeartbeatAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
++        },
++      ])
++      .mockResolvedValueOnce([
++        {
++          id: 'codespace:test',
++          online: true,
++          lastHeartbeatAt: new Date().toISOString(),
++        },
++      ]);
++
++    const result = await ensureCodespaceForQueuedWork({
++      source: 'admin:manual',
++      allowWorkerRecovery: true,
++    });
++
++    expect(result.action).toBe('already-available');
++    expect(github.stopCodespace).not.toHaveBeenCalled();
++    expect(store.appendEvent).toHaveBeenCalledWith(
++      expect.objectContaining({ type: 'codespace.worker_recovery_cancelled' })
++    );
++  }, 15_000);
+ });
+diff --git a/lib/pierrot/dev/workbench/lifecycle.ts b/lib/pierrot/dev/workbench/lifecycle.ts
+index ff68b518..4e538ec2 100644
+--- a/lib/pierrot/dev/workbench/lifecycle.ts
++++ b/lib/pierrot/dev/workbench/lifecycle.ts
+@@ -721,6 +721,50 @@ async function recoverDeadWorker(
+     };
+   }
+ 
++  // A worker can claim work or recover between the decision and the lock. The
++  // stop is destructive, so re-read every racing signal once more and cancel
++  // instead of interrupting an attempt that just started.
++  const [workersAfterLock, queueAfterLock, attemptAfterLock, intentAfterLock] = await Promise.all([
++    listWorkers(),
++    getQueueSnapshot(),
++    getActiveAttempt(),
++    readIntent(),
++  ]);
++  const workerAfterLock = chooseWorker(workersAfterLock, codespace.name);
++  const executingAfterLock = Boolean(
++    attemptAfterLock ||
++      queueAfterLock.active > 0 ||
++      queueAfterLock.activeTasks > 0 ||
++      workerAfterLock?.currentAttemptId
++  );
++  const intentAfterLockFresh = Boolean(
++    intentAfterLock && Date.now() - new Date(intentAfterLock.at).getTime() < 180_000
++  );
++  if (
++    workerAfterLock?.online ||
++    executingAfterLock ||
++    queueAfterLock.paused ||
++    queueAfterLock.queued <= 0 ||
++    intentAfterLockFresh
++  ) {
++    await appendEvent({
++      type: 'codespace.worker_recovery_cancelled',
++      level: 'info',
++      message:
++        'Worker recovery was cancelled because the worker, queue or shutdown state changed after the decision.',
++      payload: {
++        source,
++        workerOnline: Boolean(workerAfterLock?.online),
++        executing: executingAfterLock,
++        queued: queueAfterLock.queued,
++        paused: queueAfterLock.paused,
++        shutdownIntent: intentAfterLockFresh,
++      },
++      dedupeKey: `worker-recovery-cancelled:${codespace.name}:${Math.floor(Date.now() / 60_000)}`,
++    }).catch(() => {});
++    return null;
++  }
++
+   const attempts = recoveryState.failures + 1;
+   const nextState: RecoveryState = {
+     lastAttemptAt: new Date().toISOString(),
+@@ -972,11 +1016,15 @@ export async function ensureCodespaceForQueuedWork(input: {
+     return { action: 'blocked', codespace, reason: message };
+   }
+ 
+-  // A stop is in flight. Persist the intent and return immediately.
++  // A stop is in flight. Persist the intent and return immediately. Repeated
++  // overview polls refresh the same pending record instead of incrementing its
++  // attempt counter, so polling cannot look like a restart storm.
+   const recorded = await markPendingStart({
+     codespaceName: codespace.name,
+     source: input.source,
+-    reason: `Codespace is ${codespace.state}.`,
++    reason: pending?.reason || `Codespace is ${codespace.state}.`,
++    attempts: pending?.attempts || 1,
++    lastError: pending?.lastError ?? null,
+   });
+   return {
+     action: 'start-pending',
+diff --git a/scripts/pierrot/__tests__/dev-worker-lib.test.mjs b/scripts/pierrot/__tests__/dev-worker-lib.test.mjs
+index 4b0f8ca4..75a46dad 100644
+--- a/scripts/pierrot/__tests__/dev-worker-lib.test.mjs
++++ b/scripts/pierrot/__tests__/dev-worker-lib.test.mjs
+@@ -2,6 +2,8 @@ import test from 'node:test';
+ import assert from 'node:assert/strict';
+ import {
+   BOOT_PHASES,
++  commitIdentityArgs,
++  commitIdentityStatus,
+   computeReadiness,
+   isAllowedWorkerBranch,
+   isVersionAtLeast,
+@@ -9,6 +11,7 @@ import {
+   parseStoredAuth,
+   providerFromModel,
+   resolveGitIdentity,
++  VERIFIED_WORKER_GIT_EMAIL,
+ } from '../dev-worker-lib.mjs';
+ 
+ test('requires OpenCode 2.1.4 or newer', () => {
+@@ -18,11 +21,14 @@ test('requires OpenCode 2.1.4 or newer', () => {
+   assert.equal(isVersionAtLeast('unknown', '2.1.4'), false);
+ });
+ 
+-test('parses only stored provider authentication', () => {
++test('parses the actual OpenCode auth list table and ignores environment rows', () => {
+   const output = [
++    'DeepSeek        DeepSeek 3                  stored',
+     'DeepSeek        DeepSeek 2                  stored',
++    'DeepSeek        DeepSeek                    stored',
+     'DeepSeek        DEEPSEEK_API_KEY            environment',
+     'GitHub Copilot  GITHUB_TOKEN                environment',
++    'Google          GEMINI_API_KEY              environment',
+   ].join('\n');
+   assert.deepEqual(parseStoredAuth(output, 'deepseek'), {
+     authenticated: true,
+@@ -31,6 +37,16 @@ test('parses only stored provider authentication', () => {
+   assert.equal(parseStoredAuth(output, 'openai').authenticated, false);
+ });
+ 
++test('does not treat help or error text containing "stored" as authentication', () => {
++  const output = [
++    'No stored credentials found.',
++    'Run opencode auth login to store one.',
++    'DeepSeek        DEEPSEEK_API_KEY            environment',
++  ].join('\n');
++  assert.equal(parseStoredAuth(output, 'deepseek').authenticated, false);
++  assert.deepEqual(parseStoredAuth(output, 'deepseek').providers, []);
++});
++
+ test('readiness fails closed and reports the actual reason', () => {
+   const readiness = computeReadiness({
+     configOk: true,
+@@ -94,7 +110,7 @@ test('derives the provider from the configured model', () => {
+   assert.equal(providerFromModel('deepseek-flash'), null);
+ });
+ 
+-test('uses the configured GitHub identity for automatic commits', () => {
++test('uses only the verified GitHub identity for automatic commits', () => {
+   assert.deepEqual(
+     resolveGitIdentity({
+       configuredName: 'Anton Merkurov',
+@@ -105,9 +121,56 @@ test('uses the configured GitHub identity for automatic commits', () => {
+       email: '97518066+merkurov1@users.noreply.github.com',
+     }
+   );
++  // A mutable Codespace identity must not be able to poison the commit.
++  assert.deepEqual(
++    resolveGitIdentity({
++      configuredName: 'Pierrot Dev',
++      configuredEmail: 'pierrot-dev@merkurov.love',
++    }),
++    {
++      name: 'merkurov1',
++      email: '97518066+merkurov1@users.noreply.github.com',
++    }
++  );
+   const fallback = resolveGitIdentity({ configuredName: '', configuredEmail: '' });
+-  assert.equal(fallback.name, 'Pierrot Dev');
+-  assert.match(fallback.email, /@users\.noreply\.github\.com$/);
++  assert.equal(fallback.name, 'merkurov1');
++  assert.equal(fallback.email, VERIFIED_WORKER_GIT_EMAIL);
++});
++
++test('automatic commits are always signed with the verified identity', () => {
++  const args = commitIdentityArgs({ name: 'Anton Merkurov' });
++  assert.ok(args.includes('commit.gpgsign=true'));
++  assert.ok(args.includes(`user.email=${VERIFIED_WORKER_GIT_EMAIL}`));
++  assert.ok(args.includes('user.name=Anton Merkurov'));
++  assert.equal(args.some((value) => /commit\.gpgsign=false/.test(value)), false);
++});
++
++test('accepts the GitHub signing committer but requires the verified author', () => {
++  const expected = { name: 'Anton Merkurov', email: VERIFIED_WORKER_GIT_EMAIL };
++  assert.equal(
++    commitIdentityStatus({
++      expected,
++      author: expected,
++      committer: { name: 'GitHub', email: 'noreply@github.com' },
++    }).ok,
++    true
++  );
++  assert.equal(
++    commitIdentityStatus({
++      expected,
++      author: { name: 'Pierrot Dev', email: 'pierrot-dev@merkurov.love' },
++      committer: { name: 'GitHub', email: 'noreply@github.com' },
++    }).ok,
++    false
++  );
++  assert.equal(
++    commitIdentityStatus({
++      expected,
++      author: expected,
++      committer: { name: 'Pierrot Dev', email: 'pierrot-dev@merkurov.love' },
++    }).ok,
++    false
++  );
+ });
+ 
+ test('automatic pushes are restricted to attempt branches', () => {
+diff --git a/scripts/pierrot/dev-worker-lib.mjs b/scripts/pierrot/dev-worker-lib.mjs
+index 24cda039..1ea116cd 100644
+--- a/scripts/pierrot/dev-worker-lib.mjs
++++ b/scripts/pierrot/dev-worker-lib.mjs
+@@ -109,28 +109,47 @@ export function parseOpenCodeCost(output) {
+ }
+ 
+ /**
+- * Parse `opencode auth list`. Environment credentials are intentionally not
+- * accepted: the worker requires a stored login so no provider secret has to be
+- * forwarded through the process environment.
++ * Parse `opencode auth list`.
++ *
++ * Actual output is tabular, for example:
++ *   DeepSeek        DeepSeek 3                  stored
++ *   DeepSeek        DEEPSEEK_API_KEY            environment
++ *
++ * Only rows whose credential type is `stored` are accepted. Environment
++ * credentials are intentionally not accepted: the worker requires a stored
++ * login in OpenCode's own auth store so no provider secret has to be forwarded
++ * through the process environment. Matching the trailing type instead of any
++ * occurrence of the word "stored" prevents an error/help line from making the
++ * worker look authenticated.
+  */
+ export function parseStoredAuth(output, expectedProvider) {
+   const text = String(output || '');
+   const providers = [];
+-  for (const line of text.split('\n')) {
+-    if (!/\bstored\b/i.test(line)) continue;
+-    const name = line.trim().split(/\s+/)[0];
+-    if (name) providers.push(name.toLowerCase());
++  for (const rawLine of text.split('\n')) {
++    const line = rawLine
++      .replace(/\u001b\[[0-9;]*m/g, '')
++      .trim()
++      .replace(/^[^A-Za-z0-9]+/, '');
++    if (!line || !/\bstored\b\s*$/i.test(line)) continue;
++    const name = line.split(/\s+/)[0]?.toLowerCase();
++    if (!name || name === 'no' || name === 'none') continue;
++    providers.push(name);
+   }
++  const unique = [...new Set(providers)];
+   const wanted = String(expectedProvider || '').trim().toLowerCase();
+   const matched = wanted
+-    ? providers.some((provider) => provider.includes(wanted) || wanted.includes(provider))
+-    : providers.length > 0;
++    ? unique.some((provider) => provider.includes(wanted) || wanted.includes(provider))
++    : unique.length > 0;
+   return {
+     authenticated: matched,
+-    providers,
++    providers: unique,
+   };
+ }
+ 
++function shortReason(value) {
++  return typeof value === 'string' && value.trim() ? value.trim().slice(0, 220) : '';
++}
++
+ export function computeReadiness(input) {
+   const minimumVersion = String(input.minimumVersion || '2.1.4');
+   const versionOk = Boolean(
+@@ -142,15 +161,20 @@ export function computeReadiness(input) {
+   if (!input.configOk) reasons.push('Worker configuration is incomplete.');
+   if (!input.apiOk) reasons.push('Pierrot worker API is unreachable.');
+   if (!input.supabaseOk) reasons.push('Supabase is unreachable through the worker API.');
+-  if (!input.opencodeAvailable) reasons.push('OpenCode CLI is missing.');
+-  else if (!versionOk) {
++  if (!input.opencodeAvailable) {
++    const detail = shortReason(input.opencodeError);
++    reasons.push(detail ? `OpenCode CLI check failed: ${detail}` : 'OpenCode CLI is missing.');
++  } else if (!versionOk) {
+     reasons.push(
+       `OpenCode ${input.opencodeVersion || 'unknown'} is older than the required ${minimumVersion}.`
+     );
+   }
+   if (!authOk) {
++    const detail = shortReason(input.authError);
+     reasons.push(
+-      `No stored ${input.provider || 'provider'} authentication was found (run opencode auth login).`
++      detail
++        ? `OpenCode auth check failed: ${detail}`
++        : `No stored ${input.provider || 'provider'} authentication was found (run opencode auth login).`
+     );
+   }
+   return {
+@@ -169,29 +193,87 @@ export function computeReadiness(input) {
+ }
+ 
+ /**
+- * Automatic commits must use the Codespace's configured GitHub identity when
+- * it exists. A made-up address breaks Codespaces GPG signing with
+- * "403 Author is invalid". The fallback is the repository owner's verified
+- * GitHub noreply address, not an invented mailbox.
++ * Automatic commits must use the repository owner's verified GitHub identity.
++ * A made-up address breaks Codespaces GPG signing with "403 Author is invalid",
++ * and the mutable Codespace git config is not authoritative. Only the verified
++ * noreply address is accepted; a different configured address is ignored
++ * instead of being allowed to poison the commit.
+  */
+-export const DEFAULT_WORKER_GIT_NAME = 'Pierrot Dev';
+-export const DEFAULT_WORKER_GIT_EMAIL = '97518066+merkurov1@users.noreply.github.com';
++export const VERIFIED_WORKER_GIT_NAME = 'merkurov1';
++export const VERIFIED_WORKER_GIT_EMAIL = '97518066+merkurov1@users.noreply.github.com';
++export const DEFAULT_WORKER_GIT_NAME = VERIFIED_WORKER_GIT_NAME;
++export const DEFAULT_WORKER_GIT_EMAIL = VERIFIED_WORKER_GIT_EMAIL;
++
++export function isVerifiedGitEmail(value) {
++  return (
++    String(value || '')
++      .trim()
++      .toLowerCase() === VERIFIED_WORKER_GIT_EMAIL
++  );
++}
+ 
+ export function resolveGitIdentity(input = {}) {
+   const clean = (value) => (typeof value === 'string' ? value.trim() : '');
+-  const name =
+-    clean(input.configuredName) ||
+-    clean(input.envName) ||
+-    clean(input.fallbackName) ||
+-    DEFAULT_WORKER_GIT_NAME;
+-  const email =
+-    clean(input.configuredEmail) ||
+-    clean(input.envEmail) ||
+-    clean(input.fallbackEmail) ||
+-    DEFAULT_WORKER_GIT_EMAIL;
++  const candidates = [
++    { name: clean(input.configuredName), email: clean(input.configuredEmail) },
++    { name: clean(input.envName), email: clean(input.envEmail) },
++    { name: clean(input.fallbackName), email: clean(input.fallbackEmail) },
++  ];
++  const verified = candidates.find((candidate) => isVerifiedGitEmail(candidate.email));
++  const name = verified?.name || VERIFIED_WORKER_GIT_NAME;
+   return {
+     name: name.slice(0, 120),
+-    email: email.slice(0, 200),
++    email: VERIFIED_WORKER_GIT_EMAIL,
++  };
++}
++
++/**
++ * Per-command git config for an automatic commit. Signing is mandatory: the
++ * Codespace provides a GitHub-backed signer via gpg.program (gh-gpgsign), and
++ * an unsigned commit must not be pushed. Do not add a `commit.gpgsign=false`
++ * escape hatch here.
++ */
++export function commitIdentityArgs(identity = {}) {
++  const clean = (value) => (typeof value === 'string' ? value.trim() : '');
++  const name = (clean(identity.name) || VERIFIED_WORKER_GIT_NAME).slice(0, 120);
++  return [
++    '-c',
++    `user.name=${name}`,
++    '-c',
++    `user.email=${VERIFIED_WORKER_GIT_EMAIL}`,
++    '-c',
++    'commit.gpgsign=true',
++  ];
++}
++
++/**
++ * GitHub's signing service is the effective committer of a signed Codespaces
++ * commit, while the author keeps the verified user identity. Accept exactly
++ * that committer, or a local signer that preserves the configured identity.
++ */
++export const GITHUB_SIGNING_COMMITTER_NAME = 'GitHub';
++export const GITHUB_SIGNING_COMMITTER_EMAIL = 'noreply@github.com';
++
++export function commitIdentityStatus({ expected, author, committer } = {}) {
++  const clean = (value) => (typeof value === 'string' ? value.trim() : '');
++  const expectedName = clean(expected?.name) || VERIFIED_WORKER_GIT_NAME;
++  const expectedEmail = clean(expected?.email).toLowerCase() || VERIFIED_WORKER_GIT_EMAIL;
++  const authorName = clean(author?.name);
++  const authorEmail = clean(author?.email).toLowerCase();
++  const committerName = clean(committer?.name);
++  const committerEmail = clean(committer?.email).toLowerCase();
++
++  const authorOk = authorName === expectedName && authorEmail === expectedEmail;
++  const committerIsIdentity =
++    committerName === expectedName && committerEmail === expectedEmail;
++  const committerIsGitHub =
++    committerName === GITHUB_SIGNING_COMMITTER_NAME &&
++    committerEmail === GITHUB_SIGNING_COMMITTER_EMAIL;
++  return {
++    authorOk,
++    committerOk: committerIsIdentity || committerIsGitHub,
++    committerIsGitHub,
++    ok: authorOk && (committerIsIdentity || committerIsGitHub),
+   };
+ }
+ 
+diff --git a/scripts/pierrot/dev-worker.mjs b/scripts/pierrot/dev-worker.mjs
+index 8ae73d71..6298cd9d 100755
+--- a/scripts/pierrot/dev-worker.mjs
++++ b/scripts/pierrot/dev-worker.mjs
+@@ -29,6 +29,8 @@ import process from 'node:process';
+ import { runProcess, terminateProcessGroup } from './dev-worker-process.mjs';
+ import {
+   BOOT_PHASES,
++  commitIdentityArgs,
++  commitIdentityStatus,
+   computeReadiness,
+   isAllowedWorkerBranch,
+   isVersionAtLeast,
+@@ -314,8 +316,10 @@ function applyReadiness(capabilities, context) {
+     supabaseOk: context.supabaseOk === true,
+     opencodeAvailable: capabilities.opencodeAvailable === true,
+     opencodeVersion: capabilities.opencodeVersion,
++    opencodeError: capabilities.opencodeError,
+     minimumVersion: MIN_OPENCODE_VERSION,
+     authenticated: capabilities.opencodeAuthenticated === true,
++    authError: capabilities.opencodeAuthError,
+     provider: OPENCODE_PROVIDER,
+   });
+   readiness = next;
+@@ -346,12 +350,21 @@ async function readCapabilities(context = {}) {
+     if (version.code === 0) {
+       capabilities.opencodeAvailable = true;
+       capabilities.opencodeVersion = sanitize(version.stdout.trim()).slice(0, 80);
++    } else {
++      capabilities.opencodeError = sanitize(
++        (version.stderr || version.stdout || `exit ${version.code}`).trim()
++      ).slice(0, 220);
+     }
+-  } catch {}
++  } catch (error) {
++    capabilities.opencodeError = sanitize(String(error?.message || error)).slice(0, 220);
++  }
+   if (!capabilities.opencodeAvailable) {
+-    await bootPhase('failed', 'OPENCODE_CLI_MISSING: OpenCode CLI is not available on PATH.', {
+-      force: true,
+-    });
++    const detail = capabilities.opencodeError ? `: ${capabilities.opencodeError}` : '.';
++    await bootPhase(
++      'failed',
++      `OPENCODE_CLI_MISSING: OpenCode CLI is not available on PATH${detail}`,
++      { force: true }
++    );
+   }
+   await bootPhase('checking_auth', `Checking stored ${OPENCODE_PROVIDER} authentication.`);
+   try {
+@@ -363,8 +376,14 @@ async function readCapabilities(context = {}) {
+       const stored = parseStoredAuth(auth.stdout, OPENCODE_PROVIDER);
+       capabilities.opencodeAuthenticated = stored.authenticated;
+       capabilities.authProviders = stored.providers.slice(0, 12);
++    } else {
++      capabilities.opencodeAuthError = sanitize(
++        (auth.stderr || auth.stdout || `exit ${auth.code}`).trim()
++      ).slice(0, 220);
+     }
+-  } catch {}
++  } catch (error) {
++    capabilities.opencodeAuthError = sanitize(String(error?.message || error)).slice(0, 220);
++  }
+   capabilities.versionOk = Boolean(
+     capabilities.opencodeAvailable &&
+       isVersionAtLeast(capabilities.opencodeVersion, MIN_OPENCODE_VERSION)
+@@ -377,9 +396,12 @@ async function readCapabilities(context = {}) {
+       { force: true }
+     );
+   } else if (!capabilities.opencodeAuthenticated) {
++    const detail = capabilities.opencodeAuthError
++      ? ` (auth check: ${capabilities.opencodeAuthError})`
++      : '';
+     await bootPhase(
+       'failed',
+-      `OPENCODE_AUTH_MISSING: No stored ${OPENCODE_PROVIDER} authentication was found.`,
++      `OPENCODE_AUTH_MISSING: No stored ${OPENCODE_PROVIDER} authentication was found in the OpenCode auth store under HOME${detail}. GitHub secrets are not an OpenCode auth store.`,
+       { force: true }
+     );
+   }
+@@ -622,20 +644,14 @@ async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumbe
+   const files = staged.stdout.split('\n').map((line) => line.trim()).filter(Boolean);
+   if (files.length === 0) return { commitSha: null, files: [] };
+ 
+-  // Use the Codespace's verified GitHub identity. Never invent an author.
+-  // Signing is disabled only for this worker commit (the repository does not
+-  // require signed commits). If signing becomes mandatory, set
+-  // PIERROT_DEV_GIT_SIGN_COMMITS=true and use the configured gh-gpgsign identity.
++  // Use the verified GitHub identity and sign every automatic commit. The
++  // Codespace's mutable git config is not trusted: an invalid author email
++  // makes GitHub reject the signed commit with "403 Author is invalid", and an
++  // unsigned commit must never be pushed as a workaround.
+   const identity = await commitIdentity(worktree);
+-  const sign = process.env.PIERROT_DEV_GIT_SIGN_COMMITS === 'true' ? 'true' : 'false';
+   const commit = await git(
+     [
+-      '-c',
+-      `user.name=${identity.name}`,
+-      '-c',
+-      `user.email=${identity.email}`,
+-      '-c',
+-      `commit.gpgsign=${sign}`,
++      ...commitIdentityArgs(identity),
+       'commit',
+       '-m',
+       `pierrot(dev): task ${taskId} attempt ${attemptNumber}`,
+@@ -644,9 +660,10 @@ async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumbe
+     60000
+   );
+   if (commit.code !== 0) {
+-    const message = `git commit failed: ${commit.stderr.slice(-400)}`;
++    const detail = commit.stderr || commit.stdout || '';
++    const message = `git commit failed: ${detail.slice(-400)}`;
+     const error = new Error(message);
+-    error.code = /gpg|author is invalid/i.test(commit.stderr)
++    error.code = /gpg|sign|author is invalid/i.test(detail)
+       ? 'COMMIT_SIGNING_FAILED'
+       : 'COMMIT_FAILED';
+     await writePushFailure(attemptId, {
+@@ -655,7 +672,7 @@ async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumbe
+       commitSha: null,
+       reason: message,
+       identity: { name: identity.name, email: identity.email },
+-      signing: sign === 'true',
++      signing: true,
+     });
+     throw error;
+   }
+@@ -663,12 +680,57 @@ async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumbe
+   if (sha.code !== 0) throw new Error('Unable to read the commit SHA.');
+   const commitSha = sha.stdout.trim();
+ 
++  // Verify the effective author/committer and the signature before pushing.
++  // `git commit` can silently use a different identity if the environment is
++  // changed, and a missing signature is a hard failure, not a warning.
++  const [meta, raw] = await Promise.all([
++    git(['show', '-s', '--format=%an%x00%ae%x00%cn%x00%ce', commitSha], worktree, 30000),
++    git(['cat-file', '-p', commitSha], worktree, 30000),
++  ]);
++  const parts = meta.stdout.trim().split('\0');
++  const [authorName, authorEmail, committerName, committerEmail] = parts;
++  const identityStatus = commitIdentityStatus({
++    expected: identity,
++    author: { name: authorName, email: authorEmail },
++    committer: { name: committerName, email: committerEmail },
++  });
++  const identityMatches = meta.code === 0 && identityStatus.ok;
++  const signed = raw.code === 0 && /^gpgsig(?:-sha256)? /m.test(raw.stdout);
++  if (!identityMatches || !signed) {
++    const message = !identityMatches
++      ? `Refusing to push: effective commit identity ${authorName || '?'} <${authorEmail || '?'}> / ${committerName || '?'} <${committerEmail || '?'}> does not match the verified author ${identity.name} <${identity.email}> and a valid signing committer.`
++      : 'Refusing to push: the automatic commit is not signed.';
++    const error = new Error(message);
++    error.code = !identityMatches ? 'COMMIT_IDENTITY_MISMATCH' : 'COMMIT_SIGNING_FAILED';
++    error.commitSha = commitSha;
++    await writePushFailure(attemptId, {
++      taskId,
++      branch,
++      commitSha,
++      reason: message,
++      identity: {
++        expected: { name: identity.name, email: identity.email },
++        effective: {
++          author: { name: authorName || null, email: authorEmail || null },
++          committer: { name: committerName || null, email: committerEmail || null },
++        },
++        committerIsGitHubSigningService: identityStatus.committerIsGitHub,
++      },
++      signing: true,
++      signed,
++    });
++    throw error;
++  }
++
+   const push = await git(['push', 'origin', `HEAD:refs/heads/${branch}`], worktree, 300000);
+   if (push.code !== 0) {
+-    const error = new Error(`git push failed: ${push.stderr.slice(-500)}`);
+-    error.code = /rejected|non-fast-forward/i.test(push.stderr)
+-      ? 'BRANCH_CONFLICT'
+-      : 'PUSH_FAILED';
++    const detail = push.stderr || push.stdout || '';
++    const error = new Error(`git push failed: ${detail.slice(-500)}`);
++    error.code = /author is invalid|email address is not verified/i.test(detail)
++      ? 'COMMIT_AUTHOR_INVALID'
++      : /rejected|non-fast-forward/i.test(detail)
++        ? 'BRANCH_CONFLICT'
++        : 'PUSH_FAILED';
+     error.commitSha = commitSha;
+     await writePushFailure(attemptId, {
+       taskId,
+@@ -676,7 +738,8 @@ async function commitAndPush({ worktree, branch, taskId, attemptId, attemptNumbe
+       commitSha,
+       reason: error.message,
+       identity: { name: identity.name, email: identity.email },
+-      signing: sign === 'true',
++      signing: true,
++      signed,
+     });
+     throw error;
+   }
+-- 
+2.55.0
+
