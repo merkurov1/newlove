@@ -136,4 +136,45 @@ describe('Pierrot service worker privacy boundary', () => {
   it('handles logout cache clearing', () => {
     expect(source).toContain('PIERROT_CLEAR_CACHES');
   });
+
+  it('purges the previous cache generation on activation', () => {
+    expect(source).toContain("const VERSION = 'pierrot-owner-v3'");
+    expect(source).toContain('caches.delete(key)');
+    expect(source).toContain("caches.keys().then((keys) =>");
+  });
+
+  it('keeps navigation network-first and never caches HTML or RSC payloads', () => {
+    expect(source).toContain("if (request.mode === 'navigate')");
+    expect(source).toContain('fetch(request).catch(() => caches.match(OFFLINE_URL)');
+    const navigateBlock = source.slice(
+      source.indexOf("if (request.mode === 'navigate')"),
+      source.indexOf('if (isCacheableStatic')
+    );
+    expect(navigateBlock.length).toBeGreaterThan(0);
+    expect(navigateBlock).not.toContain('cache.put');
+  });
+});
+
+describe('Pierrot PWA update flow', () => {
+  it('registers with updateViaCache disabled and an explicit scope', () => {
+    const shell = readFileSync(
+      path.join(process.cwd(), 'components/pierrot/workspace/WorkspaceShell.tsx'),
+      'utf8'
+    );
+
+    expect(shell).toContain("register('/pierrot-sw.js'");
+    expect(shell).toContain("updateViaCache: 'none'");
+    expect(shell).toContain('scope: PIERROT_PWA_SCOPE');
+    expect(shell).toContain('registration.update()');
+  });
+
+  it('serves the owner worker with revalidation and an explicit allowed scope', () => {
+    const config = readFileSync(path.join(process.cwd(), 'next.config.js'), 'utf8');
+    const block = config.slice(config.indexOf("source: '/pierrot-sw.js'"));
+
+    expect(block).toContain("'Cache-Control'");
+    expect(block).toContain('public, max-age=0, must-revalidate');
+    expect(block).toContain("'Service-Worker-Allowed'");
+    expect(block).toContain("'/admin/pierrot'");
+  });
 });

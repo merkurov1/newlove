@@ -11,7 +11,7 @@
  * public site's manifest or service worker behaviour.
  */
 
-const VERSION = 'pierrot-owner-v2';
+const VERSION = 'pierrot-owner-v3';
 const OFFLINE_URL = '/pierrot-offline.html';
 const PRECACHE = [
   OFFLINE_URL,
@@ -103,5 +103,11 @@ self.addEventListener('message', (event) => {
     event.waitUntil(
       caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
     );
+  }
+
+  // A waiting worker can be promoted without keeping an old bundle in front of
+  // the owner. Navigation stays network-first, so this never serves stale HTML.
+  if (event.data && event.data.type === 'PIERROT_SKIP_WAITING') {
+    event.waitUntil(self.skipWaiting());
   }
 });

@@ -580,6 +580,104 @@ export type OwnerHistoryView = {
   project: PierrotProject | null;
 };
 
+export type OwnerHistoryViewInput = {
+  historyId?: string | null;
+  sessionId?: string | null;
+  conversationId?: string | null;
+  projectId?: string | null;
+  createSession?: boolean;
+  limit?: number;
+};
+
+/**
+ * Loads one permanent history view using an explicit store. Kept separate from
+ * the server-client construction so the read-only view semantics can be
+ * exercised against a deterministic in-memory database.
+ */
+export async function loadOwnerHistoryViewFromStore(
+  store: SupabaseClient,
+  ownerUserId: string,
+  input: OwnerHistoryViewInput = {}
+): Promise<OwnerHistoryView | null> {
+  const scope = await resolveHistoryScope(store, ownerUserId, {
+    historyId: input.historyId || null,
+    episodeId: input.sessionId || null,
+    conversationId: input.conversationId || null,
+    projectId: input.projectId || null,
+    createSession: input.createSession === true,
+  });
+  if (!scope) return null;
+
+  const sessions = await listHistorySessions(store, ownerUserId, scope.history.id).catch(() => []);
+
+  const requestedSession = input.sessionId
+    ? sessions.find((session) => session.id === input.sessionId) || null
+    : null;
+  // `listHistorySessions` is bounded; a very old deep link may not appear in
+  // that list. The resolver already loaded and owner-checked the exact session,
+  // so reuse it instead of silently falling back to the continuous history.
+  const resolvedSession =
+    !requestedSession && input.sessionId && scope.session?.id === input.sessionId
+      ? {
+          id: scope.session.id,
+          historyId: scope.session.historyId,
+          title: scope.session.title,
+          startedAt: scope.session.startedAt,
+          endedAt: scope.session.endedAt,
+          messageCount: scope.session.messageCount,
+          ordinal: scope.session.ordinal,
+          sourceConversationId: scope.session.sourceConversationId,
+          firstMessageSequence: scope.session.firstMessageSequence,
+          lastMessageSequence: scope.session.lastMessageSequence,
+        }
+      : null;
+  // Only an explicit `?session=` pins the transcript to one episode. A plain
+  // history URL is the continuous project history; it must not silently pick
+  // the latest (possibly closed) episode as the current range.
+  const selectedSession = requestedSession || resolvedSession;
+
+  const page = await loadHistoryMessagePage(store, ownerUserId, scope, {
+    limit: input.limit ?? 120,
+    // A direct session link opens that episode's message range. The
+    // canonical project chat (no session in the URL) keeps the continuous
+    // history, so older fragments remain reachable above it.
+    sessionId: selectedSession?.id || null,
+  });
+
+  const conversation: OwnerConversation = {
+    id: scope.conversationId,
+    sessionId: scope.conversationSessionId,
+    title: selectedSession?.title || scope.history.title,
+    consentState: 'granted',
+    messages: page.messages,
+    hasMore: page.hasMore,
+    oldestMessageIndex: page.oldestSequence,
+    historyId: scope.history.id,
+    historyType: scope.history.type,
+    historyTitle: scope.history.title,
+    projectId: scope.history.projectId,
+    projectSlug: scope.history.projectSlug,
+    projectName: scope.history.projectName,
+    currentSessionId: selectedSession?.id || null,
+    currentSessionTitle: selectedSession?.title || null,
+    activeSessionId: scope.activeSession?.id || null,
+    oldestSequence: page.oldestSequence,
+    newestSequence: page.newestSequence,
+    hasNewer:
+      page.newestSequence != null &&
+      page.historyMaxSequence > 0 &&
+      page.newestSequence < page.historyMaxSequence,
+    emptyCurrentSession: selectedSession ? selectedSession.messageCount === 0 : false,
+  };
+
+  return {
+    scope,
+    sessions,
+    conversation,
+    project: scope.project,
+  };
+}
+
 /**
  * Loads one permanent history view. The transcript is always scoped to a
  * history, never to a single legacy conversation. A requested session only
@@ -587,80 +685,11 @@ export type OwnerHistoryView = {
  */
 export async function loadOwnerHistoryView(
   ownerUserId: string,
-  input: {
-    historyId?: string | null;
-    sessionId?: string | null;
-    conversationId?: string | null;
-    projectId?: string | null;
-    createSession?: boolean;
-    limit?: number;
-  } = {}
+  input: OwnerHistoryViewInput = {}
 ): Promise<OwnerHistoryView | null> {
   try {
     const store = getServerSupabaseClient({ useServiceRole: true });
-    const scope = await resolveHistoryScope(store, ownerUserId, {
-      historyId: input.historyId || null,
-      episodeId: input.sessionId || null,
-      conversationId: input.conversationId || null,
-      projectId: input.projectId || null,
-      createSession: input.createSession === true,
-    });
-    if (!scope) return null;
-
-    const sessions = await listHistorySessions(store, ownerUserId, scope.history.id).catch(
-      () => []
-    );
-
-    const requestedSession = input.sessionId
-      ? sessions.find((session) => session.id === input.sessionId) || null
-      : null;
-    const selectedSession =
-      requestedSession ||
-      (scope.session
-        ? sessions.find((session) => session.id === scope.session?.id) || null
-        : null) ||
-      sessions[0] ||
-      null;
-
-    const page = await loadHistoryMessagePage(store, ownerUserId, scope, {
-      limit: input.limit ?? 120,
-      // A direct session link opens that episode's message range. The
-      // canonical project chat (no session in the URL) keeps the continuous
-      // history, so older fragments remain reachable above it.
-      sessionId: requestedSession?.id || null,
-    });
-
-    const conversation: OwnerConversation = {
-      id: scope.conversationId,
-      sessionId: scope.conversationSessionId,
-      title: selectedSession?.title || scope.history.title,
-      consentState: 'granted',
-      messages: page.messages,
-      hasMore: page.hasMore,
-      oldestMessageIndex: page.oldestSequence,
-      historyId: scope.history.id,
-      historyType: scope.history.type,
-      historyTitle: scope.history.title,
-      projectId: scope.history.projectId,
-      projectSlug: scope.history.projectSlug,
-      projectName: scope.history.projectName,
-      currentSessionId: selectedSession?.id || scope.session?.id || null,
-      currentSessionTitle: selectedSession?.title || scope.session?.title || null,
-      oldestSequence: page.oldestSequence,
-      newestSequence: page.newestSequence,
-      hasNewer:
-        page.newestSequence != null &&
-        page.historyMaxSequence > 0 &&
-        page.newestSequence < page.historyMaxSequence,
-      emptyCurrentSession: selectedSession ? selectedSession.messageCount === 0 : false,
-    };
-
-    return {
-      scope,
-      sessions,
-      conversation,
-      project: scope.project,
-    };
+    return await loadOwnerHistoryViewFromStore(store, ownerUserId, input);
   } catch {
     return null;
   }
