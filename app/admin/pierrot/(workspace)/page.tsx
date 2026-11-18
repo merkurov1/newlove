@@ -82,7 +82,7 @@ export default async function ChatPage({
   }
 
   if (projectRef && !requestedHistory) {
-    const project = await getPierrotProject(user.id, projectRef);
+    const project = await getPierrotProject(user.id, projectRef).catch(() => null);
     if (!project) redirect('/admin/pierrot');
     const projectView = await loadOwnerHistoryView(user.id, {
       projectId: project.id,
@@ -100,11 +100,29 @@ export default async function ChatPage({
 
   // A completely empty owner account still opens MAIN; the helper creates the
   // permanent history but not a session until the first message or explicit
-  // “New chat”.
+  // “New chat”. Viewing a history must never create an empty episode.
   if (!view) {
-    view = await loadOwnerHistoryView(user.id, { createSession: true });
+    view = await loadOwnerHistoryView(user.id, { createSession: false });
   }
-  if (!view) redirect('/admin/pierrot');
+  if (!view) {
+    // A bad or stale deep link falls back once to the canonical chat URL. A
+    // clean URL must render a degraded but usable workspace instead of
+    // redirecting to itself forever when storage is temporarily unavailable.
+    if (requestedHistory || requestedSession || rawConversation || projectRef) {
+      redirect('/admin/pierrot');
+    }
+    return (
+      <ChatWorkspace
+        ownerId={user.id}
+        overview={unavailableOverview()}
+        sessions={[]}
+        conversation={null}
+        startNew={requestedNew}
+        brainStatus={null}
+        project={null}
+      />
+    );
+  }
 
   const canonicalTarget = `/admin/pierrot?history=${encodeURIComponent(view.scope.history.id)}${
     view.conversation.currentSessionId

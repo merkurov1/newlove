@@ -62,6 +62,22 @@ const nextConfig = {
         ],
       },
       {
+        // The isolated owner PWA worker follows the same update guarantees.
+        // Without this header an installed iOS/iPadOS PWA can keep running an
+        // old worker after a production deploy.
+        source: '/pierrot-sw.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/admin/pierrot',
+          },
+        ],
+      },
+      {
         source: '/heartandangel/manifest.webmanifest',
         headers: [
           {

@@ -4,6 +4,7 @@ import { createPierrotStore } from '@/lib/pierrot/serverStore';
 import {
   createSession,
   ensureProjectHistory,
+  findEmptyOpenSession,
   getHistoryById,
 } from '@/lib/pierrot/history/store';
 
@@ -51,7 +52,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'History not found.' }, { status: 404 });
     }
 
-    const session = await createSession(store, admin.id, history.id, title);
+    const session =
+      (await findEmptyOpenSession(store, history.id)) ||
+      (await createSession(store, admin.id, history.id, title));
     if (!session) {
       return NextResponse.json({ error: 'Session was not created.' }, { status: 500 });
     }

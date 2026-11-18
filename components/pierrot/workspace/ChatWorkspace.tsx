@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowUp, Square, X } from 'lucide-react';
 import type {
   OwnerConversation,
@@ -128,6 +128,17 @@ function conversationViewKey(conversation: OwnerConversation | null): string {
   return `${conversation.historyId || 'main'}:${conversation.currentSessionId || 'latest'}`;
 }
 
+/**
+ * A server view explicitly reports `activeSessionId: null` when every episode
+ * is closed. Older payloads omit the field, so only they fall back to the
+ * currently displayed session.
+ */
+function writableSessionId(conversation: OwnerConversation | null): string | null {
+  if (!conversation) return null;
+  if (conversation.activeSessionId !== undefined) return conversation.activeSessionId;
+  return conversation.currentSessionId ?? null;
+}
+
 export default function ChatWorkspace({
   ownerId,
   overview,
@@ -146,6 +157,8 @@ export default function ChatWorkspace({
   project?: PierrotProject | null;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlSessionId = searchParams?.get('session') || null;
   const online = useOnlineStatus();
   const [overviewState, setOverviewState] = useState<WorkspaceOverview>(overview);
   const [brainSnapshot, setBrainSnapshot] = useState<BrainStatusSnapshot | null>(
@@ -162,7 +175,16 @@ export default function ChatWorkspace({
   const [conversationId, setConversationId] = useState<string | null>(conversation?.id ?? null);
   const [sessionId, setSessionId] = useState<string | null>(conversation?.sessionId ?? null);
   const [historyId, setHistoryId] = useState<string | null>(conversation?.historyId ?? null);
-  const [episodeId, setEpisodeId] = useState<string | null>(conversation?.currentSessionId ?? null);
+  // `readSessionId` bounds the transcript being read (pagination); `episodeId`
+  // is the open session a new message is appended to. They differ while the
+  // owner reads a closed episode: that episode stays readable, but the next
+  // turn belongs to an open continuation session.
+  const [readSessionId, setReadSessionId] = useState<string | null>(
+    conversation?.currentSessionId ?? null
+  );
+  const [episodeId, setEpisodeId] = useState<string | null>(() =>
+    writableSessionId(conversation)
+  );
   const [title, setTitle] = useState<string>(conversation?.title ?? 'Новый диалог');
   const [newSessionLoading, setNewSessionLoading] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -236,7 +258,8 @@ export default function ChatWorkspace({
     setConversationId(conversation?.id ?? null);
     setSessionId(conversation?.sessionId ?? null);
     setHistoryId(conversation?.historyId ?? null);
-    setEpisodeId(conversation?.currentSessionId ?? null);
+    setReadSessionId(conversation?.currentSessionId ?? null);
+    setEpisodeId(writableSessionId(conversation));
     setTitle(conversation?.title ?? 'Новый диалог');
     setHasOlder(Boolean(conversation?.hasMore));
     setOldestIndex(conversation?.oldestSequence ?? conversation?.oldestMessageIndex ?? null);
@@ -299,6 +322,7 @@ export default function ChatWorkspace({
       setComposerDraft('');
       atBottomRef.current = true;
       setEpisodeId(payload.session.id);
+      setReadSessionId(payload.session.id);
       setTitle('Новая сессия');
       setHasOlder(false);
       setOldestIndex(null);
@@ -338,18 +362,15 @@ export default function ChatWorkspace({
         return;
       }
 
-      // The avatar always starts a MAIN-chat session. A project chat keeps its
-      // own canonical history until the owner explicitly opens it again.
-      if (project) {
-        router.push('/admin/pierrot?new=1');
-        return;
-      }
+      // The avatar starts a new session inside the history currently being
+      // read. In a project chat that is the project history, so a project with
+      // only closed episodes can continue without losing its context.
       void startNewSession();
     }
 
     window.addEventListener('pierrot:new-session', onNewSession as EventListener);
     return () => window.removeEventListener('pierrot:new-session', onNewSession as EventListener);
-  }, [draft, project, router, startNewSession]);
+  }, [draft, startNewSession]);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -408,7 +429,7 @@ export default function ChatWorkspace({
         `/api/admin/pierrot/conversations?historyId=${encodeURIComponent(
           historyId
         )}&beforeSequence=${oldestIndex}&limit=120${
-          episodeId ? `&sessionId=${encodeURIComponent(episodeId)}` : ''
+          readSessionId ? `&sessionId=${encodeURIComponent(readSessionId)}` : ''
         }`
       );
       const data = await response.json().catch(() => ({}));
@@ -500,7 +521,9 @@ export default function ChatWorkspace({
           conversationId,
           sessionId,
           ...(historyId ? { historyId } : {}),
-          ...(episodeId ? { episodeId } : {}),
+          ...(message.sessionId || readSessionId || episodeId
+            ? { episodeId: message.sessionId || readSessionId || episodeId }
+            : {}),
           eventName: 'answer_feedback',
           eventKey: message.serverMessageId,
           payload: {
@@ -664,6 +687,24 @@ export default function ChatWorkspace({
     }
   }
 
+  /**
+   * Reconciles the URL after a persisted turn. When the turn had to move from
+   * a closed episode to an open continuation session, returning to the closed
+   * `?session=` URL would hide the new message. The continuous history URL
+   * keeps every episode readable and shows the new turn in place.
+   */
+  function finishRecordedWrite(
+    nextHistoryId?: string | null,
+    nextEpisodeId?: string | null
+  ) {
+    const targetHistory = nextHistoryId || historyId;
+    if (targetHistory && urlSessionId && nextEpisodeId && nextEpisodeId !== urlSessionId) {
+      router.replace(`/admin/pierrot?history=${encodeURIComponent(targetHistory)}`);
+      return;
+    }
+    router.refresh();
+  }
+
   async function send(explicitText?: string, options: { retry?: boolean } = {}) {
     const submittedDraft = explicitText ?? draft;
     const text = submittedDraft.trim();
@@ -772,7 +813,7 @@ export default function ChatWorkspace({
       if (parsed.episodeId) setEpisodeId(parsed.episodeId);
 
       if (parsed.recorded) {
-        router.refresh();
+        finishRecordedWrite(parsed.historyId || historyId, parsed.episodeId || null);
       } else {
         setError('Ответ получен, но диалог не сохранён: сохранение выключено или не разрешено.');
       }
@@ -906,7 +947,7 @@ export default function ChatWorkspace({
         if (parsed.episodeId) setEpisodeId(parsed.episodeId);
 
         if (parsed.recorded) {
-          router.refresh();
+          finishRecordedWrite(parsed.historyId || historyId, parsed.episodeId || null);
         } else {
           setError('Ответ получен, но диалог не сохранён: сохранение выключено или не разрешено.');
         }
@@ -1033,6 +1074,8 @@ export default function ChatWorkspace({
     () => new Map(sessions.map((session) => [session.id, session])),
     [sessions]
   );
+  const readableSession = readSessionId ? sessionById.get(readSessionId) || null : null;
+  const isReadingClosedSession = Boolean(readableSession?.endedAt);
 
   return (
     <div className="pw-chat" data-inspector={inspectorOpen ? 'open' : 'closed'}>
@@ -1249,6 +1292,21 @@ export default function ChatWorkspace({
                 </button>
               </>
             )}
+          </div>
+        )}
+
+        {isReadingClosedSession && (
+          <div className="pw-notice" role="status" style={{ margin: '0 28px 12px' }}>
+            Эта сессия закрыта и остаётся доступной для чтения. Новое сообщение продолжит
+            историю в активной сессии. {' '}
+            <button
+              type="button"
+              className="pw-link-button"
+              onClick={() => void startNewSession()}
+              disabled={newSessionLoading}
+            >
+              Начать новую сессию
+            </button>
           </div>
         )}
 

@@ -195,6 +195,40 @@ describe('project rail data model', () => {
     );
   });
 
+  it('keeps a project with a history that has no sessions in the rail', () => {
+    const items = buildProjectRailItems(
+      [project({ id: 'question', slug: 'question', name: 'Question' })],
+      [{ id: 'history-question', project_id: 'question', canonical_conversation_id: null }],
+      []
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0].historyId).toBe('history-question');
+    expect(items[0].chatHref).toBe('/admin/pierrot?history=history-question');
+    expect(items[0].sessions).toEqual([]);
+  });
+
+  it('keeps projects with only closed sessions in the rail', () => {
+    const items = buildProjectRailItems(
+      [project({ id: 'art', slug: 'art-engine', name: 'Art Engine' })],
+      [{ id: 'history-art', project_id: 'art', canonical_conversation_id: 'conversation-art' }],
+      [
+        session({
+          id: 'closed',
+          history_id: 'history-art',
+          ended_at: '2026-11-08T12:00:00.000Z',
+          message_count: 12,
+          last_message_at: '2026-11-08T12:00:00.000Z',
+        }),
+      ]
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0].chatHref).toBe('/admin/pierrot?history=history-art');
+    expect(items[0].sessions).toEqual([]);
+    expect(items[0].lastActivityAt).toBe('2026-11-08T12:00:00.000Z');
+  });
+
   it('sorts equal timestamps by name without using creation dates', () => {
     const items: ProjectRailItem[] = [
       {

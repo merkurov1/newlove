@@ -29,7 +29,6 @@ import process from 'node:process';
 import { runProcess, terminateProcessGroup } from './dev-worker-process.mjs';
 import {
   BOOT_PHASES,
-  checkCommitIdentity,
   computeReadiness,
   isAllowedWorkerBranch,
   isOrphanExecutorProcess,
@@ -846,28 +845,19 @@ async function commitAndPush({
   // gpgsig header proves the commit was not signed.
   const ident = await git(['log', '-1', '--format=%an%x00%ae%x00%cn%x00%ce'], worktree, 30000);
   const [authorName, authorEmail, committerName, committerEmail] = ident.stdout.trim().split('\0');
-  const identityCheck = checkCommitIdentity({
-    expectedName: identity.name,
-    expectedEmail: identity.email,
-    authorName,
-    authorEmail,
-    committerName,
-    committerEmail,
-  });
+  const identityOk =
+    authorName === identity.name &&
+    authorEmail === identity.email &&
+    committerName === identity.name &&
+    committerEmail === identity.email;
   const rawCommit = await git(['cat-file', 'commit', 'HEAD'], worktree, 30000);
   const signed = /^gpgsig(-sha256)? /m.test(rawCommit.stdout);
-  if (!identityCheck.authorOk || !identityCheck.committerOk || !signed) {
-    const message = !identityCheck.authorOk
-      ? `The commit author did not match ${identity.name} <${identity.email}>.`
-      : !identityCheck.committerOk
-        ? `The commit committer was not ${identity.name} <${identity.email}> or GitHub's signing service.`
-        : 'The commit has no GPG signature; refusing to push an unsigned commit.';
+  if (!identityOk || !signed) {
+    const message = !identityOk
+      ? `The commit identity did not match ${identity.name} <${identity.email}>.`
+      : 'The commit has no GPG signature; refusing to push an unsigned commit.';
     const error = new Error(message);
-    error.code = !signed
-      ? 'COMMIT_SIGNING_MISSING'
-      : !identityCheck.authorOk
-        ? 'COMMIT_IDENTITY_MISMATCH'
-        : 'COMMIT_COMMITTER_MISMATCH';
+    error.code = !signed ? 'COMMIT_SIGNING_MISSING' : 'COMMIT_IDENTITY_MISMATCH';
     await writePushFailure(attemptId, {
       taskId,
       branch,
@@ -875,7 +865,6 @@ async function commitAndPush({
       reason: message,
       identity: { name: identity.name, email: identity.email },
       effective: { authorName, authorEmail, committerName, committerEmail },
-      committerIsGitHubSigner: identityCheck.committerIsGitHubSigner,
       signing: signed,
     });
     throw error;

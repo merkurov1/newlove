@@ -12,14 +12,26 @@ import {
   shortcutRoute,
   type WorkspaceNavProject,
 } from '@/lib/pierrot/workspace/navigation';
+import { PIERROT_PWA_SCOPE } from '@/lib/pwa/pierrotManifest';
 
 function registerServiceWorker() {
   if (process.env.NODE_ENV !== 'production') return;
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
 
-  navigator.serviceWorker.register('/pierrot-sw.js', { scope: '/admin/pierrot' }).catch(() => {
-    // Offline shell is an enhancement; the workspace stays fully usable.
-  });
+  navigator.serviceWorker
+    .register('/pierrot-sw.js', {
+      scope: PIERROT_PWA_SCOPE,
+      // iOS Safari can otherwise serve a stale worker script from its HTTP
+      // cache after a deploy. The worker itself only caches hashed assets and
+      // the public offline shell, never HTML/RSC/API responses.
+      updateViaCache: 'none',
+    })
+    .then((registration) => {
+      void registration.update().catch(() => undefined);
+    })
+    .catch(() => {
+      // Offline shell is an enhancement; the workspace stays fully usable.
+    });
 }
 
 export default function WorkspaceShell({

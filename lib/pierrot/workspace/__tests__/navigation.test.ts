@@ -58,6 +58,26 @@ describe('workspace navigation', () => {
     expect(activeWorkspaceKey('/admin/pierrot/projects', projects, null, null)).toBe('chat');
   });
 
+  it('keeps a project without a history reachable through its project link', () => {
+    const withQuestion: WorkspaceNavProject[] = [
+      ...projects,
+      {
+        id: 'question',
+        slug: 'question',
+        name: 'Question',
+        historyId: null,
+        href: '/admin/pierrot?project=question',
+      },
+    ];
+
+    expect(buildWorkspaceRoutes(withQuestion).map((route) => route.path)).toContain(
+      '/admin/pierrot?project=question'
+    );
+    expect(activeWorkspaceKey('/admin/pierrot', withQuestion, null, 'question')).toBe(
+      'project:question'
+    );
+  });
+
   it('does not steal shortcuts while typing', () => {
     const input = document.createElement('input');
     const textarea = document.createElement('textarea');

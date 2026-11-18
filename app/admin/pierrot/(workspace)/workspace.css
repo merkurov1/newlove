@@ -5744,7 +5744,11 @@ a.pw-home-indicator:hover {
 
 .pw-topbar-link {
   position: relative;
+  display: inline-flex;
   flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   padding: 22px 0;
   color: var(--pw-muted);
   font-family: var(--pw-mono);
@@ -6274,10 +6278,10 @@ a.pw-home-indicator:hover {
 
 @media (max-width: 760px) {
   .pw-topbar-action {
-    width: 36px;
-    min-width: 36px;
-    height: 36px;
-    min-height: 36px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
   }
 }
 

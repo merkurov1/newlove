@@ -9,9 +9,9 @@ import type {
 import { ensureProjectConversation } from '@/lib/pierrot/projects/conversation';
 import { parsePierrotResponse } from '@/lib/pierrot/response/schema';
 import {
-  getPierrotProject,
   getPierrotProjectForConversation,
   listPierrotProjects,
+  mapProject,
 } from '@/lib/pierrot/projects/store';
 import type { PierrotProject } from '@/lib/pierrot/projects/types';
 
@@ -82,7 +82,18 @@ export type PierrotSessionRecord = {
 
 export type PierrotHistoryScope = {
   history: PierrotHistoryRecord;
+  /**
+   * Session resolved for this request. When the request names a session it is
+   * that exact session, even if it is closed: closed episodes stay readable.
+   */
   session: PierrotSessionRecord | null;
+  /** True only when `session` is open and may receive new messages. */
+  sessionActive: boolean;
+  /**
+   * Open session a new message should use. Null means the history has no open
+   * session yet; a write request will create one, a read request will not.
+   */
+  activeSession: PierrotSessionRecord | null;
   /** Canonical conversation used for all new messages in this history. */
   conversationId: string;
   /** Legacy session token of the canonical conversation row (auth compat). */
@@ -212,13 +223,36 @@ export async function ensureMainHistory(
   }
 }
 
+/**
+ * Reads a project through the caller's store. History code already holds a
+ * client; reusing it avoids a second service-role client and keeps the pure
+ * history logic testable against a deterministic store.
+ */
+async function loadProjectById(
+  store: SupabaseClient,
+  ownerUserId: string,
+  projectId: string
+): Promise<PierrotProject | null> {
+  const { data, error } = await store
+    .from('pierrot_projects')
+    .select('*')
+    .eq('owner_user_id', ownerUserId)
+    .eq('id', projectId)
+    .maybeSingle();
+  if (error) {
+    if (isMissingHistorySchema(error)) return null;
+    throw error;
+  }
+  return data ? mapProject(data as Record<string, unknown>) : null;
+}
+
 export async function ensureProjectHistory(
   store: SupabaseClient,
   ownerUserId: string,
   projectId: string
 ): Promise<PierrotHistoryRecord | null> {
   try {
-    const project = await getPierrotProject(ownerUserId, projectId);
+    const project = await loadProjectById(store, ownerUserId, projectId);
     if (!project) return null;
 
     if (!project.conversationId) {
@@ -360,6 +394,81 @@ async function latestSession(
   return sessions[0] || null;
 }
 
+/** `ended_at` is the only explicit closure marker in the history schema. */
+export function isSessionOpen(
+  session: { endedAt?: string | null; ended_at?: string | null } | null | undefined
+): boolean {
+  if (!session) return false;
+  const endedAt = session.endedAt ?? session.ended_at ?? null;
+  return endedAt === null;
+}
+
+async function listOpenSessions(
+  store: SupabaseClient,
+  historyId: string
+): Promise<PierrotSessionRecord[]> {
+  const { data, error } = await store
+    .from('pierrot_sessions')
+    .select(SESSION_COLUMNS)
+    .eq('history_id', historyId)
+    .is('ended_at', null)
+    .order('ordinal', { ascending: false })
+    .limit(100);
+  if (error) {
+    if (isMissingHistorySchema(error)) return [];
+    throw error;
+  }
+  return (Array.isArray(data) ? data : [])
+    .map((row) => mapSession(row as Record<string, unknown>))
+    .filter((row): row is PierrotSessionRecord => Boolean(row) && isSessionOpen(row));
+}
+
+function sessionActivity(session: PierrotSessionRecord): number {
+  const parsed = Date.parse(session.lastMessageAt || '');
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * Picks the open session that should receive the next message.
+ *
+ * A session that already contains dialogue and has the most recent activity is
+ * the real continuation point. An explicitly started but still empty session
+ * (message_count = 0) is only used when there is no active dialogue session;
+ * this reuses "New session" without ever creating another empty shell.
+ */
+export function pickWritableSession(
+  sessions: PierrotSessionRecord[]
+): PierrotSessionRecord | null {
+  const open = sessions.filter((session) => isSessionOpen(session));
+  if (open.length === 0) return null;
+
+  return [...open].sort((left, right) => {
+    const leftHasMessages = left.messageCount > 0;
+    const rightHasMessages = right.messageCount > 0;
+    if (leftHasMessages !== rightHasMessages) return leftHasMessages ? -1 : 1;
+    const byActivity = sessionActivity(right) - sessionActivity(left);
+    if (byActivity !== 0) return byActivity;
+    return right.ordinal - left.ordinal;
+  })[0];
+}
+
+/**
+ * Returns the newest open session that has not produced a message yet. An
+ * explicit "New chat" can reuse it instead of accumulating empty shells.
+ */
+export async function findEmptyOpenSession(
+  store: SupabaseClient,
+  historyId: string
+): Promise<PierrotSessionRecord | null> {
+  const sessions = await listOpenSessions(store, historyId);
+  return (
+    sessions
+      .filter((session) => session.messageCount === 0)
+      .sort((left, right) => right.ordinal - left.ordinal)[0] || null
+  );
+}
+
+
 async function readConversation(
   store: SupabaseClient,
   conversationId: string
@@ -491,12 +600,21 @@ export async function createSession(
 function scopeFromHistory(
   history: PierrotHistoryRecord,
   session: PierrotSessionRecord | null,
-  project: PierrotProject | null
+  project: PierrotProject | null,
+  options: { activeSession?: PierrotSessionRecord | null } = {}
 ): PierrotHistoryScope | null {
   if (!history.canonicalConversationId || !history.canonicalConversationSessionId) return null;
+  const activeSession =
+    options.activeSession !== undefined
+      ? options.activeSession
+      : isSessionOpen(session)
+        ? session
+        : null;
   return {
     history,
     session,
+    sessionActive: isSessionOpen(session),
+    activeSession,
     conversationId: history.canonicalConversationId,
     conversationSessionId: history.canonicalConversationSessionId,
     project,
@@ -523,6 +641,10 @@ export async function resolveHistoryScope(
   let history: PierrotHistoryRecord | null = null;
   let session: PierrotSessionRecord | null = null;
   let project: PierrotProject | null = null;
+  // A legacy conversation URL resolves to the session that already owns those
+  // messages. Keep it as the preferred read scope; it is never forced as a
+  // write target when it is closed.
+  let preferredSession: PierrotSessionRecord | null = null;
 
   if (input.historyId) {
     history = await getHistoryById(store, ownerUserId, input.historyId);
@@ -545,6 +667,7 @@ export async function resolveHistoryScope(
       const candidateHistory = await getHistoryById(store, ownerUserId, candidate.historyId);
       if (candidateHistory) {
         session = candidate;
+        preferredSession = candidate;
         history = candidateHistory;
       }
     }
@@ -575,12 +698,13 @@ export async function resolveHistoryScope(
           history,
           input.conversationId
         );
+        preferredSession = session;
       }
     }
   }
 
   if (!history && input.projectId) {
-    project = await getPierrotProject(ownerUserId, input.projectId);
+    project = await loadProjectById(store, ownerUserId, input.projectId);
     if (project) history = await ensureProjectHistory(store, ownerUserId, project.id);
   }
 
@@ -591,20 +715,44 @@ export async function resolveHistoryScope(
   if (!history) return null;
 
   if (history.projectId && !project) {
-    project = await getPierrotProject(ownerUserId, history.projectId).catch(() => null);
+    project = await loadProjectById(store, ownerUserId, history.projectId).catch(() => null);
   }
 
-  if (input.episodeId) {
-    session = await loadSessionById(store, history.id, input.episodeId);
+  // A project history can survive a lost/dangling canonical conversation (for
+  // example after a legacy merge). Repair the pointer from the project row
+  // before deciding the history is unusable; this never deletes a transcript.
+  if (
+    history.projectId &&
+    (!history.canonicalConversationId || !history.canonicalConversationSessionId)
+  ) {
+    const repaired = await ensureProjectHistory(store, ownerUserId, history.projectId).catch(
+      () => null
+    );
+    if (repaired) history = repaired;
   }
 
-  if (!session) session = await latestSession(store, history.id);
+  const requestedSession = input.episodeId
+    ? await loadSessionById(store, history.id, input.episodeId)
+    : preferredSession && preferredSession.historyId === history.id
+      ? preferredSession
+      : null;
+  const openSession = pickWritableSession(await listOpenSessions(store, history.id));
 
-  if (!session && input.createSession !== false) {
-    session = await createSession(store, ownerUserId, history.id);
+  if (input.createSession === true) {
+    // Writes never target a closed episode. Continue the most recent open
+    // dialogue, or create a session only because a message is being written.
+    session =
+      requestedSession && isSessionOpen(requestedSession)
+        ? requestedSession
+        : openSession || (await createSession(store, ownerUserId, history.id));
+    return scopeFromHistory(history, session, project, { activeSession: session });
   }
 
-  return scopeFromHistory(history, session, project);
+  // Reads stay non-destructive: an explicit session may be closed and is still
+  // returned for display; viewing a history never creates an empty session.
+  session = requestedSession || openSession || (await latestSession(store, history.id));
+  const activeSession = isSessionOpen(requestedSession) ? requestedSession : openSession;
+  return scopeFromHistory(history, session, project, { activeSession });
 }
 
 export type HistoryPageOptions = {
@@ -673,6 +821,25 @@ export async function loadHistoryMessagePage(
   const selectedSession =
     options.session ||
     (options.sessionId ? await loadSessionById(store, history.id, options.sessionId) : null);
+
+  // A freshly started session has no message range yet. Falling through would
+  // read the whole continuous history and make "New chat" look like it opened
+  // old messages. Only sessions that legitimately contain dialogue may use the
+  // whole-history fallback.
+  if (
+    selectedSession &&
+    selectedSession.messageCount === 0 &&
+    selectedSession.firstMessageSequence == null &&
+    selectedSession.lastMessageSequence == null
+  ) {
+    return {
+      messages: [],
+      hasMore: false,
+      oldestSequence: null,
+      newestSequence: null,
+      historyMaxSequence: 0,
+    };
+  }
 
   const buildQuery = (columns: string) => {
     let query = store
