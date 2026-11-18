@@ -55,6 +55,29 @@ describe('QuestionExperience', () => {
     );
   });
 
+  it('keeps a short question on the existing display treatment', () => {
+    render(<QuestionExperience {...baseProps} />);
+
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading.textContent).toBe(question.text);
+    expect(heading).toHaveAttribute('data-question-size', 'short');
+  });
+
+  it('preserves verbatim line breaks and calms a long restored question', () => {
+    const longText = [
+      'Представьте, что вам нужно объяснить человеку из другого времени, что значит жить осмысленно, не опираясь на привычные слова о счастье, успехе и предназначении.',
+      'Что бы вы назвали главным, если бы у вас было всего несколько предложений\nи никакой возможности сослаться на авторитет?',
+    ].join('\n\n');
+
+    render(<QuestionExperience {...baseProps} question={{ ...question, text: longText }} />);
+
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading.textContent).toBe(longText);
+    expect(heading.textContent).toContain('\n\n');
+    expect(heading.textContent).toContain('предложений\nи никакой');
+    expect(heading).toHaveAttribute('data-question-size', 'long');
+  });
+
   it('loads the next random question without a page reload', async () => {
     const fetchMock = jest.fn(async () => ({
       ok: true,

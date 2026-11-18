@@ -13,6 +13,11 @@ const seed = fs.readFileSync(
   'utf8'
 );
 
+const textLimit = fs.readFileSync(
+  path.join(process.cwd(), 'migrations/2026-12-11_question_text_limit_2000.sql'),
+  'utf8'
+);
+
 describe('Question database migration', () => {
   it('creates the minimal domain with a one-answer-per-user constraint', () => {
     expect(migration).toContain('create table if not exists public.questions');
@@ -75,5 +80,19 @@ describe('Question database migration', () => {
     const tuples = (seed.match(/\('.*?', 'active'\)/g) || []).length;
     expect(tuples).toBe(10);
     expect(seed).toContain('on conflict (question) do nothing');
+  });
+
+  it('matches the production question text limit of 3..2000 characters', () => {
+    expect(textLimit).toMatch(
+      /check\s*\(\s*char_length\(btrim\(question\)\)\s+between\s+3\s+and\s+2000\s*\)/i
+    );
+    expect(textLimit).toContain('questions_question_length_check');
+    expect(textLimit).toMatch(/validate constraint questions_question_length_check/i);
+  });
+
+  it('changes only constraint metadata, never question/answer content', () => {
+    expect(textLimit).not.toMatch(/\bupdate\s+public\./i);
+    expect(textLimit).not.toMatch(/\bdelete\s+from\b/i);
+    expect(textLimit).not.toMatch(/\b(insert\s+into|drop\s+table|drop\s+column|truncate)\b/i);
   });
 });
