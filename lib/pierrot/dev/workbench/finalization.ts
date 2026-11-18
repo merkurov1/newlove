@@ -277,6 +277,9 @@ export async function getFinalizationReport(): Promise<DevFinalizationReport | n
 
 async function saveState(state: FinalizationState): Promise<void> {
   state.updatedAt = nowIso();
+  // Keep the idempotency ledger bounded; the event journal retains full history.
+  state.integrated = state.integrated.slice(-200);
+  state.prs = state.prs.slice(-50);
   await setSetting(STATE_KEY, state);
 }
 
