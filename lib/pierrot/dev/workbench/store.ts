@@ -359,6 +359,39 @@ export async function isQueuePaused(): Promise<boolean> {
   return (await getSetting<boolean>('queue_paused', false)) === true;
 }
 
+/**
+ * Remember that the owner deliberately removed a task from the queue.
+ * `dequeue` returns a task to `ready`, which is also the approval state; without
+ * this durable marker the idle-time promotion would silently re-enqueue it.
+ */
+export async function setQueueOptOut(taskId: string, optedOut: boolean): Promise<void> {
+  if (!isUuid(taskId)) return;
+  try {
+    await setSetting(`queue:optout:${taskId}`, {
+      at: optedOut ? new Date().toISOString() : null,
+    });
+  } catch {
+    // The transition itself is authoritative; promotion is best effort.
+  }
+}
+
+async function queueOptOuts(taskIds: string[]): Promise<Set<string>> {
+  const optedOut = new Set<string>();
+  if (taskIds.length === 0) return optedOut;
+  try {
+    const keys = taskIds.map((id) => `queue:optout:${id}`);
+    const { data } = await store().from('pierrot_dev_settings').select('key,value').in('key', keys);
+    for (const row of data || []) {
+      const value = row.value as { at?: unknown } | null;
+      if (typeof value?.at === 'string' && value.at) optedOut.add(String(row.key));
+    }
+  } catch {
+    // If the marker store is unavailable, fall back to not promoting anything
+    // surprising: the caller can still enqueue explicitly.
+  }
+  return optedOut;
+}
+
 // ---------------------------------------------------------------------------
 // Cost estimate ledger
 // ---------------------------------------------------------------------------
@@ -687,10 +720,12 @@ export async function promoteStandaloneReadyTasks(limit = 20): Promise<number> {
       .limit(Math.min(Math.max(limit, 1), 50));
     if (error || !Array.isArray(data) || data.length === 0) return 0;
 
+    const optedOut = await queueOptOuts(data.map((row) => String(row.id)));
     let position = await nextQueuePosition();
     const queuedAt = new Date().toISOString();
     let promoted = 0;
     for (const row of data) {
+      if (optedOut.has(`queue:optout:${row.id}`)) continue;
       const { error: updateError } = await store()
         .from('pierrot_dev_prompts')
         .update({
@@ -1204,6 +1239,7 @@ export async function startBatch(userId: string, batchId: string): Promise<Start
     if (error) {
       return { ok: false, queued, notReady: [], error: 'BATCH_START_FAILED' };
     }
+    await setQueueOptOut(String(task.id), false);
     queued += 1;
     position += 1;
   }
