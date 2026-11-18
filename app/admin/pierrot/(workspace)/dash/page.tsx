@@ -194,6 +194,9 @@ export default async function DashPage({
             <Link className="pw-dash-infra-link" href="/admin/pierrot/infrastructure">
               Инфраструктура и Self-Funding →
             </Link>
+            <Link className="pw-dash-infra-link" href="/admin/pierrot/ai-costs">
+              AI telemetry и стоимость вызовов →
+            </Link>
           </div>
         </header>
 

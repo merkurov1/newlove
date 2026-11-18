@@ -3,6 +3,24 @@ import {
   recordCircuitFailure,
   recordCircuitSuccess,
 } from '@/lib/operations/circuitBreaker';
+import {
+  buildLlmCallRecord,
+  createTelemetryStore,
+  recordLlmCall,
+  type LlmCallContext,
+  type LlmProviderAttempt,
+  type LlmSurface,
+} from '@/lib/ai/telemetry';
+
+/**
+ * Optional per-call telemetry context for Gemini callers outside the Pierrot
+ * route. The Pierrot route records its own richer multi-provider attempts, so
+ * it sets `skip` to avoid double-counting.
+ */
+export type GeminiTelemetryContext = Partial<Omit<LlmCallContext, 'surface'>> & {
+  surface?: LlmSurface;
+  skip?: boolean;
+};
 
 /**
  * Gemini is the primary model for Pierrot, Flow item context and Flow issue
@@ -52,6 +70,104 @@ export class GeminiError extends Error {
 
 export function isGeminiConfigured(): boolean {
   return Boolean((process.env.GEMINI_API_KEY || '').trim());
+}
+
+function geminiUsageForTelemetry(value: unknown): LlmProviderAttempt['usage'] {
+  if (!value || typeof value !== 'object') {
+    return {
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      usageSource: 'unknown',
+      providerReportedCostUsd: null,
+    };
+  }
+
+  const usage = value as Record<string, unknown>;
+  const read = (key: string): number | null =>
+    typeof usage[key] === 'number' && Number.isFinite(usage[key]) ? (usage[key] as number) : null;
+  const input = read('promptTokenCount');
+  const output = read('candidatesTokenCount');
+
+  return {
+    inputTokens: input,
+    outputTokens: output,
+    totalTokens:
+      read('totalTokenCount') ??
+      (input !== null || output !== null ? (input ?? 0) + (output ?? 0) : null),
+    usageSource:
+      input === null && output === null
+        ? 'unknown'
+        : input !== null && output !== null
+          ? 'provider_reported'
+          : 'partial',
+    providerReportedCostUsd: null,
+  };
+}
+
+async function persistGeminiAttempt(input: {
+  telemetry?: GeminiTelemetryContext;
+  startedAt: number;
+  ok: boolean;
+  finishReason: string | null;
+  errorCode: string | null;
+  usage: unknown;
+  promptChars: number;
+  responseChars: number;
+}): Promise<void> {
+  const telemetry = input.telemetry;
+  if (telemetry?.skip) return;
+  // Unit tests often queue global.fetch responses. Auto-persisting every
+  // Gemini call there would consume those fixtures; tests that need coverage
+  // pass an explicit telemetry object.
+  if (process.env.NODE_ENV === 'test' && !telemetry) return;
+
+  try {
+    const store = createTelemetryStore();
+    if (!store) return;
+
+    const attempt: LlmProviderAttempt = {
+      provider: 'gemini',
+      model: GEMINI_MODEL,
+      attempt: 1,
+      isRetry: false,
+      fallbackFrom: null,
+      ok: input.ok,
+      latencyMs: Math.max(0, Date.now() - input.startedAt),
+      finishReason: input.finishReason,
+      errorCode: input.errorCode,
+      usage: geminiUsageForTelemetry(input.usage),
+      promptChars: input.promptChars,
+      responseChars: input.responseChars,
+    };
+
+    const record = buildLlmCallRecord({
+      context: {
+        requestId: telemetry?.requestId ?? null,
+        conversationId: telemetry?.conversationId ?? null,
+        sessionId: telemetry?.sessionId ?? null,
+        userId: telemetry?.userId ?? null,
+        surface: telemetry?.surface ?? 'unknown',
+      },
+      attempt,
+    });
+
+    await recordLlmCall(store, record);
+  } catch {
+    // Telemetry must never fail a generation path.
+  }
+}
+
+function geminiPromptChars(input: {
+  system?: string;
+  prompt?: string;
+  messages?: GeminiMessage[];
+}): number {
+  return (
+    (input.system?.length ?? 0) +
+    (input.prompt?.length ?? 0) +
+    (input.messages ?? []).reduce((total, message) => total + message.content.length, 0)
+  );
 }
 
 type GeminiResponse = {
@@ -131,6 +247,7 @@ export async function generateGeminiText(input: {
   timeoutMs?: number;
   responseMimeType?: string;
   signal?: AbortSignal;
+  telemetry?: GeminiTelemetryContext;
 }): Promise<GeminiTextResult> {
   const apiKey = (process.env.GEMINI_API_KEY || '').trim();
 
@@ -197,6 +314,16 @@ export async function generateGeminiText(input: {
     }
 
     await recordCircuitSuccess('gemini');
+    await persistGeminiAttempt({
+      telemetry: input.telemetry,
+      startedAt,
+      ok: true,
+      finishReason: payload?.candidates?.[0]?.finishReason ?? null,
+      errorCode: null,
+      usage: payload?.usageMetadata ?? null,
+      promptChars: geminiPromptChars(input),
+      responseChars: content.length,
+    });
 
     return {
       content,
@@ -207,6 +334,26 @@ export async function generateGeminiText(input: {
       usage: payload?.usageMetadata ?? null,
     };
   } catch (error) {
+    const errorCode =
+      error instanceof GeminiError
+        ? error.code
+        : input.signal?.aborted
+          ? 'gemini_cancelled'
+          : error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')
+            ? 'gemini_timeout'
+            : 'gemini_request_failed';
+
+    await persistGeminiAttempt({
+      telemetry: input.telemetry,
+      startedAt,
+      ok: false,
+      finishReason: null,
+      errorCode,
+      usage: null,
+      promptChars: geminiPromptChars(input),
+      responseChars: 0,
+    });
+
     if (error instanceof GeminiError) throw error;
 
     if (input.signal?.aborted) {
@@ -248,6 +395,7 @@ export async function streamGeminiText(input: {
   responseMimeType?: string;
   signal?: AbortSignal;
   onDelta: (text: string) => void;
+  telemetry?: GeminiTelemetryContext;
 }): Promise<GeminiStreamResult> {
   const apiKey = (process.env.GEMINI_API_KEY || '').trim();
 
@@ -382,6 +530,16 @@ export async function streamGeminiText(input: {
     }
 
     await recordCircuitSuccess('gemini');
+    await persistGeminiAttempt({
+      telemetry: input.telemetry,
+      startedAt,
+      ok: true,
+      finishReason,
+      errorCode: null,
+      usage,
+      promptChars: geminiPromptChars(input),
+      responseChars: content.length,
+    });
 
     return {
       content: content.trim(),
@@ -393,6 +551,24 @@ export async function streamGeminiText(input: {
       usage,
     };
   } catch (error) {
+    const errorCode =
+      error instanceof GeminiError
+        ? error.code
+        : error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')
+          ? 'gemini_timeout'
+          : 'gemini_request_failed';
+
+    await persistGeminiAttempt({
+      telemetry: input.telemetry,
+      startedAt,
+      ok: false,
+      finishReason,
+      errorCode,
+      usage: null,
+      promptChars: geminiPromptChars(input),
+      responseChars: content.length,
+    });
+
     if (error instanceof GeminiError) throw error;
 
     const aborted =

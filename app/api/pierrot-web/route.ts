@@ -113,6 +113,11 @@ import {
 } from '@/lib/knowledge/rag/journalFlowRetrieval';
 import { buildJournalFlowResponse } from '@/lib/pierrot/response/select';
 import { parsePierrotResponse } from '@/lib/pierrot/response/schema';
+import {
+  dropTrailingDuplicateTurn,
+  selectRecentHistoryWindow,
+  type NormalizedHistoryItem,
+} from '@/lib/pierrot/historyWindow';
 import { classifyPierrotFailure, logPierrotFailure } from '@/lib/pierrot/errors';
 import { pierrotErrorCopy, type PierrotErrorLanguage } from '@/lib/pierrot/errorContracts';
 import {
@@ -149,6 +154,13 @@ import {
   streamPierrotModel,
   PierrotStreamInterruptedError,
 } from '@/lib/pierrot/model';
+import {
+  buildLlmCallRecord,
+  logLlmCall,
+  recordLlmCall,
+  type LlmCallContext,
+  type LlmProviderAttempt,
+} from '@/lib/ai/telemetry';
 import {
   resolvePierrotGenerationPolicy,
   type PierrotGenerationPolicy,
@@ -802,9 +814,10 @@ export async function POST(req: Request) {
 
     // Format normalized conversation history with hard limits.
     const normalizedHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-    let historyCharacters = 0;
 
     if (Array.isArray(history)) {
+      const candidates: NormalizedHistoryItem[] = [];
+
       for (const item of history.slice(-PIERROT_MAX_HISTORY_ITEMS)) {
         if (!item || typeof item !== 'object') continue;
 
@@ -817,13 +830,17 @@ export async function POST(req: Request) {
 
         if (!content) continue;
 
-        if (historyCharacters + content.length > PIERROT_MAX_HISTORY_CHARS) {
-          break;
-        }
-
-        historyCharacters += content.length;
-        normalizedHistory.push({ role, content });
+        candidates.push({ role, content });
       }
+
+      normalizedHistory.push(
+        ...selectRecentHistoryWindow(
+          candidates,
+          PIERROT_MAX_HISTORY_ITEMS,
+          PIERROT_MAX_HISTORY_CHARS,
+          PIERROT_MAX_HISTORY_ITEM_CHARS
+        )
+      );
     }
 
     // For a verified owner, the server-side permanent history is authoritative.
@@ -840,15 +857,21 @@ export async function POST(req: Request) {
           PIERROT_MAX_HISTORY_ITEMS
         );
 
+        // A retry with the same user message id already has that turn in the
+        // stored transcript. The current message is appended to the model
+        // request below, so keeping the stored copy would ask the model to
+        // answer the same turn twice.
+        const withoutCurrentTurn = dropTrailingDuplicateTurn(storedHistory, trimmedMessage);
+
         normalizedHistory.length = 0;
-        historyCharacters = 0;
-        for (const item of storedHistory.slice(-PIERROT_MAX_HISTORY_ITEMS)) {
-          const content = item.content.trim().slice(0, PIERROT_MAX_HISTORY_ITEM_CHARS);
-          if (!content) continue;
-          if (historyCharacters + content.length > PIERROT_MAX_HISTORY_CHARS) break;
-          historyCharacters += content.length;
-          normalizedHistory.push({ role: item.role, content });
-        }
+        normalizedHistory.push(
+          ...selectRecentHistoryWindow(
+            withoutCurrentTurn,
+            PIERROT_MAX_HISTORY_ITEMS,
+            PIERROT_MAX_HISTORY_CHARS,
+            PIERROT_MAX_HISTORY_ITEM_CHARS
+          )
+        );
 
         const currentSession = historyScope.session;
         ownerHistoryScopeContext = [
@@ -5693,7 +5716,43 @@ export async function POST(req: Request) {
         completionTokens: number | null;
         totalTokens: number | null;
       } | null = null;
+      let llmAttempts: LlmProviderAttempt[] = [];
       let streamedReply = '';
+
+      // Consent is authoritative: a denied transcript must not create a new
+      // persistence client just for telemetry. In that case the attempt is
+      // emitted as a redacted structured log instead.
+      const telemetryStore = pierrotStore;
+      const telemetryContext: LlmCallContext = {
+        requestId: correlationId,
+        conversationId: canStoreMetadata ? conversationId : null,
+        sessionId: canStoreMetadata ? sessionId : null,
+        surface: streaming ? 'pierrot_stream' : 'pierrot_web',
+        userId: isPierrotUserId(ownerIdentityUserId) ? ownerIdentityUserId : null,
+      };
+
+      const persistLlmAttempts = async (attempts: LlmProviderAttempt[]) => {
+        if (!Array.isArray(attempts) || attempts.length === 0) return;
+
+        const records = attempts.map((attempt) =>
+          buildLlmCallRecord({ context: telemetryContext, attempt })
+        );
+
+        if (!telemetryStore) {
+          records.filter((record) => !record.ok).forEach((record) => logLlmCall(record));
+          return;
+        }
+
+        const stored = await Promise.all(
+          records.map((record) => recordLlmCall(telemetryStore, record))
+        );
+
+        // A deployment without the telemetry migration still keeps a redacted
+        // structured log line for failed calls instead of losing the evidence.
+        if (stored.every((ok) => !ok)) {
+          records.filter((record) => !record.ok).forEach((record) => logLlmCall(record));
+        }
+      };
 
       if (!useModel) {
         reply = plan.reply || 'Silence.';
@@ -6344,6 +6403,9 @@ export async function POST(req: Request) {
           const modelOptions = {
             maxOutputTokens: generationPolicy.maxOutputTokens,
             timeoutMs: generationPolicy.providerTimeoutMs,
+            onAttempt: (attempt: LlmProviderAttempt) => {
+              llmAttempts.push(attempt);
+            },
           };
 
           const generated = onDelta
@@ -6373,6 +6435,8 @@ export async function POST(req: Request) {
           fallbackUsed = generated.fallbackUsed;
           generationFinishReason = generated.finishReason;
           generationUsage = generated.usage;
+          llmAttempts = generated.attempts ?? llmAttempts;
+          await persistLlmAttempts(llmAttempts);
         } catch (aiError) {
           const failure = classifyPierrotFailure(aiError, {
             aborted: generationSignal.aborted,
@@ -6381,6 +6445,7 @@ export async function POST(req: Request) {
           const partialReply = interrupted ? streamedReply.trim() : '';
           const interruptedProvider =
             aiError instanceof PierrotStreamInterruptedError ? aiError.provider : usedProvider || null;
+          await persistLlmAttempts(llmAttempts);
 
           if (partialReply && pierrotStore && canStoreTranscript) {
             try {
@@ -6457,7 +6522,7 @@ export async function POST(req: Request) {
             failure,
             latencyMs: Date.now() - startedAt,
             error: aiError,
-            provider: usedProvider || 'gemini',
+            provider: usedProvider || undefined,
             dependency: 'pierrot_llm',
           });
 
@@ -6485,6 +6550,7 @@ export async function POST(req: Request) {
                       requested_output_tokens: generationPolicy.maxOutputTokens,
                       finish_reason: generationFinishReason,
                       usage: generationUsage,
+                      attempts: llmAttempts.length,
                     },
                   }
                 : {}),
@@ -6661,6 +6727,9 @@ export async function POST(req: Request) {
               provider: usedProvider,
               model: usedModel,
               fallback_used: fallbackUsed,
+              llm_attempts: llmAttempts.length,
+              llm_retries: llmAttempts.filter((attempt) => attempt.isRetry).length,
+              llm_failed_attempts: llmAttempts.filter((attempt) => !attempt.ok).length,
               generation_latency_ms: generationLatencyMs,
               generation_task: generationPolicy?.task ?? null,
               generation_budget_reason: generationPolicy?.reason ?? null,
@@ -6784,6 +6853,7 @@ export async function POST(req: Request) {
                 requested_output_tokens: generationPolicy.maxOutputTokens,
                 finish_reason: generationFinishReason,
                 usage: generationUsage,
+                attempts: llmAttempts.length,
               },
             }
           : {}),

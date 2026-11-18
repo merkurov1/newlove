@@ -1,5 +1,11 @@
 import OpenAI from 'openai';
 import { generateGeminiText, isGeminiConfigured, streamGeminiText } from '@/lib/ai/gemini';
+import type {
+  LlmProvider,
+  LlmProviderAttempt,
+  LlmTokenUsage,
+  LlmUsageSource,
+} from '@/lib/ai/telemetry';
 import { globalLimits } from '@/lib/operations/config';
 import { PIERROT_PROVIDER_OUTPUT_CAP } from './generationPolicy';
 import {
@@ -11,12 +17,22 @@ import {
 export type PierrotModelOptions = {
   maxOutputTokens?: number;
   timeoutMs?: number;
+  /**
+   * Called once per provider attempt, including failures. The route uses this
+   * to persist one telemetry row per attempt without exposing prompt text.
+   */
+  onAttempt?: (attempt: LlmProviderAttempt) => void;
 };
 
 export type PierrotTokenUsage = {
   promptTokens: number | null;
   completionTokens: number | null;
   totalTokens: number | null;
+};
+
+export type PierrotAttemptUsage = PierrotTokenUsage & {
+  usageSource: LlmUsageSource;
+  providerReportedCostUsd: number | null;
 };
 
 function outputBudget(options: PierrotModelOptions = {}): number {
@@ -31,19 +47,90 @@ function providerTimeout(options: PierrotModelOptions = {}): number {
   );
 }
 
-function usageFrom(value: unknown): PierrotTokenUsage | null {
+function usageFrom(value: unknown): PierrotAttemptUsage | null {
   if (!value || typeof value !== 'object') return null;
   const usage = value as Record<string, unknown>;
   const read = (key: string): number | null =>
-    typeof usage[key] === 'number' && Number.isFinite(usage[key])
-      ? (usage[key] as number)
-      : null;
+    typeof usage[key] === 'number' && Number.isFinite(usage[key]) ? (usage[key] as number) : null;
+
+  const promptTokens = read('prompt_tokens') ?? read('promptTokenCount');
+  const completionTokens = read('completion_tokens') ?? read('candidatesTokenCount');
+  const reportedTotal = read('total_tokens') ?? read('totalTokenCount');
+  const totalTokens =
+    reportedTotal ??
+    (promptTokens !== null || completionTokens !== null
+      ? (promptTokens ?? 0) + (completionTokens ?? 0)
+      : null);
+  const providerCost = read('cost') ?? read('total_cost') ?? read('provider_cost') ?? null;
+
+  const usageSource: LlmUsageSource =
+    promptTokens === null && completionTokens === null && totalTokens === null
+      ? 'unknown'
+      : promptTokens !== null && completionTokens !== null
+        ? 'provider_reported'
+        : 'partial';
 
   return {
-    promptTokens: read('prompt_tokens') ?? read('promptTokenCount'),
-    completionTokens: read('completion_tokens') ?? read('candidatesTokenCount'),
-    totalTokens: read('total_tokens') ?? read('totalTokenCount'),
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    usageSource,
+    providerReportedCostUsd: providerCost,
   };
+}
+
+const UNKNOWN_ATTEMPT_USAGE: PierrotAttemptUsage = {
+  promptTokens: null,
+  completionTokens: null,
+  totalTokens: null,
+  usageSource: 'unknown',
+  providerReportedCostUsd: null,
+};
+
+function promptChars(
+  systemPrompt: string,
+  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
+): number {
+  return [systemPrompt, ...messages.map((message) => serializeContent(message.content))].reduce(
+    (total, part) => total + part.length,
+    0
+  );
+}
+
+function serializeContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  try {
+    return JSON.stringify(content);
+  } catch {
+    return '';
+  }
+}
+
+function attemptUsage(usage: PierrotAttemptUsage | null): PierrotAttemptUsage {
+  return usage ?? UNKNOWN_ATTEMPT_USAGE;
+}
+
+function toTelemetryUsage(usage: PierrotAttemptUsage | null): LlmTokenUsage {
+  const value = attemptUsage(usage);
+  return {
+    inputTokens: value.promptTokens,
+    outputTokens: value.completionTokens,
+    totalTokens: value.totalTokens,
+    usageSource: value.usageSource,
+    providerReportedCostUsd: value.providerReportedCostUsd,
+  };
+}
+
+function errorCodeFrom(error: unknown): string {
+  if (!error || typeof error !== 'object') return 'provider_request_failed';
+  const code = (error as { code?: unknown }).code;
+  if (typeof code === 'string' && code.trim()) return code.slice(0, 120);
+  const status = (error as { status?: unknown }).status;
+  if (typeof status === 'number' && Number.isInteger(status)) return `http_${status}`;
+  const message = error instanceof Error ? error.message : '';
+  // Store a stable code, never a free-form provider message that may echo a
+  // prompt or a request body.
+  return /^[A-Za-z0-9_.:-]{1,120}$/.test(message) ? message : 'provider_request_failed';
 }
 
 function streamAbortError(): Error {
@@ -63,7 +150,6 @@ export class PierrotStreamInterruptedError extends Error {
 }
 
 // Helper to invoke DeepSeek
-// Helper to invoke DeepSeek
 async function callDeepSeek(
   systemPrompt: string,
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
@@ -72,7 +158,7 @@ async function callDeepSeek(
 ): Promise<{
   reply: string;
   finishReason: string | null;
-  usage: PierrotTokenUsage | null;
+  usage: PierrotAttemptUsage | null;
 }> {
   const apiKey = (process.env.DEEPSEEK_API_KEY || '').trim();
   if (!apiKey) {
@@ -134,7 +220,7 @@ async function streamDeepSeek(
   provider: 'deepseek';
   model: string;
   finishReason: string | null;
-  usage: PierrotTokenUsage | null;
+  usage: PierrotAttemptUsage | null;
 }> {
   const apiKey = (process.env.DEEPSEEK_API_KEY || '').trim();
   if (!apiKey) {
@@ -152,7 +238,7 @@ async function streamDeepSeek(
   const model = isReasoning ? 'deepseek-reasoner' : 'deepseek-chat';
   let content = '';
   let finishReason: string | null = null;
-  let usage: PierrotTokenUsage | null = null;
+  let usage: PierrotAttemptUsage | null = null;
 
   try {
     const stream = await client.chat.completions.create(
@@ -162,6 +248,10 @@ async function streamDeepSeek(
         temperature: isReasoning ? undefined : 0.7,
         max_tokens: outputBudget(options),
         stream: true,
+        // OpenAI-compatible providers only emit the final usage frame when it
+        // is explicitly requested. Without this every streaming call looks
+        // free in telemetry.
+        stream_options: { include_usage: true },
       },
       { signal }
     );
@@ -213,7 +303,7 @@ async function callOpenRouterDeepSeek(
 ): Promise<{
   reply: string;
   finishReason: string | null;
-  usage: PierrotTokenUsage | null;
+  usage: PierrotAttemptUsage | null;
 }> {
   const apiKey = (process.env.OPENROUTER_API_KEY || '').trim();
   if (!apiKey) {
@@ -277,7 +367,7 @@ async function streamOpenRouterDeepSeek(
   provider: 'openrouter';
   model: string;
   finishReason: string | null;
-  usage: PierrotTokenUsage | null;
+  usage: PierrotAttemptUsage | null;
 }> {
   const apiKey = (process.env.OPENROUTER_API_KEY || '').trim();
   if (!apiKey) {
@@ -299,7 +389,7 @@ async function streamOpenRouterDeepSeek(
   const model = isReasoning ? 'deepseek/deepseek-r1-0528' : 'deepseek/deepseek-chat';
   let content = '';
   let finishReason: string | null = null;
-  let usage: PierrotTokenUsage | null = null;
+  let usage: PierrotAttemptUsage | null = null;
 
   try {
     const stream = await client.chat.completions.create(
@@ -309,6 +399,10 @@ async function streamOpenRouterDeepSeek(
         temperature: isReasoning ? undefined : 0.7,
         max_tokens: outputBudget(options),
         stream: true,
+        // OpenAI-compatible providers only emit the final usage frame when it
+        // is explicitly requested. Without this every streaming call looks
+        // free in telemetry.
+        stream_options: { include_usage: true },
       },
       { signal }
     );
@@ -359,7 +453,9 @@ export type PierrotModelResult = {
   latencyMs: number;
   fallbackUsed: boolean;
   finishReason: string | null;
-  usage: PierrotTokenUsage | null;
+  usage: PierrotAttemptUsage | null;
+  /** One entry per provider attempt, including failed fallbacks. */
+  attempts: LlmProviderAttempt[];
 };
 
 /**
@@ -376,9 +472,19 @@ export async function callPierrotModel(
   options: PierrotModelOptions = {}
 ): Promise<PierrotModelResult> {
   const startedAt = Date.now();
+  const attempts: LlmProviderAttempt[] = [];
+  const collectAttempt = (attempt: LlmProviderAttempt) => {
+    attempts.push(attempt);
+    options.onAttempt?.(attempt);
+  };
   let geminiFailed = false;
+  let attemptNumber = 0;
+  let previousProvider: LlmProvider | null = null;
 
   if (isGeminiConfigured()) {
+    attemptNumber += 1;
+    const attemptStartedAt = Date.now();
+
     try {
       const gemini = await generateGeminiText({
         system: systemPrompt,
@@ -398,6 +504,25 @@ export async function callPierrotModel(
         temperature: 0.7,
         maxOutputTokens: outputBudget(options),
         timeoutMs: providerTimeout(options),
+        // The route records the full multi-provider attempt chain, so the
+        // Gemini adapter must not create a duplicate single-provider row.
+        telemetry: { skip: true },
+      });
+
+      const usage = usageFrom(gemini.usage);
+      collectAttempt({
+        provider: 'gemini',
+        model: gemini.model,
+        attempt: attemptNumber,
+        isRetry: attemptNumber > 1,
+        fallbackFrom: previousProvider,
+        ok: true,
+        latencyMs: Date.now() - attemptStartedAt,
+        finishReason: gemini.finishReason ?? null,
+        errorCode: null,
+        usage: toTelemetryUsage(usage),
+        promptChars: promptChars(systemPrompt, messages),
+        responseChars: gemini.content.length,
       });
 
       return {
@@ -407,10 +532,26 @@ export async function callPierrotModel(
         latencyMs: Date.now() - startedAt,
         fallbackUsed: false,
         finishReason: gemini.finishReason ?? null,
-        usage: usageFrom(gemini.usage),
+        usage,
+        attempts,
       };
     } catch (error) {
+      collectAttempt({
+        provider: 'gemini',
+        model: 'gemini-3.5-flash',
+        attempt: attemptNumber,
+        isRetry: attemptNumber > 1,
+        fallbackFrom: previousProvider,
+        ok: false,
+        latencyMs: Date.now() - attemptStartedAt,
+        finishReason: null,
+        errorCode: errorCodeFrom(error),
+        usage: toTelemetryUsage(null),
+        promptChars: promptChars(systemPrompt, messages),
+        responseChars: 0,
+      });
       geminiFailed = true;
+      previousProvider = 'gemini';
       console.warn(
         '[Pierrot AI] Gemini unavailable; trying DeepSeek:',
         error instanceof Error ? error.message : 'gemini_request_failed'
@@ -420,44 +561,109 @@ export async function callPierrotModel(
 
   let deepseekError: unknown = null;
 
+  attemptNumber += 1;
+  const deepseekStartedAt = Date.now();
+
   try {
     const deepseek = await callDeepSeek(systemPrompt, messages, isReasoning, options);
+    const model = isReasoning ? 'deepseek-reasoner' : 'deepseek-chat';
+
+    collectAttempt({
+      provider: 'deepseek',
+      model,
+      attempt: attemptNumber,
+      isRetry: attemptNumber > 1,
+      fallbackFrom: previousProvider,
+      ok: true,
+      latencyMs: Date.now() - deepseekStartedAt,
+      finishReason: deepseek.finishReason,
+      errorCode: null,
+      usage: toTelemetryUsage(deepseek.usage),
+      promptChars: promptChars(systemPrompt, messages),
+      responseChars: deepseek.reply.length,
+    });
 
     return {
       reply: deepseek.reply,
       provider: 'deepseek',
-      model: isReasoning ? 'deepseek-reasoner' : 'deepseek-chat',
+      model,
       latencyMs: Date.now() - startedAt,
       fallbackUsed: geminiFailed,
       finishReason: deepseek.finishReason,
       usage: deepseek.usage,
+      attempts,
     };
   } catch (error) {
+    collectAttempt({
+      provider: 'deepseek',
+      model: isReasoning ? 'deepseek-reasoner' : 'deepseek-chat',
+      attempt: attemptNumber,
+      isRetry: attemptNumber > 1,
+      fallbackFrom: previousProvider,
+      ok: false,
+      latencyMs: Date.now() - deepseekStartedAt,
+      finishReason: null,
+      errorCode: errorCodeFrom(error),
+      usage: toTelemetryUsage(null),
+      promptChars: promptChars(systemPrompt, messages),
+      responseChars: 0,
+    });
     deepseekError = error;
+    previousProvider = 'deepseek';
     console.warn(
       '[Pierrot AI] DeepSeek direct unavailable; trying OpenRouter:',
       error instanceof Error ? error.message : 'deepseek_request_failed'
     );
   }
 
+  attemptNumber += 1;
+  const openrouterStartedAt = Date.now();
+
   try {
-    const openrouter = await callOpenRouterDeepSeek(
-      systemPrompt,
-      messages,
-      isReasoning,
-      options
-    );
+    const openrouter = await callOpenRouterDeepSeek(systemPrompt, messages, isReasoning, options);
+    const model = isReasoning ? 'deepseek/deepseek-r1-0528' : 'deepseek/deepseek-chat';
+
+    collectAttempt({
+      provider: 'openrouter',
+      model,
+      attempt: attemptNumber,
+      isRetry: attemptNumber > 1,
+      fallbackFrom: previousProvider,
+      ok: true,
+      latencyMs: Date.now() - openrouterStartedAt,
+      finishReason: openrouter.finishReason,
+      errorCode: null,
+      usage: toTelemetryUsage(openrouter.usage),
+      promptChars: promptChars(systemPrompt, messages),
+      responseChars: openrouter.reply.length,
+    });
 
     return {
       reply: openrouter.reply,
       provider: 'openrouter',
-      model: isReasoning ? 'deepseek/deepseek-r1-0528' : 'deepseek/deepseek-chat',
+      model,
       latencyMs: Date.now() - startedAt,
       fallbackUsed: true,
       finishReason: openrouter.finishReason,
       usage: openrouter.usage,
+      attempts,
     };
-  } catch {
+  } catch (error) {
+    collectAttempt({
+      provider: 'openrouter',
+      model: isReasoning ? 'deepseek/deepseek-r1-0528' : 'deepseek/deepseek-chat',
+      attempt: attemptNumber,
+      isRetry: attemptNumber > 1,
+      fallbackFrom: previousProvider,
+      ok: false,
+      latencyMs: Date.now() - openrouterStartedAt,
+      finishReason: null,
+      errorCode: errorCodeFrom(error),
+      usage: toTelemetryUsage(null),
+      promptChars: promptChars(systemPrompt, messages),
+      responseChars: 0,
+    });
+
     throw deepseekError instanceof Error
       ? deepseekError
       : new Error('All AI providers are unavailable.');
@@ -487,11 +693,22 @@ export async function streamPierrotModel(
     onDelta(text);
   };
 
+  const attempts: LlmProviderAttempt[] = [];
+  const collectAttempt = (attempt: LlmProviderAttempt) => {
+    attempts.push(attempt);
+    options.onAttempt?.(attempt);
+  };
+
   let geminiFailed = false;
+  let attemptNumber = 0;
+  let previousProvider: LlmProvider | null = null;
 
   if (signal?.aborted) throw streamAbortError();
 
   if (isGeminiConfigured()) {
+    attemptNumber += 1;
+    const attemptStartedAt = Date.now();
+
     try {
       const gemini = await streamGeminiText({
         system: systemPrompt,
@@ -513,6 +730,23 @@ export async function streamPierrotModel(
         timeoutMs: providerTimeout(options),
         signal,
         onDelta: emit,
+        telemetry: { skip: true },
+      });
+
+      const usage = usageFrom(gemini.usage);
+      collectAttempt({
+        provider: 'gemini',
+        model: gemini.model,
+        attempt: attemptNumber,
+        isRetry: attemptNumber > 1,
+        fallbackFrom: previousProvider,
+        ok: true,
+        latencyMs: Date.now() - attemptStartedAt,
+        finishReason: gemini.finishReason ?? null,
+        errorCode: null,
+        usage: toTelemetryUsage(usage),
+        promptChars: promptChars(systemPrompt, messages),
+        responseChars: gemini.content.length,
       });
 
       return {
@@ -522,13 +756,29 @@ export async function streamPierrotModel(
         latencyMs: Date.now() - startedAt,
         fallbackUsed: false,
         finishReason: gemini.finishReason ?? null,
-        usage: usageFrom(gemini.usage),
+        usage,
+        attempts,
       };
     } catch (error) {
+      collectAttempt({
+        provider: 'gemini',
+        model: 'gemini-3.5-flash',
+        attempt: attemptNumber,
+        isRetry: attemptNumber > 1,
+        fallbackFrom: previousProvider,
+        ok: false,
+        latencyMs: Date.now() - attemptStartedAt,
+        finishReason: null,
+        errorCode: emitted ? 'stream_interrupted' : errorCodeFrom(error),
+        usage: toTelemetryUsage(null),
+        promptChars: promptChars(systemPrompt, messages),
+        responseChars: 0,
+      });
       if (emitted) throw new PierrotStreamInterruptedError('gemini');
       if (signal?.aborted) throw streamAbortError();
 
       geminiFailed = true;
+      previousProvider = 'gemini';
       console.warn(
         '[Pierrot AI] Gemini streaming unavailable; trying DeepSeek:',
         error instanceof Error ? error.message : 'gemini_request_failed'
@@ -537,6 +787,9 @@ export async function streamPierrotModel(
   }
 
   let deepseekError: unknown = null;
+
+  attemptNumber += 1;
+  const deepseekStartedAt = Date.now();
 
   try {
     const deepseek = await streamDeepSeek(
@@ -548,6 +801,21 @@ export async function streamPierrotModel(
       options
     );
 
+    collectAttempt({
+      provider: 'deepseek',
+      model: deepseek.model,
+      attempt: attemptNumber,
+      isRetry: attemptNumber > 1,
+      fallbackFrom: previousProvider,
+      ok: true,
+      latencyMs: Date.now() - deepseekStartedAt,
+      finishReason: deepseek.finishReason,
+      errorCode: null,
+      usage: toTelemetryUsage(deepseek.usage),
+      promptChars: promptChars(systemPrompt, messages),
+      responseChars: deepseek.reply.length,
+    });
+
     return {
       reply: deepseek.reply,
       provider: 'deepseek',
@@ -556,12 +824,28 @@ export async function streamPierrotModel(
       fallbackUsed: geminiFailed,
       finishReason: deepseek.finishReason,
       usage: deepseek.usage,
+      attempts,
     };
   } catch (error) {
+    collectAttempt({
+      provider: 'deepseek',
+      model: isReasoning ? 'deepseek-reasoner' : 'deepseek-chat',
+      attempt: attemptNumber,
+      isRetry: attemptNumber > 1,
+      fallbackFrom: previousProvider,
+      ok: false,
+      latencyMs: Date.now() - deepseekStartedAt,
+      finishReason: null,
+      errorCode: emitted ? 'stream_interrupted' : errorCodeFrom(error),
+      usage: toTelemetryUsage(null),
+      promptChars: promptChars(systemPrompt, messages),
+      responseChars: 0,
+    });
     if (emitted) throw new PierrotStreamInterruptedError('deepseek');
     if (signal?.aborted) throw streamAbortError();
 
     deepseekError = error;
+    previousProvider = 'deepseek';
     console.warn(
       '[Pierrot AI] DeepSeek streaming unavailable; trying OpenRouter:',
       error instanceof Error ? error.message : 'deepseek_request_failed'
@@ -569,6 +853,9 @@ export async function streamPierrotModel(
   }
 
   if (signal?.aborted) throw streamAbortError();
+
+  attemptNumber += 1;
+  const openrouterStartedAt = Date.now();
 
   try {
     const openrouter = await streamOpenRouterDeepSeek(
@@ -580,6 +867,21 @@ export async function streamPierrotModel(
       options
     );
 
+    collectAttempt({
+      provider: 'openrouter',
+      model: openrouter.model,
+      attempt: attemptNumber,
+      isRetry: attemptNumber > 1,
+      fallbackFrom: previousProvider,
+      ok: true,
+      latencyMs: Date.now() - openrouterStartedAt,
+      finishReason: openrouter.finishReason,
+      errorCode: null,
+      usage: toTelemetryUsage(openrouter.usage),
+      promptChars: promptChars(systemPrompt, messages),
+      responseChars: openrouter.reply.length,
+    });
+
     return {
       reply: openrouter.reply,
       provider: 'openrouter',
@@ -588,8 +890,23 @@ export async function streamPierrotModel(
       fallbackUsed: true,
       finishReason: openrouter.finishReason,
       usage: openrouter.usage,
+      attempts,
     };
-  } catch {
+  } catch (error) {
+    collectAttempt({
+      provider: 'openrouter',
+      model: isReasoning ? 'deepseek/deepseek-r1-0528' : 'deepseek/deepseek-chat',
+      attempt: attemptNumber,
+      isRetry: attemptNumber > 1,
+      fallbackFrom: previousProvider,
+      ok: false,
+      latencyMs: Date.now() - openrouterStartedAt,
+      finishReason: null,
+      errorCode: emitted ? 'stream_interrupted' : errorCodeFrom(error),
+      usage: toTelemetryUsage(null),
+      promptChars: promptChars(systemPrompt, messages),
+      responseChars: 0,
+    });
     if (emitted) throw new PierrotStreamInterruptedError('openrouter');
 
     throw deepseekError instanceof Error
