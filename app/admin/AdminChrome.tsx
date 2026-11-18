@@ -9,12 +9,13 @@ const WORKSPACE_PATHS = new Set([
   '/admin/pierrot/flow',
   '/admin/pierrot/dash',
   '/admin/pierrot/dev',
+  '/admin/pierrot/infrastructure',
 ]);
 
 function isOwnerWorkspace(pathname: string): boolean {
   if (WORKSPACE_PATHS.has(pathname)) return true;
 
-  return ['/brain', '/flow', '/dash', '/dev'].some((suffix) =>
+  return ['/brain', '/flow', '/dash', '/dev', '/infrastructure'].some((suffix) =>
     pathname.startsWith(`/admin/pierrot${suffix}/`)
   );
 }
