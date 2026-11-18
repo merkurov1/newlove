@@ -155,9 +155,9 @@ Stages:
    it mergeable. A conflict, branch-protection rejection, failed CI or stale
    head stops integration with a diagnostic; nothing is discarded.
 3. **Verify** — CI is checked again on the integrated `main` commit.
-4. **Complete** — tasks become `verified` with `verification_status:
-integrated`, the batch is settled, cost and duration are recorded, and the
-   owner is notified.
+4. **Complete** — tasks become `verified` with `verification_status: passed`
+   and an integration note, the batch is settled, cost and duration are
+   recorded, and the owner is notified.
 
 The report is stored in `pierrot_dev_settings` (`finalization:state`), so a
 retry is idempotent: already integrated PRs are skipped, merge SHAs are
