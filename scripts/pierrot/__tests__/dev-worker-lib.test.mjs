@@ -221,6 +221,26 @@ test('detects orphaned executors left inside attempt worktrees', () => {
   );
   assert.equal(
     isOrphanExecutorProcess(
+      {
+        cwd: `${root}/11111111-1111-4111-8111-111111111111/2`,
+        cmdline: 'next-build (v16.4.6)',
+      },
+      root
+    ),
+    true
+  );
+  assert.equal(
+    isOrphanExecutorProcess(
+      {
+        cwd: `${root}/11111111-1111-4111-8111-111111111111/2`,
+        cmdline: 'next-server (v16.4.6)',
+      },
+      root
+    ),
+    true
+  );
+  assert.equal(
+    isOrphanExecutorProcess(
       { cwd: '/workspaces/newlove', cmdline: 'node /usr/local/bin/opencode serve --service' },
       root
     ),
