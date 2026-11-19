@@ -11,10 +11,12 @@ import {
   getActiveAttempt,
   getAttempt,
   getBatchIdForTask,
+  getQueueSnapshot,
   getSetting,
   getTaskExecutionMaterial,
   getTaskRow,
   getTaskRowUnscoped,
+  getWorker,
   isUuid,
   leaseExpiryIso,
   listAttempts,
@@ -167,6 +169,158 @@ export async function claimTaskForWorker(
   });
 
   return { task: claim.task, attempt: claim.attempt, prompt };
+}
+
+export type ClaimUnavailableDiagnostics = {
+  code: string;
+  idempotent: boolean;
+  reason: string;
+  taskId: string | null;
+  taskStatus: string | null;
+  queuePaused: boolean;
+  queue: { queued: number; active: number; paused: boolean } | null;
+  activeAttempt: {
+    id: string;
+    taskId: string;
+    attemptNumber: number;
+    status: string;
+    workerId: string | null;
+    leaseExpiresAt: string | null;
+  } | null;
+};
+
+/**
+ * Explain a null claim without mutating any task or attempt.
+ *
+ * A claim can legitimately lose a race to another executor, arrive after the
+ * task left the queue, or collide with a paused queue. Those are idempotent
+ * no-ops with useful diagnostics. A runner that is not claimable at all is a
+ * real setup failure and is marked non-idempotent so the workflow stays red.
+ */
+export async function describeClaimUnavailable(
+  workerId: string,
+  taskId?: string
+): Promise<ClaimUnavailableDiagnostics> {
+  const [queue, worker, active] = await Promise.all([
+    getQueueSnapshot().catch(() => null),
+    getWorker(workerId).catch(() => null),
+    getActiveAttempt().catch(() => null),
+  ]);
+  const task = taskId ? await getTaskRowUnscoped(taskId).catch(() => null) : null;
+  const activeAttempt =
+    active && (!taskId || String(active.taskId) === String(taskId)) ? active : null;
+  const base = {
+    taskId: taskId || null,
+    taskStatus: task?.status || null,
+    queuePaused: queue?.paused === true,
+    queue: queue ? { queued: queue.queued, active: queue.active, paused: queue.paused } : null,
+    activeAttempt: activeAttempt
+      ? {
+          id: activeAttempt.id,
+          taskId: activeAttempt.taskId,
+          attemptNumber: activeAttempt.attemptNumber,
+          status: activeAttempt.status,
+          workerId: activeAttempt.workerId,
+          leaseExpiresAt: activeAttempt.leaseExpiresAt,
+        }
+      : null,
+  };
+
+  if (activeAttempt) {
+    const ownedByThisRunner = activeAttempt.workerId === workerId;
+    return {
+      ...base,
+      code: 'TASK_ALREADY_CLAIMED',
+      idempotent: true,
+      reason: `${taskId ? `Task ${taskId}` : `Task ${activeAttempt.taskId}`} is already active: ${
+        ownedByThisRunner ? 'this runner' : `worker ${activeAttempt.workerId || 'unknown'}`
+      } owns attempt ${activeAttempt.attemptNumber} (${activeAttempt.status}, lease until ${
+        activeAttempt.leaseExpiresAt || 'unknown'
+      }). This dispatch is an idempotent no-op; the owning lease was not touched.`,
+    };
+  }
+
+  const workerClaimable =
+    worker !== null &&
+    ['online', 'idle'].includes(worker.status) &&
+    worker.stopRequested !== true &&
+    (!taskId || worker.kind === 'actions');
+  if (!workerClaimable) {
+    return {
+      ...base,
+      code: 'WORKER_NOT_CLAIMABLE',
+      idempotent: false,
+      reason: `Worker ${workerId} is not claimable (status ${
+        worker?.status || 'missing'
+      }, kind ${worker?.kind || 'missing'}, stopRequested ${
+        worker ? String(worker.stopRequested === true) : 'missing'
+      }). The task was not claimed; this is a runner/setup failure, not a lost race.`,
+    };
+  }
+
+  if (queue?.paused === true) {
+    return {
+      ...base,
+      code: 'QUEUE_PAUSED',
+      idempotent: true,
+      reason: `The queue is paused; ${
+        taskId ? `task ${taskId}` : 'no task'
+      } was not claimed. This dispatch is an idempotent no-op.`,
+    };
+  }
+
+  if (!taskId) {
+    return {
+      ...base,
+      code: 'NO_QUEUED_TASK',
+      idempotent: true,
+      reason: `No queued task was claimable (queued ${queue?.queued ?? 'unknown'}, active ${
+        queue?.active ?? 'unknown'
+      }, paused ${Boolean(queue?.paused)}). This dispatch is an idempotent no-op.`,
+    };
+  }
+
+  if (!task) {
+    return {
+      ...base,
+      code: 'TASK_NOT_FOUND',
+      idempotent: true,
+      reason: `Task ${taskId} no longer exists; no attempt was created. This dispatch is an idempotent no-op.`,
+    };
+  }
+  if (task.assignedExecutor === 'codespace') {
+    return {
+      ...base,
+      code: 'TASK_ASSIGNED_TO_CODESPACE',
+      idempotent: true,
+      reason: `Task ${taskId} is assigned to the manual Codespace reserve and was not claimed by Actions. This dispatch is an idempotent no-op.`,
+    };
+  }
+  if (task.blockedReason) {
+    return {
+      ...base,
+      code: 'TASK_BLOCKED',
+      idempotent: true,
+      reason: `Task ${taskId} is blocked (${task.blockedReason}); no attempt was created. This dispatch is an idempotent no-op.`,
+    };
+  }
+  if (task.status !== 'queued') {
+    return {
+      ...base,
+      code: 'TASK_NOT_QUEUED',
+      idempotent: true,
+      reason: `Task ${taskId} is '${task.status}', not queued${
+        task.queuePosition === null ? '' : ` (queue position ${task.queuePosition})`
+      }. This dispatch is an idempotent no-op.`,
+    };
+  }
+
+  return {
+    ...base,
+    code: 'CLAIM_UNAVAILABLE',
+    idempotent: true,
+    reason: `Task ${taskId} is queued but was not claimable (dependency, paused batch, routing, or a concurrent claim). This dispatch is an idempotent no-op.`,
+  };
 }
 
 /** Mark the attempt as really running (workspace prepared, OpenCode starting). */

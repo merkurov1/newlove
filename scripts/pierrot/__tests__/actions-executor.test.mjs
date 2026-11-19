@@ -6,8 +6,10 @@ import { fileURLToPath } from 'node:url';
 import {
   ACTIONS_EXIT,
   actionsExitCode,
+  activeAttemptOwnership,
   assertHostedActionsRunner,
   buildExecutionId,
+  classifyClaimOutcome,
   isClaimForRequestedTask,
   isVersionAtLeast,
   parseStoredAuth,
@@ -42,11 +44,77 @@ test('execution ids are unique per run attempt and bounded', () => {
   assert.ok(buildExecutionId({ runId: '9'.repeat(400) }).length <= 160);
 });
 
-test('single-shot exit codes distinguish no task and permanent setup errors', () => {
+test('single-shot exit codes distinguish no task, setup and execution failures', () => {
   assert.equal(actionsExitCode({ ok: true }), ACTIONS_EXIT.success);
   assert.equal(actionsExitCode({ permanent: true, claimed: false }), ACTIONS_EXIT.permanent);
-  assert.equal(actionsExitCode({ claimed: false }), ACTIONS_EXIT.noTask);
+  assert.equal(actionsExitCode({ claimed: false }), ACTIONS_EXIT.success);
   assert.equal(actionsExitCode({ claimed: true }), ACTIONS_EXIT.executionFailed);
+  // Losing a claim is a no-op, never a legacy failing exit code.
+  assert.equal(ACTIONS_EXIT.noTask, 0);
+  assert.equal(
+    Object.values(ACTIONS_EXIT).includes(3),
+    false,
+    'no executor path may use exit code 3 for a lost claim'
+  );
+});
+
+test('claim race outcomes are idempotent no-ops only when ownership is lost', () => {
+  const duplicate = classifyClaimOutcome({
+    claimed: false,
+    failure: {
+      code: 'TASK_ALREADY_CLAIMED',
+      idempotent: true,
+      reason: 'Task is already owned by another runner.',
+    },
+  });
+  assert.equal(duplicate.outcome, 'no_op');
+  assert.equal(duplicate.exitCode, ACTIONS_EXIT.success);
+  assert.equal(duplicate.reasonCode, 'TASK_ALREADY_CLAIMED');
+
+  const noLongerQueued = classifyClaimOutcome({
+    claimed: false,
+    failure: { code: 'TASK_NOT_QUEUED', idempotent: true },
+  });
+  assert.equal(noLongerQueued.outcome, 'no_op');
+  assert.equal(noLongerQueued.exitCode, ACTIONS_EXIT.success);
+
+  const paused = classifyClaimOutcome({
+    claimed: false,
+    failure: { code: 'QUEUE_PAUSED', idempotent: true },
+  });
+  assert.equal(paused.exitCode, ACTIONS_EXIT.success);
+
+  const notClaimable = classifyClaimOutcome({
+    claimed: false,
+    failure: { code: 'WORKER_NOT_CLAIMABLE', idempotent: false, reason: 'worker stale' },
+  });
+  assert.equal(notClaimable.outcome, 'failed');
+  assert.equal(notClaimable.exitCode, ACTIONS_EXIT.permanent);
+
+  const claimed = classifyClaimOutcome({ claimed: true });
+  assert.equal(claimed.outcome, 'claimed');
+  assert.equal(claimed.exitCode, null);
+});
+
+test('cleanup releases only the attempt recorded for this exact worker', () => {
+  const record = {
+    attemptId: 'aaaaaaaa-1111-4111-8111-111111111111',
+    workerId: 'actions:100:1',
+  };
+  assert.deepEqual(activeAttemptOwnership(record, 'actions:100:1'), {
+    owned: true,
+    reason: null,
+  });
+  assert.deepEqual(activeAttemptOwnership(record, 'actions:101:1'), {
+    owned: false,
+    reason: 'other_worker',
+  });
+  assert.equal(activeAttemptOwnership({ ...record, workerId: '' }, 'actions:100:1').owned, false);
+  assert.equal(activeAttemptOwnership({ workerId: 'actions:100:1' }, 'actions:100:1').owned, false);
+  assert.equal(
+    activeAttemptOwnership({ attemptId: record.attemptId, workerId: '' }, 'actions:100:1').owned,
+    false
+  );
 });
 
 test('a targeted dispatch never executes a different claimed task', () => {
@@ -181,8 +249,38 @@ test('a no-claim Actions run records an explainable non-secret reason', () => {
   assert.match(worker, /created no attempt/);
   assert.match(worker, /actions-no-claim:/);
   assert.match(worker, /source:\s*'actions:no_claim'/);
-  assert.match(worker, /ACTIONS_EXIT\.noTask/);
+  assert.match(worker, /classifyClaimOutcome/);
+  assert.match(worker, /writeActionsOutcome/);
   assert.doesNotMatch(worker, /sk-[A-Za-z0-9]{12,}/);
+});
+
+test('the workflow treats a lost claim as success but keeps real failures red', () => {
+  const workflow = workflowText();
+  // No legacy exit-code-3 failure branch remains.
+  assert.doesNotMatch(workflow, /3\)\s*echo "::warning::No claimable task/);
+  assert.match(
+    workflow,
+    /0\) echo "::notice::Executor completed, or finished as an idempotent no-op/
+  );
+  assert.match(workflow, /2\) echo "::error::Executor stopped on a permanent/);
+  assert.match(workflow, /4\) echo "::error::Execution failed/);
+  assert.match(workflow, /\*\) echo "::error::Executor exited with code \$code\."/);
+  assert.match(workflow, /exit "\$code"/);
+  assert.match(workflow, /executorOutcome/);
+  assert.match(workflow, /claimFailureCode/);
+  assert.match(workflow, /actions-outcome\.json/);
+});
+
+test('cleanup cannot release another runner lease from a stale active-attempt file', () => {
+  const worker = fs.readFileSync(path.join(repoRoot, 'scripts/pierrot/dev-worker.mjs'), 'utf8');
+  const release = worker.slice(
+    worker.indexOf('async function runActionsRelease'),
+    worker.indexOf('async function runActionsOnce')
+  );
+  assert.match(release, /activeAttemptOwnership\(record, WORKER_ID\)/);
+  assert.match(release, /not owned by this runner; leaving it untouched/);
+  // The ownership guard must run before any release API call.
+  assert.ok(release.indexOf('ownership.owned') < release.indexOf("api(\n      'release'"));
 });
 
 test('DeepSeek preflight failures have separate non-secret diagnostics', () => {

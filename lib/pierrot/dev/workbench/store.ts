@@ -1937,7 +1937,15 @@ export async function claimNextTask(
   });
   if (error) {
     console.error('[dev-workbench] claim failed', { code: error.code, message: error.message });
-    return null;
+    // A database/RPC failure is not "no work": surfacing it keeps the runner
+    // failed instead of silently turning an infrastructure outage into a
+    // successful no-op.
+    const claimError = new Error(
+      `The queue claim failed: ${String(error.message || 'unknown Supabase error').slice(0, 300)}`
+    ) as Error & { code?: string; status?: number };
+    claimError.code = 'DEV_CLAIM_RPC_FAILED';
+    claimError.status = 503;
+    throw claimError;
   }
   return mapClaimResult(data);
 }
@@ -1977,7 +1985,12 @@ export async function claimTask(
       throw missing;
     }
     console.error('[dev-workbench] targeted claim failed', { code, message });
-    return null;
+    const claimError = new Error(
+      `The targeted queue claim failed: ${String(message || 'unknown Supabase error').slice(0, 300)}`
+    ) as Error & { code?: string; status?: number };
+    claimError.code = 'DEV_CLAIM_RPC_FAILED';
+    claimError.status = 503;
+    throw claimError;
   }
   return mapClaimResult(data);
 }

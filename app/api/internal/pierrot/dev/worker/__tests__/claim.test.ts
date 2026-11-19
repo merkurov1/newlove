@@ -41,6 +41,7 @@ jest.mock('@/lib/pierrot/dev/workbench/execution', () => {
     WorkbenchExecutionError,
     claimTaskForWorker: jest.fn(),
     completeAttempt: jest.fn(),
+    describeClaimUnavailable: jest.fn(),
     failAttempt: jest.fn(),
     progressAttempt: jest.fn(),
     releaseAttempt: jest.fn(),
@@ -96,12 +97,18 @@ jest.mock('@/lib/pierrot/dev/workbench/actions', () => ({
 }));
 
 import { POST } from '../route';
-import { claimTaskForWorker } from '@/lib/pierrot/dev/workbench/execution';
+import {
+  claimTaskForWorker,
+  describeClaimUnavailable,
+  releaseAttempt,
+} from '@/lib/pierrot/dev/workbench/execution';
 import { getWorker } from '@/lib/pierrot/dev/workbench/store';
 import { readJsonBody } from '@/lib/pierrot/dev/workbench/workerAuth';
 
 const TASK_ID = '8289098f-993a-4e75-abe4-81e23caee6d0';
 const claim = claimTaskForWorker as jest.Mock;
+const describeUnavailable = describeClaimUnavailable as jest.Mock;
+const release = releaseAttempt as jest.Mock;
 const worker = getWorker as jest.Mock;
 const body = readJsonBody as jest.Mock;
 
@@ -113,6 +120,16 @@ beforeEach(() => {
   jest.clearAllMocks();
   body.mockResolvedValue({ action: 'claim', workerId: 'actions:123:1', taskId: TASK_ID });
   claim.mockResolvedValue(null);
+  describeUnavailable.mockResolvedValue({
+    code: 'CLAIM_UNAVAILABLE',
+    idempotent: true,
+    reason: 'No queued task was claimable.',
+    taskId: TASK_ID,
+    taskStatus: 'queued',
+    queuePaused: false,
+    queue: null,
+    activeAttempt: null,
+  });
 });
 
 describe('worker claim routing', () => {
@@ -142,5 +159,125 @@ describe('worker claim routing', () => {
     await POST(request());
 
     expect(claim).toHaveBeenCalledWith('codespace:test', undefined);
+  });
+
+  it('returns an idempotent no-op with diagnostics when another runner owns the task', async () => {
+    worker.mockResolvedValue({ id: 'actions:123:1', kind: 'actions' });
+    describeUnavailable.mockResolvedValue({
+      code: 'TASK_ALREADY_CLAIMED',
+      idempotent: true,
+      reason: 'Task is owned by worker actions:122:1 attempt 1.',
+      taskId: TASK_ID,
+      taskStatus: 'in_progress',
+      queuePaused: false,
+      queue: { queued: 0, active: 1, paused: false },
+      activeAttempt: {
+        id: 'aaaaaaaa-1111-4111-8111-111111111111',
+        taskId: TASK_ID,
+        attemptNumber: 1,
+        status: 'running',
+        workerId: 'actions:122:1',
+        leaseExpiresAt: '2026-11-19T16:30:00.000Z',
+      },
+    });
+
+    const response = await POST(request());
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      claim?: unknown;
+      claimFailure?: { code?: string; idempotent?: boolean; activeAttempt?: { workerId?: string } };
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.claim).toBeNull();
+    expect(payload.claimFailure?.code).toBe('TASK_ALREADY_CLAIMED');
+    expect(payload.claimFailure?.idempotent).toBe(true);
+    expect(payload.claimFailure?.activeAttempt?.workerId).toBe('actions:122:1');
+    // A losing runner never releases or mutates the winning lease.
+    expect(release).not.toHaveBeenCalled();
+  });
+
+  it('treats concurrent duplicate dispatches as one winner and one successful no-op', async () => {
+    worker.mockResolvedValue({ id: 'actions:123:1', kind: 'actions' });
+    const winningClaim = {
+      task: { id: TASK_ID },
+      attempt: { id: 'aaaaaaaa-1111-4111-8111-111111111111' },
+    };
+    claim.mockResolvedValueOnce(winningClaim).mockResolvedValueOnce(null);
+    describeUnavailable.mockResolvedValue({
+      code: 'TASK_ALREADY_CLAIMED',
+      idempotent: true,
+      reason: 'Task is already owned by another runner.',
+      taskId: TASK_ID,
+      taskStatus: 'in_progress',
+      queuePaused: false,
+      queue: null,
+      activeAttempt: { workerId: 'actions:123:1', attemptNumber: 1 },
+    });
+
+    const responses = await Promise.all([POST(request()), POST(request())]);
+    const payloads = await Promise.all(
+      responses.map(
+        (response) =>
+          response.json() as Promise<{
+            claim?: unknown;
+            claimFailure?: { code?: string; idempotent?: boolean };
+          }>
+      )
+    );
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    expect(payloads.filter((payload) => payload.claim).length).toBe(1);
+    const loser = payloads.find((payload) => !payload.claim);
+    expect(loser?.claimFailure).toMatchObject({
+      code: 'TASK_ALREADY_CLAIMED',
+      idempotent: true,
+    });
+    expect(release).not.toHaveBeenCalled();
+  });
+
+  it('reports a task that is no longer queued and a paused queue as idempotent no-ops', async () => {
+    worker.mockResolvedValue({ id: 'actions:123:1', kind: 'actions' });
+    describeUnavailable
+      .mockResolvedValueOnce({
+        code: 'TASK_NOT_QUEUED',
+        idempotent: true,
+        reason: "Task is 'review', not queued.",
+        taskId: TASK_ID,
+        taskStatus: 'review',
+        queuePaused: false,
+        queue: null,
+        activeAttempt: null,
+      })
+      .mockResolvedValueOnce({
+        code: 'QUEUE_PAUSED',
+        idempotent: true,
+        reason: 'The queue is paused.',
+        taskId: TASK_ID,
+        taskStatus: 'queued',
+        queuePaused: true,
+        queue: { queued: 1, active: 0, paused: true },
+        activeAttempt: null,
+      });
+
+    const first = (await (await POST(request())).json()) as {
+      claimFailure?: { code?: string; idempotent?: boolean; taskStatus?: string };
+    };
+    const second = (await (await POST(request())).json()) as {
+      claimFailure?: { code?: string; idempotent?: boolean; queuePaused?: boolean };
+    };
+
+    expect(first.claimFailure).toMatchObject({
+      code: 'TASK_NOT_QUEUED',
+      idempotent: true,
+      taskStatus: 'review',
+    });
+    expect(second.claimFailure).toMatchObject({
+      code: 'QUEUE_PAUSED',
+      idempotent: true,
+      queuePaused: true,
+    });
+    expect(release).not.toHaveBeenCalled();
   });
 });
