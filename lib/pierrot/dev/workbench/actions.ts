@@ -2,6 +2,7 @@ import { assertServerOnly } from '@/lib/serverOnly';
 import { dispatchRepositoryEvent, WorkbenchGitHubError } from './github';
 import {
   appendEvent,
+  clearTaskActionsDispatch,
   getActiveAttempt,
   getTaskRowUnscoped,
   isActionsRoutingSchemaReady,
@@ -243,6 +244,71 @@ export async function dispatchTaskToActions(input: {
     reason: 'GitHub accepted the repository_dispatch request.',
     requestedAt,
   };
+}
+
+/**
+ * Explicit safe retry after a failed repository_dispatch.
+ *
+ * A failed dispatch deliberately keeps `actions_dispatch_requested_at` set so
+ * the automatic recovery pump cannot hammer GitHub. Only an owner action may
+ * clear that marker. This function refuses to retry anything that is not a
+ * failed Actions dispatch, then delegates to the normal reservation path so a
+ * concurrent retry still produces at most one repository_dispatch.
+ */
+export async function retryActionsDispatch(input: {
+  taskId: string;
+  source: string;
+}): Promise<ActionsDispatchResult> {
+  if (await isQueuePaused()) {
+    return skipped(
+      input.taskId,
+      'QUEUE_PAUSED',
+      'The queue is paused; no Actions retry was dispatched.'
+    );
+  }
+  const task = await getTaskRowUnscoped(input.taskId);
+  if (!task) {
+    throw new ActionsDispatchError('DEV_TASK_NOT_FOUND', 'Task not found.', 404, input.taskId);
+  }
+  if (task.status !== 'queued') {
+    return skipped(
+      task.id,
+      'ACTIONS_RETRY_NOT_QUEUED',
+      `Only a queued task can be retried (current status: ${task.status}).`,
+      task.repository
+    );
+  }
+  if (task.assignedExecutor === 'codespace') {
+    return skipped(
+      task.id,
+      'ACTIONS_DISPATCH_CODESPACE_ASSIGNED',
+      'This task belongs to the manual Codespace reserve and was not retried on Actions.',
+      task.repository
+    );
+  }
+  const retryable =
+    task.lastErrorCode === 'ACTIONS_DISPATCH_FAILED' ||
+    task.lastErrorCode === 'ACTIONS_DISPATCH_NOT_CONFIGURED' ||
+    task.lastErrorCode === 'ACTIONS_ROUTING_UNAVAILABLE';
+  if (!retryable) {
+    return skipped(
+      task.id,
+      'ACTIONS_RETRY_NOT_REQUIRED',
+      'The task does not have a recorded Actions dispatch failure.',
+      task.repository
+    );
+  }
+
+  await appendEvent({
+    taskId: task.id,
+    type: 'task.actions_dispatch_retry',
+    level: 'warn',
+    message: `Owner requested a safe retry after ${task.lastErrorCode}.`,
+    payload: { source: input.source, previousCode: task.lastErrorCode },
+    dedupeKey: `actions-dispatch-retry:${task.id}:${Math.floor(Date.now() / 60_000)}`,
+  }).catch(() => {});
+  await clearTaskActionsDispatch(task.id);
+  return dispatchTaskToActions({ taskId: task.id, source: input.source });
 }
 
 /**

@@ -16,6 +16,7 @@ import {
 import { getLifecycleSnapshot } from './lifecycle';
 import { getFinalizationReport } from './finalization';
 import { estimateTaskCost } from './costs';
+import { deriveWorkerHealth } from './workerHealth';
 import type { DevCostEstimate, DevWorkbenchOverview, DevWorkbenchTask } from './types';
 
 assertServerOnly('lib/pierrot/dev/workbench/overview');
@@ -113,6 +114,7 @@ export async function getWorkbenchOverview(
       history: historyTasks.map((task) => ({ task, attempts: [] })),
       review,
       workers: [],
+      workerHealth: deriveWorkerHealth([], []),
       recentEvents: [],
       lifecycle,
       finalization,
@@ -130,6 +132,8 @@ export async function getWorkbenchOverview(
     getActiveAttempt(),
     listEvents({ limit: 40 }),
   ]);
+
+  const workerHealth = deriveWorkerHealth(workers, activeAttempt ? [activeAttempt] : []);
 
   let active: DevWorkbenchOverview['active'] = null;
   if (activeAttempt) {
@@ -160,6 +164,7 @@ export async function getWorkbenchOverview(
     })),
     review,
     workers,
+    workerHealth,
     recentEvents,
     lifecycle,
     finalization,

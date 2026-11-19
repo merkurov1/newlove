@@ -133,7 +133,8 @@ describe('lease release', () => {
       expect.objectContaining({
         status: 'timed_out',
         error_code: 'WORKER_STOPPED',
-      })
+      }),
+      ['claimed', 'running']
     );
     expect(store.clearWorkerAttempt).toHaveBeenCalledWith(attempt.workerId, attempt.id);
     expect(store.patchTask).toHaveBeenCalledWith(

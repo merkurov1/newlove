@@ -29,6 +29,7 @@ jest.mock('../github', () => {
 
 jest.mock('../store', () => ({
   appendEvent: jest.fn(async () => undefined),
+  clearTaskActionsDispatch: jest.fn(async () => undefined),
   getActiveAttempt: jest.fn(async () => null),
   getTaskRowUnscoped: jest.fn(),
   isActionsRoutingSchemaReady: jest.fn(async () => true),
@@ -40,7 +41,12 @@ jest.mock('../store', () => ({
 
 import * as github from '../github';
 import * as store from '../store';
-import { ActionsDispatchError, dispatchNextQueuedTask, dispatchTaskToActions } from '../actions';
+import {
+  ActionsDispatchError,
+  dispatchNextQueuedTask,
+  dispatchTaskToActions,
+  retryActionsDispatch,
+} from '../actions';
 
 const TASK_ID = '8289098f-993a-4e75-abe4-81e23caee6d0';
 
@@ -257,6 +263,79 @@ describe('bounded Actions recovery pump', () => {
 
     expect(result.code).toBe('ACTIVE_ATTEMPT');
     expect(store.listQueuedTasksForDispatch).not.toHaveBeenCalled();
+    expect(github.dispatchRepositoryEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('dispatch concurrency and retry', () => {
+  it('emits at most one repository_dispatch for two concurrent calls with the same task id', async () => {
+    let reserved = false;
+    asMock(store.reserveTaskForActionsDispatch).mockImplementation(async () => {
+      if (reserved) return null;
+      reserved = true;
+      return {
+        ...queuedTask,
+        assignedExecutor: 'actions',
+        actionsDispatchRequestedAt: '2026-11-19T01:00:00.000Z',
+      };
+    });
+
+    const results = await Promise.all([
+      dispatchTaskToActions({ taskId: TASK_ID, source: 'admin:enqueue' }),
+      dispatchTaskToActions({ taskId: TASK_ID, source: 'admin:overview' }),
+    ]);
+
+    expect(results.filter((result) => result.dispatched)).toHaveLength(1);
+    expect(store.reserveTaskForActionsDispatch).toHaveBeenCalledTimes(2);
+    expect(github.dispatchRepositoryEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the marker after a failure and only retries after an explicit owner action', async () => {
+    asMock(store.getTaskRowUnscoped).mockResolvedValue({
+      ...queuedTask,
+      lastErrorCode: 'ACTIONS_DISPATCH_FAILED',
+      actionsDispatchRequestedAt: '2026-11-19T01:00:00.000Z',
+    });
+    asMock(github.dispatchRepositoryEvent).mockRejectedValueOnce(
+      new github.WorkbenchGitHubError('GITHUB_SERVER_ERROR', 'GitHub is unavailable.', 502)
+    );
+
+    await expect(
+      dispatchTaskToActions({ taskId: TASK_ID, source: 'admin:enqueue' })
+    ).rejects.toMatchObject({ code: 'ACTIONS_DISPATCH_FAILED' });
+    expect(store.clearTaskActionsDispatch).not.toHaveBeenCalled();
+
+    const retried = await retryActionsDispatch({
+      taskId: TASK_ID,
+      source: 'admin:retry_dispatch',
+    });
+
+    expect(retried.dispatched).toBe(true);
+    expect(store.clearTaskActionsDispatch).toHaveBeenCalledWith(TASK_ID);
+    expect(github.dispatchRepositoryEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a task without a recorded dispatch failure', async () => {
+    const result = await retryActionsDispatch({
+      taskId: TASK_ID,
+      source: 'admin:retry_dispatch',
+    });
+
+    expect(result.dispatched).toBe(false);
+    expect(result.code).toBe('ACTIONS_RETRY_NOT_REQUIRED');
+    expect(store.clearTaskActionsDispatch).not.toHaveBeenCalled();
+    expect(github.dispatchRepositoryEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not dispatch from the recovery pump while another attempt is active', async () => {
+    asMock(store.getActiveAttempt).mockResolvedValue({ id: 'attempt', taskId: TASK_ID });
+    asMock(store.listQueuedTasksForDispatch).mockResolvedValue([queuedTask]);
+
+    const result = await dispatchNextQueuedTask({ source: 'admin:overview' });
+
+    expect(result.code).toBe('ACTIVE_ATTEMPT');
+    expect(store.reserveTaskForActionsDispatch).not.toHaveBeenCalled();
+    expect(store.patchTask).not.toHaveBeenCalled();
     expect(github.dispatchRepositoryEvent).not.toHaveBeenCalled();
   });
 });

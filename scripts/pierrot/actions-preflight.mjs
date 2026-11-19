@@ -32,8 +32,12 @@ const PROVIDER_ENV_NAME = `${PROVIDER.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}
 const PROVIDER_KEY = (process.env[PROVIDER_ENV_NAME] || '').trim();
 const RUN_MODEL_CALL = process.env.PIERROT_DEV_MODEL_SMOKE_TEST !== 'false';
 
-function fail(message) {
-  process.stderr.write(`::error::${message}\n`);
+function fail(code, message) {
+  // Every preflight failure gets its own non-secret diagnostic code. This lets
+  // the owner distinguish a missing worker token from a DeepSeek/model problem
+  // in the Actions annotation without reading logs or exposing values.
+  process.stdout.write(`[preflight] failed=${code}\n`);
+  process.stderr.write(`::error title=Pierrot preflight (${code})::${message}\n`);
   process.exit(1);
 }
 
@@ -70,11 +74,13 @@ async function main() {
 
   if (!WORKER_TOKEN || WORKER_TOKEN.length < 32) {
     fail(
+      'WORKER_TOKEN_MISSING',
       'Repository secret PIERROT_DEV_WORKER_TOKEN is missing or shorter than 32 characters. Add it in GitHub repository Settings → Secrets and variables → Actions.'
     );
   }
   if (!PROVIDER_KEY) {
     fail(
+      'PROVIDER_KEY_MISSING',
       `Repository secret ${PROVIDER_ENV_NAME} is not set. In GitHub repository Settings → Secrets and variables → Actions add ${PROVIDER_ENV_NAME} with the replacement DeepSeek key. The key shared in chat must be revoked and rotated first. The executor will not fall back to another model.`
     );
   }
@@ -86,13 +92,14 @@ async function main() {
   });
   if (version.code !== 0) {
     fail(
+      'OPENCODE_UNAVAILABLE',
       'OpenCode CLI is not installed or cannot run. Install the pinned version @opencode/cli@2.1.4.'
     );
   }
   const versionText = version.stdout.trim().split('\n')[0] || 'unknown';
   note('opencode_version', versionText);
   if (!isVersionAtLeast(versionText, MIN_VERSION)) {
-    fail(`OpenCode ${versionText} is older than the required ${MIN_VERSION}.`);
+    fail('OPENCODE_VERSION', `OpenCode ${versionText} is older than the required ${MIN_VERSION}.`);
   }
 
   const models = await runProcess('opencode', ['models'], {
@@ -102,6 +109,7 @@ async function main() {
   });
   if (models.code !== 0) {
     fail(
+      'MODEL_LIST_FAILED',
       'OpenCode could not list models. Check the pinned CLI installation and provider configuration.'
     );
   }
@@ -111,6 +119,7 @@ async function main() {
     .filter(Boolean);
   if (!available.includes(MODEL)) {
     fail(
+      'MODEL_UNAVAILABLE',
       `Configured model ${MODEL} is not offered by the installed OpenCode CLI. No fallback model will be used.`
     );
   }
@@ -141,6 +150,7 @@ async function main() {
     const output = `${smoke.stdout}\n${smoke.stderr}`.toLowerCase();
     if (smoke.code !== 0 || !output.includes('deepseek_preflight_ok')) {
       fail(
+        'MODEL_CALL_FAILED',
         `Live model check failed for ${MODEL} (exit ${smoke.code}). Verify the ${PROVIDER_ENV_NAME} value in repository secrets and that the DeepSeek account is active. No fallback model will be used.`
       );
     }
@@ -164,11 +174,13 @@ async function main() {
     health = await response.json().catch(() => ({}));
     if (!response.ok || health?.ok !== true) {
       fail(
+        'WORKER_API_UNAVAILABLE',
         `Worker API health check failed with HTTP ${response.status}. Verify PIERROT_DEV_API_URL and the deployed PIERROT_DEV_WORKER_TOKEN.`
       );
     }
   } catch (error) {
     fail(
+      'WORKER_API_UNREACHABLE',
       `Worker API is unreachable at ${API_BASE} (${String(error?.message || error).slice(0, 160)}).`
     );
   }
@@ -177,5 +189,5 @@ async function main() {
 }
 
 main().catch((error) => {
-  fail(`Preflight crashed: ${String(error?.message || error).slice(0, 300)}`);
+  fail('PREFLIGHT_CRASHED', `Preflight crashed: ${String(error?.message || error).slice(0, 300)}`);
 });

@@ -431,7 +431,10 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         if (action === 'accept') {
           setNotice('Accepted. Select the verified task in REVIEW again to merge it explicitly.');
         }
-        if (['accept', 'reject', 'retry', 'merge', 'enqueue'].includes(action)) {
+        if (action === 'retry_dispatch') {
+          setNotice('Dispatch retry requested. The duplicate-launch marker was cleared once.');
+        }
+        if (['accept', 'reject', 'retry', 'retry_dispatch', 'merge', 'enqueue'].includes(action)) {
           setReviewTaskId(null);
           setReview(null);
         }
@@ -482,6 +485,17 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
   const counts = overview.counts;
   const active = overview.active;
   const worker = overview.workers.find((item) => item.online) || overview.workers[0] || null;
+  const workerHealth =
+    overview.workerHealth || {
+      total: overview.workers.length,
+      active: overview.workers.filter((item) => item.online).length,
+      stale: 0,
+      historical: 0,
+      finished: 0,
+      orphan: 0,
+      pointerMismatch: 0,
+      issues: [],
+    };
   const readyTasks = overview.inbox.filter((task) => task.status === 'ready');
 
   const createTask = async () => {
@@ -979,6 +993,16 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                 >
                   P−1
                 </button>
+                {task.lastErrorCode?.startsWith('ACTIONS_') && (
+                  <button
+                    type="button"
+                    className="pw-wb-button is-warn"
+                    disabled={busy === `retry_dispatch:${task.id}`}
+                    onClick={() => void runAction('retry_dispatch', { taskId: task.id })}
+                  >
+                    <RotateCcw size={14} /> Повторить dispatch
+                  </button>
+                )}
                 <button
                   type="button"
                   className="pw-wb-button"
@@ -1429,6 +1453,29 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
       <div className="pw-wb-subhead">
         <p className="pw-wb-kicker">WORKERS</p>
       </div>
+      <div className="pw-wb-status-strip">
+        <span className="pw-wb-chip is-ok">active {workerHealth.active}</span>
+        <span className="pw-wb-chip is-warn">stale {workerHealth.stale}</span>
+        <span className="pw-wb-chip is-quiet">
+          historical {workerHealth.historical} · finished {workerHealth.finished}
+        </span>
+        <span
+          className={`pw-wb-chip ${
+            workerHealth.orphan || workerHealth.pointerMismatch ? 'is-error' : 'is-quiet'
+          }`}
+        >
+          orphan {workerHealth.orphan} · pointer mismatch {workerHealth.pointerMismatch}
+        </span>
+      </div>
+      {workerHealth.issues.length > 0 && (
+        <p className="pw-wb-warning">
+          <AlertTriangle size={14} />{' '}
+          {workerHealth.issues
+            .slice(0, 3)
+            .map((issue) => `${issue.workerId}: ${issue.message}`)
+            .join(' · ')}
+        </p>
+      )}
       {overview.workers.length === 0 ? (
         <p className="pw-wb-empty">Worker ещё не регистрировался.</p>
       ) : (
@@ -1437,7 +1484,17 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             <li key={item.id} className="pw-wb-card">
               <div className="pw-wb-card-head">
                 <div className="pw-wb-card-title">
-                  <StatusBadge status={item.online ? 'online' : item.status} />
+                  <StatusBadge
+                    status={
+                      item.online
+                        ? 'online'
+                        : item.stale
+                          ? 'stale'
+                          : item.finished
+                            ? 'finished'
+                            : 'offline'
+                    }
+                  />
                   <strong>{item.name}</strong>
                 </div>
                 <span className="pw-wb-meta">
@@ -1461,6 +1518,10 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                 <div>
                   <dt>Current attempt</dt>
                   <dd>{item.currentAttemptId ? shortSha(item.currentAttemptId) : 'none'}</dd>
+                </div>
+                <div>
+                  <dt>Stored status</dt>
+                  <dd>{item.reportedStatus || item.status}</dd>
                 </div>
               </dl>
               <div className="pw-wb-actions">
