@@ -33,6 +33,30 @@ describe('Dev Cost Ledger', () => {
     expect(cost.unknown).toEqual([]);
   });
 
+  it('never records Codespaces runtime or cost for a GitHub-hosted Actions attempt', () => {
+    const cost = buildAttemptCost({
+      usage: {
+        inputTokens: 100,
+        outputTokens: 50,
+        costUsd: 0.25,
+        steps: 1,
+        provenance: 'opencode-step-finish',
+      },
+      machine: 'basicLinux32gb',
+      runtimeMs: 60 * 60 * 1000,
+      startedAt: '2026-11-19T08:00:00.000Z',
+      finishedAt: '2026-11-19T09:00:00.000Z',
+      executor: 'actions',
+    });
+    expect(cost.codespace.machine).toBeNull();
+    expect(cost.codespace.runtimeMs).toBeNull();
+    expect(cost.codespace.billableMs).toBeNull();
+    expect(cost.codespace.estimatedUsd).toBeNull();
+    expect(cost.codespace.provenance).toBe('not-applicable:github-actions-hosted-runner');
+    expect(cost.totalUsd).toBe(0.25);
+    expect(cost.unknown).not.toContain('Codespaces cost');
+  });
+
   it('does not sum a partial total when one component is unavailable', () => {
     const summary = summarizeCosts([
       buildAttemptCost({

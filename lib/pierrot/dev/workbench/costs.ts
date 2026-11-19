@@ -329,6 +329,30 @@ export function normalizeOpenCodeUsage(value: unknown): OpenCodeUsage {
   };
 }
 
+/**
+ * An Actions runner is not a Codespace. Keep an explicit, queryable marker
+ * instead of a zero amount: no runtime, no machine and no Codespaces charge.
+ */
+function notApplicableCodespaceCost(): CodespaceCostEstimate {
+  const provenance = 'not-applicable:github-actions-hosted-runner';
+  return {
+    machine: null,
+    startedAt: null,
+    finishedAt: null,
+    runtimeMs: null,
+    billableMs: null,
+    hourlyUsd: null,
+    estimatedUsd: null,
+    confirmedUsd: null,
+    costKind: 'unknown',
+    billingSource: provenance,
+    storageUsd: null,
+    sharedUsd: null,
+    provenance,
+    rate: null,
+  };
+}
+
 export function buildAttemptCost(input: {
   usage?: unknown;
   machine?: string | null;
@@ -337,6 +361,8 @@ export function buildAttemptCost(input: {
   finishedAt?: string | null;
   /** False when the attempt failed before OpenCode was started. */
   modelStarted?: boolean;
+  /** Where the executor ran. GitHub-hosted Actions never bill as Codespaces. */
+  executor?: 'actions' | 'codespace' | 'local' | null;
 }): DevAttemptCost {
   const modelStarted = input.modelStarted !== false;
   const model = normalizeOpenCodeUsage(input.usage);
@@ -346,18 +372,25 @@ export function buildAttemptCost(input: {
       : 'unavailable:model-not-started';
     model.costKind = 'unknown';
   }
-  const codespace = estimateCodespaceCost({
-    machine: input.machine || null,
-    runtimeMs: typeof input.runtimeMs === 'number' ? input.runtimeMs : null,
-    startedAt: input.startedAt,
-    finishedAt: input.finishedAt,
-  });
-  const effectiveCodespace = codespace.confirmedUsd ?? codespace.estimatedUsd;
+  const hostedActions = input.executor === 'actions';
+  const codespace = hostedActions
+    ? notApplicableCodespaceCost()
+    : estimateCodespaceCost({
+        machine: input.machine || null,
+        runtimeMs: typeof input.runtimeMs === 'number' ? input.runtimeMs : null,
+        startedAt: input.startedAt,
+        finishedAt: input.finishedAt,
+      });
+  // Hosted Actions has no Codespaces component at all. Zero is used only for
+  // the arithmetic; the stored codespace record remains explicitly null.
+  const effectiveCodespace = hostedActions
+    ? 0
+    : (codespace.confirmedUsd ?? codespace.estimatedUsd);
   const unknown: string[] = [];
   if (model.costUsd === null) {
     unknown.push(modelStarted ? 'model cost' : 'model cost (model did not run)');
   }
-  if (effectiveCodespace === null) unknown.push('Codespaces cost');
+  if (!hostedActions && effectiveCodespace === null) unknown.push('Codespaces cost');
   const totalUsd =
     model.costUsd === null || effectiveCodespace === null
       ? null

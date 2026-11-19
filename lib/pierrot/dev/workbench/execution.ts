@@ -53,6 +53,22 @@ assertServerOnly('lib/pierrot/dev/workbench/execution');
 const SHA_PATTERN = /^[0-9a-f]{40}$/i;
 const MAX_FILES = 200;
 
+/**
+ * The executor that owned the attempt. The worker id is durable provenance:
+ * Actions runners are `actions:<run_id>:<attempt>` and the manual reserve is
+ * `codespace:<name>`. The stored verification is a fallback for older rows.
+ */
+function attemptExecutor(attempt: DevAttempt): 'actions' | 'codespace' | 'local' {
+  const workerId = String(attempt.workerId || '');
+  if (workerId.startsWith('actions:')) return 'actions';
+  if (workerId.startsWith('codespace:')) return 'codespace';
+  if (workerId.startsWith('local:')) return 'local';
+  const executor = attempt.verification?.executor;
+  if (executor === 'github-actions') return 'actions';
+  if (executor === 'codespace') return 'codespace';
+  return 'codespace';
+}
+
 let lastReapAt = 0;
 
 export class WorkbenchExecutionError extends Error {
@@ -351,6 +367,7 @@ export async function completeAttempt(
     startedAt: attempt.startedAt,
     finishedAt,
     modelStarted: true,
+    executor: attemptExecutor(attempt),
   });
 
   const updatedAttempt = await patchAttempt(
@@ -565,6 +582,7 @@ export async function failAttempt(input: {
     startedAt: attempt.startedAt,
     finishedAt,
     modelStarted: input.modelStarted !== false,
+    executor: attemptExecutor(attempt),
   });
   const headSha =
     typeof input.headSha === 'string' && SHA_PATTERN.test(input.headSha.trim())
