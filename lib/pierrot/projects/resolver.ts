@@ -23,14 +23,24 @@ export async function resolvePierrotProject(input: {
 
   const message = input.message || '';
   const correction = CORRECTION.test(message.trim());
+  const projects = await listPierrotProjects(input.ownerUserId);
+
+  // An explicit project mention in this turn wins over the chat's current
+  // project. Without this ordering a message such as «статус проекта Pierrot»
+  // sent from the UNFRAMED chat silently returned UNFRAMED state.
+  // Vague follow-ups and corrections still fall through to the conversation
+  // project or the correction branch below.
+  if (!correction) {
+    const explicitMention = matchUniqueProjectMention(projects, message);
+    if (explicitMention) return { project: explicitMention, ambiguous: false };
+  }
+
   // A correction like «Нет, это Art Engine, а не Heart & Angel» must win over
   // the previous conversation project. Otherwise the owner cannot repair a
   // wrong classification.
   if (input.conversationProject && !correction) {
     return { project: input.conversationProject, ambiguous: false };
   }
-
-  const projects = await listPierrotProjects(input.ownerUserId);
 
   if (correction) {
     const mentioned = matchUniqueProjectMention(projects, message);

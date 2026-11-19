@@ -58,7 +58,7 @@ const MAX_FILES = 200;
  * Actions runners are `actions:<run_id>:<attempt>` and the manual reserve is
  * `codespace:<name>`. The stored verification is a fallback for older rows.
  */
-function attemptExecutor(attempt: DevAttempt): 'actions' | 'codespace' | 'local' {
+export function attemptExecutor(attempt: DevAttempt): 'actions' | 'codespace' | 'local' {
   const workerId = String(attempt.workerId || '');
   if (workerId.startsWith('actions:')) return 'actions';
   if (workerId.startsWith('codespace:')) return 'codespace';

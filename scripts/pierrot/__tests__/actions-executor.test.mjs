@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   ACTIONS_EXIT,
   actionsExitCode,
+  assertHostedActionsRunner,
   buildExecutionId,
   isClaimForRequestedTask,
   isVersionAtLeast,
@@ -114,6 +115,38 @@ test('Actions workflow has least-privilege permissions and no secret literals', 
   assert.doesNotMatch(workflow, /\bgh\s+pr\s+merge\b/i);
   assert.doesNotMatch(workflow, /\bvercel\s+--prod\b/i);
   assert.doesNotMatch(workflow, /\bsupabase\s+db\s+push\b/i);
+});
+
+test('the executor refuses any hidden Codespaces fallback', () => {
+  assert.equal(
+    assertHostedActionsRunner({
+      RUNNER_ENVIRONMENT: 'github-hosted',
+      RUNNER_NAME: 'GitHub Actions 12',
+    }).ok,
+    true
+  );
+  assert.equal(
+    assertHostedActionsRunner({
+      RUNNER_ENVIRONMENT: 'self-hosted',
+      RUNNER_NAME: 'codespace-abc',
+    }).ok,
+    false
+  );
+  assert.equal(
+    assertHostedActionsRunner({
+      RUNNER_ENVIRONMENT: 'github-hosted',
+      RUNNER_NAME: 'hosted',
+      CODESPACE_NAME: 'suspicious',
+    }).ok,
+    false
+  );
+
+  const workflow = workflowText();
+  assert.match(workflow, /Assert GitHub-hosted runner \(no Codespaces fallback\)/);
+  assert.match(workflow, /RUNNER_ENVIRONMENT/);
+  assert.match(workflow, /CODESPACE_NAME/);
+  assert.match(workflow, /runs-on:\s*ubuntu-latest/);
+  assert.doesNotMatch(workflow, /runs-on:\s*self-hosted/);
 });
 
 test('executor configuration pins the documented DeepSeek model', () => {

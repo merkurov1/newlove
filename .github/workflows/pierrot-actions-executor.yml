@@ -74,6 +74,29 @@ jobs:
           # GITHUB_TOKEN environment variable through a per-command header.
           persist-credentials: false
 
+      - name: Assert GitHub-hosted runner (no Codespaces fallback)
+        env:
+          # Never let a manual or mislabelled trigger fall back to Codespaces.
+          PIERROT_DEV_REQUIRE_HOSTED_RUNNER: 'true'
+        run: |
+          echo "runner_name=${RUNNER_NAME}"
+          echo "runner_environment=${RUNNER_ENVIRONMENT}"
+          echo "runner_os=${RUNNER_OS}"
+          if [ "${RUNNER_ENVIRONMENT}" != "github-hosted" ]; then
+            echo "::error::Pierrot executor requires a GitHub-hosted runner; got RUNNER_ENVIRONMENT='${RUNNER_ENVIRONMENT}'."
+            exit 1
+          fi
+          if [ -n "${CODESPACE_NAME}" ]; then
+            echo "::error::CODESPACE_NAME is set ('${CODESPACE_NAME}'); refusing hidden Codespaces fallback."
+            exit 1
+          fi
+          case "${RUNNER_NAME}" in
+            *[Cc]odespace*)
+              echo "::error::RUNNER_NAME looks like a Codespace ('${RUNNER_NAME}'); refusing to run."
+              exit 1
+              ;;
+          esac
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:

@@ -231,6 +231,7 @@ import {
 } from '@/lib/pierrot/identity';
 import {
   previousSubstantiveUserMessage,
+  resolveRepeatTurnMessage,
   type PierrotQueryPlan,
 } from '@/lib/pierrot/queryUnderstanding';
 import {
@@ -893,7 +894,12 @@ export async function POST(req: Request) {
       }
     }
 
-    const executionPlan = buildPierrotExecutionPlan(trimmedMessage, {
+    // "Еще раз" must re-run the previous request against live sources. Passing
+    // the stale answer back to the model only reproduced the old output.
+    const repeatTurn = resolveRepeatTurnMessage(trimmedMessage, normalizedHistory);
+    const turnMessage = repeatTurn.repeated ? repeatTurn.message : trimmedMessage;
+
+    const executionPlan = buildPierrotExecutionPlan(turnMessage, {
       history: normalizedHistory,
       ownerMode,
     });
@@ -902,7 +908,7 @@ export async function POST(req: Request) {
     // swallow a global history or personal-context request. The same plan is
     // reused by the Context Engine below; there is no second detector pass.
     const turnPlan = planPierrotTurn({
-      message: trimmedMessage,
+      message: turnMessage,
       executionPlan,
     });
     const queryPlan: PierrotQueryPlan = executionPlan.queryPlan;
@@ -921,14 +927,14 @@ export async function POST(req: Request) {
     const retrievalQuery =
       executionPlan.requiresConversationContext && contextAnchor
         ? `${contextAnchor} ${executionPlan.searchQuery}`.trim().slice(0, 1_000)
-        : trimmedMessage;
+        : turnMessage;
 
     const openAiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
       normalizedHistory.map((h) => ({
         role: h.role === 'assistant' ? 'assistant' : 'user',
         content: h.content,
       }));
-    openAiMessages.push({ role: 'user', content: trimmedMessage });
+    openAiMessages.push({ role: 'user', content: turnMessage });
 
     if (pierrotStore) {
       try {
@@ -1811,7 +1817,7 @@ export async function POST(req: Request) {
         if (!activeContext) activeContext = emptyEditorialContext();
 
         const editorialIntent = detectEditorialIntent({
-          message: trimmedMessage,
+          message: turnMessage,
           activeContext,
           conversationProjectSlug: editorialProject?.slug || null,
         });
@@ -1832,7 +1838,7 @@ export async function POST(req: Request) {
             conversationId,
             sessionId,
             requestId: correlationId,
-            message: trimmedMessage,
+            message: turnMessage,
             language: ownerLanguage,
             intent: editorialIntent,
             context: activeContext,
@@ -3665,6 +3671,8 @@ export async function POST(req: Request) {
             context_sources: contextResult.sources,
             context_gaps: contextResult.gaps.slice(0, 8),
             context_widened: contextResult.widenedFromProject,
+            context_reexecuted: repeatTurn.repeated,
+            ...(repeatTurn.repeated ? { context_repeat_target: repeatTurn.target } : {}),
           });
         } catch {
           return persistOwnerReply(
@@ -3963,6 +3971,74 @@ export async function POST(req: Request) {
       const memoryIntent = detectMemoryIntent(trimmedMessage, {
         history: normalizedHistory,
       });
+
+      // "Сохранил?" asks about the previous operation. It must read the most
+      // recent real write for this conversation and verify it by id. It never
+      // creates a record from the leftover fragment of the question.
+      if (memoryIntent.action === 'verify') {
+        if (!memoryStore || !isPierrotUserId(ownerIdentityUserId)) {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Не могу проверить предыдущее сохранение: хранилище памяти недоступно. Я не буду утверждать, что запись есть или её нет.'
+              : 'I cannot verify the previous save because the memory store is unavailable. I will not claim whether the record exists.',
+            { memory_status: 'unavailable', previous_operation: 'unverified' }
+          );
+        }
+
+        try {
+          const { data, error } = await memoryStore
+            .from('pierrot_decisions')
+            .select('id,title,kind,status,created_at')
+            .eq('user_id', ownerIdentityUserId)
+            .eq('conversation_id', conversationId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          const row =
+            !error && data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
+          const recordId = typeof row?.id === 'string' ? row.id : null;
+
+          if (!recordId) {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Проверил: в этом диалоге нет подтверждённой записи, поэтому сохранять было нечего. Ничего нового я не создавал.'
+                : 'I checked: there is no confirmed record in this conversation, so there was nothing to save. I did not create anything new.',
+              { memory_status: 'not_found', previous_operation: 'verified_absent' }
+            );
+          }
+
+          const verified = await getMemoryRecord(memoryStore, ownerIdentityUserId, recordId);
+
+          if (!verified) {
+            return persistOwnerReply(
+              ownerLanguage === 'ru'
+                ? 'Запись была создана, но повторное чтение её не подтвердило. Я не буду считать сохранение успешным.'
+                : 'A record was inserted, but reading it back did not confirm it. I will not treat the save as successful.',
+              { memory_status: 'readback_failed', previous_operation: 'unverified' }
+            );
+          }
+
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? `Проверил предыдущую операцию чтением из базы: запись «${verified.title}» существует (${verified.kind}, ${verified.status}, ${String(row?.created_at || verified.createdAt || '').slice(0, 10)}). Новую запись я не создавал.`
+              : `I verified the previous operation by reading it back: “${verified.title}” exists (${verified.kind}, ${verified.status}, ${String(row?.created_at || verified.createdAt || '').slice(0, 10)}). I did not create a new record.`,
+            {
+              memory_status: 'verified',
+              previous_operation: 'verified_present',
+              memory_id: verified.id,
+              memory_kind: verified.kind,
+            }
+          );
+        } catch {
+          return persistOwnerReply(
+            ownerLanguage === 'ru'
+              ? 'Не удалось перепроверить предыдущее сохранение из-за ошибки чтения. Я не буду утверждать, что запись сохранена.'
+              : 'I could not re-check the previous save because the read failed. I will not claim the record was saved.',
+            { memory_status: 'unavailable', previous_operation: 'unverified' }
+          );
+        }
+      }
 
       // Dev task bridge: ordinary memory stays in pierrot_decisions; an
       // explicit or clearly engineering request is routed to Task Studio.
@@ -5623,7 +5699,7 @@ export async function POST(req: Request) {
         // briefly when the tool was recovered from context; never pretend the
         // previous answer was checked when it was not.
         const correctionPrefix =
-          queryPlan.correction && executionPlan.recoveredFromContext
+          (queryPlan.correction && executionPlan.recoveredFromContext) || repeatTurn.repeated
             ? ownerLanguage === 'ru'
               ? `Перепроверил исходный запрос «${ownerTool.query.slice(0, 240)}» и заново получил данные из источника.`
               : `I re-read the original request “${ownerTool.query.slice(0, 240)}” and fetched the data from the source again.`

@@ -261,9 +261,11 @@ describe('queue finalization', () => {
       number: 1,
       expectedHeadSha: PR_HEAD,
     });
+    // Integration alone is not verification. Without a structured report the
+    // task must stay in review instead of silently becoming verified.
     expect(store.patchTask).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
-      expect.objectContaining({ status: 'verified', verification_status: 'passed' })
+      expect.objectContaining({ status: 'review', verification_status: 'integration_only' })
     );
 
     const second = await advanceFinalization({ trigger: 'test' });
@@ -503,5 +505,67 @@ describe('queue finalization', () => {
     const settled = await advanceFinalization({ trigger: 'test' });
     expect(settled).toMatchObject({ stage: 'completed', integrated: 1 });
     expect(github.mergeVerifiedPullRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it('verifies only when the attempt has a structured report and satisfied criteria', async () => {
+    asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
+    asMock(github.getPullRequestStatus).mockResolvedValue(prStatus());
+    asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
+    asMock(store.listAttemptsForTasks).mockResolvedValue(
+      new Map([
+        [
+          '11111111-1111-4111-8111-111111111111',
+          [
+            {
+              id: 'attempt-structured',
+              status: 'completed',
+              warnings: [],
+              commands: [{ name: 'pnpm test', status: 'passed', detail: 'exit 0' }],
+              verification: {
+                criteria: [
+                  { criterion: 'tests', status: 'satisfied', evidence: 'jest passed' },
+                ],
+              },
+            },
+          ],
+        ],
+      ])
+    );
+
+    await advanceFinalization({ trigger: 'test' });
+
+    expect(store.patchTask).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      expect.objectContaining({ status: 'verified', verification_status: 'passed' })
+    );
+  });
+
+  it('keeps a task in review when the attempt only warned about a missing report', async () => {
+    asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
+    asMock(github.getPullRequestStatus).mockResolvedValue(prStatus());
+    asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
+    asMock(store.listAttemptsForTasks).mockResolvedValue(
+      new Map([
+        [
+          '11111111-1111-4111-8111-111111111111',
+          [
+            {
+              id: 'attempt-unstructured',
+              status: 'completed',
+              warnings: ['OpenCode finished without a structured final report.'],
+              commands: [{ name: 'pnpm test', status: 'passed', detail: 'exit 0' }],
+              verification: { criteria: [] },
+            },
+          ],
+        ],
+      ])
+    );
+
+    await advanceFinalization({ trigger: 'test' });
+
+    expect(store.patchTask).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      expect.objectContaining({ status: 'review', verification_status: 'integration_only' })
+    );
   });
 });

@@ -452,6 +452,23 @@ export type CreateMemoryResult = PierrotMemoryRecord & {
   conflictRecordId?: string;
 };
 
+/**
+ * A write acknowledgment is not proof that the row is readable. The caller
+ * reports success only when an independent read returns the same id, title and
+ * body. This helper is exported so the failure path is directly testable.
+ */
+export function memoryReadBackConfirmed(
+  expected: { id: string; title: string; content: string },
+  actual: PierrotMemoryRecord | null
+): boolean {
+  return Boolean(
+    actual &&
+      actual.id === expected.id &&
+      actual.title === expected.title &&
+      actual.content === expected.content
+  );
+}
+
 export async function createMemoryRecord(
   store: SupabaseClient,
   userId: string,
@@ -617,10 +634,18 @@ export async function createMemoryRecord(
     ? record
     : await embedWrittenRecord(store, userId, record, client);
 
+  // A successful insert response is not proof that the row is readable.
+  // Report success only after a separate read confirms the persisted body.
+  const readBack = await getMemoryRecord(store, userId, record.id);
+  if (!readBack || !memoryReadBackConfirmed({ id: record.id, title, content }, readBack)) {
+    throw new Error('memory_readback_failed');
+  }
+
   await invalidateBrainStatus(store, userId);
 
   return {
-    ...withIndex,
+    ...readBack,
+    ...(withIndex.indexingStatus ? { indexingStatus: withIndex.indexingStatus } : {}),
     ...(supersededRecordId ? { supersededRecordId } : {}),
     ...(best?.relation.contradiction ? { conflictRecordId: best.record.id } : {}),
   };

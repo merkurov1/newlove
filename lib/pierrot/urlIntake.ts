@@ -4,7 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { assertServerOnly } from '@/lib/serverOnly';
 import { records as mediaRecords, archives as mediaArchives } from '@/data/media';
 import { parseUrl } from '@/lib/flow/parseUrl';
-import { isYouTubeUrl } from '@/lib/flow/youtube';
+import { isYouTubeUrl, normalizeYouTubeUrl } from '@/lib/flow/youtube';
 import { enqueueBrainSources } from '@/lib/knowledge/brain/enqueue';
 import { processBrainRunInline } from '@/lib/knowledge/brain/inline';
 import { createBrainStore } from '@/lib/knowledge/brain/store';
@@ -185,6 +185,17 @@ function hostnameOf(url: string): string {
   }
 }
 
+function isYouTubeHost(url: string): boolean {
+  const host = hostnameOf(url);
+  return (
+    host === 'youtube.com' ||
+    host === 'm.youtube.com' ||
+    host === 'music.youtube.com' ||
+    host === 'youtube-nocookie.com' ||
+    host === 'youtu.be'
+  );
+}
+
 function materialKindFor(url: string): UrlMaterialKind {
   const host = hostnameOf(url);
   const normalizedHost = host.replace(/^www\./, '');
@@ -287,6 +298,10 @@ function errorMessageFor(error: unknown, language: 'ru' | 'en'): string {
     pdf_url_unsupported: {
       ru: 'PDF по ссылке не загружаю из чата. Используйте Brain Injection для PDF-файла.',
       en: 'PDF links are not imported from chat. Use Brain Injection for a PDF file.',
+    },
+    youtube_video_id_missing: {
+      ru: 'В ссылке YouTube не найден корректный video ID. Проверьте, что это ссылка на конкретное видео (youtu.be/ID, watch?v=ID, shorts/ID или embed/ID).',
+      en: 'The YouTube link has no valid video ID. Check that it points to a specific video (youtu.be/ID, watch?v=ID, shorts/ID or embed/ID).',
     },
   };
 
@@ -462,6 +477,20 @@ export async function previewUrlForPierrot(rawUrl: string): Promise<UrlPreviewRe
   }
 
   const materialKind = materialKindFor(normalized);
+
+  if (isYouTubeHost(normalized)) {
+    const canonical = normalizeYouTubeUrl(normalized);
+    if (!canonical) {
+      throw new UrlIntakeError(
+        'youtube_video_id_missing',
+        errorMessageFor(new UrlIntakeError('youtube_video_id_missing', ''), 'ru')
+      );
+    }
+    // Store and re-fetch the canonical watch URL so youtu.be, shorts, embed
+    // and watch links for the same video share one identity and never fall
+    // back to a URL containing a literal `undefined` id.
+    normalized = canonical;
+  }
 
   if (materialKind === 'pdf') {
     throw new UrlIntakeError(

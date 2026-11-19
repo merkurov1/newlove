@@ -62,6 +62,25 @@ describe('owner memory intent', () => {
     expect(detectMemoryIntent('Что ты обо мне помнишь?')).toMatchObject({ action: 'list' });
   });
 
+  it('treats “Сохранил?” as a verification of the previous operation, never a save', () => {
+    for (const message of ['Сохранил?', 'Ты сохранил?', 'Запомнил?', 'Записал?']) {
+      const intent = detectMemoryIntent(message);
+      expect(intent.action).toBe('verify');
+      expect(intent.reason).toBe('verify_previous_operation');
+      expect(intent.content).toBeNull();
+    }
+
+    // A real command still works and its content is not truncated.
+    expect(detectMemoryIntent('Сохранил идею про музей')).toMatchObject({
+      action: 'none',
+    });
+    expect(
+      detectMemoryIntent('Сохрани это', {
+        history: [{ role: 'assistant', content: 'Идея для институциональной подборки.' }],
+      })
+    ).toMatchObject({ action: 'save' });
+  });
+
   it('asks for clarification when the record type is ambiguous', () => {
     expect(detectMemoryIntent('Запиши это')).toMatchObject({
       action: 'clarify',
