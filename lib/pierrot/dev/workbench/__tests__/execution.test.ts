@@ -51,6 +51,7 @@ jest.mock('../github', () => ({
 
 import * as store from '../store';
 import {
+  attemptExecutor,
   claimTaskForWorker,
   completeAttempt,
   failAttempt,
@@ -59,6 +60,7 @@ import {
   retryTask,
   startAttempt,
 } from '../execution';
+import { buildAttemptCost } from '../costs';
 
 const attempt = {
   id: 'aaaaaaaa-1111-4111-8111-111111111111',
@@ -365,5 +367,38 @@ describe('targeted Actions claim', () => {
         payload: { executionId: 'gha:12345:1' },
       })
     );
+  });
+});
+
+describe('attempt executor provenance', () => {
+  it('recognises an Actions worker id and never charges Codespaces compute', () => {
+    const actionsAttempt = {
+      ...attempt,
+      workerId: 'actions:12345:2',
+    } as never;
+    expect(attemptExecutor(actionsAttempt)).toBe('actions');
+
+    const cost = buildAttemptCost({
+      usage: { inputTokens: 100, outputTokens: 50, costUsd: 0.25, steps: 1 },
+      machine: 'standardLinux32gb',
+      runtimeMs: 60 * 60 * 1000,
+      executor: attemptExecutor(actionsAttempt),
+    });
+
+    expect(cost.codespace.machine).toBeNull();
+    expect(cost.codespace.runtimeMs).toBeNull();
+    expect(cost.codespace.estimatedUsd).toBeNull();
+    expect(cost.codespace.provenance).toBe('not-applicable:github-actions-hosted-runner');
+    expect(cost.totalUsd).toBe(0.25);
+  });
+
+  it('uses the stored executor marker for legacy attempts with no worker id', () => {
+    expect(
+      attemptExecutor({
+        ...attempt,
+        workerId: null,
+        verification: { executor: 'github-actions' },
+      } as never)
+    ).toBe('actions');
   });
 });

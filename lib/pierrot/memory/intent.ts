@@ -18,6 +18,7 @@ export type PierrotMemoryAction =
   | 'delete'
   | 'cleanup'
   | 'cleanup_preview'
+  | 'verify'
   | 'clarify';
 
 export type PierrotMemoryMutationScope = 'single' | 'selection' | 'project' | 'all' | 'none';
@@ -374,18 +375,45 @@ const RESTORE_PATTERNS = [
   /(?:^|[\s,.;:—–-])(?:restore|bring\s+back)\b/i,
 ];
 
-const CREATE_REMEMBER =
-  /^(?:пожалуйста[,\s]*)?(?:запомни|запомните|запомнить)(?:\s+(?:что|это|следующее))?\s*[:,—–-]?\s*/i;
-const CREATE_SAVE =
-  /^(?:пожалуйста[,\s]*)?(?:сохрани|сохраните|сохранить)(?:\s+(?:это|эту\s+идею|этот\s+текст|эту\s+мысль|идею|заметку|пока|на\s+потом|себе))?\s*[:,—–-]?\s*/i;
-const CREATE_REMIND =
-  /^(?:пожалуйста[,\s]*)?(?:напомни|напомните|напомнить)(?:\s+(?:мне|потом|позже|об\s+этом))*\s*[:,—–-]?\s*/i;
-const CREATE_REMEMBER_EN =
-  /^(?:please[,\s]*)?(?:remember|keep\s+(?:this\s+)?in\s+mind|note\s+that)\s*[:,—–-]?\s*/i;
-const CREATE_SAVE_EN =
-  /^(?:please[,\s]*)?(?:save|keep|store)\s+(?:this\s+(?:idea|text|thought)|this|it|for\s+later)\s*[:,—–-]?\s*/i;
-const CREATE_REMIND_EN =
-  /^(?:please[,\s]*)?(?:remind\s+me|remind)\s*(?:later|about|to)?\s*[:,—–-]?\s*/i;
+// A command verb must end at a word boundary. Without this guard the prefix
+// "сохрани" also matches the past-tense question "Сохранил?", leaving the
+// dangling fragment "л" as the content to persist.
+const COMMAND_END = '(?![\\p{L}\\p{N}_])';
+
+const CREATE_REMEMBER = new RegExp(
+  `^(?:пожалуйста[,\\s]*)?(?:запомни|запомните|запомнить)${COMMAND_END}(?:\\s+(?:что|это|следующее))?\\s*[:,—–-]?\\s*`,
+  'iu'
+);
+const CREATE_SAVE = new RegExp(
+  `^(?:пожалуйста[,\\s]*)?(?:сохрани|сохраните|сохранить)${COMMAND_END}(?:\\s+(?:это|эту\\s+идею|этот\\s+текст|эту\\s+мысль|идею|заметку|пока|на\\s+потом|себе))?\\s*[:,—–-]?\\s*`,
+  'iu'
+);
+const CREATE_REMIND = new RegExp(
+  `^(?:пожалуйста[,\\s]*)?(?:напомни|напомните|напомнить)${COMMAND_END}(?:\\s+(?:мне|потом|позже|об\\s+этом))*\\s*[:,—–-]?\\s*`,
+  'iu'
+);
+const CREATE_REMEMBER_EN = new RegExp(
+  `^(?:please[,\\s]*)?(?:remember|keep\\s+(?:this\\s+)?in\\s+mind|note\\s+that)${COMMAND_END}\\s*[:,—–-]?\\s*`,
+  'iu'
+);
+const CREATE_SAVE_EN = new RegExp(
+  `^(?:please[,\\s]*)?(?:save|keep|store)${COMMAND_END}\\s+(?:this\\s+(?:idea|text|thought)|this|it|for\\s+later)\\s*[:,—–-]?\\s*`,
+  'iu'
+);
+const CREATE_REMIND_EN = new RegExp(
+  `^(?:please[,\\s]*)?(?:remind\\s+me|remind)${COMMAND_END}\\s*(?:later|about|to)?\\s*[:,—–-]?\\s*`,
+  'iu'
+);
+
+/**
+ * A bare past-tense question such as "Сохранил?" asks about the previous
+ * operation. It must never be interpreted as a new save command with the
+ * leftover suffix as content.
+ */
+const VERIFY_PATTERNS = [
+  /^(?:ты\s+)?(?:сохранил|сохранила|запомнил|запомнила|записал|записала|сделал|сделала|выполнил|выполнила|применил|применила)\s*[?!.]*$/iu,
+  /^(?:did\s+you\s+(?:save|remember|write|do|apply)|saved\?|done\?)\s*[?!.]*$/iu,
+];
 
 const CONFLICT =
   /(вместо|больше\s+не|отменя|отмени|заменя|replace|instead|no\s+longer|not\s+anymore)/i;
@@ -777,6 +805,15 @@ export function detectMemoryIntent(
   const text = normalize(original);
 
   if (!text) return result('none', { confidence: 1, reason: 'empty' });
+
+  // "Сохранил?" is a request to verify the previous operation, not a new
+  // write. It is checked before every create/cleanup command.
+  if (VERIFY_PATTERNS.some((pattern) => pattern.test(original))) {
+    return result('verify', {
+      confidence: 0.94,
+      reason: 'verify_previous_operation',
+    });
+  }
 
   // Preview must run before the destructive-sounding cleanup command.
   if (CLEANUP_PREVIEW.some((pattern) => pattern.test(original) || pattern.test(text))) {

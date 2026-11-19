@@ -328,6 +328,43 @@ export function isClaimForRequestedTask(claim, requestedTaskId) {
   return actual === requested;
 }
 
+/**
+ * Actions execution must happen on a GitHub-hosted ephemeral runner. A
+ * Codespace would silently bill compute to Codespaces and is not an acceptable
+ * fallback for the Dev pipeline.
+ */
+export function assertHostedActionsRunner(env = process.env) {
+  const environment = String(env.RUNNER_ENVIRONMENT || '').trim().toLowerCase();
+  const name = String(env.RUNNER_NAME || '').trim();
+  const codespace = String(env.CODESPACE_NAME || '').trim();
+
+  if (environment !== 'github-hosted') {
+    return {
+      ok: false,
+      reason: `RUNNER_ENVIRONMENT=${environment || 'missing'}; expected github-hosted`,
+      runnerName: name || null,
+    };
+  }
+
+  if (codespace) {
+    return {
+      ok: false,
+      reason: `CODESPACE_NAME is set (${codespace}); refusing to run Actions execution in a Codespace`,
+      runnerName: name || null,
+    };
+  }
+
+  if (/codespace/i.test(name)) {
+    return {
+      ok: false,
+      reason: `RUNNER_NAME looks like a Codespace (${name})`,
+      runnerName: name,
+    };
+  }
+
+  return { ok: true, reason: null, runnerName: name || null };
+}
+
 /** Stable boot phases surfaced through the worker API and Admin. */
 export const BOOT_PHASES = Object.freeze([
   'starting',

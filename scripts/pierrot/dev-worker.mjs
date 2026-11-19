@@ -30,6 +30,7 @@ import { runProcess, terminateProcessGroup } from './dev-worker-process.mjs';
 import {
   ACTIONS_EXIT,
   BOOT_PHASES,
+  assertHostedActionsRunner,
   buildExecutionId,
   checkCommitIdentity,
   computeReadiness,
@@ -113,6 +114,24 @@ const RUN_LOG = path.join(LOG_DIR, 'worker.log');
 const BOOT_LOG = path.join(LOG_DIR, 'worker-boot.log');
 const WORKER_VERSION = '1.2.0';
 const WORKER_KIND = ACTIONS_MODE ? 'actions' : 'codespace';
+
+// Hard guard: the Actions executor must never run inside a Codespace or any
+// other non-hosted runner. Without this a mislabelled run would silently bill
+// Codespaces compute while claiming to be a GitHub Actions execution.
+if (ACTIONS_MODE) {
+  const hosted = assertHostedActionsRunner(process.env);
+  if (!hosted.ok) {
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        event: 'executor_runner_rejected',
+        reason: hosted.reason,
+        runnerName: hosted.runnerName,
+      })
+    );
+    process.exit(ACTIONS_EXIT.permanent);
+  }
+}
 
 let shuttingDown = false;
 let activeAttempt = null;

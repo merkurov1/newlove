@@ -2950,6 +2950,34 @@ describe('Pierrot intelligence regressions', () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
+  it('answers “Сохранил?” by verifying the previous operation instead of saving “л”', async () => {
+    memoryOwner();
+    const chain = {
+      select: () => chain,
+      eq: () => chain,
+      order: () => chain,
+      limit: () => chain,
+      maybeSingle: async () => ({ data: null, error: null }),
+    };
+    asMock(pierrotStore.createPierrotStore).mockReturnValue({ from: () => chain });
+
+    const response = await POST(
+      makeRequest(validBody({ mode: 'unframed', message: 'Сохранил?' }))
+    );
+    const json = (await response.json()) as {
+      reply?: string;
+      memory_status?: string;
+      previous_operation?: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(memoryStore.createMemoryRecord).not.toHaveBeenCalled();
+    expect(json.memory_status).toBe('not_found');
+    expect(json.previous_operation).toBe('verified_absent');
+    expect(json.reply).toContain('Проверил');
+    expect(json.reply).not.toMatch(/Сохранил:\s*«?л»?/);
+  });
+
   it('does not claim a memory write when the store fails', async () => {
     memoryOwner();
     memoryStore.createMemoryRecord.mockRejectedValueOnce(new Error('db down'));

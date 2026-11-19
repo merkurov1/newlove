@@ -79,6 +79,8 @@ export type ProviderHealth = {
   status: AnalyticsConnectionStatus;
   configured: boolean;
   connected: boolean;
+  /** True when stored credentials are rejected and the owner must reconnect. */
+  authorizationRequired?: boolean;
   externalId: string | null;
   accountLabel: string | null;
   scopes: string[];

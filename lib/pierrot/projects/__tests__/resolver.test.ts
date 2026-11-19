@@ -1,6 +1,16 @@
 import { matchUniqueProjectMention, projectAliases, projectMatchesRef } from '../matching';
 import type { PierrotProject } from '../types';
 
+const listPierrotProjects = jest.fn();
+const getPierrotProject = jest.fn();
+
+jest.mock('../store', () => ({
+  listPierrotProjects: (...args: unknown[]) => listPierrotProjects(...args),
+  getPierrotProject: (...args: unknown[]) => getPierrotProject(...args),
+}));
+
+import { resolvePierrotProject } from '../resolver';
+
 const project = (name: string, slug: string): PierrotProject => ({
   id: slug,
   ownerUserId: 'owner',
@@ -30,6 +40,30 @@ describe('project mention matching', () => {
   it('does not guess when multiple projects match', () => {
     const projects = [project('Art Engine', 'art-engine'), project('Engine', 'engine')];
     expect(matchUniqueProjectMention(projects, 'Fix Art Engine')).toBeNull();
+  });
+
+  it('prefers a project explicitly named in the turn over the open conversation project', async () => {
+    const unframed = project('UNFRAMED', 'unframed');
+    const pierrot = project('Pierrot', 'pierrot');
+    listPierrotProjects.mockResolvedValue([unframed, pierrot]);
+
+    const resolved = await resolvePierrotProject({
+      ownerUserId: 'owner',
+      conversationProject: unframed,
+      message: 'Какой статус проекта Pierrot?',
+    });
+
+    expect(resolved.project?.slug).toBe('pierrot');
+    expect(resolved.project?.name).not.toBe('UNFRAMED');
+
+    // A vague follow-up keeps the conversation project.
+    await expect(
+      resolvePierrotProject({
+        ownerUserId: 'owner',
+        conversationProject: unframed,
+        message: 'Еще раз',
+      })
+    ).resolves.toMatchObject({ project: { slug: 'unframed' } });
   });
 
   it('recognises compact and punctuation variants without new projects', () => {

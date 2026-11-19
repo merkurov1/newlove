@@ -1,7 +1,11 @@
 /** @jest-environment node */
 
 import { describe, expect, it } from '@jest/globals';
-import { extractRequestedDocumentTitle, understandPierrotQuery } from '../queryUnderstanding';
+import {
+  extractRequestedDocumentTitle,
+  resolveRepeatTurnMessage,
+  understandPierrotQuery,
+} from '../queryUnderstanding';
 
 const history = [
   { role: 'user' as const, content: 'Найди Weekly Review' },
@@ -167,6 +171,30 @@ describe('Pierrot follow-up and correction intelligence', () => {
 
     expect(plan.intent).toBe('knowledge_graph');
     expect(plan.graphDemo).toBe(false);
+  });
+});
+
+describe('repeat requests', () => {
+  it('re-executes the previous substantive request instead of replaying an answer', () => {
+    const resolved = resolveRepeatTurnMessage('Еще раз', [
+      { role: 'user', content: 'Какой статус проекта Pierrot?' },
+      { role: 'assistant', content: 'Статус проекта UNFRAMED: active.' },
+    ]);
+
+    expect(resolved).toEqual({
+      message: 'Какой статус проекта Pierrot?',
+      repeated: true,
+      target: 'Какой статус проекта Pierrot?',
+    });
+    expect(resolved.message).not.toBe('Какой статус проекта UNFRAMED?');
+  });
+
+  it('leaves a normal message untouched', () => {
+    expect(resolveRepeatTurnMessage('Новый вопрос', [])).toEqual({
+      message: 'Новый вопрос',
+      repeated: false,
+      target: null,
+    });
   });
 });
 

@@ -794,6 +794,28 @@ function mergeSources(
  * further back than the immediate previous user turn, so walk back to the last
  * substantive request instead of stopping at "А подробнее?" or "Не то".
  */
+/**
+ * A bare repeat request ("Еще раз", "Повтори") carries no topic of its own.
+ * Returning the previous substantive user turn lets the caller re-execute that
+ * request against the live sources instead of replaying the stale answer.
+ */
+export function resolveRepeatTurnMessage(
+  message: string,
+  history: HistoryItem[] | undefined
+): { message: string; repeated: boolean; target: string | null } {
+  const trimmed = typeof message === 'string' ? message.trim() : '';
+  if (!trimmed || !isRepeatRequest(trimmed)) {
+    return { message: trimmed, repeated: false, target: null };
+  }
+
+  const target = previousSubstantiveUserMessage(history)?.content?.trim() || null;
+  if (!target || target === trimmed) {
+    return { message: trimmed, repeated: false, target: null };
+  }
+
+  return { message: target, repeated: true, target };
+}
+
 export function previousSubstantiveUserMessage(
   history: HistoryItem[] | undefined
 ): HistoryItem | null {

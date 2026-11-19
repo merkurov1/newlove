@@ -9,6 +9,7 @@ import {
   deleteMemoryRecord,
   getMemorySummary,
   listMemoryRecords,
+  memoryReadBackConfirmed,
   updateMemoryRecord,
 } from '../store';
 
@@ -197,6 +198,37 @@ const userId = '11111111-1111-4111-8111-111111111111';
 const otherUser = '22222222-2222-4222-8222-222222222222';
 
 describe('owner memory store', () => {
+  it('confirms success only when a read-back returns the persisted body', () => {
+    const expected = { id: 'record-1', title: 'Заголовок', content: 'Тело записи' };
+    expect(
+      memoryReadBackConfirmed(expected, {
+        ...expected,
+        kind: 'saved',
+        status: 'current',
+        rationale: null,
+        project: null,
+        tags: [],
+        sourceRefs: [],
+        conversationId: null,
+        messageId: null,
+        reviewAt: null,
+        decidedAt: null,
+        createdAt: null,
+        updatedAt: null,
+        importance: 0.5,
+        confidence: 0.5,
+      } as never)
+    ).toBe(true);
+
+    expect(memoryReadBackConfirmed(expected, null)).toBe(false);
+    expect(
+      memoryReadBackConfirmed(expected, {
+        ...expected,
+        content: 'другой текст',
+      } as never)
+    ).toBe(false);
+  });
+
   it('creates, reads and isolates three memory kinds', async () => {
     const store = fakeStore();
 

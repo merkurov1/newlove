@@ -6,6 +6,8 @@ import {
   formatUrlPreview,
   isUrlConfirmation,
   isUrlInput,
+  previewUrlForPierrot,
+  UrlIntakeError,
   type UrlPreviewResult,
 } from '../urlIntake';
 
@@ -36,6 +38,26 @@ describe('Pierrot URL intake', () => {
     expect(detectUrlMaterialKind('https://example.com/article/one')).toBe('article');
     expect(detectUrlMaterialKind('https://example.com/about')).toBe('website');
     expect(detectUrlMaterialKind('not a url')).toBeNull();
+  });
+
+  it('recognises every supported YouTube URL shape as video', () => {
+    for (const url of [
+      'https://youtu.be/A_lpmJ326U0?si=CDQZFxpD_S2HqJYv',
+      'https://www.youtube.com/watch?v=A_lpmJ326U0',
+      'https://youtube.com/shorts/A_lpmJ326U0',
+      'https://www.youtube.com/embed/A_lpmJ326U0',
+    ]) {
+      expect(detectUrlMaterialKind(url)).toBe('video');
+    }
+  });
+
+  it('reports a precise error instead of importing /undefined for a broken YouTube id', async () => {
+    await expect(previewUrlForPierrot('https://www.youtube.com/watch?v=undefined')).rejects.toMatchObject(
+      { code: 'youtube_video_id_missing' }
+    );
+    await expect(previewUrlForPierrot('https://youtu.be/undefined')).rejects.toBeInstanceOf(
+      UrlIntakeError
+    );
   });
 
   it('validates URL input before parsing', () => {

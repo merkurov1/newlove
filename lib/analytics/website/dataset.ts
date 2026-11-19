@@ -2106,6 +2106,37 @@ function stripBreakdownComparison(
   }
 }
 
+const AUTH_ERROR_CODES = new Set([
+  'unauthorized',
+  'invalid_grant',
+  'needs_reauthorization',
+  'insufficient_permissions',
+]);
+
+/**
+ * OAuth connectivity and stored-data availability are separate dimensions.
+ *
+ * A legacy connection row can still say `connected` after Google revoked the
+ * refresh token. If the last recorded error is an authorization error, the
+ * source must be presented as `needs_reauthorization`, never as healthy.
+ */
+export function deriveProviderConnectionStatus(input: {
+  configured: boolean;
+  connection: { status: string; last_error_code?: string | null } | null;
+}): ProviderHealth['status'] {
+  if (!input.configured) return 'not_configured';
+  if (!input.connection) return 'not_connected';
+  if (input.connection.status === 'disabled') return 'disabled';
+
+  const errorCode = String(input.connection.last_error_code || '').trim();
+  if (AUTH_ERROR_CODES.has(errorCode)) return 'needs_reauthorization';
+
+  if (input.connection.status === 'needs_reauthorization') return 'needs_reauthorization';
+  if (input.connection.status === 'error') return 'error';
+  if (input.connection.status === 'connected') return 'connected';
+  return 'not_connected';
+}
+
 function providerHealth(
   provider: AnalyticsProvider,
   connection: StoredConnection | null,
@@ -2128,13 +2159,7 @@ function providerHealth(
   const lastSuccess = providerRuns.find((run) => run.status === 'completed');
   const lastRun = providerRuns[0] ?? null;
 
-  let status: ProviderHealth['status'] = 'not_connected';
-  if (!configured) status = 'not_configured';
-  else if (!connection) status = 'not_connected';
-  else if (connection.status === 'disabled') status = 'disabled';
-  else if (connection.status === 'needs_reauthorization') status = 'needs_reauthorization';
-  else if (connection.status === 'error') status = 'error';
-  else if (connection.status === 'connected') status = 'connected';
+  const status = deriveProviderConnectionStatus({ configured, connection });
 
   let actionRequired: string | null = extraAction;
 
@@ -2172,7 +2197,10 @@ function providerHealth(
     label,
     status,
     configured,
+    // "connected" means credentials exist. Health is carried by `status`, and
+    // `authorizationRequired` prevents a reauth state being read as healthy.
     connected: status === 'connected' || status === 'error' || status === 'needs_reauthorization',
+    authorizationRequired: status === 'needs_reauthorization',
     externalId: connection?.external_id ?? null,
     accountLabel: connection?.account_label ?? null,
     scopes: connection?.scopes ?? [],

@@ -20,6 +20,8 @@ const YOUTUBE_HOSTS = new Set([
   'www.youtube.com',
   'm.youtube.com',
   'music.youtube.com',
+  'youtube-nocookie.com',
+  'www.youtube-nocookie.com',
   'youtu.be',
   'www.youtu.be',
 ]);
@@ -27,12 +29,25 @@ const YOUTUBE_HOSTS = new Set([
 const VIDEO_ID_PATTERN =
   /^[A-Za-z0-9_-]{6,20}$/;
 
+// These strings can arrive when an upstream `videoId` was interpolated before
+// it was known. They pass the character check but are never real video IDs.
+const INVALID_VIDEO_IDS = new Set([
+  'undefined',
+  'null',
+  'nan',
+  'none',
+  'video',
+]);
+
 function isValidVideoId(
   value: string | null | undefined,
 ): value is string {
   return Boolean(
     value &&
-      VIDEO_ID_PATTERN.test(value),
+      VIDEO_ID_PATTERN.test(value) &&
+      !INVALID_VIDEO_IDS.has(
+        value.toLowerCase(),
+      ),
   );
 }
 
@@ -118,7 +133,9 @@ export function extractYouTubeVideoId(
     host === 'youtube.com' ||
     host === 'www.youtube.com' ||
     host === 'm.youtube.com' ||
-    host === 'music.youtube.com'
+    host === 'music.youtube.com' ||
+    host === 'youtube-nocookie.com' ||
+    host === 'www.youtube-nocookie.com'
   ) {
     const queryId =
       url.searchParams.get('v');
@@ -211,6 +228,20 @@ export function getYouTubeCanonicalUrl(
   }
 
   return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+/**
+ * One normalization entry point for every supported YouTube URL shape:
+ * youtu.be, watch?v=, shorts, embed and live. It never interpolates an
+ * undefined id: an unrecognised URL returns null and the caller must report a
+ * precise error instead of building `.../undefined`.
+ */
+export function normalizeYouTubeUrl(
+  value: string,
+): string | null {
+  return getYouTubeCanonicalUrl(
+    value,
+  );
 }
 
 type YouTubeOEmbedResponse = {
