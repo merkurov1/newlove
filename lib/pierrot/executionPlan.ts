@@ -12,6 +12,7 @@ export type PierrotOperation =
   | 'commercial.report'
   | 'analytics.report'
   | 'website.report'
+  | 'youtube.report'
   | 'graph.report'
   | 'graph.demo'
   | 'system.health'
@@ -188,7 +189,9 @@ export function buildPierrotExecutionPlan(
 
   // Journal/Flow questions are answered from their own published tables. A
   // generic stats/analytics shortcut must not replace the editorial source.
-  if (queryPlan.sources.journal || queryPlan.sources.flow) {
+  // An explicit YouTube question is the exception: the shared channel is its
+  // own source and must remain available from project chats.
+  if ((queryPlan.sources.journal || queryPlan.sources.flow) && ownerTool?.kind !== 'youtube') {
     ownerTool = null;
   }
 
@@ -239,11 +242,13 @@ export function buildPierrotExecutionPlan(
   const explicitWebIntent =
     queryPlan.intent === 'web_research' || queryPlan.intent === 'brain_web_research';
   const websiteOwnerTool = ownerTool?.kind === 'website';
+  const youtubeOwnerTool = ownerTool?.kind === 'youtube';
+  const analyticsOwnerTool = websiteOwnerTool || youtubeOwnerTool;
 
-  // An explicit web source command has absolute priority. A website-analytics
-  // question is not a web-research request even when the phrase "what is
-  // happening" would otherwise trigger that classifier.
-  if (explicitWebIntent && !websiteOwnerTool) {
+  // An explicit web source command has absolute priority. A website or
+  // YouTube-analytics question is not a web-research request even when the
+  // phrase "what is happening" would otherwise trigger that classifier.
+  if (explicitWebIntent && !analyticsOwnerTool) {
     ownerTool = null;
     resolved.operation =
       queryPlan.intent === 'brain_web_research' ? 'brain_web.search' : 'web.search';
@@ -271,7 +276,7 @@ export function buildPierrotExecutionPlan(
     resolved.fallbackPolicy = 'no_source_substitution';
   }
 
-  if (ownerTool && (!explicitWebIntent || websiteOwnerTool)) {
+  if (ownerTool && (!explicitWebIntent || analyticsOwnerTool)) {
     if (ownerTool.kind === 'commercial') {
       resolved.operation = 'commercial.report';
       resolved.tool = 'commercial';
@@ -280,6 +285,11 @@ export function buildPierrotExecutionPlan(
     } else if (ownerTool.kind === 'website') {
       resolved.operation = 'website.report';
       resolved.tool = 'website';
+      resolved.ownerOnly = true;
+      resolved.fallbackPolicy = 'no_source_substitution';
+    } else if (ownerTool.kind === 'youtube') {
+      resolved.operation = 'youtube.report';
+      resolved.tool = 'youtube';
       resolved.ownerOnly = true;
       resolved.fallbackPolicy = 'no_source_substitution';
     } else if (ownerTool.kind === 'media') {
@@ -367,7 +377,7 @@ export function buildPierrotExecutionPlan(
     tool: resolved.tool,
     ownerOnly: resolved.ownerOnly,
     requiresWeb:
-      !websiteOwnerTool &&
+      !analyticsOwnerTool &&
       (queryPlan.sources.web ||
         resolved.operation === 'web.search' ||
         resolved.operation === 'brain_web.search'),

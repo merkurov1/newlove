@@ -25,7 +25,7 @@ afterAll(() => {
 });
 
 describe('Google consent configuration', () => {
-  it('requests offline access and only the two read-only scopes', () => {
+  it('requests offline access and only read-only website and YouTube scopes', () => {
     const url = new URL(buildGoogleConsentUrl({ state: 'signed-state' }));
 
     expect(url.searchParams.get('access_type')).toBe('offline');
@@ -39,7 +39,10 @@ describe('Google consent configuration', () => {
     expect(scopes).toEqual([
       'https://www.googleapis.com/auth/analytics.readonly',
       'https://www.googleapis.com/auth/webmasters.readonly',
+      'https://www.googleapis.com/auth/youtube.readonly',
+      'https://www.googleapis.com/auth/yt-analytics.readonly',
     ]);
+    expect(scopes.some((scope) => /monetary/i.test(scope))).toBe(false);
   });
 
   it('selects the property whose web stream matches the measurement id', () => {

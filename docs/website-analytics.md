@@ -250,8 +250,9 @@ Pierrot cannot access visitor analytics.
 1. Run the first backfill (90 days).
 2. Enable an external scheduler for `/api/cron/analytics-sync` if desired.
 3. Review the first weekly report with the owner and tune thresholds.
-4. Optionally add Google Trends / YouTube Analytics as additional adapters
-   using the same connection, sync, snapshot and source-health contracts.
+4. YouTube Analytics is now implemented as an on-demand shared-channel
+   adapter, not a background sync. See `docs/youtube-shared-channel.md`.
+   Google Trends remains a possible future adapter.
 
 ## 11. Report length and history
 

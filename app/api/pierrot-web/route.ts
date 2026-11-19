@@ -3806,7 +3806,10 @@ export async function POST(req: Request) {
         });
       }
 
-      if (isUrlInput(trimmedMessage)) {
+      // A YouTube analytics question can contain a video URL. It belongs to the
+      // YouTube owner tool, not to publication intake; a bare URL still takes
+      // the existing preview path unchanged.
+      if (isUrlInput(trimmedMessage) && executionPlan.ownerTool?.kind !== 'youtube') {
         if (!pierrotStore) {
           return persistOwnerReply(
             ownerLanguage === 'ru'

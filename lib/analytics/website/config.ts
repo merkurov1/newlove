@@ -15,13 +15,23 @@ export const DEFAULT_ANALYTICS_TIMEZONE = 'Europe/London';
 export const DEFAULT_BACKFILL_DAYS = 90;
 export const DEFAULT_INCREMENTAL_DAYS = 3;
 
+/**
+ * One incremental Google grant serves website intelligence and the shared
+ * YouTube channel. Every scope is read-only; monetary YouTube Analytics scopes
+ * are deliberately absent.
+ */
 export const GOOGLE_OAUTH_SCOPES = [
   'https://www.googleapis.com/auth/analytics.readonly',
   'https://www.googleapis.com/auth/webmasters.readonly',
+  'https://www.googleapis.com/auth/youtube.readonly',
+  'https://www.googleapis.com/auth/yt-analytics.readonly',
 ] as const;
 
 export const GA4_READONLY_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly';
 export const GSC_READONLY_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
+export const YOUTUBE_READONLY_SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
+export const YOUTUBE_ANALYTICS_READONLY_SCOPE =
+  'https://www.googleapis.com/auth/yt-analytics.readonly';
 
 function env(name: string): string {
   return (process.env[name] || '').trim();

@@ -9,7 +9,12 @@ import type { AnalyticsProvider } from '@/lib/analytics/website/types';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const PROVIDERS: AnalyticsProvider[] = ['google_analytics', 'search_console', 'umami'];
+const PROVIDERS: AnalyticsProvider[] = [
+  'google_analytics',
+  'search_console',
+  'umami',
+  'youtube',
+];
 
 function isProvider(value: unknown): value is AnalyticsProvider {
   return typeof value === 'string' && PROVIDERS.includes(value as AnalyticsProvider);
@@ -33,7 +38,12 @@ export async function POST(request: Request) {
 
   const store = getServerSupabaseClient({ useServiceRole: true });
   const connection = await getStoredConnection(store, provider).catch(() => null);
-  const googleProvider = provider === 'google_analytics' || provider === 'search_console';
+  const googleFamily: AnalyticsProvider[] = [
+    'google_analytics',
+    'search_console',
+    'youtube',
+  ];
+  const googleProvider = googleFamily.includes(provider);
 
   if (googleProvider && connection) {
     const refreshToken = openSecret({
@@ -43,8 +53,8 @@ export async function POST(request: Request) {
     });
 
     if (refreshToken) {
-      // GA4 and Search Console share one Google grant. Revoking it affects
-      // both sources, so both stored tokens are disabled together.
+      // GA4, Search Console and YouTube share one Google grant. Revoking it
+      // affects all three, so their stored credentials are disabled together.
       await revokeGoogleToken(refreshToken);
     }
   }
@@ -52,7 +62,11 @@ export async function POST(request: Request) {
   await disableConnection(store, provider);
 
   if (googleProvider) {
-    await disableConnection(store, provider === 'google_analytics' ? 'search_console' : 'google_analytics');
+    await Promise.all(
+      googleFamily
+        .filter((candidate) => candidate !== provider)
+        .map((candidate) => disableConnection(store, candidate))
+    );
   }
 
   if (form) {

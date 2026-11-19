@@ -11,6 +11,27 @@ describe('Pierrot owner tool routing', () => {
     expect(detectOwnerTool('/research')?.kind).toBe('research');
     expect(detectOwnerTool('/diag')?.kind).toBe('diagnostics');
     expect(detectOwnerTool('/analytics')?.kind).toBe('analytics');
+    expect(detectOwnerTool('/youtube')?.kind).toBe('youtube');
+    expect(detectOwnerTool('/yt')?.kind).toBe('youtube');
+  });
+
+  it('routes the same shared-channel analytics question from both projects', () => {
+    expect(detectOwnerTool('Pierrot: статистика YouTube-канала за 30 дней')?.kind).toBe(
+      'youtube'
+    );
+    expect(detectOwnerTool('UNFRAMED: статистика YouTube-канала за 30 дней')?.kind).toBe(
+      'youtube'
+    );
+    expect(
+      detectOwnerTool('Сравни ролики The Spectral Tiger и Step Out of the Physical Container')?.kind
+    ).toBe('youtube');
+    expect(detectOwnerTool('Откуда трафик на YouTube за неделю?')?.kind).toBe('youtube');
+  });
+
+  it('does not treat a bare YouTube URL as YouTube analytics intake', () => {
+    // The URL-intake branch runs before owner tools, so this must not become a
+    // YouTube analytics request. It may still be classified by other detectors.
+    expect(detectOwnerTool('https://youtu.be/TmC6Lr5K4R8')?.kind).not.toBe('youtube');
   });
 
   it('recognises natural owner requests', () => {

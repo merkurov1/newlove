@@ -6,7 +6,12 @@
  * are never merged into one anonymous "visitor" number.
  */
 
-export type AnalyticsProvider = 'google_analytics' | 'search_console' | 'umami' | 'bluesky';
+export type AnalyticsProvider =
+  | 'google_analytics'
+  | 'search_console'
+  | 'umami'
+  | 'bluesky'
+  | 'youtube';
 export type AnalyticsLanguage = 'ru' | 'en';
 
 export type AnalyticsConnectionStatus =

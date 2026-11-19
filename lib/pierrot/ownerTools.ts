@@ -15,6 +15,8 @@ import { detectCommercialQuestion } from '@/lib/pierrot/commercialQuestion';
 import { answerPierrotCommercialQuestion } from '@/lib/pierrot/commercialIntelligence';
 import { detectWebsiteQuestion } from '@/lib/analytics/website/question';
 import { answerWebsiteAnalyticsQuestion } from '@/lib/analytics/website/answer';
+import { detectYouTubeQuestion } from '@/lib/youtube/question';
+import { answerYouTubeAnalyticsQuestion } from '@/lib/youtube/answer';
 import {
   buildGraphResponse,
   buildWebsiteResponse,
@@ -46,6 +48,7 @@ export type OwnerToolKind =
   | 'analytics'
   | 'commercial'
   | 'website'
+  | 'youtube'
   | 'media';
 
 export type OwnerToolRequest = {
@@ -95,7 +98,7 @@ function detectOwnerToolBase(
 ): OwnerToolRequest | null {
   const text = normalize(message);
   const command = text.match(
-    /^\/(stats|rag|brain|graph|research|diag|analytics|commercial|revenue|site|website)\b/
+    /^\/(stats|rag|brain|graph|research|diag|analytics|commercial|revenue|site|website|youtube|yt|video)\b/
   );
 
   if (command) {
@@ -106,7 +109,9 @@ function detectOwnerToolBase(
           ? 'commercial'
           : command[1] === 'site' || command[1] === 'website'
             ? 'website'
-            : (command[1] as OwnerToolKind);
+            : command[1] === 'youtube' || command[1] === 'yt' || command[1] === 'video'
+              ? 'youtube'
+              : (command[1] as OwnerToolKind);
     return { kind, query: message.trim() };
   }
 
@@ -118,6 +123,13 @@ function detectOwnerToolBase(
   // the administrative status report.
   if (detectGraphDemoRequest(message)) {
     return { kind: 'graph_demo', query: message.trim() };
+  }
+
+  // YouTube is one owner-level channel shared by Pierrot and UNFRAMED. Detect
+  // it before generic website/commercial statistics, but only when the message
+  // asks for analytics rather than publication intake.
+  if (detectYouTubeQuestion(message)) {
+    return { kind: 'youtube', query: message.trim() };
   }
 
   // Website intelligence is a first-class owner question: traffic, search,
@@ -817,6 +829,43 @@ async function formatAnalytics(language: 'ru' | 'en'): Promise<string> {
   ].join('\n');
 }
 
+async function formatYouTube(
+  request: OwnerToolRequest,
+  language: 'ru' | 'en'
+): Promise<OwnerToolDetailedResult> {
+  try {
+    const store = getServerSupabaseClient({ useServiceRole: true });
+    const answer = await answerYouTubeAnalyticsQuestion({
+      message: request.query,
+      language,
+      store,
+    });
+
+    return {
+      text:
+        answer.markdown ||
+        (language === 'ru'
+          ? 'Не распознал вопрос о YouTube. Спросите, например: «Статистика YouTube-канала за 30 дней» или «Сравни два ролика UNFRAMED за месяц».'
+          : 'I did not recognise a YouTube question. Try: “YouTube channel stats for the last 30 days” or “Compare two UNFRAMED videos this month”.'),
+      provenance: null,
+      mediaKind: null,
+    };
+  } catch (error) {
+    console.error('[Pierrot youtube tool]', {
+      code: error instanceof Error ? error.message : 'youtube_tool_failed',
+    });
+
+    return {
+      text:
+        language === 'ru'
+          ? 'Не удалось получить статистику YouTube. Это не означает, что просмотров нет: источник не ответил. Проверьте подключение общего канала и повторите запрос.'
+          : 'Could not load YouTube analytics. This does not mean there were no views: the source did not respond. Check the shared channel connection and try again.',
+      provenance: null,
+      mediaKind: null,
+    };
+  }
+}
+
 async function formatMedia(
   request: OwnerToolRequest,
   language: 'ru' | 'en'
@@ -886,6 +935,10 @@ export async function runOwnerToolDetailed(
     }
   }
 
+  if (request.kind === 'youtube') {
+    return formatYouTube(request, language);
+  }
+
   if (request.kind === 'media') {
     try {
       return await formatMedia(request, language);
@@ -918,6 +971,8 @@ export async function runOwnerTool(
     switch (request.kind) {
       case 'graph_demo':
         return (await formatGraphDemo(request.query, language, deps)).text;
+      case 'youtube':
+        return (await formatYouTube(request, language)).text;
       case 'media': {
         const result = await formatMedia(request, language);
         return result.text;
