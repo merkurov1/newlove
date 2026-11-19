@@ -37,7 +37,9 @@ permissions:
 
 env:
   NEXT_TELEMETRY_DISABLED: '1'
-  PIERROT_DEV_API_URL: ${{ vars.PIERROT_DEV_API_URL || 'https://merkurov.love' }}
+  # Production redirects the apex host to www; a POST to the apex would lose
+  # its body on the 301. Use the canonical host unless explicitly overridden.
+  PIERROT_DEV_API_URL: ${{ vars.PIERROT_DEV_API_URL || 'https://www.merkurov.love' }}
   PIERROT_DEV_OPENCODE_PROVIDER: deepseek
   PIERROT_DEV_OPENCODE_MODEL: deepseek/deepseek-flash
   PIERROT_DEV_OPENCODE_MIN_VERSION: '2.1.4'
