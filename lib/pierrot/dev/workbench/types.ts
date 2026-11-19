@@ -125,7 +125,17 @@ export type DevWorker = {
   id: string;
   name: string;
   kind: string;
+  /** Effective status: heartbeat-expired or finished workers report offline. */
   status: DevWorkerStatus;
+  /**
+   * Status as stored in Supabase. Kept separately so Admin can distinguish a
+   * worker that was explicitly signed off from one that lost its heartbeat.
+   */
+  reportedStatus?: DevWorkerStatus;
+  /** Heartbeat expired without an explicit offline/finished sign-off. */
+  stale?: boolean;
+  /** Explicitly signed off, or an Actions run that finished its only attempt. */
+  finished?: boolean;
   version: string | null;
   hostname: string | null;
   codespaceName: string | null;
@@ -149,6 +159,34 @@ export type DevWorker = {
   stopRequested: boolean;
   heartbeatAgeSeconds: number | null;
   online: boolean;
+};
+
+export type DevWorkerIssueCode =
+  | 'ORPHAN_CURRENT_ATTEMPT'
+  | 'ORPHAN_CURRENT_TASK'
+  | 'POINTER_MISMATCH'
+  | 'MISSING_ACTIVE_POINTER';
+
+export type DevWorkerIssue = {
+  workerId: string;
+  code: DevWorkerIssueCode;
+  message: string;
+};
+
+/**
+ * Admin-facing worker health. Active (fresh heartbeat) is deliberately separate
+ * from stale and historical rows: the worker table is append-only history and a
+ * long-lived list must not make old runners look alive.
+ */
+export type DevWorkerHealthSummary = {
+  total: number;
+  active: number;
+  stale: number;
+  historical: number;
+  finished: number;
+  orphan: number;
+  pointerMismatch: number;
+  issues: DevWorkerIssue[];
 };
 
 export type DevEvent = {
@@ -693,6 +731,7 @@ export type DevWorkbenchOverview = {
   history: Array<{ task: DevWorkbenchTask; attempts: DevAttempt[] }>;
   review: DevWorkbenchTask[];
   workers: DevWorker[];
+  workerHealth: DevWorkerHealthSummary;
   recentEvents: DevEvent[];
   lifecycle: DevLifecycleSnapshot;
   finalization: DevFinalizationReport | null;

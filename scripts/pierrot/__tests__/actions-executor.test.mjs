@@ -159,3 +159,50 @@ test('executor test file never prints a provider key', () => {
   const self = fs.readFileSync(fileURLToPath(import.meta.url), 'utf8');
   assert.doesNotMatch(self, /sk-[A-Za-z0-9]{12,}/);
 });
+
+test('workflows use Node 24-capable action runtimes', () => {
+  const ci = fs.readFileSync(path.join(repoRoot, '.github/workflows/ci.yml'), 'utf8');
+  const executor = workflowText();
+  for (const workflow of [ci, executor]) {
+    // v4 actions still declare the deprecated Node 20 runtime; v7/v6 are the
+    // current Node 24 action majors and remove the forced-runtime warning.
+    assert.match(workflow, /actions\/checkout@v[7-9]/);
+    assert.match(workflow, /actions\/setup-node@v[7-9]/);
+    assert.match(workflow, /pnpm\/action-setup@v[6-9]/);
+    assert.doesNotMatch(workflow, /actions\/(checkout|setup-node)@v[1-4]/);
+    assert.doesNotMatch(workflow, /pnpm\/action-setup@v[1-5]/);
+  }
+  assert.match(executor, /actions\/upload-artifact@v[7-9]/);
+  assert.doesNotMatch(executor, /actions\/upload-artifact@v[1-4]/);
+});
+
+test('a no-claim Actions run records an explainable non-secret reason', () => {
+  const worker = fs.readFileSync(path.join(repoRoot, 'scripts/pierrot/dev-worker.mjs'), 'utf8');
+  assert.match(worker, /created no attempt/);
+  assert.match(worker, /actions-no-claim:/);
+  assert.match(worker, /source:\s*'actions:no_claim'/);
+  assert.match(worker, /ACTIONS_EXIT\.noTask/);
+  assert.doesNotMatch(worker, /sk-[A-Za-z0-9]{12,}/);
+});
+
+test('DeepSeek preflight failures have separate non-secret diagnostics', () => {
+  const preflight = fs.readFileSync(
+    path.join(repoRoot, 'scripts/pierrot/actions-preflight.mjs'),
+    'utf8'
+  );
+  for (const code of [
+    'WORKER_TOKEN_MISSING',
+    'PROVIDER_KEY_MISSING',
+    'OPENCODE_UNAVAILABLE',
+    'OPENCODE_VERSION',
+    'MODEL_LIST_FAILED',
+    'MODEL_UNAVAILABLE',
+    'MODEL_CALL_FAILED',
+    'WORKER_API_UNAVAILABLE',
+    'WORKER_API_UNREACHABLE',
+  ]) {
+    assert.match(preflight, new RegExp(`['"]${code}['"]`));
+  }
+  assert.match(preflight, /::error title=Pierrot preflight/);
+  assert.doesNotMatch(preflight, /sk-[A-Za-z0-9]{12,}/);
+});

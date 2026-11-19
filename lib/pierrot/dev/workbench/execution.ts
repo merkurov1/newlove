@@ -683,13 +683,20 @@ export async function releaseAttempt(
   if (!attempt || attempt.workerId !== workerId) return false;
   if (!['claimed', 'running'].includes(attempt.status)) return false;
 
-  await patchAttempt(attemptId, {
-    status: 'timed_out',
-    finished_at: new Date().toISOString(),
-    error_code: 'WORKER_STOPPED',
-    error_message: truncateText(reason, 2000),
-    progress_stage: 'released',
-  });
+  const released = await patchAttempt(
+    attemptId,
+    {
+      status: 'timed_out',
+      finished_at: new Date().toISOString(),
+      error_code: 'WORKER_STOPPED',
+      error_message: truncateText(reason, 2000),
+      progress_stage: 'released',
+    },
+    ['claimed', 'running']
+  );
+  // Completion or another owner action may have won the race. Never overwrite
+  // a terminal attempt with a late release callback.
+  if (!released) return false;
 
   const task = await getTaskRowUnscoped(attempt.taskId);
   if (task && task.status === 'in_progress') {
@@ -738,6 +745,16 @@ export async function approveTask(
 ): Promise<DevWorkbenchTask | null> {
   const task = await getTaskRow(userId, taskId);
   if (!task) return null;
+  // Approval is idempotent. A second click on an already approved or queued
+  // task must not add another task.approved event, re-enqueue it, or move its
+  // queue_position.
+  if (task.status === 'queued') return task;
+  if (task.status === 'ready') {
+    // Re-approving a ready task re-arms auto-enqueue without emitting a
+    // duplicate approval event.
+    await setQueueOptOut(taskId, false);
+    return task;
+  }
   if (!task.objective.trim()) {
     throw new WorkbenchExecutionError(
       'DEV_OBJECTIVE_REQUIRED',
@@ -760,8 +777,19 @@ export async function approveTask(
       message: 'Task approved and ready for the queue.',
     },
   });
+  // A concurrent approval may have won the compare-and-set. Re-read once and
+  // treat the already-approved/queued state as the same idempotent success.
+  if (!approved) {
+    const current = await getTaskRow(userId, taskId);
+    if (current?.status === 'queued') return current;
+    if (current?.status === 'ready') {
+      await setQueueOptOut(taskId, false);
+      return current;
+    }
+    return null;
+  }
   // A fresh approval re-arms the standalone auto-enqueue path.
-  if (approved) await setQueueOptOut(taskId, false);
+  await setQueueOptOut(taskId, false);
   return approved;
 }
 
@@ -772,6 +800,10 @@ export async function enqueueTask(
 ): Promise<DevWorkbenchTask | null> {
   const task = await getTaskRow(userId, taskId);
   if (!task) return null;
+  // Repeated enqueue is a no-op: the task already has a queue position and a
+  // queued event. This is deliberately before cost estimation so a double
+  // click cannot append a second estimate either.
+  if (task.status === 'queued') return task;
   if (task.status !== 'ready') {
     throw new WorkbenchExecutionError(
       'DEV_TASK_NOT_READY',
@@ -817,14 +849,39 @@ export async function enqueueTask(
   if (queued) {
     await setQueueOptOut(taskId, false);
     await clearTaskActionsDispatch(taskId);
+    return queued;
   }
-  return queued;
+  // A concurrent enqueue or claim won the compare-and-set. A task that is
+  // already queued is the same idempotent outcome; anything else is reported
+  // as not queued rather than overwriting the winner.
+  const current = await getTaskRow(userId, taskId);
+  return current?.status === 'queued' ? current : null;
 }
 
 export async function dequeueTask(
   userId: string,
   taskId: string
 ): Promise<DevWorkbenchTask | null> {
+  const task = await getTaskRow(userId, taskId);
+  if (!task) return null;
+  if (task.status === 'ready') {
+    // Repeated dequeue is an idempotent no-op. Re-assert the durable opt-out
+    // marker without appending another task.dequeued event.
+    await setQueueOptOut(taskId, true);
+    return task;
+  }
+  if (task.status === 'in_progress') {
+    throw new WorkbenchExecutionError(
+      'DEV_TASK_ACTIVE',
+      'The task was claimed by a worker and can no longer be dequeued.'
+    );
+  }
+  if (task.status !== 'queued') {
+    throw new WorkbenchExecutionError(
+      'DEV_TASK_NOT_QUEUED',
+      `Only queued tasks can be dequeued (current status: ${task.status}).`
+    );
+  }
   const dequeued = await transitionTask({
     userId,
     taskId,
@@ -834,8 +891,23 @@ export async function dequeueTask(
   });
   // `ready` is shared with the approval state. Keep the owner's explicit
   // removal durable so idle promotion does not resurrect the task.
-  if (dequeued) await setQueueOptOut(taskId, true);
-  return dequeued;
+  if (dequeued) {
+    await setQueueOptOut(taskId, true);
+    return dequeued;
+  }
+  // The claim won the race after our read. Do not write anything else.
+  const current = await getTaskRow(userId, taskId);
+  if (current?.status === 'in_progress') {
+    throw new WorkbenchExecutionError(
+      'DEV_TASK_ACTIVE',
+      'The task was claimed by a worker and can no longer be dequeued.'
+    );
+  }
+  if (current?.status === 'ready') {
+    await setQueueOptOut(taskId, true);
+    return current;
+  }
+  return null;
 }
 
 export async function retryTask(userId: string, taskId: string): Promise<DevWorkbenchTask | null> {

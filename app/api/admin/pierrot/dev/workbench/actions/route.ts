@@ -39,6 +39,7 @@ import {
   ActionsDispatchError,
   dispatchNextQueuedTask,
   dispatchTaskToActions,
+  retryActionsDispatch,
 } from '@/lib/pierrot/dev/workbench/actions';
 import { advanceFinalization, retryFinalization } from '@/lib/pierrot/dev/workbench/finalization';
 import { CODESPACE_NAME_ENV } from '@/lib/pierrot/dev/workbench/setup';
@@ -57,6 +58,7 @@ const TASK_ACTIONS = new Set([
   'dequeue',
   'cancel',
   'retry',
+  'retry_dispatch',
   'accept',
   'reject',
   'archive',
@@ -168,11 +170,12 @@ export async function POST(req: Request) {
         // executor. Tasks already attached to a batch stay ready so the batch
         // owns their order. Approval never starts a Codespace.
         const batchId = await getBatchIdForTask(task.id);
-        if (!batchId) {
-          let queued = false;
+        // A repeat approve of an already queued task is an idempotent no-op:
+        // do not enqueue it again or dispatch a second runner.
+        if (!batchId && task.status === 'ready') {
+          let queuedTask = null as Awaited<ReturnType<typeof enqueueTask>>;
           try {
-            await enqueueTask(admin.id, taskId);
-            queued = true;
+            queuedTask = await enqueueTask(admin.id, taskId);
           } catch {
             await appendEvent({
               taskId,
@@ -181,7 +184,7 @@ export async function POST(req: Request) {
               message: 'Task was approved but could not be queued automatically.',
             }).catch(() => {});
           }
-          if (queued) {
+          if (queuedTask?.status === 'queued' && queuedTask.assignedExecutor !== 'codespace') {
             await dispatchTaskToActions({ taskId, source: 'admin:approve' });
           }
         }
@@ -194,7 +197,12 @@ export async function POST(req: Request) {
           typeof body.batchId === 'string' ? body.batchId : null
         );
         if (!task) return json({ error: 'Task not found.' }, 404);
-        await dispatchTaskToActions({ taskId, source: 'admin:enqueue' });
+        // The manual Codespace reserve keeps its durable routing. The Actions
+        // dispatcher would refuse it anyway; skipping here avoids an error on
+        // an otherwise successful enqueue.
+        if (task.assignedExecutor !== 'codespace') {
+          await dispatchTaskToActions({ taskId, source: 'admin:enqueue' });
+        }
         break;
       }
       case 'dequeue': {
@@ -210,7 +218,13 @@ export async function POST(req: Request) {
       case 'retry': {
         const task = await retryTask(admin.id, taskId);
         if (!task) return json({ error: 'Task not found.' }, 404);
-        await dispatchTaskToActions({ taskId, source: 'admin:retry' });
+        if (task.assignedExecutor !== 'codespace') {
+          await dispatchTaskToActions({ taskId, source: 'admin:retry' });
+        }
+        break;
+      }
+      case 'retry_dispatch': {
+        await retryActionsDispatch({ taskId, source: 'admin:retry_dispatch' });
         break;
       }
       case 'accept': {

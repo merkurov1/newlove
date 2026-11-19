@@ -206,16 +206,31 @@ export function mapAttemptRow(row: Record<string, unknown>): DevAttempt {
   };
 }
 
-function mapWorkerRow(row: Record<string, unknown>): DevWorker {
+export function mapWorkerRow(row: Record<string, unknown>): DevWorker {
   const heartbeatAt = typeof row.last_heartbeat_at === 'string' ? row.last_heartbeat_at : null;
   const ageSeconds = heartbeatAt
     ? Math.max(0, Math.round((Date.now() - new Date(heartbeatAt).getTime()) / 1000))
     : null;
+  const kind = String(row.kind || 'codespace');
+  const reportedStatus = String(row.status || 'offline') as DevWorkerStatus;
+  const fresh = ageSeconds !== null && ageSeconds <= WORKER_OFFLINE_AFTER_SECONDS;
+  // `offline` is a terminal/owner-controlled status, not a heartbeat state. A
+  // completed ephemeral runner keeps a fresh timestamp when it signs off, so
+  // freshness alone must not make it look active again.
+  const online = fresh && reportedStatus !== 'offline';
+  // A row that never sent a heartbeat is also stale, not active history.
+  const stale = !online && reportedStatus !== 'offline';
+  const finished = !online && (reportedStatus === 'offline' || (kind === 'actions' && !stale));
   return {
     id: String(row.id || ''),
     name: String(row.name || row.id || 'worker'),
-    kind: String(row.kind || 'codespace'),
-    status: String(row.status || 'offline') as DevWorkerStatus,
+    kind,
+    // The effective status is derived from the heartbeat. The stored row is
+    // never rewritten or deleted: old workers remain visible as history.
+    status: online ? reportedStatus : 'offline',
+    reportedStatus,
+    stale,
+    finished,
     version: typeof row.version === 'string' ? row.version : null,
     hostname: typeof row.hostname === 'string' ? row.hostname : null,
     codespaceName: typeof row.codespace_name === 'string' ? row.codespace_name : null,
@@ -230,7 +245,7 @@ function mapWorkerRow(row: Record<string, unknown>): DevWorker {
     lastError: truncateText(row.last_error, 1000),
     stopRequested: row.stop_requested === true,
     heartbeatAgeSeconds: ageSeconds,
-    online: Boolean(ageSeconds !== null && ageSeconds <= WORKER_OFFLINE_AFTER_SECONDS),
+    online,
   };
 }
 
@@ -713,7 +728,9 @@ export async function clearTaskActionsDispatch(taskId: string): Promise<void> {
     await store()
       .from('pierrot_dev_prompts')
       .update({
-        assigned_executor: 'actions',
+        // Clear only the duplicate-launch marker. The durable executor
+        // assignment is preserved so a manually routed Codespace task cannot
+        // be silently moved to Actions by an unrelated retry.
         actions_dispatch_requested_at: null,
         updated_at: new Date().toISOString(),
       })
@@ -728,11 +745,15 @@ export async function clearWorkerAttempt(
   attemptId: string
 ): Promise<void> {
   if (!workerId) return;
+  // An ephemeral Actions runner is finished after its single attempt; a
+  // Codespace worker becomes idle and can claim again. Both keep their row:
+  // this is a sign-off, never a deletion.
+  const status: DevWorkerStatus = workerId.startsWith('actions:') ? 'offline' : 'idle';
   try {
     await store()
       .from('pierrot_dev_workers')
       .update({
-        status: 'idle',
+        status,
         current_task_id: null,
         current_attempt_id: null,
         last_heartbeat_at: new Date().toISOString(),
@@ -1041,14 +1062,19 @@ export async function getTaskExecutionMaterial(
 
 export async function patchTask(
   taskId: string,
-  patch: Record<string, unknown>
+  patch: Record<string, unknown>,
+  expectedStatuses?: DevWorkbenchTaskStatus[]
 ): Promise<DevWorkbenchTask | null> {
-  const { data, error } = await store()
+  let query = store()
     .from('pierrot_dev_prompts')
     .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq('id', taskId)
-    .select(await taskColumns())
-    .single();
+    .eq('id', taskId);
+  // A compare-and-set guard is what makes owner transitions safe against a
+  // concurrent claim. Without it, a dequeue that read `queued` just before a
+  // worker claimed the row could overwrite `in_progress` with `ready` and
+  // orphan the new attempt.
+  if (expectedStatuses?.length) query = query.in('status', expectedStatuses);
+  const { data, error } = await query.select(await taskColumns()).maybeSingle();
   if (error || !data) return null;
   return mapTaskRow(data as unknown as Record<string, unknown>);
 }
@@ -1073,10 +1099,14 @@ export async function transitionTask(input: {
   if (!task) return null;
   assertTaskTransition(task.status, input.to);
 
-  const updated = await patchTask(input.taskId, {
-    ...(input.patch || {}),
-    status: input.to,
-  });
+  const updated = await patchTask(
+    input.taskId,
+    {
+      ...(input.patch || {}),
+      status: input.to,
+    },
+    [task.status]
+  );
   if (!updated) return null;
 
   if (input.event) {
@@ -1558,7 +1588,9 @@ export async function listWorkers(): Promise<DevWorker[]> {
       .from('pierrot_dev_workers')
       .select('*')
       .order('last_heartbeat_at', { ascending: false, nullsFirst: false })
-      .limit(10);
+      // Old rows are history, not deleted. Keep enough of them for Admin to
+      // separate active workers from stale/finished records.
+      .limit(50);
     if (error || !Array.isArray(data)) return [];
     return data.map((row) => mapWorkerRow(row));
   } catch {

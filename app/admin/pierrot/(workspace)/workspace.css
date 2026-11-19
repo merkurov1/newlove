@@ -6555,6 +6555,11 @@ a.pw-home-indicator:hover {
   color: var(--pw-muted);
 }
 
+.pw-wb-button.is-warn {
+  border-color: #b07a2c;
+  color: #81571b;
+}
+
 .pw-wb-button.is-merge {
   border-color: var(--pw-ochre);
   color: var(--pw-flow);
@@ -6689,6 +6694,18 @@ a.pw-home-indicator:hover {
   border-color: #b05345;
   color: #8f3427;
   background: #fbeceb;
+}
+
+.pw-wb-badge.is-stale {
+  border-color: #b07a2c;
+  color: #81571b;
+  background: #fbf4e6;
+}
+
+.pw-wb-badge.is-finished {
+  border-color: #6f726f;
+  color: #4d504d;
+  background: #f1f2f1;
 }
 
 .pw-wb-badge.is-cancelled,

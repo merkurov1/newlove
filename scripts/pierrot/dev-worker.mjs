@@ -1679,10 +1679,30 @@ async function runActionsOnce() {
 
     const claimed = await api('claim', TARGET_TASK_ID ? { taskId: TARGET_TASK_ID } : {}, 40000);
     if (!claimed.claim) {
+      const reason = TARGET_TASK_ID
+        ? `Task ${TARGET_TASK_ID} was not claimable (already active, not queued, paused, or another runner won the claim).`
+        : 'No queued task was claimable (queue empty, paused, or another runner won the claim).';
       await log('No claimable task; exiting without polling.', {
         requestedTaskId: TARGET_TASK_ID || null,
+        reason,
       });
-      await bootPhase('ready', 'No claimable task for this dispatch.', { force: true });
+      // Persist an explicit, non-secret reason so a workflow run that creates
+      // no attempt is explainable in Supabase, not only in the runner log.
+      await api(
+        'event',
+        {
+          type: 'worker.note',
+          message: `Actions run ${EXECUTION_ID} created no attempt: ${reason}`,
+          payload: {
+            source: 'actions:no_claim',
+            requestedTaskId: TARGET_TASK_ID || null,
+            executionId: EXECUTION_ID,
+          },
+          dedupeKey: `actions-no-claim:${WORKER_ID}`,
+        },
+        15000
+      ).catch(() => {});
+      await bootPhase('ready', `No claimable task for this dispatch. ${reason}`, { force: true });
       process.exitCode = ACTIONS_EXIT.noTask;
       return;
     }
