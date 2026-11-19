@@ -3,6 +3,7 @@
 jest.mock('../store', () => ({
   appendEvent: jest.fn(),
   claimNextTask: jest.fn(),
+  claimTask: jest.fn(),
   clearWorkerAttempt: jest.fn(),
   expectedBranch: jest.fn(),
   getActiveAttempt: jest.fn(),
@@ -49,11 +50,13 @@ jest.mock('../github', () => ({
 
 import * as store from '../store';
 import {
+  claimTaskForWorker,
   completeAttempt,
   failAttempt,
   progressAttempt,
   releaseAttempt,
   retryTask,
+  startAttempt,
 } from '../execution';
 
 const attempt = {
@@ -295,6 +298,70 @@ describe('retry queueing', () => {
           result_commit: null,
           pull_requests: [],
         }),
+      })
+    );
+  });
+});
+
+describe('targeted Actions claim', () => {
+  const claim = {
+    task: { ...task, id: attempt.taskId, repository: 'newlove', baseRef: 'main', baseCommit: null },
+    attempt: { ...attempt, status: 'claimed' as const },
+    prompt: '',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    asMock(store.claimTask).mockResolvedValue(claim as never);
+    asMock(store.claimNextTask).mockResolvedValue(claim as never);
+    asMock(store.getTaskExecutionMaterial).mockResolvedValue({ id: attempt.taskId } as never);
+    asMock(store.appendEvent).mockResolvedValue(undefined);
+  });
+
+  it('claims exactly the dispatched task through the targeted RPC', async () => {
+    const result = await claimTaskForWorker(attempt.workerId, attempt.taskId);
+
+    expect(store.claimTask).toHaveBeenCalledWith(attempt.workerId, attempt.taskId);
+    expect(store.claimNextTask).not.toHaveBeenCalled();
+    expect(result?.attempt.id).toBe(attempt.id);
+  });
+
+  it('keeps the next-queued claim for a manual dispatch without a task id', async () => {
+    await claimTaskForWorker(attempt.workerId);
+
+    expect(store.claimNextTask).toHaveBeenCalledWith(attempt.workerId);
+    expect(store.claimTask).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the targeted claim migration is missing', async () => {
+    asMock(store.claimTask).mockRejectedValue(
+      Object.assign(new Error('missing'), { code: 'TARGETED_CLAIM_RPC_MISSING' })
+    );
+
+    await expect(claimTaskForWorker(attempt.workerId, attempt.taskId)).rejects.toMatchObject({
+      code: 'TARGETED_CLAIM_UNAVAILABLE',
+      status: 503,
+    });
+    expect(store.getTaskExecutionMaterial).not.toHaveBeenCalled();
+  });
+
+  it('records the GitHub run id as provenance without changing the attempt lock id', async () => {
+    asMock(store.getAttempt).mockResolvedValue({ ...attempt, status: 'claimed' });
+    asMock(store.patchAttempt).mockResolvedValue({ ...attempt, status: 'running' });
+
+    await startAttempt(attempt.workerId, attempt.id, 'gha:12345:1');
+
+    expect(store.patchAttempt).toHaveBeenCalledWith(
+      attempt.id,
+      expect.objectContaining({
+        verification: expect.objectContaining({ executionId: 'gha:12345:1' }),
+      }),
+      ['claimed']
+    );
+    expect(store.appendEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'attempt.running',
+        payload: { executionId: 'gha:12345:1' },
       })
     );
   });

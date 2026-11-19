@@ -16,6 +16,8 @@ remains infrastructure; the owner works from Admin.
 | Queue / attempts / events          | `lib/pierrot/dev/workbench/*`                                                             |
 | Codespace worker                   | `scripts/pierrot/dev-worker.mjs`                                                          |
 | Worker lifecycle                   | `scripts/pierrot/dev-worker-start.sh` / `dev-worker-supervisor.sh` / `dev-worker-stop.sh` |
+| GitHub Actions executor            | `.github/workflows/pierrot-actions-executor.yml` / `scripts/pierrot/actions-preflight.mjs` |
+| Actions audit/pilot/rollback       | `docs/pierrot-actions-executor.md`                                                         |
 | Codespace lifecycle                | `lib/pierrot/dev/workbench/lifecycle.ts`                                                  |
 | Cost ledger                        | `lib/pierrot/dev/workbench/costs.ts` / `ledger.ts`                                        |
 | Cost dashboard API                 | `app/api/admin/pierrot/dev/workbench/ledger/route.ts`                                     |

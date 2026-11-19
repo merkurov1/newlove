@@ -1451,15 +1451,20 @@ export async function registerWorker(input: {
   hostname?: string;
   codespaceName?: string;
   repository?: string;
+  kind?: 'codespace' | 'local' | 'actions';
   capabilities?: Record<string, unknown>;
   userId?: string;
 }): Promise<DevWorker | null> {
   if (!isWorkerId(input.workerId)) throw new Error('INVALID_WORKER_ID');
+  const kind =
+    input.kind === 'actions' || input.kind === 'local' || input.kind === 'codespace'
+      ? input.kind
+      : 'codespace';
   const row = {
     id: input.workerId,
     user_id: isUuid(input.userId) ? input.userId : null,
     name: truncateText(input.name, 120) || input.workerId,
-    kind: 'codespace',
+    kind,
     status: 'idle',
     version: truncateText(input.version, 80) || null,
     hostname: truncateText(input.hostname, 200) || null,
@@ -1476,7 +1481,20 @@ export async function registerWorker(input: {
     .upsert(row, { onConflict: 'id' })
     .select('*')
     .single();
-  if (error || !data) throw error || new Error('WORKER_REGISTER_FAILED');
+  if (error || !data) {
+    const code = String(error?.code || '');
+    const message = String(error?.message || '');
+    if (kind === 'actions' && (code === '23514' || /kind_check|check constraint/i.test(message))) {
+      const migration = new Error(
+        'The actions worker kind requires the additive migration 2026-12-12_pierrot_actions_executor.sql. Apply it before dispatching the Actions executor.'
+      );
+      (migration as Error & { code?: string; status?: number }).code =
+        'ACTIONS_KIND_MIGRATION_REQUIRED';
+      (migration as Error & { code?: string; status?: number }).status = 503;
+      throw migration;
+    }
+    throw error || new Error('WORKER_REGISTER_FAILED');
+  }
   const registeredReadiness =
     row.capabilities &&
     typeof row.capabilities === 'object' &&
@@ -1726,6 +1744,19 @@ export async function patchAttempt(
   return mapAttemptRow(data);
 }
 
+function mapClaimResult(
+  data: unknown
+): { task: DevWorkbenchTask; attempt: DevAttempt; prompt: string } | null {
+  if (!data || typeof data !== 'object') return null;
+  const record = data as { task?: Record<string, unknown>; attempt?: Record<string, unknown> };
+  if (!record.task || !record.attempt) return null;
+  return {
+    task: mapTaskRow(record.task),
+    attempt: mapAttemptRow(record.attempt),
+    prompt: '',
+  };
+}
+
 export async function claimNextTask(
   workerId: string,
   leaseSeconds = WORKER_LEASE_SECONDS
@@ -1739,12 +1770,44 @@ export async function claimNextTask(
     console.error('[dev-workbench] claim failed', { code: error.code, message: error.message });
     return null;
   }
-  if (!data || typeof data !== 'object') return null;
-  const record = data as { task?: Record<string, unknown>; attempt?: Record<string, unknown> };
-  if (!record.task || !record.attempt) return null;
-  const task = mapTaskRow(record.task);
-  const attempt = mapAttemptRow(record.attempt);
-  return { task, attempt, prompt: '' };
+  return mapClaimResult(data);
+}
+
+/**
+ * Claim one explicitly requested task (GitHub Actions executor).
+ *
+ * The existing next-queued RPC is still the single queue mechanism. This
+ * targeted variant only narrows the same atomic claim to one task id; it uses
+ * the same advisory lock, worker liveness check, active-attempt guard and
+ * FOR UPDATE SKIP LOCKED. If the additive migration is not applied the caller
+ * receives TARGETED_CLAIM_RPC_MISSING and must fail closed instead of claiming
+ * an unrelated task.
+ */
+export async function claimTask(
+  workerId: string,
+  taskId: string,
+  leaseSeconds = WORKER_LEASE_SECONDS
+): Promise<{ task: DevWorkbenchTask; attempt: DevAttempt; prompt: string } | null> {
+  await requireWorkbenchSchema();
+  const { data, error } = await store().rpc('pierrot_dev_claim_task', {
+    p_task_id: taskId,
+    p_worker_id: workerId,
+    p_lease_seconds: leaseSeconds,
+  });
+  if (error) {
+    const code = String(error.code || '');
+    const message = String(error.message || '');
+    if (code === 'PGRST202' || /function .*pierrot_dev_claim_task.* does not exist/i.test(message)) {
+      const missing = new Error(
+        'Targeted claims require the additive migration 2026-12-12_pierrot_actions_executor.sql.'
+      );
+      (missing as Error & { code?: string }).code = 'TARGETED_CLAIM_RPC_MISSING';
+      throw missing;
+    }
+    console.error('[dev-workbench] targeted claim failed', { code, message });
+    return null;
+  }
+  return mapClaimResult(data);
 }
 
 export async function reapExpiredAttempts(): Promise<number> {
