@@ -19,12 +19,14 @@ import {
   getActiveAttemptsForWorker,
   getAttempt,
   getQueueSnapshot,
+  getWorker,
   heartbeatWorker,
   isWorkerId,
   isUuid,
   pingWorkbenchStore,
   registerWorker,
 } from '@/lib/pierrot/dev/workbench/store';
+import { dispatchNextQueuedTask } from '@/lib/pierrot/dev/workbench/actions';
 import {
   WORKER_LEASE_SECONDS,
   WORKER_MAX_POLL_INTERVAL_MS,
@@ -287,6 +289,21 @@ export async function POST(req: Request) {
         if (taskId && !isUuid(taskId)) {
           return json({ error: 'taskId must be a UUID.', code: 'INVALID_TASK_ID' }, 400);
         }
+        // A targeted claim is an Actions-only capability. The database also
+        // enforces the same rule, but rejecting it here gives an explicit 403
+        // instead of a silent no-op for a Codespace worker.
+        if (taskId) {
+          const worker = await getWorker(workerId);
+          if (!worker || worker.kind !== 'actions') {
+            return json(
+              {
+                error: 'Targeted task claims are reserved for the GitHub Actions executor.',
+                code: 'TARGETED_CLAIM_REQUIRES_ACTIONS_WORKER',
+              },
+              403
+            );
+          }
+        }
         const claim = await claimTaskForWorker(workerId, taskId);
         if (claim) {
           await recordWorkerIdle({ workerId, status: 'busy', idleSince: null });
@@ -323,15 +340,18 @@ export async function POST(req: Request) {
           logExcerpt:
             typeof body.logExcerpt === 'string' ? body.logExcerpt.slice(0, 60_000) : undefined,
         });
-        // Refresh the Codespace idle timer while the executor is busy. This is
-        // scheduled after the response so a slow GitHub call never delays the
-        // attempt heartbeat itself.
-        after(async () => {
-          await keepCodespaceAwakeForActiveWork({
-            source: 'worker:progress',
-            workerId,
-          }).catch(() => {});
-        });
+        // Refresh the Codespace idle timer only when the active worker really
+        // is the Codespace worker. An ephemeral Actions runner must never touch
+        // the Codespaces lifecycle.
+        const progressWorker = await getWorker(workerId);
+        if (progressWorker?.kind === 'codespace') {
+          after(async () => {
+            await keepCodespaceAwakeForActiveWork({
+              source: 'worker:progress',
+              workerId,
+            }).catch(() => {});
+          });
+        }
         return json({ ok: true, cancelled: result.cancelled, attempt: result.attempt });
       }
 
@@ -361,6 +381,12 @@ export async function POST(req: Request) {
               : null,
         };
         const completed = await completeAttempt(workerId, attemptId, result);
+        // Queue progression: one Actions run = one task, so the next eligible
+        // task must be dispatched server-side. This is best effort and happens
+        // after the response; the database reservation prevents duplicates.
+        after(async () => {
+          await dispatchNextQueuedTask({ source: 'worker:complete' }).catch(() => {});
+        });
         return json({
           ok: true,
           attempt: completed.attempt,
@@ -391,6 +417,9 @@ export async function POST(req: Request) {
           modelStarted: body.modelStarted !== false,
           verification: safeObject(body.verification, 32_000),
         });
+        after(async () => {
+          await dispatchNextQueuedTask({ source: 'worker:fail' }).catch(() => {});
+        });
         return json({ ok: true, attempt });
       }
 
@@ -402,6 +431,11 @@ export async function POST(req: Request) {
           attemptId,
           text(body.reason, 2000) || 'Worker stopped before completion.'
         );
+        if (released) {
+          after(async () => {
+            await dispatchNextQueuedTask({ source: 'worker:release' }).catch(() => {});
+          });
+        }
         return json({ ok: released });
       }
 

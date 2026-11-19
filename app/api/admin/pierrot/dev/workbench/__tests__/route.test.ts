@@ -18,10 +18,18 @@ jest.mock('@/lib/pierrot/dev/workbench/overview', () => ({
 }));
 
 jest.mock('@/lib/pierrot/dev/workbench/lifecycle', () => ({
-  ensureCodespaceForQueuedWork: jest.fn(async () => ({
-    action: 'already-available',
-    codespace: null,
-    reason: 'Codespace is Available.',
+  ensureCodespaceForQueuedWork: jest.fn(),
+  startCodespaceNow: jest.fn(),
+}));
+
+jest.mock('@/lib/pierrot/dev/workbench/actions', () => ({
+  dispatchNextQueuedTask: jest.fn(async () => ({
+    dispatched: false,
+    taskId: null,
+    repository: null,
+    code: 'NO_QUEUED_WORK',
+    reason: 'No queued work.',
+    requestedAt: null,
   })),
 }));
 
@@ -34,11 +42,13 @@ jest.mock('@/lib/pierrot/dev/workbench/finalization', () => ({
 }));
 
 import { GET, maxDuration } from '../route';
+import { dispatchNextQueuedTask } from '@/lib/pierrot/dev/workbench/actions';
 import { advanceFinalization } from '@/lib/pierrot/dev/workbench/finalization';
 import { ensureCodespaceForQueuedWork } from '@/lib/pierrot/dev/workbench/lifecycle';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
 import { reapExpiredAttempts } from '@/lib/pierrot/dev/workbench/store';
 
+const dispatch = dispatchNextQueuedTask as jest.Mock;
 const ensure = ensureCodespaceForQueuedWork as jest.Mock;
 const overview = getWorkbenchOverview as jest.Mock;
 const reap = reapExpiredAttempts as jest.Mock;
@@ -46,10 +56,13 @@ const finalize = advanceFinalization as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  ensure.mockResolvedValue({
-    action: 'already-available',
-    codespace: null,
-    reason: 'Codespace is Available.',
+  dispatch.mockResolvedValue({
+    dispatched: false,
+    taskId: null,
+    repository: null,
+    code: 'NO_QUEUED_WORK',
+    reason: 'No queued work.',
+    requestedAt: null,
   });
   overview.mockResolvedValue({ schemaReady: true, lifecycle: {} });
   reap.mockResolvedValue(0);
@@ -57,7 +70,7 @@ beforeEach(() => {
 });
 
 describe('Admin Dev workbench GET', () => {
-  it('reaps, then allows guarded worker recovery, then builds the snapshot', async () => {
+  it('reaps, dispatches Actions work, finalizes, then builds the snapshot', async () => {
     const request = new Request('http://localhost/api/admin/pierrot/dev/workbench');
     const response = await GET(request);
     const body = (await response.json()) as { overview?: unknown };
@@ -65,24 +78,23 @@ describe('Admin Dev workbench GET', () => {
     expect(response.status).toBe(200);
     expect(body.overview).toBeTruthy();
     expect(reap).toHaveBeenCalledTimes(1);
-    expect(ensure).toHaveBeenCalledTimes(1);
-    expect(ensure).toHaveBeenCalledWith({
-      source: 'admin:overview',
-      allowWorkerRecovery: true,
-    });
+    expect(dispatch).toHaveBeenCalledWith({ source: 'admin:overview' });
     expect(overview).toHaveBeenCalledWith(expect.any(String), { skipReap: true });
     expect(finalize).toHaveBeenCalledWith({ trigger: 'admin:overview' });
 
-    // The overview must not be read before recovery and finalization have
-    // finished. Finalization is bounded to one integration step per poll.
-    expect(reap.mock.invocationCallOrder[0]).toBeLessThan(ensure.mock.invocationCallOrder[0]);
-    expect(ensure.mock.invocationCallOrder[0]).toBeLessThan(finalize.mock.invocationCallOrder[0]);
-    expect(finalize.mock.invocationCallOrder[0]).toBeLessThan(
-      overview.mock.invocationCallOrder[0]
-    );
+    expect(reap.mock.invocationCallOrder[0]).toBeLessThan(dispatch.mock.invocationCallOrder[0]);
+    expect(dispatch.mock.invocationCallOrder[0]).toBeLessThan(finalize.mock.invocationCallOrder[0]);
+    expect(finalize.mock.invocationCallOrder[0]).toBeLessThan(overview.mock.invocationCallOrder[0]);
   });
 
-  it('keeps a bounded function budget and does not wait for Codespace boot', async () => {
+  it('never starts a Codespace when Admin is opened or refreshed', async () => {
+    const request = new Request('http://localhost/api/admin/pierrot/dev/workbench');
+    await GET(request);
+
+    expect(ensure).not.toHaveBeenCalled();
+  });
+
+  it('keeps a bounded function budget and does not wait for Actions startup', async () => {
     expect(maxDuration).toBeLessThanOrEqual(30);
     const request = new Request('http://localhost/api/admin/pierrot/dev/workbench');
     const started = Date.now();
@@ -90,12 +102,13 @@ describe('Admin Dev workbench GET', () => {
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 
-  it('still returns the overview when the lifecycle reconcile is unavailable', async () => {
-    ensure.mockRejectedValueOnce(new Error('Codespaces API is unavailable.'));
+  it('still returns the overview when the Actions dispatcher is unavailable', async () => {
+    dispatch.mockRejectedValueOnce(new Error('GitHub dispatch API is unavailable.'));
     const request = new Request('http://localhost/api/admin/pierrot/dev/workbench');
     const response = await GET(request);
 
     expect(response.status).toBe(200);
     expect(overview).toHaveBeenCalledTimes(1);
+    expect(ensure).not.toHaveBeenCalled();
   });
 });

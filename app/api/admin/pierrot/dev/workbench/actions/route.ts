@@ -34,11 +34,12 @@ import {
   updateBatchStatus,
 } from '@/lib/pierrot/dev/workbench/store';
 import { createCodespace, listUserCodespaces } from '@/lib/pierrot/dev/workbench/github';
+import { startCodespaceNow, stopCodespaceNow } from '@/lib/pierrot/dev/workbench/lifecycle';
 import {
-  ensureCodespaceForQueuedWork,
-  startCodespaceNow,
-  stopCodespaceNow,
-} from '@/lib/pierrot/dev/workbench/lifecycle';
+  ActionsDispatchError,
+  dispatchNextQueuedTask,
+  dispatchTaskToActions,
+} from '@/lib/pierrot/dev/workbench/actions';
 import { advanceFinalization, retryFinalization } from '@/lib/pierrot/dev/workbench/finalization';
 import { CODESPACE_NAME_ENV } from '@/lib/pierrot/dev/workbench/setup';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
@@ -101,6 +102,17 @@ function errorResponse(error: unknown) {
   if (error instanceof DevTransitionError) {
     return json({ error: error.message, code: error.code }, 409);
   }
+  if (error instanceof ActionsDispatchError) {
+    return json(
+      {
+        error: error.message,
+        code: error.code,
+        taskId: error.taskId,
+        detail: error.detail,
+      },
+      error.status
+    );
+  }
   if (error instanceof WorkbenchGitHubError) {
     return json(
       {
@@ -152,12 +164,15 @@ export async function POST(req: Request) {
         const task = await approveTask(admin.id, taskId);
         if (!task) return json({ error: 'Task not found.' }, 404);
         // Approval is the owner's normal entry point. A standalone task enters
-        // the queue immediately (and therefore starts the Codespace). Tasks
-        // already attached to a batch stay ready so the batch owns their order.
+        // the queue immediately and is dispatched to the GitHub Actions
+        // executor. Tasks already attached to a batch stay ready so the batch
+        // owns their order. Approval never starts a Codespace.
         const batchId = await getBatchIdForTask(task.id);
         if (!batchId) {
+          let queued = false;
           try {
             await enqueueTask(admin.id, taskId);
+            queued = true;
           } catch {
             await appendEvent({
               taskId,
@@ -166,8 +181,10 @@ export async function POST(req: Request) {
               message: 'Task was approved but could not be queued automatically.',
             }).catch(() => {});
           }
+          if (queued) {
+            await dispatchTaskToActions({ taskId, source: 'admin:approve' });
+          }
         }
-        await ensureCodespaceForQueuedWork({ source: 'admin:approve' });
         break;
       }
       case 'enqueue': {
@@ -177,7 +194,7 @@ export async function POST(req: Request) {
           typeof body.batchId === 'string' ? body.batchId : null
         );
         if (!task) return json({ error: 'Task not found.' }, 404);
-        await ensureCodespaceForQueuedWork({ source: 'admin:enqueue' });
+        await dispatchTaskToActions({ taskId, source: 'admin:enqueue' });
         break;
       }
       case 'dequeue': {
@@ -193,7 +210,7 @@ export async function POST(req: Request) {
       case 'retry': {
         const task = await retryTask(admin.id, taskId);
         if (!task) return json({ error: 'Task not found.' }, 404);
-        await ensureCodespaceForQueuedWork({ source: 'admin:retry' });
+        await dispatchTaskToActions({ taskId, source: 'admin:retry' });
         break;
       }
       case 'accept': {
@@ -262,7 +279,7 @@ export async function POST(req: Request) {
           message: paused ? 'Queue paused by the owner.' : 'Queue resumed by the owner.',
         });
         if (!paused) {
-          await ensureCodespaceForQueuedWork({ source: 'admin:resume' });
+          await dispatchNextQueuedTask({ source: 'admin:resume' });
         }
         break;
       }
@@ -308,7 +325,7 @@ export async function POST(req: Request) {
                       : 'The batch could not be started.';
           return json({ error: message, code: result.error, notReady: result.notReady }, status);
         }
-        await ensureCodespaceForQueuedWork({ source: 'admin:start_batch' });
+        await dispatchNextQueuedTask({ source: 'admin:start_batch' });
         break;
       }
       case 'update_batch': {

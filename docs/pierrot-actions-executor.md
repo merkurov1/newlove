@@ -55,13 +55,13 @@ Supabase service-role key; it talks only to the worker API.
 
 ### 1.4 Plan and required secrets/permissions (no values requested)
 
-| Item                       | Type                           | Purpose                                                                                         |
-| -------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `DEEPSEEK_API_KEY`         | GitHub repository secret       | Forwarded only to the executor/OpenCode process as `DEEPSEEK_API_KEY`                           |
-| `PIERROT_DEV_WORKER_TOKEN` | GitHub repository secret       | Existing internal worker API credential (32+ chars)                                             |
-| `GITHUB_TOKEN`             | Automatic job token            | Push the per-attempt branch; `contents: write` only                                             |
-| `PIERROT_DEV_API_URL`      | Repository variable (optional) | Production admin origin; defaults to `https://merkurov.love`                                    |
-| Additive SQL               | Manual owner action            | `migrations/2026-12-12_pierrot_actions_executor.sql` for targeted claim + `actions` worker kind |
+| Item                       | Type                           | Purpose                                                                                                                                                                                             |
+| -------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DEEPSEEK_API_KEY`         | GitHub repository secret       | Forwarded only to the executor/OpenCode process as `DEEPSEEK_API_KEY`                                                                                                                               |
+| `PIERROT_DEV_WORKER_TOKEN` | GitHub repository secret       | Existing internal worker API credential (32+ chars)                                                                                                                                                 |
+| `GITHUB_TOKEN`             | Automatic job token            | Push the per-attempt branch; `contents: write` only                                                                                                                                                 |
+| `PIERROT_DEV_API_URL`      | Repository variable (optional) | Production admin origin; defaults to `https://merkurov.love`                                                                                                                                        |
+| Additive SQL               | Manual owner action            | `migrations/2026-12-12_pierrot_actions_executor.sql` for targeted claim + `actions` worker kind; `migrations/2026-12-13_pierrot_actions_routing.sql` for durable routing + duplicate-dispatch guard |
 
 No Supabase service-role key, Vercel token or production credential is given to
 the Actions runner. The workflow is not triggered by `pull_request`, so fork or
@@ -150,10 +150,14 @@ Ephemeral ubuntu-latest runner
    `Settings → Secrets and variables → Actions → New repository secret`.
 3. Confirm `PIERROT_DEV_WORKER_TOKEN` exists there (same value as the deployed
    server). Optionally set repository variable `PIERROT_DEV_API_URL`.
-4. Apply the additive migration manually after review, in a maintenance window:
-   `migrations/2026-12-12_pierrot_actions_executor.sql`.
-   It adds one RPC and widens the worker-kind check; it does not touch queue
-   rows, statuses, attempts or RLS policies.
+4. Apply the additive migrations manually after review, in a maintenance window,
+   in this order:
+   `migrations/2026-12-12_pierrot_actions_executor.sql`, then
+   `migrations/2026-12-13_pierrot_actions_routing.sql`.
+   They add two RPCs/columns and widen the worker-kind check; they do not delete
+   or rewrite queue rows, statuses, attempts or RLS policies. Until the 12-13
+   migration is applied, dispatch fails explicitly with
+   `ACTIONS_ROUTING_MIGRATION_REQUIRED`; it never falls back to Codespaces.
 5. Ensure the GitHub token used by the server can create PRs (existing setup).
 6. Keep the Codespace worker and its secrets untouched. Do not stop or delete
    the Codespace until the owner approves the completed pilot.
@@ -181,10 +185,28 @@ Event dispatch from a trusted dispatcher:
 Use `POST /repos/merkurov1/newlove/dispatches` with a token that has
 `contents: write`. Do not dispatch from fork or untrusted PR context.
 
-Automatic dispatch from the queue is intentionally **not** enabled during the
-pilot. The owner triggers each task manually. Only after the pilot and owner
-approval should a small server-side dispatcher call `repository_dispatch`; it
-must never become a polling daemon inside Actions.
+Automatic dispatch from the queue is now the standard path:
+
+- approving/enqueuing/retrying a standalone task calls
+  `POST /repos/{owner}/{repo}/dispatches` with `event_type =
+pierrot-dev-task` and `client_payload.task_id` set to that exact task;
+- resuming the queue or starting a batch dispatches at most one eligible task;
+- Admin overview runs a bounded recovery pump (it never starts a Codespace);
+- a worker completion/failure/release dispatches the next eligible task, so a
+  one-run-per-task workflow can progress through the queue.
+
+The dispatcher is server-side and request-driven; it is not a daemon inside
+Actions. Before the GitHub call it atomically reserves the task
+(`assigned_executor = 'actions'`, `actions_dispatch_requested_at = now`). The
+database claim RPC refuses an Actions-assigned task to a Codespace worker and
+requires `assigned_executor = 'codespace'` for the manual reserve. A failed
+dispatch records `task.actions_dispatch_failed` plus `last_error_code` on the
+task and throws; it does not emit `task.actions_dispatched` and does not start
+Codespaces.
+
+Required server permission for dispatch: the repository token must have
+**Contents: write** (classic: `repo`) so `repository_dispatch` is accepted. The
+workflow job itself still needs only `contents: write`.
 
 ---
 
@@ -247,8 +269,11 @@ Disable workflow`) or stop dispatching `pierrot-dev-task`. No code revert is
    restore the previous kind check **after** confirming no `actions` worker rows
    remain. Queue and attempt history are untouched. Do not drop tables.
 5. Resume Codespaces by starting the existing Codespace; `postStartCommand`
-   starts the existing supervisor/worker. No queue migration or data copy is
-   needed.
+   starts the existing supervisor/worker. Because Actions is now the standard
+   executor, explicitly assign work to the reserve before it can be claimed:
+   `UPDATE public.pierrot_dev_prompts SET assigned_executor = 'codespace',
+actions_dispatch_requested_at = NULL WHERE id = '<task-uuid>';`
+   No queue migration or data copy is needed.
 
 Rollback loses no tasks, attempts, events, commits or PR links.
 

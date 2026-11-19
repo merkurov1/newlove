@@ -5,6 +5,7 @@ import {
   appendEvent,
   claimNextTask,
   claimTask,
+  clearTaskActionsDispatch,
   clearWorkerAttempt,
   expectedBranch,
   getActiveAttempt,
@@ -609,9 +610,12 @@ export async function failAttempt(input: {
     // pushed SHA is ever recorded as the base by the worker.
     const resumeFrom =
       headSha &&
-      ['EXECUTION_TIMEOUT', 'OPENCODE_FAILED', 'OPENCODE_INTERRUPTED', 'OPENCODE_REPORT_MISSING'].includes(
-        input.errorCode
-      )
+      [
+        'EXECUTION_TIMEOUT',
+        'OPENCODE_FAILED',
+        'OPENCODE_INTERRUPTED',
+        'OPENCODE_REPORT_MISSING',
+      ].includes(input.errorCode)
         ? headSha
         : null;
     await patchTask(task.id, {
@@ -792,7 +796,10 @@ export async function enqueueTask(
       message: `Task added to the queue at position ${position}.`,
     },
   });
-  if (queued) await setQueueOptOut(taskId, false);
+  if (queued) {
+    await setQueueOptOut(taskId, false);
+    await clearTaskActionsDispatch(taskId);
+  }
   return queued;
 }
 
@@ -858,7 +865,10 @@ export async function retryTask(userId: string, taskId: string): Promise<DevWork
       message: `Retry requested. Previous attempts are preserved; the next attempt will get a new ID and branch.`,
     },
   });
-  if (updated) await setQueueOptOut(taskId, false);
+  if (updated) {
+    await setQueueOptOut(taskId, false);
+    await clearTaskActionsDispatch(taskId);
+  }
   return updated;
 }
 

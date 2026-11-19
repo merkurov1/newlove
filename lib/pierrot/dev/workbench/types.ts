@@ -47,6 +47,18 @@ export type DevWorkbenchTask = {
   blockedReason: string | null;
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
+  /**
+   * Durable routing decision for the queued task. `actions` means only an
+   * ephemeral GitHub Actions runner may claim it; `codespace` is the explicit
+   * manual reserve. `null` keeps legacy tasks claimable by either executor.
+   */
+  assignedExecutor?: 'actions' | 'codespace' | null;
+  /**
+   * Timestamp of the last repository_dispatch request. Non-null marks a
+   * dispatch as already requested so Admin polling cannot launch duplicates.
+   * It is cleared on enqueue/retry/recovery, not used as a success flag.
+   */
+  actionsDispatchRequestedAt?: string | null;
   resultCommit: string | null;
   resultNotes: string;
   pullRequests: string[];

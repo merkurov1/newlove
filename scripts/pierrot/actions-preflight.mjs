@@ -20,7 +20,9 @@ import { runProcess } from './dev-worker-process.mjs';
 const API_BASE = (
   process.env.PIERROT_DEV_API_URL ||
   process.env.NEXT_PUBLIC_BASE_URL ||
-  'https://merkurov.love'
+  // Production redirects the apex host to www; a POST to the apex would lose
+  // its body on the 301, so the canonical host is the default.
+  'https://www.merkurov.love'
 ).replace(/\/+$/, '');
 const WORKER_TOKEN = (process.env.PIERROT_DEV_WORKER_TOKEN || '').trim();
 const PROVIDER = (process.env.PIERROT_DEV_OPENCODE_PROVIDER || 'deepseek').trim();

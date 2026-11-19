@@ -1,0 +1,270 @@
+/** @jest-environment node */
+
+jest.mock('../github', () => {
+  class WorkbenchGitHubError extends Error {
+    code: string;
+    status: number | null;
+    endpoint: string | null;
+    requiredPermission: string | null;
+    retryAt: string | null;
+    constructor(
+      code: string,
+      message: string,
+      status: number | null = null,
+      options: Record<string, unknown> = {}
+    ) {
+      super(message);
+      this.code = code;
+      this.status = status;
+      this.endpoint = (options.endpoint as string) || null;
+      this.requiredPermission = (options.requiredPermission as string) || null;
+      this.retryAt = (options.retryAt as string) || null;
+    }
+  }
+  return {
+    WorkbenchGitHubError,
+    dispatchRepositoryEvent: jest.fn(),
+  };
+});
+
+jest.mock('../store', () => ({
+  appendEvent: jest.fn(async () => undefined),
+  getActiveAttempt: jest.fn(async () => null),
+  getTaskRowUnscoped: jest.fn(),
+  isActionsRoutingSchemaReady: jest.fn(async () => true),
+  isQueuePaused: jest.fn(async () => false),
+  listQueuedTasksForDispatch: jest.fn(async () => []),
+  patchTask: jest.fn(async () => ({})),
+  reserveTaskForActionsDispatch: jest.fn(),
+}));
+
+import * as github from '../github';
+import * as store from '../store';
+import { ActionsDispatchError, dispatchNextQueuedTask, dispatchTaskToActions } from '../actions';
+
+const TASK_ID = '8289098f-993a-4e75-abe4-81e23caee6d0';
+
+const queuedTask = {
+  id: TASK_ID,
+  title: 'Task',
+  objective: 'Do the task',
+  repository: 'newlove',
+  baseRef: 'main',
+  status: 'queued' as const,
+  priority: 0,
+  queuePosition: 1,
+  queuedAt: '2026-11-19T00:00:00.000Z',
+  attemptCount: 0,
+  acceptanceCriteria: ['done'],
+  verificationStatus: null,
+  blockedReason: null,
+  lastErrorCode: null,
+  lastErrorMessage: null,
+  assignedExecutor: null,
+  actionsDispatchRequestedAt: null,
+  resultCommit: null,
+  resultNotes: '',
+  pullRequests: [],
+  updatedAt: '2026-11-19T00:00:00.000Z',
+  createdAt: '2026-11-19T00:00:00.000Z',
+};
+
+function asMock(value: unknown): jest.Mock {
+  return value as jest.Mock;
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  asMock(store.getTaskRowUnscoped).mockResolvedValue(queuedTask);
+  asMock(store.isActionsRoutingSchemaReady).mockResolvedValue(true);
+  asMock(store.isQueuePaused).mockResolvedValue(false);
+  asMock(store.getActiveAttempt).mockResolvedValue(null);
+  asMock(store.appendEvent).mockResolvedValue(undefined);
+  asMock(store.patchTask).mockResolvedValue(queuedTask);
+  asMock(store.reserveTaskForActionsDispatch).mockResolvedValue({
+    ...queuedTask,
+    assignedExecutor: 'actions',
+    actionsDispatchRequestedAt: '2026-11-19T01:00:00.000Z',
+  });
+  asMock(github.dispatchRepositoryEvent).mockResolvedValue(undefined);
+});
+
+describe('task approval dispatch', () => {
+  it('dispatches exactly the queued task id to the Actions event', async () => {
+    const result = await dispatchTaskToActions({ taskId: TASK_ID, source: 'admin:approve' });
+
+    expect(result.dispatched).toBe(true);
+    expect(result.taskId).toBe(TASK_ID);
+    expect(store.reserveTaskForActionsDispatch).toHaveBeenCalledWith(TASK_ID);
+    expect(github.dispatchRepositoryEvent).toHaveBeenCalledWith({
+      repository: 'newlove',
+      eventType: 'pierrot-dev-task',
+      clientPayload: expect.objectContaining({ task_id: TASK_ID, source: 'admin:approve' }),
+    });
+    expect(store.appendEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'task.actions_dispatched', taskId: TASK_ID })
+    );
+  });
+
+  it('is an explicit no-op while the queue is paused', async () => {
+    asMock(store.isQueuePaused).mockResolvedValue(true);
+
+    const result = await dispatchTaskToActions({ taskId: TASK_ID, source: 'admin:approve' });
+
+    expect(result.dispatched).toBe(false);
+    expect(result.code).toBe('QUEUE_PAUSED');
+    expect(store.reserveTaskForActionsDispatch).not.toHaveBeenCalled();
+    expect(github.dispatchRepositoryEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not dispatch twice when the reservation already exists', async () => {
+    asMock(store.reserveTaskForActionsDispatch).mockResolvedValue(null);
+
+    const result = await dispatchTaskToActions({ taskId: TASK_ID, source: 'admin:approve' });
+
+    expect(result.dispatched).toBe(false);
+    expect(result.code).toBe('ACTIONS_DISPATCH_ALREADY_REQUESTED');
+    expect(github.dispatchRepositoryEvent).not.toHaveBeenCalled();
+  });
+
+  it('records a dispatch failure on the task and does not emit a success event', async () => {
+    asMock(github.dispatchRepositoryEvent).mockRejectedValue(
+      new github.WorkbenchGitHubError(
+        'GITHUB_PERMISSION_DENIED',
+        'GitHub denied the dispatch.',
+        403,
+        {
+          endpoint: 'POST /repos/{owner}/{repo}/dispatches',
+          requiredPermission: 'Contents: write',
+        }
+      )
+    );
+
+    await expect(
+      dispatchTaskToActions({ taskId: TASK_ID, source: 'admin:approve' })
+    ).rejects.toMatchObject({ code: 'ACTIONS_DISPATCH_FAILED', status: 502, taskId: TASK_ID });
+
+    expect(store.patchTask).toHaveBeenCalledWith(TASK_ID, {
+      last_error_code: 'ACTIONS_DISPATCH_FAILED',
+      last_error_message: expect.stringContaining('GitHub denied'),
+    });
+    expect(store.appendEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'task.actions_dispatch_failed',
+        level: 'error',
+        taskId: TASK_ID,
+      })
+    );
+    expect(store.appendEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'task.actions_dispatched' })
+    );
+  });
+
+  it('fails closed with an explicit configuration error when the token is missing', async () => {
+    asMock(github.dispatchRepositoryEvent).mockRejectedValue(
+      new github.WorkbenchGitHubError('GITHUB_TOKEN_MISSING', 'GITHUB_TOKEN is not configured.')
+    );
+
+    await expect(
+      dispatchTaskToActions({ taskId: TASK_ID, source: 'admin:approve' })
+    ).rejects.toMatchObject({
+      code: 'ACTIONS_DISPATCH_NOT_CONFIGURED',
+      status: 503,
+    });
+
+    expect(store.patchTask).toHaveBeenCalledWith(TASK_ID, {
+      last_error_code: 'ACTIONS_DISPATCH_NOT_CONFIGURED',
+      last_error_message: expect.stringContaining('No Codespaces fallback'),
+    });
+    expect(store.appendEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'task.actions_dispatched' })
+    );
+  });
+
+  it('fails explicitly when the routing migration is missing', async () => {
+    asMock(store.isActionsRoutingSchemaReady).mockResolvedValue(false);
+
+    await expect(
+      dispatchTaskToActions({ taskId: TASK_ID, source: 'admin:approve' })
+    ).rejects.toMatchObject({
+      code: 'ACTIONS_ROUTING_MIGRATION_REQUIRED',
+      status: 503,
+    });
+    expect(store.getTaskRowUnscoped).not.toHaveBeenCalled();
+    expect(github.dispatchRepositoryEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses a task explicitly assigned to the manual Codespace reserve', async () => {
+    asMock(store.getTaskRowUnscoped).mockResolvedValue({
+      ...queuedTask,
+      assignedExecutor: 'codespace',
+    });
+
+    await expect(
+      dispatchTaskToActions({ taskId: TASK_ID, source: 'admin:approve' })
+    ).rejects.toMatchObject({ code: 'ACTIONS_DISPATCH_CODESPACE_ASSIGNED' });
+    expect(github.dispatchRepositoryEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('bounded Actions recovery pump', () => {
+  it('skips Codespace-assigned and already-requested tasks', async () => {
+    asMock(store.listQueuedTasksForDispatch).mockResolvedValue([
+      { ...queuedTask, id: '11111111-1111-4111-8111-111111111111', assignedExecutor: 'codespace' },
+      {
+        ...queuedTask,
+        id: '22222222-2222-4222-8222-222222222222',
+        actionsDispatchRequestedAt: '2026-11-19T00:30:00.000Z',
+      },
+      { ...queuedTask, id: TASK_ID },
+    ]);
+    asMock(store.getTaskRowUnscoped).mockImplementation(async (id: string) =>
+      id === TASK_ID ? queuedTask : null
+    );
+    asMock(store.reserveTaskForActionsDispatch).mockImplementation(async (id: string) =>
+      id === TASK_ID
+        ? {
+            ...queuedTask,
+            assignedExecutor: 'actions',
+            actionsDispatchRequestedAt: '2026-11-19T01:00:00.000Z',
+          }
+        : null
+    );
+
+    const result = await dispatchNextQueuedTask({ source: 'admin:overview' });
+
+    expect(result.dispatched).toBe(true);
+    expect(result.taskId).toBe(TASK_ID);
+    expect(store.reserveTaskForActionsDispatch).toHaveBeenCalledTimes(1);
+    expect(store.reserveTaskForActionsDispatch).toHaveBeenCalledWith(TASK_ID);
+  });
+
+  it('does nothing while the queue is paused', async () => {
+    asMock(store.isQueuePaused).mockResolvedValue(true);
+    asMock(store.listQueuedTasksForDispatch).mockResolvedValue([queuedTask]);
+
+    const result = await dispatchNextQueuedTask({ source: 'admin:overview' });
+
+    expect(result.code).toBe('QUEUE_PAUSED');
+    expect(store.listQueuedTasksForDispatch).not.toHaveBeenCalled();
+    expect(github.dispatchRepositoryEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not dispatch while another attempt is active', async () => {
+    asMock(store.getActiveAttempt).mockResolvedValue({ id: 'attempt', taskId: TASK_ID });
+
+    const result = await dispatchNextQueuedTask({ source: 'admin:overview' });
+
+    expect(result.code).toBe('ACTIVE_ATTEMPT');
+    expect(store.listQueuedTasksForDispatch).not.toHaveBeenCalled();
+    expect(github.dispatchRepositoryEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('dispatch error surface', () => {
+  it('uses coded errors instead of a silent fallback', () => {
+    const error = new ActionsDispatchError('ACTIONS_DISPATCH_FAILED', 'failed', 502, TASK_ID);
+    expect(error.code).toBe('ACTIONS_DISPATCH_FAILED');
+    expect(error.taskId).toBe(TASK_ID);
+  });
+});
