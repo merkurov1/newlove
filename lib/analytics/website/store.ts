@@ -138,6 +138,29 @@ export async function upsertConnection(
   if (error) throw new Error(`analytics_connections upsert: ${error.message}`);
 }
 
+/**
+ * Rotate only the encrypted credential. Connected-at, discovery metadata and
+ * project links stay untouched, so a refresh never looks like a new connect.
+ */
+export async function updateConnectionSecret(
+  store: SupabaseClient,
+  provider: AnalyticsProvider,
+  sealed: { ciphertext: string; iv: string; tag: string; keyVersion: string }
+): Promise<void> {
+  const { error } = await store
+    .from('analytics_connections')
+    .update({
+      token_ciphertext: sealed.ciphertext,
+      token_iv: sealed.iv,
+      token_tag: sealed.tag,
+      token_key_version: sealed.keyVersion,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('provider', provider);
+
+  if (error) throw new Error(`analytics_connections token update: ${error.message}`);
+}
+
 export async function markConnectionError(
   store: SupabaseClient,
   provider: AnalyticsProvider,

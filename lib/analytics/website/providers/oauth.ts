@@ -1,6 +1,7 @@
 import { assertServerOnly } from '@/lib/serverOnly';
 import {
   GA4_READONLY_SCOPE,
+  GOOGLE_OAUTH_SCOPES,
   GSC_READONLY_SCOPE,
   WEBSITE_ANALYTICS_MEASUREMENT_ID,
   getGoogleOAuthConfig,
@@ -81,7 +82,7 @@ export function buildGoogleConsentUrl(input: { state: string; loginHint?: string
     access_type: 'offline',
     prompt: 'consent',
     include_granted_scopes: 'true',
-    scope: [GA4_READONLY_SCOPE, GSC_READONLY_SCOPE].join(' '),
+    scope: [...GOOGLE_OAUTH_SCOPES].join(' '),
     state: input.state,
   });
 

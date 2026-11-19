@@ -66,6 +66,17 @@ describe('Pierrot execution plan routing', () => {
     expect(plan.ownerTool).toBeNull();
   });
 
+  it('keeps the shared YouTube analytics tool in a project chat', () => {
+    const plan = buildPierrotExecutionPlan('UNFRAMED: статистика YouTube-канала за 30 дней', {
+      ownerMode: true,
+    });
+
+    expect(plan.operation).toBe('youtube.report');
+    expect(plan.tool).toBe('youtube');
+    expect(plan.ownerTool?.kind).toBe('youtube');
+    expect(plan.requiresWeb).toBe(false);
+  });
+
   it('keeps an explicit Brain request on Brain even when it contains a search verb', () => {
     const plan = buildPierrotExecutionPlan('Найди в Brain заметку о Sotheby’s', {
       ownerMode: true,

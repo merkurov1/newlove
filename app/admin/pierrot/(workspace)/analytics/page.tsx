@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { unstable_cache } from 'next/cache';
 
-import { requireAdmin } from '@/lib/serverAuth';
+import { requireAdmin, getServerSupabaseClient } from '@/lib/serverAuth';
 import { analyticsEncryptionKeySource } from '@/lib/analytics/website/tokenCrypto';
 import {
   WEBSITE_ANALYTICS_MEASUREMENT_ID,
@@ -12,6 +12,8 @@ import {
 } from '@/lib/analytics/website/config';
 import { loadSourceHealth } from '@/lib/analytics/website/dataset';
 import { loadWebsiteDashboard } from '@/lib/analytics/website/dashboard';
+import { loadYouTubeConnectionState } from '@/lib/youtube/connection';
+import { getYouTubeChannelId, getYouTubeDataApiKey } from '@/lib/youtube/config';
 import type { ProviderHealth } from '@/lib/analytics/website/types';
 import Sparkline from '@/components/pierrot/workspace/Sparkline';
 
@@ -150,12 +152,16 @@ function banner(params: SearchParams): { tone: 'ok' | 'warn' | 'bad'; text: stri
   if (discovery) return discovery;
 
   if (connect === 'success') {
-    return { tone: 'ok', text: 'Google-доступ получен. Оба источника настроены только на чтение.' };
+    return {
+      tone: 'ok',
+      text: 'Google-доступ получен. GA4, Search Console и общий YouTube-канал Pierrot + UNFRAMED настроены только на чтение.',
+    };
   }
   if (connect === 'partial' || connect === 'error') {
     const reason = one(params, 'reason');
     const ga = one(params, 'ga');
     const gsc = one(params, 'gsc');
+    const yt = one(params, 'yt');
 
     if (reason === 'redirect_uri_mismatch') {
       return {
@@ -180,10 +186,12 @@ function banner(params: SearchParams): { tone: 'ok' | 'warn' | 'bad'; text: stri
 
     const detail =
       explainError(reason ?? null) ||
-      [ga && `GA4: ${ga}`, gsc && `GSC: ${gsc}`].filter(Boolean).join(' · ');
+      [ga && `GA4: ${ga}`, gsc && `GSC: ${gsc}`, yt && `YouTube: ${yt}`]
+        .filter(Boolean)
+        .join(' · ');
 
     return {
-      tone: ga === 'connected' || gsc === 'connected' ? 'warn' : 'bad',
+      tone: ga === 'connected' || gsc === 'connected' || yt === 'connected' ? 'warn' : 'bad',
       text: detail
         ? `Подключение завершилось не полностью: ${detail}. Источники можно подключить отдельно.`
         : 'Подключение завершилось не полностью. Проверьте разрешения и повторите.',
@@ -193,12 +201,15 @@ function banner(params: SearchParams): { tone: 'ok' | 'warn' | 'bad'; text: stri
     return { tone: 'ok', text: `Синхронизация завершена: ${sync.replace(/,/g, ' · ')}.` };
   }
   if (disconnected) {
-    const google = disconnected === 'google_analytics' || disconnected === 'search_console';
+    const google =
+      disconnected === 'google_analytics' ||
+      disconnected === 'search_console' ||
+      disconnected === 'youtube';
 
     return {
       tone: 'warn',
       text: google
-        ? 'Google-разрешение отозвано, сохранённые токены удалены. Google Analytics и Search Console отключены вместе, потому что используют один grant.'
+        ? 'Google-разрешение отозвано, сохранённые токены удалены. Google Analytics, Search Console и общий YouTube-канал отключены вместе, потому что используют один grant.'
         : 'Источник Umami отключён. Сохранённые данные не удалены.',
     };
   }
@@ -422,9 +433,34 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
   const gsc = sourceFor('search_console');
   const um = sourceFor('umami');
   const bs = sourceFor('bluesky');
+  const youtube = await (async () => {
+    try {
+      return await loadYouTubeConnectionState(
+        getServerSupabaseClient({ useServiceRole: true })
+      );
+    } catch {
+      return null;
+    }
+  })();
+  const youtubeTone = youtube?.connected
+    ? 'growth'
+    : youtube?.status === 'error' || youtube?.status === 'needs_reauthorization'
+      ? 'attention'
+      : 'missing';
+  const youtubeStatus = youtube?.connected
+    ? 'подключён'
+    : youtube?.status === 'needs_reauthorization'
+      ? 'нужно разрешение'
+      : youtube?.status === 'error'
+        ? 'ошибка'
+        : youtube?.status === 'disabled'
+          ? 'отключён'
+          : 'не подключён';
   const blueskyDashboard = dashboard?.dataset.bluesky ?? null;
   const blueskyPeriodPosts = blueskyDashboard?.period.posts ?? [];
   const recentRuns = health.runs.slice(0, 12);
+  const youtubeStatusHref = '/api/admin/pierrot/youtube/status';
+  const youtubeConnectHref = '/api/admin/analytics/connect?provider=youtube';
 
   return (
     <div className="pw-page pw-analytics">
@@ -434,9 +470,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
             <p className="pw-kicker">ANALYTICS · WEBSITE INTELLIGENCE</p>
             <h1 className="pw-page-title">Сайт под наблюдением.</h1>
             <p className="pw-page-lede">
-              Google Analytics, Search Console, Umami и Bluesky остаются независимыми источниками.
-              Пьеро сопоставляет их с рассылками, Supabase и Brain, но не выдаёт отсутствие данных
-              за ноль.
+              Google Analytics, Search Console, Umami, Bluesky и общий YouTube-канал остаются
+              независимыми источниками. Пьеро сопоставляет их с рассылками, Supabase и Brain, но не
+              выдаёт отсутствие данных за ноль.
             </p>
           </div>
 
@@ -473,8 +509,10 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
           <section className="pw-analytics-config pw-analytics-config--quiet">
             <p>
               <strong>OAuth настроен.</strong> Redirect URI: <code>{google.redirectUri}</code>.
-              Запрашиваются только <code>analytics.readonly</code> и{' '}
-              <code>webmasters.readonly</code>.
+              Запрашиваются только read-only scopes: <code>analytics.readonly</code>,{' '}
+              <code>webmasters.readonly</code>, <code>youtube.readonly</code> и{' '}
+              <code>yt-analytics.readonly</code>. Один grant обслуживает сайт и общий канал
+              Pierrot + UNFRAMED.
             </p>
             {encryption === 'derived' && (
               <p>
@@ -491,6 +529,89 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
           {um && <SourceCard source={um} provider="umami" />}
           {bs && <SourceCard source={bs} provider="bluesky" />}
         </section>
+
+        {youtube && (
+          <section className="pw-analytics-grid" aria-label="Общий YouTube-канал">
+            <article className="pw-analytics-card">
+              <div className="pw-analytics-card-head">
+                <div>
+                  <span className={`pw-dot pw-dot-${youtubeTone}`} aria-hidden="true" />
+                  <h2>YouTube · Pierrot + UNFRAMED</h2>
+                </div>
+                <span className="pw-analytics-badge">{youtubeStatus}</span>
+              </div>
+
+              <p className="pw-analytics-id">
+                {youtube.accountLabel || youtube.channelId || 'Общий канал ещё не подключён'}
+              </p>
+
+              <dl className="pw-analytics-facts">
+                <div>
+                  <dt>Channel ID</dt>
+                  <dd>{youtube.channelId || getYouTubeChannelId() || '—'}</dd>
+                </div>
+                <div>
+                  <dt>Подключён</dt>
+                  <dd>{formatDate(youtube.connectedAt)}</dd>
+                </div>
+                <div>
+                  <dt>Последняя проверка</dt>
+                  <dd>{formatDate(youtube.lastCheckedAt)}</dd>
+                </div>
+                <div>
+                  <dt>Публичный Data API ключ</dt>
+                  <dd>{getYouTubeDataApiKey() ? 'настроен' : 'используется OAuth'}</dd>
+                </div>
+              </dl>
+
+              <p className="pw-analytics-hint">
+                Один канал и один Google grant для обоих проектов. OAuth scopes:{' '}
+                {youtube.scopes.length
+                  ? youtube.scopes
+                      .map((scope) => scope.replace('https://www.googleapis.com/auth/', ''))
+                      .join(', ')
+                  : '—'}
+              </p>
+
+              {youtube.missingScopes.length > 0 && (
+                <p className="pw-analytics-action">
+                  Не хватает read-only scopes: {youtube.missingScopes.join(', ')}. Переподключите
+                  Google, чтобы приватная аналитика стала доступна.
+                </p>
+              )}
+
+              {youtube.lastErrorCode && (
+                <p className="pw-analytics-error">
+                  {explainError(youtube.lastErrorCode, youtube.lastErrorMessage)}
+                </p>
+              )}
+
+              <p className="pw-analytics-hint">
+                Диагностика без секретов:{' '}
+                <a className="pw-analytics-link" href={youtubeStatusHref}>
+                  /api/admin/pierrot/youtube/status
+                </a>
+              </p>
+
+              <div className="pw-analytics-card-actions">
+                <a className="pw-analytics-button" href={youtubeConnectHref}>
+                  {youtube.connected ? 'Переподключить Google' : 'Подключить общий канал'}
+                </a>
+                {youtube.connected && (
+                  <form action="/api/admin/analytics/disconnect" method="post">
+                    <input type="hidden" name="provider" value="youtube" />
+                    <button
+                      className="pw-analytics-button pw-analytics-button--quiet"
+                      type="submit"
+                    >
+                      Отключить
+                    </button>
+                  </form>
+                )}
+              </div>
+            </article>
+          </section>
+        )}
 
         <section className="pw-analytics-grid" aria-label="Рассылки и инфраструктура">
           <article className="pw-analytics-card">

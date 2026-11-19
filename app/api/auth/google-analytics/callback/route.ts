@@ -11,6 +11,7 @@ import {
 } from '@/lib/analytics/website/discovery';
 import { verifyState } from '@/lib/analytics/website/tokenCrypto';
 import { getStoredConnection } from '@/lib/analytics/website/store';
+import { runYouTubeDiscovery } from '@/lib/youtube/discovery';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -92,17 +93,22 @@ export async function GET(request: Request) {
   }
 
   const store = getServerSupabaseClient({ useServiceRole: true });
-  const [existingGa, existingGsc] = await Promise.all([
+  const [existingGa, existingGsc, existingYouTube] = await Promise.all([
     getStoredConnection(store, 'google_analytics').catch(() => null),
     getStoredConnection(store, 'search_console').catch(() => null),
+    getStoredConnection(store, 'youtube').catch(() => null),
   ]);
 
+  // GA4, Search Console and YouTube share one Google grant. Re-authorizing any
+  // of them must not discard a working refresh token when Google omits it.
   const existingCredential =
-    existingGa?.token_ciphertext || existingGsc?.token_ciphertext
-      ? existingGa?.token_ciphertext
-        ? existingGa
-        : existingGsc
-      : null;
+    existingGa?.token_ciphertext
+      ? existingGa
+      : existingGsc?.token_ciphertext
+        ? existingGsc
+        : existingYouTube?.token_ciphertext
+          ? existingYouTube
+          : null;
 
   const credential = resolveGoogleRefreshCredential({
     newRefreshToken: tokens.refreshToken,
@@ -123,18 +129,35 @@ export async function GET(request: Request) {
     connectedBy: user.id,
   });
 
+  // YouTube uses the same stored grant. Discovery verifies both read-only
+  // scopes and the channel is visible to this Google account before the
+  // connection is marked connected.
+  const youtubeResult = await runYouTubeDiscovery(store, {
+    accessToken: tokens.accessToken,
+    scopes: grantedScopes,
+    sealed: credential.sealed,
+    connectedBy: user.id,
+  });
+
   const gaResult =
     results.find((result) => result.provider === 'google_analytics')?.status ?? 'not_granted';
   const gscResult =
     results.find((result) => result.provider === 'search_console')?.status ?? 'not_granted';
+  const ytResult = youtubeResult.status;
   const gaConnected = gaResult === 'connected';
   const gscConnected = gscResult === 'connected';
+  const ytConnected = ytResult === 'connected';
 
   const response = redirect(request, {
     connect:
-      gaConnected && gscConnected ? 'success' : gaConnected || gscConnected ? 'partial' : 'error',
+      gaConnected && gscConnected && ytConnected
+        ? 'success'
+        : gaConnected || gscConnected || ytConnected
+          ? 'partial'
+          : 'error',
     ga: gaResult,
     gsc: gscResult,
+    yt: ytResult,
   });
 
   response.cookies.set(STATE_COOKIE, '', {

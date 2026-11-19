@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAuth';
 import { analyticsEncryptionKeySource } from '@/lib/analytics/website/tokenCrypto';
 import {
   WEBSITE_ANALYTICS_MEASUREMENT_ID,
@@ -13,6 +13,8 @@ import {
   getUmamiConfig,
 } from '@/lib/analytics/website/config';
 import { loadSourceHealth } from '@/lib/analytics/website/dataset';
+import { getYouTubeChannelId, getYouTubeDataApiKey } from '@/lib/youtube/config';
+import { loadYouTubeConnectionState } from '@/lib/youtube/connection';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,6 +39,8 @@ export async function GET(request: Request) {
   const health = await loadSourceHealth();
   const google = getGoogleOAuthConfig();
   const umami = getUmamiConfig();
+  const store = getServerSupabaseClient({ useServiceRole: true });
+  const youtube = await loadYouTubeConnectionState(store).catch(() => null);
 
   return json({
     ok: true,
@@ -70,6 +74,9 @@ export async function GET(request: Request) {
       encryptionKeySource: analyticsEncryptionKeySource(),
       umamiConfigured: umami.configured,
       umamiMissing: umami.missing,
+      youtubeChannelId: getYouTubeChannelId(),
+      youtubeDataApiKeyConfigured: Boolean(getYouTubeDataApiKey()),
+      youtube,
     },
   });
 }
