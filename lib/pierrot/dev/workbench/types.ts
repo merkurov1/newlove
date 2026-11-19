@@ -633,6 +633,8 @@ export type DevFinalizationPullRequest = {
   integrated: boolean;
   integrationSha: string | null;
   reason: string | null;
+  errorCode?: string | null;
+  errorDetail?: string | null;
 };
 
 export type DevFinalizationReport = {
@@ -658,6 +660,8 @@ export type DevFinalizationReport = {
   blockedReason: string | null;
   failureStage: string | null;
   attempts: number;
+  blockedCode?: string | null;
+  retryAt?: string | null;
 };
 
 export type DevWorkbenchOverview = {

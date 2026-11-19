@@ -22,16 +22,56 @@ jest.mock('../store', () => {
   };
 });
 
-jest.mock('../github', () => ({
-  getPullRequestStatus: jest.fn(),
-  getCommitChecks: jest.fn(),
-  getBranchHead: jest.fn(),
-  mergeVerifiedPullRequest: jest.fn(),
-  commitUrl: jest.fn(
-    (_repository: string, sha: string) => `https://github.com/merkurov1/newlove/commit/${sha}`
-  ),
-  WorkbenchGitHubError: class WorkbenchGitHubError extends Error {},
-}));
+jest.mock('../github', () => {
+  class WorkbenchGitHubError extends Error {
+    code: string;
+    status: number | null;
+    endpoint: string | null;
+    requiredPermission: string | null;
+    retryAt: string | null;
+    retryAfterMs: number | null;
+    resetAt: string | null;
+    rateLimited: boolean;
+    permissionDenied: boolean;
+    constructor(
+      code: string,
+      message: string,
+      status: number | null = null,
+      details: {
+        endpoint?: string | null;
+        requiredPermission?: string | null;
+        retryAt?: string | null;
+        retryAfterMs?: number | null;
+        resetAt?: string | null;
+        rateLimited?: boolean;
+        permissionDenied?: boolean;
+      } = {}
+    ) {
+      super(message);
+      this.code = code;
+      this.status = status;
+      this.endpoint = details.endpoint ?? null;
+      this.requiredPermission = details.requiredPermission ?? null;
+      this.retryAt = details.retryAt ?? null;
+      this.retryAfterMs = details.retryAfterMs ?? null;
+      this.resetAt = details.resetAt ?? null;
+      this.rateLimited = details.rateLimited ?? code === 'GITHUB_RATE_LIMITED';
+      this.permissionDenied =
+        details.permissionDenied ??
+        (code === 'GITHUB_PERMISSION_DENIED' || code === 'GITHUB_AUTH_FAILED');
+    }
+  }
+  return {
+    getPullRequestStatus: jest.fn(),
+    getCommitChecks: jest.fn(),
+    getBranchHead: jest.fn(),
+    mergeVerifiedPullRequest: jest.fn(),
+    commitUrl: jest.fn(
+      (_repository: string, sha: string) => `https://github.com/merkurov1/newlove/commit/${sha}`
+    ),
+    WorkbenchGitHubError,
+  };
+});
 
 jest.mock('../costs', () => ({
   readAttemptCost: jest.fn(() => null),
@@ -62,6 +102,7 @@ import {
   collectPrCandidates,
   isQueueDrained,
   parsePullRequestNumber,
+  retryFinalization,
 } from '../finalization';
 import type { DevFinalizationPullRequest, DevWorkbenchTask } from '../types';
 
@@ -303,5 +344,164 @@ describe('queue finalization', () => {
     });
     const events = asMock(store.appendEvent).mock.calls.map(([event]) => event.type);
     expect(events).toContain('queue.drained');
+  });
+
+  it('names the missing permission and endpoint for a 403 and does not retry automatically', async () => {
+    asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
+    asMock(github.getPullRequestStatus).mockRejectedValue(
+      new github.WorkbenchGitHubError(
+        'GITHUB_PERMISSION_DENIED',
+        'GitHub denied GET /repos/{owner}/{repo}/pulls/{pull_number} (403). Required permission: pull_requests=read.',
+        403,
+        {
+          endpoint: 'GET /repos/{owner}/{repo}/pulls/{pull_number}',
+          requiredPermission: 'pull_requests=read',
+        }
+      )
+    );
+
+    const report = await advanceFinalization({ trigger: 'test' });
+    expect(report).toMatchObject({
+      stage: 'blocked',
+      failureStage: 'collecting',
+      blockedCode: 'GITHUB_PERMISSION_DENIED',
+      retryAt: null,
+    });
+    expect(report?.blockedReason).toContain('GET /repos/{owner}/{repo}/pulls/{pull_number}');
+    expect(report?.blockedReason).toContain('pull_requests=read');
+    expect(report?.blockedReason).toMatch(/Automatic retry is disabled/i);
+    expect(github.mergeVerifiedPullRequest).not.toHaveBeenCalled();
+
+    const second = await advanceFinalization({ trigger: 'test' });
+    expect(second?.stage).toBe('blocked');
+    expect(github.getPullRequestStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('honours the rate-limit retry time before resuming the same finalization', async () => {
+    asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
+    const retryAt = new Date(Date.now() - 1_000).toISOString();
+    asMock(github.getPullRequestStatus)
+      .mockRejectedValueOnce(
+        new github.WorkbenchGitHubError(
+          'GITHUB_RATE_LIMITED',
+          `GitHub rate limit reached for GET /repos/{owner}/{repo}/pulls/{pull_number} (403). Retry after ${retryAt}.`,
+          403,
+          {
+            endpoint: 'GET /repos/{owner}/{repo}/pulls/{pull_number}',
+            requiredPermission: 'Pull requests: read',
+            retryAt,
+            rateLimited: true,
+          }
+        )
+      )
+      .mockResolvedValue(prStatus());
+    asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
+
+    const blocked = await advanceFinalization({ trigger: 'test' });
+    expect(blocked).toMatchObject({
+      stage: 'blocked',
+      blockedCode: 'GITHUB_RATE_LIMITED',
+      retryAt,
+    });
+    expect(blocked?.blockedReason).toContain('Rate-limit retries are bounded');
+    expect(github.mergeVerifiedPullRequest).not.toHaveBeenCalled();
+
+    const resumed = await advanceFinalization({ trigger: 'test' });
+    expect(resumed?.stage).toBe('integrating');
+    expect(resumed?.integrated).toBe(1);
+    expect(github.mergeVerifiedPullRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits until a future rate-limit reset before calling GitHub again', async () => {
+    asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
+    const retryAt = new Date(Date.now() + 60_000).toISOString();
+    asMock(github.getPullRequestStatus).mockRejectedValue(
+      new github.WorkbenchGitHubError(
+        'GITHUB_RATE_LIMITED',
+        'GitHub rate limit reached.',
+        403,
+        { retryAt, rateLimited: true }
+      )
+    );
+
+    const report = await advanceFinalization({ trigger: 'test' });
+    expect(report).toMatchObject({ stage: 'blocked', retryAt });
+    await advanceFinalization({ trigger: 'test' });
+    expect(github.getPullRequestStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('recognises an already merged PR without merging it again', async () => {
+    asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
+    asMock(github.getPullRequestStatus).mockResolvedValue(
+      prStatus({ state: 'closed', merged: true })
+    );
+
+    const report = await advanceFinalization({ trigger: 'test' });
+    expect(report).toMatchObject({
+      stage: 'completed',
+      integrated: 1,
+      commitSha: MAIN_SHA,
+    });
+    expect(report?.prs[0]).toMatchObject({
+      state: 'merged',
+      merged: true,
+      integrated: true,
+      integrationSha: PR_HEAD,
+      reason: 'ALREADY_MERGED',
+    });
+    expect(github.mergeVerifiedPullRequest).not.toHaveBeenCalled();
+
+    const again = await advanceFinalization({ trigger: 'test' });
+    expect(again?.integrated).toBe(1);
+    expect(github.mergeVerifiedPullRequest).not.toHaveBeenCalled();
+  });
+
+  it('continues a permission-blocked finalization after an explicit retry and token fix', async () => {
+    asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
+    asMock(github.getPullRequestStatus)
+      .mockRejectedValueOnce(
+        new github.WorkbenchGitHubError(
+          'GITHUB_PERMISSION_DENIED',
+          'GitHub denied GET /repos/{owner}/{repo}/pulls/{pull_number} (403). Required permission: pull_requests=read.',
+          403,
+          {
+            endpoint: 'GET /repos/{owner}/{repo}/pulls/{pull_number}',
+            requiredPermission: 'pull_requests=read',
+          }
+        )
+      )
+      .mockResolvedValue(prStatus());
+    asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
+
+    const blocked = await advanceFinalization({ trigger: 'test' });
+    expect(blocked).toMatchObject({
+      stage: 'blocked',
+      blockedCode: 'GITHUB_PERMISSION_DENIED',
+    });
+
+    const resumed = await retryFinalization('test:retry');
+    expect(resumed).toMatchObject({ stage: 'integrating', integrated: 1 });
+    expect(github.mergeVerifiedPullRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a failed merge once the owner clears the block without duplicating integration', async () => {
+    asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
+    asMock(github.getPullRequestStatus).mockResolvedValue(prStatus());
+    asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
+    asMock(github.mergeVerifiedPullRequest)
+      .mockRejectedValueOnce(new Error('temporary GitHub gateway failure'))
+      .mockResolvedValue({ merged: true, sha: MERGE_SHA, message: '' });
+
+    const failed = await advanceFinalization({ trigger: 'test' });
+    expect(failed).toMatchObject({ stage: 'blocked', failureStage: 'integrating' });
+    expect(failed?.integrated).toBe(0);
+
+    const retried = await retryFinalization('test:retry');
+    expect(retried).toMatchObject({ stage: 'integrating', integrated: 1 });
+    expect(github.mergeVerifiedPullRequest).toHaveBeenCalledTimes(2);
+
+    const settled = await advanceFinalization({ trigger: 'test' });
+    expect(settled).toMatchObject({ stage: 'completed', integrated: 1 });
+    expect(github.mergeVerifiedPullRequest).toHaveBeenCalledTimes(2);
   });
 });

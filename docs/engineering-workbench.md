@@ -170,6 +170,50 @@ integration is blocked and the owner must decide; the Codespace may stop to
 avoid idle cost. If new work arrives during finalization, the pass is
 superseded (`queue.refilled`) and normal execution resumes.
 
+### GitHub token and failure recovery
+
+The finalizer uses the single server-side `GITHUB_TOKEN` (a fine-grained PAT or
+GitHub App installation token). It does not read a separate worker or browser
+token, and it never logs the token value. The minimum repository permissions
+needed by the finalizer are:
+
+| Operation | Endpoint | Fine-grained permission |
+| --- | --- | --- |
+| Read PR state, mergeability, head SHA | `GET /repos/{owner}/{repo}/pulls/{pull_number}` | Pull requests: read |
+| Read check runs | `GET /repos/{owner}/{repo}/commits/{ref}/check-runs` | Checks: read |
+| Read legacy commit statuses | `GET /repos/{owner}/{repo}/commits/{ref}/status` | Commit statuses: read |
+| Read the default branch head | `GET /repos/{owner}/{repo}/branches/{branch}` | Contents: read |
+| Merge an approved PR (only when integration is allowed) | `PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge` | Contents: write |
+
+`Metadata: read` is implicit for every repository endpoint. Creating pull
+requests additionally needs Pull requests write, and Codespace start/stop needs
+Codespaces write; grant those only when those features are used. If GitHub
+returns `x-accepted-github-permissions`, that header is the authoritative
+required permission and is shown in the block reason. No force push, branch
+protection bypass or repository-permission widening is performed.
+
+Failure handling is deliberately different by cause:
+
+- **Permission denied (401/403 without rate-limit evidence)** — finalization
+  blocks with the exact endpoint and required permission and does **not** retry
+  automatically. Update `GITHUB_TOKEN`, restart/redeploy the server so the new
+  value is loaded, then use **Retry finalization**.
+- **Rate limit (403 secondary limit or 429)** — `Retry-After` and
+  `X-RateLimit-Reset` are honoured. Retries use bounded exponential backoff
+  with jitter, capped by `PIERROT_DEV_GITHUB_MAX_ATTEMPTS`,
+  `PIERROT_DEV_GITHUB_RETRY_BASE_MS`,
+  `PIERROT_DEV_GITHUB_RETRY_MAX_DELAY_MS` and
+  `PIERROT_DEV_GITHUB_RETRY_MAX_TOTAL_MS`. If the reset is farther away than
+  the cap, the pass blocks with the reset time instead of holding the request
+  open; it resumes automatically after that time.
+- **Already merged PR** — the PR is recorded as integrated from its actual
+  merged state. A repeated pass does not merge it again, even if the previous
+  state write was lost.
+- **Temporary API failure** — the pass blocks with the error and the PR/commit
+  state that was read. Use **Retry finalization**; the pass re-reads PR,
+  checks, merge state and commit SHA before acting.
+
+
 Idle promotion is safe for explicit owner intent: `dequeue` writes a durable
 `queue:optout:<task>` marker, so a task the owner removed is never silently
 re-enqueued. Approving, enqueuing, retrying or starting a batch clears the
@@ -308,5 +352,7 @@ heartbeats.
 | `OpenCode CLI missing`                    | Install/verify `opencode --version` in the Codespace.                                                                                                                                    |
 | `Stored provider authentication: missing` | Run `opencode auth login` in the Codespace.                                                                                                                                              |
 | Codespace start returns 403               | Grant the fine-grained token **Codespaces: write**.                                                                                                                                      |
+| Finalization blocked on 403               | Read the block reason: it names the endpoint and required permission. Fix the fine-grained token, redeploy, then **Retry finalization**. Automatic retry is intentionally disabled for permission errors. |
+| Finalization blocked on rate limit        | The block reason contains the reset time. Wait for it (the pass resumes automatically) or use **Retry finalization** after the reset. Check `GET /rate_limit` and reduce concurrent GitHub calls. |
 | No CI checks                              | Add/verify the repository CI workflow; acceptance then requires manual confirmation.                                                                                                     |
 | Vercel `unavailable`                      | Set `VERCEL_TOKEN` (and `VERCEL_PROJECT_ID` if auto-detection fails).                                                                                                                    |

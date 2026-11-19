@@ -8,17 +8,114 @@ import type { DevDeploymentStatus } from './types';
 assertServerOnly('lib/pierrot/dev/workbench/github');
 
 const REQUEST_TIMEOUT_MS = Number(process.env.PIERROT_DEV_GITHUB_TIMEOUT_MS || 15_000);
+const DEFAULT_RETRY_ATTEMPTS = 3;
+const DEFAULT_RETRY_BASE_MS = 500;
+const DEFAULT_RETRY_MAX_DELAY_MS = 8_000;
+const DEFAULT_RETRY_MAX_TOTAL_MS = 20_000;
+const MAX_JITTER_MS = 250;
+
+export type GitHubApiOperation = {
+  endpoint: string;
+  requiredPermission: string;
+  fallbackCode?: string;
+};
+
+export type GitHubRateLimitInfo = {
+  remaining: number | null;
+  limit: number | null;
+  resetAt: string | null;
+  retryAfterMs: number | null;
+  retryAt: string | null;
+};
+
+export type WorkbenchGitHubErrorOptions = {
+  endpoint?: string | null;
+  requiredPermission?: string | null;
+  retryAfterMs?: number | null;
+  retryAt?: string | null;
+  resetAt?: string | null;
+  remaining?: number | null;
+  limit?: number | null;
+  requestId?: string | null;
+  rateLimited?: boolean;
+  permissionDenied?: boolean;
+};
 
 export class WorkbenchGitHubError extends Error {
   readonly code: string;
   readonly status: number | null;
+  readonly endpoint: string | null;
+  readonly requiredPermission: string | null;
+  readonly retryAfterMs: number | null;
+  readonly retryAt: string | null;
+  readonly resetAt: string | null;
+  readonly remaining: number | null;
+  readonly limit: number | null;
+  readonly requestId: string | null;
+  readonly rateLimited: boolean;
+  readonly permissionDenied: boolean;
 
-  constructor(code: string, message: string, status: number | null = null) {
+  constructor(
+    code: string,
+    message: string,
+    status: number | null = null,
+    options: WorkbenchGitHubErrorOptions = {}
+  ) {
     super(message);
     this.name = 'WorkbenchGitHubError';
     this.code = code;
     this.status = status;
+    this.endpoint = options.endpoint ?? null;
+    this.requiredPermission = options.requiredPermission ?? null;
+    this.retryAfterMs = options.retryAfterMs ?? null;
+    this.retryAt = options.retryAt ?? null;
+    this.resetAt = options.resetAt ?? null;
+    this.remaining = options.remaining ?? null;
+    this.limit = options.limit ?? null;
+    this.requestId = options.requestId ?? null;
+    this.rateLimited = options.rateLimited ?? code === 'GITHUB_RATE_LIMITED';
+    this.permissionDenied =
+      options.permissionDenied ??
+      (code === 'GITHUB_PERMISSION_DENIED' || code === 'GITHUB_AUTH_FAILED');
   }
+}
+
+export type GitHubRetryOptions = {
+  maxAttempts: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  maxTotalWaitMs: number;
+  sleep: (ms: number) => Promise<void>;
+  now: () => number;
+  random: () => number;
+};
+
+function envNumber(name: string, fallback: number, min: number, max: number): number {
+  const raw = Number(process.env[name]);
+  if (!Number.isFinite(raw)) return fallback;
+  return Math.min(Math.max(Math.trunc(raw), min), max);
+}
+
+export function getGitHubRetryOptions(
+  overrides: Partial<GitHubRetryOptions> = {}
+): GitHubRetryOptions {
+  return {
+    maxAttempts:
+      overrides.maxAttempts ??
+      envNumber('PIERROT_DEV_GITHUB_MAX_ATTEMPTS', DEFAULT_RETRY_ATTEMPTS, 1, 5),
+    baseDelayMs:
+      overrides.baseDelayMs ??
+      envNumber('PIERROT_DEV_GITHUB_RETRY_BASE_MS', DEFAULT_RETRY_BASE_MS, 0, 30_000),
+    maxDelayMs:
+      overrides.maxDelayMs ??
+      envNumber('PIERROT_DEV_GITHUB_RETRY_MAX_DELAY_MS', DEFAULT_RETRY_MAX_DELAY_MS, 0, 60_000),
+    maxTotalWaitMs:
+      overrides.maxTotalWaitMs ??
+      envNumber('PIERROT_DEV_GITHUB_RETRY_MAX_TOTAL_MS', DEFAULT_RETRY_MAX_TOTAL_MS, 0, 120_000),
+    sleep: overrides.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
+    now: overrides.now ?? (() => Date.now()),
+    random: overrides.random ?? Math.random,
+  };
 }
 
 let cached: { token: string; client: Octokit } | null = null;
@@ -42,29 +139,224 @@ function client(): Octokit {
 }
 
 function statusOf(error: unknown): number | null {
-  if (error && typeof error === 'object' && 'status' in error) {
-    const value = (error as { status?: unknown }).status;
-    return typeof value === 'number' ? value : null;
+  if (error && typeof error === 'object') {
+    const direct = (error as { status?: unknown }).status;
+    if (typeof direct === 'number') return direct;
+    const response = (error as { response?: { status?: unknown } }).response;
+    if (response && typeof response.status === 'number') return response.status;
   }
   return null;
 }
 
-function toError(error: unknown, fallbackCode = 'GITHUB_API_ERROR'): WorkbenchGitHubError {
+function headersOf(error: unknown): unknown {
+  if (!error || typeof error !== 'object') return null;
+  const response = (error as { response?: { headers?: unknown } }).response;
+  if (response?.headers) return response.headers;
+  const headers = (error as { headers?: unknown }).headers;
+  return headers || null;
+}
+
+function headerValue(headers: unknown, name: string): string | null {
+  if (!headers || typeof headers !== 'object') return null;
+  const wanted = name.toLowerCase();
+  for (const [key, raw] of Object.entries(headers as Record<string, unknown>)) {
+    if (key.toLowerCase() !== wanted) continue;
+    if (typeof raw === 'string') return raw;
+    if (Array.isArray(raw)) return raw.map((item) => String(item)).join(', ');
+    if (raw !== null && raw !== undefined) return String(raw);
+  }
+  return null;
+}
+
+function numberHeader(headers: unknown, name: string): number | null {
+  const raw = headerValue(headers, name);
+  if (!raw) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function parseRetryAfterMs(value: string | null, now: number): number | null {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, Math.trunc(seconds * 1000));
+  const date = Date.parse(value);
+  if (Number.isFinite(date)) return Math.max(0, date - now);
+  return null;
+}
+
+function isoFromEpochSeconds(value: number | null): string | null {
+  if (value === null || !Number.isFinite(value)) return null;
+  const ms = value * 1000;
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toISOString();
+}
+
+export function readGitHubRateLimitInfo(headers: unknown, now = Date.now()): GitHubRateLimitInfo {
+  const remaining = numberHeader(headers, 'x-ratelimit-remaining');
+  const limit = numberHeader(headers, 'x-ratelimit-limit');
+  const resetAt = isoFromEpochSeconds(numberHeader(headers, 'x-ratelimit-reset'));
+  const retryAfterMs = parseRetryAfterMs(headerValue(headers, 'retry-after'), now);
+  const resetMs = resetAt ? Date.parse(resetAt) : Number.NaN;
+  const retryCandidates = [
+    retryAfterMs,
+    Number.isFinite(resetMs) ? Math.max(0, resetMs - now) : null,
+  ].filter((value): value is number => value !== null && Number.isFinite(value));
+  const retryMs = retryCandidates.length > 0 ? Math.max(...retryCandidates) : null;
+  return {
+    remaining,
+    limit,
+    resetAt,
+    retryAfterMs,
+    retryAt: retryMs === null ? null : new Date(now + retryMs).toISOString(),
+  };
+}
+
+function messageOf(error: unknown): string {
+  if (!error || typeof error !== 'object') return '';
+  const response = (error as { response?: { data?: { message?: unknown } } }).response;
+  const responseMessage = response?.data?.message;
+  if (typeof responseMessage === 'string' && responseMessage.trim()) {
+    return responseMessage.trim().slice(0, 500);
+  }
+  return error instanceof Error ? error.message.slice(0, 500) : '';
+}
+
+function isRateLimited(
+  status: number | null,
+  message: string,
+  headers: unknown,
+  rate: GitHubRateLimitInfo
+): boolean {
+  if (status === 429) return true;
+  if (status !== 403) return false;
+  if (rate.remaining !== null && rate.remaining <= 0) return true;
+  if (rate.retryAfterMs !== null) return true;
+  return /rate limit|secondary rate|abuse detection|too many requests/i.test(message);
+}
+
+function toError(
+  error: unknown,
+  operation: GitHubApiOperation,
+  fallbackCode = operation.fallbackCode || 'GITHUB_API_ERROR'
+): WorkbenchGitHubError {
   if (error instanceof WorkbenchGitHubError) return error;
   const status = statusOf(error);
-  const message =
-    status === 401
-      ? 'GitHub token was rejected (401).'
-      : status === 403
-        ? 'GitHub API access denied or rate-limited (403). Check the token permissions.'
-        : status === 404
-          ? 'GitHub resource not found (404).'
-          : status === 422
-            ? 'GitHub rejected the request parameters (422).'
-            : error instanceof Error
-              ? error.message.slice(0, 500)
-              : 'GitHub API request failed.';
-  return new WorkbenchGitHubError(fallbackCode, message, status);
+  const headers = headersOf(error);
+  const bodyMessage = messageOf(error);
+  const rate = readGitHubRateLimitInfo(headers, Date.now());
+  const accepted = headerValue(headers, 'x-accepted-github-permissions');
+  const requiredPermission = (accepted || operation.requiredPermission).slice(0, 300);
+  const requestId = headerValue(headers, 'x-github-request-id');
+  const rateLimited = isRateLimited(status, bodyMessage, headers, rate);
+  let code = fallbackCode;
+  let message: string;
+
+  if (status === 401) {
+    code = 'GITHUB_AUTH_FAILED';
+    message = `GitHub rejected the token (401) for ${operation.endpoint}. Re-authenticate GITHUB_TOKEN before retrying.`;
+  } else if (rateLimited) {
+    code = 'GITHUB_RATE_LIMITED';
+    const when = rate.retryAt ? ` Retry after ${rate.retryAt}.` : ' Retry after the rate-limit window resets.';
+    message = `GitHub rate limit reached for ${operation.endpoint} (${status ?? 403}).${when} Remaining: ${
+      rate.remaining ?? 'unknown'
+    }/${rate.limit ?? 'unknown'}.`;
+  } else if (status === 403) {
+    code = 'GITHUB_PERMISSION_DENIED';
+    message = `GitHub denied ${operation.endpoint} (403). Required permission: ${requiredPermission}.${
+      bodyMessage ? ` GitHub says: ${bodyMessage}.` : ''
+    } Automatic retries are disabled until the token is updated.`;
+  } else if (status === 404) {
+    code = 'GITHUB_NOT_FOUND';
+    message = `GitHub did not find ${operation.endpoint} (404). Verify the repository and ${requiredPermission}.`;
+  } else if (status === 422) {
+    code = 'GITHUB_INVALID_REQUEST';
+    message = `GitHub rejected ${operation.endpoint} (422).${bodyMessage ? ` ${bodyMessage}.` : ''}`;
+  } else {
+    message =
+      bodyMessage ||
+      (error instanceof Error
+        ? error.message.slice(0, 500)
+        : `GitHub request to ${operation.endpoint} failed.`);
+  }
+
+  return new WorkbenchGitHubError(code, message, status, {
+    endpoint: operation.endpoint,
+    requiredPermission,
+    retryAfterMs: rate.retryAfterMs,
+    retryAt: rate.retryAt,
+    resetAt: rate.resetAt,
+    remaining: rate.remaining,
+    limit: rate.limit,
+    requestId,
+    rateLimited,
+    permissionDenied: code === 'GITHUB_PERMISSION_DENIED' || code === 'GITHUB_AUTH_FAILED',
+  });
+}
+
+/**
+ * Compute the wait before a rate-limit retry. An explicit Retry-After or
+ * X-RateLimit-Reset is always honoured. When it is farther away than the
+ * configured cap, return null: the caller reports the reset time instead of
+ * holding the request open.
+ */
+export function githubRetryDelayMs(
+  error: WorkbenchGitHubError,
+  attempt: number,
+  options: GitHubRetryOptions
+): number | null {
+  const now = options.now();
+  const resetMs = error.resetAt ? Date.parse(error.resetAt) : Number.NaN;
+  const explicit = Math.max(
+    error.retryAfterMs ?? 0,
+    Number.isFinite(resetMs) ? Math.max(0, resetMs - now) : 0
+  );
+  if (explicit > options.maxDelayMs) return null;
+
+  const exponential = Math.min(
+    options.maxDelayMs,
+    Math.max(0, options.baseDelayMs) * 2 ** Math.max(0, attempt)
+  );
+  const base = explicit > 0 ? explicit : exponential;
+  const jitter = Math.max(0, Math.floor(options.random() * MAX_JITTER_MS));
+  const delay = Math.min(options.maxDelayMs, base + (base > 0 ? jitter : 0));
+  return Math.max(0, delay);
+}
+
+/** Run one GitHub call with bounded, jittered retries for rate-limit responses. */
+export async function requestGitHubWithRetry<T>(
+  operation: GitHubApiOperation,
+  request: () => Promise<T>,
+  overrides: Partial<GitHubRetryOptions> = {}
+): Promise<T> {
+  const options = getGitHubRetryOptions(overrides);
+  let waitedMs = 0;
+  let lastError: WorkbenchGitHubError | null = null;
+
+  for (let attempt = 0; attempt < options.maxAttempts; attempt += 1) {
+    try {
+      return await request();
+    } catch (error) {
+      const normalized = toError(error, operation);
+      lastError = normalized;
+      if (!normalized.rateLimited) throw normalized;
+      if (attempt + 1 >= options.maxAttempts) throw normalized;
+      const delay = githubRetryDelayMs(normalized, attempt, options);
+      if (delay === null) throw normalized;
+      if (waitedMs + delay > options.maxTotalWaitMs) throw normalized;
+      await options.sleep(delay);
+      waitedMs += delay;
+    }
+  }
+
+  throw (
+    lastError ||
+    new WorkbenchGitHubError(
+      'GITHUB_RATE_LIMITED',
+      `GitHub rate limit persisted for ${operation.endpoint}.`,
+      null,
+      { endpoint: operation.endpoint, requiredPermission: operation.requiredPermission }
+    )
+  );
 }
 
 function repoKey(value: unknown): DevRepositoryKey {
@@ -87,6 +379,79 @@ function safeBranch(value: unknown): string {
 // ---------------------------------------------------------------------------
 // Pull requests
 // ---------------------------------------------------------------------------
+
+const OPERATIONS = {
+  listPullRequests: {
+    endpoint: 'GET /repos/{owner}/{repo}/pulls',
+    requiredPermission: 'Pull requests: read',
+    fallbackCode: 'GITHUB_PR_LIST_FAILED',
+  },
+  getPullRequest: {
+    endpoint: 'GET /repos/{owner}/{repo}/pulls/{pull_number}',
+    requiredPermission: 'Pull requests: read',
+    fallbackCode: 'GITHUB_PR_STATUS_FAILED',
+  },
+  createPullRequest: {
+    endpoint: 'POST /repos/{owner}/{repo}/pulls',
+    requiredPermission: 'Pull requests: write',
+    fallbackCode: 'GITHUB_PR_CREATE_FAILED',
+  },
+  listCheckRuns: {
+    endpoint: 'GET /repos/{owner}/{repo}/commits/{ref}/check-runs',
+    requiredPermission: 'Checks: read',
+    fallbackCode: 'GITHUB_CHECKS_FAILED',
+  },
+  combinedStatus: {
+    endpoint: 'GET /repos/{owner}/{repo}/commits/{ref}/status',
+    requiredPermission: 'Commit statuses: read',
+    fallbackCode: 'GITHUB_CHECKS_FAILED',
+  },
+  getBranch: {
+    endpoint: 'GET /repos/{owner}/{repo}/branches/{branch}',
+    requiredPermission: 'Contents: read',
+    fallbackCode: 'GITHUB_BRANCH_READ_FAILED',
+  },
+  mergePullRequest: {
+    endpoint: 'PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge',
+    requiredPermission: 'Contents: write',
+    fallbackCode: 'GITHUB_MERGE_FAILED',
+  },
+  getRepository: {
+    endpoint: 'GET /repos/{owner}/{repo}',
+    requiredPermission: 'Metadata: read',
+    fallbackCode: 'GITHUB_REPOSITORY_READ_FAILED',
+  },
+  rateLimit: {
+    endpoint: 'GET /rate_limit',
+    requiredPermission: 'Metadata: read',
+    fallbackCode: 'GITHUB_RATE_LIMIT_READ_FAILED',
+  },
+  listCodespaces: {
+    endpoint: 'GET /user/codespaces',
+    requiredPermission: 'Codespaces: read',
+    fallbackCode: 'CODESPACE_LIST_FAILED',
+  },
+  getCodespace: {
+    endpoint: 'GET /user/codespaces/{codespace_name}',
+    requiredPermission: 'Codespaces: read',
+    fallbackCode: 'CODESPACE_READ_FAILED',
+  },
+  startCodespace: {
+    endpoint: 'POST /user/codespaces/{codespace_name}/start',
+    requiredPermission: 'Codespaces: write',
+    fallbackCode: 'CODESPACE_START_FAILED',
+  },
+  stopCodespace: {
+    endpoint: 'POST /user/codespaces/{codespace_name}/stop',
+    requiredPermission: 'Codespaces: write',
+    fallbackCode: 'CODESPACE_STOP_FAILED',
+  },
+  createCodespace: {
+    endpoint: 'POST /repos/{owner}/{repo}/codespaces',
+    requiredPermission: 'Codespaces: write',
+    fallbackCode: 'CODESPACE_CREATE_FAILED',
+  },
+} satisfies Record<string, GitHubApiOperation>;
 
 export async function createPullRequestForAttempt(input: {
   repository: DevRepositoryKey | string;
@@ -116,15 +481,17 @@ export async function createPullRequestForAttempt(input: {
   }
 
   try {
-    const response = await client().rest.pulls.create({
-      owner: config.owner,
-      repo: config.repo,
-      head,
-      base,
-      title: input.title.slice(0, 240),
-      body: input.body.slice(0, 20_000),
-      draft: false,
-    });
+    const response = await requestGitHubWithRetry(OPERATIONS.createPullRequest, () =>
+      client().rest.pulls.create({
+        owner: config.owner,
+        repo: config.repo,
+        head,
+        base,
+        title: input.title.slice(0, 240),
+        body: input.body.slice(0, 20_000),
+        draft: false,
+      })
+    );
     return {
       number: response.data.number,
       url: response.data.html_url,
@@ -136,7 +503,7 @@ export async function createPullRequestForAttempt(input: {
       const existing = await findPullRequestForBranch(config.key, head);
       if (existing) return existing;
     }
-    throw toError(error, 'GITHUB_PR_CREATE_FAILED');
+    throw toError(error, OPERATIONS.createPullRequest);
   }
 }
 
@@ -146,13 +513,15 @@ export async function findPullRequestForBranch(
 ): Promise<{ number: number; url: string; state: string } | null> {
   const config = getDevRepositoryConfig(repoKey(repository));
   try {
-    const response = await client().rest.pulls.list({
-      owner: config.owner,
-      repo: config.repo,
-      head: `${config.owner}:${safeBranch(head)}`,
-      state: 'open',
-      per_page: 1,
-    });
+    const response = await requestGitHubWithRetry(OPERATIONS.listPullRequests, () =>
+      client().rest.pulls.list({
+        owner: config.owner,
+        repo: config.repo,
+        head: `${config.owner}:${safeBranch(head)}`,
+        state: 'open',
+        per_page: 1,
+      })
+    );
     const pr = response.data[0];
     if (!pr) return null;
     return { number: pr.number, url: pr.html_url, state: pr.state };
@@ -176,11 +545,13 @@ export async function getPullRequestStatus(
 } | null> {
   const config = getDevRepositoryConfig(repoKey(repository));
   try {
-    const response = await client().rest.pulls.get({
-      owner: config.owner,
-      repo: config.repo,
-      pull_number: number,
-    });
+    const response = await requestGitHubWithRetry(OPERATIONS.getPullRequest, () =>
+      client().rest.pulls.get({
+        owner: config.owner,
+        repo: config.repo,
+        pull_number: number,
+      })
+    );
     return {
       number: response.data.number,
       url: response.data.html_url,
@@ -191,8 +562,12 @@ export async function getPullRequestStatus(
       headSha: response.data.head.sha,
       baseBranch: response.data.base.ref,
     };
-  } catch {
-    return null;
+  } catch (error) {
+    const normalized = toError(error, OPERATIONS.getPullRequest);
+    // A genuinely missing PR is reported as null. Auth and rate-limit errors
+    // must never be mistaken for a missing PR.
+    if (normalized.status === 404) return null;
+    throw normalized;
   }
 }
 
@@ -231,20 +606,22 @@ export async function getCommitChecks(
   }
   try {
     const [runs, statuses] = await Promise.all([
-      client().rest.checks.listForRef({
-        owner: config.owner,
-        repo: config.repo,
-        ref: sha,
-        per_page: 100,
-      }),
-      client()
-        .rest.repos.getCombinedStatusForRef({
+      requestGitHubWithRetry(OPERATIONS.listCheckRuns, () =>
+        client().rest.checks.listForRef({
           owner: config.owner,
           repo: config.repo,
           ref: sha,
           per_page: 100,
         })
-        .catch(() => null),
+      ),
+      requestGitHubWithRetry(OPERATIONS.combinedStatus, () =>
+        client().rest.repos.getCombinedStatusForRef({
+          owner: config.owner,
+          repo: config.repo,
+          ref: sha,
+          per_page: 100,
+        })
+      ),
     ]);
 
     const checks = (runs.data.check_runs || []).map((run) => ({
@@ -297,7 +674,18 @@ export async function getCommitChecks(
       checks: all,
     };
   } catch (error) {
-    const normalized = toError(error, 'GITHUB_CHECKS_FAILED');
+    const normalized = toError(error, OPERATIONS.listCheckRuns);
+    // Permission, authentication and rate-limit failures must reach the
+    // finalizer so it can name the endpoint/permission instead of masking them
+    // as an unknown CI result.
+    if (
+      normalized.status === 401 ||
+      normalized.status === 403 ||
+      normalized.status === 429 ||
+      normalized.rateLimited
+    ) {
+      throw normalized;
+    }
     return {
       status: 'unknown',
       detail: normalized.message,
@@ -312,14 +700,18 @@ export async function getBranchHead(
 ): Promise<string | null> {
   const config = getDevRepositoryConfig(repoKey(repository));
   try {
-    const response = await client().rest.repos.getBranch({
-      owner: config.owner,
-      repo: config.repo,
-      branch: safeBranch(branch),
-    });
+    const response = await requestGitHubWithRetry(OPERATIONS.getBranch, () =>
+      client().rest.repos.getBranch({
+        owner: config.owner,
+        repo: config.repo,
+        branch: safeBranch(branch),
+      })
+    );
     return response.data.commit.sha;
-  } catch {
-    return null;
+  } catch (error) {
+    const normalized = toError(error, OPERATIONS.getBranch);
+    if (normalized.status === 404) return null;
+    throw normalized;
   }
 }
 
@@ -346,12 +738,23 @@ export async function mergeVerifiedPullRequest(input: {
   }
 
   try {
-    const pr = await client().rest.pulls.get({
-      owner: config.owner,
-      repo: config.repo,
-      pull_number: input.number,
-    });
+    const pr = await requestGitHubWithRetry(OPERATIONS.getPullRequest, () =>
+      client().rest.pulls.get({
+        owner: config.owner,
+        repo: config.repo,
+        pull_number: input.number,
+      })
+    );
 
+    if (pr.data.merged) {
+      // A previous attempt may have merged the PR without persisting the
+      // result. Treat that as success instead of merging twice.
+      return {
+        merged: true,
+        sha: pr.data.merge_commit_sha || null,
+        message: 'Already merged.',
+      };
+    }
     if (pr.data.state !== 'open') {
       throw new WorkbenchGitHubError('GITHUB_PR_NOT_OPEN', 'The pull request is not open.');
     }
@@ -370,13 +773,15 @@ export async function mergeVerifiedPullRequest(input: {
       );
     }
 
-    const response = await client().rest.pulls.merge({
-      owner: config.owner,
-      repo: config.repo,
-      pull_number: input.number,
-      sha: input.expectedHeadSha,
-      merge_method: 'squash',
-    });
+    const response = await requestGitHubWithRetry(OPERATIONS.mergePullRequest, () =>
+      client().rest.pulls.merge({
+        owner: config.owner,
+        repo: config.repo,
+        pull_number: input.number,
+        sha: input.expectedHeadSha,
+        merge_method: 'squash',
+      })
+    );
 
     return {
       merged: Boolean(response.data.merged),
@@ -384,7 +789,7 @@ export async function mergeVerifiedPullRequest(input: {
       message: response.data.message || '',
     };
   } catch (error) {
-    throw toError(error, 'GITHUB_MERGE_FAILED');
+    throw toError(error, OPERATIONS.mergePullRequest);
   }
 }
 
@@ -473,7 +878,7 @@ export async function listUserCodespaces(): Promise<CodespaceInfo[]> {
       (response.data as { codespaces?: Array<Record<string, unknown>> }).codespaces || [];
     return items.map(mapCodespace);
   } catch (error) {
-    throw toError(error, 'CODESPACE_LIST_FAILED');
+    throw toError(error, OPERATIONS.listCodespaces);
   }
 }
 
@@ -485,7 +890,7 @@ export async function getCodespace(name: string): Promise<CodespaceInfo | null> 
     return mapCodespace(response.data as Record<string, unknown>);
   } catch (error) {
     if (statusOf(error) === 404) return null;
-    throw toError(error, 'CODESPACE_READ_FAILED');
+    throw toError(error, OPERATIONS.getCodespace);
   }
 }
 
@@ -527,13 +932,24 @@ export async function startCodespace(name: string): Promise<CodespaceInfo> {
     });
     return mapCodespace(response.data as Record<string, unknown>);
   } catch (error) {
-    const status = statusOf(error);
+    const normalized = toError(error, OPERATIONS.startCodespace);
     throw new WorkbenchGitHubError(
       'CODESPACE_START_FAILED',
-      status === 403 || status === 401
-        ? 'The GitHub token cannot start Codespaces. Grant the fine-grained token the "Codespaces" write permission for this repository.'
-        : toError(error, 'CODESPACE_START_FAILED').message,
-      status
+      normalized.status === 403 || normalized.status === 401
+        ? `${normalized.message} Grant the fine-grained token the Codespaces write permission for this repository.`
+        : normalized.message,
+      normalized.status,
+      {
+        endpoint: normalized.endpoint,
+        requiredPermission: normalized.requiredPermission,
+        retryAfterMs: normalized.retryAfterMs,
+        retryAt: normalized.retryAt,
+        resetAt: normalized.resetAt,
+        remaining: normalized.remaining,
+        limit: normalized.limit,
+        requestId: normalized.requestId,
+        rateLimited: normalized.rateLimited,
+      }
     );
   }
 }
@@ -545,13 +961,24 @@ export async function stopCodespace(name: string): Promise<CodespaceInfo> {
     });
     return mapCodespace(response.data as Record<string, unknown>);
   } catch (error) {
-    const status = statusOf(error);
+    const normalized = toError(error, OPERATIONS.stopCodespace);
     throw new WorkbenchGitHubError(
       'CODESPACE_STOP_FAILED',
-      status === 403 || status === 401
-        ? 'The GitHub token cannot stop Codespaces. Grant the fine-grained token the "Codespaces" write permission.'
-        : toError(error, 'CODESPACE_STOP_FAILED').message,
-      status
+      normalized.status === 403 || normalized.status === 401
+        ? `${normalized.message} Grant the fine-grained token the Codespaces write permission.`
+        : normalized.message,
+      normalized.status,
+      {
+        endpoint: normalized.endpoint,
+        requiredPermission: normalized.requiredPermission,
+        retryAfterMs: normalized.retryAfterMs,
+        retryAt: normalized.retryAt,
+        resetAt: normalized.resetAt,
+        remaining: normalized.remaining,
+        limit: normalized.limit,
+        requestId: normalized.requestId,
+        rateLimited: normalized.rateLimited,
+      }
     );
   }
 }
@@ -575,7 +1002,7 @@ export async function createCodespace(input: {
     });
     return mapCodespace(response.data as Record<string, unknown>);
   } catch (error) {
-    throw toError(error, 'CODESPACE_CREATE_FAILED');
+    throw toError(error, OPERATIONS.createCodespace);
   }
 }
 

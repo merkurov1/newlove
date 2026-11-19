@@ -1508,7 +1508,12 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             </div>
             <div>
               <dt>CI</dt>
-              <dd>{overview.finalization.ciStatus}</dd>
+              <dd>
+                {overview.finalization.ciStatus}
+                {overview.finalization.ciDetail ? (
+                  <span className="pw-wb-meta"> · {overview.finalization.ciDetail}</span>
+                ) : null}
+              </dd>
             </div>
             <div>
               <dt>Tasks</dt>
@@ -1522,7 +1527,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                     {shortSha(overview.finalization.commitSha)}
                   </a>
                 ) : (
-                  '—'
+                  <span className="pw-wb-meta">
+                    Not recorded yet · finalization has not read the main commit.
+                  </span>
                 )}
               </dd>
             </div>
@@ -1534,6 +1541,11 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
           {overview.finalization.blockedReason && (
             <p className="pw-wb-warning">{overview.finalization.blockedReason}</p>
           )}
+          {overview.finalization.retryAt && (
+            <p className="pw-wb-meta">
+              Next automatic attempt: {overview.finalization.retryAt}
+            </p>
+          )}
           {overview.finalization.prs.length > 0 && (
             <ul className="pw-wb-criteria">
               {overview.finalization.prs.map((pr) => (
@@ -1543,6 +1555,13 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                   </a>{' '}
                   · {pr.integrated ? 'integrated' : pr.ciStatus} ·{' '}
                   {pr.mergeable === false ? 'conflict' : pr.state}
+                  {pr.headSha ? ` · head ${shortSha(pr.headSha)}` : ''}
+                  {pr.ciDetail ? (
+                    <span className="pw-wb-meta"> · {pr.ciDetail}</span>
+                  ) : null}
+                  {!pr.integrated && pr.reason ? (
+                    <span className="pw-wb-meta"> · reason {pr.reason}</span>
+                  ) : null}
                 </li>
               ))}
             </ul>
