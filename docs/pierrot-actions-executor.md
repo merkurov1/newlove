@@ -156,11 +156,14 @@ Ephemeral ubuntu-latest runner
 4. Apply the additive migrations manually after review, in a maintenance window,
    in this order:
    `migrations/2026-12-12_pierrot_actions_executor.sql`, then
-   `migrations/2026-12-13_pierrot_actions_routing.sql`.
-   They add two RPCs/columns and widen the worker-kind check; they do not delete
-   or rewrite queue rows, statuses, attempts or RLS policies. Until the 12-13
+   `migrations/2026-12-13_pierrot_actions_routing.sql`, then
+   `migrations/2026-12-14_pierrot_actions_dispatch_recovery.sql`.
+   They add RPCs/columns and widen the worker-kind check; they do not delete or
+   rewrite queue rows, statuses, attempts or RLS policies. Until the 12-13
    migration is applied, dispatch fails explicitly with
-   `ACTIONS_ROUTING_MIGRATION_REQUIRED`; it never falls back to Codespaces.
+   `ACTIONS_ROUTING_MIGRATION_REQUIRED`. Until 12-14 is applied it fails with
+   `ACTIONS_DISPATCH_RECOVERY_MIGRATION_REQUIRED`; it never falls back to
+   Codespaces.
 5. Ensure the GitHub token used by the server can create PRs (existing setup).
 6. Keep the Codespace worker and its secrets untouched. Do not stop or delete
    the Codespace until the owner approves the completed pilot.
@@ -210,6 +213,48 @@ Codespaces.
 Required server permission for dispatch: the repository token must have
 **Contents: write** (classic: `repo`) so `repository_dispatch` is accepted. The
 workflow job itself still needs only `contents: write`.
+
+### 3.2 Durable dispatch outcomes and stale-marker recovery
+
+A dispatch marker is **not** proof that a task is running. The task row now
+records `actions_dispatch_status` (`requested`, `accepted`, `claimed`,
+`retry_scheduled`, `not_claimable`, `ineligible`, `failed`), the last reason/code,
+a correlation id, a bounded attempt counter and the next retry time.
+
+- If a workflow starts but the atomic claim refuses, the worker API classifies
+  the reason (another task owns the global slot, stale worker, queue paused,
+  dependency/batch/blocked, task changed status, duplicate claim race).
+- Only genuinely transient reasons schedule a bounded retry with exponential
+  backoff. Deterministic blockers keep the marker and do not loop; they are
+  released automatically once the blocker is actually gone.
+- An accepted dispatch that never claims within three minutes is recovered as a
+  stale reservation and retried within the same bounded budget (5 dispatches).
+- Reservations are released only by `pierrot_dev_complete_actions_dispatch`,
+  which locks the task, verifies it is still queued, checks the correlation and
+  reservation revision, and refuses when an active attempt owns the task.
+- The existing five-minute scheduler tick now also calls the protected
+  `/api/cron/pierrot-dev-dispatch` endpoint, so a stuck marker recovers even
+  when nobody has Admin open. No new cron schedule is created and no runner is
+  kept alive.
+- In the QUEUE view the task stays `queued` until an attempt is claimed; Admin
+  shows dispatch state/reason/next retry and offers a safe owner retry when the
+  reservation is failed or no longer claimable.
+
+### 3.3 Rebase after the PR #57 duplicate-dispatch hardening
+
+This recovery work was rebased onto main after PR #57. The conflicts were
+resolved by keeping both behaviours, not by choosing one:
+
+- `app/api/internal/pierrot/dev/worker/route.ts` now returns both `claimFailure`
+  (PR #57 idempotent execution diagnostics) and `diagnosis` (recovery/retry
+  classification). A lost claim is still a successful no-op that never touches
+  the winning lease.
+- `scripts/pierrot/dev-worker.mjs` keeps PR #57's `classifyClaimOutcome` exit
+  code/ownership handling and augments it with the recovery reason, retry time
+  and diagnosis. A real setup failure stays red; a lost race stays a no-op.
+- The worker claim test keeps PR #57's concurrent duplicate-dispatch tests and
+  the recovery claim-outcome tests in the same suite.
+- The recovery migration remains additive and unchanged by the rebase.
 
 ---
 

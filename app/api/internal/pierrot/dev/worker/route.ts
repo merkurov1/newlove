@@ -27,7 +27,11 @@ import {
   pingWorkbenchStore,
   registerWorker,
 } from '@/lib/pierrot/dev/workbench/store';
-import { dispatchNextQueuedTask } from '@/lib/pierrot/dev/workbench/actions';
+import {
+  dispatchNextQueuedTask,
+  recordActionsClaimMiss,
+  recordActionsClaimSuccess,
+} from '@/lib/pierrot/dev/workbench/actions';
 import {
   WORKER_LEASE_SECONDS,
   WORKER_MAX_POLL_INTERVAL_MS,
@@ -306,8 +310,27 @@ export async function POST(req: Request) {
           }
         }
         const claim = await claimTaskForWorker(workerId, taskId);
+        let diagnosis = null;
         if (claim) {
           await recordWorkerIdle({ workerId, status: 'busy', idleSince: null });
+          if (taskId) {
+            await recordActionsClaimSuccess({
+              taskId,
+              workerId,
+              correlationId: text(body.correlationId, 160) || null,
+              executionId: text(body.executionId, 160) || null,
+            }).catch(() => {});
+          }
+        } else if (taskId) {
+          // The workflow started but the atomic claim refused. Classify and
+          // persist why, then schedule a bounded retry only when it is safe.
+          diagnosis = await recordActionsClaimMiss({
+            taskId,
+            workerId,
+            correlationId: text(body.correlationId, 160) || null,
+            executionId: text(body.executionId, 160) || null,
+            source: 'worker:claim',
+          }).catch(() => null);
         }
         // A lost claim is not an error. Explain it without mutating the task or
         // the attempt owned by the winning runner.
@@ -316,6 +339,7 @@ export async function POST(req: Request) {
           ok: true,
           claim,
           claimFailure,
+          diagnosis,
           serverTime: new Date().toISOString(),
           pollIntervalMs: WORKER_POLL_INTERVAL_MS,
           idleGraceSeconds: idleGraceSeconds(),
