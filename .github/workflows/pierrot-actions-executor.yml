@@ -44,6 +44,7 @@ env:
   PIERROT_DEV_OPENCODE_MODEL: deepseek/deepseek-flash
   PIERROT_DEV_OPENCODE_MIN_VERSION: '2.1.4'
   PIERROT_DEV_TASK_ID: ${{ github.event.client_payload.task_id || inputs.task_id }}
+  PIERROT_DEV_DISPATCH_CORRELATION_ID: ${{ github.event.client_payload.correlation_id || '' }}
   PIERROT_DEV_EXECUTION_ID: gha:${{ github.run_id }}:${{ github.run_attempt }}
   PIERROT_DEV_WORKER_ID: actions:${{ github.run_id }}:${{ github.run_attempt }}
   PIERROT_DEV_ALLOW_PROVIDER_ENV: 'true'
@@ -171,6 +172,7 @@ jobs:
           } catch {}
           const summary = {
             taskId: process.env.PIERROT_DEV_TASK_ID || null,
+            dispatchCorrelationId: process.env.PIERROT_DEV_DISPATCH_CORRELATION_ID || null,
             executionId: process.env.PIERROT_DEV_EXECUTION_ID || null,
             workerId: process.env.PIERROT_DEV_WORKER_ID || null,
             repository: process.env.GITHUB_REPOSITORY || null,

@@ -298,6 +298,100 @@ function TaskMeta({ task }: { task: DevWorkbenchTask }) {
   );
 }
 
+/**
+ * Operator-facing dispatch state. A queued task with a dispatch marker is
+ * never labelled running: only a claimed/in_progress attempt is running.
+ */
+function dispatchView(task: DevWorkbenchTask): {
+  label: string;
+  detail: string | null;
+  retryable: boolean;
+  warning: boolean;
+} {
+  const marker = task.actionsDispatchRequestedAt || null;
+  const status = task.actionsDispatchStatus || null;
+  const reason = task.actionsDispatchReason || task.lastErrorMessage || null;
+  const reasonCode = task.actionsDispatchReasonCode || task.lastErrorCode || null;
+  const nextRetry = task.actionsDispatchNextRetryAt || null;
+  const attempts = task.actionsDispatchAttempts || 0;
+  const attemptLabel = attempts > 0 ? ` · attempt ${attempts}/5` : '';
+  const retryLabel = nextRetry ? `retry ${age(nextRetry)} ago` : '';
+
+  if (!marker) {
+    return {
+      label: 'dispatch: waiting for a free slot',
+      detail: null,
+      retryable: false,
+      warning: false,
+    };
+  }
+  switch (status) {
+    case 'requested':
+      return {
+        label: `dispatch: requested${attemptLabel}`,
+        detail: 'Waiting for GitHub Actions to start the workflow. This is not running yet.',
+        retryable: false,
+        warning: false,
+      };
+    case 'accepted':
+      return {
+        label: `dispatch: workflow accepted${attemptLabel}`,
+        detail: 'GitHub accepted the event; no workflow claim has been recorded yet.',
+        retryable: false,
+        warning: false,
+      };
+    case 'claimable':
+      return {
+        label: `dispatch: workflow started${attemptLabel}`,
+        detail: 'Waiting for the runner to claim the task.',
+        retryable: false,
+        warning: false,
+      };
+    case 'claimed':
+      return {
+        label: 'dispatch: claimed',
+        detail: 'An attempt owns this task.',
+        retryable: false,
+        warning: false,
+      };
+    case 'retry_scheduled':
+      return {
+        label: `dispatch: retry scheduled${attemptLabel}`,
+        detail: [
+          reasonCode,
+          reason,
+          nextRetry ? `next ${new Date(nextRetry).toLocaleString()}` : retryLabel,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        retryable: true,
+        warning: true,
+      };
+    case 'not_claimable':
+    case 'ineligible':
+      return {
+        label: `dispatch: not claimable${attemptLabel}`,
+        detail: [reasonCode, reason].filter(Boolean).join(' · '),
+        retryable: task.status === 'queued',
+        warning: true,
+      };
+    case 'failed':
+      return {
+        label: `dispatch: failed to claim${attemptLabel}`,
+        detail: [reasonCode, reason].filter(Boolean).join(' · '),
+        retryable: task.status === 'queued',
+        warning: true,
+      };
+    default:
+      return {
+        label: 'dispatch: requested',
+        detail: reason,
+        retryable: false,
+        warning: false,
+      };
+  }
+}
+
 export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
   const [overview, setOverview] = useState(initialOverview);
   const [tab, setTab] = useState<Tab>('inbox');
@@ -424,7 +518,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
           );
           setNotice(
             queued
-              ? 'Задание утверждено и поставлено в очередь. Codespace запустится автоматически.'
+              ? 'Задание утверждено и поставлено в очередь. Dispatch в GitHub Actions запрошен; это ещё не значит, что задача выполняется.'
               : 'Задание утверждено. Задачи batch запускаются через Start batch.'
           );
         }
@@ -432,7 +526,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
           setNotice('Accepted. Select the verified task in REVIEW again to merge it explicitly.');
         }
         if (action === 'retry_dispatch') {
-          setNotice('Dispatch retry requested. The duplicate-launch marker was cleared once.');
+          setNotice(
+            'Safe dispatch retry requested. The stale reservation was conditionally released and one new dispatch may be sent.'
+          );
         }
         if (['accept', 'reject', 'retry', 'retry_dispatch', 'merge', 'enqueue'].includes(action)) {
           setReviewTaskId(null);
@@ -485,17 +581,16 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
   const counts = overview.counts;
   const active = overview.active;
   const worker = overview.workers.find((item) => item.online) || overview.workers[0] || null;
-  const workerHealth =
-    overview.workerHealth || {
-      total: overview.workers.length,
-      active: overview.workers.filter((item) => item.online).length,
-      stale: 0,
-      historical: 0,
-      finished: 0,
-      orphan: 0,
-      pointerMismatch: 0,
-      issues: [],
-    };
+  const workerHealth = overview.workerHealth || {
+    total: overview.workers.length,
+    active: overview.workers.filter((item) => item.online).length,
+    stale: 0,
+    historical: 0,
+    finished: 0,
+    orphan: 0,
+    pointerMismatch: 0,
+    issues: [],
+  };
   const readyTasks = overview.inbox.filter((task) => task.status === 'ready');
 
   const createTask = async () => {
@@ -936,83 +1031,97 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         </p>
       ) : (
         <ol className="pw-wb-queue">
-          {overview.queue.map((task, index) => (
-            <li key={task.id} className="pw-wb-card">
-              <div className="pw-wb-card-head">
-                <div className="pw-wb-card-title">
-                  <span className="pw-wb-position">{index + 1}</span>
-                  <StatusBadge status={task.status} />
-                  <strong>{task.title}</strong>
+          {overview.queue.map((task, index) => {
+            const dispatch = dispatchView(task);
+            return (
+              <li key={task.id} className="pw-wb-card">
+                <div className="pw-wb-card-head">
+                  <div className="pw-wb-card-title">
+                    <span className="pw-wb-position">{index + 1}</span>
+                    <StatusBadge status={task.status} />
+                    <strong>{task.title}</strong>
+                  </div>
+                  <TaskMeta task={task} />
                 </div>
-                <TaskMeta task={task} />
-              </div>
-              <p className="pw-wb-meta">Cost estimate: {moneyRange(task.costEstimate)}</p>
-              {task.lastErrorCode && (
-                <p className="pw-wb-warning">
-                  <AlertTriangle size={14} /> {task.lastErrorCode}: {task.lastErrorMessage}
+                <p className="pw-wb-meta">Cost estimate: {moneyRange(task.costEstimate)}</p>
+                <p className={dispatch.warning ? 'pw-wb-warning' : 'pw-wb-meta'}>
+                  {dispatch.warning ? <AlertTriangle size={14} /> : <GitBranch size={14} />}{' '}
+                  {dispatch.label}
+                  {dispatch.detail ? ` · ${dispatch.detail}` : ''}
                 </p>
-              )}
-              <div className="pw-wb-actions">
-                <button
-                  type="button"
-                  className="pw-wb-icon-button"
-                  aria-label="Выше"
-                  disabled={index === 0}
-                  onClick={() =>
-                    void runAction('reorder', { taskId: task.id, position: index - 1 })
-                  }
-                >
-                  <ArrowUp size={14} />
-                </button>
-                <button
-                  type="button"
-                  className="pw-wb-icon-button"
-                  aria-label="Ниже"
-                  disabled={index === overview.queue.length - 1}
-                  onClick={() =>
-                    void runAction('reorder', { taskId: task.id, position: index + 1 })
-                  }
-                >
-                  <ArrowDown size={14} />
-                </button>
-                <button
-                  type="button"
-                  className="pw-wb-button is-quiet"
-                  onClick={() =>
-                    void runAction('set_priority', { taskId: task.id, priority: task.priority + 1 })
-                  }
-                >
-                  P+1
-                </button>
-                <button
-                  type="button"
-                  className="pw-wb-button is-quiet"
-                  onClick={() =>
-                    void runAction('set_priority', { taskId: task.id, priority: task.priority - 1 })
-                  }
-                >
-                  P−1
-                </button>
-                {task.lastErrorCode?.startsWith('ACTIONS_') && (
+                {task.lastErrorCode && (
+                  <p className="pw-wb-warning">
+                    <AlertTriangle size={14} /> {task.lastErrorCode}: {task.lastErrorMessage}
+                  </p>
+                )}
+                <div className="pw-wb-actions">
                   <button
                     type="button"
-                    className="pw-wb-button is-warn"
-                    disabled={busy === `retry_dispatch:${task.id}`}
-                    onClick={() => void runAction('retry_dispatch', { taskId: task.id })}
+                    className="pw-wb-icon-button"
+                    aria-label="Выше"
+                    disabled={index === 0}
+                    onClick={() =>
+                      void runAction('reorder', { taskId: task.id, position: index - 1 })
+                    }
                   >
-                    <RotateCcw size={14} /> Повторить dispatch
+                    <ArrowUp size={14} />
                   </button>
-                )}
-                <button
-                  type="button"
-                  className="pw-wb-button"
-                  onClick={() => void runAction('dequeue', { taskId: task.id })}
-                >
-                  Убрать из очереди
-                </button>
-              </div>
-            </li>
-          ))}
+                  <button
+                    type="button"
+                    className="pw-wb-icon-button"
+                    aria-label="Ниже"
+                    disabled={index === overview.queue.length - 1}
+                    onClick={() =>
+                      void runAction('reorder', { taskId: task.id, position: index + 1 })
+                    }
+                  >
+                    <ArrowDown size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="pw-wb-button is-quiet"
+                    onClick={() =>
+                      void runAction('set_priority', {
+                        taskId: task.id,
+                        priority: task.priority + 1,
+                      })
+                    }
+                  >
+                    P+1
+                  </button>
+                  <button
+                    type="button"
+                    className="pw-wb-button is-quiet"
+                    onClick={() =>
+                      void runAction('set_priority', {
+                        taskId: task.id,
+                        priority: task.priority - 1,
+                      })
+                    }
+                  >
+                    P−1
+                  </button>
+                  {(dispatch.retryable || task.lastErrorCode?.startsWith('ACTIONS_')) && (
+                    <button
+                      type="button"
+                      className="pw-wb-button is-warn"
+                      disabled={busy === `retry_dispatch:${task.id}`}
+                      onClick={() => void runAction('retry_dispatch', { taskId: task.id })}
+                    >
+                      <RotateCcw size={14} /> Повторить dispatch
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="pw-wb-button"
+                    onClick={() => void runAction('dequeue', { taskId: task.id })}
+                  >
+                    Убрать из очереди
+                  </button>
+                </div>
+              </li>
+            );
+          })}
         </ol>
       )}
 
@@ -1603,9 +1712,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             <p className="pw-wb-warning">{overview.finalization.blockedReason}</p>
           )}
           {overview.finalization.retryAt && (
-            <p className="pw-wb-meta">
-              Next automatic attempt: {overview.finalization.retryAt}
-            </p>
+            <p className="pw-wb-meta">Next automatic attempt: {overview.finalization.retryAt}</p>
           )}
           {overview.finalization.prs.length > 0 && (
             <ul className="pw-wb-criteria">
@@ -1617,9 +1724,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                   · {pr.integrated ? 'integrated' : pr.ciStatus} ·{' '}
                   {pr.mergeable === false ? 'conflict' : pr.state}
                   {pr.headSha ? ` · head ${shortSha(pr.headSha)}` : ''}
-                  {pr.ciDetail ? (
-                    <span className="pw-wb-meta"> · {pr.ciDetail}</span>
-                  ) : null}
+                  {pr.ciDetail ? <span className="pw-wb-meta"> · {pr.ciDetail}</span> : null}
                   {!pr.integrated && pr.reason ? (
                     <span className="pw-wb-meta"> · reason {pr.reason}</span>
                   ) : null}

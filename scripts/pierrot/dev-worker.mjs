@@ -99,6 +99,7 @@ const EXECUTOR_MODE = (process.env.PIERROT_DEV_EXECUTOR_MODE || 'codespace').tri
 const ACTIONS_MODE = EXECUTOR_MODE === 'actions';
 const RELEASE_MODE = EXECUTOR_MODE === 'release-active';
 const TARGET_TASK_ID = (process.env.PIERROT_DEV_TASK_ID || '').trim();
+const TARGET_CORRELATION_ID = (process.env.PIERROT_DEV_DISPATCH_CORRELATION_ID || '').trim();
 const ALLOW_PROVIDER_ENV = process.env.PIERROT_DEV_ALLOW_PROVIDER_ENV === 'true';
 const PROVIDER_ENV_NAME = `${OPENCODE_PROVIDER.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`;
 const ALLOW_UNSIGNED_COMMITS = process.env.PIERROT_DEV_ALLOW_UNSIGNED_COMMITS === 'true';
@@ -407,11 +408,7 @@ function startLeaseHeartbeat(attemptId) {
       return;
     }
     try {
-      const response = await api(
-        'progress',
-        { attemptId, stage: leaseHeartbeatStage },
-        15000
-      );
+      const response = await api('progress', { attemptId, stage: leaseHeartbeatStage }, 15000);
       if (leaseHeartbeatFailures > 0) {
         await log('Lease heartbeat recovered', {
           attemptId,
@@ -465,8 +462,7 @@ function opencodeEnv() {
   // The Codespace container is memory-limited in practice. A single executor
   // command (tsc/next build) must not be able to consume the whole machine and
   // trigger an environment restart.
-  env.NODE_OPTIONS =
-    process.env.PIERROT_DEV_OPENCODE_NODE_OPTIONS || '--max-old-space-size=2560';
+  env.NODE_OPTIONS = process.env.PIERROT_DEV_OPENCODE_NODE_OPTIONS || '--max-old-space-size=2560';
   env.OPENCODE_CONFIG_CONTENT = JSON.stringify(permissionConfig());
   return env;
 }
@@ -1155,8 +1151,7 @@ async function executeClaim(claim) {
       runtimeMs: runResult?.durationMs ?? null,
       modelStarted,
       headSha: payload.headSha ?? preserved?.commitSha ?? commitSha ?? null,
-      changedFiles:
-        preserved?.files?.length > 0 ? preserved.files : payload.changedFiles,
+      changedFiles: preserved?.files?.length > 0 ? preserved.files : payload.changedFiles,
     });
   };
 
@@ -1717,15 +1712,26 @@ async function runActionsOnce() {
     });
     await bootPhase('registered', `Actions worker ${WORKER_ID} registered.`, { force: true });
 
-    const claimed = await api('claim', TARGET_TASK_ID ? { taskId: TARGET_TASK_ID } : {}, 40000);
+    const claimed = await api(
+      'claim',
+      {
+        ...(TARGET_TASK_ID ? { taskId: TARGET_TASK_ID } : {}),
+        ...(TARGET_CORRELATION_ID ? { correlationId: TARGET_CORRELATION_ID } : {}),
+        executionId: EXECUTION_ID,
+      },
+      40000
+    );
     if (!claimed.claim) {
       const claimFailure = claimed.claimFailure || null;
+      const diagnosis = claimed.diagnosis || null;
       const outcome = classifyClaimOutcome({
         claimed: false,
         failure: claimFailure,
         taskId: TARGET_TASK_ID || undefined,
       });
-      const reason = outcome.reason;
+      // The claim diagnosis carries the recovery/retry classification; the
+      // claim failure carries the execution-side ownership details.
+      const reason = diagnosis?.reason || outcome.reason;
       await log(
         outcome.idempotent
           ? 'No claimable task; finishing as an idempotent no-op without polling.'
@@ -1734,12 +1740,17 @@ async function runActionsOnce() {
           requestedTaskId: TARGET_TASK_ID || null,
           outcome: outcome.outcome,
           reasonCode: outcome.reasonCode,
+          retryable: diagnosis?.retryable ?? null,
+          retryAt: diagnosis?.retryAt || null,
           reason,
           claimFailure,
+          diagnosis,
         }
       );
       // Persist an explicit, non-secret reason so a workflow run that creates
       // no attempt is explainable in Supabase, not only in the runner log.
+      // The claim API already persisted the classified outcome and any safe
+      // bounded retry. Keep a non-secret runner-side breadcrumb as well.
       await api(
         'event',
         {
@@ -1749,12 +1760,14 @@ async function runActionsOnce() {
           payload: {
             source: 'actions:no_claim',
             requestedTaskId: TARGET_TASK_ID || null,
+            correlationId: TARGET_CORRELATION_ID || null,
             executionId: EXECUTION_ID,
             outcome: outcome.outcome,
             reasonCode: outcome.reasonCode,
             taskStatus: claimFailure?.taskStatus || null,
             queuePaused: claimFailure?.queuePaused === true,
             activeAttempt: claimFailure?.activeAttempt || null,
+            diagnosis,
           },
           dedupeKey: `actions-no-claim:${WORKER_ID}`,
         },
