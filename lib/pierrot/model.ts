@@ -671,6 +671,226 @@ export async function callPierrotModel(
 }
 
 /**
+ * Explicit provider policy for the isolated personal assistant profile.
+ *
+ * DeepSeek direct is always attempted first. If it is unavailable, the same
+ * DeepSeek model is tried through OpenRouter. Gemini is the final fallback.
+ * Every provider receives the exact same system prompt and conversation, so a
+ * fallback never changes the persona, the language policy or the safety rules.
+ */
+export const PERSONAL_ASSISTANT_PROVIDER_ORDER = ['deepseek', 'openrouter', 'gemini'] as const;
+
+export type PersonalAssistantProvider = (typeof PERSONAL_ASSISTANT_PROVIDER_ORDER)[number];
+
+/**
+ * DeepSeek-first generation for the personal assistant profile.
+ *
+ * The public Pierrot pipeline keeps its existing Gemini-first order. This
+ * function is used only by the personal_assistant branch.
+ */
+export async function callPersonalAssistantModel(
+  systemPrompt: string,
+  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+  options: PierrotModelOptions = {}
+): Promise<PierrotModelResult> {
+  const startedAt = Date.now();
+  const attempts: LlmProviderAttempt[] = [];
+  const collectAttempt = (attempt: LlmProviderAttempt) => {
+    attempts.push(attempt);
+    options.onAttempt?.(attempt);
+  };
+
+  let attemptNumber = 0;
+  let previousProvider: LlmProvider | null = null;
+  let lastError: unknown = null;
+
+  for (const provider of PERSONAL_ASSISTANT_PROVIDER_ORDER) {
+    if (provider === 'gemini' && !isGeminiConfigured()) continue;
+
+    attemptNumber += 1;
+    const attemptStartedAt = Date.now();
+
+    if (provider === 'deepseek') {
+      try {
+        const deepseek = await callDeepSeek(systemPrompt, messages, false, options);
+        const model = 'deepseek-chat';
+
+        collectAttempt({
+          provider: 'deepseek',
+          model,
+          attempt: attemptNumber,
+          isRetry: attemptNumber > 1,
+          fallbackFrom: previousProvider,
+          ok: true,
+          latencyMs: Date.now() - attemptStartedAt,
+          finishReason: deepseek.finishReason,
+          errorCode: null,
+          usage: toTelemetryUsage(deepseek.usage),
+          promptChars: promptChars(systemPrompt, messages),
+          responseChars: deepseek.reply.length,
+        });
+
+        return {
+          reply: deepseek.reply,
+          provider: 'deepseek',
+          model,
+          latencyMs: Date.now() - startedAt,
+          fallbackUsed: attemptNumber > 1,
+          finishReason: deepseek.finishReason,
+          usage: deepseek.usage,
+          attempts,
+        };
+      } catch (error) {
+        collectAttempt({
+          provider: 'deepseek',
+          model: 'deepseek-chat',
+          attempt: attemptNumber,
+          isRetry: attemptNumber > 1,
+          fallbackFrom: previousProvider,
+          ok: false,
+          latencyMs: Date.now() - attemptStartedAt,
+          finishReason: null,
+          errorCode: errorCodeFrom(error),
+          usage: toTelemetryUsage(null),
+          promptChars: promptChars(systemPrompt, messages),
+          responseChars: 0,
+        });
+        lastError = error;
+        previousProvider = 'deepseek';
+        console.warn(
+          '[Pierrot AI] Personal assistant DeepSeek direct unavailable; trying OpenRouter'
+        );
+        continue;
+      }
+    }
+
+    if (provider === 'openrouter') {
+      try {
+        const openrouter = await callOpenRouterDeepSeek(systemPrompt, messages, false, options);
+        const model = 'deepseek/deepseek-chat';
+
+        collectAttempt({
+          provider: 'openrouter',
+          model,
+          attempt: attemptNumber,
+          isRetry: attemptNumber > 1,
+          fallbackFrom: previousProvider,
+          ok: true,
+          latencyMs: Date.now() - attemptStartedAt,
+          finishReason: openrouter.finishReason,
+          errorCode: null,
+          usage: toTelemetryUsage(openrouter.usage),
+          promptChars: promptChars(systemPrompt, messages),
+          responseChars: openrouter.reply.length,
+        });
+
+        return {
+          reply: openrouter.reply,
+          provider: 'openrouter',
+          model,
+          latencyMs: Date.now() - startedAt,
+          fallbackUsed: attemptNumber > 1,
+          finishReason: openrouter.finishReason,
+          usage: openrouter.usage,
+          attempts,
+        };
+      } catch (error) {
+        collectAttempt({
+          provider: 'openrouter',
+          model: 'deepseek/deepseek-chat',
+          attempt: attemptNumber,
+          isRetry: attemptNumber > 1,
+          fallbackFrom: previousProvider,
+          ok: false,
+          latencyMs: Date.now() - attemptStartedAt,
+          finishReason: null,
+          errorCode: errorCodeFrom(error),
+          usage: toTelemetryUsage(null),
+          promptChars: promptChars(systemPrompt, messages),
+          responseChars: 0,
+        });
+        lastError = error;
+        previousProvider = 'openrouter';
+        console.warn(
+          '[Pierrot AI] Personal assistant OpenRouter unavailable; trying Gemini'
+        );
+        continue;
+      }
+    }
+
+    try {
+      const gemini = await generateGeminiText({
+        system: systemPrompt,
+        messages: messages.flatMap((message) => {
+          if (message.role !== 'user' && message.role !== 'assistant') return [];
+
+          const content =
+            typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
+
+          return [
+            {
+              role: message.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+              content,
+            },
+          ];
+        }),
+        temperature: 0.7,
+        maxOutputTokens: outputBudget(options),
+        timeoutMs: providerTimeout(options),
+        telemetry: { skip: true },
+      });
+
+      const usage = usageFrom(gemini.usage);
+
+      collectAttempt({
+        provider: 'gemini',
+        model: gemini.model,
+        attempt: attemptNumber,
+        isRetry: attemptNumber > 1,
+        fallbackFrom: previousProvider,
+        ok: true,
+        latencyMs: Date.now() - attemptStartedAt,
+        finishReason: gemini.finishReason ?? null,
+        errorCode: null,
+        usage: toTelemetryUsage(usage),
+        promptChars: promptChars(systemPrompt, messages),
+        responseChars: gemini.content.length,
+      });
+
+      return {
+        reply: gemini.content,
+        provider: 'gemini',
+        model: gemini.model,
+        latencyMs: Date.now() - startedAt,
+        fallbackUsed: attemptNumber > 1,
+        finishReason: gemini.finishReason ?? null,
+        usage,
+        attempts,
+      };
+    } catch (error) {
+      collectAttempt({
+        provider: 'gemini',
+        model: 'gemini-3.5-flash',
+        attempt: attemptNumber,
+        isRetry: attemptNumber > 1,
+        fallbackFrom: previousProvider,
+        ok: false,
+        latencyMs: Date.now() - attemptStartedAt,
+        finishReason: null,
+        errorCode: errorCodeFrom(error),
+        usage: toTelemetryUsage(null),
+        promptChars: promptChars(systemPrompt, messages),
+        responseChars: 0,
+      });
+      lastError = error;
+      previousProvider = 'gemini';
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('All AI providers are unavailable.');
+}
+
+/**
  * Streaming version of callPierrotModel with the same provider order.
  *
  * Fallback is allowed only before the first emitted token. Once a provider has

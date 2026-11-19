@@ -99,6 +99,17 @@ import {
 } from '@/lib/knowledge/rag/authorization';
 import { isMediaArchiveQuery } from '@/lib/pierrot/mediaIntent';
 import {
+  PERSONAL_ASSISTANT_TELEGRAM_USER_ID,
+  isPersonalAssistantContext,
+  isPersonalAssistantSenderId,
+} from '@/lib/pierrot/personalAssistant/identity';
+import { createServiceRolePersonalAssistantStore } from '@/lib/pierrot/personalAssistant/store';
+import { runPersonalAssistantTurn } from '@/lib/pierrot/personalAssistant/pipeline';
+import {
+  detectAssistantLanguage,
+  personalAssistantErrorText,
+} from '@/lib/pierrot/personalAssistant/language';
+import {
   retrieveMediaEvidence,
   buildMediaEvidencePrompt,
   buildMediaEvidenceSources,
@@ -556,6 +567,75 @@ export async function POST(req: Request) {
 
     if (rawMode !== undefined && rawMode !== 'site' && rawMode !== 'unframed') {
       return NextResponse.json({ error: 'Invalid conversation mode.' }, { status: 400 });
+    }
+
+    // Isolated personal assistant profile. Identity is resolved only from the
+    // server-to-server headers set by /api/pierrot after it verified the
+    // Telegram webhook secret and the private-chat sender id. Body flags,
+    // message text and callback data never select this branch.
+    const telegramSenderId = req.headers.get('x-telegram-sender-id');
+
+    if (isPersonalAssistantSenderId(telegramSenderId)) {
+      const personalAssistantRequest =
+        isInternalRequest &&
+        req.headers.get('x-telegram-update-authentic') === '1' &&
+        isPersonalAssistantContext({
+          fromId: telegramSenderId,
+          chatId: req.headers.get('x-telegram-chat-id') ?? '',
+          chatType: req.headers.get('x-telegram-chat-type'),
+        });
+
+      if (!personalAssistantRequest) {
+        return NextResponse.json({ error: 'Not available.' }, { status: 403 });
+      }
+
+      const store = createServiceRolePersonalAssistantStore();
+
+      if (!store) {
+        return NextResponse.json(
+          { error: personalAssistantErrorText(detectAssistantLanguage(trimmedMessage)) },
+          { status: 503 }
+        );
+      }
+
+      try {
+        const profile = await store.ensureProfile(PERSONAL_ASSISTANT_TELEGRAM_USER_ID);
+        const assistantMessageId =
+          typeof rawUserMessageId === 'string' && isPierrotId(rawUserMessageId)
+            ? rawUserMessageId
+            : randomUUID();
+
+        const result = await runPersonalAssistantTurn({
+          profile,
+          message: trimmedMessage,
+          messageId: assistantMessageId,
+          store,
+        });
+
+        return NextResponse.json(
+          {
+            reply: result.reply,
+            provider: result.provider,
+            model: result.model,
+            web: result.searchedWeb,
+            language: result.language,
+          },
+          { headers: { 'Cache-Control': 'no-store' } }
+        );
+      } catch (error) {
+        // Never log message text, memory contents or provider request bodies.
+        console.error(
+          '[Pierrot Assistant] turn failed:',
+          error && typeof error === 'object' && 'code' in error
+            ? String((error as { code?: unknown }).code)
+            : 'unexpected'
+        );
+
+        return NextResponse.json(
+          { error: personalAssistantErrorText(detectAssistantLanguage(trimmedMessage)) },
+          { status: 502 }
+        );
+      }
     }
 
     const requestedOwnerMode = rawMode === 'unframed';

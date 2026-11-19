@@ -59,6 +59,21 @@ import {
   TELEGRAM_NOTIFICATION_CATEGORIES,
   type TelegramNotificationCategory,
 } from '@/lib/telegram/notifications';
+import {
+  PERSONAL_ASSISTANT_GREETING,
+  isPersonalAssistantContext,
+} from '@/lib/pierrot/personalAssistant/identity';
+import { authorizePersonalAssistantUpdate } from '@/lib/pierrot/personalAssistant/webhookAuth';
+import {
+  detectAssistantLanguage,
+  personalAssistantErrorText,
+} from '@/lib/pierrot/personalAssistant/language';
+import {
+  isPersonalAssistantCommandAllowed,
+  normalizeTelegramCommand,
+  personalAssistantHelpText,
+  personalAssistantUnknownCommandText,
+} from '@/lib/pierrot/personalAssistant/telegramPolicy';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -299,6 +314,173 @@ async function sendWelcome(ctx: Context) {
     ].join('\n'),
     { reply_markup: welcomeKeyboard() }
   );
+}
+
+/**
+ * The personal assistant profile is resolved only from the Telegram sender and
+ * chat type on the server. Message text, callback data and body claims are
+ * never authentication factors.
+ */
+function isPersonalAssistantMessage(ctx: Context): boolean {
+  return isPersonalAssistantContext({
+    fromId: ctx.from?.id,
+    chatId: ctx.chat?.id,
+    chatType: ctx.chat?.type,
+  });
+}
+
+function splitTelegramText(value: string, maxChars = 4000): string[] {
+  const text = String(value || '').trim();
+  if (!text) return [''];
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > maxChars) {
+    let cut = remaining.lastIndexOf('\n', maxChars);
+    if (cut < maxChars * 0.5) cut = remaining.lastIndexOf(' ', maxChars);
+    if (cut < maxChars * 0.5) cut = maxChars;
+
+    chunks.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+
+  if (remaining) chunks.push(remaining);
+  return chunks.length > 0 ? chunks : [''];
+}
+
+async function sendPersonalAssistantReply(ctx: Context, reply: string): Promise<void> {
+  const chunks = splitTelegramText(reply);
+
+  for (const chunk of chunks) {
+    try {
+      await ctx.reply(toTelegramHtml(chunk), { parse_mode: 'HTML' });
+    } catch (error) {
+      // A 400 means Telegram rejected the HTML and nothing was sent, so a
+      // plain-text retry cannot duplicate the message.
+      if (error instanceof GrammyError && error.error_code === 400) {
+        await ctx.reply(chunk);
+        continue;
+      }
+
+      throw error;
+    }
+  }
+}
+
+async function requestPersonalAssistant(input: {
+  senderId: number;
+  messageId: string;
+  text: string;
+}): Promise<{ reply: string }> {
+  const ids = createTelegramPierrotIds(input.senderId, input.messageId);
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    // The web route re-checks the allowlist and private-chat header. These
+    // headers are trusted only together with the internal service secret.
+    'x-telegram-user-id': String(input.senderId),
+    'x-telegram-sender-id': String(input.senderId),
+    'x-telegram-chat-id': String(input.senderId),
+    'x-telegram-chat-type': 'private',
+    'x-telegram-update-authentic': '1',
+  };
+
+  if (internalSecret) {
+    headers['x-pierrot-internal'] = internalSecret;
+  }
+
+  const response = await fetch(`${siteUrl}/api/pierrot-web`, {
+    method: 'POST',
+    headers,
+    signal: AbortSignal.timeout(55_000),
+    body: JSON.stringify({
+      message: input.text,
+      userMessageId: ids.userMessageId,
+      stream: false,
+      context: { pathname: '/' },
+    }),
+  });
+
+  const data = (await response.json().catch(() => ({}))) as {
+    reply?: unknown;
+    error?: unknown;
+  };
+
+  if (!response.ok) {
+    throw new Error(
+      typeof data.error === 'string' ? data.error : `Pierrot web returned ${response.status}`
+    );
+  }
+
+  return {
+    reply: typeof data.reply === 'string' ? data.reply : '',
+  };
+}
+
+async function handlePersonalAssistantText(ctx: Context, text: string): Promise<void> {
+  const senderId = ctx.from?.id;
+  const chatId = ctx.chat?.id;
+  const messageId = ctx.message?.message_id;
+  const language = detectAssistantLanguage(text);
+
+  if (typeof senderId !== 'number' || typeof chatId !== 'number') return;
+
+  if (text.length > PIERROT_MAX_MESSAGE_LENGTH) {
+    await ctx
+      .reply(
+        language === 'ru'
+          ? 'Это сообщение слишком длинное. Сократите его, пожалуйста.'
+          : personalAssistantErrorText(language)
+      )
+      .catch(() => undefined);
+    return;
+  }
+
+  try {
+    await ctx.api.sendChatAction(chatId, 'typing').catch(() => undefined);
+    const data = await requestPersonalAssistant({
+      senderId,
+      messageId: typeof messageId === 'number' ? String(messageId) : `msg-${Date.now()}`,
+      text,
+    });
+
+    if (!data.reply.trim()) {
+      await ctx.reply(personalAssistantErrorText(language)).catch(() => undefined);
+      return;
+    }
+
+    await sendPersonalAssistantReply(ctx, data.reply);
+  } catch {
+    // Never expose provider responses, prompts, memory or internal details.
+    console.error('[Pierrot Assistant TG] request failed');
+    await ctx.reply(personalAssistantErrorText(language)).catch(() => undefined);
+  }
+}
+
+async function handlePersonalAssistantCommand(ctx: Context, text: string): Promise<void> {
+  const command = normalizeTelegramCommand(text);
+
+  if (command === '/start') {
+    await ctx.reply(PERSONAL_ASSISTANT_GREETING).catch(() => undefined);
+    return;
+  }
+
+  if (command === '/help') {
+    await ctx.reply(personalAssistantHelpText()).catch(() => undefined);
+    return;
+  }
+
+  if (command === '/privacy') {
+    await handlePersonalAssistantText(ctx, 'privacy');
+    return;
+  }
+
+  if (command === '/memory') {
+    await handlePersonalAssistantText(ctx, 'что ты помнишь?');
+    return;
+  }
+
+  await ctx.reply(personalAssistantUnknownCommandText()).catch(() => undefined);
 }
 
 async function editCallbackNotification(
@@ -1151,8 +1333,59 @@ async function handleNotificationToggle(
   }
 }
 
-bot.command('start', (ctx) => sendWelcome(ctx));
-bot.command('help', (ctx) => sendWelcome(ctx));
+// Personal assistant guard. It runs before every command and callback handler
+// so the isolated profile can never reach owner commands, Flow, human presence,
+// notifications or prompt callbacks. Only a private chat from the allowlisted
+// sender is affected; every other Telegram user keeps the existing behaviour.
+bot.use(async (ctx, next) => {
+  if (!isPersonalAssistantMessage(ctx)) return next();
+
+  if (ctx.callbackQuery) {
+    await ctx.answerCallbackQuery({ text: 'Недоступно' }).catch(() => undefined);
+    return;
+  }
+
+  if (ctx.message?.photo) {
+    await ctx
+      .reply('Пока я работаю с текстом. Отправьте вопрос текстом, пожалуйста.')
+      .catch(() => undefined);
+    return;
+  }
+
+  if (ctx.message?.document) {
+    await ctx
+      .reply('Пока я не принимаю документы. Отправьте вопрос текстом, пожалуйста.')
+      .catch(() => undefined);
+    return;
+  }
+
+  if (ctx.message?.video || ctx.message?.audio) {
+    await ctx
+      .reply('Пока я не принимаю видео и аудио. Отправьте вопрос текстом, пожалуйста.')
+      .catch(() => undefined);
+    return;
+  }
+
+  const text = ctx.message?.text;
+
+  if (typeof text === 'string' && text.startsWith('/')) {
+    const command = normalizeTelegramCommand(text);
+
+    if (!isPersonalAssistantCommandAllowed(command)) {
+      await ctx.reply(personalAssistantUnknownCommandText()).catch(() => undefined);
+      return;
+    }
+  }
+
+  return next();
+});
+
+bot.command('start', (ctx) =>
+  isPersonalAssistantMessage(ctx) ? handlePersonalAssistantCommand(ctx, '/start') : sendWelcome(ctx)
+);
+bot.command('help', (ctx) =>
+  isPersonalAssistantMessage(ctx) ? handlePersonalAssistantCommand(ctx, '/help') : sendWelcome(ctx)
+);
 bot.command('flow', (ctx) => handleFlowCommand(ctx));
 bot.command('cancel', (ctx) => handleCancelCommand(ctx));
 bot.command('end', (ctx) => handleEndCommand(ctx));
@@ -1161,6 +1394,11 @@ bot.command('human', (ctx) => handleHumanHelpCommand(ctx));
 bot.command('settings', (ctx) => handleSettingsCommand(ctx));
 
 bot.command('privacy', async (ctx) => {
+  if (isPersonalAssistantMessage(ctx)) {
+    await handlePersonalAssistantCommand(ctx, '/privacy');
+    return;
+  }
+
   const ids = createTelegramPierrotIds(ctx.chat.id, 'privacy');
   const store = createPierrotStore();
   const argument = (ctx.match || '').trim().toLowerCase();
@@ -1242,6 +1480,16 @@ bot.command('delete', async (ctx) => {
 bot.on('message:text', async (ctx) => {
   const text = ctx.message.text;
 
+  if (isPersonalAssistantMessage(ctx)) {
+    if (text.startsWith('/')) {
+      await handlePersonalAssistantCommand(ctx, text);
+      return;
+    }
+
+    await handlePersonalAssistantText(ctx, text);
+    return;
+  }
+
   if (text.startsWith('/')) {
     await ctx.reply('Unknown command. Use /start or ask me anything.');
     return;
@@ -1277,8 +1525,17 @@ bot.on('message:voice', async (ctx) => {
 
   if (!transcript) {
     await ctx
-      .reply('Voice transcription is not available right now. Send text instead.')
+      .reply(
+        isPersonalAssistantMessage(ctx)
+          ? 'Не удалось распознать голосовое сообщение. Отправьте вопрос текстом, пожалуйста.'
+          : 'Voice transcription is not available right now. Send text instead.'
+      )
       .catch(() => undefined);
+    return;
+  }
+
+  if (isPersonalAssistantMessage(ctx)) {
+    await handlePersonalAssistantText(ctx, transcript);
     return;
   }
 
@@ -1458,15 +1715,46 @@ export async function POST(request: Request) {
   }
 
   let updateId: number | string | null = null;
+  let payload: unknown = null;
 
   try {
     // Telegram retries the same update_id when the first webhook response is
     // slow. Claim it before grammY starts handlers so a retry can never send a
     // second Pierrot answer.
-    const payload = await request.clone().json();
+    payload = await request.clone().json();
     updateId = updateIdFromPayload(payload);
   } catch {
     // Let grammY return its normal 400 for malformed bodies.
+  }
+
+  // The personal assistant profile fails closed. Its sender id is read only
+  // from the Telegram update, and the update must also carry the exact webhook
+  // secret. If enforcement is not configured, the profile is unavailable.
+  // Group/supergroup/channel contexts are rejected even with a valid secret.
+  const assistantAuthorization = authorizePersonalAssistantUpdate(
+    payload,
+    request.headers,
+    process.env
+  );
+
+  if (assistantAuthorization === 'reject_unauthenticated') {
+    return new Response(
+      JSON.stringify({ ok: false, error: 'Update authenticity could not be verified.' }),
+      {
+        status: 403,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      }
+    );
+  }
+
+  if (assistantAuthorization === 'reject_context') {
+    return new Response(
+      JSON.stringify({ ok: false, error: 'This profile is available only in a private chat.' }),
+      {
+        status: 403,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      }
+    );
   }
 
   if (updateId !== null) {
