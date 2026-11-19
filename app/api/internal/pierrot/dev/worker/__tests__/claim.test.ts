@@ -93,9 +93,23 @@ jest.mock('@/lib/pierrot/dev/workbench/github', () => {
 
 jest.mock('@/lib/pierrot/dev/workbench/actions', () => ({
   dispatchNextQueuedTask: jest.fn(async () => ({ dispatched: false })),
+  recordActionsClaimMiss: jest.fn(async () => ({
+    code: 'CLAIM_CONFLICT',
+    reason: 'Claim lost a race.',
+    retryable: true,
+    terminal: false,
+    action: 'retry_scheduled',
+    retryAt: '2026-11-19T01:01:00.000Z',
+    correlationId: 'corr-1',
+  })),
+  recordActionsClaimSuccess: jest.fn(async () => undefined),
 }));
 
 import { POST } from '../route';
+import {
+  recordActionsClaimMiss,
+  recordActionsClaimSuccess,
+} from '@/lib/pierrot/dev/workbench/actions';
 import { claimTaskForWorker } from '@/lib/pierrot/dev/workbench/execution';
 import { getWorker } from '@/lib/pierrot/dev/workbench/store';
 import { readJsonBody } from '@/lib/pierrot/dev/workbench/workerAuth';
@@ -142,5 +156,51 @@ describe('worker claim routing', () => {
     await POST(request());
 
     expect(claim).toHaveBeenCalledWith('codespace:test', undefined);
+  });
+
+  it('persists the claimed outcome for a targeted Actions claim', async () => {
+    worker.mockResolvedValue({ id: 'actions:123:1', kind: 'actions' });
+    claim.mockResolvedValue({
+      task: { id: TASK_ID },
+      attempt: { id: 'attempt-1' },
+      prompt: 'prompt',
+    });
+    body.mockResolvedValue({
+      action: 'claim',
+      workerId: 'actions:123:1',
+      taskId: TASK_ID,
+      correlationId: 'corr-1',
+      executionId: 'gha:1:1',
+    });
+
+    await POST(request());
+
+    expect(recordActionsClaimSuccess).toHaveBeenCalledWith({
+      taskId: TASK_ID,
+      workerId: 'actions:123:1',
+      correlationId: 'corr-1',
+      executionId: 'gha:1:1',
+    });
+    expect(recordActionsClaimMiss).not.toHaveBeenCalled();
+  });
+
+  it('classifies a targeted claim miss and returns the diagnosis', async () => {
+    worker.mockResolvedValue({ id: 'actions:123:1', kind: 'actions' });
+    body.mockResolvedValue({
+      action: 'claim',
+      workerId: 'actions:123:1',
+      taskId: TASK_ID,
+      correlationId: 'corr-1',
+      executionId: 'gha:1:1',
+    });
+
+    const response = await POST(request());
+    const payload = (await response.json()) as { diagnosis?: { code?: string } };
+
+    expect(recordActionsClaimMiss).toHaveBeenCalledWith(
+      expect.objectContaining({ taskId: TASK_ID, correlationId: 'corr-1' })
+    );
+    expect(payload.diagnosis?.code).toBe('CLAIM_CONFLICT');
+    expect(recordActionsClaimSuccess).not.toHaveBeenCalled();
   });
 });

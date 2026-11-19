@@ -30,6 +30,18 @@ export const COST_LEDGER_MIGRATION_FILE = '2026-12-10_pierrot_dev_cost_ledger.sq
 const BASE_TASK_COLUMNS =
   'id,user_id,title,task,objective,repository,base_ref,status,priority,queue_position,queued_at,attempt_count,acceptance_criteria,verification_status,blocked_reason,last_error_code,last_error_message,result_commit,result_notes,pull_requests,created_at,updated_at';
 const ACTIONS_ROUTING_TASK_COLUMNS = ',assigned_executor,actions_dispatch_requested_at';
+const ACTIONS_DISPATCH_TASK_COLUMNS =
+  ',actions_dispatch_status,actions_dispatch_reason_code,actions_dispatch_reason,actions_dispatch_correlation_id,actions_dispatch_attempts,actions_dispatch_last_attempt_at,actions_dispatch_next_retry_at,actions_dispatch_updated_at';
+const ACTIONS_DISPATCH_STATUSES = new Set([
+  'requested',
+  'accepted',
+  'claimable',
+  'claimed',
+  'retry_scheduled',
+  'not_claimable',
+  'ineligible',
+  'failed',
+]);
 const ATTEMPT_COLUMNS =
   'id,task_id,attempt_number,status,worker_id,branch,base_ref,base_commit,head_sha,pr_number,pr_url,opencode_session_id,exit_code,started_at,finished_at,heartbeat_at,lease_expires_at,progress_stage,result_summary,changed_files,commands,verification,warnings,error_code,error_message,log_excerpt,created_at';
 
@@ -146,6 +158,34 @@ export function mapTaskRow(row: Record<string, unknown>): DevWorkbenchTask {
       typeof row.actions_dispatch_requested_at === 'string'
         ? row.actions_dispatch_requested_at
         : null,
+    actionsDispatchStatus:
+      typeof row.actions_dispatch_status === 'string' &&
+      ACTIONS_DISPATCH_STATUSES.has(row.actions_dispatch_status)
+        ? (row.actions_dispatch_status as DevWorkbenchTask['actionsDispatchStatus'])
+        : null,
+    actionsDispatchReasonCode:
+      typeof row.actions_dispatch_reason_code === 'string'
+        ? row.actions_dispatch_reason_code
+        : null,
+    actionsDispatchReason:
+      typeof row.actions_dispatch_reason === 'string' ? row.actions_dispatch_reason : null,
+    actionsDispatchCorrelationId:
+      typeof row.actions_dispatch_correlation_id === 'string'
+        ? row.actions_dispatch_correlation_id
+        : null,
+    actionsDispatchAttempts: Number.isFinite(Number(row.actions_dispatch_attempts))
+      ? Math.max(0, Math.trunc(Number(row.actions_dispatch_attempts)))
+      : 0,
+    actionsDispatchLastAttemptAt:
+      typeof row.actions_dispatch_last_attempt_at === 'string'
+        ? row.actions_dispatch_last_attempt_at
+        : null,
+    actionsDispatchNextRetryAt:
+      typeof row.actions_dispatch_next_retry_at === 'string'
+        ? row.actions_dispatch_next_retry_at
+        : null,
+    actionsDispatchUpdatedAt:
+      typeof row.actions_dispatch_updated_at === 'string' ? row.actions_dispatch_updated_at : null,
     resultCommit: typeof row.result_commit === 'string' ? row.result_commit : null,
     resultNotes: truncateText(row.result_notes, 12_000),
     pullRequests: list(row.pull_requests),
@@ -634,6 +674,7 @@ export async function listTaskRows(input: {
 }
 
 let actionsRoutingSchemaReady: boolean | null = null;
+let actionsDispatchRecoverySchemaReady: boolean | null = null;
 
 /**
  * True only when the additive Actions routing migration is applied. This is a
@@ -655,13 +696,38 @@ export async function isActionsRoutingSchemaReady(force = false): Promise<boolea
 }
 
 /**
- * Select only columns that exist. Before the 12-13 migration is applied the
- * rest of the workbench must keep working; dispatch then fails explicitly.
+ * True only when 2026-12-14 dispatch-recovery columns are applied. The rest of
+ * the workbench keeps working before it lands; dispatch then fails explicitly
+ * instead of silently creating another permanent marker.
+ */
+export async function isActionsDispatchRecoverySchemaReady(force = false): Promise<boolean> {
+  if (!force && actionsDispatchRecoverySchemaReady !== null) {
+    return actionsDispatchRecoverySchemaReady;
+  }
+  try {
+    const { error } = await store()
+      .from('pierrot_dev_prompts')
+      .select('actions_dispatch_status,actions_dispatch_attempts')
+      .limit(1);
+    actionsDispatchRecoverySchemaReady = !error;
+  } catch {
+    actionsDispatchRecoverySchemaReady = false;
+  }
+  return actionsDispatchRecoverySchemaReady;
+}
+
+/**
+ * Select only columns that exist. Before the routing/recovery migrations are
+ * applied the rest of the workbench must keep working; dispatch then fails
+ * explicitly with the migration file name.
  */
 async function taskColumns(): Promise<string> {
-  return (await isActionsRoutingSchemaReady())
-    ? `${BASE_TASK_COLUMNS}${ACTIONS_ROUTING_TASK_COLUMNS}`
-    : BASE_TASK_COLUMNS;
+  const routing = await isActionsRoutingSchemaReady();
+  if (!routing) return BASE_TASK_COLUMNS;
+  const recovery = await isActionsDispatchRecoverySchemaReady();
+  return recovery
+    ? `${BASE_TASK_COLUMNS}${ACTIONS_ROUTING_TASK_COLUMNS}${ACTIONS_DISPATCH_TASK_COLUMNS}`
+    : `${BASE_TASK_COLUMNS}${ACTIONS_ROUTING_TASK_COLUMNS}`;
 }
 
 /**
@@ -688,17 +754,39 @@ export async function listQueuedTasksForDispatch(limit = 10): Promise<DevWorkben
 }
 
 /**
- * Atomically reserve a queued task for one Actions dispatch request.
+ * Atomically reserve (or safely renew) a queued task for one Actions dispatch.
  *
- * The conditional update is the dispatcher's double-launch guard: only the
- * first concurrent caller observes `actions_dispatch_requested_at IS NULL` and
- * receives the row. The value is cleared explicitly on enqueue, retry, batch
- * start and lease recovery so a new attempt can be dispatched.
+ * `p_expected_requested_at` is the compare-and-set revision. A first request
+ * omits it and requires an empty marker; a bounded retry passes the current
+ * marker so only the dispatcher that saw that exact reservation can renew it.
+ * The database also refuses while any attempt is active, preserving the global
+ * single-active-attempt guarantee.
  */
 export async function reserveTaskForActionsDispatch(
-  taskId: string
+  taskId: string,
+  options: {
+    correlationId: string;
+    expectedRequestedAt?: string | null;
+    maxAttempts?: number;
+  } = { correlationId: '' }
 ): Promise<DevWorkbenchTask | null> {
   if (!isUuid(taskId)) return null;
+  if (await isActionsDispatchRecoverySchemaReady()) {
+    const correlationId = options.correlationId || `${taskId}:${Date.now().toString(36)}`;
+    const { data, error } = await store().rpc('pierrot_dev_reserve_actions_dispatch', {
+      p_task_id: taskId,
+      p_correlation_id: correlationId,
+      p_max_attempts: Math.min(Math.max(Math.trunc(options.maxAttempts || 5), 1), 20),
+      p_expected_requested_at: options.expectedRequestedAt || null,
+    });
+    if (error || !data || typeof data !== 'object') return null;
+    const record = data as { ok?: boolean; task?: Record<string, unknown> };
+    if (record.ok !== true || !record.task) return null;
+    return mapTaskRow(record.task);
+  }
+
+  // Legacy fallback until the additive recovery migration lands. It keeps the
+  // old duplicate-launch guard; dispatch itself fails closed before this path.
   const now = new Date().toISOString();
   const { data, error } = await store()
     .from('pierrot_dev_prompts')
@@ -716,27 +804,164 @@ export async function reserveTaskForActionsDispatch(
   return mapTaskRow(data as unknown as Record<string, unknown>);
 }
 
+export type ActionsDispatchCompletion = {
+  ok: boolean;
+  action: string;
+  code: string | null;
+  task: DevWorkbenchTask | null;
+};
+
 /**
- * Clear a previous dispatch marker and route the task to Actions again.
- * No-op until the additive migration is applied, so the rest of the workbench
- * keeps working before the DDL is deployed.
+ * Record an accepted/claimed outcome, or atomically release/renew a reservation
+ * after proving the task is still queued and no active attempt owns it.
+ */
+export async function completeTaskActionsDispatch(input: {
+  taskId: string;
+  correlationId?: string | null;
+  outcome: 'accepted' | 'claimed' | 'retry' | 'terminal';
+  reasonCode?: string | null;
+  reason?: string | null;
+  retryAt?: string | null;
+  expectedRequestedAt?: string | null;
+  terminal?: boolean;
+  workerId?: string | null;
+  executionId?: string | null;
+  resetAttempts?: boolean;
+}): Promise<ActionsDispatchCompletion> {
+  if (!isUuid(input.taskId)) {
+    return { ok: false, action: 'skipped', code: 'INVALID_TASK_ID', task: null };
+  }
+  if (!(await isActionsDispatchRecoverySchemaReady())) {
+    return {
+      ok: false,
+      action: 'skipped',
+      code: 'ACTIONS_DISPATCH_RECOVERY_MIGRATION_REQUIRED',
+      task: null,
+    };
+  }
+  try {
+    const { data, error } = await store().rpc('pierrot_dev_complete_actions_dispatch', {
+      p_task_id: input.taskId,
+      p_correlation_id: input.correlationId || null,
+      p_outcome: input.outcome,
+      p_reason_code: input.reasonCode || null,
+      p_reason: input.reason || null,
+      p_retry_at: input.retryAt || null,
+      p_expected_requested_at: input.expectedRequestedAt || null,
+      p_terminal: input.terminal === true,
+      p_worker_id: input.workerId || null,
+      p_execution_id: input.executionId || null,
+      p_reset_attempts: input.resetAttempts === true,
+    });
+    if (error || !data || typeof data !== 'object') {
+      return { ok: false, action: 'skipped', code: 'DISPATCH_COMPLETION_FAILED', task: null };
+    }
+    const record = data as {
+      ok?: boolean;
+      action?: string;
+      code?: string | null;
+      task?: Record<string, unknown>;
+    };
+    return {
+      ok: record.ok === true,
+      action: String(record.action || 'skipped'),
+      code: record.code ? String(record.code) : null,
+      task: record.task ? mapTaskRow(record.task) : null,
+    };
+  } catch {
+    return { ok: false, action: 'skipped', code: 'DISPATCH_COMPLETION_FAILED', task: null };
+  }
+}
+
+/**
+ * Reset every dispatch-observability field after an owner enqueue/retry/batch
+ * start. The durable executor assignment is deliberately preserved so a
+ * manually routed Codespace task is not silently moved to Actions.
  */
 export async function clearTaskActionsDispatch(taskId: string): Promise<void> {
   if (!isUuid(taskId)) return;
   if (!(await isActionsRoutingSchemaReady())) return;
   try {
+    const recoveryReady = await isActionsDispatchRecoverySchemaReady();
     await store()
       .from('pierrot_dev_prompts')
       .update({
-        // Clear only the duplicate-launch marker. The durable executor
-        // assignment is preserved so a manually routed Codespace task cannot
-        // be silently moved to Actions by an unrelated retry.
         actions_dispatch_requested_at: null,
+        ...(recoveryReady
+          ? {
+              actions_dispatch_status: null,
+              actions_dispatch_reason_code: null,
+              actions_dispatch_reason: null,
+              actions_dispatch_correlation_id: null,
+              actions_dispatch_attempts: 0,
+              actions_dispatch_last_attempt_at: null,
+              actions_dispatch_next_retry_at: null,
+              actions_dispatch_updated_at: new Date().toISOString(),
+            }
+          : {}),
         updated_at: new Date().toISOString(),
       })
       .eq('id', taskId);
   } catch {
     // The next dispatcher reservation will surface any real write failure.
+  }
+}
+
+/**
+ * Current claim blockers for one queued task. Used only for diagnosis and for
+ * deciding whether a previously terminal marker may be retried now; the claim
+ * RPC remains the authority.
+ */
+export async function getTaskDispatchBlockers(taskId: string): Promise<{
+  batchPaused: boolean;
+  dependencyBlocked: boolean;
+  activeAttemptForTask: boolean;
+}> {
+  const result = { batchPaused: false, dependencyBlocked: false, activeAttemptForTask: false };
+  if (!isUuid(taskId)) return result;
+  try {
+    const client = store();
+    const [itemsResult, attemptResult] = await Promise.all([
+      client
+        .from('pierrot_dev_batch_items')
+        .select('batch_id,depends_on_task_id')
+        .eq('task_id', taskId),
+      client
+        .from('pierrot_dev_attempts')
+        .select('id')
+        .eq('task_id', taskId)
+        .in('status', ['claimed', 'running'])
+        .limit(1),
+    ]);
+    result.activeAttemptForTask =
+      Array.isArray(attemptResult.data) && attemptResult.data.length > 0;
+    const items = Array.isArray(itemsResult.data) ? itemsResult.data : [];
+    if (items.length === 0) return result;
+    const batchIds = [
+      ...new Set(items.map((row) => String(row.batch_id || '')).filter((id) => isUuid(id))),
+    ];
+    const dependencyIds = [
+      ...new Set(
+        items.map((row) => String(row.depends_on_task_id || '')).filter((id) => isUuid(id))
+      ),
+    ];
+    const [batchesResult, dependenciesResult] = await Promise.all([
+      batchIds.length
+        ? client.from('pierrot_dev_batches').select('id,status').in('id', batchIds)
+        : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+      dependencyIds.length
+        ? client.from('pierrot_dev_prompts').select('id,status').in('id', dependencyIds)
+        : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+    ]);
+    const batches = Array.isArray(batchesResult.data) ? batchesResult.data : [];
+    result.batchPaused = batches.some((row) => String(row.status) === 'paused');
+    const dependencies = Array.isArray(dependenciesResult.data) ? dependenciesResult.data : [];
+    result.dependencyBlocked = dependencies.some(
+      (row) => !['verified', 'archived'].includes(String(row.status))
+    );
+    return result;
+  } catch {
+    return result;
   }
 }
 
@@ -1988,7 +2213,32 @@ export async function reapExpiredAttempts(): Promise<number> {
       p_limit: 20,
     });
     if (error) return 0;
-    return typeof data === 'number' ? data : 0;
+    const reaped = typeof data === 'number' ? data : 0;
+    if (reaped > 0 && (await isActionsDispatchRecoverySchemaReady())) {
+      // The reaper clears actions_dispatch_requested_at when it requeues a
+      // task. Normalize the new diagnostic fields for any queued task whose
+      // marker is already gone so a lease retry starts with a fresh budget.
+      try {
+        await store()
+          .from('pierrot_dev_prompts')
+          .update({
+            actions_dispatch_status: null,
+            actions_dispatch_reason_code: null,
+            actions_dispatch_reason: null,
+            actions_dispatch_correlation_id: null,
+            actions_dispatch_attempts: 0,
+            actions_dispatch_last_attempt_at: null,
+            actions_dispatch_next_retry_at: null,
+            actions_dispatch_updated_at: new Date().toISOString(),
+          })
+          .eq('status', 'queued')
+          .is('actions_dispatch_requested_at', null)
+          .not('actions_dispatch_status', 'is', null);
+      } catch {
+        // Diagnostics are best effort; the marker itself is authoritative.
+      }
+    }
+    return reaped;
   } catch {
     return 0;
   }

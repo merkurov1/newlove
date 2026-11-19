@@ -29,6 +29,16 @@ export type DevAttemptStatus =
 
 export type DevBatchStatus = 'draft' | 'active' | 'paused' | 'completed' | 'archived';
 
+export type DevActionsDispatchStatus =
+  | 'requested'
+  | 'accepted'
+  | 'claimable'
+  | 'claimed'
+  | 'retry_scheduled'
+  | 'not_claimable'
+  | 'ineligible'
+  | 'failed';
+
 export type DevWorkerStatus = 'online' | 'idle' | 'busy' | 'draining' | 'offline' | 'error';
 
 export type DevWorkbenchTask = {
@@ -59,6 +69,18 @@ export type DevWorkbenchTask = {
    * It is cleared on enqueue/retry/recovery, not used as a success flag.
    */
   actionsDispatchRequestedAt?: string | null;
+  /**
+   * Durable dispatch outcome. `requested`/`accepted` mean a workflow was
+   * asked for but has not claimed the task yet; they are never "running".
+   */
+  actionsDispatchStatus?: DevActionsDispatchStatus | null;
+  actionsDispatchReasonCode?: string | null;
+  actionsDispatchReason?: string | null;
+  actionsDispatchCorrelationId?: string | null;
+  actionsDispatchAttempts?: number;
+  actionsDispatchLastAttemptAt?: string | null;
+  actionsDispatchNextRetryAt?: string | null;
+  actionsDispatchUpdatedAt?: string | null;
   resultCommit: string | null;
   resultNotes: string;
   pullRequests: string[];
