@@ -119,6 +119,11 @@ export function LinkPreviewCard({
   const description =
     preview.description;
 
+  const sourceLabel =
+    preview.site_name?.trim() ||
+    preview.domain ||
+    "Open link";
+
   return (
     <div className="mt-3 overflow-hidden border border-black/10 bg-black/[0.02]">
       {preview.image ? (
@@ -151,8 +156,7 @@ export function LinkPreviewCard({
           rel="noreferrer"
           className="mt-2 block truncate text-[10px] uppercase tracking-[0.12em] text-black/35 transition-colors hover:text-black/60"
         >
-          {preview.domain ||
-            "Open link"}
+          {sourceLabel}
         </a>
       </div>
     </div>

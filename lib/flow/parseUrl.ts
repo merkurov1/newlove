@@ -160,9 +160,96 @@ function normalizeUrl(raw: string): string {
   return `https://${trimmed}`;
 }
 
+function normalizeHostname(hostname: string): string {
+  return hostname
+    .trim()
+    .toLowerCase()
+    .replace(/\.$/, '')
+    .replace(/^www\./, '');
+}
+
+/**
+ * Publications whose own Open Graph site name is not a stable display name.
+ * The English Art Newspaper sends "The Art Newspaper - International art news
+ * and events" while its Russian edition uses a separate domain. Matching on
+ * the resolved hostname (never on the article title) keeps the source label
+ * stable across www/non-www URLs, redirects and pages without OG metadata.
+ */
+const KNOWN_PUBLICATIONS: ReadonlyArray<{ domain: string; name: string }> = [
+  { domain: 'theartnewspaper.com', name: 'The Art Newspaper' },
+  { domain: 'theartnewspaper.ru', name: 'The Art Newspaper Russia' },
+];
+
+function publicationForHostname(hostname: string | null | undefined): string | null {
+  const normalized = normalizeHostname(hostname ?? '');
+  if (!normalized) return null;
+
+  const match = KNOWN_PUBLICATIONS.find(
+    ({ domain }) => normalized === domain || normalized.endsWith(`.${domain}`)
+  );
+
+  return match?.name ?? null;
+}
+
+function hostnameForUrl(value: string, fallback: string): string {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return fallback;
+  }
+}
+
+function faviconFor(domain: string, isMedium: boolean): string {
+  return isMedium
+    ? 'https://medium.com/favicon.ico'
+    : `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
+}
+
+function canonicalUrlFromDocument(
+  $: cheerio.CheerioAPI,
+  finalUrl: string
+): string | null {
+  const declared =
+    $('link[rel~="canonical"]').first().attr('href')?.trim() ||
+    $('meta[property="og:url"]').attr('content')?.trim();
+
+  if (!declared) return null;
+
+  try {
+    const candidate = new URL(declared, finalUrl);
+    if (candidate.protocol !== 'http:' && candidate.protocol !== 'https:') {
+      return null;
+    }
+
+    // The canonical URL is returned to the client as a preview link. Reuse the
+    // same public-host guard as the fetch path, but never follow this URL.
+    assertSafePublicUrl(candidate.toString());
+    candidate.hash = '';
+    return candidate.toString();
+  } catch {
+    return null;
+  }
+}
+
 function isMediumHost(host: string): boolean {
-  const lower = host.toLowerCase();
+  const lower = normalizeHostname(host);
   return lower === 'medium.com' || lower.endsWith('.medium.com');
+}
+
+function fallbackPreview(url: string, hostname: string): ParsedUrlResult {
+  const domain = normalizeHostname(hostname);
+  const isMedium = isMediumHost(hostname);
+  const siteName =
+    publicationForHostname(hostname) ?? (isMedium ? 'Medium' : domain);
+
+  return {
+    url,
+    isYouTube: false,
+    domain,
+    site_name: siteName,
+    title: siteName,
+    favicon: faviconFor(domain, isMedium),
+  };
 }
 
 async function fetchMediumRssFallback(
@@ -238,11 +325,8 @@ export async function parseUrl(rawUrl: string): Promise<ParsedUrlResult> {
     throw error instanceof Error ? error : new Error('Invalid URL provided');
   }
 
-  const domain = parsedUrl.hostname.replace(/^www\./, '');
+  const domain = normalizeHostname(parsedUrl.hostname);
   const isMedium = isMediumHost(parsedUrl.hostname);
-  const favicon = isMedium
-    ? 'https://medium.com/favicon.ico'
-    : `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
 
   // 1. Check if it's a YouTube link
   if (isYouTubeUrl(normalized)) {
@@ -335,14 +419,7 @@ export async function parseUrl(rawUrl: string): Promise<ParsedUrlResult> {
         if (rssResult) return rssResult;
       }
 
-      return {
-        url: normalized,
-        isYouTube: false,
-        domain,
-        site_name: isMedium ? 'Medium' : domain,
-        title: isMedium ? 'Medium' : domain,
-        favicon,
-      };
+      return fallbackPreview(normalized, parsedUrl.hostname);
     }
 
     const finalUrl = res.url || normalized;
@@ -356,6 +433,17 @@ export async function parseUrl(rawUrl: string): Promise<ParsedUrlResult> {
     const html = (await res.text()).slice(0, MAX_HTML_BYTES);
     const $ = cheerio.load(html);
 
+    // Redirects and canonical tags are the source of truth for the publisher
+    // identity. The requested URL may use a non-www host or tracking params,
+    // while both Art Newspaper editions declare a www canonical URL.
+    const canonicalUrl = canonicalUrlFromDocument($, finalUrl);
+    const resolvedUrl = canonicalUrl || finalUrl;
+    const resolvedHostname = hostnameForUrl(resolvedUrl, parsedUrl.hostname);
+    const resolvedDomain = normalizeHostname(resolvedHostname);
+    const resolvedIsMedium = isMediumHost(resolvedHostname);
+    const recognizedResolvedPublication =
+      publicationForHostname(resolvedHostname);
+
     const getMeta = (...selectors: string[]): string | null => {
       for (const sel of selectors) {
         const val = $(sel).attr('content')?.trim();
@@ -367,10 +455,10 @@ export async function parseUrl(rawUrl: string): Promise<ParsedUrlResult> {
     let title =
       getMeta('meta[property="og:title"]', 'meta[name="twitter:title"]') ||
       $('title').first().text().trim() ||
-      domain;
+      resolvedDomain;
 
     // For Medium, generic title `<title>Medium</title>` should fallback to article headline
-    if (isMedium && (!title || title.trim().toLowerCase() === 'medium')) {
+    if (resolvedIsMedium && (!title || title.trim().toLowerCase() === 'medium')) {
       const articleHeadline =
         $('article h1').first().text().trim() || $('h1').first().text().trim();
       if (articleHeadline) {
@@ -393,31 +481,34 @@ export async function parseUrl(rawUrl: string): Promise<ParsedUrlResult> {
         'meta[name="twitter:image"]'
       ) || null;
 
-    if (!image && isMedium) {
+    if (!image && resolvedIsMedium) {
       const firstImg = $('article img').first().attr('src') || $('img').first().attr('src');
       if (firstImg) image = firstImg;
     }
 
     if (image) {
       try {
-        image = new URL(image, finalUrl).toString();
+        image = new URL(image, resolvedUrl).toString();
       } catch {
         // Keep raw image if URL resolution fails
       }
     }
 
     const site_name =
-      (isMedium ? 'Medium' : null) || getMeta('meta[property="og:site_name"]') || domain;
+      (resolvedIsMedium ? 'Medium' : null) ||
+      recognizedResolvedPublication ||
+      getMeta('meta[property="og:site_name"]') ||
+      resolvedDomain;
 
     return {
-      url: finalUrl,
+      url: resolvedUrl,
       isYouTube: false,
-      domain,
+      domain: resolvedDomain,
       title,
       description,
       image,
       site_name,
-      favicon,
+      favicon: faviconFor(resolvedDomain, resolvedIsMedium),
     };
   } catch (error) {
     console.warn('[parseUrl] Fetching URL failed, returning fallback domain info:', error);
@@ -427,13 +518,6 @@ export async function parseUrl(rawUrl: string): Promise<ParsedUrlResult> {
       if (rssResult) return rssResult;
     }
 
-    return {
-      url: normalized,
-      isYouTube: false,
-      domain,
-      site_name: isMedium ? 'Medium' : domain,
-      title: isMedium ? 'Medium' : domain,
-      favicon,
-    };
+    return fallbackPreview(normalized, parsedUrl.hostname);
   }
 }
