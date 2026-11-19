@@ -5,6 +5,7 @@ import {
   appendEvent,
   claimNextTask,
   claimTask,
+  clearTaskActionsDispatch,
   clearWorkerAttempt,
   expectedBranch,
   getActiveAttempt,
@@ -781,8 +782,6 @@ export async function enqueueTask(
   const patch: Record<string, unknown> = {
     queue_position: position,
     queued_at: new Date().toISOString(),
-    assigned_executor: 'actions',
-    actions_dispatch_requested_at: null,
     last_error_code: null,
     last_error_message: null,
   };
@@ -797,7 +796,10 @@ export async function enqueueTask(
       message: `Task added to the queue at position ${position}.`,
     },
   });
-  if (queued) await setQueueOptOut(taskId, false);
+  if (queued) {
+    await setQueueOptOut(taskId, false);
+    await clearTaskActionsDispatch(taskId);
+  }
   return queued;
 }
 
@@ -850,8 +852,6 @@ export async function retryTask(userId: string, taskId: string): Promise<DevWork
     patch: {
       queue_position: position,
       queued_at: new Date().toISOString(),
-      assigned_executor: 'actions',
-      actions_dispatch_requested_at: null,
       result_commit: null,
       pull_requests: [],
       verification_status: 'not_run',
@@ -865,7 +865,10 @@ export async function retryTask(userId: string, taskId: string): Promise<DevWork
       message: `Retry requested. Previous attempts are preserved; the next attempt will get a new ID and branch.`,
     },
   });
-  if (updated) await setQueueOptOut(taskId, false);
+  if (updated) {
+    await setQueueOptOut(taskId, false);
+    await clearTaskActionsDispatch(taskId);
+  }
   return updated;
 }
 

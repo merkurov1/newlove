@@ -72,6 +72,13 @@ export async function dispatchTaskToActions(input: {
   taskId: string;
   source: string;
 }): Promise<ActionsDispatchResult> {
+  if (await isQueuePaused()) {
+    return skipped(
+      input.taskId,
+      'QUEUE_PAUSED',
+      'The queue is paused; no Actions run was dispatched.'
+    );
+  }
   if (!(await isActionsRoutingSchemaReady())) {
     throw new ActionsDispatchError(
       'ACTIONS_ROUTING_MIGRATION_REQUIRED',
@@ -99,9 +106,6 @@ export async function dispatchTaskToActions(input: {
       409,
       task.id
     );
-  }
-  if (await isQueuePaused()) {
-    return skipped(task.id, 'QUEUE_PAUSED', 'The queue is paused; no Actions run was dispatched.');
   }
 
   let reserved: Awaited<ReturnType<typeof reserveTaskForActionsDispatch>>;
@@ -252,6 +256,9 @@ export async function dispatchTaskToActions(input: {
 export async function dispatchNextQueuedTask(input: {
   source: string;
 }): Promise<ActionsDispatchResult> {
+  if (await isQueuePaused()) {
+    return skipped(null, 'QUEUE_PAUSED', 'The queue is paused; no Actions run was dispatched.');
+  }
   if (!(await isActionsRoutingSchemaReady())) {
     const message =
       'Actions routing requires the additive migration 2026-12-13_pierrot_actions_routing.sql. No Codespaces fallback was started.';
@@ -263,9 +270,6 @@ export async function dispatchNextQueuedTask(input: {
       dedupeKey: `actions-routing-migration:${Math.floor(Date.now() / 3_600_000)}`,
     }).catch(() => {});
     throw new ActionsDispatchError('ACTIONS_ROUTING_MIGRATION_REQUIRED', message, 503);
-  }
-  if (await isQueuePaused()) {
-    return skipped(null, 'QUEUE_PAUSED', 'The queue is paused; no Actions run was dispatched.');
   }
   const active = await getActiveAttempt();
   if (active) {

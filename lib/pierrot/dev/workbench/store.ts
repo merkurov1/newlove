@@ -27,8 +27,9 @@ assertServerOnly('lib/pierrot/dev/workbench/store');
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const WORKER_ID_PATTERN = /^[A-Za-z0-9._:-]{4,120}$/;
 export const COST_LEDGER_MIGRATION_FILE = '2026-12-10_pierrot_dev_cost_ledger.sql';
-const TASK_COLUMNS =
-  'id,user_id,title,task,objective,repository,base_ref,status,priority,queue_position,queued_at,attempt_count,acceptance_criteria,verification_status,blocked_reason,last_error_code,last_error_message,assigned_executor,actions_dispatch_requested_at,result_commit,result_notes,pull_requests,created_at,updated_at';
+const BASE_TASK_COLUMNS =
+  'id,user_id,title,task,objective,repository,base_ref,status,priority,queue_position,queued_at,attempt_count,acceptance_criteria,verification_status,blocked_reason,last_error_code,last_error_message,result_commit,result_notes,pull_requests,created_at,updated_at';
+const ACTIONS_ROUTING_TASK_COLUMNS = ',assigned_executor,actions_dispatch_requested_at';
 const ATTEMPT_COLUMNS =
   'id,task_id,attempt_number,status,worker_id,branch,base_ref,base_commit,head_sha,pr_number,pr_url,opencode_session_id,exit_code,started_at,finished_at,heartbeat_at,lease_expires_at,progress_stage,result_summary,changed_files,commands,verification,warnings,error_code,error_message,log_excerpt,created_at';
 
@@ -595,7 +596,7 @@ export async function listTaskRows(input: {
   try {
     let query = store()
       .from('pierrot_dev_prompts')
-      .select(TASK_COLUMNS)
+      .select(await taskColumns())
       .limit(Math.min(Math.max(input.limit || 60, 1), 200));
     if (isUuid(input.userId)) query = query.eq('user_id', input.userId);
     if (input.statuses?.length) query = query.in('status', input.statuses);
@@ -609,7 +610,9 @@ export async function listTaskRows(input: {
     }
     const { data, error } = await query;
     if (error) return [];
-    return (Array.isArray(data) ? data : []).map((row) => mapTaskRow(row));
+    return (Array.isArray(data) ? data : []).map((row) =>
+      mapTaskRow(row as unknown as Record<string, unknown>)
+    );
   } catch {
     return [];
   }
@@ -637,6 +640,16 @@ export async function isActionsRoutingSchemaReady(force = false): Promise<boolea
 }
 
 /**
+ * Select only columns that exist. Before the 12-13 migration is applied the
+ * rest of the workbench must keep working; dispatch then fails explicitly.
+ */
+async function taskColumns(): Promise<string> {
+  return (await isActionsRoutingSchemaReady())
+    ? `${BASE_TASK_COLUMNS}${ACTIONS_ROUTING_TASK_COLUMNS}`
+    : BASE_TASK_COLUMNS;
+}
+
+/**
  * Queued tasks eligible for the server-side Actions dispatcher, in claim order.
  * Codespace-assigned and already-requested tasks are excluded by the caller
  * (the query is intentionally unscoped; dispatch is an owner-level action).
@@ -645,7 +658,7 @@ export async function listQueuedTasksForDispatch(limit = 10): Promise<DevWorkben
   try {
     const { data, error } = await store()
       .from('pierrot_dev_prompts')
-      .select(TASK_COLUMNS)
+      .select(await taskColumns())
       .eq('status', 'queued')
       .is('blocked_reason', null)
       .order('priority', { ascending: false })
@@ -653,7 +666,7 @@ export async function listQueuedTasksForDispatch(limit = 10): Promise<DevWorkben
       .order('queued_at', { ascending: true, nullsFirst: true })
       .limit(Math.min(Math.max(limit, 1), 20));
     if (error || !Array.isArray(data)) return [];
-    return data.map((row) => mapTaskRow(row));
+    return data.map((row) => mapTaskRow(row as unknown as Record<string, unknown>));
   } catch {
     return [];
   }
@@ -682,10 +695,32 @@ export async function reserveTaskForActionsDispatch(
     .eq('id', taskId)
     .eq('status', 'queued')
     .is('actions_dispatch_requested_at', null)
-    .select(TASK_COLUMNS)
+    .select(await taskColumns())
     .maybeSingle();
   if (error || !data) return null;
-  return mapTaskRow(data);
+  return mapTaskRow(data as unknown as Record<string, unknown>);
+}
+
+/**
+ * Clear a previous dispatch marker and route the task to Actions again.
+ * No-op until the additive migration is applied, so the rest of the workbench
+ * keeps working before the DDL is deployed.
+ */
+export async function clearTaskActionsDispatch(taskId: string): Promise<void> {
+  if (!isUuid(taskId)) return;
+  if (!(await isActionsRoutingSchemaReady())) return;
+  try {
+    await store()
+      .from('pierrot_dev_prompts')
+      .update({
+        assigned_executor: 'actions',
+        actions_dispatch_requested_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', taskId);
+  } catch {
+    // The next dispatcher reservation will surface any real write failure.
+  }
 }
 
 export async function clearWorkerAttempt(
@@ -849,12 +884,14 @@ export async function listFinalizationTasks(limit = 100): Promise<DevWorkbenchTa
   try {
     const { data, error } = await store()
       .from('pierrot_dev_prompts')
-      .select(TASK_COLUMNS)
+      .select(await taskColumns())
       .in('status', ['review', 'verified'])
       .order('updated_at', { ascending: true })
       .limit(Math.min(Math.max(limit, 1), 200));
     if (error || !Array.isArray(data)) return [];
-    return data.map((row) => mapTaskRow(row)).filter((task) => task.pullRequests.length > 0);
+    return data
+      .map((row) => mapTaskRow(row as unknown as Record<string, unknown>))
+      .filter((task) => task.pullRequests.length > 0);
   } catch {
     return [];
   }
@@ -938,11 +975,14 @@ export async function listRecentAttempts(limit = 50): Promise<DevAttempt[]> {
 export async function getTaskRow(userId: string, taskId: string): Promise<DevWorkbenchTask | null> {
   if (!isUuid(taskId)) return null;
   try {
-    let query = store().from('pierrot_dev_prompts').select(TASK_COLUMNS).eq('id', taskId);
+    let query = store()
+      .from('pierrot_dev_prompts')
+      .select(await taskColumns())
+      .eq('id', taskId);
     if (isUuid(userId)) query = query.eq('user_id', userId);
     const { data, error } = await query.maybeSingle();
     if (error || !data) return null;
-    return mapTaskRow(data);
+    return mapTaskRow(data as unknown as Record<string, unknown>);
   } catch {
     return null;
   }
@@ -1007,10 +1047,10 @@ export async function patchTask(
     .from('pierrot_dev_prompts')
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq('id', taskId)
-    .select(TASK_COLUMNS)
+    .select(await taskColumns())
     .single();
   if (error || !data) return null;
-  return mapTaskRow(data);
+  return mapTaskRow(data as unknown as Record<string, unknown>);
 }
 
 /**
@@ -1314,8 +1354,6 @@ export async function startBatch(userId: string, batchId: string): Promise<Start
         queue_position: position,
         queued_at: queuedAt,
         queue_batch_id: batchId,
-        assigned_executor: 'actions',
-        actions_dispatch_requested_at: null,
         last_error_code: null,
         last_error_message: null,
         updated_at: queuedAt,
@@ -1325,6 +1363,7 @@ export async function startBatch(userId: string, batchId: string): Promise<Start
     if (error) {
       return { ok: false, queued, notReady: [], error: 'BATCH_START_FAILED' };
     }
+    await clearTaskActionsDispatch(String(task.id));
     await setQueueOptOut(String(task.id), false);
     queued += 1;
     position += 1;
@@ -1943,15 +1982,13 @@ export async function requeueTask(input: {
     acceptanceCriteria: task.acceptanceCriteria,
     trigger: 'requeue',
   });
-  return transitionTask({
+  const queued = await transitionTask({
     userId: input.userId,
     taskId: input.taskId,
     to: 'queued',
     patch: {
       queue_position: position,
       queued_at: new Date().toISOString(),
-      assigned_executor: 'actions',
-      actions_dispatch_requested_at: null,
       blocked_reason: null,
     },
     event: {
@@ -1959,6 +1996,8 @@ export async function requeueTask(input: {
       message: `Task queued for attempt ${task.attemptCount + 1}. ${input.reason}`.trim(),
     },
   });
+  if (queued) await clearTaskActionsDispatch(input.taskId);
+  return queued;
 }
 
 export function leaseExpiryIso(seconds = WORKER_LEASE_SECONDS): string {

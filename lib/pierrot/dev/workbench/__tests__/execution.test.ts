@@ -4,6 +4,7 @@ jest.mock('../store', () => ({
   appendEvent: jest.fn(),
   claimNextTask: jest.fn(),
   claimTask: jest.fn(),
+  clearTaskActionsDispatch: jest.fn(async () => undefined),
   clearWorkerAttempt: jest.fn(),
   expectedBranch: jest.fn(),
   getActiveAttempt: jest.fn(),
