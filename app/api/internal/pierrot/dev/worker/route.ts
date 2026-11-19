@@ -7,6 +7,7 @@ import {
 import {
   claimTaskForWorker,
   completeAttempt,
+  describeClaimUnavailable,
   failAttempt,
   progressAttempt,
   releaseAttempt,
@@ -308,9 +309,13 @@ export async function POST(req: Request) {
         if (claim) {
           await recordWorkerIdle({ workerId, status: 'busy', idleSince: null });
         }
+        // A lost claim is not an error. Explain it without mutating the task or
+        // the attempt owned by the winning runner.
+        const claimFailure = claim ? null : await describeClaimUnavailable(workerId, taskId);
         return json({
           ok: true,
           claim,
+          claimFailure,
           serverTime: new Date().toISOString(),
           pollIntervalMs: WORKER_POLL_INTERVAL_MS,
           idleGraceSeconds: idleGraceSeconds(),

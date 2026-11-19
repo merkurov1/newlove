@@ -10,10 +10,12 @@ jest.mock('../store', () => ({
   getActiveAttempt: jest.fn(),
   getAttempt: jest.fn(),
   getBatchIdForTask: jest.fn(async () => null),
+  getQueueSnapshot: jest.fn(),
   getSetting: jest.fn(async () => ({})),
   getTaskExecutionMaterial: jest.fn(),
   getTaskRow: jest.fn(),
   getTaskRowUnscoped: jest.fn(),
+  getWorker: jest.fn(),
   isUuid: jest.fn(),
   leaseExpiryIso: jest.fn(),
   listAttempts: jest.fn(),
@@ -54,6 +56,7 @@ import {
   attemptExecutor,
   claimTaskForWorker,
   completeAttempt,
+  describeClaimUnavailable,
   failAttempt,
   progressAttempt,
   releaseAttempt,
@@ -153,6 +156,9 @@ describe('lease release', () => {
   it('does not release an attempt owned by another worker', async () => {
     await expect(releaseAttempt('codespace:other', attempt.id)).resolves.toBe(false);
     expect(store.patchAttempt).not.toHaveBeenCalled();
+    expect(store.patchTask).not.toHaveBeenCalled();
+    expect(store.clearWorkerAttempt).not.toHaveBeenCalled();
+    expect(store.appendEvent).not.toHaveBeenCalled();
   });
 
   it('does not release a terminal attempt', async () => {
@@ -349,6 +355,16 @@ describe('targeted Actions claim', () => {
     expect(store.getTaskExecutionMaterial).not.toHaveBeenCalled();
   });
 
+  it('does not turn a claim RPC/database failure into a no-task success', async () => {
+    asMock(store.claimTask).mockRejectedValue(
+      Object.assign(new Error('Supabase unavailable'), { code: 'DEV_CLAIM_RPC_FAILED' })
+    );
+
+    await expect(claimTaskForWorker(attempt.workerId, attempt.taskId)).rejects.toMatchObject({
+      code: 'DEV_CLAIM_RPC_FAILED',
+    });
+  });
+
   it('records the GitHub run id as provenance without changing the attempt lock id', async () => {
     asMock(store.getAttempt).mockResolvedValue({ ...attempt, status: 'claimed' });
     asMock(store.patchAttempt).mockResolvedValue({ ...attempt, status: 'running' });
@@ -368,6 +384,99 @@ describe('targeted Actions claim', () => {
         payload: { executionId: 'gha:12345:1' },
       })
     );
+  });
+});
+
+describe('claim race diagnostics', () => {
+  const actionsWorkerId = 'actions:123:1';
+  const queue = { queued: 1, active: 0, paused: false };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    asMock(store.getQueueSnapshot).mockResolvedValue(queue);
+    asMock(store.getWorker).mockResolvedValue({
+      id: actionsWorkerId,
+      kind: 'actions',
+      status: 'idle',
+      stopRequested: false,
+    });
+    asMock(store.getActiveAttempt).mockResolvedValue(null);
+    asMock(store.getTaskRowUnscoped).mockResolvedValue({
+      ...task,
+      status: 'queued',
+      queuePosition: 1,
+      blockedReason: null,
+      assignedExecutor: 'actions',
+    });
+  });
+
+  it('explains an already-claimed task without touching the winning lease', async () => {
+    asMock(store.getActiveAttempt).mockResolvedValue({
+      ...attempt,
+      workerId: 'actions:122:1',
+      status: 'running',
+      leaseExpiresAt: '2026-11-19T16:30:00.000Z',
+    });
+    asMock(store.getTaskRowUnscoped).mockResolvedValue({
+      ...task,
+      status: 'in_progress',
+      queuePosition: null,
+      blockedReason: null,
+      assignedExecutor: 'actions',
+    });
+
+    const result = await describeClaimUnavailable(actionsWorkerId, attempt.taskId);
+
+    expect(result).toMatchObject({
+      code: 'TASK_ALREADY_CLAIMED',
+      idempotent: true,
+      taskStatus: 'in_progress',
+    });
+    expect(result.activeAttempt).toMatchObject({
+      workerId: 'actions:122:1',
+      attemptNumber: 1,
+      status: 'running',
+    });
+    expect(store.patchAttempt).not.toHaveBeenCalled();
+    expect(store.patchTask).not.toHaveBeenCalled();
+    expect(store.clearWorkerAttempt).not.toHaveBeenCalled();
+    expect(store.appendEvent).not.toHaveBeenCalled();
+  });
+
+  it('reports a task that left the queue and a paused queue as idempotent', async () => {
+    asMock(store.getTaskRowUnscoped).mockResolvedValue({
+      ...task,
+      status: 'review',
+      queuePosition: null,
+      blockedReason: null,
+      assignedExecutor: 'actions',
+    });
+
+    const notQueued = await describeClaimUnavailable(actionsWorkerId, attempt.taskId);
+    expect(notQueued).toMatchObject({
+      code: 'TASK_NOT_QUEUED',
+      idempotent: true,
+      taskStatus: 'review',
+    });
+
+    asMock(store.getQueueSnapshot).mockResolvedValue({ queued: 1, active: 0, paused: true });
+    asMock(store.getTaskRowUnscoped).mockResolvedValue({
+      ...task,
+      status: 'queued',
+      queuePosition: 1,
+      blockedReason: null,
+      assignedExecutor: 'actions',
+    });
+    const paused = await describeClaimUnavailable(actionsWorkerId, attempt.taskId);
+    expect(paused).toMatchObject({ code: 'QUEUE_PAUSED', idempotent: true, queuePaused: true });
+  });
+
+  it('keeps an unclaimable runner a visible failure rather than a no-op', async () => {
+    asMock(store.getWorker).mockResolvedValue(null);
+
+    const result = await describeClaimUnavailable(actionsWorkerId, attempt.taskId);
+
+    expect(result).toMatchObject({ code: 'WORKER_NOT_CLAIMABLE', idempotent: false });
   });
 });
 

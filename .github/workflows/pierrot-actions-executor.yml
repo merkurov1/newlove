@@ -138,9 +138,8 @@ jobs:
           code=$?
           echo "executor_exit_code=$code" >> "$GITHUB_OUTPUT"
           case "$code" in
-            0) echo "::notice::Executor completed the task." ;;
+            0) echo "::notice::Executor completed, or finished as an idempotent no-op (duplicate/lost claim, paused queue, or task no longer queued). See the outcome summary and Supabase worker.note event." ;;
             2) echo "::error::Executor stopped on a permanent configuration/setup error." ;;
-            3) echo "::warning::No claimable task. A concurrent trigger may own the only active attempt, or the task is not queued." ;;
             4) echo "::error::Execution failed; the attempt and diagnostics are in Supabase." ;;
             *) echo "::error::Executor exited with code $code." ;;
           esac
@@ -160,6 +159,16 @@ jobs:
         run: |
           node - <<'NODE'
           const fs = require('node:fs');
+          const path = require('node:path');
+          let outcome = null;
+          try {
+            const file = path.join(
+              process.env.RUNNER_TEMP || '',
+              'pierrot-dev-work',
+              'actions-outcome.json'
+            );
+            outcome = JSON.parse(fs.readFileSync(file, 'utf8'));
+          } catch {}
           const summary = {
             taskId: process.env.PIERROT_DEV_TASK_ID || null,
             executionId: process.env.PIERROT_DEV_EXECUTION_ID || null,
@@ -172,6 +181,12 @@ jobs:
               : null,
             dryRun: process.env.GITHUB_EVENT_NAME === 'workflow_dispatch' && '${{ inputs.dry_run }}' === 'true',
             executorExitCode: '${{ steps.executor.outputs.executor_exit_code }}' || null,
+            executorOutcome: outcome?.outcome || null,
+            claimFailureCode: outcome?.reasonCode || null,
+            claimFailureReason: outcome?.reason || null,
+            claimTaskStatus: outcome?.taskStatus || null,
+            queuePaused: outcome?.queuePaused === true,
+            activeAttempt: outcome?.activeAttempt || null,
             model: process.env.PIERROT_DEV_OPENCODE_MODEL || null,
             provider: process.env.PIERROT_DEV_OPENCODE_PROVIDER || null,
             generatedAt: new Date().toISOString(),

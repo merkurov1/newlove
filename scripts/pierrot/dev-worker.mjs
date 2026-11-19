@@ -30,9 +30,11 @@ import { runProcess, terminateProcessGroup } from './dev-worker-process.mjs';
 import {
   ACTIONS_EXIT,
   BOOT_PHASES,
+  activeAttemptOwnership,
   assertHostedActionsRunner,
   buildExecutionId,
   checkCommitIdentity,
+  classifyClaimOutcome,
   computeReadiness,
   isAllowedWorkerBranch,
   isClaimForRequestedTask,
@@ -110,6 +112,7 @@ const OUTBOX_DIR = path.join(WORK_ROOT, 'outbox');
 const PUSH_FAILURE_DIR = path.join(WORK_ROOT, 'push-failures');
 const WORKTREE_ROOT = path.join(WORK_ROOT, 'work');
 const ACTIVE_ATTEMPT_FILE = path.join(WORK_ROOT, 'actions-active-attempt.json');
+const ACTIONS_OUTCOME_FILE = path.join(WORK_ROOT, 'actions-outcome.json');
 const RUN_LOG = path.join(LOG_DIR, 'worker.log');
 const BOOT_LOG = path.join(LOG_DIR, 'worker-boot.log');
 const WORKER_VERSION = '1.2.0';
@@ -1071,6 +1074,30 @@ async function clearActiveAttempt() {
   } catch {}
 }
 
+/**
+ * Non-secret outcome for the workflow summary artifact. This is best effort:
+ * the Supabase event/journal remains the durable source of truth.
+ */
+async function writeActionsOutcome(record) {
+  try {
+    await fs.writeFile(
+      ACTIONS_OUTCOME_FILE,
+      JSON.stringify(
+        {
+          taskId: TARGET_TASK_ID || null,
+          executionId: EXECUTION_ID,
+          workerId: WORKER_ID,
+          recordedAt: nowIso(),
+          ...record,
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+  } catch {}
+}
+
 async function executeClaim(claim) {
   const { task, attempt, prompt } = claim;
   activeAttempt = attempt;
@@ -1556,11 +1583,24 @@ async function runActionsRelease() {
     await log('Actions cleanup: no active attempt file; nothing to release.');
     return;
   }
-  const attemptId = typeof record?.attemptId === 'string' ? record.attemptId : '';
-  if (!attemptId) {
-    await log('Actions cleanup: active attempt file has no attemptId.');
+  const ownership = activeAttemptOwnership(record, WORKER_ID);
+  if (!ownership.owned) {
+    // Never send a release for another runner's lease. The server also checks
+    // ownership, but skipping locally means a stale/shared file cannot even
+    // produce a rejected mutation.
+    await log(
+      'Actions cleanup: active attempt is not owned by this runner; leaving it untouched.',
+      {
+        reason: ownership.reason,
+        attemptId: typeof record?.attemptId === 'string' ? record.attemptId : null,
+        recordedWorkerId:
+          typeof record?.workerId === 'string' && record.workerId ? record.workerId : null,
+        workerId: WORKER_ID,
+      }
+    );
     return;
   }
+  const attemptId = String(record.attemptId);
   try {
     // Idempotent on the server: an already completed/failed attempt is left
     // untouched and the task is not requeued twice.
@@ -1679,31 +1719,62 @@ async function runActionsOnce() {
 
     const claimed = await api('claim', TARGET_TASK_ID ? { taskId: TARGET_TASK_ID } : {}, 40000);
     if (!claimed.claim) {
-      const reason = TARGET_TASK_ID
-        ? `Task ${TARGET_TASK_ID} was not claimable (already active, not queued, paused, or another runner won the claim).`
-        : 'No queued task was claimable (queue empty, paused, or another runner won the claim).';
-      await log('No claimable task; exiting without polling.', {
-        requestedTaskId: TARGET_TASK_ID || null,
-        reason,
+      const claimFailure = claimed.claimFailure || null;
+      const outcome = classifyClaimOutcome({
+        claimed: false,
+        failure: claimFailure,
+        taskId: TARGET_TASK_ID || undefined,
       });
+      const reason = outcome.reason;
+      await log(
+        outcome.idempotent
+          ? 'No claimable task; finishing as an idempotent no-op without polling.'
+          : 'No claimable task for a non-idempotent reason; failing the run.',
+        {
+          requestedTaskId: TARGET_TASK_ID || null,
+          outcome: outcome.outcome,
+          reasonCode: outcome.reasonCode,
+          reason,
+          claimFailure,
+        }
+      );
       // Persist an explicit, non-secret reason so a workflow run that creates
       // no attempt is explainable in Supabase, not only in the runner log.
       await api(
         'event',
         {
           type: 'worker.note',
+          level: outcome.idempotent ? 'warn' : 'error',
           message: `Actions run ${EXECUTION_ID} created no attempt: ${reason}`,
           payload: {
             source: 'actions:no_claim',
             requestedTaskId: TARGET_TASK_ID || null,
             executionId: EXECUTION_ID,
+            outcome: outcome.outcome,
+            reasonCode: outcome.reasonCode,
+            taskStatus: claimFailure?.taskStatus || null,
+            queuePaused: claimFailure?.queuePaused === true,
+            activeAttempt: claimFailure?.activeAttempt || null,
           },
           dedupeKey: `actions-no-claim:${WORKER_ID}`,
         },
         15000
       ).catch(() => {});
-      await bootPhase('ready', `No claimable task for this dispatch. ${reason}`, { force: true });
-      process.exitCode = ACTIONS_EXIT.noTask;
+      await writeActionsOutcome({
+        outcome: outcome.outcome,
+        exitCode: outcome.exitCode,
+        reasonCode: outcome.reasonCode,
+        reason,
+        taskStatus: claimFailure?.taskStatus || null,
+        queuePaused: claimFailure?.queuePaused === true,
+        activeAttempt: claimFailure?.activeAttempt || null,
+      });
+      await bootPhase(
+        outcome.idempotent ? 'ready' : 'failed',
+        `No attempt created for this dispatch (${outcome.reasonCode}). ${reason}`,
+        { force: true }
+      );
+      process.exitCode = outcome.exitCode;
       return;
     }
     if (!isClaimForRequestedTask(claimed.claim, TARGET_TASK_ID)) {
@@ -1719,12 +1790,28 @@ async function runActionsOnce() {
         },
         30000
       ).catch(() => {});
+      await writeActionsOutcome({
+        outcome: 'claim_mismatch',
+        exitCode: ACTIONS_EXIT.permanent,
+        reasonCode: 'CLAIMED_TASK_MISMATCH',
+        reason: 'The claimed task did not match the dispatched task id.',
+      });
       process.exitCode = ACTIONS_EXIT.permanent;
       return;
     }
 
     const success = await executeClaim(claimed.claim);
     process.exitCode = success ? ACTIONS_EXIT.success : ACTIONS_EXIT.executionFailed;
+    await writeActionsOutcome({
+      outcome: success ? 'completed' : 'execution_failed',
+      exitCode: process.exitCode,
+      reasonCode: success ? null : 'EXECUTION_FAILED',
+      reason: success
+        ? 'The claimed task completed and its result was submitted.'
+        : 'The claimed task failed; the attempt and diagnostics are in Supabase.',
+      attemptId: claimed.claim.attempt?.id || null,
+      taskStatus: 'in_progress',
+    });
   } catch (error) {
     const code = error.code || 'ACTIONS_EXECUTOR_FAILED';
     const permanent =
@@ -1745,6 +1832,13 @@ async function runActionsOnce() {
       force: true,
     });
     process.exitCode = permanent ? ACTIONS_EXIT.permanent : ACTIONS_EXIT.executionFailed;
+    await writeActionsOutcome({
+      outcome: permanent ? 'permanent_failure' : 'execution_failed',
+      exitCode: process.exitCode,
+      reasonCode: code,
+      reason: String(error.message || error).slice(0, 800),
+      retryable: !permanent,
+    });
   }
 }
 

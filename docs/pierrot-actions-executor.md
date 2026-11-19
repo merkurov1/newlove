@@ -96,8 +96,9 @@ Ephemeral ubuntu-latest runner
 - **Atomic claim**: the new `pierrot_dev_claim_task` narrows the existing claim
   to one task id and keeps the same advisory lock, worker-liveness check,
   single-active-attempt guard and `FOR UPDATE SKIP LOCKED`. Two simultaneous
-  triggers can produce at most one runner with work; the other exits with code
-  3 and creates no attempt, commit or PR.
+  triggers can produce at most one runner with work; the other exits `0` as an
+  idempotent no-op (with a `worker.note` reason and an outcome summary) and
+  creates no attempt, commit or PR. The winner's lease is never touched.
 - **State survives the runner**: attempts, events, statuses, summaries,
   commands, warnings and PR links are in Supabase. The committed branch
   preserves partial work. On runner loss the lease expires and the existing
@@ -106,9 +107,11 @@ Ephemeral ubuntu-latest runner
   already completed and repairs a missing PR without creating a second one.
   Repeating `complete`/`fail` cannot duplicate commits, PRs or status changes.
 - **Retries**: completion delivery is bounded to 6 attempts with backoff.
-  Exit codes distinguish permanent setup errors (2), no claim (3) and
-  execution failure (4). The workflow does **not** auto-retry itself. A retry is
-  an owner action or the single lease-recovery retry.
+  Exit codes distinguish permanent setup errors (2) and execution failure (4);
+  a lost/duplicate claim or a task that is no longer queued is an idempotent
+  no-op with exit `0`, an explicit `claimFailure` payload and a `worker.note`
+  event. The workflow does **not** auto-retry itself. A retry is an owner action
+  or the single lease-recovery retry.
 - **Cancellation/timeout**: the job has a 75-minute ceiling, the executor step
   60 minutes, OpenCode 45 minutes, and the lease is renewed every 20 seconds.
   An `always()` cleanup step releases an interrupted attempt and requeues the
@@ -225,7 +228,7 @@ Minimum matrix (5–10 real tasks):
 | 3   | UI change                              | Build + tests              | production build in CI                 |
 | 4   | Data/API change                        | Tests and migration review | no auto-deploy                         |
 | 5   | Deliberately complex                   | Time/cost/robustness       | bounded logs, no duplicate PR          |
-| 6   | Same task triggered twice concurrently | Atomic claim               | one attempt; second exit 3             |
+| 6   | Same task triggered twice concurrently | Atomic claim               | one attempt; second exits 0 as no-op   |
 | 7   | Cancel during execution                | Release + requeue          | cleanup step, task queued again        |
 | 8   | Kill the runner (job cancel)           | Lease recovery             | attempt timed_out, one requeue         |
 | 9   | Re-dispatch after failure              | Resume/no duplicate commit | base commit preserved, one PR          |

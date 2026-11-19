@@ -301,11 +301,16 @@ export function buildExecutionId(input = {}) {
  * Bounded, explicit exit codes for the single-shot Actions executor.
  * GitHub treats every non-zero code as a failed job; the distinction is for
  * the runbook and for the runner's own summary, not for automatic retries.
+ *
+ * `noTask` is deliberately `0`: losing a claim to another runner, a paused
+ * queue, or a task that is no longer queued is an idempotent no-op, not a
+ * workflow failure. The explicit outcome is recorded in Supabase and in the
+ * runner's outcome file instead of being inferred from a non-zero exit code.
  */
 export const ACTIONS_EXIT = Object.freeze({
   success: 0,
   permanent: 2,
-  noTask: 3,
+  noTask: 0,
   executionFailed: 4,
 });
 
@@ -314,6 +319,57 @@ export function actionsExitCode(input = {}) {
   if (input.permanent === true) return ACTIONS_EXIT.permanent;
   if (input.claimed === false) return ACTIONS_EXIT.noTask;
   return ACTIONS_EXIT.executionFailed;
+}
+
+/**
+ * Classify a claim response for the workflow exit code.
+ *
+ * A lost/duplicate claim is an idempotent no-op and must finish successfully.
+ * Only a claim that failed for a reason we cannot treat as "no work" (for
+ * example this runner was not claimable at all) stays a permanent failure.
+ * Actual RPC/transport failures are thrown by the API client before this
+ * helper is called and therefore remain execution failures.
+ */
+export function classifyClaimOutcome(input = {}) {
+  if (input.claimed === true) {
+    return {
+      outcome: 'claimed',
+      exitCode: null,
+      idempotent: false,
+      reasonCode: null,
+      reason: '',
+    };
+  }
+  const failure = input.failure && typeof input.failure === 'object' ? input.failure : {};
+  const reasonCode = String(failure.code || 'CLAIM_UNAVAILABLE').slice(0, 80);
+  const idempotent = failure.idempotent !== false;
+  const fallback = input.taskId
+    ? `Task ${input.taskId} was not claimable (already active, not queued, paused, or another runner won the claim).`
+    : 'No queued task was claimable (queue empty, paused, or another runner won the claim).';
+  return {
+    outcome: idempotent ? 'no_op' : 'failed',
+    exitCode: idempotent ? ACTIONS_EXIT.noTask : ACTIONS_EXIT.permanent,
+    idempotent,
+    reasonCode,
+    reason: String(failure.reason || fallback).slice(0, 800),
+  };
+}
+
+/**
+ * The cleanup step must only release the attempt this workflow run recorded.
+ * A stale/shared file, a missing owner, or another runner's attempt must be
+ * left completely untouched; the database also enforces the same ownership
+ * check, but refusing locally avoids even a rejected release call.
+ */
+export function activeAttemptOwnership(record, workerId) {
+  const expected = String(workerId || '').trim();
+  const attemptId = String(record?.attemptId || '').trim();
+  const recordedWorker = String(record?.workerId || '').trim();
+  if (!attemptId) return { owned: false, reason: 'missing_attempt_id' };
+  if (!expected) return { owned: false, reason: 'missing_worker_id' };
+  if (!recordedWorker) return { owned: false, reason: 'missing_recorded_owner' };
+  if (recordedWorker !== expected) return { owned: false, reason: 'other_worker' };
+  return { owned: true, reason: null };
 }
 
 /** A claim may only execute the task that was explicitly requested. */
