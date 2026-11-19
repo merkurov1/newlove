@@ -21,6 +21,7 @@ import {
   getQueueSnapshot,
   heartbeatWorker,
   isWorkerId,
+  isUuid,
   pingWorkbenchStore,
   registerWorker,
 } from '@/lib/pierrot/dev/workbench/store';
@@ -133,6 +134,10 @@ function errorResponse(error: unknown) {
   if (error instanceof WorkerAuthError) {
     return json({ error: error.message, code: error.code }, error.status);
   }
+  const coded = error as { code?: string; status?: number; message?: string };
+  if (coded?.code === 'ACTIONS_KIND_MIGRATION_REQUIRED') {
+    return json({ error: coded.message, code: coded.code }, coded.status || 503);
+  }
   if (error instanceof WorkbenchUnavailableError) {
     return json({ error: error.message, code: error.code }, 503);
   }
@@ -191,6 +196,10 @@ export async function POST(req: Request) {
           hostname: text(body.hostname, 200) || undefined,
           codespaceName: text(body.codespaceName, 120) || undefined,
           repository: text(body.repository, 120) || undefined,
+          kind:
+            body.kind === 'actions' || body.kind === 'local' || body.kind === 'codespace'
+              ? body.kind
+              : undefined,
           capabilities,
         });
         if (capabilities.ready === true || readiness.ready === true) {
@@ -274,7 +283,11 @@ export async function POST(req: Request) {
       }
 
       case 'claim': {
-        const claim = await claimTaskForWorker(workerId);
+        const taskId = text(body.taskId, 64) || undefined;
+        if (taskId && !isUuid(taskId)) {
+          return json({ error: 'taskId must be a UUID.', code: 'INVALID_TASK_ID' }, 400);
+        }
+        const claim = await claimTaskForWorker(workerId, taskId);
         if (claim) {
           await recordWorkerIdle({ workerId, status: 'busy', idleSince: null });
         }
@@ -290,7 +303,11 @@ export async function POST(req: Request) {
       case 'start': {
         const attemptId = text(body.attemptId, 64);
         if (!attemptId) return json({ error: 'attemptId is required.' }, 400);
-        const result = await startAttempt(workerId, attemptId);
+        const result = await startAttempt(
+          workerId,
+          attemptId,
+          text(body.executionId, 160) || undefined
+        );
         return json({ ok: true, attempt: result.attempt });
       }
 

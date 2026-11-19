@@ -4,6 +4,7 @@ import { resolveDevRepository } from '../repositories';
 import {
   appendEvent,
   claimNextTask,
+  claimTask,
   clearWorkerAttempt,
   expectedBranch,
   getActiveAttempt,
@@ -100,14 +101,27 @@ async function settleBatchForTask(taskId: string): Promise<void> {
  * for ordering, locking, lease creation and the one-active-attempt rule.
  */
 export async function claimTaskForWorker(
-  workerId: string
+  workerId: string,
+  taskId?: string
 ): Promise<{ task: DevWorkbenchTask; attempt: DevAttempt; prompt: string } | null> {
-  if (Date.now() - lastReapAt > 60_000) {
+  if (taskId || Date.now() - lastReapAt > 60_000) {
     lastReapAt = Date.now();
     await reapExpiredAttempts();
   }
 
-  const claim = await claimNextTask(workerId);
+  let claim: { task: DevWorkbenchTask; attempt: DevAttempt; prompt: string } | null;
+  try {
+    claim = taskId ? await claimTask(workerId, taskId) : await claimNextTask(workerId);
+  } catch (error) {
+    if ((error as { code?: string }).code === 'TARGETED_CLAIM_RPC_MISSING') {
+      throw new WorkbenchExecutionError(
+        'TARGETED_CLAIM_UNAVAILABLE',
+        'The GitHub Actions executor requires the additive migration 2026-12-12_pierrot_actions_executor.sql. Apply it before dispatching a specific task.',
+        503
+      );
+    }
+    throw error;
+  }
   if (!claim) return null;
 
   const material = await getTaskExecutionMaterial(claim.task.id);
@@ -141,7 +155,8 @@ export async function claimTaskForWorker(
 /** Mark the attempt as really running (workspace prepared, OpenCode starting). */
 export async function startAttempt(
   workerId: string,
-  attemptId: string
+  attemptId: string,
+  executionId?: string
 ): Promise<{ attempt: DevAttempt; stopRequested: boolean }> {
   const attempt = ensureOwnership(await getAttempt(attemptId), workerId);
   if (attempt.status === 'running') {
@@ -149,16 +164,26 @@ export async function startAttempt(
   }
   assertAttemptTransition(attempt.status, 'running');
 
-  const updated = await patchAttempt(
-    attemptId,
-    {
-      status: 'running',
-      progress_stage: 'starting',
-      heartbeat_at: new Date().toISOString(),
-      lease_expires_at: leaseExpiryIso(),
-    },
-    ['claimed']
-  );
+  const normalizedExecutionId =
+    typeof executionId === 'string' && /^[A-Za-z0-9:._-]{8,160}$/.test(executionId.trim())
+      ? executionId.trim()
+      : null;
+
+  const patch: Record<string, unknown> = {
+    status: 'running',
+    progress_stage: 'starting',
+    heartbeat_at: new Date().toISOString(),
+    lease_expires_at: leaseExpiryIso(),
+  };
+  if (normalizedExecutionId) {
+    // Durable provenance on the attempt itself. The attempt UUID remains the
+    // lock/lease id; executionId identifies the runner invocation that owns it.
+    patch.verification = {
+      ...(attempt.verification || {}),
+      executionId: normalizedExecutionId,
+    };
+  }
+  const updated = await patchAttempt(attemptId, patch, ['claimed']);
   if (!updated) {
     throw new WorkbenchExecutionError('ATTEMPT_NOT_ACTIVE', 'Attempt is no longer claimable.');
   }
@@ -169,6 +194,9 @@ export async function startAttempt(
     workerId,
     type: 'attempt.running',
     message: 'Worker started the execution attempt.',
+    // The attempt UUID is the durable, unique execution id. The GitHub run id
+    // is additional provenance stored in the append-only journal, not a lock.
+    payload: normalizedExecutionId ? { executionId: normalizedExecutionId } : {},
   });
 
   return { attempt: updated, stopRequested: false };
@@ -335,6 +363,7 @@ export async function completeAttempt(
       changed_files: changedFiles,
       commands,
       verification: {
+        ...(attempt.verification || {}),
         ...(result.verification || {}),
         criteria: Array.isArray(result.criteria) ? result.criteria.slice(0, 60) : [],
         cost,

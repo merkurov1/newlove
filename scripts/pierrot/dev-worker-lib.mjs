@@ -64,7 +64,9 @@ export function parseOpenCodeCost(output) {
     } catch {
       continue;
     }
-    const type = String(event?.type || '').toLowerCase().replace(/-/g, '_');
+    const type = String(event?.type || '')
+      .toLowerCase()
+      .replace(/-/g, '_');
     if (type !== 'step_finish') continue;
     const part = event.part && typeof event.part === 'object' ? event.part : event;
     result.steps += 1;
@@ -133,7 +135,9 @@ export function parseStoredAuth(output, expectedProvider) {
     if (name) providers.push(name.toLowerCase());
   }
   const unique = [...new Set(providers)];
-  const wanted = String(expectedProvider || '').trim().toLowerCase();
+  const wanted = String(expectedProvider || '')
+    .trim()
+    .toLowerCase();
   const matched = wanted
     ? unique.some((provider) => provider.includes(wanted) || wanted.includes(provider))
     : unique.length > 0;
@@ -242,8 +246,7 @@ export function checkCommitIdentity(input) {
     Boolean(expectedEmail) &&
     authorName === expectedName &&
     authorEmail === expectedEmail;
-  const committerIsExpected =
-    committerName === expectedName && committerEmail === expectedEmail;
+  const committerIsExpected = committerName === expectedName && committerEmail === expectedEmail;
   const committerIsGitHubSigner =
     /^github$/i.test(committerName) && /^noreply@github\.com$/i.test(committerEmail);
   return {
@@ -267,6 +270,62 @@ export function isOrphanExecutorProcess(entry, workRoot) {
   if (!root || !cwd.startsWith(`${root}/`)) return false;
   if (/\bopencode(?:\.exe)?\b/i.test(cmdline)) return true;
   return /\b(?:jest|vitest|playwright|next-build|next-server|next\s+build|tsc)\b/i.test(cmdline);
+}
+
+/**
+ * Commit signing policy.
+ *
+ * Codespaces keep the strict rule: every automatic commit must be GPG signed.
+ * An ephemeral GitHub Actions runner has no `gh-gpgsign` helper and must opt in
+ * explicitly before an unsigned commit is allowed. With neither a signing key
+ * nor the explicit override the runner refuses to push, so an unsigned commit
+ * is never produced silently.
+ */
+export function resolveCommitPolicy(input = {}) {
+  if (input.hasSigningKey === true) return 'gpg';
+  if (input.actionsMode === true) return input.allowUnsigned === true ? 'unsigned' : 'refuse';
+  return 'gpg';
+}
+
+/** Unique execution id for one runner. The attempt UUID remains the lock id. */
+export function buildExecutionId(input = {}) {
+  const clean = (value) => (typeof value === 'string' ? value.trim() : '');
+  const runId = clean(input.runId);
+  const runAttempt = clean(input.runAttempt) || '1';
+  if (runId) return `gha:${runId}:${runAttempt}`.slice(0, 160);
+  const fallback = clean(input.fallback);
+  return (fallback || `local:${Date.now()}`).slice(0, 160);
+}
+
+/**
+ * Bounded, explicit exit codes for the single-shot Actions executor.
+ * GitHub treats every non-zero code as a failed job; the distinction is for
+ * the runbook and for the runner's own summary, not for automatic retries.
+ */
+export const ACTIONS_EXIT = Object.freeze({
+  success: 0,
+  permanent: 2,
+  noTask: 3,
+  executionFailed: 4,
+});
+
+export function actionsExitCode(input = {}) {
+  if (input.ok === true) return ACTIONS_EXIT.success;
+  if (input.permanent === true) return ACTIONS_EXIT.permanent;
+  if (input.claimed === false) return ACTIONS_EXIT.noTask;
+  return ACTIONS_EXIT.executionFailed;
+}
+
+/** A claim may only execute the task that was explicitly requested. */
+export function isClaimForRequestedTask(claim, requestedTaskId) {
+  const requested = String(requestedTaskId || '')
+    .trim()
+    .toLowerCase();
+  if (!requested) return true;
+  const actual = String(claim?.task?.id || '')
+    .trim()
+    .toLowerCase();
+  return actual === requested;
 }
 
 /** Stable boot phases surfaced through the worker API and Admin. */

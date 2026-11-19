@@ -28,15 +28,19 @@ import os from 'node:os';
 import process from 'node:process';
 import { runProcess, terminateProcessGroup } from './dev-worker-process.mjs';
 import {
+  ACTIONS_EXIT,
   BOOT_PHASES,
+  buildExecutionId,
   checkCommitIdentity,
   computeReadiness,
   isAllowedWorkerBranch,
+  isClaimForRequestedTask,
   isOrphanExecutorProcess,
   isVersionAtLeast,
   parseOpenCodeCost,
   parseStoredAuth,
   providerFromModel,
+  resolveCommitPolicy,
   resolveGitIdentity,
 } from './dev-worker-lib.mjs';
 
@@ -50,7 +54,11 @@ const TOKEN = (process.env.PIERROT_DEV_WORKER_TOKEN || '').trim();
 const CODESPACE_NAME = (process.env.CODESPACE_NAME || '').trim();
 const WORKER_ID = (
   process.env.PIERROT_DEV_WORKER_ID ||
-  (CODESPACE_NAME ? `codespace:${CODESPACE_NAME}` : `codespace:${os.hostname()}`)
+  ((process.env.PIERROT_DEV_EXECUTOR_MODE || '').trim().toLowerCase() === 'actions'
+    ? `actions:${process.env.GITHUB_RUN_ID || os.hostname()}:${process.env.GITHUB_RUN_ATTEMPT || '1'}`
+    : CODESPACE_NAME
+      ? `codespace:${CODESPACE_NAME}`
+      : `codespace:${os.hostname()}`)
 ).slice(0, 120);
 const WORK_ROOT = process.env.PIERROT_DEV_WORK_ROOT || path.join(os.homedir(), '.pierrot-dev-work');
 const REPO_DIR = process.env.PIERROT_DEV_REPO_DIR || process.cwd();
@@ -84,13 +92,27 @@ const OPENCODE_PROVIDER = (
   'deepseek'
 ).trim();
 const OPENCODE_AGENT = (process.env.PIERROT_DEV_OPENCODE_AGENT || '').trim();
+const EXECUTOR_MODE = (process.env.PIERROT_DEV_EXECUTOR_MODE || 'codespace').trim().toLowerCase();
+const ACTIONS_MODE = EXECUTOR_MODE === 'actions';
+const RELEASE_MODE = EXECUTOR_MODE === 'release-active';
+const TARGET_TASK_ID = (process.env.PIERROT_DEV_TASK_ID || '').trim();
+const ALLOW_PROVIDER_ENV = process.env.PIERROT_DEV_ALLOW_PROVIDER_ENV === 'true';
+const PROVIDER_ENV_NAME = `${OPENCODE_PROVIDER.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`;
+const ALLOW_UNSIGNED_COMMITS = process.env.PIERROT_DEV_ALLOW_UNSIGNED_COMMITS === 'true';
+const EXECUTION_ID = buildExecutionId({
+  runId: process.env.GITHUB_RUN_ID,
+  runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+  fallback: process.env.PIERROT_DEV_EXECUTION_ID,
+});
 const LOG_DIR = path.join(WORK_ROOT, 'logs');
 const OUTBOX_DIR = path.join(WORK_ROOT, 'outbox');
 const PUSH_FAILURE_DIR = path.join(WORK_ROOT, 'push-failures');
 const WORKTREE_ROOT = path.join(WORK_ROOT, 'work');
+const ACTIVE_ATTEMPT_FILE = path.join(WORK_ROOT, 'actions-active-attempt.json');
 const RUN_LOG = path.join(LOG_DIR, 'worker.log');
 const BOOT_LOG = path.join(LOG_DIR, 'worker-boot.log');
-const WORKER_VERSION = '1.1.0';
+const WORKER_VERSION = '1.2.0';
+const WORKER_KIND = ACTIONS_MODE ? 'actions' : 'codespace';
 
 let shuttingDown = false;
 let activeAttempt = null;
@@ -408,6 +430,13 @@ function opencodeEnv() {
   for (const key of allowed) {
     if (process.env[key]) env[key] = process.env[key];
   }
+  // A GitHub Actions runner has no stored OpenCode login. The workflow passes
+  // the repository secret only to this process and the executor forwards it to
+  // OpenCode as the provider's documented environment variable. The value is
+  // never logged, placed in argv or written to the repository.
+  if (ALLOW_PROVIDER_ENV && process.env[PROVIDER_ENV_NAME]) {
+    env[PROVIDER_ENV_NAME] = process.env[PROVIDER_ENV_NAME];
+  }
   env.CI = '1';
   env.NO_COLOR = '1';
   env.OPENCODE_DISABLE_AUTOUPDATE = '1';
@@ -538,6 +567,20 @@ async function readCapabilities(context = {}) {
   }
   capabilities.authProbeOk = authProbeOk;
   capabilities.authProbeError = authProbeOk ? null : authProbeError || 'probe failed';
+  const environmentCredential =
+    ALLOW_PROVIDER_ENV && Boolean((process.env[PROVIDER_ENV_NAME] || '').trim());
+  capabilities.providerEnvConfigured = environmentCredential;
+  if (!capabilities.opencodeAuthenticated && environmentCredential) {
+    // The Actions runner intentionally has no stored login. An explicit
+    // provider environment credential is a different, valid auth source; the
+    // value is never recorded, only its presence.
+    capabilities.opencodeAuthenticated = true;
+    capabilities.authSource = 'environment';
+    capabilities.authProbeOk = true;
+    capabilities.authProbeError = null;
+  } else {
+    capabilities.authSource = capabilities.opencodeAuthenticated ? 'stored' : 'missing';
+  }
   capabilities.versionOk = Boolean(
     capabilities.opencodeAvailable &&
       isVersionAtLeast(capabilities.opencodeVersion, MIN_OPENCODE_VERSION)
@@ -809,14 +852,38 @@ async function commitAndPush({
   // returns 403 Author is invalid when the author identity is wrong, so the
   // identity is checked together with the signature before the push.
   const identity = await commitIdentity(worktree);
+  const commitPolicy = resolveCommitPolicy({
+    actionsMode: ACTIONS_MODE,
+    allowUnsigned: ALLOW_UNSIGNED_COMMITS,
+    hasSigningKey: false,
+  });
+  if (commitPolicy === 'refuse') {
+    const error = new Error(
+      'COMMIT_SIGNING_UNAVAILABLE: the GitHub Actions runner has no GPG signing key. Set PIERROT_DEV_ALLOW_UNSIGNED_COMMITS=true for the pilot or configure commit signing.'
+    );
+    error.code = 'COMMIT_SIGNING_UNAVAILABLE';
+    await writePushFailure(attemptId, {
+      taskId,
+      branch,
+      commitSha: null,
+      reason: error.message,
+      signing: false,
+    });
+    throw error;
+  }
+  if (commitPolicy === 'unsigned') {
+    await log('Committing without GPG signature (explicit Actions pilot override)', {
+      attemptId,
+      branch,
+    });
+  }
   const commit = await git(
     [
       '-c',
       `user.name=${identity.name}`,
       '-c',
       `user.email=${identity.email}`,
-      '-c',
-      'commit.gpgsign=true',
+      ...(commitPolicy === 'gpg' ? ['-c', 'commit.gpgsign=true'] : []),
       'commit',
       '-m',
       `${messagePrefix}: task ${taskId} attempt ${attemptNumber}`,
@@ -836,14 +903,14 @@ async function commitAndPush({
       commitSha: null,
       reason: message,
       identity: { name: identity.name, email: identity.email },
-      signing: true,
+      signing: commitPolicy === 'gpg',
     });
     throw error;
   }
 
-  // Verify the effective author/committer and that a signature object exists
-  // before pushing. Local GPG cannot validate GitHub's key, but an absent
-  // gpgsig header proves the commit was not signed.
+  // Verify the effective author/committer. For signed commits also verify that
+  // a signature object exists before pushing. Local GPG cannot validate
+  // GitHub's key, but an absent gpgsig header proves the commit was not signed.
   const ident = await git(['log', '-1', '--format=%an%x00%ae%x00%cn%x00%ce'], worktree, 30000);
   const [authorName, authorEmail, committerName, committerEmail] = ident.stdout.trim().split('\0');
   const identityCheck = checkCommitIdentity({
@@ -856,7 +923,11 @@ async function commitAndPush({
   });
   const rawCommit = await git(['cat-file', 'commit', 'HEAD'], worktree, 30000);
   const signed = /^gpgsig(-sha256)? /m.test(rawCommit.stdout);
-  if (!identityCheck.authorOk || !identityCheck.committerOk || !signed) {
+  if (
+    !identityCheck.authorOk ||
+    !identityCheck.committerOk ||
+    (commitPolicy === 'gpg' && !signed)
+  ) {
     const message = !identityCheck.authorOk
       ? `The commit author did not match ${identity.name} <${identity.email}>.`
       : !identityCheck.committerOk
@@ -883,7 +954,7 @@ async function commitAndPush({
 
   await log('Commit verified', {
     identity: `${identity.name} <${identity.email}>`,
-    signed: true,
+    signed,
   });
 
   const sha = await git(['rev-parse', 'HEAD'], worktree, 30000);
@@ -906,7 +977,7 @@ async function commitAndPush({
     throw error;
   }
 
-  return { commitSha, files };
+  return { commitSha, files, signed };
 }
 
 async function preservePartialWork({ workspace, task, attempt, reason }) {
@@ -969,12 +1040,33 @@ async function failWithLog(attemptId, payload) {
   }
 }
 
+async function writeActiveAttempt(record) {
+  try {
+    await fs.writeFile(ACTIVE_ATTEMPT_FILE, JSON.stringify(record, null, 2), 'utf8');
+  } catch {}
+}
+
+async function clearActiveAttempt() {
+  try {
+    await fs.unlink(ACTIVE_ATTEMPT_FILE);
+  } catch {}
+}
+
 async function executeClaim(claim) {
   const { task, attempt, prompt } = claim;
   activeAttempt = attempt;
   idleSince = null;
+  await writeActiveAttempt({
+    taskId: task.id,
+    attemptId: attempt.id,
+    attemptNumber: attempt.attemptNumber,
+    workerId: WORKER_ID,
+    executionId: EXECUTION_ID,
+    startedAt: nowIso(),
+  });
   await log(`Claimed task ${task.id} attempt ${attempt.attemptNumber}`, {
     branch: attempt.branch,
+    executionId: EXECUTION_ID,
   });
 
   let workspace = null;
@@ -982,6 +1074,7 @@ async function executeClaim(claim) {
   let runResult = null;
   let usage = null;
   let commitSha = null;
+  let commitSigned = true;
   let attemptFailed = false;
 
   const failClaim = async (payload) => {
@@ -1022,7 +1115,7 @@ async function executeClaim(claim) {
   };
 
   try {
-    await api('start', { attemptId: attempt.id });
+    await api('start', { attemptId: attempt.id, executionId: EXECUTION_ID });
     startLeaseHeartbeat(attempt.id);
     setAttemptStage('workspace_ready');
     const prepared = await prepareWorktree({ task, attempt });
@@ -1070,7 +1163,7 @@ async function executeClaim(claim) {
         exitCode: runResult.code,
         logExcerpt,
       });
-      return;
+      return false;
     }
 
     if (runResult.timedOut) {
@@ -1083,7 +1176,7 @@ async function executeClaim(claim) {
         logExcerpt,
         changedFiles,
       });
-      return;
+      return false;
     }
 
     if (changedFiles.length > 120) {
@@ -1095,7 +1188,7 @@ async function executeClaim(claim) {
         logExcerpt,
         changedFiles,
       });
-      return;
+      return false;
     }
 
     const sensitive = changedFiles.find((file) => SENSITIVE_PATTERN.test(file));
@@ -1108,7 +1201,7 @@ async function executeClaim(claim) {
         logExcerpt,
         changedFiles,
       });
-      return;
+      return false;
     }
 
     if (runResult.code !== 0) {
@@ -1127,7 +1220,7 @@ async function executeClaim(claim) {
         logExcerpt,
         changedFiles,
       });
-      return;
+      return false;
     }
 
     if (!report && changedFiles.length === 0) {
@@ -1139,7 +1232,7 @@ async function executeClaim(claim) {
         logExcerpt,
         changedFiles,
       });
-      return;
+      return false;
     }
 
     // Executor diagnostics are persisted before the runner commits.
@@ -1165,6 +1258,7 @@ async function executeClaim(claim) {
         });
         commitSha = pushed.commitSha;
         pushedFiles = pushed.files;
+        commitSigned = pushed.signed !== false;
       } catch (error) {
         await failClaim({
           attemptId: attempt.id,
@@ -1175,7 +1269,7 @@ async function executeClaim(claim) {
           logExcerpt,
           changedFiles,
         });
-        return;
+        return false;
       }
     }
 
@@ -1186,6 +1280,11 @@ async function executeClaim(claim) {
     }
     if (runResult.truncated) {
       warnings.push('OpenCode output exceeded the capture limit; only the tail was kept.');
+    }
+    if (commitSha && !commitSigned) {
+      warnings.push(
+        'Commit pushed without a GPG signature by the GitHub Actions pilot override. Branch protection may require signed commits.'
+      );
     }
 
     const payload = {
@@ -1205,8 +1304,11 @@ async function executeClaim(claim) {
       logExcerpt: runResult.truncated ? `${logExcerpt}\n[log truncated]` : logExcerpt,
       verification: {
         durationMs: runResult.durationMs,
-        runner: 'pierrot-dev-worker',
+        runner: ACTIONS_MODE ? 'pierrot-actions-executor' : 'pierrot-dev-worker',
         workerVersion: WORKER_VERSION,
+        executor: ACTIONS_MODE ? 'github-actions' : 'codespace',
+        executionId: EXECUTION_ID,
+        commitSigned,
         selfReported: true,
         unverified: Array.isArray(parsedReport.unverified)
           ? parsedReport.unverified.slice(0, 40)
@@ -1220,7 +1322,7 @@ async function executeClaim(claim) {
 
     // Durable outbox: if the network drops after the work is done, retry the
     // exact same completion later instead of losing the result.
-    await submitCompletion(attempt.id, payload);
+    return await submitCompletion(attempt.id, payload);
   } catch (error) {
     // Workspace, git or transport failure: never leave the attempt hanging.
     // A failure that was already recorded above is not sent twice (the server
@@ -1238,6 +1340,7 @@ async function executeClaim(claim) {
   } finally {
     stopLeaseHeartbeat();
     activeAttempt = null;
+    await clearActiveAttempt();
     if (workspace) {
       await cleanupWorktree(workspace.repoDir, workspace.worktree);
     }
@@ -1258,12 +1361,12 @@ async function submitCompletion(attemptId, payload) {
       await api('complete', { attemptId, result: payload }, 60000);
       await fs.unlink(file).catch(() => {});
       await log(`Result submitted for ${attemptId}`);
-      return;
+      return true;
     } catch (error) {
       if (error.status && error.status >= 400 && error.status < 500 && error.status !== 429) {
         await fs.unlink(file).catch(() => {});
         await log(`Result rejected for ${attemptId}`, { code: error.code });
-        return;
+        return false;
       }
       await log(`Completion retry ${attempt}/6 failed`, { status: error.status || null });
       await sleep(delay);
@@ -1271,6 +1374,7 @@ async function submitCompletion(attemptId, payload) {
     }
   }
   await log(`Result kept in outbox for later delivery: ${file}`);
+  return false;
 }
 
 async function flushOutbox() {
@@ -1393,6 +1497,216 @@ async function shutdown(signal) {
     } catch {}
   }
   process.exit(0);
+}
+
+// ---------------------------------------------------------------------------
+// GitHub Actions single-shot executor
+// ---------------------------------------------------------------------------
+
+/**
+ * The configured model must be listed by the installed CLI. This is a
+ * non-secret check: it proves provider/model selection, not credentials.
+ */
+async function configuredModelAvailable() {
+  try {
+    const result = await run('opencode', ['models'], {
+      env: opencodeEnv(),
+      timeoutMs: 30000,
+    });
+    if (result.code !== 0) return false;
+    return result.stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .includes(OPENCODE_MODEL);
+  } catch {
+    return false;
+  }
+}
+
+async function runActionsRelease() {
+  await ensureDirs();
+  if (!TOKEN || TOKEN.length < 32 || !/^https?:\/\//.test(API_BASE)) {
+    await log('Actions cleanup: worker API is not configured; nothing to release.');
+    return;
+  }
+  let record = null;
+  try {
+    record = JSON.parse(await fs.readFile(ACTIVE_ATTEMPT_FILE, 'utf8'));
+  } catch {
+    await log('Actions cleanup: no active attempt file; nothing to release.');
+    return;
+  }
+  const attemptId = typeof record?.attemptId === 'string' ? record.attemptId : '';
+  if (!attemptId) {
+    await log('Actions cleanup: active attempt file has no attemptId.');
+    return;
+  }
+  try {
+    // Idempotent on the server: an already completed/failed attempt is left
+    // untouched and the task is not requeued twice.
+    const result = await api(
+      'release',
+      {
+        attemptId,
+        reason: 'GitHub Actions workflow was cancelled or timed out; the task was requeued.',
+      },
+      30000
+    );
+    await log('Actions cleanup released the attempt', { attemptId, released: result.ok === true });
+  } catch (error) {
+    await log('Actions cleanup could not release the attempt', {
+      attemptId,
+      status: error.status || null,
+      code: error.code || null,
+      message: String(error.message || error).slice(0, 300),
+    });
+  } finally {
+    await clearActiveAttempt();
+  }
+}
+
+/**
+ * One Actions run = one task = one attempt. There is deliberately no polling
+ * loop: a runner that finds no claimable task exits instead of waiting.
+ */
+async function runActionsOnce() {
+  await ensureDirs();
+  await cleanupOrphanExecutors().catch(() => {});
+  // A cancelled/timed-out job must terminate the OpenCode process group and
+  // release the lease. The workflow's always() cleanup step is the second line
+  // of defence if the runner is killed before this handler finishes.
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  await bootPhase('starting', `GitHub Actions executor ${WORKER_ID} starting.`);
+
+  await bootPhase('checking_config', 'Checking runner configuration.');
+  if (!TOKEN || TOKEN.length < 32) {
+    await bootPhase(
+      'failed',
+      'WORKER_CONFIG_INVALID: repository secret PIERROT_DEV_WORKER_TOKEN is missing or shorter than 32 characters. No task was claimed.',
+      { force: true }
+    );
+    process.exitCode = ACTIONS_EXIT.permanent;
+    return;
+  }
+  if (!/^https?:\/\//.test(API_BASE)) {
+    await bootPhase('failed', 'WORKER_CONFIG_INVALID: PIERROT_DEV_API_URL is invalid.', {
+      force: true,
+    });
+    process.exitCode = ACTIONS_EXIT.permanent;
+    return;
+  }
+  if (ALLOW_PROVIDER_ENV && !(process.env[PROVIDER_ENV_NAME] || '').trim()) {
+    await bootPhase(
+      'failed',
+      `DEEPSEEK_CONFIG_MISSING: repository secret ${PROVIDER_ENV_NAME} is not present. Add it in GitHub repository Settings → Secrets and variables → Actions. The key shared in chat must be revoked and rotated first. No fallback model will be used.`,
+      { force: true }
+    );
+    process.exitCode = ACTIONS_EXIT.permanent;
+    return;
+  }
+
+  const capabilities = await readCapabilities({ configOk: true, apiOk: false, supabaseOk: false });
+  capabilities.executor = 'github-actions';
+  capabilities.executionId = EXECUTION_ID;
+  capabilities.workerKind = WORKER_KIND;
+  capabilities.configuredModel = OPENCODE_MODEL;
+  capabilities.runUrl = process.env.GITHUB_SERVER_URL
+    ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+    : null;
+  await bootPhase(
+    'checking_provider',
+    `Checking ${OPENCODE_PROVIDER} provider and model ${OPENCODE_MODEL}.`
+  );
+  capabilities.modelAvailable = await configuredModelAvailable();
+  applyReadiness(capabilities, { configOk: true, apiOk: false, supabaseOk: false });
+  if (!capabilities.modelAvailable) {
+    await bootPhase(
+      'failed',
+      `OPENCODE_MODEL_UNAVAILABLE: ${OPENCODE_MODEL} is not listed by the installed OpenCode CLI. No fallback model will be used.`,
+      { force: true }
+    );
+    process.exitCode = ACTIONS_EXIT.permanent;
+    return;
+  }
+  if (
+    capabilities.opencodeAvailable !== true ||
+    capabilities.versionOk !== true ||
+    capabilities.opencodeAuthenticated !== true
+  ) {
+    const reasons = Array.isArray(capabilities.readiness?.reasons)
+      ? capabilities.readiness.reasons.join(' · ')
+      : 'OpenCode readiness check failed.';
+    await bootPhase('failed', `WORKER_NOT_READY: ${reasons}`, { force: true });
+    process.exitCode = ACTIONS_EXIT.permanent;
+    return;
+  }
+
+  try {
+    await bootPhase('connecting_api', `Connecting to ${API_BASE}.`);
+    await api('health', {}, 15000);
+    applyReadiness(capabilities, { configOk: true, apiOk: true, supabaseOk: true });
+    await bootPhase('registering', 'Registering the ephemeral Actions worker.');
+    await api('register', {
+      name: `GitHub Actions ${process.env.GITHUB_RUN_ID || WORKER_ID}`,
+      kind: WORKER_KIND,
+      version: WORKER_VERSION,
+      hostname: os.hostname(),
+      repository: process.env.GITHUB_REPOSITORY || 'merkurov1/newlove',
+      capabilities,
+    });
+    await bootPhase('registered', `Actions worker ${WORKER_ID} registered.`, { force: true });
+
+    const claimed = await api('claim', TARGET_TASK_ID ? { taskId: TARGET_TASK_ID } : {}, 40000);
+    if (!claimed.claim) {
+      await log('No claimable task; exiting without polling.', {
+        requestedTaskId: TARGET_TASK_ID || null,
+      });
+      await bootPhase('ready', 'No claimable task for this dispatch.', { force: true });
+      process.exitCode = ACTIONS_EXIT.noTask;
+      return;
+    }
+    if (!isClaimForRequestedTask(claimed.claim, TARGET_TASK_ID)) {
+      await log('Claimed task does not match the requested task; releasing without executing.', {
+        requestedTaskId: TARGET_TASK_ID,
+        claimedTaskId: claimed.claim?.task?.id || null,
+      });
+      await api(
+        'release',
+        {
+          attemptId: claimed.claim.attempt.id,
+          reason: 'Claimed task did not match the dispatched task id; released without execution.',
+        },
+        30000
+      ).catch(() => {});
+      process.exitCode = ACTIONS_EXIT.permanent;
+      return;
+    }
+
+    const success = await executeClaim(claimed.claim);
+    process.exitCode = success ? ACTIONS_EXIT.success : ACTIONS_EXIT.executionFailed;
+  } catch (error) {
+    const code = error.code || 'ACTIONS_EXECUTOR_FAILED';
+    const permanent =
+      error.status === 401 ||
+      error.status === 403 ||
+      error.code === 'TARGETED_CLAIM_UNAVAILABLE' ||
+      error.code === 'ACTIONS_KIND_MIGRATION_REQUIRED' ||
+      error.code === 'INVALID_TASK_ID' ||
+      error.code === 'WORKER_AUTH_NOT_CONFIGURED';
+    await log('Actions executor failed', {
+      status: error.status || null,
+      code,
+      message: String(error.message || error).slice(0, 500),
+      permanent,
+      retryable: !permanent,
+    });
+    await bootPhase('failed', `${code}: ${String(error.message || error).slice(0, 400)}`, {
+      force: true,
+    });
+    process.exitCode = permanent ? ACTIONS_EXIT.permanent : ACTIONS_EXIT.executionFailed;
+  }
 }
 
 async function main() {
@@ -1622,7 +1936,13 @@ async function main() {
   }
 }
 
-main().catch(async (error) => {
+async function entry() {
+  if (RELEASE_MODE) return runActionsRelease();
+  if (ACTIONS_MODE) return runActionsOnce();
+  return main();
+}
+
+entry().catch(async (error) => {
   await bootPhase('failed', `WORKER_FATAL: ${String(error?.message || error).slice(0, 500)}`, {
     force: true,
   });

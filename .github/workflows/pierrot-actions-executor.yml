@@ -1,0 +1,155 @@
+name: Pierrot Actions Executor
+
+# One workflow run = one task = one attempt. The runner is ephemeral and exits
+# after the task. There is no polling loop and no long-lived daemon.
+#
+# Triggers are short-lived and owner-controlled:
+#   * workflow_dispatch for a manual pilot run;
+#   * repository_dispatch type pierrot-dev-task from a trusted dispatcher.
+#
+# This workflow is intentionally NOT triggered by pull_request/pull_request_target,
+# so fork and untrusted PR code can never receive repository secrets.
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: 'Queued Supabase task UUID. Leave empty to claim the next queued task.'
+        required: false
+        type: string
+      dry_run:
+        description: 'Run preflight only; do not claim or execute a task.'
+        required: false
+        default: false
+        type: boolean
+      model_smoke_test:
+        description: 'Make a tiny live DeepSeek call to prove provider/model configuration.'
+        required: false
+        default: true
+        type: boolean
+  repository_dispatch:
+    types: [pierrot-dev-task]
+
+permissions:
+  # The executor only pushes the per-attempt branch. PR creation and merge stay
+  # on the server; no pull-requests, packages, id-token or deployments scope.
+  contents: write
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+  PIERROT_DEV_API_URL: ${{ vars.PIERROT_DEV_API_URL || 'https://merkurov.love' }}
+  PIERROT_DEV_OPENCODE_PROVIDER: deepseek
+  PIERROT_DEV_OPENCODE_MODEL: deepseek/deepseek-flash
+  PIERROT_DEV_OPENCODE_MIN_VERSION: '2.1.4'
+  PIERROT_DEV_TASK_ID: ${{ github.event.client_payload.task_id || inputs.task_id }}
+  PIERROT_DEV_EXECUTION_ID: gha:${{ github.run_id }}:${{ github.run_attempt }}
+  PIERROT_DEV_WORKER_ID: actions:${{ github.run_id }}:${{ github.run_attempt }}
+  PIERROT_DEV_WORK_ROOT: ${{ runner.temp }}/pierrot-dev-work
+  PIERROT_DEV_ALLOW_PROVIDER_ENV: 'true'
+  PIERROT_DEV_MODEL_SMOKE_TEST: ${{ (github.event_name == 'workflow_dispatch' && !inputs.model_smoke_test) && 'false' || 'true' }}
+  # GitHub Actions has no gh-gpgsign helper. Unsigned pilot commits are an
+  # explicit, logged override; merge still requires owner review and approval.
+  PIERROT_DEV_ALLOW_UNSIGNED_COMMITS: ${{ vars.PIERROT_DEV_ALLOW_UNSIGNED_COMMITS || 'true' }}
+
+jobs:
+  execute:
+    name: Execute one Pierrot task
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Do not persist the job token in .git/config: the OpenCode child
+          # shares the checkout and could read it. The executor uses the
+          # GITHUB_TOKEN environment variable through a per-command header.
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install pinned OpenCode CLI
+        run: npm install --global @opencode/cli@2.1.4
+
+      - name: Preflight (secrets presence, model, API)
+        env:
+          PIERROT_DEV_WORKER_TOKEN: ${{ secrets.PIERROT_DEV_WORKER_TOKEN }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: node scripts/pierrot/actions-preflight.mjs
+
+      - name: Execute task
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run == false }}
+        id: executor
+        timeout-minutes: 60
+        env:
+          PIERROT_DEV_WORKER_TOKEN: ${{ secrets.PIERROT_DEV_WORKER_TOKEN }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.PIERROT_DEV_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+          PIERROT_DEV_EXECUTOR_MODE: actions
+        run: |
+          set +e
+          node scripts/pierrot/dev-worker.mjs
+          code=$?
+          echo "executor_exit_code=$code" >> "$GITHUB_OUTPUT"
+          case "$code" in
+            0) echo "::notice::Executor completed the task." ;;
+            2) echo "::error::Executor stopped on a permanent configuration/setup error." ;;
+            3) echo "::warning::No claimable task. A concurrent trigger may own the only active attempt, or the task is not queued." ;;
+            4) echo "::error::Execution failed; the attempt and diagnostics are in Supabase." ;;
+            *) echo "::error::Executor exited with code $code." ;;
+          esac
+          exit "$code"
+
+      - name: Release an interrupted attempt
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.dry_run == false)
+        timeout-minutes: 5
+        env:
+          PIERROT_DEV_WORKER_TOKEN: ${{ secrets.PIERROT_DEV_WORKER_TOKEN }}
+          PIERROT_DEV_EXECUTOR_MODE: release-active
+        run: node scripts/pierrot/dev-worker.mjs
+
+      - name: Write non-secret execution summary
+        if: always()
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const summary = {
+            taskId: process.env.PIERROT_DEV_TASK_ID || null,
+            executionId: process.env.PIERROT_DEV_EXECUTION_ID || null,
+            workerId: process.env.PIERROT_DEV_WORKER_ID || null,
+            repository: process.env.GITHUB_REPOSITORY || null,
+            runId: process.env.GITHUB_RUN_ID || null,
+            runAttempt: process.env.GITHUB_RUN_ATTEMPT || null,
+            runUrl: process.env.GITHUB_SERVER_URL
+              ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+              : null,
+            dryRun: process.env.GITHUB_EVENT_NAME === 'workflow_dispatch' && '${{ inputs.dry_run }}' === 'true',
+            executorExitCode: '${{ steps.executor.outputs.executor_exit_code }}' || null,
+            model: process.env.PIERROT_DEV_OPENCODE_MODEL || null,
+            provider: process.env.PIERROT_DEV_OPENCODE_PROVIDER || null,
+            generatedAt: new Date().toISOString(),
+            secretsIncluded: false,
+          };
+          fs.writeFileSync('pierrot-executor-summary.json', JSON.stringify(summary, null, 2));
+          NODE
+
+      - name: Upload non-secret summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pierrot-executor-summary-${{ github.run_id }}-${{ github.run_attempt }}
+          path: pierrot-executor-summary.json
+          if-no-files-found: ignore
+          retention-days: 7
