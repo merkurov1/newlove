@@ -107,6 +107,9 @@ function errorResponse(error: unknown) {
         error: error.message,
         code: error.code,
         status: error.status,
+        endpoint: error.endpoint,
+        requiredPermission: error.requiredPermission,
+        retryAt: error.retryAt,
       },
       error.status === 401 || error.status === 403 ? 403 : 502
     );
