@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
-import { ensureCodespaceForQueuedWork } from '@/lib/pierrot/dev/workbench/lifecycle';
+import { dispatchNextQueuedTask } from '@/lib/pierrot/dev/workbench/actions';
 import { advanceFinalization } from '@/lib/pierrot/dev/workbench/finalization';
 import { reapExpiredAttempts } from '@/lib/pierrot/dev/workbench/store';
 
@@ -30,12 +30,13 @@ export async function GET(req: Request) {
   try {
     // Admin is the guaranteed recovery trigger. Order matters:
     //   1. finalize expired leases and make a retry visible in the queue;
-    //   2. run the guarded lifecycle reconcile against that fresh queue;
+    //   2. dispatch at most one eligible task to GitHub Actions;
     //   3. build the overview from the post-recovery state.
-    // ensureCodespaceForQueuedWork still enforces every safety rule: an active
-    // attempt, paused queue, startup grace, cooldown and circuit breaker. It
-    // never stops a live Codespace merely because a heartbeat is stale, and it
-    // never starts a second worker over an existing attempt.
+    //
+    // Codespaces are deliberately NOT started from this poll. Opening or
+    // refreshing Admin must never boot the manual Codespace reserve. The
+    // dispatcher respects a paused queue, an active attempt and the per-task
+    // dispatch reservation, so it cannot launch duplicates.
     //
     // There is no cron or always-on supervisor: this request-driven Admin poll
     // is the recovery trigger. While nobody polls Admin, an expired lease stays
@@ -47,12 +48,10 @@ export async function GET(req: Request) {
     }
 
     try {
-      await ensureCodespaceForQueuedWork({
-        source: 'admin:overview',
-        allowWorkerRecovery: true,
-      });
+      await dispatchNextQueuedTask({ source: 'admin:overview' });
     } catch {
-      // The overview must still load when Codespaces is temporarily unavailable.
+      // The overview must still load when the Actions dispatch API is down.
+      // The failure is recorded on the task by the dispatcher itself.
     }
 
     // Admin is also a finalization pump: when the queue is drained, each poll

@@ -28,7 +28,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const WORKER_ID_PATTERN = /^[A-Za-z0-9._:-]{4,120}$/;
 export const COST_LEDGER_MIGRATION_FILE = '2026-12-10_pierrot_dev_cost_ledger.sql';
 const TASK_COLUMNS =
-  'id,user_id,title,task,objective,repository,base_ref,status,priority,queue_position,queued_at,attempt_count,acceptance_criteria,verification_status,blocked_reason,last_error_code,last_error_message,result_commit,result_notes,pull_requests,created_at,updated_at';
+  'id,user_id,title,task,objective,repository,base_ref,status,priority,queue_position,queued_at,attempt_count,acceptance_criteria,verification_status,blocked_reason,last_error_code,last_error_message,assigned_executor,actions_dispatch_requested_at,result_commit,result_notes,pull_requests,created_at,updated_at';
 const ATTEMPT_COLUMNS =
   'id,task_id,attempt_number,status,worker_id,branch,base_ref,base_commit,head_sha,pr_number,pr_url,opencode_session_id,exit_code,started_at,finished_at,heartbeat_at,lease_expires_at,progress_stage,result_summary,changed_files,commands,verification,warnings,error_code,error_message,log_excerpt,created_at';
 
@@ -137,6 +137,14 @@ export function mapTaskRow(row: Record<string, unknown>): DevWorkbenchTask {
     blockedReason: typeof row.blocked_reason === 'string' ? row.blocked_reason : null,
     lastErrorCode: typeof row.last_error_code === 'string' ? row.last_error_code : null,
     lastErrorMessage: typeof row.last_error_message === 'string' ? row.last_error_message : null,
+    assignedExecutor:
+      row.assigned_executor === 'actions' || row.assigned_executor === 'codespace'
+        ? row.assigned_executor
+        : null,
+    actionsDispatchRequestedAt:
+      typeof row.actions_dispatch_requested_at === 'string'
+        ? row.actions_dispatch_requested_at
+        : null,
     resultCommit: typeof row.result_commit === 'string' ? row.result_commit : null,
     resultNotes: truncateText(row.result_notes, 12_000),
     pullRequests: list(row.pull_requests),
@@ -605,6 +613,79 @@ export async function listTaskRows(input: {
   } catch {
     return [];
   }
+}
+
+let actionsRoutingSchemaReady: boolean | null = null;
+
+/**
+ * True only when the additive Actions routing migration is applied. This is a
+ * configuration check, not a fallback: callers must fail explicitly instead of
+ * dispatching without the durable assignment/marker columns.
+ */
+export async function isActionsRoutingSchemaReady(force = false): Promise<boolean> {
+  if (!force && actionsRoutingSchemaReady !== null) return actionsRoutingSchemaReady;
+  try {
+    const { error } = await store()
+      .from('pierrot_dev_prompts')
+      .select('assigned_executor,actions_dispatch_requested_at')
+      .limit(1);
+    actionsRoutingSchemaReady = !error;
+  } catch {
+    actionsRoutingSchemaReady = false;
+  }
+  return actionsRoutingSchemaReady;
+}
+
+/**
+ * Queued tasks eligible for the server-side Actions dispatcher, in claim order.
+ * Codespace-assigned and already-requested tasks are excluded by the caller
+ * (the query is intentionally unscoped; dispatch is an owner-level action).
+ */
+export async function listQueuedTasksForDispatch(limit = 10): Promise<DevWorkbenchTask[]> {
+  try {
+    const { data, error } = await store()
+      .from('pierrot_dev_prompts')
+      .select(TASK_COLUMNS)
+      .eq('status', 'queued')
+      .is('blocked_reason', null)
+      .order('priority', { ascending: false })
+      .order('queue_position', { ascending: true, nullsFirst: false })
+      .order('queued_at', { ascending: true, nullsFirst: true })
+      .limit(Math.min(Math.max(limit, 1), 20));
+    if (error || !Array.isArray(data)) return [];
+    return data.map((row) => mapTaskRow(row));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Atomically reserve a queued task for one Actions dispatch request.
+ *
+ * The conditional update is the dispatcher's double-launch guard: only the
+ * first concurrent caller observes `actions_dispatch_requested_at IS NULL` and
+ * receives the row. The value is cleared explicitly on enqueue, retry, batch
+ * start and lease recovery so a new attempt can be dispatched.
+ */
+export async function reserveTaskForActionsDispatch(
+  taskId: string
+): Promise<DevWorkbenchTask | null> {
+  if (!isUuid(taskId)) return null;
+  const now = new Date().toISOString();
+  const { data, error } = await store()
+    .from('pierrot_dev_prompts')
+    .update({
+      assigned_executor: 'actions',
+      actions_dispatch_requested_at: now,
+      updated_at: now,
+    })
+    .eq('id', taskId)
+    .eq('status', 'queued')
+    .is('actions_dispatch_requested_at', null)
+    .select(TASK_COLUMNS)
+    .maybeSingle();
+  if (error || !data) return null;
+  return mapTaskRow(data);
 }
 
 export async function clearWorkerAttempt(
@@ -1233,6 +1314,8 @@ export async function startBatch(userId: string, batchId: string): Promise<Start
         queue_position: position,
         queued_at: queuedAt,
         queue_batch_id: batchId,
+        assigned_executor: 'actions',
+        actions_dispatch_requested_at: null,
         last_error_code: null,
         last_error_message: null,
         updated_at: queuedAt,
@@ -1441,6 +1524,21 @@ export async function listWorkers(): Promise<DevWorker[]> {
     return data.map((row) => mapWorkerRow(row));
   } catch {
     return [];
+  }
+}
+
+export async function getWorker(workerId: string): Promise<DevWorker | null> {
+  if (!isWorkerId(workerId)) return null;
+  try {
+    const { data, error } = await store()
+      .from('pierrot_dev_workers')
+      .select('*')
+      .eq('id', workerId)
+      .maybeSingle();
+    if (error || !data) return null;
+    return mapWorkerRow(data);
+  } catch {
+    return null;
   }
 }
 
@@ -1797,7 +1895,10 @@ export async function claimTask(
   if (error) {
     const code = String(error.code || '');
     const message = String(error.message || '');
-    if (code === 'PGRST202' || /function .*pierrot_dev_claim_task.* does not exist/i.test(message)) {
+    if (
+      code === 'PGRST202' ||
+      /function .*pierrot_dev_claim_task.* does not exist/i.test(message)
+    ) {
       const missing = new Error(
         'Targeted claims require the additive migration 2026-12-12_pierrot_actions_executor.sql.'
       );
@@ -1849,6 +1950,8 @@ export async function requeueTask(input: {
     patch: {
       queue_position: position,
       queued_at: new Date().toISOString(),
+      assigned_executor: 'actions',
+      actions_dispatch_requested_at: null,
       blocked_reason: null,
     },
     event: {

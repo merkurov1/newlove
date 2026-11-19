@@ -256,7 +256,9 @@ function toError(
     message = `GitHub rejected the token (401) for ${operation.endpoint}. Re-authenticate GITHUB_TOKEN before retrying.`;
   } else if (rateLimited) {
     code = 'GITHUB_RATE_LIMITED';
-    const when = rate.retryAt ? ` Retry after ${rate.retryAt}.` : ' Retry after the rate-limit window resets.';
+    const when = rate.retryAt
+      ? ` Retry after ${rate.retryAt}.`
+      : ' Retry after the rate-limit window resets.';
     message = `GitHub rate limit reached for ${operation.endpoint} (${status ?? 403}).${when} Remaining: ${
       rate.remaining ?? 'unknown'
     }/${rate.limit ?? 'unknown'}.`;
@@ -451,7 +453,38 @@ const OPERATIONS = {
     requiredPermission: 'Codespaces: write',
     fallbackCode: 'CODESPACE_CREATE_FAILED',
   },
+  dispatchTask: {
+    endpoint: 'POST /repos/{owner}/{repo}/dispatches',
+    requiredPermission: 'Contents: write',
+    fallbackCode: 'ACTIONS_DISPATCH_FAILED',
+  },
 } satisfies Record<string, GitHubApiOperation>;
+
+/**
+ * Send a repository_dispatch event to the Actions executor.
+ *
+ * The GitHub API returns 204 with no run id. Callers must record the request as
+ * "dispatched" only after this call succeeds and must treat a thrown error as an
+ * execution failure, never as a successful launch.
+ */
+export async function dispatchRepositoryEvent(input: {
+  repository: DevRepositoryKey | string;
+  eventType: string;
+  clientPayload: Record<string, unknown>;
+}): Promise<void> {
+  const config = getDevRepositoryConfig(repoKey(input.repository));
+  if (!/^[A-Za-z0-9._-]{1,100}$/.test(input.eventType)) {
+    throw new WorkbenchGitHubError('GITHUB_INVALID_REQUEST', 'Invalid repository event type.');
+  }
+  await requestGitHubWithRetry(OPERATIONS.dispatchTask, () =>
+    client().rest.repos.createDispatchEvent({
+      owner: config.owner,
+      repo: config.repo,
+      event_type: input.eventType,
+      client_payload: input.clientPayload,
+    })
+  );
+}
 
 export async function createPullRequestForAttempt(input: {
   repository: DevRepositoryKey | string;

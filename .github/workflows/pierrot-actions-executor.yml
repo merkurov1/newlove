@@ -44,12 +44,18 @@ env:
   PIERROT_DEV_TASK_ID: ${{ github.event.client_payload.task_id || inputs.task_id }}
   PIERROT_DEV_EXECUTION_ID: gha:${{ github.run_id }}:${{ github.run_attempt }}
   PIERROT_DEV_WORKER_ID: actions:${{ github.run_id }}:${{ github.run_attempt }}
-  PIERROT_DEV_WORK_ROOT: ${{ runner.temp }}/pierrot-dev-work
   PIERROT_DEV_ALLOW_PROVIDER_ENV: 'true'
-  PIERROT_DEV_MODEL_SMOKE_TEST: ${{ (github.event_name == 'workflow_dispatch' && !inputs.model_smoke_test) && 'false' || 'true' }}
+  PIERROT_DEV_MODEL_SMOKE_TEST: ${{ (github.event_name == 'workflow_dispatch' && inputs.model_smoke_test == false) && 'false' || 'true' }}
   # GitHub Actions has no gh-gpgsign helper. Unsigned pilot commits are an
   # explicit, logged override; merge still requires owner review and approval.
   PIERROT_DEV_ALLOW_UNSIGNED_COMMITS: ${{ vars.PIERROT_DEV_ALLOW_UNSIGNED_COMMITS || 'true' }}
+
+# At most one queued run per task id. The runner itself still relies on the
+# database advisory lock + single-active-attempt index; this only prevents a
+# duplicate trigger from piling up identical executions.
+concurrency:
+  group: pierrot-task-${{ github.event.client_payload.task_id || inputs.task_id || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   execute:
@@ -90,7 +96,7 @@ jobs:
         run: node scripts/pierrot/actions-preflight.mjs
 
       - name: Execute task
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run == false }}
+        if: ${{ github.event_name == 'repository_dispatch' || inputs.dry_run != true }}
         id: executor
         timeout-minutes: 60
         env:
@@ -98,6 +104,9 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.PIERROT_DEV_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
           PIERROT_DEV_EXECUTOR_MODE: actions
+          # runner.* is not available in a workflow-level env block. The job
+          # failed before creating any job while this was set at the top.
+          PIERROT_DEV_WORK_ROOT: ${{ runner.temp }}/pierrot-dev-work
         run: |
           set +e
           node scripts/pierrot/dev-worker.mjs
@@ -113,11 +122,12 @@ jobs:
           exit "$code"
 
       - name: Release an interrupted attempt
-        if: always() && (github.event_name != 'workflow_dispatch' || inputs.dry_run == false)
+        if: always() && (github.event_name == 'repository_dispatch' || inputs.dry_run != true)
         timeout-minutes: 5
         env:
           PIERROT_DEV_WORKER_TOKEN: ${{ secrets.PIERROT_DEV_WORKER_TOKEN }}
           PIERROT_DEV_EXECUTOR_MODE: release-active
+          PIERROT_DEV_WORK_ROOT: ${{ runner.temp }}/pierrot-dev-work
         run: node scripts/pierrot/dev-worker.mjs
 
       - name: Write non-secret execution summary

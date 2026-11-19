@@ -609,9 +609,12 @@ export async function failAttempt(input: {
     // pushed SHA is ever recorded as the base by the worker.
     const resumeFrom =
       headSha &&
-      ['EXECUTION_TIMEOUT', 'OPENCODE_FAILED', 'OPENCODE_INTERRUPTED', 'OPENCODE_REPORT_MISSING'].includes(
-        input.errorCode
-      )
+      [
+        'EXECUTION_TIMEOUT',
+        'OPENCODE_FAILED',
+        'OPENCODE_INTERRUPTED',
+        'OPENCODE_REPORT_MISSING',
+      ].includes(input.errorCode)
         ? headSha
         : null;
     await patchTask(task.id, {
@@ -778,6 +781,8 @@ export async function enqueueTask(
   const patch: Record<string, unknown> = {
     queue_position: position,
     queued_at: new Date().toISOString(),
+    assigned_executor: 'actions',
+    actions_dispatch_requested_at: null,
     last_error_code: null,
     last_error_message: null,
   };
@@ -845,6 +850,8 @@ export async function retryTask(userId: string, taskId: string): Promise<DevWork
     patch: {
       queue_position: position,
       queued_at: new Date().toISOString(),
+      assigned_executor: 'actions',
+      actions_dispatch_requested_at: null,
       result_commit: null,
       pull_requests: [],
       verification_status: 'not_run',

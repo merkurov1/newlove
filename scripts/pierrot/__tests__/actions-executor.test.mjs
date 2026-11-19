@@ -75,6 +75,30 @@ test('Actions workflow is not exposed to fork or untrusted pull requests', () =>
   assert.match(workflow, /types:\s*\[pierrot-dev-task\]/);
 });
 
+test('workflow-level env never references the runner context', () => {
+  const workflow = workflowText();
+  const beforeJobs = workflow.split('\njobs:')[0];
+  assert.doesNotMatch(
+    beforeJobs,
+    /runner\./,
+    'runner.* is unavailable in workflow-level env and makes GitHub fail before creating jobs'
+  );
+  assert.match(workflow, /PIERROT_DEV_WORK_ROOT:\s*\$\{\{\s*runner\.temp\s*\}\}/);
+});
+
+test('the dispatcher task id is used for one-run-per-task concurrency', () => {
+  const workflow = workflowText();
+  assert.match(workflow, /concurrency:/);
+  assert.match(workflow, /github\.event\.client_payload\.task_id/);
+  assert.match(workflow, /PIERROT_DEV_TASK_ID:/);
+});
+
+test('repository_dispatch runs the executor even though inputs are undefined', () => {
+  const workflow = workflowText();
+  assert.match(workflow, /github\.event_name == 'repository_dispatch'/);
+  assert.doesNotMatch(workflow, /github\.event_name != 'workflow_dispatch'/);
+});
+
 test('Actions workflow has least-privilege permissions and no secret literals', () => {
   const workflow = workflowText();
   assert.match(workflow, /permissions:[\s\S]{0,300}?contents:\s*write/);
