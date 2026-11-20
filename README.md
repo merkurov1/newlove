@@ -85,7 +85,7 @@ Start with [`.env.example`](./.env.example). The core variables currently docume
 | `SUPABASE_SERVICE_ROLE_KEY`       | Privileged server-side Supabase access; **never expose to the browser**                                                     |
 | `TELEGRAM_WEBHOOK_SECRET`         | Secret used to validate configured Telegram webhook requests                                                                |
 | `TELEGRAM_WEBHOOK_ENFORCE_SECRET` | Set to `1` only after the webhook is registered with `secret_token` matching `TELEGRAM_WEBHOOK_SECRET`; otherwise leave off |
-| `GEMINI_API_KEY`                  | Primary Gemini key for Pierrot, Flow item context and Flow issue analysis                                                  |
+| `GEMINI_API_KEY`                  | Primary Gemini key for Pierrot, Flow item context and Flow issue analysis; `GOOGLE_API_KEY` is accepted as an alias        |
 | `DEEPSEEK_API_KEY`                | DeepSeek key used as the automatic fallback and by graph/media intelligence                                                |
 | `OPENROUTER_API_KEY`              | Server-only embeddings key (`baai/bge-m3`, 1024 dimensions)                                                                 |
 | `CRON_SECRET`                     | Bearer secret required by every `/api/cron/*` worker route                                                                  |

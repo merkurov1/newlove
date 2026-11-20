@@ -3,6 +3,7 @@ import {
   recordCircuitFailure,
   recordCircuitSuccess,
 } from '@/lib/operations/circuitBreaker';
+import { globalLimits } from '@/lib/operations/config';
 import {
   buildLlmCallRecord,
   createTelemetryStore,
@@ -68,8 +69,45 @@ export class GeminiError extends Error {
   }
 }
 
+/**
+ * Gemini accepts a Google AI Studio API key. The project has used both
+ * `GEMINI_API_KEY` and the Google-standard `GOOGLE_API_KEY` name in different
+ * environments. Never require operators to duplicate the same secret under a
+ * second name: a missing `GEMINI_API_KEY` must not silently disable Gemini.
+ */
+export function geminiApiKey(): string {
+  return (
+    (process.env.GEMINI_API_KEY || '').trim() ||
+    (process.env.GOOGLE_API_KEY || '').trim()
+  );
+}
+
+/** Which environment variable supplied the key. Never returns the key itself. */
+export function geminiApiKeySource(): 'GEMINI_API_KEY' | 'GOOGLE_API_KEY' | null {
+  if ((process.env.GEMINI_API_KEY || '').trim()) return 'GEMINI_API_KEY';
+  if ((process.env.GOOGLE_API_KEY || '').trim()) return 'GOOGLE_API_KEY';
+  return null;
+}
+
 export function isGeminiConfigured(): boolean {
-  return Boolean((process.env.GEMINI_API_KEY || '').trim());
+  return Boolean(geminiApiKey());
+}
+
+/**
+ * A 429 is not always a transient rate limit. Google returns 429 with a
+ * "monthly spending cap exceeded" / RESOURCE_EXHAUSTED body when the project
+ * cannot be billed until the next period. Probing that endpoint on every
+ * request only adds latency, so the circuit is opened for a long cooldown.
+ */
+function isQuotaExhausted(status: number, message: string): boolean {
+  if (status !== 429) return false;
+
+  // Do not treat an ordinary per-minute rate limit as a monthly outage. Only
+  // messages that explicitly describe a cap/period/billing condition get the
+  // long cooldown.
+  return /(?:spending cap|monthly (?:quota|limit|spending)|daily (?:quota|limit)|billing (?:limit|details)|insufficient (?:quota|credit))/i.test(
+    message
+  );
 }
 
 function geminiUsageForTelemetry(value: unknown): LlmProviderAttempt['usage'] {
@@ -248,8 +286,10 @@ export async function generateGeminiText(input: {
   responseMimeType?: string;
   signal?: AbortSignal;
   telemetry?: GeminiTelemetryContext;
+  /** Explicit key for an owner-approved evaluation; never persisted or logged. */
+  apiKey?: string;
 }): Promise<GeminiTextResult> {
-  const apiKey = (process.env.GEMINI_API_KEY || '').trim();
+  const apiKey = (input.apiKey || '').trim() || geminiApiKey();
 
   if (!apiKey) {
     throw new GeminiError('Gemini is not configured.', 'gemini_not_configured');
@@ -286,16 +326,25 @@ export async function generateGeminiText(input: {
     const payload = (await response.json().catch(() => null)) as GeminiResponse | null;
 
     if (!response.ok) {
-      const code = `gemini_http_${response.status}`;
+      const providerMessage = payload?.error?.message || '';
+      const quotaExhausted = isQuotaExhausted(response.status, providerMessage);
+      const code = quotaExhausted
+        ? 'gemini_quota_exhausted'
+        : `gemini_http_${response.status}`;
 
       await recordCircuitFailure({
         dependency: 'gemini',
         errorCode: code,
-        permanent: [400, 401, 403, 404].includes(response.status),
+        permanent: quotaExhausted || [400, 401, 403, 404].includes(response.status),
+        ...(quotaExhausted
+          ? { cooldownSeconds: globalLimits().providerQuotaCooldownSeconds }
+          : {}),
       });
 
       throw new GeminiError(
-        payload?.error?.message || 'Gemini request failed.',
+        quotaExhausted
+          ? 'Gemini quota is exhausted for this billing period.'
+          : providerMessage || 'Gemini request failed.',
         code,
         response.status
       );
@@ -396,8 +445,9 @@ export async function streamGeminiText(input: {
   signal?: AbortSignal;
   onDelta: (text: string) => void;
   telemetry?: GeminiTelemetryContext;
+  apiKey?: string;
 }): Promise<GeminiStreamResult> {
-  const apiKey = (process.env.GEMINI_API_KEY || '').trim();
+  const apiKey = (input.apiKey || '').trim() || geminiApiKey();
 
   if (!apiKey) {
     throw new GeminiError('Gemini is not configured.', 'gemini_not_configured');
@@ -439,16 +489,25 @@ export async function streamGeminiText(input: {
 
     if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as GeminiResponse | null;
-      const code = `gemini_http_${response.status}`;
+      const providerMessage = payload?.error?.message || '';
+      const quotaExhausted = isQuotaExhausted(response.status, providerMessage);
+      const code = quotaExhausted
+        ? 'gemini_quota_exhausted'
+        : `gemini_http_${response.status}`;
 
       await recordCircuitFailure({
         dependency: 'gemini',
         errorCode: code,
-        permanent: [400, 401, 403, 404].includes(response.status),
+        permanent: quotaExhausted || [400, 401, 403, 404].includes(response.status),
+        ...(quotaExhausted
+          ? { cooldownSeconds: globalLimits().providerQuotaCooldownSeconds }
+          : {}),
       });
 
       throw new GeminiError(
-        payload?.error?.message || 'Gemini request failed.',
+        quotaExhausted
+          ? 'Gemini quota is exhausted for this billing period.'
+          : providerMessage || 'Gemini request failed.',
         code,
         response.status
       );

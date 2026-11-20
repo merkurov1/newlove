@@ -153,6 +153,31 @@ describe('resource safety', () => {
     await expect(assertCircuitClosed('llm', null)).resolves.toBeUndefined();
   });
 
+  it('honours an explicit long cooldown for an exhausted provider quota', async () => {
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+
+    try {
+      await recordCircuitFailure({
+        dependency: 'gemini',
+        errorCode: 'gemini_quota_exhausted',
+        permanent: true,
+        cooldownSeconds: 21_600,
+        client: null,
+      });
+
+      await expect(assertCircuitClosed('gemini', null)).rejects.toThrow('circuit_open:gemini');
+
+      // Still open after the normal one-hour exponential ceiling.
+      nowSpy.mockReturnValue(1_000_000 + 3_601_000);
+      await expect(assertCircuitClosed('gemini', null)).rejects.toThrow('circuit_open:gemini');
+
+      nowSpy.mockReturnValue(1_000_000 + 21_601_000);
+      await expect(assertCircuitClosed('gemini', null)).resolves.toBeUndefined();
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it('rejects an enqueue larger than the configured request limit', () => {
     process.env.OPS_MAX_ENQUEUE_PER_REQUEST = '5';
     expect(() => assertEnqueueLimit(6)).toThrow('enqueue_limit_reached:5');

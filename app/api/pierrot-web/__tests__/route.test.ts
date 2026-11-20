@@ -655,6 +655,17 @@ describe('POST /api/pierrot-web persistence', () => {
       'message:assistant',
       'event:assistant_replied',
     ]);
+
+    // A deterministic assistant answer must not be stored with provider NULL.
+    const assistantRow = asMock(pierrotStore.appendPierrotMessage).mock.calls
+      .map((call) => call[1] as { role?: string; provider?: string | null })
+      .find((row) => row.role === 'assistant');
+    expect(assistantRow?.provider).toBe('deterministic');
+
+    const repliedEvent = asMock(pierrotStore.recordPierrotEvent).mock.calls
+      .map((call) => call[1] as { eventName?: string; payload?: { provider?: string } })
+      .find((event) => event.eventName === 'assistant_replied');
+    expect(repliedEvent?.payload?.provider).toBe('deterministic');
   });
 
   it('returns the deterministic qualification question for a service inquiry', async () => {

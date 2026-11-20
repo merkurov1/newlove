@@ -12,6 +12,7 @@ import { decideWebSearch } from '@/lib/knowledge/web/searchDecision';
 import { searchWebEvidence } from '@/lib/knowledge/web/exaSearch';
 import type { WebSearchResult } from '@/lib/knowledge/web/types';
 import { callPersonalAssistantModel, type PierrotModelResult } from '@/lib/pierrot/model';
+import type { LlmProviderAttempt } from '@/lib/ai/telemetry';
 import { detectAssistantLanguage, type AssistantLanguage } from './language';
 import { parsePersonalAssistantMemoryCommand } from './memoryCommands';
 import { buildPersonalAssistantSystemPrompt } from './prompt';
@@ -45,6 +46,12 @@ export type PersonalAssistantTurnInput = {
   messageId: string;
   store: PersonalAssistantStore | null;
   dependencies?: PersonalAssistantTurnDependencies;
+  /**
+   * Called once per provider attempt. The HTTP route persists these rows so the
+   * Telegram assistant channel has the same provider/model provenance as the
+   * public website.
+   */
+  onAttempt?: (attempt: LlmProviderAttempt) => void;
 };
 
 export type PersonalAssistantTurnResult = {
@@ -253,8 +260,12 @@ export async function runPersonalAssistantTurn(
     language,
   });
 
-  const generate = dependencies.generate || callPersonalAssistantModel;
-  const generated = await generate(systemPrompt, toModelMessages(history, message));
+  const modelMessages = toModelMessages(history, message);
+  const generated = dependencies.generate
+    ? await dependencies.generate(systemPrompt, modelMessages)
+    : await callPersonalAssistantModel(systemPrompt, modelMessages, {
+        ...(input.onAttempt ? { onAttempt: input.onAttempt } : {}),
+      });
 
   const reply =
     webResult?.outcome === 'relevant_results'
@@ -270,6 +281,7 @@ export async function runPersonalAssistantTurn(
     metadata: {
       provider: generated.provider,
       model: generated.model,
+      provider_chain: generated.providerChain,
       web: webResult?.outcome || (webRequested ? 'unavailable' : 'not_requested'),
     },
   });

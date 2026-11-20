@@ -46,13 +46,15 @@ export async function assertCircuitClosed(
   dependency: CircuitDependency,
   client: SupabaseClient | null = createOpsClient()
 ): Promise<void> {
-  if (!client) {
-    const memory = memoryCircuits.get(dependency) || defaultCircuit();
-    if (memory.state === 'open' && memory.openUntil > Date.now()) {
-      throw new Error(`circuit_open:${dependency}`);
-    }
-    return;
+  // Always consult the in-process breaker first. If the shared ops table is
+  // missing or temporarily unreachable, a quota/outage that opened the circuit
+  // in this instance must still stop calls instead of silently allowing them.
+  const memory = memoryCircuits.get(dependency) || defaultCircuit();
+  if (memory.state === 'open' && memory.openUntil > Date.now()) {
+    throw new Error(`circuit_open:${dependency}`);
   }
+
+  if (!client) return;
 
   try {
     const { data, error } = await client
@@ -137,21 +139,40 @@ export async function recordCircuitFailure(input: {
   dependency: CircuitDependency;
   errorCode: string;
   permanent?: boolean;
+  /**
+   * Optional explicit cooldown. Used when the provider has told us that the
+   * whole quota/period is exhausted (for example a monthly spending cap), so a
+   * normal exponential retry would hammer the same dead endpoint. Explicit
+   * values are clamped to a hard 24 h ceiling, not to the shorter exponential
+   * backoff ceiling.
+   */
+  cooldownSeconds?: number;
   client?: SupabaseClient | null;
 }): Promise<void> {
   const limits = globalLimits();
   const memory = memoryCircuits.get(input.dependency) || defaultCircuit();
   memory.failures += 1;
 
+  const requestedCooldown =
+    typeof input.cooldownSeconds === 'number' && Number.isFinite(input.cooldownSeconds)
+      ? Math.max(0, Math.trunc(input.cooldownSeconds))
+      : null;
+
   const shouldOpen =
     input.permanent === true || memory.state === 'half_open' || memory.failures >= limits.circuitFailureThreshold;
 
   if (shouldOpen) {
     memory.reopenCount += 1;
-    const cooldown = Math.min(
-      limits.circuitMaxCooldownSeconds,
-      limits.circuitCooldownSeconds * 2 ** Math.max(0, memory.reopenCount - 1)
-    );
+    // An explicit quota cooldown may exceed the exponential backoff ceiling:
+    // a monthly cap does not recover after one hour. It still has a hard 24 h
+    // upper bound.
+    const cooldown =
+      requestedCooldown !== null
+        ? Math.min(86_400, requestedCooldown)
+        : Math.min(
+            limits.circuitMaxCooldownSeconds,
+            limits.circuitCooldownSeconds * 2 ** Math.max(0, memory.reopenCount - 1)
+          );
     memory.state = 'open';
     memory.openUntil = Date.now() + cooldown * 1000;
   }
@@ -176,10 +197,13 @@ export async function recordCircuitFailure(input: {
         (typeof row?.consecutive_failures === 'number' ? row.consecutive_failures : 0) + 1;
       const reopenCount =
         (typeof row?.reopen_count === 'number' ? row.reopen_count : 0) + (shouldOpen ? 1 : 0);
-      const cooldown = Math.min(
-        limits.circuitMaxCooldownSeconds,
-        limits.circuitCooldownSeconds * 2 ** Math.max(0, reopenCount - 1)
-      );
+      const cooldown =
+        requestedCooldown !== null
+          ? Math.min(86_400, requestedCooldown)
+          : Math.min(
+              limits.circuitMaxCooldownSeconds,
+              limits.circuitCooldownSeconds * 2 ** Math.max(0, reopenCount - 1)
+            );
 
       await client.from('ops_circuit_breakers').upsert(
         {

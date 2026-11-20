@@ -220,6 +220,20 @@ function firstRpcRow(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
 }
 
+function isLegacyProviderConstraint(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+
+  const code = (error as { code?: unknown }).code;
+  const message = String((error as { message?: unknown }).message || '').toLowerCase();
+
+  return (
+    code === '22023' ||
+    code === '23514' ||
+    message.includes('invalid_provider') ||
+    message.includes('pierrot_messages_provider_check')
+  );
+}
+
 /**
  * Atomic, idempotent message insertion. The SQL function serialises writers
  * for one conversation, reuses an existing message_id and assigns the next
@@ -245,7 +259,20 @@ export async function appendPierrotMessage(
     params.p_episode_id = input.episodeId;
   }
 
-  const { data, error } = await store.rpc(rpcName, params);
+  let { data, error } = await store.rpc(rpcName, params);
+
+  // A deployment can receive code that records explicit deterministic/unknown
+  // provenance before the additive migration is applied. Do not lose the
+  // answer: retry without provider so the row is still stored, and leave the
+  // explicit reason in the structured event/metadata.
+  if (error && input.provider && isLegacyProviderConstraint(error)) {
+    params.p_provider = null;
+    ({ data, error } = await store.rpc(rpcName, params));
+
+    if (!error) {
+      console.warn('[Pierrot store] provider constraint predates provenance migration');
+    }
+  }
 
   if (error) throw error;
 

@@ -18,6 +18,7 @@ export type LlmProvider = 'gemini' | 'deepseek' | 'openrouter' | 'openai' | 'oth
 export type LlmSurface =
   | 'pierrot_web'
   | 'pierrot_stream'
+  | 'telegram_personal_assistant'
   | 'question'
   | 'flow_issue'
   | 'flow_item'

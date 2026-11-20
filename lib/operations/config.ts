@@ -72,6 +72,16 @@ export function globalLimits() {
     circuitFailureThreshold: readInt('OPS_CIRCUIT_FAILURE_THRESHOLD', 3, 1, 20),
     circuitCooldownSeconds: readInt('OPS_CIRCUIT_COOLDOWN_SECONDS', 300, 30, 3600),
     circuitMaxCooldownSeconds: readInt('OPS_CIRCUIT_MAX_COOLDOWN_SECONDS', 3600, 60, 86_400),
+    /**
+     * A provider that reports an exhausted monthly quota/cap must not be probed
+     * on every request. Six hours by default; the owner can shorten it.
+     */
+    providerQuotaCooldownSeconds: readInt(
+      'OPS_PROVIDER_QUOTA_COOLDOWN_SECONDS',
+      21_600,
+      300,
+      86_400
+    ),
     pierrotLlmTimeoutMs: readInt('OPS_PIERROT_LLM_TIMEOUT_MS', 25_000, 1_000, 55_000),
     pierrotLlmMaxTokens: readInt('OPS_PIERROT_LLM_MAX_TOKENS', 1_400, 100, 12_000),
     flowLlmTimeoutMs: readInt('OPS_FLOW_LLM_TIMEOUT_MS', 20_000, 1_000, 55_000),

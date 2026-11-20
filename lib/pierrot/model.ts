@@ -454,9 +454,23 @@ export type PierrotModelResult = {
   fallbackUsed: boolean;
   finishReason: string | null;
   usage: PierrotAttemptUsage | null;
+  /**
+   * Every provider contacted for this turn, in order. The last entry is the
+   * one that produced the answer. Persisted with the answer so a NULL provider
+   * can never be the only provenance left in production history.
+   */
+  providerChain: LlmProvider[];
   /** One entry per provider attempt, including failed fallbacks. */
   attempts: LlmProviderAttempt[];
 };
+
+/** A retry reuses the same provider; a fallback changes provider. */
+function isSameProviderRetry(
+  previousProvider: LlmProvider | null,
+  provider: LlmProvider
+): boolean {
+  return previousProvider === provider;
+}
 
 /**
  * Gemini -> DeepSeek Direct -> OpenRouter DeepSeek.
@@ -514,7 +528,7 @@ export async function callPierrotModel(
         provider: 'gemini',
         model: gemini.model,
         attempt: attemptNumber,
-        isRetry: attemptNumber > 1,
+        isRetry: isSameProviderRetry(previousProvider, 'gemini'),
         fallbackFrom: previousProvider,
         ok: true,
         latencyMs: Date.now() - attemptStartedAt,
@@ -534,13 +548,14 @@ export async function callPierrotModel(
         finishReason: gemini.finishReason ?? null,
         usage,
         attempts,
+        providerChain: attempts.map((attempt) => attempt.provider),
       };
     } catch (error) {
       collectAttempt({
         provider: 'gemini',
         model: 'gemini-3.5-flash',
         attempt: attemptNumber,
-        isRetry: attemptNumber > 1,
+        isRetry: isSameProviderRetry(previousProvider, 'gemini'),
         fallbackFrom: previousProvider,
         ok: false,
         latencyMs: Date.now() - attemptStartedAt,
@@ -572,7 +587,7 @@ export async function callPierrotModel(
       provider: 'deepseek',
       model,
       attempt: attemptNumber,
-      isRetry: attemptNumber > 1,
+      isRetry: isSameProviderRetry(previousProvider, 'deepseek'),
       fallbackFrom: previousProvider,
       ok: true,
       latencyMs: Date.now() - deepseekStartedAt,
@@ -592,13 +607,14 @@ export async function callPierrotModel(
       finishReason: deepseek.finishReason,
       usage: deepseek.usage,
       attempts,
+      providerChain: attempts.map((attempt) => attempt.provider),
     };
   } catch (error) {
     collectAttempt({
       provider: 'deepseek',
       model: isReasoning ? 'deepseek-reasoner' : 'deepseek-chat',
       attempt: attemptNumber,
-      isRetry: attemptNumber > 1,
+      isRetry: isSameProviderRetry(previousProvider, 'deepseek'),
       fallbackFrom: previousProvider,
       ok: false,
       latencyMs: Date.now() - deepseekStartedAt,
@@ -627,7 +643,7 @@ export async function callPierrotModel(
       provider: 'openrouter',
       model,
       attempt: attemptNumber,
-      isRetry: attemptNumber > 1,
+      isRetry: isSameProviderRetry(previousProvider, 'openrouter'),
       fallbackFrom: previousProvider,
       ok: true,
       latencyMs: Date.now() - openrouterStartedAt,
@@ -647,13 +663,14 @@ export async function callPierrotModel(
       finishReason: openrouter.finishReason,
       usage: openrouter.usage,
       attempts,
+      providerChain: attempts.map((attempt) => attempt.provider),
     };
   } catch (error) {
     collectAttempt({
       provider: 'openrouter',
       model: isReasoning ? 'deepseek/deepseek-r1-0528' : 'deepseek/deepseek-chat',
       attempt: attemptNumber,
-      isRetry: attemptNumber > 1,
+      isRetry: isSameProviderRetry(previousProvider, 'openrouter'),
       fallbackFrom: previousProvider,
       ok: false,
       latencyMs: Date.now() - openrouterStartedAt,
@@ -719,7 +736,7 @@ export async function callPersonalAssistantModel(
           provider: 'deepseek',
           model,
           attempt: attemptNumber,
-          isRetry: attemptNumber > 1,
+          isRetry: isSameProviderRetry(previousProvider, 'deepseek'),
           fallbackFrom: previousProvider,
           ok: true,
           latencyMs: Date.now() - attemptStartedAt,
@@ -739,13 +756,14 @@ export async function callPersonalAssistantModel(
           finishReason: deepseek.finishReason,
           usage: deepseek.usage,
           attempts,
+          providerChain: attempts.map((attempt) => attempt.provider),
         };
       } catch (error) {
         collectAttempt({
           provider: 'deepseek',
           model: 'deepseek-chat',
           attempt: attemptNumber,
-          isRetry: attemptNumber > 1,
+          isRetry: isSameProviderRetry(previousProvider, 'deepseek'),
           fallbackFrom: previousProvider,
           ok: false,
           latencyMs: Date.now() - attemptStartedAt,
@@ -773,7 +791,7 @@ export async function callPersonalAssistantModel(
           provider: 'openrouter',
           model,
           attempt: attemptNumber,
-          isRetry: attemptNumber > 1,
+          isRetry: isSameProviderRetry(previousProvider, 'openrouter'),
           fallbackFrom: previousProvider,
           ok: true,
           latencyMs: Date.now() - attemptStartedAt,
@@ -793,13 +811,14 @@ export async function callPersonalAssistantModel(
           finishReason: openrouter.finishReason,
           usage: openrouter.usage,
           attempts,
+          providerChain: attempts.map((attempt) => attempt.provider),
         };
       } catch (error) {
         collectAttempt({
           provider: 'openrouter',
           model: 'deepseek/deepseek-chat',
           attempt: attemptNumber,
-          isRetry: attemptNumber > 1,
+          isRetry: isSameProviderRetry(previousProvider, 'openrouter'),
           fallbackFrom: previousProvider,
           ok: false,
           latencyMs: Date.now() - attemptStartedAt,
@@ -846,7 +865,7 @@ export async function callPersonalAssistantModel(
         provider: 'gemini',
         model: gemini.model,
         attempt: attemptNumber,
-        isRetry: attemptNumber > 1,
+        isRetry: isSameProviderRetry(previousProvider, 'gemini'),
         fallbackFrom: previousProvider,
         ok: true,
         latencyMs: Date.now() - attemptStartedAt,
@@ -866,13 +885,14 @@ export async function callPersonalAssistantModel(
         finishReason: gemini.finishReason ?? null,
         usage,
         attempts,
+        providerChain: attempts.map((attempt) => attempt.provider),
       };
     } catch (error) {
       collectAttempt({
         provider: 'gemini',
         model: 'gemini-3.5-flash',
         attempt: attemptNumber,
-        isRetry: attemptNumber > 1,
+        isRetry: isSameProviderRetry(previousProvider, 'gemini'),
         fallbackFrom: previousProvider,
         ok: false,
         latencyMs: Date.now() - attemptStartedAt,
@@ -958,7 +978,7 @@ export async function streamPierrotModel(
         provider: 'gemini',
         model: gemini.model,
         attempt: attemptNumber,
-        isRetry: attemptNumber > 1,
+        isRetry: isSameProviderRetry(previousProvider, 'gemini'),
         fallbackFrom: previousProvider,
         ok: true,
         latencyMs: Date.now() - attemptStartedAt,
@@ -978,13 +998,14 @@ export async function streamPierrotModel(
         finishReason: gemini.finishReason ?? null,
         usage,
         attempts,
+        providerChain: attempts.map((attempt) => attempt.provider),
       };
     } catch (error) {
       collectAttempt({
         provider: 'gemini',
         model: 'gemini-3.5-flash',
         attempt: attemptNumber,
-        isRetry: attemptNumber > 1,
+        isRetry: isSameProviderRetry(previousProvider, 'gemini'),
         fallbackFrom: previousProvider,
         ok: false,
         latencyMs: Date.now() - attemptStartedAt,
@@ -1025,7 +1046,7 @@ export async function streamPierrotModel(
       provider: 'deepseek',
       model: deepseek.model,
       attempt: attemptNumber,
-      isRetry: attemptNumber > 1,
+      isRetry: isSameProviderRetry(previousProvider, 'deepseek'),
       fallbackFrom: previousProvider,
       ok: true,
       latencyMs: Date.now() - deepseekStartedAt,
@@ -1045,13 +1066,14 @@ export async function streamPierrotModel(
       finishReason: deepseek.finishReason,
       usage: deepseek.usage,
       attempts,
+      providerChain: attempts.map((attempt) => attempt.provider),
     };
   } catch (error) {
     collectAttempt({
       provider: 'deepseek',
       model: isReasoning ? 'deepseek-reasoner' : 'deepseek-chat',
       attempt: attemptNumber,
-      isRetry: attemptNumber > 1,
+      isRetry: isSameProviderRetry(previousProvider, 'deepseek'),
       fallbackFrom: previousProvider,
       ok: false,
       latencyMs: Date.now() - deepseekStartedAt,
@@ -1091,7 +1113,7 @@ export async function streamPierrotModel(
       provider: 'openrouter',
       model: openrouter.model,
       attempt: attemptNumber,
-      isRetry: attemptNumber > 1,
+      isRetry: isSameProviderRetry(previousProvider, 'openrouter'),
       fallbackFrom: previousProvider,
       ok: true,
       latencyMs: Date.now() - openrouterStartedAt,
@@ -1111,13 +1133,14 @@ export async function streamPierrotModel(
       finishReason: openrouter.finishReason,
       usage: openrouter.usage,
       attempts,
+      providerChain: attempts.map((attempt) => attempt.provider),
     };
   } catch (error) {
     collectAttempt({
       provider: 'openrouter',
       model: isReasoning ? 'deepseek/deepseek-r1-0528' : 'deepseek/deepseek-chat',
       attempt: attemptNumber,
-      isRetry: attemptNumber > 1,
+      isRetry: isSameProviderRetry(previousProvider, 'openrouter'),
       fallbackFrom: previousProvider,
       ok: false,
       latencyMs: Date.now() - openrouterStartedAt,

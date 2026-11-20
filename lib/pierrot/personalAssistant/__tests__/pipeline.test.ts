@@ -21,6 +21,7 @@ function modelResult(reply: string): PierrotModelResult {
     fallbackUsed: false,
     finishReason: 'stop',
     usage: null,
+    providerChain: ['deepseek'],
     attempts: [],
   };
 }

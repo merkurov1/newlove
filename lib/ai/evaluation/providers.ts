@@ -60,6 +60,7 @@ export function createGeminiEvaluator(options: GeminiEvaluatorOptions = {}): Eva
         temperature: 0.2,
         maxOutputTokens: request.maxOutputTokens,
         timeoutMs: options.timeoutMs ?? 45_000,
+        ...(options.apiKey ? { apiKey: options.apiKey } : {}),
       });
 
       return {

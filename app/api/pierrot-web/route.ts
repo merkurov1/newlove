@@ -167,6 +167,7 @@ import {
 } from '@/lib/pierrot/model';
 import {
   buildLlmCallRecord,
+  createTelemetryStore,
   logLlmCall,
   recordLlmCall,
   type LlmCallContext,
@@ -375,7 +376,51 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
+/**
+ * Persist one row per provider attempt for channels that do not use the main
+ * Pierrot transcript store (currently the isolated Telegram personal assistant).
+ * It reuses the same redacted contract: no prompt, answer or memory text.
+ */
+async function persistAssistantAttempts(input: {
+  attempts: LlmProviderAttempt[];
+  requestId: string;
+  conversationId: string | null;
+}): Promise<void> {
+  if (input.attempts.length === 0) return;
+
+  const context: LlmCallContext = {
+    requestId: input.requestId,
+    conversationId: input.conversationId,
+    sessionId: null,
+    userId: null,
+    surface: 'telegram_personal_assistant',
+  };
+  const records = input.attempts.map((attempt) => buildLlmCallRecord({ context, attempt }));
+  const store = createTelemetryStore();
+
+  if (!store) {
+    records.filter((record) => !record.ok).forEach((record) => logLlmCall(record));
+    return;
+  }
+
+  const stored = await Promise.all(records.map((record) => recordLlmCall(store, record)));
+
+  if (stored.every((ok) => !ok)) {
+    records.filter((record) => !record.ok).forEach((record) => logLlmCall(record));
+  }
+}
+
 const RETRIEVAL_TIMEOUT_MS = 12_000;
+
+/**
+ * An assistant answer assembled by a deterministic server path (navigation,
+ * human-presence copy, verified owner tools) has no model provider. Persisting
+ * an explicit value keeps every new assistant row attributable instead of
+ * leaving `provider` NULL.
+ */
+const DETERMINISTIC_ANSWER_PROVIDER = 'deterministic';
+/** Defensive value for a model answer that unexpectedly lacks a provider. */
+const UNKNOWN_ANSWER_PROVIDER = 'unknown';
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -605,12 +650,20 @@ export async function POST(req: Request) {
             ? rawUserMessageId
             : randomUUID();
 
+        const attempts: LlmProviderAttempt[] = [];
         const result = await runPersonalAssistantTurn({
           profile,
           message: trimmedMessage,
           messageId: assistantMessageId,
           store,
+          onAttempt: (attempt) => attempts.push(attempt),
         });
+
+        await persistAssistantAttempts({
+          attempts,
+          requestId: `assistant-${assistantMessageId}`,
+          conversationId: profile.id,
+        }).catch(() => undefined);
 
         return NextResponse.json(
           {
@@ -1518,7 +1571,12 @@ export async function POST(req: Request) {
               messageId: humanAssistantId,
               role: 'assistant',
               content: text,
-              provider: null,
+              provider: DETERMINISTIC_ANSWER_PROVIDER,
+              metadata: {
+                answer_source: 'deterministic',
+                answer_provider: DETERMINISTIC_ANSWER_PROVIDER,
+                reason: 'human_presence_copy',
+              },
             });
 
             await recordPierrotEvent(pierrotStore, {
@@ -1529,6 +1587,9 @@ export async function POST(req: Request) {
               payload: {
                 message_id: humanAssistantId,
                 in_reply_to: userMessageId,
+                provider: DETERMINISTIC_ANSWER_PROVIDER,
+                model: null,
+                answer_source: 'deterministic',
                 human_presence: true,
                 length: text.length,
               },
@@ -1784,8 +1845,13 @@ export async function POST(req: Request) {
               messageId: assistantMessageId,
               role: 'assistant',
               content: storageText,
-              provider: null,
-              metadata: extra.response ? { response: extra.response } : null,
+              provider: DETERMINISTIC_ANSWER_PROVIDER,
+              metadata: {
+                ...(extra.response ? { response: extra.response } : {}),
+                answer_source: 'deterministic',
+                answer_provider: DETERMINISTIC_ANSWER_PROVIDER,
+                reason: 'owner_tool_reply',
+              },
             });
 
             // Keep the full analytical answer in the current turn. The stored
@@ -1802,7 +1868,9 @@ export async function POST(req: Request) {
               payload: {
                 message_id: assistantMessageId,
                 in_reply_to: userMessageId,
-                provider: null,
+                provider: DETERMINISTIC_ANSWER_PROVIDER,
+                model: null,
+                answer_source: 'deterministic',
                 deterministic: true,
                 length: finalText.length,
                 ...eventExtra,
@@ -6604,6 +6672,7 @@ export async function POST(req: Request) {
           const partialReply = interrupted ? streamedReply.trim() : '';
           const interruptedProvider =
             aiError instanceof PierrotStreamInterruptedError ? aiError.provider : usedProvider || null;
+          const interruptedAnswerProvider = interruptedProvider ?? UNKNOWN_ANSWER_PROVIDER;
           await persistLlmAttempts(llmAttempts);
 
           if (partialReply && pierrotStore && canStoreTranscript) {
@@ -6616,12 +6685,14 @@ export async function POST(req: Request) {
                 messageId: assistantMessageId,
                 role: 'assistant',
                 content: partialReply.slice(0, PIERROT_MAX_REPLY_LENGTH),
-                provider: interruptedProvider,
+                provider: interruptedAnswerProvider,
                 metadata: {
                   partial: true,
                   interrupted: true,
-                  provider: interruptedProvider,
+                  provider: interruptedAnswerProvider,
+                  answer_provider: interruptedAnswerProvider,
                   model: usedModel || null,
+                  provider_chain: llmAttempts.map((attempt) => attempt.provider),
                   finish_reason: generationFinishReason,
                 },
               });
@@ -6636,8 +6707,10 @@ export async function POST(req: Request) {
                     message_id: assistantMessageId,
                     in_reply_to: userMessageId,
                     request_id: correlationId,
-                    provider: interruptedProvider,
+                    provider: interruptedAnswerProvider,
+                    answer_provider: interruptedAnswerProvider,
                     model: usedModel || null,
+                    provider_chain: llmAttempts.map((attempt) => attempt.provider),
                     length: partialReply.length,
                     code: failure.code,
                     generation_task: generationPolicy?.task ?? null,
@@ -6852,6 +6925,12 @@ export async function POST(req: Request) {
       }
 
       let finalReply = reply;
+      // Every persisted assistant answer must carry provenance. Model answers
+      // use the provider that actually replied; deterministic server answers
+      // say so explicitly instead of writing NULL.
+      const answerProvider =
+        usedProvider || (useModel ? UNKNOWN_ANSWER_PROVIDER : DETERMINISTIC_ANSWER_PROVIDER);
+      const answerModel = usedModel || null;
 
       if (pierrotStore && canStoreTranscript) {
         try {
@@ -6863,8 +6942,14 @@ export async function POST(req: Request) {
             messageId: assistantMessageId,
             role: 'assistant',
             content: reply,
-            provider: usedProvider || null,
-            metadata: generatedResponse ? { response: generatedResponse } : null,
+            provider: answerProvider,
+            metadata: {
+              ...(generatedResponse ? { response: generatedResponse } : {}),
+              answer_provider: answerProvider,
+              answer_model: answerModel,
+              provider_chain: llmAttempts.map((attempt) => attempt.provider),
+              answer_source: useModel ? 'model' : 'deterministic',
+            },
           });
 
           // Concurrent retries may have stored a slightly different response
@@ -6883,8 +6968,11 @@ export async function POST(req: Request) {
               message_id: assistantMessageId,
               in_reply_to: userMessageId,
               request_id: correlationId,
-              provider: usedProvider,
-              model: usedModel,
+              provider: answerProvider,
+              answer_provider: answerProvider,
+              model: answerModel,
+              answer_source: useModel ? 'model' : 'deterministic',
+              provider_chain: llmAttempts.map((attempt) => attempt.provider),
               fallback_used: fallbackUsed,
               llm_attempts: llmAttempts.length,
               llm_retries: llmAttempts.filter((attempt) => attempt.isRetry).length,

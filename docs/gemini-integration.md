@@ -13,7 +13,8 @@ Research pipelines are unchanged.
 
 `lib/ai/gemini.ts` makes one bounded REST call to the Gemini API:
 
-- reads the existing `GEMINI_API_KEY`;
+- reads `GEMINI_API_KEY`, or `GOOGLE_API_KEY` when that is the name present in
+  the deployment (the key itself is never logged or persisted);
 - pins `gemini-3.5-flash` (no alias that can move silently);
 - sends the key in `x-goog-api-key`, never in the URL;
 - applies the existing per-call timeout and token budget;
@@ -22,7 +23,9 @@ Research pipelines are unchanged.
 - uses the existing circuit breaker with dependency `gemini`;
 - logs no prompt, history, RAG context or response text.
 
-No new environment variables are required.
+No new environment variables are required. A deployment that already exposes the
+Google-standard `GOOGLE_API_KEY` does not need to duplicate it as
+`GEMINI_API_KEY`.
 
 ## 2. Pierrot
 

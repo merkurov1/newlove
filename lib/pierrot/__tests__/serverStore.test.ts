@@ -44,6 +44,35 @@ describe('Pierrot server store contracts', () => {
     );
   });
 
+  it('keeps the answer when an older provider constraint rejects deterministic provenance', async () => {
+    const rpc = jest
+      .fn(async (..._args: unknown[]) => ({
+        data: null,
+        error: { code: '22023', message: 'invalid_provider' },
+      }))
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: '22023', message: 'invalid_provider' },
+      })
+      .mockResolvedValueOnce({
+        data: [{ sequence: 8, content: 'Stored reply', inserted: true }],
+        error: null,
+      });
+
+    const result = await appendPierrotMessage({ rpc } as never, {
+      conversationId: 'conversation-1',
+      sessionId: 'session-1',
+      messageId: 'assistant-message-1',
+      role: 'assistant',
+      content: 'Deterministic answer',
+      provider: 'deterministic',
+    });
+
+    expect(result.inserted).toBe(true);
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls[1]?.[1]).toMatchObject({ p_provider: null });
+  });
+
   it('writes history/session provenance through the v2 append function', async () => {
     const rpc = jest.fn(async (..._args: unknown[]) => ({
       data: [{ sequence: 9, content: 'Scoped reply', inserted: true, history_sequence: 41 }],

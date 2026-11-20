@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { BrainRetrievalResult } from '@/lib/knowledge/rag/brainRetrieval';
+import { classifyRetrievalFailure } from '@/lib/knowledge/rag/failureClassification';
 import { recordPierrotEvent } from '@/lib/pierrot/serverStore';
 
 export type PierrotRetrievalMode =
@@ -70,6 +71,7 @@ export function buildPierrotRetrievalPayload(
     mode: input.mode,
     outcome: input.outcome,
     code: input.code ?? null,
+    failure_class: classifyRetrievalFailure(input.outcome, input.code),
     selected_sources: input.selectedSources.slice(0, 10),
     document_ids: input.documentIds.slice(0, 20),
     chunk_ids: input.chunkIds.slice(0, 20),
@@ -126,6 +128,7 @@ export async function recordBrainRetrieval(
       eventName: 'brain_retrieval',
       eventKey: `brain_retrieval:${input.userMessageId}`,
       payload: {
+        mode: 'brain_v2',
         query_hash: hashQuery(result.plan.originalQuery),
         language: result.plan.language,
         intent: result.plan.intent,
@@ -138,6 +141,7 @@ export async function recordBrainRetrieval(
         method: result.method,
         outcome: result.outcome,
         code: result.code ?? null,
+        failure_class: classifyRetrievalFailure(result.outcome, result.code),
         empty: result.hits.length === 0,
         top_similarity: result.topSimilarity,
         candidate_count: result.candidateCount,

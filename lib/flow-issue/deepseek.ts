@@ -42,7 +42,9 @@ const TRANSLATION_BUDGET_MS = 20_000;
 export { heuristicLanguage };
 
 export function hasAIConfiguration(): boolean {
-  return Boolean(process.env.GEMINI_API_KEY || process.env.DEEPSEEK_API_KEY);
+  return Boolean(
+    process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.DEEPSEEK_API_KEY
+  );
 }
 
 function hasDeepSeekConfiguration(): boolean {

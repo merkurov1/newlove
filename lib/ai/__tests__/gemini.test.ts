@@ -3,7 +3,12 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 import { assertCircuitClosed, resetCircuitBreakerState } from '@/lib/operations/circuitBreaker';
-import { GeminiError, generateGeminiText, streamGeminiText } from '../gemini';
+import {
+  GeminiError,
+  generateGeminiText,
+  geminiApiKeySource,
+  streamGeminiText,
+} from '../gemini';
 
 function jsonResponse(payload: unknown, ok = true, status = 200) {
   return {
@@ -15,6 +20,7 @@ function jsonResponse(payload: unknown, ok = true, status = 200) {
 
 describe('Gemini provider helper', () => {
   const previousKey = process.env.GEMINI_API_KEY;
+  const previousGoogleKey = process.env.GOOGLE_API_KEY;
   const previousThreshold = process.env.OPS_CIRCUIT_FAILURE_THRESHOLD;
   const fetchMock = jest.fn();
 
@@ -23,6 +29,7 @@ describe('Gemini provider helper', () => {
     global.fetch = fetchMock as unknown as typeof fetch;
     resetCircuitBreakerState();
     process.env.GEMINI_API_KEY = 'test-gemini-key';
+    delete process.env.GOOGLE_API_KEY;
     process.env.OPS_CIRCUIT_FAILURE_THRESHOLD = '3';
   });
 
@@ -61,8 +68,10 @@ describe('Gemini provider helper', () => {
     });
   });
 
-  it('maps HTTP 429 and opens the circuit after repeated failures', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ error: { message: 'quota exceeded' } }, false, 429));
+  it('maps HTTP 429 and opens the circuit after repeated transient failures', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ error: { message: 'rate limit, slow down' } }, false, 429)
+    );
 
     await expect(generateGeminiText({ prompt: 'one' })).rejects.toBeInstanceOf(GeminiError);
     await expect(generateGeminiText({ prompt: 'two' })).rejects.toMatchObject({
@@ -179,8 +188,48 @@ describe('Gemini provider helper', () => {
     ).rejects.toMatchObject({ code: 'gemini_empty_response' });
   });
 
+  it('accepts the Google-standard GOOGLE_API_KEY name', async () => {
+    delete process.env.GEMINI_API_KEY;
+    process.env.GOOGLE_API_KEY = 'test-google-key';
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ content: { parts: [{ text: 'from google key' }] } }] })
+    );
+
+    expect(geminiApiKeySource()).toBe('GOOGLE_API_KEY');
+
+    const result = await generateGeminiText({ prompt: 'hello' });
+
+    expect(result.content).toBe('from google key');
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)['x-goog-api-key']).toBe('test-google-key');
+  });
+
+  it('opens the circuit immediately for an exhausted monthly spending cap', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        {
+          error: {
+            message: 'The monthly spending cap exceeded for this project.',
+          },
+        },
+        false,
+        429
+      )
+    );
+
+    await expect(generateGeminiText({ prompt: 'one' })).rejects.toMatchObject({
+      code: 'gemini_quota_exhausted',
+    });
+
+    // A monthly cap cannot recover on the next request; the circuit must stop
+    // further Gemini calls instead of repeating the same 429 every turn.
+    await expect(assertCircuitClosed('gemini', null)).rejects.toThrow('circuit_open:gemini');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('does not call the provider when the key is missing', async () => {
     delete process.env.GEMINI_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
 
     await expect(generateGeminiText({ prompt: 'hello' })).rejects.toMatchObject({
       code: 'gemini_not_configured',
@@ -191,6 +240,8 @@ describe('Gemini provider helper', () => {
   afterAll(() => {
     if (previousKey === undefined) delete process.env.GEMINI_API_KEY;
     else process.env.GEMINI_API_KEY = previousKey;
+    if (previousGoogleKey === undefined) delete process.env.GOOGLE_API_KEY;
+    else process.env.GOOGLE_API_KEY = previousGoogleKey;
     if (previousThreshold === undefined) delete process.env.OPS_CIRCUIT_FAILURE_THRESHOLD;
     else process.env.OPS_CIRCUIT_FAILURE_THRESHOLD = previousThreshold;
   });

@@ -83,7 +83,8 @@ describe('provider routing telemetry', () => {
     expect(result.attempts).toHaveLength(2);
     expect(seen).toEqual([
       { provider: 'gemini', attempt: 1, isRetry: false, ok: false },
-      { provider: 'deepseek', attempt: 2, isRetry: true, ok: true },
+      // A fallback changes provider; it is not a retry of the same provider.
+      { provider: 'deepseek', attempt: 2, isRetry: false, ok: true },
     ]);
     expect(result.attempts[1]?.usage.inputTokens).toBe(120);
     expect(result.attempts[1]?.usage.outputTokens).toBe(40);
@@ -129,6 +130,36 @@ describe('provider routing telemetry', () => {
       { provider: 'gemini', ok: false, errorCode: 'gemini_http_500' },
       { provider: 'deepseek', ok: false, errorCode: 'http_500' },
       { provider: 'openrouter', ok: false, errorCode: 'http_502' },
+    ]);
+  });
+
+  it('keeps the system prompt and full history when falling back to DeepSeek', async () => {
+    gemini.isGeminiConfigured.mockReturnValue(true);
+    gemini.generateGeminiText.mockRejectedValueOnce(new Error('gemini_http_429'));
+    openaiModule.__create.mockResolvedValueOnce(completion('DeepSeek answer'));
+
+    const history = [
+      { role: 'user' as const, content: 'first question' },
+      { role: 'assistant' as const, content: 'first answer' },
+      { role: 'user' as const, content: 'follow-up' },
+    ];
+
+    const result = await callPierrotModel('SYSTEM_PERSONA', history, false);
+
+    expect(result.providerChain).toEqual(['gemini', 'deepseek']);
+    expect(gemini.generateGeminiText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: 'SYSTEM_PERSONA',
+        messages: history,
+      })
+    );
+
+    const deepseekPayload = openaiModule.__create.mock.calls[0]?.[0] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(deepseekPayload.messages).toEqual([
+      { role: 'system', content: 'SYSTEM_PERSONA' },
+      ...history,
     ]);
   });
 
