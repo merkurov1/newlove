@@ -147,7 +147,7 @@ export default function NewPostModal({
         onMouseDown={(event) => event.stopPropagation()}
       >
         {/* Minimal top row */}
-        <header className="flex shrink-0 items-center justify-between px-5 pt-4 sm:px-7 sm:pt-5">
+        <header className="flex shrink-0 items-center justify-between px-5 pt-[max(16px,env(safe-area-inset-top))] sm:px-7 sm:pt-5">
           <div className="min-w-0">
             <SaveStatus state={saveState} error={error} />
           </div>
@@ -161,7 +161,7 @@ export default function NewPostModal({
             aria-label="Close composer"
             title="Close"
             className="
-              -mr-2 flex h-9 w-9 shrink-0 items-center justify-center
+              -mr-2 flex h-10 w-10 shrink-0 items-center justify-center
               rounded-full text-[#898277] transition
               hover:bg-black/[0.04] hover:text-[#37332D]
               disabled:opacity-40
@@ -335,7 +335,7 @@ export default function NewPostModal({
               aria-label="Attach images"
               title="Attach images"
               className={`
-                flex h-10 w-10 shrink-0 items-center justify-center
+                flex h-11 w-11 shrink-0 items-center justify-center
                 rounded-full transition-colors
                 hover:bg-black/[0.05] disabled:opacity-40
                 ${
@@ -368,7 +368,7 @@ export default function NewPostModal({
             onClick={() => void finish()}
             disabled={!canPost || busy}
             className="
-              rounded-full bg-[#37332D] px-6 py-2.5
+              min-h-11 rounded-full bg-[#37332D] px-6 py-2.5
               text-sm text-white transition-colors
               hover:bg-[#514B42] active:scale-[0.98]
               disabled:cursor-not-allowed disabled:opacity-35

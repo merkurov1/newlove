@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import NewPostModal from '@/components/flow/NewPostModal';
+import PublishReceipt from '@/components/flow/PublishReceipt';
 
 export default function ComposerTrigger() {
   const [open, setOpen] = useState(false);
@@ -51,6 +52,8 @@ export default function ComposerTrigger() {
       {open && (
         <NewPostModal open={open} onClose={() => setOpen(false)} onCreated={handleCreated} />
       )}
+
+      <PublishReceipt />
     </>
   );
 }

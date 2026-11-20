@@ -182,7 +182,7 @@ function MarkdownBody({ body }: { body: string }) {
             </h3>
           ),
           p: ({ children }) => (
-            <p className="mb-5 whitespace-pre-wrap font-serif text-[18px] font-light leading-[1.8] text-stone-800 sm:text-[20px]">
+            <p className="mb-5 whitespace-pre-wrap font-serif text-[18px] font-normal leading-[1.75] text-stone-800 sm:text-[20px]">
               {children}
             </p>
           ),
@@ -237,12 +237,12 @@ function MarkdownBody({ body }: { body: string }) {
             </figure>
           ),
           ul: ({ children }) => (
-            <ul className="mb-6 list-disc space-y-2 pl-6 font-serif text-[18px] leading-8 text-stone-800 sm:text-[20px]">
+            <ul className="mb-6 list-disc space-y-2 pl-6 font-serif text-[18px] font-normal leading-8 text-stone-800 sm:text-[20px]">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="mb-6 list-decimal space-y-2 pl-6 font-serif text-[18px] leading-8 text-stone-800 sm:text-[20px]">
+            <ol className="mb-6 list-decimal space-y-2 pl-6 font-serif text-[18px] font-normal leading-8 text-stone-800 sm:text-[20px]">
               {children}
             </ol>
           ),
@@ -467,13 +467,13 @@ function SmartLinks({ links }: { links: FlowLink[] }) {
                 style={{ width: 56, height: 56 }}
               />
             ) : (
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-stone-200/50 font-mono text-sm text-stone-400">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-stone-200/60 font-mono text-sm text-stone-500">
                 ↗
               </div>
             )}
 
             <div className="min-w-0 flex-1">
-              <span className="block font-mono text-[10px] uppercase tracking-wider text-stone-400">
+              <span className="block font-mono text-[10px] uppercase tracking-wider text-stone-500">
                 {link.siteName || link.domain}
               </span>
 
@@ -491,7 +491,7 @@ function SmartLinks({ links }: { links: FlowLink[] }) {
 
           <span
             aria-hidden="true"
-            className="shrink-0 p-1 font-mono text-sm text-stone-400 transition group-hover:text-stone-900"
+            className="shrink-0 p-1 font-mono text-sm text-stone-500 transition group-hover:text-stone-900"
           >
             ↗
           </span>
@@ -616,16 +616,16 @@ export default async function FlowItemPage({ params }: PageProps) {
       />
 
       <div className="min-h-screen bg-white px-5 pb-24 pt-20 text-stone-900 sm:px-8 sm:pt-24">
-        <article className="mx-auto max-w-3xl">
+        <article className="flow-item mx-auto max-w-3xl">
           <header className="mb-8 flex items-center justify-between gap-4 border-b border-stone-100 pb-5">
             <Link
               href="/flow"
-              className="font-mono text-[11px] uppercase tracking-[0.2em] text-stone-400 transition hover:text-stone-950"
+              className="font-mono text-[11px] uppercase tracking-[0.2em] text-stone-500 transition hover:text-stone-950"
             >
               ← Flow
             </Link>
 
-            <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider text-stone-400">
+            <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider text-stone-500">
               <a
                 href={bskyUrl || 'https://bsky.app/profile/merkurov.love'}
                 target="_blank"
@@ -663,7 +663,7 @@ export default async function FlowItemPage({ params }: PageProps) {
             </div>
           </header>
 
-          <div className="mb-6 flex flex-wrap items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
+          <div className="mb-6 flex flex-wrap items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500">
             <span>{typeLabels[content.contentType] ?? 'Post'}</span>
 
             {content.publishedAt && (

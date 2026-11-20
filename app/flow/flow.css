@@ -1,16 +1,74 @@
 /*
- * Public Flow feed rhythm.
+ * Flow editorial system.
  *
- * Entry blocks are spaced by their relationships rather than by ad-hoc
- * per-element margins: metadata, media, text and links each own one gap.
+ * The public feed, the owner PWA and the full-post page share one typographic
+ * vocabulary. The stacks below are deliberate system fallbacks: the repository
+ * ships no Newsreader / IBM Plex Mono WOFF2 files and Flow makes no Google
+ * Fonts request. Each family ends in a generic so every platform resolves to a
+ * readable serif/sans/mono instead of an unavailable webfont.
+ *
+ * Keep these tokens in sync with `app/admin/pierrot/(workspace)/workspace.css`.
  */
+
+:root {
+  --flow-serif:
+    'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, 'Noto Serif', Georgia,
+    'Times New Roman', Times, serif;
+  --flow-mono:
+    ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+
+  --flow-ink: #1d1b18;
+  --flow-body: #37332d;
+  --flow-muted: #6b665e;
+  --flow-line: #e8e4dc;
+  --flow-paper: #ffffff;
+}
+
+.flow-page {
+  min-height: 100vh;
+  background: var(--flow-paper);
+  color: var(--flow-ink);
+}
+
+.flow-page__column {
+  width: 100%;
+  max-width: 40rem;
+  margin-inline: auto;
+}
+
+.flow-page__header {
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--flow-line);
+}
+
+.flow-page__title {
+  margin: 0;
+  font-family: var(--flow-serif);
+  font-size: clamp(1.9rem, 5vw, 2.5rem);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+}
+
+.flow-page__subtitle {
+  margin: 0.35rem 0 0;
+  font-family: var(--flow-serif);
+  font-size: 0.95rem;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--flow-muted);
+}
+
+/* Entry rhythm is owned by this stylesheet, not by per-element utilities.
+ * Metadata, media, text and links each own one gap. */
 .flow-entry {
-  padding-block: 2rem;
-  border-bottom: 1px solid #f5f5f5;
+  padding-block: 2.25rem;
+  border-bottom: 1px solid var(--flow-line);
 }
 
 .flow-entry:first-child {
-  padding-top: 0;
+  padding-top: 0.5rem;
 }
 
 .flow-entry:last-child {
@@ -18,39 +76,117 @@
 }
 
 .flow-entry__meta {
-  margin-bottom: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.flow-entry__date {
+  font-family: var(--flow-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--flow-muted);
+}
+
+.flow-entry__admin {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.flow-entry__admin button {
+  min-height: 36px;
+  padding: 0 0.5rem;
+  font-family: var(--flow-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--flow-muted);
+  transition: color 140ms ease;
+}
+
+.flow-entry__admin button:hover {
+  color: var(--flow-ink);
+}
+
+.flow-entry__admin button[data-action='delete']:hover {
+  color: #b3261e;
 }
 
 .flow-entry__media {
-  margin-bottom: 1rem;
+  margin-bottom: 1.15rem;
 }
 
-.flow-entry__text {
-  min-width: 0;
+.flow-entry__media:last-child {
+  margin-bottom: 0;
 }
 
 .flow-entry__title {
-  margin: 0 0 0.375rem;
+  margin: 0 0 0.55rem;
+  font-family: var(--flow-serif);
+  font-size: clamp(1.25rem, 2.4vw, 1.45rem);
+  font-weight: 500;
+  letter-spacing: -0.012em;
+  line-height: 1.28;
+  color: var(--flow-ink);
 }
 
-.flow-entry__title:last-child {
-  margin-bottom: 0;
+.flow-entry__title a {
+  color: inherit;
+}
+
+.flow-entry__title a:hover {
+  color: #52504b;
+}
+
+.flow-entry__body {
+  margin: 0 0 1rem;
 }
 
 .flow-entry__body p {
   margin: 0;
+  white-space: pre-line;
+  font-family: var(--flow-serif);
+  font-size: 1.0625rem;
+  font-weight: 400;
+  line-height: 1.72;
+  color: var(--flow-body);
+}
+
+.flow-entry__body:last-child {
+  margin-bottom: 0;
 }
 
 .flow-entry__more {
-  margin-top: 0.5rem;
+  display: inline-block;
+  margin-top: 0.55rem;
+  font-family: var(--flow-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--flow-muted);
+  transition: color 140ms ease;
+}
+
+.flow-entry__more:hover {
+  color: var(--flow-ink);
 }
 
 .flow-entry__links {
+  margin-top: 1rem;
+}
+
+.flow-entry__links:first-child {
   margin-top: 0;
 }
 
-.flow-entry__text + .flow-entry__links {
-  margin-top: 1rem;
+.flow-entry__body + .flow-entry__links {
+  margin-top: 0;
 }
 
 /* Media-only posts end on the media, so they need no trailing gap. */
@@ -59,13 +195,90 @@
   margin-bottom: 0;
 }
 
-/* Media-led posts get a slightly stronger break before the text begins. */
-.flow-entry--image-text .flow-entry__media,
-.flow-entry--video-text .flow-entry__media {
-  margin-bottom: 1.125rem;
-}
-
 /* Link-only posts are already framed by their preview card. */
 .flow-entry--link .flow-entry__meta {
-  margin-bottom: 0.625rem;
+  margin-bottom: 0.65rem;
+}
+
+.flow-entry--link .flow-entry__links {
+  margin-top: 0;
+}
+
+.flow-page__message {
+  padding: 4rem 0;
+  text-align: center;
+  font-family: var(--flow-serif);
+  font-size: 0.95rem;
+  color: var(--flow-muted);
+}
+
+.flow-page__message button {
+  margin-top: 0.75rem;
+  font-family: var(--flow-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--flow-ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.flow-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.flow-loading__row {
+  padding-bottom: 2rem;
+  border-bottom: 1px solid var(--flow-line);
+}
+
+.flow-loading__row:first-child {
+  padding-top: 0.5rem;
+}
+
+.flow-loading__bar {
+  border-radius: 2px;
+  background: #f2f0ec;
+}
+
+/* Touch and focus behaviour for the quiet admin controls on real devices. */
+.flow-entry__admin button:focus-visible,
+.flow-page__message button:focus-visible,
+.flow-entry__more:focus-visible {
+  outline: 2px solid var(--flow-ink);
+  outline-offset: 3px;
+}
+
+/* Full-post page: same serif as the feed and the PWA reader. */
+.flow-item {
+  font-family: var(--flow-serif);
+}
+
+.flow-item .font-serif {
+  font-family: var(--flow-serif);
+}
+
+.flow-item time,
+.flow-item .font-mono {
+  font-family: var(--flow-mono);
+}
+
+@media (max-width: 480px) {
+  .flow-entry {
+    padding-block: 1.9rem;
+  }
+
+  .flow-entry__body p {
+    font-size: 1.03125rem;
+    line-height: 1.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-entry__admin button,
+  .flow-entry__more {
+    transition: none;
+  }
 }

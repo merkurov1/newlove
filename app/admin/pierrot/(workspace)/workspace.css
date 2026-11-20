@@ -2,10 +2,10 @@
  * Pierrot owner workspace.
  *
  * Fonts: the repository has no self-hosted Newsreader / IBM Plex Mono WOFF2
- * files. Per the brief, no Google Fonts request is made. The tokens below use
- * an editorial serif and system monospace fallback until the WOFF2 files are
- * supplied. Expected future paths: /fonts/newsreader/*.woff2 and
- * /fonts/ibm-plex-mono/*.woff2.
+ * files and no Google Fonts request is made. The tokens below are the same
+ * deliberate system fallbacks used by the public Flow surface, so the public
+ * feed and the PWA resolve to the same editorial serif, sans and monospace on
+ * every platform. Keep them in sync with app/flow/flow.css.
  */
 
 .pw-root {
@@ -21,9 +21,10 @@
   --pw-ochre: #b7791f;
   --pw-flow: #8a5a10;
   --pw-serif:
-    'Newsreader', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman',
-    serif;
-  --pw-mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+    'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, 'Noto Serif', Georgia,
+    'Times New Roman', Times, serif;
+  --pw-mono:
+    ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   --pw-rail: 88px;
   position: fixed;
   inset: 0;
@@ -3730,8 +3731,8 @@ a.pw-home-indicator:hover {
 }
 
 .pw-site-entry {
-  padding: 30px 0;
-  border-bottom: 1px solid #f0eeea;
+  padding: 32px 0;
+  border-bottom: 1px solid var(--pw-line);
 }
 
 .pw-site-entry:last-child {
@@ -3744,8 +3745,8 @@ a.pw-home-indicator:hover {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
-  color: #a3a3a3;
+  margin-bottom: 12px;
+  color: #6b665e;
   font-family: var(--pw-mono);
   font-size: 10px;
   letter-spacing: 0.08em;
@@ -3763,9 +3764,9 @@ a.pw-home-indicator:hover {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 36px;
+  min-height: 40px;
   padding: 0 8px;
-  color: #a3a3a3;
+  color: #6b665e;
   font-family: var(--pw-mono);
   font-size: 9px;
   letter-spacing: 0.06em;
@@ -3779,10 +3780,10 @@ a.pw-home-indicator:hover {
 .pw-site-entry-title {
   margin: 0 0 8px;
   font-family: var(--pw-serif);
-  font-size: 22px;
+  font-size: clamp(20px, 3.2vw, 23px);
   font-weight: 500;
-  letter-spacing: -0.01em;
-  line-height: 1.3;
+  letter-spacing: -0.012em;
+  line-height: 1.28;
 }
 
 .pw-site-entry-title button {
@@ -3812,7 +3813,8 @@ a.pw-home-indicator:hover {
   display: block;
   font-family: var(--pw-serif);
   font-size: 17px;
-  line-height: 1.7;
+  font-weight: 400;
+  line-height: 1.72;
   white-space: pre-line;
 }
 
@@ -3823,7 +3825,7 @@ a.pw-home-indicator:hover {
   padding: 0;
   border: 0;
   background: none;
-  color: #a3a3a3;
+  color: #6b665e;
   font-family: var(--pw-mono);
   font-size: 9px;
   letter-spacing: 0.12em;
@@ -3839,7 +3841,7 @@ a.pw-home-indicator:hover {
   width: 100%;
   margin-top: 16px;
   padding: 0;
-  border: 1px solid #f0eeea;
+  border: 1px solid var(--pw-line);
   background: none;
   overflow: hidden;
   text-align: left;
@@ -3868,7 +3870,7 @@ a.pw-home-indicator:hover {
   display: block;
   overflow: hidden;
   padding: 0;
-  border: 1px solid #f0eeea;
+  border: 1px solid var(--pw-line);
   background: none;
   text-align: left;
 }
@@ -3902,7 +3904,7 @@ a.pw-home-indicator:hover {
   align-items: center;
   gap: 14px;
   padding: 10px;
-  border: 1px solid #f0eeea;
+  border: 1px solid var(--pw-line);
   background: #faf9f7;
 }
 
@@ -3944,7 +3946,7 @@ a.pw-home-indicator:hover {
 .pw-site-entry-video-copy span {
   display: block;
   margin-top: 6px;
-  color: #a3a3a3;
+  color: #6b665e;
   font-family: var(--pw-mono);
   font-size: 9px;
   letter-spacing: 0.06em;
@@ -3961,7 +3963,7 @@ a.pw-home-indicator:hover {
   gap: 4px;
   margin-top: 14px;
   padding: 13px 14px;
-  border: 1px solid #ebe7e1;
+  border: 1px solid var(--pw-line);
   background: #faf9f7;
 }
 
@@ -3980,7 +3982,7 @@ a.pw-home-indicator:hover {
 }
 
 .pw-site-entry-link em {
-  color: #a3a3a3;
+  color: #6b665e;
   font-family: var(--pw-mono);
   font-size: 9px;
   font-style: normal;
@@ -4005,7 +4007,7 @@ a.pw-home-indicator:hover {
   padding: 0;
   border: 0;
   background: none;
-  color: #a3a3a3;
+  color: #6b665e;
   font-family: var(--pw-mono);
   font-size: 9px;
   letter-spacing: 0.06em;
@@ -4040,8 +4042,8 @@ a.pw-home-indicator:hover {
 }
 
 .pw-flow-skeleton {
-  padding: 28px 0;
-  border-bottom: 1px solid #f0eeea;
+  padding: 30px 0;
+  border-bottom: 1px solid var(--pw-line);
 }
 
 .pw-flow-skeleton span {
@@ -4071,7 +4073,7 @@ a.pw-home-indicator:hover {
 
 .pw-flow-empty {
   padding: 48px 0;
-  color: #8b857c;
+  color: #6b665e;
   text-align: left;
 }
 
@@ -4123,8 +4125,8 @@ a.pw-home-indicator:hover {
   justify-content: space-between;
   gap: 18px;
   padding-bottom: 14px;
-  border-bottom: 1px solid #f0eeea;
-  color: #a3a3a3;
+  border-bottom: 1px solid var(--pw-line);
+  color: #6b665e;
   font-family: var(--pw-mono);
   font-size: 9px;
   letter-spacing: 0.08em;
@@ -4189,7 +4191,7 @@ a.pw-home-indicator:hover {
 
 .pw-flow-reader-image {
   margin-top: 16px;
-  border: 1px solid #f0eeea;
+  border: 1px solid var(--pw-line);
 }
 
 .pw-flow-reader-link {
@@ -4198,7 +4200,7 @@ a.pw-home-indicator:hover {
   gap: 4px;
   margin-top: 14px;
   padding: 13px 14px;
-  border: 1px solid #ebe7e1;
+  border: 1px solid var(--pw-line);
   background: #faf9f7;
 }
 
@@ -4216,7 +4218,7 @@ a.pw-home-indicator:hover {
 }
 
 .pw-flow-reader-link em {
-  color: #a3a3a3;
+  color: #6b665e;
   font-family: var(--pw-mono);
   font-size: 9px;
   font-style: normal;
@@ -4229,7 +4231,7 @@ a.pw-home-indicator:hover {
   justify-content: flex-end;
   margin-top: 24px;
   padding-top: 14px;
-  border-top: 1px solid #f0eeea;
+  border-top: 1px solid var(--pw-line);
 }
 
 .pw-flow-reader-foot a {
@@ -4237,7 +4239,7 @@ a.pw-home-indicator:hover {
   align-items: center;
   gap: 5px;
   min-height: 40px;
-  color: #a3a3a3;
+  color: #6b665e;
   font-family: var(--pw-mono);
   font-size: 9px;
   letter-spacing: 0.06em;
