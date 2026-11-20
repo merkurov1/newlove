@@ -170,8 +170,12 @@ describe('buildIssuePayload', () => {
     expect(ru.items.map((entry) => entry.id).sort()).toEqual(['newer-supporting', 'older-strong']);
     expect(en.items).toHaveLength(2);
 
-    expect(buildIssueTitle(ru)).toMatch(/^An older strong argument — Flow \/ поток — /);
-    expect(buildIssueTitle(en)).toMatch(/^An older strong argument — Flow — /);
+    expect(buildIssueTitle(ru)).toBe(
+      'An older strong argument «| Поток - 28 октября 2026 г.»'
+    );
+    expect(buildIssueTitle(en)).toBe(
+      'An older strong argument «| Flow - 28 October 2026»'
+    );
     expect(ru.summary.length).toBeGreaterThan(0);
     expect(ru.pierrotIntro.length).toBeGreaterThanOrEqual(2);
 
@@ -180,7 +184,7 @@ describe('buildIssuePayload', () => {
     const withoutLead = { ...ru, lead: null };
     const fallbackTitle = buildIssueTitle(withoutLead);
     expect(fallbackTitle).toContain(ru.items[0].title);
-    expect(fallbackTitle).toMatch(/ — Flow \/ поток — /);
+    expect(fallbackTitle).toContain('«| Поток - ');
   });
 
   it('keeps the full published count separate from the editorial selection', async () => {
@@ -315,6 +319,42 @@ describe('buildIssuePayload', () => {
         url: 'https://example.com/archives',
       }),
     ]);
+  });
+
+  it('includes every published video, including ones without a usable analysis', async () => {
+    const videos = Array.from({ length: 6 }, (_, index) =>
+      withAnalysis(
+        item({
+          id: `video-${index}`,
+          type: 'video',
+          title: `Published video ${index}`,
+          body_md: '',
+          metadata: {
+            youtube: {
+              video_id: `video-id-${index}`,
+              title: `Published video ${index}`,
+              thumbnail_url: `https://i.ytimg.com/vi/video-id-${index}/hqdefault.jpg`,
+            },
+          },
+        }),
+        {
+          role: 'omit',
+          editorialValue: 0,
+          originality: 0,
+          specificity: 0,
+          readerValue: 0,
+          confidence: 0.1,
+        }
+      )
+    );
+
+    const payload = await buildIssuePayload(fakeSupabase(videos) as any, 'ru', start, end);
+
+    expect(payload.videos.map((entry) => entry.id).sort()).toEqual(
+      videos.map((entry) => entry.id).sort()
+    );
+    expect(payload.videos.every((entry) => entry.videoId)).toBe(true);
+    expect(payload.videos.every((entry) => entry.image)).toBe(true);
   });
 
   it('keeps old payloads rendering through the existing HTML/email contract', async () => {

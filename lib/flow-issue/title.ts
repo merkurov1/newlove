@@ -1,3 +1,4 @@
+import { getLinkPresentation } from './metadata';
 import type { IssueEntry, IssueLang, IssuePayload } from './types';
 
 const clean = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
@@ -52,9 +53,46 @@ export function formatIssueDate(value: string | null | undefined, lang: IssueLan
 }
 
 /**
- * Title contract:
- *   RU: `<main item title> — Flow / поток — <date>`
- *   EN: `<main item title> — Flow — <date>`
+ * The publication that supplied the headline material. External sources keep
+ * their own name; an own note has no source and therefore no separator.
+ */
+export function issueEntrySource(entry: IssueEntry | null | undefined): string {
+  if (!entry) return '';
+
+  const metadata = entry.metadata || {};
+  const link = getLinkPresentation(metadata);
+  const legacy = entry as IssueEntry & { siteName?: string; source?: string; author?: string };
+
+  const explicit =
+    clean(link.siteName) ||
+    clean(legacy.siteName) ||
+    clean(legacy.source) ||
+    clean(metadata.youtube?.author_name) ||
+    clean(metadata.youtube?.channel) ||
+    clean(metadata.site_name) ||
+    clean(metadata.source);
+
+  if (explicit) return explicit;
+
+  if (!entry.own && entry.url) {
+    try {
+      return new URL(entry.url).hostname.replace(/^www\./, '');
+    } catch {
+      // Ignore malformed URLs.
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Title contract (control example):
+ *   RU: `Tomb in Siberia reveals humans were using cannabis 2800 years ago |
+ *        New Scientist «| Поток - 13 ноября 2026 г.»`
+ *   EN: `<main item title> | <source> «| Flow - 13 November 2026»`
+ *
+ * The issue signature always closes the title, so a long source name can
+ * never truncate the publication and date.
  */
 export function buildIssueTitle(
   payload: IssuePayload,
@@ -65,9 +103,18 @@ export function buildIssueTitle(
     clean(main?.title) ||
     clean(payload.items?.find((entry) => clean(entry.title))?.title) ||
     (payload.lang === 'ru' ? 'Поток' : 'Flow');
+  const indexedSource = Array.isArray(payload.sourceIndex)
+    ? clean(payload.sourceIndex.find((source) => source.id === main?.id)?.source)
+    : '';
+  const source =
+    issueEntrySource(main) || (indexedSource && indexedSource !== '—' ? indexedSource : '');
 
-  const brand = payload.lang === 'ru' ? 'Flow / поток' : 'Flow';
+  const brand = payload.lang === 'ru' ? 'Поток' : 'Flow';
   const formattedDate = formatIssueDate(date, payload.lang);
+  const signature = formattedDate ? `«| ${brand} - ${formattedDate}»` : `«| ${brand}»`;
 
-  return [mainTitle, brand, formattedDate].filter(Boolean).join(' — ').slice(0, 500);
+  const base = [mainTitle, source].filter(Boolean).join(' | ');
+  const maxBaseLength = Math.max(0, 500 - signature.length - 1);
+
+  return `${base.slice(0, maxBaseLength).trimEnd()} ${signature}`;
 }

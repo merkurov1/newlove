@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import SubscribeFormClient from '@/components/journal/SubscribeFormClient';
 import FrontPage, { type FrontIssue, type FlowEntry } from '@/components/journal/FrontPage';
 import { JOURNAL_COPY, journalIssueHref, type JournalLanguage } from '@/lib/i18n/journal';
+import { selectJournalIssues } from '@/lib/journal/archive';
 import { localizedPath } from '@/lib/i18n/config';
 import HtmlLanguage from '@/components/i18n/HtmlLanguage';
 
@@ -139,16 +140,17 @@ export default async function JournalPageView({ lang }: { lang: JournalLanguage 
       .eq('kind', 'issue')
       .order('publishedAt', { ascending: false })
       .order('id', { ascending: false })
-      .limit(24),
+      .limit(60),
     loadFlow(),
   ]);
 
   if (issuesRes.error) console.error('[Journal] Issues:', issuesRes.error);
   else issues = (issuesRes.data || []).map(toIssue);
 
-  const streamIssues = issues.filter((issue) => issue.lang === lang);
-  const featured = streamIssues[0] ?? null;
-  const archive = streamIssues.filter((issue) => issue.id !== featured?.id).slice(0, 8);
+  // The interface language and the archive contents are separate concerns.
+  // Prefer the latest edition in the current language, but never hide the
+  // other language from the catalogue: every issue keeps its own lang.
+  const { featured, archive } = selectJournalIssues(issues, lang);
   const flow = allFlow.filter((entry) => entry.lang === lang).slice(0, 5);
 
   const journalItems = issues.map((issue) => ({

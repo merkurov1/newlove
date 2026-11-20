@@ -68,7 +68,15 @@ export async function loadPublicFlowIssue(slug: string): Promise<PublicFlowIssue
   }
 }
 
-export async function listPublicFlowIssues(lang: IssueLang): Promise<PublicFlowIssue[]> {
+/**
+ * The public archive is deliberately language-complete.
+ *
+ * The `lang` argument selects the interface language, not the archive
+ * contents. Filtering by `lang` here used to hide Russian editions from the
+ * English archive and made pagination/counters look smaller than the real
+ * catalogue. Each issue keeps its own `lang` for display.
+ */
+export async function listPublicFlowIssues(_lang?: IssueLang | 'all'): Promise<PublicFlowIssue[]> {
   try {
     const supabase = client();
     const { data, error } = await supabase
@@ -77,7 +85,6 @@ export async function listPublicFlowIssues(lang: IssueLang): Promise<PublicFlowI
       .eq('kind', 'issue')
       .eq('status', 'published')
       .eq('published', true)
-      .eq('lang', lang)
       .order('publishedAt', { ascending: false });
 
     if (error) {

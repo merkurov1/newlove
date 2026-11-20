@@ -114,4 +114,60 @@ describe('flow issue web layout', () => {
     expect(htmlWeb).toContain('word-break:break-word');
     expect(htmlWeb).toContain('minmax(0,1fr)');
   });
+
+  it('renders the issue header once, in the agreed order, without a duplicate line', () => {
+    const issue = payload();
+    issue.period = {
+      start: '2026-11-06T00:00:00.000Z',
+      end: '2026-11-13T00:00:00.000Z',
+      timezone: 'UTC',
+    };
+
+    const { htmlWeb } = renderIssue(issue, {
+      title: 'Tomb in Siberia | New Scientist «| Поток - 13 ноября 2026 г.»',
+      slug: 'issue-25',
+      number: 25,
+    });
+
+    const period = '6 НОЯБРЯ 2026 Г. — 13 НОЯБРЯ 2026 Г.';
+    const number = 'ВЫПУСК №25';
+    const timezone = 'ВРЕМЯ УКАЗАНО ПО UTC';
+    const address = 'MERKUROV.LOVE/FLOW';
+    const brand = 'ПОТОК';
+
+    const positions = [period, number, timezone, address, brand].map((value) =>
+      htmlWeb.indexOf(value)
+    );
+
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    expect(htmlWeb.match(new RegExp(period, 'g'))).toHaveLength(1);
+    expect(htmlWeb.match(new RegExp(number, 'g'))).toHaveLength(1);
+    expect(htmlWeb).not.toContain(`${period} · ${number}`);
+    expect(htmlWeb).not.toContain('mast-period');
+  });
+
+  it('renders the English masthead with FLOW and the same order', () => {
+    const issue = payload();
+    issue.lang = 'en';
+    issue.period = {
+      start: '2026-11-06T00:00:00.000Z',
+      end: '2026-11-13T00:00:00.000Z',
+      timezone: 'UTC',
+    };
+
+    const { htmlWeb, htmlEmail, textEmail } = renderIssue(issue, {
+      title: 'A headline «| Flow - 13 November 2026»',
+      slug: 'issue-25',
+      number: 25,
+    });
+
+    for (const output of [htmlWeb, htmlEmail, textEmail]) {
+      expect(output).toContain('6 NOVEMBER 2026 — 13 NOVEMBER 2026');
+      expect(output).toContain('ISSUE №25');
+      expect(output).toContain('TIMES ARE SHOWN IN UTC');
+      expect(output).toContain('MERKUROV.LOVE/FLOW');
+      expect(output).toContain('FLOW');
+    }
+  });
 });

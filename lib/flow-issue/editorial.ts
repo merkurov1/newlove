@@ -607,15 +607,21 @@ export function selectIssueContent(
 
   chosen.push(...links);
 
-  const videos = selectSection(
-    sortCandidates(
-      scored.filter(
-        (candidate) => candidate.entry.type === "video",
-      ),
+  /**
+   * Video is a completeness rule, not a quota.
+   *
+   * Every published video in the reporting period belongs to the issue even
+   * when there is no transcript, no AI analysis, a low editorial score or an
+   * explicit `omit` role. Those signals describe the text, not whether the
+   * video was published. Selection order remains deterministic (newest first)
+   * and no description is invented for an unexamined video.
+   */
+  const videos = sortCandidates(
+    scored.filter(
+      (candidate) =>
+        candidate.entry.type === "video" &&
+        !chosen.some((item) => item.entry.id === candidate.entry.id),
     ),
-    limits.videos,
-    chosen,
-    MIN_SELECTION_SCORE,
   );
 
   chosen.push(...videos);

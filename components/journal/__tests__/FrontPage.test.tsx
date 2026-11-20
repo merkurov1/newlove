@@ -125,6 +125,26 @@ describe('Journal FrontPage localization', () => {
     expect(screen.queryByText('Issue archive')).not.toBeInTheDocument();
   });
 
+  it('shows the full multilingual archive while keeping each material language', () => {
+    const { container } = render(
+      <FrontPage
+        lang="en"
+        featured={enIssue}
+        flow={enFlow}
+        archive={[ruIssue, olderEnIssue, olderRuIssue]}
+        subscribe={<div>Subscription form</div>}
+      />
+    );
+
+    expect(container.querySelector('a[href="/en/flow-issues/issue-en-old"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/flow-issues/issue-ru"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/flow-issues/issue-ru-old"]')).not.toBeNull();
+
+    expect(screen.getByText('Русский заголовок')).toHaveAttribute('lang', 'ru');
+    expect(screen.getByText('The English headline')).toHaveAttribute('lang', 'en');
+    expect(screen.getAllByText('In Russian').length).toBeGreaterThan(0);
+  });
+
   it('shows a localized empty state instead of falling back to another language', () => {
     render(
       <FrontPage
