@@ -105,9 +105,11 @@ export async function fetchSearchConsoleRows(input: {
   endDate: string;
   maxRows?: number;
   dataState?: 'final' | 'all';
+  /** Testable page size; production always uses the API maximum of 25k. */
+  pageSize?: number;
 }): Promise<{ rows: SearchConsoleRow[]; truncated: boolean; rawPages: unknown[] }> {
   const maxRows = Math.max(1, Math.min(input.maxRows ?? 50_000, 200_000));
-  const pageSize = 25_000;
+  const pageSize = Math.max(1, Math.min(input.pageSize ?? 25_000, 25_000));
   const rows: SearchConsoleRow[] = [];
   const rawPages: unknown[] = [];
   let startRow = 0;

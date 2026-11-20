@@ -3,7 +3,20 @@ import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { parseCalendarDate } from '@/lib/pierrot/reportingPeriod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { getBlueskyConfig, getGoogleOAuthConfig, getUmamiConfig } from './config';
+import {
+  getBlueskyConfig,
+  getGoogleOAuthConfig,
+  getSearchBrandTerms,
+  getUmamiConfig,
+} from './config';
+import {
+  GSC_REPORTING_DELAY_DAYS,
+  GSC_SEARCH_TYPE,
+  buildSearchBrandSplit,
+  detectSearchAnomalies,
+  rowsUpTo,
+  stripBrandComparison,
+} from './searchInsights';
 import { classifyTrafficPath, isInternalPath, isPublicPath } from './traffic';
 import { buildSourceCoverage, coverageIsComparable } from './coverage';
 import { getSearchConsoleSiteOverride } from './config';
@@ -496,7 +509,8 @@ function searchBreakdown(
 function gscSnapshot(
   rows: SearchPerformanceRow[],
   previousRows: SearchPerformanceRow[],
-  siteUrl: string | null
+  siteUrl: string | null,
+  brandTerms: string[]
 ): SearchConsoleSnapshot {
   const available = rows.length > 0 && Boolean(siteUrl);
   const clicks = rows.reduce((sum, row) => sum + row.clicks, 0);
@@ -600,7 +614,10 @@ function gscSnapshot(
   const previousPages = aggregateSearchDimension(previousRows, 'page');
 
   const siteCtr = impressions > 0 ? clicks / impressions : null;
-  const impressionFloor = Math.max(5, Math.round(impressions * 0.001));
+  // A low-CTR "opportunity" needs a meaningful sample. Five impressions can
+  // never justify a metadata rewrite, so the floor is at least 30 and grows
+  // with the property size.
+  const impressionFloor = Math.max(30, Math.round(impressions * 0.01));
 
   const toOpportunity = (
     entry: [string, { clicks: number; impressions: number; positionWeight: number }]
@@ -706,6 +723,13 @@ function gscSnapshot(
 
   return {
     available,
+    property: siteUrl,
+    searchType: GSC_SEARCH_TYPE,
+    reportingDelayDays: GSC_REPORTING_DELAY_DAYS,
+    expectedDataTo: null,
+    dataState: available ? 'complete' : 'unavailable',
+    freshness: available ? 'delayed' : 'unknown',
+    lastSuccessfulSyncAt: null,
     totals,
     series,
     queries: searchBreakdown(currentQueries, previousQueries),
@@ -718,6 +742,8 @@ function gscSnapshot(
       aggregateSearchDimension(rows, 'device'),
       aggregateSearchDimension(previousRows, 'device')
     ),
+    brand: buildSearchBrandSplit(rows, previousRows, brandTerms),
+    anomalies: detectSearchAnomalies(rows, previousRows),
     lowCtrPages,
     lowCtrQueries,
     risingQueries: movement(currentQueries, previousQueries, 'rising'),
@@ -726,9 +752,10 @@ function gscSnapshot(
     limitations: available
       ? [
           'Search Console не отдаёт search appearance и часть данных об индексации через Search Analytics API.',
-          'Данные Search Console отстают на 2–3 дня; последние дни могут быть неполными.',
+          'Данные Search Console отстают на 2–3 дня; последние дни могут быть неполными и исключаются из итогов до ожидаемой даты.',
           'Запросы с малым числом показов могут быть скрыты Google и не попадать в разбивку.',
           'Показы — не посещения, а CTR — не конверсия.',
+          'Бренд/небренд — эвристика по тексту запроса; отдельного измерения brand в Search Console нет.',
         ]
       : ['Search Console не подключён или за выбранный период нет сохранённых данных.'],
   };
@@ -2419,11 +2446,53 @@ export async function loadAnalyticsDataset(input: {
 
   const publicSearchRows = searchRows.filter((row) => isPublicPath(row.page));
   const publicPreviousSearchRows = previousSearchRows.filter((row) => isPublicPath(row.page));
+  const googleOAuth = getGoogleOAuthConfig();
+  const umamiConfig = getUmamiConfig();
+  const blueskyConfig = getBlueskyConfig();
+
+  const gscSiteConfigured = Boolean(gscConnection?.external_id);
+  const gscConfigured = googleOAuth.configured;
+  const previousPeriod = {
+    start: period.previousStart,
+    end: period.previousEnd,
+    timezone: period.timezone,
+  };
+
+  // Coverage is calculated before the snapshot so days Google has not
+  // finalised yet are removed from totals instead of being read as a fall.
+  const gscCoverage = buildSourceCoverage({
+    provider: 'search_console',
+    period,
+    dataDates: publicSearchRows.map((row) => row.metric_date),
+    lastSyncAt: gscConnection?.last_sync_at ?? null,
+    configured: gscConfigured,
+    connected: Boolean(gscConnection?.external_id),
+    error: gscConnection?.last_error_message ?? null,
+    reportingDelayDays: GSC_REPORTING_DELAY_DAYS,
+  });
+  const gscPreviousCoverage = buildSourceCoverage({
+    provider: 'search_console',
+    period: previousPeriod,
+    dataDates: publicPreviousSearchRows.map((row) => row.metric_date),
+    lastSyncAt: gscConnection?.last_sync_at ?? null,
+    configured: gscConfigured,
+    connected: Boolean(gscConnection?.external_id),
+    error: gscConnection?.last_error_message ?? null,
+    reportingDelayDays: GSC_REPORTING_DELAY_DAYS,
+  });
+
+  const completeSearchRows = rowsUpTo(publicSearchRows, gscCoverage.expectedEnd);
+  const completePreviousSearchRows = rowsUpTo(
+    publicPreviousSearchRows,
+    gscPreviousCoverage.expectedEnd
+  );
+
   const ga4 = ga4Snapshot(gaRows, gaPreviousRows, gaConnection);
   const gsc = gscSnapshot(
-    publicSearchRows,
-    publicPreviousSearchRows,
-    gscConnection?.external_id ?? null
+    completeSearchRows,
+    completePreviousSearchRows,
+    gscConnection?.external_id ?? null,
+    getSearchBrandTerms()
   );
   const umami = umamiSnapshot(umamiRows, umamiPreviousRows, period, umamiConnection);
   const [internal, flowLinksResult] = await Promise.all([
@@ -2442,17 +2511,6 @@ export async function loadAnalyticsDataset(input: {
     dataGaps.push(`Bluesky → Flow link resolution: ${flowLinksResult.error}`);
   }
 
-  const googleOAuth = getGoogleOAuthConfig();
-  const umamiConfig = getUmamiConfig();
-  const blueskyConfig = getBlueskyConfig();
-
-  const gscSiteConfigured = Boolean(gscConnection?.external_id);
-  const gscConfigured = googleOAuth.configured;
-  const previousPeriod = {
-    start: period.previousStart,
-    end: period.previousEnd,
-    timezone: period.timezone,
-  };
   const blueskyObservationDates = blueskyRows
     .map((row) => row.metric_date)
     .filter((value): value is string => Boolean(value))
@@ -2481,26 +2539,6 @@ export async function loadAnalyticsDataset(input: {
     connected: Boolean(gaConnection?.external_id),
     error: gaConnection?.last_error_message ?? null,
     reportingDelayDays: 0,
-  });
-  const gscCoverage = buildSourceCoverage({
-    provider: 'search_console',
-    period,
-    dataDates: publicSearchRows.map((row) => row.metric_date),
-    lastSyncAt: gscConnection?.last_sync_at ?? null,
-    configured: gscConfigured,
-    connected: Boolean(gscConnection?.external_id),
-    error: gscConnection?.last_error_message ?? null,
-    reportingDelayDays: 3,
-  });
-  const gscPreviousCoverage = buildSourceCoverage({
-    provider: 'search_console',
-    period: previousPeriod,
-    dataDates: publicPreviousSearchRows.map((row) => row.metric_date),
-    lastSyncAt: gscConnection?.last_sync_at ?? null,
-    configured: gscConfigured,
-    connected: Boolean(gscConnection?.external_id),
-    error: gscConnection?.last_error_message ?? null,
-    reportingDelayDays: 3,
   });
   const umamiCoverage = buildSourceCoverage({
     provider: 'umami',
@@ -2560,6 +2598,8 @@ export async function loadAnalyticsDataset(input: {
   if (!coverageIsComparable(gscCoverage, gscPreviousCoverage)) {
     stripMetricComparison(gsc.totals);
     [gsc.queries, gsc.pages, gsc.countries, gsc.devices].forEach(stripBreakdownComparison);
+    stripBrandComparison(gsc.brand);
+    gsc.anomalies = [];
   }
   if (!coverageIsComparable(umamiCoverage, umamiPreviousCoverage)) {
     stripMetricComparison(umami.totals);
@@ -2629,6 +2669,12 @@ export async function loadAnalyticsDataset(input: {
       blueskyCoverage
     ),
   ];
+
+  const gscSource = sources.find((source) => source.provider === 'search_console') ?? null;
+  gsc.expectedDataTo = gscCoverage.expectedEnd;
+  gsc.dataState = gscCoverage.state;
+  gsc.freshness = gscCoverage.freshness;
+  gsc.lastSuccessfulSyncAt = gscSource?.lastSuccessAt ?? null;
 
   return {
     period,

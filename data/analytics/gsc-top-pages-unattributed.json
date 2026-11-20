@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "sliceId": "gsc-merkurov-love-top-pages-unattributed",
+  "source": {
+    "type": "owner_provided_export",
+    "description": "Top pages extract supplied with the task. It has no date range, property, filters or search type.",
+    "receivedAt": "2026-11-20"
+  },
+  "property": null,
+  "searchType": null,
+  "period": null,
+  "filters": null,
+  "rows": [
+    {
+      "label": "Flow: GitHub spy satellite simulator",
+      "page": "/flow/github-bilawalsidhugods-eye-view-a-spy-satellite-simulator-in-your-browser-excep",
+      "impressions": 58,
+      "clicks": 1,
+      "ctrPercent": 1.724137931,
+      "position": 10.98
+    },
+    {
+      "label": "Homepage",
+      "page": "/",
+      "impressions": 43,
+      "clicks": 1,
+      "ctrPercent": 2.3255813953,
+      "position": 2.93
+    },
+    {
+      "label": "Heritage",
+      "page": "/heritage",
+      "impressions": 29,
+      "clicks": 0,
+      "ctrPercent": 0,
+      "position": 5.07
+    },
+    {
+      "label": "Art Engine",
+      "page": "/art-engine",
+      "impressions": 17,
+      "clicks": 0,
+      "ctrPercent": 0,
+      "position": 6.65
+    },
+    {
+      "label": "Advising",
+      "page": "/advising",
+      "impressions": 11,
+      "clicks": 0,
+      "ctrPercent": 0,
+      "position": 3.91
+    },
+    {
+      "label": "Research",
+      "page": "/research",
+      "impressions": 10,
+      "clicks": 0,
+      "ctrPercent": 0,
+      "position": 4.9
+    },
+    {
+      "label": "Flow: The Sanctuary",
+      "page": "/flow/the-sanctuary-digital-temple",
+      "impressions": 10,
+      "clicks": 0,
+      "ctrPercent": 0,
+      "position": 6.5
+    }
+  ],
+  "integrity": {
+    "listedRows": 7,
+    "listedImpressionsSum": 178,
+    "listedClicksSum": 2,
+    "ownerStatement": {
+      "firstEightRowsImpressionsAtLeast": 179,
+      "listedRowsInTask": 7,
+      "note": "The task says at least 179 impressions in the first eight rows, but only seven rows were listed. The listed rows alone already sum to 178."
+    }
+  },
+  "compatibility": {
+    "mergeableWithDailySlice": false,
+    "reason": "The listed top-page rows sum to 178 impressions, which is greater than the 167 impressions reported for the entire daily slice. The extracts therefore cannot describe the same period, property, filters and search type. They are kept separate and are not added together."
+  }
+}
