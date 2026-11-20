@@ -78,6 +78,45 @@ export type BreakdownRow = {
   extra?: Record<string, number | string | null>;
 };
 
+export type SearchSegmentSummary = {
+  key: string;
+  label: string;
+  clicks: number;
+  impressions: number;
+  /** Null after the read model strips a comparison that is not comparable. */
+  previousClicks: number | null;
+  previousImpressions: number | null;
+  ctr: number | null;
+  previousCtr: number | null;
+  position: number | null;
+  previousPosition: number | null;
+  clicksDeltaPercent: number | null;
+  impressionsDeltaPercent: number | null;
+  shareOfImpressions: number | null;
+};
+
+export type SearchBrandSplit = {
+  brandTerms: string[];
+  brand: SearchSegmentSummary;
+  nonBrand: SearchSegmentSummary;
+  /** Brand is derived from query text; Google exposes no brand dimension. */
+  heuristic: string;
+};
+
+export type SearchAnomaly = {
+  key: string;
+  scope: 'total' | 'query' | 'page';
+  metric: 'clicks' | 'impressions' | 'ctr' | 'position';
+  direction: 'drop' | 'rise';
+  label: string;
+  current: number;
+  previous: number;
+  deltaPercent: number | null;
+  sample: number;
+  severity: 'info' | 'warning';
+  note: string;
+};
+
 export type ProviderHealth = {
   provider: AnalyticsProvider;
   label: string;
@@ -165,6 +204,16 @@ export type Ga4Snapshot = {
 
 export type SearchConsoleSnapshot = {
   available: boolean;
+  /** Search Console property (`sc-domain:…` or verified URL) used for the read. */
+  property: string | null;
+  /** Search Analytics `type`; stored explicitly instead of implied. */
+  searchType: 'web';
+  reportingDelayDays: number;
+  /** Last day expected to be final. Later rows are excluded from totals. */
+  expectedDataTo: string | null;
+  dataState: SourceDataState;
+  freshness: SourceFreshness;
+  lastSuccessfulSyncAt: string | null;
   totals: Record<string, MetricComparison>;
   series: Array<{
     date: string;
@@ -177,6 +226,8 @@ export type SearchConsoleSnapshot = {
   pages: BreakdownRow[];
   countries: BreakdownRow[];
   devices: BreakdownRow[];
+  brand: SearchBrandSplit;
+  anomalies: SearchAnomaly[];
   lowCtrPages: Array<{
     page: string;
     clicks: number;

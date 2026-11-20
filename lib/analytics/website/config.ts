@@ -1,5 +1,6 @@
 import { assertServerOnly } from '@/lib/serverOnly';
 import { GA_MEASUREMENT_ID } from '@/lib/analytics/ga4';
+import { DEFAULT_BRAND_TERMS } from './searchInsights';
 
 assertServerOnly('lib/analytics/website/config');
 
@@ -107,6 +108,31 @@ export function getGoogleAccountOverride(): string | null {
 
 export function getSearchConsoleSiteOverride(): string | null {
   return env('ANALYTICS_GSC_SITE_URL') || null;
+}
+
+/**
+ * Optional comma-separated brand terms. Defaults stay in one place so the
+ * dashboard and tests classify the same queries as brand/non-brand.
+ */
+export function getSearchBrandTerms(): string[] {
+  const raw = env('ANALYTICS_GSC_BRAND_TERMS');
+  const terms = (raw ? raw.split(',') : DEFAULT_BRAND_TERMS)
+    .map((term) => term.trim())
+    .filter(Boolean);
+
+  return terms.length > 0 ? terms : DEFAULT_BRAND_TERMS;
+}
+
+/**
+ * A stored grant with an explicit scope list must contain the required scope
+ * before a sync is attempted. An empty legacy list is unknown, not a grant.
+ */
+export function missingRequiredScope(
+  scopes: string[] | null | undefined,
+  required: string
+): boolean {
+  if (!Array.isArray(scopes) || scopes.length === 0) return false;
+  return !scopes.includes(required);
 }
 
 export type UmamiConfig = {

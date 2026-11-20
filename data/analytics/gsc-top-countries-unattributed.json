@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "sliceId": "gsc-merkurov-love-top-countries-unattributed",
+  "source": {
+    "type": "owner_provided_export",
+    "description": "Top countries extract supplied with the task. It has no date range, property, filters or search type.",
+    "receivedAt": "2026-11-20"
+  },
+  "property": null,
+  "searchType": null,
+  "period": null,
+  "filters": null,
+  "rows": [
+    { "country": "United States", "countryCode": "USA", "impressions": 40, "clicks": null },
+    { "country": "Israel", "countryCode": "ISR", "impressions": 31, "clicks": null },
+    { "country": "Russia", "countryCode": "RUS", "impressions": 31, "clicks": null },
+    { "country": "Ukraine", "countryCode": "UKR", "impressions": 18, "clicks": null }
+  ],
+  "integrity": {
+    "listedRows": 4,
+    "listedImpressionsSum": 120,
+    "note": "If these were the same 167-impression slice, 47 impressions would be outside the listed top countries. That is not assumed."
+  },
+  "compatibility": {
+    "mergeableWithDailySlice": false,
+    "reason": "The extract has no period, property, filter or search-type metadata. It is retained as a top-country view only, not as a period total and not as proof of a country-level decline."
+  }
+}

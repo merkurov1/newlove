@@ -10,6 +10,8 @@ import {
   getBlueskyConfig,
   getIncrementalDays,
   getUmamiConfig,
+  missingRequiredScope,
+  GSC_READONLY_SCOPE,
 } from './config';
 import { fullHash, openSecret, sealSecret } from './tokenCrypto';
 import { normalizePath } from './normalize';
@@ -34,6 +36,7 @@ import {
 import { AnalyticsProviderError, diagnosticFromError, diagnosticSummary } from './providers/http';
 import { buildGa4Reports, ga4DateToIso, runGa4Report } from './providers/googleAnalytics';
 import { fetchSearchConsoleRows } from './providers/searchConsole';
+import { GSC_SEARCH_TYPE } from './searchInsights';
 import {
   fetchUmamiMetrics,
   fetchUmamiPageviews,
@@ -189,6 +192,24 @@ function metricUnit(name: string): string {
   if (name === 'engagementRate' || name === 'sessionConversionRate') return 'ratio';
   if (name === 'userEngagementDuration' || name === 'averageSessionDuration') return 'seconds';
   return 'count';
+}
+
+/**
+ * A sync is partial when at least one report failed or a provider row cap was
+ * reached, but not every report failed. The caller persists `partial`, never
+ * presenting a partial slice as complete.
+ */
+export function syncOutcome(input: {
+  reportCount: number;
+  failureCount: number;
+  truncated?: boolean;
+}): { partial: boolean; reportsFailed: number; reportsTotal: number } {
+  const reportsFailed = Math.max(0, Math.min(input.failureCount, input.reportCount));
+  return {
+    partial: input.truncated === true || (reportsFailed > 0 && reportsFailed < input.reportCount),
+    reportsFailed,
+    reportsTotal: Math.max(0, input.reportCount),
+  };
 }
 
 async function syncGoogleAnalytics(
@@ -390,7 +411,7 @@ async function syncGoogleAnalytics(
     details: {
       reports: reportSummary,
       failures,
-      partial: failures.length > 0,
+      ...syncOutcome({ reportCount: reports.length, failureCount: failures.length }),
     },
   };
 }
@@ -419,6 +440,16 @@ async function syncSearchConsole(
     });
   }
 
+  if (missingRequiredScope(connection.scopes, GSC_READONLY_SCOPE)) {
+    throw new AnalyticsProviderError({
+      provider: 'search_console',
+      code: 'insufficient_permissions',
+      message: 'The stored Google grant does not include the webmasters.readonly scope.',
+      stage: 'scope_check',
+      scope: GSC_READONLY_SCOPE,
+    });
+  }
+
   const accessToken = await resolveAccessToken(store, connection);
   const result = await fetchSearchConsoleRows({
     accessToken,
@@ -427,6 +458,7 @@ async function syncSearchConsole(
     endDate: range.end,
   });
 
+  const retrievedAt = new Date().toISOString();
   const rows: SearchRowInput[] = result.rows.map((row) => ({
     metric_date: row.date,
     site_url: siteUrl,
@@ -459,12 +491,48 @@ async function syncSearchConsole(
     payload: result.rawPages,
   });
 
+  // The metadata snapshot makes the stored slice reproducible even though the
+  // normalized table has no search_type/aggregation columns. Additive only.
+  const sliceMetadata = {
+    property: siteUrl,
+    searchType: GSC_SEARCH_TYPE,
+    dimensions: ['date', 'query', 'page', 'country', 'device'],
+    filters: {
+      query: 'all',
+      page: 'all',
+      country: 'all',
+      device: 'all',
+      searchAppearance: 'not exposed by Search Analytics API',
+    },
+    dataState: 'final',
+    aggregationType: 'auto',
+    startDate: range.start,
+    endDate: range.end,
+    rowCount: written,
+    truncated: result.truncated,
+    retrievedAt,
+    source: 'Search Console Search Analytics API',
+  };
+  await saveSnapshot(store, {
+    provider: 'search_console',
+    reportType: 'search_analytics_slice_meta',
+    periodStart: range.start,
+    periodEnd: range.end,
+    checksum: fullHash(JSON.stringify(sliceMetadata)).slice(0, 40),
+    payload: sliceMetadata,
+  });
+
   return {
     rows: written,
-    snapshots: 1,
+    snapshots: 2,
     details: {
+      property: siteUrl,
+      searchType: GSC_SEARCH_TYPE,
+      dataState: 'final',
+      retrievedAt,
       truncated: result.truncated,
       rows: written,
+      ...syncOutcome({ reportCount: 1, failureCount: 0, truncated: result.truncated }),
       note: result.truncated ? 'Row cap reached; the range was not fully downloaded.' : null,
     },
   };

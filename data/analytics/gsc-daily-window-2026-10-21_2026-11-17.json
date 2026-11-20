@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "sliceId": "gsc-merkurov-love-daily-2026-10-21_2026-11-17",
+  "source": {
+    "type": "owner_provided_export",
+    "description": "Aggregated Search Console export supplied with the task. No raw CSV or daily rows were provided.",
+    "tool": "Google Search Console export",
+    "notGscWizard": true,
+    "receivedAt": "2026-11-20",
+    "retrievedAt": null
+  },
+  "property": {
+    "value": "sc-domain:merkurov.love",
+    "verifiedAgainstSitesList": false,
+    "note": "Requested target property. The supplied aggregate does not carry property metadata, so the property is stated by the task, not independently verified."
+  },
+  "searchType": {
+    "value": "web",
+    "verified": false,
+    "note": "Task context says organic Google Search. The export metadata does not expose type; no other search type is assumed or merged."
+  },
+  "filters": {
+    "query": "all",
+    "page": "all",
+    "country": "all",
+    "device": "all",
+    "searchAppearance": "not_provided",
+    "note": "Top pages and top countries were supplied as separate extracts; their filters are not recorded."
+  },
+  "timezone": {
+    "value": "unknown",
+    "note": "Search Console property timezone was not supplied. No cross-source date joins are made."
+  },
+  "dataState": {
+    "value": "reported_final_unverified",
+    "note": "The export is treated as final for its own dates, but daily rows are absent so GSC lag and finalisation cannot be verified from the file."
+  },
+  "dateRange": {
+    "start": "2026-10-21",
+    "end": "2026-11-17",
+    "days": 28
+  },
+  "totals": {
+    "impressions": 167,
+    "clicks": 3,
+    "ctrPercent": 1.7964071856,
+    "averagePosition": null,
+    "note": "Average position was not part of the supplied aggregate."
+  },
+  "windows": [
+    {
+      "key": "earlier_14d",
+      "start": "2026-10-21",
+      "end": "2026-11-03",
+      "days": 14,
+      "impressions": 128,
+      "clicks": 3,
+      "ctrPercent": 2.34375
+    },
+    {
+      "key": "later_14d",
+      "start": "2026-11-04",
+      "end": "2026-11-17",
+      "days": 14,
+      "impressions": 39,
+      "clicks": 0,
+      "ctrPercent": 0
+    }
+  ],
+  "integrity": {
+    "sumOfWindowsMatchesTotals": true,
+    "impressions": "128 + 39 = 167",
+    "clicks": "3 + 0 = 3",
+    "laterVsEarlierImpressionsDeltaPercent": -69.53125,
+    "note": "The -69.5% figure is the difference between two halves of the same 28-day window, not a comparison of the latest 28 days with the previous 28 days."
+  },
+  "lagSafety": {
+    "reportingDelayDays": 3,
+    "asOf": "2026-11-20",
+    "lastExpectedCompleteDay": "2026-11-17",
+    "dailyRowsAvailable": false,
+    "comparableToPrevious28Days": false,
+    "reason": "A previous 28-day window (2026-09-23..2026-10-20) and daily rows were not supplied. Per-day completeness inside 2026-11-04..2026-11-17 cannot be checked."
+  }
+}
