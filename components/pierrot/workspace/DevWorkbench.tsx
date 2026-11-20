@@ -495,6 +495,11 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
           overview?: DevWorkbenchOverview;
           merge?: { deployment: DevDeploymentStatus | null; mergeSha: string | null };
           token?: string;
+          dispatch?: {
+            dispatched?: boolean;
+            code?: string;
+            reason?: string;
+          } | null;
           codespaces?: Array<{
             name: string;
             state: string;
@@ -512,15 +517,23 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         if (action === 'start_codespace' || action === 'create_codespace') {
           setNotice('Codespace start requested. The worker starts automatically after boot.');
         }
-        if (action === 'approve') {
+        if (action === 'approve' || action === 'enqueue') {
           const queued = body.overview?.queue.some(
             (item) => item.id === String(payload.taskId || '')
           );
-          setNotice(
-            queued
-              ? 'Задание утверждено и поставлено в очередь. Dispatch в GitHub Actions запрошен; это ещё не значит, что задача выполняется.'
-              : 'Задание утверждено. Задачи batch запускаются через Start batch.'
-          );
+          if (body.dispatch && body.dispatch.dispatched === false) {
+            setNotice(
+              `Задание в очереди, но dispatch не отправлен (${body.dispatch.code || 'не отправлен'}). ${
+                body.dispatch.reason || 'Повторите dispatch из QUEUE.'
+              }`
+            );
+          } else {
+            setNotice(
+              queued
+                ? 'Задание утверждено и поставлено в очередь. Dispatch в GitHub Actions запрошен; это ещё не значит, что задача выполняется.'
+                : 'Задание утверждено. Задачи batch запускаются через Start batch.'
+            );
+          }
         }
         if (action === 'accept') {
           setNotice('Accepted. Select the verified task in REVIEW again to merge it explicitly.');
@@ -1033,11 +1046,12 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         <ol className="pw-wb-queue">
           {overview.queue.map((task, index) => {
             const dispatch = dispatchView(task);
+            const isQueued = task.status === 'queued';
             return (
               <li key={task.id} className="pw-wb-card">
                 <div className="pw-wb-card-head">
                   <div className="pw-wb-card-title">
-                    <span className="pw-wb-position">{index + 1}</span>
+                    <span className="pw-wb-position">{isQueued ? index + 1 : 'ready'}</span>
                     <StatusBadge status={task.status} />
                     <strong>{task.title}</strong>
                   </div>
@@ -1046,8 +1060,10 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                 <p className="pw-wb-meta">Cost estimate: {moneyRange(task.costEstimate)}</p>
                 <p className={dispatch.warning ? 'pw-wb-warning' : 'pw-wb-meta'}>
                   {dispatch.warning ? <AlertTriangle size={14} /> : <GitBranch size={14} />}{' '}
-                  {dispatch.label}
-                  {dispatch.detail ? ` · ${dispatch.detail}` : ''}
+                  {isQueued
+                    ? dispatch.label
+                    : 'approved · ready to enqueue (задача утверждена, но ещё не в очереди)'}
+                  {isQueued && dispatch.detail ? ` · ${dispatch.detail}` : ''}
                 </p>
                 {task.lastErrorCode && (
                   <p className="pw-wb-warning">
@@ -1055,28 +1071,32 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                   </p>
                 )}
                 <div className="pw-wb-actions">
-                  <button
-                    type="button"
-                    className="pw-wb-icon-button"
-                    aria-label="Выше"
-                    disabled={index === 0}
-                    onClick={() =>
-                      void runAction('reorder', { taskId: task.id, position: index - 1 })
-                    }
-                  >
-                    <ArrowUp size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    className="pw-wb-icon-button"
-                    aria-label="Ниже"
-                    disabled={index === overview.queue.length - 1}
-                    onClick={() =>
-                      void runAction('reorder', { taskId: task.id, position: index + 1 })
-                    }
-                  >
-                    <ArrowDown size={14} />
-                  </button>
+                  {isQueued && (
+                    <>
+                      <button
+                        type="button"
+                        className="pw-wb-icon-button"
+                        aria-label="Выше"
+                        disabled={index === 0}
+                        onClick={() =>
+                          void runAction('reorder', { taskId: task.id, position: index - 1 })
+                        }
+                      >
+                        <ArrowUp size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="pw-wb-icon-button"
+                        aria-label="Ниже"
+                        disabled={index === overview.queue.length - 1}
+                        onClick={() =>
+                          void runAction('reorder', { taskId: task.id, position: index + 1 })
+                        }
+                      >
+                        <ArrowDown size={14} />
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     className="pw-wb-button is-quiet"
@@ -1101,23 +1121,36 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
                   >
                     P−1
                   </button>
-                  {(dispatch.retryable || task.lastErrorCode?.startsWith('ACTIONS_')) && (
+                  {!isQueued && (
                     <button
                       type="button"
-                      className="pw-wb-button is-warn"
-                      disabled={busy === `retry_dispatch:${task.id}`}
-                      onClick={() => void runAction('retry_dispatch', { taskId: task.id })}
+                      className="pw-wb-button is-primary"
+                      disabled={busy === `enqueue:${task.id}`}
+                      onClick={() => void runAction('enqueue', { taskId: task.id })}
                     >
-                      <RotateCcw size={14} /> Повторить dispatch
+                      <ArrowDown size={14} /> В очередь
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="pw-wb-button"
-                    onClick={() => void runAction('dequeue', { taskId: task.id })}
-                  >
-                    Убрать из очереди
-                  </button>
+                  {isQueued &&
+                    (dispatch.retryable || task.lastErrorCode?.startsWith('ACTIONS_')) && (
+                      <button
+                        type="button"
+                        className="pw-wb-button is-warn"
+                        disabled={busy === `retry_dispatch:${task.id}`}
+                        onClick={() => void runAction('retry_dispatch', { taskId: task.id })}
+                      >
+                        <RotateCcw size={14} /> Повторить dispatch
+                      </button>
+                    )}
+                  {isQueued && (
+                    <button
+                      type="button"
+                      className="pw-wb-button"
+                      onClick={() => void runAction('dequeue', { taskId: task.id })}
+                    >
+                      Убрать из очереди
+                    </button>
+                  )}
                 </div>
               </li>
             );

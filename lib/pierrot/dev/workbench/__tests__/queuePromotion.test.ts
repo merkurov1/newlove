@@ -5,10 +5,12 @@ jest.mock('@/lib/serverAuth', () => {
     ready: [] as Array<{ id: string; priority: number }>,
     optOuts: new Set<string>(),
     updates: [] as Array<Record<string, unknown>>,
+    updateMatches: true,
     reset() {
       state.ready = [];
       state.optOuts = new Set();
       state.updates = [];
+      state.updateMatches = true;
     },
   };
 
@@ -17,11 +19,13 @@ jest.mock('@/lib/serverAuth', () => {
     private columns = '';
     private payload: Record<string, unknown> | null = null;
     private filters: Record<string, unknown> = {};
+    private selectedAfterWrite = false;
 
     constructor(private readonly table: string) {}
 
     select(columns = '*') {
       if (this.op === 'select') this.columns = columns;
+      else this.selectedAfterWrite = true;
       return this;
     }
     insert(payload: Record<string, unknown>) {
@@ -72,7 +76,14 @@ jest.mock('@/lib/serverAuth', () => {
         }
         if (this.op === 'update') {
           state.updates.push({ ...this.payload, id: this.filters.id });
-          return { data: null, error: null };
+          return {
+            data: !this.selectedAfterWrite
+              ? null
+              : state.updateMatches
+                ? [{ id: this.filters.id }]
+                : [],
+            error: null,
+          };
         }
       }
       if (this.table === 'pierrot_dev_settings' && this.op === 'select') {
@@ -104,6 +115,7 @@ const state = (
       ready: Array<{ id: string; priority: number }>;
       optOuts: Set<string>;
       updates: Array<Record<string, unknown>>;
+      updateMatches: boolean;
       reset: () => void;
     };
   }
@@ -129,6 +141,14 @@ describe('standalone ready-task promotion', () => {
 
     await expect(promoteStandaloneReadyTasks()).resolves.toBe(0);
     expect(state.updates).toHaveLength(0);
+  });
+
+  it('does not count a conditional update that matched zero rows', async () => {
+    state.ready = [{ id: TASK_A, priority: 0 }];
+    state.updateMatches = false;
+
+    await expect(promoteStandaloneReadyTasks()).resolves.toBe(0);
+    expect(state.updates).toHaveLength(1);
   });
 
   it('promotes an unmarked task while leaving a dequeued task alone', async () => {

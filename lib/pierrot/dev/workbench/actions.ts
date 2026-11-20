@@ -13,6 +13,7 @@ import {
   isQueuePaused,
   listQueuedTasksForDispatch,
   patchTask,
+  promoteStandaloneReadyTasks,
   reserveTaskForActionsDispatch,
 } from './store';
 import type { DevWorkbenchTask } from './types';
@@ -44,6 +45,8 @@ export type ActionsDispatchResult = {
   retryAt?: string | null;
   correlationId?: string | null;
   attempts?: number;
+  /** Approved standalone tasks moved into the queue by this recovery pass. */
+  promoted?: number;
 };
 
 export type ActionsClaimDiagnosis = {
@@ -742,8 +745,13 @@ async function recoverDispatchMarker(
     now - markerAt >= ACTIONS_DISPATCH_STALE_MS;
   const retryDue = status === 'retry_scheduled' && (retryAt === null || retryAt <= now);
   const recoverableTerminal = ['not_claimable', 'ineligible', 'failed'].includes(status);
+  // A lease may expire after the workflow claimed the task but before the
+  // attempt completed. The reaper returns the task to `queued`, yet the old
+  // `claimed` marker used to make the dispatcher skip it forever. Once the task
+  // is queued again and no attempt owns it, that marker is stale by definition.
+  const staleClaimed = status === 'claimed' && task.status === 'queued';
 
-  if (!staleAccepted && !retryDue && !recoverableTerminal) return null;
+  if (!staleAccepted && !retryDue && !recoverableTerminal && !staleClaimed) return null;
 
   if (status === 'retry_scheduled' && !retryDue) return null;
   if (recoverableTerminal && !isRecoverableReason(task.actionsDispatchReasonCode)) return null;
@@ -760,15 +768,22 @@ async function recoverDispatchMarker(
     return null;
   }
 
-  if (staleAccepted || recoverableTerminal) {
+  if (staleAccepted || recoverableTerminal || staleClaimed) {
+    const reasonCode = staleClaimed
+      ? 'CLAIMED_ATTEMPT_GONE'
+      : staleAccepted
+        ? 'DISPATCH_STALE_NO_CLAIM'
+        : 'DISPATCH_RECOVERED';
     const released = await completeTaskActionsDispatch({
       taskId: task.id,
       correlationId: task.actionsDispatchCorrelationId || null,
       outcome: 'retry',
-      reasonCode: staleAccepted ? 'DISPATCH_STALE_NO_CLAIM' : 'DISPATCH_RECOVERED',
-      reason: staleAccepted
-        ? 'The workflow was accepted but did not claim within the stale window; the safe reservation was released for retry.'
-        : 'The previous dispatch blocker is gone; the safe reservation was released for retry.',
+      reasonCode,
+      reason: staleClaimed
+        ? 'The claimed attempt is no longer active and the task is queued again; the stale claim marker was released for a safe retry.'
+        : staleAccepted
+          ? 'The workflow was accepted but did not claim within the stale window; the safe reservation was released for retry.'
+          : 'The previous dispatch blocker is gone; the safe reservation was released for retry.',
       retryAt: null,
       expectedRequestedAt: task.actionsDispatchRequestedAt,
     });
@@ -825,7 +840,17 @@ export async function dispatchNextQueuedTask(input: {
     );
   }
 
-  const tasks = await listQueuedTasksForDispatch(20);
+  let tasks = await listQueuedTasksForDispatch(20);
+  // An approved standalone task is executable even if it predates the explicit
+  // batch flow. When the queue is empty, promote it first so Admin/Cron never
+  // reports an empty queue while `ready` work is waiting. A batch-owned ready
+  // task is left untouched by promoteStandaloneReadyTasks.
+  let promoted = 0;
+  if (tasks.length === 0) {
+    promoted = await promoteStandaloneReadyTasks().catch(() => 0);
+    if (promoted > 0) tasks = await listQueuedTasksForDispatch(20);
+  }
+
   let sawIneligible = false;
   for (const task of tasks) {
     if (task.assignedExecutor === 'codespace') continue;
@@ -842,10 +867,23 @@ export async function dispatchNextQueuedTask(input: {
         return skipped(task.id, error.code, error.message, task.repository, {
           retryAt:
             typeof error.detail.retryAt === 'string' ? (error.detail.retryAt as string) : null,
+          promoted,
         });
       }
       throw error;
     }
+  }
+
+  // Promotion without a subsequent dispatch is not success. Report it with an
+  // explicit code so a refill caller cannot claim that work was sent.
+  if (promoted > 0) {
+    return skipped(
+      null,
+      'PROMOTED_NOT_DISPATCHED',
+      `${promoted} approved task(s) were queued but none could be dispatched in this pass.`,
+      null,
+      { promoted }
+    );
   }
 
   return skipped(
@@ -855,6 +893,8 @@ export async function dispatchNextQueuedTask(input: {
       ? sawIneligible
         ? 'Queued tasks are already dispatched, retry-exhausted, or blocked by another active attempt.'
         : 'Queued tasks are assigned to another executor.'
-      : 'No queued work.'
+      : 'No queued work.',
+    null,
+    { promoted }
   );
 }

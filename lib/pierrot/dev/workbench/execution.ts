@@ -1067,6 +1067,10 @@ export async function dequeueTask(
 export async function retryTask(userId: string, taskId: string): Promise<DevWorkbenchTask | null> {
   const task = await getTaskRow(userId, taskId);
   if (!task) return null;
+  // Retrying an already queued task is a no-op. Re-enqueueing it would move it
+  // and clear an in-flight dispatch marker, which could launch a duplicate
+  // runner. A genuinely stuck dispatch uses the explicit retry_dispatch path.
+  if (task.status === 'queued') return task;
   const active = await getActiveAttempt();
   if (active && active.taskId === taskId) {
     throw new WorkbenchExecutionError(
@@ -1112,8 +1116,12 @@ export async function retryTask(userId: string, taskId: string): Promise<DevWork
   if (updated) {
     await setQueueOptOut(taskId, false);
     await clearTaskActionsDispatch(taskId);
+    return updated;
   }
-  return updated;
+  // A concurrent retry won the compare-and-set. The task is already queued,
+  // which is the same safe outcome; do not enqueue or dispatch it a second time.
+  const current = await getTaskRow(userId, taskId);
+  return current?.status === 'queued' ? current : null;
 }
 
 export async function cancelTask(userId: string, taskId: string): Promise<DevWorkbenchTask | null> {

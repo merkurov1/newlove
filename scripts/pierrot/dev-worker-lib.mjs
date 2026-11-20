@@ -110,6 +110,121 @@ export function parseOpenCodeCost(output) {
   return result;
 }
 
+function decodeReportEscapes(value) {
+  let text = String(value || '');
+  if (!text.includes('\n') && text.includes('\\n')) {
+    text = text.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  }
+  return text;
+}
+
+function isExecutorReportObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return [
+    'summary',
+    'changedFiles',
+    'commands',
+    'acceptanceCriteria',
+    'warnings',
+    'unverified',
+  ].some((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
+
+/**
+ * Extract the last complete top-level JSON object from free-form output.
+ * A small ring buffer keeps memory bounded even for a multi-megabyte log.
+ */
+function completeJsonObjects(text, limit = 20) {
+  const objects = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === '{') {
+      if (depth === 0) start = index;
+      depth += 1;
+      continue;
+    }
+    if (char === '}' && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        objects.push(text.slice(start, index + 1));
+        if (objects.length > limit) objects.shift();
+        start = -1;
+      }
+    }
+  }
+  return objects;
+}
+
+/**
+ * The executor contract requires a fenced JSON report, but a model may emit it
+ * as plain final text or inside an OpenCode event's text part. Accept all three
+ * shapes while still requiring a report-shaped object; malformed or unrelated
+ * JSON is never trusted.
+ */
+export function extractExecutorReport(output) {
+  const raw = String(output || '');
+  if (!raw) return null;
+  const decoded = decodeReportEscapes(raw);
+  const candidates = [];
+  const addFenced = (text) => {
+    const blocks = [...text.matchAll(/```json\s*([\s\S]*?)```/gi)];
+    if (blocks.length > 0) candidates.push(blocks[blocks.length - 1][1]);
+  };
+  addFenced(raw);
+  addFenced(decoded);
+
+  const addText = (text) => {
+    if (typeof text !== 'string' || !text.trim()) return;
+    const normalized = decodeReportEscapes(text);
+    addFenced(normalized);
+    for (const object of completeJsonObjects(normalized).reverse()) {
+      candidates.push(object);
+    }
+  };
+
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) continue;
+    try {
+      const event = JSON.parse(trimmed);
+      const part = event?.part && typeof event.part === 'object' ? event.part : null;
+      addText(event?.text);
+      addText(event?.content);
+      addText(event?.message);
+      addText(part?.text);
+      addText(part?.content);
+      addText(part?.message);
+    } catch {
+      // Not an event line; the balanced-object scan below still sees it.
+    }
+  }
+  for (const object of completeJsonObjects(decoded).reverse()) candidates.push(object);
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(String(candidate).trim());
+      if (isExecutorReportObject(parsed)) return parsed;
+    } catch {
+      // Try the next candidate; malformed blocks are not trusted.
+    }
+  }
+  return null;
+}
+
 /**
  * Parse `opencode auth list`. Environment credentials are intentionally not
  * accepted: the worker requires a stored login so no provider secret has to be
@@ -390,7 +505,9 @@ export function isClaimForRequestedTask(claim, requestedTaskId) {
  * fallback for the Dev pipeline.
  */
 export function assertHostedActionsRunner(env = process.env) {
-  const environment = String(env.RUNNER_ENVIRONMENT || '').trim().toLowerCase();
+  const environment = String(env.RUNNER_ENVIRONMENT || '')
+    .trim()
+    .toLowerCase();
   const name = String(env.RUNNER_NAME || '').trim();
   const codespace = String(env.CODESPACE_NAME || '').trim();
 

@@ -89,15 +89,23 @@ export async function getWorkbenchOverview(
   }
 
   const inbox = tasks.filter((task) => ['draft', 'ready', 'blocked'].includes(task.status));
+  // The Queue tab must never look empty while approved work is waiting for an
+  // explicit enqueue. Ready tasks are part of the same execution queue: they
+  // have no position yet but are shown after the queued tasks so the owner can
+  // see and enqueue them without hunting through the inbox.
   const queue = tasks
-    .filter((task) => task.status === 'queued')
-    .sort(
-      (a, b) =>
+    .filter((task) => task.status === 'queued' || task.status === 'ready')
+    .sort((a, b) => {
+      const rank = (task: DevWorkbenchTask) => (task.status === 'queued' ? 0 : 1);
+      return (
+        rank(a) - rank(b) ||
         b.priority - a.priority ||
         (a.queuePosition ?? Number.MAX_SAFE_INTEGER) -
           (b.queuePosition ?? Number.MAX_SAFE_INTEGER) ||
-        (a.queuedAt || '').localeCompare(b.queuedAt || '')
-    );
+        (a.queuedAt || '').localeCompare(b.queuedAt || '') ||
+        a.createdAt.localeCompare(b.createdAt)
+      );
+    });
   const review = selectReviewTasks(tasks);
   const historyTasks = tasks.filter((task) => HISTORY_STATUSES.includes(task.status)).slice(0, 24);
 

@@ -4,6 +4,7 @@ import {
   BOOT_PHASES,
   checkCommitIdentity,
   computeReadiness,
+  extractExecutorReport,
   isAllowedWorkerBranch,
   isOrphanExecutorProcess,
   isVersionAtLeast,
@@ -116,6 +117,28 @@ test('parses actual OpenCode step_finish cost and tokens', () => {
   assert.equal(usage.model, 'deepseek-flash');
 });
 
+test('extracts a report from a fenced block, plain final JSON or event text', () => {
+  const report = {
+    summary: 'done',
+    changedFiles: ['lib/a.ts'],
+    commands: [{ name: 'pnpm typecheck', status: 'passed' }],
+    acceptanceCriteria: [{ criterion: 'works', status: 'satisfied', evidence: 'test' }],
+  };
+  const fenced = `narrative\n\`\`\`json\n${JSON.stringify(report)}\n\`\`\``;
+  assert.equal(extractExecutorReport(fenced).summary, 'done');
+
+  const plain = `narrative\n${JSON.stringify(report)}`;
+  assert.equal(extractExecutorReport(plain).summary, 'done');
+
+  const event = JSON.stringify({ type: 'text', part: { text: JSON.stringify(report) } });
+  assert.equal(extractExecutorReport(event).summary, 'done');
+});
+
+test('does not mistake unrelated JSON for the executor report', () => {
+  assert.equal(extractExecutorReport('{"name":"package","version":"1.0.0"}'), null);
+  assert.equal(extractExecutorReport('no report here'), null);
+});
+
 test('does not invent a zero cost when OpenCode reports no cost', () => {
   const usage = parseOpenCodeCost(
     JSON.stringify({ type: 'step_finish', part: { tokens: { input: 1, output: 2 } } })
@@ -191,10 +214,8 @@ test('accepts GitHub as the committer only for signed helper commits', () => {
   assert.equal(wrongCommitter.committerOk, false);
 });
 
-test('automatic pushes are restricted to attempt branches', () => {  assert.equal(
-    isAllowedWorkerBranch('pierrot/dev/11111111-1111-4111-8111-111111111111/1'),
-    true
-  );
+test('automatic pushes are restricted to attempt branches', () => {
+  assert.equal(isAllowedWorkerBranch('pierrot/dev/11111111-1111-4111-8111-111111111111/1'), true);
   assert.equal(isAllowedWorkerBranch('main'), false);
   assert.equal(isAllowedWorkerBranch('pierrot/dev/task/1'), false);
   assert.equal(isAllowedWorkerBranch('feature/x'), false);
@@ -256,7 +277,8 @@ test('detects orphaned executors left inside attempt worktrees', () => {
   assert.equal(isOrphanExecutorProcess({ cwd: '', cmdline: 'opencode' }, root), false);
 });
 
-test('boot telemetry exposes a closed set of phases', () => {  for (const phase of [
+test('boot telemetry exposes a closed set of phases', () => {
+  for (const phase of [
     'starting',
     'checking_config',
     'checking_opencode',
