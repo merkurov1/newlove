@@ -1,4 +1,5 @@
 import { DEFAULT_ISSUE_TEMPLATE } from './template';
+import { buildIssueHeader } from './header';
 import { issueEntries } from './title';
 import type { IssueEntry, IssuePayload, IssueLang } from './types';
 
@@ -19,16 +20,16 @@ type DelayRow = Stats['delays'][number] & { label?: string; external?: boolean }
 type Opts = { title: string; canonical: string; number?: number | null };
 
 const SITE = 'https://www.merkurov.love';
-// Оформление как на главной merkurov.love: бумага #FAF8F5, чернила #111111, серый zinc.
-// Акцент один; по умолчанию совпадает с чернилами. Поменяй ACCENT, если нужен цветной.
-const ACCENT = '#111111';
+// Restrained newspaper palette: warm paper, soft black ink, graphite secondary
+// text, one muted wine accent and thin light rules. No gradients or shadows.
+const ACCENT = '#7A2233';
 const PAPER = '#FAF8F5';
-const INK = '#111111';
-const SOFT = '#52525B'; // zinc-600
-const LINE = '#D4D4D8'; // zinc-300
+const INK = '#1C1A1B';
+const SOFT = '#5B5658'; // graphite
+const LINE = '#DAD3CC';
 const CLARET = ACCENT;
-const TINT = '#F0EDE6';
-const BAR2 = '#D4D4D8';
+const TINT = '#F1ECE5';
+const BAR2 = '#DAD3CC';
 // Шрифты сайта: если страница открывается внутри приложения, подхватятся его переменные
 // (--font-serif, --font-sans, --font-mono), иначе работают запасные.
 const SERIF_WEB = "var(--font-serif,'Source Serif 4',Georgia,'Times New Roman',serif)";
@@ -291,14 +292,6 @@ function linkMeta(item: LinkItem, lang: IssueLang): string {
   return parts.join('. ');
 }
 
-function issueTitle(payload: IssuePayload, number?: number | null) {
-  const lang = payload.lang;
-  const t = L[lang];
-  const period = `${dateLong(payload.period.start, lang)} — ${dateLong(payload.period.end, lang)}`;
-  const num = number ? `${t.issue} №${number}` : t.issue;
-  return { period, num };
-}
-
 function issueSummary(payload: IssuePayload, items: IssueEntry[], lang: IssueLang): string {
   const explicit = typeof payload.summary === 'string' ? payload.summary.trim() : '';
 
@@ -347,13 +340,15 @@ function pierrotIntro(payload: IssuePayload, items: IssueEntry[], lang: IssueLan
 
 function issueTheme(payload: IssuePayload) {
   const theme = payload.template?.theme;
+  const legacy = (value: string | undefined, legacyValues: string[], fallback: string) =>
+    !value || legacyValues.includes(value.toUpperCase()) ? fallback : value;
 
   return {
-    paper: theme?.paper || PAPER,
-    ink: theme?.ink || INK,
-    soft: theme?.muted || SOFT,
-    line: theme?.rule || LINE,
-    accent: theme?.accent || ACCENT,
+    paper: legacy(theme?.paper, ['#FFFFFF', '#FAF8F5'], PAPER),
+    ink: legacy(theme?.ink, ['#111111', '#1C1A1B'], INK),
+    soft: legacy(theme?.muted, ['#52525B', '#6B6568', '#5B5658'], SOFT),
+    line: legacy(theme?.rule, ['#D4D4D8', '#DDD6D8', '#DAD3CC'], LINE),
+    accent: legacy(theme?.accent, ['#111111', '#990F3D', '#7A2233'], ACCENT),
     // Older issue payloads stored the previous 760px template width. Keep the
     // stored value as a lower bound only so every published issue benefits
     // from the wider newspaper composition without rewriting its snapshot.
@@ -378,18 +373,18 @@ function webCss(payload: IssuePayload): string {
 .flow-issue-root{--bg:${theme.paper};--ink:${theme.ink};--soft:${theme.soft};--line:${theme.line};--claret:${theme.accent};--tint:${TINT};--bar:${theme.ink};--bar2:${theme.line};
 --serif:${theme.serif};--sans:${theme.sans};--mono:${MONO_WEB};position:relative;background:var(--bg);color:var(--ink);font:17px/1.65 var(--serif);scroll-padding-top:12px;color-scheme:light;padding-top:env(safe-area-inset-top,0);padding-bottom:env(safe-area-inset-bottom,0);-webkit-font-smoothing:antialiased}
 .flow-issue-root,.flow-issue-root *{box-sizing:border-box}
-.flow-issue-root:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.025;mix-blend-mode:overlay;z-index:5;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 .flow-issue-root ::selection{background:var(--ink);color:var(--bg)}
 .flow-issue-root{overflow-x:clip}
 .flow-issue-root a{color:inherit;overflow-wrap:anywhere;word-break:break-word}
 .page{max-width:${theme.maxWidth}px;min-width:0;margin:0 auto;padding:clamp(18px,2.2vw,28px) clamp(18px,3vw,44px) 64px;position:relative;z-index:10}
-.top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font:12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--soft);padding-bottom:12px}
+.top{display:grid;grid-template-columns:1fr;gap:5px;align-items:baseline;font:11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--soft);padding-bottom:12px}
+@media(min-width:700px){.top{grid-template-columns:repeat(4,auto);justify-content:space-between}}
+.top span{min-width:0;overflow-wrap:anywhere}
 .mast{border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);padding:24px 0 20px;text-align:center}
-.mast .brand{margin:0 0 10px;font:500 12px var(--mono);letter-spacing:.28em;text-transform:uppercase;color:var(--soft)}
+.mast .brand{margin:0 0 12px;font:500 12px var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--claret)}
 .mast h1{margin:0 auto;max-width:min(1180px,100%);font:400 clamp(28px,4.6vw,54px)/1.12 var(--serif);letter-spacing:-.02em;text-wrap:balance;overflow-wrap:anywhere}
-.mast .mast-period{margin:14px 0 0;font:12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--soft)}
 .nav{display:flex;gap:10px 30px;justify-content:center;flex-wrap:wrap;font:500 12px var(--mono);letter-spacing:.2em;text-transform:uppercase;padding:14px 0;border-bottom:1px solid var(--line)}
-.nav a{text-decoration:underline;text-underline-offset:8px;text-decoration-color:#D4D4D8;padding:6px 0}.nav a:hover{text-decoration-color:var(--ink)}
+.nav a{text-decoration:underline;text-underline-offset:8px;text-decoration-color:var(--line);padding:6px 0}.nav a:hover{text-decoration-color:var(--claret)}
 .g{display:grid;grid-template-columns:1fr;gap:0 clamp(28px,3vw,52px);margin-top:40px}
 @media(min-width:1200px){.g{grid-template-columns:repeat(12,1fr)}.c8{grid-column:span 8}.c4{grid-column:span 4}.c6{grid-column:span 6}.c12{grid-column:span 12}}
 .flow-issue-root section,.flow-issue-root aside{margin-bottom:48px;min-width:0}
@@ -417,8 +412,9 @@ function webCss(payload: IssuePayload): string {
 .metrics span{display:block;margin-top:6px;font:13px/1.35 var(--sans);color:var(--soft)}
 .metrics .metric-summary b{font:400 clamp(19px,2.4vw,28px)/1.2 var(--serif);letter-spacing:-.01em}
 .lead p{max-width:72ch}
-.intro{border-top:1px solid var(--ink);padding-top:20px}
-.intro p{font:400 18px/1.65 var(--serif);margin:0 0 14px;max-width:76ch;color:var(--ink);overflow-wrap:anywhere}
+.intro{border-top:1px solid var(--ink);padding-top:24px;margin-bottom:54px}
+.intro p{font:400 19px/1.7 var(--serif);margin:0 0 16px;max-width:72ch;color:var(--ink);overflow-wrap:anywhere}
+.intro p:first-child{font-size:clamp(21px,2.4vw,25px);line-height:1.5;letter-spacing:-.008em}
 .intro p:last-child{margin-bottom:0}
 .issue-feed{display:flex;flex-direction:column;min-width:0}
 .item{padding:26px 0;border-top:1px solid var(--line);min-width:0}
@@ -460,8 +456,8 @@ function webCss(payload: IssuePayload): string {
 .statsHead{border-top:1px solid var(--ink);padding-top:16px;margin-bottom:16px}.statsHead .k{margin:0}
 .sub{border-top:1px solid var(--ink);padding-top:22px;text-align:center}.sub h2{font-size:clamp(28px,4vw,42px)}
 .dek{font:italic 20px/1.5 var(--serif);color:var(--soft);margin:0 auto 22px;max-width:640px}
-.mail{display:inline-flex;align-items:center;gap:10px;border:1px solid rgba(17,17,17,.2);background:rgba(255,255,255,.8);color:var(--ink);padding:14px 30px;border-radius:999px;font:italic 18px var(--serif);text-decoration:none;transition:all .3s}
-.mail:hover{background:var(--ink);color:var(--bg)}
+.mail{display:inline-block;border-bottom:1px solid var(--claret);color:var(--claret);padding:4px 0;font:italic 19px var(--serif);text-decoration:none;transition:color .2s,border-color .2s}
+.mail:hover{color:var(--ink);border-bottom-color:var(--ink)}
 .flow-issue-root footer{border-top:1px solid var(--ink);padding-top:14px;font:12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--soft)}
 `;
 }
@@ -545,7 +541,12 @@ function materialOrder(payload: IssuePayload): MaterialKey[] {
   const active = requested.filter((key) => enabled[key] !== false);
   const remainder = MATERIAL_KEYS.filter((key) => !active.includes(key) && enabled[key] !== false);
 
-  return [...new Set([...active, ...remainder])];
+  // Every published video belongs to the issue. A template switch may change
+  // where the section sits (or hide other optional sections), but it must not
+  // silently erase the week's video record.
+  const mandatory: MaterialKey[] = payload.videos?.length ? ['videos'] : [];
+
+  return [...new Set([...active, ...remainder, ...mandatory])];
 }
 
 function renderWeb(payload: IssuePayload, ext: Stats, o: Opts): string {
@@ -553,7 +554,7 @@ function renderWeb(payload: IssuePayload, ext: Stats, o: Opts): string {
   const t = L[lang];
   const labels = issueLabels(payload);
   const sections = issueSections(payload);
-  const { period, num } = issueTitle(payload, o.number);
+  const header = buildIssueHeader(payload, o.number);
   const summary = issueSummary(payload, issueEntries(payload), lang);
   const intro = pierrotIntro(payload, issueEntries(payload), lang);
   const flowDays = ext.flowActiveDays ?? ext.days ?? 1;
@@ -669,18 +670,17 @@ function renderWeb(payload: IssuePayload, ext: Stats, o: Opts): string {
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <title>${esc(o.title)}</title>
-<meta name="description" content="${esc(`${t.brand}. ${num}. ${period}. ${summary}`)}">
+<meta name="description" content="${esc(`${o.title}. ${summary}`)}">
 <link rel="canonical" href="${esc(o.canonical)}">
 <style>${webCss(payload)}</style>
 </head>
 <body>
 <div class="flow-issue-root">
 <div class="page">
-<div class="top"><span>${esc(period)}</span><span>${esc(num)}. ${esc(t.utc)}</span><span>merkurov.love/flow</span></div>
+<div class="top"><span>${esc(header.period)}</span><span>${esc(header.issueNumber)}</span><span>${esc(header.timezone)}</span><span>${esc(header.address)}</span></div>
 <header class="mast">
-  <p class="brand">${esc(t.brand)}</p>
+  <p class="brand">${esc(header.brand)}</p>
   <h1>${esc(o.title)}</h1>
-  <p class="mast-period">${esc(period)} · ${esc(num)}</p>
 </header>
 <nav class="nav">${nav.map((item) => `<a href="#${item.href}">${esc(item.label)}</a>`).join('')}</nav>
 <div class="g">
@@ -732,7 +732,7 @@ function renderEmail(payload: IssuePayload, ext: Stats, o: Opts): string {
   const t = L[lang];
   const labels = issueLabels(payload);
   const sections = issueSections(payload);
-  const { period, num } = issueTitle(payload, o.number);
+  const header = buildIssueHeader(payload, o.number);
   const summary = issueSummary(payload, issueEntries(payload), lang);
   const intro = pierrotIntro(payload, issueEntries(payload), lang);
   const flowDays = ext.flowActiveDays ?? ext.days ?? 1;
@@ -830,17 +830,20 @@ function renderEmail(payload: IssuePayload, ext: Stats, o: Opts): string {
 
   const joinHtml =
     enabled.subscribe !== false
-      ? `<div style="margin-top:38px;padding-top:18px;border-top:2px solid ${INK};"><h2 style="margin:0 0 10px;font-family:${SERIF_MAIL};font-size:28px;line-height:1.15;color:${INK};">${esc(t.joinTitle)}</h2><p style="margin:0 0 16px;font-family:${SERIF_MAIL};font-size:16px;line-height:1.55;color:${SOFT};">${esc(labels.subscribeCopy)}</p><a href="${SITE}/flow/join" style="display:inline-block;background:${INK};color:${PAPER};padding:13px 26px;border-radius:999px;font-family:${SERIF_MAIL};font-size:16px;font-style:italic;text-decoration:none;">${esc(t.joinCta)} ↗</a></div>`
+      ? `<div style="margin-top:38px;padding-top:18px;border-top:2px solid ${INK};"><h2 style="margin:0 0 10px;font-family:${SERIF_MAIL};font-size:28px;line-height:1.15;color:${INK};">${esc(t.joinTitle)}</h2><p style="margin:0 0 16px;font-family:${SERIF_MAIL};font-size:16px;line-height:1.55;color:${SOFT};">${esc(labels.subscribeCopy)}</p><a href="${SITE}/flow/join" style="display:inline-block;color:${CLARET};border-bottom:1px solid ${CLARET};padding-bottom:2px;font-family:${SERIF_MAIL};font-size:18px;font-style:italic;text-decoration:none;">${esc(t.joinCta)} ↗</a></div>`
       : '';
 
   return `<!doctype html>
 <html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head>
 <body style="margin:0;padding:0;background:${PAPER};">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${esc(`${num}. ${period}. ${summary}`)}</div>
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${esc(summary)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${PAPER}" style="background:${PAPER};"><tr><td align="center" style="padding:0 8px;">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;"><tr><td style="padding:22px 18px 36px;">
-<p style="margin:0 0 8px;font-family:${SANS_MAIL};font-size:12px;color:${SOFT};">${esc(period)}. ${esc(num)}</p>
-<div style="border-top:1px solid ${INK};border-bottom:1px solid ${INK};padding:16px 0 14px;text-align:center;"><span style="font-family:${MONO_MAIL};font-size:11px;letter-spacing:2px;text-transform:uppercase;color:${SOFT};">${esc(t.brand)}</span><div style="margin-top:8px;font-family:${SERIF_MAIL};font-size:30px;font-weight:normal;letter-spacing:-.5px;line-height:1.2;color:${INK};">${esc(o.title)}</div></div>
+<p style="margin:0 0 4px;font-family:${SANS_MAIL};font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:${SOFT};">${esc(header.period)}</p>
+<p style="margin:0 0 4px;font-family:${SANS_MAIL};font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:${SOFT};">${esc(header.issueNumber)}</p>
+<p style="margin:0 0 4px;font-family:${SANS_MAIL};font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:${SOFT};">${esc(header.timezone)}</p>
+<p style="margin:0 0 8px;font-family:${SANS_MAIL};font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:${SOFT};">${esc(header.address)}</p>
+<div style="border-top:1px solid ${INK};border-bottom:1px solid ${INK};padding:16px 0 14px;text-align:center;"><span style="font-family:${MONO_MAIL};font-size:11px;letter-spacing:3px;text-transform:uppercase;color:${CLARET};">${esc(header.brand)}</span><div style="margin-top:8px;font-family:${SERIF_MAIL};font-size:30px;font-weight:normal;letter-spacing:-.5px;line-height:1.2;color:${INK};">${esc(o.title)}</div></div>
 <p style="margin:20px 0 8px;font-family:${MONO_MAIL};font-size:12px;letter-spacing:2px;text-transform:uppercase;color:${SOFT};">${esc(labels.metrics)}</p>
 ${metricsHtml}
 ${introHtml}
@@ -857,14 +860,23 @@ function renderText(payload: IssuePayload, ext: Stats, o: Opts): string {
   const t = L[lang];
   const labels = issueLabels(payload);
   const sections = issueSections(payload);
-  const { period, num } = issueTitle(payload, o.number);
+  const header = buildIssueHeader(payload, o.number);
   const summary = issueSummary(payload, issueEntries(payload), lang);
   const intro = pierrotIntro(payload, issueEntries(payload), lang);
   const flowDays = ext.flowActiveDays ?? ext.days ?? 1;
   const published = publishedCount(payload, ext);
   const order = materialOrder(payload);
   const enabled = payload.template?.sections?.enabled || {};
-  const out: string[] = [o.title, `${t.brand}. ${num}`, period, ''];
+  const out: string[] = [
+    header.period,
+    header.issueNumber,
+    header.timezone,
+    header.address,
+    header.brand,
+    '',
+    o.title,
+    '',
+  ];
 
   out.push(
     labels.metrics,

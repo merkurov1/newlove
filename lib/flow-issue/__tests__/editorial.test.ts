@@ -389,6 +389,49 @@ describe("Flow issue editorial selection", () => {
     expect(selection.lead).toBeNull();
   });
 
+  it("includes every published video even without usable transcript or analysis", () => {
+    const noTranscript = buildCandidate(
+      entry({
+        id: "video-b",
+        type: "video",
+        title: "A video without transcript",
+        body: "",
+        metadata: { youtube: { video_id: "abc123", title: "A video without transcript" } },
+      }),
+      analysis({
+        role: "omit",
+        editorialValue: 0,
+        originality: 0,
+        specificity: 0,
+        readerValue: 0,
+      }),
+      windowEnd,
+    );
+
+    const videos = [
+      candidate("video-a", {
+        type: "video",
+        title: "A published video",
+        scores: { editorialValue: 1, originality: 1, specificity: 1, readerValue: 1 },
+      }),
+      noTranscript,
+      candidate("video-c", {
+        type: "video",
+        title: "A third video",
+        scores: { editorialValue: 1, originality: 1, specificity: 1, readerValue: 1 },
+      }),
+    ];
+
+    // A low template quota must not silently hide published videos.
+    const selection = selectIssueContent(videos, { ...limits, videos: 1 }, windowEnd);
+
+    expect(selection.videos.map((item) => item.id).sort()).toEqual([
+      "video-a",
+      "video-b",
+      "video-c",
+    ]);
+  });
+
   it("is deterministic for identical inputs and analyses", () => {
     const items = [
       candidate("alpha", { topic: "one" }),

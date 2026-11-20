@@ -100,7 +100,7 @@ export default function FlowIssueArticle({
           font: 12px ui-monospace, monospace;
           letter-spacing: .08em;
           text-transform: uppercase;
-          color: #52525B;
+          color: #5B5658;
         }
         .flow-issue-back a {
           overflow-wrap: anywhere;
@@ -113,7 +113,7 @@ export default function FlowIssueArticle({
           border-bottom-color: currentColor;
         }
         .flow-issue-back span {
-          color: #D4D4D8;
+          color: #DAD3CC;
         }
       `}</style>
       <div className="flow-issue-back">

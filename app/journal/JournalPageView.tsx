@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/server';
 import SubscribeFormClient from '@/components/journal/SubscribeFormClient';
 import FrontPage, { type FrontIssue, type FlowEntry } from '@/components/journal/FrontPage';
 import { JOURNAL_COPY, journalIssueHref, type JournalLanguage } from '@/lib/i18n/journal';
+import { selectJournalIssues } from '@/lib/journal/archive';
+import { loadAllJournalIssues, type JournalIssueRow } from '@/lib/journal/load';
 import { localizedPath } from '@/lib/i18n/config';
 import HtmlLanguage from '@/components/i18n/HtmlLanguage';
 
@@ -126,30 +128,28 @@ export default async function JournalPageView({ lang }: { lang: JournalLanguage 
 
   let issues: FrontIssue[] = [];
 
-  const [issuesRes, allFlow]: [any, FlowEntry[]] = await Promise.all([
-    supabase
-      .from('letters')
-      .select(
-        'id,title,slug,publishedAt,sentAt,createdAt,lang,number,' +
-          'leadTitle:payload->lead->>title,leadBody:payload->lead->>body,' +
-          'itemCount:payload->stats->>published,byType:payload->stats->byType,' +
-          'periodStart:payload->period->>start,periodEnd:payload->period->>end'
-      )
-      .eq('published', true)
-      .eq('kind', 'issue')
-      .order('publishedAt', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(24),
+  // Read the whole catalogue in explicit pages. Interface language is not a
+  // query filter, so the English journal keeps Russian editions (and their
+  // original titles) in the archive.
+  const [issueRows, allFlow]: [JournalIssueRow[], FlowEntry[]] = await Promise.all([
+    loadAllJournalIssues(supabase).catch((error) => {
+      console.error('[Journal] Issues:', error);
+      return [] as JournalIssueRow[];
+    }),
     loadFlow(),
   ]);
 
-  if (issuesRes.error) console.error('[Journal] Issues:', issuesRes.error);
-  else issues = (issuesRes.data || []).map(toIssue);
+  issues = issueRows.map(toIssue);
 
-  const streamIssues = issues.filter((issue) => issue.lang === lang);
-  const featured = streamIssues[0] ?? null;
-  const archive = streamIssues.filter((issue) => issue.id !== featured?.id).slice(0, 8);
-  const flow = allFlow.filter((entry) => entry.lang === lang).slice(0, 5);
+  // The interface language and the archive contents are separate concerns.
+  // Prefer the latest edition in the current language, but never hide the
+  // other language from the catalogue: every issue keeps its own lang.
+  const { featured, archive } = selectJournalIssues(issues, lang);
+
+  // The recent stream is part of the same record. Interface language changes
+  // the chrome, not which materials exist: keep both languages and let the
+  // row label show when a material is in the other language.
+  const flow = allFlow.slice(0, 5);
 
   const journalItems = issues.map((issue) => ({
     name: issue.headline,
@@ -159,7 +159,7 @@ export default async function JournalPageView({ lang }: { lang: JournalLanguage 
   return (
     <div
       lang={lang}
-      className="min-h-screen bg-[#FDFBF7] font-sans text-[#111] selection:bg-black selection:text-white"
+      className="min-h-screen bg-[#FAF8F5] font-sans text-[#1C1A1B] selection:bg-black selection:text-white"
     >
       <HtmlLanguage lang={lang} />
       <PageEvent name="section_view" params={{ section: 'journal', language: lang }} />

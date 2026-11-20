@@ -54,11 +54,11 @@ export type IssueTemplateSettings = {
 
 export const DEFAULT_ISSUE_TEMPLATE: IssueTemplateSettings = {
   theme: {
-    accent: "#990F3D",
-    paper: "#FFFFFF",
+    accent: "#7A2233",
+    paper: "#FAF8F5",
     ink: "#1C1A1B",
-    muted: "#6B6568",
-    rule: "#DDD6D8",
+    muted: "#5B5658",
+    rule: "#DAD3CC",
     maxWidth: 760,
     serifFont: "Georgia, 'Times New Roman', serif",
     sansFont: "Inter, Arial, sans-serif",

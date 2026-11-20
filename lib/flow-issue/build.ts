@@ -60,7 +60,9 @@ const itemIsSelectable = (item: FlowItem): boolean => {
       return Boolean(link.title || link.description);
     }
     case 'video':
-      return Boolean(clean(metadata.youtube?.title) || clean(metadata.youtube?.video_id));
+      // Every published video belongs to the issue. A missing transcript,
+      // thumbnail or AI analysis must never make it unselectable.
+      return true;
     case 'photo':
       return Boolean(clean(metadata.public_url) || clean(metadata.alt) || clean(metadata.caption));
     default:
