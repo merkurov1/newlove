@@ -1,9 +1,6 @@
 /** @jest-environment node */
 
-import {
-  buildExecutionPrompt,
-  parseExecutorReport,
-} from '../prompt';
+import { buildExecutionPrompt, parseExecutorReport } from '../prompt';
 
 const material = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -85,6 +82,20 @@ describe('executor report parsing', () => {
     const parsed = parseExecutorReport(validRaw);
     expect(parsed.summary).toBe('Changed the queue');
     expect(parsed.criteria[0].criterion).toBe('Queue persists');
+    expect(parsed.commands[0].status).toBe('passed');
+  });
+
+  it('accepts a plain final JSON object when the model omits the fence', () => {
+    const payload = JSON.stringify({
+      summary: 'plain report',
+      changedFiles: ['lib/a.ts'],
+      commands: [{ name: 'pnpm test', status: 'passed' }],
+      acceptanceCriteria: [],
+      warnings: [],
+      unverified: [],
+    });
+    const parsed = parseExecutorReport(`narrative\n${payload}`);
+    expect(parsed.summary).toBe('plain report');
     expect(parsed.commands[0].status).toBe('passed');
   });
 

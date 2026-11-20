@@ -1091,7 +1091,10 @@ export async function promoteStandaloneReadyTasks(limit = 20): Promise<number> {
     let promoted = 0;
     for (const row of data) {
       if (optedOut.has(`queue:optout:${row.id}`)) continue;
-      const { error: updateError } = await store()
+      // Supabase does not report an error when a conditional UPDATE matches
+      // zero rows. Select the id back so a concurrent claim/dequeue cannot be
+      // counted as a successful refill.
+      const { data: updated, error: updateError } = await store()
         .from('pierrot_dev_prompts')
         .update({
           status: 'queued',
@@ -1102,8 +1105,10 @@ export async function promoteStandaloneReadyTasks(limit = 20): Promise<number> {
           updated_at: queuedAt,
         })
         .eq('id', String(row.id))
-        .eq('status', 'ready');
+        .eq('status', 'ready')
+        .select('id');
       if (updateError) continue;
+      if (!Array.isArray(updated) || updated.length === 0) continue;
       promoted += 1;
       position += 1;
       await appendEvent({
@@ -2220,6 +2225,67 @@ export async function claimTask(
   return mapClaimResult(data);
 }
 
+/**
+ * Release dispatch markers that still say `claimed` after their attempt ended.
+ *
+ * The lease reaper returns the task to `queued`, but it predates the Actions
+ * dispatch columns and therefore cannot clear them. A queued task whose marker
+ * is still `claimed` is never picked up by the dispatcher again; this safe,
+ * conditional cleanup removes that stale marker without touching a live
+ * attempt or a reservation owned by a newer workflow.
+ */
+export async function clearStaleClaimedDispatchMarkers(limit = 20): Promise<number> {
+  if (!(await isActionsDispatchRecoverySchemaReady())) return 0;
+  try {
+    const client = store();
+    const { data, error } = await client
+      .from('pierrot_dev_prompts')
+      .select('id')
+      .eq('status', 'queued')
+      .eq('actions_dispatch_status', 'claimed')
+      .not('actions_dispatch_requested_at', 'is', null)
+      .limit(Math.min(Math.max(limit, 1), 50));
+    if (error || !Array.isArray(data) || data.length === 0) return 0;
+
+    const ids = data.map((row) => String(row.id)).filter(isUuid);
+    if (ids.length === 0) return 0;
+
+    const { data: activeRows } = await client
+      .from('pierrot_dev_attempts')
+      .select('task_id')
+      .in('task_id', ids)
+      .in('status', ['claimed', 'running']);
+    const active = new Set((activeRows || []).map((row) => String(row.task_id)));
+    const staleIds = ids.filter((id) => !active.has(id));
+    if (staleIds.length === 0) return 0;
+
+    const now = new Date().toISOString();
+    const { data: updated, error: updateError } = await client
+      .from('pierrot_dev_prompts')
+      .update({
+        actions_dispatch_requested_at: null,
+        actions_dispatch_status: null,
+        actions_dispatch_reason_code: null,
+        actions_dispatch_reason: null,
+        actions_dispatch_correlation_id: null,
+        actions_dispatch_attempts: 0,
+        actions_dispatch_last_attempt_at: null,
+        actions_dispatch_next_retry_at: null,
+        actions_dispatch_updated_at: now,
+        updated_at: now,
+      })
+      .in('id', staleIds)
+      // Re-check the exact stale condition so a concurrent claim/retry wins.
+      .eq('status', 'queued')
+      .eq('actions_dispatch_status', 'claimed')
+      .select('id');
+    if (updateError || !Array.isArray(updated)) return 0;
+    return updated.length;
+  } catch {
+    return 0;
+  }
+}
+
 export async function reapExpiredAttempts(): Promise<number> {
   try {
     const { data, error } = await store().rpc('pierrot_dev_reap_expired_attempts', {
@@ -2227,6 +2293,12 @@ export async function reapExpiredAttempts(): Promise<number> {
     });
     if (error) return 0;
     const reaped = typeof data === 'number' ? data : 0;
+    if (reaped > 0) {
+      // The reaper requeues the first expired attempt. Any dispatch marker that
+      // still says `claimed` belongs to that dead attempt and must not block
+      // the next dispatch.
+      await clearStaleClaimedDispatchMarkers().catch(() => 0);
+    }
     if (reaped > 0 && (await isActionsDispatchRecoverySchemaReady())) {
       // The reaper clears actions_dispatch_requested_at when it requeues a
       // task. Normalize the new diagnostic fields for any queued task whose

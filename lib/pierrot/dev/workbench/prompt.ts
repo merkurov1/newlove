@@ -107,17 +107,65 @@ export function buildExecutionPrompt(input: {
     );
   }
 
-  return lines.filter((line) => line !== null).join('\n').trim();
+  return lines
+    .filter((line) => line !== null)
+    .join('\n')
+    .trim();
+}
+
+/** Last complete top-level JSON objects, bounded to avoid a huge log copy. */
+function completeJsonObjects(text: string, limit = 20): string[] {
+  const objects: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === '{') {
+      if (depth === 0) start = index;
+      depth += 1;
+      continue;
+    }
+    if (char === '}' && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        objects.push(text.slice(start, index + 1));
+        if (objects.length > limit) objects.shift();
+        start = -1;
+      }
+    }
+  }
+  return objects;
 }
 
 /**
  * Structured result block parser for the executor's final answer. Bounded and
  * defensive: anything malformed is ignored rather than trusted.
  */
-export function parseExecutorReport(raw: string): {  summary: string;
+export function parseExecutorReport(raw: string): {
+  summary: string;
   changedFiles: string[];
-  commands: Array<{ name: string; status: 'passed' | 'failed' | 'skipped' | 'unknown'; detail?: string }>;
-  criteria: Array<{ criterion: string; status: 'satisfied' | 'not_verified' | 'failed'; evidence: string }>;
+  commands: Array<{
+    name: string;
+    status: 'passed' | 'failed' | 'skipped' | 'unknown';
+    detail?: string;
+  }>;
+  criteria: Array<{
+    criterion: string;
+    status: 'satisfied' | 'not_verified' | 'failed';
+    evidence: string;
+  }>;
   warnings: string[];
   unverified: string[];
 } {
@@ -143,24 +191,32 @@ export function parseExecutorReport(raw: string): {  summary: string;
   const extract = (input: string) => [...input.matchAll(/```json\s*([\s\S]*?)```/gi)];
   const candidates: string[] = [];
   const direct = extract(raw);
-  if (direct.length > 0) candidates.push(direct[direct.length - 1][1]);
+  if (direct.length > 0) {
+    // The last fenced block is the executor's answer. If it is malformed we do
+    // not silently fall back to an earlier, unrelated block.
+    candidates.push(direct[direct.length - 1][1]);
+  }
   if (!raw.includes('\n') && raw.includes('\\n')) {
     // JSON-formatted CLI output escapes newlines and quotes inside a string.
-    const decoded = raw
-      .replace(/\\n/g, '\n')
-      .replace(/\\"/g, '"')
-      .replace(/\\\\/g, '\\');
+    const decoded = raw.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
     const decodedBlocks = extract(decoded);
     if (decodedBlocks.length > 0) {
       candidates.push(decodedBlocks[decodedBlocks.length - 1][1]);
     }
+  } else if (direct.length === 0) {
+    // A model may ignore the fence but still end with the required JSON object.
+    for (const object of completeJsonObjects(raw).reverse()) candidates.push(object);
   }
 
+  const isReport = (value: Record<string, unknown>) =>
+    ['summary', 'changedFiles', 'commands', 'acceptanceCriteria', 'warnings', 'unverified'].some(
+      (key) => Object.prototype.hasOwnProperty.call(value, key)
+    );
   let parsed: Record<string, unknown> | null = null;
   for (const candidate of candidates) {
     try {
       const value = JSON.parse(candidate);
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
+      if (value && typeof value === 'object' && !Array.isArray(value) && isReport(value)) {
         parsed = value as Record<string, unknown>;
         break;
       }
@@ -169,53 +225,56 @@ export function parseExecutorReport(raw: string): {  summary: string;
     }
   }
   if (!parsed) return fallback;
-    const strings = (value: unknown, limit: number): string[] =>
-      Array.isArray(value)
-        ? value.filter((item): item is string => typeof item === 'string').slice(0, limit)
-        : [];
-
-    const commands = Array.isArray(parsed.commands)
-      ? parsed.commands
-          .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
-          .slice(0, 30)
-          .map((item) => {
-            const status = String(item.status || 'unknown');
-            return {
-              name: String(item.name || 'command').slice(0, 300),
-              status: (['passed', 'failed', 'skipped'].includes(status) ? status : 'unknown') as
-                | 'passed'
-                | 'failed'
-                | 'skipped'
-                | 'unknown',
-              detail:
-                typeof item.detail === 'string' ? item.detail.slice(0, 1000) : undefined,
-            };
-          })
+  const strings = (value: unknown, limit: number): string[] =>
+    Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string').slice(0, limit)
       : [];
 
-    const criteria = Array.isArray(parsed.acceptanceCriteria)
-      ? parsed.acceptanceCriteria
-          .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
-          .slice(0, 40)
-          .map((item) => {
-            const status = String(item.status || 'not_verified');
-            return {
-              criterion: String(item.criterion || '').slice(0, 1000),
-              status: (['satisfied', 'not_verified', 'failed'].includes(status)
-                ? status
-                : 'not_verified') as 'satisfied' | 'not_verified' | 'failed',
-              evidence: String(item.evidence || '').slice(0, 2000),
-            };
-          })
-          .filter((item) => item.criterion.length > 0)
-      : [];
+  const commands = Array.isArray(parsed.commands)
+    ? parsed.commands
+        .filter(
+          (item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object'
+        )
+        .slice(0, 30)
+        .map((item) => {
+          const status = String(item.status || 'unknown');
+          return {
+            name: String(item.name || 'command').slice(0, 300),
+            status: (['passed', 'failed', 'skipped'].includes(status) ? status : 'unknown') as
+              | 'passed'
+              | 'failed'
+              | 'skipped'
+              | 'unknown',
+            detail: typeof item.detail === 'string' ? item.detail.slice(0, 1000) : undefined,
+          };
+        })
+    : [];
 
-    return {
-      summary: typeof parsed.summary === 'string' ? parsed.summary.slice(0, 12_000) : '',
-      changedFiles: strings(parsed.changedFiles, 200).map((file) => file.slice(0, 500)),
-      commands,
-      criteria,
-      warnings: strings(parsed.warnings, 40).map((item) => item.slice(0, 1000)),
-      unverified: strings(parsed.unverified, 40).map((item) => item.slice(0, 1000)),
-    };
+  const criteria = Array.isArray(parsed.acceptanceCriteria)
+    ? parsed.acceptanceCriteria
+        .filter(
+          (item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object'
+        )
+        .slice(0, 40)
+        .map((item) => {
+          const status = String(item.status || 'not_verified');
+          return {
+            criterion: String(item.criterion || '').slice(0, 1000),
+            status: (['satisfied', 'not_verified', 'failed'].includes(status)
+              ? status
+              : 'not_verified') as 'satisfied' | 'not_verified' | 'failed',
+            evidence: String(item.evidence || '').slice(0, 2000),
+          };
+        })
+        .filter((item) => item.criterion.length > 0)
+    : [];
+
+  return {
+    summary: typeof parsed.summary === 'string' ? parsed.summary.slice(0, 12_000) : '',
+    changedFiles: strings(parsed.changedFiles, 200).map((file) => file.slice(0, 500)),
+    commands,
+    criteria,
+    warnings: strings(parsed.warnings, 40).map((item) => item.slice(0, 1000)),
+    unverified: strings(parsed.unverified, 40).map((item) => item.slice(0, 1000)),
+  };
 }

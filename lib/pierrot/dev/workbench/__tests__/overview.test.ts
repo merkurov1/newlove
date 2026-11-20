@@ -87,6 +87,48 @@ describe('workbench overview recovery ordering', () => {
     expect(lifecycle.getLifecycleSnapshot).toHaveBeenCalledTimes(1);
   });
 
+  it('shows ready tasks in the queue so an empty queued list is never misleading', async () => {
+    const base = {
+      repository: 'newlove',
+      baseRef: 'main',
+      priority: 0,
+      queuePosition: null,
+      queuedAt: null,
+      attemptCount: 0,
+      acceptanceCriteria: [],
+      verificationStatus: null,
+      blockedReason: null,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      resultCommit: null,
+      resultNotes: '',
+      pullRequests: [],
+      updatedAt: '2026-11-20T00:00:00.000Z',
+      createdAt: '2026-11-20T00:00:00.000Z',
+      objective: '',
+      title: 'Ready task',
+    };
+    asMock(store.listTaskRows).mockResolvedValue([
+      { ...base, id: 'ready', status: 'ready' as const, title: 'Ready task' },
+      {
+        ...base,
+        id: 'queued',
+        status: 'queued' as const,
+        title: 'Queued task',
+        queuePosition: 1,
+        queuedAt: '2026-11-20T00:00:00.000Z',
+      },
+      { ...base, id: 'draft', status: 'draft' as const, title: 'Draft task' },
+    ]);
+
+    const overview = await getWorkbenchOverview('11111111-1111-4111-8111-111111111111', {
+      skipReap: true,
+    });
+
+    expect(overview.queue.map((task) => task.id)).toEqual(['queued', 'ready']);
+    expect(overview.queue.find((task) => task.id === 'ready')?.status).toBe('ready');
+  });
+
   it('keeps verified or merged tasks out of the owner review list', () => {
     const base = {
       repository: 'newlove',

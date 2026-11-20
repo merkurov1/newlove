@@ -155,6 +155,7 @@ export async function POST(req: Request) {
   }
   const action = body.action;
   const taskId = typeof body.taskId === 'string' ? body.taskId : '';
+  let dispatchResult: Awaited<ReturnType<typeof dispatchTaskToActions>> | null = null;
 
   try {
     if (TASK_ACTIONS.has(action) && !isUuid(taskId)) {
@@ -185,7 +186,7 @@ export async function POST(req: Request) {
             }).catch(() => {});
           }
           if (queuedTask?.status === 'queued' && queuedTask.assignedExecutor !== 'codespace') {
-            await dispatchTaskToActions({ taskId, source: 'admin:approve' });
+            dispatchResult = await dispatchTaskToActions({ taskId, source: 'admin:approve' });
           }
         }
         break;
@@ -201,7 +202,7 @@ export async function POST(req: Request) {
         // dispatcher would refuse it anyway; skipping here avoids an error on
         // an otherwise successful enqueue.
         if (task.assignedExecutor !== 'codespace') {
-          await dispatchTaskToActions({ taskId, source: 'admin:enqueue' });
+          dispatchResult = await dispatchTaskToActions({ taskId, source: 'admin:enqueue' });
         }
         break;
       }
@@ -219,12 +220,12 @@ export async function POST(req: Request) {
         const task = await retryTask(admin.id, taskId);
         if (!task) return json({ error: 'Task not found.' }, 404);
         if (task.assignedExecutor !== 'codespace') {
-          await dispatchTaskToActions({ taskId, source: 'admin:retry' });
+          dispatchResult = await dispatchTaskToActions({ taskId, source: 'admin:retry' });
         }
         break;
       }
       case 'retry_dispatch': {
-        await retryActionsDispatch({ taskId, source: 'admin:retry_dispatch' });
+        dispatchResult = await retryActionsDispatch({ taskId, source: 'admin:retry_dispatch' });
         break;
       }
       case 'accept': {
@@ -502,7 +503,7 @@ export async function POST(req: Request) {
     }
 
     const overview = await getWorkbenchOverview(admin.id);
-    return json({ ok: true, overview });
+    return json({ ok: true, overview, dispatch: dispatchResult });
   } catch (error) {
     return errorResponse(error);
   }

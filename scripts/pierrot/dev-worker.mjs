@@ -36,6 +36,7 @@ import {
   checkCommitIdentity,
   classifyClaimOutcome,
   computeReadiness,
+  extractExecutorReport,
   isAllowedWorkerBranch,
   isClaimForRequestedTask,
   isOrphanExecutorProcess,
@@ -717,33 +718,6 @@ function extractSessionId(output) {
       const candidate = event.sessionID || event.session_id || event.session?.id || event.sessionId;
       if (typeof candidate === 'string' && candidate.length >= 8) return candidate.slice(0, 200);
     } catch {}
-  }
-  return null;
-}
-
-function decodeEscapes(value) {
-  let text = value;
-  if (!text.includes('\n') && text.includes('\\n')) {
-    text = text.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-  }
-  return text;
-}
-
-function extractExecutorReport(output) {
-  const decoded = decodeEscapes(output);
-  const candidates = [];
-  const direct = [...output.matchAll(/```json\s*([\s\S]*?)```/gi)];
-  if (direct.length > 0) candidates.push(direct[direct.length - 1][1]);
-  const expanded = [...decoded.matchAll(/```json\s*([\s\S]*?)```/gi)];
-  if (expanded.length > 0) candidates.push(expanded[expanded.length - 1][1]);
-
-  for (const candidate of candidates) {
-    try {
-      const parsed = JSON.parse(candidate);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
-    } catch {
-      // Try the next candidate; malformed blocks are not trusted.
-    }
   }
   return null;
 }

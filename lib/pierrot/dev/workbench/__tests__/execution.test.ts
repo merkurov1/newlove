@@ -311,6 +311,56 @@ describe('retry queueing', () => {
       })
     );
   });
+
+  it('requeues a report-missing failure once with a fresh queue position and timestamp', async () => {
+    asMock(store.getTaskRow).mockResolvedValue({
+      ...task,
+      status: 'failed' as const,
+      lastErrorCode: 'OPENCODE_REPORT_MISSING',
+      attemptCount: 1,
+    });
+
+    await retryTask('11111111-1111-4111-8111-111111111111', task.id);
+
+    expect(store.transitionTask).toHaveBeenCalledTimes(1);
+    expect(store.transitionTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: task.id,
+        to: 'queued',
+        patch: expect.objectContaining({
+          queue_position: 4,
+          queued_at: expect.any(String),
+          last_error_code: null,
+          last_error_message: null,
+        }),
+      })
+    );
+    expect(store.clearTaskActionsDispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not re-enqueue or reset a task that is already queued', async () => {
+    const queued = { ...task, status: 'queued' as const, queuePosition: 2 };
+    asMock(store.getTaskRow).mockResolvedValue(queued);
+
+    await expect(retryTask('11111111-1111-4111-8111-111111111111', task.id)).resolves.toBe(queued);
+
+    expect(store.nextQueuePosition).not.toHaveBeenCalled();
+    expect(store.transitionTask).not.toHaveBeenCalled();
+    expect(store.clearTaskActionsDispatch).not.toHaveBeenCalled();
+  });
+
+  it('treats a concurrent retry that already queued the task as the same success', async () => {
+    const queued = { ...task, status: 'queued' as const, queuePosition: 4 };
+    asMock(store.getTaskRow)
+      .mockResolvedValueOnce({ ...task, status: 'failed' as const })
+      .mockResolvedValueOnce(queued);
+    asMock(store.transitionTask).mockResolvedValue(null);
+
+    await expect(retryTask('11111111-1111-4111-8111-111111111111', task.id)).resolves.toBe(queued);
+
+    expect(store.transitionTask).toHaveBeenCalledTimes(1);
+    expect(store.clearTaskActionsDispatch).not.toHaveBeenCalled();
+  });
 });
 
 describe('targeted Actions claim', () => {

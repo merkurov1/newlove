@@ -49,6 +49,7 @@ jest.mock('../store', () => ({
   isQueuePaused: jest.fn(async () => false),
   listQueuedTasksForDispatch: jest.fn(async () => []),
   patchTask: jest.fn(async () => ({})),
+  promoteStandaloneReadyTasks: jest.fn(async () => 0),
   reserveTaskForActionsDispatch: jest.fn(),
 }));
 
@@ -116,6 +117,7 @@ beforeEach(() => {
   });
   asMock(store.appendEvent).mockResolvedValue(undefined);
   asMock(store.patchTask).mockResolvedValue(queuedTask);
+  asMock(store.promoteStandaloneReadyTasks).mockResolvedValue(0);
   asMock(store.reserveTaskForActionsDispatch).mockResolvedValue({
     ...queuedTask,
     assignedExecutor: 'actions',
@@ -297,6 +299,31 @@ describe('bounded Actions recovery pump', () => {
       TASK_ID,
       expect.objectContaining({ expectedRequestedAt: null, maxAttempts: 5 })
     );
+  });
+
+  it('promotes approved ready work when the queue looks empty, then dispatches it', async () => {
+    asMock(store.listQueuedTasksForDispatch)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([queuedTask]);
+    asMock(store.promoteStandaloneReadyTasks).mockResolvedValue(1);
+
+    const result = await dispatchNextQueuedTask({ source: 'admin:overview' });
+
+    expect(store.promoteStandaloneReadyTasks).toHaveBeenCalledTimes(1);
+    expect(result.dispatched).toBe(true);
+    expect(result.taskId).toBe(TASK_ID);
+  });
+
+  it('does not report success when promotion happened but nothing was dispatched', async () => {
+    asMock(store.listQueuedTasksForDispatch).mockResolvedValue([]);
+    asMock(store.promoteStandaloneReadyTasks).mockResolvedValue(2);
+
+    const result = await dispatchNextQueuedTask({ source: 'admin:overview' });
+
+    expect(result.dispatched).toBe(false);
+    expect(result.code).toBe('PROMOTED_NOT_DISPATCHED');
+    expect(result.promoted).toBe(2);
+    expect(github.dispatchRepositoryEvent).not.toHaveBeenCalled();
   });
 
   it('does nothing while the queue is paused', async () => {
@@ -685,6 +712,67 @@ describe('stale marker recovery', () => {
     );
     expect(store.reserveTaskForActionsDispatch).toHaveBeenCalledTimes(1);
     expect(github.dispatchRepositoryEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers a claimed marker left behind after its lease expired and requeues', async () => {
+    const claimedTask = {
+      ...queuedTask,
+      actionsDispatchRequestedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+      actionsDispatchStatus: 'claimed' as const,
+      actionsDispatchReasonCode: 'CLAIMED',
+      actionsDispatchAttempts: 1,
+      actionsDispatchCorrelationId: 'corr-claimed',
+    };
+    asMock(store.listQueuedTasksForDispatch).mockResolvedValue([claimedTask]);
+    asMock(store.getTaskRowUnscoped).mockResolvedValue(claimedTask);
+    asMock(store.completeTaskActionsDispatch)
+      .mockResolvedValueOnce({
+        ok: true,
+        action: 'released',
+        code: 'CLAIMED_ATTEMPT_GONE',
+        task: claimedTask,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        action: 'accepted',
+        code: null,
+        task: claimedTask,
+      });
+
+    const result = await dispatchNextQueuedTask({ source: 'admin:overview' });
+
+    expect(result.dispatched).toBe(true);
+    expect(store.completeTaskActionsDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'retry',
+        reasonCode: 'CLAIMED_ATTEMPT_GONE',
+        expectedRequestedAt: claimedTask.actionsDispatchRequestedAt,
+      })
+    );
+    expect(github.dispatchRepositoryEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not release a stale claimed marker while an attempt still owns the task', async () => {
+    const claimedTask = {
+      ...queuedTask,
+      actionsDispatchRequestedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+      actionsDispatchStatus: 'claimed' as const,
+      actionsDispatchAttempts: 1,
+    };
+    asMock(store.listQueuedTasksForDispatch).mockResolvedValue([claimedTask]);
+    asMock(store.getTaskDispatchBlockers).mockResolvedValue({
+      batchPaused: false,
+      dependencyBlocked: false,
+      activeAttemptForTask: true,
+    });
+
+    const result = await dispatchNextQueuedTask({ source: 'admin:overview' });
+
+    expect(result.dispatched).toBe(false);
+    expect(store.completeTaskActionsDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'retry' })
+    );
+    expect(github.dispatchRepositoryEvent).not.toHaveBeenCalled();
   });
 
   it('does not release a marker while the task still has an active attempt', async () => {
