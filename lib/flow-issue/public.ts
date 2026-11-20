@@ -77,22 +77,47 @@ export async function loadPublicFlowIssue(slug: string): Promise<PublicFlowIssue
  * catalogue. Each issue keeps its own `lang` for display.
  */
 export async function listPublicFlowIssues(_lang?: IssueLang | 'all'): Promise<PublicFlowIssue[]> {
+  const pageSize = 200;
+
   try {
     const supabase = client();
-    const { data, error } = await supabase
-      .from('letters')
-      .select(SELECT)
-      .eq('kind', 'issue')
-      .eq('status', 'published')
-      .eq('published', true)
-      .order('publishedAt', { ascending: false });
+    const rows: any[] = [];
+    const seen = new Set<string>();
 
-    if (error) {
-      console.error('[flow-issues] archive lookup failed', error);
-      return [];
+    // Page explicitly: PostgREST has a default row cap, and a bare select
+    // would silently truncate a growing archive.
+    for (let page = 0; page < 100; page++) {
+      const from = page * pageSize;
+      const { data, error } = await supabase
+        .from('letters')
+        .select(SELECT)
+        .eq('kind', 'issue')
+        .eq('status', 'published')
+        .eq('published', true)
+        .order('publishedAt', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, from + pageSize - 1);
+
+      if (error) {
+        console.error('[flow-issues] archive lookup failed', error);
+        return rows.map(normalizeIssue).filter((issue) => issue.slug);
+      }
+
+      const batch = Array.isArray(data) ? data : [];
+
+      for (const row of batch) {
+        const id = String(row?.id ?? '');
+
+        if (id && seen.has(id)) continue;
+        if (id) seen.add(id);
+
+        rows.push(row);
+      }
+
+      if (batch.length < pageSize) break;
     }
 
-    return (data || []).map(normalizeIssue).filter((issue) => issue.slug);
+    return rows.map(normalizeIssue).filter((issue) => issue.slug);
   } catch (error) {
     console.error('[flow-issues] archive lookup crashed', error);
     return [];

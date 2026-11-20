@@ -86,7 +86,7 @@ export const JOURNAL_COPY: Record<JournalLanguage, JournalCopy> = {
     flow: {
       title: 'Flow',
       cta: 'Full stream',
-      empty: 'No recent Flow entries in this language yet.',
+      empty: 'No recent Flow entries yet.',
       types: {
         note: 'Note',
         article: 'Article',
@@ -143,7 +143,7 @@ export const JOURNAL_COPY: Record<JournalLanguage, JournalCopy> = {
     flow: {
       title: 'Flow',
       cta: 'Весь поток',
-      empty: 'В этом языке пока нет свежих материалов Flow.',
+      empty: 'Свежих материалов Flow пока нет.',
       types: {
         note: 'Заметка',
         article: 'Статья',

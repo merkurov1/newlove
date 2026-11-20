@@ -145,6 +145,22 @@ describe('Journal FrontPage localization', () => {
     expect(screen.getAllByText('In Russian').length).toBeGreaterThan(0);
   });
 
+  it('shows materials in their original language in the stream', () => {
+    render(
+      <FrontPage
+        lang="en"
+        featured={enIssue}
+        flow={[enFlow[0], ruFlow[0]]}
+        archive={[]}
+        subscribe={<div>Subscription form</div>}
+      />
+    );
+
+    expect(screen.getByText('A recent English note')).toHaveAttribute('lang', 'en');
+    expect(screen.getByText('Свежая русская статья')).toHaveAttribute('lang', 'ru');
+    expect(screen.getAllByText(/In Russian/).length).toBeGreaterThan(0);
+  });
+
   it('shows a localized empty state instead of falling back to another language', () => {
     render(
       <FrontPage
@@ -157,7 +173,7 @@ describe('Journal FrontPage localization', () => {
     );
 
     expect(screen.getByText('The first issue is coming soon.')).toBeInTheDocument();
-    expect(screen.getByText('No recent Flow entries in this language yet.')).toBeInTheDocument();
+    expect(screen.getByText('No recent Flow entries yet.')).toBeInTheDocument();
     expect(screen.getByText('The issue archive is empty for now.')).toBeInTheDocument();
     expect(screen.queryByText('Русский заголовок')).not.toBeInTheDocument();
   });

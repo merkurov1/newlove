@@ -541,7 +541,12 @@ function materialOrder(payload: IssuePayload): MaterialKey[] {
   const active = requested.filter((key) => enabled[key] !== false);
   const remainder = MATERIAL_KEYS.filter((key) => !active.includes(key) && enabled[key] !== false);
 
-  return [...new Set([...active, ...remainder])];
+  // Every published video belongs to the issue. A template switch may change
+  // where the section sits (or hide other optional sections), but it must not
+  // silently erase the week's video record.
+  const mandatory: MaterialKey[] = payload.videos?.length ? ['videos'] : [];
+
+  return [...new Set([...active, ...remainder, ...mandatory])];
 }
 
 function renderWeb(payload: IssuePayload, ext: Stats, o: Opts): string {

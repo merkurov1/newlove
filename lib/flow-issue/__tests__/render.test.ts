@@ -168,6 +168,58 @@ describe('flow issue web layout', () => {
       expect(output).toContain('TIMES ARE SHOWN IN UTC');
       expect(output).toContain('MERKUROV.LOVE/FLOW');
       expect(output).toContain('FLOW');
+
+      // The period and issue number belong to the header only. Neither the
+      // web page, the email nor the text version may repeat them in a
+      // second "period · issue" line.
+      expect(output.match(/6 NOVEMBER 2026 — 13 NOVEMBER 2026/g)).toHaveLength(1);
+      expect(output.match(/ISSUE №25/g)).toHaveLength(1);
     }
+  });
+
+  it('keeps every published video even when the template disables the section', () => {
+    const issue = payload();
+    issue.videos = [
+      {
+        ...entry({
+          id: 'video-1',
+          type: 'video',
+          title: 'Published video without transcript',
+          body: '',
+          url: 'https://www.youtube.com/watch?v=abc123',
+          metadata: {
+            youtube: {
+              video_id: 'abc123',
+              title: 'Published video without transcript',
+              thumbnail_url: 'https://i.ytimg.com/vi/abc123/hqdefault.jpg',
+            },
+          },
+        }),
+        image: 'https://i.ytimg.com/vi/abc123/hqdefault.jpg',
+        videoId: 'abc123',
+      },
+    ];
+    issue.template = {
+      ...issue.template,
+      sections: {
+        ...issue.template.sections,
+        enabled: { ...issue.template.sections.enabled, videos: false },
+      },
+    };
+
+    const { htmlWeb, htmlEmail, textEmail } = renderIssue(issue, {
+      title: 'Issue 25',
+      slug: 'issue-25',
+      number: 25,
+    });
+
+    for (const output of [htmlWeb, htmlEmail, textEmail]) {
+      expect(output).toContain('Published video without transcript');
+    }
+
+    // No transcript means no invented description: the video is represented
+    // by its real title, date and link only.
+    expect(htmlWeb).not.toContain('transcript of');
+    expect(htmlWeb).toContain('https://www.youtube.com/watch?v=abc123');
   });
 });

@@ -122,7 +122,7 @@ function SectionHead({
       {href && (
         <Link
           href={href}
-          className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-500 transition-colors hover:text-[#990F3D]"
+          className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-500 transition-colors hover:text-[#7A2233]"
         >
           {hrefLabel} →
         </Link>
@@ -163,7 +163,7 @@ function IssueLead({
     <article className="group py-10 md:px-10 md:first:pl-0 md:last:pr-0">
       <Link href={journalIssueHref(issue.lang, issue.slug)} className="block">
         <p className={kicker}>
-          <span className="text-[#990F3D]">Flow</span>
+          <span className="text-[#7A2233]">Flow</span>
           {issue.number ? ` · ${copy.featured.issue} №${issue.number}` : ''}
           {` · ${copy.languages[issue.lang]}`}
         </p>
@@ -174,7 +174,7 @@ function IssueLead({
 
         <h3
           lang={issue.lang}
-          className="mt-4 font-serif text-3xl font-normal leading-[1.1] tracking-tight text-neutral-900 transition-colors group-hover:text-[#990F3D] md:text-[2.6rem]"
+          className="mt-4 font-serif text-3xl font-normal leading-[1.1] tracking-tight text-neutral-900 transition-colors group-hover:text-[#7A2233] md:text-[2.6rem]"
         >
           {issue.headline}
         </h3>
@@ -193,7 +193,7 @@ function IssueLead({
           {issue.published != null && ` · ${items(issue.published, uiLang)}`}
         </p>
 
-        <span className="mt-6 inline-block border-b border-neutral-900 pb-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-neutral-900 transition-colors group-hover:border-[#990F3D] group-hover:text-[#990F3D]">
+        <span className="mt-6 inline-block border-b border-neutral-900 pb-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-neutral-900 transition-colors group-hover:border-[#7A2233] group-hover:text-[#7A2233]">
           {copy.featured.read} →
         </span>
       </Link>
@@ -226,16 +226,16 @@ export default function FrontPage({ lang, featured, flow, archive, subscribe }: 
         aria-label={copy.nav.ariaLabel}
         className="flex flex-wrap gap-x-7 gap-y-2 border-y border-neutral-900 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-neutral-600"
       >
-        <a href="#issues" className="hover:text-[#990F3D]">
+        <a href="#issues" className="hover:text-[#7A2233]">
           {copy.nav.issues}
         </a>
-        <a href="#stream" className="hover:text-[#990F3D]">
+        <a href="#stream" className="hover:text-[#7A2233]">
           {copy.nav.stream}
         </a>
-        <a href="#archive" className="hover:text-[#990F3D]">
+        <a href="#archive" className="hover:text-[#7A2233]">
           {copy.nav.archive}
         </a>
-        <a href="#subscribe" className="ml-auto hover:text-[#990F3D]">
+        <a href="#subscribe" className="ml-auto hover:text-[#7A2233]">
           {copy.nav.subscribe}
         </a>
       </nav>
@@ -258,6 +258,7 @@ export default function FrontPage({ lang, featured, flow, archive, subscribe }: 
               {flow.map((entry) => {
                 const when = stamp(entry.at, lang);
                 const label = copy.flow.types[entry.type] || copy.flow.types.mixed;
+                const otherLanguage = entry.lang !== lang ? copy.languages[entry.lang] : '';
                 const href = entry.slug ? `/flow/${encodeURIComponent(entry.slug)}` : '/flow';
                 return (
                   <li key={entry.id} className="border-t border-neutral-300">
@@ -268,10 +269,13 @@ export default function FrontPage({ lang, featured, flow, archive, subscribe }: 
                         {when.time}
                       </span>
                       <span>
-                        <span className={kicker}>{label}</span>
+                        <span className={kicker}>
+                          {label}
+                          {otherLanguage ? ` · ${otherLanguage}` : ''}
+                        </span>
                         <span
                           lang={entry.lang}
-                          className="mt-1 block font-serif text-lg leading-snug text-neutral-900 transition-colors group-hover:text-[#990F3D]"
+                          className="mt-1 block font-serif text-lg leading-snug text-neutral-900 transition-colors group-hover:text-[#7A2233]"
                         >
                           {entry.text || label}
                         </span>
@@ -306,7 +310,7 @@ export default function FrontPage({ lang, featured, flow, archive, subscribe }: 
                       </span>
                       <span
                         lang={issue.lang}
-                        className="mt-1 block font-serif text-xl leading-snug text-neutral-900 transition-colors group-hover:text-[#990F3D]"
+                        className="mt-1 block font-serif text-xl leading-snug text-neutral-900 transition-colors group-hover:text-[#7A2233]"
                       >
                         {issue.headline}
                       </span>
