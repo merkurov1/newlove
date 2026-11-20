@@ -6,11 +6,21 @@ import { normalizeWalletLoginAddress, validateWalletLoginMessage } from '@/lib/a
 
 export const dynamic = 'force-dynamic';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-  { auth: { persistSession: false } }
-);
+/**
+ * Wallet login uses the service role for auth admin operations and the nonce
+ * table. Construct the client lazily so route collection does not require
+ * production credentials at build time.
+ */
+function getWalletAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+  if (!url || !serviceRoleKey) {
+    throw new Error('Wallet authentication is not configured.');
+  }
+
+  return createClient(url, serviceRoleKey, { auth: { persistSession: false } });
+}
 
 function requestHost(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-host');
@@ -53,6 +63,7 @@ function requestOrigin(request: Request): string {
  */
 export async function POST(request: Request) {
   try {
+    const supabaseAdmin = getWalletAdminClient();
     const { address, message, signature } = await request.json();
 
     if (
@@ -141,7 +152,24 @@ export async function POST(request: Request) {
       { onConflict: 'id' }
     );
 
-    if (profileError) throw profileError;
+    // Compatibility table only: an older deployment may not have it, and the
+    // wallet address is not an authorization input.
+    if (profileError) {
+      console.warn('[api/auth/wallet] legacy profile upsert failed');
+    }
+
+    // public.users is the canonical application profile. Keep it in sync so
+    // serverAuth and /api/auth/me can resolve the same identity.
+    const { error: userError } = await supabaseAdmin.from('users').upsert(
+      {
+        id: user.id,
+        email: walletEmail,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    );
+
+    if (userError) throw userError;
 
     const { data: signInData, error: signInError } = await supabaseAdmin.auth.signInWithPassword({
       email: walletEmail,

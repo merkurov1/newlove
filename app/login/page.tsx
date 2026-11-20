@@ -1,57 +1,93 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
 import { createClient } from '@/lib/supabase-browser';
-import { loginReturnPathFromReferrer, resolveLoginReturnPath } from '@/lib/auth/returnPath';
-import { ArrowLeft, KeyRound, Mail, Wallet, CheckCircle2 } from 'lucide-react';
+import {
+  loginReturnPathFromReferrer,
+  resolveLoginReturnPath,
+  safeLoginReturnPath,
+} from '@/lib/auth/returnPath';
+import { ArrowLeft, CheckCircle2, KeyRound, Mail, Wallet } from 'lucide-react';
 
-export default function LoginPage() {
+type PendingMethod = 'google' | 'passkey' | 'wallet' | 'email' | null;
+
+const DEFAULT_RETURN_PATH = '/art-engine';
+
+const CALLBACK_ERROR_MESSAGE =
+  'We could not complete sign-in. Please try again or choose another method.';
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+
+  return fallback;
+}
+
+function LoginClient() {
   const { user, isLoading, signInWithGoogle, signInWithPasskey } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
-  const [authMode, setAuthMode] = useState<'methods' | 'email'>('methods');
   const [email, setEmail] = useState('');
   const [otpToken, setOtpToken] = useState('');
   const [emailSent, setEmailSent] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [pending, setPending] = useState<PendingMethod>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isRegister, setIsRegister] = useState(false);
+  const [returnTo, setReturnTo] = useState(DEFAULT_RETURN_PATH);
 
-  const requestedReturnTo =
-    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('next') : null;
+  const callbackErrorHandledRef = useRef(false);
+  const otpInputRef = useRef<HTMLInputElement | null>(null);
 
-  const storedReturnTo =
-    typeof window !== 'undefined' ? window.localStorage.getItem('login_redirect_path') : null;
+  const isRegister = searchParams?.get('mode') === 'register';
+  const requestedReturnTo = searchParams?.get('next') ?? null;
 
-  const referrerReturnTo =
-    typeof window !== 'undefined'
-      ? loginReturnPathFromReferrer(document.referrer, window.location.origin)
-      : null;
-
-  const returnTo = resolveLoginReturnPath({
-    requested: requestedReturnTo,
-    stored: storedReturnTo,
-    referrer: referrerReturnTo,
-    fallback: '/art-engine',
-  });
-
+  // Resolve the return path only on the client. The initial render stays
+  // identical on the server and in the browser, avoiding a hydration mismatch.
   useEffect(() => {
-    setIsRegister(new URLSearchParams(window.location.search).get('mode') === 'register');
-  }, []);
+    let stored: string | null = null;
 
-  useEffect(() => {
     try {
-      // OAuth providers leave the SPA; this is what brings the user back to
-      // the page where the login started.
-      window.localStorage.setItem('login_redirect_path', returnTo);
+      stored = window.localStorage.getItem('login_redirect_path');
     } catch {
-      // The in-memory auth flow still redirects through router.push(returnTo).
+      // Private browsing can make localStorage unavailable.
     }
-  }, [returnTo]);
+
+    const referrer = loginReturnPathFromReferrer(document.referrer, window.location.origin);
+    const resolved = resolveLoginReturnPath({
+      requested: requestedReturnTo,
+      stored,
+      referrer,
+      fallback: DEFAULT_RETURN_PATH,
+    });
+
+    setReturnTo(resolved);
+
+    try {
+      // AuthContext reads this value when it builds the OAuth redirect.
+      window.localStorage.setItem('login_redirect_path', resolved);
+    } catch {
+      // The in-memory value still drives router.push(returnTo).
+    }
+  }, [requestedReturnTo]);
+
+  useEffect(() => {
+    if (callbackErrorHandledRef.current) return;
+
+    const callbackError = searchParams?.get('error');
+    if (!callbackError) return;
+
+    callbackErrorHandledRef.current = true;
+    setErrorMsg(CALLBACK_ERROR_MESSAGE);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!isLoading && user) {
@@ -59,73 +95,58 @@ export default function LoginPage() {
     }
   }, [user, isLoading, router, returnTo]);
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) return;
-    setSubmitting(true);
+  useEffect(() => {
+    if (emailSent) {
+      otpInputRef.current?.focus();
+    }
+  }, [emailSent]);
+
+  const linkNext =
+    safeLoginReturnPath(requestedReturnTo) ?? safeLoginReturnPath(returnTo) ?? DEFAULT_RETURN_PATH;
+
+  const isBusy = pending !== null;
+
+  const handleGoogleLogin = async () => {
+    if (isBusy) return;
+
+    setPending('google');
     setErrorMsg(null);
 
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/login?next=${encodeURIComponent(returnTo)}`,
-        },
-      });
-      if (error) throw error;
-      setEmailSent(true);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to dispatch secure access code.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (otpToken.length !== 6) {
-      setErrorMsg('Please enter a valid 6-digit verification code.');
-      return;
-    }
-    setSubmitting(true);
-    setErrorMsg(null);
-
-    try {
-      const { error } = await supabase.auth.verifyOtp({
-        email,
-        token: otpToken,
-        type: 'email',
-      });
-      if (error) throw error;
-      router.push(returnTo);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Invalid verification code');
-    } finally {
-      setSubmitting(false);
+      await signInWithGoogle();
+    } catch (error) {
+      setErrorMsg(errorMessage(error, 'Google sign-in could not be started.'));
+      setPending(null);
     }
   };
 
   const handlePasskeyLogin = async () => {
-    setSubmitting(true);
+    if (isBusy) return;
+
+    setPending('passkey');
     setErrorMsg(null);
+
     try {
       await signInWithPasskey();
       router.push(returnTo);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Passkey authentication failed');
-    } finally {
-      setSubmitting(false);
+    } catch (error) {
+      setErrorMsg(errorMessage(error, 'Passkey authentication failed.'));
+      setPending(null);
     }
   };
 
   const handleWalletLogin = async () => {
+    if (isBusy) return;
+
     setErrorMsg(null);
+
     if (typeof window === 'undefined' || !(window as any).ethereum) {
-      setErrorMsg('Web3 wallet not detected (e.g. MetaMask / Rabby)');
+      setErrorMsg('No Web3 wallet was detected. Install MetaMask, Rabby, or use another method.');
       return;
     }
 
-    setSubmitting(true);
+    setPending('wallet');
+
     try {
       const ethersMod = await import('ethers');
       const { ethers } = ethersMod as any;
@@ -176,229 +197,327 @@ export default function LoginPage() {
       }
 
       router.push(returnTo);
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err?.message || 'Wallet authentication error');
-    } finally {
-      setSubmitting(false);
+    } catch (error) {
+      setErrorMsg(errorMessage(error, 'Wallet authentication failed.'));
+      setPending(null);
     }
   };
 
+  const handleEmailLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (isBusy) return;
+
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setErrorMsg('Enter your email address to receive a sign-in code.');
+      return;
+    }
+
+    setPending('email');
+    setErrorMsg(null);
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: normalizedEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/login?next=${encodeURIComponent(returnTo)}`,
+          shouldCreateUser: true,
+        },
+      });
+
+      if (error) throw error;
+
+      setEmail(normalizedEmail);
+      setEmailSent(true);
+    } catch (error) {
+      setErrorMsg(errorMessage(error, 'The sign-in code could not be sent.'));
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const handleVerifyOtp = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (isBusy) return;
+
+    if (otpToken.length !== 6) {
+      setErrorMsg('Enter the six-digit code from your email.');
+      return;
+    }
+
+    setPending('email');
+    setErrorMsg(null);
+
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email,
+        token: otpToken,
+        type: 'email',
+      });
+
+      if (error) throw error;
+
+      router.push(returnTo);
+    } catch (error) {
+      setErrorMsg(errorMessage(error, 'That verification code is not valid.'));
+      setPending(null);
+    }
+  };
+
+  const resetEmailFlow = () => {
+    setEmailSent(false);
+    setOtpToken('');
+    setErrorMsg(null);
+  };
+
   return (
-    <div className="relative flex min-h-screen flex-col justify-between bg-[#FAF8F5] px-6 py-10 text-stone-900 selection:bg-stone-900 selection:text-white sm:px-8">
-      {/* Noise background overlay */}
-      <div
-        className="pointer-events-none fixed inset-0 z-10 opacity-[0.025] mix-blend-overlay"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-        }}
-      />
-
-      {/* Top Header */}
-      <header className="relative z-20 mx-auto flex w-full max-w-4xl items-center justify-between">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-[0.2em] text-stone-500 transition-colors hover:text-stone-900"
-        >
-          <ArrowLeft size={14} />
-          <span>Home</span>
-        </Link>
-        <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-stone-400">
-          Merkurov Access
-        </span>
-      </header>
-
-      {/* Auth Card Container */}
-      <div className="relative z-20 my-auto mx-auto w-full max-w-md py-6">
-        {/* Toggle Mode Tabs */}
-        <div className="mb-6 flex rounded-full border border-stone-200 bg-stone-100/80 p-1 shadow-inner backdrop-blur-md">
+    <div className="min-h-[70vh] bg-[#FAF8F5] px-5 pb-24 pt-28 text-[#111111] selection:bg-black selection:text-white sm:px-8 sm:pt-36">
+      <div className="mx-auto w-full max-w-[30rem]">
+        <div className="flex items-center justify-between gap-4">
           <Link
-            href={`/login?next=${encodeURIComponent(returnTo)}`}
-            className={`flex-1 rounded-full py-2.5 text-center font-mono text-[11px] uppercase tracking-[0.18em] transition-all ${
+            href="/"
+            className="inline-flex min-h-[44px] items-center gap-2 text-[10px] font-medium uppercase tracking-[0.22em] text-zinc-500 transition-colors hover:text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-zinc-900"
+          >
+            <ArrowLeft size={14} aria-hidden="true" />
+            <span>Home</span>
+          </Link>
+          <span className="text-[10px] uppercase tracking-[0.22em] text-zinc-400">
+            {isRegister ? 'New account' : 'Account access'}
+          </span>
+        </div>
+
+        <header className="mt-10 border-b border-zinc-900/15 pb-7 sm:mt-14">
+          <h1 className="font-serif text-4xl font-normal leading-[1.05] tracking-tight text-[#111111] sm:text-5xl">
+            {isRegister ? 'Create your account' : 'Sign in'}
+          </h1>
+          <p className="mt-4 max-w-md font-serif text-base leading-relaxed text-zinc-600 sm:text-lg">
+            {isRegister
+              ? 'Confirm your identity with any method below. Your Newlove account is created on first use.'
+              : 'Choose how you would like to confirm your identity.'}
+          </p>
+        </header>
+
+        <nav aria-label="Authentication mode" className="mt-6 flex items-center gap-6">
+          <Link
+            href={`/login?next=${encodeURIComponent(linkNext)}`}
+            aria-current={!isRegister ? 'page' : undefined}
+            className={`min-h-[44px] border-b-2 pb-2 text-[11px] font-medium uppercase tracking-[0.18em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-zinc-900 ${
               !isRegister
-                ? 'bg-white text-stone-950 shadow-sm font-semibold'
-                : 'text-stone-500 hover:text-stone-900'
+                ? 'border-zinc-900 text-zinc-900'
+                : 'border-transparent text-zinc-500 hover:text-zinc-900'
             }`}
           >
-            Sign In
+            Sign in
           </Link>
           <Link
-            href={`/login?mode=register&next=${encodeURIComponent(returnTo)}`}
-            className={`flex-1 rounded-full py-2.5 text-center font-mono text-[11px] uppercase tracking-[0.18em] transition-all ${
+            href={`/login?mode=register&next=${encodeURIComponent(linkNext)}`}
+            aria-current={isRegister ? 'page' : undefined}
+            className={`min-h-[44px] border-b-2 pb-2 text-[11px] font-medium uppercase tracking-[0.18em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-zinc-900 ${
               isRegister
-                ? 'bg-white text-stone-950 shadow-sm font-semibold'
-                : 'text-stone-500 hover:text-stone-900'
+                ? 'border-zinc-900 text-zinc-900'
+                : 'border-transparent text-zinc-500 hover:text-zinc-900'
             }`}
           >
             Register
           </Link>
-        </div>
+        </nav>
 
-        {/* Card Body */}
-        <div className="space-y-7 rounded-[2rem] border border-stone-200/90 bg-white/85 p-8 shadow-[0_20px_60px_rgba(0,0,0,0.03)] backdrop-blur-2xl sm:p-10">
-          <div className="space-y-2 text-center">
-            <h1 className="font-serif text-3xl font-light tracking-tight text-stone-900 sm:text-4xl">
-              {isRegister ? 'Join Platform' : 'Welcome Back'}
-            </h1>
-            <p className="font-serif text-sm leading-relaxed text-stone-600">
-              {isRegister
-                ? 'Create a unified identity for your profile and creative workspace.'
-                : 'Sign in to access your profile, published works, and account settings.'}
-            </p>
+        {errorMsg && (
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="mt-6 border-l-2 border-red-700 bg-red-50/70 px-4 py-3 text-sm leading-relaxed text-red-800"
+          >
+            {errorMsg}
+          </div>
+        )}
+
+        <div className="mt-7 space-y-3">
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={isLoading || isBusy}
+            aria-busy={pending === 'google'}
+            className="group flex min-h-[52px] w-full items-center justify-center gap-3 border border-zinc-900 bg-zinc-900 px-5 text-[11px] font-medium uppercase tracking-[0.18em] text-white transition-colors hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="#FFFFFF"
+                d="M21.6 12.23c0-.71-.06-1.4-.18-2.07H12v3.92h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.24c1.9-1.75 2.98-4.33 2.98-7.37z"
+              />
+              <path
+                fill="#FFFFFF"
+                opacity=".78"
+                d="M12 22c2.7 0 4.96-.9 6.62-2.4l-3.24-2.5c-.9.6-2.05.96-3.38.96-2.6 0-4.8-1.76-5.6-4.12H3.05v2.58A10 10 0 0 0 12 22z"
+              />
+              <path
+                fill="#FFFFFF"
+                opacity=".58"
+                d="M6.4 13.94a6 6 0 0 1 0-3.88V7.48H3.05a10 10 0 0 0 0 9.04l3.35-2.58z"
+              />
+              <path
+                fill="#FFFFFF"
+                opacity=".9"
+                d="M12 5.94c1.47 0 2.79.5 3.83 1.5l2.87-2.87A9.62 9.62 0 0 0 12 2a10 10 0 0 0-8.95 5.48l3.35 2.58C7.2 7.7 9.4 5.94 12 5.94z"
+              />
+            </svg>
+            <span>{pending === 'google' ? 'Opening Google…' : 'Continue with Google'}</span>
+          </button>
+
+          <div className="flex items-center gap-4 py-2" aria-hidden="true">
+            <span className="h-px flex-1 bg-zinc-900/10" />
+            <span className="text-[10px] uppercase tracking-[0.22em] text-zinc-400">or</span>
+            <span className="h-px flex-1 bg-zinc-900/10" />
           </div>
 
-          {errorMsg && (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 font-mono text-xs text-rose-700">
-              {errorMsg}
-            </div>
-          )}
-
-          {authMode === 'methods' && (
-            <div className="space-y-3">
-              {/* GOOGLE OAUTH */}
-              <button
-                type="button"
-                onClick={() => signInWithGoogle()}
-                disabled={isLoading || submitting}
-                className="group flex h-13 w-full items-center justify-center gap-3 rounded-full border border-stone-200 bg-white px-6 font-mono text-xs uppercase tracking-[0.16em] text-stone-900 shadow-sm transition-all hover:border-stone-400 hover:bg-stone-50 active:scale-[0.98] disabled:opacity-50"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.13C3.25 21.32 7.33 24 12 24z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.28 14.25c-.25-.72-.38-1.49-.38-2.25s.13-1.53.38-2.25V6.62H1.26C.46 8.23 0 10.06 0 12s.46 3.77 1.26 5.38l4.02-3.13z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.25 2.68 1.26 6.62l4.02 3.13c.95-2.83 3.6-4.93 6.72-4.93z"
-                  />
-                </svg>
-                <span>Google Account</span>
-              </button>
-
-              {/* PASSKEY / BIOMETRIC */}
-              <button
-                type="button"
-                onClick={handlePasskeyLogin}
-                disabled={isLoading || submitting}
-                className="flex h-13 w-full items-center justify-center gap-3 rounded-full border border-stone-200 bg-white px-6 font-mono text-xs uppercase tracking-[0.16em] text-stone-900 shadow-sm transition-all hover:border-stone-400 hover:bg-stone-50 active:scale-[0.98] disabled:opacity-50"
-              >
-                <KeyRound size={16} className="text-stone-700" />
-                <span>Passkey / Biometric</span>
-              </button>
-
-              {/* WEB3 WALLET LOGIN */}
-              <button
-                type="button"
-                onClick={handleWalletLogin}
-                disabled={isLoading || submitting}
-                className="flex h-13 w-full items-center justify-center gap-3 rounded-full border border-stone-200 bg-white px-6 font-mono text-xs uppercase tracking-[0.16em] text-stone-900 shadow-sm transition-all hover:border-stone-400 hover:bg-stone-50 active:scale-[0.98] disabled:opacity-50"
-              >
-                <Wallet size={16} className="text-stone-700" />
-                <span>Web3 Wallet</span>
-              </button>
-
-              {/* EMAIL OTP TOGGLE */}
-              <button
-                type="button"
-                onClick={() => setAuthMode('email')}
-                className="flex h-13 w-full items-center justify-center gap-3 rounded-full bg-stone-950 px-6 font-mono text-xs uppercase tracking-[0.18em] text-white shadow-md transition-all hover:bg-stone-800 active:scale-[0.98]"
-              >
-                <Mail size={16} className="text-stone-300" />
-                <span>One-Time Email Code</span>
-              </button>
-            </div>
-          )}
-
-          {authMode === 'email' && (
-            <form onSubmit={handleEmailLogin} className="space-y-4">
-              {emailSent ? (
-                <div className="space-y-5 rounded-2xl border border-stone-200 bg-stone-50/60 p-6 text-center">
-                  <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600" />
-                  <p className="font-mono text-xs uppercase tracking-wider text-stone-700">
-                    Code sent to <span className="font-bold text-stone-950">{email}</span>
+          {emailSent ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="border border-zinc-900/15 bg-white p-5 sm:p-6"
+            >
+              <div className="flex items-start gap-3">
+                <CheckCircle2
+                  className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700"
+                  aria-hidden="true"
+                />
+                <div>
+                  <p className="font-serif text-lg leading-snug text-zinc-900">Check your inbox</p>
+                  <p className="mt-1 text-sm leading-relaxed text-zinc-600">
+                    We sent a six-digit code to{' '}
+                    <span className="font-medium text-zinc-900">{email}</span>.
                   </p>
-
-                  <div className="space-y-3 pt-1">
-                    <label className="block font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                      Enter 6-Digit Verification Code
-                    </label>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      value={otpToken}
-                      onChange={(e) => setOtpToken(e.target.value)}
-                      placeholder="000000"
-                      className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3.5 text-center font-mono text-xl tracking-[0.5em] text-stone-950 outline-none transition-colors focus:border-stone-950"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleVerifyOtp}
-                      disabled={submitting || otpToken.length !== 6}
-                      className="h-12 w-full rounded-full bg-stone-950 font-mono text-xs uppercase tracking-[0.18em] text-white transition-all hover:bg-stone-800 disabled:opacity-50"
-                    >
-                      Verify & Sign In
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmailSent(false);
-                      setOtpToken('');
-                    }}
-                    className="block mx-auto font-mono text-[10px] uppercase tracking-widest text-stone-500 underline hover:text-stone-900"
-                  >
-                    Change Email
-                  </button>
                 </div>
-              ) : (
-                <>
-                  <div className="space-y-2 text-left">
-                    <label className="block font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@example.com"
-                      className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3.5 font-mono text-xs text-stone-900 outline-none transition-colors focus:border-stone-950"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="h-12 w-full rounded-full bg-stone-950 font-mono text-xs uppercase tracking-[0.18em] text-white transition-all hover:bg-stone-800 disabled:opacity-50"
-                  >
-                    {submitting ? 'Sending Code...' : 'Send Access Code'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAuthMode('methods')}
-                    className="block w-full text-center font-mono text-[10px] uppercase tracking-widest text-stone-500 hover:text-stone-900"
-                  >
-                    ← All Options
-                  </button>
-                </>
-              )}
+              </div>
+
+              <form onSubmit={handleVerifyOtp} className="mt-5 space-y-3">
+                <label
+                  htmlFor="login-otp"
+                  className="block text-[10px] uppercase tracking-[0.2em] text-zinc-500"
+                >
+                  Verification code
+                </label>
+                <input
+                  ref={otpInputRef}
+                  id="login-otp"
+                  name="otp"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={otpToken}
+                  onChange={(event) =>
+                    setOtpToken(event.target.value.replace(/\D/g, '').slice(0, 6))
+                  }
+                  placeholder="000000"
+                  aria-describedby="login-otp-hint"
+                  className="w-full border border-zinc-300 bg-white px-4 py-3 text-center font-mono text-xl tracking-[0.45em] text-zinc-900 outline-none transition-colors focus:border-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+                />
+                <p id="login-otp-hint" className="text-xs leading-relaxed text-zinc-500">
+                  The code expires shortly. You can request a new one if it does not arrive.
+                </p>
+                <button
+                  type="submit"
+                  disabled={pending === 'email' || otpToken.length !== 6}
+                  className="min-h-[48px] w-full border border-zinc-900 bg-zinc-900 px-5 text-[11px] font-medium uppercase tracking-[0.18em] text-white transition-colors hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {pending === 'email' ? 'Verifying…' : 'Verify and sign in'}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetEmailFlow}
+                  className="min-h-[44px] w-full text-center text-[10px] uppercase tracking-[0.18em] text-zinc-500 transition-colors hover:text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-zinc-900"
+                >
+                  Use a different email
+                </button>
+              </form>
+            </div>
+          ) : (
+            <form onSubmit={handleEmailLogin} className="space-y-3">
+              <label htmlFor="login-email" className="sr-only">
+                Email address
+              </label>
+              <input
+                id="login-email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="Email address"
+                className="min-h-[52px] w-full border border-zinc-300 bg-white px-4 text-base text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+              />
+              <button
+                type="submit"
+                disabled={isLoading || isBusy}
+                className="min-h-[48px] w-full border border-zinc-900 bg-transparent px-5 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-900 transition-colors hover:bg-zinc-900 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {pending === 'email'
+                  ? 'Sending code…'
+                  : isRegister
+                    ? 'Send registration code'
+                    : 'Send sign-in code'}
+              </button>
             </form>
           )}
-        </div>
-      </div>
 
-      {/* Footer */}
-      <footer className="relative z-20 mx-auto w-full max-w-4xl text-center font-mono text-[10px] uppercase tracking-[0.3em] text-stone-400">
-        Anton Merkurov Platform &copy; {new Date().getFullYear()}
-      </footer>
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handlePasskeyLogin}
+              disabled={isLoading || isBusy}
+              aria-busy={pending === 'passkey'}
+              className="flex min-h-[48px] items-center justify-center gap-2 border border-zinc-300 bg-transparent px-3 text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-800 transition-colors hover:border-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <KeyRound size={15} aria-hidden="true" />
+              <span>{pending === 'passkey' ? 'Waiting…' : 'Passkey'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleWalletLogin}
+              disabled={isLoading || isBusy}
+              aria-busy={pending === 'wallet'}
+              className="flex min-h-[48px] items-center justify-center gap-2 border border-zinc-300 bg-transparent px-3 text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-800 transition-colors hover:border-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Wallet size={15} aria-hidden="true" />
+              <span>{pending === 'wallet' ? 'Waiting…' : 'Wallet'}</span>
+            </button>
+          </div>
+        </div>
+
+        <p className="mt-8 border-t border-zinc-900/10 pt-5 font-serif text-sm leading-relaxed text-zinc-500">
+          No password to remember. The same identity methods sign you in and create your account.
+        </p>
+
+        <p className="mt-4 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-zinc-400">
+          <Mail size={13} aria-hidden="true" />
+          <span>Email sign-in uses a one-time code</span>
+        </p>
+      </div>
     </div>
+  );
+}
+
+function LoginFallback() {
+  return (
+    <div className="min-h-[70vh] bg-[#FAF8F5] px-5 pb-24 pt-28 sm:px-8 sm:pt-36">
+      <div className="mx-auto w-full max-w-[30rem] space-y-6" aria-hidden="true">
+        <div className="h-3 w-24 bg-zinc-200" />
+        <div className="h-12 w-72 max-w-full bg-zinc-200/80" />
+        <div className="h-4 w-full max-w-sm bg-zinc-200/60" />
+        <div className="h-[52px] w-full bg-zinc-200/70" />
+        <div className="h-[52px] w-full bg-zinc-200/50" />
+      </div>
+    </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginClient />
+    </Suspense>
   );
 }
