@@ -6,6 +6,7 @@
 
 import { useAuth } from '@/components/AuthContext';
 import { subscribeToNewsletter } from '@/app/admin/actions';
+import NewsletterBotFields from '@/components/newsletter/NewsletterBotFields';
 import { useActionState, useEffect, useRef, useState } from 'react';
 
 function SubmitButton() {
@@ -27,6 +28,7 @@ export default function NewsletterSubscribe() {
 
   const initialState: any = { message: null, status: null };
   const [state, formAction]: any = useActionState(subscribeToNewsletter, initialState);
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
@@ -47,6 +49,10 @@ export default function NewsletterSubscribe() {
   }, [session]);
 
   useEffect(() => {
+    if (state?.status) setTurnstileResetKey((key) => key + 1);
+  }, [state]);
+
+  useEffect(() => {
     if (state.status === 'success') {
       formRef.current?.reset();
       setIsSubscribed(true);
@@ -62,6 +68,7 @@ export default function NewsletterSubscribe() {
   return (
     <div className="border border-gray-300 rounded p-6 bg-white">
       <form ref={formRef} action={formAction} className="space-y-4">
+        <NewsletterBotFields language="en" turnstileResetKey={turnstileResetKey} />
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-gray-900 mb-2">
             Subscribe to Journal

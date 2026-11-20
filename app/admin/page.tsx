@@ -139,7 +139,9 @@ export default async function AdminDashboard() {
   const [users, activeSubscribers, publishedItems, recentItemsResult, recentConversations] =
     await Promise.all([
       countRows(supabase, "users"),
-      countRows(supabase, "subscribers", (q) => q.eq("isActive", true)),
+      countRows(supabase, "subscribers", (q) =>
+        q.eq("isActive", true).not("confirmedAt", "is", null),
+      ),
       countRows(supabase, "items", (q) =>
         q.eq("status", "published").eq("visibility", "public"),
       ),

@@ -204,7 +204,8 @@ const getSubscriberCount = unstable_cache(
           count: 'exact',
           head: true,
         })
-        .eq('isActive', true);
+        .eq('isActive', true)
+        .not('confirmedAt', 'is', null);
 
       return res && typeof res.count === 'number' ? Number(res.count) : 0;
     } catch {

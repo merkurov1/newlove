@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/components/AuthContext';
 import { subscribeToNewsletter } from '@/app/admin/actions';
+import NewsletterBotFields from '@/components/newsletter/NewsletterBotFields';
 import { useActionState, useEffect, useRef, useState } from 'react';
 
 const MODAL_STORAGE_KEY = 'newsletter_modal_last_shown';
@@ -28,6 +29,7 @@ export default function NewsletterModal() {
 
   const initialState: any = { message: null, status: null };
   const [state, formAction]: any = useActionState(subscribeToNewsletter, initialState);
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
   // Проверка подписки для залогиненных пользователей
   useEffect(() => {
@@ -83,6 +85,10 @@ export default function NewsletterModal() {
   }, [checkingSubscription, isSubscribed]);
 
   // Закрытие после успешной подписки
+  useEffect(() => {
+    if (state?.status) setTurnstileResetKey((key) => key + 1);
+  }, [state]);
+
   useEffect(() => {
     if (state.status === 'success') {
       formRef.current?.reset();
@@ -176,6 +182,7 @@ export default function NewsletterModal() {
 
           {/* Форма */}
           <form ref={formRef} action={formAction} className="space-y-4">
+            <NewsletterBotFields language="ru" turnstileResetKey={turnstileResetKey} />
             <div>
               <input 
                 type="email" 

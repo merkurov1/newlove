@@ -328,9 +328,19 @@ export type InternalSnapshot = {
     subscribers: {
       total: number | null;
       active: number | null;
+      /** Double-opt-in confirmed subscribers only. */
+      confirmed: number | null;
+      /** Unconfirmed signups; explicitly excluded from audience growth. */
+      pending: number | null;
       unsubscribed: number | null;
       ru: number | null;
       en: number | null;
+    };
+    signals: {
+      deliveryFailures: number | null;
+      suspectedAutomated: number | null;
+      rateLimited: number | null;
+      blockedReasons: Record<string, number>;
     };
     jobs: {
       total: number | null;
