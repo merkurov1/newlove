@@ -98,10 +98,7 @@ function EntryDate({ item }: { item: FlowItem }) {
   if (!date) return null;
 
   return (
-    <time
-      dateTime={value || undefined}
-      className="text-xs font-mono tracking-wide text-neutral-400"
-    >
+    <time dateTime={value || undefined} className="flow-entry__date">
       {date}
     </time>
   );
@@ -119,10 +116,8 @@ function EntryMeta({
   onDelete: () => void;
 }) {
   return (
-    <div className="mb-3 flex items-center justify-between gap-4">
-      <div className="flex items-center gap-2.5 font-mono text-[11px] text-neutral-400">
-        <EntryDate item={item} />
-      </div>
+    <div className="flow-entry__meta">
+      <EntryDate item={item} />
 
       {admin && <AdminControls onEdit={onEdit} onDelete={onDelete} />}
     </div>
@@ -131,20 +126,14 @@ function EntryMeta({
 
 function AdminControls({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
   return (
-    <div className="flex items-center gap-3">
-      <button
-        type="button"
-        onClick={onEdit}
-        className="text-xs text-neutral-400 transition hover:text-neutral-900"
-        aria-label="Edit post"
-        title="Edit"
-      >
+    <div className="flow-entry__admin">
+      <button type="button" onClick={onEdit} aria-label="Edit post" title="Edit">
         Edit
       </button>
       <button
         type="button"
         onClick={onDelete}
-        className="text-xs text-neutral-400 transition hover:text-red-600"
+        data-action="delete"
         aria-label="Delete post"
         title="Delete"
       >
@@ -179,7 +168,7 @@ function LinkCard({ preview, itemHref: href }: { preview: FlowLink; itemHref: st
           href={preview.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-3 inline-block w-fit font-mono text-[11px] tracking-wider text-neutral-400 transition hover:text-neutral-700"
+          className="mt-3 inline-block w-fit font-mono text-[11px] tracking-wider text-neutral-500 transition hover:text-neutral-800"
           onClick={(event) => event.stopPropagation()}
         >
           {domain} ↗
@@ -218,13 +207,13 @@ function CompactLinkRow({ preview, itemHref: href }: { preview: FlowLink; itemHr
             style={{ width: 40, height: 40 }}
           />
         ) : (
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-200/50 font-mono text-xs text-neutral-400">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-200/60 font-mono text-xs text-neutral-500">
             ↗
           </div>
         )}
 
         <div className="min-w-0 flex-1">
-          <span className="block font-mono text-[10px] uppercase tracking-wider text-neutral-400">
+          <span className="block font-mono text-[10px] uppercase tracking-wider text-neutral-500">
             {domain}
           </span>
           <Link
@@ -242,7 +231,7 @@ function CompactLinkRow({ preview, itemHref: href }: { preview: FlowLink; itemHr
         rel="noopener noreferrer"
         aria-label={`Open ${domain}`}
         onClick={(event) => event.stopPropagation()}
-        className="shrink-0 p-1 font-mono text-xs text-neutral-400 transition hover:text-neutral-900"
+        className="shrink-0 p-1 font-mono text-xs text-neutral-500 transition hover:text-neutral-900"
       >
         ↗
       </a>
@@ -260,7 +249,7 @@ function GalleryGrid({ images, itemHref: href }: { images: FlowImage[]; itemHref
     const image = images[0];
 
     return (
-      <figure className="mb-4">
+      <figure>
         <Link
           href={href}
           className="block w-full overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50 transition hover:border-neutral-300"
@@ -284,7 +273,7 @@ function GalleryGrid({ images, itemHref: href }: { images: FlowImage[]; itemHref
 
   if (images.length === 2) {
     return (
-      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
         {images.slice(0, 2).map((image, index) => (
           <Link
             key={`${image.url}-${index}`}
@@ -305,7 +294,7 @@ function GalleryGrid({ images, itemHref: href }: { images: FlowImage[]; itemHref
 
   if (images.length === 3) {
     return (
-      <div className="mb-4 space-y-2.5 sm:space-y-3">
+      <div className="space-y-2.5 sm:space-y-3">
         <Link
           href={href}
           className="block overflow-hidden rounded-2xl bg-neutral-100 transition hover:opacity-95"
@@ -341,7 +330,7 @@ function GalleryGrid({ images, itemHref: href }: { images: FlowImage[]; itemHref
   const remaining = images.length - 4;
 
   return (
-    <div className="mb-4 grid grid-cols-2 gap-2.5 sm:gap-3">
+    <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
       {displayPhotos.map((image, index) => {
         const isLastWithMore = index === 3 && remaining > 0;
 
@@ -375,7 +364,7 @@ function VideoCards({ videos }: { videos: FlowVideo[] }) {
   if (videos.length === 0) return null;
 
   return (
-    <div className="mb-4 space-y-3">
+    <div className="space-y-3">
       {videos.map((video, index) => (
         <Link
           key={`${video.url}-${index}`}
@@ -417,7 +406,7 @@ function VideoCards({ videos }: { videos: FlowVideo[] }) {
               <span className="mt-1 block text-xs text-neutral-500">{video.author}</span>
             )}
 
-            <span className="mt-2 inline-block font-mono text-[10px] tracking-wider text-neutral-400">
+            <span className="mt-2 inline-block font-mono text-[10px] tracking-wider text-neutral-500">
               {video.provider === 'youtube' ? 'youtube.com' : 'video'} ↗
             </span>
           </div>
@@ -456,38 +445,39 @@ function Entry({
 
   return (
     <article
-      className={`group flow-entry flow-entry--${composition} border-b border-neutral-100 py-8 first:pt-0 last:border-b-0`}
+      className={`group flow-entry flow-entry--${composition}`}
       data-content-type={item.contentType || item.type}
     >
       <EntryMeta item={item} admin={admin} onEdit={onEdit} onDelete={onDelete} />
 
       {/* Image and video are the lead element whenever they exist. The title
        * and body follow, so text can never visually displace the media. */}
-      {hasImages && <GalleryGrid images={images} itemHref={href} />}
+      {hasImages && (
+        <div className="flow-entry__media">
+          <GalleryGrid images={images} itemHref={href} />
+        </div>
+      )}
 
-      {hasVideos && <VideoCards videos={videos} />}
+      {hasVideos && (
+        <div className="flow-entry__media">
+          <VideoCards videos={videos} />
+        </div>
+      )}
 
       {showTitle && (
-        <h2 className="mb-2 text-lg font-medium leading-snug text-neutral-900 sm:text-xl">
-          <Link href={href} className="transition hover:text-neutral-600">
-            {item.title}
-          </Link>
+        <h2 className="flow-entry__title">
+          <Link href={href}>{item.title}</Link>
         </h2>
       )}
 
       {body && (
-        <div className="mb-4">
+        <div className="flow-entry__body">
           <Link href={href} className="block">
-            <p className="whitespace-pre-line font-serif text-[16px] leading-[1.7] text-neutral-800 sm:text-[17px]">
-              {body}
-            </p>
+            <p>{body}</p>
           </Link>
 
           {item.bodyTruncated && (
-            <Link
-              href={href}
-              className="mt-2 inline-block font-mono text-[10px] uppercase tracking-[0.18em] text-neutral-400 transition hover:text-neutral-900"
-            >
+            <Link href={href} className="flow-entry__more">
               Read full →
             </Link>
           )}
@@ -495,13 +485,13 @@ function Entry({
       )}
 
       {links.length === 1 && (
-        <div className="mt-3">
+        <div className="flow-entry__links">
           <LinkCard preview={links[0]} itemHref={href} />
         </div>
       )}
 
       {links.length > 1 && (
-        <div className="mt-3 divide-y divide-neutral-200/50 overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50/40">
+        <div className="flow-entry__links divide-y divide-neutral-200/50 overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50/40">
           {links.map((preview) => (
             <CompactLinkRow key={preview.url} preview={preview} itemHref={href} />
           ))}
@@ -513,12 +503,12 @@ function Entry({
 
 function LoadingEntries() {
   return (
-    <div className="animate-pulse space-y-8" aria-label="Loading Flow" aria-busy="true">
+    <div className="flow-loading" aria-label="Loading Flow" aria-busy="true">
       {[0, 1, 2].map((item) => (
-        <div key={item} className="border-b border-neutral-100 py-8 first:pt-0">
-          <div className="h-3 w-20 rounded bg-neutral-100" />
-          <div className="mt-4 h-5 w-3/4 rounded bg-neutral-100" />
-          <div className="mt-2.5 h-4 w-1/2 rounded bg-neutral-50" />
+        <div key={item} className="flow-loading__row animate-pulse">
+          <div className="flow-loading__bar h-2.5 w-24" />
+          <div className="flow-loading__bar mt-4 h-5 w-3/4" />
+          <div className="flow-loading__bar mt-2.5 h-3.5 w-1/2" />
         </div>
       ))}
     </div>
@@ -527,9 +517,9 @@ function LoadingEntries() {
 
 function Message({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="py-16 text-center text-sm text-neutral-400">
+    <div className="flow-page__message">
       <p>{children}</p>
-      {action && <div className="mt-3">{action}</div>}
+      {action && <div>{action}</div>}
     </div>
   );
 }
@@ -709,15 +699,11 @@ export default function FlowPage() {
           { name: 'Flow', path: '/flow' },
         ])}
       />
-      <div className="min-h-screen bg-white px-5 pb-24 pt-20 text-neutral-900 sm:px-8 sm:pt-24">
-        <div className="mx-auto max-w-2xl">
-          <header className="mb-10 border-b border-neutral-100 pb-6 lg:hidden">
-            <h1 className="font-serif text-3xl font-light tracking-tight text-neutral-900 sm:text-4xl">
-              Flow
-            </h1>
-            <p className="mt-1 font-serif text-sm text-neutral-400">
-              Stream of thoughts &amp; media
-            </p>
+      <div className="flow-page px-5 pb-24 pt-20 sm:px-8 sm:pt-24">
+        <div className="flow-page__column">
+          <header className="flow-page__header lg:hidden">
+            <h1 className="flow-page__title">Flow</h1>
+            <p className="flow-page__subtitle">Stream of thoughts &amp; media</p>
           </header>
 
           {loadError && items.length === 0 ? (
@@ -781,13 +767,13 @@ export default function FlowPage() {
               )}
 
               <div ref={observerRef} className="flex min-h-16 items-center justify-center py-6">
-                {loadingMore && <span className="text-xs text-neutral-400">Loading…</span>}
+                {loadingMore && <span className="text-xs text-neutral-500">Loading…</span>}
 
                 {!loadingMore && hasMore && !loadError && (
                   <button
                     type="button"
                     onClick={() => void loadItems(false)}
-                    className="text-xs text-neutral-400 transition hover:text-neutral-900"
+                    className="text-xs text-neutral-500 transition hover:text-neutral-900"
                   >
                     Load more
                   </button>

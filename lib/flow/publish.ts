@@ -52,6 +52,16 @@ export type FlowPublicationFailure = {
 
 export type FlowPublicationResult = FlowPublicationSuccess | FlowPublicationFailure;
 
+export type FlowPublicationOptions = {
+  /**
+   * Persist the item and return before Telegram/Bluesky and AI context run.
+   * The caller is responsible for scheduling `crosspostFlowItem` and
+   * `ensurePublishedFlowContext` after the response (for example with
+   * `after()` in a route handler).
+   */
+  deferDistribution?: boolean;
+};
+
 export function generateFlowSlug(title?: string | null, bodyMd?: string | null): string {
   const source = (title?.trim() || bodyMd?.split(/\r?\n/)[0]?.trim() || 'post').slice(0, 50);
 
@@ -78,7 +88,8 @@ function isUniqueViolation(error: unknown): boolean {
 
 export async function createFlowItem(
   supabase: SupabaseClient,
-  input: FlowPublicationInput
+  input: FlowPublicationInput,
+  options: FlowPublicationOptions = {}
 ): Promise<FlowPublicationResult> {
   const now = new Date().toISOString();
   const itemType =
@@ -174,7 +185,11 @@ export async function createFlowItem(
   const row = item as Record<string, unknown>;
   let crosspostResult: CrosspostResult | null = null;
 
-  if (row.status === 'published' && row.visibility === 'public') {
+  if (
+    !options.deferDistribution &&
+    row.status === 'published' &&
+    row.visibility === 'public'
+  ) {
     try {
       // Lazy import keeps sharp and other publishing dependencies out of
       // callers that only create drafts.
@@ -187,10 +202,9 @@ export async function createFlowItem(
     }
   }
 
-  const aiContext = await ensurePublishedFlowContext(
-    supabase,
-    row as unknown as PublishedFlowItem
-  );
+  const aiContext = options.deferDistribution
+    ? null
+    : await ensurePublishedFlowContext(supabase, row as unknown as PublishedFlowItem);
 
   return {
     ok: true,

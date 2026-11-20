@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { PenLine } from 'lucide-react';
 import PierrotAvatar from './PierrotAvatar';
 import NewPostModal from '@/components/flow/NewPostModal';
+import PublishReceipt from '@/components/flow/PublishReceipt';
 import {
   activeWorkspaceKey,
   buildWorkspaceRoutes,
@@ -136,6 +137,8 @@ export default function WorkspaceShell({
           window.dispatchEvent(new CustomEvent('flow:updated'));
         }}
       />
+
+      <PublishReceipt />
     </div>
   );
 }

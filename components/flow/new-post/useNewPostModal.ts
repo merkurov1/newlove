@@ -14,7 +14,7 @@ import {
 interface UseNewPostModalParams {
   open: boolean;
   onClose: () => void;
-  onCreated?: (item?: any) => void;
+  onCreated?: (item?: any, crosspost?: unknown) => void;
   itemId?: string | null;
 }
 
@@ -829,7 +829,28 @@ export function useNewPostModal({
       }
 
       setSaveState("saved");
-      onCreated?.(data.item);
+
+      // Creation returns before external channels finish. Publish the item and
+      // the (possibly pending) channel state so the owner gets one truthful
+      // receipt without adding a step to the composer. Drafts and private
+      // items are not distributed, so they produce no channel receipt.
+      if (
+        !isEditing &&
+        typeof window !== "undefined" &&
+        (data.crosspostPending === true || Boolean(data.crosspost))
+      ) {
+        window.dispatchEvent(
+          new CustomEvent("flow:published", {
+            detail: {
+              item: data.item,
+              crosspost: data.crosspost ?? null,
+              pending: data.crosspostPending === true,
+            },
+          }),
+        );
+      }
+
+      onCreated?.(data.item, data.crosspost);
       onClose();
     } catch (err) {
       console.error("[useNewPostModal] Save error:", err);
