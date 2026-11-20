@@ -54,6 +54,8 @@ export type DevWorkbenchTask = {
   attemptCount: number;
   acceptanceCriteria: string[];
   verificationStatus: string | null;
+  /** Timestamp of the owner verification. Never set by an advisory review. */
+  verifiedAt: string | null;
   blockedReason: string | null;
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
@@ -757,6 +759,20 @@ export type DevWorkbenchOverview = {
   recentEvents: DevEvent[];
   lifecycle: DevLifecycleSnapshot;
   finalization: DevFinalizationReport | null;
+  /** Bounded PR/task state repair performed during this overview read. */
+  reconciliation?: {
+    checked: number;
+    repaired: number;
+    skipped: boolean;
+    errors: number;
+  };
+  /** Read-only drift report for non-terminal rows that need owner attention. */
+  consistency?: Array<{
+    taskId: string;
+    status: string;
+    code: string;
+    message: string;
+  }>;
   updatedAt: string;
 };
 

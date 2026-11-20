@@ -1,0 +1,5 @@
+{
+  "provider": "deepseek",
+  "model": "deepseek/deepseek-flash",
+  "minimumOpencodeVersion": "2.1.4"
+}

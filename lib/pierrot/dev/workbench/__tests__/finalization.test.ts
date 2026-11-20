@@ -265,7 +265,8 @@ describe('queue finalization', () => {
     // task must stay in review instead of silently becoming verified.
     expect(store.patchTask).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
-      expect.objectContaining({ status: 'review', verification_status: 'integration_only' })
+      expect.objectContaining({ status: 'review', verification_status: 'not_run' }),
+      ['review', 'verified']
     );
 
     const second = await advanceFinalization({ trigger: 'test' });
@@ -418,12 +419,10 @@ describe('queue finalization', () => {
     asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
     const retryAt = new Date(Date.now() + 60_000).toISOString();
     asMock(github.getPullRequestStatus).mockRejectedValue(
-      new github.WorkbenchGitHubError(
-        'GITHUB_RATE_LIMITED',
-        'GitHub rate limit reached.',
-        403,
-        { retryAt, rateLimited: true }
-      )
+      new github.WorkbenchGitHubError('GITHUB_RATE_LIMITED', 'GitHub rate limit reached.', 403, {
+        retryAt,
+        rateLimited: true,
+      })
     );
 
     const report = await advanceFinalization({ trigger: 'test' });
@@ -522,9 +521,7 @@ describe('queue finalization', () => {
               warnings: [],
               commands: [{ name: 'pnpm test', status: 'passed', detail: 'exit 0' }],
               verification: {
-                criteria: [
-                  { criterion: 'tests', status: 'satisfied', evidence: 'jest passed' },
-                ],
+                criteria: [{ criterion: 'tests', status: 'satisfied', evidence: 'jest passed' }],
               },
             },
           ],
@@ -536,7 +533,8 @@ describe('queue finalization', () => {
 
     expect(store.patchTask).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
-      expect.objectContaining({ status: 'verified', verification_status: 'passed' })
+      expect.objectContaining({ status: 'verified', verification_status: 'passed' }),
+      ['review', 'verified']
     );
   });
 
@@ -565,7 +563,8 @@ describe('queue finalization', () => {
 
     expect(store.patchTask).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
-      expect.objectContaining({ status: 'review', verification_status: 'integration_only' })
+      expect.objectContaining({ status: 'review', verification_status: 'not_run' }),
+      ['review', 'verified']
     );
   });
 });

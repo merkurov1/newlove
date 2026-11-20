@@ -23,6 +23,16 @@ jest.mock('../finalization', () => ({
   getFinalizationReport: jest.fn(async () => null),
 }));
 
+jest.mock('../reconciliation', () => ({
+  auditNonTerminalTasks: jest.fn(() => []),
+  reconcileTaskStates: jest.fn(async () => ({
+    checked: 0,
+    repaired: 0,
+    skipped: false,
+    errors: 0,
+  })),
+}));
+
 import * as lifecycle from '../lifecycle';
 import * as store from '../store';
 import { getWorkbenchOverview, selectReviewTasks } from '../overview';

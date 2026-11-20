@@ -124,6 +124,10 @@ Ephemeral ubuntu-latest runner
 
 - Provider: `deepseek`
 - Exact model id: `deepseek/deepseek-flash`
+- Single source of truth: `lib/pierrot/dev/executorModel.json`
+  (`provider`, `model`, `minimumOpencodeVersion`). The workflow environment,
+  preflight, worker and server cost ledger resolve the same identity; the env
+  vars remain explicit overrides.
 - CLI flag used by the runner: `--model deepseek/deepseek-flash`
 - Repository config: `opencode.json` pins `"model": "deepseek/deepseek-flash"`
 - Credential convention: OpenCode reads `DEEPSEEK_API_KEY` from the process
@@ -133,12 +137,22 @@ Ephemeral ubuntu-latest runner
 - The runner forwards the key to the OpenCode child only when
   `PIERROT_DEV_ALLOW_PROVIDER_ENV=true`; Codespaces keep using their stored
   `opencode auth login` and do not need the environment key.
-- Non-secret checks: `scripts/pierrot/actions-preflight.mjs` verifies the CLI
-  version, that `opencode models` lists the exact model, and (by default) makes a
-  tiny live call that must return `DEEPSEEK_PREFLIGHT_OK`. It prints only
-  presence booleans and the model id, never the key.
+- Non-secret checks: `scripts/pierrot/actions-preflight.mjs` and
+  `scripts/pierrot/dev-worker.mjs` both use `resolveConfiguredModel()` and
+  `verifyConfiguredModel()`. They verify the CLI version, that
+  `opencode models` lists the exact configured id, and (by default) make a tiny
+  live call that must return `DEEPSEEK_PREFLIGHT_OK`. They print only presence
+  booleans and the model id, never the key.
+- A provider/model mismatch is a hard `MODEL_PROVIDER_MISMATCH`; a different
+  available model is never substituted. A model reported by OpenCode is stored
+  next to the configured one (`verification.modelIdentity`) and a mismatch is a
+  warning + `worker.note`, never a silent relabel in cost telemetry.
 - If `DEEPSEEK_API_KEY` is absent the workflow stops with setup instructions.
   There is no fallback provider or model.
+
+The 2026-11-20 investigation of repeated boot errors, the Flow exit code and
+the PR/task reconciliation is recorded in
+[`docs/pierrot-dev-executor-incident-2026-11-20.md`](./pierrot-dev-executor-incident-2026-11-20.md).
 
 ---
 

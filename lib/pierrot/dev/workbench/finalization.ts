@@ -22,12 +22,12 @@ import {
   type GitHubChecksSummary,
 } from './github';
 import { readAttemptCost, summarizeCosts } from './costs';
+import { planTaskReconciliation } from './reconciliation';
 import { notifyDevOwner } from './notifications';
 import type {
   DevFinalizationCheckStatus,
   DevFinalizationPullRequest,
   DevFinalizationReport,
-  DevAttempt,
   DevFinalizationStage,
   DevLifecycleCost,
   DevWorkbenchTask,
@@ -327,8 +327,7 @@ function describeGitHubFailure(error: unknown): GitHubFailure {
       ? error.message.slice(0, 1200)
       : 'The GitHub request failed.';
   const endpoint = typeof value.endpoint === 'string' ? value.endpoint : null;
-  const permission =
-    typeof value.requiredPermission === 'string' ? value.requiredPermission : null;
+  const permission = typeof value.requiredPermission === 'string' ? value.requiredPermission : null;
   const retryAt = typeof value.retryAt === 'string' ? value.retryAt : null;
   const rateLimited = value.rateLimited === true || code === 'GITHUB_RATE_LIMITED';
   const permissionDenied =
@@ -412,32 +411,6 @@ async function finalizationCost(taskIds: string[]): Promise<DevLifecycleCost | n
   }
 }
 
-function attemptHasStructuredEvidence(attempt: DevAttempt | null): boolean {
-  if (!attempt) return false;
-  if (
-    (attempt.warnings || []).some((warning) =>
-      /without a structured final report/i.test(String(warning))
-    )
-  ) {
-    return false;
-  }
-  const verification = attempt.verification || {};
-  const criteria = Array.isArray(verification.criteria) ? verification.criteria : [];
-  if (criteria.length === 0) return false;
-  if (
-    !criteria.every(
-      (criterion) =>
-        Boolean(criterion) &&
-        typeof criterion === 'object' &&
-        (criterion as { status?: unknown }).status === 'satisfied'
-    )
-  ) {
-    return false;
-  }
-  const commands = Array.isArray(attempt.commands) ? attempt.commands : [];
-  return commands.some((command) => command?.status === 'passed');
-}
-
 async function verifyTaskIntegrated(input: {
   taskId: string;
   sha: string | null;
@@ -447,38 +420,38 @@ async function verifyTaskIntegrated(input: {
   const task = (await listFinalizationTasks(200)).find((item) => item.id === input.taskId);
   if (!task) return;
   if (task.status === 'review' || task.status === 'verified') {
-    // Integration is not verification. A merged PR without a structured final
-    // report and satisfied criteria must stay in review; otherwise an attempt
-    // with an empty report would be marked verified exactly as before.
     const attempts = (await listAttemptsForTasks([task.id], 5)).get(task.id) || [];
-    const latest = attempts.find((attempt) => attempt.status === 'completed') || attempts[0] || null;
-
-    if (!attemptHasStructuredEvidence(latest)) {
-      await patchTask(task.id, {
-        status: 'review',
-        verification_status: 'integration_only',
-        verification_notes: `Integrated into ${DEFAULT_BRANCH} by queue finalization (${input.prUrl}), but not verified: the latest attempt has no structured final report with satisfied acceptance criteria and a passing command.`,
-        verified_at: null,
-        result_commit: input.sha || task.resultCommit,
-      }).catch(() => null);
+    const latest =
+      attempts.find((attempt) => attempt.status === 'completed') || attempts[0] || null;
+    // Use exactly the same semantics as the standalone reconciliation pass:
+    // integration is not verification, and an invalid/legacy verification value
+    // is never written (which previously left production rows stuck at
+    // `review` + `partial` after the PR had merged).
+    const plan = planTaskReconciliation({
+      task,
+      pr: {
+        number: parsePullRequestNumber(input.prUrl),
+        url: input.prUrl,
+        state: 'closed',
+        merged: true,
+        mergeCommitSha: input.sha,
+        headSha: input.sha,
+      },
+      attempt: latest as Parameters<typeof planTaskReconciliation>[0]['attempt'],
+    });
+    if (plan.patch) {
+      await patchTask(task.id, plan.patch, ['review', 'verified']).catch(() => null);
+    }
+    if (plan.event) {
       await appendEvent({
         taskId: task.id,
-        type: 'task.verification_required',
-        level: 'warn',
-        message:
-          'PR integrated but task kept in review: structured final report, satisfied criteria and at least one passing command are required for verified.',
-        payload: { prUrl: input.prUrl, attemptId: latest?.id || null },
+        type: plan.event.type,
+        level: plan.event.level,
+        message: plan.event.message,
+        payload: plan.event.payload,
+        dedupeKey: plan.dedupeKey,
       }).catch(() => undefined);
-      return;
     }
-
-    await patchTask(task.id, {
-      status: 'verified',
-      verification_status: 'passed',
-      verification_notes: `Integrated into ${DEFAULT_BRANCH} by queue finalization (${input.prUrl}) with structured criteria and passing commands.`,
-      verified_at: nowIso(),
-      result_commit: input.sha || task.resultCommit,
-    }).catch(() => null);
   }
   const batchId = await getBatchIdForTask(task.id).catch(() => null);
   if (batchId) await maybeCompleteBatch(batchId).catch(() => false);
@@ -1152,10 +1125,7 @@ async function advanceLocked(input: {
         return reportFromState(
           await block(state, {
             stage: 'integrating',
-            reason: formatGitHubBlockReason(
-              `PR #${refreshed.number} could not be merged`,
-              failure
-            ),
+            reason: formatGitHubBlockReason(`PR #${refreshed.number} could not be merged`, failure),
             code: failure.code,
             retryAt: failure.retryAt,
             level: failure.permissionDenied ? 'error' : 'warn',

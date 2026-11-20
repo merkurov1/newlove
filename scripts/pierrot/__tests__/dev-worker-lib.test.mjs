@@ -3,15 +3,20 @@ import assert from 'node:assert/strict';
 import {
   BOOT_PHASES,
   checkCommitIdentity,
+  compareModelIdentity,
   computeReadiness,
+  describeOpenCodeFailure,
   extractExecutorReport,
   isAllowedWorkerBranch,
   isOrphanExecutorProcess,
   isVersionAtLeast,
+  normalizeBootPhase,
   parseOpenCodeCost,
   parseStoredAuth,
   providerFromModel,
+  resolveConfiguredModel,
   resolveGitIdentity,
+  verifyConfiguredModel,
 } from '../dev-worker-lib.mjs';
 
 test('requires OpenCode 2.1.4 or newer', () => {
@@ -283,6 +288,7 @@ test('boot telemetry exposes a closed set of phases', () => {
     'checking_config',
     'checking_opencode',
     'checking_auth',
+    'checking_provider',
     'connecting_api',
     'api_connected',
     'registering',
@@ -293,4 +299,108 @@ test('boot telemetry exposes a closed set of phases', () => {
   ]) {
     assert.equal(BOOT_PHASES.includes(phase), true);
   }
+});
+
+test('provider check is an info phase, never a synthetic failure', () => {
+  assert.equal(BOOT_PHASES.includes('checking_provider'), true);
+  assert.equal(normalizeBootPhase('checking_provider'), 'checking_provider');
+  assert.equal(normalizeBootPhase('some-new-info-phase'), 'starting');
+  assert.equal(normalizeBootPhase('FAILED'), 'failed');
+  assert.equal(normalizeBootPhase(undefined), 'starting');
+});
+
+test('configured model identity is resolved from the shared registry and env', () => {
+  const defaults = resolveConfiguredModel({});
+  assert.equal(defaults.ok, true);
+  assert.equal(defaults.provider, 'deepseek');
+  assert.equal(defaults.model, 'deepseek/deepseek-flash');
+  assert.equal(defaults.providerEnvName, 'DEEPSEEK_API_KEY');
+  assert.equal(defaults.source, 'registry');
+
+  const override = resolveConfiguredModel({
+    PIERROT_DEV_OPENCODE_PROVIDER: 'deepseek',
+    PIERROT_DEV_OPENCODE_MODEL: 'deepseek/deepseek-chat',
+  });
+  assert.equal(override.ok, true);
+  assert.equal(override.model, 'deepseek/deepseek-chat');
+  assert.equal(override.source, 'environment');
+});
+
+test('a provider/model mismatch is a hard configuration error', () => {
+  const mismatch = resolveConfiguredModel({
+    PIERROT_DEV_OPENCODE_PROVIDER: 'openrouter',
+    PIERROT_DEV_OPENCODE_MODEL: 'deepseek/deepseek-flash',
+  });
+  assert.equal(mismatch.ok, false);
+  assert.equal(mismatch.errorCode, 'MODEL_PROVIDER_MISMATCH');
+  assert.match(mismatch.errorMessage, /same provider/);
+
+  const invalid = resolveConfiguredModel({ PIERROT_DEV_OPENCODE_MODEL: 'deepseek-flash' });
+  assert.equal(invalid.ok, false);
+  assert.equal(invalid.errorCode, 'MODEL_ID_INVALID');
+});
+
+test('the model health check uses the same configured id the worker invokes', () => {
+  const config = resolveConfiguredModel({
+    PIERROT_DEV_OPENCODE_MODEL: 'deepseek/deepseek-flash',
+  });
+  const pass = verifyConfiguredModel({
+    config,
+    modelsStdout: 'deepseek/deepseek-chat\ndeepseek/deepseek-flash\n',
+  });
+  assert.equal(pass.ok, true);
+
+  const fail = verifyConfiguredModel({
+    config,
+    modelsStdout: 'deepseek/deepseek-chat\nopenai/gpt-5\n',
+  });
+  assert.equal(fail.ok, false);
+  assert.equal(fail.code, 'MODEL_UNAVAILABLE');
+  assert.match(fail.message, /deepseek\/deepseek-chat/);
+  assert.match(fail.message, /No fallback model/);
+});
+
+test('reported model identity is compared without inventing aliases', () => {
+  assert.equal(
+    compareModelIdentity({
+      configuredModel: 'deepseek/deepseek-flash',
+      reportedModel: 'deepseek-flash',
+    }).verdict,
+    'match'
+  );
+  assert.equal(
+    compareModelIdentity({
+      configuredModel: 'deepseek/deepseek-flash',
+      reportedModel: 'deepseek/deepseek-chat',
+    }).verdict,
+    'mismatch'
+  );
+  assert.equal(
+    compareModelIdentity({
+      configuredModel: 'deepseek/deepseek-flash',
+      reportedModel: null,
+    }).verdict,
+    'unreported'
+  );
+});
+
+test('OpenCode failures get actionable categories without changing model', () => {
+  assert.equal(describeOpenCodeFailure({ exitCode: 1 }).code, 'OPENCODE_FAILED');
+  assert.equal(
+    describeOpenCodeFailure({ exitCode: 1, stderr: 'Error 429: rate limit exceeded' }).code,
+    'OPENCODE_RATE_LIMITED'
+  );
+  assert.equal(
+    describeOpenCodeFailure({ exitCode: 1, stderr: 'invalid api key' }).code,
+    'OPENCODE_AUTH_FAILED'
+  );
+  assert.equal(describeOpenCodeFailure({ exitCode: 1, timedOut: true }).code, 'EXECUTION_TIMEOUT');
+  assert.equal(
+    describeOpenCodeFailure({ exitCode: 130, signal: 'SIGINT' }).code,
+    'OPENCODE_INTERRUPTED'
+  );
+  assert.equal(
+    describeOpenCodeFailure({ exitCode: 1, stderr: 'maximum context length exceeded' }).code,
+    'OPENCODE_CONTEXT_LIMIT'
+  );
 });

@@ -574,6 +574,8 @@ export async function getPullRequestStatus(
   mergeable: boolean | null;
   mergeableState: string | null;
   headSha: string;
+  /** GitHub's merge commit SHA; null while the PR is open. */
+  mergeCommitSha: string | null;
   baseBranch: string;
 } | null> {
   const config = getDevRepositoryConfig(repoKey(repository));
@@ -593,6 +595,7 @@ export async function getPullRequestStatus(
       mergeable: response.data.mergeable ?? null,
       mergeableState: response.data.mergeable_state ?? null,
       headSha: response.data.head.sha,
+      mergeCommitSha: response.data.merge_commit_sha ?? null,
       baseBranch: response.data.base.ref,
     };
   } catch (error) {

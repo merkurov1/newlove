@@ -4,6 +4,245 @@
  * tested without starting the polling loop.
  */
 
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const EXECUTOR_MODEL_FILE = fileURLToPath(
+  new URL('../../lib/pierrot/dev/executorModel.json', import.meta.url)
+);
+let executorModelDefaults = null;
+
+/**
+ * The model registry is shared by the server cost ledger and both executor
+ * processes. Reading it here (instead of repeating literals) keeps the
+ * preflight, the real OpenCode invocation and telemetry on one identity.
+ */
+export function loadExecutorModelDefaults() {
+  if (executorModelDefaults) return executorModelDefaults;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(EXECUTOR_MODEL_FILE, 'utf8'));
+    executorModelDefaults = {
+      provider: String(parsed.provider || 'deepseek')
+        .trim()
+        .toLowerCase(),
+      model: String(parsed.model || 'deepseek/deepseek-flash').trim(),
+      minimumOpencodeVersion: String(parsed.minimumOpencodeVersion || '2.1.4').trim(),
+    };
+  } catch {
+    // A broken/missing registry must not silently change the model. Fall back
+    // to the documented contract; the preflight test asserts the file exists.
+    executorModelDefaults = {
+      provider: 'deepseek',
+      model: 'deepseek/deepseek-flash',
+      minimumOpencodeVersion: '2.1.4',
+    };
+  }
+  return executorModelDefaults;
+}
+
+function clean(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/**
+ * Resolve the exact provider/model pair used by the preflight, the worker and
+ * the advertised capabilities. An explicit mismatch is a configuration error,
+ * never a reason to fall back to another model.
+ */
+export function resolveConfiguredModel(env = process.env) {
+  const defaults = loadExecutorModelDefaults();
+  const rawModel = clean(env.PIERROT_DEV_OPENCODE_MODEL) || defaults.model;
+  const modelProvider = providerFromModel(rawModel);
+  const rawProvider = clean(env.PIERROT_DEV_OPENCODE_PROVIDER);
+  const provider = (rawProvider || modelProvider || defaults.provider).toLowerCase();
+  const providerEnvName = `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`;
+  const base = {
+    model: rawModel,
+    provider,
+    providerEnvName,
+    source: clean(env.PIERROT_DEV_OPENCODE_MODEL) ? 'environment' : 'registry',
+  };
+  if (!rawModel.includes('/') || !modelProvider) {
+    return {
+      ...base,
+      ok: false,
+      errorCode: 'MODEL_ID_INVALID',
+      errorMessage: `Configured model "${rawModel}" is not a provider/model id. Set PIERROT_DEV_OPENCODE_MODEL to "${defaults.model}" (or another model listed by "opencode models").`,
+    };
+  }
+  if (modelProvider !== provider) {
+    return {
+      ...base,
+      ok: false,
+      errorCode: 'MODEL_PROVIDER_MISMATCH',
+      errorMessage: `PIERROT_DEV_OPENCODE_PROVIDER is "${provider}", but PIERROT_DEV_OPENCODE_MODEL is "${rawModel}" (provider "${modelProvider}"). Set both to the same provider; the executor will not guess or fall back.`,
+    };
+  }
+  return { ...base, ok: true, errorCode: null, errorMessage: null };
+}
+
+export function parseModelList(stdout) {
+  return String(stdout || '')
+    .replace(/\x1b\[[0-9;]*m/g, '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Compare the requested executor model with the model OpenCode reported in its
+ * usage events. The report is evidence, not a replacement for configuration:
+ * a different model id is recorded as a mismatch and surfaced to the owner.
+ */
+export function compareModelIdentity(input = {}) {
+  const configured = clean(input.configuredModel).toLowerCase();
+  const reported = clean(input.reportedModel).toLowerCase();
+  if (!configured) return { verdict: 'unconfigured', configured: null, reported: reported || null };
+  if (!reported) {
+    return {
+      verdict: 'unreported',
+      configured: configured || null,
+      reported: null,
+    };
+  }
+  const configuredProvider = providerFromModel(configured);
+  const reportedProvider = providerFromModel(reported);
+  const bare = (value) => (value.includes('/') ? value.slice(value.indexOf('/') + 1) : value);
+  const match =
+    configured === reported ||
+    (bare(configured) === bare(reported) &&
+      (!configuredProvider || !reportedProvider || configuredProvider === reportedProvider));
+  return {
+    verdict: match ? 'match' : 'mismatch',
+    configured,
+    reported,
+  };
+}
+
+/**
+ * Verify the configured model against exactly what `opencode models` offers.
+ * Returns an actionable explanation and the provider's offered models; it
+ * never silently accepts a bare/partial match.
+ */
+export function verifyConfiguredModel(input = {}) {
+  const config = input.config || resolveConfiguredModel(input.env || process.env);
+  if (!config.ok) {
+    return {
+      ok: false,
+      code: config.errorCode,
+      message: config.errorMessage,
+      model: config.model,
+      provider: config.provider,
+      available: [],
+    };
+  }
+  const available = parseModelList(input.modelsStdout);
+  const matches = available.filter((line) => line.toLowerCase() === config.model.toLowerCase());
+  if (matches.length > 0) {
+    return {
+      ok: true,
+      code: null,
+      message: null,
+      model: config.model,
+      provider: config.provider,
+      available: matches,
+    };
+  }
+  const providerModels = available.filter((line) => providerFromModel(line) === config.provider);
+  return {
+    ok: false,
+    code: 'MODEL_UNAVAILABLE',
+    message: `Configured model ${config.model} is not listed by the installed OpenCode CLI. Provider ${config.provider} offers: ${
+      providerModels.slice(0, 8).join(', ') || 'no models'
+    }. Run "opencode models", then set PIERROT_DEV_OPENCODE_MODEL to one of the listed ids. No fallback model will be used.`,
+    model: config.model,
+    provider: config.provider,
+    available: providerModels.slice(0, 8),
+  };
+}
+
+/**
+ * Classify an OpenCode exit into a stable, actionable failure code. This is
+ * diagnostics only: it never retries or changes provider by itself. The
+ * original stderr/stdout tail is still persisted by the worker.
+ */
+export function describeOpenCodeFailure(input = {}) {
+  const code = Number.isFinite(input.exitCode) ? Number(input.exitCode) : null;
+  const signal = clean(input.signal) || null;
+  const output = `${input.stdout || ''}\n${input.stderr || ''}`;
+  const lower = output.toLowerCase();
+  if (input.timedOut || code === 124) {
+    return {
+      code: 'EXECUTION_TIMEOUT',
+      category: 'timeout',
+      message: 'OpenCode exceeded the configured execution timeout.',
+    };
+  }
+  if (signal === 'SIGINT' || signal === 'SIGTERM' || code === 130 || code === 143) {
+    return {
+      code: 'OPENCODE_INTERRUPTED',
+      category: 'interrupted',
+      message: 'OpenCode was interrupted before completing the task.',
+    };
+  }
+  if (/rate limit|too many requests|429/.test(lower)) {
+    return {
+      code: 'OPENCODE_RATE_LIMITED',
+      category: 'provider_rate_limit',
+      message: 'The model provider rate-limited OpenCode. Retry after the provider reset window.',
+    };
+  }
+  if (/insufficient balance|payment required|quota|402/.test(lower)) {
+    return {
+      code: 'OPENCODE_PROVIDER_QUOTA',
+      category: 'provider_quota',
+      message:
+        'The model provider rejected the request for quota/billing reasons. Check the provider account; the executor will not switch models.',
+    };
+  }
+  if (/invalid api key|unauthori[sz]ed|authentication failed|\b401\b/.test(lower)) {
+    return {
+      code: 'OPENCODE_AUTH_FAILED',
+      category: 'provider_auth',
+      message:
+        'The model provider rejected the credential. Verify the repository secret; the executor will not fall back to another provider.',
+    };
+  }
+  if (/model .*not found|model_not_found|unknown model|does not exist|\b404\b/.test(lower)) {
+    return {
+      code: 'OPENCODE_MODEL_UNAVAILABLE',
+      category: 'model_identity',
+      message:
+        'The provider/CLI did not recognise the configured model. Check PIERROT_DEV_OPENCODE_MODEL against "opencode models".',
+    };
+  }
+  if (/context length|token limit|maximum context|too many tokens/.test(lower)) {
+    return {
+      code: 'OPENCODE_CONTEXT_LIMIT',
+      category: 'context_limit',
+      message:
+        'OpenCode exceeded the model context window. Reduce the task scope or start a fresh attempt; branch work is preserved.',
+    };
+  }
+  if (
+    /overloaded|service unavailable|\b50[234]\b|econnreset|etimedout|fetch failed|network/.test(
+      lower
+    )
+  ) {
+    return {
+      code: 'OPENCODE_PROVIDER_UNAVAILABLE',
+      category: 'provider_transient',
+      message:
+        'The provider or network was temporarily unavailable. Retry from the preserved attempt branch.',
+    };
+  }
+  return {
+    code: 'OPENCODE_FAILED',
+    category: 'unknown',
+    message: `OpenCode exited with code ${code === null ? 'unknown' : code} without a recognised provider error. Inspect the bounded log tail and session id.`,
+  };
+}
+
 export function parseVersion(value) {
   const match = String(value || '').match(/(\d+)\.(\d+)\.(\d+)/);
   if (!match) return null;
@@ -544,6 +783,7 @@ export const BOOT_PHASES = Object.freeze([
   'checking_config',
   'checking_opencode',
   'checking_auth',
+  'checking_provider',
   'connecting_api',
   'api_connected',
   'registering',
@@ -552,3 +792,21 @@ export const BOOT_PHASES = Object.freeze([
   'failed',
   'stopping',
 ]);
+
+/**
+ * A boot phase is telemetry, not a control-flow signal. An unknown or missing
+ * informational phase must never be coerced into `failed`: that is what turned
+ * the harmless "checking provider" line into repeated worker.boot errors while
+ * the task still executed. Only the explicit `failed` phase is an error.
+ */
+export function normalizeBootPhase(phase) {
+  const value = String(phase || '')
+    .trim()
+    .toLowerCase();
+  if (BOOT_PHASES.includes(value)) return value;
+  return 'starting';
+}
+
+export function bootPhaseLevel(phase) {
+  return normalizeBootPhase(phase) === 'failed' ? 'error' : 'info';
+}

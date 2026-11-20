@@ -28,7 +28,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const WORKER_ID_PATTERN = /^[A-Za-z0-9._:-]{4,120}$/;
 export const COST_LEDGER_MIGRATION_FILE = '2026-12-10_pierrot_dev_cost_ledger.sql';
 const BASE_TASK_COLUMNS =
-  'id,user_id,title,task,objective,repository,base_ref,status,priority,queue_position,queued_at,attempt_count,acceptance_criteria,verification_status,blocked_reason,last_error_code,last_error_message,result_commit,result_notes,pull_requests,created_at,updated_at';
+  'id,user_id,title,task,objective,repository,base_ref,status,priority,queue_position,queued_at,attempt_count,acceptance_criteria,verification_status,verified_at,blocked_reason,last_error_code,last_error_message,result_commit,result_notes,pull_requests,created_at,updated_at';
 const ACTIONS_ROUTING_TASK_COLUMNS = ',assigned_executor,actions_dispatch_requested_at';
 const ACTIONS_DISPATCH_TASK_COLUMNS =
   ',actions_dispatch_status,actions_dispatch_reason_code,actions_dispatch_reason,actions_dispatch_correlation_id,actions_dispatch_attempts,actions_dispatch_last_attempt_at,actions_dispatch_next_retry_at,actions_dispatch_updated_at';
@@ -147,6 +147,7 @@ export function mapTaskRow(row: Record<string, unknown>): DevWorkbenchTask {
     acceptanceCriteria: list(row.acceptance_criteria),
     verificationStatus:
       typeof row.verification_status === 'string' ? row.verification_status : null,
+    verifiedAt: typeof row.verified_at === 'string' ? row.verified_at : null,
     blockedReason: typeof row.blocked_reason === 'string' ? row.blocked_reason : null,
     lastErrorCode: typeof row.last_error_code === 'string' ? row.last_error_code : null,
     lastErrorMessage: typeof row.last_error_message === 'string' ? row.last_error_message : null,

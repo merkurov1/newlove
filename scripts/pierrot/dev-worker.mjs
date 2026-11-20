@@ -29,23 +29,26 @@ import process from 'node:process';
 import { runProcess, terminateProcessGroup } from './dev-worker-process.mjs';
 import {
   ACTIONS_EXIT,
-  BOOT_PHASES,
   activeAttemptOwnership,
   assertHostedActionsRunner,
   buildExecutionId,
   checkCommitIdentity,
   classifyClaimOutcome,
+  compareModelIdentity,
   computeReadiness,
+  describeOpenCodeFailure,
   extractExecutorReport,
   isAllowedWorkerBranch,
   isClaimForRequestedTask,
   isOrphanExecutorProcess,
   isVersionAtLeast,
+  normalizeBootPhase,
   parseOpenCodeCost,
   parseStoredAuth,
-  providerFromModel,
   resolveCommitPolicy,
+  resolveConfiguredModel,
   resolveGitIdentity,
+  verifyConfiguredModel,
 } from './dev-worker-lib.mjs';
 
 const API_BASE = (
@@ -89,12 +92,12 @@ const IDLE_GRACE_SECONDS = (() => {
   return Number.isFinite(value) ? Math.min(Math.max(Math.trunc(value * 60), 60), 3600) : 120;
 })();
 const MIN_OPENCODE_VERSION = (process.env.PIERROT_DEV_OPENCODE_MIN_VERSION || '2.1.4').trim();
-const OPENCODE_MODEL = (process.env.PIERROT_DEV_OPENCODE_MODEL || 'deepseek/deepseek-flash').trim();
-const OPENCODE_PROVIDER = (
-  process.env.PIERROT_DEV_OPENCODE_PROVIDER ||
-  providerFromModel(OPENCODE_MODEL) ||
-  'deepseek'
-).trim();
+// Resolve the provider/model pair once, from the same registry and environment
+// that the preflight uses. A mismatch is a hard configuration error; the
+// executor never guesses a provider or silently uses another model.
+const MODEL_CONFIG = resolveConfiguredModel(process.env);
+const OPENCODE_MODEL = MODEL_CONFIG.model;
+const OPENCODE_PROVIDER = MODEL_CONFIG.provider;
 const OPENCODE_AGENT = (process.env.PIERROT_DEV_OPENCODE_AGENT || '').trim();
 const EXECUTOR_MODE = (process.env.PIERROT_DEV_EXECUTOR_MODE || 'codespace').trim().toLowerCase();
 const ACTIONS_MODE = EXECUTOR_MODE === 'actions';
@@ -102,7 +105,7 @@ const RELEASE_MODE = EXECUTOR_MODE === 'release-active';
 const TARGET_TASK_ID = (process.env.PIERROT_DEV_TASK_ID || '').trim();
 const TARGET_CORRELATION_ID = (process.env.PIERROT_DEV_DISPATCH_CORRELATION_ID || '').trim();
 const ALLOW_PROVIDER_ENV = process.env.PIERROT_DEV_ALLOW_PROVIDER_ENV === 'true';
-const PROVIDER_ENV_NAME = `${OPENCODE_PROVIDER.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`;
+const PROVIDER_ENV_NAME = MODEL_CONFIG.providerEnvName;
 const ALLOW_UNSIGNED_COMMITS = process.env.PIERROT_DEV_ALLOW_UNSIGNED_COMMITS === 'true';
 const EXECUTION_ID = buildExecutionId({
   runId: process.env.GITHUB_RUN_ID,
@@ -210,7 +213,9 @@ async function log(message, extra) {
  * reason a worker did not start.
  */
 async function bootPhase(phase, message, options = {}) {
-  const safePhase = BOOT_PHASES.includes(phase) ? phase : 'failed';
+  // Only an explicit `failed` phase is an error. Unknown informational phases
+  // must not be relabelled as failures (see normalizeBootPhase).
+  const safePhase = normalizeBootPhase(phase);
   const safeMessage = sanitize(message).slice(0, 800);
   const line = `${nowIso()} [boot:${safePhase}] ${safeMessage}\n`;
   process.stdout.write(line);
@@ -722,6 +727,40 @@ function extractSessionId(output) {
   return null;
 }
 
+function boundedTail(value, limit = 4000) {
+  const text = String(value || '');
+  return text.length > limit ? text.slice(-limit) : text;
+}
+
+/**
+ * Persist a bounded, secret-scrubbed failure record with the attempt. This is
+ * what makes a future OpenCode exit 1 diagnosable without reading runner logs:
+ * exit code, signal, duration, provider category, model identity and the last
+ * stderr/stdout lines are stored in Supabase.
+ */
+function opencodeFailureDiagnostics(runResult, failure, sessionId) {
+  return {
+    opencode: {
+      code: failure.code,
+      category: failure.category,
+      message: failure.message,
+      exitCode: typeof runResult.code === 'number' ? runResult.code : null,
+      signal: runResult.signal || null,
+      timedOut: runResult.timedOut === true,
+      cancelled: runResult.cancelled === true,
+      durationMs: typeof runResult.durationMs === 'number' ? runResult.durationMs : null,
+      sessionId: sessionId || null,
+      stderrTail: sanitize(boundedTail(runResult.stderr)),
+      stdoutTail: sanitize(boundedTail(runResult.stdout)),
+    },
+    modelIdentity: {
+      configuredModel: OPENCODE_MODEL,
+      configuredProvider: OPENCODE_PROVIDER,
+      source: MODEL_CONFIG.source,
+    },
+  };
+}
+
 async function runOpenCode({ worktree, prompt, attemptId, title }) {
   const args = ['run', '--standalone', '--format', 'json', '--title', title.slice(0, 180)];
   if (OPENCODE_MODEL) args.push('--model', OPENCODE_MODEL);
@@ -1155,6 +1194,15 @@ async function executeClaim(claim) {
     const sessionId = extractSessionId(runResult.stdout);
     const report = extractExecutorReport(output);
     usage = parseOpenCodeCost(runResult.stdout);
+    // Keep the requested identity next to the provider-reported one. The
+    // server records both so a missing/aliased usage model cannot be mistaken
+    // for the configured model in cost telemetry.
+    usage.configuredModel = OPENCODE_MODEL;
+    usage.configuredProvider = OPENCODE_PROVIDER;
+    usage.modelIdentity = compareModelIdentity({
+      configuredModel: OPENCODE_MODEL,
+      reportedModel: usage.model,
+    });
     const changedFiles = await collectChangedFiles(prepared.worktree);
     const logExcerpt = sanitize(output.slice(-60000));
 
@@ -1168,7 +1216,25 @@ async function executeClaim(claim) {
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       steps: usage.steps,
+      reportedModel: usage.model || null,
+      configuredModel: OPENCODE_MODEL,
+      modelIdentity: usage.modelIdentity?.verdict || null,
     });
+
+    if (usage.modelIdentity?.verdict === 'mismatch') {
+      await api('event', {
+        attemptId: attempt.id,
+        type: 'worker.note',
+        message: `Model identity mismatch: configured ${OPENCODE_MODEL}, OpenCode reported ${usage.model}. Cost telemetry records the reported model and flags the mismatch.`,
+        payload: {
+          configuredModel: OPENCODE_MODEL,
+          configuredProvider: OPENCODE_PROVIDER,
+          reportedModel: usage.model,
+          reportedProvider: usage.provider || null,
+        },
+        dedupeKey: `model-identity:${attempt.id}`,
+      }).catch(() => {});
+    }
 
     if (runResult.cancelled) {
       await failClaim({
@@ -1182,14 +1248,16 @@ async function executeClaim(claim) {
     }
 
     if (runResult.timedOut) {
+      const failure = describeOpenCodeFailure({ ...runResult, timedOut: true });
       await failClaim({
         attemptId: attempt.id,
-        errorCode: 'EXECUTION_TIMEOUT',
-        errorMessage: `OpenCode exceeded the ${Math.round(TASK_TIMEOUT_MS / 60000)} minute limit.`,
+        errorCode: failure.code,
+        errorMessage: failure.message,
         timedOut: true,
         exitCode: runResult.code,
         logExcerpt,
         changedFiles,
+        verification: opencodeFailureDiagnostics(runResult, failure, sessionId),
       });
       return false;
     }
@@ -1220,32 +1288,33 @@ async function executeClaim(claim) {
     }
 
     if (runResult.code !== 0) {
-      const interrupted =
-        runResult.signal === 'SIGINT' ||
-        runResult.signal === 'SIGTERM' ||
-        runResult.code === 130 ||
-        runResult.code === 143;
+      const failure = describeOpenCodeFailure(runResult);
       await failClaim({
         attemptId: attempt.id,
-        errorCode: interrupted ? 'OPENCODE_INTERRUPTED' : 'OPENCODE_FAILED',
-        errorMessage: interrupted
-          ? 'OpenCode was interrupted before completing the task.'
-          : `OpenCode exited with code ${runResult.code}.`,
+        errorCode: failure.code,
+        errorMessage: failure.message,
         exitCode: runResult.code,
         logExcerpt,
         changedFiles,
+        verification: opencodeFailureDiagnostics(runResult, failure, sessionId),
       });
       return false;
     }
 
     if (!report && changedFiles.length === 0) {
+      const failure = {
+        code: 'OPENCODE_REPORT_MISSING',
+        category: 'missing_report',
+        message: 'OpenCode exited without a final report and without changing any files.',
+      };
       await failClaim({
         attemptId: attempt.id,
-        errorCode: 'OPENCODE_REPORT_MISSING',
-        errorMessage: 'OpenCode exited without a final report and without changing any files.',
+        errorCode: failure.code,
+        errorMessage: failure.message,
         exitCode: runResult.code,
         logExcerpt,
         changedFiles,
+        verification: opencodeFailureDiagnostics(runResult, failure, sessionId),
       });
       return false;
     }
@@ -1301,6 +1370,11 @@ async function executeClaim(claim) {
         'Commit pushed without a GPG signature by the GitHub Actions pilot override. Branch protection may require signed commits.'
       );
     }
+    if (usage.modelIdentity?.verdict === 'mismatch') {
+      warnings.push(
+        `Model identity mismatch: configured ${OPENCODE_MODEL}, OpenCode reported ${usage.model}. Cost telemetry uses the reported model.`
+      );
+    }
 
     const payload = {
       exitCode: runResult.code,
@@ -1325,6 +1399,14 @@ async function executeClaim(claim) {
         executionId: EXECUTION_ID,
         commitSigned,
         selfReported: true,
+        modelIdentity: {
+          configuredModel: OPENCODE_MODEL,
+          configuredProvider: OPENCODE_PROVIDER,
+          source: MODEL_CONFIG.source,
+          reportedModel: usage.model || null,
+          reportedProvider: usage.provider || null,
+          verdict: usage.modelIdentity?.verdict || 'unreported',
+        },
         unverified: Array.isArray(parsedReport.unverified)
           ? parsedReport.unverified.slice(0, 40)
           : [],
@@ -1528,14 +1610,24 @@ async function configuredModelAvailable() {
       env: opencodeEnv(),
       timeoutMs: 30000,
     });
-    if (result.code !== 0) return false;
-    return result.stdout
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .includes(OPENCODE_MODEL);
-  } catch {
-    return false;
+    if (result.code !== 0)
+      return {
+        ok: false,
+        code: 'MODEL_LIST_FAILED',
+        message: 'OpenCode could not list models.',
+        available: [],
+      };
+    return verifyConfiguredModel({
+      config: MODEL_CONFIG,
+      modelsStdout: result.stdout,
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      code: 'MODEL_LIST_FAILED',
+      message: `OpenCode model list failed: ${String(error?.message || error).slice(0, 200)}`,
+      available: [],
+    };
   }
 }
 
@@ -1625,6 +1717,13 @@ async function runActionsOnce() {
     process.exitCode = ACTIONS_EXIT.permanent;
     return;
   }
+  if (!MODEL_CONFIG.ok) {
+    await bootPhase('failed', `${MODEL_CONFIG.errorCode}: ${MODEL_CONFIG.errorMessage}`, {
+      force: true,
+    });
+    process.exitCode = ACTIONS_EXIT.permanent;
+    return;
+  }
   if (ALLOW_PROVIDER_ENV && !(process.env[PROVIDER_ENV_NAME] || '').trim()) {
     await bootPhase(
       'failed',
@@ -1640,6 +1739,8 @@ async function runActionsOnce() {
   capabilities.executionId = EXECUTION_ID;
   capabilities.workerKind = WORKER_KIND;
   capabilities.configuredModel = OPENCODE_MODEL;
+  capabilities.configuredProvider = OPENCODE_PROVIDER;
+  capabilities.modelSource = MODEL_CONFIG.source;
   capabilities.runUrl = process.env.GITHUB_SERVER_URL
     ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
     : null;
@@ -1647,12 +1748,20 @@ async function runActionsOnce() {
     'checking_provider',
     `Checking ${OPENCODE_PROVIDER} provider and model ${OPENCODE_MODEL}.`
   );
-  capabilities.modelAvailable = await configuredModelAvailable();
+  const modelCheck = await configuredModelAvailable();
+  capabilities.modelAvailable = modelCheck.ok === true;
+  capabilities.modelCheck = {
+    ok: modelCheck.ok === true,
+    code: modelCheck.code || null,
+    message: modelCheck.message || null,
+    available: Array.isArray(modelCheck.available) ? modelCheck.available.slice(0, 8) : [],
+    checkedAt: nowIso(),
+  };
   applyReadiness(capabilities, { configOk: true, apiOk: false, supabaseOk: false });
   if (!capabilities.modelAvailable) {
     await bootPhase(
       'failed',
-      `OPENCODE_MODEL_UNAVAILABLE: ${OPENCODE_MODEL} is not listed by the installed OpenCode CLI. No fallback model will be used.`,
+      `${modelCheck.code || 'OPENCODE_MODEL_UNAVAILABLE'}: ${modelCheck.message || `${OPENCODE_MODEL} is not listed by the installed OpenCode CLI. No fallback model will be used.`}`,
       { force: true }
     );
     process.exitCode = ACTIONS_EXIT.permanent;

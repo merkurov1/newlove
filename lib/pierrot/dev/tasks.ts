@@ -668,6 +668,7 @@ export async function attachDevTaskResult(input: {
     verification_status: storedVerificationStatus(nextVerification),
     verification_notes: text(input.verificationNotes ?? existing.verificationNotes),
     status: status(input.status, existing.status),
+    ...(nextStatus === 'verified' ? { verified_at: new Date().toISOString() } : {}),
     updated_at: new Date().toISOString(),
   };
 
@@ -747,11 +748,16 @@ export async function saveDevTaskReview(input: {
   const result = await store
     .from('pierrot_dev_prompts')
     .update({
-      verification_status: storedVerificationStatus(input.report.verdict),
+      // A review is advisory. It may store findings, but it must not set a
+      // verified-ish status or a verified_at timestamp while the task is still
+      // waiting for the owner. Otherwise a merged PR row could read
+      // `status=review` with `verification_status=partial` (verified with
+      // warnings) without any verification action.
+      verification_status: 'not_run',
       verification_notes: notes,
       verification_report: compactReport,
       result_commit: input.report.headCommit,
-      verified_at: new Date().toISOString(),
+      verified_at: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', input.taskId)
@@ -763,7 +769,7 @@ export async function saveDevTaskReview(input: {
       userId: input.userId,
       taskId: input.taskId,
       resultCommit: input.report.headCommit,
-      verificationStatus: input.report.verdict,
+      verificationStatus: 'not_verified',
       verificationNotes: notes,
       status: existing.status,
     });

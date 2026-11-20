@@ -1,3 +1,9 @@
+import {
+  DEV_EXECUTOR_MODEL,
+  DEV_EXECUTOR_PROVIDER,
+  compareModelIdentities,
+  sameModelIdentity,
+} from './modelIdentity';
 import type {
   DevAttemptCost,
   DevCostConfidence,
@@ -58,6 +64,18 @@ const DEEPSEEK_RATE: DevCostModelRate = {
 export type OpenCodeUsage = {
   provider: string | null;
   model: string | null;
+  /**
+   * Where `model` came from. Cost telemetry must never silently label a
+   * configured fallback as a provider-reported model.
+   */
+  modelSource: 'opencode-reported' | 'executor-configured' | 'server-configured' | 'unknown';
+  /** The executor model that was actually requested for this attempt. */
+  configuredProvider: string | null;
+  configuredModel: string | null;
+  /** True when OpenCode reported a different model than the configured one. */
+  modelMismatch: boolean;
+  /** Match verdict for the configured and provider-reported identities. */
+  identity: 'match' | 'mismatch' | 'unreported' | 'unconfigured';
   inputTokens: number | null;
   outputTokens: number | null;
   reasoningTokens: number | null;
@@ -128,19 +146,16 @@ export function modelRateFor(
   if (overrideInput !== null || overrideOutput !== null) {
     return {
       version:
-        text(process.env.PIERROT_DEV_MODEL_PRICING_VERSION, 120) ||
-        'env-model-price-override',
+        text(process.env.PIERROT_DEV_MODEL_PRICING_VERSION, 120) || 'env-model-price-override',
       source: 'PIERROT_DEV_MODEL_* environment override',
       effectiveAt: new Date().toISOString(),
       currency: 'USD',
       inputPerMillionUsd: overrideInput ?? DEEPSEEK_RATE.inputPerMillionUsd,
       outputPerMillionUsd: overrideOutput ?? DEEPSEEK_RATE.outputPerMillionUsd,
       cacheReadPerMillionUsd:
-        envRate('PIERROT_DEV_MODEL_CACHE_READ_USD_PER_M') ??
-        DEEPSEEK_RATE.cacheReadPerMillionUsd,
+        envRate('PIERROT_DEV_MODEL_CACHE_READ_USD_PER_M') ?? DEEPSEEK_RATE.cacheReadPerMillionUsd,
       cacheWritePerMillionUsd:
-        envRate('PIERROT_DEV_MODEL_CACHE_WRITE_USD_PER_M') ??
-        DEEPSEEK_RATE.cacheWritePerMillionUsd,
+        envRate('PIERROT_DEV_MODEL_CACHE_WRITE_USD_PER_M') ?? DEEPSEEK_RATE.cacheWritePerMillionUsd,
     };
   }
 
@@ -154,8 +169,8 @@ export function modelRateFor(
 
 export function modelPricingRateInfo(): DevCostRate {
   const rate = modelRateFor(
-    text(process.env.PIERROT_DEV_OPENCODE_PROVIDER, 80) || 'deepseek',
-    text(process.env.PIERROT_DEV_OPENCODE_MODEL, 120) || 'deepseek/deepseek-chat'
+    text(process.env.PIERROT_DEV_OPENCODE_PROVIDER, 80) || DEV_EXECUTOR_PROVIDER,
+    text(process.env.PIERROT_DEV_OPENCODE_MODEL, 120) || DEV_EXECUTOR_MODEL
   );
   return rate || DEEPSEEK_RATE;
 }
@@ -275,16 +290,38 @@ export function normalizeOpenCodeUsage(value: unknown): OpenCodeUsage {
     value && typeof value === 'object' && !Array.isArray(value)
       ? (value as Record<string, unknown>)
       : {};
-  const provider =
-    text(record.provider, 80) ||
-    text(record.providerID, 80) ||
-    text(record.providerId, 80) ||
-    text(process.env.PIERROT_DEV_OPENCODE_PROVIDER, 80);
-  const model =
-    text(record.model, 120) ||
-    text(record.modelID, 120) ||
-    text(record.modelId, 120) ||
-    text(process.env.PIERROT_DEV_OPENCODE_MODEL, 120);
+  const reportedProvider =
+    text(record.provider, 80) || text(record.providerID, 80) || text(record.providerId, 80);
+  const reportedModel =
+    text(record.model, 120) || text(record.modelID, 120) || text(record.modelId, 120);
+  const serverConfiguredProvider = text(process.env.PIERROT_DEV_OPENCODE_PROVIDER, 80);
+  const serverConfiguredModel = text(process.env.PIERROT_DEV_OPENCODE_MODEL, 120);
+  const configuredProvider =
+    text(record.configuredProvider, 80) ||
+    text(record.configuredProviderID, 80) ||
+    serverConfiguredProvider;
+  const configuredModel =
+    text(record.configuredModel, 120) ||
+    text(record.configuredModelID, 120) ||
+    serverConfiguredModel;
+  // Prefer what the provider actually reported. An executor-configured model is
+  // an explicit fallback, never a fake observation. No second model is ever
+  // substituted when the report is missing.
+  const model = reportedModel || configuredModel || null;
+  const provider = reportedProvider || configuredProvider || providerFromModel(model) || null;
+  const modelSource: OpenCodeUsage['modelSource'] = reportedModel
+    ? 'opencode-reported'
+    : text(record.configuredModel, 120)
+      ? 'executor-configured'
+      : serverConfiguredModel
+        ? 'server-configured'
+        : 'unknown';
+  const identity = compareModelIdentities({
+    configuredProvider,
+    configuredModel,
+    reportedProvider,
+    reportedModel,
+  });
   const inputTokens = finite(record.inputTokens);
   const outputTokens = finite(record.outputTokens);
   const reasoningTokens = finite(record.reasoningTokens);
@@ -309,6 +346,12 @@ export function normalizeOpenCodeUsage(value: unknown): OpenCodeUsage {
   return {
     provider,
     model,
+    modelSource,
+    configuredProvider,
+    configuredModel,
+    modelMismatch: Boolean(
+      reportedModel && configuredModel && !sameModelIdentity(configuredModel, reportedModel)
+    ),
     inputTokens,
     outputTokens,
     reasoningTokens,
@@ -326,6 +369,7 @@ export function normalizeOpenCodeUsage(value: unknown): OpenCodeUsage {
           ? `estimated:${rate?.version || 'model-rate'}`
           : 'unavailable:opencode-did-not-report-cost',
     rate,
+    identity: identity.verdict,
   };
 }
 
@@ -383,9 +427,7 @@ export function buildAttemptCost(input: {
       });
   // Hosted Actions has no Codespaces component at all. Zero is used only for
   // the arithmetic; the stored codespace record remains explicitly null.
-  const effectiveCodespace = hostedActions
-    ? 0
-    : (codespace.confirmedUsd ?? codespace.estimatedUsd);
+  const effectiveCodespace = hostedActions ? 0 : (codespace.confirmedUsd ?? codespace.estimatedUsd);
   const unknown: string[] = [];
   if (model.costUsd === null) {
     unknown.push(modelStarted ? 'model cost' : 'model cost (model did not run)');
@@ -451,7 +493,7 @@ export function attemptCostValues(cost: DevAttemptCost | null | undefined): {
   const reported =
     cost.model.costKind === 'estimated'
       ? null
-      : finite(cost.model.reportedCostUsd) ?? finite(cost.model.costUsd);
+      : (finite(cost.model.reportedCostUsd) ?? finite(cost.model.costUsd));
   const estimated = finite(cost.model.estimatedCostUsd);
   const modelEffective = finite(cost.model.costUsd) ?? reported ?? estimated;
   const codespaceEstimated = finite(cost.codespace.estimatedUsd);
@@ -480,9 +522,7 @@ export function attemptCostValues(cost: DevAttemptCost | null | undefined): {
   };
 }
 
-export function summarizeCosts(
-  costs: Array<DevAttemptCost | null | undefined>
-): {
+export function summarizeCosts(costs: Array<DevAttemptCost | null | undefined>): {
   modelUsd: number | null;
   modelReportedUsd: number | null;
   modelEstimatedUsd: number | null;
@@ -552,10 +592,7 @@ export function summarizeCosts(
         ? null
         : reasoningTokens + values.reasoningTokens;
     if (values.modelEstimatedUsd !== null) estimatedModel += 1;
-    if (
-      values.codespaceEstimatedUsd !== null &&
-      values.codespaceConfirmedUsd === null
-    ) {
+    if (values.codespaceEstimatedUsd !== null && values.codespaceConfirmedUsd === null) {
       estimatedCodespace += 1;
     }
     for (const item of values.unknown) unknown.add(item);
@@ -590,10 +627,8 @@ export function summarizeCosts(
     modelUsd: modelSum === null ? null : round6(modelSum),
     modelReportedUsd: modelReportedSum === null ? null : round6(modelReportedSum),
     modelEstimatedUsd: modelEstimatedSum === null ? null : round6(modelEstimatedSum),
-    codespaceEstimatedUsd:
-      codespaceEstimatedSum === null ? null : round6(codespaceEstimatedSum),
-    codespaceConfirmedUsd:
-      codespaceConfirmedSum === null ? null : round6(codespaceConfirmedSum),
+    codespaceEstimatedUsd: codespaceEstimatedSum === null ? null : round6(codespaceEstimatedSum),
+    codespaceConfirmedUsd: codespaceConfirmedSum === null ? null : round6(codespaceConfirmedSum),
     totalUsd,
     inputTokens,
     outputTokens,
@@ -663,11 +698,11 @@ export function estimateTaskCost(input: {
   const provider =
     text(input.provider, 80) ||
     text(process.env.PIERROT_DEV_OPENCODE_PROVIDER, 80) ||
-    'deepseek';
+    DEV_EXECUTOR_PROVIDER;
   const model =
     text(input.model, 120) ||
     text(process.env.PIERROT_DEV_OPENCODE_MODEL, 120) ||
-    'deepseek/deepseek-chat';
+    DEV_EXECUTOR_MODEL;
   const modelRate = modelRateFor(provider, model);
   const modelCost = modelRate
     ? {
@@ -769,17 +804,16 @@ export function estimateTaskCost(input: {
       ...modelCost,
       inputTokens,
       outputTokens,
-      rate:
-        modelRate || {
-          version: 'model-rate-unknown',
-          source: 'no matching tariff',
-          effectiveAt: MODEL_PRICING_EFFECTIVE_AT,
-          currency: 'USD',
-          inputPerMillionUsd: null,
-          outputPerMillionUsd: null,
-          cacheReadPerMillionUsd: null,
-          cacheWritePerMillionUsd: null,
-        },
+      rate: modelRate || {
+        version: 'model-rate-unknown',
+        source: 'no matching tariff',
+        effectiveAt: MODEL_PRICING_EFFECTIVE_AT,
+        currency: 'USD',
+        inputPerMillionUsd: null,
+        outputPerMillionUsd: null,
+        cacheReadPerMillionUsd: null,
+        cacheWritePerMillionUsd: null,
+      },
       assumptions: modelAssumptions,
     },
     codespaces: {

@@ -56,6 +56,7 @@ import {
   createDevTask,
   createTaskInput,
   listDevTasks,
+  saveDevTaskReview,
   updateDevTask,
   validateDevTaskCompletion,
 } from '../tasks';
@@ -307,5 +308,38 @@ describe('Task Studio persistence', () => {
     for (const status of ['verified', 'archived', 'rejected', 'cancelled', 'failed'] as const) {
       expect(canPersistReviewStatus(status)).toBe(false);
     }
+  });
+
+  it('an advisory review never writes a verified-like status or verified_at', async () => {
+    lastUpdate = null;
+    queue.push({
+      data: taskRow({ status: 'review', verification_status: 'partial' }),
+      error: null,
+    });
+    queue.push({
+      data: taskRow({ status: 'review', verification_status: 'not_run', verified_at: null }),
+      error: null,
+    });
+
+    await saveDevTaskReview({
+      userId: USER_ID,
+      taskId: TASK_ID,
+      report: {
+        verdict: 'verified_with_warnings',
+        summary: 'Looks good with one warning.',
+        generatedAt: new Date().toISOString(),
+        baseRef: 'main',
+        headCommit: 'b'.repeat(40),
+        changedFiles: [],
+        findings: [],
+        limitations: [],
+        checks: { testsExecuted: true, note: 'CI passed.' },
+      } as never,
+    });
+
+    expect(lastUpdate).toMatchObject({
+      verification_status: 'not_run',
+      verified_at: null,
+    });
   });
 });

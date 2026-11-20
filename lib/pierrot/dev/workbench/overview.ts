@@ -15,6 +15,7 @@ import {
 } from './store';
 import { getLifecycleSnapshot } from './lifecycle';
 import { getFinalizationReport } from './finalization';
+import { auditNonTerminalTasks, reconcileTaskStates } from './reconciliation';
 import { estimateTaskCost } from './costs';
 import { deriveWorkerHealth } from './workerHealth';
 import type { DevCostEstimate, DevWorkbenchOverview, DevWorkbenchTask } from './types';
@@ -61,10 +62,27 @@ export async function getWorkbenchOverview(
   ]);
   const updatedAt = new Date().toISOString();
 
-  const [allTasks, paused] = await Promise.all([
+  const [initialTasks, paused] = await Promise.all([
     listTaskRows({ userId, limit: 200 }),
     schemaReady ? isQueuePaused() : Promise.resolve(false),
   ]);
+  let allTasks = initialTasks;
+
+  // Repair merged-PR/task drift before rendering the list. This is independent
+  // of queue finalization, which only runs when the queue is drained. It never
+  // closes/archives a task and never marks one verified without structured
+  // evidence. Re-read only when a row actually changed.
+  const reconciliation = schemaReady
+    ? await reconcileTaskStates({ tasks: allTasks }).catch(() => ({
+        checked: 0,
+        repaired: 0,
+        skipped: false,
+        errors: 1,
+      }))
+    : { checked: 0, repaired: 0, skipped: false, errors: 0 };
+  if (reconciliation.repaired > 0) {
+    allTasks = await listTaskRows({ userId, limit: 200 });
+  }
 
   const storedEstimates = schemaReady
     ? await listLatestCostEstimates(allTasks.map((task) => task.id))
@@ -87,6 +105,7 @@ export async function getWorkbenchOverview(
   for (const task of tasks) {
     counts[task.status] = (counts[task.status] || 0) + 1;
   }
+  const consistency = auditNonTerminalTasks(tasks);
 
   const inbox = tasks.filter((task) => ['draft', 'ready', 'blocked'].includes(task.status));
   // The Queue tab must never look empty while approved work is waiting for an
@@ -126,6 +145,7 @@ export async function getWorkbenchOverview(
       recentEvents: [],
       lifecycle,
       finalization,
+      consistency: [],
       updatedAt,
     };
   }
@@ -176,6 +196,8 @@ export async function getWorkbenchOverview(
     recentEvents,
     lifecycle,
     finalization,
+    reconciliation,
+    consistency,
     updatedAt,
   };
 }

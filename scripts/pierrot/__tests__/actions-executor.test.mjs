@@ -217,10 +217,39 @@ test('the executor refuses any hidden Codespaces fallback', () => {
   assert.doesNotMatch(workflow, /runs-on:\s*self-hosted/);
 });
 
-test('executor configuration pins the documented DeepSeek model', () => {
+test('executor configuration pins one documented DeepSeek model identity', () => {
   const config = JSON.parse(fs.readFileSync(path.join(repoRoot, 'opencode.json'), 'utf8'));
+  const registry = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'lib/pierrot/dev/executorModel.json'), 'utf8')
+  );
   assert.equal(config.model, 'deepseek/deepseek-flash');
+  assert.equal(registry.model, config.model);
+  assert.equal(registry.provider, 'deepseek');
   assert.match(workflowText(), /PIERROT_DEV_OPENCODE_MODEL:\s*deepseek\/deepseek-flash/);
+  assert.match(workflowText(), /PIERROT_DEV_OPENCODE_PROVIDER:\s*deepseek/);
+});
+
+test('preflight and worker both use the shared model identity contract', () => {
+  const preflight = fs.readFileSync(
+    path.join(repoRoot, 'scripts/pierrot/actions-preflight.mjs'),
+    'utf8'
+  );
+  const worker = fs.readFileSync(path.join(repoRoot, 'scripts/pierrot/dev-worker.mjs'), 'utf8');
+  for (const source of [preflight, worker]) {
+    assert.match(source, /resolveConfiguredModel/);
+    assert.match(source, /verifyConfiguredModel/);
+    assert.doesNotMatch(source, /\.stdout[\s\S]{0,200}\.includes\(OPENCODE_MODEL\)/);
+  }
+});
+
+test('worker failures persist bounded OpenCode diagnostics and model identity', () => {
+  const worker = fs.readFileSync(path.join(repoRoot, 'scripts/pierrot/dev-worker.mjs'), 'utf8');
+  assert.match(worker, /describeOpenCodeFailure/);
+  assert.match(worker, /opencodeFailureDiagnostics/);
+  assert.match(worker, /stderrTail/);
+  assert.match(worker, /reportedModel/);
+  assert.match(worker, /modelIdentity/);
+  assert.match(worker, /normalizeBootPhase/);
 });
 
 test('executor test file never prints a provider key', () => {

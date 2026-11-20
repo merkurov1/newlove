@@ -14,7 +14,12 @@
  */
 
 import process from 'node:process';
-import { isVersionAtLeast } from './dev-worker-lib.mjs';
+import {
+  isVersionAtLeast,
+  loadExecutorModelDefaults,
+  resolveConfiguredModel,
+  verifyConfiguredModel,
+} from './dev-worker-lib.mjs';
 import { runProcess } from './dev-worker-process.mjs';
 
 const API_BASE = (
@@ -25,10 +30,13 @@ const API_BASE = (
   'https://www.merkurov.love'
 ).replace(/\/+$/, '');
 const WORKER_TOKEN = (process.env.PIERROT_DEV_WORKER_TOKEN || '').trim();
-const PROVIDER = (process.env.PIERROT_DEV_OPENCODE_PROVIDER || 'deepseek').trim();
-const MODEL = (process.env.PIERROT_DEV_OPENCODE_MODEL || 'deepseek/deepseek-flash').trim();
-const MIN_VERSION = (process.env.PIERROT_DEV_OPENCODE_MIN_VERSION || '2.1.4').trim();
-const PROVIDER_ENV_NAME = `${PROVIDER.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`;
+const MODEL_CONFIG = resolveConfiguredModel(process.env);
+const MODEL = MODEL_CONFIG.model;
+const PROVIDER = MODEL_CONFIG.provider;
+const MIN_VERSION = (
+  process.env.PIERROT_DEV_OPENCODE_MIN_VERSION || loadExecutorModelDefaults().minimumOpencodeVersion
+).trim();
+const PROVIDER_ENV_NAME = MODEL_CONFIG.providerEnvName;
 const PROVIDER_KEY = (process.env[PROVIDER_ENV_NAME] || '').trim();
 const RUN_MODEL_CALL = process.env.PIERROT_DEV_MODEL_SMOKE_TEST !== 'false';
 
@@ -69,9 +77,14 @@ async function main() {
   note('api_url', API_BASE);
   note('model', MODEL);
   note('provider', PROVIDER);
+  note('model_source', MODEL_CONFIG.source);
+  note('model_identity', `${PROVIDER}/${MODEL.split('/').slice(1).join('/') || MODEL}`);
   note('worker_token_present', WORKER_TOKEN.length >= 32);
   note('provider_key_present', PROVIDER_KEY.length > 0);
 
+  if (!MODEL_CONFIG.ok) {
+    fail(MODEL_CONFIG.errorCode, MODEL_CONFIG.errorMessage);
+  }
   if (!WORKER_TOKEN || WORKER_TOKEN.length < 32) {
     fail(
       'WORKER_TOKEN_MISSING',
@@ -113,14 +126,15 @@ async function main() {
       'OpenCode could not list models. Check the pinned CLI installation and provider configuration.'
     );
   }
-  const available = models.stdout
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-  if (!available.includes(MODEL)) {
+  const modelCheck = verifyConfiguredModel({
+    config: MODEL_CONFIG,
+    modelsStdout: models.stdout,
+  });
+  if (!modelCheck.ok) {
     fail(
-      'MODEL_UNAVAILABLE',
-      `Configured model ${MODEL} is not offered by the installed OpenCode CLI. No fallback model will be used.`
+      modelCheck.code || 'MODEL_UNAVAILABLE',
+      modelCheck.message ||
+        `Configured model ${MODEL} is not offered by the installed OpenCode CLI. No fallback model will be used.`
     );
   }
   note('model_available', true);

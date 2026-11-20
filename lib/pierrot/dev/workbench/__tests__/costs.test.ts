@@ -3,6 +3,7 @@
 import {
   buildAttemptCost,
   estimateTaskCost,
+  normalizeOpenCodeUsage,
   summarizeCosts,
 } from '../costs';
 
@@ -148,5 +149,42 @@ describe('Dev Cost Ledger', () => {
     expect(cost.codespace.confirmedUsd).toBeNull();
     expect(cost.codespace.costKind).toBe('estimated');
     expect(cost.codespace.rate?.version).toBe('github-codespaces-list-price-2025-01');
+  });
+
+  it('labels the executor-configured model instead of inventing deepseek-chat', () => {
+    const usage = normalizeOpenCodeUsage({
+      configuredProvider: 'deepseek',
+      configuredModel: 'deepseek/deepseek-flash',
+      inputTokens: 100,
+      outputTokens: 50,
+      steps: 1,
+    });
+    expect(usage.model).toBe('deepseek/deepseek-flash');
+    expect(usage.provider).toBe('deepseek');
+    expect(usage.modelSource).toBe('executor-configured');
+    expect(usage.identity).toBe('unreported');
+    expect(usage.modelMismatch).toBe(false);
+  });
+
+  it('keeps a provider-reported different model and flags the mismatch', () => {
+    const usage = normalizeOpenCodeUsage({
+      configuredProvider: 'deepseek',
+      configuredModel: 'deepseek/deepseek-flash',
+      provider: 'deepseek',
+      model: 'deepseek/deepseek-chat',
+      inputTokens: 10,
+      outputTokens: 5,
+      steps: 1,
+    });
+    expect(usage.model).toBe('deepseek/deepseek-chat');
+    expect(usage.modelSource).toBe('opencode-reported');
+    expect(usage.identity).toBe('mismatch');
+    expect(usage.modelMismatch).toBe(true);
+  });
+
+  it('never defaults the pre-execution estimate to a different model', () => {
+    delete process.env.PIERROT_DEV_OPENCODE_MODEL;
+    const estimate = estimateTaskCost({ title: 'Task', objective: 'Objective' });
+    expect(estimate.model.model).toBe('deepseek/deepseek-flash');
   });
 });
