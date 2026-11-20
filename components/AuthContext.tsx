@@ -5,10 +5,10 @@ import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase-browser';
 import { useRouter } from 'next/navigation';
 import { clearOverviewCaches } from '@/lib/pierrot/workspace/cache';
+import { loadAuthProfile, type AuthProfile } from '@/lib/auth/profile';
+import { safeLoginReturnPath } from '@/lib/auth/returnPath';
 
-type Profile = Record<string, unknown> & {
-  id: string;
-};
+type Profile = AuthProfile;
 
 interface AuthContextType {
   user: User | null;
@@ -71,16 +71,7 @@ export function AuthProvider(props: React.PropsWithChildren) {
 
       const request = (async () => {
         try {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', userId)
-            .maybeSingle();
-
-          if (error) {
-            console.warn('Failed to fetch profile:', error);
-            return;
-          }
+          const { profile: nextProfile, source } = await loadAuthProfile(supabase, userId);
 
           // Не применяем профиль предыдущего пользователя,
           // если авторизация успела измениться во время запроса.
@@ -88,8 +79,21 @@ export function AuthProvider(props: React.PropsWithChildren) {
             return;
           }
 
-          setProfile((data as Profile | null) ?? null);
+          setProfile(nextProfile);
           loadedProfileForUserRef.current = userId;
+
+          // Older accounts (in particular wallet-era accounts) may exist only
+          // in the compatibility table. Create the canonical public.users row
+          // once so server authorization and /api/auth/me see the same user.
+          if (source !== 'users') {
+            void fetch('/api/auth/upsert', {
+              method: 'POST',
+              credentials: 'same-origin',
+              cache: 'no-store',
+            }).catch(() => {
+              // The canonical row will be retried on the next session load.
+            });
+          }
         } catch (error) {
           console.warn('Failed to fetch profile:', error);
         }
@@ -279,10 +283,7 @@ export function AuthProvider(props: React.PropsWithChildren) {
             `${window.location.pathname}${window.location.search}`
           : '/art-engine';
 
-      const safePath =
-        requestedPath.startsWith('/') && !requestedPath.startsWith('//')
-          ? requestedPath
-          : '/art-engine';
+      const safePath = safeLoginReturnPath(requestedPath) ?? '/art-engine';
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',

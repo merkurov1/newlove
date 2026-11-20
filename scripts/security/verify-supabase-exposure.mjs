@@ -210,6 +210,27 @@ if (databaseUrl) {
       `select has_function_privilege('anon','public.get_my_user_roles_any(text)','EXECUTE') as allowed`
     );
     assert(anonRpc.rows[0]?.allowed === false, 'get_my_user_roles_any is still executable by anon');
+
+    const selfRpcPresent = await client.query(
+      `select to_regprocedure('public.get_my_user_roles()') is not null as present`
+    );
+    if (selfRpcPresent.rows[0]?.present) {
+      const selfRpc = await client.query(
+        `select
+           has_function_privilege('anon','public.get_my_user_roles()','EXECUTE') as anon_allowed,
+           has_function_privilege('authenticated','public.get_my_user_roles()','EXECUTE') as authenticated_allowed`
+      );
+      assert(
+        selfRpc.rows[0]?.anon_allowed === false,
+        'get_my_user_roles is still executable by anon'
+      );
+      assert(
+        selfRpc.rows[0]?.authenticated_allowed === false,
+        'get_my_user_roles is still executable by authenticated'
+      );
+    } else {
+      notes.push('get_my_user_roles() is not present in this database; privilege check skipped.');
+    }
   } finally {
     await client.end();
   }

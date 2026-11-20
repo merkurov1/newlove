@@ -1,8 +1,39 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase-browser';
+import { safeLoginReturnPath } from '@/lib/auth/returnPath';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
+
+/**
+ * Consume the one-time post-login redirect written by the login page.
+ * The value is client-controlled storage, so it must pass the same
+ * same-origin check as ?next=. Protected routes enforce roles server-side.
+ */
+export function consumeStoredLoginRedirect(): string | null {
+  try {
+    if (typeof window === 'undefined') return null;
+
+    const raw =
+      sessionStorage.getItem('login_redirect_path') ||
+      localStorage.getItem('login_redirect_path') ||
+      localStorage.getItem('supabase_oauth_redirect');
+
+    try {
+      sessionStorage.removeItem('login_redirect_path');
+    } catch {}
+    try {
+      localStorage.removeItem('login_redirect_path');
+    } catch {}
+    try {
+      localStorage.removeItem('supabase_oauth_redirect');
+    } catch {}
+
+    return safeLoginReturnPath(raw);
+  } catch {
+    return null;
+  }
+}
 
 export default function useSupabaseSession() {
   const [session, setSession] = useState<any | null>(null);
@@ -173,40 +204,11 @@ export default function useSupabaseSession() {
         // One-time redirect after auth state change to respect stored redirect path
         try {
           if (typeof window !== 'undefined') {
-            const redirectKey1 =
-              sessionStorage.getItem('login_redirect_path') ||
-              localStorage.getItem('login_redirect_path');
-            const redirectKey2 = localStorage.getItem('supabase_oauth_redirect');
-            const redirectTo = redirectKey1 || redirectKey2 || null;
-            if (redirectTo) {
-              try {
-                sessionStorage.removeItem('login_redirect_path');
-              } catch {}
-              try {
-                localStorage.removeItem('login_redirect_path');
-              } catch {}
-              try {
-                localStorage.removeItem('supabase_oauth_redirect');
-              } catch {}
-              const current = window.location.pathname + window.location.search;
-              if (redirectTo !== current) {
-                try {
-                  const targetUrl = new URL(redirectTo, window.location.origin);
-                  const isAdminTarget = targetUrl.pathname.startsWith('/admin');
-                  const userRole =
-                    s && s.user && s.user.role ? String(s.user.role).toUpperCase() : null;
-                  if (!isAdminTarget || (isAdminTarget && userRole === 'ADMIN')) {
-                    window.location.replace(redirectTo);
-                    return;
-                  }
-                } catch (e) {
-                  // If URL parsing fails, play safe and do not redirect to admin
-                  try {
-                    window.location.replace(redirectTo);
-                    return;
-                  } catch (err) {}
-                }
-              }
+            const redirectTo = consumeStoredLoginRedirect();
+            const current = window.location.pathname + window.location.search;
+            if (redirectTo && redirectTo !== current) {
+              window.location.replace(redirectTo);
+              return;
             }
           }
         } catch (e) {}
@@ -342,40 +344,11 @@ export default function useSupabaseSession() {
           // After successful client-side session detection, attempt one-time post-login redirect
           try {
             if (typeof window !== 'undefined') {
-              const redirectKey1 =
-                sessionStorage.getItem('login_redirect_path') ||
-                localStorage.getItem('login_redirect_path');
-              const redirectKey2 = localStorage.getItem('supabase_oauth_redirect');
-              const redirectTo = redirectKey1 || redirectKey2 || null;
-              if (redirectTo) {
-                try {
-                  sessionStorage.removeItem('login_redirect_path');
-                } catch {}
-                try {
-                  localStorage.removeItem('login_redirect_path');
-                } catch {}
-                try {
-                  localStorage.removeItem('supabase_oauth_redirect');
-                } catch {}
-                // If already on that path, don't navigate
-                const current = window.location.pathname + window.location.search;
-                if (redirectTo !== current) {
-                  try {
-                    const targetUrl = new URL(redirectTo, window.location.origin);
-                    const isAdminTarget = targetUrl.pathname.startsWith('/admin');
-                    const userRole =
-                      s && s.user && s.user.role ? String(s.user.role).toUpperCase() : null;
-                    if (!isAdminTarget || (isAdminTarget && userRole === 'ADMIN')) {
-                      window.location.replace(redirectTo);
-                      return;
-                    }
-                  } catch (e) {
-                    try {
-                      window.location.replace(redirectTo);
-                      return;
-                    } catch (err) {}
-                  }
-                }
+              const redirectTo = consumeStoredLoginRedirect();
+              const current = window.location.pathname + window.location.search;
+              if (redirectTo && redirectTo !== current) {
+                window.location.replace(redirectTo);
+                return;
               }
             }
           } catch (e) {}
@@ -412,39 +385,11 @@ export default function useSupabaseSession() {
               // One-time redirect after server-side session detected (e.g., after OAuth)
               try {
                 if (typeof window !== 'undefined') {
-                  const redirectKey1 =
-                    sessionStorage.getItem('login_redirect_path') ||
-                    localStorage.getItem('login_redirect_path');
-                  const redirectKey2 = localStorage.getItem('supabase_oauth_redirect');
-                  const redirectTo = redirectKey1 || redirectKey2 || null;
-                  if (redirectTo) {
-                    try {
-                      sessionStorage.removeItem('login_redirect_path');
-                    } catch {}
-                    try {
-                      localStorage.removeItem('login_redirect_path');
-                    } catch {}
-                    try {
-                      localStorage.removeItem('supabase_oauth_redirect');
-                    } catch {}
-                    const current = window.location.pathname + window.location.search;
-                    if (redirectTo !== current) {
-                      try {
-                        const targetUrl = new URL(redirectTo, window.location.origin);
-                        const isAdminTarget = targetUrl.pathname.startsWith('/admin');
-                        const userRole =
-                          j && j.user && j.user.role ? String(j.user.role).toUpperCase() : null;
-                        if (!isAdminTarget || (isAdminTarget && userRole === 'ADMIN')) {
-                          window.location.replace(redirectTo);
-                          return;
-                        }
-                      } catch (e) {
-                        try {
-                          window.location.replace(redirectTo);
-                          return;
-                        } catch (err) {}
-                      }
-                    }
+                  const redirectTo = consumeStoredLoginRedirect();
+                  const current = window.location.pathname + window.location.search;
+                  if (redirectTo && redirectTo !== current) {
+                    window.location.replace(redirectTo);
+                    return;
                   }
                 }
               } catch (e) {}
