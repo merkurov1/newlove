@@ -59,6 +59,26 @@ analytics.
 - `answer.ts` — owner-tool entry point.
 - `tools.ts` — named owner tools.
 - `dashboard.ts` — DASH read model.
+- `searchInsights.ts` — GSC brand split, minimum-sample anomaly thresholds,
+  3-day finalisation guard and comparison stripping.
+
+### GSC monitoring (2026-11-20)
+
+`/admin/pierrot/analytics` renders a dedicated Search Console block with
+clicks, impressions, CTR, average position, period comparison, top
+queries/pages/countries/devices, brand vs non-brand, substantial anomalies,
+property, search type, expected final day, freshness and last successful sync.
+`stale`, `partial`, `unavailable` and `not_configured` are shown explicitly; the
+block never substitutes zero for missing data.
+
+Search Console totals exclude days after the expected finalisation date. A
+`search_analytics_slice_meta` snapshot stores property, `type=web`, dimensions,
+dates, data state, aggregation, row count, truncation and retrieval time. A
+reached row cap is marked `partial`. A stored grant with an explicit scope list
+must contain `webmasters.readonly`.
+
+The full investigation and the supplied-slice limitations are in
+`docs/gsc-visibility-audit-2026-11-20.md`.
 
 ### Storage (`migrations/2026-11-30_website_analytics.sql`)
 
@@ -174,6 +194,8 @@ See `.env.example`. Secrets are server-only; nothing is `NEXT_PUBLIC_`.
   domain-separated key is derived from `SUPABASE_SERVICE_ROLE_KEY`; the admin UI
   reports this mode.
 - `ANALYTICS_TIMEZONE` — default `Europe/London`.
+- `ANALYTICS_GSC_BRAND_TERMS` — optional comma-separated brand terms; defaults
+  to `merkurov,меркуров`. The split is a documented query-text heuristic.
 - `ANALYTICS_BACKFILL_DAYS` — default 90.
 - `ANALYTICS_INCREMENTAL_DAYS` — default 3 (repairs delayed Google data).
 - Umami: `ANALYTICS_UMAMI_API_URL`, `ANALYTICS_UMAMI_API_KEY`,

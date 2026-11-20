@@ -121,6 +121,28 @@ describe('shared Flow publication service', () => {
     expect(crosspostFlowItem).not.toHaveBeenCalled();
   });
 
+  it('can return before deferred distribution runs', async () => {
+    const store = fakeStore();
+
+    const result = await createFlowItem(
+      store.client,
+      {
+        body_md: 'Fast publication',
+        status: 'published',
+        visibility: 'public',
+      },
+      { deferDistribution: true }
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.crosspost).toBeNull();
+    expect(result.aiContext).toBeNull();
+    expect(crosspostFlowItem).not.toHaveBeenCalled();
+    expect(ensurePublishedFlowContext).not.toHaveBeenCalled();
+  });
+
   it('uses a deterministic slug for idempotent Telegram publication', async () => {
     const store = fakeStore();
 

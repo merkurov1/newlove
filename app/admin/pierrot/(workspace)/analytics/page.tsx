@@ -16,6 +16,7 @@ import { loadYouTubeConnectionState } from '@/lib/youtube/connection';
 import { getYouTubeChannelId, getYouTubeDataApiKey } from '@/lib/youtube/config';
 import type { ProviderHealth } from '@/lib/analytics/website/types';
 import Sparkline from '@/components/pierrot/workspace/Sparkline';
+import SearchConsoleMonitor from '@/components/analytics/SearchConsoleMonitor';
 
 import './analytics.css';
 
@@ -775,6 +776,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
             </article>
           </div>
         </section>
+
+        {dashboard && <SearchConsoleMonitor dataset={dashboard.dataset} />}
 
         <section className="pw-analytics-sync" aria-labelledby="pw-analytics-sync-title">
           <div>

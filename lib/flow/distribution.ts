@@ -50,3 +50,89 @@ export function readDistributionUrl(
   const uri = readDistributionState(metadata, channel)?.externalUri;
   return typeof uri === 'string' && uri.trim() ? uri : null;
 }
+
+/**
+ * Compact, honest receipt for a just-finished publication.
+ *
+ * The POST /api/flow/items response contains the independent channel states.
+ * This helper reduces them to the two channels the Flow composer owns
+ * (Telegram and Bluesky) without ever turning a partial or uncertain result
+ * into a success.
+ */
+export const FLOW_RECEIPT_CHANNELS = [
+  { key: 'telegram', label: 'Telegram' },
+  { key: 'bluesky', label: 'Bluesky' },
+] as const;
+
+export type FlowReceiptStatus =
+  | 'published'
+  | 'failed'
+  | 'uncertain'
+  | 'skipped'
+  | 'publishing'
+  | 'not_requested'
+  | 'unknown';
+
+export type FlowReceiptChannel = {
+  key: (typeof FLOW_RECEIPT_CHANNELS)[number]['key'];
+  label: string;
+  status: FlowReceiptStatus;
+  detail: string | null;
+};
+
+export type FlowPublishReceipt = {
+  itemId: string | null;
+  channels: FlowReceiptChannel[];
+  hasProblem: boolean;
+};
+
+function receiptStatus(value: unknown, uncertain: unknown): FlowReceiptStatus {
+  if (value === 'published') return 'published';
+  if (value === 'failed') return uncertain === true ? 'uncertain' : 'failed';
+  if (value === 'skipped') return 'skipped';
+  if (value === 'publishing' || value === 'pending') return 'publishing';
+  if (value === 'not_requested') return 'not_requested';
+  return 'unknown';
+}
+
+export function summarizeCrosspostResult(
+  result: unknown,
+  itemId: string | null = null
+): FlowPublishReceipt {
+  const root = asRecord(result);
+  const channels = asRecord(root?.channels);
+
+  const receiptChannels: FlowReceiptChannel[] = FLOW_RECEIPT_CHANNELS.map(
+    ({ key, label }) => {
+      const state = asRecord(channels?.[key]);
+
+      if (!root) {
+        return { key, label, status: 'unknown', detail: null };
+      }
+
+      if (!state) {
+        return { key, label, status: 'not_requested', detail: null };
+      }
+
+      const lastError = typeof state.lastError === 'string' ? state.lastError.trim() : '';
+
+      return {
+        key,
+        label,
+        status: receiptStatus(state.status, state.uncertain),
+        detail: lastError || null,
+      };
+    }
+  );
+
+  return {
+    itemId: typeof itemId === 'string' && itemId.trim() ? itemId : null,
+    channels: receiptChannels,
+    hasProblem: receiptChannels.some(
+      (channel) =>
+        channel.status === 'failed' ||
+        channel.status === 'uncertain' ||
+        channel.status === 'unknown'
+    ),
+  };
+}

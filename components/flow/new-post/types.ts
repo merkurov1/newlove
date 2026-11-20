@@ -53,7 +53,7 @@ export type Item = {
 export type NewPostModalProps = {
   open: boolean;
   onClose: () => void;
-  onCreated?: (item: Item) => void;
+  onCreated?: (item: Item, crosspost?: unknown) => void;
   itemId?: string | null;
 };
 

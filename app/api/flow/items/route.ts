@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { getCachedFlowItems, invalidateFlowCache } from '@/lib/flow/items-cash';
@@ -107,18 +107,25 @@ export async function POST(req: Request) {
     }
 
     const supabase = getSupabaseAdmin();
-    const publication = await createFlowItem(supabase, {
-      title: body.title,
-      body_md: body.body_md,
-      source_url: body.source_url,
-      type: body.type,
-      lang: body.lang,
-      status: body.status,
-      visibility: body.visibility,
-      metadata: body.metadata,
-      slug: typeof body.slug === 'string' ? body.slug : null,
-      published_at: typeof body.published_at === 'string' ? body.published_at : null,
-    });
+    const publication = await createFlowItem(
+      supabase,
+      {
+        title: body.title,
+        body_md: body.body_md,
+        source_url: body.source_url,
+        type: body.type,
+        lang: body.lang,
+        status: body.status,
+        visibility: body.visibility,
+        metadata: body.metadata,
+        slug: typeof body.slug === 'string' ? body.slug : null,
+        published_at: typeof body.published_at === 'string' ? body.published_at : null,
+      },
+      // The Flow item is saved before the response. External channels are
+      // published after the response so a slow Telegram/Bluesky call never
+      // keeps the composer open. Channel state is persisted independently.
+      { deferDistribution: true }
+    );
 
     if (!publication.ok) {
       console.error('[api/flow/items] insert error:', publication.details);
@@ -128,11 +135,50 @@ export async function POST(req: Request) {
 
     invalidateFlowCache();
 
+    const shouldDistribute =
+      publication.item.status === 'published' && publication.item.visibility === 'public';
+
+    if (shouldDistribute) {
+      const item = publication.item;
+
+      try {
+        after(async () => {
+          try {
+            const { crosspostFlowItem } = await import('@/lib/flow/crosspost');
+            await crosspostFlowItem(item);
+            invalidateFlowCache();
+          } catch (error) {
+            console.error('[api/flow/items] deferred crosspost error:', error);
+          }
+
+          try {
+            const { ensurePublishedFlowContext } = await import(
+              '@/lib/flow/publishedContext'
+            );
+            await ensurePublishedFlowContext(
+              supabase,
+              item as unknown as import('@/lib/flow/publishedContext').PublishedFlowItem
+            );
+            invalidateFlowCache();
+          } catch (error) {
+            console.error('[api/flow/items] deferred AI context error:', error);
+          }
+        });
+      } catch (error) {
+        // The item is already persisted. Never turn a scheduling problem into
+        // an error response that could make the owner publish a duplicate.
+        console.error('[api/flow/items] could not schedule distribution:', error);
+      }
+    }
+
     return NextResponse.json(
       {
         success: true,
         item: publication.item,
         crosspost: publication.crosspost,
+        // The client uses this flag to follow channel state instead of
+        // presenting an unfinished publication as fully delivered.
+        crosspostPending: shouldDistribute,
         aiContext: publication.aiContext,
       },
       { status: 201 }
