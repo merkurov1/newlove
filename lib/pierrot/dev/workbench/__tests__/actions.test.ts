@@ -299,6 +299,31 @@ describe('bounded Actions recovery pump', () => {
     );
   });
 
+  it('dispatches a queued task exactly once across concurrent pump calls', async () => {
+    let reserved = false;
+    asMock(store.listQueuedTasksForDispatch).mockResolvedValue([queuedTask]);
+    asMock(store.reserveTaskForActionsDispatch).mockImplementation(async () => {
+      if (reserved) return null;
+      reserved = true;
+      return {
+        ...queuedTask,
+        assignedExecutor: 'actions',
+        actionsDispatchRequestedAt: '2026-11-19T01:00:00.000Z',
+        actionsDispatchStatus: 'requested',
+        actionsDispatchAttempts: 1,
+      };
+    });
+
+    const results = await Promise.all([
+      dispatchNextQueuedTask({ source: 'admin:overview' }),
+      dispatchNextQueuedTask({ source: 'cron:pierrot-dev-dispatch' }),
+    ]);
+
+    expect(results.filter((result) => result.dispatched)).toHaveLength(1);
+    expect(store.reserveTaskForActionsDispatch).toHaveBeenCalledTimes(2);
+    expect(github.dispatchRepositoryEvent).toHaveBeenCalledTimes(1);
+  });
+
   it('does nothing while the queue is paused', async () => {
     asMock(store.isQueuePaused).mockResolvedValue(true);
     asMock(store.listQueuedTasksForDispatch).mockResolvedValue([queuedTask]);

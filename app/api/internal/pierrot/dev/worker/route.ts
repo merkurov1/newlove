@@ -32,6 +32,7 @@ import {
   recordActionsClaimMiss,
   recordActionsClaimSuccess,
 } from '@/lib/pierrot/dev/workbench/actions';
+import { advanceFinalization } from '@/lib/pierrot/dev/workbench/finalization';
 import {
   WORKER_LEASE_SECONDS,
   WORKER_MAX_POLL_INTERVAL_MS,
@@ -158,6 +159,17 @@ function errorResponse(error: unknown) {
     code: error instanceof Error ? error.name : 'unknown',
   });
   return json({ error: 'Worker request failed.', code: 'WORKER_REQUEST_FAILED' }, 500);
+}
+
+/**
+ * Server-side queue progression after an attempt ends. The response has
+ * already been sent; this keeps the next dispatch and the locked finalization
+ * pump moving even when nobody has the Admin tab open. Both operations are
+ * idempotent and bounded by the database CAS/lock guards.
+ */
+async function advanceQueueAfterAttempt(source: string): Promise<void> {
+  await dispatchNextQueuedTask({ source }).catch(() => {});
+  await advanceFinalization({ trigger: source }).catch(() => {});
 }
 
 export async function POST(req: Request) {
@@ -413,8 +425,9 @@ export async function POST(req: Request) {
         // Queue progression: one Actions run = one task, so the next eligible
         // task must be dispatched server-side. This is best effort and happens
         // after the response; the database reservation prevents duplicates.
+        // The same pump advances finalization once the queue is drained.
         after(async () => {
-          await dispatchNextQueuedTask({ source: 'worker:complete' }).catch(() => {});
+          await advanceQueueAfterAttempt('worker:complete');
         });
         return json({
           ok: true,
@@ -447,7 +460,7 @@ export async function POST(req: Request) {
           verification: safeObject(body.verification, 32_000),
         });
         after(async () => {
-          await dispatchNextQueuedTask({ source: 'worker:fail' }).catch(() => {});
+          await advanceQueueAfterAttempt('worker:fail');
         });
         return json({ ok: true, attempt });
       }
@@ -462,7 +475,7 @@ export async function POST(req: Request) {
         );
         if (released) {
           after(async () => {
-            await dispatchNextQueuedTask({ source: 'worker:release' }).catch(() => {});
+            await advanceQueueAfterAttempt('worker:release');
           });
         }
         return json({ ok: released });

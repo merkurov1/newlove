@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Archive,
@@ -34,6 +34,7 @@ import type {
   DevDeploymentStatus,
   DevReviewView,
   DevSetupReport,
+  DevWorker,
   DevWorkbenchOverview,
   DevWorkbenchTask,
 } from '@/lib/pierrot/dev/workbench/types';
@@ -138,6 +139,24 @@ function lifecycleTone(status: string): string {
   if (status === 'blocked' || status === 'worker_missing') return 'error';
   if (status === 'waiting_for_shutdown' || status === 'stopping_codespace') return 'warn';
   return 'busy';
+}
+
+/**
+ * Worker rows are append-only history. Show an online worker's real status
+ * (busy/idle/draining) and keep stale or finished records visibly historical
+ * instead of labelling them as if they were active.
+ */
+function workerBadgeStatus(worker: DevWorker): string {
+  if (worker.online) return worker.reportedStatus || worker.status;
+  if (worker.stale) return 'stale';
+  if (worker.finished) return 'finished';
+  return 'offline';
+}
+
+function formatRefreshTime(value: string | null): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString('ru-RU');
 }
 
 type AttemptCostView = {
@@ -398,6 +417,12 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(
+    initialOverview.updatedAt || null
+  );
+  const refreshInFlight = useRef<Promise<DevWorkbenchOverview | null> | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [setup, setSetup] = useState<DevSetupReport | null>(null);
   const [ledger, setLedger] = useState<DevCostLedger | null>(null);
@@ -434,14 +459,36 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
     affectedFiles: '',
   });
 
-  const refresh = useCallback(async () => {
-    const response = await fetch('/api/admin/pierrot/dev/workbench', {
-      cache: 'no-store',
-    });
-    if (!response.ok) throw new Error(await readError(response));
-    const body = (await response.json()) as { overview: DevWorkbenchOverview };
-    setOverview(body.overview);
-    return body.overview;
+  const refresh = useCallback(async (): Promise<DevWorkbenchOverview | null> => {
+    // A manual click, the tab-open effect, the 15s timer and a foreground
+    // resume can coincide. Share one request so the Admin endpoint is never
+    // polled in overlapping waves.
+    if (refreshInFlight.current) return refreshInFlight.current;
+    setRefreshing(true);
+    const run = (async () => {
+      try {
+        const response = await fetch('/api/admin/pierrot/dev/workbench', {
+          cache: 'no-store',
+        });
+        if (!response.ok) throw new Error(await readError(response));
+        const body = (await response.json()) as { overview: DevWorkbenchOverview };
+        setOverview(body.overview);
+        setLastRefreshedAt(body.overview.updatedAt || new Date().toISOString());
+        setRefreshError(null);
+        return body.overview;
+      } catch (caught) {
+        // Automatic failures must be as visible as manual ones. Keep the last
+        // good snapshot on screen and offer a retry instead of blanking it.
+        const message = caught instanceof Error ? caught.message : 'Refresh failed.';
+        setRefreshError(message);
+        return null;
+      } finally {
+        setRefreshing(false);
+        refreshInFlight.current = null;
+      }
+    })();
+    refreshInFlight.current = run;
+    return run;
   }, []);
 
   const loadSetup = useCallback(async () => {
@@ -570,17 +617,34 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
   }, []);
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const poll = () => {
       if (document.visibilityState === 'visible' && !busy) {
-        void refresh().catch(() => {});
+        void refresh();
       }
-    }, 15000);
-    return () => clearInterval(timer);
+    };
+    const timer = setInterval(poll, 15000);
+    // Returning to the app is an explicit freshness event: do not wait for the
+    // next timer tick. This is still a read-only Admin request; it never starts
+    // a Codespace.
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') poll();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [refresh, busy]);
+
+  // Opening Execution must show the current queue/worker state immediately.
+  // The request is the same bounded Admin overview used by polling.
+  useEffect(() => {
+    if (tab === 'execution') void refresh();
+  }, [tab, refresh]);
 
   const counts = overview.counts;
   const active = overview.active;
-  const worker = overview.workers.find((item) => item.online) || overview.workers[0] || null;
+  const worker = overview.workers.find((item) => item.online && !item.finished) || null;
   const workerHealth = overview.workerHealth || {
     total: overview.workers.length,
     active: overview.workers.filter((item) => item.online).length,
@@ -591,6 +655,8 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
     pointerMismatch: 0,
     issues: [],
   };
+  const activeWorkers = overview.workers.filter((item) => item.online && !item.finished);
+  const historicalWorkers = overview.workers.filter((item) => !item.online || item.finished);
   const readyTasks = overview.inbox.filter((task) => task.status === 'ready');
 
   const createTask = async () => {
@@ -1243,6 +1309,62 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
     </div>
   );
 
+  const renderWorkerCard = (item: DevWorker, historical = false) => (
+    <li key={item.id} className="pw-wb-card" data-worker-state={workerBadgeStatus(item)}>
+      <div className="pw-wb-card-head">
+        <div className="pw-wb-card-title">
+          <StatusBadge status={workerBadgeStatus(item)} />
+          <strong>{item.name}</strong>
+        </div>
+        <span className="pw-wb-meta">
+          heartbeat {item.heartbeatAgeSeconds ?? '—'}s · OpenCode{' '}
+          {String(item.capabilities.opencodeVersion || 'unknown')}
+          {historical ? ` · ${item.finished ? 'finished' : item.stale ? 'stale' : 'offline'}` : ''}
+        </span>
+      </div>
+      <dl className="pw-wb-facts">
+        <div>
+          <dt>Codespace</dt>
+          <dd>{item.codespaceName || '—'}</dd>
+        </div>
+        <div>
+          <dt>Version</dt>
+          <dd>{item.version || '—'}</dd>
+        </div>
+        <div>
+          <dt>OpenCode auth</dt>
+          <dd>{item.capabilities.opencodeAuthenticated ? 'available' : 'missing'}</dd>
+        </div>
+        <div>
+          <dt>Current attempt</dt>
+          <dd>{item.currentAttemptId ? shortSha(item.currentAttemptId) : 'none'}</dd>
+        </div>
+        <div>
+          <dt>Stored status</dt>
+          <dd>{item.reportedStatus || item.status}</dd>
+        </div>
+      </dl>
+      <div className="pw-wb-actions">
+        {!historical && (
+          <button
+            type="button"
+            className="pw-wb-button is-danger"
+            onClick={() => void runAction('stop_worker', { workerId: item.id })}
+          >
+            Stop worker
+          </button>
+        )}
+        <button
+          type="button"
+          className="pw-wb-button is-quiet"
+          onClick={() => void runAction('stop_codespace')}
+        >
+          Stop Codespace
+        </button>
+      </div>
+    </li>
+  );
+
   const renderExecution = () => (
     <div className="pw-wb-section">
       <div className="pw-wb-section-head">
@@ -1254,6 +1376,14 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
           <button
             type="button"
             className="pw-wb-button is-quiet"
+            disabled={refreshing}
+            onClick={() => void refresh()}
+          >
+            <RefreshCw size={14} /> {refreshing ? 'Refreshing…' : 'Refresh now'}
+          </button>
+          <button
+            type="button"
+            className="pw-wb-button is-quiet"
             disabled={
               busy === 'start_codespace' ||
               ['starting_codespace', 'starting_worker', 'stopping_codespace'].includes(
@@ -1262,7 +1392,7 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             }
             onClick={() => void runAction('start_codespace')}
           >
-            Start now (automatic)
+            Start Codespace (manual)
           </button>
           <button
             type="button"
@@ -1275,6 +1405,17 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         </div>
       </div>
 
+      <div className="pw-wb-status-strip">
+        <span className={`pw-wb-chip ${refreshing ? 'is-busy' : 'is-ok'}`}>
+          {refreshing ? 'refreshing…' : 'fresh'}
+        </span>
+        <span className="pw-wb-chip is-quiet">
+          last update {formatRefreshTime(lastRefreshedAt)}
+        </span>
+        <span className="pw-wb-chip is-quiet">auto 15s · on foreground · on tab open</span>
+        {refreshError ? <span className="pw-wb-chip is-error">refresh failed</span> : null}
+      </div>
+
       <div className="pw-wb-card">
         <div className="pw-wb-card-head">
           <div className="pw-wb-card-title">
@@ -1282,7 +1423,8 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             <strong>{overview.lifecycle.label}</strong>
           </div>
           <span className="pw-wb-meta">
-            updated {new Date(overview.lifecycle.updatedAt).toLocaleTimeString('ru-RU')}
+            observed {formatRefreshTime(lastRefreshedAt)} · lifecycle{' '}
+            {formatRefreshTime(overview.lifecycle.updatedAt)}
           </span>
         </div>
         <p className="pw-wb-card-body">{overview.lifecycle.detail}</p>
@@ -1304,166 +1446,169 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             {overview.lifecycle.lastBoot.message ? ` · ${overview.lifecycle.lastBoot.message}` : ''}
           </p>
         ) : null}
-        <dl className="pw-wb-facts">
-          <div>
-            <dt>Codespace</dt>
-            <dd>
-              {overview.lifecycle.codespace
-                ? `${overview.lifecycle.codespace.name} · ${overview.lifecycle.codespace.state || 'unknown'}${
-                    overview.lifecycle.codespace.idleTimeoutMinutes
-                      ? ` · idle ${overview.lifecycle.codespace.idleTimeoutMinutes}m`
-                      : ''
-                  }`
-                : '—'}
-            </dd>
-          </div>
-          <div>
-            <dt>Queue</dt>
-            <dd>
-              {overview.lifecycle.queue.queued} queued · {overview.lifecycle.queue.active} active
-              {overview.lifecycle.queue.paused ? ' · paused' : ''}
-            </dd>
-          </div>
-          <div>
-            <dt>Worker</dt>
-            <dd>
-              {overview.lifecycle.worker
-                ? `${overview.lifecycle.worker.online ? 'online' : 'offline'} · ${
-                    overview.lifecycle.worker.ready ? 'ready' : 'not ready'
-                  } · heartbeat ${overview.lifecycle.worker.heartbeatAgeSeconds ?? '—'}s${
-                    overview.lifecycle.worker.currentAttemptId
-                      ? ` · task ${overview.lifecycle.worker.currentTaskId || '—'}`
-                      : ''
-                  }`
-                : 'not registered'}
-            </dd>
-          </div>
-          <div>
-            <dt>Versions</dt>
-            <dd>
-              worker {overview.lifecycle.worker?.version || '—'} · OpenCode{' '}
-              {overview.lifecycle.worker?.opencodeVersion || '—'}
-            </dd>
-          </div>
-          <div>
-            <dt>Readiness</dt>
-            <dd>
-              API {overview.lifecycle.worker?.readiness?.apiOk ? 'ok' : 'not ready'} · Supabase{' '}
-              {overview.lifecycle.worker?.readiness?.supabaseOk ? 'ok' : 'not ready'} · provider
-              auth {overview.lifecycle.worker?.readiness?.authOk ? 'ok' : 'missing'} · checked{' '}
-              {overview.lifecycle.worker?.readinessAgeSeconds ?? '—'}s ago
-              {overview.lifecycle.worker?.readinessFresh === false ? ' · STALE' : ''}
-            </dd>
-          </div>
-          <div>
-            <dt>Pending start</dt>
-            <dd>
-              {overview.lifecycle.pendingStartInfo
-                ? `${overview.lifecycle.pendingStartInfo.phase} · attempts ${overview.lifecycle.pendingStartInfo.attempts}/${overview.lifecycle.pendingStartInfo.maxAttempts} · age ${overview.lifecycle.pendingStartInfo.ageSeconds ?? '—'}s · observed ${
-                    overview.lifecycle.pendingStartInfo.lastObservedState || 'unknown'
-                  } · HTTP ${overview.lifecycle.pendingStartInfo.lastHttpStatus ?? '—'}${
-                    overview.lifecycle.pendingStartInfo.lastError
-                      ? ` · ${overview.lifecycle.pendingStartInfo.lastError}`
-                      : ''
-                  }`
-                : 'no'}
-            </dd>
-          </div>
-          {overview.lifecycle.recovery ? (
+        <details className="pw-wb-log">
+          <summary>Lifecycle diagnostics</summary>
+          <dl className="pw-wb-facts">
             <div>
-              <dt>Recovery</dt>
+              <dt>Codespace</dt>
               <dd>
-                failures {overview.lifecycle.recovery.failures}
-                {overview.lifecycle.recovery.blocked ? ' · blocked' : ''}
-                {overview.lifecycle.recovery.lastReason
-                  ? ` · ${overview.lifecycle.recovery.lastReason}`
-                  : ''}
+                {overview.lifecycle.codespace
+                  ? `${overview.lifecycle.codespace.name} · ${overview.lifecycle.codespace.state || 'unknown'}${
+                      overview.lifecycle.codespace.idleTimeoutMinutes
+                        ? ` · idle ${overview.lifecycle.codespace.idleTimeoutMinutes}m`
+                        : ''
+                    }`
+                  : '—'}
               </dd>
             </div>
-          ) : null}
-          <div>
-            <dt>Idle / grace</dt>
-            <dd>
-              {overview.lifecycle.idleSeconds !== null
-                ? `${overview.lifecycle.idleSeconds}s / ${overview.lifecycle.idleGraceSeconds}s`
-                : `— / ${overview.lifecycle.idleGraceSeconds}s`}
-            </dd>
-          </div>
-          <div>
-            <dt>Keepalive</dt>
-            <dd>
-              {overview.lifecycle.lastKeepaliveAt
-                ? `${age(overview.lifecycle.lastKeepaliveAt)} ago`
-                : '—'}
-            </dd>
-          </div>
-          <div>
-            <dt>Startup</dt>
-            <dd>
-              {overview.lifecycle.lastStartAt
-                ? `${age(overview.lifecycle.lastStartAt)} ago · requested ${
-                    overview.lifecycle.lastStartState || 'unknown'
-                  } · observed ${overview.lifecycle.lastStartObservedState || 'unknown'} · HTTP ${
-                    overview.lifecycle.lastStartHttpStatus ?? '—'
-                  }${
-                    overview.lifecycle.lastReadyAt
-                      ? ` · ready ${age(overview.lifecycle.lastReadyAt)} ago`
-                      : ''
-                  }`
-                : '—'}
-            </dd>
-          </div>
-          <div>
-            <dt>Last shutdown</dt>
-            <dd>
-              {overview.lifecycle.lastStopAt
-                ? `${age(overview.lifecycle.lastStopAt)} ago${
-                    overview.lifecycle.lastStop?.idleSeconds != null
-                      ? ` · idle ${overview.lifecycle.lastStop.idleSeconds}s`
-                      : ''
-                  }${
-                    overview.lifecycle.lastStop?.startupMs != null
-                      ? ` · startup ${Math.round(overview.lifecycle.lastStop.startupMs / 1000)}s`
-                      : ''
-                  }${
-                    overview.lifecycle.lastStop?.measuredRuntimeMs != null
-                      ? ` · runtime ${Math.round(
-                          overview.lifecycle.lastStop.measuredRuntimeMs / 60000
-                        )}m`
-                      : ''
-                  }`
-                : '—'}
-            </dd>
-          </div>
-          <div>
-            <dt>Cost ledger</dt>
-            <dd>
-              model {money(overview.lifecycle.cost.modelUsd)} (reported{' '}
-              {money(overview.lifecycle.cost.modelReportedUsd)}, est.{' '}
-              {money(overview.lifecycle.cost.modelEstimatedUsd)}) · Codespaces est.{' '}
-              {money(overview.lifecycle.cost.codespaceEstimatedUsd)} · total{' '}
-              {money(overview.lifecycle.cost.totalUsd)}
-            </dd>
-          </div>
-          <div>
-            <dt>Tokens</dt>
-            <dd>
-              in {overview.lifecycle.cost.inputTokens ?? '—'} · out{' '}
-              {overview.lifecycle.cost.outputTokens ?? '—'} · reasoning{' '}
-              {overview.lifecycle.cost.reasoningTokens ?? '—'}
-            </dd>
-          </div>
-        </dl>
-        <p className="pw-wb-meta">
-          {overview.lifecycle.cost.attemptsWithCost} attempt(s) with cost ·{' '}
-          {overview.lifecycle.cost.attemptsMissingCost} without ·{' '}
-          {overview.lifecycle.cost.attemptsWithEstimatedModel} model estimate(s) ·{' '}
-          {overview.lifecycle.cost.attemptsWithEstimatedCodespace} Codespaces estimate(s) ·{' '}
-          {overview.lifecycle.cost.provenance}
-          {overview.lifecycle.cost.unknown.length
-            ? ` · unknown: ${overview.lifecycle.cost.unknown.join(', ')}`
-            : ''}
-        </p>
+            <div>
+              <dt>Queue</dt>
+              <dd>
+                {overview.lifecycle.queue.queued} queued · {overview.lifecycle.queue.active} active
+                {overview.lifecycle.queue.paused ? ' · paused' : ''}
+              </dd>
+            </div>
+            <div>
+              <dt>Worker</dt>
+              <dd>
+                {overview.lifecycle.worker
+                  ? `${overview.lifecycle.worker.online ? 'online' : 'offline'} · ${
+                      overview.lifecycle.worker.ready ? 'ready' : 'not ready'
+                    } · heartbeat ${overview.lifecycle.worker.heartbeatAgeSeconds ?? '—'}s${
+                      overview.lifecycle.worker.currentAttemptId
+                        ? ` · task ${overview.lifecycle.worker.currentTaskId || '—'}`
+                        : ''
+                    }`
+                  : 'not registered'}
+              </dd>
+            </div>
+            <div>
+              <dt>Versions</dt>
+              <dd>
+                worker {overview.lifecycle.worker?.version || '—'} · OpenCode{' '}
+                {overview.lifecycle.worker?.opencodeVersion || '—'}
+              </dd>
+            </div>
+            <div>
+              <dt>Readiness</dt>
+              <dd>
+                API {overview.lifecycle.worker?.readiness?.apiOk ? 'ok' : 'not ready'} · Supabase{' '}
+                {overview.lifecycle.worker?.readiness?.supabaseOk ? 'ok' : 'not ready'} · provider
+                auth {overview.lifecycle.worker?.readiness?.authOk ? 'ok' : 'missing'} · checked{' '}
+                {overview.lifecycle.worker?.readinessAgeSeconds ?? '—'}s ago
+                {overview.lifecycle.worker?.readinessFresh === false ? ' · STALE' : ''}
+              </dd>
+            </div>
+            <div>
+              <dt>Pending start</dt>
+              <dd>
+                {overview.lifecycle.pendingStartInfo
+                  ? `${overview.lifecycle.pendingStartInfo.phase} · attempts ${overview.lifecycle.pendingStartInfo.attempts}/${overview.lifecycle.pendingStartInfo.maxAttempts} · age ${overview.lifecycle.pendingStartInfo.ageSeconds ?? '—'}s · observed ${
+                      overview.lifecycle.pendingStartInfo.lastObservedState || 'unknown'
+                    } · HTTP ${overview.lifecycle.pendingStartInfo.lastHttpStatus ?? '—'}${
+                      overview.lifecycle.pendingStartInfo.lastError
+                        ? ` · ${overview.lifecycle.pendingStartInfo.lastError}`
+                        : ''
+                    }`
+                  : 'no'}
+              </dd>
+            </div>
+            {overview.lifecycle.recovery ? (
+              <div>
+                <dt>Recovery</dt>
+                <dd>
+                  failures {overview.lifecycle.recovery.failures}
+                  {overview.lifecycle.recovery.blocked ? ' · blocked' : ''}
+                  {overview.lifecycle.recovery.lastReason
+                    ? ` · ${overview.lifecycle.recovery.lastReason}`
+                    : ''}
+                </dd>
+              </div>
+            ) : null}
+            <div>
+              <dt>Idle / grace</dt>
+              <dd>
+                {overview.lifecycle.idleSeconds !== null
+                  ? `${overview.lifecycle.idleSeconds}s / ${overview.lifecycle.idleGraceSeconds}s`
+                  : `— / ${overview.lifecycle.idleGraceSeconds}s`}
+              </dd>
+            </div>
+            <div>
+              <dt>Keepalive</dt>
+              <dd>
+                {overview.lifecycle.lastKeepaliveAt
+                  ? `${age(overview.lifecycle.lastKeepaliveAt)} ago`
+                  : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt>Startup</dt>
+              <dd>
+                {overview.lifecycle.lastStartAt
+                  ? `${age(overview.lifecycle.lastStartAt)} ago · requested ${
+                      overview.lifecycle.lastStartState || 'unknown'
+                    } · observed ${overview.lifecycle.lastStartObservedState || 'unknown'} · HTTP ${
+                      overview.lifecycle.lastStartHttpStatus ?? '—'
+                    }${
+                      overview.lifecycle.lastReadyAt
+                        ? ` · ready ${age(overview.lifecycle.lastReadyAt)} ago`
+                        : ''
+                    }`
+                  : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt>Last shutdown</dt>
+              <dd>
+                {overview.lifecycle.lastStopAt
+                  ? `${age(overview.lifecycle.lastStopAt)} ago${
+                      overview.lifecycle.lastStop?.idleSeconds != null
+                        ? ` · idle ${overview.lifecycle.lastStop.idleSeconds}s`
+                        : ''
+                    }${
+                      overview.lifecycle.lastStop?.startupMs != null
+                        ? ` · startup ${Math.round(overview.lifecycle.lastStop.startupMs / 1000)}s`
+                        : ''
+                    }${
+                      overview.lifecycle.lastStop?.measuredRuntimeMs != null
+                        ? ` · runtime ${Math.round(
+                            overview.lifecycle.lastStop.measuredRuntimeMs / 60000
+                          )}m`
+                        : ''
+                    }`
+                  : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt>Cost ledger</dt>
+              <dd>
+                model {money(overview.lifecycle.cost.modelUsd)} (reported{' '}
+                {money(overview.lifecycle.cost.modelReportedUsd)}, est.{' '}
+                {money(overview.lifecycle.cost.modelEstimatedUsd)}) · Codespaces est.{' '}
+                {money(overview.lifecycle.cost.codespaceEstimatedUsd)} · total{' '}
+                {money(overview.lifecycle.cost.totalUsd)}
+              </dd>
+            </div>
+            <div>
+              <dt>Tokens</dt>
+              <dd>
+                in {overview.lifecycle.cost.inputTokens ?? '—'} · out{' '}
+                {overview.lifecycle.cost.outputTokens ?? '—'} · reasoning{' '}
+                {overview.lifecycle.cost.reasoningTokens ?? '—'}
+              </dd>
+            </div>
+          </dl>
+          <p className="pw-wb-meta">
+            {overview.lifecycle.cost.attemptsWithCost} attempt(s) with cost ·{' '}
+            {overview.lifecycle.cost.attemptsMissingCost} without ·{' '}
+            {overview.lifecycle.cost.attemptsWithEstimatedModel} model estimate(s) ·{' '}
+            {overview.lifecycle.cost.attemptsWithEstimatedCodespace} Codespaces estimate(s) ·{' '}
+            {overview.lifecycle.cost.provenance}
+            {overview.lifecycle.cost.unknown.length
+              ? ` · unknown: ${overview.lifecycle.cost.unknown.join(', ')}`
+              : ''}
+          </p>
+        </details>
       </div>
 
       {active ? (
@@ -1505,15 +1650,18 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
               </dd>
             </div>
           </dl>
-          <div className="pw-wb-events">
-            {active.events.map((event) => (
-              <div key={event.id} className={`pw-wb-event is-${event.level}`}>
-                <time>{new Date(event.createdAt).toLocaleTimeString('ru-RU')}</time>
-                <span>{event.message}</span>
-              </div>
-            ))}
-            {active.events.length === 0 && <p className="pw-wb-empty">Событий пока нет.</p>}
-          </div>
+          <details className="pw-wb-log">
+            <summary>Attempt event history ({active.events.length})</summary>
+            <div className="pw-wb-events">
+              {active.events.map((event) => (
+                <div key={event.id} className={`pw-wb-event is-${event.level}`}>
+                  <time>{new Date(event.createdAt).toLocaleTimeString('ru-RU')}</time>
+                  <span>{event.message}</span>
+                </div>
+              ))}
+              {active.events.length === 0 && <p className="pw-wb-empty">Событий пока нет.</p>}
+            </div>
+          </details>
         </div>
       ) : (
         <div className="pw-wb-idle">
@@ -1585,73 +1733,21 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             .join(' · ')}
         </p>
       )}
-      {overview.workers.length === 0 ? (
-        <p className="pw-wb-empty">Worker ещё не регистрировался.</p>
-      ) : (
-        <ul className="pw-wb-list">
-          {overview.workers.map((item) => (
-            <li key={item.id} className="pw-wb-card">
-              <div className="pw-wb-card-head">
-                <div className="pw-wb-card-title">
-                  <StatusBadge
-                    status={
-                      item.online
-                        ? 'online'
-                        : item.stale
-                          ? 'stale'
-                          : item.finished
-                            ? 'finished'
-                            : 'offline'
-                    }
-                  />
-                  <strong>{item.name}</strong>
-                </div>
-                <span className="pw-wb-meta">
-                  heartbeat {item.heartbeatAgeSeconds ?? '—'}s · OpenCode{' '}
-                  {String(item.capabilities.opencodeVersion || 'unknown')}
-                </span>
-              </div>
-              <dl className="pw-wb-facts">
-                <div>
-                  <dt>Codespace</dt>
-                  <dd>{item.codespaceName || '—'}</dd>
-                </div>
-                <div>
-                  <dt>Version</dt>
-                  <dd>{item.version || '—'}</dd>
-                </div>
-                <div>
-                  <dt>OpenCode auth</dt>
-                  <dd>{item.capabilities.opencodeAuthenticated ? 'available' : 'missing'}</dd>
-                </div>
-                <div>
-                  <dt>Current attempt</dt>
-                  <dd>{item.currentAttemptId ? shortSha(item.currentAttemptId) : 'none'}</dd>
-                </div>
-                <div>
-                  <dt>Stored status</dt>
-                  <dd>{item.reportedStatus || item.status}</dd>
-                </div>
-              </dl>
-              <div className="pw-wb-actions">
-                <button
-                  type="button"
-                  className="pw-wb-button is-danger"
-                  onClick={() => void runAction('stop_worker', { workerId: item.id })}
-                >
-                  Stop worker
-                </button>
-                <button
-                  type="button"
-                  className="pw-wb-button is-quiet"
-                  onClick={() => void runAction('stop_codespace')}
-                >
-                  Stop Codespace
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+      <div className="pw-wb-worker-group" data-worker-group="active">
+        <p className="pw-wb-subtitle">Active workers ({activeWorkers.length})</p>
+        {activeWorkers.length === 0 ? (
+          <p className="pw-wb-empty">Нет активных worker. Исторические записи ниже.</p>
+        ) : (
+          <ul className="pw-wb-list">{activeWorkers.map((item) => renderWorkerCard(item))}</ul>
+        )}
+      </div>
+      {historicalWorkers.length > 0 && (
+        <details className="pw-wb-log" data-worker-group="historical">
+          <summary>Historical workers ({historicalWorkers.length})</summary>
+          <ul className="pw-wb-list">
+            {historicalWorkers.map((item) => renderWorkerCard(item, true))}
+          </ul>
+        </details>
       )}
 
       <div className="pw-wb-subhead">
@@ -1715,22 +1811,25 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
             <p className="pw-wb-meta">Next automatic attempt: {overview.finalization.retryAt}</p>
           )}
           {overview.finalization.prs.length > 0 && (
-            <ul className="pw-wb-criteria">
-              {overview.finalization.prs.map((pr) => (
-                <li key={pr.url}>
-                  <a href={pr.url} target="_blank" rel="noreferrer">
-                    #{pr.number ?? '?'} {pr.taskTitle}
-                  </a>{' '}
-                  · {pr.integrated ? 'integrated' : pr.ciStatus} ·{' '}
-                  {pr.mergeable === false ? 'conflict' : pr.state}
-                  {pr.headSha ? ` · head ${shortSha(pr.headSha)}` : ''}
-                  {pr.ciDetail ? <span className="pw-wb-meta"> · {pr.ciDetail}</span> : null}
-                  {!pr.integrated && pr.reason ? (
-                    <span className="pw-wb-meta"> · reason {pr.reason}</span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+            <details className="pw-wb-log">
+              <summary>Pull requests ({overview.finalization.prs.length})</summary>
+              <ul className="pw-wb-criteria">
+                {overview.finalization.prs.map((pr) => (
+                  <li key={pr.url}>
+                    <a href={pr.url} target="_blank" rel="noreferrer">
+                      #{pr.number ?? '?'} {pr.taskTitle}
+                    </a>{' '}
+                    · {pr.integrated ? 'integrated' : pr.ciStatus} ·{' '}
+                    {pr.mergeable === false ? 'conflict' : pr.state}
+                    {pr.headSha ? ` · head ${shortSha(pr.headSha)}` : ''}
+                    {pr.ciDetail ? <span className="pw-wb-meta"> · {pr.ciDetail}</span> : null}
+                    {!pr.integrated && pr.reason ? (
+                      <span className="pw-wb-meta"> · reason {pr.reason}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
           <div className="pw-wb-actions">
             <button
@@ -1756,8 +1855,9 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
       ) : (
         <div className="pw-wb-card">
           <p className="pw-wb-card-body">
-            Finalization has not run yet. It starts automatically when there are no queued, ready or
-            in-progress tasks, no active attempts and no unfinished batches.
+            Finalization has not run yet. The server-side recovery pump starts it automatically when
+            there are no queued, ready or in-progress tasks, no active attempts and no unfinished
+            batches. It does not require this browser tab to stay open.
           </p>
           <div className="pw-wb-actions">
             <button
@@ -1775,16 +1875,19 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
       <div className="pw-wb-subhead">
         <p className="pw-wb-kicker">RECENT EVENTS</p>
       </div>
-      <div className="pw-wb-events">
-        {overview.recentEvents.map((event) => (
-          <div key={event.id} className={`pw-wb-event is-${event.level}`}>
-            <time>{new Date(event.createdAt).toLocaleTimeString('ru-RU')}</time>
-            <span>
-              {event.type} — {event.message}
-            </span>
-          </div>
-        ))}
-      </div>
+      <details className="pw-wb-log">
+        <summary>Event history ({overview.recentEvents.length})</summary>
+        <div className="pw-wb-events">
+          {overview.recentEvents.map((event) => (
+            <div key={event.id} className={`pw-wb-event is-${event.level}`}>
+              <time>{new Date(event.createdAt).toLocaleTimeString('ru-RU')}</time>
+              <span>
+                {event.type} — {event.message}
+              </span>
+            </div>
+          ))}
+        </div>
+      </details>
     </div>
   );
 
@@ -2105,8 +2208,13 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
           <p className="pw-wb-kicker">HISTORY</p>
           <h2>Завершённые и неудачные задания</h2>
         </div>
-        <button type="button" className="pw-wb-button is-quiet" onClick={() => void refresh()}>
-          <RefreshCw size={14} /> Refresh
+        <button
+          type="button"
+          className="pw-wb-button is-quiet"
+          disabled={refreshing}
+          onClick={() => void refresh()}
+        >
+          <RefreshCw size={14} /> {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
       {overview.history.length === 0 ? (
@@ -2546,8 +2654,13 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
           <h1>Управление разработкой</h1>
         </div>
         <div className="pw-wb-head-actions">
-          <button type="button" className="pw-wb-button is-quiet" onClick={() => void refresh()}>
-            <RefreshCw size={14} /> Refresh
+          <button
+            type="button"
+            className="pw-wb-button is-quiet"
+            disabled={refreshing}
+            onClick={() => void refresh()}
+          >
+            <RefreshCw size={14} /> {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
           <button type="button" className="pw-wb-button" onClick={onOpenChat}>
             <Terminal size={14} /> Dev chat
@@ -2568,6 +2681,28 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
         <div className="pw-wb-banner is-error" role="alert">
           <AlertTriangle size={15} /> {error}
           <button type="button" className="pw-wb-icon-button" onClick={() => setError(null)}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {refreshError && (
+        <div className="pw-wb-banner is-error" role="alert">
+          <AlertTriangle size={15} /> Refresh failed: {refreshError}
+          <button
+            type="button"
+            className="pw-wb-button is-quiet"
+            disabled={refreshing}
+            onClick={() => void refresh()}
+          >
+            <RefreshCw size={14} /> {refreshing ? 'Retrying…' : 'Retry'}
+          </button>
+          <button
+            type="button"
+            className="pw-wb-icon-button"
+            aria-label="Dismiss refresh error"
+            onClick={() => setRefreshError(null)}
+          >
             <X size={14} />
           </button>
         </div>
@@ -2613,7 +2748,11 @@ export default function DevWorkbench({ initialOverview, onOpenChat }: Props) {
       </div>
 
       <footer className="pw-wb-foot">
-        <span>Last update {new Date(overview.updatedAt).toLocaleTimeString('ru-RU')}</span>
+        <span>
+          Last update {formatRefreshTime(lastRefreshedAt)}
+          {refreshing ? ' · refreshing…' : ''}
+          {refreshError ? ' · refresh failed' : ''}
+        </span>
         <span>
           {readyTasks.length} ready · {counts.queued || 0} queued · {counts.verified || 0} verified
         </span>

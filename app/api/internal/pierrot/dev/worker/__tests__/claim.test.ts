@@ -106,25 +106,35 @@ jest.mock('@/lib/pierrot/dev/workbench/actions', () => ({
   recordActionsClaimSuccess: jest.fn(async () => undefined),
 }));
 
+jest.mock('@/lib/pierrot/dev/workbench/finalization', () => ({
+  advanceFinalization: jest.fn(async () => null),
+}));
+
 import { POST } from '../route';
 import {
+  dispatchNextQueuedTask,
   recordActionsClaimMiss,
   recordActionsClaimSuccess,
 } from '@/lib/pierrot/dev/workbench/actions';
 import {
   claimTaskForWorker,
+  completeAttempt,
   describeClaimUnavailable,
   releaseAttempt,
 } from '@/lib/pierrot/dev/workbench/execution';
+import { advanceFinalization } from '@/lib/pierrot/dev/workbench/finalization';
 import { getWorker } from '@/lib/pierrot/dev/workbench/store';
 import { readJsonBody } from '@/lib/pierrot/dev/workbench/workerAuth';
 
 const TASK_ID = '8289098f-993a-4e75-abe4-81e23caee6d0';
 const claim = claimTaskForWorker as jest.Mock;
+const complete = completeAttempt as jest.Mock;
 const describeUnavailable = describeClaimUnavailable as jest.Mock;
 const release = releaseAttempt as jest.Mock;
 const worker = getWorker as jest.Mock;
 const body = readJsonBody as jest.Mock;
+const dispatchPump = dispatchNextQueuedTask as jest.Mock;
+const finalize = advanceFinalization as jest.Mock;
 
 function request(): Request {
   return new Request('http://localhost/api/internal/pierrot/dev/worker', { method: 'POST' });
@@ -339,5 +349,22 @@ describe('worker claim routing', () => {
     );
     expect(payload.diagnosis?.code).toBe('CLAIM_CONFLICT');
     expect(recordActionsClaimSuccess).not.toHaveBeenCalled();
+  });
+
+  it('advances the next dispatch and finalization after completion without Admin', async () => {
+    complete.mockResolvedValue({ attempt: { id: 'attempt-1' }, task: { id: TASK_ID } });
+    body.mockResolvedValue({
+      action: 'complete',
+      workerId: 'actions:123:1',
+      attemptId: 'attempt-1',
+      result: { summary: 'done' },
+    });
+
+    const response = await POST(request());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(response.status).toBe(200);
+    expect(dispatchPump).toHaveBeenCalledWith({ source: 'worker:complete' });
+    expect(finalize).toHaveBeenCalledWith({ trigger: 'worker:complete' });
   });
 });
