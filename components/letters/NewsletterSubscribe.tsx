@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/components/AuthContext';
 import { subscribeToNewsletter } from '@/app/admin/actions';
+import NewsletterBotFields from '@/components/newsletter/NewsletterBotFields';
 import { useActionState, useEffect, useRef, useState } from 'react';
 
 function SubmitButton() {
@@ -23,6 +24,7 @@ export default function NewsletterSubscribe() {
 
   const initialState: any = { message: null, status: null };
   const [state, formAction]: any = useActionState(subscribeToNewsletter, initialState);
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
   // Проверка подписки для залогиненных пользователей
   useEffect(() => {
@@ -45,6 +47,10 @@ export default function NewsletterSubscribe() {
   }, [session]);
 
   // Сбрасываем форму после успешной подписки
+  useEffect(() => {
+    if (state?.status) setTurnstileResetKey((key) => key + 1);
+  }, [state]);
+
   useEffect(() => {
     if (state.status === 'success') {
       formRef.current?.reset();
@@ -79,6 +85,7 @@ export default function NewsletterSubscribe() {
         </div>
 
         <form ref={formRef} action={formAction} className="space-y-3">
+          <NewsletterBotFields language="en" turnstileResetKey={turnstileResetKey} />
           <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="email"

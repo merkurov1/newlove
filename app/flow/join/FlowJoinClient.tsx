@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, CheckCircle2, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { GA_EVENTS, trackGaEvent } from '@/lib/analytics/ga4';
+import TurnstileWidget from '@/components/newsletter/TurnstileWidget';
 
 type Language = 'ru' | 'en';
 
@@ -52,6 +53,14 @@ export default function FlowJoinClient() {
     null
   );
   const [errorMessage, setErrorMessage] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const [honeypot, setHoneypot] = useState('');
+  const formStartedAtRef = useRef(0);
+
+  useEffect(() => {
+    formStartedAtRef.current = Date.now();
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -95,6 +104,9 @@ export default function FlowJoinClient() {
           email: trimmedEmail,
           language: lang,
           locale: lang,
+          formStartedAt: formStartedAtRef.current,
+          website: honeypot,
+          ...(turnstileToken ? { turnstileToken } : {}),
           ...(pierrotAttribution ? { pierrotAttribution } : {}),
         }),
       });
@@ -126,6 +138,9 @@ export default function FlowJoinClient() {
             ? 'Произошла ошибка. Попробуйте позже.'
             : 'An error occurred. Please try again.')
       );
+    } finally {
+      setTurnstileResetKey((key) => key + 1);
+      formStartedAtRef.current = Date.now();
     }
   };
 
@@ -242,6 +257,17 @@ export default function FlowJoinClient() {
                 exit={{ opacity: 0 }}
                 className="space-y-3"
               >
+                <div aria-hidden="true" style={{ position: 'absolute', left: '-5000px', top: 'auto' }}>
+                  <label htmlFor="flow-newsletter-website">Website</label>
+                  <input
+                    id="flow-newsletter-website"
+                    type="text"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={honeypot}
+                    onChange={(event) => setHoneypot(event.target.value)}
+                  />
+                </div>
                 <div className="flex flex-col sm:flex-row gap-2.5">
                   <input
                     type="email"
@@ -266,6 +292,12 @@ export default function FlowJoinClient() {
                     )}
                   </button>
                 </div>
+
+                <TurnstileWidget
+                  onToken={setTurnstileToken}
+                  resetKey={turnstileResetKey}
+                  className="flex justify-center"
+                />
 
                 {status === 'error' && (
                   <p className="text-xs font-mono text-rose-600 pt-1 px-1">

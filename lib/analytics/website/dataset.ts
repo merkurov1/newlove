@@ -18,6 +18,7 @@ import {
   stripBrandComparison,
 } from './searchInsights';
 import { classifyTrafficPath, isInternalPath, isPublicPath } from './traffic';
+import { classifyNewsletterAudience } from '@/lib/newsletter/analytics';
 import { buildSourceCoverage, coverageIsComparable } from './coverage';
 import { getSearchConsoleSiteOverride } from './config';
 import {
@@ -1421,13 +1422,25 @@ async function internalSnapshot(
     countQuery(store, 'pierrot_v_subscription_conversions', (query) =>
       query.gte('confirmed_at', bounds.previousStartIso).lt('confirmed_at', bounds.previousEndIso)
     ),
-    readRows<{ event_name: string | null; created_at: string | null }>(
+    readRows<{
+      event_name: string | null;
+      event_key?: string | null;
+      subscriber_id?: string | null;
+      payload?: unknown;
+      created_at: string | null;
+    }>(
       store,
       'subscription_events',
       (query) =>
         query.gte('created_at', bounds.startIso).lt('created_at', bounds.endIso)
     ),
-    readRows<{ event_name: string | null; created_at: string | null }>(
+    readRows<{
+      event_name: string | null;
+      event_key?: string | null;
+      subscriber_id?: string | null;
+      payload?: unknown;
+      created_at: string | null;
+    }>(
       store,
       'subscription_events',
       (query) =>
@@ -1636,9 +1649,21 @@ async function internalSnapshot(
   }
 
   const newsletterSubscribers = subscriberRows;
+  const newsletterMetrics = classifyNewsletterAudience(
+    newsletterSubscribers.map((row) => ({
+      isActive: row.isActive,
+      confirmedAt: row.confirmedAt,
+      unsubscribedAt: row.unsubscribedAt,
+    })),
+    subscriptionEvents
+  );
   const localeGroup = (row: { locale: string | null }) =>
     (row.locale || '').toLowerCase().startsWith('en') ? 'en' : 'ru';
-  const activeSubscribers = newsletterSubscribers.filter((row) => row.isActive === true);
+  // Audience metrics include only double-opt-in confirmed rows. Pending
+  // signups are reported separately and never count as audience growth.
+  const activeSubscribers = newsletterSubscribers.filter(
+    (row) => row.isActive === true && Boolean(row.confirmedAt)
+  );
   const unsubscribedSubscribers = newsletterSubscribers.filter(
     (row) => Boolean(row.unsubscribedAt)
   );
@@ -1762,10 +1787,18 @@ async function internalSnapshot(
       available: true,
       subscribers: {
         total: newsletterSubscribers.length,
-        active: activeSubscribers.length,
+        active: newsletterMetrics.confirmed,
+        confirmed: newsletterMetrics.confirmed,
+        pending: newsletterMetrics.pending,
         unsubscribed: unsubscribedSubscribers.length,
         ru: activeSubscribers.filter((row) => localeGroup(row) === 'ru').length,
         en: activeSubscribers.filter((row) => localeGroup(row) === 'en').length,
+      },
+      signals: {
+        deliveryFailures: newsletterMetrics.deliveryFailures,
+        suspectedAutomated: newsletterMetrics.suspectedAutomated,
+        rateLimited: newsletterMetrics.rateLimited,
+        blockedReasons: newsletterMetrics.blockedReasons,
       },
       jobs: {
         total: newsletterJobs.length,

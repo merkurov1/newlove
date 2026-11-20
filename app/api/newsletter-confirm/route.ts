@@ -1,20 +1,24 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import {
   normalizePierrotSubscriptionRef,
   pierrotConversationIdFromSubscriptionRef,
 } from '@/lib/pierrot/orderAttribution';
 import { recordSubscriptionEvent } from '@/lib/newsletter/subscriptionEvents';
+import { getTrustedClientIp } from '@/lib/newsletter/clientIp';
+import {
+  checkNewsletterIpRateLimit,
+  newsletterRateLimitResponse,
+} from '@/lib/newsletter/rateLimit';
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 
 export async function GET(req: NextRequest) {
-  const clientIp = getClientIp(req);
-  const rateLimitResponse = checkRateLimit(clientIp, RATE_LIMITS.NEWSLETTER);
-  if (rateLimitResponse) return rateLimitResponse;
+  const clientIp = getTrustedClientIp(req.headers);
+  const rateLimit = await checkNewsletterIpRateLimit(clientIp);
+  if (!rateLimit.allowed) return newsletterRateLimitResponse(rateLimit);
 
   const { searchParams } = new URL(req.url);
   const token = searchParams.get('token');
@@ -53,7 +57,43 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    if (!tokenRow || tokenRow.type !== 'confirm' || tokenRow.used === true) {
+    if (!tokenRow || tokenRow.type !== 'confirm') {
+      return NextResponse.json(
+        {
+          error:
+            language === 'ru'
+              ? 'Некорректный токен подтверждения.'
+              : 'Invalid confirmation token.',
+        },
+        { status: 404 }
+      );
+    }
+
+    const subscriberId = tokenRow.subscriber_id ?? tokenRow.subscriberId;
+
+    if (!subscriberId) {
+      return NextResponse.json({ error: 'Invalid confirmation token.' }, { status: 400 });
+    }
+
+    if (tokenRow.used === true) {
+      // Link scanners and repeated clicks are safe: if this subscriber is
+      // already confirmed, report success instead of breaking the flow.
+      const { data: subscriber } = await store
+        .from('subscribers')
+        .select('id, isActive, confirmedAt')
+        .eq('id', subscriberId)
+        .maybeSingle();
+
+      if (subscriber?.isActive === true && subscriber.confirmedAt) {
+        return NextResponse.json({
+          message:
+            language === 'ru'
+              ? 'Подписка уже подтверждена.'
+              : 'Subscription is already confirmed.',
+          alreadyConfirmed: true,
+        });
+      }
+
       return NextResponse.json(
         {
           error:
@@ -75,12 +115,6 @@ export async function GET(req: NextRequest) {
         },
         { status: 410 }
       );
-    }
-
-    const subscriberId = tokenRow.subscriber_id ?? tokenRow.subscriberId;
-
-    if (!subscriberId) {
-      return NextResponse.json({ error: 'Invalid confirmation token.' }, { status: 400 });
     }
 
     const now = new Date().toISOString();

@@ -313,7 +313,9 @@ async function formatStats(language: 'ru' | 'en'): Promise<string> {
 
   const [users, subscribers, flow, conversations, messages, media, projects] = await Promise.all([
     count(store, 'users'),
-    count(store, 'subscribers', (query) => query.eq('isActive', true)),
+    count(store, 'subscribers', (query) =>
+      query.eq('isActive', true).not('confirmedAt', 'is', null)
+    ),
     count(store, 'items', (query) => query.eq('status', 'published').eq('visibility', 'public')),
     count(store, 'pierrot_conversations', (query) => query.gte('started_at', since)),
     count(store, 'pierrot_messages', (query) => query.gte('created_at', since)),

@@ -3,6 +3,7 @@
 import React, { useId, useRef, useState, useEffect, type ElementRef } from 'react';
 import useSupabaseSession from '@/hooks/useSupabaseSession';
 import AuthLoginModal from '@/components/AuthLoginModal';
+import TurnstileWidget from '@/components/newsletter/TurnstileWidget';
 
 interface SubscribeFormClientProps {
   defaultLanguage?: 'ru' | 'en';
@@ -49,6 +50,10 @@ export default function SubscribeFormClient({
   const [pierrotAttribution, setPierrotAttribution] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const [honeypot, setHoneypot] = useState('');
+  const formStartedAtRef = useRef(0);
 
   // Автоматически выводим точный тип рефа из компонента AuthLoginModal
   const modalRef = useRef<ElementRef<typeof AuthLoginModal>>(null);
@@ -58,6 +63,10 @@ export default function SubscribeFormClient({
 
     const ref = new URLSearchParams(window.location.search).get('pierrot');
     setPierrotAttribution(ref && /^psub_[A-Za-z0-9_-]{8,64}$/.test(ref) ? ref : null);
+  }, []);
+
+  useEffect(() => {
+    formStartedAtRef.current = Date.now();
   }, []);
 
   // Автоматическое определение языка браузера, если defaultLanguage не задан явно
@@ -96,6 +105,9 @@ export default function SubscribeFormClient({
           email: trimmedEmail,
           language,
           userId: session?.user?.id || null,
+          formStartedAt: formStartedAtRef.current,
+          website: honeypot,
+          ...(turnstileToken ? { turnstileToken } : {}),
           ...(pierrotAttribution ? { pierrotAttribution } : {}),
         }),
       });
@@ -119,6 +131,8 @@ export default function SubscribeFormClient({
       setOk(false);
     } finally {
       setLoading(false);
+      setTurnstileResetKey((key) => key + 1);
+      formStartedAtRef.current = Date.now();
     }
   }
 
@@ -206,6 +220,17 @@ export default function SubscribeFormClient({
           </div>
         ) : (
           <form onSubmit={handleSubmit} noValidate className="space-y-3">
+            <div aria-hidden="true" style={{ position: 'absolute', left: '-5000px', top: 'auto' }}>
+              <label htmlFor={`${emailId}-website`}>Website</label>
+              <input
+                id={`${emailId}-website`}
+                type="text"
+                tabIndex={-1}
+                autoComplete="off"
+                value={honeypot}
+                onChange={(event) => setHoneypot(event.target.value)}
+              />
+            </div>
             <label htmlFor={emailId} className="sr-only">
               {language === 'ru' ? 'Email для подписки' : 'Subscription email'}
             </label>
@@ -244,6 +269,11 @@ export default function SubscribeFormClient({
                     : 'Subscribe'}
               </button>
             </div>
+            <TurnstileWidget
+              onToken={setTurnstileToken}
+              resetKey={turnstileResetKey}
+              className="flex justify-center"
+            />
             {errorMsg && (
               <p role="alert" aria-live="polite" className="pt-1 font-mono text-xs text-rose-500">
                 {errorMsg}

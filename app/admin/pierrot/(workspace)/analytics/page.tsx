@@ -626,11 +626,15 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
             <p className="pw-analytics-id">Русская и английская — отдельные продукты</p>
             <dl className="pw-analytics-facts">
               <div>
-                <dt>Активные подписчики</dt>
-                <dd>{formatNumber(dashboard?.dataset.internal.newsletter.subscribers.active)}</dd>
+                <dt>Подтверждённые подписчики</dt>
+                <dd>{formatNumber(dashboard?.dataset.internal.newsletter.subscribers.confirmed)}</dd>
               </div>
               <div>
-                <dt>RU / EN</dt>
+                <dt>Ожидают подтверждения</dt>
+                <dd>{formatNumber(dashboard?.dataset.internal.newsletter.subscribers.pending)}</dd>
+              </div>
+              <div>
+                <dt>RU / EN (подтверждённые)</dt>
                 <dd>
                   {formatNumber(dashboard?.dataset.internal.newsletter.subscribers.ru)} /{' '}
                   {formatNumber(dashboard?.dataset.internal.newsletter.subscribers.en)}
@@ -641,10 +645,27 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
                 <dd>{formatNumber(dashboard?.dataset.internal.newsletter.jobs.emailsSent)}</dd>
               </div>
               <div>
-                <dt>Ошибок доставки</dt>
+                <dt>Ошибки доставки писем</dt>
                 <dd>{formatNumber(dashboard?.dataset.internal.newsletter.jobs.emailsFailed)}</dd>
               </div>
+              <div>
+                <dt>Ошибки отправки подтверждения</dt>
+                <dd>
+                  {formatNumber(dashboard?.dataset.internal.newsletter.signals.deliveryFailures)}
+                </dd>
+              </div>
+              <div>
+                <dt>Заблокировано ботов (эвристика)</dt>
+                <dd>
+                  {formatNumber(dashboard?.dataset.internal.newsletter.signals.suspectedAutomated)}
+                </dd>
+              </div>
             </dl>
+            <p className="pw-analytics-hint">
+              Аудитория — только подтверждённые адреса. Ожидающие подтверждения и ошибки доставки
+              показаны отдельно и не считаются ростом аудитории. Подозрительные регистрации — это
+              только серверные срабатывания защиты, а не приговор адресу.
+            </p>
             <p className="pw-analytics-hint">
               Открытия и клики не сохраняются в текущем Resend-логе; они не рассчитываются и не
               подставляются.

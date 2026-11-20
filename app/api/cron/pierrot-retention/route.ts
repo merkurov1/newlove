@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 import { isCronAuthorized } from '@/lib/knowledge/brain/cronAuth';
 import { beginWorkerInvocation } from '@/lib/operations/guard';
+import { cleanupStaleNewsletterSignups } from '@/lib/newsletter/retention';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,13 +49,9 @@ async function handle(request: Request) {
     });
 
     try {
-      const { data, error } = await store.rpc('purge_expired_pierrot_conversations');
-
-      if (error) {
-        console.error('[Pierrot retention] purge failed');
-        return json({ error: 'Retention purge failed.' }, 503);
-      }
-
+      // Newsletter retention is independent of the Pierrot conversation purge
+      // and must still run if that RPC is temporarily unavailable.
+      const newsletterRetention = await cleanupStaleNewsletterSignups(store);
       const staleBefore = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
 
       try {
@@ -63,9 +60,17 @@ async function handle(request: Request) {
         // Rate-limit cleanup is best effort and must not fail the purge.
       }
 
+      const { data, error } = await store.rpc('purge_expired_pierrot_conversations');
+
+      if (error) {
+        console.error('[Pierrot retention] purge failed');
+        return json({ error: 'Retention purge failed.', newsletterRetention }, 503);
+      }
+
       return json({
         status: 'ok',
         purged: typeof data === 'number' ? data : null,
+        newsletterRetention,
         ranAt: new Date().toISOString(),
       });
     } catch {

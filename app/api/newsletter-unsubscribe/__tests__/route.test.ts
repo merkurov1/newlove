@@ -2,10 +2,9 @@
 
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
-jest.mock('@/lib/rateLimit', () => ({
-  checkRateLimit: jest.fn(() => null),
-  getClientIp: jest.fn(() => 'test-client'),
-  RATE_LIMITS: { NEWSLETTER: { interval: 1000, maxRequests: 5, keyPrefix: 'test' } },
+jest.mock('@/lib/newsletter/rateLimit', () => ({
+  checkNewsletterIpRateLimit: jest.fn(async () => ({ allowed: true })),
+  newsletterRateLimitResponse: jest.fn(),
 }));
 
 jest.mock('@/lib/serverAuth', () => ({

@@ -1,10 +1,9 @@
 // ===== ФАЙЛ: app/actions.ts =====
 'use server';
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { Resend } from 'resend';
 import { createId } from '@paralleldrive/cuid2';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -15,6 +14,17 @@ import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAu
 import { sendNewsletterToSubscriber } from '@/lib/newsletter/sendNewsletterToSubscriber';
 import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
 import { parseTagNames, upsertTagsAndLink } from '@/lib/tags';
+import { getTrustedClientIp } from '@/lib/newsletter/clientIp';
+import { checkNewsletterRateLimit } from '@/lib/newsletter/rateLimit';
+import {
+  NEWSLETTER_BOT_FIELD,
+  NEWSLETTER_FORM_STARTED_FIELD,
+  checkSignupTiming,
+  honeypotWasFilled,
+  verifyTurnstileToken,
+} from '@/lib/newsletter/botProtection';
+import { registerNewsletterSubscriber } from '@/lib/newsletter/signup';
+import { recordSubscriptionEvent } from '@/lib/newsletter/subscriptionEvents';
 
 // Local helper to produce tag slugs for revalidation paths
 const slugifyTag = (s: string) =>
@@ -661,9 +671,90 @@ export async function adminToggleUserSubscription(userId: any, subscribe: any) {
 // --- Рассылки и подписки (User-Context) ---
 
 export async function subscribeToNewsletter(prevState: any, formData: any) {
-  const email = formData.get('email')?.toString().trim();
+  const email = formData.get('email')?.toString().trim().toLowerCase() || '';
+  const language = formData.get('language')?.toString().trim().toLowerCase() || 'ru';
+  const locale = language === 'en' ? 'en' : 'ru';
+
+  async function recordEvent(
+    reason: string,
+    payload: Record<string, unknown>,
+    subscriberId?: string | number | null
+  ) {
+    try {
+      const store = getServerSupabaseClient({ useServiceRole: true });
+      await recordSubscriptionEvent(store, {
+        eventName: 'subscription_failed',
+        eventKey: `signup_action:${createId()}`,
+        subscriberId: subscriberId ?? null,
+        payload: { reason, ...payload },
+      });
+    } catch {
+      // Telemetry must not break the user-facing response.
+    }
+  }
+
   if (!email || !/\S+@\S+\.\S+/.test(email)) {
-    return { status: 'error', message: 'Введите корректный email адрес.' };
+    return {
+      status: 'error',
+      message: locale === 'ru' ? 'Введите корректный email адрес.' : 'Enter a valid email address.',
+    };
+  }
+
+  const requestHeaders = await headers();
+  const clientIp = getTrustedClientIp(requestHeaders);
+
+  if (
+    honeypotWasFilled(
+      formData.get(NEWSLETTER_BOT_FIELD),
+      formData.get('company_website'),
+      formData.get('_gotcha')
+    )
+  ) {
+    await recordEvent('honeypot', {});
+    return {
+      status: 'error',
+      message: locale === 'ru' ? 'Не удалось оформить подписку.' : 'Could not complete the subscription.',
+    };
+  }
+
+  const timing = checkSignupTiming(formData.get(NEWSLETTER_FORM_STARTED_FIELD));
+  if (!timing.ok) {
+    await recordEvent(`timing_${timing.reason}`, {});
+    return {
+      status: 'error',
+      message: locale === 'ru' ? 'Не удалось оформить подписку.' : 'Could not complete the subscription.',
+    };
+  }
+
+  const rateLimit = await checkNewsletterRateLimit({ ip: clientIp, email });
+  if (!rateLimit.allowed) {
+    await recordEvent(`rate_limited_${rateLimit.layer}`, {});
+    return {
+      status: 'error',
+      message:
+        locale === 'ru'
+          ? 'Слишком много попыток. Попробуйте позже.'
+          : 'Too many attempts. Please try again later.',
+    };
+  }
+
+  const turnstile = await verifyTurnstileToken({
+    token: formData.get('turnstileToken'),
+    remoteIp: clientIp,
+  });
+  if (!turnstile.ok) {
+    await recordEvent(`turnstile_${turnstile.reason}`, {});
+    return {
+      status: 'error',
+      message:
+        turnstile.reason === 'provider_unavailable' || turnstile.reason === 'invalid_response'
+          ? locale === 'ru'
+            ? 'Проверка недоступна. Попробуйте позже.'
+            : 'Verification is unavailable. Please try again later.'
+          : locale === 'ru'
+            ? 'Проверка не пройдена. Обновите страницу и попробуйте снова.'
+            : 'Verification failed. Refresh the page and try again.',
+    };
   }
 
   const { user } = await getUserAndSupabaseForRequest(new Request('http://localhost'));
@@ -675,124 +766,63 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
     console.error('subscribeToNewsletter: service role client not available', e);
     return {
       status: 'error',
-      message: 'Сервер не настроен для обработки подписок (SUPABASE_SERVICE_ROLE_KEY отсутствует).',
-      error: String(e),
+      message:
+        locale === 'ru'
+          ? 'Сервер не настроен для обработки подписок.'
+          : 'The server is not configured for subscriptions.',
     };
   }
 
-  let subscriber;
-  try {
-    const { data: existingSub } = await svc
-      .from('subscribers')
-      .select('*')
-      .eq('email', email)
-      .maybeSingle();
+  const baseUrl = (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    'https://merkurov.love'
+  ).replace(/\/$/, '');
 
-    if (existingSub) {
-      subscriber = existingSub;
-      if (user?.id && subscriber.userId !== user.id) {
-        await svc.from('subscribers').update({ userId: user.id }).eq('id', subscriber.id);
-        subscriber.userId = user.id;
-      }
-    } else {
-      const payload = { id: createId(), email, userId: user?.id || null, isActive: false };
-      const insertRes = await svc.from('subscribers').insert(payload).select().single();
+  const result = await registerNewsletterSubscriber({
+    store: svc,
+    email,
+    locale,
+    userId: user?.id || null,
+    baseUrl,
+  });
 
-      if (insertRes.error) {
-        throw insertRes.error;
-      }
-      subscriber = insertRes.data;
-    }
-  } catch (error: any) {
-    console.error('Supabase subscriber error:', error);
-    const code = error?.code || null;
-    const msg = error?.message || String(error) || 'Ошибка при подписке.';
-    if (String(code) === '42501') {
-      return {
-        status: 'error',
-        message:
-          'Права на запись в базу отсутствуют. Проверьте SUPABASE_SERVICE_ROLE_KEY и привилегии.',
-        code,
-        details: error,
-      };
-    }
-    return { status: 'error', message: msg, code, details: error };
+  if (result.status === 'already_confirmed') {
+    return {
+      status: 'success',
+      message: locale === 'ru' ? 'Вы уже подписаны.' : 'You are already subscribed.',
+    };
   }
 
-  if (subscriber.isActive) {
-    return { status: 'success', message: 'Вы уже подписаны.' };
+  if (result.status === 'pending_confirmation') {
+    return {
+      status: 'success',
+      message:
+        locale === 'ru'
+          ? 'Проверьте почту для подтверждения подписки.'
+          : 'Check your inbox to confirm the subscription.',
+    };
   }
 
-  try {
-    const confirmToken = createId();
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const { error: tokenErr } = await svc.from('subscriber_tokens').insert({
-      subscriber_id: subscriber.id,
-      type: 'confirm',
-      token: confirmToken,
-      created_at: now.toISOString(),
-      expires_at: expiresAt.toISOString(),
-    });
-    if (tokenErr) {
-      console.warn('Failed to insert confirm token:', tokenErr.message || tokenErr);
-    } else {
-      const confirmUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/api/newsletter-confirm?token=${confirmToken}`;
+  await recordEvent(result.reason, { error_code: result.errorCode }, result.subscriberId);
 
-      const apiKey = process.env.RESEND_API_KEY;
-      if (apiKey) {
-        try {
-          const resend = new Resend(apiKey);
-          const fromEmail = process.env.NOREPLY_EMAIL || 'noreply@merkurov.love';
-          const fromDisplay = process.env.NOREPLY_DISPLAY || 'Anton Merkurov';
-
-          await resend.emails.send({
-            from: `${fromDisplay} <${fromEmail}>`,
-            to: email,
-            subject: 'Подтвердите подписку на рассылку',
-            html: `
-              <!DOCTYPE html>
-              <html>
-              <head>
-                <meta charset="utf-8">
-                <style>
-                  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-                  .button { display: inline-block; padding: 12px 24px; background: #0070f3; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
-                  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 14px; color: #666; }
-                </style>
-              </head>
-              <body>
-                <h1>Подтвердите подписку</h1>
-                <p>Привет!</p>
-                <p>Спасибо за интерес к моим письмам о искусстве, инвестициях и культуре.</p>
-                <p>Чтобы начать получать рассылку, подтвердите свой email:</p>
-                <a href="${confirmUrl}" class="button">Подтвердить подписку</a>
-                <p>Или скопируйте эту ссылку в браузер:</p>
-                <p style="background: #f5f5f5; padding: 10px; border-radius: 4px; word-break: break-all;">${confirmUrl}</p>
-                <div class="footer">
-                  <p>Если вы не подписывались на рассылку, просто проигнорируйте это письмо.</p>
-                  <p>С уважением,<br>Антон Меркуров<br><a href="https://merkurov.love">merkurov.love</a></p>
-                </div>
-              </body>
-              </html>
-            `,
-          });
-        } catch (emailErr) {
-          console.error('Failed to send confirmation email:', emailErr);
-        }
-      }
-
-      return {
-        status: 'success',
-        message: 'Проверьте почту для подтверждения подписки.',
-        confirmUrl,
-      };
-    }
-  } catch (e: any) {
-    console.warn('subscribeToNewsletter: token insert failed', e?.message || e);
+  if (result.reason === 'email_send' || result.reason === 'email_not_configured') {
+    return {
+      status: 'error',
+      message:
+        locale === 'ru'
+          ? 'Не удалось отправить письмо подтверждения. Подписка не оформлена.'
+          : 'The confirmation email could not be sent. Your subscription is not active.',
+    };
   }
 
-  return { status: 'success', message: 'Проверьте почту для подтверждения подписки.' };
+  return {
+    status: 'error',
+    message:
+      locale === 'ru'
+        ? 'Не удалось оформить подписку. Попробуйте позже.'
+        : 'Could not complete the subscription. Please try again.',
+  };
 }
 
 // --- Письма (Letter) ---

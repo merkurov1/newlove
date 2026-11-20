@@ -1,20 +1,24 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import {
   normalizePierrotSubscriptionRef,
   pierrotConversationIdFromSubscriptionRef,
 } from '@/lib/pierrot/orderAttribution';
 import { recordSubscriptionEvent } from '@/lib/newsletter/subscriptionEvents';
+import { getTrustedClientIp } from '@/lib/newsletter/clientIp';
+import {
+  checkNewsletterIpRateLimit,
+  newsletterRateLimitResponse,
+} from '@/lib/newsletter/rateLimit';
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 
 export async function GET(req: NextRequest) {
-  const clientIp = getClientIp(req);
-  const rateLimitResponse = checkRateLimit(clientIp, RATE_LIMITS.NEWSLETTER);
-  if (rateLimitResponse) return rateLimitResponse;
+  const clientIp = getTrustedClientIp(req.headers);
+  const rateLimit = await checkNewsletterIpRateLimit(clientIp);
+  if (!rateLimit.allowed) return newsletterRateLimitResponse(rateLimit);
 
   const { searchParams } = new URL(req.url);
   const token = searchParams.get('token');

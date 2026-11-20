@@ -48,8 +48,8 @@ const METRIC_META: Array<{
     label: 'Подписчики',
     table: 'subscribers',
     dateColumn: 'confirmedAt',
-    totalFilter: (query) => query.eq('isActive', true),
-    periodFilter: (query) => query.eq('isActive', true),
+    totalFilter: (query) => query.eq('isActive', true).not('confirmedAt', 'is', null),
+    periodFilter: (query) => query.eq('isActive', true).not('confirmedAt', 'is', null),
   },
   {
     key: 'flow',

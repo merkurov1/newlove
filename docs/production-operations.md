@@ -261,7 +261,9 @@ Recommended production setup:
 - external scheduler every 5–15 minutes:
   `/api/cron/brain-worker`, `/api/cron/graph-worker`,
   `/api/cron/media-analysis-worker`;
-- once per day: `/api/cron/pierrot-retention`;
+- once per day: `/api/cron/pierrot-retention` (also runs stale pending
+  newsletter signup and expired token retention; see
+  `docs/newsletter-signup-protection.md`);
 - bearer header: `Authorization: Bearer $CRON_SECRET`.
 
 Vercel Hobby allows at most two daily cron jobs and is not a reliable
