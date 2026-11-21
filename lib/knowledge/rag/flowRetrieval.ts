@@ -352,7 +352,7 @@ export async function retrieveFlowPublicEvidence(
 
     const config = resolveUnframedEmbeddingConfig(env);
     const embeddingClient =
-      deps.embeddingClient ?? createOpenRouterEmbeddingClientFromEnv(env);
+      deps.embeddingClient ?? createOpenRouterEmbeddingClientFromEnv(env, undefined, { surface: 'flow_item' });
     const search = deps.search === undefined ? createSupabaseFlowPublicSearch(env) : deps.search;
 
     if (!search) {

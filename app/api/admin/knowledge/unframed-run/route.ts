@@ -236,6 +236,7 @@ function createEmbeddingClient() {
     modelId: UNFRAMED_EMBEDDING_MODEL,
     dimensions: UNFRAMED_EMBEDDING_DIMENSIONS,
     provider: resolveUnframedEmbeddingProvider(process.env),
+    telemetry: { surface: 'media' },
   });
 }
 

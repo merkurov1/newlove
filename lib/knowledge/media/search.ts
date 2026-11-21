@@ -252,7 +252,8 @@ export async function searchMediaIntelligence(input: {
   if (!client) throw new Error('media_search_database_unavailable');
 
   const embeddingClient =
-    input.embeddingClient || createOpenRouterEmbeddingClientFromEnv(process.env);
+    input.embeddingClient ||
+    createOpenRouterEmbeddingClientFromEnv(process.env, undefined, { surface: 'media' });
   const vectors = await embeddingClient.embed([query]);
   const embedding = vectors[0];
 

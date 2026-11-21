@@ -177,7 +177,7 @@ export function estimateLlmCost(input: {
 
   const price = priceFor(provider, model);
 
-  if (price.inputUsdPerMillion === null && price.outputUsdPerMillion === null) {
+  if (price.inputUsdPerMillion === null || price.outputUsdPerMillion === null) {
     return {
       costUsd: null,
       source: 'unknown',
@@ -185,8 +185,8 @@ export function estimateLlmCost(input: {
       pricingSource: price.source,
       note:
         provider === 'gemini'
-          ? 'Gemini tariff is not configured. Set GEMINI_INPUT_USD_PER_MILLION and GEMINI_OUTPUT_USD_PER_MILLION from a verified Google Cloud invoice to enable estimates.'
-          : 'No verified per-token price is configured for this provider/model.',
+          ? 'Gemini tariff is not fully configured. Set both GEMINI_INPUT_USD_PER_MILLION and GEMINI_OUTPUT_USD_PER_MILLION from a verified Google Cloud invoice to enable estimates.'
+          : 'No verified input and output per-token price is configured for this provider/model.',
     };
   }
 
@@ -238,7 +238,8 @@ export type LlmProviderAttempt = {
   /** Provider that failed immediately before this attempt, if any. */
   fallbackFrom: LlmProvider | null;
   ok: boolean;
-  latencyMs: number;
+  /** Null when a legacy/manual row has no measured latency. */
+  latencyMs: number | null;
   finishReason: string | null;
   errorCode: string | null;
   usage: LlmTokenUsage;
@@ -253,6 +254,47 @@ export type LlmCallContext = {
   surface: LlmSurface;
   userId: string | null;
 };
+
+/** Supabase service-role client used by the telemetry store. */
+export type TelemetryStore = SupabaseClient;
+
+/**
+ * Context for embedding calls. `store: null` is an explicit consent denial:
+ * the attempt is kept as a redacted log only. Omitting `store` lets the
+ * embedding client use its own service-role store.
+ */
+export type EmbeddingTelemetryContext = Partial<Omit<LlmCallContext, 'surface'>> & {
+  surface?: LlmSurface;
+  skip?: boolean;
+  store?: TelemetryStore | null;
+};
+
+/**
+ * OpenAI-compatible embedding responses may include `usage.prompt_tokens` and
+ * `usage.total_tokens`. There is no completion side, so the usage is `partial`
+ * rather than pretending the output token count is zero.
+ */
+export function embeddingUsageFrom(value: unknown): LlmTokenUsage {
+  if (!value || typeof value !== 'object') return { ...UNKNOWN_USAGE };
+
+  const record = value as Record<string, unknown>;
+  const read = (key: string): number | null =>
+    typeof record[key] === 'number' && Number.isFinite(record[key])
+      ? (record[key] as number)
+      : null;
+
+  const input = read('prompt_tokens') ?? read('input_tokens');
+  const total = read('total_tokens');
+  const reportedCost = read('cost') ?? read('total_cost') ?? read('provider_cost');
+
+  return {
+    inputTokens: input ?? total,
+    outputTokens: null,
+    totalTokens: total,
+    usageSource: input !== null || total !== null ? 'partial' : 'unknown',
+    providerReportedCostUsd: reportedCost,
+  };
+}
 
 export type LlmCallRecord = LlmCallContext &
   LlmProviderAttempt & {
@@ -299,7 +341,7 @@ function bounded(value: string | null, max = 160): string | null {
  * Minimal service-role client for provider adapters that do not have a Pierrot
  * conversation store. Read-only callers pass their own client to the report.
  */
-export function createTelemetryStore(): SupabaseClient | null {
+export function createTelemetryStore(): TelemetryStore | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceRoleKey) return null;
@@ -319,7 +361,7 @@ export function createTelemetryStore(): SupabaseClient | null {
  * still read the structured server log.
  */
 export async function recordLlmCall(
-  store: SupabaseClient | null,
+  store: TelemetryStore | null,
   record: LlmCallRecord
 ): Promise<boolean> {
   if (!store) return false;
@@ -338,7 +380,8 @@ export async function recordLlmCall(
       is_retry: record.isRetry,
       fallback_from: record.fallbackFrom,
       ok: record.ok,
-      latency_ms: Math.max(0, Math.trunc(record.latencyMs)),
+      latency_ms:
+        record.latencyMs === null ? null : Math.max(0, Math.trunc(record.latencyMs)),
       finish_reason: bounded(record.finishReason),
       error_code: bounded(record.errorCode),
       prompt_chars: record.promptChars,
