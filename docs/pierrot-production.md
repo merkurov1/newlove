@@ -12,6 +12,11 @@
   (default `false`), and uses only documents with
   `knowledge_documents.public_retrieval_allowed = true`.
 - Manuscripts and `personal_writing` are never public-retrievable.
+- Brain hybrid SQL uses the existing HNSW index through a transaction-local,
+  scoped candidate function. The migration is prepared but not applied to
+  production; methodology, gates and rollback are documented in
+  `docs/brain-hnsw-retrieval-optimization.md`. Final decision is **NO-GO for
+  production rollout** until the real-query benchmark runs on preview/staging.
 
 ## Model providers
 
