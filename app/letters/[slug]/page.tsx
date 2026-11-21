@@ -5,6 +5,12 @@ import FlowIssueArticle from '@/components/flow-issues/FlowIssueArticle';
 import { parseRichTextContent } from '@/lib/contentParser';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { buildIssueTitle } from '@/lib/flow-issue/title';
+import {
+  findAdjacentFlowIssues,
+  issuePageTitle,
+  listPublicFlowIssues,
+  type PublicFlowIssue,
+} from '@/lib/flow-issue/public';
 import type { IssuePayload } from '@/lib/flow-issue/types';
 
 const SITE = 'https://www.merkurov.love';
@@ -225,7 +231,7 @@ export default async function LetterPage({ params }: PageProps) {
 
   const { data: issue, error: issueError } = await supabasePublic
     .from('letters')
-    .select('id,title,slug,kind,status,published,html_web,payload,publishedAt,createdAt,number')
+    .select('id,title,slug,kind,status,published,html_web,payload,publishedAt,createdAt,number,lang')
     .eq('slug', slug)
     .eq('kind', 'issue')
     .eq('status', 'published')
@@ -245,7 +251,8 @@ export default async function LetterPage({ params }: PageProps) {
     }
 
     const issueDate = issue.publishedAt || issue.createdAt || undefined;
-    const lang = issue.payload?.lang === 'ru' ? 'ru' : 'en';
+    const lang =
+      issue.payload?.lang === 'ru' || issue.lang === 'ru' ? 'ru' : 'en';
     const period = issue.payload?.period;
     const ogImage = getIssueOgImage(issue.payload);
 
@@ -282,6 +289,20 @@ export default async function LetterPage({ params }: PageProps) {
         : {}),
     };
 
+    const currentIssue: PublicFlowIssue = {
+      id: String(issue.id),
+      title: issue.title || 'Flow',
+      slug,
+      lang,
+      number: typeof issue.number === 'number' ? issue.number : null,
+      htmlWeb: html,
+      payload: issue.payload && typeof issue.payload === 'object' ? issue.payload : null,
+      publishedAt: issue.publishedAt || null,
+      createdAt: issue.createdAt || null,
+    };
+    const catalogue = await listPublicFlowIssues(lang);
+    const { previous, next } = findAdjacentFlowIssues(catalogue, currentIssue);
+
     return (
       <>
         <script
@@ -298,6 +319,26 @@ export default async function LetterPage({ params }: PageProps) {
           title={issue.title}
           number={typeof issue.number === 'number' ? issue.number : null}
           indexHref={lang === 'ru' ? '/flow-issues' : '/en/flow-issues'}
+          previousIssue={
+            previous
+              ? {
+                  href: `${lang === 'ru' ? '/flow-issues' : '/en/flow-issues'}/${encodeURIComponent(previous.slug)}`,
+                  title: issuePageTitle(previous),
+                  lang: previous.lang,
+                  number: previous.number,
+                }
+              : null
+          }
+          nextIssue={
+            next
+              ? {
+                  href: `${lang === 'ru' ? '/flow-issues' : '/en/flow-issues'}/${encodeURIComponent(next.slug)}`,
+                  title: issuePageTitle(next),
+                  lang: next.lang,
+                  number: next.number,
+                }
+              : null
+          }
         />
       </>
     );

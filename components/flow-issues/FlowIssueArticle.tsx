@@ -2,6 +2,13 @@ import { renderIssueWeb } from '@/lib/flow-issue/render';
 import { buildIssueTitle } from '@/lib/flow-issue/title';
 import type { IssueLang, IssuePayload } from '@/lib/flow-issue/types';
 
+export type FlowIssueNavItem = {
+  href: string;
+  title: string;
+  lang?: IssueLang;
+  number?: number | null;
+};
+
 type FlowIssueArticleProps = {
   htmlWeb: string;
   lang: IssueLang;
@@ -13,6 +20,10 @@ type FlowIssueArticleProps = {
   /** Archive route for the language version, e.g. /flow-issues. */
   indexHref?: string;
   indexLabel?: string;
+  /** Older issue in the same language edition. */
+  previousIssue?: FlowIssueNavItem | null;
+  /** Newer issue in the same language edition. */
+  nextIssue?: FlowIssueNavItem | null;
 };
 
 function resolveHtml(
@@ -62,6 +73,8 @@ export default function FlowIssueArticle({
   number,
   indexHref = '/flow-issues',
   indexLabel,
+  previousIssue = null,
+  nextIssue = null,
 }: FlowIssueArticleProps) {
   const renderedHtml = resolveHtml(htmlWeb, payload, title, slug, number);
   const body = getIssueBody(renderedHtml);
@@ -126,6 +139,53 @@ export default function FlowIssueArticle({
         </a>
       </div>
       <div dangerouslySetInnerHTML={{ __html: body }} />
+
+      {(previousIssue || nextIssue) && (
+        <nav
+          aria-label={lang === 'ru' ? 'Навигация по выпускам' : 'Issue navigation'}
+          className="mx-auto grid max-w-[1440px] gap-4 px-[clamp(18px,3vw,44px)] py-10 sm:grid-cols-2"
+        >
+          {previousIssue ? (
+            <a
+              href={previousIssue.href}
+              rel="prev"
+              className="group border-t border-[#DAD3CC] pt-4 text-left"
+            >
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#8A8380]">
+                ← {lang === 'ru' ? 'Предыдущий выпуск' : 'Previous issue'}
+                {previousIssue.number ? ` №${previousIssue.number}` : ''}
+              </span>
+              <span
+                lang={previousIssue.lang || lang}
+                className="mt-2 block font-serif text-lg leading-snug text-[#1C1A1B] transition-colors group-hover:text-[#7A2233]"
+              >
+                {previousIssue.title}
+              </span>
+            </a>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+
+          {nextIssue && (
+            <a
+              href={nextIssue.href}
+              rel="next"
+              className="group border-t border-[#DAD3CC] pt-4 text-left sm:text-right"
+            >
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#8A8380]">
+                {lang === 'ru' ? 'Следующий выпуск' : 'Next issue'}
+                {nextIssue.number ? ` №${nextIssue.number}` : ''} →
+              </span>
+              <span
+                lang={nextIssue.lang || lang}
+                className="mt-2 block font-serif text-lg leading-snug text-[#1C1A1B] transition-colors group-hover:text-[#7A2233]"
+              >
+                {nextIssue.title}
+              </span>
+            </a>
+          )}
+        </nav>
+      )}
     </div>
   );
 }

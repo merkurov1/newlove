@@ -64,7 +64,7 @@ export async function loadAllJournalIssues(
       .select(JOURNAL_ISSUE_SELECT)
       .eq('published', true)
       .eq('kind', 'issue')
-      .order('publishedAt', { ascending: false })
+      .order('publishedAt', { ascending: false, nullsFirst: false })
       .order('id', { ascending: false });
 
     const supportsRange = typeof base?.range === 'function';
