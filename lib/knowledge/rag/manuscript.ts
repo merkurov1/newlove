@@ -709,7 +709,9 @@ export async function searchManuscriptSemantic(input: {
 
   try {
     const config = resolveUnframedEmbeddingConfig(env);
-    const client = input.embeddingClient ?? createOpenRouterEmbeddingClientFromEnv(env);
+    const client =
+      input.embeddingClient ??
+      createOpenRouterEmbeddingClientFromEnv(env, undefined, { surface: 'brain' });
     const search = input.search ?? createSupabaseBrainSearch(env);
     if (!search) return { available: false, code: 'database_unavailable', hits: [] };
 

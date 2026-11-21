@@ -60,7 +60,8 @@
     "media:verify": "node scripts/media-audit/verify.mjs",
     "media:audit": "node scripts/media-audit/problems.mjs",
     "media:repair:consistency": "node scripts/media-audit/repair-media-consistency.mjs --dry-run",
-    "audit:pierrot-intelligence": "node scripts/audit/pierrot-intelligence-audit.mjs"
+    "audit:pierrot-intelligence": "node scripts/audit/pierrot-intelligence-audit.mjs",
+    "ai:routing-report": "node scripts/ai/provider-routing-report.mjs"
   },
   "dependencies": {
     "@atproto/api": "^0.17.7",

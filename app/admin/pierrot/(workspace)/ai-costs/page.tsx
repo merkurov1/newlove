@@ -100,9 +100,24 @@ export default async function AiCostsPage({
             </p>
           </article>
           <article className="pw-dash-metric">
-            <p className="pw-dash-metric-label">Retries / fallbacks</p>
+            <p className="pw-dash-metric-label">Retries</p>
             <p className="pw-dash-number">{formatNumber(totals.retries)}</p>
-            <p className="pw-dash-metric-sub">attempt &gt; 1</p>
+            <p className="pw-dash-metric-sub">same provider, repeated attempt</p>
+          </article>
+          <article className="pw-dash-metric">
+            <p className="pw-dash-metric-label">Fallbacks</p>
+            <p className="pw-dash-number">{formatNumber(totals.fallbacks)}</p>
+            <p className="pw-dash-metric-sub">provider switch after a failure</p>
+          </article>
+          <article className="pw-dash-metric">
+            <p className="pw-dash-metric-label">Latency</p>
+            <p className="pw-dash-number">
+              {formatNumber(totals.averageLatencyMs)}
+              {totals.averageLatencyMs === null ? '' : ' ms'}
+            </p>
+            <p className="pw-dash-metric-sub">
+              average across {formatNumber(totals.latencySamples)} attempts
+            </p>
           </article>
           <article className="pw-dash-metric">
             <p className="pw-dash-metric-label">Tokens</p>
@@ -139,6 +154,8 @@ export default async function AiCostsPage({
                 <th className="py-2 pr-4">Calls</th>
                 <th className="py-2 pr-4">Ok / failed</th>
                 <th className="py-2 pr-4">Retries</th>
+                <th className="py-2 pr-4">Fallbacks</th>
+                <th className="py-2 pr-4">Avg latency</th>
                 <th className="py-2 pr-4">Tokens in / out</th>
                 <th className="py-2 pr-4">Unknown usage</th>
                 <th className="py-2 pr-4">Estimated</th>
@@ -148,7 +165,7 @@ export default async function AiCostsPage({
             <tbody>
               {report.rows.length === 0 ? (
                 <tr>
-                  <td className="py-6 text-[#746D66]" colSpan={9}>
+                  <td className="py-6 text-[#746D66]" colSpan={11}>
                     No provider attempts recorded in this period.
                   </td>
                 </tr>
@@ -169,6 +186,12 @@ export default async function AiCostsPage({
                       {formatNumber(row.successfulCalls)} / {formatNumber(row.failedCalls)}
                     </td>
                     <td className="py-3 pr-4">{formatNumber(row.retries)}</td>
+                    <td className="py-3 pr-4">{formatNumber(row.fallbacks)}</td>
+                    <td className="py-3 pr-4">
+                      {row.averageLatencyMs === null
+                        ? '—'
+                        : `${formatNumber(row.averageLatencyMs)} ms`}
+                    </td>
                     <td className="py-3 pr-4">
                       {formatNumber(row.inputTokens)} / {formatNumber(row.outputTokens)}
                     </td>

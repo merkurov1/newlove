@@ -53,7 +53,9 @@ export async function processBrainRunInline(input: {
     embeddingClient = input.embeddingClient;
   } else {
     try {
-      embeddingClient = createOpenRouterEmbeddingClientFromEnv(process.env);
+      embeddingClient = createOpenRouterEmbeddingClientFromEnv(process.env, undefined, {
+        surface: 'brain',
+      });
     } catch {
       return {
         ok: false,
