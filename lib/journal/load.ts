@@ -31,6 +31,43 @@ export type JournalIssueRow = {
   [key: string]: unknown;
 };
 
+/**
+ * The catalogue query stays deliberately small: archive rows only need
+ * metadata. The complete payload (including the canonical material list) is
+ * read for the single featured issue.
+ */
+export const JOURNAL_ISSUE_DETAIL_SELECT = 'id,payload,content';
+
+export type JournalIssueDetailRow = {
+  id?: string | number | null;
+  payload?: unknown;
+  content?: string | null;
+};
+
+/**
+ * Load the stored payload for one issue. The public page uses this to read
+ * `payload.items`; it never reads `html_web` or `html_email` snapshots.
+ */
+export async function loadJournalIssueDetail(
+  supabase: any,
+  issueId: string | number
+): Promise<JournalIssueDetailRow | null> {
+  if (issueId == null || issueId === '') return null;
+
+  const { data, error } = await supabase
+    .from('letters')
+    .select(JOURNAL_ISSUE_DETAIL_SELECT)
+    .eq('id', issueId)
+    .eq('kind', 'issue')
+    .eq('status', 'published')
+    .eq('published', true)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return data && typeof data === 'object' ? (data as JournalIssueDetailRow) : null;
+}
+
 export type LoadJournalIssuesOptions = {
   pageSize?: number;
 };

@@ -90,13 +90,12 @@ export function selectJournalIssues<T extends JournalIssueLike>(
   return { featured, archive };
 }
 
-function samePeriod(
-  left: JournalIssueLike,
-  right: JournalIssueLike
-): boolean {
-  if (!left.periodStart || !left.periodEnd || !right.periodStart || !right.periodEnd) {
-    return false;
-  }
+function hasPeriod(issue: JournalIssueLike): boolean {
+  return Boolean(issue.periodStart && issue.periodEnd);
+}
+
+function samePeriod(left: JournalIssueLike, right: JournalIssueLike): boolean {
+  if (!hasPeriod(left) || !hasPeriod(right)) return false;
 
   return (
     timestamp(left.periodStart) === timestamp(right.periodStart) &&
@@ -104,14 +103,23 @@ function samePeriod(
   );
 }
 
+function issueNumber(issue: JournalIssueLike): number | null {
+  return typeof issue.number === 'number' && Number.isFinite(issue.number)
+    ? issue.number
+    : null;
+}
+
 /**
  * Find the edition of the same issue in another language.
  *
- * Published issues carry a per-language `number`; the same number identifies
- * the same edition of the journal in RU and EN. When number is unavailable we
- * only accept an exact period match, because a guessed link would take the
- * reader to an unrelated issue. If neither signal matches, the caller must not
- * render a language link at all.
+ * RU and EN editions are numbered independently (the production catalogue has
+ * EN issue 17 next to RU issue 25 for the same week), so a matching number
+ * alone is *not* a reliable pair. The stable identifier is the issue period:
+ * both editions of one weekly issue share an exact start/end. A number can
+ * only break a tie between several period matches.
+ *
+ * When the period is unavailable on either side we refuse to guess. A missing
+ * language link is honest; a link to an unrelated issue is not.
  */
 export function findIssueCounterpart<T extends JournalIssueLike>(
   issue: T | null | undefined,
@@ -128,17 +136,18 @@ export function findIssueCounterpart<T extends JournalIssueLike>(
 
   if (candidates.length === 0) return null;
 
-  const issueNumber =
-    typeof issue.number === 'number' && Number.isFinite(issue.number) ? issue.number : null;
+  if (hasPeriod(issue)) {
+    const byPeriod = candidates.filter((candidate) => samePeriod(issue, candidate));
+    if (byPeriod.length === 0) return null;
 
-  if (issueNumber != null) {
-    const byNumber = candidates.find(
-      (candidate) =>
-        typeof candidate.number === 'number' && candidate.number === issueNumber
-    );
+    const number = issueNumber(issue);
+    if (number != null) {
+      const byNumber = byPeriod.find((candidate) => issueNumber(candidate) === number);
+      if (byNumber) return byNumber;
+    }
 
-    if (byNumber) return byNumber;
+    return byPeriod[0];
   }
 
-  return candidates.find((candidate) => samePeriod(issue, candidate)) ?? null;
+  return null;
 }

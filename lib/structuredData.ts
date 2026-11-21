@@ -208,6 +208,36 @@ export function collectionPageJsonLd(input: {
   });
 }
 
+/**
+ * Standalone ItemList for the materials of the current issue. The page keeps
+ * its CollectionPage node for the issue catalogue and uses this node for the
+ * issue contents, so a reader/search engine can see both levels.
+ */
+export function itemListJsonLd(input: {
+  path: string;
+  name: string;
+  items: { name: string; url: string }[];
+  inLanguage?: string;
+}) {
+  const url = absoluteUrl(input.path);
+
+  return compact({
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    '@id': `${url}#issue-materials`,
+    name: input.name,
+    url,
+    numberOfItems: input.items.length,
+    inLanguage: input.inLanguage || SITE_LANGUAGE,
+    itemListElement: input.items.map((item, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: item.name,
+      url: /^https?:\/\//i.test(item.url) ? item.url : absoluteUrl(item.url),
+    })),
+  });
+}
+
 export type ArticleSchemaType = 'Article' | 'BlogPosting' | 'NewsArticle';
 
 export function articleJsonLd(input: {

@@ -85,29 +85,47 @@ describe('journal archive language independence', () => {
 });
 
 describe('journal issue language counterparts', () => {
-  it('links to the same issue number in the other language', () => {
-    expect(findIssueCounterpart(ru, [ru, en, olderEn, olderRu], 'en')?.id).toBe('en-1');
-    expect(findIssueCounterpart(en, [ru, en, olderEn, olderRu], 'ru')?.id).toBe('ru-1');
+  // RU and EN editions are numbered independently. The production catalogue
+  // has EN issue 17 next to RU issue 25 for the same week, while RU issue 17
+  // belongs to a different (older) issue. A same number alone is a false pair.
+  const enSameWeek = {
+    ...en,
+    id: 'en-26',
+    number: 18,
+    periodStart: ru.periodStart,
+    periodEnd: ru.periodEnd,
+  };
+
+  it('links editions that share an exact period, even when numbers differ', () => {
+    expect(
+      findIssueCounterpart(ru, [ru, enSameWeek, en, olderEn, olderRu], 'en')?.id
+    ).toBe('en-26');
+    expect(
+      findIssueCounterpart(enSameWeek, [ru, enSameWeek, en, olderEn, olderRu], 'ru')?.id
+    ).toBe('ru-1');
   });
 
-  it('does not invent a counterpart when that issue number is absent', () => {
-    expect(findIssueCounterpart(ru, [ru, olderEn], 'en')).toBeNull();
+  it('never links by number alone when the periods differ', () => {
+    expect(findIssueCounterpart(ru, [ru, en, olderEn, olderRu], 'en')).toBeNull();
+    expect(findIssueCounterpart(en, [ru, en, olderEn, olderRu], 'ru')).toBeNull();
   });
 
-  it('uses an exact period match only when issue numbers are unavailable', () => {
-    const current = { ...ru, number: null };
-    const samePeriod = {
+  it('does not invent a counterpart when the period is absent', () => {
+    const current = { ...ru, periodStart: null, periodEnd: null };
+
+    expect(findIssueCounterpart(current, [current, enSameWeek], 'en')).toBeNull();
+  });
+
+  it('uses the period as the reliable key, not the number', () => {
+    const wrongNumber = {
       ...en,
-      number: null,
-      periodStart: current.periodStart,
-      periodEnd: current.periodEnd,
+      id: 'en-wrong-number',
+      number: 9,
+      periodStart: ru.periodStart,
+      periodEnd: ru.periodEnd,
     };
-    const differentPeriod = { ...olderEn, number: null };
 
-    expect(findIssueCounterpart(current, [current, samePeriod, differentPeriod], 'en')?.id).toBe(
-      'en-1'
-    );
-    expect(findIssueCounterpart(current, [current, differentPeriod], 'en')).toBeNull();
+    expect(findIssueCounterpart(ru, [ru, wrongNumber, en], 'en')?.id).toBe('en-wrong-number');
   });
 
   it('never links an issue to its own language', () => {

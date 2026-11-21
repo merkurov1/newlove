@@ -72,4 +72,53 @@ describe('Flow issue archive filters', () => {
     expect(screen.getByLabelText('Язык')).toBeInTheDocument();
     expect(screen.getByText('Все годы')).toBeInTheDocument();
   });
+
+  it('paginates the complete catalogue and never drops filtered rows', () => {
+    const many = Array.from({ length: 23 }, (_, index) =>
+      issue(
+        `issue-${index}`,
+        index % 2 === 0 ? 'ru' : 'en',
+        index + 1,
+        new Date(Date.UTC(2026, 10, 21 - index)).toISOString()
+      )
+    );
+
+    const { container } = render(
+      <FlowIssuesArchive
+        issues={many}
+        lang="en"
+        hrefFor={(item) => `/en/flow-issues/${item.slug}`}
+        alternateHref="/flow-issues"
+        alternateLabel="Русский"
+      />
+    );
+
+    expect(container.querySelectorAll('ol li')).toHaveLength(10);
+    expect(screen.getByText(/Page 1 \/ 3/)).toBeInTheDocument();
+    expect(screen.getByText(/Showing 1–10 \/ 23/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }));
+
+    expect(container.querySelectorAll('ol li')).toHaveLength(10);
+    expect(screen.getByText(/Page 2 \/ 3/)).toBeInTheDocument();
+    expect(screen.getByText(/Showing 11–20 \/ 23/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }));
+
+    expect(container.querySelectorAll('ol li')).toHaveLength(3);
+    expect(screen.getByText(/Page 3 \/ 3/)).toBeInTheDocument();
+    expect(screen.getByText(/Showing 21–23 \/ 23/)).toBeInTheDocument();
+
+    // Filtering the whole catalogue returns to page one and keeps every
+    // matching issue available through the same pagination.
+    fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'ru' } });
+
+    expect(screen.getByText(/Page 1 \/ 2/)).toBeInTheDocument();
+    expect(screen.getByText(/Showing 1–10 \/ 12/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }));
+
+    expect(container.querySelectorAll('ol li')).toHaveLength(2);
+    expect(screen.getByText(/Showing 11–12 \/ 12/)).toBeInTheDocument();
+  });
 });
