@@ -1,14 +1,25 @@
 import { headers } from 'next/headers';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { PageEvent } from '@/components/analytics/PageEvent';
-import { breadcrumbJsonLd, collectionPageJsonLd } from '@/lib/structuredData';
+import {
+  breadcrumbJsonLd,
+  collectionPageJsonLd,
+  itemListJsonLd,
+} from '@/lib/structuredData';
 import { createClient } from '@/lib/supabase/server';
 import SubscribeFormClient from '@/components/journal/SubscribeFormClient';
 import FrontPage, { type FrontIssue, type FlowEntry } from '@/components/journal/FrontPage';
 import { JOURNAL_COPY, journalIssueHref, type JournalLanguage } from '@/lib/i18n/journal';
 import { selectJournalIssues } from '@/lib/journal/archive';
-import { loadAllJournalIssues, type JournalIssueRow } from '@/lib/journal/load';
+import {
+  loadAllJournalIssues,
+  loadJournalIssueDetail,
+  type JournalIssueRow,
+} from '@/lib/journal/load';
+import { collectIssueMaterials, materialHref } from '@/lib/journal/issue';
+import { extractPreview } from '@/lib/journal/preview';
 import { localizedPath } from '@/lib/i18n/config';
+import type { IssuePayload } from '@/lib/flow-issue/types';
 import HtmlLanguage from '@/components/i18n/HtmlLanguage';
 
 const isEn = (value: unknown) =>
@@ -31,27 +42,35 @@ const TYPE_NAMES: Record<'ru' | 'en', [string, string][]> = {
   ru: [
     ['note', 'Заметки'],
     ['link', 'Ссылки'],
+    ['article', 'Статьи'],
     ['video', 'Видео'],
     ['photo', 'Фото'],
   ],
   en: [
     ['note', 'Notes'],
     ['link', 'Links'],
-    ['video', 'Videos'],
+    ['article', 'Articles'],
+    ['video', 'Video'],
     ['photo', 'Photos'],
   ],
 };
 
-function summarize(byType: any, lang: 'ru' | 'en') {
-  let map = byType;
-  if (typeof map === 'string') {
+function parseTypeCounts(value: unknown): Record<string, number> | null {
+  let parsed = value;
+  if (typeof parsed === 'string') {
     try {
-      map = JSON.parse(map);
+      parsed = JSON.parse(parsed);
     } catch {
-      map = null;
+      parsed = null;
     }
   }
-  if (!map || typeof map !== 'object') return '';
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  return parsed as Record<string, number>;
+}
+
+function summarize(byType: unknown, lang: 'ru' | 'en') {
+  const map = parseTypeCounts(byType);
+  if (!map) return '';
   return TYPE_NAMES[lang]
     .filter(([key]) => Number(map[key]) > 0)
     .map(([key, label]) => `${label} ${map[key]}`)
@@ -60,6 +79,7 @@ function summarize(byType: any, lang: 'ru' | 'en') {
 
 function toIssue(row: any): FrontIssue {
   const lang = isEn(row.lang) ? 'en' : 'ru';
+  const lead = clean(row.leadBody);
 
   return {
     id: String(row.id),
@@ -67,13 +87,15 @@ function toIssue(row: any): FrontIssue {
     lang,
     number: row.number ?? null,
     headline: clean(row.leadTitle) || String(row.title || 'Flow'),
-    excerpt: cut(clean(row.leadBody), 200),
+    excerpt: cut(lead, 220),
+    lead: cut(lead, 1400),
     summary: summarize(row.byType, lang),
     published: row.itemCount != null ? Number(row.itemCount) : null,
     publishedAt: row.publishedAt || row.sentAt || row.createdAt || null,
     createdAt: row.createdAt || null,
     periodStart: row.periodStart || null,
     periodEnd: row.periodEnd || null,
+    typeCounts: parseTypeCounts(row.byType) || undefined,
   };
 }
 
@@ -89,6 +111,22 @@ function toFlow(row: any): FlowEntry {
     text: cut(text, 110),
     at: row.published_at || null,
   };
+}
+
+function normalizePayload(value: unknown): IssuePayload | null {
+  let payload = value;
+
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      return null;
+    }
+  }
+
+  return payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? (payload as IssuePayload)
+    : null;
 }
 
 // The Flow preview uses the same public API as /flow so visibility and
@@ -127,8 +165,6 @@ export default async function JournalPageView({ lang }: { lang: JournalLanguage 
   const copy = JOURNAL_COPY[lang];
   const supabase: any = await createClient();
 
-  let issues: FrontIssue[] = [];
-
   // Read the whole catalogue in explicit pages. Interface language is not a
   // query filter, so the English journal keeps Russian editions (and their
   // original titles) in the archive.
@@ -140,22 +176,64 @@ export default async function JournalPageView({ lang }: { lang: JournalLanguage 
     loadFlow(),
   ]);
 
-  issues = issueRows.map(toIssue);
+  const issues = issueRows.map(toIssue);
 
   // One global current issue for both /journal and /ru/journal. The interface
   // language changes only the page chrome and the counterpart link, never
   // which issue is considered current.
-  const { featured, archive } = selectJournalIssues(issues, lang);
+  const selection = selectJournalIssues(issues, lang);
+  let featured = selection.featured;
+  const archive = selection.archive;
+
+  // The catalogue only carries metadata. The featured issue additionally
+  // loads its stored payload so the page can show the real materials rather
+  // than a type summary.
+  let payload: IssuePayload | null = null;
+
+  if (featured?.id) {
+    try {
+      const detail = await loadJournalIssueDetail(supabase, featured.id);
+      payload = normalizePayload(detail?.payload);
+
+      if (payload) {
+        const payloadLang =
+          payload.lang === 'ru' || payload.lang === 'en' ? payload.lang : featured.lang;
+        const lead = clean(payload.lead?.body) || featured.lead || '';
+        const contentLead = detail?.content
+          ? extractPreview(detail.content, payload, 1400)
+          : '';
+
+        featured = {
+          ...featured,
+          lang: payloadLang,
+          lead: lead || contentLead || featured.lead,
+          editorialSummary: clean(payload.summary) || undefined,
+        };
+      }
+    } catch (error) {
+      console.error('[Journal] Issue contents:', error);
+    }
+  }
+
+  const materials = collectIssueMaterials(payload);
 
   // The recent stream is part of the same record. Interface language changes
   // the chrome, not which materials exist: keep both languages and let the
   // row label show when a material is in the other language.
-  const flow = allFlow.slice(0, 5);
+  const flow = allFlow.slice(0, 4);
 
   const journalItems = issues.map((issue) => ({
     name: issue.headline,
     url: journalIssueHref(issue.lang, issue.slug),
   }));
+
+  const materialItems = materials
+    .map((material) => {
+      const href = materialHref(material.url);
+      if (!href || !material.title) return null;
+      return { name: material.title, url: href };
+    })
+    .filter((item): item is { name: string; url: string } => item !== null);
 
   return (
     <div
@@ -173,6 +251,16 @@ export default async function JournalPageView({ lang }: { lang: JournalLanguage 
           inLanguage: lang,
         })}
       />
+      {materialItems.length > 0 && (
+        <JsonLd
+          data={itemListJsonLd({
+            path: localizedPath('journal', lang),
+            name: copy.inside.title,
+            items: materialItems,
+            inLanguage: featured?.lang || lang,
+          })}
+        />
+      )}
       <JsonLd
         data={breadcrumbJsonLd([
           { name: copy.meta.breadcrumbs.home, path: '/' },
@@ -182,6 +270,7 @@ export default async function JournalPageView({ lang }: { lang: JournalLanguage 
       <FrontPage
         lang={lang}
         featured={featured}
+        materials={materials}
         flow={flow}
         archive={archive}
         subscribe={

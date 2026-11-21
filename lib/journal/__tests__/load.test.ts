@@ -1,4 +1,8 @@
-import { loadAllJournalIssues, type JournalIssueRow } from '../load';
+import {
+  loadAllJournalIssues,
+  loadJournalIssueDetail,
+  type JournalIssueRow,
+} from '../load';
 
 type FakeResult = { data: JournalIssueRow[]; error: null };
 
@@ -74,5 +78,49 @@ describe('journal issue catalogue loader', () => {
     const loaded = await loadAllJournalIssues(fake.supabase, { pageSize: 3 });
 
     expect(loaded.map((row) => row.id)).toEqual(['3', '2', '1']);
+  });
+});
+
+describe('journal issue detail loader', () => {
+  it('reads the stored payload for exactly one published issue', async () => {
+    const filters: Array<[string, unknown]> = [];
+    const row = {
+      id: '42',
+      payload: { items: [{ id: 'note-1', type: 'note', title: 'A note' }] },
+      content: '<p>legacy content</p>',
+    };
+
+    const chain: any = {
+      select: (columns: string) => {
+        expect(columns).toContain('payload');
+        expect(columns).not.toContain('html_web');
+        expect(columns).not.toContain('html_email');
+        return chain;
+      },
+      eq: (key: string, value: unknown) => {
+        filters.push([key, value]);
+        return chain;
+      },
+      maybeSingle: () => Promise.resolve({ data: row, error: null }),
+    };
+
+    const supabase = { from: () => chain };
+    const detail = await loadJournalIssueDetail(supabase, '42');
+
+    expect(detail?.payload).toEqual(row.payload);
+    expect(filters).toContainEqual(['id', '42']);
+    expect(filters).toContainEqual(['kind', 'issue']);
+    expect(filters).toContainEqual(['status', 'published']);
+    expect(filters).toContainEqual(['published', true]);
+  });
+
+  it('returns null for an empty id without querying', async () => {
+    const supabase = {
+      from: () => {
+        throw new Error('must not query');
+      },
+    };
+
+    await expect(loadJournalIssueDetail(supabase, '')).resolves.toBeNull();
   });
 });
