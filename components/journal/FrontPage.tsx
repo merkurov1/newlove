@@ -1,6 +1,13 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import SectionLanguageSwitcher from '@/components/i18n/SectionLanguageSwitcher';
+import JournalArchiveList from './JournalArchiveList';
+import type { FlowEntry, FrontIssue } from './types';
+import {
+  findIssueCounterpart,
+  sortJournalIssues,
+} from '@/lib/journal/archive';
+import { dateLong, items, period, stamp } from '@/lib/journal/format';
 import {
   JOURNAL_COPY,
   journalArchiveHref,
@@ -8,30 +15,7 @@ import {
   type JournalLanguage,
 } from '@/lib/i18n/journal';
 
-export type Lang = 'ru' | 'en';
-
-export interface FrontIssue {
-  id: string;
-  slug: string;
-  lang: Lang;
-  number: number | null;
-  headline: string;
-  excerpt: string;
-  summary: string;
-  published: number | null;
-  publishedAt: string | null;
-  periodStart: string | null;
-  periodEnd: string | null;
-}
-
-export interface FlowEntry {
-  id: string;
-  slug: string | null;
-  type: string;
-  lang: Lang;
-  text: string;
-  at: string | null;
-}
+export type { FlowEntry, FrontIssue, Lang } from './types';
 
 interface Props {
   lang: JournalLanguage;
@@ -39,70 +23,6 @@ interface Props {
   flow: FlowEntry[];
   archive: FrontIssue[];
   subscribe: ReactNode;
-}
-
-const LOCALE: Record<Lang, string> = { ru: 'ru-RU', en: 'en-GB' };
-
-function dateLong(value: string | null, lang: Lang) {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat(LOCALE[lang], {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(d);
-}
-
-function period(start: string | null, end: string | null, lang: Lang) {
-  if (!start || !end) return '';
-  const a = new Date(start);
-  const b = new Date(end);
-  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return '';
-  try {
-    return new Intl.DateTimeFormat(LOCALE[lang], {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }).formatRange(a, b);
-  } catch {
-    return `${dateLong(start, lang)} — ${dateLong(end, lang)}`;
-  }
-}
-
-function stamp(value: string | null, lang: Lang) {
-  if (!value) return { day: '', time: '' };
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return { day: '', time: '' };
-  const day = new Intl.DateTimeFormat(LOCALE[lang], {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  })
-    .format(d)
-    .replace(/\./g, '');
-  const time = new Intl.DateTimeFormat(LOCALE[lang], {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'UTC',
-  }).format(d);
-  return { day, time };
-}
-
-function items(n: number, lang: Lang) {
-  if (lang === 'en') return `${n} ${n === 1 ? 'item' : 'items'}`;
-  const a = n % 10;
-  const b = n % 100;
-  const word =
-    a === 1 && b !== 11
-      ? 'материал'
-      : a >= 2 && a <= 4 && (b < 10 || b >= 20)
-        ? 'материала'
-        : 'материалов';
-  return `${n} ${word}`;
 }
 
 const kicker = 'font-mono text-[10px] uppercase tracking-[0.16em] text-neutral-500';
@@ -133,10 +53,12 @@ function SectionHead({
 
 function IssueLead({
   issue,
+  counterpart,
   uiLang,
   label,
 }: {
   issue: FrontIssue | null;
+  counterpart: FrontIssue | null;
   uiLang: JournalLanguage;
   label: string;
 }) {
@@ -174,7 +96,7 @@ function IssueLead({
 
         <h3
           lang={issue.lang}
-          className="mt-4 font-serif text-3xl font-normal leading-[1.1] tracking-tight text-neutral-900 transition-colors group-hover:text-[#7A2233] md:text-[2.6rem]"
+          className="mt-4 font-serif text-4xl font-normal leading-[1.05] tracking-tight text-neutral-900 transition-colors group-hover:text-[#7A2233] md:text-[3.4rem]"
         >
           {issue.headline}
         </h3>
@@ -197,12 +119,33 @@ function IssueLead({
           {copy.featured.read} →
         </span>
       </Link>
+
+      {counterpart && (
+        <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[9px] uppercase tracking-[0.14em] text-neutral-500">
+          <span>{copy.featured.otherEdition}</span>
+          <Link
+            href={journalIssueHref(counterpart.lang, counterpart.slug)}
+            hrefLang={counterpart.lang}
+            aria-label={`${copy.featured.otherEdition}: ${copy.languages[counterpart.lang]}`}
+            className="border-b border-neutral-400 pb-0.5 text-neutral-800 transition-colors hover:border-[#7A2233] hover:text-[#7A2233]"
+          >
+            {copy.languages[counterpart.lang]} →
+          </Link>
+        </div>
+      )}
     </article>
   );
 }
 
 export default function FrontPage({ lang, featured, flow, archive, subscribe }: Props) {
   const copy = JOURNAL_COPY[lang];
+  const catalogue = sortJournalIssues([
+    ...(featured ? [featured] : []),
+    ...archive,
+  ]);
+  const counterpart = featured
+    ? findIssueCounterpart(featured, catalogue, featured.lang === 'en' ? 'ru' : 'en')
+    : null;
 
   return (
     <div lang={lang} className="mx-auto max-w-6xl px-5 pb-24 pt-16 sm:px-8 md:pt-24">
@@ -245,7 +188,12 @@ export default function FrontPage({ lang, featured, flow, archive, subscribe }: 
         aria-label={copy.featured.ariaLabel}
         className="border-b border-neutral-300"
       >
-        <IssueLead issue={featured} uiLang={lang} label={copy.featured.currentEdition} />
+        <IssueLead
+          issue={featured}
+          counterpart={counterpart}
+          uiLang={lang}
+          label={copy.featured.currentEdition}
+        />
       </section>
 
       <div className="grid gap-x-14 gap-y-14 py-12 lg:grid-cols-12">
@@ -258,7 +206,7 @@ export default function FrontPage({ lang, featured, flow, archive, subscribe }: 
               {flow.map((entry) => {
                 const when = stamp(entry.at, lang);
                 const label = copy.flow.types[entry.type] || copy.flow.types.mixed;
-                const otherLanguage = entry.lang !== lang ? copy.languages[entry.lang] : '';
+                const entryLanguage = copy.languages[entry.lang];
                 const href = entry.slug ? `/flow/${encodeURIComponent(entry.slug)}` : '/flow';
                 return (
                   <li key={entry.id} className="border-t border-neutral-300">
@@ -270,8 +218,7 @@ export default function FrontPage({ lang, featured, flow, archive, subscribe }: 
                       </span>
                       <span>
                         <span className={kicker}>
-                          {label}
-                          {otherLanguage ? ` · ${otherLanguage}` : ''}
+                          {label} · {entryLanguage}
                         </span>
                         <span
                           lang={entry.lang}
@@ -294,40 +241,7 @@ export default function FrontPage({ lang, featured, flow, archive, subscribe }: 
             href={journalArchiveHref(lang)}
             hrefLabel={copy.archive.cta}
           />
-          {archive.length === 0 ? (
-            <p className="py-6 font-serif italic text-neutral-400">{copy.archive.empty}</p>
-          ) : (
-            <ul>
-              {archive.map((issue) => (
-                <li key={issue.id} className="border-t border-neutral-300">
-                  <Link
-                    href={journalIssueHref(issue.lang, issue.slug)}
-                    className="group grid grid-cols-[1fr_auto] items-baseline gap-4 py-4"
-                  >
-                    <span>
-                      <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-500">
-                        {dateLong(issue.publishedAt, lang)}
-                      </span>
-                      <span
-                        lang={issue.lang}
-                        className="mt-1 block font-serif text-xl leading-snug text-neutral-900 transition-colors group-hover:text-[#7A2233]"
-                      >
-                        {issue.headline}
-                      </span>
-                      <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.12em] text-neutral-500">
-                        {copy.archive.issue}
-                        {issue.number ? ` №${issue.number}` : ''}
-                        {issue.published != null ? ` · ${items(issue.published, lang)}` : ''}
-                      </span>
-                    </span>
-                    <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
-                      {copy.languages[issue.lang]}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+          <JournalArchiveList issues={archive} lang={lang} />
         </section>
       </div>
 

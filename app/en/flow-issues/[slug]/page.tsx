@@ -1,7 +1,13 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import FlowIssueDetail from '@/components/flow-issues/FlowIssueDetail';
-import { issueDescription, issuePageTitle, loadPublicFlowIssue } from '@/lib/flow-issue/public';
+import {
+  findAdjacentFlowIssues,
+  issueDescription,
+  issuePageTitle,
+  listPublicFlowIssues,
+  loadPublicFlowIssue,
+} from '@/lib/flow-issue/public';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
 export const dynamic = 'force-dynamic';
@@ -52,11 +58,16 @@ export default async function EnFlowIssuePage({ params }: PageProps) {
 
   if (!issue || (!issue.htmlWeb && !issue.payload)) notFound();
 
+  const catalogue = await listPublicFlowIssues(issue.lang);
+  const { previous, next } = findAdjacentFlowIssues(catalogue, issue);
+
   return (
     <FlowIssueDetail
       issue={issue}
       canonical={`${SITE}/en/flow-issues/${encodeURIComponent(issue.slug)}`}
       indexHref="/en/flow-issues"
+      previousIssue={previous}
+      nextIssue={next}
     />
   );
 }

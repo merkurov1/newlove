@@ -71,6 +71,7 @@ function toIssue(row: any): FrontIssue {
     summary: summarize(row.byType, lang),
     published: row.itemCount != null ? Number(row.itemCount) : null,
     publishedAt: row.publishedAt || row.sentAt || row.createdAt || null,
+    createdAt: row.createdAt || null,
     periodStart: row.periodStart || null,
     periodEnd: row.periodEnd || null,
   };
@@ -141,9 +142,9 @@ export default async function JournalPageView({ lang }: { lang: JournalLanguage 
 
   issues = issueRows.map(toIssue);
 
-  // The interface language and the archive contents are separate concerns.
-  // Prefer the latest edition in the current language, but never hide the
-  // other language from the catalogue: every issue keeps its own lang.
+  // One global current issue for both /journal and /ru/journal. The interface
+  // language changes only the page chrome and the counterpart link, never
+  // which issue is considered current.
   const { featured, archive } = selectJournalIssues(issues, lang);
 
   // The recent stream is part of the same record. Interface language changes

@@ -43,6 +43,15 @@ export type JournalCopy = {
     cta: string;
     empty: string;
     issue: string;
+    filters: {
+      ariaLabel: string;
+      year: string;
+      language: string;
+      allYears: string;
+      allLanguages: string;
+      reset: string;
+      noMatches: string;
+    };
   };
   subscribe: {
     kicker: string;
@@ -102,6 +111,15 @@ export const JOURNAL_COPY: Record<JournalLanguage, JournalCopy> = {
       cta: 'All Flow issues',
       empty: 'The issue archive is empty for now.',
       issue: 'Issue',
+      filters: {
+        ariaLabel: 'Filter the issue archive',
+        year: 'Year',
+        language: 'Language',
+        allYears: 'All years',
+        allLanguages: 'All languages',
+        reset: 'Reset filters',
+        noMatches: 'No issues match these filters.',
+      },
     },
     subscribe: {
       kicker: 'Flow · Weekly',
@@ -159,6 +177,15 @@ export const JOURNAL_COPY: Record<JournalLanguage, JournalCopy> = {
       cta: 'Все выпуски Flow',
       empty: 'Архив выпусков пока пуст.',
       issue: 'Выпуск',
+      filters: {
+        ariaLabel: 'Фильтр архива выпусков',
+        year: 'Год',
+        language: 'Язык',
+        allYears: 'Все годы',
+        allLanguages: 'Все языки',
+        reset: 'Сбросить фильтры',
+        noMatches: 'По этим фильтрам выпусков нет.',
+      },
     },
     subscribe: {
       kicker: 'Flow · Еженедельно',

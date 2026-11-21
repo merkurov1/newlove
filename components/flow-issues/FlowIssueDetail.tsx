@@ -7,9 +7,17 @@ type FlowIssueDetailProps = {
   issue: PublicFlowIssue;
   canonical: string;
   indexHref: string;
+  previousIssue?: PublicFlowIssue | null;
+  nextIssue?: PublicFlowIssue | null;
 };
 
-export default function FlowIssueDetail({ issue, canonical, indexHref }: FlowIssueDetailProps) {
+export default function FlowIssueDetail({
+  issue,
+  canonical,
+  indexHref,
+  previousIssue = null,
+  nextIssue = null,
+}: FlowIssueDetailProps) {
   const period = issue.payload?.period;
 
   const articleSchema = {
@@ -51,6 +59,26 @@ export default function FlowIssueDetail({ issue, canonical, indexHref }: FlowIss
         title={issue.title}
         number={issue.number}
         indexHref={indexHref}
+        previousIssue={
+          previousIssue
+            ? {
+                href: `${indexHref}/${encodeURIComponent(previousIssue.slug)}`,
+                title: issuePageTitle(previousIssue),
+                lang: previousIssue.lang,
+                number: previousIssue.number,
+              }
+            : null
+        }
+        nextIssue={
+          nextIssue
+            ? {
+                href: `${indexHref}/${encodeURIComponent(nextIssue.slug)}`,
+                title: issuePageTitle(nextIssue),
+                lang: nextIssue.lang,
+                number: nextIssue.number,
+              }
+            : null
+        }
       />
     </>
   );

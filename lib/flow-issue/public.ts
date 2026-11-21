@@ -124,6 +124,8 @@ export async function listPublicFlowIssues(_lang?: IssueLang | 'all'): Promise<P
   }
 }
 
+export { findAdjacentFlowIssues } from './navigation';
+
 export function issuePageTitle(issue: PublicFlowIssue): string {
   if (issue.payload) {
     const title = buildIssueTitle(issue.payload);
