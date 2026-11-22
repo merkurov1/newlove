@@ -231,7 +231,7 @@ export const ADVISING_COPY: Record<AdvisingLanguage, AdvisingCopy> = {
         {
           number: '03',
           title: 'Бескомпромиссное личное доверие и конфиденциальность',
-          body: 'Консультирование в ситуациях высокой ставки держится на абсолютной личной порядочности. На доверии, при котором активы, чувствительный контекст и непубличная стратегия могут оставаться в моих руках без второго вопроса.',
+          body: 'Консультирование в ситуациях с высокой ставкой держится на абсолютной личной порядочности. На доверии, при котором активы, чувствительный контекст и непубличная стратегия могут оставаться в моих руках без колебаний.',
         },
       ],
     },
@@ -282,7 +282,7 @@ export const ADVISING_COPY: Record<AdvisingLanguage, AdvisingCopy> = {
       imageAlt: 'Anton Merkurov',
     },
     manifesto: {
-      lead: 'Die meisten Experten arbeiten in Silos: Wirtschaftsanwälte verstehen die feine Kunst nicht, Galeriedirektoren fürchten die KI-Regulierung, und Wagniskapitalfonds verlieren sich im Hype.',
+      lead: 'Die meisten Experten arbeiten in Silos: Wirtschaftsanwälte verstehen die bildende Kunst nicht, Galeriedirektoren fürchten die KI-Regulierung, und Wagniskapitalfonds verlieren sich im Hype.',
       body: 'Ich arbeite an der Schnittstelle. Ich bringe den Überblick in komplexe, unkonventionelle Herausforderungen, in denen Recht, aufkommende Technologien, Medien und kulturelles Kapital aufeinandertreffen.',
     },
     capability: {
@@ -555,7 +555,7 @@ export const ADVISING_COPY: Record<AdvisingLanguage, AdvisingCopy> = {
         },
         {
           number: '03',
-          title: 'ثقة شخصية وتحفّظ لا يساومان',
+          title: 'ثقة شخصية وتحفّظ لا يقبلان المساومة',
           body: 'تقوم الاستشارة في المواقف عالية المخاطر على نزاهة شخصية مطلقة. ثقة تسمح بترك الأصول والسياق الحساس والاستراتيجية غير المعلنة بين يديّ دون تردد.',
         },
       ],
@@ -564,7 +564,7 @@ export const ADVISING_COPY: Record<AdvisingLanguage, AdvisingCopy> = {
       title: 'صيغ التعاون',
       items: [
         {
-          kicker: 'اشتراك شهري',
+          kicker: 'عقد استمراري',
           title: 'مجلس واستشارة',
           body: 'حضور استراتيجي مستمر، ورصد للآفاق، ومراجعات دورية للصناديق والمختبرات والمكاتب الخاصة.',
         },

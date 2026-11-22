@@ -344,6 +344,51 @@ button:focus {
   }
 }
 
+/* --- Light Gallery & Daylight Glass ---
+ * Scoped surface tokens for the public editorial routes (home, lobby, media,
+ * advising, isakeyforall, all). The class is applied by the page shells only;
+ * no global body or admin styles are changed.
+ */
+:root {
+  --lg-canvas: #f5f2eb;
+  --lg-ink: #1d1b18;
+  --lg-line: rgba(29, 27, 24, 0.13);
+}
+
+.light-gallery {
+  background-color: var(--lg-canvas);
+  color: var(--lg-ink);
+}
+
+.light-gallery ::selection {
+  background: var(--lg-ink);
+  color: var(--lg-canvas);
+}
+
+.light-gallery .lg-display {
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .light-gallery *,
+  .light-gallery *::before,
+  .light-gallery *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Keep the shared chrome visually continuous with the scoped canvas. */
+body:has(.light-gallery) {
+  background-color: var(--lg-canvas) !important;
+}
+
+body:has(.light-gallery) .site-footer {
+  border-top-color: var(--lg-line);
+  background-color: var(--lg-canvas);
+}
+
 /* --- Site background --- */
 
 :root {

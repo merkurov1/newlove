@@ -124,7 +124,7 @@ export const ISAKEYFORALL_COPY: Record<IsakeyforallLanguage, IsakeyforallCopy> =
       values: [
         {
           title: 'Всё начинается с символа.',
-          body: 'Сердце — универсальный символ любви, понятный каждому, преодолевающий социальные барьеры и объединяющий нас поверх границ.',
+          body: 'Сердце — универсальный символ любви, понятный каждому, преодолевающий социальные барьеры и объединяющий нас через границы.',
         },
         {
           title: 'Каждая работа уникальна',
@@ -135,13 +135,13 @@ export const ISAKEYFORALL_COPY: Record<IsakeyforallLanguage, IsakeyforallCopy> =
     secondQuote:
       '«Я более 20 лет работаю в медиа, развиваю новые медиа и продвигаю новые технологии. Но зачем всё это, если в этом нет любви?»',
     closing:
-      'Сегодня, продолжая работать с децентрализованными коммуникациями, Меркуров полностью принял возможность творить как художник — говоря миру, что любовь и человечность — самое важное в существовании.',
+      'Сегодня, продолжая работать с децентрализованными коммуникациями, Меркуров в полной мере воспользовался возможностью творить как художник — говоря миру, что любовь и человечность — самое важное в жизни.',
     featured: {
       label: 'Избранные работы',
       memoirBadge: 'Мемуары',
       memoirTitle: 'UNFRAMED — мемуары Антона Меркурова',
       memoirSubtitle:
-        'Нелинейное воспоминание об искусстве, изгнании и мелких насилиях современной жизни.',
+        'Нелинейное воспоминание об искусстве, изгнании и маленьких жестокостях современной жизни.',
       researchBadge: 'Исследование',
       researchTitle: 'Цифровое увядание: хроника добровольного подчинения.',
       researchSubtitle: 'Долгие исследования, эссе и архивные заметки Антона Меркурова.',
@@ -164,7 +164,7 @@ export const ISAKEYFORALL_COPY: Record<IsakeyforallLanguage, IsakeyforallCopy> =
       origin:
         'Anton Merkurov ist Medienexperte, Publizist, Künstler und Kunsthändler. Als Urenkel des monumentalen Bildhauers Sergey Merkurov wuchs er in Moskau in der späten Sowjetzeit und den 1990er-Jahren auf und lebte später zwischen London und Moskau.',
       career:
-        'Schon als Kind in die Kunstszene eingebunden, wählte Merkurov zunächst einen Weg in Technologie und neue Medien. Über zwei Jahrzehnte etablierte er sich als einer der profiliertesten Digitalberater und Internetexperten Russlands: Er gründete Ende der 1990er-Jahre erste IT-Unternehmen mit, arbeitete als Fotograf im Übergang von Film zu Digital, beriet Unternehmen, lehrte an Universitäten und setzte sich für regulatorische Veränderungen ein.',
+        'Schon als Kind in die Kunstszene eingebunden, wählte Merkurov zunächst einen Weg in Technologie und neue Medien. Über zwei Jahrzehnte etablierte er sich als einer der profiliertesten Digitalberater und Internetexperten Russlands: Er gründete Ende der 1990er-Jahre erste IT-Unternehmen mit, arbeitete als Fotograf im Übergang vom Film zur digitalen Fotografie, beriet Unternehmen, lehrte an Universitäten und setzte sich für regulatorische Veränderungen ein.',
       heritage:
         'Neben seiner Laufbahn in der Kommunikation beschäftigte sich Merkurov kontinuierlich mit dem kulturellen Erbe seiner Familie: Er entwickelte das Sergey-Merkurov-Museum in Gjumri, Armenien, veröffentlichte Familienbriefe und Memoiren und organisierte Ausstellungen mit Archivarbeiten, darunter ein NFT-Drop der historischen Lenin-Maske, die sein Urgroßvater geschaffen hatte.',
     },
@@ -189,13 +189,13 @@ export const ISAKEYFORALL_COPY: Record<IsakeyforallLanguage, IsakeyforallCopy> =
     secondQuote:
       '„Ich bin seit mehr als 20 Jahren in den Medien tätig, führe neue Medien und fördere neue Technologie. Aber wozu braucht man das alles, wenn man keine Liebe hat?“',
     closing:
-      'Heute, während er weiter mit dezentralen Kommunikationsformen arbeitet, hat Merkurov die Möglichkeit zu schaffen als Künstler voll angenommen – und sagt der Welt, dass Liebe und Menschlichkeit das Wichtigste sind, was es gibt.',
+      'Heute, während er weiter mit dezentralen Kommunikationsformen arbeitet, hat Merkurov die Möglichkeit, als Künstler zu schaffen, voll angenommen – und sagt der Welt, dass Liebe und Menschlichkeit das Wichtigste sind, was es gibt.',
     featured: {
       label: 'Ausgewählte Arbeiten',
       memoirBadge: 'Memoiren',
       memoirTitle: 'UNFRAMED — Memoiren von Anton Merkurov',
       memoirSubtitle:
-        'Eine nichtlineare Erinnerung an Kunst, Exil und die kleinen Gewalten des modernen Lebens.',
+        'Eine nichtlineare Erinnerung an Kunst, Exil und die kleinen Gewaltsamkeiten des modernen Lebens.',
       researchBadge: 'Forschung',
       researchTitle: 'The Digital Decay: Eine Chronik der freiwilligen Unterwerfung.',
       researchSubtitle: 'Langform-Forschung, Essays und Archivanmerkungen von Anton Merkurov.',

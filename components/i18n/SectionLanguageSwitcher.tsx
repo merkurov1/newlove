@@ -12,6 +12,14 @@ import {
 
 const LANGUAGE_CHOICE_KEY = 'merkurov.language-choice';
 
+const LANGUAGE_SWITCHER_LABEL: Record<Language, string> = {
+  en: 'Language selection',
+  ru: 'Выбор языка',
+  de: 'Sprachauswahl',
+  fr: 'Choix de la langue',
+  ar: 'اختيار اللغة',
+};
+
 function rememberLanguage(language: Language) {
   try {
     window.localStorage.setItem(LANGUAGE_CHOICE_KEY, language);
@@ -93,8 +101,8 @@ export default function SectionLanguageSwitcher({
       )}
 
       <nav
-        aria-label={currentLang === 'ru' ? 'Выбор языка' : 'Language selection'}
-        className="flex items-center gap-0.5 rounded-full border border-zinc-200/80 bg-zinc-100/90 p-0.5"
+        aria-label={LANGUAGE_SWITCHER_LABEL[currentLang]}
+        className="flex items-center gap-0.5 rounded-full border border-[#1D1B18]/12 bg-white/55 p-0.5 shadow-[0_12px_30px_rgba(58,46,30,0.06)] backdrop-blur-md"
       >
         {languages.map((language) => {
           const active = language === currentLang;
@@ -107,7 +115,9 @@ export default function SectionLanguageSwitcher({
               aria-label={`${LANGUAGE_META[language].englishName} (${LANGUAGE_META[language].label})`}
               onClick={() => rememberLanguage(language)}
               className={`rounded-full px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                active ? 'bg-zinc-900 text-white shadow-xs' : 'text-zinc-500 hover:text-zinc-900'
+                active
+                  ? 'bg-[#1D1B18] text-[#F5F2EB] shadow-xs'
+                  : 'text-[#6F6A60] hover:text-[#1D1B18]'
               }`}
             >
               {LANGUAGE_META[language].label}

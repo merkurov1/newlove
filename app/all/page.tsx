@@ -46,15 +46,24 @@ const rawProjects: Omit<Project, 'size' | 'weight'>[] = [
 export default function AllProjectsPage() {
   const [seed, setSeed] = useState(0);
 
-  // Перемешиваем и назначаем случайные размеры при каждом обновлении seed
+  // Перемешиваем и назначаем случайные размеры при каждом обновлении seed.
+  // seed = 0 is the deterministic first render shared by the server and the
+  // client; the effect below replaces it with a timestamp after hydration.
   const projects = useMemo(() => {
     const sizes: ('sm' | 'md' | 'lg' | 'xl')[] = ['sm', 'md', 'lg', 'xl'];
-    const shuffled = [...rawProjects].sort(() => Math.random() - 0.5);
-    
+    let cursor = seed || 1;
+
+    const next = () => {
+      cursor = (cursor * 1664525 + 1013904223) % 4294967296;
+      return cursor / 4294967296;
+    };
+
+    const shuffled = seed === 0 ? [...rawProjects] : [...rawProjects].sort(() => next() - 0.5);
+
     return shuffled.map((p) => ({
       ...p,
-      size: sizes[Math.floor(Math.random() * sizes.length)],
-      weight: Math.floor(Math.random() * 3) + 1, // от 1 до 3 для вариативности шрифта
+      size: sizes[Math.floor((seed === 0 ? 0.5 : next()) * sizes.length)],
+      weight: Math.floor((seed === 0 ? 0.5 : next()) * 3) + 1,
     }));
   }, [seed]);
 
@@ -64,20 +73,20 @@ export default function AllProjectsPage() {
   }, []);
 
   return (
-    <div className="min-h-[80vh] flex flex-col justify-between px-6 py-12 md:py-20 max-w-5xl mx-auto selection:bg-neutral-800 selection:text-neutral-100">
+    <div className="light-gallery min-h-screen flex flex-col justify-between px-6 py-12 md:py-20 max-w-5xl mx-auto text-[#1D1B18] selection:bg-[#1D1B18] selection:text-[#F5F2EB]">
       <div className="space-y-8">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-neutral-800 pb-6">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-[#1D1B18]/15 pb-6">
           <div>
-            <h1 className="text-3xl md:text-4xl font-light tracking-tight text-neutral-100">
+            <h1 className="text-3xl md:text-4xl font-serif font-normal tracking-tight text-[#1D1B18]">
               index
             </h1>
-            <p className="text-sm text-neutral-500 mt-1 font-mono">
+            <p className="text-sm text-[#6F6A60] mt-1 font-mono">
               merkurov.love / all projects & spaces
             </p>
           </div>
           <button
             onClick={() => setSeed(Date.now())}
-            className="self-start sm:self-auto text-xs uppercase tracking-widest text-neutral-400 hover:text-neutral-100 transition-colors border border-neutral-800 hover:border-neutral-600 px-4 py-2 rounded-full font-mono"
+            className="self-start sm:self-auto text-xs uppercase tracking-widest text-[#5C574F] hover:text-[#1D1B18] transition-colors border border-[#1D1B18]/15 bg-white/55 hover:border-[#1D1B18]/40 hover:bg-white/70 px-4 py-2 rounded-full font-mono shadow-[0_12px_30px_rgba(58,46,30,0.06)] backdrop-blur-md"
           >
             shuffle matrix
           </button>
@@ -98,13 +107,13 @@ export default function AllProjectsPage() {
               <span
                 className={`inline-flex items-center gap-2 rounded-full border transition-all duration-300 font-mono select-none ${
                   project.active
-                    ? 'border-neutral-800 bg-neutral-900/50 text-neutral-300 hover:border-neutral-500 hover:text-neutral-100 hover:bg-neutral-800/80 hover:scale-105 shadow-sm'
-                    : 'border-neutral-900 bg-neutral-950/30 text-neutral-600 cursor-not-allowed opacity-60'
+                    ? 'border-[#1D1B18]/15 bg-white/55 text-[#3E3A34] shadow-[0_10px_28px_rgba(58,46,30,0.06)] hover:border-[#1D1B18]/40 hover:bg-white/80 hover:text-[#1D1B18] hover:scale-105'
+                    : 'border-[#1D1B18]/10 bg-white/25 text-[#8B857B] cursor-not-allowed opacity-70'
                 } ${sizeClasses}`}
               >
                 <span>{project.name}</span>
                 {!project.active && (
-                  <span className="text-[10px] tracking-tighter uppercase text-neutral-700 bg-neutral-900 px-1.5 py-0.5 rounded">
+                  <span className="text-[10px] tracking-tighter uppercase text-[#8B857B] bg-[#1D1B18]/5 px-1.5 py-0.5 rounded">
                     off
                   </span>
                 )}
@@ -123,7 +132,7 @@ export default function AllProjectsPage() {
               <Link
                 key={project.slug}
                 href={`/${project.slug}`}
-                className="inline-block focus:outline-none focus:ring-1 focus:ring-neutral-400 rounded-full"
+                className="inline-block max-w-full rounded-full focus:outline-none focus:ring-1 focus:ring-[#1D1B18]/40"
               >
                 {content}
               </Link>
@@ -132,7 +141,7 @@ export default function AllProjectsPage() {
         </div>
       </div>
 
-      <div className="mt-12 pt-6 border-t border-neutral-900 text-xs text-neutral-600 font-mono flex justify-between items-center">
+      <div className="mt-12 pt-6 border-t border-[#1D1B18]/10 text-xs text-[#6F6A60] font-mono flex justify-between items-center">
         <span>total: {rawProjects.length} nodes</span>
         <span>randomized layout</span>
       </div>

@@ -77,7 +77,7 @@ export default function HomeClient() {
   }, [shuffleItems]);
 
   return (
-    <div className="min-h-screen w-full bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] flex flex-col justify-between px-5 sm:px-12 pt-32 md:pt-44 pb-12 antialiased relative overflow-x-hidden">
+    <div className="light-gallery min-h-screen w-full bg-[#F5F2EB] text-[#1D1B18] font-sans selection:bg-[#1D1B18] selection:text-[#F5F2EB] flex flex-col justify-between px-5 sm:px-12 pt-32 md:pt-44 pb-12 antialiased relative overflow-x-hidden">
       {/* Subtle Paper Grain Overlay */}
       <div
         className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay z-10"
@@ -88,13 +88,13 @@ export default function HomeClient() {
 
       {/* Content Wrapper */}
       <div className="w-full max-w-5xl mx-auto flex flex-col items-center justify-center my-auto text-center z-25 space-y-10 py-6">
-        <p className="font-serif italic text-zinc-600 text-sm sm:text-lg md:text-xl mb-6 sm:mb-10 tracking-wide font-normal max-w-lg mx-auto px-2">
+        <p className="font-serif italic text-[#6F6A60] text-sm sm:text-lg md:text-xl mb-6 sm:mb-10 tracking-wide font-normal max-w-lg mx-auto px-2">
           Structure is the antidote to chaos.
         </p>
 
-        <h1 className="text-3xl sm:text-6xl md:text-7xl lg:text-8xl font-serif font-normal tracking-tight leading-[1.15] sm:leading-[0.98] text-[#111111] mb-10 sm:mb-16 px-1 [hyphens:none] break-words">
+        <h1 className="lg-display text-balance text-3xl sm:text-6xl md:text-7xl lg:text-8xl font-serif font-normal tracking-tight leading-[1.15] sm:leading-[0.98] text-[#1D1B18] mb-10 sm:mb-16 px-1 [hyphens:none] break-words">
           Context Architecture <br className="hidden sm:inline" />
-          <span className="text-zinc-500 italic font-serif">&amp; Cultural Capital</span>
+          <span className="text-[#847E73] italic font-serif">&amp; Cultural Capital</span>
         </h1>
 
         <nav
@@ -110,9 +110,9 @@ export default function HomeClient() {
               onClick={(event: React.MouseEvent<HTMLAnchorElement>) => {
                 event.stopPropagation();
               }}
-              className="group inline-flex items-center gap-2 py-2 text-[#111111] hover:text-zinc-600 transition-colors"
+              className="group inline-flex items-center gap-2 py-2 text-[#1D1B18] hover:text-[#6F6A60] transition-colors"
             >
-              <span className="font-medium tracking-[0.2em] underline underline-offset-8 decoration-zinc-300 group-hover:decoration-black transition-colors">
+              <span className="font-medium tracking-[0.2em] underline underline-offset-8 decoration-[#1D1B18]/25 group-hover:decoration-[#1D1B18] transition-colors">
                 {item.label}
               </span>
             </PierrotSectionLink>
@@ -123,28 +123,28 @@ export default function HomeClient() {
           <PierrotSectionLink
             href="/lobby"
             sectionId="lobby"
-            className="group inline-flex items-center gap-3 border border-zinc-900/20 bg-white/80 hover:bg-[#111111] text-[#111111] hover:text-[#FAF8F5] px-7 py-3.5 sm:px-8 sm:py-4 transition-all duration-300 ease-out backdrop-blur-sm shadow-sm rounded-full"
+            className="group inline-flex items-center gap-3 rounded-full border border-[#1D1B18]/15 bg-white/55 px-7 py-3.5 text-[#1D1B18] shadow-[0_18px_50px_rgba(58,46,30,0.08)] backdrop-blur-md transition-all duration-300 ease-out hover:bg-[#1D1B18] hover:text-[#F5F2EB] sm:px-8 sm:py-4"
           >
             <span className="font-serif text-base sm:text-lg italic font-normal tracking-wide px-1">
               Enter The Lobby
             </span>
             <ArrowUpRight
               size={18}
-              className="text-zinc-600 group-hover:text-[#FAF8F5] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-300"
+              className="text-[#6F6A60] transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[#F5F2EB]"
             />
           </PierrotSectionLink>
 
           <PierrotSectionLink
             href="/journal"
             sectionId="journal"
-            className="group inline-flex items-center gap-3 border border-zinc-900/20 bg-white/80 hover:bg-[#111111] text-[#111111] hover:text-[#FAF8F5] px-7 py-3.5 sm:px-8 sm:py-4 transition-all duration-300 ease-out backdrop-blur-sm shadow-sm rounded-full"
+            className="group inline-flex items-center gap-3 rounded-full border border-[#1D1B18]/15 bg-white/55 px-7 py-3.5 text-[#1D1B18] shadow-[0_18px_50px_rgba(58,46,30,0.08)] backdrop-blur-md transition-all duration-300 ease-out hover:bg-[#1D1B18] hover:text-[#F5F2EB] sm:px-8 sm:py-4"
           >
             <span className="font-serif text-base sm:text-lg italic font-normal tracking-wide px-1">
               Journal
             </span>
             <ArrowUpRight
               size={18}
-              className="text-zinc-600 group-hover:text-[#FAF8F5] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-300"
+              className="text-[#6F6A60] transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[#F5F2EB]"
             />
           </PierrotSectionLink>
         </div>
