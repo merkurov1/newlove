@@ -170,6 +170,15 @@ function formatRecordDate(record: Pick<MediaRecord, 'date' | 'datePrecision'>): 
   return formatDate(record.date);
 }
 
+function recordDateTime(record: Pick<MediaRecord, 'date' | 'datePrecision'>): string {
+  if (record.datePrecision === 'year') {
+    const year = record.date.slice(0, 4);
+    return /^\d{4}$/.test(year) ? year : record.date;
+  }
+
+  return record.date;
+}
+
 function isAuthoredSeriesRecord(record: MediaRecord): boolean {
   return (record.kind === 'column' || record.kind === 'blog') && !isMediaReprint(record);
 }
@@ -182,6 +191,18 @@ function seriesTitle(outlet: string): string {
 
 function reprintGroupKey(original: PublicMediaRelation): string {
   return original.slug || original.url || `${original.outlet}:${original.title}`;
+}
+
+/**
+ * Editions of the same publication (for example Le Monde FR and EN) are
+ * separate versions, not syndicated copies of each other. Only cross-outlet
+ * relations build a reprint group.
+ */
+function isSyndicatedReprint(
+  record: MediaRecord,
+  original: PublicMediaRelation | undefined
+): original is PublicMediaRelation {
+  return Boolean(original && original.outlet.trim() !== record.outlet.trim());
 }
 
 function compareRecords(a: MediaRecord, b: MediaRecord): number {
@@ -503,7 +524,10 @@ export default function MediaArchive({ records, archives }: Props) {
     router.replace(pathname, { scroll: false });
   };
 
-  const isOverview = !query.trim() && !outlet && type !== 'columns';
+  // Series and reprint groups are built from the records that survived the
+  // current filters. A free-text query keeps individual rows so a search hit
+  // is never hidden inside a collapsed group.
+  const groupingEnabled = !query.trim();
 
   const visibleRecords = useMemo(() => filtered.slice(0, visibleLimit), [filtered, visibleLimit]);
 
@@ -527,14 +551,14 @@ export default function MediaArchive({ records, archives }: Props) {
           { original: PublicMediaRelation; items: MediaRecord[] }
         >();
 
-        if (isOverview) {
+        if (groupingEnabled) {
           yearRecords.forEach((record) => {
             // A reprint belongs to its original publication, never to the
             // outlet that republished it. This keeps two different articles
             // from the same newspaper as separate groups.
             if (isMediaReprint(record)) {
               const original = originalMediaRelation(record);
-              if (!original) return;
+              if (!isSyndicatedReprint(record, original)) return;
 
               const key = reprintGroupKey(original);
               const group = reprintGroups.get(key) ?? { original, items: [] };
@@ -564,9 +588,9 @@ export default function MediaArchive({ records, archives }: Props) {
         const addedReprintGroups = new Set<string>();
 
         yearRecords.forEach((record) => {
-          if (isOverview && isMediaReprint(record)) {
+          if (groupingEnabled && isMediaReprint(record)) {
             const original = originalMediaRelation(record);
-            if (!original) {
+            if (!isSyndicatedReprint(record, original)) {
               nodes.push({ type: 'record', record });
               return;
             }
@@ -582,7 +606,11 @@ export default function MediaArchive({ records, archives }: Props) {
             return;
           }
 
-          if (isOverview && isAuthoredSeriesRecord(record) && collapsedOutlets.has(record.outlet)) {
+          if (
+            groupingEnabled &&
+            isAuthoredSeriesRecord(record) &&
+            collapsedOutlets.has(record.outlet)
+          ) {
             if (addedSeriesOutlets.has(record.outlet)) return;
 
             nodes.push({
@@ -603,7 +631,7 @@ export default function MediaArchive({ records, archives }: Props) {
           nodes,
         };
       });
-  }, [visibleRecords, isOverview]);
+  }, [visibleRecords, groupingEnabled]);
 
   return (
     <div className="ma">
@@ -973,7 +1001,9 @@ export default function MediaArchive({ records, archives }: Props) {
                           <ol className="ma-mini">
                             {node.items.map((column) => (
                               <li key={column.slug}>
-                                <time dateTime={column.date}>{formatRecordDate(column)}</time>
+                                <time dateTime={recordDateTime(column)}>
+                                  {formatRecordDate(column)}
+                                </time>
                                 <a href={column.url} target="_blank" rel="noopener noreferrer">
                                   {column.title}
                                   <span aria-hidden="true"> ↗</span>
@@ -1019,7 +1049,7 @@ export default function MediaArchive({ records, archives }: Props) {
                           <ol className="ma-mini">
                             {node.items.map((item) => (
                               <li key={item.slug}>
-                                <time dateTime={item.date}>{formatRecordDate(item)}</time>
+                                <time dateTime={recordDateTime(item)}>{formatRecordDate(item)}</time>
                                 <div>
                                   <a href={item.url} target="_blank" rel="noopener noreferrer">
                                     {item.title}
@@ -1046,7 +1076,7 @@ export default function MediaArchive({ records, archives }: Props) {
 
                   return (
                     <li key={record.slug} className="ma-row">
-                      <time className="ma-date" dateTime={record.date}>
+                      <time className="ma-date" dateTime={recordDateTime(record)}>
                         {formatRecordDate(record)}
                         {record.datePrecision !== 'year' && (
                           <span className="ma-full-date">{record.date.slice(0, 4)}</span>
