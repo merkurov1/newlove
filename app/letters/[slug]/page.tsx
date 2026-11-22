@@ -5,6 +5,7 @@ import FlowIssueArticle from '@/components/flow-issues/FlowIssueArticle';
 import { parseRichTextContent } from '@/lib/contentParser';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { buildIssueTitle } from '@/lib/flow-issue/title';
+import { flowIssueCanonicalUrl, flowIssuePath } from '@/lib/flow-issue/urls';
 import {
   findAdjacentFlowIssues,
   issuePageTitle,
@@ -145,10 +146,7 @@ export async function generateMetadata({ params }: PageProps) {
             })}.`
         : 'Flow newspaper issue.';
 
-      const canonical =
-        lang === 'ru'
-          ? `${SITE}/flow-issues/${encodeURIComponent(slug)}`
-          : `${SITE}/en/flow-issues/${encodeURIComponent(slug)}`;
+      const canonical = flowIssueCanonicalUrl(slug, lang);
       const ogImage = getIssueOgImage(issue.payload);
 
       return sanitizeMetadata({
@@ -322,7 +320,7 @@ export default async function LetterPage({ params }: PageProps) {
           previousIssue={
             previous
               ? {
-                  href: `${lang === 'ru' ? '/flow-issues' : '/en/flow-issues'}/${encodeURIComponent(previous.slug)}`,
+                  href: flowIssuePath(previous.slug, previous.lang),
                   title: issuePageTitle(previous),
                   lang: previous.lang,
                   number: previous.number,
@@ -332,7 +330,7 @@ export default async function LetterPage({ params }: PageProps) {
           nextIssue={
             next
               ? {
-                  href: `${lang === 'ru' ? '/flow-issues' : '/en/flow-issues'}/${encodeURIComponent(next.slug)}`,
+                  href: flowIssuePath(next.slug, next.lang),
                   title: issuePageTitle(next),
                   lang: next.lang,
                   number: next.number,

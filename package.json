@@ -37,6 +37,7 @@
     "render:logs": "echo 'Check logs at https://dashboard.render.com'",
     "render:shell": "echo 'Use Render Dashboard → Shell to access container'",
     "check:metadata": "node scripts/check_metadata.js",
+    "audit:gsc": "node scripts/gsc-coverage-audit.mjs",
     "test:pierrot:viewport": "playwright test --config=tests/pierrot.playwright.config.ts",
     "test:attach-tags": "node scripts/test_attach_tags.js",
     "test:telegram-research": "jest lib/telegram-research --runInBand",

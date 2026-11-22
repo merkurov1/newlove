@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import FlowJoinClient from './FlowJoinClient';
+import { SITE_URL } from '@/lib/seo';
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.merkurov.love';
+const siteUrl = SITE_URL;
 const imageUrl =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/artifacts/IMG_1542.jpeg';
 
@@ -23,11 +24,7 @@ export const metadata: Metadata = {
   creator: 'Anton Merkurov',
   metadataBase: new URL(siteUrl),
   alternates: {
-    canonical: '/flow/join',
-    languages: {
-      'ru-RU': '/flow/join?lang=ru',
-      'en-US': '/flow/join?lang=en',
-    },
+    canonical: `${siteUrl}/flow/join`,
   },
   openGraph: {
     title: 'FLOW | Anton Merkurov',
