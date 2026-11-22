@@ -226,7 +226,9 @@ export async function runEditorialRadar(input: {
     return { runId, questionCount: 0, clusterCount: 0, suggestions: [] };
   }
 
-  const embeddingClient = input.embeddingClient || createOpenRouterEmbeddingClientFromEnv(process.env);
+  const embeddingClient =
+    input.embeddingClient ||
+    createOpenRouterEmbeddingClientFromEnv(process.env, undefined, { surface: 'brain' });
   const search = input.search ?? createSupabaseKnowledgeSearch(process.env);
 
   if (!search) throw new Error('brain_radar_search_unavailable');

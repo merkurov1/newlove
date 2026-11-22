@@ -22,11 +22,17 @@ export type LlmTelemetryRow = {
   calls: number;
   successfulCalls: number;
   failedCalls: number;
+  /** Attempts that repeated the same provider after a failure. */
   retries: number;
+  /** Attempts that switched to another provider after a failure. */
+  fallbacks: number;
   inputTokens: number | null;
   outputTokens: number | null;
   totalTokens: number | null;
   unknownUsageCalls: number;
+  latencyTotalMs: number;
+  latencySamples: number;
+  averageLatencyMs: number | null;
   estimatedCostUsd: number | null;
   estimatedCostCalls: number;
   unknownCostCalls: number;
@@ -76,10 +82,14 @@ function emptyTotals(): LlmTelemetryTotals {
     successfulCalls: 0,
     failedCalls: 0,
     retries: 0,
+    fallbacks: 0,
     inputTokens: null,
     outputTokens: null,
     totalTokens: null,
     unknownUsageCalls: 0,
+    latencyTotalMs: 0,
+    latencySamples: 0,
+    averageLatencyMs: null,
     estimatedCostUsd: null,
     estimatedCostCalls: 0,
     unknownCostCalls: 0,
@@ -90,7 +100,18 @@ function emptyTotals(): LlmTelemetryTotals {
 
 export function summarizeLlmCalls(
   records: Array<
-    Pick<LlmCallRecord, 'provider' | 'model' | 'surface' | 'ok' | 'isRetry' | 'usage' | 'cost'>
+    Pick<
+      LlmCallRecord,
+      | 'provider'
+      | 'model'
+      | 'surface'
+      | 'ok'
+      | 'isRetry'
+      | 'fallbackFrom'
+      | 'latencyMs'
+      | 'usage'
+      | 'cost'
+    >
   >,
   messages = 0
 ): { rows: LlmTelemetryRow[]; totals: LlmTelemetryTotals } {
@@ -108,10 +129,14 @@ export function summarizeLlmCalls(
         successfulCalls: 0,
         failedCalls: 0,
         retries: 0,
+        fallbacks: 0,
         inputTokens: null,
         outputTokens: null,
         totalTokens: null,
         unknownUsageCalls: 0,
+        latencyTotalMs: 0,
+        latencySamples: 0,
+        averageLatencyMs: null,
         estimatedCostUsd: null,
         estimatedCostCalls: 0,
         unknownCostCalls: 0,
@@ -122,7 +147,22 @@ export function summarizeLlmCalls(
     row.calls += 1;
     if (record.ok) row.successfulCalls += 1;
     else row.failedCalls += 1;
-    if (record.isRetry) row.retries += 1;
+    // Retry and fallback are separate events: a retry repeats the same
+    // provider, a fallback switches provider. Older rows may have set
+    // is_retry on a fallback, so fallback_from wins when both are present.
+    if (record.fallbackFrom) row.fallbacks += 1;
+    else if (record.isRetry) row.retries += 1;
+
+    const latency =
+      typeof record.latencyMs === 'number' &&
+      Number.isFinite(record.latencyMs) &&
+      record.latencyMs >= 0
+        ? record.latencyMs
+        : null;
+    if (latency !== null) {
+      row.latencyTotalMs += latency;
+      row.latencySamples += 1;
+    }
 
     if (record.usage.usageSource === 'unknown') {
       row.unknownUsageCalls += 1;
@@ -146,6 +186,11 @@ export function summarizeLlmCalls(
     grouped.set(key, row);
   }
 
+  for (const row of grouped.values()) {
+    row.averageLatencyMs =
+      row.latencySamples > 0 ? Math.round(row.latencyTotalMs / row.latencySamples) : null;
+  }
+
   const rows = [...grouped.values()].sort(
     (left, right) =>
       right.calls - left.calls ||
@@ -160,10 +205,14 @@ export function summarizeLlmCalls(
       successfulCalls: accumulator.successfulCalls + row.successfulCalls,
       failedCalls: accumulator.failedCalls + row.failedCalls,
       retries: accumulator.retries + row.retries,
+      fallbacks: accumulator.fallbacks + row.fallbacks,
       inputTokens: addNullable(accumulator.inputTokens, row.inputTokens),
       outputTokens: addNullable(accumulator.outputTokens, row.outputTokens),
       totalTokens: addNullable(accumulator.totalTokens, row.totalTokens),
       unknownUsageCalls: accumulator.unknownUsageCalls + row.unknownUsageCalls,
+      latencyTotalMs: accumulator.latencyTotalMs + row.latencyTotalMs,
+      latencySamples: accumulator.latencySamples + row.latencySamples,
+      averageLatencyMs: null,
       estimatedCostUsd: addNullable(accumulator.estimatedCostUsd, row.estimatedCostUsd),
       estimatedCostCalls: accumulator.estimatedCostCalls + row.estimatedCostCalls,
       unknownCostCalls: accumulator.unknownCostCalls + row.unknownCostCalls,
@@ -177,6 +226,8 @@ export function summarizeLlmCalls(
   );
 
   totals.messages = messages;
+  totals.averageLatencyMs =
+    totals.latencySamples > 0 ? Math.round(totals.latencyTotalMs / totals.latencySamples) : null;
   return { rows, totals };
 }
 
@@ -214,7 +265,7 @@ function dbRowToRecord(row: TelemetryDbRow): LlmCallRecord {
     isRetry: row.is_retry === true,
     fallbackFrom: typeof row.fallback_from === 'string' ? (row.fallback_from as LlmProvider) : null,
     ok: row.ok === true,
-    latencyMs: numberOrNull(row.latency_ms) ?? 0,
+    latencyMs: numberOrNull(row.latency_ms),
     finishReason: typeof row.finish_reason === 'string' ? row.finish_reason : null,
     errorCode: typeof row.error_code === 'string' ? row.error_code : null,
     usage: {
@@ -239,6 +290,7 @@ function dbRowToRecord(row: TelemetryDbRow): LlmCallRecord {
 const LIMITATIONS = [
   'Calls are provider attempts, not user messages. A fallback adds another row.',
   'Estimated costs use versioned public tariffs and peak rates. They are not an invoice.',
+  'Embedding requests appear as openrouter attempts with finish_reason=embedding; their vectors are never stored.',
   'Gemini cost stays unknown until verified rates or a Google Cloud billing export are configured.',
   'Provider-reported cost appears only when the provider returns it (for example OpenRouter usage.cost).',
   'A turn where transcript consent is denied is not persisted; its attempts remain redacted server logs only.',
@@ -283,7 +335,7 @@ export async function loadLlmTelemetryReport(
   let callsQuery = store
     .from('pierrot_llm_calls')
     .select(
-      'occurred_at,surface,provider,model,attempt,is_retry,ok,latency_ms,error_code,input_tokens,output_tokens,total_tokens,usage_source,estimated_cost_usd,cost_source,pricing_version,pricing_source,provider_reported_cost_usd'
+      'occurred_at,surface,provider,model,attempt,is_retry,fallback_from,ok,latency_ms,error_code,input_tokens,output_tokens,total_tokens,usage_source,estimated_cost_usd,cost_source,pricing_version,pricing_source,provider_reported_cost_usd'
     )
     .gte('occurred_at', filters.from)
     .lte('occurred_at', filters.to)

@@ -7,6 +7,7 @@ import {
   createGeminiEvaluator,
   evaluationAvailability,
 } from '@/lib/ai/evaluation/providers';
+import { buildProviderRoutingReport } from '@/lib/ai/providerRouting';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -29,6 +30,7 @@ export async function GET() {
         purpose: item.purpose,
       })),
       availability: evaluationAvailability(),
+      providerRouting: buildProviderRoutingReport(),
       instructions:
         'POST {"confirm":true} with ALLOW_PAID_AI_EVALUATION=true to run the identical case set against both providers.',
     },

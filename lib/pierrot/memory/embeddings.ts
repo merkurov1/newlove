@@ -54,6 +54,7 @@ export function resolveMemoryEmbeddingClient(
       dimensions: config.dimensions,
       provider: env.UNFRAMED_EMBEDDING_PROVIDER || null,
       timeoutMs: 8_000,
+      telemetry: { surface: 'brain' },
     });
   } catch {
     return null;

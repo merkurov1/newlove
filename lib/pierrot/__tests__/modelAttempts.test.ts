@@ -61,7 +61,7 @@ beforeEach(() => {
 });
 
 describe('provider routing telemetry', () => {
-  it('records Gemini failure and DeepSeek success as two attempts with one retry', async () => {
+  it('records Gemini failure and DeepSeek success as two attempts with one fallback', async () => {
     gemini.isGeminiConfigured.mockReturnValue(true);
     gemini.generateGeminiText.mockRejectedValueOnce(new Error('gemini_http_429'));
     openaiModule.__create.mockResolvedValueOnce(completion('DeepSeek answer'));
@@ -83,7 +83,7 @@ describe('provider routing telemetry', () => {
     expect(result.attempts).toHaveLength(2);
     expect(seen).toEqual([
       { provider: 'gemini', attempt: 1, isRetry: false, ok: false },
-      { provider: 'deepseek', attempt: 2, isRetry: true, ok: true },
+      { provider: 'deepseek', attempt: 2, isRetry: false, ok: true },
     ]);
     expect(result.attempts[1]?.usage.inputTokens).toBe(120);
     expect(result.attempts[1]?.usage.outputTokens).toBe(40);

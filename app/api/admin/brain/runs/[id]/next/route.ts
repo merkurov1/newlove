@@ -52,7 +52,9 @@ export async function POST(
     let embeddingClient;
 
     try {
-      embeddingClient = createOpenRouterEmbeddingClientFromEnv(process.env);
+      embeddingClient = createOpenRouterEmbeddingClientFromEnv(process.env, undefined, {
+        surface: 'brain',
+      });
     } catch {
       return json(
         {

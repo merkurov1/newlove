@@ -5890,6 +5890,18 @@ export async function POST(req: Request) {
         userId: isPierrotUserId(ownerIdentityUserId) ? ownerIdentityUserId : null,
       };
 
+      // Embeddings follow the same consent boundary as generation telemetry:
+      // a denied transcript yields no persistence store, only a redacted log.
+      const embeddingTelemetry = {
+        surface: 'brain' as const,
+        requestId: correlationId,
+        conversationId: canStoreMetadata ? conversationId : null,
+        sessionId: canStoreMetadata ? sessionId : null,
+        userId:
+          canStoreMetadata && isPierrotUserId(ownerIdentityUserId) ? ownerIdentityUserId : null,
+        store: pierrotStore,
+      };
+
       const persistLlmAttempts = async (attempts: LlmProviderAttempt[]) => {
         if (!Array.isArray(attempts) || attempts.length === 0) return;
 
@@ -6361,6 +6373,7 @@ export async function POST(req: Request) {
                         plan: attempt.plan,
                         topK: attempt.topK,
                         timeoutMs: attempt.timeoutMs,
+                        embeddingTelemetry,
                       }),
                   });
 
@@ -6418,6 +6431,7 @@ export async function POST(req: Request) {
                     query: trimmedMessage,
                     scope: 'owner',
                     ownerAuthorized: true,
+                    embeddingTelemetry,
                   });
 
                   brainOutcome = { outcome: retrieval.outcome, code: retrieval.code ?? null };
@@ -6887,7 +6901,9 @@ export async function POST(req: Request) {
               model: usedModel,
               fallback_used: fallbackUsed,
               llm_attempts: llmAttempts.length,
-              llm_retries: llmAttempts.filter((attempt) => attempt.isRetry).length,
+              llm_retries: llmAttempts.filter((attempt) => attempt.isRetry && !attempt.fallbackFrom)
+                .length,
+              llm_fallbacks: llmAttempts.filter((attempt) => attempt.fallbackFrom).length,
               llm_failed_attempts: llmAttempts.filter((attempt) => !attempt.ok).length,
               generation_latency_ms: generationLatencyMs,
               generation_task: generationPolicy?.task ?? null,

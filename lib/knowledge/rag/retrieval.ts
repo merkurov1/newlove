@@ -16,6 +16,7 @@ import {
   RagConfigurationError,
 } from './errors';
 import { createOpenRouterEmbeddingClientFromEnv, type EmbeddingClient } from './embeddings';
+import type { EmbeddingTelemetryContext } from '@/lib/ai/telemetry';
 import { createSupabaseKnowledgeSearch } from './supabaseStore';
 import type {
   KnowledgeAccessClass,
@@ -43,6 +44,8 @@ export type RetrieveUnframedEvidenceInput = {
   topK?: number;
   minSimilarity?: number;
   timeoutMs?: number;
+  /** Consent-aware telemetry for the embedding attempt. */
+  embeddingTelemetry?: EmbeddingTelemetryContext;
 };
 
 function unavailable(
@@ -175,7 +178,11 @@ export async function retrieveUnframedEvidence(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const embeddingClient = input.embeddingClient ?? createOpenRouterEmbeddingClientFromEnv(env);
+    const embeddingClient =
+      input.embeddingClient ??
+      createOpenRouterEmbeddingClientFromEnv(env, undefined, input.embeddingTelemetry ?? {
+        surface: 'brain',
+      });
     const search = input.search ?? createSupabaseKnowledgeSearch(env);
 
     if (!search) return unavailable('database_unavailable', startedAt);

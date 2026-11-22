@@ -19,6 +19,7 @@ import {
   RagConfigurationError,
 } from './errors';
 import { createOpenRouterEmbeddingClientFromEnv, type EmbeddingClient } from './embeddings';
+import type { EmbeddingTelemetryContext } from '@/lib/ai/telemetry';
 import {
   buildBrainQueryPlan,
   classifyBrainDocument,
@@ -52,6 +53,8 @@ export type RetrieveBrainEvidenceInput = {
   minSimilarity?: number;
   timeoutMs?: number;
   plan?: BrainQueryPlan;
+  /** Consent-aware telemetry for the embedding attempt. */
+  embeddingTelemetry?: EmbeddingTelemetryContext;
 };
 
 export type BrainRetrievalRanking = {
@@ -301,7 +304,11 @@ export async function retrieveBrainEvidence(
   const sourcePriority = sourcePriorityForPlan(plan);
 
   try {
-    const embeddingClient = input.embeddingClient ?? createOpenRouterEmbeddingClientFromEnv(env);
+    const embeddingClient =
+      input.embeddingClient ??
+      createOpenRouterEmbeddingClientFromEnv(env, undefined, input.embeddingTelemetry ?? {
+        surface: 'brain',
+      });
     const search = input.search ?? createSupabaseBrainSearch(env);
 
     if (!search) return emptyResult(plan, startedAt, 'unavailable', 'database_unavailable');

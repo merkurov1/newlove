@@ -155,7 +155,9 @@ export async function runBrainWorker(
 
     if (!embeddingClient) {
       try {
-        embeddingClient = createOpenRouterEmbeddingClientFromEnv(process.env);
+        embeddingClient = createOpenRouterEmbeddingClientFromEnv(process.env, undefined, {
+          surface: 'brain',
+        });
       } catch {
         throw new Error('embedding_not_configured');
       }

@@ -1,4 +1,13 @@
 import {
+  buildLlmCallRecord,
+  createTelemetryStore,
+  embeddingUsageFrom,
+  logLlmCall,
+  recordLlmCall,
+  type EmbeddingTelemetryContext,
+  type LlmTokenUsage,
+} from '@/lib/ai/telemetry';
+import {
   EmbeddingDimensionMismatchError,
   EmbeddingModelMismatchError,
   EmbeddingProviderError,
@@ -37,6 +46,11 @@ export type OpenRouterEmbeddingOptions = {
    * exceed the model context even though the chunk count looks reasonable.
    */
   maxBatchChars?: number;
+  /**
+   * Per-attempt telemetry context. Passing `store: null` is an explicit consent
+   * denial: the attempt is logged redacted but never persisted.
+   */
+  telemetry?: EmbeddingTelemetryContext;
 };
 
 /** Conservative default for bge-m3: about 4–6k tokens per request. */
@@ -63,12 +77,18 @@ function retryAfterSeconds(value: string | null): number | null {
   return Math.max(0, Math.min(3600, Math.ceil((date - Date.now()) / 1000)));
 }
 
+type ParsedEmbeddingResponse = {
+  vectors: number[][];
+  model: string;
+  usage: LlmTokenUsage;
+};
+
 function parseEmbeddingResponse(
   payload: unknown,
   expectedCount: number,
   expectedModel: string,
   expectedDimensions: number
-): number[][] {
+): ParsedEmbeddingResponse {
   if (!payload || typeof payload !== 'object') {
     throw new EmbeddingProviderError('invalid_response');
   }
@@ -126,7 +146,11 @@ function parseEmbeddingResponse(
     throw new EmbeddingProviderError('invalid_response');
   }
 
-  return ordered.map((entry) => entry.embedding);
+  return {
+    vectors: ordered.map((entry) => entry.embedding),
+    model: actualModel,
+    usage: embeddingUsageFrom(record.usage),
+  };
 }
 
 /**
@@ -214,6 +238,70 @@ function writeCachedEmbedding(
   });
 }
 
+function errorCodeFrom(error: unknown): string {
+  if (error && typeof error === 'object' && 'code' in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === 'string' && /^[A-Za-z0-9_.:-]{1,120}$/.test(code)) return code;
+  }
+  if (error instanceof Error && /^[A-Za-z0-9_.:-]{1,120}$/.test(error.name)) {
+    return error.name;
+  }
+  return 'embedding_request_failed';
+}
+
+/**
+ * One row per embedding HTTP request. The row keeps only counts, token usage,
+ * provider/model and a stable error code: never the input text or the vector.
+ */
+async function persistEmbeddingAttempt(input: {
+  telemetry?: EmbeddingTelemetryContext;
+  model: string;
+  ok: boolean;
+  latencyMs: number;
+  errorCode: string | null;
+  usage: LlmTokenUsage;
+  promptChars: number;
+}): Promise<void> {
+  const telemetry = input.telemetry;
+  if (telemetry?.skip) return;
+  // Unit tests with a fake fetch must not hit the database unless they pass an
+  // explicit telemetry object.
+  if (process.env.NODE_ENV === 'test' && !telemetry) return;
+
+  try {
+    const store =
+      telemetry && 'store' in telemetry ? (telemetry.store ?? null) : createTelemetryStore();
+    const record = buildLlmCallRecord({
+      context: {
+        requestId: telemetry?.requestId ?? null,
+        conversationId: telemetry?.conversationId ?? null,
+        sessionId: telemetry?.sessionId ?? null,
+        userId: telemetry?.userId ?? null,
+        surface: telemetry?.surface ?? 'unknown',
+      },
+      attempt: {
+        provider: 'openrouter',
+        model: input.model,
+        attempt: 1,
+        isRetry: false,
+        fallbackFrom: null,
+        ok: input.ok,
+        latencyMs: input.latencyMs,
+        finishReason: 'embedding',
+        errorCode: input.errorCode,
+        usage: input.usage,
+        promptChars: input.promptChars,
+        responseChars: null,
+      },
+    });
+
+    const stored = await recordLlmCall(store, record);
+    if (!stored && !input.ok) logLlmCall(record);
+  } catch {
+    // Telemetry must never fail retrieval or ingestion.
+  }
+}
+
 export function createOpenRouterEmbeddingClient(
   options: OpenRouterEmbeddingOptions
 ): EmbeddingClient {
@@ -226,6 +314,7 @@ export function createOpenRouterEmbeddingClient(
   const timeoutMs = options.timeoutMs ?? UNFRAMED_EMBEDDING_TIMEOUT_MS;
   const batchSize = options.batchSize ?? UNFRAMED_EMBEDDING_BATCH_SIZE;
   const maxBatchChars = options.maxBatchChars ?? OPENROUTER_EMBEDDING_MAX_BATCH_CHARS;
+  const telemetry = options.telemetry;
 
   if (!apiKey) throw new RagConfigurationError('OPENROUTER_API_KEY_missing');
   if (!modelId) throw new RagConfigurationError('embedding_model_missing');
@@ -246,6 +335,7 @@ export function createOpenRouterEmbeddingClient(
   }
 
   async function embedBatch(texts: string[], signal?: AbortSignal): Promise<number[][]> {
+    const startedAt = Date.now();
     const controller = new AbortController();
     const abortFromCaller = () => controller.abort();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -287,9 +377,36 @@ export function createOpenRouterEmbeddingClient(
       }
 
       const payload = await response.json().catch(() => null);
+      const parsed = parseEmbeddingResponse(payload, texts.length, modelId, dimensions);
 
-      return parseEmbeddingResponse(payload, texts.length, modelId, dimensions);
+      await persistEmbeddingAttempt({
+        telemetry,
+        model: parsed.model,
+        ok: true,
+        latencyMs: Date.now() - startedAt,
+        errorCode: null,
+        usage: parsed.usage,
+        promptChars: texts.reduce((total, text) => total + text.length, 0),
+      });
+
+      return parsed.vectors;
     } catch (error) {
+      await persistEmbeddingAttempt({
+        telemetry,
+        model: modelId,
+        ok: false,
+        latencyMs: Date.now() - startedAt,
+        errorCode: errorCodeFrom(error),
+        usage: {
+          inputTokens: null,
+          outputTokens: null,
+          totalTokens: null,
+          usageSource: 'unknown',
+          providerReportedCostUsd: null,
+        },
+        promptChars: texts.reduce((total, text) => total + text.length, 0),
+      });
+
       if (
         error instanceof EmbeddingProviderError ||
         error instanceof EmbeddingDimensionMismatchError ||
@@ -358,7 +475,8 @@ export function createOpenRouterEmbeddingClient(
 
 export function createOpenRouterEmbeddingClientFromEnv(
   env: RagEnvironment = process.env,
-  fetchImpl?: FetchLike
+  fetchImpl?: FetchLike,
+  telemetry?: EmbeddingTelemetryContext
 ): EmbeddingClient {
   const config = resolveUnframedEmbeddingConfig(env);
   const apiKey = (env.OPENROUTER_API_KEY || '').trim();
@@ -371,5 +489,6 @@ export function createOpenRouterEmbeddingClientFromEnv(
     dimensions: config.dimensions,
     provider: resolveUnframedEmbeddingProvider(env),
     fetchImpl,
+    telemetry,
   });
 }
