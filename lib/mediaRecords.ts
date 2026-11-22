@@ -1,5 +1,5 @@
 import {
-  records as fallbackRecords,
+  publicRecords as fallbackRecords,
   type MediaRecord,
   type Lang,
   type Kind,
@@ -16,6 +16,7 @@ type DatabaseMediaRecord = {
   canonical_url?: string | null;
   title?: string | null;
   outlet?: string | null;
+  author?: string | null;
   published_date?: string | null;
   created_at?: string | null;
   lang?: string | null;
@@ -76,12 +77,36 @@ function slugFromUrl(value: string): string {
 
 function validDisplayDate(value: unknown): string | null {
   const candidate = text(value);
+  const yearMatch = candidate.match(/^(\d{4})$/);
+  if (yearMatch) {
+    const year = Number(yearMatch[1]);
+    return year >= 1900 && year <= 2200 ? candidate : null;
+  }
 
-  if (/^\d{4}$/.test(candidate)) return candidate;
-  if (/^\d{4}-\d{2}$/.test(candidate)) return candidate;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return candidate;
+  const monthMatch = candidate.match(/^(\d{4})-(\d{2})$/);
+  if (monthMatch) {
+    const year = Number(monthMatch[1]);
+    const month = Number(monthMatch[2]);
+    return year >= 1900 && year <= 2200 && month >= 1 && month <= 12 ? candidate : null;
+  }
 
-  return null;
+  const dayMatch = candidate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!dayMatch) return null;
+
+  const year = Number(dayMatch[1]);
+  const month = Number(dayMatch[2]);
+  const day = Number(dayMatch[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return candidate;
 }
 
 function dateFromCreatedAt(value: unknown): string | null {
@@ -128,6 +153,7 @@ function mapDatabaseRecord(row: DatabaseMediaRecord): MediaRecord | null {
     ...(slugAliases && slugAliases.length > 0 ? { slugAliases } : {}),
     title: text(row.title, 'Untitled publication'),
     outlet: text(row.outlet, 'Unknown publication'),
+    ...(text(row.author) ? { author: text(row.author) } : {}),
     url,
     date: timelineDate,
     lang,
@@ -260,15 +286,29 @@ async function enrichMediaRecords(recordsById: Map<string, MediaRecord>): Promis
   }
 }
 
+/**
+ * Identity key used only for merging the local fallback with database rows.
+ * It never rewrites the URL that is shown to readers. `www.` and a trailing
+ * slash are safe to normalize; query strings are preserved because they can
+ * distinguish different publications on the same path.
+ */
 function canonicalize(value: string): string {
   try {
     const url = new URL(value);
     url.hash = '';
-    url.hostname = url.hostname.toLowerCase();
+    url.hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+    url.pathname = url.pathname.replace(/\/+$/, '') || '/';
 
-    return url.toString().replace(/\/$/, '');
+    if (
+      (url.protocol === 'https:' && url.port === '443') ||
+      (url.protocol === 'http:' && url.port === '80')
+    ) {
+      url.port = '';
+    }
+
+    return url.toString().replace(/\/+$/, '');
   } catch {
-    return value.trim();
+    return value.trim().replace(/\/+$/, '');
   }
 }
 

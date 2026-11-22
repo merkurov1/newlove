@@ -1,4 +1,4 @@
-import { records as fallbackMedia } from '@/data/media';
+import { publicRecords as fallbackMedia } from '@/data/media';
 import { getMediaRecords } from '@/lib/mediaRecords';
 import { createClient } from '@/lib/supabase/server';
 import {

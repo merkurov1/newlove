@@ -44,6 +44,7 @@ type ManifestRecord = {
   genre: string;
   note?: string | null;
   topic?: string | null;
+  date_source?: string | null;
 };
 
 type MediaRow = {

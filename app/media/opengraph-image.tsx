@@ -1,5 +1,5 @@
 import { ImageResponse } from 'next/og';
-import { records } from '@/data/media';
+import { publicRecords } from '@/data/media';
 
 
 export const alt = 'Media Archive — Anton Merkurov';
@@ -10,7 +10,7 @@ export const size = {
 export const contentType = 'image/png';
 
 export default async function Image() {
-  const count = records.length;
+  const count = publicRecords.length;
 
   return new ImageResponse(
     (

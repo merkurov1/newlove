@@ -23,6 +23,7 @@ const record = {
   slug: 'le-monde-digital-control',
   title: 'Digital control and hardware',
   outlet: 'Le Monde',
+  author: 'Jane Reporter',
   url: 'https://example.com/article',
   date: '2026-10-13',
   lang: 'EN' as const,
@@ -73,5 +74,75 @@ describe('Public media search API', () => {
 
     expect(json.count).toBe(0);
     expect(json.summary).toContain('No publications');
+  });
+
+  it.each([
+    ['title', 'Digital control'],
+    ['author', 'Jane Reporter'],
+    ['outlet', 'Le Monde'],
+    ['full date', '2026-10-13'],
+    ['type', 'quote'],
+  ])('finds the same publication by %s', async (_label, query) => {
+    const response = await POST(
+      new Request('http://localhost/api/media/search', {
+        method: 'POST',
+        body: JSON.stringify({ query, filters: {} }),
+      })
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.results.map((item: { slug: string }) => item.slug)).toContain(
+      'le-monde-digital-control'
+    );
+    expect(json.results[0].author).toBe('Jane Reporter');
+  });
+
+  it('drops semantic hits that are not in the public archive set', async () => {
+    (searchMediaIntelligence as jest.Mock).mockResolvedValue({
+      results: [{ mediaRecordId: 'private-or-draft-id' }],
+      scannedChunks: 1,
+      minSimilarity: 0.25,
+      caveats: [],
+    });
+
+    const response = await POST(
+      new Request('http://localhost/api/media/search', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'private draft', filters: {} }),
+      })
+    );
+    const json = await response.json();
+
+    expect(json.semantic).toBe(false);
+    expect(json.results).toHaveLength(0);
+    expect(json.provenance.semantic).toBeNull();
+    expect(JSON.stringify(json)).not.toContain('private-or-draft-id');
+  });
+
+  it('finds a verified local fallback that has no database id', async () => {
+    const fallbackRecord = {
+      ...record,
+      id: undefined,
+      slug: 'local-fallback-record',
+      title: 'Local fallback interview',
+      outlet: 'Новая газета',
+      author: 'Антон Меркуров',
+      kind: 'column' as const,
+    };
+
+    (getMediaRecords as jest.Mock).mockResolvedValue([record, fallbackRecord]);
+
+    const response = await POST(
+      new Request('http://localhost/api/media/search', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'Антон Меркуров', filters: {} }),
+      })
+    );
+    const json = await response.json();
+
+    expect(json.results.map((item: { slug: string }) => item.slug)).toContain(
+      'local-fallback-record'
+    );
   });
 });
