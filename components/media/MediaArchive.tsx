@@ -562,39 +562,35 @@ export default function MediaArchive({ records, archives }: Props) {
         </p>
 
         <p className="ma-stats-line" aria-label="Archive summary">
-          <span>
-            <strong>{stats.total}</strong> records
+          <span className="ma-stat">
+            <strong className="ma-stat-value">{stats.total}</strong>
+            <span className="ma-stat-label">records</span>
           </span>
-          <span aria-hidden="true">·</span>
-          <span>
-            <strong>{stats.own}</strong> own
+          <span className="ma-stat">
+            <strong className="ma-stat-value">{stats.own}</strong>
+            <span className="ma-stat-label">own</span>
           </span>
-          <span aria-hidden="true">·</span>
-          <span>
-            <strong>{stats.mentions}</strong> mentions
+          <span className="ma-stat">
+            <strong className="ma-stat-value">{stats.mentions}</strong>
+            <span className="ma-stat-label">mentions</span>
           </span>
-          <span aria-hidden="true">·</span>
-          <span>
-            <strong>{stats.outlets.length}</strong> publications
+          <span className="ma-stat">
+            <strong className="ma-stat-value">{stats.outlets.length}</strong>
+            <span className="ma-stat-label">publications</span>
           </span>
-          <span aria-hidden="true">·</span>
-          <span>
-            <strong>{stats.languages.length}</strong> languages
+          <span className="ma-stat">
+            <strong className="ma-stat-value">{stats.languages.length}</strong>
+            <span className="ma-stat-label">languages</span>
           </span>
-          <span aria-hidden="true">·</span>
-          <span>
-            <strong>{stats.maxYear - stats.minYear + 1}</strong> years
+          <span className="ma-stat">
+            <strong className="ma-stat-value">{stats.maxYear - stats.minYear + 1}</strong>
+            <span className="ma-stat-label">years</span>
           </span>
         </p>
 
         <div className="ma-publications" aria-label="Representative publications">
-          {representativeOutlets.map((publication, index) => (
+          {representativeOutlets.map((publication) => (
             <span key={publication} className="ma-publication">
-              {index > 0 && (
-                <span className="ma-publication-sep" aria-hidden="true">
-                  ·
-                </span>
-              )}
               <button
                 type="button"
                 className="ma-outlet-btn"
@@ -1182,54 +1178,68 @@ const CSS = `
 }
 
 .ma-lede {
-  max-width: 760px;
-  margin: 8px 0 0;
+  max-width: 820px;
+  margin: clamp(12px, 1.6vw, 18px) 0 0;
   color: var(--ma-muted);
   font-family: var(--ma-serif);
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: clamp(19px, 1.9vw, 24px);
+  line-height: 1.42;
+  letter-spacing: -.005em;
+  text-wrap: pretty;
 }
 
 .ma-stats-line {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-items: start;
+  gap: clamp(18px, 2.4vw, 30px) clamp(12px, 2vw, 32px);
+  margin: clamp(26px, 3.4vw, 40px) 0 0;
+  padding-top: clamp(16px, 2.2vw, 26px);
+  border-top: 1px solid var(--ma-line);
+}
+
+.ma-stat {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 9px;
-  margin: 12px 0 0;
-  color: var(--ma-muted);
-  font-size: 12px;
-  line-height: 1.5;
+  flex-direction: column;
+  gap: clamp(7px, .8vw, 11px);
+  min-width: 0;
 }
 
-.ma-stats-line strong {
+.ma-stat-value {
   color: var(--ma-fg);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  font-family: var(--ma-serif);
+  font-size: clamp(44px, 5.6vw, 76px);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums lining-nums;
+  line-height: .82;
+  letter-spacing: -.045em;
 }
 
-.ma-stats-line > span[aria-hidden="true"] {
-  color: var(--ma-line);
+.ma-stat-label {
+  color: var(--ma-muted);
+  font-family: var(--ma-sans);
+  font-size: clamp(10px, .85vw, 12px);
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: .035em;
 }
 
 .ma-publications {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 10px;
-  margin-top: 8px;
+  gap: 8px clamp(16px, 2.2vw, 30px);
+  max-width: 1000px;
+  margin-top: clamp(18px, 2.2vw, 26px);
   font-family: var(--ma-serif);
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: clamp(16px, 1.4vw, 19px);
+  line-height: 1.45;
 }
 
 .ma-publication {
   display: inline-flex;
   align-items: baseline;
-  gap: 10px;
-}
-
-.ma-publication-sep {
-  color: var(--ma-line);
+  min-width: 0;
 }
 
 .ma-outlet-btn {
@@ -1238,9 +1248,10 @@ const CSS = `
   border: 0;
   border-bottom: 1px solid transparent;
   background: transparent;
-  color: var(--ma-muted);
+  color: var(--ma-fg);
   font: inherit;
-  line-height: 1.4;
+  line-height: 1.45;
+  white-space: nowrap;
   cursor: pointer;
   transition: color .15s ease, border-color .15s ease;
 }
@@ -1757,6 +1768,25 @@ const CSS = `
   letter-spacing: .07em;
 }
 
+@media (max-width: 1024px) {
+  .ma-lede {
+    font-size: clamp(18px, 2.4vw, 22px);
+  }
+
+  .ma-stats-line {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(20px, 3vw, 30px) clamp(16px, 3vw, 32px);
+  }
+
+  .ma-stat-value {
+    font-size: clamp(42px, 7vw, 62px);
+  }
+
+  .ma-publications {
+    font-size: clamp(16px, 2.1vw, 18px);
+  }
+}
+
 @media (max-width: 700px) {
   .ma {
     padding-right: 18px;
@@ -1769,24 +1799,41 @@ const CSS = `
   }
 
   .ma-lede {
-    margin-top: 8px;
-    font-size: 13px;
+    margin-top: 10px;
+    font-size: 16px;
+    line-height: 1.48;
   }
 
   .ma-stats-line {
-    margin-top: 10px;
-    gap: 3px 7px;
-    font-size: 11px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 22px;
+    padding-top: 16px;
+    gap: 17px 14px;
+  }
+
+  .ma-stat {
+    gap: 6px;
+  }
+
+  .ma-stat-value {
+    font-size: clamp(34px, 9vw, 44px);
+    line-height: .85;
+  }
+
+  .ma-stat-label {
+    font-size: 9.5px;
+    letter-spacing: .02em;
   }
 
   .ma-publications {
-    margin-top: 7px;
-    gap: 2px 6px;
-    font-size: 12px;
+    margin-top: 16px;
+    gap: 6px 14px;
+    font-size: 15px;
+    line-height: 1.4;
   }
 
-  .ma-publication {
-    gap: 6px;
+  .ma-outlet-btn {
+    line-height: 1.4;
   }
 
   .ma-filters {
