@@ -136,6 +136,37 @@ describe('autonomous worker', () => {
     expect(result.status).toBe('completed');
   });
 
+  it('scopes processing to explicitly requested runs', async () => {
+    const store = {
+      recoverStaleJobs: jest.fn(async () => 0),
+      listRecoverableRuns: jest.fn(async () => [brainRun('run-a'), brainRun('run-b')]),
+      listRunningRuns: jest.fn(async () => []),
+      updateRun: jest.fn(async () => undefined),
+    } as unknown as BrainStore;
+    const processNext = jest.fn(async () => ({
+      state: 'done' as const,
+      progress: { done: true },
+      runStatus: 'completed',
+    }));
+
+    const result = await runBrainWorker({
+      store,
+      embeddingClient: embeddingClient(),
+      processNext: processNext as never,
+      queueGraph: (async () => ({ status: 'skipped', reason: 'test' })) as never,
+      telemetry: null,
+      maxJobs: 1,
+      maxDurationMs: 60_000,
+      runIds: ['run-b'],
+    });
+
+    expect(processNext).toHaveBeenCalledTimes(1);
+    expect(processNext as jest.Mock).toHaveBeenCalledWith(
+      expect.objectContaining({ runId: 'run-b' })
+    );
+    expect(result.runsTouched).toBe(1);
+  });
+
   it('stops at maxJobs instead of running forever', async () => {
     const store = {
       recoverStaleJobs: jest.fn(async () => 0),

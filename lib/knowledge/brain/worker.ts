@@ -98,6 +98,12 @@ export async function runBrainWorker(
     queueGraph?: typeof queueGraphForIngestionRun;
     telemetry?: WorkerTelemetry | null;
     skipGuard?: boolean;
+    /**
+     * Optional operator scope. When set, only these runs are processed; the
+     * global stale-lease recovery still runs so an interrupted job is never
+     * stranded. This does not create or reorder any queue row.
+     */
+    runIds?: string[];
   } = {}
 ): Promise<WorkerResult> {
   const startedAt = Date.now();
@@ -189,8 +195,10 @@ export async function runBrainWorker(
       typeof store.listRecoverableRuns === 'function'
         ? await store.listRecoverableRuns(100)
         : await store.listRunningRuns(100);
+    const scopedRuns =
+      input.runIds === undefined ? runs : runs.filter((run) => input.runIds?.includes(run.id));
 
-    outer: for (const run of runs) {
+    outer: for (const run of scopedRuns) {
       if (processed >= maxJobs) {
         stoppedBy = 'max_jobs';
         break;
