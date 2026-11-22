@@ -25,15 +25,28 @@ export default function HeroMotion({ title, subtitle, status, brand }: Props) {
     <motion.div initial="hidden" animate="show" variants={container}>
       <div className="flex flex-col items-center mb-6 text-center">
         {brand && (
-          <motion.span variants={item} className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400 mb-3">
+          <motion.span
+            variants={item}
+            className="font-mono text-[10px] tracking-[0.3em] uppercase text-[#847E73] mb-3"
+          >
             {brand}
           </motion.span>
         )}
 
         {status && (
-          <motion.div variants={item} className="font-mono text-[10px] tracking-widest uppercase text-green-600 border border-green-600 px-2 py-1 rounded-full mb-3">
+          <motion.div
+            variants={item}
+            className="font-mono text-[10px] tracking-widest uppercase text-green-600 border border-green-600 px-2 py-1 rounded-full mb-3"
+          >
             <motion.span
-              animate={{ scale: [1, 1.08, 1], boxShadow: ["0 0 0 rgba(0,0,0,0)", "0 0 12px rgba(16,185,129,0.2)", "0 0 0 rgba(0,0,0,0)"] }}
+              animate={{
+                scale: [1, 1.08, 1],
+                boxShadow: [
+                  '0 0 0 rgba(0,0,0,0)',
+                  '0 0 12px rgba(16,185,129,0.2)',
+                  '0 0 0 rgba(0,0,0,0)',
+                ],
+              }}
               transition={{ duration: 1.6, repeat: Infinity }}
               className="inline-block"
             >
@@ -42,12 +55,18 @@ export default function HeroMotion({ title, subtitle, status, brand }: Props) {
           </motion.div>
         )}
 
-        <motion.h1 variants={item} className="text-5xl md:text-7xl font-serif font-medium leading-none tracking-tight mb-6">
+        <motion.h1
+          variants={item}
+          className="lg-display text-balance text-5xl md:text-7xl font-serif font-medium leading-none tracking-tight text-[#1D1B18] mb-6 break-words"
+        >
           {title}
         </motion.h1>
 
         {subtitle && (
-          <motion.p variants={item} className="text-xl md:text-2xl font-serif italic text-gray-600 max-w-xl mx-auto">
+          <motion.p
+            variants={item}
+            className="text-xl md:text-2xl font-serif italic text-[#6F6A60] max-w-xl mx-auto"
+          >
             {subtitle}
           </motion.p>
         )}

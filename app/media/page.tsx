@@ -56,15 +56,17 @@ export default async function MediaPage() {
           { name: 'Media Archive', path: '/media' },
         ])}
       />
-      <Suspense
-        fallback={
-          <div className="mx-auto max-w-6xl px-6 py-24 font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500">
-            Loading media archive…
-          </div>
-        }
-      >
-        <MediaArchive records={records} archives={archives} />
-      </Suspense>
+      <div className="light-gallery min-h-screen bg-[#F5F2EB] text-[#1D1B18]">
+        <Suspense
+          fallback={
+            <div className="mx-auto max-w-6xl px-6 py-24 font-mono text-[10px] uppercase tracking-[0.22em] text-[#6F6A60]">
+              Loading media archive…
+            </div>
+          }
+        >
+          <MediaArchive records={records} archives={archives} />
+        </Suspense>
+      </div>
     </>
   );
 }

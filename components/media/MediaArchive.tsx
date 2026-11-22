@@ -266,7 +266,8 @@ export default function MediaArchive({ records, archives }: Props) {
     return {
       total: records.length,
       own: records.filter((record) => record.kind === 'column' || record.kind === 'blog').length,
-      mentions: records.filter((record) => record.kind !== 'column' && record.kind !== 'blog').length,
+      mentions: records.filter((record) => record.kind !== 'column' && record.kind !== 'blog')
+        .length,
       outlets,
       languages: [...new Set(records.map((record) => record.lang))].sort(),
       topics: [...new Set(records.map((record) => record.derivedTopic || record.topic))].sort(),
@@ -1103,12 +1104,13 @@ export default function MediaArchive({ records, archives }: Props) {
 
 const CSS = `
 .ma {
-  --ma-bg: #fff;
-  --ma-fg: #171715;
-  --ma-muted: #77766f;
-  --ma-line: #e6e4df;
-  --ma-accent: #a53a27;
+  --ma-bg: #f5f2eb;
+  --ma-fg: #1d1b18;
+  --ma-muted: #6f6a60;
+  --ma-line: rgba(29, 27, 24, 0.14);
+  --ma-accent: #8d3d2e;
   --ma-serif: var(--font-cormorant, 'Cormorant Garamond', Georgia, serif);
+  --ma-sans: var(--font-inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif);
   --ma-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   width: 100%;
@@ -1117,7 +1119,7 @@ const CSS = `
   padding: clamp(42px, 7vw, 100px) clamp(18px, 4vw, 48px) 64px;
   color: var(--ma-fg);
   background: var(--ma-bg);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--ma-serif);
   box-sizing: border-box;
 }
 
@@ -1128,8 +1130,15 @@ const CSS = `
 }
 
 :where(.ma) button,
-:where(.ma) input {
+:where(.ma) input,
+:where(.ma) select {
   font: inherit;
+}
+
+:where(.ma) button,
+:where(.ma) input,
+:where(.ma) select {
+  font-family: var(--ma-sans);
 }
 
 :where(.ma) button {
@@ -1157,17 +1166,20 @@ const CSS = `
   max-width: 900px;
   margin: 0;
   font-family: var(--ma-serif);
-  font-size: clamp(36px, 3.2vw, 44px);
+  font-size: clamp(38px, 4.4vw, 56px);
   font-weight: 400;
   line-height: 1;
-  letter-spacing: -.04em;
+  letter-spacing: -.035em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .ma-lede {
   max-width: 760px;
   margin: 8px 0 0;
   color: var(--ma-muted);
-  font-size: 14px;
+  font-family: var(--ma-serif);
+  font-size: 15px;
   line-height: 1.55;
 }
 
@@ -1260,7 +1272,13 @@ const CSS = `
   align-items: center;
   gap: 12px;
   min-width: 0;
-  border-bottom: 1px solid var(--ma-fg);
+  border: 1px solid var(--ma-line);
+  border-radius: 999px;
+  padding: 0 14px;
+  background: rgba(255, 255, 255, 0.52);
+  box-shadow: 0 12px 30px rgba(58, 46, 30, 0.06);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
 
 .ma-sr {
@@ -1282,7 +1300,7 @@ const CSS = `
 .ma-search input {
   width: 100%;
   min-width: 0;
-  padding: 10px 0;
+  padding: 12px 0;
   border: 0;
   border-radius: 0;
   outline: none;
@@ -1292,7 +1310,7 @@ const CSS = `
 }
 
 .ma-search input::placeholder {
-  color: #99978f;
+  color: var(--ma-muted);
 }
 
 .ma-search input:focus-visible {
@@ -1313,9 +1331,9 @@ const CSS = `
   flex: 0 0 auto;
   padding: 8px 14px;
   border: 1px solid var(--ma-fg);
-  border-radius: 0;
+  border-radius: 999px;
   background: var(--ma-fg);
-  color: #fff;
+  color: var(--ma-bg);
   font: 500 9px/1.4 var(--ma-mono);
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -1496,7 +1514,7 @@ const CSS = `
 
 .ma-full-date {
   display: block;
-  color: #a09e96;
+  color: var(--ma-muted);
   font-size: 9px;
 }
 
@@ -1553,22 +1571,28 @@ const CSS = `
   display: inline-block;
   margin-left: 7px;
   color: var(--ma-muted);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--ma-sans);
   font-size: 12px;
   vertical-align: .3em;
 }
 
 .ma-sum {
   max-width: 680px;
+  display: block;
   margin: 10px 0 0;
   color: var(--ma-muted);
-  font-size: 12px;
+  font-family: var(--ma-serif);
+  font-size: 13px;
   line-height: 1.7;
 }
 
 .ma-record-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
   margin-top: 12px;
-  color: #929087;
+  color: var(--ma-muted);
   font: 9px/1.6 var(--ma-mono);
 }
 
@@ -1606,7 +1630,7 @@ const CSS = `
 
 .ma-title em {
   color: var(--ma-muted);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--ma-sans);
   font-size: 11px;
   font-style: normal;
   letter-spacing: 0;
@@ -1696,10 +1720,13 @@ const CSS = `
 }
 
 .ma-load-button {
-  padding: 12px 18px;
-  border: 1px solid var(--ma-fg);
-  border-radius: 0;
-  background: transparent;
+  padding: 12px 20px;
+  border: 1px solid var(--ma-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.52);
+  box-shadow: 0 12px 30px rgba(58, 46, 30, 0.06);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   color: var(--ma-fg);
   font-size: 12px;
   cursor: pointer;
@@ -1708,7 +1735,7 @@ const CSS = `
 
 .ma-load-button:hover {
   background: var(--ma-fg);
-  color: #fff;
+  color: var(--ma-bg);
 }
 
 .ma-footer-note {
@@ -1762,7 +1789,11 @@ const CSS = `
   }
 
   .ma-search {
-    flex-basis: 180px;
+    flex: 1 1 100%;
+  }
+
+  .ma-search-mode {
+    margin-left: auto;
   }
 
   .ma-filter-row {
@@ -2022,7 +2053,7 @@ const CSS = `
   margin: 8px 0 0;
   border-left: 2px solid var(--ma-accent);
   padding: 4px 0 4px 12px;
-  color: #3f3e39;
+  color: var(--ma-fg);
   font-family: var(--ma-serif);
   font-size: 16px;
   line-height: 1.45;
@@ -2046,7 +2077,7 @@ const CSS = `
   display: block;
   margin-top: 3px;
   color: var(--ma-muted);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--ma-sans);
   font-size: 11px;
 }
 

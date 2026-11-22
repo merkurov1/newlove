@@ -30,7 +30,7 @@ export default function IsakeyforallPageView({ lang }: { lang: IsakeyforallLangu
     <div
       lang={lang}
       dir="ltr"
-      className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden"
+      className="light-gallery min-h-screen bg-[#F5F2EB] text-[#1D1B18] font-sans selection:bg-[#1D1B18] selection:text-[#F5F2EB] relative overflow-x-hidden"
     >
       <JsonLd
         data={profilePageJsonLd({
@@ -67,7 +67,7 @@ export default function IsakeyforallPageView({ lang }: { lang: IsakeyforallLangu
 
         {/* Content: The Narrative */}
         <article className="prose prose-lg prose-stone prose-p:font-light prose-p:leading-relaxed prose-headings:font-serif max-w-none">
-          <div className="space-y-8 text-lg leading-relaxed text-[#111]">
+          <div className="space-y-8 text-lg leading-relaxed text-[#1D1B18]">
             <p className="first-letter:text-5xl first-letter:font-serif first-letter:font-bold first-letter:float-left first-letter:mr-3 first-letter:mt-[-8px]">
               {copy.narrative.origin}
             </p>
@@ -76,24 +76,24 @@ export default function IsakeyforallPageView({ lang }: { lang: IsakeyforallLangu
 
             <p>{copy.narrative.heritage}</p>
 
-            <blockquote className="border-l-2 border-black pl-8 my-12 py-2 bg-white/50 p-6 rounded-r-2xl">
-              <p className="text-2xl sm:text-3xl font-serif italic text-black leading-tight">
+            <blockquote className="border-l-2 border-[#1D1B18]/40 pl-8 my-12 py-2 bg-white/55 p-6 rounded-r-2xl shadow-[0_18px_50px_rgba(58,46,30,0.08)] backdrop-blur-sm">
+              <p className="text-2xl sm:text-3xl font-serif italic text-[#1D1B18] leading-tight">
                 {copy.quote}
               </p>
             </blockquote>
 
             {/* Heart & Angel — unified block */}
-            <div className="bg-white/70 border border-stone-200 p-8 rounded-2xl my-12 space-y-6 shadow-sm">
+            <div className="border border-[#1D1B18]/12 bg-white/55 p-8 rounded-2xl my-12 space-y-6 shadow-[0_18px_50px_rgba(58,46,30,0.08)] backdrop-blur-sm">
               <p>{copy.heart.origin}</p>
 
               <p>{copy.heart.mission}</p>
 
-              <ul className="space-y-3 text-stone-800 font-light list-none pl-0">
+              <ul className="space-y-3 text-[#4E4A43] font-light list-none pl-0">
                 {copy.heart.values.map((value) => (
                   <li key={value.title} className="flex items-start gap-3">
-                    <span className="text-black font-bold">•</span>
+                    <span className="text-[#1D1B18] font-bold">•</span>
                     <span>
-                      <strong className="font-semibold text-black">{value.title}</strong>{' '}
+                      <strong className="font-semibold text-[#1D1B18]">{value.title}</strong>{' '}
                       {value.body}
                     </span>
                   </li>
@@ -101,8 +101,8 @@ export default function IsakeyforallPageView({ lang }: { lang: IsakeyforallLangu
               </ul>
             </div>
 
-            <blockquote className="border-l-2 border-black pl-6 sm:pl-8 my-12 py-2">
-              <p className="text-xl sm:text-2xl font-serif italic text-black leading-relaxed">
+            <blockquote className="border-l-2 border-[#1D1B18]/40 pl-6 sm:pl-8 my-12 py-2">
+              <p className="text-xl sm:text-2xl font-serif italic text-[#1D1B18] leading-relaxed">
                 {copy.secondQuote}
               </p>
             </blockquote>
@@ -112,7 +112,7 @@ export default function IsakeyforallPageView({ lang }: { lang: IsakeyforallLangu
 
           {/* FEATURED: UNFRAMED & RESEARCH */}
           <section className="mb-12 mt-16">
-            <h3 className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mb-6">
+            <h3 className="font-mono text-[10px] uppercase tracking-widest text-[#847E73] mb-6">
               {copy.featured.label}
             </h3>
 
