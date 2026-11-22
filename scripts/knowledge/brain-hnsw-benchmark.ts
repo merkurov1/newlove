@@ -602,6 +602,7 @@ async function modeRecall(client: Client) {
 
   const perQuery = [];
   const rankingsByEf = new Map<number, QueryRanking[]>();
+  const scopedRankingsByEf = new Map<number, QueryRanking[]>();
   const latencies = {
     exact: [] as number[],
     approx: new Map<number, number[]>(EF_VALUES.map((ef) => [ef, [] as number[]])),
@@ -680,8 +681,9 @@ async function modeRecall(client: Client) {
       );
 
       const ranking: QueryRanking = { exact: exactIds, approx: approxIds };
-      if (!rankingsByEf.has(efSearch)) rankingsByEf.set(efSearch, []);
-      rankingsByEf.get(efSearch).push(ranking);
+      const targetRankings = query.documentIds ? scopedRankingsByEf : rankingsByEf;
+      if (!targetRankings.has(efSearch)) targetRankings.set(efSearch, []);
+      targetRankings.get(efSearch).push(ranking);
 
       approxSummaries.push({
         efSearch,
@@ -716,12 +718,20 @@ async function modeRecall(client: Client) {
   const summaries: EfSearchSummary[] = EF_VALUES.map((ef) =>
     summarizeEfSearch(ef, rankingsByEf.get(ef) || [])
   );
+  const scopedSummaries: EfSearchSummary[] = EF_VALUES.map((ef) =>
+    summarizeEfSearch(ef, scopedRankingsByEf.get(ef) || [])
+  );
+  // The recall gates apply to the whole-Brain HNSW path only. Document-scoped
+  // requests keep the planner's default exact path, so mixing them into the
+  // gate would inflate HNSW recall.
   const selected = chooseEfSearch(summaries);
+  const wholeBrainPerQuery = perQuery.filter((row) => !row.scoped);
+  const scopedPerQuery = perQuery.filter((row) => row.scoped);
 
   const sameOrderByEf = new Map<number, number[]>(
     EF_VALUES.map((ef) => [
       ef,
-      perQuery.map((row) => {
+      wholeBrainPerQuery.map((row) => {
         const entry = row.approx.find((value) => value.efSearch === ef);
         return entry?.sameTop10Order ? 1 : 0;
       }),
@@ -730,9 +740,18 @@ async function modeRecall(client: Client) {
   const stabilityByEf = new Map<number, number[]>(
     EF_VALUES.map((ef) => [
       ef,
-      perQuery.map((row) => {
+      wholeBrainPerQuery.map((row) => {
         const entry = row.approx.find((value) => value.efSearch === ef);
         return entry?.stableAcrossRepeats === false ? 0 : 1;
+      }),
+    ])
+  );
+  const scopedSameOrderByEf = new Map<number, number[]>(
+    EF_VALUES.map((ef) => [
+      ef,
+      scopedPerQuery.map((row) => {
+        const entry = row.approx.find((value) => value.efSearch === ef);
+        return entry?.sameTop10Order ? 1 : 0;
       }),
     ])
   );
@@ -748,6 +767,7 @@ async function modeRecall(client: Client) {
     queryGateNote: manifestGateEligibility(queries)
       ? '30-50 real queries supplied.'
       : 'The 30-50 real-query gate is not eligible with this manifest size.',
+    gateScope: 'whole_brain_only',
     qualityGates: {
       recallAt20: 0.95,
       recallAt40: 0.97,
@@ -758,10 +778,19 @@ async function modeRecall(client: Client) {
       passesGates: meetsGates(summary),
       sameTop10OrderRate:
         sameOrderByEf.get(summary.efSearch)?.reduce((sum, value) => sum + value, 0) /
-        Math.max(1, queries.length),
+        Math.max(1, wholeBrainPerQuery.length),
       stableAcrossRepeatsRate:
         stabilityByEf.get(summary.efSearch)?.reduce((sum, value) => sum + value, 0) /
-        Math.max(1, queries.length),
+        Math.max(1, wholeBrainPerQuery.length),
+    })),
+    scopedSummaries: scopedSummaries.map((summary) => ({
+      ...summary,
+      // Document-scoped calls keep the previous planner-default path and are
+      // not part of the HNSW recall gate. Keep the numbers visible.
+      passesGates: null,
+      sameTop10OrderRate:
+        scopedSameOrderByEf.get(summary.efSearch)?.reduce((sum, value) => sum + value, 0) /
+        Math.max(1, scopedPerQuery.length),
     })),
     selectedEfSearch: selected,
     selectionNote:

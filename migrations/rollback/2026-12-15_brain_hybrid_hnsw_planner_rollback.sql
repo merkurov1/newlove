@@ -80,6 +80,9 @@ begin
     raise exception 'invalid_query_text' using errcode = '22023';
   end if;
 
+  -- Keep candidate selection bounded. At the current corpus size 120 is the
+  -- largest limit that still lets the planner choose the HNSW index instead
+  -- of a sequential scan + sort.
   v_candidate_limit := least(greatest(p_match_count * 2, 40), 120);
 
   if p_query_text is not null and btrim(p_query_text) <> '' then
