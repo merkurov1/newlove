@@ -59,6 +59,8 @@
     "seo:check": "node --experimental-strip-types scripts/seo-check.ts",
     "media:analyze": "tsx scripts/media-analysis-run.ts",
     "media:inventory": "node --experimental-strip-types --no-warnings scripts/media-audit/archive-inventory.ts",
+    "media:verify-early": "node --experimental-strip-types --no-warnings scripts/media-audit/verify-early-period.ts",
+    "media:import-early": "node --experimental-strip-types --no-warnings scripts/media-audit/import-early-period.ts",
     "media:verify": "node scripts/media-audit/verify.mjs",
     "media:audit": "node scripts/media-audit/problems.mjs",
     "media:repair:consistency": "node scripts/media-audit/repair-media-consistency.mjs --dry-run",

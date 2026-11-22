@@ -1,0 +1,557 @@
+{
+  "generatedAt": "2026-11-22",
+  "confirmed": [
+    {
+      "date": "2006-04-21",
+      "outlet": "merkurov.com",
+      "title": "Гипер-социальное",
+      "url": "https://merkurov.com/2006/04/21/%D0%B3%D0%B8%D0%BF%D0%B5%D1%80-%D1%81%D0%BE%D1%86%D0%B8%D0%B0%D0%BB%D1%8C%D0%BD%D0%BE%D0%B5/",
+      "lang": "RU",
+      "kind": "blog",
+      "role": "subject",
+      "topic": "AI & Tech",
+      "summary": "Авторский пост о сервисе CatchUp и геосоциальных функциях: как технологии меняют привычку сообщать друзьям о своём местоположении.",
+      "verification": "Internet Archive, копия 2009-04-09."
+    },
+    {
+      "date": "2006-06-21",
+      "outlet": "merkurov.com",
+      "title": "Google sucks",
+      "url": "https://merkurov.com/2006/06/21/google-sucks/",
+      "lang": "RU",
+      "kind": "blog",
+      "role": "subject",
+      "topic": "AI & Tech",
+      "summary": "Авторский пост о региональной выдаче Google: почему русскоязычные результаты раздражают пользователя и как это влияет на выбор поисковика.",
+      "verification": "Internet Archive, копия 2008-10-23."
+    },
+    {
+      "date": "2007-08-15",
+      "outlet": "merkurov.com",
+      "title": "IP-телефония: Достань юзера",
+      "url": "https://merkurov.com/2007/08/15/ip-%D1%82%D0%B5%D0%BB%D0%B5%D1%84%D0%BE%D0%BD%D0%B8%D1%8F-%D0%B4%D0%BE%D1%81%D1%82%D0%B0%D0%BD%D1%8C-%D1%8E%D0%B7%D0%B5%D1%80%D0%B0/",
+      "lang": "RU",
+      "kind": "blog",
+      "role": "subject",
+      "topic": "AI & Tech",
+      "summary": "Авторский пост об IP-телефонии: почему пользователи по-прежнему тянутся к телефонной трубке и что мешает массовому VoIP.",
+      "verification": "Internet Archive, копия 2008-03-23."
+    },
+    {
+      "date": "2007-12-14",
+      "outlet": "merkurov.com",
+      "title": "Социальная футорология",
+      "url": "https://merkurov.com/2007/12/14/%D1%81%D0%BE%D1%86%D0%B8%D0%B0%D0%BB%D1%8C%D0%BD%D0%B0%D1%8F-%D1%84%D1%83%D1%82%D0%BE%D1%80%D0%BE%D0%BB%D0%BE%D0%B3%D0%B8%D1%8F/",
+      "lang": "RU",
+      "kind": "blog",
+      "role": "subject",
+      "topic": "Internet & Censorship",
+      "summary": "Авторский пост о будущем социального веба: единая идентификация, интеграция сервисов через API и превращение платформ в инфраструктуру.",
+      "verification": "Internet Archive, копия 2008-03-13."
+    },
+    {
+      "date": "2008-08-31",
+      "outlet": "Эхо Москвы",
+      "title": "Перспективы iPhone в России",
+      "url": "https://echofm.online/archive/tochka/23820",
+      "lang": "RU",
+      "kind": "radio",
+      "role": "subject",
+      "topic": "AI & Tech",
+      "summary": "Эфир программы «Точка» с Александром Плющевым: Антон Меркуров и Алексей Пацай обсуждают официальный выход iPhone в России, рынок смартфонов и конкуренцию платформ.",
+      "verification": "live page verified during research"
+    },
+    {
+      "date": "2009-03-18",
+      "outlet": "Roem.ru",
+      "title": "Кадры: Антон Меркуров покидает РБК",
+      "url": "https://roem.ru/18-03-2009/128488/kadry-anton-merkurov-pokidaet-rbk/",
+      "lang": "RU",
+      "kind": "mention",
+      "role": "subject",
+      "topic": "AI & Tech",
+      "summary": "Заметка об уходе Антона Меркурова с должности директора по интеграционным процессам РБК; указан его переезд в Лондон.",
+      "verification": "live page verified during research"
+    },
+    {
+      "date": "2009-07-01",
+      "outlet": "Chaskor",
+      "title": "Всё остальное — жалкая пародия",
+      "url": "https://www.chaskor.ru/article/vse_ostalnoe_-_zhalkaya_parodiya_8013",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "Internet & Censorship",
+      "summary": "Колонка о том, как Facebook постепенно заменяет блоги, фотохостинги, новостные агрегаторы и другие сервисы.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-07-29",
+      "outlet": "Chaskor",
+      "title": "Телефон против прогресса",
+      "url": "https://www.chaskor.ru/article/telefon_protiv_progressa_8828",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "AI & Tech",
+      "summary": "Колонка о конфликте сотовых операторов и интернет-телефонии: почему звонки через интернет меняют рынок связи.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-08-05",
+      "outlet": "Chaskor",
+      "title": "Битва гигантов",
+      "url": "https://www.chaskor.ru/article/bitva_gigantov_9003",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "AI & Tech",
+      "summary": "Колонка о конфликте Apple и Google вокруг App Store и Google Voice: как закрытие приложения превратилось в войну платформ.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-08-07",
+      "outlet": "Chaskor",
+      "title": "Яська",
+      "url": "https://www.chaskor.ru/article/yaska_9121",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "AI & Tech",
+      "summary": "Колонка о запуске «Яндексом» собственной версии ICQ и о путанице в стратегии компании вокруг мессенджеров.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-08-19",
+      "outlet": "Chaskor",
+      "title": "SaaS вместо сисадмина",
+      "url": "https://www.chaskor.ru/article/saas_vmesto_sisadmina_9468",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "AI & Tech",
+      "summary": "Колонка о переходе компаний на SaaS и облачные офисные сервисы: экономика, зависимость от провайдера и будущее ИТ-специалистов.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-08-24",
+      "outlet": "Chaskor",
+      "title": "Отпишись и не читай",
+      "url": "https://www.chaskor.ru/article/otpishis_i_ne_chitaj_9652",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "Internet & Censorship",
+      "summary": "Колонка о границах свободы в LiveJournal, жалобах на ненормативную лексику и попытках регулировать содержание блогов.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-09-03",
+      "outlet": "Chaskor",
+      "title": "Катаклизм Warcraft",
+      "url": "https://www.chaskor.ru/article/kataklizm_warcraft_9945",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "Art & Culture",
+      "summary": "Колонка о запуске печатного журнала World of Warcraft и о том, как игровые вселенные становятся медиапродуктами.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-09-03",
+      "outlet": "Chaskor",
+      "title": "Я вас купил — чего же боле?",
+      "url": "https://www.chaskor.ru/article/ya_vas_kupil_-_chego_zhe_bole_9918",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "Internet & Censorship",
+      "summary": "Колонка о рынке проплаченных мнений в блогах и социальных сетях: как девальвируется доверие к частному мнению.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-09-09",
+      "outlet": "Chaskor",
+      "title": "Боливар не выдержит двоих",
+      "url": "https://www.chaskor.ru/article/bolivar_ne_vyderzhit_dvoih_10096",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "Internet & Censorship",
+      "summary": "Колонка о покупке домена VK.com и заявке «ВКонтакте» на международную экспансию: хватит ли ресурсов на борьбу с Facebook.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-09-14",
+      "outlet": "Chaskor",
+      "title": "В ожидании доктора",
+      "url": "https://www.chaskor.ru/article/v_ozhidanii_doktora_10213",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "Art & Culture",
+      "summary": "Колонка о начале нового телесезона, сериалах и конкуренции американских и британских шоу за внимание зрителя.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-09-15",
+      "outlet": "Chaskor",
+      "title": "Зачем качать? Просто слушай",
+      "url": "https://www.chaskor.ru/article/zachem_kachat_prosto_slushaj_10232",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "AI & Tech",
+      "summary": "Колонка о стриминговых музыкальных сервисах и приходе Spotify на мобильные платформы: почему скачивание уступает потоковому прослушиванию.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-09-19",
+      "outlet": "Chaskor",
+      "title": "Дохлые линии",
+      "url": "https://www.chaskor.ru/article/dohlye_linii_10435",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "AI & Tech",
+      "summary": "Колонка о судьбе домашней телефонной связи в Британии и о переходе пользователей на мобильную и интернет-телефонию.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-09-23",
+      "outlet": "Chaskor",
+      "title": "Лондон. Чичваркин. Суд…",
+      "url": "https://www.chaskor.ru/article/london_chichvarkin_sud_10585",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "Internet & Censorship",
+      "summary": "Репортаж из Лондона о первом судебном заседании по делу Евгения Чичваркина: процедура, стороны и атмосфера слушаний.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-09-27",
+      "outlet": "Chaskor",
+      "title": "Старые трюки new media",
+      "url": "https://www.chaskor.ru/article/starye_tryuki_new_media_10682",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "AI & Tech",
+      "summary": "Колонка о Google Fast Flip и попытке медиакомпаний найти новую бизнес-модель на стыке поиска, рекламы и издательского контента.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-11-03",
+      "outlet": "Chaskor",
+      "title": "DVD? На помойку!",
+      "url": "https://www.chaskor.ru/article/dvd_na_pomojku_11956",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "Art & Culture",
+      "summary": "Колонка о вытеснении физических медианосителей цифровой дистрибуцией и о том, почему DVD уходит с рынка.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-11-05",
+      "outlet": "Chaskor",
+      "title": "«Рейтинг с петлёй на шее»",
+      "url": "https://www.chaskor.ru/article/yandeks_zakryvaet_rejting_populyarnyh_zapisej_blogov_zakrytie_rejtinga_yandeks_blogov_12021",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "Internet & Censorship",
+      "summary": "Колонка о закрытии рейтинга блогов «Яндекса» и о том, почему публичные метрики блогосферы утратили смысл.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-11-10",
+      "outlet": "Chaskor",
+      "title": "Испорченная карма",
+      "url": "https://www.chaskor.ru/article/isporchennaya_karma_12234",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "Internet & Censorship",
+      "summary": "Колонка о спам-конкурсе «ВКонтакте»: как социальная сеть пыталась выйти на западный рынок и почему рассылка приглашений ударила по репутации.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-11-11",
+      "outlet": "Chaskor",
+      "title": "Google5",
+      "url": "https://www.chaskor.ru/article/google5_12304",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "AI & Tech",
+      "summary": "Колонка о покупке Google сервиса Gizmo5 и переделе рынка интернет-телефонии: почему Google хочет заменить Skype.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2009-11-19",
+      "outlet": "Chaskor",
+      "title": "Своя зона",
+      "url": "https://www.chaskor.ru/article/svoya_zona_12580",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "Internet & Censorship",
+      "summary": "Колонка о кириллической доменной зоне .РФ: нужен ли России собственный домен, кто на нём зарабатывает и чего ждут регистраторы.",
+      "verification": "Internet Archive, копия 2009-11-19."
+    },
+    {
+      "date": "2010-02-24",
+      "outlet": "Chaskor",
+      "title": "Самые ценные пользователи",
+      "url": "https://www.chaskor.ru/article/samye_tsennye_polzovateli_15197",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "Internet & Censorship",
+      "summary": "Колонка о том, кого социальные сервисы считают самыми ценными пользователями, и о зависимости платформ от активной аудитории.",
+      "verification": "Internet Archive, копия 2010 года."
+    },
+    {
+      "date": "2010-03-02",
+      "outlet": "Chaskor",
+      "title": "Этот Google-ЖЖ неспроста!",
+      "url": "https://www.chaskor.ru/article/etot_google-zhzh_nesprosta_15017",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "Internet & Censorship",
+      "summary": "Колонка о конкуренции Google и LiveJournal за внимание аудитории и о том, как поисковик меняет привычки блогеров.",
+      "verification": "Internet Archive, копия 2010 года."
+    },
+    {
+      "date": "2010-03-18",
+      "outlet": "Chaskor",
+      "title": "«Для видео в интернете YouTube — самое большое зло»",
+      "url": "https://www.chaskor.ru/article/tvigle_on-line_televidenie_15843",
+      "lang": "RU",
+      "kind": "column",
+      "role": "author",
+      "topic": "AI & Tech",
+      "summary": "Материал о развитии онлайн-видео: почему YouTube занял доминирующее положение, как конкурируют видеоплатформы и что это значит для медиа.",
+      "verification": "Internet Archive, копия 2010 года."
+    },
+    {
+      "date": "2010-07-05",
+      "outlet": "Roem.ru",
+      "title": "Засурский, Меркуров и Москалев проконсультируют «Суп»",
+      "url": "https://roem.ru/05-07-2010/121296/zasurskiy-merkurov-i-moskalev-prokonsultiruyut-sup/",
+      "lang": "RU",
+      "kind": "mention",
+      "role": "subject",
+      "topic": "AI & Tech",
+      "summary": "Сообщение о консалтинговом проекте для «СУП»: Иван Засурский, Антон Меркуров и Сергей Москалёв названы консультантами нового медийного проекта.",
+      "verification": "live page verified during research"
+    },
+    {
+      "date": "2012-04-04",
+      "outlet": "Roem.ru",
+      "title": "Меркуров утверждает, что Google сможет сделать кнопку +1 кому-то нужной (Slon.ru)",
+      "url": "https://roem.ru/04-04-2012/141385/merkurov-utverjdaet-chto-google-smojet-sdelat-knopku-1-komu-to-nujnoy-slonru/",
+      "lang": "RU",
+      "kind": "mention",
+      "role": "subject",
+      "topic": "AI & Tech",
+      "summary": "Перепечатка/разбор колонки Антона Меркурова о кнопке Google +1 и её месте в экономике внимания.",
+      "verification": "live page verified during research"
+    },
+    {
+      "date": "2012-04-16",
+      "outlet": "TJournal",
+      "title": "«Достаточно один раз сказать что-то внятное, и журналисты записывают тебя в интернет-эксперты»",
+      "url": "https://tjournal.ru/46771",
+      "lang": "RU",
+      "kind": "interview",
+      "role": "subject",
+      "topic": "AI & Tech",
+      "summary": "Интервью об устройстве медиаэкспертизы, работе в РБК в 2006–2008 годах, консалтинге, публичной речи и отношении к социальным платформам.",
+      "verification": "Автор — Никита Лихачёв."
+    },
+    {
+      "date": "2012-11-09",
+      "outlet": "Roem.ru",
+      "title": "«Элита» Рунета уходит из Facebook?",
+      "url": "https://roem.ru/09-11-2012/133566/elita-runeta-uhodit-iz-facebook/",
+      "lang": "RU",
+      "kind": "mention",
+      "role": "subject",
+      "topic": "Internet & Censorship",
+      "summary": "Материал о переходе заметных деятелей Рунета из Facebook во «ВКонтакте»; Антон Меркуров назван одним из авторов, объяснявших выбор в пользу VK.",
+      "verification": "live page verified during research"
+    },
+    {
+      "date": "2013-10-09",
+      "outlet": "Roem.ru",
+      "title": "Дедушка Меркурова был тот ещё затейник",
+      "url": "https://roem.ru/09-10-2013/138453/dedushka-merkurova-byl-tot-eshche-zateynik/",
+      "lang": "RU",
+      "kind": "mention",
+      "role": "subject",
+      "topic": "Art & Culture",
+      "summary": "Заметка о советской эротической азбуке 1931 года из семейного собрания Меркуровых; Антон Меркуров упомянут как наследник и популяризатор наследия скульптора Сергея Меркурова.",
+      "verification": "live page verified during research"
+    },
+    {
+      "date": "2015-10-26",
+      "outlet": "Теплица социальных технологий",
+      "title": "Видеозапись и презентация вебинара «FireChat: общение без Интернета и сотовой связи»",
+      "url": "https://te-st.org/reports/firechat-webinar-materials/",
+      "lang": "RU",
+      "kind": "video",
+      "role": "subject",
+      "topic": "AI & Tech",
+      "summary": "Вебинар о mesh-коммуникациях на примере FireChat: как работает связь без интернета и сотовой сети, зачем это НКО и какие ограничения есть у технологии.",
+      "verification": "Антон Меркуров — представитель Open Garden в России."
+    }
+  ],
+  "doubtful": [
+    {
+      "date": "2005–2008",
+      "outlet": "не установлено",
+      "title": "Публикация о HYIP / электронных деньгах / e-gold",
+      "url": null,
+      "status": "unresolved",
+      "reason": "Ни один независимый источник не подтвердил существование материала и участие Антона Меркурова. Поисковые формулировки по HYIP, e-gold, electronic money, электронные деньги и хайп не дали проверяемого результата. В архив не добавлено."
+    },
+    {
+      "date": "2007-06-05",
+      "outlet": "Kavkazcenter",
+      "title": "Руссо-туристо: Нихт ферштейн!",
+      "url": "https://www.kavkazcenter.com/russ/content/2007/06/05/51286/russo-turisto-nikht-fershtejn!.shtml",
+      "status": "excluded_source",
+      "reason": "Цитата Антона Меркурова подтверждена, но источник является запрещённой/экстремистской площадкой. Публиковать такую ссылку в публичном архиве без отдельного решения владельца нельзя."
+    },
+    {
+      "date": "2007-06-03",
+      "outlet": "Эхо Москвы",
+      "title": "Аргентум",
+      "url": "https://echo.msk.ru/programs/argentum/52242/",
+      "status": "unverified_identity",
+      "reason": "Поисковый сниппет упоминает фотографа Антона Меркурова, но страница недоступна (404), а роль и тождество с интернет-экспертом не подтверждены."
+    },
+    {
+      "date": "2011-02-04",
+      "outlet": "Roem.ru",
+      "title": "ФСБ обижает Меркурова",
+      "url": "https://roem.ru/04-02-2011/147391/fsb-obijaet-merkurova/",
+      "status": "unverified_context",
+      "reason": "В сохранённой версии страницы отсутствует тело новости; невозможно подтвердить, о каком Меркурове и каком событии идёт речь."
+    },
+    {
+      "date": "2011-11-24",
+      "outlet": "Roem.ru",
+      "title": "РОЦИТ запустил видеошоу про Интернет",
+      "url": "https://roem.ru/24-11-2011/123344/rocit-zapustil-videoshou-pro-internet/",
+      "status": "unverified_context",
+      "reason": "Страница найдена по имени, но в доступном фрагменте нет подтверждения роли Антона Меркурова."
+    },
+    {
+      "date": "2013-01-28",
+      "outlet": "Republic",
+      "title": "Шесть секунд, которые могут изменить мир",
+      "url": null,
+      "status": "unresolved_url",
+      "reason": "Материал указан на авторской странице Republic, но точный canonical URL не удалось получить без обхода антибот-защиты. В архив не добавлено."
+    },
+    {
+      "date": "2009-07-09",
+      "outlet": "Chaskor",
+      "title": "Похороны Короля",
+      "url": "https://www.chaskor.ru/article/pohorony_korola_8275",
+      "status": "unverified_url",
+      "reason": "Заголовок и дата видны в архивной авторской странице, но сам URL не имеет сохранённого снимка и не подтверждён как canonical."
+    },
+    {
+      "date": "2010-02-05",
+      "outlet": "Chaskor",
+      "title": "Марш в школу!",
+      "url": "https://www.chaskor.ru/article/marsh_v_shkolu_14764",
+      "status": "url_title_mismatch",
+      "reason": "По URL открывается страница с другим заголовком («Воображариум доктора Курпатова»); запись не добавлена до ручной сверки."
+    },
+    {
+      "date": "2026-11-22",
+      "outlet": "Muck Rack",
+      "title": "Профиль Anton Merkurov",
+      "url": "https://muckrack.com/anton-merkurov",
+      "status": "access_blocked",
+      "reason": "Muck Rack вернул 403/антибот-защиту; наличие профиля и публикаций не подтверждено."
+    }
+  ],
+  "deferredPossibleDuplicates": [
+    {
+      "date": "2011-10-18",
+      "outlet": "Republic (Слон.ру)",
+      "title": "Когда интернет-телевидение убьет телеканалы?",
+      "url": "https://slon.ru/russia/kogda_internet_televidenie_ubet_telekanaly-689478.xhtml",
+      "reason": "Подтверждено, но не добавлено: возможный дубль уже импортированных колонок Slon/Republic."
+    },
+    {
+      "date": "2012-04-04",
+      "outlet": "Republic (Слон.ру)",
+      "title": "Как Google делает «+1» обязательной кнопкой",
+      "url": "https://slon.ru/future/kak_google_delaet_1_obyazatelnoy_knopkoy_-772783.xhtml",
+      "reason": "Подтверждено, но не добавлено: возможный дубль."
+    },
+    {
+      "date": "2012-04-09",
+      "outlet": "Republic (Слон.ру)",
+      "title": "Миллиард? За Instagram?",
+      "url": "https://slon.ru/future/milliard_za_instagram-775141.xhtml",
+      "reason": "Подтверждено, но не добавлено: возможный дубль."
+    },
+    {
+      "date": "2012-09-18",
+      "outlet": "Republic (Слон.ру)",
+      "title": "Наступила осень интернет-цензуры? Расслабьтесь!",
+      "url": "https://slon.ru/future/nastupila_osen_internet_tsenzury-829637.xhtml",
+      "reason": "Подтверждено, но не добавлено: возможный дубль."
+    },
+    {
+      "date": "2012-09-25",
+      "outlet": "Republic (Слон.ру)",
+      "title": "Митинг в защиту YouTube: кто пойдет?",
+      "url": "https://slon.ru/future/youtube_miting-832135.xhtml",
+      "reason": "Подтверждено, но не добавлено: возможный дубль."
+    },
+    {
+      "date": "2012-10-04",
+      "outlet": "Republic (Слон.ру)",
+      "title": "Зачем нужен «Яндекс.Браузер»?",
+      "url": "https://slon.ru/future/zachem_nuzhen_yandeks_brauzer-834872.xhtml",
+      "reason": "Подтверждено, но не добавлено: возможный дубль."
+    },
+    {
+      "date": "2012-11-07",
+      "outlet": "Republic (Слон.ру)",
+      "title": "Торренты в России: практика большого взрыва",
+      "url": "https://slon.ru/future/torrenty_v_rossii_praktika_bolshogo_vzryva_-849002.xhtml",
+      "reason": "Подтверждено, но не добавлено: возможный дубль."
+    },
+    {
+      "date": "2012-11-09",
+      "outlet": "Republic (Слон.ру)",
+      "title": "Почему «ВКонтакте» лучше, чем Facebook",
+      "url": "https://slon.ru/future/pochemu_vkontakte_luchshe_chem_facebook-850183.xhtml",
+      "reason": "Подтверждено, но не добавлено: возможный дубль."
+    },
+    {
+      "date": "2012-11-12",
+      "outlet": "Republic (Слон.ру)",
+      "title": "139-ФЗ доставляет лулзы: запрещают «Луркоморье»",
+      "url": "https://slon.ru/future/139_fz_dostavlyaet_lulzy_zapreshchayut_lurkomore-851132.xhtml",
+      "reason": "Подтверждено, но не добавлено: возможный дубль."
+    }
+  ],
+  "counts": {
+    "confirmed": 34,
+    "doubtful": 9,
+    "deferredPossibleDuplicates": 9
+  }
+}
