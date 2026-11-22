@@ -26,9 +26,10 @@
 --                             benchmark harness at 40/80/120.
 --
 -- Document-scoped requests (p_document_ids is not null) keep the planner's
--- default scope-index path. That path is exact, returns all chunks of the
--- selected documents and was not the measured bottleneck; forcing HNSW there
--- would trade exact scoped recall for no meaningful latency gain.
+-- default behaviour. The previous implementation used the same filtered
+-- `ORDER BY ... LIMIT` shape; locally the planner chooses the scope index plus
+-- a sort. That is preserved behaviour, not a hard guarantee, and forcing HNSW
+-- there would change scoped retrieval semantics for no measured gain.
 --
 -- Every setting is applied with set_config(..., is_local => true), so it is
 -- guaranteed to revert at transaction end, and is explicitly restored before
@@ -140,18 +141,22 @@ begin
     exception when others then
       perform set_config('enable_seqscan', v_prior_seqscan, true);
       perform set_config('enable_sort', v_prior_sort, true);
-      perform set_config('hnsw.ef_search', coalesce(v_prior_ef_search, '40'), true);
+      -- If the GUC was unset before the call, NULL resets it instead of
+      -- inventing a value that would leak inside the transaction.
+      perform set_config('hnsw.ef_search', v_prior_ef_search, true);
       raise;
     end;
 
     perform set_config('enable_seqscan', v_prior_seqscan, true);
     perform set_config('enable_sort', v_prior_sort, true);
-    perform set_config('hnsw.ef_search', coalesce(v_prior_ef_search, '40'), true);
+    perform set_config('hnsw.ef_search', v_prior_ef_search, true);
   else
     -- Document-scoped path: preserve the planner's default behaviour. The
-    -- knowledge_chunks_scope_idx path is exact, returns all chunks of the
-    -- selected documents and was not the measured bottleneck. Forcing HNSW
-    -- here would trade exact scoped recall for no meaningful latency gain.
+    -- previous implementation used the same filtered `ORDER BY ... LIMIT`
+    -- shape and kept the default plan; locally that is
+    -- knowledge_chunks_scope_idx + sort. This is preserved behaviour, not a
+    -- hard guarantee that the planner will never choose HNSW for a scope.
+    -- Forcing HNSW here would change scoped retrieval semantics.
     return query
     select
       c.id as chunk_id,

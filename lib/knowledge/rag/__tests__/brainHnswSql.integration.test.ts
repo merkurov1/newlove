@@ -38,6 +38,7 @@ describeIf('brain_search_hybrid HNSW integration (preview DB only)', () => {
   let client: Client;
   let probeVector: string;
   let probeDocumentId: string;
+  let probeAccessClass: 'owner' | 'public';
 
   beforeAll(async () => {
     client = new Client({
@@ -49,10 +50,14 @@ describeIf('brain_search_hybrid HNSW integration (preview DB only)', () => {
     });
     await client.connect();
 
+    // Use the same access class as the probe chunk. Hard-coding "owner" made
+    // the scoped assertion fail whenever the first chunk happened to be public.
     const result = await client.query(
-      `select embedding::text as embedding, document_id
+      `select embedding::text as embedding, document_id, access_class
        from public.knowledge_chunks
-       where embedding_model = $1 and embedding_dimensions = $2
+       where embedding_model = $1
+         and embedding_dimensions = $2
+         and access_class in ('owner', 'public')
        order by id
        limit 1`,
       [MODEL, DIMENSIONS]
@@ -64,6 +69,7 @@ describeIf('brain_search_hybrid HNSW integration (preview DB only)', () => {
 
     probeVector = result.rows[0].embedding;
     probeDocumentId = String(result.rows[0].document_id);
+    probeAccessClass = result.rows[0].access_class === 'public' ? 'public' : 'owner';
   });
 
   afterAll(async () => {
@@ -74,7 +80,7 @@ describeIf('brain_search_hybrid HNSW integration (preview DB only)', () => {
     const result = await client.query(
       `select chunk_id, document_id, similarity
        from public.brain_vector_candidates($1::vector,$2,$3,$4,$5::text[],$6,$7)`,
-      [probeVector, MODEL, DIMENSIONS, 'owner', null, 40, 120]
+      [probeVector, MODEL, DIMENSIONS, probeAccessClass, null, 40, 120]
     );
 
     expect(result.rows.length).toBeLessThanOrEqual(40);
@@ -86,7 +92,7 @@ describeIf('brain_search_hybrid HNSW integration (preview DB only)', () => {
     }
   });
 
-  it('restores planner settings after the helper returns', async () => {
+  it('restores planner settings inside the same transaction', async () => {
     const settings = async () =>
       (
         await client.query(
@@ -96,14 +102,22 @@ describeIf('brain_search_hybrid HNSW integration (preview DB only)', () => {
         )
       ).rows[0];
 
-    const before = await settings();
+    // The helper uses set_config(..., is_local => true), so an implicit
+    // transaction would hide a leak. Keep the call and the read in one
+    // explicit transaction to prove the settings are restored before return.
+    await client.query('begin');
+    try {
+      const before = await settings();
 
-    await client.query(
-      `select * from public.brain_vector_candidates($1::vector,$2,$3,$4,$5::text[],$6,$7)`,
-      [probeVector, MODEL, DIMENSIONS, 'owner', null, 40, 120]
-    );
+      await client.query(
+        `select * from public.brain_vector_candidates($1::vector,$2,$3,$4,$5::text[],$6,$7)`,
+        [probeVector, MODEL, DIMENSIONS, probeAccessClass, null, 40, 120]
+      );
 
-    expect(await settings()).toEqual(before);
+      expect(await settings()).toEqual(before);
+    } finally {
+      await client.query('rollback');
+    }
   });
 
   it('uses the HNSW index on the whole-Brain helper path', async () => {
@@ -133,7 +147,7 @@ describeIf('brain_search_hybrid HNSW integration (preview DB only)', () => {
 
     await client.query(
       `select * from public.brain_vector_candidates($1::vector,$2,$3,$4,$5::text[],$6,$7)`,
-      [probeVector, MODEL, DIMENSIONS, 'owner', null, 80, 120]
+      [probeVector, MODEL, DIMENSIONS, probeAccessClass, null, 80, 120]
     );
 
     const after = await scans();
@@ -147,7 +161,7 @@ describeIf('brain_search_hybrid HNSW integration (preview DB only)', () => {
     const result = await client.query(
       `select chunk_id, document_id, similarity
        from public.brain_vector_candidates($1::vector,$2,$3,$4,$5::text[],$6,$7)`,
-      [probeVector, MODEL, DIMENSIONS, 'owner', [probeDocumentId], 40, 120]
+      [probeVector, MODEL, DIMENSIONS, probeAccessClass, [probeDocumentId], 40, 120]
     );
 
     expect(result.rows.length).toBeGreaterThan(0);
@@ -166,7 +180,7 @@ describeIf('brain_search_hybrid HNSW integration (preview DB only)', () => {
         probeVector,
         MODEL,
         DIMENSIONS,
-        'owner',
+        probeAccessClass,
         null,
         null,
         null,
@@ -186,7 +200,7 @@ describeIf('brain_search_hybrid HNSW integration (preview DB only)', () => {
         probeVector,
         MODEL,
         DIMENSIONS,
-        'owner',
+        probeAccessClass,
         'memory',
         null,
         null,
@@ -216,7 +230,7 @@ describeIf('brain_search_hybrid HNSW integration (preview DB only)', () => {
         probeVector,
         MODEL,
         DIMENSIONS,
-        'owner',
+        probeAccessClass,
         null,
         40,
       ]);

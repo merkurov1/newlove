@@ -101,9 +101,8 @@ describe('Brain HNSW planner migration', () => {
 
     expect(migration).toMatch(/set_config\('enable_seqscan',\s*v_prior_seqscan,\s*true\)/);
     expect(migration).toMatch(/set_config\('enable_sort',\s*v_prior_sort,\s*true\)/);
-    expect(migration).toMatch(
-      /set_config\('hnsw\.ef_search',\s*coalesce\(v_prior_ef_search,\s*'40'\),\s*true\)/
-    );
+    expect(migration).toMatch(/set_config\('hnsw\.ef_search',\s*v_prior_ef_search,\s*true\)/);
+    expect(migration).not.toMatch(/coalesce\(v_prior_ef_search,\s*'40'\)/);
   });
 
   it('keeps the HNSW probe bounded and defaults ef_search to 120', () => {

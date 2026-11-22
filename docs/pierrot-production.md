@@ -15,7 +15,8 @@
 - Brain hybrid SQL uses the existing HNSW index through a transaction-local,
   scoped candidate function. The migration is prepared but not applied to
   production; methodology, gates and rollback are documented in
-  `docs/brain-hnsw-retrieval-optimization.md`.
+  `docs/brain-hnsw-retrieval-optimization.md`. Final decision is **NO-GO for
+  production rollout** until the real-query benchmark runs on preview/staging.
 
 ## Model providers
 
