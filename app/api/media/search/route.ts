@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { parseMediaIntelligenceFilters } from '@/lib/analytics/mediaIntelligenceFilters';
 import { getMediaRecords } from '@/lib/mediaRecords';
+import { mediaLanguageSearchText } from '@/lib/mediaLanguages';
 import { searchMediaIntelligence } from '@/lib/knowledge/media/search';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import type { MediaRecord, PublicMediaQuote } from '@/data/media';
@@ -45,7 +46,7 @@ function lexicalMatches(records: MediaRecord[], query: string): MediaRecord[] {
       record.summary,
       record.topic,
       record.derivedTopic,
-      record.lang,
+      mediaLanguageSearchText(record.lang),
       record.kind,
       record.date,
       ...(record.subtopics || []),

@@ -1,13 +1,13 @@
 import {
   publicRecords as fallbackRecords,
   type MediaRecord,
-  type Lang,
   type Kind,
   type Topic,
   type PublicMediaQuote,
   type PublicMediaRelation,
   type PublicMediaQuoteType,
 } from '@/data/media';
+import { normalizeMediaLanguageCode } from '@/lib/mediaLanguages';
 import { createClient } from '@/lib/supabase/server';
 
 type DatabaseMediaRecord = {
@@ -26,8 +26,6 @@ type DatabaseMediaRecord = {
   status?: string | null;
   ai_metadata?: Record<string, unknown> | null;
 };
-
-const VALID_LANGUAGES: Lang[] = ['EN', 'RU', 'DE', 'PL', 'BS', 'FR', 'IT', 'ES', 'UK'];
 
 const VALID_KINDS: Kind[] = [
   'quote',
@@ -128,7 +126,9 @@ function mapDatabaseRecord(row: DatabaseMediaRecord): MediaRecord | null {
 
   const metadata = row.ai_metadata && typeof row.ai_metadata === 'object' ? row.ai_metadata : {};
 
-  const lang = VALID_LANGUAGES.includes(row.lang as Lang) ? (row.lang as Lang) : 'EN';
+  // Preserve the stored code. Unknown values are displayed as their original
+  // code (with an explicit "Unknown" label) instead of being relabelled EN.
+  const lang = normalizeMediaLanguageCode(row.lang);
 
   const kind = VALID_KINDS.includes(row.kind as Kind) ? (row.kind as Kind) : 'mention';
 

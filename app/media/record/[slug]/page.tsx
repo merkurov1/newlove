@@ -9,6 +9,7 @@ import {
   originalMediaRelation,
   reprintMediaRelations,
 } from '@/lib/mediaClassification';
+import { mediaLanguageBadge, mediaLanguageTag } from '@/lib/mediaLanguages';
 import { description, pageMetadata, truncate } from '@/lib/seo';
 
 export const revalidate = 3600;
@@ -101,7 +102,7 @@ export default async function MediaRecordPage({ params }: Props) {
                 authorName: 'Anton Merkurov',
                 citation: record.url,
                 isBasedOn: record.url,
-                inLanguage: record.lang.toLowerCase(),
+                inLanguage: mediaLanguageTag(record.lang),
               })
             : creativeWorkJsonLd({
                 path,
@@ -111,7 +112,7 @@ export default async function MediaRecordPage({ params }: Props) {
                 genre: record.kind,
                 citation: record.url,
                 isBasedOn: record.url,
-                inLanguage: record.lang.toLowerCase(),
+                inLanguage: mediaLanguageTag(record.lang),
               })
         }
       />
@@ -150,7 +151,7 @@ export default async function MediaRecordPage({ params }: Props) {
           <div className="mt-5 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500">
             <time dateTime={record.date}>{record.date}</time>
             {record.author ? <span>{record.author}</span> : null}
-            <span>{record.lang}</span>
+            <span>{mediaLanguageBadge(record.lang)}</span>
             <span>{presenceLabel}</span>
             <span>{record.derivedTopic || record.topic}</span>
             {record.subtopics?.length ? <span>{record.subtopics.join(' · ')}</span> : null}

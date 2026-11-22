@@ -3,6 +3,12 @@
 import { useEffect, useState } from 'react';
 
 import MediaBulkImportPanel from '@/components/admin/MediaBulkImportPanel';
+import {
+  MEDIA_LANGUAGE_CODES,
+  mediaLanguageBadge,
+  mediaLanguageOptionLabel,
+  normalizeMediaLanguageCode,
+} from '@/lib/mediaLanguages';
 
 type RecordStatus = 'draft' | 'published';
 
@@ -114,24 +120,6 @@ type ApiResponse = {
 const kinds = ['quote', 'mention', 'interview', 'radio', 'video', 'column', 'blog', 'profile'];
 
 const topics = ['Internet & Censorship', 'AI & Tech', 'Art & Culture', 'Fintech & Crypto'];
-
-const langs = [
-  'EN',
-  'RU',
-  'DE',
-  'PL',
-  'BS',
-  'FR',
-  'IT',
-  'ES',
-  'PT',
-  'NL',
-  'CS',
-  'TR',
-  'UK',
-  'SR',
-  'HR',
-];
 
 const inputClass =
   'w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-500';
@@ -656,12 +644,20 @@ export default function MediaLinksPanel() {
               Язык
               <select
                 className={`${inputClass} mt-1`}
-                value={record.lang || 'EN'}
+                value={normalizeMediaLanguageCode(record.lang, 'EN')}
                 onChange={(event) => update('lang', event.target.value)}
               >
-                {langs.map((value) => (
+                {record.lang &&
+                  !MEDIA_LANGUAGE_CODES.some(
+                    (code) => code === normalizeMediaLanguageCode(record.lang)
+                  ) && (
+                    <option value={normalizeMediaLanguageCode(record.lang)}>
+                      {mediaLanguageOptionLabel(record.lang)}
+                    </option>
+                  )}
+                {MEDIA_LANGUAGE_CODES.map((value) => (
                   <option key={value} value={value}>
-                    {value}
+                    {mediaLanguageOptionLabel(value)}
                   </option>
                 ))}
               </select>
@@ -769,7 +765,9 @@ export default function MediaLinksPanel() {
                   {' · '}
                   {item.published_date || 'Дата не указана'}
                   {' · '}
-                  {item.coverage?.language || item.lang || '—'}
+                  {item.coverage?.language || item.lang
+                    ? mediaLanguageBadge(item.coverage?.language || item.lang)
+                    : '—'}
                 </p>
 
                 <p className="mt-1 break-words font-serif text-lg">
