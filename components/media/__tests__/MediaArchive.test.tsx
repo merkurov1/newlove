@@ -174,6 +174,66 @@ describe('MediaArchive authored outlet+year series', () => {
       expect(container.querySelector(`a[href="${item.url}"]`)).not.toBeNull();
     });
   });
+
+  it('collapses the remaining outlet+year groups with four or more authored entries', () => {
+    const grouped = [
+      ...authored('Merkuroff.wordpress.com', '2014', 4, 'blog'),
+      ...authored('Merkuroff.wordpress.com', '2013', 4, 'blog'),
+      ...authored('Runet', '2013', 4),
+      ...authored('Slon.ru', '2012', 4),
+      ...authored('Газета.Ru', '2011', 4),
+      ...authored('Forbes.ru', '2010', 4),
+      ...authored('Хабр', '2009', 4, 'blog'),
+    ];
+
+    const { container } = render(<MediaArchive records={grouped} archives={[]} />);
+
+    expect(container.querySelectorAll('.ma-series')).toHaveLength(7);
+    expect(screen.getAllByText('Авторские публикации')).toHaveLength(7);
+  });
+
+  it('keeps small authored outlets as individual rows and ignores other formats', () => {
+    const mixed = [
+      ...authored('Small authored outlet', '2017', 3),
+      record({
+        slug: 'mention-one',
+        title: 'Mention one',
+        outlet: 'Small authored outlet',
+        date: '2017-03-04',
+        kind: 'mention',
+      }),
+      record({
+        slug: 'interview-one',
+        title: 'Interview one',
+        outlet: 'Small authored outlet',
+        date: '2017-03-03',
+        kind: 'interview',
+      }),
+    ];
+
+    const { container } = render(<MediaArchive records={mixed} archives={[]} />);
+
+    const timeline = within(screen.getByRole('region', { name: 'Media timeline' }));
+
+    expect(container.querySelectorAll('.ma-series')).toHaveLength(0);
+    ['1', '2', '3'].forEach((number) => {
+      expect(
+        timeline.getAllByText(`Small authored outlet 2017 article ${number}`).length
+      ).toBeGreaterThan(0);
+    });
+    expect(timeline.getByText('Mention one')).toBeInTheDocument();
+    expect(timeline.getByText('Interview one')).toBeInTheDocument();
+  });
+
+  it('keeps grouping active for the Columns and Publication filters', () => {
+    const retrograde = authored('Ретроградный Меркуров', '2025', 4);
+
+    mockCurrentSearchParams = 'type=columns&outlet=Ретроградный Меркуров';
+    const { container } = render(<MediaArchive records={retrograde} archives={[]} />);
+
+    expect(container.querySelectorAll('.ma-series')).toHaveLength(1);
+    expect(screen.getByText(/4 publications/)).toBeInTheDocument();
+  });
 });
 
 describe('MediaArchive reprints', () => {
@@ -255,6 +315,43 @@ describe('MediaArchive reprints', () => {
     expect(screen.getAllByText('Le Monde French edition').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Le Monde English edition').length).toBeGreaterThan(0);
   });
+
+  it('does not fold another edition of the same publication into a reprint group', () => {
+    const french = record({
+      slug: 'le-monde-fr-edition',
+      title: 'Le Monde French edition',
+      outlet: 'Le Monde',
+      date: '2026-05-27',
+      lang: 'FR',
+    });
+    const englishEdition = record({
+      slug: 'le-monde-en-edition',
+      title: 'Le Monde English edition',
+      outlet: 'Le Monde',
+      date: '2026-05-27',
+      lang: 'EN',
+      related: [
+        {
+          slug: french.slug,
+          title: french.title,
+          outlet: french.outlet,
+          url: french.url,
+          date: french.date,
+          relationType: 'syndication',
+          confidence: 1,
+          role: 'original',
+        },
+      ],
+    });
+
+    const { container } = render(
+      <MediaArchive records={[french, englishEdition]} archives={[]} />
+    );
+
+    expect(container.querySelectorAll('.ma-series')).toHaveLength(0);
+    expect(screen.getAllByText('Le Monde French edition').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Le Monde English edition').length).toBeGreaterThan(0);
+  });
 });
 
 describe('MediaArchive date precision', () => {
@@ -274,12 +371,14 @@ describe('MediaArchive date precision', () => {
       lang: 'RU',
     });
 
-    render(<MediaArchive records={[novyeIzvestia]} archives={[]} />);
+    const { container } = render(<MediaArchive records={[novyeIzvestia]} archives={[]} />);
 
     const timeline = within(screen.getByRole('region', { name: 'Media timeline' }));
     expect(timeline.getAllByText('2019').length).toBeGreaterThan(0);
     expect(timeline.queryByText('1 Nov')).not.toBeInTheDocument();
     expect(timeline.queryByText('2019-11-01')).not.toBeInTheDocument();
+    expect(container.querySelector('time[datetime="2019-11-01"]')).toBeNull();
+    expect(container.querySelector('time[datetime="2019"]')).not.toBeNull();
   });
 
   it('leaves ordinary day-precision dates unchanged', () => {
@@ -325,6 +424,20 @@ describe('MediaArchive selection integrity', () => {
     expect(timeline.getByText('Needle one')).toBeInTheDocument();
     expect(timeline.getByText('Another Needle story')).toBeInTheDocument();
     expect(timeline.queryByText('Unrelated story')).not.toBeInTheDocument();
+  });
+
+  it('shows individual authored rows for a text query without losing or duplicating them', () => {
+    mockCurrentSearchParams = 'q=article';
+
+    const series = authored('Ретроградный Меркуров', '2025', 4);
+    const { container } = render(<MediaArchive records={series} archives={[]} />);
+    const timeline = within(screen.getByRole('region', { name: 'Media timeline' }));
+
+    expect(container.querySelectorAll('.ma-series')).toHaveLength(0);
+    expect(container.querySelectorAll('.ma-row')).toHaveLength(4);
+    series.forEach((item) => {
+      expect(timeline.getAllByText(item.title)).toHaveLength(1);
+    });
   });
 
   it('keeps Load more working without duplicating records', () => {
