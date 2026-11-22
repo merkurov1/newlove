@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type { Kind, MediaRecord } from '@/data/media';
+import type { Kind, MediaRecord, PublicMediaRelation } from '@/data/media';
 import {
   isMediaReprint,
   originalMediaRelation,
@@ -32,8 +32,8 @@ type TypeDef = {
 
 type TimelineNode =
   | { type: 'record'; record: MediaRecord }
-  | { type: 'series'; items: MediaRecord[] }
-  | { type: 'reprints'; outlet: string; items: MediaRecord[] };
+  | { type: 'series'; outlet: string; items: MediaRecord[] }
+  | { type: 'reprints'; original: PublicMediaRelation; items: MediaRecord[] };
 
 const TYPES: TypeDef[] = [
   { id: 'all', label: 'All', kinds: null },
@@ -96,6 +96,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 const PAGE_SIZE = 30;
 const SERIES_OUTLET = 'Новая газета';
+const RETROGRADE_OUTLET = 'Ретроградный Меркуров';
 const SERIES_MIN = 4;
 const REPRESENTATIVE_OUTLETS = 6;
 
@@ -154,6 +155,33 @@ function formatDate(date: string): string {
   if (!monthName) return date;
 
   return day ? `${Number(day)} ${monthName}` : monthName;
+}
+
+/**
+ * `date` can keep a technical anchor (for example 2019-11-01) when only the
+ * publication year was confirmed. Precision decides what readers may see.
+ */
+function formatRecordDate(record: Pick<MediaRecord, 'date' | 'datePrecision'>): string {
+  if (record.datePrecision === 'year') {
+    const year = record.date.slice(0, 4);
+    return /^\d{4}$/.test(year) ? year : record.date;
+  }
+
+  return formatDate(record.date);
+}
+
+function isAuthoredSeriesRecord(record: MediaRecord): boolean {
+  return (record.kind === 'column' || record.kind === 'blog') && !isMediaReprint(record);
+}
+
+function seriesTitle(outlet: string): string {
+  if (outlet === SERIES_OUTLET) return '«Виртуальный Меркуров»';
+  if (outlet === RETROGRADE_OUTLET) return RETROGRADE_OUTLET;
+  return 'Авторские публикации';
+}
+
+function reprintGroupKey(original: PublicMediaRelation): string {
+  return original.slug || original.url || `${original.outlet}:${original.title}`;
 }
 
 function compareRecords(a: MediaRecord, b: MediaRecord): number {
@@ -493,52 +521,80 @@ export default function MediaArchive({ records, archives }: Props) {
     return [...byYear.entries()]
       .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
       .map(([recordYear, yearRecords]) => {
-        const seriesItems = yearRecords.filter(
-          (record) =>
-            record.kind === 'column' && record.outlet === SERIES_OUTLET && !isMediaReprint(record)
-        );
+        const authoredGroups = new Map<string, MediaRecord[]>();
+        const reprintGroups = new Map<
+          string,
+          { original: PublicMediaRelation; items: MediaRecord[] }
+        >();
 
-        const collapseSeries = isOverview && seriesItems.length >= SERIES_MIN;
-
-        // Reprints are grouped separately from original columns and
-        // commentary. Grouping by outlet keeps a syndicated article in a
-        // single collapsed row instead of presenting it as a new mention.
-        const reprintGroups = new Map<string, MediaRecord[]>();
         if (isOverview) {
           yearRecords.forEach((record) => {
-            if (!isMediaReprint(record)) return;
-            const items = reprintGroups.get(record.outlet) ?? [];
-            items.push(record);
-            reprintGroups.set(record.outlet, items);
+            // A reprint belongs to its original publication, never to the
+            // outlet that republished it. This keeps two different articles
+            // from the same newspaper as separate groups.
+            if (isMediaReprint(record)) {
+              const original = originalMediaRelation(record);
+              if (!original) return;
+
+              const key = reprintGroupKey(original);
+              const group = reprintGroups.get(key) ?? { original, items: [] };
+              group.items.push(record);
+              reprintGroups.set(key, group);
+              return;
+            }
+
+            // Only authored columns and blog posts form outlet+year series.
+            // Mentions, interviews, quotes and reprints stay individual rows.
+            if (isAuthoredSeriesRecord(record)) {
+              const items = authoredGroups.get(record.outlet) ?? [];
+              items.push(record);
+              authoredGroups.set(record.outlet, items);
+            }
           });
         }
 
+        const collapsedOutlets = new Set(
+          [...authoredGroups.entries()]
+            .filter(([, items]) => items.length >= SERIES_MIN)
+            .map(([outlet]) => outlet)
+        );
+
         const nodes: TimelineNode[] = [];
-        const addedReprintOutlets = new Set<string>();
-        let seriesAdded = false;
+        const addedSeriesOutlets = new Set<string>();
+        const addedReprintGroups = new Set<string>();
 
         yearRecords.forEach((record) => {
           if (isOverview && isMediaReprint(record)) {
-            if (!addedReprintOutlets.has(record.outlet)) {
-              nodes.push({
-                type: 'reprints',
-                outlet: record.outlet,
-                items: reprintGroups.get(record.outlet) ?? [record],
-              });
-              addedReprintOutlets.add(record.outlet);
+            const original = originalMediaRelation(record);
+            if (!original) {
+              nodes.push({ type: 'record', record });
+              return;
+            }
+
+            const key = reprintGroupKey(original);
+            if (addedReprintGroups.has(key)) return;
+
+            const group = reprintGroups.get(key);
+            if (group) {
+              nodes.push({ type: 'reprints', original: group.original, items: group.items });
+              addedReprintGroups.add(key);
             }
             return;
           }
 
-          const belongsToSeries =
-            collapseSeries && record.kind === 'column' && record.outlet === SERIES_OUTLET;
+          if (isOverview && isAuthoredSeriesRecord(record) && collapsedOutlets.has(record.outlet)) {
+            if (addedSeriesOutlets.has(record.outlet)) return;
 
-          if (!belongsToSeries) {
-            nodes.push({ type: 'record', record });
-          } else if (!seriesAdded) {
-            nodes.push({ type: 'series', items: seriesItems });
-            seriesAdded = true;
+            nodes.push({
+              type: 'series',
+              outlet: record.outlet,
+              items: authoredGroups.get(record.outlet) ?? [record],
+            });
+            addedSeriesOutlets.add(record.outlet);
+            return;
           }
+
+          nodes.push({ type: 'record', record });
         });
 
         return {
@@ -625,7 +681,7 @@ export default function MediaArchive({ records, archives }: Props) {
                         {record.title}
                       </Link>
                       <span className="ma-collection-meta">
-                        {record.outlet} · {formatDate(record.date)}
+                        {record.outlet} · {formatRecordDate(record)}
                       </span>
                     </li>
                   ))}
@@ -890,31 +946,38 @@ export default function MediaArchive({ records, archives }: Props) {
               <ol className="ma-list">
                 {group.nodes.map((node, index) => {
                   if (node.type === 'series') {
+                    const title = seriesTitle(node.outlet);
+
                     return (
-                      <li key={`series-${group.year}-${index}`} className="ma-row">
+                      <li key={`series-${group.year}-${node.outlet}-${index}`} className="ma-row">
                         <div className="ma-date">{node.items.length}×</div>
 
                         <details className="ma-series">
                           <summary>
                             <span className="ma-meta">
-                              <span className="ma-outlet">{SERIES_OUTLET}</span>
-                              <span>Author column series</span>
+                              <span className="ma-outlet">{node.outlet}</span>
+                              <span>Author publications</span>
                             </span>
 
                             <span className="ma-title">
-                              «Виртуальный Меркуров»
-                              <em> · {node.items.length} columns</em>
+                              {title}
+                              <em>
+                                {' '}
+                                · {node.items.length}{' '}
+                                {node.items.length === 1 ? 'publication' : 'publications'}
+                              </em>
                             </span>
 
                             <span className="ma-sum">
-                              Internet policy, AI, platforms and digital culture.
+                              Authored columns and blog posts published by {node.outlet} in{' '}
+                              {group.year}.
                             </span>
                           </summary>
 
                           <ol className="ma-mini">
                             {node.items.map((column) => (
                               <li key={column.slug}>
-                                <time dateTime={column.date}>{formatDate(column.date)}</time>
+                                <time dateTime={column.date}>{formatRecordDate(column)}</time>
                                 <a href={column.url} target="_blank" rel="noopener noreferrer">
                                   {column.title}
                                   <span aria-hidden="true"> ↗</span>
@@ -928,21 +991,22 @@ export default function MediaArchive({ records, archives }: Props) {
                   }
 
                   if (node.type === 'reprints') {
-                    const single = node.items.length === 1 ? node.items[0] : null;
-
                     return (
-                      <li key={`reprints-${group.year}-${node.outlet}-${index}`} className="ma-row">
+                      <li
+                        key={`reprints-${group.year}-${reprintGroupKey(node.original)}-${index}`}
+                        className="ma-row"
+                      >
                         <div className="ma-date">{node.items.length}×</div>
 
                         <details className="ma-series">
                           <summary>
                             <span className="ma-meta">
-                              <span className="ma-outlet">{node.outlet}</span>
-                              <span>Reprint series</span>
+                              <span className="ma-outlet">{node.original.outlet}</span>
+                              <span>Original publication</span>
                             </span>
 
                             <span className="ma-title">
-                              {single ? single.title : `${node.outlet} reprints`}
+                              {node.original.title}
                               <em>
                                 {' '}
                                 · {node.items.length}{' '}
@@ -951,36 +1015,32 @@ export default function MediaArchive({ records, archives }: Props) {
                             </span>
 
                             <span className="ma-sum">
-                              Republished material. Each entry links to the original publication.
+                              Syndicated copies of one original publication. Each entry links to its
+                              own material.
                             </span>
                           </summary>
 
                           <ol className="ma-mini">
-                            {node.items.map((item) => {
-                              const original = originalMediaRelation(item);
-
-                              return (
-                                <li key={item.slug}>
-                                  <time dateTime={item.date}>{formatDate(item.date)}</time>
-                                  <div>
-                                    <Link href={`/media/record/${encodeURIComponent(item.slug)}`}>
-                                      {item.title}
-                                    </Link>
-                                    {original && (
-                                      <span className="ma-reprint-source">
-                                        Reprint of{' '}
-                                        <Link
-                                          href={`/media/record/${encodeURIComponent(original.slug)}`}
-                                        >
-                                          {original.outlet}: {original.title}
-                                        </Link>
-                                      </span>
-                                    )}
-                                  </div>
-                                </li>
-                              );
-                            })}
+                            {node.items.map((item) => (
+                              <li key={item.slug}>
+                                <time dateTime={item.date}>{formatRecordDate(item)}</time>
+                                <div>
+                                  <a href={item.url} target="_blank" rel="noopener noreferrer">
+                                    {item.title}
+                                    <span aria-hidden="true"> ↗</span>
+                                  </a>
+                                  <span className="ma-reprint-source">{item.outlet}</span>
+                                </div>
+                              </li>
+                            ))}
                           </ol>
+
+                          <p className="ma-reprint-source">
+                            Original:{' '}
+                            <Link href={`/media/record/${encodeURIComponent(node.original.slug)}`}>
+                              {node.original.outlet}: {node.original.title}
+                            </Link>
+                          </p>
                         </details>
                       </li>
                     );
@@ -991,8 +1051,10 @@ export default function MediaArchive({ records, archives }: Props) {
                   return (
                     <li key={record.slug} className="ma-row">
                       <time className="ma-date" dateTime={record.date}>
-                        {formatDate(record.date)}
-                        <span className="ma-full-date">{record.date.slice(0, 4)}</span>
+                        {formatRecordDate(record)}
+                        {record.datePrecision !== 'year' && (
+                          <span className="ma-full-date">{record.date.slice(0, 4)}</span>
+                        )}
                       </time>
 
                       <div className="ma-main">

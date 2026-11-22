@@ -32,6 +32,11 @@ export interface PublicMediaRelation {
  * keeps a database code outside the list visible instead of coercing it to EN.
  */
 export type Lang = MediaLanguageCode | (string & {});
+/**
+ * Public date precision. `year` keeps the internal publication-date anchor for
+ * sorting while the interface shows only the confirmed year.
+ */
+export type MediaDatePrecision = 'year' | 'month' | 'day';
 export type Topic = 'Internet & Censorship' | 'AI & Tech' | 'Art & Culture' | 'Fintech & Crypto';
 export type Kind =
   | 'quote' // цитата или комментарий в материале издания
@@ -52,6 +57,8 @@ export interface MediaRecord {
   program?: string; // рубрика или передача
   url: string;
   date: string; // YYYY | YYYY-MM | YYYY-MM-DD
+  /** Confirmed precision of the public publication date. */
+  datePrecision?: MediaDatePrecision;
   lang: Lang;
   topic: Topic;
   kind: Kind;

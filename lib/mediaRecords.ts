@@ -1,6 +1,7 @@
 import {
   publicRecords as fallbackRecords,
   type MediaRecord,
+  type MediaDatePrecision,
   type Kind,
   type Topic,
   type PublicMediaQuote,
@@ -44,6 +45,8 @@ const VALID_TOPICS: Topic[] = [
   'Art & Culture',
   'Fintech & Crypto',
 ];
+
+const VALID_DATE_PRECISIONS: MediaDatePrecision[] = ['year', 'month', 'day'];
 
 function text(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value.trim() || fallback : fallback;
@@ -107,6 +110,17 @@ function validDisplayDate(value: unknown): string | null {
   return candidate;
 }
 
+/**
+ * Only the precision flag is public. The rest of ai_metadata stays private,
+ * and unknown values are ignored rather than passed through.
+ */
+function publicDatePrecision(value: unknown): MediaDatePrecision | undefined {
+  if (typeof value !== 'string') return undefined;
+
+  const candidate = value.trim().toLowerCase() as MediaDatePrecision;
+  return VALID_DATE_PRECISIONS.includes(candidate) ? candidate : undefined;
+}
+
 function dateFromCreatedAt(value: unknown): string | null {
   const candidate = text(value);
   if (!candidate) return null;
@@ -141,6 +155,10 @@ function mapDatabaseRecord(row: DatabaseMediaRecord): MediaRecord | null {
 
   const timelineDate = publicationDate ?? dateFromCreatedAt(row.created_at) ?? '1900';
 
+  // Precision describes the confirmed publication date, not the timeline
+  // fallback, so it is only meaningful when a publication date exists.
+  const datePrecision = publicationDate ? publicDatePrecision(metadata.date_precision) : undefined;
+
   const slugAliases = Array.isArray(metadata.slug_aliases)
     ? metadata.slug_aliases.filter(
         (value): value is string => typeof value === 'string' && value.length > 0
@@ -156,6 +174,7 @@ function mapDatabaseRecord(row: DatabaseMediaRecord): MediaRecord | null {
     ...(text(row.author) ? { author: text(row.author) } : {}),
     url,
     date: timelineDate,
+    ...(datePrecision ? { datePrecision } : {}),
     lang,
     kind,
     topic,

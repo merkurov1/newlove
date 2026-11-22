@@ -17,6 +17,15 @@ export const runtime = 'nodejs';
 
 type Props = { params: Promise<{ slug: string }> };
 
+function publicRecordDate(record: { date: string; datePrecision?: string }): string {
+  if (record.datePrecision === 'year') {
+    const year = record.date.slice(0, 4);
+    return /^\d{4}$/.test(year) ? year : record.date;
+  }
+
+  return record.date;
+}
+
 async function getRecord(slug: string) {
   const decoded = decodeURIComponent(slug);
   const records = await getMediaRecords();
@@ -43,7 +52,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const path = `/media/record/${encodeURIComponent(record.slug)}`;
   const summary = description(
     record.summary ||
-      `${record.title} — ${record.outlet}, ${record.date}. A media citation featuring Anton Merkurov.`
+      `${record.title} — ${record.outlet}, ${publicRecordDate(record)}. A media citation featuring Anton Merkurov.`
   );
 
   return pageMetadata({
@@ -66,7 +75,7 @@ export default async function MediaRecordPage({ params }: Props) {
   const path = `/media/record/${encodeURIComponent(record.slug)}`;
   const summary =
     record.summary ||
-    `${record.title} — a ${record.kind} published by ${record.outlet} on ${record.date}.`;
+    `${record.title} — a ${record.kind} published by ${record.outlet} on ${publicRecordDate(record)}.`;
 
   const articleKinds = new Set(['column', 'blog', 'interview', 'radio', 'video']);
   const presence: Record<string, string> = {
@@ -149,7 +158,7 @@ export default async function MediaRecordPage({ params }: Props) {
             {record.title}
           </h1>
           <div className="mt-5 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500">
-            <time dateTime={record.date}>{record.date}</time>
+            <time dateTime={record.date}>{publicRecordDate(record)}</time>
             {record.author ? <span>{record.author}</span> : null}
             <span>{mediaLanguageBadge(record.lang)}</span>
             <span>{presenceLabel}</span>
