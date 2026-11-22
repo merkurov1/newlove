@@ -24,9 +24,12 @@ function json(body: unknown, status = 200) {
 function words(value: string): string[] {
   return value
     .toLowerCase()
+    .replace(/ё/g, 'е')
     .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
     .split(/\s+/)
-    .filter((word) => word.length >= 3);
+    // Keep short numeric tokens so a full date such as 2026-10-13 is matched
+    // as a whole instead of degrading to its year only.
+    .filter((word) => word.length >= 3 || /^\d+$/.test(word));
 }
 
 function lexicalMatches(records: MediaRecord[], query: string): MediaRecord[] {
@@ -36,18 +39,22 @@ function lexicalMatches(records: MediaRecord[], query: string): MediaRecord[] {
   return records.filter((record) => {
     const haystack = [
       record.title,
+      record.author,
       record.outlet,
+      record.program,
       record.summary,
       record.topic,
       record.derivedTopic,
       record.lang,
       record.kind,
+      record.date,
       ...(record.subtopics || []),
       ...(record.verifiedQuotes || []).map((quote) => quote.text),
     ]
       .filter(Boolean)
       .join(' ')
-      .toLowerCase();
+      .toLowerCase()
+      .replace(/ё/g, 'е');
 
     return terms.every((term) => haystack.includes(term));
   });
@@ -63,6 +70,7 @@ function mapRecord(record: MediaRecord) {
     slug: record.slug,
     title: record.title,
     outlet: record.outlet,
+    author: record.author,
     date: record.date,
     lang: record.lang,
     kind: record.kind,
@@ -100,8 +108,7 @@ export async function POST(request: Request) {
       : { status: 'published' }
   );
 
-  let records = await getMediaRecords();
-  records = records.filter((record) => record.id);
+  const records = await getMediaRecords();
 
   const filtered = records.filter((record) => {
     if (filters.topic && (record.derivedTopic || record.topic) !== filters.topic) return false;
@@ -111,6 +118,15 @@ export async function POST(request: Request) {
     if (filters.to && record.date > filters.to) return false;
     return true;
   });
+
+  // Database ids are used by semantic search. The local verified fallback has
+  // no database id, so it must remain addressable by slug for metadata search;
+  // otherwise a record visible on /media could not be found through the API.
+  const byKey = new Map<string, MediaRecord>();
+  for (const record of filtered) {
+    if (record.id) byKey.set(`id:${record.id}`, record);
+    byKey.set(`slug:${record.slug}`, record);
+  }
 
   let ids: string[] = [];
   let semanticUsed = false;
@@ -130,7 +146,6 @@ export async function POST(request: Request) {
     });
 
     ids = Array.from(new Set(result.results.map((hit) => hit.mediaRecordId)));
-    semanticUsed = result.results.length > 0;
     semanticProvenance = {
       count: result.results.length,
       scannedChunks: result.scannedChunks,
@@ -142,12 +157,17 @@ export async function POST(request: Request) {
     // embeddings are unavailable.
   }
 
-  const byId = new Map(filtered.map((record) => [record.id || '', record]));
   let results = ids
-    .map((id) => byId.get(id))
+    .map((id) => byKey.get(`id:${id}`))
     .filter((record): record is MediaRecord => Boolean(record));
 
+  semanticUsed = results.length > 0;
+
   if (results.length === 0) {
+    // The semantic RPC may only return ids that are not in the public set
+    // (for example after an archive record becomes a draft). In that case the
+    // response must not claim a semantic sample.
+    semanticProvenance = null;
     results = lexicalMatches(filtered, query);
   }
 

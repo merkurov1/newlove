@@ -149,6 +149,7 @@ export default async function MediaRecordPage({ params }: Props) {
           </h1>
           <div className="mt-5 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500">
             <time dateTime={record.date}>{record.date}</time>
+            {record.author ? <span>{record.author}</span> : null}
             <span>{record.lang}</span>
             <span>{presenceLabel}</span>
             <span>{record.derivedTopic || record.topic}</span>

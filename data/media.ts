@@ -42,6 +42,7 @@ export interface MediaRecord {
   slugAliases?: string[]; // historical slugs kept for stable inbound links
   title: string;
   outlet: string; // чистое имя издания, по нему считаются издания
+  author?: string; // автор публикации, когда он подтверждён источником
   program?: string; // рубрика или передача
   url: string;
   date: string; // YYYY | YYYY-MM | YYYY-MM-DD
@@ -50,6 +51,12 @@ export interface MediaRecord {
   kind: Kind;
   summary: string;
   note?: string; // служебное, на сайте не показывать
+  /**
+   * Local fallback publication state. A `draft` record stays in this file as
+   * history but is not served when the database is unavailable. The database
+   * remains the source of truth when it is reachable.
+   */
+  status?: 'published' | 'draft';
   id?: string;
   verifiedQuotes?: PublicMediaQuote[];
   related?: PublicMediaRelation[];
@@ -78,7 +85,7 @@ const r = (
   t: T,
   kind: Kind,
   summary: string,
-  extra: { program?: string; note?: string } = {}
+  extra: { program?: string; note?: string; status?: 'published' | 'draft' } = {}
 ): Draft => ({ date, outlet, title, url, lang, topic: TOPIC[t], kind, summary, ...extra });
 
 // ── Новая газета: колонки ────────────────────────────────────────────────
@@ -484,7 +491,11 @@ const items: Draft[] = [
     'RU',
     'a',
     'column',
-    'Виртуальный Меркуров — колонка об искусственном интеллекте и сетевой реальности.'
+    'Виртуальный Меркуров — колонка об искусственном интеллекте и сетевой реальности.',
+    {
+      status: 'draft',
+      note: 'Author not confirmed by the source metadata; kept as history and excluded from the public archive pending owner review.',
+    }
   ),
   r(
     '2025-07-07',
@@ -1138,12 +1149,29 @@ function build(drafts: Draft[]): MediaRecord[] {
       const base = `${d.date}-${slugify(d.outlet)}-${slugify(d.title).split('-').slice(0, 5).join('-')}`;
       const n = (seen.get(base) ?? 0) + 1;
       seen.set(base, n);
-      return { ...d, slug: n > 1 ? `${base}-${n}` : base };
+      // Authored columns and blog posts in this archive belong to Anton
+      // Merkurov. External coverage keeps its own byline when the database
+      // supplies one; no journalist is invented here.
+      const author =
+        d.author || (d.kind === 'column' || d.kind === 'blog' ? 'Антон Меркуров' : undefined);
+      return {
+        ...d,
+        ...(author ? { author } : {}),
+        slug: n > 1 ? `${base}-${n}` : base,
+      };
     })
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
 export const records: MediaRecord[] = build([...items, ...columns]);
+
+/**
+ * Records that may be served without a database. Draft history stays in
+ * `records` so provenance is not lost, but it is never a public fallback.
+ */
+export const publicRecords: MediaRecord[] = records.filter(
+  (record) => record.status !== 'draft'
+);
 
 // Страницы автора. Показываются отдельной строкой, в таймлайн и статистику не входят.
 export const archives = [

@@ -1,0 +1,22 @@
+{
+  "capturedAt": "2026-11-05",
+  "source": "docs/audits/brain-media-final-audit.md#5-final-state",
+  "media": {
+    "records": 265,
+    "published": 263,
+    "drafts": 2,
+    "fullText": 231,
+    "linkedDocuments": 259,
+    "duplicates": 0,
+    "nullDates": 0,
+    "outlets": 43,
+    "languages": 8
+  },
+  "novaya": {
+    "manifestTotal": 157,
+    "matched": 157,
+    "alreadyPresent": 118,
+    "added": 39,
+    "ambiguous": 0
+  }
+}

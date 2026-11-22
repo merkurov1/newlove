@@ -396,6 +396,7 @@ export default function MediaArchive({ records, archives }: Props) {
       if (words.length) {
         const searchableText = [
           record.title,
+          record.author ?? '',
           record.outlet,
           record.program ?? '',
           record.summary,
@@ -656,7 +657,7 @@ export default function MediaArchive({ records, archives }: Props) {
               placeholder={
                 searchMode === 'semantic'
                   ? 'e.g. comments about data centres, AI sovereignty'
-                  : 'Search title, publication, topic, date…'
+                  : 'Search title, author, publication, topic, date, type…'
               }
               aria-label={
                 searchMode === 'semantic' ? 'Semantic search query' : 'Search the media archive'
