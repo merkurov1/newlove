@@ -2,8 +2,13 @@ import { assertServerOnly } from '@/lib/serverOnly';
 
 import {
   YOUTUBE_ANALYTICS_READONLY_SCOPE,
+  YOUTUBE_FORCE_SSL_SCOPE,
+  YOUTUBE_MANAGEMENT_CONSENT_SCOPES,
+  YOUTUBE_MANAGEMENT_SCOPES,
   YOUTUBE_READONLY_SCOPE,
+  YOUTUBE_UPLOAD_SCOPE,
   getAnalyticsTimezone,
+  getYouTubeManagementRedirectUri,
 } from '@/lib/analytics/website/config';
 
 assertServerOnly('lib/youtube/config');
@@ -13,7 +18,14 @@ assertServerOnly('lib/youtube/config');
  * OAuth scopes are deliberately read-only. Monetary Analytics scopes are not
  * requested: the owner asked for reach and engagement, not revenue.
  */
-export { YOUTUBE_ANALYTICS_READONLY_SCOPE, YOUTUBE_READONLY_SCOPE };
+export {
+  YOUTUBE_ANALYTICS_READONLY_SCOPE,
+  YOUTUBE_FORCE_SSL_SCOPE,
+  YOUTUBE_MANAGEMENT_CONSENT_SCOPES,
+  YOUTUBE_MANAGEMENT_SCOPES,
+  YOUTUBE_READONLY_SCOPE,
+  YOUTUBE_UPLOAD_SCOPE,
+};
 
 export const YOUTUBE_REQUIRED_SCOPES = [
   YOUTUBE_READONLY_SCOPE,
@@ -21,6 +33,7 @@ export const YOUTUBE_REQUIRED_SCOPES = [
 ] as const;
 
 export const YOUTUBE_DATA_API = 'https://www.googleapis.com/youtube/v3';
+export const YOUTUBE_UPLOAD_API = 'https://www.googleapis.com/upload/youtube/v3';
 export const YOUTUBE_ANALYTICS_API = 'https://youtubeanalytics.googleapis.com/v2';
 
 export const YOUTUBE_DEFAULT_CACHE_TTL_SECONDS = 300;
@@ -60,3 +73,15 @@ export function getYouTubeCacheTtlSeconds(): number {
 export function isYouTubeConfigured(): boolean {
   return Boolean(getYouTubeChannelId() || getYouTubeDataApiKey());
 }
+
+export { getYouTubeManagementRedirectUri };
+
+/** Capability-level scope requirements, kept beside the API operations. */
+export const YOUTUBE_MANAGEMENT_SCOPE_BY_CAPABILITY = {
+  channel: YOUTUBE_READONLY_SCOPE,
+  videos: YOUTUBE_UPLOAD_SCOPE,
+  thumbnail: YOUTUBE_UPLOAD_SCOPE,
+  playlists: YOUTUBE_UPLOAD_SCOPE,
+  comments: YOUTUBE_FORCE_SSL_SCOPE,
+  captions: YOUTUBE_FORCE_SSL_SCOPE,
+} as const;

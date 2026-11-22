@@ -34,6 +34,32 @@ export const YOUTUBE_READONLY_SCOPE = 'https://www.googleapis.com/auth/youtube.r
 export const YOUTUBE_ANALYTICS_READONLY_SCOPE =
   'https://www.googleapis.com/auth/yt-analytics.readonly';
 
+/**
+ * Incremental, least-privilege scopes for YouTube channel management.
+ *
+ * `youtube.upload` covers videos, thumbnails, playlists and playlist items.
+ * `youtube.force-ssl` is the narrowest Google scope that permits comment and
+ * caption management. These scopes are only requested by the dedicated
+ * management consent flow, never by the analytics connection.
+ */
+export const YOUTUBE_UPLOAD_SCOPE = 'https://www.googleapis.com/auth/youtube.upload';
+export const YOUTUBE_FORCE_SSL_SCOPE = 'https://www.googleapis.com/auth/youtube.force-ssl';
+
+export const GOOGLE_IDENTITY_SCOPES = ['openid', 'email'] as const;
+
+export const YOUTUBE_MANAGEMENT_SCOPES = [YOUTUBE_UPLOAD_SCOPE, YOUTUBE_FORCE_SSL_SCOPE] as const;
+
+/**
+ * A management grant keeps `youtube.readonly` so the selected channel can be
+ * verified without granting Analytics. It deliberately excludes GA4, Search
+ * Console and yt-analytics.readonly: analytics consent stays incremental.
+ */
+export const YOUTUBE_MANAGEMENT_CONSENT_SCOPES = [
+  ...GOOGLE_IDENTITY_SCOPES,
+  YOUTUBE_READONLY_SCOPE,
+  ...YOUTUBE_MANAGEMENT_SCOPES,
+] as const;
+
 function env(name: string): string {
   return (process.env[name] || '').trim();
 }
@@ -91,6 +117,18 @@ export function getGoogleOAuthConfig(): GoogleOAuthConfig {
     configured: missing.length === 0,
     missing,
   };
+}
+
+/**
+ * The management consent uses its own callback so a write grant can never be
+ * silently substituted for the analytics grant (and vice versa). The URI must
+ * be registered in the same Google Cloud OAuth client.
+ */
+export function getYouTubeManagementRedirectUri(): string {
+  return (
+    env('YOUTUBE_MANAGEMENT_GOOGLE_REDIRECT_URI') ||
+    `${getSiteUrl()}/api/auth/youtube-management/callback`
+  );
 }
 
 export function getGooglePropertyOverride(): string | null {
@@ -176,7 +214,7 @@ export function getBlueskyConfig(): BlueskyConfig {
 export function isAnalyticsSyncConfigured(): boolean {
   return Boolean(
     process.env.SUPABASE_SERVICE_ROLE_KEY &&
-    (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)
+      (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)
   );
 }
 

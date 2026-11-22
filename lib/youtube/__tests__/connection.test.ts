@@ -4,11 +4,19 @@ import type { StoredConnection } from '@/lib/analytics/website/store';
 
 import {
   createYouTubeTokenManager,
+  hasYouTubeManagementScopes,
   hasYouTubeScopes,
   loadYouTubeConnectionState,
+  missingYouTubeManagementScopes,
   missingYouTubeScopes,
 } from '../connection';
-import { YOUTUBE_ANALYTICS_READONLY_SCOPE, YOUTUBE_READONLY_SCOPE } from '../config';
+import {
+  YOUTUBE_ANALYTICS_READONLY_SCOPE,
+  YOUTUBE_FORCE_SSL_SCOPE,
+  YOUTUBE_MANAGEMENT_SCOPES,
+  YOUTUBE_READONLY_SCOPE,
+  YOUTUBE_UPLOAD_SCOPE,
+} from '../config';
 import { YouTubeError } from '../types';
 
 jest.mock('@/lib/analytics/website/store', () => ({
@@ -56,6 +64,23 @@ describe('YouTube OAuth scope validation', () => {
       YOUTUBE_ANALYTICS_READONLY_SCOPE,
     ]);
     expect(hasYouTubeScopes([])).toBe(false);
+  });
+
+  it('requires both incremental management scopes without weakening analytics', () => {
+    expect(hasYouTubeManagementScopes(YOUTUBE_MANAGEMENT_SCOPES)).toBe(true);
+    expect(hasYouTubeManagementScopes([YOUTUBE_UPLOAD_SCOPE])).toBe(false);
+    expect(missingYouTubeManagementScopes([YOUTUBE_UPLOAD_SCOPE])).toEqual([
+      YOUTUBE_FORCE_SSL_SCOPE,
+    ]);
+    expect(hasYouTubeManagementScopes(REQUIRED_SCOPES)).toBe(false);
+    expect(missingYouTubeManagementScopes(REQUIRED_SCOPES)).toEqual([
+      YOUTUBE_UPLOAD_SCOPE,
+      YOUTUBE_FORCE_SSL_SCOPE,
+    ]);
+    expect(hasYouTubeScopes(YOUTUBE_MANAGEMENT_SCOPES)).toBe(false);
+    expect(missingYouTubeManagementScopes([YOUTUBE_FORCE_SSL_SCOPE])).toEqual([
+      YOUTUBE_UPLOAD_SCOPE,
+    ]);
   });
 });
 
@@ -123,6 +148,75 @@ describe('on-demand YouTube token refresh', () => {
       iv: 'rotated-iv',
       tag: 'rotated-tag',
       keyVersion: 'v1:test',
+    });
+  });
+
+  it('uses the separate management credential for write scopes', async () => {
+    const open = jest.fn(() => 'management-refresh-secret');
+    const refresh = jest.fn(async () => ({
+      accessToken: 'management-access',
+      refreshToken: null,
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      scope: [YOUTUBE_READONLY_SCOPE, ...YOUTUBE_MANAGEMENT_SCOPES].join(' '),
+      tokenType: 'Bearer',
+    }));
+    const manager = createYouTubeTokenManager({
+      readConnection: async () =>
+        connection({
+          scopes: [YOUTUBE_READONLY_SCOPE, ...YOUTUBE_MANAGEMENT_SCOPES],
+          token_ciphertext: 'analytics-cipher',
+          token_iv: 'analytics-iv',
+          token_tag: 'analytics-tag',
+          management_token_ciphertext: 'management-cipher',
+          management_token_iv: 'management-iv',
+          management_token_tag: 'management-tag',
+        }),
+      readCredential: (stored) => ({
+        ciphertext: stored.management_token_ciphertext ?? null,
+        iv: stored.management_token_iv ?? null,
+        tag: stored.management_token_tag ?? null,
+      }),
+      refresh,
+      open,
+      seal: jest.fn(),
+      persistRotated: jest.fn(),
+      markError: jest.fn(),
+    });
+
+    const token = await manager.getAccessToken([
+      YOUTUBE_READONLY_SCOPE,
+      ...YOUTUBE_MANAGEMENT_SCOPES,
+    ]);
+
+    expect(token.accessToken).toBe('management-access');
+    expect(open).toHaveBeenCalledWith({
+      ciphertext: 'management-cipher',
+      iv: 'management-iv',
+      tag: 'management-tag',
+    });
+    expect(refresh).toHaveBeenCalledWith('management-refresh-secret');
+  });
+
+  it('asks for re-consent when the management grant was revoked', async () => {
+    const manager = createYouTubeTokenManager({
+      readConnection: async () => connection({ scopes: REQUIRED_SCOPES }),
+      readCredential: () => ({
+        ciphertext: 'management-cipher',
+        iv: 'management-iv',
+        tag: 'management-tag',
+      }),
+      refresh: jest.fn(),
+      open: () => 'management-refresh-secret',
+      seal: jest.fn(),
+      persistRotated: jest.fn(),
+      markError: jest.fn(async () => undefined),
+    });
+
+    await expect(
+      manager.getAccessToken([YOUTUBE_READONLY_SCOPE, ...YOUTUBE_MANAGEMENT_SCOPES])
+    ).rejects.toMatchObject({
+      code: 'insufficient_permissions',
+      requiredScopes: [YOUTUBE_UPLOAD_SCOPE, YOUTUBE_FORCE_SSL_SCOPE],
     });
   });
 

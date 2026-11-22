@@ -19,6 +19,11 @@ export type StoredConnection = {
   token_iv: string | null;
   token_tag: string | null;
   token_key_version: string | null;
+  /** Optional separate YouTube management grant. Null on older rows. */
+  management_token_ciphertext?: string | null;
+  management_token_iv?: string | null;
+  management_token_tag?: string | null;
+  management_token_key_version?: string | null;
   connected_by: string | null;
   connected_at: string | null;
   disabled_at: string | null;
@@ -101,6 +106,12 @@ export async function upsertConnection(
     externalMeta?: Record<string, unknown>;
     scopes?: string[];
     sealed?: { ciphertext: string; iv: string; tag: string; keyVersion: string } | null;
+    managementSealed?: {
+      ciphertext: string;
+      iv: string;
+      tag: string;
+      keyVersion: string;
+    } | null;
     connectedBy?: string | null;
   }
 ): Promise<void> {
@@ -131,6 +142,13 @@ export async function upsertConnection(
     payload.token_key_version = input.sealed.keyVersion;
   }
 
+  if (input.managementSealed) {
+    payload.management_token_ciphertext = input.managementSealed.ciphertext;
+    payload.management_token_iv = input.managementSealed.iv;
+    payload.management_token_tag = input.managementSealed.tag;
+    payload.management_token_key_version = input.managementSealed.keyVersion;
+  }
+
   const { error } = await store
     .from('analytics_connections')
     .upsert(payload, { onConflict: 'provider' });
@@ -159,6 +177,29 @@ export async function updateConnectionSecret(
     .eq('provider', provider);
 
   if (error) throw new Error(`analytics_connections token update: ${error.message}`);
+}
+
+/**
+ * Rotate only the encrypted YouTube management credential. The analytics
+ * credential and its history stay byte-for-byte untouched.
+ */
+export async function updateManagementConnectionSecret(
+  store: SupabaseClient,
+  provider: AnalyticsProvider,
+  sealed: { ciphertext: string; iv: string; tag: string; keyVersion: string }
+): Promise<void> {
+  const { error } = await store
+    .from('analytics_connections')
+    .update({
+      management_token_ciphertext: sealed.ciphertext,
+      management_token_iv: sealed.iv,
+      management_token_tag: sealed.tag,
+      management_token_key_version: sealed.keyVersion,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('provider', provider);
+
+  if (error) throw new Error(`analytics_connections management token update: ${error.message}`);
 }
 
 export async function markConnectionError(
@@ -228,6 +269,23 @@ export async function disableConnection(
     .eq('provider', provider);
 
   if (error) throw new Error(`analytics_connections disable: ${error.message}`);
+
+  // Best effective cleanup of the optional management grant. It is a separate
+  // statement so a deployment that has not applied the additive migration yet
+  // still disconnects analytics normally.
+  await store
+    .from('analytics_connections')
+    .update({
+      management_token_ciphertext: null,
+      management_token_iv: null,
+      management_token_tag: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('provider', provider)
+    .then(
+      () => undefined,
+      () => undefined
+    );
 }
 
 /**
@@ -343,7 +401,6 @@ export async function getRecentSyncRuns(
   return (data ?? []) as StoredSyncRun[];
 }
 
-
 /**
  * GA4 can return more than one row for the same normalized dimension (for
  * example two page paths that normalize to the same path, or a duplicated
@@ -414,7 +471,7 @@ function dedupeSearchRows(rows: SearchRowInput[]): SearchRowInput[] {
       existing.position !== null && row.position !== null
         ? (existing.position * existing.impressions + row.position * row.impressions) /
           Math.max(1, existing.impressions + row.impressions)
-        : existing.position ?? row.position;
+        : (existing.position ?? row.position);
 
     existing.clicks = clicks;
     existing.impressions = impressions;
@@ -652,10 +709,7 @@ export type MetricRow = {
   synced_at: string;
 };
 
-export async function listBlueskyPostUris(
-  store: SupabaseClient,
-  limit = 5_000
-): Promise<string[]> {
+export async function listBlueskyPostUris(store: SupabaseClient, limit = 5_000): Promise<string[]> {
   try {
     const { data, error } = await store
       .from('analytics_metrics_daily')
