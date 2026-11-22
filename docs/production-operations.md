@@ -237,6 +237,35 @@ where id = '<job-id>'
    admin UI. Cancellation sets remaining jobs to `cancelled`; it never deletes
    completed documents.
 
+### Targeted media batch recovery
+
+Use the read-only report first. It never inserts a job:
+
+```bash
+pnpm brain:ingestion-recovery -- --run <run-id> --status
+```
+
+To retry only already-failed rows with a known transient error and then drain
+the existing queue through the bounded Brain worker:
+
+```bash
+pnpm brain:ingestion-recovery -- \
+  --run <run-id> \
+  --retry-safe-failed \
+  --process \
+  --max-jobs 10 \
+  --report docs/audits/brain-ingestion-<run-id>.json
+```
+
+The command leaves `partial`, `duplicate`, `completed` and `cancelled` rows
+alone, refuses a retry when an active job exists for the same media record or
+URL, and never creates a second job. A paused or cancelled run is not resumed
+implicitly; resume it through the normal admin action first. Add
+`--verify-retrieval` to probe an early-year and a new publication through the
+normal media search path. See
+`docs/audits/brain-ingestion-queue-recovery.md` for the report fields and cost
+inputs.
+
 ### Permanent errors that should not be retried blindly
 
 - `embedding_auth_failed`, `embedding_payment_required`

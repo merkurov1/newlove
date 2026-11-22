@@ -58,6 +58,7 @@
     "db:diag": "tsc db_diagnostics.ts && node db_diagnostics.js",
     "seo:check": "node --experimental-strip-types scripts/seo-check.ts",
     "media:analyze": "tsx scripts/media-analysis-run.ts",
+    "brain:ingestion-recovery": "npx tsx scripts/knowledge/brain-ingestion-recovery.ts",
     "media:inventory": "node --experimental-strip-types --no-warnings scripts/media-audit/archive-inventory.ts",
     "media:verify": "node scripts/media-audit/verify.mjs",
     "media:audit": "node scripts/media-audit/problems.mjs",
