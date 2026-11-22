@@ -20,13 +20,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const path = `/journal/${encodeURIComponent(slug)}`;
 
   try {
-    const supabase = await createClient();
-    const { data: letter } = await supabase
+    // Public article metadata must not depend on request-scoped RLS. The row is
+    // still constrained to published=true, and limit(1) tolerates duplicate
+    // historical slugs that used to make .single() return a 404.
+    const supabase = await createClient({ useServiceRole: true });
+    const { data } = await supabase
       .from('letters')
       .select('title, content, publishedAt, createdAt, lang, kind')
       .eq('slug', slug)
       .eq('published', true)
-      .single();
+      .order('publishedAt', { ascending: false })
+      .limit(1);
+    const letter = data?.[0] ?? null;
 
     if (!letter) {
       return pageMetadata({
@@ -79,18 +84,20 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function LetterPage({ params }: PageProps) {
   const resolvedParams = params instanceof Promise ? await params : params;
   const slug = resolvedParams.slug;
-  const supabase = await createClient();
+  const supabase = await createClient({ useServiceRole: true });
 
-  const { data: letter, error } = await supabase
+  const { data } = await supabase
     .from('letters')
     .select(
       'id, title, slug, content, published, publishedAt, createdAt, lang, kind, authorId, users(name, email)'
     )
     .eq('slug', slug)
     .eq('published', true)
-    .single();
+    .order('publishedAt', { ascending: false })
+    .limit(1);
 
-  if (error || !letter) notFound();
+  const letter = data?.[0] ?? null;
+  if (!letter) notFound();
 
   const letterAuthor = Array.isArray(letter.users) ? letter.users[0] : letter.users;
   const dateStr = new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('en-GB', {

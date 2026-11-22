@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import FlowIssuesArchive from '@/components/flow-issues/FlowIssuesArchive';
 import { listPublicFlowIssues } from '@/lib/flow-issue/public';
+import { flowIssuePath } from '@/lib/flow-issue/urls';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +25,7 @@ export default async function EnFlowIssuesPage() {
     <FlowIssuesArchive
       issues={issues}
       lang="en"
-      hrefFor={(issue) => `/en/flow-issues/${encodeURIComponent(issue.slug)}`}
+      hrefFor={(issue) => flowIssuePath(issue.slug, issue.lang)}
       alternateHref="/flow-issues"
       alternateLabel="Русский"
     />

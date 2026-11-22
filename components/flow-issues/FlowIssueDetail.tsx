@@ -1,5 +1,6 @@
 import FlowIssueArticle from './FlowIssueArticle';
 import { issuePageTitle, type PublicFlowIssue } from '@/lib/flow-issue/public';
+import { flowIssuePath } from '@/lib/flow-issue/urls';
 
 const SITE = 'https://www.merkurov.love';
 
@@ -62,7 +63,7 @@ export default function FlowIssueDetail({
         previousIssue={
           previousIssue
             ? {
-                href: `${indexHref}/${encodeURIComponent(previousIssue.slug)}`,
+                href: flowIssuePath(previousIssue.slug, previousIssue.lang),
                 title: issuePageTitle(previousIssue),
                 lang: previousIssue.lang,
                 number: previousIssue.number,
@@ -72,7 +73,7 @@ export default function FlowIssueDetail({
         nextIssue={
           nextIssue
             ? {
-                href: `${indexHref}/${encodeURIComponent(nextIssue.slug)}`,
+                href: flowIssuePath(nextIssue.slug, nextIssue.lang),
                 title: issuePageTitle(nextIssue),
                 lang: nextIssue.lang,
                 number: nextIssue.number,

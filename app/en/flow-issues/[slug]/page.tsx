@@ -9,10 +9,9 @@ import {
   loadPublicFlowIssue,
 } from '@/lib/flow-issue/public';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { flowIssueCanonicalUrl } from '@/lib/flow-issue/urls';
 
 export const dynamic = 'force-dynamic';
-
-const SITE = 'https://www.merkurov.love';
 
 type PageProps = {
   params: Promise<{ slug: string }> | { slug: string };
@@ -26,17 +25,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return sanitizeMetadata({ title: 'Flow issue | Anton Merkurov' });
   }
 
-  const canonical = `${SITE}/en/flow-issues/${encodeURIComponent(issue.slug)}`;
+  const canonical = flowIssueCanonicalUrl(issue.slug, issue.lang);
 
   return sanitizeMetadata({
     title: issuePageTitle(issue),
     description: issueDescription(issue),
     alternates: {
       canonical,
-      languages: {
-        ru: `${SITE}/flow-issues/${encodeURIComponent(issue.slug)}`,
-        en: `${SITE}/en/flow-issues/${encodeURIComponent(issue.slug)}`,
-      },
     },
     openGraph: {
       title: issuePageTitle(issue),
@@ -64,8 +59,8 @@ export default async function EnFlowIssuePage({ params }: PageProps) {
   return (
     <FlowIssueDetail
       issue={issue}
-      canonical={`${SITE}/en/flow-issues/${encodeURIComponent(issue.slug)}`}
-      indexHref="/en/flow-issues"
+      canonical={flowIssueCanonicalUrl(issue.slug, issue.lang)}
+      indexHref={issue.lang === 'ru' ? '/flow-issues' : '/en/flow-issues'}
       previousIssue={previous}
       nextIssue={next}
     />
