@@ -2,6 +2,8 @@
 // Что не удалось подтвердить, лежит в `pending` и на сайт не попадает.
 // Supabase-ready: схема плоская, MediaRecord 1:1 ложится на таблицу.
 
+import type { MediaLanguageCode } from '@/lib/mediaLanguages';
+
 export type PublicMediaQuoteType = 'direct_quote' | 'indirect_quote' | 'mention';
 
 export interface PublicMediaQuote {
@@ -25,7 +27,11 @@ export interface PublicMediaRelation {
   role?: 'original' | 'reprint' | 'related';
 }
 
-export type Lang = 'EN' | 'RU' | 'DE' | 'PL' | 'BS' | 'FR' | 'IT' | 'ES' | 'UK';
+/**
+ * Known archive codes get editorially reviewed labels; the open string branch
+ * keeps a database code outside the list visible instead of coercing it to EN.
+ */
+export type Lang = MediaLanguageCode | (string & {});
 export type Topic = 'Internet & Censorship' | 'AI & Tech' | 'Art & Culture' | 'Fintech & Crypto';
 export type Kind =
   | 'quote' // цитата или комментарий в материале издания

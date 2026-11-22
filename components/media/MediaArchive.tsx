@@ -9,6 +9,13 @@ import {
   originalMediaRelation,
   reprintMediaRelations,
 } from '@/lib/mediaClassification';
+import {
+  mediaLanguageBadge,
+  mediaLanguageOptionLabel,
+  mediaLanguageSearchText,
+  normalizeMediaLanguageCode,
+  sortMediaLanguages,
+} from '@/lib/mediaLanguages';
 
 type Props = {
   records: MediaRecord[];
@@ -171,7 +178,7 @@ export default function MediaArchive({ records, archives }: Props) {
   const params = useMemo(() => new URLSearchParams(paramsString), [paramsString]);
 
   const type = params.get('type') ?? 'all';
-  const lang = params.get('lang') ?? '';
+  const lang = normalizeMediaLanguageCode(params.get('lang'), '');
   const topic = params.get('topic') ?? '';
   const year = params.get('year') ?? '';
   const outlet = params.get('outlet') ?? '';
@@ -269,7 +276,7 @@ export default function MediaArchive({ records, archives }: Props) {
       mentions: records.filter((record) => record.kind !== 'column' && record.kind !== 'blog')
         .length,
       outlets,
-      languages: [...new Set(records.map((record) => record.lang))].sort(),
+      languages: sortMediaLanguages(records.map((record) => record.lang)),
       topics: [...new Set(records.map((record) => record.derivedTopic || record.topic))].sort(),
       minYear: years.length ? Math.min(...years) : new Date().getFullYear(),
       maxYear: years.length ? Math.max(...years) : new Date().getFullYear(),
@@ -404,7 +411,7 @@ export default function MediaArchive({ records, archives }: Props) {
           record.topic,
           record.derivedTopic ?? '',
           (record.subtopics ?? []).join(' '),
-          record.lang,
+          mediaLanguageSearchText(record.lang),
           record.date,
           KIND_LABEL[record.kind],
           presenceLabel(record),
@@ -734,7 +741,7 @@ export default function MediaArchive({ records, archives }: Props) {
               <option value="">All languages</option>
               {stats.languages.map((language) => (
                 <option key={language} value={language}>
-                  {language}
+                  {mediaLanguageOptionLabel(language)}
                 </option>
               ))}
             </select>
@@ -994,7 +1001,7 @@ export default function MediaArchive({ records, archives }: Props) {
 
                           {record.program && <span>{record.program}</span>}
 
-                          <span className="ma-tag">{record.lang}</span>
+                          <span className="ma-tag">{mediaLanguageBadge(record.lang)}</span>
                           <span className="ma-kind">{presenceLabel(record)}</span>
                         </p>
 

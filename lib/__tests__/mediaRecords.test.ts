@@ -181,6 +181,82 @@ describe('getMediaRecords publication boundary', () => {
     expect(records).toHaveLength(localRecords.length);
   });
 
+  it('maps Albanian SQ and Armenian HY records without relabelling them', async () => {
+    state.__mediaTestClient = clientWithMedia([
+      {
+        id: 'sq-1',
+        url: 'https://example.com/media/gazeta-shqip',
+        canonical_url: 'https://example.com/media/gazeta-shqip',
+        title: 'Gazeta Shqip publication',
+        outlet: 'Gazeta Shqip',
+        published_date: '2026-05-28',
+        lang: 'SQ',
+        kind: 'mention',
+        topic: 'Internet & Censorship',
+        status: 'published',
+        ai_metadata: {},
+      },
+      {
+        id: 'hy-1',
+        url: 'https://example.com/media/armenian-record',
+        canonical_url: 'https://example.com/media/armenian-record',
+        title: 'Armenian publication',
+        outlet: 'Armenian outlet',
+        published_date: '2026-05-27',
+        lang: 'HY',
+        kind: 'mention',
+        topic: 'Internet & Censorship',
+        status: 'published',
+        ai_metadata: {},
+      },
+    ]);
+
+    const records = await getMediaRecords();
+
+    expect(records.find((item) => item.id === 'sq-1')?.lang).toBe('SQ');
+    expect(records.find((item) => item.id === 'hy-1')?.lang).toBe('HY');
+  });
+
+  it('preserves an unknown database language instead of masking it as EN', async () => {
+    state.__mediaTestClient = clientWithMedia([
+      {
+        id: 'unknown-lang-1',
+        url: 'https://example.com/media/unknown-language',
+        canonical_url: 'https://example.com/media/unknown-language',
+        title: 'Publication with an unlisted language',
+        outlet: 'Example Times',
+        published_date: '2026-05-26',
+        lang: 'az',
+        kind: 'mention',
+        topic: 'Internet & Censorship',
+        status: 'published',
+        ai_metadata: {},
+      },
+      {
+        id: 'missing-lang-1',
+        url: 'https://example.com/media/missing-language',
+        canonical_url: 'https://example.com/media/missing-language',
+        title: 'Publication with no stored language',
+        outlet: 'Example Times',
+        published_date: '2026-05-25',
+        lang: null,
+        kind: 'mention',
+        topic: 'Internet & Censorship',
+        status: 'published',
+        ai_metadata: {},
+      },
+    ]);
+
+    const records = await getMediaRecords();
+    const unknown = records.find((item) => item.id === 'unknown-lang-1');
+    const missing = records.find((item) => item.id === 'missing-lang-1');
+
+    expect(unknown?.lang).toBe('AZ');
+    expect(unknown?.lang).not.toBe('EN');
+    expect(missing?.lang).toBe('Unknown');
+    expect(missing?.lang).not.toBe('EN');
+  });
+
   it('does not display an invalid calendar date as if it were verified', async () => {
     state.__mediaTestClient = clientWithMedia([
         {

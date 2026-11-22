@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
+import { mediaLanguageBadge, mediaLanguageOptionLabel } from '@/lib/mediaLanguages';
+
 type Section =
   | 'overview'
   | 'timeline'
@@ -827,7 +829,7 @@ export default function MediaIntelligenceDashboard() {
             <option value="">Все</option>
             {options.languages.map((language) => (
               <option key={language} value={language}>
-                {language}
+                {mediaLanguageOptionLabel(language)}
               </option>
             ))}
           </select>
@@ -1143,7 +1145,7 @@ export default function MediaIntelligenceDashboard() {
                       {overview.languages.slice(0, 12).map((item) => (
                         <Bar
                           key={item.language}
-                          label={item.language}
+                          label={mediaLanguageOptionLabel(item.language)}
                           value={item.count}
                           max={Math.max(...overview.languages.map((entry) => entry.count))}
                         />
@@ -1316,7 +1318,11 @@ export default function MediaIntelligenceDashboard() {
                       <tr key={item.outlet} className="border-t border-[#EEE9E4]">
                         <td className="px-3 py-2">{item.outlet}</td>
                         <td className="px-3 py-2 font-mono">{item.publications}</td>
-                        <td className="px-3 py-2">{item.languages.join(', ') || '—'}</td>
+                        <td className="px-3 py-2">
+                          {item.languages
+                            .map((language) => mediaLanguageBadge(language))
+                            .join(', ') || '—'}
+                        </td>
                         <td className="px-3 py-2 font-mono">{item.full_text}</td>
                         <td className="px-3 py-2 font-mono">{item.direct_quotes}</td>
                         <td className="px-3 py-2">{date(item.last_publication)}</td>
@@ -1619,7 +1625,7 @@ export default function MediaIntelligenceDashboard() {
                                 </a>
                               )}
                               <span>{row.effective_topic || '—'}</span>
-                              <span>{row.language || '—'}</span>
+                              <span>{row.language ? mediaLanguageBadge(row.language) : '—'}</span>
                             </div>
                           </td>
                           <td className="px-3 py-2">
@@ -2151,7 +2157,8 @@ export default function MediaIntelligenceDashboard() {
                         <div>
                           <p className="font-serif text-lg">{hit.title}</p>
                           <p className="text-[10px] text-[#89827B]">
-                            {hit.outlet} · {date(hit.publishedDate)} · {hit.language || '—'} ·{' '}
+                            {hit.outlet} · {date(hit.publishedDate)} ·{' '}
+                            {hit.language ? mediaLanguageBadge(hit.language) : '—'} ·{' '}
                             {hit.topic || '—'}
                           </p>
                         </div>

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { mediaLanguageBadge } from '@/lib/mediaLanguages';
+
 type BulkProgress = {
   total: number;
   queued: number;
@@ -520,7 +522,11 @@ export default function MediaBulkImportPanel() {
                     <td className="max-w-[220px] px-3 py-2">{row.title || '—'}</td>
                     <td className="px-3 py-2">{row.outlet || '—'}</td>
                     <td className="px-3 py-2">{row.publishedDate || '—'}</td>
-                    <td className="px-3 py-2">{row.detectedLanguage || row.lang || '—'}</td>
+                    <td className="px-3 py-2">
+                      {row.detectedLanguage || row.lang
+                        ? mediaLanguageBadge(row.detectedLanguage || row.lang)
+                        : '—'}
+                    </td>
                     <td className="px-3 py-2">{row.kind || '—'}</td>
                     <td className="px-3 py-2">{row.topic || '—'}</td>
                     <td className="px-3 py-2">

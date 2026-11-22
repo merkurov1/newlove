@@ -1,5 +1,7 @@
 import OpenAI from 'openai';
 
+import { MEDIA_LANGUAGE_CODES, normalizeMediaLanguageCode } from '@/lib/mediaLanguages';
+
 export const MEDIA_KINDS = [
   'quote',
   'mention',
@@ -19,31 +21,15 @@ export const MEDIA_TOPICS = [
 ] as const;
 
 /**
- * The public Media Archive currently renders only a subset of these, but the
- * database and the admin interface must not collapse French, Italian, Spanish
- * or other Latin-script publications into English.
+ * The public Media Archive, ingestion pipeline and admin interface share one
+ * language list. Unknown detected codes are preserved rather than collapsed
+ * into English.
  */
-export const MEDIA_LANGUAGES = [
-  'EN',
-  'RU',
-  'DE',
-  'PL',
-  'BS',
-  'FR',
-  'IT',
-  'ES',
-  'PT',
-  'NL',
-  'CS',
-  'TR',
-  'UK',
-  'SR',
-  'HR',
-] as const;
+export const MEDIA_LANGUAGES = MEDIA_LANGUAGE_CODES;
 
 export type MediaKind = (typeof MEDIA_KINDS)[number];
 export type MediaTopic = (typeof MEDIA_TOPICS)[number];
-export type MediaLanguage = (typeof MEDIA_LANGUAGES)[number];
+export type MediaLanguage = (typeof MEDIA_LANGUAGES)[number] | (string & {});
 
 export type MediaClassification = {
   lang: MediaLanguage;
@@ -72,13 +58,7 @@ export function normalizeMediaLanguage(
   value: string | null | undefined,
   fallback: MediaLanguage = 'EN'
 ): MediaLanguage {
-  const tag = (value || '')
-    .trim()
-    .toUpperCase()
-    .replace(/_/g, '-')
-    .split('-')[0];
-
-  return isOneOf(MEDIA_LANGUAGES, tag) ? tag : fallback;
+  return normalizeMediaLanguageCode(value, fallback);
 }
 
 export function fallbackMediaClassification(
