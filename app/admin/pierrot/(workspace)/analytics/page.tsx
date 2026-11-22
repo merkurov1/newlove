@@ -17,6 +17,7 @@ import { getYouTubeChannelId, getYouTubeDataApiKey } from '@/lib/youtube/config'
 import type { ProviderHealth } from '@/lib/analytics/website/types';
 import Sparkline from '@/components/pierrot/workspace/Sparkline';
 import SearchConsoleMonitor from '@/components/analytics/SearchConsoleMonitor';
+import YouTubeChannelManager from '@/components/youtube/YouTubeChannelManager';
 
 import './analytics.css';
 
@@ -149,8 +150,27 @@ function banner(params: SearchParams): { tone: 'ok' | 'warn' | 'bad'; text: stri
   const sync = one(params, 'sync');
   const disconnected = one(params, 'disconnected');
   const discovery = discoveryBanner(params);
+  const youtubeManagement = one(params, 'youtube_management');
 
   if (discovery) return discovery;
+
+  if (youtubeManagement === 'success') {
+    return {
+      tone: 'ok',
+      text: `Управление YouTube подключено отдельным incremental consent. Канал: ${
+        one(params, 'yt_channel') || 'общий канал Pierrot + UNFRAMED'
+      }. Аналитический grant не изменён.`,
+    };
+  }
+
+  if (youtubeManagement && youtubeManagement !== 'success') {
+    return {
+      tone: 'bad',
+      text: `Управление YouTube не подключено: ${explainError(
+        one(params, 'reason') || youtubeManagement
+      )}. Аналитика продолжает работать с прежним grant.`,
+    };
+  }
 
   if (connect === 'success') {
     return {
@@ -238,9 +258,7 @@ function SourceCard({
   provider: 'google_analytics' | 'search_console' | 'umami' | 'bluesky';
 }) {
   const connectHref =
-    provider === 'bluesky'
-      ? null
-      : `/api/admin/analytics/connect?provider=${provider}`;
+    provider === 'bluesky' ? null : `/api/admin/analytics/connect?provider=${provider}`;
   const external = metaRecord(source.externalMeta);
   const discovery = metaRecord(external?.discovery);
   const properties = metaList(external?.discovered_properties);
@@ -436,9 +454,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
   const bs = sourceFor('bluesky');
   const youtube = await (async () => {
     try {
-      return await loadYouTubeConnectionState(
-        getServerSupabaseClient({ useServiceRole: true })
-      );
+      return await loadYouTubeConnectionState(getServerSupabaseClient({ useServiceRole: true }));
     } catch {
       return null;
     }
@@ -462,6 +478,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
   const recentRuns = health.runs.slice(0, 12);
   const youtubeStatusHref = '/api/admin/pierrot/youtube/status';
   const youtubeConnectHref = '/api/admin/analytics/connect?provider=youtube';
+  const youtubeProject = one(params, 'project') === 'unframed' ? 'unframed' : 'pierrot';
 
   return (
     <div className="pw-page pw-analytics">
@@ -512,8 +529,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
               <strong>OAuth настроен.</strong> Redirect URI: <code>{google.redirectUri}</code>.
               Запрашиваются только read-only scopes: <code>analytics.readonly</code>,{' '}
               <code>webmasters.readonly</code>, <code>youtube.readonly</code> и{' '}
-              <code>yt-analytics.readonly</code>. Один grant обслуживает сайт и общий канал
-              Pierrot + UNFRAMED.
+              <code>yt-analytics.readonly</code>. Один grant обслуживает сайт и общий канал Pierrot
+              + UNFRAMED.
             </p>
             {encryption === 'derived' && (
               <p>
@@ -598,6 +615,12 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
                 <a className="pw-analytics-button" href={youtubeConnectHref}>
                   {youtube.connected ? 'Переподключить Google' : 'Подключить общий канал'}
                 </a>
+                <a
+                  className="pw-analytics-button pw-analytics-button--quiet"
+                  href={`/admin/pierrot/youtube?project=${youtubeProject}`}
+                >
+                  Управление каналом
+                </a>
                 {youtube.connected && (
                   <form action="/api/admin/analytics/disconnect" method="post">
                     <input type="hidden" name="provider" value="youtube" />
@@ -614,6 +637,10 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
           </section>
         )}
 
+        <section className="pw-analytics-grid" aria-label="Управление общим YouTube-каналом">
+          <YouTubeChannelManager project={youtubeProject} />
+        </section>
+
         <section className="pw-analytics-grid" aria-label="Рассылки и инфраструктура">
           <article className="pw-analytics-card">
             <div className="pw-analytics-card-head">
@@ -627,7 +654,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
             <dl className="pw-analytics-facts">
               <div>
                 <dt>Подтверждённые подписчики</dt>
-                <dd>{formatNumber(dashboard?.dataset.internal.newsletter.subscribers.confirmed)}</dd>
+                <dd>
+                  {formatNumber(dashboard?.dataset.internal.newsletter.subscribers.confirmed)}
+                </dd>
               </div>
               <div>
                 <dt>Ожидают подтверждения</dt>
@@ -686,19 +715,35 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
             <dl className="pw-analytics-facts">
               <div>
                 <dt>Подписчики (всего)</dt>
-                <dd>{blueskyDashboard?.available ? formatNumber(blueskyDashboard?.profile.followers) : '—'}</dd>
+                <dd>
+                  {blueskyDashboard?.available
+                    ? formatNumber(blueskyDashboard?.profile.followers)
+                    : '—'}
+                </dd>
               </div>
               <div>
                 <dt>Постов за период</dt>
-                <dd>{blueskyDashboard?.period.available ? formatNumber(blueskyDashboard?.period.totals.posts) : '—'}</dd>
+                <dd>
+                  {blueskyDashboard?.period.available
+                    ? formatNumber(blueskyDashboard?.period.totals.posts)
+                    : '—'}
+                </dd>
               </div>
               <div>
                 <dt>Лайки на постах периода</dt>
-                <dd>{blueskyDashboard?.period.available ? formatNumber(blueskyDashboard?.period.totals.likes) : '—'}</dd>
+                <dd>
+                  {blueskyDashboard?.period.available
+                    ? formatNumber(blueskyDashboard?.period.totals.likes)
+                    : '—'}
+                </dd>
               </div>
               <div>
                 <dt>Архив постов</dt>
-                <dd>{blueskyDashboard?.available ? formatNumber(blueskyDashboard?.archive.total) : '—'}</dd>
+                <dd>
+                  {blueskyDashboard?.available
+                    ? formatNumber(blueskyDashboard?.archive.total)
+                    : '—'}
+                </dd>
               </div>
             </dl>
             {blueskyPeriodPosts.length ? (
@@ -750,9 +795,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
             </div>
             <p className="pw-analytics-id">@vercel/analytics · @vercel/speed-insights</p>
             <p className="pw-analytics-hint">
-              Скрипты Analytics и Speed Insights присутствуют в production-бандле. Vercel API
-              Web Analytics / Speed Insights на текущем тарифе недоступен; эти данные не
-              подменяются оценками.
+              Скрипты Analytics и Speed Insights присутствуют в production-бандле. Vercel API Web
+              Analytics / Speed Insights на текущем тарифе недоступен; эти данные не подменяются
+              оценками.
             </p>
           </article>
         </section>

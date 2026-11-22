@@ -1,10 +1,12 @@
 import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { getGoogleOAuthConfig, getSyncOwnerSecret } from '@/lib/analytics/website/config';
-import { buildGoogleConsentUrl, probeGoogleConsentUrl } from '@/lib/analytics/website/providers/oauth';
+import {
+  buildGoogleConsentUrl,
+  probeGoogleConsentUrl,
+} from '@/lib/analytics/website/providers/oauth';
 import { signState } from '@/lib/analytics/website/tokenCrypto';
 
 export const runtime = 'nodejs';
@@ -44,6 +46,11 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const provider = url.searchParams.get('provider') || 'google_analytics';
+    // Account selection is explicit. The site-login email is only used when the
+    // owner deliberately supplies `login_hint`; forcing it would preselect the
+    // site account and make a different UNFRAMED Google account hard to choose.
+    const loginHint = url.searchParams.get('login_hint')?.trim() || null;
+    const selectAccount = url.searchParams.get('select_account') !== 'false';
     const nonce = crypto.randomBytes(18).toString('base64url');
 
     const state = signState(
@@ -58,7 +65,8 @@ export async function GET(request: Request) {
 
     const consentUrl = buildGoogleConsentUrl({
       state,
-      loginHint: user.email ?? null,
+      loginHint,
+      selectAccount,
     });
 
     const probe = await probeGoogleConsentUrl(consentUrl);

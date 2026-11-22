@@ -8,6 +8,7 @@ import {
   getGooglePropertyOverride,
   getSearchConsoleSiteOverride,
   getSiteUrl,
+  getYouTubeManagementRedirectUri,
 } from '../config';
 import {
   AnalyticsProviderError,
@@ -68,21 +69,42 @@ function toTokenSet(raw: RawTokenResponse): GoogleTokenSet {
   };
 }
 
-export function buildGoogleConsentUrl(input: { state: string; loginHint?: string | null }): string {
+export type GoogleConsentUrlInput = {
+  state: string;
+  /**
+   * Google account hint. It must only be supplied when the owner explicitly
+   * asks for a specific account: passing the site-login email by default makes
+   * Google preselect that account and hides the account chooser.
+   */
+  loginHint?: string | null;
+  /** Explicit Google account chooser. Defaults to true. */
+  selectAccount?: boolean;
+  scopes?: readonly string[];
+  redirectUri?: string;
+};
+
+/**
+ * Builds an explicit Google consent URL. `select_account` is always requested
+ * so the owner can connect the UNFRAMED Google account even when it differs
+ * from the site login. Incremental consent is preserved with
+ * `include_granted_scopes=true`.
+ */
+export function buildGoogleConsentUrl(input: GoogleConsentUrlInput): string {
   const config = getGoogleOAuthConfig();
 
   if (!config.configured) {
     throw new Error(`Google OAuth is not configured: missing ${config.missing.join(', ')}.`);
   }
 
+  const prompt = input.selectAccount === false ? 'consent' : 'consent select_account';
   const params = new URLSearchParams({
     client_id: config.clientId,
-    redirect_uri: config.redirectUri,
+    redirect_uri: input.redirectUri || config.redirectUri,
     response_type: 'code',
     access_type: 'offline',
-    prompt: 'consent',
+    prompt,
     include_granted_scopes: 'true',
-    scope: [...GOOGLE_OAUTH_SCOPES].join(' '),
+    scope: [...(input.scopes ?? GOOGLE_OAUTH_SCOPES)].join(' '),
     state: input.state,
   });
 
@@ -91,13 +113,31 @@ export function buildGoogleConsentUrl(input: { state: string; loginHint?: string
   return `${AUTH_URL}?${params.toString()}`;
 }
 
-export async function exchangeGoogleCode(code: string): Promise<GoogleTokenSet> {
+export function buildYouTubeManagementConsentUrl(input: {
+  state: string;
+  loginHint?: string | null;
+  selectAccount?: boolean;
+  scopes: readonly string[];
+}): string {
+  return buildGoogleConsentUrl({
+    state: input.state,
+    loginHint: input.loginHint,
+    selectAccount: input.selectAccount,
+    scopes: input.scopes,
+    redirectUri: getYouTubeManagementRedirectUri(),
+  });
+}
+
+export async function exchangeGoogleCode(
+  code: string,
+  options: { redirectUri?: string } = {}
+): Promise<GoogleTokenSet> {
   const config = getGoogleOAuthConfig();
   const body = new URLSearchParams({
     code,
     client_id: config.clientId,
     client_secret: config.clientSecret,
-    redirect_uri: config.redirectUri,
+    redirect_uri: options.redirectUri || config.redirectUri,
     grant_type: 'authorization_code',
   });
 
@@ -134,6 +174,37 @@ export async function refreshGoogleAccessToken(refreshToken: string): Promise<Go
   );
 
   return toTokenSet(raw);
+}
+
+export type GoogleUserInfo = {
+  email: string | null;
+  name: string | null;
+  subject: string | null;
+};
+
+/**
+ * Reads the identity of the Google account that granted the management
+ * scopes. This is intentionally separate from YouTube channel discovery:
+ * channel ownership and Google account identity are different facts.
+ */
+export async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
+  try {
+    const raw = await fetchJson<{ email?: string; name?: string; sub?: string }>(
+      'https://openidconnect.googleapis.com/v1/userinfo',
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+      { provider: 'google_oauth', retries: 1, label: 'userinfo' }
+    );
+
+    return {
+      email: typeof raw.email === 'string' ? raw.email : null,
+      name: typeof raw.name === 'string' ? raw.name : null,
+      subject: typeof raw.sub === 'string' ? raw.sub : null,
+    };
+  } catch {
+    // Account identity is display metadata only. A failure must never block a
+    // valid YouTube management grant.
+    return { email: null, name: null, subject: null };
+  }
 }
 
 export async function revokeGoogleToken(token: string): Promise<void> {

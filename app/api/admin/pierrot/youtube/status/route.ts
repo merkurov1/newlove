@@ -3,9 +3,11 @@ import { NextResponse } from 'next/server';
 import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAuth';
 import { getGoogleOAuthConfig } from '@/lib/analytics/website/config';
 import {
+  YOUTUBE_MANAGEMENT_SCOPES,
   YOUTUBE_REQUIRED_SCOPES,
   getYouTubeChannelId,
   getYouTubeDataApiKey,
+  getYouTubeManagementRedirectUri,
   getYouTubeTimezone,
 } from '@/lib/youtube/config';
 import { loadYouTubeConnectionState } from '@/lib/youtube/connection';
@@ -62,6 +64,15 @@ export async function GET(request: Request) {
       publicDataApiKey: Boolean(getYouTubeDataApiKey()),
     },
     requiredScopes: [...YOUTUBE_REQUIRED_SCOPES],
+    management: {
+      scopes: [...YOUTUBE_MANAGEMENT_SCOPES],
+      authorized: connection.managementAuthorized,
+      googleAccountEmail: connection.googleAccountEmail,
+      authorizedAt: connection.managementAuthorizedAt,
+      missingScopes: connection.missingManagementScopes,
+      connectUrl: '/api/admin/youtube/management/connect?project=pierrot',
+      requiredRedirectUri: getYouTubeManagementRedirectUri(),
+    },
     connection: {
       ...connection,
       // Explicitly document that no secret is included.

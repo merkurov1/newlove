@@ -2,11 +2,13 @@
 
 import {
   buildGoogleConsentUrl,
+  buildYouTubeManagementConsentUrl,
   chooseGa4Property,
   chooseSearchConsoleSite,
   normalizeGa4AccountId,
   normalizeGa4PropertyId,
 } from '../providers/oauth';
+import { YOUTUBE_MANAGEMENT_CONSENT_SCOPES, YOUTUBE_MANAGEMENT_SCOPES } from '../config';
 
 const previousEnv = { ...process.env };
 
@@ -29,8 +31,11 @@ describe('Google consent configuration', () => {
     const url = new URL(buildGoogleConsentUrl({ state: 'signed-state' }));
 
     expect(url.searchParams.get('access_type')).toBe('offline');
-    expect(url.searchParams.get('prompt')).toBe('consent');
+    expect(url.searchParams.get('prompt')).toBe('consent select_account');
     expect(url.searchParams.get('include_granted_scopes')).toBe('true');
+    // The site-login email must not be forced: it would preselect the account
+    // and hide the chooser needed for a separate UNFRAMED Google account.
+    expect(url.searchParams.get('login_hint')).toBeNull();
     expect(url.searchParams.get('redirect_uri')).toBe(
       'https://www.merkurov.love/api/auth/google-analytics/callback'
     );
@@ -43,6 +48,41 @@ describe('Google consent configuration', () => {
       'https://www.googleapis.com/auth/yt-analytics.readonly',
     ]);
     expect(scopes.some((scope) => /monetary/i.test(scope))).toBe(false);
+  });
+
+  it('only sends login_hint when the owner explicitly chooses an account', () => {
+    const explicit = new URL(
+      buildGoogleConsentUrl({ state: 'signed-state', loginHint: 'unframed@example.com' })
+    );
+
+    expect(explicit.searchParams.get('login_hint')).toBe('unframed@example.com');
+    expect(explicit.searchParams.get('prompt')).toContain('select_account');
+  });
+
+  it('builds a separate least-privilege management consent with a distinct callback', () => {
+    const url = new URL(
+      buildYouTubeManagementConsentUrl({
+        state: 'signed-state',
+        scopes: YOUTUBE_MANAGEMENT_CONSENT_SCOPES,
+      })
+    );
+
+    expect(url.searchParams.get('prompt')).toBe('consent select_account');
+    expect(url.searchParams.get('include_granted_scopes')).toBe('true');
+    expect(url.searchParams.get('redirect_uri')).toBe(
+      'https://www.merkurov.love/api/auth/youtube-management/callback'
+    );
+    expect(url.searchParams.get('login_hint')).toBeNull();
+
+    const scopes = (url.searchParams.get('scope') || '').split(' ');
+    expect(scopes).toEqual(expect.arrayContaining([...YOUTUBE_MANAGEMENT_SCOPES]));
+    expect(scopes).toContain('openid');
+    expect(scopes).toContain('email');
+    expect(scopes).toContain('https://www.googleapis.com/auth/youtube.readonly');
+    // Analytics stays incremental; the management flow never broadens it.
+    expect(scopes).not.toContain('https://www.googleapis.com/auth/yt-analytics.readonly');
+    expect(scopes).not.toContain('https://www.googleapis.com/auth/analytics.readonly');
+    expect(scopes).not.toContain('https://www.googleapis.com/auth/webmasters.readonly');
   });
 
   it('selects the property whose web stream matches the measurement id', () => {
