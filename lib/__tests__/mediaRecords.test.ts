@@ -257,6 +257,92 @@ describe('getMediaRecords publication boundary', () => {
     expect(missing?.lang).not.toBe('EN');
   });
 
+  it('exposes only a safe datePrecision field from ai_metadata', async () => {
+    state.__mediaTestClient = clientWithMedia([
+      {
+        id: 'year-precision-1',
+        url: 'https://example.com/media/novye-izvestia',
+        canonical_url: 'https://example.com/media/novye-izvestia',
+        title: 'Никакой угрозы Рунету нет',
+        outlet: 'Новые Известия',
+        published_date: '2019-11-01',
+        created_at: '2026-11-01T00:00:00.000Z',
+        lang: 'RU',
+        kind: 'column',
+        topic: 'Internet & Censorship',
+        status: 'published',
+        ai_metadata: {
+          date_precision: 'year',
+          owner_note: 'do not expose',
+          raw_date_guess: '2019-11-01',
+        },
+      },
+    ]);
+
+    const records = await getMediaRecords();
+    const record = records.find((item) => item.id === 'year-precision-1');
+
+    // The technical anchor stays available for sorting, but the precision
+    // flag is the only ai_metadata value that reaches the public record.
+    expect(record?.date).toBe('2019-11-01');
+    expect(record?.datePrecision).toBe('year');
+    expect(record).not.toHaveProperty('ai_metadata');
+    expect(JSON.stringify(record)).not.toContain('do not expose');
+    expect(JSON.stringify(record)).not.toContain('raw_date_guess');
+  });
+
+  it('ignores unknown or unsupported date precision values', async () => {
+    state.__mediaTestClient = clientWithMedia([
+      {
+        id: 'unknown-precision-1',
+        url: 'https://example.com/media/unknown-precision',
+        canonical_url: 'https://example.com/media/unknown-precision',
+        title: 'Record with unknown precision',
+        outlet: 'Example Times',
+        published_date: '2026-05-28',
+        lang: 'EN',
+        kind: 'mention',
+        topic: 'Internet & Censorship',
+        status: 'published',
+        ai_metadata: { date_precision: 'decade' },
+      },
+    ]);
+
+    const record = (await getMediaRecords()).find(
+      (item) => item.id === 'unknown-precision-1'
+    );
+
+    expect(record?.date).toBe('2026-05-28');
+    expect(record).not.toHaveProperty('datePrecision');
+  });
+
+  it('does not claim date precision for a timeline fallback date', async () => {
+    state.__mediaTestClient = clientWithMedia([
+      {
+        id: 'fallback-precision-1',
+        url: 'https://example.com/media/fallback-precision',
+        canonical_url: 'https://example.com/media/fallback-precision',
+        title: 'Record without publication date',
+        outlet: 'Example Times',
+        published_date: null,
+        created_at: '2026-11-01T00:00:00.000Z',
+        lang: 'EN',
+        kind: 'mention',
+        topic: 'Internet & Censorship',
+        status: 'published',
+        ai_metadata: { date_precision: 'year' },
+      },
+    ]);
+
+    const record = (await getMediaRecords()).find(
+      (item) => item.id === 'fallback-precision-1'
+    );
+
+    expect(record?.date).toBe('2026-11-01');
+    expect(record).not.toHaveProperty('datePrecision');
+    expect(record?.note).toContain('Publication date unavailable');
+  });
+
   it('does not display an invalid calendar date as if it were verified', async () => {
     state.__mediaTestClient = clientWithMedia([
         {
