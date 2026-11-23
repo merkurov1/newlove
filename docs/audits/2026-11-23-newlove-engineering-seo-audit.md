@@ -1,414 +1,242 @@
 # NewLove — independent engineering and SEO audit
 
-Date: **2026-11-23**
-Repository: `merkurov1/newlove`
-Base: `main` @ `f869bc1498978210279a5c65bc4eb386b43db21d`
-Production: `https://www.merkurov.love` (observed `server: Vercel`, `x-vercel-id` present)
-Audit branch: `pierrot/dev/8717abfd-553a-4c9d-abf5-e73c6cde2d26/2`
+- Date: **2026-11-23**
+- Repository: `merkurov1/newlove`
+- Audited base: `main` at `5738df0113fc79ff2833da1010f67d97e6d3f32b`
+- Production: `https://www.merkurov.love`
+- Production observations: **2026-11-23 20:00–20:14 UTC**, read-only HTTP fetches
 
-This report separates **measured facts**, **hypotheses**, and **data that could not be obtained**.
-No production deploy, migration, DDL, Search Console setting, auth/payment change or mass content
-rewrite was performed.
+This report separates current production facts, historical GSC evidence, and hypotheses. No
+deployment, migration, SQL, external-account change, content rewrite, or monitoring implementation
+was performed in this attempt.
 
----
+## 1. Executive result
 
-## 1. Executive answer
+Current production has no verified P0 crawl/indexing blocker. The P0/P1 fixes from the earlier audit
+are now present on `main` and observable in production: host and legacy paths reach their canonical
+destinations, `/media` renders its H1 in initial HTML, `/debug-auth` is noindex, and sitemap future
+dates are suppressed. Their regression suite passes.
 
-The site's organic problem is **not primarily a code-level crawl blocker**. On 2026-11-23 the public
-canonical pages return 200, self-canonicalise on the `www` host, emit `index, follow`, appear in a
-755-URL sitemap with no duplicate/non-canonical URLs, and have reciprocal hreflang for the five
-real locale variants that exist. The previously reported six `/journal/*` 404s are fixed in current
-production, and `/flow/join` now canonicals to the `www` host.
+The highest-confidence remaining work is P2:
 
-The dominant measured problems are:
+1. `/media` is server-rendered but produced **568,391 bytes** and took **6.76 s** in one uncached
+   probe (`private, no-cache, no-store`, `x-vercel-cache: MISS`).
+2. `/journal` produced **168,245 bytes** and took **6.30 s** in one uncached probe. It is explicitly
+   dynamic (`app/journal/page.tsx:5`) and therefore remains an origin/crawl-efficiency concern.
+3. `/research/novayagazeta2025` and `/unframed/book` still contain no H1 in raw HTML. These are
+   verified presentation/SSR gaps, not proof of non-indexing.
+4. Historical GSC exports show a large discovery backlog, but no current GSC slice is available.
+   Content quality and authority remain hypotheses until current query/page data exists.
 
-1. **Host and legacy-URL normalisation are not executing in production.** `https://merkurov.love/*`
-   and `http://merkurov.love/*` answer **HTTP 200** instead of redirecting. `/stat`, `/projects` and
-   `/feed` also answer **200** (via an internal rewrite) although `next.config.js` defines 308s.
-   This is consistent with **production running an older routing configuration than `main`**
-   (deployment drift), not with a missing rule in the repository. It is confirmed; the root cause
-   cannot be proven from outside Vercel.
-2. **Two high-value templates render no meaningful HTML for non-JS crawlers.** `/media` returns an
-   H1-less document containing “Loading media archive…” (the client component bails out because of
-   `useSearchParams`). `/research/novayagazeta2025` and `/unframed/book` return no H1 before JS.
-3. **Content scale + discovery delay.** 228 not-indexed URLs in the 2026-11-22 GSC export are mostly
-   *Discovered / Crawled — currently not indexed*, including large numbers of short Flow notes and
-   media records. That is normal crawl-queue behaviour for a young, very large archive; it is not
-   proof of a technical defect, and no URL should be noindexed just to move a GSC number.
-4. **Measurement is the weakest link.** There is no Google credential in this runner and no
-   reproducible GSC API slice, so the 2026-11-20/22 exports remain **historical context**, not a
-   current baseline.
+No new code fix is justified as P0/P1. Changing the remaining client-heavy templates or caching
+strategy is not a safe narrow fix without product/browser regression work, so this attempt updates
+the evidence and backlog only.
 
-The site's problem is therefore **technical (host/legacy normalisation + SSR gaps) plus
-content/authority and measurement**, in that order of fixability. It is not a site-wide
-canonical/hreflang failure.
+## 2. Prior work reviewed (not reimplemented)
 
----
+- `docs/seo-audit.md`: route/metadata/structured-data baseline and prior remediation.
+- `docs/archive/SEO_AUDIT_2025-11-09.md`: older historical baseline.
+- `docs/gsc-visibility-audit-2026-11-20.md`: supplied performance-data analysis.
+- `docs/gsc-coverage-audit-2026-11-22.md`: 161-URL discovered-not-indexed drilldown.
+- PR **#61**, merge commit `d48e7868`: reviewed through its 16-file git diff. It added the existing
+  GSC monitor, stored export metadata, reconciliation/insight logic, and tests. It was not redone.
+- Existing adapter evidence: `lib/analytics/website/providers/searchConsole.ts:33-55` fixes the
+  dimensions, `dataState=final`, 25k request cap and `type=web`; lines 97-146 paginate with a hard
+  cap. Existing dashboard/monitor code remains unchanged.
+- Earlier task implementation, PR **#92** / commit `c825dff0`, is already merged into current main.
+  This attempt independently rechecked those fixes rather than duplicating them.
 
-## 2. Baseline method and limits
+## 3. Evidence and limitations
 
-### 2.1 Repository baseline
+### Current production method
 
-- Branch checked out at `main` SHA `f869bc14`; working tree clean before changes.
-- `pnpm typecheck` passes.
-- `pnpm lint` exits 0 with **1,388 pre-existing warnings, 0 errors**.
-- `pnpm test --runInBand`: **506 suites passed, 1 skipped; 3,648 tests passed, 10 skipped**.
-- `pnpm build` **fails before our change** with:
-  `supabaseUrl is required` at `app/api/cast/capture/route.ts:10` — the runner has no Supabase
-  environment. This is a baseline environment failure, not a regression. The build got through
-  compilation and TypeScript first.
+Responses were fetched without credentials and parsed for final URL, final HTTP status, title,
+canonical, robots meta, H1 count, JSON-LD, response bytes and cache headers. The available HTTP
+transport follows redirects even when manual mode is requested. It reports `redirected=true` and
+the final 200 URL, but does **not** expose the intermediate 301/308 response or `Location`; exact
+redirect status is therefore not independently verified. Current source declares permanent
+redirects at `next.config.js:21-35`, and the host guard emits 308 at `proxy.ts:13-25`.
 
-### 2.2 Production HTTP method
+### GSC boundary
 
-All production observations below were read-only `GET` requests with `redirect: 'manual'`, parsed
-for `<title>`, `<meta name="robots">`, `<link rel="canonical">`, `<h1>` count and JSON-LD. They are
-not Google crawls.
+There is no GSC resource or OAuth grant exposed to this session (MCP resource discovery returned no
+resources/templates). No current Search Console API call or setting change was made. Current URL
+Inspection, crawl stats, Manual Actions, query/device/country breakdowns and current coverage totals
+are unavailable. Missing data is not reported as zero.
 
-### 2.3 GSC / OpenAI access
+### Core Web Vitals boundary
 
-- No Google credentials exist in this runner (`compgen -e` shows only `DEEPSEEK_API_KEY`; no
-  `GOOGLE_*`, `GSC_*`, `OPENAI_API_KEY`, `VERCEL_TOKEN`).
-- No `vercel` CLI and no `.vercel/` project link exist, so the existing Vercel `openai_api_key`
-  cannot be pulled securely. No API call was made, and no workaround that could expose the secret
-  was attempted.
-- GSC figures below are quoted **only** from the committed historical exports and are explicitly
-  labelled historical.
+No CrUX/PSI field data or browser trace is available. TTFB-like elapsed fetch time, HTML bytes,
+cache headers and raw-HTML visibility below are **proxies**, not LCP/INP/CLS measurements. No layout
+or performance code changed, so no browser/mobile visual regression was claimed.
 
----
+## 4. Current production technical audit
 
-## 3. Confirmed technical findings
+### Robots, noindex and sitemap
 
-### P0 — Production does not execute the canonical-host redirects (confirmed)
+- `https://www.merkurov.love/robots.txt` returned 200 and matches `app/robots.ts:8-62`: public
+  content allowed; admin/API/auth/draft/debug/private surfaces disallowed; canonical Host and
+  sitemap declared.
+- `/debug-auth` returned 200 with `noindex, nofollow`, its own title and no canonical. Evidence:
+  `app/debug-auth/page.tsx:5-12`; robots exclusion at `app/robots.ts:25-30`.
+- Sitemap returned 200, **165,989 bytes**, **755 unique URLs**, 694 `lastmod` values, zero duplicate
+  URLs, zero non-`https://www` URLs, and zero dates beyond now + five minutes.
+- All 17 entries carrying alternates were reciprocal and self-referencing; no reciprocity errors.
+  Code evidence: canonical filtering and date guard in `lib/sitemap/entries.ts:62-76,93-120`, real
+  locale expansion at lines 149-175, and dynamic-source filtering from line 178 onward.
 
-| Probe | Observed | Expected |
-| --- | --- | --- |
-| `https://merkurov.love/` | `200`, no `Location`, canonical `https://www.merkurov.love` | `308` to `https://www.merkurov.love/` |
-| `https://merkurov.love/advising` | `200`, canonical `https://www.merkurov.love/advising` | `308` to www |
-| `http://merkurov.love/` | `200` (served over the probe) | `308` to `https://www.merkurov.love/` |
-| `https://www.merkurov.love/stat` | `200`, `x-matched-path: /liveheart/stat`, canonical `/liveheart/stat` | `308` to `/liveheart/stat` |
-| `https://www.merkurov.love/projects` | `200`, canonical `/all` | `308` to `/all` |
-| `https://www.merkurov.love/feed` | `200`, canonical `/flow` | `308` to `/flow` |
+### HTTP, canonical and redirects
 
-`next.config.js:21-36` contains exactly these redirects. Their absence in production, combined with
-the internal rewrite signature on `/stat`, is evidence that the live deployment predates the current
-routing configuration (commit `bae5f388`, 2026-10-30, added `/stat`, `/projects` and `/feed`).
-The root cause (stale deployment vs. a Vercel project-level rewrite) cannot be proven without the
-Vercel API, which this task forbids.
+| Requested URL               | Observed final result                               | Canonical / robots           | Verification                         |
+| --------------------------- | --------------------------------------------------- | ---------------------------- | ------------------------------------ |
+| `https://merkurov.love/`    | redirected; final `https://www.merkurov.love/`, 200 | www root / index             | current production                   |
+| `http://merkurov.love/`     | redirected; final HTTPS www root, 200               | www root / index             | current production                   |
+| `http://www.merkurov.love/` | redirected; final HTTPS www root, 200               | www root / index             | current production                   |
+| `/stat`                     | redirected; final `/liveheart/stat`, 200            | final URL / index            | current production                   |
+| `/projects`                 | redirected; final `/all`, 200                       | final URL / index            | current production                   |
+| `/feed`                     | redirected; final `/flow`, 200                      | final URL / index            | current production                   |
+| `/letters`                  | 200                                                 | canonical `/journal` / index | intentional duplicate representation |
 
-**Fix applied:** `lib/seo/canonicalHost.ts` + a 308 guard at the top of `proxy.ts`. The guard is
-host-based, leaves `*.vercel.app`/localhost untouched, preserves path and query, and is unit-tested.
-It still requires a deploy to take effect; the live defect remains until then.
-**Owner action still needed:** confirm the production alias points at the current `main` deployment
-and remove any dashboard-level rewrite that shadows the config redirects.
+**Fact:** destination normalization is live. **Unverified:** intermediate status code and hop count.
+The source and six canonical-host unit cases support 308 behavior, but source is not live HTTP proof.
 
-### P1 — `/media` ships no H1 and no archive content without JavaScript (confirmed)
+### Metadata and raw HTML
 
-- `https://www.merkurov.love/media` returned `200`, `index, follow`, self-canonical, **`<h1>` count 0**.
-- Initial HTML body contained `Loading media archive…`; the archive is inside a `Suspense` fallback.
-- Cause: `components/media/MediaArchive.tsx` called `useSearchParams()`, which forces a client-side
-  rendering bailout for the subtree. The visible `<h1>Public record & commentary</h1>` existed only
-  after hydration.
-- HTML weight is **425,867 bytes** and the response was `x-vercel-cache: STALE` with
-  `max-age=0, must-revalidate`, so every revalidation ships a very large document.
+Representative canonical pages returned 200, distinct relevant titles, self-canonicals and
+`index, follow`: `/`, `/media`, `/journal`, `/flow/join`, `/lots`, `/tags`,
+`/case-study/garcia`, `/heartandangel/about`, `/research/novayagazeta2025`, `/unframed/book`.
 
-**Fix applied:** the server page now resolves `searchParams` and passes
-`initialSearchParams` to the archive. `useSearchParams` was removed; local state keeps filter clicks
-immediate, while a changed server query string (back/forward) wins. The entire archive, including the
-H1, now renders in the initial HTML. Regression test:
-`components/media/__tests__/MediaArchive.test.tsx` asserts the H1 exists in `renderToStaticMarkup`.
-**Remaining risk:** the page becomes request-rendered because it reads `searchParams`; the 426 KB
-HTML weight is unchanged and remains a separate performance item.
-
-### P1 — `/debug-auth` was indexable and duplicated homepage metadata (confirmed)
-
-- `https://www.merkurov.love/debug-auth` returned `200`, **`index, follow`**, **no canonical**, and
-  the inherited homepage title `Anton Merkurov — Art, Love & Money`.
-- `app/debug-auth/page.tsx` had no metadata at all.
-- `/roles-demo` already emits `noindex, nofollow`, so this was an isolated oversight.
-
-**Fix applied:** explicit `noindex, nofollow` metadata plus `/debug-auth` and `/roles-demo` entries in
-`app/robots.ts`. Regression test: `lib/__tests__/robots.test.ts`.
-
-### P1 — Future `lastmod` values can enter the sitemap (confirmed at snapshot time)
-
-- The sitemap snapshot at **2026-11-23T18:56Z** contained future `lastmod` values, e.g.
-  `2026-11-24T06:15:24Z`, `2026-11-27T12:35:14Z`, `2026-11-29T11:14:40Z`, while “now” was
-  2026-11-23.
-- A re-fetch at **19:00Z** contained none (max `2026-11-23T18:21:56Z`). The reason for the change
-  (DB edit or cache regeneration) is unknown; the code accepted any future date either way.
-- `parseLastModified` only rejected pre-1971 and invalid dates.
-
-**Fix applied:** `lib/sitemap/entries.ts` now drops timestamps more than five minutes in the future.
-Tests cover a one-year-ahead date and a future dynamic record, asserting the URL remains but
-`lastModified` is omitted.
-
-### P2 — Two public research/reading templates are invisible before JS (confirmed)
-
-- `/research/novayagazeta2025`: `200`, self-canonical, but **H1 count 0**. `NovayaGazetaClient`
-  returns `null` until `mounted` is true (`app/research/novayagazeta2025/NovayaGazetaClient.tsx:305`).
-  The metadata is English while the client's default content language is Russian.
-- `/unframed/book`: `200`, self-canonical, **H1 count 0**. The reader waits for an authenticated
-  manuscript fetch (`app/unframed/book/page.tsx`), so the SSR shell has no heading.
-- `/flow` and `/art-engine` render two H1s; `/2025` renders two H1s. Low severity, but not ideal.
-
-These are content-presentation issues, not crawl blockers. They should be fixed by moving a static
-title/abstract shell into the server component (without exposing paywalled manuscript text).
-
-### P2 — Journal index is uncached and slow (confirmed proxy)
-
-- `/journal` returned `cache-control: private, no-cache, no-store`, `x-vercel-cache: MISS`, TTFB
-  **1,028 ms** in the probe.
-- `app/journal/page.tsx` sets `dynamic = 'force-dynamic'`; `JournalPageView` calls `headers()` and
-  then fetches its own `/api/flow/items` endpoint with `cache: 'no-store'`.
-- This is a self-inflicted origin round-trip on a high-value index. It raises TTFB and wastes crawl
-  capacity; it is a performance problem, not an indexation blocker.
-
-### P2 — `/letters` is a 200 duplicate of `/journal` (confirmed, intentionally canonicalised)
-
-- `/letters` returns `200`, canonical `https://www.merkurov.love/journal`, `index, follow`.
-- It is already excluded from the sitemap (`NON_CANONICAL_STATIC_ROUTES`) and is a candidate for a
-  301 to `/journal`. This was not changed because it is editorially reachable and the canonical is
-  correct.
-
----
-
-## 4. What is healthy (measured, not assumed)
-
-### Sitemap
-
-- **755** `<loc>` entries; **0** duplicates; **0** non-`www`/query/hash URLs.
-- **17** hreflang groups; every group is reciprocal and self-referencing (`x-default` + real
-  languages); no false locale alternates.
-- 694 entries carry `lastmod`; the rest correctly omit it. Static routes carry no fabricated
-  generation timestamp.
-
-### Canonical, robots, status
-
-- Homepage, `/lobby`, `/ru/lobby`, `/de/lobby`, `/advising`, `/ru|de|fr|ar/advising`, `/journal`,
-  `/heritage`, `/heritage/krass`, `/media`, `/heartandangel/*`, `/unframed/*`, `/flow`,
-  `/flow/join`, `/flow-issues`, `/en/flow-issues`, `/tags`, `/lots`, `/art-engine`,
-  `/case-study/*`, `/liveheart*`, `/question*`, `/temple`, `/tribute`, `/vigil`, `/absolution`,
-  `/silence`, `/research`, `/selection`, `/isakeyforall` all returned `200`, self-canonical,
-  `index, follow`.
-- Private surfaces checked: `/login`, `/onboard`, `/onboard/secret`, `/research/telegram`,
-  `/roles-demo`, `/admin` all emit `noindex` and are disallowed by `robots.txt`.
-- `robots.txt` allows public content, disallows `/admin`, `/api`, `/auth`, `/draft`,
-  `/unframed/debug`, `/question/dashboard`, and now `/debug-auth`, `/roles-demo`.
-- Journal, Flow RSS and JSON feeds are distinct discovery documents and are not in the sitemap:
-  `/feed.xml` and `/rss.xml` → `application/rss+xml`; `/flow/rss` → RSS; `/flow/feed.json` → JSON Feed.
-  `/llms.txt` and `/llms-full.txt` are served as text and are not treated as indexable pages.
-
-### Multilingual
-
-The five locales that exist in the repository are the only ones advertised:
-`en` (unprefixed), `ru`, `de`, `fr`, `ar`. Verified reciprocal hreflang and self-canonicals on
-`/lobby`, `/advising`, `/heritage`, `/isakeyforall`, `/journal`. No hreflang is emitted for a
-language version that does not exist. RU/EN titles and descriptions are genuinely translated, with
-no observed language leakage on those templates.
+- `/media`: one H1 and archive heading in initial HTML. The fallback string is also embedded in the
+  React payload, so its mere presence is not evidence of a client-render bailout. Server evidence:
+  `app/media/page.tsx:37-59,80-93`; SSR regression test:
+  `components/media/__tests__/MediaArchive.test.tsx`.
+- `/research/novayagazeta2025`: zero raw-HTML H1. The component defaults to Russian and returns null
+  until mount (`app/research/novayagazeta2025/NovayaGazetaClient.tsx:297-305`).
+- `/unframed/book`: zero raw-HTML H1. It is a client reader that requests gated content after mount
+  (`app/unframed/book/page.tsx:1-9,39-88`). A public server-rendered cover/title shell is preferable,
+  but must not expose manuscript content.
+- `/flow` still has two H1 elements; this is hierarchy polish, not a crawl blocker.
 
 ### Structured data
 
-Eight representative templates were parsed from live HTML with **zero JSON-LD syntax errors**:
-homepage, media record, journal article, Flow join, lot (`VisualArtwork`), tag, case study,
-Heart & Angel about. Types observed: `WebSite`, `Person`, `Organization`, `Article`/`BlogPosting`,
-`VisualArtwork`, `AboutPage`, `BreadcrumbList`. Entity IDs reuse `#person`, `#website`,
-`#organization`; no fabricated ratings, prices or reviews were found.
+JSON parsing succeeded with zero syntax errors on eight current templates. Observed types included
+`WebSite`, `Person`, `Organization`, `ProfilePage`, `CollectionPage`, `ItemList`, `Article`,
+`AboutPage` and `BreadcrumbList`. No rating/review schema was observed. This verifies syntax and
+types only; it is not a Google Rich Results eligibility result.
 
-### Prior work re-used and re-verified
+### Internal links and content architecture
 
-- `docs/gsc-visibility-audit-2026-11-20.md` and `docs/gsc-coverage-audit-2026-11-22.md` reviewed.
-- Existing Search Console monitoring (PR #61 work) is present and was **not** re-implemented:
-  `lib/analytics/website/providers/searchConsole.ts` (Search Analytics API, `type: 'web'`,
-  `dataState: 'final'`, 25k row cap), `lib/analytics/website/dashboard.ts`, and
-  `/admin/pierrot/(workspace)/analytics`.
-- The six `/journal/*` URLs that the 2026-11-22 audit reported as 404 now return **200**,
-  self-canonical, `index, follow`.
-- `/flow/join` now canonicals to `https://www.merkurov.love/flow/join` (the prior non-www canonical
-  is fixed in current production).
+Eight hubs (`/`, `/journal`, `/media`, `/heritage`, `/flow`, `/research`, `/unframed`, `/tags`)
+contained 17–39 same-origin references in raw HTML. A deduplicated sample of **66 internal URLs**
+from those hubs was fetched: 66 final 200, zero errors. This supports basic hub connectivity but is
+not a complete orphan-page crawl of all 755 sitemap URLs.
 
----
+Architecture remains broad: static profile/service pages, Journal, high-volume Flow, Media, art
+lots, Heritage and research coexist in one sitemap. The historical GSC backlog is concentrated in
+Flow/media and supports an editorial curation review; it does not prove that those sections should
+be mass-noindexed or redirected.
 
-## 5. GSC analysis — what is available and what is not
+## 5. GSC analysis: historical versus current
 
-**No GSC API call was made.** Missing permission/data is marked unavailable, never zero.
+### Historical supplied data only
 
-Historical facts from the supplied exports:
+| Slice                   | Property                                                          | Dates                             | Search type           | Filters/state                                   | Result                       |
+| ----------------------- | ----------------------------------------------------------------- | --------------------------------- | --------------------- | ----------------------------------------------- | ---------------------------- |
+| Daily visibility export | `sc-domain:merkurov.love` (task metadata; absent from raw export) | 2026-10-21..2026-11-17            | `web` (task metadata) | all query/page/country/device; final unverified | 167 impressions, 3 clicks    |
+| First/second half       | same                                                              | 2026-10-21..11-03 vs 11-04..11-17 | same                  | same                                            | 128/3 vs 39/0                |
+| Coverage snapshot       | same                                                              | snapshot 2026-11-22               | web context           | coverage categories                             | 417 indexed; 228 not indexed |
+| Supplied URL drilldown  | same                                                              | snapshot 2026-11-22               | web context           | Discovered—currently not indexed only           | 161 URLs                     |
 
-| Item | Value | Status |
-| --- | --- | --- |
-| Coverage snapshot date | 2026-11-22 | historical |
-| Indexed | 417 | historical |
-| Not indexed | 228 | historical |
-| Discovered — not indexed | 161 | historical |
-| Crawled — not indexed | 33 | historical |
-| 404 | 17 | historical |
-| Excluded by noindex | 5 | historical |
-| Page with redirect | 4 | historical |
-| Alternative canonical | 2 | historical |
-| Google-selected canonical | 6 | historical |
-| Visibility window | 2026-10-21..2026-11-17 | historical |
-| Clicks / impressions | 3 / 167 | historical, incompatible exports flagged by the prior audit |
-| Property / search type | `sc-domain:merkurov.love` / `web` | from prior export metadata |
+Historical coverage categories were 161 discovered-not-indexed, 33 crawled-not-indexed, 17 404,
+5 noindex, 4 redirects, 2 alternative canonical and 6 Google-selected-different-canonical. Only the
+161-URL list was supplied. The top-page extract (178 impressions in seven rows) exceeds the daily
+slice total (167), so those exports cannot be merged; see
+`docs/gsc-visibility-audit-2026-11-20.md:89-153`.
 
-Not available in this runner: exact current 28-day GSC slice, comparison window, query/page/country/
-device drilldowns, URL Inspection results, and crawl stats. Therefore no current CTR, position or
-query-opportunity claim is made, and no ranking causality is inferred.
+### Current data
 
-The current production re-check does show that **at least one historical 404 cluster is resolved**,
-so the 2026-11-22 numbers must not be presented as current.
+**Unavailable.** Exact current property/date/search-type/filters cannot be asserted because no API
+response was obtained. Required next pull: `sc-domain:merkurov.love`, `type=web`, `dataState=final`,
+latest complete 28 days versus preceding 28 days, all query/page/country/device values, with the
+existing three-day delay guard. Until then, ranking/CTR causes are hypotheses.
 
----
+## 6. Ranked matrix
 
-## 6. SEO matrix
+| Rank | Finding                                                            | Severity       | Impact                                   | Verification                                         | Expected effect                              | Change risk / decision                    |
+| ---: | ------------------------------------------------------------------ | -------------- | ---------------------------------------- | ---------------------------------------------------- | -------------------------------------------- | ----------------------------------------- |
+|    1 | `/media` 568 KB, uncached 6.76 s probe                             | P2             | Crawl cost and user latency              | URL/header/byte evidence; `app/media/page.tsx:55-93` | Pagination could reduce HTML/LCP work        | Medium; backlog, measure first            |
+|    2 | `/journal` 168 KB, uncached 6.30 s probe                           | P2             | Crawl efficiency and UX                  | URL evidence; `app/journal/page.tsx:5`               | Data-layer cache could reduce origin latency | Medium; backlog                           |
+|    3 | Research page absent before mount                                  | P2             | Content understanding for non-JS clients | 0 H1; client lines 297-305                           | Server abstract exposes real page purpose    | Medium; browser/localization tests needed |
+|    4 | Book reader has no public SSR heading                              | P2             | Weak raw-HTML landing shell              | 0 H1; client reader lines 1-88                       | Better discovery without exposing book       | Medium; auth/paywall regression risk      |
+|    5 | No current GSC comparable slice                                    | P1 measurement | Cannot prioritize search work reliably   | no MCP/GSC resource; historical files only           | Enables evidence-led CTR/content work        | Low; reuse PR #61 only                    |
+|    6 | `/letters` serves a 200 representation canonicalized to `/journal` | P3             | Duplicate crawl work                     | current URL/canonical evidence                       | Redirect may consolidate crawl signals       | Low-medium; editorial decision            |
+|    7 | Flow/media long tail in historical backlog                         | P2 hypothesis  | Possible quality/crawl dilution          | historical GSC only                                  | Curation may improve selection               | High editorial risk; no bulk action       |
+|    8 | `/flow` has two H1s                                                | P3             | Heading hierarchy                        | raw HTML count                                       | Minor semantic cleanup                       | Low, not urgent                           |
+|    — | Host/legacy normalization                                          | Resolved P0/P1 | Canonical consolidation                  | current redirect destinations + source/tests         | Already achieved                             | No duplicate fix                          |
+|    — | Media SSR, debug noindex, sitemap dates                            | Resolved P1    | Crawlability/hygiene                     | current production + tests                           | Already achieved                             | No duplicate fix                          |
 
-Severity: P0 = blocks consolidation/indexation; P1 = materially harms discovery/understanding;
-P2 = quality/performance; P3 = polish.
+Facts are rows with current URL/source evidence. Row 7 is explicitly a hypothesis. No ranking gain
+is promised.
 
-| # | URL / template | Issue | Evidence | Priority | Change | Verification | Expected impact | Risk |
-| ---: | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | apex host, all paths | Apex/HTTP returns 200 instead of 308; duplicate origin of every canonical page | `https://merkurov.love/` → 200, canonical www; `http://merkurov.love/` → 200 | P0 | Middleware host guard added; owner must deploy current `main` and check Vercel alias/rewrites | Unit tests; live probe must show `308` + `Location: https://www...` | Consolidates link equity; stops duplicate host crawling | Very low; guard skips preview/localhost |
-| 2 | `/stat`, `/projects`, `/feed` | Legacy URLs return 200 + canonical instead of 308; production config drift | `/stat` → 200 `x-matched-path: /liveheart/stat`; `/projects` → 200 canonical `/all`; `/feed` → 200 canonical `/flow` | P1 | Deploy current `main` (config already correct); do not add more redirect layers | After deploy: `308` + single-hop final 200 | Removes soft duplicates, clarifies crawl paths | Low |
-| 3 | `/media` | No H1/archive content in initial HTML; 426 KB HTML | H1 count 0; body “Loading media archive…”; 425,867 bytes | P1 | Server-resolved `initialSearchParams`; removed `useSearchParams` bailout | Jest SSR test; after deploy expect H1 in raw HTML | Media archive becomes understandable/indexable; better LCP | Medium-low; filter behaviour tested |
-| 4 | `/debug-auth` | Indexable internal page with duplicate homepage metadata | 200, `index, follow`, no canonical | P1 | `noindex` metadata + robots disallow | Robots test; after deploy meta + robots | Removes an internal duplicate | Very low |
-| 5 | sitemap dynamic rows | Future `lastmod` possible | 2026-11-24/27/29 entries seen at 18:56Z | P1 | Reject dates > now + 5 min | 4 new sitemap tests | Restores trust in `lastmod` | Very low |
-| 6 | `/research/novayagazeta2025` | Report absent before JS; EN metadata vs RU default content | H1 count 0; `mounted` gate at client line 305 | P2 | Render a server-side title/abstract shell; align default language with metadata | Raw HTML contains H1 + abstract; language switch still works | Report becomes indexable and understandable | Medium (client-only animation/localisation) |
-| 7 | `/unframed/book` | Reader shell has no H1 before JS | H1 count 0; auth fetch gate | P2 | Server-render the public cover/title shell; keep manuscript gated | Raw HTML contains H1; paywall unchanged | Book landing becomes indexable | Low-medium |
-| 8 | `/journal` | Uncached self-fetch; 1 s TTFB | `private, no-store`, `MISS`, 1,028 ms | P2 | Call the Flow data layer directly; cache/revalidate the index | TTFB before/after; cache header public | Faster crawl + UX | Medium (data access refactor) |
-| 9 | `/flow`, `/art-engine`, `/2025` | Two H1s per page | Live H1 count 2 | P3 | Demote one heading to H2 | H1 count 1 | Cleaner hierarchy | Very low visual risk |
-| 10 | `/letters` | 200 duplicate of `/journal` | Canonical `/journal`, 200 | P3 | Consider 301 to `/journal` | 308/301 + final 200 | Consolidation | Low; editorial links may need update |
-| 11 | Flow/media long tail | Many short/link/photo notes; 161 discovered-not-indexed | Historical GSC + sitemap | P2 (content) | Curate canonical notes; avoid mass noindex; improve titles/summaries | GSC after 30 days | Better crawl selection | Editorial judgement required |
-| 12 | Metadata uniqueness | Static routes checked: titles/descriptions unique | Live title/description scan | — | No change | `scripts/check_metadata.js` | Already healthy | — |
-| 13 | JSON-LD | Valid on 8 templates, consistent IDs | Live parse | — | No change | Re-parse after deploy | Already healthy | — |
+## 7. Verification and CI evidence
 
----
+- `pnpm verify` — exit 0: typecheck and lint completed; **506 suites passed, 1 skipped; 3,648 tests
+  passed, 10 skipped**. Lint has existing warnings but no blocking errors.
+- Focused SEO regression run — exit 0: 5 suites, 48 tests covering canonical host, robots/noindex,
+  sitemap membership/date policy, hreflang reciprocity and Media SSR.
+- Targeted ESLint — exit 0 with two `react-hooks/set-state-in-effect` warnings in
+  `components/media/MediaArchive.tsx:305,319`.
+- `pnpm build` — exit 1 after successful compilation and TypeScript. Page-data collection fails at
+  `app/api/cast/route.ts:11` with `supabaseUrl is required`; required environment is unavailable.
+  This is a baseline environment limitation and no secret was inspected.
+- The current task itself runs in GitHub Actions after the mandated preflight passed. This session
+  cannot query the enclosing job conclusion, so a final integrated CI conclusion is not claimed.
 
-## 7. Changes made in this branch
+## 8. OpenAI usage/cost ledger and release handoff
 
-| File | Change | Test |
-| --- | --- | --- |
-| `lib/sitemap/entries.ts` | Reject future `lastmod` (> 5 min skew) | `lib/__tests__/sitemap.test.ts` (2 new cases) |
-| `lib/seo/canonicalHost.ts` (new) | Pure apex→www / http→https canonicaliser | `lib/seo/__tests__/canonicalHost.test.ts` (6 cases) |
-| `proxy.ts` | 308 canonical-host guard before all other middleware logic | same unit tests |
-| `app/debug-auth/page.tsx` | `noindex, nofollow` + own title/description | covered by robots/metadata policy |
-| `app/robots.ts` | Disallow `/debug-auth`, `/roles-demo` | `lib/__tests__/robots.test.ts` (3 cases) |
-| `app/media/page.tsx` | Resolve `searchParams` server-side, pass to archive | `components/media/__tests__/MediaArchive.test.tsx` |
-| `components/media/MediaArchive.tsx` | Remove `useSearchParams` bailout; prop + local override | same file: 2 new SSR cases, 18 existing cases preserved |
-| `lib/i18n/__tests__/config.test.ts` (new) | Hreflang reciprocity / no-false-locale regression checks | 3 cases |
+Owner-provided workflow evidence says the mandatory preflight completed with provider `openai`,
+model `openai/gpt-5.6`, `model_call=ok`, `worker_api=ok`, and `preflight=passed`. That proves a live
+call but does not expose tokens or cost to this session.
 
-**Verification run**
+| Stage                    | Usage/cost visible here              | Action                                    |
+| ------------------------ | ------------------------------------ | ----------------------------------------- |
+| Workflow preflight       | model known; tokens/cost unavailable | accepted as successful, cost not invented |
+| OpenCode audit session   | no usage/cost metadata exposed       | recorded as unavailable, not `$0`         |
+| Separate audit API calls | none made by audit tools             | no additional direct model call           |
 
-- `pnpm typecheck` → exit 0.
-- `pnpm lint` → exit 0 (1,388 pre-existing warnings, 0 errors).
-- `pnpm test --runInBand` → 505 suites passed, 1 skipped; 3,627 passed, 10 skipped.
-- `pnpm build` → fails on the pre-existing missing Supabase environment at
-  `app/api/cast/capture/route.ts:10`, after compilation and TypeScript succeed.
-- No Vercel Preview was produced because this runner has no Vercel credentials; see §9.
+Therefore the **$2.50 hard cap and $2.30 stop threshold cannot be independently totaled** from the
+available metadata. No further model/API call was initiated. The optional release-handoff subtask is
+**skipped** because cumulative spend cannot be proven below $2.30; no deployment or promotion was
+performed. No credential was read, printed, stored, transmitted, or added to a client bundle.
 
----
+## 9. Ranked follow-up backlog and 30-day plan
 
-## 8. OpenAI API spend ledger
+1. Restore/reuse the existing read-only GSC grant and save a comparable 28-vs-28 slice with complete
+   metadata. Do not build a second monitor.
+2. Profile `/media` with mobile Lighthouse/CrUX if available; paginate or cap the initial server
+   list, preserving filter URLs and JSON-LD accuracy.
+3. Replace Journal's dynamic self/origin work with a directly cached data-layer read; compare cache
+   headers and repeated TTFB before shipping.
+4. Add a localized server-rendered title/abstract shell to the Novaya report; retain language switch
+   behavior and run desktop/mobile checks.
+5. Add a public server-rendered cover/title shell to `/unframed/book`; explicitly test that gated
+   manuscript text never appears to unauthenticated users.
+6. Decide editorially whether `/letters` should redirect to `/journal`; inspect inbound links first.
+7. Curate only high-value Flow/media records using current GSC evidence; no mass noindex, rewrite,
+   redirect, or generated content.
 
-No OpenAI request was made. The hard cap is **$2.00**; the stop threshold is **$1.80**.
+- **Days 1–3:** obtain and freeze the GSC baseline; recheck redirect status with a transport that
+  exposes intermediate headers.
+- **Days 4–10:** profile Media and Journal on mobile and repeat HTTP probes; implement one bounded
+  performance change with regression/browser tests.
+- **Days 11–20:** implement the two SSR shells with localization/auth tests; revalidate metadata,
+  JSON-LD, canonical and hreflang.
+- **Days 21–30:** review only pages supported by current GSC page/query evidence, then compare
+  coverage and impressions without claiming causality from small samples.
 
-| Stage | Model | Input tokens | Output tokens | Rate used | Cost | Cumulative |
-| --- | --- | ---: | ---: | --- | ---: | ---: |
-| — | none | 0 | 0 | — | $0.00 | **$0.00** |
+## 10. Final status
 
-Reason: no `OPENAI_API_KEY` is present in the runner, no Vercel token/CLI/project link is available,
-and reading the repository `.env*` files is forbidden by the security constraints. The credential was
-never read, printed, committed, sent to a model or exposed to a browser bundle. Total spend
-**$0.00 ≤ $2.00**; the $1.80 stop threshold was never approached.
-
-Because there was no call, independent model review (Phase 4) is **not completed**; it is a blocker,
-not a silent omission.
-
----
-
-## 9. Blockers and unverified items
-
-1. **Vercel access.** No `VERCEL_TOKEN`, `vercel` CLI, or `.vercel/` link. Cannot pull the existing
-   `openai_api_key`, cannot inspect the production deployment/alias, cannot create a Preview URL.
-2. **Google/GSC access.** No OAuth credentials or stored grant in the runner. No current GSC slice,
-   URL Inspection, query/page/device/country reporting, or crawl stats. Historical exports only.
-3. **Build.** `pnpm build` cannot complete without Supabase environment variables; this predates the
-   change. Build-level verification of the final diff was therefore not possible locally.
-4. **Live verification of the fixes.** They are unit-tested and typechecked, but cannot be observed
-   in production until the current `main` (plus this branch) is deployed. The live apex and legacy
-   redirect defects remain exactly as measured.
-5. **Root cause of production routing drift.** Stale deployment vs. Vercel dashboard rewrite cannot
-   be distinguished without Vercel API access.
-6. **Core Web Vitals.** No field CrUX/Lab data was available. The report uses HTTP TTFB, HTML bytes
-   and cache headers as proxies only. INP/CLS/LCP field values are unverified.
-7. **Brain/RAG, queues and Supabase deep audit.** Code shows authenticated cron routes, lock-conflict
-   handling and telemetry, and the existing analytics sync with `CRON_SECRET`. No production database
-   access was available, so queue backlog, stuck jobs, Disk IO, index usage and RLS behaviour could
-   not be measured. No SQL was run.
-
----
-
-## 10. Ranked follow-up backlog (impact first)
-
-1. **Deploy current `main` and verify the canonical host + legacy 308s.** Confirm the apex and
-   `/stat`, `/projects`, `/feed` probes; check Vercel domain aliases and any dashboard rewrites.
-   Without this, every page is reachable on two origins.
-2. **Ship and verify the `/media` SSR fix**, then measure HTML size and LCP. Consider paginating or
-   server-limiting the initial archive to reduce the 426 KB document.
-3. **Remove the `mounted` gate from `/research/novayagazeta2025`** and render a server-side title,
-   standfirst and abstract. Align the initial content language with the English metadata.
-4. **Add a server-rendered public shell to `/unframed/book`** without exposing the gated manuscript.
-5. **Fix the Journal index TTFB**: call the Flow data layer directly instead of fetching your own
-   `/api/flow/items`, and cache the public index with a short revalidate.
-6. **Restore GSC API access** through the existing read-only grant and produce a reproducible
-   28-day slice with an explicit comparison window, `type=web`, `dataState=final`, and filters.
-   The dashboard already supports this; only credentials/verification are missing.
-7. **Curate the Flow long tail.** Improve titles/summaries for note/link/photo items that deserve
-   indexing; do not mass-noindex or mass-generate pages. Measure selection after 30 days.
-8. **Consider 301 for `/letters` → `/journal`** after checking inbound links and analytics.
-9. **Fix double H1s** on `/flow`, `/art-engine`, `/2025`.
-10. **Run a real engineering pass on Brain/queues/Supabase with read-only production access**:
-    worker backlog, retry/dead-letter counts, cron overlap, slow queries and RLS tests.
-
----
-
-## 11. 30-day plan (realistic, no ranking promises)
-
-- **Days 1–3:** deploy current `main`; verify host/legacy redirects; verify `/media`, `/debug-auth`
-  and sitemap `lastmod` in production; re-run raw-HTML checks.
-- **Days 4–10:** fix the two JS-gated research/book templates; reduce media HTML weight; fix Journal
-  TTFB. Re-check canonical/hreflang and structured data after each deploy.
-- **Days 11–20:** restore a reproducible GSC 28-day slice and build a page/query opportunity list
-  (positions 4–20, impressions with weak CTR, valuable unindexed pages). Submit nothing in bulk.
-- **Days 21–30:** editorial pass on the highest-value Flow and media records; measure index coverage
-  and impressions against the day-1 baseline. Do not infer causality from small samples.
-
----
-
-## 12. Reproduce
-
-```bash
-git rev-parse HEAD
-pnpm typecheck
-pnpm lint
-pnpm test --runInBand
-node -e "fetch('https://www.merkurov.love/sitemap.xml').then(r=>r.text()).then(t=>console.log((t.match(/<loc>/g)||[]).length))"
-curl -sSI https://merkurov.love/            # expect 308 after deploy, currently 200
-curl -sSI https://www.merkurov.love/stat    # expect 308 after deploy, currently 200 rewrite
-```
-
----
-
-## 13. Plain-language conclusion
-
-The site is **crawlable and technically well-structured at the page level** — canonicals, hreflang,
-JSON-LD and the sitemap are in good shape. What is holding it back is a mix of:
-
-- a **deployment/routing mismatch** that leaves every page reachable on a second host and keeps old
-  URLs alive as 200s;
-- **two important templates that only exist after JavaScript**, so Google and AI crawlers see a
-  loading message instead of the archive/report;
-- a **large, young content surface** (hundreds of short Flow notes and media records) where normal
-  discovery delay and thin-value selection — not a code bug — explain most “not indexed” URLs;
-- **weak measurement**, because no current GSC slice is reproducible in this environment.
-
-Fix the routing and the SSR gaps first. Then restore measurement and curate the long tail. Do not
-expect, and do not promise, ranking gains from metadata tweaks alone.
+**Review / partially verified**, not fully verified. Technical SEO scope, current production, main,
+historical GSC, prior work, matrix and plan are independently evidenced. Current GSC data, exact
+intermediate redirect codes, field CWV, final enclosing CI conclusion and the cumulative OpenAI cost
+remain unavailable. Those limitations prevent a fully verified task status.
