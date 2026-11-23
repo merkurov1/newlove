@@ -68,6 +68,13 @@ const CANONICAL_HOST = 'www.merkurov.love';
  */
 const MIN_KNOWN_TIMESTAMP = Date.UTC(1971, 0, 1);
 
+/**
+ * A `lastmod` cannot be in the future. Small skew is tolerated for clocks that
+ * write a timestamp a few seconds ahead, but a genuinely future date (observed
+ * in production up to two weeks ahead) makes Google distrust the whole sitemap.
+ */
+const MAX_LAST_MODIFIED_SKEW_MS = 5 * 60 * 1000;
+
 /** Routes that are public but canonicalise to another URL. */
 const NON_CANONICAL_STATIC_ROUTES = new Set(['/letters']);
 
@@ -95,6 +102,7 @@ export function parseLastModified(value: unknown): string | undefined {
   }
 
   if (!Number.isFinite(time) || time < MIN_KNOWN_TIMESTAMP) return undefined;
+  if (time > Date.now() + MAX_LAST_MODIFIED_SKEW_MS) return undefined;
 
   return new Date(time).toISOString();
 }

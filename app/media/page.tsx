@@ -34,8 +34,29 @@ export const metadata: Metadata = pageMetadata({
   },
 });
 
-export default async function MediaPage() {
-  const records = await getMediaRecords();
+type MediaPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function toQueryString(params: Record<string, string | string[] | undefined>): string {
+  const search = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (Array.isArray(value)) {
+      value.forEach((item) => search.append(key, item));
+    } else if (typeof value === 'string') {
+      search.set(key, value);
+    }
+  }
+
+  return search.toString();
+}
+
+export default async function MediaPage({ searchParams }: MediaPageProps) {
+  const [records, resolvedSearchParams] = await Promise.all([
+    getMediaRecords(),
+    searchParams,
+  ]);
 
   return (
     <>
@@ -64,7 +85,11 @@ export default async function MediaPage() {
             </div>
           }
         >
-          <MediaArchive records={records} archives={archives} />
+          <MediaArchive
+            records={records}
+            archives={archives}
+            initialSearchParams={toQueryString(resolvedSearchParams)}
+          />
         </Suspense>
       </div>
     </>

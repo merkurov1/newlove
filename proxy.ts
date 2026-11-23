@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { CookieOptions } from '@supabase/ssr';
 import { needsAuthRefresh } from '@/lib/auth/routeProtection';
+import { canonicalHostRedirect } from '@/lib/seo/canonicalHost';
 
 type CookieToSet = {
   name: string;
@@ -11,6 +12,17 @@ type CookieToSet = {
 
 export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
+
+  // Single canonical origin. This is enforced here as well as in
+  // next.config.js because production currently answers the apex host with
+  // HTTP 200 instead of the configured 308.
+  const hostRedirect = canonicalHostRedirect(
+    request.nextUrl,
+    request.headers.get('host')
+  );
+  if (hostRedirect) {
+    return NextResponse.redirect(hostRedirect, 308);
+  }
 
   // Markdown twins: /path.md and `Accept: text/markdown` are served by the
   // /api/markdown converter. The internal header prevents a fetch loop.
