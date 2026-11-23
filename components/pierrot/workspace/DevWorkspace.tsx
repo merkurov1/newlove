@@ -5,8 +5,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowUp,
+  Check,
   ChevronRight,
   GitBranch,
+  LayoutList,
   PanelRight,
   Plus,
   RefreshCw,
@@ -14,15 +16,14 @@ import {
   X,
 } from 'lucide-react';
 import WorkspaceMarkdown from './WorkspaceMarkdown';
-import DevTaskStudio from './DevTaskStudio';
-import DevWorkbench from './DevWorkbench';
+import DevWorkbench, { type DevTaskHandoff } from './DevWorkbench';
+import { diagnosisToTaskInput } from '@/lib/pierrot/dev/diagnosis';
 import type { DevWorkbenchOverview } from '@/lib/pierrot/dev/workbench/types';
 import { useOnlineStatus } from './useOnlineStatus';
 import type {
   DevDiagnosis,
   DevMemoryEntry,
   DevRepositoryStatus,
-  DevTask,
   DevToolEvent,
   DevToolTraceEntry,
   DevTokenUsage,
@@ -285,7 +286,6 @@ export default function DevWorkspace({
   conversation,
   integration,
   migrationRequired,
-  tasks,
   taskMigrationRequired,
   requestStoreAvailable,
   memory,
@@ -295,7 +295,6 @@ export default function DevWorkspace({
   conversation: DevConversation | null;
   integration: IntegrationStatus;
   migrationRequired: boolean;
-  tasks: DevTask[];
   taskMigrationRequired: boolean;
   requestStoreAvailable: boolean;
   memory: DevMemoryEntry[];
@@ -314,10 +313,8 @@ export default function DevWorkspace({
   const [notice, setNotice] = useState<string | null>(null);
   const [threadsOpen, setThreadsOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
-  const [taskCreateNonce, setTaskCreateNonce] = useState(0);
-  const [mode, setMode] = useState<'workbench' | 'chat'>(
-    conversation ? 'chat' : 'workbench'
-  );
+  const [taskHandoff, setTaskHandoff] = useState<DevTaskHandoff | null>(null);
+  const [mode, setMode] = useState<'workbench' | 'chat'>(conversation ? 'chat' : 'workbench');
   const [activeRepoKey, setActiveRepoKey] = useState<string>(
     () =>
       integration.repositories.find((repo) => repo.accessible)?.key ||
@@ -388,6 +385,36 @@ export default function DevWorkspace({
     const clean = (lastUser?.content || title || 'Инженерное задание').replace(/\s+/g, ' ').trim();
     return clean.length > 92 ? `${clean.slice(0, 89).trimEnd()}…` : clean;
   }, [messages, title]);
+
+  function handoffTask(input: DevTaskHandoff['input']) {
+    setTaskHandoff({ nonce: Date.now(), input });
+    setMode('workbench');
+    setThreadsOpen(false);
+    setContextOpen(false);
+  }
+
+  function createTaskFromThread() {
+    handoffTask({
+      title: suggestedTitle.trim() || 'Инженерное задание из Dev-треда',
+      objective: 'Преобразовать текущее обсуждение в проверяемое инженерное изменение.',
+      context: conversationContext.slice(0, 12_000),
+      repository: activeRepo?.key || activeRepoKey,
+      baseRef: activeRepo?.workBranch || 'main',
+      baseCommit: activeRepo?.lastCommitSha || null,
+      conversationId,
+      status: 'draft',
+    });
+  }
+
+  function createTaskFromDiagnosis(diagnosis: DevDiagnosis) {
+    handoffTask(
+      diagnosisToTaskInput(diagnosis, {
+        conversationId,
+        baseRef: activeRepo?.workBranch || diagnosis.ref || 'main',
+        baseCommit: diagnosis.commitSha || activeRepo?.lastCommitSha || null,
+      })
+    );
+  }
 
   function resetThread() {
     setMessages([]);
@@ -600,6 +627,8 @@ export default function DevWorkspace({
       <DevWorkbench
         initialOverview={workbench}
         onOpenChat={() => setMode('chat')}
+        taskHandoff={taskHandoff}
+        onTaskHandoffConsumed={() => setTaskHandoff(null)}
       />
     );
   }
@@ -693,6 +722,15 @@ export default function DevWorkspace({
               onClick={() => setMode('workbench')}
             >
               Workbench
+            </button>
+            <button
+              type="button"
+              className="pw-wb-button is-quiet"
+              onClick={createTaskFromThread}
+              disabled={!suggestedTitle}
+              title="Открыть Execution → Details с черновиком задания из текущего треда"
+            >
+              Task from thread
             </button>
             <StatusChip
               label={
@@ -850,8 +888,8 @@ export default function DevWorkspace({
                         <DiagnosisCard
                           diagnosis={message.diagnosis}
                           onCreateTask={() => {
-                            setTaskCreateNonce((value) => value + 1);
-                            setContextOpen(true);
+                            if (!message.diagnosis) return;
+                            createTaskFromDiagnosis(message.diagnosis);
                           }}
                         />
                       )}
@@ -987,23 +1025,27 @@ export default function DevWorkspace({
               </ul>
             </section>
 
-            <DevTaskStudio
-              initialTasks={tasks}
-              repositories={integration.repositories.map((repo) => ({
-                key: repo.key,
-                label: repo.key,
-                fullName: repo.fullName,
-                workBranch: repo.workBranch,
-                lastCommitSha: repo.lastCommitSha,
-              }))}
-              activeRepository={activeRepoKey}
-              conversationId={conversationId}
-              conversationContext={conversationContext}
-              suggestedTitle={suggestedTitle}
-              diagnosis={lastAssistant?.diagnosis || null}
-              createNonce={taskCreateNonce}
-              onCopyPrompt={(prompt) => setNotice(`Prompt скопирован · ${prompt.length} символов`)}
-            />
+            <section className="pw-dev-context-section">
+              <div className="pw-dev-context-title">
+                <Check size={13} aria-hidden="true" />
+                Tasks
+              </div>
+              <p className="pw-dev-context-muted">
+                Единый lifecycle заданий теперь в Execution → Details. Создание из диагностики
+                открывает черновик там же.
+              </p>
+              <button
+                type="button"
+                className="pw-dev-context-action"
+                onClick={() => {
+                  setContextOpen(false);
+                  setMode('workbench');
+                }}
+              >
+                <LayoutList size={13} aria-hidden="true" />
+                открыть Execution
+              </button>
+            </section>
           </aside>
         </div>
 

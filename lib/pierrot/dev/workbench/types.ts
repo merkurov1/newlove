@@ -736,6 +736,51 @@ export type DevFinalizationReport = {
   retryAt?: string | null;
 };
 
+export type DevReleaseCommit = {
+  sha: string;
+  shortSha: string;
+  message: string;
+  author: string | null;
+  committedAt: string | null;
+  url: string;
+};
+
+export type DevReleaseCheckStatus = 'ok' | 'warn' | 'error' | 'unknown';
+
+export type DevReleaseCheck = {
+  key: string;
+  label: string;
+  status: DevReleaseCheckStatus;
+  detail: string;
+};
+
+/**
+ * Read-only production release readiness. A verified/merged task is "landed in
+ * main"; it is only "released" when its commit is the production deployment
+ * commit. Merge and deploy are never conflated.
+ */
+export type DevReleaseOverview = {
+  repository: string;
+  branch: string;
+  checkedAt: string;
+  main: { sha: string; shortSha: string; url: string } | null;
+  production: (DevDeploymentStatus & { shortSha: string | null }) | null;
+  /** Exact commit a Deploy action would release: the main branch head. */
+  target: { sha: string; shortSha: string; url: string } | null;
+  behindBy: number | null;
+  commits: DevReleaseCommit[];
+  checks: DevReleaseCheck[];
+  blockers: string[];
+  canRelease: boolean;
+  releaseAction: {
+    available: boolean;
+    reason: string;
+    /** Optional external release console URL. Never called by Admin itself. */
+    url?: string | null;
+  };
+  error: string | null;
+};
+
 export type DevWorkbenchOverview = {
   schemaReady: boolean;
   migrationFile: string;

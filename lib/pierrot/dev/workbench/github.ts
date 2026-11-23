@@ -413,6 +413,11 @@ const OPERATIONS = {
     requiredPermission: 'Contents: read',
     fallbackCode: 'GITHUB_BRANCH_READ_FAILED',
   },
+  compareCommits: {
+    endpoint: 'GET /repos/{owner}/{repo}/compare/{basehead}',
+    requiredPermission: 'Contents: read',
+    fallbackCode: 'GITHUB_COMPARE_FAILED',
+  },
   mergePullRequest: {
     endpoint: 'PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge',
     requiredPermission: 'Contents: write',
@@ -751,6 +756,56 @@ export async function getBranchHead(
 export function commitUrl(repository: DevRepositoryKey | string, sha: string): string {
   const config = getDevRepositoryConfig(repoKey(repository));
   return `https://github.com/${config.owner}/${config.repo}/commit/${sha}`;
+}
+
+export type CommitRange = {
+  status: string;
+  aheadBy: number;
+  behindBy: number;
+  commits: Array<{
+    sha: string;
+    message: string;
+    author: string | null;
+    committedAt: string | null;
+  }>;
+};
+
+/**
+ * Compare two commits using GitHub's compare API. `aheadBy` is the number of
+ * commits reachable from `head` but not from `base`, so comparing
+ * `production...main` is exactly "what landed in main since the release".
+ */
+export async function getCommitRange(
+  repository: DevRepositoryKey | string,
+  base: string,
+  head: string
+): Promise<CommitRange> {
+  const config = getDevRepositoryConfig(repoKey(repository));
+  if (!/^[0-9a-f]{7,40}$/i.test(base) || !/^[0-9a-f]{7,40}$/i.test(head)) {
+    throw new WorkbenchGitHubError('GITHUB_INVALID_SHA', 'Valid base and head SHAs are required.');
+  }
+  try {
+    const response = await requestGitHubWithRetry(OPERATIONS.compareCommits, () =>
+      client().rest.repos.compareCommitsWithBasehead({
+        owner: config.owner,
+        repo: config.repo,
+        basehead: `${base}...${head}`,
+      })
+    );
+    return {
+      status: response.data.status || 'unknown',
+      aheadBy: Number(response.data.ahead_by || 0),
+      behindBy: Number(response.data.behind_by || 0),
+      commits: (response.data.commits || []).map((commit) => ({
+        sha: commit.sha,
+        message: commit.commit.message || '',
+        author: commit.commit.author?.name || commit.author?.login || null,
+        committedAt: commit.commit.author?.date || null,
+      })),
+    };
+  } catch (error) {
+    throw toError(error, OPERATIONS.compareCommits);
+  }
 }
 
 /**
@@ -1210,6 +1265,109 @@ export async function getVercelDeploymentStatus(input: {
       commitSha: input.commitSha,
       checkedAt,
       reason: 'Vercel deployment request failed.',
+    };
+  }
+}
+
+/**
+ * Latest Vercel production deployment. This is read-only and never triggers a
+ * deployment. When the token is missing the caller must report unknown instead
+ * of assuming production equals main.
+ */
+export async function getLatestProductionDeployment(
+  repository: DevRepositoryKey | string = 'newlove'
+): Promise<DevDeploymentStatus> {
+  const checkedAt = new Date().toISOString();
+  const token = (process.env.VERCEL_TOKEN || '').trim();
+  if (!token) {
+    return {
+      state: 'unavailable',
+      url: null,
+      target: 'production',
+      commitSha: null,
+      checkedAt,
+      reason:
+        'VERCEL_TOKEN is not configured, so Admin cannot read the production deployment commit. Production may still be deployed by the Git integration.',
+    };
+  }
+
+  const projectId = await resolveVercelProjectId(repository);
+  if (!projectId) {
+    return {
+      state: 'unavailable',
+      url: null,
+      target: 'production',
+      commitSha: null,
+      checkedAt,
+      reason:
+        'No Vercel project matches this repository. Set VERCEL_PROJECT_ID to read the production deployment.',
+    };
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.vercel.com/v6/deployments?projectId=${encodeURIComponent(projectId)}&target=production&limit=20`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(10_000),
+      }
+    );
+    if (!response.ok) {
+      return {
+        state: 'unknown',
+        url: null,
+        target: 'production',
+        commitSha: null,
+        checkedAt,
+        reason: `Vercel API returned ${response.status} while reading the production deployment.`,
+      };
+    }
+    const body = (await response.json()) as {
+      deployments?: Array<{
+        url?: string;
+        state?: string;
+        target?: string | null;
+        meta?: { githubCommitSha?: string };
+      }>;
+    };
+    const deployment = (body.deployments || []).find(
+      (item) => item.target === 'production' || item.target === null || item.target === undefined
+    );
+    if (!deployment) {
+      return {
+        state: 'unknown',
+        url: null,
+        target: 'production',
+        commitSha: null,
+        checkedAt,
+        reason: 'Vercel has no production deployment for this project yet.',
+      };
+    }
+    const state = String(deployment.state || '').toUpperCase();
+    const mapped: DevDeploymentStatus['state'] =
+      state === 'READY'
+        ? 'ready'
+        : state === 'ERROR' || state === 'CANCELED'
+          ? 'error'
+          : state === 'BUILDING'
+            ? 'building'
+            : 'queued';
+    return {
+      state: mapped,
+      url: deployment.url ? `https://${deployment.url}` : null,
+      target: 'production',
+      commitSha: deployment.meta?.githubCommitSha || null,
+      checkedAt,
+      reason: null,
+    };
+  } catch {
+    return {
+      state: 'unknown',
+      url: null,
+      target: 'production',
+      commitSha: null,
+      checkedAt,
+      reason: 'Vercel production deployment request failed.',
     };
   }
 }

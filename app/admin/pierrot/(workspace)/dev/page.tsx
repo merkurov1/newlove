@@ -7,10 +7,7 @@ import { getProjectMemory } from '@/lib/pierrot/dev/memory';
 import { isDevRequestStoreAvailable } from '@/lib/pierrot/dev/requests';
 import { listDevTasks } from '@/lib/pierrot/dev/tasks';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
-import {
-  loadDevConversation,
-  loadDevConversations,
-} from '@/lib/pierrot/dev/store';
+import { loadDevConversation, loadDevConversations } from '@/lib/pierrot/dev/store';
 import DevWorkspace from '@/components/pierrot/workspace/DevWorkspace';
 
 export const dynamic = 'force-dynamic';
@@ -55,7 +52,6 @@ export default async function DevPage({
       conversation={conversation}
       integration={integration}
       migrationRequired={list.migrationRequired}
-      tasks={taskList.tasks}
       taskMigrationRequired={taskList.migrationRequired}
       requestStoreAvailable={requestStoreAvailable}
       memory={memory}
