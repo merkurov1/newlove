@@ -1187,6 +1187,88 @@ export async function tryAcquireFinalizationLock(
   }
 }
 
+/**
+ * Serialize production-release advancement across Vercel instances.
+ *
+ * A release performs external side effects (migrations, Vercel preview,
+ * promotion, smoke tests), so two concurrent admin polls must not run the same
+ * phase twice. The unique event dedupe key is the established one-winner lock
+ * pattern used by finalization and lifecycle operations.
+ */
+export async function tryAcquireProductionReleaseLock(
+  releaseId: string,
+  windowMs = 20_000
+): Promise<boolean> {
+  const window = Math.min(Math.max(Math.trunc(windowMs), 5_000), 120_000);
+  const bucket = Math.floor(Date.now() / window);
+  const dedupeKey = `production-release-lock:${releaseId.slice(0, 80)}:${bucket}`;
+  try {
+    const { error } = await store()
+      .from('pierrot_dev_events')
+      .insert({
+        type: 'release.lock',
+        level: 'debug',
+        message: 'Production release advancement lock acquired.',
+        payload: { releaseId: releaseId.slice(0, 80), windowMs: window },
+        dedupe_key: dedupeKey,
+      });
+    if (!error) return true;
+    if (isDuplicate(error)) return false;
+    console.error('[dev-workbench] production release lock failed', { code: error.code });
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Append-only production release ledger.
+ *
+ * Release transitions are stored in the existing event journal rather than a
+ * new table: the journal is already additive, durable, server-only and has a
+ * unique dedupe key. The full release snapshot is in `payload`, so a retry can
+ * reconstruct exactly which SHA was pinned and which side effects completed.
+ */
+export async function listProductionReleaseEvents(limit = 500): Promise<
+  Array<{
+    id: number;
+    type: string;
+    level: string;
+    message: string;
+    payload: Record<string, unknown>;
+    createdAt: string;
+  }>
+> {
+  try {
+    const { data, error } = await store()
+      .from('pierrot_dev_events')
+      .select('id,type,level,message,payload,created_at')
+      .in('type', [
+        'release.requested',
+        'release.running',
+        'release.succeeded',
+        'release.failed',
+        'release.blocked',
+      ])
+      .order('id', { ascending: false })
+      .limit(Math.min(Math.max(limit, 1), 1000));
+    if (error || !Array.isArray(data)) return [];
+    return data.map((row) => ({
+      id: Number(row.id || 0),
+      type: String(row.type || ''),
+      level: String(row.level || 'info'),
+      message: String(row.message || ''),
+      payload:
+        row.payload && typeof row.payload === 'object'
+          ? (row.payload as Record<string, unknown>)
+          : {},
+      createdAt: String(row.created_at || ''),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function tryAcquireLifecycleLock(
   name: 'start' | 'stop' | 'restart',
   owner: string,

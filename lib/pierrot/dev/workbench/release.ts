@@ -1,14 +1,30 @@
 import { assertServerOnly } from '@/lib/serverOnly';
 import { getDevRepositoryConfig } from '../repositories';
 import type { DevRepositoryKey } from '../types';
-import { commitUrl, getBranchHead, getCommitRange, getLatestProductionDeployment } from './github';
+import {
+  commitUrl,
+  getBranchHead,
+  getCommitChecks,
+  getCommitRange,
+  getLatestProductionDeployment,
+} from './github';
 import { getFinalizationReport } from './finalization';
+import { inspectProductionMigrations } from './migrationAudit';
+import { resolveVercelReleaseProject } from './productionVercel';
+import { getActiveProductionRelease, getLatestProductionRelease } from './releaseLedger';
 import { isWorkbenchSchemaReady } from './store';
-import type { DevReleaseCheck, DevReleaseCommit, DevReleaseOverview } from './types';
+import type {
+  DevReleaseCheck,
+  DevReleaseCommit,
+  DevReleaseFile,
+  DevReleaseMigrations,
+  DevReleaseOverview,
+} from './types';
 
 assertServerOnly('lib/pierrot/dev/workbench/release');
 
 const MAX_COMMITS = 30;
+const MAX_FILES = 100;
 
 function shortSha(value: string | null | undefined): string | null {
   return value ? value.slice(0, 7) : null;
@@ -28,21 +44,51 @@ function releaseCheck(
   return { key, label, status, detail };
 }
 
+function migrationOverview(
+  report: Awaited<ReturnType<typeof inspectProductionMigrations>>
+): DevReleaseMigrations {
+  return {
+    checkedAt: report.checkedAt,
+    available: report.available,
+    source: report.source,
+    error: report.error,
+    counts: report.counts,
+    rows: report.rows.map((row) => ({
+      version: row.version,
+      filename: row.filename,
+      status: row.status,
+      risk: row.risk,
+      reasons: row.reasons,
+      evidence: row.evidence,
+    })),
+    pendingSafe: report.pendingSafe,
+    blockers: report.blockers,
+  };
+}
+
+export type ReleaseOverviewOptions = {
+  /** Do not let this release block its own advancement poll. */
+  ignoreReleaseId?: string | null;
+  /** Skip Vercel project verification for a read-only display call. */
+  skipVercelCheck?: boolean;
+};
+
 /**
- * Read-only release readiness.
+ * Read-only production release readiness.
  *
- * This module never deploys. It answers:
- *  - what is the exact commit a release would publish (main head);
- *  - what did production last deploy;
- *  - which commits landed in main since then;
- *  - which preflight checks block the release.
+ * This function never deploys and never applies SQL. It answers:
+ *  - what exact commit a release would publish (main head);
+ *  - what production last deployed and which commits/files are new;
+ *  - whether real CI passed for the exact head;
+ *  - which migrations are applied, pending-safe, unsafe or unknown;
+ *  - what blocks an owner-confirmed release.
  *
- * The production release execution lives in a separate task. When its console
- * URL is configured through PIERROT_DEV_RELEASE_URL the UI links to it; it is
- * never invoked from this process.
+ * The owner action lives in `productionRelease.ts` and only promotes an
+ * immutable preview deployment for the SHA displayed here.
  */
 export async function getReleaseOverview(
-  repository: DevRepositoryKey = 'newlove'
+  repository: DevRepositoryKey = 'newlove',
+  options: ReleaseOverviewOptions = {}
 ): Promise<DevReleaseOverview> {
   const checkedAt = new Date().toISOString();
   const config = getDevRepositoryConfig(repository);
@@ -88,7 +134,9 @@ export async function getReleaseOverview(
           : deployment.state === 'unavailable'
             ? 'unknown'
             : 'warn',
-        `Vercel production is ${deployment.state} at ${shortSha(deployment.commitSha)}.`
+        `Vercel production is ${deployment.state} at ${shortSha(deployment.commitSha)}${
+          deployment.deploymentId ? ` (${deployment.deploymentId})` : ''
+        }.`
       )
     );
   } else {
@@ -102,6 +150,7 @@ export async function getReleaseOverview(
   let behindBy: number | null = null;
   let productionAheadBy = 0;
   let commits: DevReleaseCommit[] = [];
+  let files: DevReleaseFile[] = [];
   let compareError: string | null = null;
 
   if (mainSha && deployment.commitSha) {
@@ -123,6 +172,13 @@ export async function getReleaseOverview(
             committedAt: commit.committedAt,
             url: commitUrl(repository, commit.sha),
           }));
+        files = (range.files || []).slice(0, MAX_FILES).map((file) => ({
+          filename: file.filename,
+          status: file.status,
+          additions: Number(file.additions || 0),
+          deletions: Number(file.deletions || 0),
+          url: `https://github.com/${config.fullName}/blob/${mainSha}/${file.filename}`,
+        }));
       } catch (error) {
         compareError = messageOf(error);
       }
@@ -148,7 +204,7 @@ export async function getReleaseOverview(
         'behind',
         'Main vs production',
         'ok',
-        `${behindBy} commit(s) landed in main and are not in production yet.`
+        `${behindBy} commit(s) and ${files.length} file(s) landed in main and are not in production yet.`
       )
     );
   } else {
@@ -157,6 +213,70 @@ export async function getReleaseOverview(
       'Main cannot be compared with the production commit until both SHAs are readable.';
     checks.push(releaseCheck('behind', 'Main vs production', 'unknown', detail));
     if (compareError) blockers.push(detail);
+  }
+
+  let ci: { status: string; detail: string } | null = null;
+  if (mainSha) {
+    try {
+      const summary = await getCommitChecks(repository, mainSha);
+      ci = { status: summary.status, detail: summary.detail };
+      checks.push(
+        releaseCheck(
+          'ci',
+          'CI for main head',
+          summary.status === 'passed' ? 'ok' : summary.status === 'pending' ? 'warn' : 'error',
+          `CI ${summary.status} for ${shortSha(mainSha)}: ${summary.detail}`
+        )
+      );
+      if (summary.status !== 'passed') {
+        blockers.push(
+          `CI for main ${shortSha(mainSha)} is ${summary.status}. A production release requires passing real CI for the exact SHA.`
+        );
+      }
+    } catch (error) {
+      const detail = `CI could not be read for ${shortSha(mainSha)}: ${messageOf(error)}`;
+      checks.push(releaseCheck('ci', 'CI for main head', 'error', detail));
+      blockers.push(detail);
+    }
+  }
+
+  const migrationReport = await inspectProductionMigrations();
+  const migrations = migrationOverview(migrationReport);
+  checks.push(
+    releaseCheck(
+      'migrations',
+      'Migration reconciliation',
+      !migrations.available
+        ? 'error'
+        : migrations.blockers.length > 0
+          ? 'error'
+          : migrations.pendingSafe.length > 0
+            ? 'warn'
+            : 'ok',
+      !migrations.available
+        ? migrations.error || 'Production migration history is unavailable.'
+        : migrations.blockers.length > 0
+          ? migrations.blockers[0]
+          : migrations.pendingSafe.length > 0
+            ? `${migrations.pendingSafe.length} safe pending migration(s) will be applied in order: ${migrations.pendingSafe.slice(0, 6).join(', ')}${migrations.pendingSafe.length > 6 ? ', …' : ''}.`
+            : `Applied ${migrations.counts.applied}, pending ${migrations.counts.pending}, unsafe ${migrations.counts.unsafe}, unknown ${migrations.counts.unknown}.`
+    )
+  );
+  blockers.push(...migrations.blockers);
+
+  if (!options.skipVercelCheck) {
+    const vercel = await resolveVercelReleaseProject(repository);
+    checks.push(
+      releaseCheck(
+        'vercel',
+        'Vercel release workflow',
+        vercel.ok ? 'ok' : 'error',
+        vercel.ok
+          ? `Vercel project ${vercel.config.project.name} (${vercel.config.project.id}) is linked to ${vercel.config.project.org || '?'}/${vercel.config.project.repo || '?'}. Release uses an immutable preview → production promotion.`
+          : vercel.blocker
+      )
+    );
+    if (!vercel.ok) blockers.push(vercel.blocker);
   }
 
   let schemaReady = false;
@@ -171,13 +291,11 @@ export async function getReleaseOverview(
       'Workbench migrations',
       schemaReady ? 'ok' : 'error',
       schemaReady
-        ? 'The additive workbench schema is applied.'
-        : 'The additive workbench migration is not applied. Release evidence may be incomplete.'
+        ? 'The additive workbench schema is applied, so the release ledger can be persisted.'
+        : 'The additive workbench migration is not applied. Release evidence cannot be persisted.'
     )
   );
-  if (!schemaReady) {
-    blockers.push('The additive workbench migration is not applied.');
-  }
+  if (!schemaReady) blockers.push('The additive workbench migration is not applied.');
 
   const finalization = await getFinalizationReport();
   if (finalization && ['blocked', 'failed'].includes(finalization.stage)) {
@@ -199,12 +317,36 @@ export async function getReleaseOverview(
     );
   }
 
+  const [latestRelease, activeRelease] = await Promise.all([
+    getLatestProductionRelease(),
+    getActiveProductionRelease(),
+  ]);
+  if (activeRelease && activeRelease.id !== options.ignoreReleaseId) {
+    const detail = `Release ${activeRelease.id} is ${activeRelease.status} at ${activeRelease.phase} for ${shortSha(activeRelease.pinnedSha)}. Wait for it to finish before starting another.`;
+    checks.push(releaseCheck('release', 'Release in progress', 'error', detail));
+    blockers.push(detail);
+  } else {
+    checks.push(
+      releaseCheck(
+        'release',
+        'Release ledger',
+        latestRelease ? 'ok' : 'warn',
+        latestRelease
+          ? `Latest release ${latestRelease.id} is ${latestRelease.status} at ${latestRelease.phase}.`
+          : 'No production release has been recorded yet.'
+      )
+    );
+  }
+
   const canRelease =
     Boolean(mainSha) &&
     Boolean(deployment.commitSha) &&
     productionAheadBy === 0 &&
     behindBy !== null &&
     behindBy > 0 &&
+    migrations.available &&
+    migrations.blockers.length === 0 &&
+    ci?.status === 'passed' &&
     blockers.length === 0;
 
   if (!canRelease && blockers.length === 0) {
@@ -212,24 +354,21 @@ export async function getReleaseOverview(
       blockers.push('Production already runs the main head commit.');
     } else if (behindBy === null) {
       blockers.push('Production commit is unknown.');
+    } else if (ci?.status !== 'passed') {
+      blockers.push('CI for the exact main head has not passed.');
     }
   }
 
-  const releaseUrl = (process.env.PIERROT_DEV_RELEASE_URL || '').trim();
-  const releaseAction = releaseUrl
-    ? {
-        available: true,
-        reason: canRelease
-          ? 'Release readiness passed. Open the production release console to deploy the exact target SHA.'
-          : 'The release console is configured but the preflight is not ready.',
-        url: releaseUrl,
-      }
-    : {
-        available: false,
-        reason:
-          'Production release execution is not connected in this deployment. The exact target SHA is shown, but Admin only reports readiness.',
-        url: null,
-      };
+  const externalReleaseUrl = (process.env.PIERROT_DEV_RELEASE_URL || '').trim();
+  const releaseAction = {
+    available: canRelease && blockers.length === 0,
+    reason: canRelease
+      ? `Releasing will pin ${shortSha(mainSha)}, apply safe pending migrations, build a preview for that exact SHA, promote it to production, wait for READY and run live smoke tests.`
+      : blockers[0] || 'Release preflight is not ready.',
+    url: externalReleaseUrl || null,
+    builtIn: true,
+    requiresConfirmation: true,
+  };
 
   return {
     repository: config.fullName,
@@ -247,10 +386,15 @@ export async function getReleaseOverview(
       : null,
     behindBy,
     commits,
+    files,
+    ci,
+    migrations,
     checks,
     blockers,
-    canRelease,
+    canRelease: canRelease && blockers.length === 0,
     releaseAction,
+    productionRelease: latestRelease,
+    activeRelease,
     error: mainError,
   };
 }

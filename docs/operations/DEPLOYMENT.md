@@ -1,6 +1,10 @@
 # Deployment and recovery
 
-Vercel is the primary deployment contract for this repository. `vercel.json` enables `next build` and deploys `main`; it intentionally contains no cron definitions. Render scripts and `output: 'standalone'` remain compatibility residue and are not the supported production path for this mission.
+Vercel is the primary deployment contract for this repository. `vercel.json`
+disables automatic deployments for `main` and leaves preview deployments
+enabled for other branches. A merge to `main` therefore never deploys to Vercel
+Production; production is published only by the owner-triggered release in
+Admin → Pierrot Dev → EXECUTION → RELEASE.
 
 ## Normal deployment
 
@@ -20,8 +24,25 @@ npm test -- --runInBand
 npm run build
 ```
 
-3. Deploy the reviewed commit through the Vercel project connected to `main`. Do not use `vercel --prod` from a workstation unless the operator is intentionally performing the release and has verified the linked project.
-4. Verify the deployment health endpoint and public smoke paths:
+3. Open Admin → Pierrot Dev → EXECUTION → RELEASE. Confirm that the displayed
+   `main` SHA is the commit you reviewed, then press **Release**. The server pins
+   the SHA and shows the last production SHA, commits/files since production, CI
+   status, migration preflight and blockers before the confirmation.
+4. The release applies only ordered, safe pending migrations, creates/reuses an
+   immutable preview deployment for that exact SHA, promotes it, waits for
+   `READY` and verifies that production serves the same commit. It then runs the
+   live smoke paths (`/api/health`, `/`) and records the result in the release
+   ledger. Rollback to the previous production deployment is attempted if a
+   post-promotion step fails. Migration preflight reads
+   `PIERROT_RELEASE_DATABASE_URL`/`SUPABASE_DB_URL`/`DATABASE_URL` in a
+   read-only session; applying the ordered safe pending set additionally needs
+   DDL rights. If those rights are absent, the release stops instead of skipping
+   migrations.
+5. Do not use `vercel --prod` from a workstation as a substitute. If the Admin
+   release reports a missing `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`, production
+   database read URL or GitHub permission, fix that blocker; do not bypass the
+   pinned preview → production promotion.
+6. Verify the deployment health endpoint and public smoke paths:
 
 ```text
 /api/health
@@ -33,8 +54,8 @@ npm run build
 /admin
 ```
 
-5. Verify one authenticated admin request and one unauthenticated rejection for each changed sensitive endpoint. Do not use real financial, newsletter or public-user content for smoke tests.
-6. Record the Vercel deployment ID, commit SHA, build result and rollback target.
+7. Verify one authenticated admin request and one unauthenticated rejection for each changed sensitive endpoint. Do not use real financial, newsletter or public-user content for smoke tests.
+8. The release ledger records the Vercel deployment ID, commit SHA, build result and rollback target. Use `PIERROT_RELEASE_SMOKE_PATHS` and `PIERROT_RELEASE_PRODUCTION_URL` to extend or target the smoke check without changing code.
 
 ## Environment variables by purpose
 

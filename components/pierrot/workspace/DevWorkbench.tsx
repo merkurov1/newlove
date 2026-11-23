@@ -590,12 +590,15 @@ export default function DevWorkbench({
     return body.overview;
   }, []);
 
-  const loadRelease = useCallback(async (showLoading = false) => {
+  const loadRelease = useCallback(async (showLoading = false, advance = false) => {
     if (showLoading) setReleaseLoading(true);
     try {
-      const response = await fetch('/api/admin/pierrot/dev/workbench/release', {
-        cache: 'no-store',
-      });
+      const response = await fetch(
+        `/api/admin/pierrot/dev/workbench/release${advance ? '?advance=1' : ''}`,
+        {
+          cache: 'no-store',
+        }
+      );
       if (!response.ok) throw new Error(await readError(response));
       const body = (await response.json()) as { release: DevReleaseOverview };
       setRelease(body.release);
@@ -606,6 +609,52 @@ export default function DevWorkbench({
       setReleaseLoading(false);
     }
   }, []);
+
+  const startRelease = useCallback(async () => {
+    if (!release?.target || !release.canRelease || busy) return;
+    const sha = release.target.sha;
+    const confirmed = window.confirm(
+      `Deploy ${sha} to production?\n\nAdmin will apply only safe pending migrations, promote an immutable preview for this exact SHA, wait for READY and run live smoke tests.`
+    );
+    if (!confirmed) return;
+    setBusy('release');
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch('/api/admin/pierrot/dev/workbench/release', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start', confirm: true, expectedSha: sha }),
+      });
+      const body = (await response.json().catch(() => null)) as {
+        release?: DevReleaseOverview;
+        error?: string;
+        code?: string;
+        detail?: string | null;
+      } | null;
+      if (!response.ok) {
+        if (body?.code === 'RELEASE_SHA_MOVED') {
+          setNotice(
+            `main moved while you were reading it. Nothing was deployed. Refresh and release the new main SHA${
+              body.detail ? ` (${body.detail.slice(0, 7)})` : ''
+            }.`
+          );
+          await loadRelease(true);
+          return;
+        }
+        throw new Error(body?.error || (await readError(response)));
+      }
+      if (body?.release) setRelease(body.release);
+      else await loadRelease(true);
+      setNotice(
+        'Production release started for the pinned SHA. Admin will keep advancing it and report every step.'
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Production release failed.');
+    } finally {
+      setBusy(null);
+    }
+  }, [release, busy, loadRelease]);
 
   const refreshAll = useCallback(async () => {
     await Promise.allSettled([refresh(), loadRelease(true)]);
@@ -799,6 +848,18 @@ export default function DevWorkbench({
       clearInterval(releaseTimer);
     };
   }, [refresh, loadRelease, busy]);
+
+  const activeReleaseId = release?.activeRelease?.id || null;
+
+  useEffect(() => {
+    // A production release is a server-side state machine. Polling advances one
+    // bounded step at a time; the owner action happened once.
+    if (!activeReleaseId || busy) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void loadRelease(false, true);
+    }, 12000);
+    return () => clearInterval(timer);
+  }, [activeReleaseId, busy, loadRelease]);
 
   useEffect(() => {
     if (!drawer) return;
@@ -1569,7 +1630,7 @@ export default function DevWorkbench({
       </div>
 
       <div className="pw-exec-target">
-        <span className="pw-exec-kicker">DEPLOY WILL RELEASE</span>
+        <span className="pw-exec-kicker">DEPLOY WILL RELEASE · PINNED BY ADMIN</span>
         {release?.target ? (
           <a href={release.target.url} target="_blank" rel="noreferrer">
             main @ {release.target.sha}
@@ -1581,6 +1642,95 @@ export default function DevWorkbench({
 
       {release ? (
         <>
+          <dl className="pw-exec-facts">
+            <div>
+              <dt>Production now</dt>
+              <dd>
+                {release.production?.commitSha ? (
+                  release.production.url ? (
+                    <a href={release.production.url} target="_blank" rel="noreferrer">
+                      {release.production.shortSha} · {release.production.state}
+                    </a>
+                  ) : (
+                    <span>
+                      {release.production.shortSha} · {release.production.state}
+                    </span>
+                  )
+                ) : (
+                  <span className="pw-wb-meta">unknown</span>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>CI for main head</dt>
+              <dd>{release.ci ? `${release.ci.status} · ${release.ci.detail}` : 'unavailable'}</dd>
+            </div>
+            <div>
+              <dt>Since production</dt>
+              <dd>
+                {release.behindBy === null
+                  ? 'unavailable'
+                  : `${release.behindBy} commit(s) · ${release.files?.length || 0} file(s)`}
+              </dd>
+            </div>
+            <div>
+              <dt>Migrations</dt>
+              <dd>
+                {release.migrations?.available
+                  ? `applied ${release.migrations.counts.applied} · pending safe ${release.migrations.pendingSafe.length} · unsafe ${release.migrations.counts.unsafe} · unknown ${release.migrations.counts.unknown}`
+                  : 'production schema unavailable'}
+              </dd>
+            </div>
+          </dl>
+
+          {(release.files?.length || 0) > 0 && (
+            <details className="pw-exec-release-details">
+              <summary>Files since production ({release.files?.length || 0})</summary>
+              <ul className="pw-exec-commits">
+                {(release.files || []).slice(0, 20).map((file) => (
+                  <li key={file.filename}>
+                    <a href={file.url} target="_blank" rel="noreferrer" className="pw-exec-sha">
+                      {file.status}
+                    </a>
+                    <span className="pw-exec-commit-message">{file.filename}</span>
+                    <span className="pw-wb-meta">
+                      +{file.additions} / −{file.deletions}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
+          {(release.migrations?.rows || []).some((row) => row.status !== 'applied') && (
+            <details
+              className="pw-exec-release-details"
+              open={(release.migrations?.blockers.length || 0) > 0}
+            >
+              <summary>Migration preflight (non-applied)</summary>
+              <ul className="pw-exec-checks">
+                {(release.migrations?.rows || [])
+                  .filter((row) => row.status !== 'applied')
+                  .slice(0, 20)
+                  .map((row) => (
+                    <li
+                      key={row.version}
+                      className={`is-${row.status === 'pending' ? 'warn' : 'error'}`}
+                    >
+                      <span className="pw-exec-check-dot" aria-hidden="true" />
+                      <div>
+                        <strong>
+                          {row.status} · {row.risk} · {row.version}
+                        </strong>
+                        <p>{row.evidence}</p>
+                        {row.reasons.length > 0 && <p>{row.reasons.join(' ')}</p>}
+                      </div>
+                    </li>
+                  ))}
+              </ul>
+            </details>
+          )}
+
           <ul className="pw-exec-checks">
             {release.checks.map((check) => (
               <li key={check.key} className={`is-${check.status}`}>
@@ -1601,6 +1751,39 @@ export default function DevWorkbench({
               ))}
             </ul>
           )}
+          {release.productionRelease && (
+            <div className="pw-exec-release-ledger">
+              <p className="pw-exec-kicker">RELEASE LEDGER · LATEST</p>
+              <p>
+                <strong>{release.productionRelease.status}</strong> ·{' '}
+                {release.productionRelease.phase} · {shortSha(release.productionRelease.pinnedSha)}
+                {release.productionRelease.productionDeploymentId
+                  ? ` · ${release.productionRelease.productionDeploymentId}`
+                  : ''}
+              </p>
+              <p className="pw-wb-meta">
+                requested {formatDate(release.productionRelease.requestedAt)}
+                {release.productionRelease.finishedAt
+                  ? ` · finished ${formatDate(release.productionRelease.finishedAt)}`
+                  : ''}
+                {' · smoke '}
+                {release.productionRelease.smokeResults.length === 0
+                  ? 'not run'
+                  : release.productionRelease.smokeResults.every((result) => result.ok)
+                    ? 'passed'
+                    : 'failed'}
+                {release.productionRelease.rolledBack ? ' · rolled back' : ''}
+              </p>
+              {(release.productionRelease.errorMessage ||
+                release.productionRelease.rollbackError) && (
+                <p className="pw-wb-warning">
+                  <AlertTriangle size={14} />{' '}
+                  {release.productionRelease.errorMessage ||
+                    release.productionRelease.rollbackError}
+                </p>
+              )}
+            </div>
+          )}
           {releaseError && (
             <p className="pw-wb-warning">
               <AlertTriangle size={14} /> Latest release refresh failed: {releaseError}. Showing the
@@ -1612,31 +1795,30 @@ export default function DevWorkbench({
         <p className="pw-wb-empty">{releaseLoading ? 'Checking preflight…' : releaseError}</p>
       )}
 
-      {release?.releaseAction.available && release.canRelease && release.releaseAction.url ? (
-        <a
-          className="pw-wb-button is-primary"
-          href={release.releaseAction.url}
-          target="_blank"
-          rel="noreferrer"
-        >
-          <Rocket size={14} /> Open release console
-        </a>
-      ) : (
-        <button
-          type="button"
-          className="pw-wb-button is-primary"
-          disabled
-          title={releaseDisabledReason}
-          aria-describedby="pw-release-reason"
-        >
-          <Rocket size={14} /> Release {release?.target ? shortSha(release.target.sha) : ''}
-        </button>
-      )}
+      <button
+        type="button"
+        className="pw-wb-button is-primary"
+        onClick={() => void startRelease()}
+        disabled={
+          Boolean(busy) ||
+          !release?.canRelease ||
+          !release.releaseAction.available ||
+          Boolean(release.activeRelease)
+        }
+        title={releaseDisabledReason}
+        aria-describedby="pw-release-reason"
+      >
+        <Rocket size={14} />{' '}
+        {release?.activeRelease
+          ? `Release ${release.activeRelease.status}…`
+          : `Release ${release?.target ? shortSha(release.target.sha) : ''}`}
+      </button>
       <p id="pw-release-reason" className="pw-wb-warning pw-exec-release-reason">
         <ShieldAlert size={14} /> {releaseDisabledReason}
       </p>
       <p className="pw-wb-meta">
-        Merge завершает задачу в main. Deploy публикует production. Это разные состояния.
+        Merge завершает задачу в main. Deploy публикует production. Каждый релиз привязан к
+        показанному SHA и не принимает ветку или произвольный SHA от клиента.
       </p>
     </section>
   );

@@ -275,6 +275,26 @@ const releaseOverview = {
       url: 'https://github.com/merkurov1/newlove/commit/' + MID,
     },
   ],
+  files: [
+    {
+      filename: 'components/example.tsx',
+      status: 'modified',
+      additions: 2,
+      deletions: 1,
+      url: 'https://github.com/merkurov1/newlove/blob/' + MAIN + '/components/example.tsx',
+    },
+  ],
+  ci: { status: 'passed', detail: '2 CI checks completed successfully.' },
+  migrations: {
+    checkedAt: NOW,
+    available: true,
+    source: 'PIERROT_RELEASE_DATABASE_URL',
+    error: null,
+    counts: { applied: 10, pending: 0, unsafe: 0, unknown: 0 },
+    rows: [],
+    pendingSafe: [],
+    blockers: [],
+  },
   checks: [
     { key: 'main', label: 'main branch', status: 'ok', detail: 'main is readable' },
     { key: 'production', label: 'Production deployment', status: 'ok', detail: 'ready' },
@@ -282,11 +302,15 @@ const releaseOverview = {
   blockers: [],
   canRelease: true,
   releaseAction: {
-    available: false,
+    available: true,
     reason:
-      'Production release execution is not connected in this deployment. The exact target SHA is shown, but Admin only reports readiness.',
+      'Releasing will pin aaaaaaa, apply safe pending migrations, build a preview for that exact SHA, promote it to production, wait for READY and run live smoke tests.',
     url: null,
+    builtIn: true,
+    requiresConfirmation: true,
   },
+  productionRelease: null,
+  activeRelease: null,
   error: null,
 } as unknown as DevReleaseOverview;
 
@@ -351,8 +375,8 @@ describe('execution screen', () => {
     expect(screen.getByText('fix: follow up')).toBeTruthy();
 
     const releaseButton = screen.getByRole('button', { name: /Release aaaaaaa/i });
-    expect(releaseButton).toBeDisabled();
-    expect(releaseButton.getAttribute('title')).toMatch(/not connected in this deployment/i);
+    expect(releaseButton).not.toBeDisabled();
+    expect(releaseButton.getAttribute('title')).toMatch(/pin aaaaaaa/i);
     expect(screen.getByText(/Merge завершает задачу в main/)).toBeTruthy();
   });
 

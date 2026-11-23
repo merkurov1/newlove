@@ -2,6 +2,7 @@
 
 jest.mock('@/lib/pierrot/dev/workbench/github', () => ({
   getBranchHead: jest.fn(),
+  getCommitChecks: jest.fn(),
   getCommitRange: jest.fn(),
   getLatestProductionDeployment: jest.fn(),
   commitUrl: (repository: string, sha: string) => `https://github.com/${repository}/commit/${sha}`,
@@ -15,20 +16,63 @@ jest.mock('@/lib/pierrot/dev/workbench/store', () => ({
   isWorkbenchSchemaReady: jest.fn(async () => true),
 }));
 
+jest.mock('@/lib/pierrot/dev/workbench/migrationAudit', () => ({
+  inspectProductionMigrations: jest.fn(async () => ({
+    checkedAt: '2026-11-23T10:00:00.000Z',
+    available: true,
+    source: 'PIERROT_RELEASE_DATABASE_URL',
+    error: null,
+    counts: { applied: 1, pending: 0, unsafe: 0, unknown: 0 },
+    rows: [],
+    pendingSafe: [],
+    blockers: [],
+  })),
+}));
+
+jest.mock('@/lib/pierrot/dev/workbench/productionVercel', () => ({
+  resolveVercelReleaseProject: jest.fn(async () => ({
+    ok: true,
+    config: {
+      project: {
+        id: 'prj_1',
+        name: 'newlove',
+        repoId: '123',
+        repo: 'newlove',
+        org: 'merkurov1',
+        productionBranch: 'main',
+        teamId: null,
+      },
+      token: 'test-token',
+      teamId: null,
+    },
+  })),
+}));
+
+jest.mock('@/lib/pierrot/dev/workbench/releaseLedger', () => ({
+  getLatestProductionRelease: jest.fn(async () => null),
+  getActiveProductionRelease: jest.fn(async () => null),
+}));
+
 import {
   getBranchHead,
+  getCommitChecks,
   getCommitRange,
   getLatestProductionDeployment,
 } from '@/lib/pierrot/dev/workbench/github';
 import { getFinalizationReport } from '@/lib/pierrot/dev/workbench/finalization';
 import { isWorkbenchSchemaReady } from '@/lib/pierrot/dev/workbench/store';
+import { inspectProductionMigrations } from '@/lib/pierrot/dev/workbench/migrationAudit';
+import { resolveVercelReleaseProject } from '@/lib/pierrot/dev/workbench/productionVercel';
 import { getReleaseOverview } from '../release';
 
 const branch = getBranchHead as jest.Mock;
+const checks = getCommitChecks as jest.Mock;
 const range = getCommitRange as jest.Mock;
 const production = getLatestProductionDeployment as jest.Mock;
 const finalization = getFinalizationReport as jest.Mock;
 const schema = isWorkbenchSchemaReady as jest.Mock;
+const migrations = inspectProductionMigrations as jest.Mock;
+const vercel = resolveVercelReleaseProject as jest.Mock;
 
 const MAIN = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const PROD = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -37,6 +81,11 @@ const MID = 'cccccccccccccccccccccccccccccccccccccccc';
 beforeEach(() => {
   jest.clearAllMocks();
   branch.mockResolvedValue(MAIN);
+  checks.mockResolvedValue({
+    status: 'passed',
+    detail: '2 CI checks completed successfully.',
+    checks: [],
+  });
   range.mockResolvedValue({
     status: 'ahead',
     aheadBy: 2,
@@ -55,6 +104,7 @@ beforeEach(() => {
         committedAt: '2026-11-21T10:00:00Z',
       },
     ],
+    files: [{ filename: 'app/page.tsx', status: 'modified', additions: 4, deletions: 1 }],
   });
   production.mockResolvedValue({
     state: 'ready',
@@ -63,9 +113,36 @@ beforeEach(() => {
     commitSha: PROD,
     checkedAt: '2026-11-22T10:00:00Z',
     reason: null,
+    deploymentId: 'dpl_old',
   });
   finalization.mockResolvedValue(null);
   schema.mockResolvedValue(true);
+  migrations.mockResolvedValue({
+    checkedAt: '2026-11-23T10:00:00.000Z',
+    available: true,
+    source: 'PIERROT_RELEASE_DATABASE_URL',
+    error: null,
+    counts: { applied: 1, pending: 0, unsafe: 0, unknown: 0 },
+    rows: [],
+    pendingSafe: [],
+    blockers: [],
+  });
+  vercel.mockResolvedValue({
+    ok: true,
+    config: {
+      project: {
+        id: 'prj_1',
+        name: 'newlove',
+        repoId: '123',
+        repo: 'newlove',
+        org: 'merkurov1',
+        productionBranch: 'main',
+        teamId: null,
+      },
+      token: 'test-token',
+      teamId: null,
+    },
+  });
   delete process.env.PIERROT_DEV_RELEASE_URL;
 });
 
@@ -79,9 +156,13 @@ describe('release readiness', () => {
     expect(release.behindBy).toBe(2);
     expect(release.commits.map((commit) => commit.sha)).toEqual([MAIN, MID]);
     expect(release.commits[0].shortSha).toBe('aaaaaaa');
+    expect(release.files.map((file) => file.filename)).toEqual(['app/page.tsx']);
+    expect(release.ci?.status).toBe('passed');
+    expect(release.migrations.available).toBe(true);
     expect(release.canRelease).toBe(true);
-    expect(release.releaseAction.available).toBe(false);
-    expect(release.releaseAction.reason).toMatch(/not connected/i);
+    expect(release.releaseAction.available).toBe(true);
+    expect(release.releaseAction.builtIn).toBe(true);
+    expect(release.releaseAction.requiresConfirmation).toBe(true);
     expect(range).toHaveBeenCalledWith('newlove', PROD, MAIN);
   });
 

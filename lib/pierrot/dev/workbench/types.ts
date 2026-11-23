@@ -517,6 +517,8 @@ export type DevDeploymentStatus = {
   commitSha: string | null;
   checkedAt: string;
   reason: string | null;
+  /** Vercel deployment ID when it can be read; needed for rollback. */
+  deploymentId?: string | null;
 };
 
 export type DevSetupCheck = {
@@ -768,6 +770,85 @@ export type DevReleaseCheck = {
   detail: string;
 };
 
+export type DevReleaseFile = {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  url: string;
+};
+
+export type DevReleaseMigrationStatus = 'applied' | 'pending' | 'unsafe' | 'unknown';
+export type DevReleaseMigrationRisk = 'safe' | 'destructive' | 'security' | 'downtime' | 'manual';
+
+export type DevReleaseMigration = {
+  version: string;
+  filename: string;
+  status: DevReleaseMigrationStatus;
+  risk: DevReleaseMigrationRisk;
+  reasons: string[];
+  evidence: string;
+};
+
+export type DevReleaseMigrations = {
+  checkedAt: string;
+  available: boolean;
+  source: string;
+  error: string | null;
+  counts: Record<DevReleaseMigrationStatus, number>;
+  rows: DevReleaseMigration[];
+  /** Ordered, safe pending versions that the release action may apply. */
+  pendingSafe: string[];
+  blockers: string[];
+};
+
+export type DevReleaseStatus = 'requested' | 'running' | 'succeeded' | 'failed' | 'blocked';
+export type DevReleasePhase =
+  | 'requested'
+  | 'preflight'
+  | 'migrations'
+  | 'preview'
+  | 'promote'
+  | 'production_ready'
+  | 'smoke'
+  | 'completed';
+
+export type DevReleaseSmokeResult = {
+  path: string;
+  url: string;
+  ok: boolean;
+  status: number | null;
+  durationMs: number;
+  detail: string;
+  checkedAt: string;
+};
+
+export type DevProductionRelease = {
+  id: string;
+  actorId: string;
+  status: DevReleaseStatus;
+  phase: DevReleasePhase;
+  pinnedSha: string;
+  previousProductionSha: string | null;
+  previousProductionDeploymentId: string | null;
+  previewDeploymentId: string | null;
+  previewUrl: string | null;
+  productionDeploymentId: string | null;
+  productionUrl: string | null;
+  migrationVersions: string[];
+  migrationSummary: Record<string, unknown>;
+  smokeResults: DevReleaseSmokeResult[];
+  blockers: string[];
+  errorCode: string | null;
+  errorMessage: string | null;
+  rolledBack: boolean;
+  rollbackError: string | null;
+  requestedAt: string;
+  startedAt: string | null;
+  updatedAt: string;
+  finishedAt: string | null;
+};
+
 /**
  * Read-only production release readiness. A verified/merged task is "landed in
  * main"; it is only "released" when its commit is the production deployment
@@ -783,6 +864,10 @@ export type DevReleaseOverview = {
   target: { sha: string; shortSha: string; url: string } | null;
   behindBy: number | null;
   commits: DevReleaseCommit[];
+  files: DevReleaseFile[];
+  /** Real CI checks for the exact main head SHA. */
+  ci: { status: string; detail: string } | null;
+  migrations: DevReleaseMigrations;
   checks: DevReleaseCheck[];
   blockers: string[];
   canRelease: boolean;
@@ -791,7 +876,14 @@ export type DevReleaseOverview = {
     reason: string;
     /** Optional external release console URL. Never called by Admin itself. */
     url?: string | null;
+    /** True when Admin performs the pinned preview-to-production release. */
+    builtIn?: boolean;
+    requiresConfirmation?: boolean;
   };
+  /** Most recent release attempt, including blocked/failed history. */
+  productionRelease: DevProductionRelease | null;
+  /** Release currently requested or running, if any. */
+  activeRelease: DevProductionRelease | null;
   error: string | null;
 };
 

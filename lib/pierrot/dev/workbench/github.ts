@@ -823,6 +823,12 @@ export type CommitRange = {
     author: string | null;
     committedAt: string | null;
   }>;
+  files: Array<{
+    filename: string;
+    status: string;
+    additions: number;
+    deletions: number;
+  }>;
 };
 
 /**
@@ -856,6 +862,12 @@ export async function getCommitRange(
         message: commit.commit.message || '',
         author: commit.commit.author?.name || commit.author?.login || null,
         committedAt: commit.commit.author?.date || null,
+      })),
+      files: (response.data.files || []).map((file) => ({
+        filename: file.filename,
+        status: file.status,
+        additions: Number(file.additions || 0),
+        deletions: Number(file.deletions || 0),
       })),
     };
   } catch (error) {
@@ -1276,6 +1288,7 @@ export async function getVercelDeploymentStatus(input: {
     }
     const body = (await response.json()) as {
       deployments?: Array<{
+        id?: string;
         url?: string;
         state?: string;
         target?: string | null;
@@ -1311,6 +1324,7 @@ export async function getVercelDeploymentStatus(input: {
       commitSha: input.commitSha,
       checkedAt,
       reason: null,
+      deploymentId: deployment.id || null,
     };
   } catch {
     return {
@@ -1379,6 +1393,7 @@ export async function getLatestProductionDeployment(
     }
     const body = (await response.json()) as {
       deployments?: Array<{
+        id?: string;
         url?: string;
         state?: string;
         target?: string | null;
@@ -1414,6 +1429,7 @@ export async function getLatestProductionDeployment(
       commitSha: deployment.meta?.githubCommitSha || null,
       checkedAt,
       reason: null,
+      deploymentId: deployment.id || null,
     };
   } catch {
     return {

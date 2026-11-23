@@ -344,6 +344,42 @@ heartbeats.
   Production deployment status is read separately from Vercel; landing never
   implies a deploy and this process never deploys.
 
+## Production release
+
+- `vercel.json` disables automatic deployments for `main` and keeps preview
+  deployments for other branches. A merge to `main` never reaches Vercel
+  Production by itself.
+- The owner-triggered release reads `main` on the server, pins the full SHA and
+  refuses to continue if `main` moved after the panel rendered. The client only
+  sends the displayed SHA as a concurrency check; it can never name a branch or
+  choose a different deployment target.
+- Before confirmation Admin shows the pinned SHA, last production SHA, commits
+  and files since production, real CI for the exact head, migration counts and
+  every blocker.
+- Migration reconciliation compares each repository file with
+  `supabase_migrations.schema_migrations` (when present) and live
+  `information_schema` objects. Applied, pending, unsafe and unknown are
+  reported separately. Only ordered, provably-pending, statically-safe files
+  are applied in one transaction. Destructive, security, downtime, diagnostic
+  and unclassifiable files block the release; migration history is never
+  written or faked.
+- Release then creates or reuses an immutable preview deployment for the pinned
+  SHA, promotes that exact deployment with Vercel's promote endpoint, waits for
+  the deployment and production alias to report the same SHA with `READY`, and
+  runs unauthenticated live smoke tests (`/api/health` must be healthy).
+- Every transition (requested/running/succeeded/failed/blocked) is appended to
+  the existing server-only event journal with actor, pinned SHA, previous
+  production deployment, migration versions, deployment ids/URLs, smoke results
+  and timestamps. Retries reuse an active release, reuse a ready preview and
+  re-audit migrations, so repeated clicks are safe.
+- Failure after promotion attempts a rollback to the recorded previous
+  production deployment. If the previous deployment id is unknown, the exact
+  rollback limitation is recorded instead of pretending the old production is
+  still active.
+- If `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`, a read-only production database URL or
+  the GitHub token is unavailable, the release is blocked with that exact
+  blocker. There is no ad-hoc shell fallback and no `vercel --prod` from Admin.
+
 ## Dev Cost Ledger
 
 - Before a task enters the queue a deterministic min/expected/max estimate is

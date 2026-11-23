@@ -129,6 +129,9 @@ const nextConfig = {
   outputFileTracingIncludes: {
     '/api/admin/knowledge/**': ['./app/unframed/Unframed.markdown'],
     '/api/unframed/**': ['./app/unframed/Unframed.markdown'],
+    // Production release reconciliation reads the ordered migration files at
+    // runtime. Trace them into the authenticated release route.
+    '/api/admin/pierrot/dev/workbench/release/**': ['./migrations/**/*.sql'],
   },
 
   // Конфигурация изображений
@@ -225,5 +228,4 @@ const nextConfig = {
   },
 };
 
-module.exports =
-  process.env.ANALYZE === 'true' ? withBundleAnalyzer(nextConfig) : nextConfig;
+module.exports = process.env.ANALYZE === 'true' ? withBundleAnalyzer(nextConfig) : nextConfig;
