@@ -61,6 +61,7 @@
     "brain:ingestion-recovery": "npx tsx scripts/knowledge/brain-ingestion-recovery.ts",
     "media:inventory": "node --experimental-strip-types --no-warnings scripts/media-audit/archive-inventory.ts",
     "media:verify": "node scripts/media-audit/verify.mjs",
+    "media:verify-bundle": "node --experimental-strip-types --no-warnings scripts/knowledge/verify-media-archive-bundle.ts",
     "media:audit": "node scripts/media-audit/problems.mjs",
     "media:repair:consistency": "node scripts/media-audit/repair-media-consistency.mjs --dry-run",
     "audit:pierrot-intelligence": "node scripts/audit/pierrot-intelligence-audit.mjs",
