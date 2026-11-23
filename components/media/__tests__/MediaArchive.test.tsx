@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import type { MediaRecord } from '@/data/media';
 import MediaArchive from '../MediaArchive';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 const mockReplace = jest.fn();
 let mockCurrentSearchParams = '';
@@ -12,6 +13,10 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mockReplace }),
   useSearchParams: () => new URLSearchParams(mockCurrentSearchParams),
 }));
+
+function MediaArchiveWithParams(props: React.ComponentProps<typeof MediaArchive>) {
+  return <MediaArchive {...props} initialSearchParams={mockCurrentSearchParams} />;
+}
 
 function record(overrides: Partial<MediaRecord> & Pick<MediaRecord, 'slug' | 'title' | 'lang'>) {
   return {
@@ -53,7 +58,7 @@ describe('MediaArchive languages', () => {
   });
 
   it('shows codes together with their names and labelled filter options', () => {
-    render(<MediaArchive records={records} archives={[]} />);
+    render(<MediaArchiveWithParams records={records} archives={[]} />);
 
     expect(screen.getByText('SQ / Albanian')).toBeInTheDocument();
     expect(screen.getByText('HY / Armenian')).toBeInTheDocument();
@@ -65,7 +70,7 @@ describe('MediaArchive languages', () => {
   it('filters the public catalogue by the SQ code', () => {
     mockCurrentSearchParams = 'lang=SQ';
 
-    render(<MediaArchive records={records} archives={[]} />);
+    render(<MediaArchiveWithParams records={records} archives={[]} />);
 
     const timeline = within(screen.getByRole('region', { name: 'Media timeline' }));
     expect(timeline.getByText('Gazeta Shqip publication')).toBeInTheDocument();
@@ -74,7 +79,7 @@ describe('MediaArchive languages', () => {
   });
 
   it('keeps an unknown language visible instead of calling it English', () => {
-    render(<MediaArchive records={records} archives={[]} />);
+    render(<MediaArchiveWithParams records={records} archives={[]} />);
 
     expect(screen.getByText('AZ / Azerbaijani')).toBeInTheDocument();
     expect(screen.queryByText('AZ / English')).not.toBeInTheDocument();
@@ -140,7 +145,7 @@ describe('MediaArchive authored outlet+year series', () => {
       ...authored('Ретроградный Меркуров', '2023', 4),
     ];
 
-    const { container } = render(<MediaArchive records={retrograde} archives={[]} />);
+    const { container } = render(<MediaArchiveWithParams records={retrograde} archives={[]} />);
 
     expect(container.querySelectorAll('.ma-series')).toHaveLength(3);
     expect(screen.getAllByText('Ретроградный Меркуров').length).toBeGreaterThanOrEqual(3);
@@ -154,7 +159,7 @@ describe('MediaArchive authored outlet+year series', () => {
       ...authored('Small outlet', '2017', 3),
     ];
 
-    const { container } = render(<MediaArchive records={grouped} archives={[]} />);
+    const { container } = render(<MediaArchiveWithParams records={grouped} archives={[]} />);
 
     expect(container.querySelectorAll('.ma-series')).toHaveLength(2);
     expect(screen.getAllByText('Авторские публикации')).toHaveLength(2);
@@ -166,7 +171,7 @@ describe('MediaArchive authored outlet+year series', () => {
   it('keeps the Novaya Gazeta title and lists each publication date, title and link', () => {
     const novaya = authored('Новая газета', '2026', 4);
 
-    const { container } = render(<MediaArchive records={novaya} archives={[]} />);
+    const { container } = render(<MediaArchiveWithParams records={novaya} archives={[]} />);
 
     expect(screen.getByText('«Виртуальный Меркуров»')).toBeInTheDocument();
     novaya.forEach((item) => {
@@ -186,7 +191,7 @@ describe('MediaArchive authored outlet+year series', () => {
       ...authored('Хабр', '2009', 4, 'blog'),
     ];
 
-    const { container } = render(<MediaArchive records={grouped} archives={[]} />);
+    const { container } = render(<MediaArchiveWithParams records={grouped} archives={[]} />);
 
     expect(container.querySelectorAll('.ma-series')).toHaveLength(7);
     expect(screen.getAllByText('Авторские публикации')).toHaveLength(7);
@@ -211,7 +216,7 @@ describe('MediaArchive authored outlet+year series', () => {
       }),
     ];
 
-    const { container } = render(<MediaArchive records={mixed} archives={[]} />);
+    const { container } = render(<MediaArchiveWithParams records={mixed} archives={[]} />);
 
     const timeline = within(screen.getByRole('region', { name: 'Media timeline' }));
 
@@ -229,7 +234,7 @@ describe('MediaArchive authored outlet+year series', () => {
     const retrograde = authored('Ретроградный Меркуров', '2025', 4);
 
     mockCurrentSearchParams = 'type=columns&outlet=Ретроградный Меркуров';
-    const { container } = render(<MediaArchive records={retrograde} archives={[]} />);
+    const { container } = render(<MediaArchiveWithParams records={retrograde} archives={[]} />);
 
     expect(container.querySelectorAll('.ma-series')).toHaveLength(1);
     expect(screen.getByText(/4 publications/)).toBeInTheDocument();
@@ -257,7 +262,7 @@ describe('MediaArchive reprints', () => {
       reprint('voxnews-syndication', 'VoxNews syndication', 'VoxNews', original),
     ];
 
-    const { container } = render(<MediaArchive records={[original, ...albanian]} archives={[]} />);
+    const { container } = render(<MediaArchiveWithParams records={[original, ...albanian]} archives={[]} />);
 
     const group = container.querySelector('.ma-series');
     expect(container.querySelectorAll('.ma-series')).toHaveLength(1);
@@ -287,7 +292,7 @@ describe('MediaArchive reprints', () => {
     ];
 
     const { container } = render(
-      <MediaArchive records={[original, secondOriginal, ...reprints]} archives={[]} />
+      <MediaArchiveWithParams records={[original, secondOriginal, ...reprints]} archives={[]} />
     );
 
     expect(container.querySelectorAll('.ma-series')).toHaveLength(2);
@@ -309,7 +314,7 @@ describe('MediaArchive reprints', () => {
       lang: 'EN',
     });
 
-    const { container } = render(<MediaArchive records={[french, english]} archives={[]} />);
+    const { container } = render(<MediaArchiveWithParams records={[french, english]} archives={[]} />);
 
     expect(container.querySelectorAll('.ma-series')).toHaveLength(0);
     expect(screen.getAllByText('Le Monde French edition').length).toBeGreaterThan(0);
@@ -345,7 +350,7 @@ describe('MediaArchive reprints', () => {
     });
 
     const { container } = render(
-      <MediaArchive records={[french, englishEdition]} archives={[]} />
+      <MediaArchiveWithParams records={[french, englishEdition]} archives={[]} />
     );
 
     expect(container.querySelectorAll('.ma-series')).toHaveLength(0);
@@ -371,7 +376,7 @@ describe('MediaArchive date precision', () => {
       lang: 'RU',
     });
 
-    const { container } = render(<MediaArchive records={[novyeIzvestia]} archives={[]} />);
+    const { container } = render(<MediaArchiveWithParams records={[novyeIzvestia]} archives={[]} />);
 
     const timeline = within(screen.getByRole('region', { name: 'Media timeline' }));
     expect(timeline.getAllByText('2019').length).toBeGreaterThan(0);
@@ -390,7 +395,7 @@ describe('MediaArchive date precision', () => {
     });
 
     const timeline = within(
-      render(<MediaArchive records={[ordinary]} archives={[]} />).getByRole('region', {
+      render(<MediaArchiveWithParams records={[ordinary]} archives={[]} />).getByRole('region', {
         name: 'Media timeline',
       })
     );
@@ -416,7 +421,7 @@ describe('MediaArchive selection integrity', () => {
     ];
 
     const timeline = within(
-      render(<MediaArchive records={searchable} archives={[]} />).getByRole('region', {
+      render(<MediaArchiveWithParams records={searchable} archives={[]} />).getByRole('region', {
         name: 'Media timeline',
       })
     );
@@ -430,7 +435,7 @@ describe('MediaArchive selection integrity', () => {
     mockCurrentSearchParams = 'q=article';
 
     const series = authored('Ретроградный Меркуров', '2025', 4);
-    const { container } = render(<MediaArchive records={series} archives={[]} />);
+    const { container } = render(<MediaArchiveWithParams records={series} archives={[]} />);
     const timeline = within(screen.getByRole('region', { name: 'Media timeline' }));
 
     expect(container.querySelectorAll('.ma-series')).toHaveLength(0);
@@ -450,7 +455,7 @@ describe('MediaArchive selection integrity', () => {
       })
     );
 
-    const { container } = render(<MediaArchive records={many} archives={[]} />);
+    const { container } = render(<MediaArchiveWithParams records={many} archives={[]} />);
 
     expect(container.querySelectorAll('.ma-row')).toHaveLength(30);
     expect(screen.getByText(/Showing 30 of 35 records/)).toBeInTheDocument();
@@ -459,5 +464,30 @@ describe('MediaArchive selection integrity', () => {
 
     expect(container.querySelectorAll('.ma-row')).toHaveLength(35);
     expect(screen.queryByRole('button', { name: /Load .* more/ })).not.toBeInTheDocument();
+  });
+});
+
+
+describe('MediaArchive server rendering', () => {
+  it('renders its H1 and summary without a client-only bailout', () => {
+    const html = renderToStaticMarkup(
+      <MediaArchive records={[]} archives={[]} initialSearchParams="" />
+    );
+
+    expect(html).toContain('<h1');
+    expect(html).toContain('Public record &amp; commentary');
+    expect(html).not.toContain('Loading media archive');
+  });
+
+  it('accepts a server-resolved query string as its initial state', () => {
+    const html = renderToStaticMarkup(
+      <MediaArchive
+        records={[]}
+        archives={[]}
+        initialSearchParams="type=columns&q=internet"
+      />
+    );
+
+    expect(html).toContain('<h1');
   });
 });

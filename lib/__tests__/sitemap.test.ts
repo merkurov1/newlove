@@ -17,8 +17,25 @@ describe('sitemap lastModified', () => {
     expect(parseLastModified('1970-01-01T00:00:00.000Z')).toBeUndefined();
   });
 
-  it('keeps a real date exactly as provided', () => {
-    expect(parseLastModified('2026-11-10T12:00:00.000Z')).toBe('2026-11-10T12:00:00.000Z');
+  it('keeps a real recent date exactly as provided', () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    expect(parseLastModified(yesterday)).toBe(yesterday);
+  });
+
+  it('drops dates in the future instead of advertising an impossible lastmod', () => {
+    const nextYear = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    expect(parseLastModified(nextYear)).toBeUndefined();
+    expect(parseLastModified('2999-01-01T00:00:00.000Z')).toBeUndefined();
+  });
+
+  it('drops a future dynamic-record lastmod from the sitemap entry', () => {
+    const future = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const [entry] = buildDynamicSitemapEntries({
+      articles: [{ slug: 'future-article', updatedAt: future }],
+    });
+
+    expect(entry.url).toBe(`${SITE}/future-article`);
+    expect(entry.lastModified).toBeUndefined();
   });
 
   it('does not put a generation timestamp on static routes', () => {
@@ -173,13 +190,13 @@ describe('dynamic sitemap sources', () => {
   it('uses media publication dates and drops unknown/placeholder dates', () => {
     const entries = buildDynamicSitemapEntries({
       media: [
-        { slug: 'dated-record', date: '2026-04-02' },
+        { slug: 'dated-record', date: '2024-04-02' },
         { slug: 'undated-record', date: '1900' },
       ],
     });
 
     expect(entries).toHaveLength(2);
-    expect(entries[0].lastModified).toBe('2026-04-02T00:00:00.000Z');
+    expect(entries[0].lastModified).toBe('2024-04-02T00:00:00.000Z');
     expect(entries[1].lastModified).toBeUndefined();
   });
 });

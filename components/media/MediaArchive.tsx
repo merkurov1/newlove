@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import type { Kind, MediaRecord, PublicMediaRelation } from '@/data/media';
 import {
   isMediaReprint,
@@ -20,6 +20,13 @@ import {
 type Props = {
   records: MediaRecord[];
   archives: { outlet: string; url: string }[];
+  /**
+   * Initial query string resolved on the server. Passing it as a prop (instead
+   * of calling `useSearchParams`) keeps the archive out of the client-side
+   * rendering bailout, so the heading and records are present in the initial
+   * HTML for crawlers.
+   */
+  initialSearchParams?: string;
 };
 
 type TypeDef = {
@@ -217,12 +224,20 @@ function presenceLabel(record: MediaRecord): string {
   return PRESENCE_LABEL[record.kind];
 }
 
-export default function MediaArchive({ records, archives }: Props) {
-  const searchParams = useSearchParams();
+export default function MediaArchive({ records, archives, initialSearchParams = '' }: Props) {
   const pathname = usePathname() ?? '/media';
   const router = useRouter();
 
-  const paramsString = searchParams?.toString() ?? '';
+  const [localParams, setLocalParams] = useState<{ server: string; value: string } | null>(null);
+
+  // Filter clicks update the URL immediately without waiting for the server
+  // round-trip. When the server sends a different query string (back/forward
+  // navigation) the stored override no longer matches and the server value
+  // wins again.
+  const paramsString =
+    localParams && localParams.server === initialSearchParams
+      ? localParams.value
+      : initialSearchParams;
 
   const params = useMemo(() => new URLSearchParams(paramsString), [paramsString]);
 
@@ -265,7 +280,7 @@ export default function MediaArchive({ records, archives }: Props) {
 
   const updateUrl = useCallback(
     (patch: Record<string, string | null>) => {
-      const next = new URLSearchParams(params.toString());
+      const next = new URLSearchParams(paramsString);
 
       Object.entries(patch).forEach(([key, value]) => {
         if (value) next.set(key, value);
@@ -273,9 +288,10 @@ export default function MediaArchive({ records, archives }: Props) {
       });
 
       const queryString = next.toString();
+      setLocalParams({ server: initialSearchParams, value: queryString });
       router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false });
     },
-    [params, pathname, router]
+    [paramsString, initialSearchParams, pathname, router]
   );
 
   const toggleFilter = useCallback(
