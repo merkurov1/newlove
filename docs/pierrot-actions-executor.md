@@ -39,7 +39,7 @@ Supabase service-role key; it talks only to the worker API.
 | Push-failure records  | `$HOME/.pierrot-dev-work/push-failures`         | Diagnostic only; the failure is also sent to Supabase                                          |
 | Local logs            | `$HOME/.pierrot-dev-work/logs`                  | Not needed for recovery; CI workflow logs and Supabase `log_excerpt` remain                    |
 | Supervisor/PID files  | `dev-worker-start/supervisor/stop.sh`           | Codespace-only; Actions uses a single bounded process                                          |
-| OpenCode stored login | `$HOME/.local/share/opencode`                   | Actions uses the `DEEPSEEK_API_KEY` repository secret instead                                  |
+| OpenCode stored login | `$HOME/.local/share/opencode`                   | Actions uses the `OPENAI_API_KEY` repository secret instead                                    |
 | `gh-gpgsign`          | Codespace helper                                | Not present on Actions; pilot uses an explicit unsigned-commit override, documented as a risk  |
 | Lifecycle hooks       | `.devcontainer/devcontainer.json`               | Not used by Actions                                                                            |
 | Agent scratch state   | OpenCode session DB, temporary files            | Discarded after the run by design                                                              |
@@ -57,7 +57,7 @@ Supabase service-role key; it talks only to the worker API.
 
 | Item                       | Type                           | Purpose                                                                                                                                                                                             |
 | -------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DEEPSEEK_API_KEY`         | GitHub repository secret       | Forwarded only to the executor/OpenCode process as `DEEPSEEK_API_KEY`                                                                                                                               |
+| `OPENAI_API_KEY`           | GitHub repository secret       | Forwarded only to the executor/OpenCode process as `OPENAI_API_KEY`                                                                                                                                 |
 | `PIERROT_DEV_WORKER_TOKEN` | GitHub repository secret       | Existing internal worker API credential (32+ chars)                                                                                                                                                 |
 | `GITHUB_TOKEN`             | Automatic job token            | Push the per-attempt branch; `contents: write` only                                                                                                                                                 |
 | `PIERROT_DEV_API_URL`      | Repository variable (optional) | Production admin origin; defaults to `https://merkurov.love`                                                                                                                                        |
@@ -76,12 +76,12 @@ GitHub workflow_dispatch / repository_dispatch
         │  (task_id optional)
         ▼
 Ephemeral ubuntu-latest runner
-  preflight: secrets presence, OpenCode version, model, live DeepSeek call, API health
+  preflight: OpenAI-only selection, secrets presence, OpenCode version, model, live OpenAI call, API health
   register worker  actions:<run_id>:<run_attempt>   (kind=actions)
   claim             pierrot_dev_claim_task(task_id)  ← advisory lock + one-active guard
   start attempt     executionId=gha:<run_id>:<run_attempt>
   worktree          pierrot/dev/<task>/<attempt>
-  OpenCode          deepseek/deepseek-flash, scrubbed env, existing permissions
+  OpenCode          openai/gpt-5.6, scrubbed env, existing permissions
   commit + push     attempt branch only; no PR, merge or deploy
   complete          Supabase attempt + task → review, PR created by the server
   exit              runner destroyed
@@ -123,36 +123,36 @@ Ephemeral ubuntu-latest runner
   owner does not review individual tasks. Landing in `main` is recorded
   separately from production deployment; this path never deploys.
 
-### 2.1 DeepSeek / OpenCode configuration
+### 2.1 OpenAI / OpenCode configuration
 
-- Provider: `deepseek`
-- Exact model id: `deepseek/deepseek-flash`
-- CLI flag used by the runner: `--model deepseek/deepseek-flash`
-- Repository config: `opencode.json` pins `"model": "deepseek/deepseek-flash"`
-- Credential convention: OpenCode reads `DEEPSEEK_API_KEY` from the process
+- Provider: `openai` (enforced; any other provider or model fails preflight and
+  the worker before a task is claimed)
+- Exact model id: `openai/gpt-5.6`
+- CLI flag used by the runner: `--model openai/gpt-5.6`
+- Repository config: `opencode.json` pins `"model": "openai/gpt-5.6"`
+- Credential convention: OpenCode reads `OPENAI_API_KEY` from the process
   environment (verified against the installed CLI). The workflow maps
-  `secrets.DEEPSEEK_API_KEY` to that variable only for the preflight and
+  `secrets.OPENAI_API_KEY` to that variable only for the preflight and
   executor steps.
 - The runner forwards the key to the OpenCode child only when
   `PIERROT_DEV_ALLOW_PROVIDER_ENV=true`; Codespaces keep using their stored
   `opencode auth login` and do not need the environment key.
-- Non-secret checks: `scripts/pierrot/actions-preflight.mjs` verifies the CLI
-  version, that `opencode models` lists the exact model, and (by default) makes a
-  tiny live call that must return `DEEPSEEK_PREFLIGHT_OK`. It prints only
-  presence booleans and the model id, never the key.
-- If `DEEPSEEK_API_KEY` is absent the workflow stops with setup instructions.
+- Non-secret checks: `scripts/pierrot/actions-preflight.mjs` verifies the
+  CLI version, that `opencode models --standalone` lists the exact model, and
+  makes a tiny live call that must return `OPENAI_PREFLIGHT_OK`. It prints only
+  presence booleans and the model id, never the key. The live call is mandatory
+  whenever a task may execute; it can only be skipped on a `dry_run` preflight.
+- If `OPENAI_API_KEY` is absent the workflow stops with setup instructions.
   There is no fallback provider or model.
 
 ---
 
 ## 3. Setup
 
-1. **Rotate the exposed key first.** The DeepSeek key that was shared in chat
-   must be treated as compromised. Revoke it in the DeepSeek dashboard and
-   create a replacement. Do not paste it into this repository, Supabase, a
-   workflow file, logs, artifacts, commits or PRs.
-2. Add the replacement as a GitHub **repository secret** named
-   `DEEPSEEK_API_KEY`:
+1. **Add the OpenAI key as a GitHub secret.** The owner has already created the
+   `OPENAI_API_KEY` repository secret. Never paste a key into this repository,
+   Supabase, a workflow file, logs, artifacts, commits or PRs.
+2. Confirm the secret is visible to this workflow as `OPENAI_API_KEY`:
    `Settings → Secrets and variables → Actions → New repository secret`.
 3. Confirm `PIERROT_DEV_WORKER_TOKEN` exists there (same value as the deployed
    server). Optionally set repository variable `PIERROT_DEV_API_URL`.
@@ -264,7 +264,7 @@ resolved by keeping both behaviours, not by choosing one:
 ## 4. Pilot plan and evidence
 
 Pilot is **not yet executed** in this implementation environment: no production
-Supabase service, worker API credential or DeepSeek secret is available here.
+Supabase service, worker API credential or OpenAI secret is available here.
 The runner, checks and rollback are implemented; the owner must run the pilot.
 
 Minimum matrix (5–10 real tasks):
@@ -322,8 +322,11 @@ Disable workflow`) or stop dispatching `pierrot-dev-task`. No code revert is
    restore the previous kind check **after** confirming no `actions` worker rows
    remain. Queue and attempt history are untouched. Do not drop tables.
 5. Resume Codespaces by starting the existing Codespace; `postStartCommand`
-   starts the existing supervisor/worker. Because Actions is now the standard
-   executor, explicitly assign work to the reserve before it can be claimed:
+   starts the existing supervisor/worker. The worker now defaults to
+   `openai/gpt-5.6`, so run `opencode auth login` for OpenAI in the Codespace (or
+   export `OPENAI_API_KEY` with `PIERROT_DEV_ALLOW_PROVIDER_ENV=true`) before it
+   can execute. Because Actions is now the standard executor, explicitly assign
+   work to the reserve before it can be claimed:
    `UPDATE public.pierrot_dev_prompts SET assigned_executor = 'codespace',
 actions_dispatch_requested_at = NULL WHERE id = '<task-uuid>';`
    No queue migration or data copy is needed.

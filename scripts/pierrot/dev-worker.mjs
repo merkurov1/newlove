@@ -43,8 +43,8 @@ import {
   isVersionAtLeast,
   parseOpenCodeCost,
   parseStoredAuth,
-  providerFromModel,
   resolveCommitPolicy,
+  resolveDevProviderSelection,
   resolveGitIdentity,
 } from './dev-worker-lib.mjs';
 
@@ -89,12 +89,12 @@ const IDLE_GRACE_SECONDS = (() => {
   return Number.isFinite(value) ? Math.min(Math.max(Math.trunc(value * 60), 60), 3600) : 120;
 })();
 const MIN_OPENCODE_VERSION = (process.env.PIERROT_DEV_OPENCODE_MIN_VERSION || '2.1.4').trim();
-const OPENCODE_MODEL = (process.env.PIERROT_DEV_OPENCODE_MODEL || 'deepseek/deepseek-flash').trim();
-const OPENCODE_PROVIDER = (
-  process.env.PIERROT_DEV_OPENCODE_PROVIDER ||
-  providerFromModel(OPENCODE_MODEL) ||
-  'deepseek'
-).trim();
+const PROVIDER_SELECTION = resolveDevProviderSelection({
+  provider: process.env.PIERROT_DEV_OPENCODE_PROVIDER,
+  model: process.env.PIERROT_DEV_OPENCODE_MODEL,
+});
+const OPENCODE_MODEL = PROVIDER_SELECTION.model;
+const OPENCODE_PROVIDER = PROVIDER_SELECTION.provider;
 const OPENCODE_AGENT = (process.env.PIERROT_DEV_OPENCODE_AGENT || '').trim();
 const EXECUTOR_MODE = (process.env.PIERROT_DEV_EXECUTOR_MODE || 'codespace').trim().toLowerCase();
 const ACTIONS_MODE = EXECUTOR_MODE === 'actions';
@@ -102,7 +102,7 @@ const RELEASE_MODE = EXECUTOR_MODE === 'release-active';
 const TARGET_TASK_ID = (process.env.PIERROT_DEV_TASK_ID || '').trim();
 const TARGET_CORRELATION_ID = (process.env.PIERROT_DEV_DISPATCH_CORRELATION_ID || '').trim();
 const ALLOW_PROVIDER_ENV = process.env.PIERROT_DEV_ALLOW_PROVIDER_ENV === 'true';
-const PROVIDER_ENV_NAME = `${OPENCODE_PROVIDER.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`;
+const PROVIDER_ENV_NAME = PROVIDER_SELECTION.envName;
 const ALLOW_UNSIGNED_COMMITS = process.env.PIERROT_DEV_ALLOW_UNSIGNED_COMMITS === 'true';
 const EXECUTION_ID = buildExecutionId({
   runId: process.env.GITHUB_RUN_ID,
@@ -166,6 +166,7 @@ const SECRET_ENV_NAMES = [
   'GITHUB_TOKEN',
   'GITHUB_CODESPACE_TOKEN',
   'DEEPSEEK_API_KEY',
+  'OPENAI_API_KEY',
   'OPENROUTER_API_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
   'SUPABASE_SERVICE_KEY',
@@ -1524,7 +1525,7 @@ async function shutdown(signal) {
  */
 async function configuredModelAvailable() {
   try {
-    const result = await run('opencode', ['models'], {
+    const result = await run('opencode', ['models', '--standalone'], {
       env: opencodeEnv(),
       timeoutMs: 30000,
     });
@@ -1625,10 +1626,20 @@ async function runActionsOnce() {
     process.exitCode = ACTIONS_EXIT.permanent;
     return;
   }
+  // The Actions executor is OpenAI-only. A stale repository variable, a manual
+  // dispatch or an inherited shell environment must never route a Dev task to
+  // DeepSeek (or any other provider). Fail before registering or claiming.
+  if (!PROVIDER_SELECTION.ok) {
+    await bootPhase('failed', `${PROVIDER_SELECTION.reasonCode}: ${PROVIDER_SELECTION.reason}`, {
+      force: true,
+    });
+    process.exitCode = ACTIONS_EXIT.permanent;
+    return;
+  }
   if (ALLOW_PROVIDER_ENV && !(process.env[PROVIDER_ENV_NAME] || '').trim()) {
     await bootPhase(
       'failed',
-      `DEEPSEEK_CONFIG_MISSING: repository secret ${PROVIDER_ENV_NAME} is not present. Add it in GitHub repository Settings → Secrets and variables → Actions. The key shared in chat must be revoked and rotated first. No fallback model will be used.`,
+      `PROVIDER_KEY_MISSING: repository secret ${PROVIDER_ENV_NAME} is not present. Add it in GitHub repository Settings → Secrets and variables → Actions. No fallback provider or model will be used.`,
       { force: true }
     );
     process.exitCode = ACTIONS_EXIT.permanent;
