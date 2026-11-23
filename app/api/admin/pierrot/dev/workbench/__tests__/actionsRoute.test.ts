@@ -83,6 +83,19 @@ jest.mock('@/lib/pierrot/dev/workbench/finalization', () => ({
   retryFinalization: jest.fn(async () => null),
 }));
 
+jest.mock('@/lib/pierrot/dev/workbench/reconciliation', () => ({
+  reconcileLegacyReviewRows: jest.fn(async () => ({
+    apply: false,
+    scanned: 0,
+    landed: 0,
+    stillReview: 0,
+    missingPullRequest: 0,
+    changed: 0,
+    rows: [],
+    generatedAt: new Date().toISOString(),
+  })),
+}));
+
 jest.mock('@/lib/pierrot/dev/workbench/setup', () => ({
   CODESPACE_NAME_ENV: 'PIERROT_DEV_CODESPACE_NAME',
 }));
@@ -99,11 +112,13 @@ import { POST } from '../actions/route';
 import { approveTask, enqueueTask } from '@/lib/pierrot/dev/workbench/execution';
 import { dispatchTaskToActions } from '@/lib/pierrot/dev/workbench/actions';
 import { getBatchIdForTask } from '@/lib/pierrot/dev/workbench/store';
+import { reconcileLegacyReviewRows } from '@/lib/pierrot/dev/workbench/reconciliation';
 
 const approve = approveTask as jest.Mock;
 const enqueue = enqueueTask as jest.Mock;
 const dispatch = dispatchTaskToActions as jest.Mock;
 const batchForTask = getBatchIdForTask as jest.Mock;
+const reconcile = reconcileLegacyReviewRows as jest.Mock;
 
 function request(action: string, taskId = 'task-1') {
   return new Request('http://localhost/api/admin/pierrot/dev/workbench/actions', {
@@ -150,5 +165,22 @@ describe('POST workbench action queue', () => {
 
     expect(response.status).toBe(404);
     expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('runs legacy reconciliation as a dry run unless confirmation is explicit', async () => {
+    const dry = await POST(request('reconcile_legacy'));
+    expect(dry.status).toBe(200);
+    expect(reconcile).toHaveBeenCalledWith({ apply: false, limit: 200 });
+
+    const body = JSON.stringify({ action: 'reconcile_legacy', confirm: true });
+    const applied = await POST(
+      new Request('http://localhost/api/admin/pierrot/dev/workbench/actions', {
+        method: 'POST',
+        body,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    expect(applied.status).toBe(200);
+    expect(reconcile).toHaveBeenLastCalledWith({ apply: true, limit: 200 });
   });
 });

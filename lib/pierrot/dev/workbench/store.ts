@@ -1131,7 +1131,10 @@ export async function promoteStandaloneReadyTasks(limit = 20): Promise<number> {
  * pull request is the primary candidate; verified tasks are included so a
  * restarted finalization can repair an interrupted status update.
  */
-export async function listFinalizationTasks(limit = 100): Promise<DevWorkbenchTask[]> {
+export async function listFinalizationTasks(
+  limit = 100,
+  options: { includeWithoutPullRequests?: boolean } = {}
+): Promise<DevWorkbenchTask[]> {
   try {
     const { data, error } = await store()
       .from('pierrot_dev_prompts')
@@ -1142,7 +1145,9 @@ export async function listFinalizationTasks(limit = 100): Promise<DevWorkbenchTa
     if (error || !Array.isArray(data)) return [];
     return data
       .map((row) => mapTaskRow(row as unknown as Record<string, unknown>))
-      .filter((task) => task.pullRequests.length > 0);
+      .filter(
+        (task) => options.includeWithoutPullRequests === true || task.pullRequests.length > 0
+      );
   } catch {
     return [];
   }

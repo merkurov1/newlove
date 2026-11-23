@@ -7,31 +7,33 @@ remains infrastructure; the owner works from Admin.
 
 ## Components
 
-| Part                               | Location                                                                                  |
-| ---------------------------------- | ----------------------------------------------------------------------------------------- |
-| Admin overview API                 | `app/api/admin/pierrot/dev/workbench/route.ts`                                            |
-| Admin actions API                  | `app/api/admin/pierrot/dev/workbench/actions/route.ts`                                    |
-| Setup health checks                | `app/api/admin/pierrot/dev/workbench/setup/route.ts`                                      |
-| Internal worker API                | `app/api/internal/pierrot/dev/worker/route.ts`                                            |
-| Queue / attempts / events          | `lib/pierrot/dev/workbench/*`                                                             |
-| Codespace worker                   | `scripts/pierrot/dev-worker.mjs`                                                          |
-| Worker lifecycle                   | `scripts/pierrot/dev-worker-start.sh` / `dev-worker-supervisor.sh` / `dev-worker-stop.sh` |
+| Part                               | Location                                                                                   |
+| ---------------------------------- | ------------------------------------------------------------------------------------------ |
+| Admin overview API                 | `app/api/admin/pierrot/dev/workbench/route.ts`                                             |
+| Admin actions API                  | `app/api/admin/pierrot/dev/workbench/actions/route.ts`                                     |
+| Setup health checks                | `app/api/admin/pierrot/dev/workbench/setup/route.ts`                                       |
+| Internal worker API                | `app/api/internal/pierrot/dev/worker/route.ts`                                             |
+| Queue / attempts / events          | `lib/pierrot/dev/workbench/*`                                                              |
+| Codespace worker                   | `scripts/pierrot/dev-worker.mjs`                                                           |
+| Worker lifecycle                   | `scripts/pierrot/dev-worker-start.sh` / `dev-worker-supervisor.sh` / `dev-worker-stop.sh`  |
 | GitHub Actions executor            | `.github/workflows/pierrot-actions-executor.yml` / `scripts/pierrot/actions-preflight.mjs` |
 | Actions audit/pilot/rollback       | `docs/pierrot-actions-executor.md`                                                         |
-| Codespace lifecycle                | `lib/pierrot/dev/workbench/lifecycle.ts`                                                  |
-| Cost ledger                        | `lib/pierrot/dev/workbench/costs.ts` / `ledger.ts`                                        |
-| Cost dashboard API                 | `app/api/admin/pierrot/dev/workbench/ledger/route.ts`                                     |
-| Admin UI                           | `components/pierrot/workspace/DevWorkbench.tsx`                                           |
-| Migration (additive)               | `migrations/2026-11-22_pierrot_dev_workbench.sql`                                         |
-| Cost estimate migration (additive) | `migrations/2026-12-10_pierrot_dev_cost_ledger.sql`                                       |
-| Existing task table                | `public.pierrot_dev_prompts` (reused)                                                     |
+| Codespace lifecycle                | `lib/pierrot/dev/workbench/lifecycle.ts`                                                   |
+| Cost ledger                        | `lib/pierrot/dev/workbench/costs.ts` / `ledger.ts`                                         |
+| Cost dashboard API                 | `app/api/admin/pierrot/dev/workbench/ledger/route.ts`                                      |
+| Admin UI                           | `components/pierrot/workspace/DevWorkbench.tsx`                                            |
+| Migration (additive)               | `migrations/2026-11-22_pierrot_dev_workbench.sql`                                          |
+| Cost estimate migration (additive) | `migrations/2026-12-10_pierrot_dev_cost_ledger.sql`                                        |
+| Existing task table                | `public.pierrot_dev_prompts` (reused)                                                      |
 
 ## State machines
 
 Task: `draft → ready → queued → in_progress → review → verified`
 
-Additional: `failed`, `rejected`, `cancelled`, `archived`, `blocked`.
-Transitions are closed in `lib/pierrot/dev/workbench/state.ts`.
+`verified` means "landed in main with passing real CI", not "owner accepted"
+and not "deployed to production". Additional states: `failed`, `rejected`,
+`cancelled`, `archived`, `blocked`. Transitions are closed in
+`lib/pierrot/dev/workbench/state.ts`.
 
 Attempt: `created → claimed → running → completed | failed | cancelled | timed_out`.
 
@@ -143,34 +145,80 @@ overwritten.
 
 ## Queue finalization
 
-A drained queue is not the end of a development batch. The backend runs a
-separate, idempotent finalization pass when **all** of these are true: no
-`queued`, no `ready`, no `in_progress` tasks, no `claimed`/`running` attempt,
-no active/paused batch and the queue is not paused. It is triggered by the
-worker idle request and by the Admin overview poll; only one instance can
-advance it per 30-second window.
+Automatic landing is the normal end of every task. The owner does not approve
+individual tasks. The backend runs a separate, idempotent finalization pass
+whenever execution is idle: no `in_progress` task and no `claimed`/`running`
+attempt, and the queue is not paused. A non-empty queue is **not** a blocker,
+because batch dependents intentionally stay `queued` until their prerequisite
+lands. It is triggered by the worker idle request and by the Admin overview
+poll; only one instance can advance it per 30-second window.
 
 Stages:
 
 1. **Collect** — every `review`/`verified` task with a pull request is read from
-   GitHub. CI checks, mergeability, head SHA and conflicts are recorded.
-2. **Integrate** — one PR per pass is merged (never force-pushed) only when the
+   GitHub. CI checks, mergeability, head SHA, conflicts and the real PR file
+   list are recorded.
+2. **Safety gate** — a PR that changes secret/credential files, contains private
+   key material or destructive SQL, or modifies the CI workflow itself is
+   stopped before any merge. The task keeps its PR link, attempts, reports and
+   notes; nothing is marked complete. Non-blocking security-sensitive paths
+   (auth, RLS, migrations) are recorded as warnings.
+3. **Integrate** — one PR per pass is merged (never force-pushed) only when the
    PR is open, its exact head SHA is unchanged, CI is green and GitHub reports
-   it mergeable. A conflict, branch-protection rejection, failed CI or stale
-   head stops integration with a diagnostic; nothing is discarded.
-3. **Verify** — CI is checked again on the integrated `main` commit.
-4. **Complete** — tasks become `verified` with `verification_status: passed`
-   and an integration note, the batch is settled, cost and duration are
-   recorded, and the owner is notified.
+   it mergeable. A conflict, branch-protection rejection, failed CI, missing CI
+   evidence, stale head or security finding stops integration with a precise
+   diagnostic; nothing is discarded.
+4. **Verify** — CI is checked again on the integrated `main` commit.
+5. **Complete** — tasks become `verified` with `verification_status: passed`
+   from **real CI for the exact head**, not from executor self-report, and the
+   batch is settled, cost and duration are recorded, and the owner is notified.
+   Only then are dependent batch tasks claimable. `verified` means landed in
+   `main`; it never means deployed to production.
 
 The report is stored in `pierrot_dev_settings` (`finalization:state`), so a
 retry is idempotent: already integrated PRs are skipped, merge SHAs are
-remembered and main is never rewritten. Admin → `EXECUTION` → `FINALIZATION`
-shows the stage, PR list, CI, commit link, cost and a manual **Retry
-finalization** action. When a conflict needs a product/architecture decision,
-integration is blocked and the owner must decide; the Codespace may stop to
-avoid idle cost. If new work arrives during finalization, the pass is
-superseded (`queue.refilled`) and normal execution resumes.
+remembered and main is never rewritten. Evidence includes the PR number/URL,
+head SHA, merge commit SHA, check runs, attempt id and append-only events.
+Admin → `EXECUTION` → `FINALIZATION` shows the stage, PR list, CI, commit link,
+cost and a manual **Retry finalization** action. When a conflict or a security
+finding needs a product/architecture decision, landing is blocked with the
+exact reason; the Codespace may stop to avoid idle cost. If an executor starts
+new work during finalization, the pass is superseded (`queue.refilled`) and
+normal execution resumes.
+
+### Legacy review reconciliation
+
+Review rows created before automatic landing are reconciled against the real
+GitHub PR and `main` state. The automatic finalization already does this for
+rows with a PR. The protected Admin action
+`reconcile_legacy` (dry-run by default; `confirm: true` applies it) also
+reports rows without a PR. It never deletes a row, attempt, report, note or PR
+reference:
+
+- merged PR + passing real CI → `verified` with the merge SHA and CI evidence;
+- open/closed-unmerged PR → stays `review` with an explicit reason;
+- merged PR with missing/failed CI evidence → stays `review`;
+- no cached PR → reported and left unchanged, never marked complete.
+
+This is how the legacy Brain triage PR #84, AI telemetry, Markdown-first and
+the obsolete production-release task are checked: a task is complete only if
+its own PR is actually merged and CI passed. A production release task is not
+"done" merely because code landed in `main`; deployment remains a separate,
+explicitly reported state.
+
+Baseline inspected in the repository history (database rows must still be
+checked against live GitHub before any status is written):
+
+| Legacy item                                                             | Pull request | Merge commit in `main` | Reconciliation rule                                                                 |
+| ----------------------------------------------------------------------- | ------------ | ---------------------- | ----------------------------------------------------------------------------------- |
+| Brain ingestion triage                                                  | #84          | `2b63771a`             | Mark landed only if GitHub says #84 is merged and its head CI passed.               |
+| AI telemetry reliability                                                | #85          | `7995299b`             | Same evidence rule; do not infer completion from the report file.                   |
+| Markdown-first response rendering                                       | #86          | `13216472`             | Same evidence rule.                                                                 |
+| Obsolete production release task `d0e3b355-8038-4992-a8a4-9041069fffff` | none proven  | none                   | Never mark complete without a merged PR. Code in `main` is not a production deploy. |
+
+If a legacy row has no PR or its PR is open/closed-unmerged, reconciliation
+keeps it in `review` with the reason and leaves every report, attempt, note and
+PR reference untouched.
 
 ### GitHub token and failure recovery
 
@@ -179,13 +227,13 @@ GitHub App installation token). It does not read a separate worker or browser
 token, and it never logs the token value. The minimum repository permissions
 needed by the finalizer are:
 
-| Operation | Endpoint | Fine-grained permission |
-| --- | --- | --- |
-| Read PR state, mergeability, head SHA | `GET /repos/{owner}/{repo}/pulls/{pull_number}` | Pull requests: read |
-| Read check runs | `GET /repos/{owner}/{repo}/commits/{ref}/check-runs` | Checks: read |
-| Read legacy commit statuses | `GET /repos/{owner}/{repo}/commits/{ref}/status` | Commit statuses: read |
-| Read the default branch head | `GET /repos/{owner}/{repo}/branches/{branch}` | Contents: read |
-| Merge an approved PR (only when integration is allowed) | `PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge` | Contents: write |
+| Operation                                               | Endpoint                                              | Fine-grained permission |
+| ------------------------------------------------------- | ----------------------------------------------------- | ----------------------- |
+| Read PR state, mergeability, head SHA                   | `GET /repos/{owner}/{repo}/pulls/{pull_number}`       | Pull requests: read     |
+| Read check runs                                         | `GET /repos/{owner}/{repo}/commits/{ref}/check-runs`  | Checks: read            |
+| Read legacy commit statuses                             | `GET /repos/{owner}/{repo}/commits/{ref}/status`      | Commit statuses: read   |
+| Read the default branch head                            | `GET /repos/{owner}/{repo}/branches/{branch}`         | Contents: read          |
+| Merge an approved PR (only when integration is allowed) | `PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge` | Contents: write         |
 
 `Metadata: read` is implicit for every repository endpoint. Creating pull
 requests additionally needs Pull requests write, and Codespace start/stop needs
@@ -214,7 +262,6 @@ Failure handling is deliberately different by cause:
 - **Temporary API failure** — the pass blocks with the error and the PR/commit
   state that was read. Use **Retry finalization**; the pass re-reads PR,
   checks, merge state and commit SHA before acting.
-
 
 Idle promotion is safe for explicit owner intent: `dequeue` writes a durable
 `queue:optout:<task>` marker, so a task the owner removed is never silently
@@ -274,25 +321,28 @@ heartbeats.
   Missing cost data is stored as unknown, never zero.
 - On SIGTERM releases the lease and requeues the task.
 
-## Review and merge
+## Review, landing and merge
 
-- Review is advisory and read-only for every task that is not waiting for
-  review. Opening a verified/merged, rejected, archived or cancelled task in
-  Admin never changes its state. A review verdict of `rejected` is not an owner
-  rejection; only the explicit Reject action changes a task to `rejected`.
+- Owner acceptance is not part of the normal lifecycle. Running OpenCode,
+  opening a PR and proving real CI on the exact head is the automatic path.
+  Admin review is read-only evidence for audit and troubleshooting.
+- Review is advisory and read-only for every task. Opening a verified/landed,
+  rejected, archived or cancelled task in Admin never changes its state.
 - For a merged pull request the review reads the PR head SHA and the PR's own
   file list. It never compares `main...merge_commit`, which is empty and used
   to produce a false "no changed files" verdict.
-- A commit or PR is never treated as completion.
+- A commit or PR is never treated as completion. Completion requires the PR to
+  be merged and real CI to have passed for its exact head SHA.
 - CI check runs and local, executor-reported commands are shown separately.
-- Executor-reported commands are self-reported unless
-  `PIERROT_DEV_TRUST_SELF_REPORTED_CHECKS=true`.
+  Executor self-report is evidence only; it is never the merge gate.
 - A changed filename is never acceptance evidence.
-- Accept requires every criterion to have CI evidence or explicit manual
-  confirmation.
-- Merge is only available for a `verified` task, with an explicit confirmation,
-  and only for the exact reviewed head SHA. After merge the task is archived
-  (history preserved) and Vercel deployment status is shown when configured.
+- Automatic landing merges only an open, conflict-free PR whose exact head SHA
+  is unchanged and whose required checks are green. A failed check, missing
+  evidence, stale head, conflict or destructive/security-sensitive finding
+  stops that task with a precise reason.
+- `verified` / "landed in main" is distinct from "released to production".
+  Production deployment status is read separately from Vercel; landing never
+  implies a deploy and this process never deploys.
 
 ## Dev Cost Ledger
 
@@ -347,14 +397,14 @@ heartbeats.
 
 ## Troubleshooting
 
-| Symptom                                   | Action                                                                                                                                                                                   |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schema missing`                          | Apply the migration manually, then Re-check.                                                                                                                                             |
-| `worker offline`                          | Queueing a task should start the Codespace automatically. If it does not, check the lifecycle detail in EXECUTION, then `$HOME/.pierrot-dev-work/logs/worker.log` and `worker-boot.log`. |
-| `OpenCode CLI missing`                    | Install/verify `opencode --version` in the Codespace.                                                                                                                                    |
-| `Stored provider authentication: missing` | Run `opencode auth login` in the Codespace.                                                                                                                                              |
-| Codespace start returns 403               | Grant the fine-grained token **Codespaces: write**.                                                                                                                                      |
+| Symptom                                   | Action                                                                                                                                                                                                    |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema missing`                          | Apply the migration manually, then Re-check.                                                                                                                                                              |
+| `worker offline`                          | Queueing a task should start the Codespace automatically. If it does not, check the lifecycle detail in EXECUTION, then `$HOME/.pierrot-dev-work/logs/worker.log` and `worker-boot.log`.                  |
+| `OpenCode CLI missing`                    | Install/verify `opencode --version` in the Codespace.                                                                                                                                                     |
+| `Stored provider authentication: missing` | Run `opencode auth login` in the Codespace.                                                                                                                                                               |
+| Codespace start returns 403               | Grant the fine-grained token **Codespaces: write**.                                                                                                                                                       |
 | Finalization blocked on 403               | Read the block reason: it names the endpoint and required permission. Fix the fine-grained token, redeploy, then **Retry finalization**. Automatic retry is intentionally disabled for permission errors. |
-| Finalization blocked on rate limit        | The block reason contains the reset time. Wait for it (the pass resumes automatically) or use **Retry finalization** after the reset. Check `GET /rate_limit` and reduce concurrent GitHub calls. |
-| No CI checks                              | Add/verify the repository CI workflow; acceptance then requires manual confirmation.                                                                                                     |
-| Vercel `unavailable`                      | Set `VERCEL_TOKEN` (and `VERCEL_PROJECT_ID` if auto-detection fails).                                                                                                                    |
+| Finalization blocked on rate limit        | The block reason contains the reset time. Wait for it (the pass resumes automatically) or use **Retry finalization** after the reset. Check `GET /rate_limit` and reduce concurrent GitHub calls.         |
+| No CI checks                              | Add/verify the repository CI workflow; acceptance then requires manual confirmation.                                                                                                                      |
+| Vercel `unavailable`                      | Set `VERCEL_TOKEN` (and `VERCEL_PROJECT_ID` if auto-detection fails).                                                                                                                                     |

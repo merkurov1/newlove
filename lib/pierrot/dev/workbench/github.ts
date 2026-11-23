@@ -393,6 +393,11 @@ const OPERATIONS = {
     requiredPermission: 'Pull requests: read',
     fallbackCode: 'GITHUB_PR_STATUS_FAILED',
   },
+  listPullRequestFiles: {
+    endpoint: 'GET /repos/{owner}/{repo}/pulls/{pull_number}/files',
+    requiredPermission: 'Pull requests: read',
+    fallbackCode: 'GITHUB_PR_FILES_FAILED',
+  },
   createPullRequest: {
     endpoint: 'POST /repos/{owner}/{repo}/pulls',
     requiredPermission: 'Pull requests: write',
@@ -580,6 +585,9 @@ export async function getPullRequestStatus(
   mergeableState: string | null;
   headSha: string;
   baseBranch: string;
+  /** Exact merge commit reported by GitHub (null until merged). */
+  mergeCommitSha: string | null;
+  mergedAt: string | null;
 } | null> {
   const config = getDevRepositoryConfig(repoKey(repository));
   try {
@@ -599,6 +607,8 @@ export async function getPullRequestStatus(
       mergeableState: response.data.mergeable_state ?? null,
       headSha: response.data.head.sha,
       baseBranch: response.data.base.ref,
+      mergeCommitSha: response.data.merge_commit_sha || null,
+      mergedAt: response.data.merged_at || null,
     };
   } catch (error) {
     const normalized = toError(error, OPERATIONS.getPullRequest);
@@ -606,6 +616,51 @@ export async function getPullRequestStatus(
     // must never be mistaken for a missing PR.
     if (normalized.status === 404) return null;
     throw normalized;
+  }
+}
+
+export type GitHubPullRequestFile = {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  patch: string | null;
+};
+
+/** Read the file list a PR actually changes. Used for the pre-merge safety gate. */
+export async function getPullRequestFiles(
+  repository: DevRepositoryKey | string,
+  number: number
+): Promise<GitHubPullRequestFile[]> {
+  const config = getDevRepositoryConfig(repoKey(repository));
+  try {
+    const files: GitHubPullRequestFile[] = [];
+    // The safety gate must see the whole PR. Read bounded pages instead of
+    // silently trusting the first 100 files.
+    for (let page = 1; page <= 3; page += 1) {
+      const response = await requestGitHubWithRetry(OPERATIONS.listPullRequestFiles, () =>
+        client().rest.pulls.listFiles({
+          owner: config.owner,
+          repo: config.repo,
+          pull_number: number,
+          per_page: 100,
+          page,
+        })
+      );
+      files.push(
+        ...response.data.map((file) => ({
+          filename: file.filename,
+          status: file.status,
+          additions: Number(file.additions || 0),
+          deletions: Number(file.deletions || 0),
+          patch: typeof file.patch === 'string' ? file.patch : null,
+        }))
+      );
+      if (response.data.length < 100) break;
+    }
+    return files;
+  } catch (error) {
+    throw toError(error, OPERATIONS.listPullRequestFiles);
   }
 }
 

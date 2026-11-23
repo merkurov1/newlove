@@ -42,6 +42,7 @@ import {
   retryActionsDispatch,
 } from '@/lib/pierrot/dev/workbench/actions';
 import { advanceFinalization, retryFinalization } from '@/lib/pierrot/dev/workbench/finalization';
+import { reconcileLegacyReviewRows } from '@/lib/pierrot/dev/workbench/reconciliation';
 import { CODESPACE_NAME_ENV } from '@/lib/pierrot/dev/workbench/setup';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
 import { DevTransitionError } from '@/lib/pierrot/dev/workbench/state';
@@ -495,6 +496,16 @@ export async function POST(req: Request) {
           payload: { finalizationId: report.id, retry },
         });
         break;
+      }
+      case 'reconcile_legacy': {
+        // One-time maintenance, not a per-task review gate. Dry-run is the
+        // default; `confirm: true` applies the evidence-backed reconciliation.
+        const report = await reconcileLegacyReviewRows({
+          apply: body.confirm === true,
+          limit: Math.min(Math.max(Number(body.limit) || 200, 1), 200),
+        });
+        const overview = await getWorkbenchOverview(admin.id);
+        return json({ ok: true, reconciliation: report, overview });
       }
       case 'block': {
         const reason = typeof body.reason === 'string' ? body.reason.slice(0, 2000) : '';

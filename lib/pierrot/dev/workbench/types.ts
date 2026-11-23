@@ -704,6 +704,20 @@ export type DevFinalizationPullRequest = {
   checks: DevFinalizationCheck[];
   integrated: boolean;
   integrationSha: string | null;
+  /** Exact GitHub merge commit when the PR is merged. */
+  mergeSha?: string | null;
+  /** Attempt that produced the PR head, when it can be read. */
+  attemptId?: string | null;
+  /**
+   * Pre-merge safety findings. `blocking` findings stop landing; warnings are
+   * evidence only. Kept on the report so Admin never has to re-derive them.
+   */
+  risks?: Array<{
+    code: string;
+    severity: 'blocking' | 'warning';
+    reason: string;
+    files: string[];
+  }>;
   reason: string | null;
   errorCode?: string | null;
   errorDetail?: string | null;
@@ -832,4 +846,5 @@ export type DevWorkbenchAction =
   | 'release_worker'
   | 'reap'
   | 'set_priority'
-  | 'finalize_queue';
+  | 'finalize_queue'
+  | 'reconcile_legacy';
