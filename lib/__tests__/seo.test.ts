@@ -1,4 +1,4 @@
-import { pageMetadata, SITE_URL, absoluteUrl } from '../seo';
+import { pageMetadata, recordDescription, SITE_URL, absoluteUrl } from '../seo';
 
 describe('page metadata canonical and multilingual rules', () => {
   it('always emits a self-referencing canonical URL', () => {
@@ -42,5 +42,25 @@ describe('page metadata canonical and multilingual rules', () => {
 
   it('does not double-prefix absolute URLs', () => {
     expect(absoluteUrl('https://example.com/a')).toBe('https://example.com/a');
+  });
+});
+
+describe('recordDescription', () => {
+  it('builds a non-empty description from visible artwork fields', () => {
+    const value = recordDescription({
+      title: 'La veillée',
+      artist: 'René Magritte (1898-1967)',
+      year: '1960',
+      kind: 'article',
+    });
+
+    expect(value.length).toBeGreaterThanOrEqual(120);
+    expect(value).toContain('René Magritte');
+    expect(value).toContain('La veillée');
+    expect(value).toContain('1960');
+  });
+
+  it('does not invent a description when no title exists', () => {
+    expect(recordDescription({ title: '', artist: 'Unknown' })).toBe('');
   });
 });

@@ -453,6 +453,7 @@ export default function BookReaderPage() {
   if (!isMounted || status === 'loading') {
     return (
       <div className="min-h-screen bg-[#faf9f5] flex items-center justify-center px-6">
+        <h1 className="sr-only">Unframed — Anton Merkurov</h1>
         <div
           role="status"
           aria-live="polite"

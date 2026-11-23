@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { openAIApiKeyFromEnv } from '@/lib/ai/openaiKey';
 
 // Transcription endpoint: admin-only audio transcription for temple whispers.
-// This implementation uses OpenAI Speech-to-Text if OPENAI_API_KEY is set.
+// This implementation uses OpenAI Speech-to-Text when an OpenAI key is set.
 export async function POST(req: Request) {
   const limited = checkRateLimit(getClientIp(req), {
     interval: 60 * 1000,
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'Whisper audio unavailable' }, { status: 503 });
 
     // Prefer OpenAI if configured
-    const OPENAI_KEY = process.env.OPENAI_API_KEY;
+    const OPENAI_KEY = openAIApiKeyFromEnv();
     let text = null;
 
     if (OPENAI_KEY) {

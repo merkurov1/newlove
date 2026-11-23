@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { openAIApiKeyFromEnv } from '@/lib/ai/openaiKey';
+
 const TELEGRAM_API = 'https://api.telegram.org';
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const MAX_VOICE_BYTES = 25 * 1024 * 1024;
@@ -129,7 +131,7 @@ export async function transcribeTelegramVoice(input: {
   fileId: string;
   mime?: string | null;
 }): Promise<string | null> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = openAIApiKeyFromEnv();
   if (!apiKey || !input.fileId) return null;
 
   const file = await downloadTelegramFile(input.fileId, MAX_VOICE_BYTES);

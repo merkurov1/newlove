@@ -16,6 +16,7 @@ export default defineConfig({
     'pierrot-viewport.spec.ts',
     'pierrot-presentation.spec.ts',
     'pierrot-browser.spec.ts',
+    'seo-ssr.spec.ts',
   ],
   timeout: 90_000,
   expect: { timeout: 10_000 },

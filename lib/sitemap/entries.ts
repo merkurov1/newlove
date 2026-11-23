@@ -68,6 +68,16 @@ const CANONICAL_HOST = 'www.merkurov.love';
  */
 const MIN_KNOWN_TIMESTAMP = Date.UTC(1971, 0, 1);
 
+/**
+ * A lastmod in the future is not a trustworthy modification signal and Google
+ * may ignore the whole field. Allow a small clock-skew window, then omit.
+ */
+const MAX_FUTURE_SKEW_MS = 24 * 60 * 60 * 1000;
+
+function latestTrustedTimestamp(): number {
+  return Date.now() + MAX_FUTURE_SKEW_MS;
+}
+
 /** Routes that are public but canonicalise to another URL. */
 const NON_CANONICAL_STATIC_ROUTES = new Set(['/letters']);
 
@@ -95,6 +105,7 @@ export function parseLastModified(value: unknown): string | undefined {
   }
 
   if (!Number.isFinite(time) || time < MIN_KNOWN_TIMESTAMP) return undefined;
+  if (time > latestTrustedTimestamp()) return undefined;
 
   return new Date(time).toISOString();
 }

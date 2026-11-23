@@ -5,12 +5,13 @@ import type { MediaRecord } from '@/data/media';
 import MediaArchive from '../MediaArchive';
 
 const mockReplace = jest.fn();
-let mockCurrentSearchParams = '';
+function setSearchParams(value: string) {
+  window.history.replaceState({}, '', value ? `/media?${value}` : '/media');
+}
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/media',
   useRouter: () => ({ replace: mockReplace }),
-  useSearchParams: () => new URLSearchParams(mockCurrentSearchParams),
 }));
 
 function record(overrides: Partial<MediaRecord> & Pick<MediaRecord, 'slug' | 'title' | 'lang'>) {
@@ -48,7 +49,7 @@ const records: MediaRecord[] = [
 
 describe('MediaArchive languages', () => {
   beforeEach(() => {
-    mockCurrentSearchParams = '';
+    setSearchParams('');
     mockReplace.mockClear();
   });
 
@@ -63,7 +64,7 @@ describe('MediaArchive languages', () => {
   });
 
   it('filters the public catalogue by the SQ code', () => {
-    mockCurrentSearchParams = 'lang=SQ';
+    setSearchParams('lang=SQ');
 
     render(<MediaArchive records={records} archives={[]} />);
 
@@ -129,7 +130,7 @@ function reprint(
 
 describe('MediaArchive authored outlet+year series', () => {
   beforeEach(() => {
-    mockCurrentSearchParams = '';
+    setSearchParams('');
     mockReplace.mockClear();
   });
 
@@ -228,7 +229,7 @@ describe('MediaArchive authored outlet+year series', () => {
   it('keeps grouping active for the Columns and Publication filters', () => {
     const retrograde = authored('Ретроградный Меркуров', '2025', 4);
 
-    mockCurrentSearchParams = 'type=columns&outlet=Ретроградный Меркуров';
+    setSearchParams('type=columns&outlet=Ретроградный Меркуров');
     const { container } = render(<MediaArchive records={retrograde} archives={[]} />);
 
     expect(container.querySelectorAll('.ma-series')).toHaveLength(1);
@@ -238,7 +239,7 @@ describe('MediaArchive authored outlet+year series', () => {
 
 describe('MediaArchive reprints', () => {
   beforeEach(() => {
-    mockCurrentSearchParams = '';
+    setSearchParams('');
     mockReplace.mockClear();
   });
 
@@ -356,7 +357,7 @@ describe('MediaArchive reprints', () => {
 
 describe('MediaArchive date precision', () => {
   beforeEach(() => {
-    mockCurrentSearchParams = '';
+    setSearchParams('');
     mockReplace.mockClear();
   });
 
@@ -402,12 +403,12 @@ describe('MediaArchive date precision', () => {
 
 describe('MediaArchive selection integrity', () => {
   beforeEach(() => {
-    mockCurrentSearchParams = '';
+    setSearchParams('');
     mockReplace.mockClear();
   });
 
   it('applies archive search without dropping the matching records', () => {
-    mockCurrentSearchParams = 'q=Needle';
+    setSearchParams('q=Needle');
 
     const searchable = [
       record({ slug: 'needle-one', title: 'Needle one', lang: 'EN' }),
@@ -427,7 +428,7 @@ describe('MediaArchive selection integrity', () => {
   });
 
   it('shows individual authored rows for a text query without losing or duplicating them', () => {
-    mockCurrentSearchParams = 'q=article';
+    setSearchParams('q=article');
 
     const series = authored('Ретроградный Меркуров', '2025', 4);
     const { container } = render(<MediaArchive records={series} archives={[]} />);

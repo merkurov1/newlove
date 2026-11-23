@@ -18,6 +18,8 @@ const PRIVATE_PATHS = [
   '/draft',
   '/draft/',
   '/draft/*',
+  '/debug-auth',
+  '/debug-auth/',
   '/unframed/debug',
   '/unframed/debug/*',
   '/question/dashboard',

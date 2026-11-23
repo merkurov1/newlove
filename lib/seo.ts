@@ -77,6 +77,25 @@ export function description(value: string, fallback = ''): string {
   return combined.length >= 120 ? combined : source;
 }
 
+/**
+ * Description for an archive record whose body has no extractable prose
+ * (typically an artwork). Uses only fields that are already visible on the
+ * page; it never invents provenance, dates or authorship.
+ */
+export function recordDescription(input: {
+  title?: string | null;
+  artist?: string | null;
+  year?: string | number | null;
+  kind?: 'article' | 'project';
+}): string {
+  const title = truncate(input.title || '', 120);
+  if (!title) return '';
+
+  const facts = [input.artist, title, input.year].filter(Boolean).join(', ');
+  const label = input.kind === 'project' ? 'project record' : 'artwork record';
+  return description(`${facts}. ${label} in the archive of Anton Merkurov.`);
+}
+
 type PageMetadataInput = {
   /** Full page title, already composed with the brand where appropriate. */
   title: string;

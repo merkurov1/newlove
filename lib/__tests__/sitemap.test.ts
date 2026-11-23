@@ -18,7 +18,13 @@ describe('sitemap lastModified', () => {
   });
 
   it('keeps a real date exactly as provided', () => {
-    expect(parseLastModified('2026-11-10T12:00:00.000Z')).toBe('2026-11-10T12:00:00.000Z');
+    const recent = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    expect(parseLastModified(recent)).toBe(recent);
+  });
+
+  it('omits timestamps that are materially in the future', () => {
+    const future = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    expect(parseLastModified(future)).toBeUndefined();
   });
 
   it('does not put a generation timestamp on static routes', () => {

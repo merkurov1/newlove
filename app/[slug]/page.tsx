@@ -1,5 +1,5 @@
 import { safeData } from '@/lib/safeSerialize';
-import { pageMetadata, description as seoDescription, truncate, DEFAULT_OG_IMAGE } from '@/lib/seo';
+import { pageMetadata, description as seoDescription, recordDescription, truncate, DEFAULT_OG_IMAGE } from '@/lib/seo';
 import { notFound } from 'next/navigation';
 import Markdown from 'markdown-to-jsx';
 import Link from 'next/link';
@@ -267,8 +267,15 @@ export async function generateMetadata({
     }
     const { type, content } = result;
     const previewImage = content.content ? await getFirstImage(content.content) : null;
+    const generated = content.content ? generateDescription(content.content) : '';
     const summary = seoDescription(
-      content.content ? generateDescription(content.content) : content.title || 'Anton Merkurov',
+      generated ||
+        recordDescription({
+          title: content.title,
+          artist: content.artist,
+          year: content.year,
+          kind: type,
+        })
     );
     const displayTitle = truncate(
       type === 'article' && content.artist
@@ -304,9 +311,15 @@ export default async function ContentPage({ params }: { params: Promise<{ slug: 
   const { type, content } = result;
 
   const previewImage = content.content ? await getFirstImage(content.content) : null;
-  const description = content.content
-    ? generateDescription(content.content)
-    : content.title || 'Anton Merkurov';
+  const generatedDescription = content.content ? generateDescription(content.content) : '';
+  const description =
+    generatedDescription ||
+    recordDescription({
+      title: content.title,
+      artist: content.artist,
+      year: content.year,
+      kind: type,
+    });
   const { jsonLd, breadcrumbSchema } = getStructuredData(type, content, previewImage, description);
 
   return (

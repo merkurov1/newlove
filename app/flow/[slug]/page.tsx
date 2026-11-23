@@ -3,7 +3,6 @@ import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { notFound } from 'next/navigation';
-
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import {
   type FlowContent,
@@ -19,6 +18,7 @@ import {
 import { getCachedFlowItem } from '@/lib/flow/items-cash';
 import { readDistributionUrl } from '@/lib/flow/distribution';
 import PierrotContextBlock from '@/components/flow/PierrotContextBlock';
+import { FlowItemTitle } from '@/components/flow/FlowItemTitle';
 import FlowImageComponent from '@/components/flow/FlowImage';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { breadcrumbJsonLd, flowContentJsonLd } from '@/lib/structuredData';
@@ -511,11 +511,7 @@ function FlowHero({ content }: { content: FlowContent }) {
       {videosFirst && <VideoBlock videos={content.videos} />}
       {imagesFirst && <SmartGallery images={content.images} />}
 
-      {content.showTitle && (
-        <h1 className="font-serif text-3xl font-light leading-[1.25] text-stone-900 sm:text-4xl lg:text-5xl">
-          {content.title}
-        </h1>
-      )}
+      <FlowItemTitle showTitle={content.showTitle} title={content.title} />
 
       {content.body && <MarkdownBody body={content.body} />}
 

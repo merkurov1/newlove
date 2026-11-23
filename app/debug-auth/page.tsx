@@ -1,4 +1,11 @@
+import type { Metadata } from 'next';
 import PasskeyAuth from '@/components/PasskeyAuth';
+
+// Internal passkey diagnostic surface. Never index it and never advertise it.
+export const metadata: Metadata = {
+  title: 'Debug Auth',
+  robots: { index: false, follow: false },
+};
 
 export default function DebugAuthPage() {
   return (

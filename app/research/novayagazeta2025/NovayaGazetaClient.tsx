@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Globe, ArrowRight, Share2, Printer, FileText, Lock, Smartphone, Server } from 'lucide-react';
 
@@ -296,13 +296,6 @@ const CONTENT: Record<Language, ReportData> = {
 
 export default function DeepResearchClient() {
   const [lang, setLang] = useState<Language>('ru');
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) return null;
 
   return (
     <div className="min-h-screen bg-[#F9F9F7] text-[#111111] font-sans selection:bg-[#CC0000] selection:text-white pb-20">

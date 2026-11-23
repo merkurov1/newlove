@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import type { Kind, MediaRecord, PublicMediaRelation } from '@/data/media';
 import {
   isMediaReprint,
@@ -218,11 +218,15 @@ function presenceLabel(record: MediaRecord): string {
 }
 
 export default function MediaArchive({ records, archives }: Props) {
-  const searchParams = useSearchParams();
   const pathname = usePathname() ?? '/media';
   const router = useRouter();
 
-  const paramsString = searchParams?.toString() ?? '';
+  // `useSearchParams` opts the whole archive out of static rendering and
+  // replaces the server HTML with the Suspense fallback, so Googlebot would
+  // receive no H1, no record links and no archive text. Keep the filters in
+  // local state instead: the default view is server-rendered and the URL is
+  // synchronised after hydration.
+  const [paramsString, setParamsString] = useState('');
 
   const params = useMemo(() => new URLSearchParams(paramsString), [paramsString]);
 
@@ -273,10 +277,19 @@ export default function MediaArchive({ records, archives }: Props) {
       });
 
       const queryString = next.toString();
+      setParamsString(queryString);
       router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false });
     },
     [params, pathname, router]
   );
+
+  // Hydrate filters from the real URL once, then follow back/forward.
+  useEffect(() => {
+    const sync = () => setParamsString(window.location.search.replace(/^\?/, ''));
+    sync();
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
 
   const toggleFilter = useCallback(
     (key: string, current: string, value: string) => {
@@ -521,6 +534,7 @@ export default function MediaArchive({ records, archives }: Props) {
     setSemanticResults([]);
     setSemanticMessage('');
     setVisibleLimit(PAGE_SIZE);
+    setParamsString('');
     router.replace(pathname, { scroll: false });
   };
 

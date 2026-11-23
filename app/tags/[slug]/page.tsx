@@ -142,7 +142,12 @@ export default async function TagPage({ params }: { params: Promise<{ slug: stri
       excerpt: article.excerpt || null
     }));
 
-    return <AuctionGrid articles={articlesWithImages} />;
+    return (
+      <>
+        <h1 className="sr-only">Материалы по тегу: {tag.name}</h1>
+        <AuctionGrid articles={articlesWithImages} />
+      </>
+    );
   }
 
   // Обычное отображение для других тегов
