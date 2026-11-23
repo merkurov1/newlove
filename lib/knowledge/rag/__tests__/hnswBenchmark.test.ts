@@ -3,6 +3,7 @@
 import {
   HNSW_RECALL_GATES,
   chooseEfSearch,
+  deterministicTextEmbedding,
   meetsGates,
   overlapAtK,
   percentile,
@@ -106,10 +107,18 @@ describe('summarizeEfSearch and chooseEfSearch', () => {
 
   it('exposes the documented gates', () => {
     expect(HNSW_RECALL_GATES).toEqual({
-      recallAt20: 0.95,
+      recallAt20: 0.97,
       recallAt40: 0.97,
       top10PreservedRate: 0.95,
     });
+  });
+
+  it('rejects a 0.95 recall@20 result under the 0.97 gate', () => {
+    const exact = ids('e', 40);
+    const summary = summarizeEfSearch(120, [{ exact, approx: [...ids('e', 19), ...ids('x', 21)] }]);
+
+    expect(summary.recallAt20).toBe(0.95);
+    expect(meetsGates(summary)).toBe(false);
   });
 });
 
@@ -141,5 +150,35 @@ describe('latency aggregation', () => {
       maxMs: null,
       minMs: null,
     });
+  });
+});
+
+describe('deterministicTextEmbedding', () => {
+  function cosine(left: number[], right: number[]): number {
+    return left.reduce((sum, value, index) => sum + value * right[index], 0);
+  }
+
+  it('is deterministic, unit length and dimension-bounded', () => {
+    const first = deterministicTextEmbedding('Lisbon travel notes', 64);
+    const second = deterministicTextEmbedding('Lisbon travel notes', 64);
+
+    expect(first).toEqual(second);
+    expect(first).toHaveLength(64);
+    expect(Math.sqrt(cosine(first, first))).toBeCloseTo(1, 10);
+  });
+
+  it('is more similar for shared vocabulary than for unrelated text', () => {
+    const query = deterministicTextEmbedding('Lisbon travel and quiet places', 256);
+    const related = deterministicTextEmbedding('Lisbon travel notes about quiet places', 256);
+    const unrelated = deterministicTextEmbedding('sourdough starter and baking', 256);
+
+    expect(cosine(query, related)).toBeGreaterThan(cosine(query, unrelated));
+  });
+
+  it('handles empty text without producing a zero vector', () => {
+    const vector = deterministicTextEmbedding('', 8);
+
+    expect(vector).toHaveLength(8);
+    expect(vector.some((value) => value !== 0)).toBe(true);
   });
 });

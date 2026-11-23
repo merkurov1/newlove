@@ -40,7 +40,7 @@ export type LatencySummary = {
 };
 
 export const HNSW_RECALL_GATES = {
-  recallAt20: 0.95,
+  recallAt20: 0.97,
   recallAt40: 0.97,
   top10PreservedRate: 0.95,
 } as const;
@@ -213,4 +213,57 @@ export function summarizeLatencies(values: number[]): LatencySummary {
     maxMs: sorted.length > 0 ? Math.max(...sorted) : null,
     minMs: sorted.length > 0 ? Math.min(...sorted) : null,
   };
+}
+
+function fnv1a(value: string): number {
+  let hash = 0x811c9dc5;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+
+  return hash >>> 0;
+}
+
+/**
+ * Deterministic hashing vectorizer used only by the local benchmark fixture.
+ *
+ * It is intentionally not an embedding model: it lowers and tokenises text,
+ * hashes character trigrams into fixed buckets and L2-normalises the result.
+ * It lets the benchmark plumbing (exact SQL, production RPC, HNSW helper,
+ * recall and latency aggregation) be exercised without an API key. Outputs
+ * produced with this function must be labelled synthetic and must never be
+ * presented as real-query quality evidence.
+ */
+export function deterministicTextEmbedding(text: string, dimensions = 1024): number[] {
+  if (!Number.isInteger(dimensions) || dimensions < 1) {
+    throw new Error('dimensions must be a positive integer');
+  }
+
+  const vector = new Array<number>(dimensions).fill(0);
+  const normalized = text.normalize('NFKC').toLowerCase();
+  const tokens = normalized
+    .split(/[^a-z0-9\u00c0-\u024f\u0400-\u04ff\u1e00-\u1eff]+/g)
+    .filter((token) => token.length > 0);
+
+  for (const token of tokens) {
+    const padded = `^${token}$`;
+
+    for (let index = 0; index + 3 <= padded.length; index += 1) {
+      const hash = fnv1a(padded.slice(index, index + 3));
+      const bucket = hash % dimensions;
+      const sign = hash & 0x80000000 ? -1 : 1;
+      vector[bucket] += sign;
+    }
+  }
+
+  let norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+
+  if (norm === 0) {
+    vector[0] = 1;
+    norm = 1;
+  }
+
+  return vector.map((value) => value / norm);
 }

@@ -214,9 +214,13 @@ Exact-search latency for the same synthetic workload was ~10.6 ms median /
 11.0 ms P95. The synthetic numbers are internally consistent with the expected
 ANN trade-off, but **no tested ef passes all declared gates**:
 
-- Recall@20 ≥ 0.95: only ef 120 reaches 0.951, marginally;
+- Recall@20 ≥ 0.97: best is 0.951 (ef 120), still below the owner gate;
 - Recall@40 ≥ 0.97: best is 0.946;
 - top-10 preserved rate ≥ 0.95: best is 0.925.
+
+The owner specification for the follow-up sets the gates to
+**Recall@20 ≥ 0.97, Recall@40 ≥ 0.97, top-10 preserved ≥ 0.95**. The harness
+now uses those values; the earlier 0.95 Recall@20 gate was too lenient.
 
 That is a reason not to overstate the result and not to call the PR
 production-ready. It does not prove that ef 120 will fail on real BGE-M3
@@ -347,9 +351,9 @@ low-risk and locally verified, but the quality gates that justify production
 HNSW are not met with available evidence:
 
 - real-user recall/latency was not measured;
-- the labelled synthetic smoke benchmark fails Recall@40 and top-10
-  preservation at every tested ef_search, including 120 (ef 120 only narrowly
-  passes Recall@20);
+- the labelled synthetic smoke benchmark fails all three owner gates at every
+  tested ef_search, including 120 (best Recall@20 0.951, Recall@40 0.946,
+  top-10 preservation 0.925);
 - document-scoped "exactness" is preserved planner behavior, not a hard
   guarantee;
 - no preview/staging database or embedding credentials are available here.
@@ -402,3 +406,239 @@ current main; only HNSW files were touched.
 
 No unrelated main changes were reverted, and the migration remains the highest
 dated file (`2026-12-15`).
+## 10. Follow-up 2026-11-23 — representative query set and staging comparison harness
+
+### 10.1 Scope of this follow-up
+
+This follow-up does **not** change the migration, production retrieval, the
+index, any access filter or any data. It prepares the evidence path requested by
+the owner and keeps the conservative decision:
+
+- the owner gates are now encoded as **Recall@20 ≥ 0.97, Recall@40 ≥ 0.97,
+  top-10 preserved ≥ 0.95** (the previous 0.95 Recall@20 gate was too lenient);
+- an anonymised, generic representative query set is committed for staging
+  preparation;
+- the benchmark harness now compares exact vector retrieval, the deployed
+  production hybrid RPC and the HNSW helper on the same query vector, filters
+  and corpus snapshot, and reports whole-Brain and document-scoped results
+  separately;
+- a `settings` mode verifies planner-setting restoration, including an unset
+  (NULL/default) prior `hnsw.ef_search` and the exception path;
+- a deterministic local fixture exercises the whole harness without any API key.
+  Its output is labelled `synthetic_deterministic_text_hash_not_real_user` and
+  `qualityProof: false`. **It is not quality evidence.**
+
+No production migration, production configuration change, production retrieval
+switch, index change or data mutation was performed in this follow-up.
+
+### 10.2 Representative query set
+
+Path:
+`scripts/knowledge/fixtures/brain-hnsw-representative-queries.json`.
+
+The file contains 40 whole-Brain queries (memory/thematic recall, lexical
+recall, health, tech, finance, relationships, work, art, philosophy, travel,
+long questions and vector-leaning queries in ru/en/de/fr/es/it) plus 6
+document-scoped queries. Every row has a language, category and access class.
+The document-scoped rows use `documentSelector` (`largest_owner_document` or
+`largest_public_document`) so real preview document ids are never committed;
+the harness resolves them against the current corpus snapshot and emits only a
+hash of the resolved id.
+
+The manifest is explicitly marked:
+
+```json
+{
+  "provenance": "generic_representative_not_real_user",
+  "embeddingModel": "baai/bge-m3",
+  "dimensions": 1024
+}
+```
+
+`qualityProof` is only `true` when the manifest provenance is
+`real_user_anonymised`, the OpenRouter `baai/bge-m3` path is used and the query
+count is 30–50. This prevents the committed generic fixture from being mistaken
+for real-user proof even if someone accidentally embeds it with the production
+provider.
+
+### 10.3 Reproducible local harness run — plumbing only, not quality proof
+
+A disposable local PostgreSQL 18 + pgvector 0.8.7 container was seeded with a
+deterministic 680-chunk / 17-document fixture. Chunk and query vectors came
+from the deterministic hashing vectorizer in `lib/knowledge/rag/hnswBenchmark.ts`,
+not from `baai/bge-m3`. The point of this run is to prove that the harness,
+metrics, production RPC comparison, scoped aggregation, snapshot fingerprint
+and settings checks execute end to end.
+
+```bash
+# Disposable local database only. Never point this at production.
+BRAIN_HNSW_FIXTURE_ALLOW_WRITE=true \
+BRAIN_HNSW_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/bench \
+BRAIN_HNSW_TEST_NO_SSL=true \
+BRAIN_HNSW_FIXTURE_APPLY_MIGRATION=true \
+  npx tsx scripts/knowledge/seed-brain-hnsw-fixture.ts
+
+DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/bench \
+BRAIN_BENCH_NO_SSL=true \
+BRAIN_BENCH_QUERIES_FILE=scripts/knowledge/fixtures/brain-hnsw-representative-queries.json \
+BRAIN_BENCH_DETERMINISTIC_EMBEDDINGS=true \
+BRAIN_BENCH_ALLOW_SYNTHETIC_EMBEDDINGS=true \
+BRAIN_BENCH_REPETITIONS=2 \
+  npx tsx scripts/knowledge/brain-hnsw-benchmark.ts recall
+
+DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/bench \
+BRAIN_BENCH_NO_SSL=true \
+  npx tsx scripts/knowledge/brain-hnsw-benchmark.ts settings
+```
+
+Corpus snapshot fingerprint for that run:
+`c7fbfd75c343d6db53bd5c5aa8610953` (680 chunks, 680 embedded, 17 documents,
+600 owner chunks, 80 public chunks).
+
+Observed harness output (whole-Brain, 40 queries, 2 repetitions,
+**synthetic fixture, not real-user evidence**):
+
+| ef_search | Recall@20 | Recall@40 | Top-10 preserved | Warm median / P95 | Gate result          |
+| --------- | --------- | --------- | ---------------- | ----------------- | -------------------- |
+| 40        | 0.9425    | 0.9125    | 0.95             | 0.93 / 1.33 ms    | fail                 |
+| 80        | 0.9925    | 0.9881    | 1.00             | 1.20 / 1.55 ms    | pass on fixture only |
+| 120       | 0.9925    | 0.9931    | 1.00             | 1.25 / 1.60 ms    | pass on fixture only |
+
+Document-scoped rows (6 queries) returned Recall@20/40 = 1.0 and top-10
+preserved = 1.0 at all tested ef values, as expected because the scoped helper
+keeps the planner-default exact path on this fixture.
+
+Production comparison on the same vector and filters (migrated RPC):
+
+| Path                                  | Queries | Recall@20                       | Recall@40    | Top-10 preserved | Warm median / P95 |
+| ------------------------------------- | ------- | ------------------------------- | ------------ | ---------------- | ----------------- |
+| Exact vector (seq scan)               | 46      | ground truth                    | ground truth | ground truth     | 4.51 / 5.48 ms    |
+| Production vector-only RPC            | 40      | 0.9925                          | 0.9938       | 1.00             | 2.43 / 4.01 ms    |
+| Production hybrid RPC (lexical + RRF) | 40      | —                               | —            | 0.965 overlap / 0.95 preserved | 8.02 / 9.04 ms    |
+| HNSW helper ef 120                    | 40      | 0.9925                          | 0.9931       | 1.00             | 1.25 / 1.60 ms    |
+
+**Why this table is not a GO argument:** the fixture is tiny and its vectors are
+a deterministic hashing approximation designed to make the harness runnable.
+It can pass the gates while saying nothing about `baai/bge-m3` embeddings or a
+real corpus. The prior random-vector synthetic benchmark failed the same gates;
+this fixture passes them. That contradiction is exactly why synthetic-only
+results are excluded from the decision.
+
+`settings` mode results on the same disposable database:
+
+| Case                   | Prior ef_search | After helper | Result |
+| ---------------------- | --------------- | ------------ | ------ |
+| normal, unset prior    | default 40      | 40           | pass   |
+| normal, prior 77       | 77              | 77           | pass   |
+| exception, unset prior | default 40      | 40           | pass   |
+| exception, prior 77    | 77              | 77           | pass   |
+
+The probe value 80/120 never leaked. `enable_seqscan` and `enable_sort` were
+also restored in every case. Once pgvector is loaded, an unset placeholder GUC
+observes the extension default (40); before it is loaded it observes NULL/empty.
+The tests accept those three unset representations and reject any probe value.
+The static migration test still rejects the old `coalesce(v_prior_ef_search, '40')`
+form, and the migration restores the captured prior value exactly.
+
+### 10.4 Preview/staging comparison — still blocked
+
+The real comparison required by the owner needs all of the following, and none
+of them is available in this runner:
+
+1. a **preview/staging** database (not production) with the same schema and a
+   stable corpus snapshot fingerprint;
+2. a 30–50 query manifest of anonymised real-user queries marked
+   `"provenance": "real_user_anonymised"` (or owner-approved representative
+   queries with explicit consent);
+3. `DATABASE_URL` for that preview database;
+4. `OPENROUTER_API_KEY` with enough balance to embed the queries through the
+   identical `baai/bge-m3` production path; no substitute model is accepted;
+5. real preview document ids, or the `documentSelector` rows resolved against
+   that preview snapshot.
+
+The reproducible commands are already in §5 and are extended by:
+
+```bash
+# 1. Record the preview corpus fingerprint and plan evidence.
+ENV_FILE=.env.preview.local npx tsx scripts/knowledge/brain-hnsw-benchmark.ts plan
+
+# 2. Verify setting restoration including unset/NULL and exceptions.
+ENV_FILE=.env.preview.local npx tsx scripts/knowledge/brain-hnsw-benchmark.ts settings
+
+# 3. Exact vs production RPC vs HNSW at ef 40/80/120, whole-Brain and scoped.
+BRAIN_BENCH_QUERIES_FILE=/secure/brain-queries.json \
+  ENV_FILE=.env.preview.local npx tsx scripts/knowledge/brain-hnsw-benchmark.ts recall
+
+# 4. Before/after production retrieval regression on the same snapshot.
+BRAIN_BENCH_QUERIES_FILE=/secure/brain-queries.json \
+BRAIN_BENCH_DUMP_FILE=/tmp/baseline.json \
+  ENV_FILE=.env.preview.local npx tsx scripts/knowledge/brain-hnsw-benchmark.ts dump
+# apply the migration only on the approved preview database, then:
+BRAIN_BENCH_QUERIES_FILE=/secure/brain-queries.json \
+BRAIN_BENCH_DUMP_FILE=/tmp/candidate.json \
+  ENV_FILE=.env.preview.local npx tsx scripts/knowledge/brain-hnsw-benchmark.ts dump
+npx tsx scripts/knowledge/brain-hnsw-benchmark.ts compare /tmp/baseline.json /tmp/candidate.json
+```
+
+To prove that exact, production and HNSW ran on the same snapshot, pin the
+fingerprint from step 1:
+
+```bash
+BRAIN_BENCH_EXPECTED_CORPUS_FINGERPRINT=<fingerprint> \
+BRAIN_BENCH_QUERIES_FILE=/secure/brain-queries.json \
+  ENV_FILE=.env.preview.local npx tsx scripts/knowledge/brain-hnsw-benchmark.ts recall
+```
+
+### 10.5 Access-filter guardrails
+
+No filter was weakened:
+
+- the exact and ANN SQL still require `c.access_class = $4`;
+- the helper still takes `p_access_class` and validates it to `public | owner`;
+- the hybrid RPC still filters both `knowledge_chunks.access_class` and
+  `knowledge_documents.access_class`, plus the existing source/date/language
+  filters;
+- the integration test now asserts that public and owner hybrid calls never
+  return a document outside the requested access class;
+- the migration verification script asserts the same on its disposable fixture;
+- document-scoped helper calls are asserted to return only the requested
+  document.
+
+### 10.6 Final decision
+
+**NO-GO for production rollout remains unchanged.**
+
+Reasons:
+
+- there is still no real-query preview/staging run with the production
+  `baai/bge-m3` embedding path and a stable corpus snapshot;
+- the committed query set is generic/representative, not real-user evidence;
+- the local deterministic fixture passes the gates only because it is synthetic
+  and intentionally easy; it is labelled `qualityProof: false` and must not be
+  used to justify a rollout;
+- document-scoped real-document results have not been measured on preview;
+- adjusting `hnsw.ef_search` from 120 to a lower value is not justified before
+  the real run.
+
+A GO decision would require, at minimum: the preview `recall` run passing all
+three owner gates for whole-Brain, no scoped regression, the before/after dump
+comparison preserving production top-10 at ≥ 0.95, the `settings` mode passing
+including unset/NULL, acceptable p50/p95 latency, and separate owner approval
+for the migration and retrieval switch.
+
+### 10.7 Acceptance criteria for this follow-up
+
+| Criterion                                                                                    | Status                                          | Evidence                                                                                                                                             |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Owner gates encoded as 0.97 / 0.97 / 0.95                                                    | **Satisfied**                                   | `HNSW_RECALL_GATES` and `hnswBenchmark.test.ts`; §10.1                                                                                               |
+| Anonymised representative query set prepared                                                 | **Satisfied**                                   | `scripts/knowledge/fixtures/brain-hnsw-representative-queries.json`, 40 whole-Brain + 6 scoped, no personal text                                     |
+| Exact vs production vs HNSW compared on the same vector/filters/snapshot                     | **Harness satisfied; real preview run blocked** | `recall` mode runs exact SQL, `brain_search_hybrid` (vector-only and hybrid) and the helper at 40/80/120; corpus fingerprint emitted and enforceable |
+| Recall@20/40, top-10 preservation and p50/p95 reported separately for whole-Brain and scoped | **Harness satisfied; synthetic local run only** | §10.3 tables; `qualityProof: false`; real preview numbers missing                                                                                    |
+| ef_search restoration verified including NULL                                                | **Satisfied locally and in tests**              | `settings` mode 4/4 cases; integration test; verify script; static rejection of the old coalesce                                                     |
+| Access filters not weakened                                                                  | **Satisfied**                                   | Filter SQL unchanged; new isolation assertions in integration and verification tests                                                                 |
+| No production migration, configuration change, retrieval switch or data mutation             | **Satisfied**                                   | Only local Docker PostgreSQL and repository files changed                                                                                            |
+| Final report and GO/NO-GO                                                                    | **Satisfied**                                   | This section: NO-GO                                                                                                                                  |
+
+No production migration may be applied and production retrieval must not be
+switched to HNSW until the blocked preview run in §10.4 passes and the owner
+approves it separately.

@@ -1,0 +1,337 @@
+{
+  "schemaVersion": 1,
+  "provenance": "generic_representative_not_real_user",
+  "note": "Anonymised, generic query set prepared for the Brain HNSW staging benchmark. It contains no real user text and must not be presented as real-user evidence. Run it only against a preview/staging corpus snapshot with the production baai/bge-m3 embedding path. documentSelector resolves to the largest embedded document for that access class in the current snapshot, so document ids are never committed.",
+  "embeddingModel": "baai/bge-m3",
+  "dimensions": 1024,
+  "queries": [
+    {
+      "id": "rep-ru-thematic-01",
+      "category": "thematic",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "Что я писал о страхе перемен и новых началах?"
+    },
+    {
+      "id": "rep-ru-thematic-02",
+      "category": "thematic",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "Какие рецепты выпечки я сохранял в прошлом году?"
+    },
+    {
+      "id": "rep-ru-thematic-03",
+      "category": "thematic",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "Мои заметки о поездке в Лиссабон и любимых местах"
+    },
+    {
+      "id": "rep-ru-health-04",
+      "category": "health",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "Что я думал о сне, усталости и восстановлении?"
+    },
+    {
+      "id": "rep-ru-tech-05",
+      "category": "tech",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "Заметки о Postgres, pgvector и поиске по смыслу"
+    },
+    {
+      "id": "rep-ru-finance-06",
+      "category": "finance",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "Мои мысли о деньгах, накоплениях и финансовой независимости"
+    },
+    {
+      "id": "rep-ru-relationships-07",
+      "category": "relationships",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "Что я писал о близости, доверии и границах?"
+    },
+    {
+      "id": "rep-ru-work-08",
+      "category": "work",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "Идеи о фокусе, выгорании и планировании недели"
+    },
+    {
+      "id": "rep-ru-art-09",
+      "category": "art",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "Размышления об искусстве, цвете и тишине"
+    },
+    {
+      "id": "rep-ru-philosophy-10",
+      "category": "philosophy",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "Смысл, память и время в моих записях"
+    },
+    {
+      "id": "rep-en-thematic-11",
+      "category": "thematic",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "What have I written about starting over after failure?"
+    },
+    {
+      "id": "rep-en-thematic-12",
+      "category": "thematic",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "Saved recipes for sourdough and slow cooking"
+    },
+    {
+      "id": "rep-en-travel-13",
+      "category": "travel",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "Notes from the trip to Japan and quiet places in Kyoto"
+    },
+    {
+      "id": "rep-en-health-14",
+      "category": "health",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "Sleep, recovery and energy routines"
+    },
+    {
+      "id": "rep-en-tech-15",
+      "category": "tech",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "Vector search, HNSW and Postgres query plans"
+    },
+    {
+      "id": "rep-en-finance-16",
+      "category": "finance",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "Long-term savings and financial independence"
+    },
+    {
+      "id": "rep-en-relationships-17",
+      "category": "relationships",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "Trust, boundaries and difficult conversations"
+    },
+    {
+      "id": "rep-en-work-18",
+      "category": "work",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "Deep work, focus and weekly planning"
+    },
+    {
+      "id": "rep-en-art-19",
+      "category": "art",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "Color, silence and the practice of making art"
+    },
+    {
+      "id": "rep-en-philosophy-20",
+      "category": "philosophy",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "Memory, time and personal meaning"
+    },
+    {
+      "id": "rep-ru-lexical-21",
+      "category": "lexical",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "Лиссабон"
+    },
+    {
+      "id": "rep-en-lexical-22",
+      "category": "lexical",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "pgvector"
+    },
+    {
+      "id": "rep-ru-lexical-23",
+      "category": "lexical",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "бессонница"
+    },
+    {
+      "id": "rep-en-lexical-24",
+      "category": "lexical",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "sourdough"
+    },
+    {
+      "id": "rep-ru-lexical-25",
+      "category": "lexical",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "доверие"
+    },
+    {
+      "id": "rep-en-lexical-26",
+      "category": "lexical",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "HNSW"
+    },
+    {
+      "id": "rep-ru-lexical-27",
+      "category": "lexical",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "выгорание"
+    },
+    {
+      "id": "rep-en-lexical-28",
+      "category": "lexical",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "Kyoto"
+    },
+    {
+      "id": "rep-ru-lexical-29",
+      "category": "lexical",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "финансовая независимость"
+    },
+    {
+      "id": "rep-en-lexical-30",
+      "category": "lexical",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "boundaries"
+    },
+    {
+      "id": "rep-de-thematic-31",
+      "category": "thematic",
+      "language": "de",
+      "accessClass": "owner",
+      "text": "Was habe ich über langsames Reisen und Aufmerksamkeit geschrieben?"
+    },
+    {
+      "id": "rep-fr-thematic-32",
+      "category": "thematic",
+      "language": "fr",
+      "accessClass": "owner",
+      "text": "Mes notes sur la mémoire, le temps et la solitude"
+    },
+    {
+      "id": "rep-es-thematic-33",
+      "category": "thematic",
+      "language": "es",
+      "accessClass": "owner",
+      "text": "Notas sobre el sueño, la energía y el descanso"
+    },
+    {
+      "id": "rep-it-thematic-34",
+      "category": "thematic",
+      "language": "it",
+      "accessClass": "owner",
+      "text": "Appunti su arte, colore e silenzio"
+    },
+    {
+      "id": "rep-ru-long-35",
+      "category": "long",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "Сравни мои заметки о страхе перемен, финансовой независимости и восстановлении после выгорания"
+    },
+    {
+      "id": "rep-en-long-36",
+      "category": "long",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "Find everything I wrote about trust, boundaries, difficult conversations and long-term relationships"
+    },
+    {
+      "id": "rep-ru-public-37",
+      "category": "thematic",
+      "language": "ru",
+      "accessClass": "public",
+      "text": "Публичные материалы о рецептах и повседневной практике"
+    },
+    {
+      "id": "rep-en-public-38",
+      "category": "thematic",
+      "language": "en",
+      "accessClass": "public",
+      "text": "Public notes about art, color and silence"
+    },
+    {
+      "id": "rep-ru-vector-39",
+      "category": "vector-leaning",
+      "language": "ru",
+      "accessClass": "owner",
+      "text": "то, что я не могу назвать словами, но узнаю по ощущению"
+    },
+    {
+      "id": "rep-en-vector-40",
+      "category": "vector-leaning",
+      "language": "en",
+      "accessClass": "owner",
+      "text": "the feeling of a place I have not visited yet"
+    },
+    {
+      "id": "rep-ru-scoped-41",
+      "category": "scoped",
+      "language": "ru",
+      "accessClass": "owner",
+      "documentSelector": "largest_owner_document",
+      "text": "О чём этот документ и какие темы в нём главные?"
+    },
+    {
+      "id": "rep-en-scoped-42",
+      "category": "scoped",
+      "language": "en",
+      "accessClass": "owner",
+      "documentSelector": "largest_owner_document",
+      "text": "Summarise the central themes and key ideas of this document"
+    },
+    {
+      "id": "rep-de-scoped-43",
+      "category": "scoped",
+      "language": "de",
+      "accessClass": "owner",
+      "documentSelector": "largest_owner_document",
+      "text": "Worum geht es in diesem Dokument und was sind die wichtigsten Themen?"
+    },
+    {
+      "id": "rep-fr-scoped-44",
+      "category": "scoped",
+      "language": "fr",
+      "accessClass": "owner",
+      "documentSelector": "largest_owner_document",
+      "text": "Quels sont les thèmes principaux de ce document ?"
+    },
+    {
+      "id": "rep-es-scoped-45",
+      "category": "scoped",
+      "language": "es",
+      "accessClass": "public",
+      "documentSelector": "largest_public_document",
+      "text": "¿Cuáles son los temas principales de este documento?"
+    },
+    {
+      "id": "rep-it-scoped-46",
+      "category": "scoped",
+      "language": "it",
+      "accessClass": "owner",
+      "documentSelector": "largest_owner_document",
+      "text": "Quali sono i temi principali di questo documento?"
+    }
+  ]
+}

@@ -27,11 +27,16 @@ const rollbackPath = path.join(
 );
 
 const connectionString =
-  process.env.BRAIN_HNSW_TEST_DATABASE_URL ||
-  'postgres://postgres:postgres@127.0.0.1:5432/brain';
+  process.env.BRAIN_HNSW_TEST_DATABASE_URL || 'postgres://postgres:postgres@127.0.0.1:5432/brain';
 
 const MODEL = 'baai/bge-m3';
 const DIMENSIONS = 1024;
+
+const HYBRID_SQL = `
+select * from public.brain_search_hybrid(
+  $1::vector,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14
+)
+`;
 
 const fixtureSql = `
 do $$
@@ -97,7 +102,9 @@ function assert(condition, message) {
 }
 
 async function procedureExists(client, signature) {
-  const result = await client.query(`select to_regprocedure($1) is not null as present`, [signature]);
+  const result = await client.query(`select to_regprocedure($1) is not null as present`, [
+    signature,
+  ]);
   return Boolean(result.rows[0]?.present);
 }
 
@@ -108,6 +115,11 @@ async function plannerSettings(client) {
             coalesce(current_setting('hnsw.ef_search', true), '') as ef`
   );
   return result.rows[0];
+}
+
+async function efSetting(client) {
+  const result = await client.query(`select current_setting('hnsw.ef_search', true) as ef`);
+  return result.rows[0]?.ef ?? null;
 }
 
 async function main() {
@@ -159,7 +171,10 @@ async function main() {
        from public.brain_vector_candidates($1::vector,$2,$3,$4,$5::text[],$6,$7)`,
       [probeVector, MODEL, DIMENSIONS, 'owner', null, 40, 120]
     );
-    assert(candidates.rows.length > 0 && candidates.rows.length <= 40, 'whole-Brain helper returned no bounded rows');
+    assert(
+      candidates.rows.length > 0 && candidates.rows.length <= 40,
+      'whole-Brain helper returned no bounded rows'
+    );
 
     await client.query('begin');
     try {
@@ -180,6 +195,97 @@ async function main() {
       JSON.stringify(settingsAfter) === JSON.stringify(settingsBefore),
       'planner settings leaked after the helper returned'
     );
+
+    // The task explicitly requires verifying restoration when the prior value
+    // is unset (NULL). Once pgvector is loaded the placeholder GUC has the
+    // documented default (40); before that it is NULL/empty. Accept NULL,
+    // empty and 40, but never the probe value 80/120.
+    await client.query('begin');
+    try {
+      await client.query(`select set_config('hnsw.ef_search', null, true)`);
+      const before = await efSetting(client);
+      assert(
+        before === null || before === '' || before === '40',
+        'unset ef_search was not observed as NULL/empty/default'
+      );
+      await client.query(
+        `select * from public.brain_vector_candidates($1::vector,$2,$3,$4,$5::text[],$6,$7)`,
+        [probeVector, MODEL, DIMENSIONS, 'owner', null, 40, 80]
+      );
+      const after = await efSetting(client);
+      assert(
+        after === null || after === '' || after === '40',
+        'ef_search leaked after an unset prior value'
+      );
+      assert(after !== '80' && after !== '120', 'ef_search leaked the probe value');
+    } finally {
+      await client.query('rollback');
+    }
+
+    // Exception path: a dimension-mismatched vector fails after the planner
+    // hints are applied. A failed statement aborts the transaction, so recover
+    // to a savepoint before reading the caller-visible setting.
+    await client.query('begin');
+    try {
+      await client.query(`select set_config('hnsw.ef_search', '77', true)`);
+      await client.query('savepoint helper_call');
+      let raised = false;
+      try {
+        await client.query(
+          `select * from public.brain_vector_candidates($1::vector,$2,$3,$4,$5::text[],$6,$7)`,
+          ['[0.1,0.2,0.3]', MODEL, DIMENSIONS, 'owner', null, 40, 120]
+        );
+      } catch {
+        raised = true;
+      }
+      assert(raised, 'dimension-mismatched helper call did not raise');
+      await client.query('rollback to savepoint helper_call');
+      assert((await efSetting(client)) === '77', 'ef_search was not restored after an exception');
+    } finally {
+      await client.query('rollback');
+    }
+
+    const ownerDocuments = await client.query(
+      `select distinct document_id from public.knowledge_chunks where access_class = 'owner'`
+    );
+    const publicDocuments = await client.query(
+      `select distinct document_id from public.knowledge_chunks where access_class = 'public'`
+    );
+    const ownerIds = new Set(ownerDocuments.rows.map((row) => String(row.document_id)));
+    const publicIds = new Set(publicDocuments.rows.map((row) => String(row.document_id)));
+
+    const hybridParams = (accessClass) => [
+      probeVector,
+      MODEL,
+      DIMENSIONS,
+      accessClass,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      40,
+      -1,
+    ];
+
+    if (publicIds.size > 0) {
+      const publicRows = (await client.query(HYBRID_SQL, hybridParams('public'))).rows;
+      assert(
+        publicRows.every((row) => publicIds.has(String(row.document_id))),
+        'public hybrid query returned a document outside the public access class'
+      );
+    }
+
+    if (ownerIds.size > 0) {
+      const ownerRows = (await client.query(HYBRID_SQL, hybridParams('owner'))).rows;
+      assert(
+        ownerRows.every((row) => ownerIds.has(String(row.document_id))),
+        'owner hybrid query returned a document outside the owner access class'
+      );
+    }
 
     const scoped = await client.query(
       `select chunk_id, document_id
@@ -234,13 +340,17 @@ async function main() {
     // Leave the disposable database in the migrated state for any follow-up
     // check in the same CI job.
     await client.query(migration);
-    console.log('brain-hnsw migration check passed: apply, helper, scoped, plan, rollback, re-apply');
+    console.log(
+      'brain-hnsw migration check passed: apply, helper, settings (incl. unset/NULL and exception), access isolation, scoped, plan, rollback, re-apply'
+    );
   } finally {
     await client.end();
   }
 }
 
 main().catch((error) => {
-  console.error(`brain-hnsw migration check failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+  console.error(
+    `brain-hnsw migration check failed: ${error instanceof Error ? error.message : 'unknown error'}`
+  );
   process.exitCode = 1;
 });

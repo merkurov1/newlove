@@ -8,8 +8,13 @@
  *            transaction-local HNSW plan at ef_search 40/80/120, plus an
  *            index-usage check for the target vector path.
  *   recall   Exact vs approximate vector recall@10/20/40 on real query
- *            embeddings, latency medians/P95 and the ef_search chosen by the
- *            documented quality gates.
+ *            embeddings, the production hybrid RPC on the same vector and
+ *            filters, latency medians/P95 and the ef_search chosen by the
+ *            documented quality gates. Whole-Brain and document-scoped
+ *            queries are reported separately; gates apply to whole-Brain only.
+ *   settings Verify that enable_seqscan, enable_sort and hnsw.ef_search are
+ *            restored before the helper returns, including an unset (NULL)
+ *            prior ef_search and the exception path.
  *   dump     Anonymised final-ranked chunk ids from the deployed RPC. Run it
  *            before and after applying the migration on a preview database.
  *   compare  Diff two dump files (baseline vs candidate) without query text.
@@ -19,25 +24,45 @@
  * brain_retrieval telemetry intentionally stores no query text, so real query
  * embeddings cannot be reconstructed from production telemetry. The harness
  * therefore refuses to substitute chunk embeddings for quality measurements.
- * Provide 30-50 real queries in a local, non-committed JSON file:
+ * Provide 30-50 real, owner-approved queries in a local, non-committed JSON
+ * file. The committed fixture under scripts/knowledge/fixtures is a generic
+ * representative set for plumbing/staging prep, not real-user evidence:
  *
  *   BRAIN_BENCH_QUERIES_FILE=/secure/path/brain-queries.json
- *   [
- *     { "id": "q001", "category": "thematic", "text": "..." },
- *     { "id": "q002", "category": "scope", "text": "...", "accessClass": "owner" },
- *     { "id": "q003", "category": "document", "text": "...", "documentIds": ["doc_..."] }
- *   ]
+ *   {
+ *     "embeddingModel": "baai/bge-m3",
+ *     "dimensions": 1024,
+ *     "queries": [
+ *       { "id": "q001", "category": "thematic", "text": "..." },
+ *       { "id": "q002", "category": "scope", "text": "...", "accessClass": "owner",
+ *         "languages": ["ru"], "sourceTypes": ["note"] },
+ *       { "id": "q003", "category": "document", "text": "...",
+ *         "documentSelector": "largest_owner_document" }
+ *     ]
+ *   }
+ *
+ * A plain JSON array is still accepted. documentSelector resolves to the
+ * largest embedded document in the current corpus snapshot so preview ids do
+ * not have to be committed; explicit documentIds take precedence. The corpus
+ * snapshot fingerprint is emitted with every run and can be enforced with
+ * BRAIN_BENCH_EXPECTED_CORPUS_FINGERPRINT.
  *
  * The file is read in memory only. Output contains a SHA-256 query hash and
  * category, never the text. For plan mode only, a chunk embedding may be used
  * as a probe vector when the manifest is absent; that is explicitly labelled
  * and must never be reported as a retrieval-quality metric.
  *
+ * Local fixture only: set BRAIN_BENCH_DETERMINISTIC_EMBEDDINGS=true and
+ * BRAIN_BENCH_ALLOW_SYNTHETIC_EMBEDDINGS=true to use the deterministic hashing
+ * vectorizer instead of OpenRouter. Such output is labelled synthetic and
+ * qualityProof=false; it is never real-query evidence.
+ *
  * Usage
  * -----
  *   ENV_FILE=.env.preview.local npx tsx scripts/knowledge/brain-hnsw-benchmark.ts plan
  *   BRAIN_BENCH_QUERIES_FILE=/secure/queries.json \
  *     ENV_FILE=.env.preview.local npx tsx scripts/knowledge/brain-hnsw-benchmark.ts recall
+ *   ENV_FILE=.env.preview.local npx tsx scripts/knowledge/brain-hnsw-benchmark.ts settings
  *   BRAIN_BENCH_QUERIES_FILE=/secure/queries.json \
  *     BRAIN_BENCH_DUMP_FILE=/tmp/baseline.json \
  *     ENV_FILE=.env.preview.local npx tsx scripts/knowledge/brain-hnsw-benchmark.ts dump
@@ -53,7 +78,9 @@ import dotenv from 'dotenv';
 import { Client } from 'pg';
 
 import {
+  HNSW_RECALL_GATES,
   chooseEfSearch,
+  deterministicTextEmbedding,
   meetsGates,
   overlapAtK,
   percentile,
@@ -123,12 +150,27 @@ select * from public.brain_search_hybrid(
 )
 `;
 
+type DocumentSelector = 'largest_owner_document' | 'largest_public_document';
+
+// Only a manifest the owner marks as anonymised real-user evidence may set a
+// quality decision. The committed representative fixture stays synthetic.
+let manifestProvenance: string | null = null;
+
 type BenchQuery = {
   queryHash: string;
   category: string;
   text: string;
   accessClass: 'owner' | 'public';
+  language: string | null;
   documentIds: string[] | null;
+  documentSelector: DocumentSelector | null;
+  sourceTypes: string[] | null;
+  sourceDomains: string[] | null;
+  authors: string[] | null;
+  languages: string[] | null;
+  publishedFrom: string | null;
+  publishedTo: string | null;
+  minSimilarity: number;
 };
 
 type VectorRow = {
@@ -165,6 +207,32 @@ function safeCategory(value: unknown): string {
   return /^[a-z0-9_-]{1,40}$/.test(text) ? text : 'uncategorized';
 }
 
+function stringArray(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const filtered = value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  return filtered.length > 0 ? filtered : null;
+}
+
+function optionalTimestamp(value: unknown): string | null {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error('query manifest contains an invalid timestamp');
+  }
+
+  return new Date(parsed).toISOString();
+}
+
+function documentSelector(value: unknown): DocumentSelector | null {
+  return value === 'largest_owner_document' || value === 'largest_public_document' ? value : null;
+}
+
 function loadManifest(): BenchQuery[] {
   const file = (process.env.BRAIN_BENCH_QUERIES_FILE || '').trim();
   if (!file) {
@@ -174,11 +242,33 @@ function loadManifest(): BenchQuery[] {
   }
 
   const payload = JSON.parse(readFileSync(file, 'utf8'));
-  if (!Array.isArray(payload) || payload.length === 0) {
-    throw new Error('query manifest must be a non-empty JSON array');
+  const entries = Array.isArray(payload)
+    ? payload
+    : payload && Array.isArray(payload.queries)
+      ? payload.queries
+      : null;
+
+  if (!entries || entries.length === 0) {
+    throw new Error(
+      'query manifest must be a non-empty JSON array or contain a non-empty queries array'
+    );
   }
 
-  return payload.map((entry, index) => {
+  manifestProvenance =
+    payload && !Array.isArray(payload) && typeof payload.provenance === 'string'
+      ? safeCategory(payload.provenance)
+      : null;
+
+  if (payload && !Array.isArray(payload)) {
+    if (typeof payload.embeddingModel === 'string' && payload.embeddingModel.trim() !== MODEL) {
+      throw new Error(`query manifest embedding model must be ${MODEL}`);
+    }
+    if (payload.dimensions !== undefined && Number(payload.dimensions) !== DIMENSIONS) {
+      throw new Error(`query manifest dimensions must be ${DIMENSIONS}`);
+    }
+  }
+
+  return entries.map((entry: any, index: number) => {
     if (!entry || typeof entry !== 'object' || typeof entry.text !== 'string') {
       throw new Error(`query manifest entry ${index} has no text`);
     }
@@ -189,24 +279,195 @@ function loadManifest(): BenchQuery[] {
     }
 
     const accessClass = entry.accessClass === 'public' ? 'public' : 'owner';
-    const filteredDocuments =
-      Array.isArray(entry.documentIds) && entry.documentIds.length > 0
-        ? entry.documentIds.filter((value: unknown) => typeof value === 'string')
-        : [];
-    const documentIds = filteredDocuments.length > 0 ? filteredDocuments : null;
+    const documentIds = stringArray(entry.documentIds);
+    const selector = documentSelector(entry.documentSelector);
+
+    if (selector && documentIds) {
+      throw new Error(
+        `query manifest entry ${index} must use either documentIds or documentSelector, not both`
+      );
+    }
+
+    const minSimilarityRaw = entry.minSimilarity;
+    const minSimilarity =
+      typeof minSimilarityRaw === 'number' &&
+      Number.isFinite(minSimilarityRaw) &&
+      minSimilarityRaw >= -1 &&
+      minSimilarityRaw <= 1
+        ? minSimilarityRaw
+        : -1;
 
     return {
       queryHash: hashValue(typeof entry.id === 'string' ? entry.id : text),
       category: safeCategory(entry.category),
       text,
       accessClass,
+      language: typeof entry.language === 'string' ? safeCategory(entry.language) : null,
       documentIds,
+      documentSelector: selector,
+      sourceTypes: stringArray(entry.sourceTypes),
+      sourceDomains: stringArray(entry.sourceDomains),
+      authors: stringArray(entry.authors),
+      languages: stringArray(entry.languages),
+      publishedFrom: optionalTimestamp(entry.publishedFrom),
+      publishedTo: optionalTimestamp(entry.publishedTo),
+      minSimilarity,
     };
   });
 }
 
 function manifestGateEligibility(queries: BenchQuery[]): boolean {
   return queries.length >= 30 && queries.length <= 50;
+}
+
+type CorpusSnapshot = {
+  chunks: number;
+  embeddedChunks: number;
+  documents: number;
+  ownerChunks: number;
+  publicChunks: number;
+  embeddingModel: string;
+  dimensions: number;
+  fingerprint: string;
+  embeddingFingerprint: string | null;
+};
+
+async function readCorpusSnapshot(client: Client): Promise<CorpusSnapshot> {
+  const includeEmbeddings =
+    (process.env.BRAIN_BENCH_SNAPSHOT_INCLUDE_EMBEDDINGS || '').toLowerCase() === 'true';
+
+  const result = await client.query(
+    `select
+       count(*)::int as chunks,
+       count(embedding)::int as embedded_chunks,
+       count(distinct document_id)::int as documents,
+       count(*) filter (where access_class = 'owner')::int as owner_chunks,
+       count(*) filter (where access_class = 'public')::int as public_chunks,
+       md5(coalesce(string_agg(
+         id || ':' || document_id || ':' || access_class || ':' ||
+         embedding_model || ':' || embedding_dimensions,
+         '|' order by id
+       ), '')) as fingerprint
+       ${
+         includeEmbeddings
+           ? `, md5(coalesce(string_agg(
+                id || ':' || coalesce(md5(embedding::text), 'null'),
+                '|' order by id
+              ), '')) as embedding_fingerprint`
+           : `, null::text as embedding_fingerprint`
+       }
+     from public.knowledge_chunks
+     where embedding_model = $1 and embedding_dimensions = $2`,
+    [MODEL, DIMENSIONS]
+  );
+
+  const row = result.rows[0] || {};
+  const snapshot: CorpusSnapshot = {
+    chunks: Number(row.chunks || 0),
+    embeddedChunks: Number(row.embedded_chunks || 0),
+    documents: Number(row.documents || 0),
+    ownerChunks: Number(row.owner_chunks || 0),
+    publicChunks: Number(row.public_chunks || 0),
+    embeddingModel: MODEL,
+    dimensions: DIMENSIONS,
+    fingerprint: String(row.fingerprint || ''),
+    embeddingFingerprint:
+      typeof row.embedding_fingerprint === 'string' ? row.embedding_fingerprint : null,
+  };
+
+  const expected = (process.env.BRAIN_BENCH_EXPECTED_CORPUS_FINGERPRINT || '').trim();
+  if (expected && snapshot.fingerprint !== expected) {
+    throw new Error(
+      `corpus snapshot fingerprint mismatch: expected ${expected}, observed ${snapshot.fingerprint}`
+    );
+  }
+
+  return snapshot;
+}
+
+async function resolveManifestScopes(client: Client, queries: BenchQuery[]) {
+  const resolutions: Array<{
+    queryHash: string;
+    selector: DocumentSelector;
+    documentHash: string;
+    chunks: number;
+  }> = [];
+
+  for (const query of queries) {
+    if (!query.documentSelector || query.documentIds) continue;
+
+    const accessClass = query.documentSelector === 'largest_owner_document' ? 'owner' : 'public';
+    const result = await client.query(
+      `select document_id, count(*)::int as chunks
+       from public.knowledge_chunks
+       where access_class = $1
+         and embedding_model = $2
+         and embedding_dimensions = $3
+         and embedding is not null
+       group by document_id
+       order by count(*) desc, document_id
+       limit 1`,
+      [accessClass, MODEL, DIMENSIONS]
+    );
+
+    if (!result.rows[0]) {
+      throw new Error(
+        `documentSelector ${query.documentSelector} found no embedded ${accessClass} document`
+      );
+    }
+
+    const documentId = String(result.rows[0].document_id);
+    query.documentIds = [documentId];
+    resolutions.push({
+      queryHash: query.queryHash,
+      selector: query.documentSelector,
+      documentHash: hashValue(documentId),
+      chunks: Number(result.rows[0].chunks),
+    });
+  }
+
+  return resolutions;
+}
+
+async function productionAvailable(client: Client): Promise<boolean> {
+  try {
+    const result = await client.query(
+      `select to_regprocedure('public.brain_search_hybrid(vector,text,integer,text,text,text[],text[],text[],text[],text[],timestamptz,timestamptz,integer,double precision)') is not null as present`
+    );
+    return Boolean(result.rows[0]?.present);
+  } catch {
+    return false;
+  }
+}
+
+async function runProduction(
+  client: Client,
+  query: BenchQuery,
+  vector: number[],
+  limit: number,
+  includeLexicalText: boolean
+): Promise<string[]> {
+  const result = await client.query(
+    DEPLOYED_RPC_SQL,
+    rpcParams({
+      queryEmbedding: vector,
+      modelId: MODEL,
+      dimensions: DIMENSIONS,
+      accessClass: query.accessClass,
+      queryText: includeLexicalText ? query.text : null,
+      sourceTypes: query.sourceTypes,
+      sourceDomains: query.sourceDomains,
+      authors: query.authors,
+      languages: query.languages,
+      documentIds: query.documentIds,
+      publishedFrom: query.publishedFrom,
+      publishedTo: query.publishedTo,
+      matchCount: limit,
+      minSimilarity: query.minSimilarity,
+    })
+  );
+
+  return result.rows.map((row) => String(row.chunk_id));
 }
 
 function parseBrainRows(rows: any[]): BrainSearchRow[] {
@@ -385,7 +646,45 @@ async function probeVector(
   return { vector: parseVector(result.rows[0].embedding), source: 'chunk_embedding_plan_only' };
 }
 
+function deterministicEmbeddingsEnabled(): boolean {
+  return (process.env.BRAIN_BENCH_DETERMINISTIC_EMBEDDINGS || '').toLowerCase() === 'true';
+}
+
+function embeddingPathLabel(): string {
+  return deterministicEmbeddingsEnabled()
+    ? 'synthetic_deterministic_text_hash_not_real_user'
+    : 'openrouter_baai_bge_m3';
+}
+
+function qualityProofFlag(): boolean {
+  return !deterministicEmbeddingsEnabled() && manifestProvenance === 'real_user_anonymised';
+}
+
+function deterministicEmbeddingClient() {
+  if ((process.env.BRAIN_BENCH_ALLOW_SYNTHETIC_EMBEDDINGS || '').toLowerCase() !== 'true') {
+    throw new Error(
+      'BRAIN_BENCH_DETERMINISTIC_EMBEDDINGS requires BRAIN_BENCH_ALLOW_SYNTHETIC_EMBEDDINGS=true. Synthetic vectors are harness plumbing only, not retrieval-quality evidence.'
+    );
+  }
+
+  return {
+    modelId: MODEL,
+    dimensions: DIMENSIONS,
+    async embed(texts: string[]): Promise<number[][]> {
+      return texts.map((text) => deterministicTextEmbedding(text, DIMENSIONS));
+    },
+  };
+}
+
 function embeddingClientOrNull() {
+  if (deterministicEmbeddingsEnabled()) {
+    try {
+      return deterministicEmbeddingClient();
+    } catch {
+      return null;
+    }
+  }
+
   try {
     const env = { ...process.env, UNFRAMED_EMBEDDING_MODEL: MODEL };
     return createOpenRouterEmbeddingClientFromEnv(env);
@@ -395,6 +694,10 @@ function embeddingClientOrNull() {
 }
 
 function embeddingClientOrThrow() {
+  if (deterministicEmbeddingsEnabled()) {
+    return deterministicEmbeddingClient();
+  }
+
   const client = embeddingClientOrNull();
   if (!client) {
     throw new Error(
@@ -487,10 +790,7 @@ async function modePlan(client: Client) {
   const extension = await client.query(
     `select extversion from pg_extension where extname = 'vector'`
   );
-  const corpus = await client.query(
-    `select count(*)::int as chunks, count(embedding)::int as embedded
-     from public.knowledge_chunks`
-  );
+  const snapshot = await readCorpusSnapshot(client);
   const helper = await helperAvailable(client);
 
   const values = vectorParams(
@@ -564,10 +864,14 @@ async function modePlan(client: Client) {
   return {
     generatedAt: new Date().toISOString(),
     mode: 'plan',
-    corpus: 'production-like',
+    corpus: 'preview_or_staging',
+    embeddingPath: embeddingPathLabel(),
+    queryProvenance: manifestProvenance,
+    qualityProof: qualityProofFlag() && probe.source === 'real_query',
     vectorExtension: extension.rows[0]?.extversion ?? 'unknown',
-    chunkCount: corpus.rows[0]?.chunks ?? 0,
-    embeddedChunkCount: corpus.rows[0]?.embedded ?? 0,
+    chunkCount: snapshot.chunks,
+    embeddedChunkCount: snapshot.embeddedChunks,
+    corpusSnapshot: snapshot,
     hnswIndexExists: indexDefinition.rows.length > 0,
     hnswIndexDefinition: indexDefinition.rows[0]?.indexdef ?? null,
     probeSource: probe.source,
@@ -582,6 +886,26 @@ async function modePlan(client: Client) {
   };
 }
 
+function meanValue(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function summarizeHybridAgainstExact(rankings: Array<{ exact: string[]; hybrid: string[] }>) {
+  if (rankings.length === 0) return null;
+
+  return {
+    queries: rankings.length,
+    overlapAt10: meanValue(rankings.map((entry) => overlapAtK(entry.exact, entry.hybrid, 10))),
+    overlapAt20: meanValue(rankings.map((entry) => overlapAtK(entry.exact, entry.hybrid, 20))),
+    overlapAt40: meanValue(rankings.map((entry) => overlapAtK(entry.exact, entry.hybrid, 40))),
+    top10PreservedRate: meanValue(
+      rankings.map((entry) => (overlapAtK(entry.exact, entry.hybrid, 10) >= 0.9 ? 1 : 0))
+    ),
+    note: 'Production hybrid (lexical + RRF) is compared with the exact vector ranking for visibility only; it is not an HNSW recall gate.',
+  };
+}
+
 async function modeRecall(client: Client) {
   const queries = loadManifest();
   const embeddingClient = embeddingClientOrThrow();
@@ -590,6 +914,9 @@ async function modeRecall(client: Client) {
     Math.max(1, Number(process.env.BRAIN_BENCH_REPETITIONS || DEFAULT_REPETITIONS))
   );
   const helper = await helperAvailable(client);
+  const hasProduction = await productionAvailable(client);
+  const scopeResolutions = await resolveManifestScopes(client, queries);
+  const snapshot = await readCorpusSnapshot(client);
 
   const vectors: number[][] = [];
   for (const query of queries) {
@@ -600,19 +927,33 @@ async function modeRecall(client: Client) {
     vectors.push(vector);
   }
 
-  const perQuery = [];
+  const perQuery: any[] = [];
   const rankingsByEf = new Map<number, QueryRanking[]>();
   const scopedRankingsByEf = new Map<number, QueryRanking[]>();
+  const productionRankings: QueryRanking[] = [];
+  const scopedProductionRankings: QueryRanking[] = [];
+  const productionHybridRankings: Array<{ exact: string[]; hybrid: string[] }> = [];
+  const scopedProductionHybridRankings: Array<{ exact: string[]; hybrid: string[] }> = [];
+  const scopedLatencies = {
+    productionVector: [] as number[],
+    productionHybrid: [] as number[],
+  };
   const latencies = {
     exact: [] as number[],
+    productionVector: [] as number[],
+    productionHybrid: [] as number[],
     approx: new Map<number, number[]>(EF_VALUES.map((ef) => [ef, [] as number[]])),
   };
   const cold = {
     exact: [] as number[],
+    productionVector: [] as number[],
+    productionHybrid: [] as number[],
     approx: new Map<number, number[]>(EF_VALUES.map((ef) => [ef, [] as number[]])),
   };
   const empty = {
     exact: 0,
+    productionVector: 0,
+    productionHybrid: 0,
     approx: new Map<number, number>(EF_VALUES.map((ef) => [ef, 0])),
   };
 
@@ -641,6 +982,55 @@ async function modeRecall(client: Client) {
       exactRows.map((row) => ({ chunkId: row.chunk_id, similarity: row.similarity })),
       DEFAULT_TOP_K
     );
+
+    let productionVectorIds: string[] = [];
+    let productionHybridIds: string[] = [];
+    let productionVectorTimes: number[] = [];
+    let productionHybridTimes: number[] = [];
+
+    if (hasProduction) {
+      const firstVector = await timed(() =>
+        runProduction(client, query, vector, DEFAULT_TOP_K, false)
+      );
+      cold.productionVector.push(firstVector.ms);
+      await runProduction(client, query, vector, DEFAULT_TOP_K, false);
+
+      for (let repeat = 0; repeat < repetitions; repeat += 1) {
+        const sample = await timed(() =>
+          runProduction(client, query, vector, DEFAULT_TOP_K, false)
+        );
+        productionVectorTimes.push(sample.ms);
+        productionVectorIds = sample.value;
+      }
+      latencies.productionVector.push(...productionVectorTimes);
+      if (query.documentIds) scopedLatencies.productionVector.push(...productionVectorTimes);
+      if (productionVectorIds.length === 0) empty.productionVector += 1;
+
+      const firstHybrid = await timed(() =>
+        runProduction(client, query, vector, DEFAULT_TOP_K, true)
+      );
+      cold.productionHybrid.push(firstHybrid.ms);
+      await runProduction(client, query, vector, DEFAULT_TOP_K, true);
+
+      for (let repeat = 0; repeat < repetitions; repeat += 1) {
+        const sample = await timed(() => runProduction(client, query, vector, DEFAULT_TOP_K, true));
+        productionHybridTimes.push(sample.ms);
+        productionHybridIds = sample.value;
+      }
+      latencies.productionHybrid.push(...productionHybridTimes);
+      if (query.documentIds) scopedLatencies.productionHybrid.push(...productionHybridTimes);
+      if (productionHybridIds.length === 0) empty.productionHybrid += 1;
+
+      const productionRanking = { exact: exactIds, approx: productionVectorIds };
+      const hybridRanking = { exact: exactIds, hybrid: productionHybridIds };
+      if (query.documentIds) {
+        scopedProductionRankings.push(productionRanking);
+        scopedProductionHybridRankings.push(hybridRanking);
+      } else {
+        productionRankings.push(productionRanking);
+        productionHybridRankings.push(hybridRanking);
+      }
+    }
 
     const approxSummaries: Record<string, unknown>[] = [];
     const candidateLatencies: Record<number, number[]> = {};
@@ -697,17 +1087,52 @@ async function modeRecall(client: Client) {
         stableAcrossRepeats:
           firstApproxIds === null ? null : firstApproxIds.join('|') === approxIds.join('|'),
         approxCount: approxRows.length,
+        productionVectorOverlapAt10: hasProduction
+          ? overlapAtK(productionVectorIds, approxIds, 10)
+          : null,
+        productionVectorOverlapAt20: hasProduction
+          ? overlapAtK(productionVectorIds, approxIds, 20)
+          : null,
+        productionVectorOverlapAt40: hasProduction
+          ? overlapAtK(productionVectorIds, approxIds, 40)
+          : null,
       });
     }
 
     perQuery.push({
       queryHash: query.queryHash,
       category: query.category,
+      language: query.language,
       accessClass: query.accessClass,
+      scope: query.documentIds ? 'document' : 'whole_brain',
       scoped: Boolean(query.documentIds),
       approxPlan: helper ? (query.documentIds ? 'scoped_planner_default' : 'hnsw') : 'inline_hnsw',
       exactCount: exactRows.length,
       exactMs: summarizeLatencies(exactTimes),
+      production: hasProduction
+        ? {
+            vectorOnly: {
+              count: productionVectorIds.length,
+              latency: summarizeLatencies(productionVectorTimes),
+              recallAt10: recallFor(exactIds, productionVectorIds, 10),
+              recallAt20: recallFor(exactIds, productionVectorIds, 20),
+              recallAt40: recallFor(exactIds, productionVectorIds, 40),
+              overlapAt10: overlapAtK(exactIds, productionVectorIds, 10),
+              overlapAt20: overlapAtK(exactIds, productionVectorIds, 20),
+              overlapAt40: overlapAtK(exactIds, productionVectorIds, 40),
+              sameTop10Order:
+                exactIds.slice(0, 10).join('|') === productionVectorIds.slice(0, 10).join('|'),
+            },
+            hybrid: {
+              count: productionHybridIds.length,
+              latency: summarizeLatencies(productionHybridTimes),
+              overlapAt10: overlapAtK(exactIds, productionHybridIds, 10),
+              overlapAt20: overlapAtK(exactIds, productionHybridIds, 20),
+              overlapAt40: overlapAtK(exactIds, productionHybridIds, 40),
+              top10Preserved: overlapAtK(exactIds, productionHybridIds, 10) >= 0.9,
+            },
+          }
+        : null,
       candidateMs: Object.fromEntries(
         EF_VALUES.map((ef) => [ef, summarizeLatencies(candidateLatencies[ef] || [])])
       ),
@@ -756,23 +1181,85 @@ async function modeRecall(client: Client) {
     ])
   );
 
+  const productionSummary =
+    hasProduction && productionRankings.length > 0
+      ? summarizeEfSearch(120, productionRankings)
+      : null;
+  const scopedProductionSummary =
+    hasProduction && scopedProductionRankings.length > 0
+      ? summarizeEfSearch(120, scopedProductionRankings)
+      : null;
+  const productionHybridSummary = hasProduction
+    ? summarizeHybridAgainstExact(productionHybridRankings)
+    : null;
+  const scopedProductionHybridSummary = hasProduction
+    ? summarizeHybridAgainstExact(scopedProductionHybridRankings)
+    : null;
+
   return {
     generatedAt: new Date().toISOString(),
     mode: 'recall',
-    corpus: 'production-like',
+    corpus: 'preview_or_staging',
+    embeddingPath: embeddingPathLabel(),
+    queryProvenance: manifestProvenance,
+    qualityProof: qualityProofFlag(),
+    corpusSnapshot: snapshot,
+    scopeResolutions,
     helperInstalled: helper,
+    productionAvailable: hasProduction,
+    productionPath: hasProduction
+      ? helper
+        ? 'migrated_brain_search_hybrid'
+        : 'baseline_brain_search_hybrid'
+      : null,
     repetitions,
     queries: queries.length,
+    wholeBrainQueries: queries.filter((query) => !query.documentIds).length,
+    scopedQueries: queries.filter((query) => Boolean(query.documentIds)).length,
     queryGateEligible: manifestGateEligibility(queries),
     queryGateNote: manifestGateEligibility(queries)
-      ? '30-50 real queries supplied.'
-      : 'The 30-50 real-query gate is not eligible with this manifest size.',
+      ? '30-50 queries supplied; they must still be anonymised real-user queries for a quality decision.'
+      : 'The 30-50 query gate is not eligible with this manifest size.',
     gateScope: 'whole_brain_only',
-    qualityGates: {
-      recallAt20: 0.95,
-      recallAt40: 0.97,
-      top10PreservedRate: 0.95,
-    },
+    qualityGates: HNSW_RECALL_GATES,
+    production: hasProduction
+      ? {
+          vectorOnly: productionSummary
+            ? {
+                ...productionSummary,
+                passesGates: meetsGates(productionSummary),
+                latency: summarizeLatencies(latencies.productionVector),
+                coldLatency: summarizeLatencies(cold.productionVector),
+                emptyQueries: empty.productionVector,
+              }
+            : null,
+          hybrid: productionHybridSummary
+            ? {
+                ...productionHybridSummary,
+                latency: summarizeLatencies(latencies.productionHybrid),
+                coldLatency: summarizeLatencies(cold.productionHybrid),
+                emptyQueries: empty.productionHybrid,
+              }
+            : null,
+        }
+      : null,
+    scopedProduction: hasProduction
+      ? {
+          vectorOnly: scopedProductionSummary
+            ? {
+                ...scopedProductionSummary,
+                passesGates: null,
+                latency: summarizeLatencies(scopedLatencies.productionVector),
+              }
+            : null,
+          hybrid: scopedProductionHybridSummary
+            ? {
+                ...scopedProductionHybridSummary,
+                latency: summarizeLatencies(scopedLatencies.productionHybrid),
+              }
+            : null,
+        }
+      : null,
     summaries: summaries.map((summary) => ({
       ...summary,
       passesGates: meetsGates(summary),
@@ -800,6 +1287,10 @@ async function modeRecall(client: Client) {
     latency: {
       exact: summarizeLatencies(latencies.exact),
       exactCold: summarizeLatencies(cold.exact),
+      productionVector: summarizeLatencies(latencies.productionVector),
+      productionVectorCold: summarizeLatencies(cold.productionVector),
+      productionHybrid: summarizeLatencies(latencies.productionHybrid),
+      productionHybridCold: summarizeLatencies(cold.productionHybrid),
       approx: Object.fromEntries(
         EF_VALUES.map((ef) => [
           ef,
@@ -813,6 +1304,8 @@ async function modeRecall(client: Client) {
     },
     emptyResultCounts: {
       exact: empty.exact,
+      productionVector: empty.productionVector,
+      productionHybrid: empty.productionHybrid,
       approx: Object.fromEntries(EF_VALUES.map((ef) => [ef, empty.approx.get(ef)])),
     },
     perQuery,
@@ -826,9 +1319,125 @@ function recallFor(exact: string[], approx: string[], k: number): number | null 
   return exactK.filter((id) => approxSet.has(id)).length / exactK.length;
 }
 
+async function readPlannerSettings(client: Client) {
+  const result = await client.query(
+    `select current_setting('enable_seqscan') as seqscan,
+            current_setting('enable_sort') as sort,
+            current_setting('hnsw.ef_search', true) as ef`
+  );
+  const row = result.rows[0] || {};
+
+  return {
+    seqscan: typeof row.seqscan === 'string' ? row.seqscan : String(row.seqscan),
+    sort: typeof row.sort === 'string' ? row.sort : String(row.sort),
+    ef: typeof row.ef === 'string' ? row.ef : null,
+  };
+}
+
+function efIsUnset(value: string | null): boolean {
+  return value === null || value === '';
+}
+
+async function modeSettings(client: Client) {
+  const helper = await helperAvailable(client);
+  if (!helper) {
+    throw new Error(
+      'brain_vector_candidates is not installed; apply the migration on a disposable/preview database first'
+    );
+  }
+
+  const probe = await probeVector(client, [], null);
+  const snapshot = await readCorpusSnapshot(client);
+  const cases: Array<Record<string, unknown>> = [];
+
+  async function runCase(input: {
+    label: string;
+    priorEf: 'unset' | '77';
+    expectException: boolean;
+  }) {
+    await client.query('begin');
+    try {
+      if (input.priorEf === 'unset') {
+        await client.query(`select set_config('hnsw.ef_search', null, true)`);
+      } else {
+        await client.query(`select set_config('hnsw.ef_search', '77', true)`);
+      }
+
+      const before = await readPlannerSettings(client);
+      const vector = input.expectException
+        ? vectorLiteral([0.1, 0.2, 0.3])
+        : vectorLiteral(probe.vector);
+      let error: string | null = null;
+
+      await client.query('savepoint helper_call');
+      try {
+        await client.query(HELPER_SQL, [vector, MODEL, DIMENSIONS, 'owner', null, 40, 80]);
+      } catch (caught) {
+        error = caught instanceof Error ? caught.message : 'unknown error';
+        // A failed statement aborts the transaction. Recover to the savepoint
+        // so the caller-visible setting can be read.
+        await client.query('rollback to savepoint helper_call');
+      }
+
+      const after = await readPlannerSettings(client);
+      const efRestored =
+        input.priorEf === 'unset' ? efIsUnset(after.ef) || after.ef === '40' : after.ef === '77';
+
+      cases.push({
+        label: input.label,
+        priorEf: input.priorEf,
+        expectException: input.expectException,
+        before,
+        after,
+        exceptionRaised: error !== null,
+        errorCode: error ? error.slice(0, 120) : null,
+        seqscanRestored: after.seqscan === before.seqscan,
+        sortRestored: after.sort === before.sort,
+        efRestored,
+        passed: efRestored && after.seqscan === before.seqscan && after.sort === before.sort,
+      });
+    } finally {
+      await client.query('rollback');
+    }
+  }
+
+  const sessionBefore = await readPlannerSettings(client);
+
+  await runCase({ label: 'normal_with_unset_prior', priorEf: 'unset', expectException: false });
+  await runCase({ label: 'normal_with_prior_77', priorEf: '77', expectException: false });
+  await runCase({ label: 'exception_with_unset_prior', priorEf: 'unset', expectException: true });
+  await runCase({ label: 'exception_with_prior_77', priorEf: '77', expectException: true });
+
+  const sessionAfter = await readPlannerSettings(client);
+  // Loading pgvector can turn an unobserved NULL placeholder into its default
+  // 40. That is not a leak of the probe value.
+  const sessionEfStable =
+    sessionAfter.ef === sessionBefore.ef ||
+    (efIsUnset(sessionBefore.ef) && (efIsUnset(sessionAfter.ef) || sessionAfter.ef === '40'));
+  const passed =
+    cases.every((entry) => entry.passed === true) &&
+    sessionAfter.seqscan === sessionBefore.seqscan &&
+    sessionAfter.sort === sessionBefore.sort &&
+    sessionEfStable;
+
+  return {
+    generatedAt: new Date().toISOString(),
+    mode: 'settings',
+    helperInstalled: helper,
+    corpusSnapshot: snapshot,
+    sessionBefore,
+    sessionAfter,
+    cases,
+    passed,
+    note: 'Inside one explicit transaction per case, the helper must restore enable_seqscan, enable_sort and hnsw.ef_search before returning. An unset ef_search may be observed as NULL/empty or the pgvector default 40 after the extension loads; it must never retain the probe value (80/120).',
+  };
+}
+
 async function modeDump(client: Client) {
   const queries = loadManifest();
   const embeddingClient = embeddingClientOrThrow();
+  const scopeResolutions = await resolveManifestScopes(client, queries);
+  const snapshot = await readCorpusSnapshot(client);
   const useSupabase = (process.env.BRAIN_BENCH_USE_SUPABASE || '').toLowerCase() === 'true';
   const useRefinement = (process.env.BRAIN_BENCH_WITH_REFINEMENT || '').toLowerCase() === 'true';
   const supabaseSearch = useSupabase ? createSupabaseBrainSearch(process.env) : null;
@@ -934,6 +1543,11 @@ async function modeDump(client: Client) {
     mode: 'dump',
     rpc: 'public.brain_search_hybrid',
     transport: useSupabase ? 'supabase_postgrest_rpc' : 'pg_direct',
+    embeddingPath: embeddingPathLabel(),
+    queryProvenance: manifestProvenance,
+    qualityProof: qualityProofFlag(),
+    corpusSnapshot: snapshot,
+    scopeResolutions,
     topK: RPC_TOP_K,
     queries: rows.length,
     rows,
@@ -1135,11 +1749,17 @@ async function main() {
         ? await modePlan(client)
         : mode === 'recall'
           ? await modeRecall(client)
-          : mode === 'dump'
-            ? await modeDump(client)
-            : (() => {
-                throw new Error(`unknown mode: ${mode}`);
-              })();
+          : mode === 'settings'
+            ? await modeSettings(client)
+            : mode === 'dump'
+              ? await modeDump(client)
+              : (() => {
+                  throw new Error(`unknown mode: ${mode}`);
+                })();
+
+    if (mode === 'settings' && output && typeof output === 'object' && 'passed' in output) {
+      if (output.passed !== true) process.exitCode = 1;
+    }
 
     console.log('BENCHMARK_JSON');
     console.log(JSON.stringify(output, null, 2));
