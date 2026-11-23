@@ -1,5 +1,11 @@
 # Owner review: восстановление telemetry `pierrot_llm_calls`
 
+> **Superseded for current `main`.** This review reflects `main` at
+> `4eccacc1…`. Current findings (including the now-implemented latency
+> aggregate and local SQL dry-run) are in
+> `docs/audits/pierrot-llm-telemetry-owner-review-2026-11-23.md`. This file is
+> kept as a historical record only.
+
 **Дата review:** 2026-11-21  
 **Task ID:** `cabfc3c3-b22b-4435-b7af-9c7af78f48c9`  
 **Repository:** `merkurov1/newlove`  
