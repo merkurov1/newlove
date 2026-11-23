@@ -41,6 +41,50 @@ jobs:
       - name: Unit and integration tests
         run: pnpm test --runInBand
 
+  browser:
+    name: Browser behavior (Playwright)
+    runs-on: ubuntu-latest
+    needs: verify
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # The stable browser set: modal geometry at every registered viewport,
+      # real Recharts/diagram SVG at desktop/iPad/mobile, long transcript and
+      # 500+ history anchoring, live-stream scroll position, interruption and
+      # reconnect. Every chat turn is served by a local fixture; no production
+      # chat is written.
+      - name: Pierrot browser regression suite
+        run: pnpm test:pierrot
+        env:
+          CI: 'true'
+
+      - name: Upload Playwright traces, screenshots and videos on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pierrot-playwright-${{ github.run_attempt }}
+          path: |
+            test-results/pierrot
+            playwright-report/pierrot
+          if-no-files-found: ignore
+          retention-days: 7
+
   build:
     name: Production build
     runs-on: ubuntu-latest

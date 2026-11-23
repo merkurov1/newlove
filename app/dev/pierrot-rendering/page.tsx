@@ -9,20 +9,17 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function PierrotRenderingPreviewPage({
+export default async function PierrotRenderingPreviewPage({
   searchParams,
 }: {
-  searchParams?: { case?: string | string[] };
+  searchParams: Promise<{ case?: string | string[] }>;
 }) {
-  if (
-    process.env.NODE_ENV === 'production' &&
-    process.env.PIERROT_RENDERING_PREVIEW !== 'true'
-  ) {
+  if (process.env.NODE_ENV === 'production' && process.env.PIERROT_RENDERING_PREVIEW !== 'true') {
     notFound();
   }
 
-  const only =
-    typeof searchParams?.case === 'string' ? searchParams.case : null;
+  const params = await searchParams;
+  const only = typeof params?.case === 'string' ? params.case : null;
 
   return <ResponsePreview only={only} />;
 }
