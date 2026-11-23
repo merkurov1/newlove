@@ -53,6 +53,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 const TASK_ACTIONS = new Set([
+  'queue',
   'approve',
   'enqueue',
   'dequeue',
@@ -163,6 +164,21 @@ export async function POST(req: Request) {
     }
 
     switch (action) {
+      case 'queue': {
+        // Normal execution entry point. It replaces the old owner approve/queue
+        // two-step: a draft becomes ready and, when it is standalone, enters the
+        // queue immediately. Batch tasks stay ready for the batch order.
+        const approved = await approveTask(admin.id, taskId);
+        if (!approved) return json({ error: 'Task not found.' }, 404);
+        const batchId = await getBatchIdForTask(approved.id);
+        if (!batchId && approved.status === 'ready') {
+          const queued = await enqueueTask(admin.id, taskId);
+          if (queued?.status === 'queued' && queued.assignedExecutor !== 'codespace') {
+            dispatchResult = await dispatchTaskToActions({ taskId, source: 'admin:queue' });
+          }
+        }
+        break;
+      }
       case 'approve': {
         const task = await approveTask(admin.id, taskId);
         if (!task) return json({ error: 'Task not found.' }, 404);
