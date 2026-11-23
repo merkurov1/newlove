@@ -4,6 +4,7 @@ import React from 'react';
 import PierrotMarkdown from '@/components/pierrot/PierrotMarkdown';
 import { RESPONSE_PREVIEW_CASES } from '@/lib/pierrot/response/previewFixtures';
 import { PIERROT_RESPONSE_VERSION, type PierrotResponse } from '@/lib/pierrot/response/types';
+import MarkdownFirstPreview from './MarkdownFirstPreview';
 import PierrotResponseRenderer from './PierrotResponseRenderer';
 
 const INVALID_RESPONSE = {
@@ -23,15 +24,18 @@ export default function ResponsePreview({ only }: { only?: string | null }) {
           Pierrot · rendering preview
         </p>
         <h1 className="mt-3 font-serif text-[32px] leading-tight tracking-[-0.02em] text-[#1F1C18] sm:text-[42px]">
-          Editorial response compositions
+          Markdown-first response preview
         </h1>
         <p className="mt-3 max-w-2xl font-serif text-[15px] leading-relaxed text-[#625B50]">
-          Слева — исходный Markdown. Справа — та же мысль после локального presentation adapter:
-          без дополнительного model call и без изменения содержания.
+          Обычные ответы рендерятся как исходный Markdown с прежней типографикой. Отдельные
+          блочные композиции ниже остаются только для серверных data views: аналитика, метрики,
+          графики и диаграммы.
         </p>
       </header>
 
       <div className="mx-auto mt-8 max-w-[1200px] space-y-12">
+        <MarkdownFirstPreview />
+
         {cases.map((entry) => (
           <section
             key={entry.id}
@@ -47,7 +51,7 @@ export default function ResponsePreview({ only }: { only?: string | null }) {
             <div className="grid gap-5 lg:grid-cols-2">
               <div className="min-w-0 border border-[#E4DCCF] bg-[#FCFAF6] p-4">
                 <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-[#A49A8C]">
-                  Markdown fallback
+                  Markdown source
                 </p>
                 <div className="font-serif text-[15.5px] leading-[1.8] text-[#2F2B26]">
                   <PierrotMarkdown content={entry.fallback} />
@@ -55,7 +59,7 @@ export default function ResponsePreview({ only }: { only?: string | null }) {
               </div>
               <div className="min-w-0 border border-[#DED4C6] bg-white/70 p-4">
                 <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-[#A5764F]">
-                  Structured composition
+                  Validated structured payload
                 </p>
                 <div className="font-serif text-[15.5px] leading-[1.8] text-[#2F2B26]">
                   <PierrotResponseRenderer
@@ -88,7 +92,7 @@ export default function ResponsePreview({ only }: { only?: string | null }) {
             13 · Old Markdown-only message
           </h2>
           <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.13em] text-[#948A7D]">
-            Historical Markdown-only messages now use the same local adapter.
+            Historical Markdown-only messages render with their original typography.
           </p>
           <div className="mt-4 max-w-2xl border border-[#E4DCCF] bg-[#FCFAF6] p-4 font-serif text-[15.5px] leading-[1.8]">
             <PierrotResponseRenderer

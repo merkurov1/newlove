@@ -12,7 +12,12 @@ import {
 /**
  * Deterministic Markdown → presentation contract adapter.
  *
- * This is the presentation layer, not generation. It only recognises structures
+ * IMPORTANT: this adapter is no longer applied automatically to model answers.
+ * Ordinary responses render as their original Markdown. It is kept for the
+ * development before/after preview and for explicit diagnostic composition
+ * only. Structured runtime blocks must come from a validated server payload.
+ *
+ * This is a presentation helper, not generation. It only recognises structures
  * that are already explicit in the Markdown (headings, lists, tables, quotes,
  * fences, warnings). It never invents numbers, metrics, charts or sources, and
  * it never calls a model.
