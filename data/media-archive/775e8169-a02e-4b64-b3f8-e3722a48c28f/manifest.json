@@ -1,0 +1,112 @@
+{
+  "recordId": "775e8169-a02e-4b64-b3f8-e3722a48c28f",
+  "title": "Ярмарка интеллекта",
+  "outlet": "CDпро.ru",
+  "author": "Антон (Палыч) Меркуров",
+  "publishedDate": "2001-12-10",
+  "language": "RU",
+  "kind": "column",
+  "topic": "Art & Culture",
+  "issue": {
+    "publication": "CDпро.ru",
+    "number": 27,
+    "year": 2001,
+    "signedForPrint": "2001-12-10",
+    "sourceUrl": "https://www.expertiza.org/MAYDAYCO/CDPRO/Pilot.pdf"
+  },
+  "source": {
+    "url": "https://www.expertiza.org/MAYDAYCO/CDPRO/Pilot.pdf",
+    "contentType": "application/pdf",
+    "bytes": 1716581,
+    "sha256": "b86b1dc5e4ef6f48c3563d0293e77873a0bcf9500803f3cddd8a12c41c041acf",
+    "pageCount": 16,
+    "unchanged": true
+  },
+  "article": {
+    "pdfPage": 3,
+    "printPage": 3,
+    "note": "PDF page 2 is the editor’s New Year editorial «Праздник обновления». The signed article «Ярмарка интеллекта» with the byline «Антон (Палыч) МЕРКУРОВ» is on PDF/print page 3; the owner task refers to the 2–3 spread.",
+    "signedByline": "Антон (Палыч) МЕРКУРОВ",
+    "textFile": "yarmarka-intellekta.txt",
+    "encoding": "UTF-8",
+    "bytes": 13381,
+    "characters": 7341,
+    "words": 1005,
+    "bodyParagraphs": 32,
+    "textBlocks": 33,
+    "sha256": "59141b0aa36b37938dc677013371f239402f39da2c6f21a09b455d89e46460a3",
+    "contentHash": "fc485f44fd9fa9814dc72527aad4b1a83bc40f6678833134575e01efa906adbe",
+    "chunkCount": 4,
+    "quality": "full_text"
+  },
+  "ocrReview": {
+    "reviewed": true,
+    "method": "Manual proofreading against the PDF text layer, preserving the 32 article paragraphs and the byline.",
+    "corrections": [
+      "Joined mid-word line breaks and removed line-break artefacts (U+0019, U+0008, U+0010).",
+      "Restored compound hyphens: компакт-диски, CD-ROM, 10-процентный, что-то, какие-то.",
+      "Removed OCR commas used as end-of-line hyphens and restored spaces around dashes.",
+      "Normalized quotation marks to « » and kept the original 2001 spelling and style, including «non/fictio№3».",
+      "Corrected split words such as «28ноября», «издательст ва», «Толки ена» and «СD» → «CD»."
+    ]
+  },
+  "storage": {
+    "bucket": "brain-sources",
+    "originalPdfPath": "brain-sources/b8/b86b1dc5e4ef6f48c3563d0293e77873a0bcf9500803f3cddd8a12c41c041acf.pdf",
+    "cleanedTextPath": "brain-sources/59/59141b0aa36b37938dc677013371f239402f39da2c6f21a09b455d89e46460a3.txt",
+    "textSourceFormat": "text",
+    "mimeType": "text/plain"
+  },
+  "recordUpdate": {
+    "strategy": "update existing row by id; never insert",
+    "source_format": "text",
+    "source_path": "brain-sources/59/59141b0aa36b37938dc677013371f239402f39da2c6f21a09b455d89e46460a3.txt",
+    "source_sha256": "59141b0aa36b37938dc677013371f239402f39da2c6f21a09b455d89e46460a3",
+    "content_hash": "fc485f44fd9fa9814dc72527aad4b1a83bc40f6678833134575e01efa906adbe",
+    "extraction_diagnostics": {
+      "quality": "full_text",
+      "coverageStatus": "completed",
+      "extractionStatus": "complete",
+      "errorCode": null,
+      "charCount": 7341,
+      "wordCount": 1005,
+      "paragraphCount": 32,
+      "chunkCount": 4,
+      "languageDetected": "RU",
+      "paywallDetected": false,
+      "truncated": false,
+      "parser": "media-archive-proofread-text-v1",
+      "fetchedBytes": 13381,
+      "finalUrl": "https://www.expertiza.org/MAYDAYCO/CDPRO/Pilot.pdf",
+      "pageCount": 16,
+      "skippedPages": [],
+      "sourceFormat": "text",
+      "contentHash": "fc485f44fd9fa9814dc72527aad4b1a83bc40f6678833134575e01efa906adbe",
+      "sourceSha256": "59141b0aa36b37938dc677013371f239402f39da2c6f21a09b455d89e46460a3",
+      "ocrReviewed": true,
+      "ocrReview": "Вручную склеены переносы строк и слова, исправлены пробелы, дефисы, кавычки и пунктуация OCR; абзацы сохранены.",
+      "issue": {
+        "publication": "CDпро.ru",
+        "number": "27",
+        "year": "2001",
+        "publishedAt": "2001-12-10",
+        "sourceUrl": "https://www.expertiza.org/MAYDAYCO/CDPRO/Pilot.pdf"
+      },
+      "originalPdf": {
+        "sourcePath": "brain-sources/b8/b86b1dc5e4ef6f48c3563d0293e77873a0bcf9500803f3cddd8a12c41c041acf.pdf",
+        "sourceSha256": "b86b1dc5e4ef6f48c3563d0293e77873a0bcf9500803f3cddd8a12c41c041acf",
+        "byteSize": 1716581,
+        "pageCount": 16,
+        "articlePages": [3]
+      },
+      "textFile": "yarmarka-intellekta.txt",
+      "importedAt": "2026-11-23T14:01:18.382Z"
+    },
+    "expectedKnowledgeDocumentId": "doc_media_775e8169a02e4b64b3f8e3722a48c28f"
+  },
+  "ingestion": {
+    "command": "npx tsx scripts/knowledge/import-media-archive-source.ts --apply --record-id 775e8169-a02e-4b64-b3f8-e3722a48c28f --pdf data/media-archive/775e8169-a02e-4b64-b3f8-e3722a48c28f/Pilot.pdf --text data/media-archive/775e8169-a02e-4b64-b3f8-e3722a48c28f/yarmarka-intellekta.txt",
+    "retrievalQuery": "Ярмарка интеллекта non/fiction CDпро Меркуров электронные книги"
+  },
+  "generatedAt": "2026-11-23T00:00:00.000Z"
+}

@@ -27,6 +27,9 @@ export type MediaArchiveRecord = {
   content_hash?: string | null;
   source_path?: string | null;
   source_sha256?: string | null;
+  extraction_diagnostics?: Record<string, unknown> | null;
+  indexing_status?: string | null;
+  indexing_error?: string | null;
   published_date: string | null;
   lang: string;
   kind: string;
@@ -46,6 +49,7 @@ export type MediaArchivePatch = {
   content_hash?: string | null;
   source_path?: string | null;
   source_sha256?: string | null;
+  extraction_diagnostics?: Record<string, unknown> | null;
   indexing_status?: string | null;
   indexing_error?: string | null;
   canonical_url?: string;
@@ -284,7 +288,7 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       const { data, error } = await store
         .from('media_archive_records')
         .select(
-          'id,url,canonical_url,title,outlet,author,source_format,content_hash,source_path,source_sha256,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at'
+          'id,url,canonical_url,title,outlet,author,source_format,content_hash,source_path,source_sha256,extraction_diagnostics,indexing_status,indexing_error,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at'
         )
         .eq('id', mediaRecordId)
         .maybeSingle();
@@ -299,7 +303,7 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       normalizedUrl: string
     ): Promise<MediaArchiveRecord | null> {
       const select =
-        'id,url,canonical_url,title,outlet,author,source_format,content_hash,source_path,source_sha256,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at';
+        'id,url,canonical_url,title,outlet,author,source_format,content_hash,source_path,source_sha256,extraction_diagnostics,indexing_status,indexing_error,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at';
 
       for (const [column, value] of [
         ['canonical_url', normalizedUrl],
@@ -364,7 +368,7 @@ export function createBrainStore(env: RagEnvironment = process.env) {
           const { data: existing } = await store
             .from('media_archive_records')
             .select(
-              'id,url,canonical_url,title,outlet,author,source_format,content_hash,source_path,source_sha256,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at'
+              'id,url,canonical_url,title,outlet,author,source_format,content_hash,source_path,source_sha256,extraction_diagnostics,indexing_status,indexing_error,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at'
             )
             .eq(column, value)
             .limit(1)
@@ -403,7 +407,7 @@ export function createBrainStore(env: RagEnvironment = process.env) {
       const { data, error } = await store
         .from('media_archive_records')
         .select(
-          'id,url,canonical_url,title,outlet,author,source_format,content_hash,source_path,source_sha256,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at'
+          'id,url,canonical_url,title,outlet,author,source_format,content_hash,source_path,source_sha256,extraction_diagnostics,indexing_status,indexing_error,published_date,lang,kind,topic,summary,image_url,status,ai_metadata,updated_at'
         )
         .in('id', ids)
         .limit(1000);

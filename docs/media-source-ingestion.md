@@ -94,6 +94,23 @@ Some Media Archive rows were previously linked to an `article` knowledge documen
 - no public URL is created for originals;
 - source text is not stored in `ai_metadata`/JSONB; only compact extraction diagnostics are stored there.
 
+## Record-specific PDF + proofread text import
+
+For an existing Media Archive row that has an archived PDF and a manually
+proofread UTF-8 article, use:
+
+```bash
+npx tsx scripts/knowledge/import-media-archive-source.ts --apply \
+  --record-id <uuid> --pdf <original.pdf> --text <proofread.txt>
+```
+
+The script archives both files in `brain-sources`, updates the row by id (never
+inserts), indexes the cleaned text with source format `text`, and verifies the
+job, coverage document, content hash and retrieval. The original PDF path is
+kept in `extraction_diagnostics.originalPdf.sourcePath` and
+`ai_metadata.original_pdf_source_path`. See
+`docs/media-archive/775e8169-yarmarka-intellekta.md` for a worked example.
+
 ## Migration
 
 `migrations/2026-11-07_media_source_ingestion.sql` adds:
