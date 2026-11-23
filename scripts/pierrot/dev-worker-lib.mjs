@@ -28,6 +28,58 @@ export function providerFromModel(model) {
 }
 
 /**
+ * The Dev executor is OpenAI-only by policy. DeepSeek remains in the product as
+ * an unrelated generation provider, but it is never an executor fallback: a
+ * workflow, repository variable or shell environment that selects DeepSeek
+ * must stop the run before a task is claimed.
+ */
+export const REQUIRED_DEV_PROVIDER = 'openai';
+export const DEFAULT_DEV_OPENCODE_MODEL = 'openai/gpt-5.6';
+export const DEV_PREFLIGHT_MARKER = 'OPENAI_PREFLIGHT_OK';
+
+export function providerEnvName(provider) {
+  return `${String(provider || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')}_API_KEY`;
+}
+
+/**
+ * Resolve the executor provider/model and reject anything that is not OpenAI.
+ * The provider is derived from the explicit provider variable first, then from
+ * the model id; it never silently falls back to another provider.
+ */
+export function resolveDevProviderSelection(input = {}) {
+  const explicitProvider =
+    typeof input.provider === 'string' ? input.provider.trim().toLowerCase() : '';
+  const rawModel = typeof input.model === 'string' ? input.model.trim() : '';
+  const model = rawModel || DEFAULT_DEV_OPENCODE_MODEL;
+  const modelProvider = providerFromModel(model);
+  const provider = explicitProvider || modelProvider || REQUIRED_DEV_PROVIDER;
+
+  let reasonCode = null;
+  let reason = null;
+  if (provider !== REQUIRED_DEV_PROVIDER) {
+    reasonCode = 'PROVIDER_NOT_OPENAI';
+    reason = `Executor provider '${provider}' is not allowed; only '${REQUIRED_DEV_PROVIDER}' may be used. No fallback provider is available.`;
+  } else if (modelProvider !== REQUIRED_DEV_PROVIDER) {
+    reasonCode = 'MODEL_NOT_OPENAI';
+    reason = `Executor model '${model}' does not belong to provider '${REQUIRED_DEV_PROVIDER}'. No fallback model is available.`;
+  }
+
+  return {
+    provider,
+    model,
+    modelProvider,
+    envName: providerEnvName(provider),
+    preflightMarker: DEV_PREFLIGHT_MARKER,
+    ok: reasonCode === null,
+    reasonCode,
+    reason,
+  };
+}
+
+/**
  * OpenCode `--format json` emits step_finish events with the provider-reported
  * cost and token counts. Only those events are trusted as actual usage.
  */

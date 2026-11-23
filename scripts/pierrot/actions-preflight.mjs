@@ -3,18 +3,19 @@
  * Non-secret preflight for the Pierrot GitHub Actions executor.
  *
  * This script never prints secret values. It verifies:
+ *   * the executor selection is OpenAI-only (provider and model id);
  *   * required repository secrets are present (presence only);
  *   * the installed OpenCode CLI is new enough;
- *   * the exact configured DeepSeek model is offered by the CLI;
+ *   * the exact configured OpenAI model is offered by the CLI;
  *   * the worker API and its Supabase path are reachable;
  *   * optionally, a tiny live model call succeeds with the configured model.
  *
- * A missing DEEPSEEK_API_KEY stops the workflow with setup instructions and
- * never falls back to another provider/model.
+ * A missing OPENAI_API_KEY stops the workflow with setup instructions. There is
+ * no DeepSeek or other provider/model fallback in this executor path.
  */
 
 import process from 'node:process';
-import { isVersionAtLeast } from './dev-worker-lib.mjs';
+import { isVersionAtLeast, resolveDevProviderSelection } from './dev-worker-lib.mjs';
 import { runProcess } from './dev-worker-process.mjs';
 
 const API_BASE = (
@@ -25,16 +26,21 @@ const API_BASE = (
   'https://www.merkurov.love'
 ).replace(/\/+$/, '');
 const WORKER_TOKEN = (process.env.PIERROT_DEV_WORKER_TOKEN || '').trim();
-const PROVIDER = (process.env.PIERROT_DEV_OPENCODE_PROVIDER || 'deepseek').trim();
-const MODEL = (process.env.PIERROT_DEV_OPENCODE_MODEL || 'deepseek/deepseek-flash').trim();
+const SELECTION = resolveDevProviderSelection({
+  provider: process.env.PIERROT_DEV_OPENCODE_PROVIDER,
+  model: process.env.PIERROT_DEV_OPENCODE_MODEL,
+});
+const PROVIDER = SELECTION.provider;
+const MODEL = SELECTION.model;
 const MIN_VERSION = (process.env.PIERROT_DEV_OPENCODE_MIN_VERSION || '2.1.4').trim();
-const PROVIDER_ENV_NAME = `${PROVIDER.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`;
+const PROVIDER_ENV_NAME = SELECTION.envName;
 const PROVIDER_KEY = (process.env[PROVIDER_ENV_NAME] || '').trim();
+const PREFLIGHT_MARKER = SELECTION.preflightMarker;
 const RUN_MODEL_CALL = process.env.PIERROT_DEV_MODEL_SMOKE_TEST !== 'false';
 
 function fail(code, message) {
   // Every preflight failure gets its own non-secret diagnostic code. This lets
-  // the owner distinguish a missing worker token from a DeepSeek/model problem
+  // the owner distinguish a missing worker token from an OpenAI/model problem
   // in the Actions annotation without reading logs or exposing values.
   process.stdout.write(`[preflight] failed=${code}\n`);
   process.stderr.write(`::error title=Pierrot preflight (${code})::${message}\n`);
@@ -72,6 +78,14 @@ async function main() {
   note('worker_token_present', WORKER_TOKEN.length >= 32);
   note('provider_key_present', PROVIDER_KEY.length > 0);
 
+  // Fail closed before any credential or network check when the workflow or a
+  // repository variable selects a non-OpenAI provider/model.
+  if (!SELECTION.ok) {
+    fail(
+      SELECTION.reasonCode,
+      `${SELECTION.reason} Set PIERROT_DEV_OPENCODE_PROVIDER=openai and PIERROT_DEV_OPENCODE_MODEL to an openai/* model.`
+    );
+  }
   if (!WORKER_TOKEN || WORKER_TOKEN.length < 32) {
     fail(
       'WORKER_TOKEN_MISSING',
@@ -81,7 +95,7 @@ async function main() {
   if (!PROVIDER_KEY) {
     fail(
       'PROVIDER_KEY_MISSING',
-      `Repository secret ${PROVIDER_ENV_NAME} is not set. In GitHub repository Settings → Secrets and variables → Actions add ${PROVIDER_ENV_NAME} with the replacement DeepSeek key. The key shared in chat must be revoked and rotated first. The executor will not fall back to another model.`
+      `Repository secret ${PROVIDER_ENV_NAME} is not set. In GitHub repository Settings → Secrets and variables → Actions add ${PROVIDER_ENV_NAME} with the OpenAI API key. The executor will not fall back to another provider or model.`
     );
   }
 
@@ -102,7 +116,7 @@ async function main() {
     fail('OPENCODE_VERSION', `OpenCode ${versionText} is older than the required ${MIN_VERSION}.`);
   }
 
-  const models = await runProcess('opencode', ['models'], {
+  const models = await runProcess('opencode', ['models', '--standalone'], {
     env: opencodeEnv(),
     timeoutMs: 60000,
     maxCaptureBytes: 200000,
@@ -110,7 +124,7 @@ async function main() {
   if (models.code !== 0) {
     fail(
       'MODEL_LIST_FAILED',
-      'OpenCode could not list models. Check the pinned CLI installation and provider configuration.'
+      'OpenCode could not list models. Check the pinned CLI installation and OpenAI provider configuration.'
     );
   }
   const available = models.stdout
@@ -120,7 +134,7 @@ async function main() {
   if (!available.includes(MODEL)) {
     fail(
       'MODEL_UNAVAILABLE',
-      `Configured model ${MODEL} is not offered by the installed OpenCode CLI. No fallback model will be used.`
+      `Configured model ${MODEL} is not offered by the installed OpenCode CLI for the OpenAI provider. No fallback model will be used.`
     );
   }
   note('model_available', true);
@@ -139,7 +153,7 @@ async function main() {
         'json',
         '--model',
         MODEL,
-        'Reply with exactly DEEPSEEK_PREFLIGHT_OK and do not use tools.',
+        `Reply with exactly ${PREFLIGHT_MARKER} and do not use tools.`,
       ],
       {
         env: opencodeEnv(),
@@ -148,10 +162,10 @@ async function main() {
       }
     );
     const output = `${smoke.stdout}\n${smoke.stderr}`.toLowerCase();
-    if (smoke.code !== 0 || !output.includes('deepseek_preflight_ok')) {
+    if (smoke.code !== 0 || !output.includes(PREFLIGHT_MARKER.toLowerCase())) {
       fail(
         'MODEL_CALL_FAILED',
-        `Live model check failed for ${MODEL} (exit ${smoke.code}). Verify the ${PROVIDER_ENV_NAME} value in repository secrets and that the DeepSeek account is active. No fallback model will be used.`
+        `Live model check failed for ${MODEL} (exit ${smoke.code}). Verify the ${PROVIDER_ENV_NAME} value in repository secrets and that the OpenAI account/project has access to this model. No fallback model will be used.`
       );
     }
     note('model_call', 'ok');
