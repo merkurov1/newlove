@@ -41,16 +41,29 @@ export type LlmTelemetryRow = {
 };
 
 export type LlmTelemetryTotals = Omit<LlmTelemetryRow, 'provider' | 'model' | 'surface'> & {
-  messages: number;
+  /**
+   * assistant_replied events. null means the source could not be counted and
+   * must never be rendered as zero. A real zero stays 0.
+   */
+  messages: number | null;
 };
+
+export type LlmTelemetryCompleteness = 'complete' | 'partial' | 'unavailable';
 
 export type LlmTelemetryReport = {
   generatedAt: string;
   period: LlmTelemetryPeriod;
+  /** True when the per-call telemetry source was read successfully. */
   available: boolean;
+  /** Whole-report health: some source failed (partial) or calls failed (unavailable). */
+  completeness: LlmTelemetryCompleteness;
   unavailableReason: string | null;
   rows: LlmTelemetryRow[];
   totals: LlmTelemetryTotals;
+  /** False when the pierrot_events count failed; totals.messages is then null. */
+  messagesAvailable: boolean;
+  /** Stable error summary for the messages source, or null on success. */
+  messagesError: string | null;
   limitations: string[];
 };
 
@@ -77,7 +90,7 @@ function addNullable(left: number | null, right: number | null): number | null {
 
 function emptyTotals(): LlmTelemetryTotals {
   return {
-    messages: 0,
+    messages: null,
     calls: 0,
     successfulCalls: 0,
     failedCalls: 0,
@@ -113,7 +126,7 @@ export function summarizeLlmCalls(
       | 'cost'
     >
   >,
-  messages = 0
+  messages: number | null = null
 ): { rows: LlmTelemetryRow[]; totals: LlmTelemetryTotals } {
   const grouped = new Map<string, LlmTelemetryRow>();
 
@@ -231,15 +244,40 @@ export function summarizeLlmCalls(
   return { rows, totals };
 }
 
-function isMissingTelemetryTable(error: { code?: unknown; message?: unknown } | null): boolean {
-  const code = typeof error?.code === 'string' ? error.code : '';
-  const message = typeof error?.message === 'string' ? error.message.toLowerCase() : '';
+function isMissingTelemetryTable(error: unknown): boolean {
+  const record =
+    error && typeof error === 'object'
+      ? (error as { code?: unknown; message?: unknown })
+      : ({} as { code?: unknown; message?: unknown });
+  const code = typeof record.code === 'string' ? record.code : '';
+  const message = typeof record.message === 'string' ? record.message.toLowerCase() : '';
   return (
     code === '42P01' ||
     code === 'PGRST205' ||
     message.includes('does not exist') ||
     message.includes('pierrot_llm_calls')
   );
+}
+
+function describeSourceError(error: unknown): string {
+  if (!error) return 'unknown_error';
+  if (typeof error === 'string') {
+    return error.replace(/\s+/g, ' ').trim().slice(0, 240) || 'unknown_error';
+  }
+  if (typeof error !== 'object') return 'unknown_error';
+
+  const record = error as { code?: unknown; message?: unknown };
+  const code = typeof record.code === 'string' ? record.code.trim() : '';
+  const message =
+    typeof record.message === 'string'
+      ? record.message.replace(/\s+/g, ' ').trim().slice(0, 200)
+      : '';
+  const summary = [code, message].filter(Boolean).join(': ');
+  return summary || 'unknown_error';
+}
+
+function messagesLimitation(error: string): string {
+  return `Message counts are unavailable because the pierrot_events count failed (${error}). The message total is unknown, not zero.`;
 }
 
 function dbRowToRecord(row: TelemetryDbRow): LlmCallRecord {
@@ -299,7 +337,8 @@ const LIMITATIONS = [
 /**
  * Reads per-call telemetry. The table is service-role only; the admin page is
  * the only consumer. A missing migration returns available:false instead of a
- * fabricated zero-cost report.
+ * fabricated zero-cost report. A failed pierrot_events count leaves messages
+ * unknown (null) and marks the report partial; it never becomes zero.
  */
 export async function loadLlmTelemetryReport(
   store: SupabaseClient | null,
@@ -312,25 +351,46 @@ export async function loadLlmTelemetryReport(
       generatedAt: new Date().toISOString(),
       period: { from: filters.from, to: filters.to },
       available: false,
+      completeness: 'unavailable',
       unavailableReason: 'telemetry_store_unavailable',
       rows: [],
       totals,
+      messagesAvailable: false,
+      messagesError: 'telemetry_store_unavailable',
       limitations: [...LIMITATIONS, 'The service-role store is not configured.'],
     };
   }
 
-  let messages = 0;
+  let messages: number | null = null;
+  let messagesError: string | null = null;
 
-  const messagesResult = await store
-    .from('pierrot_events')
-    .select('id', { count: 'exact', head: true })
-    .eq('event_name', 'assistant_replied')
-    .gte('created_at', filters.from)
-    .lte('created_at', filters.to);
+  try {
+    const messagesResult = await store
+      .from('pierrot_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_name', 'assistant_replied')
+      .gte('created_at', filters.from)
+      .lte('created_at', filters.to);
 
-  if (!messagesResult.error && typeof messagesResult.count === 'number') {
-    messages = messagesResult.count;
+    if (messagesResult.error) {
+      messagesError = describeSourceError(messagesResult.error);
+    } else if (
+      typeof messagesResult.count === 'number' &&
+      Number.isFinite(messagesResult.count) &&
+      messagesResult.count >= 0
+    ) {
+      // A real zero is a valid count and must stay zero.
+      messages = messagesResult.count;
+    } else {
+      // PostgREST can return no count without an explicit error. That is still
+      // unknown, not an empty period.
+      messagesError = 'count_missing';
+    }
+  } catch (error) {
+    messagesError = describeSourceError(error);
   }
+
+  const messagesAvailable = messages !== null;
 
   let callsQuery = store
     .from('pierrot_llm_calls')
@@ -345,39 +405,58 @@ export async function loadLlmTelemetryReport(
   if (filters.provider) callsQuery = callsQuery.eq('provider', filters.provider);
   if (filters.surface) callsQuery = callsQuery.eq('surface', filters.surface);
 
-  const callsResult = await callsQuery;
+  let callsError: unknown = null;
+  let callsData: unknown = null;
 
-  if (callsResult.error) {
-    if (isMissingTelemetryTable(callsResult.error)) {
-      return {
-        generatedAt: new Date().toISOString(),
-        period: { from: filters.from, to: filters.to },
-        available: false,
-        unavailableReason: 'telemetry_migration_not_applied',
-        rows: [],
-        totals: { ...totals, messages },
-        limitations: [
-          ...LIMITATIONS,
-          'Apply migrations/2026-11-18_pierrot_llm_call_telemetry.sql to record per-call rows.',
-        ],
-      };
-    }
-
-    throw callsResult.error;
+  try {
+    const callsResult = await callsQuery;
+    callsError = callsResult.error;
+    callsData = callsResult.data;
+  } catch (error) {
+    callsError = error;
   }
 
-  const records = (Array.isArray(callsResult.data) ? callsResult.data : []).map((row) =>
-    dbRowToRecord(row as TelemetryDbRow)
-  );
+  const baseLimitations = [...LIMITATIONS];
+  if (!messagesAvailable) {
+    baseLimitations.push(messagesLimitation(messagesError ?? 'unknown_error'));
+  }
+
+  if (callsError || !Array.isArray(callsData)) {
+    const missingTable = isMissingTelemetryTable(callsError);
+    const callsErrorSummary = callsError ? describeSourceError(callsError) : 'calls_data_missing';
+
+    return {
+      generatedAt: new Date().toISOString(),
+      period: { from: filters.from, to: filters.to },
+      available: false,
+      completeness: 'unavailable',
+      unavailableReason: missingTable ? 'telemetry_migration_not_applied' : 'telemetry_read_failed',
+      rows: [],
+      totals: { ...totals, messages },
+      messagesAvailable,
+      messagesError,
+      limitations: missingTable
+        ? [
+            ...baseLimitations,
+            'Apply migrations/2026-11-18_pierrot_llm_call_telemetry.sql to record per-call rows.',
+          ]
+        : [...baseLimitations, `Per-call telemetry could not be read (${callsErrorSummary}).`],
+    };
+  }
+
+  const records = callsData.map((row) => dbRowToRecord(row as TelemetryDbRow));
   const summary = summarizeLlmCalls(records, messages);
 
   return {
     generatedAt: new Date().toISOString(),
     period: { from: filters.from, to: filters.to },
     available: true,
+    completeness: messagesAvailable ? 'complete' : 'partial',
     unavailableReason: null,
     rows: summary.rows,
     totals: summary.totals,
-    limitations: LIMITATIONS,
+    messagesAvailable,
+    messagesError,
+    limitations: baseLimitations,
   };
 }
