@@ -40,6 +40,8 @@ export type MediaArchiveTextPlanInput = {
   textFilename?: string | null;
   pdfPageCount?: number | null;
   articlePageNumbers?: number[];
+  /** The spread named by the owner, when it differs from the text page. */
+  articleSpreadPages?: number[];
   issue?: {
     publication: string;
     number: number | string;
@@ -151,6 +153,9 @@ export function planMediaArchiveTextSource(input: MediaArchiveTextPlanInput): Me
   const articlePageNumbers = (input.articlePageNumbers || [])
     .map((page) => Math.trunc(Number(page)))
     .filter((page) => Number.isFinite(page) && page > 0);
+  const articleSpreadPages = (input.articleSpreadPages || [])
+    .map((page) => Math.trunc(Number(page)))
+    .filter((page) => Number.isFinite(page) && page > 0);
   const now = (input.now || new Date()).toISOString();
 
   const textPath = sourcePathForStorage(textSha256, 'txt');
@@ -210,7 +215,10 @@ export function planMediaArchiveTextSource(input: MediaArchiveTextPlanInput): Me
       sourceSha256: pdfSha256,
       byteSize: input.pdf.length,
       pageCount: pdfPageCount,
+      /** Page where the signed article text actually starts. */
       articlePages: articlePageNumbers,
+      /** Owner-described printed spread (pages 2–3 for this issue). */
+      articleSpreadPages,
     },
     textFile: input.textFilename || null,
     importedAt: now,

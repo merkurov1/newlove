@@ -111,6 +111,16 @@ kept in `extraction_diagnostics.originalPdf.sourcePath` and
 `ai_metadata.original_pdf_source_path`. See
 `docs/media-archive/775e8169-yarmarka-intellekta.md` for a worked example.
 
+A record bundle can be checked offline, without database credentials:
+
+```bash
+pnpm media:verify-bundle --record-id <uuid>
+```
+
+It confirms the PDF signature/hash/page count, the text and content hashes, the
+manifest paths, and that the proofread text covers the complete PDF article
+page.
+
 ## Migration
 
 `migrations/2026-11-07_media_source_ingestion.sql` adds:

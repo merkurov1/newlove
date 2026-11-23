@@ -25,7 +25,8 @@
   "article": {
     "pdfPage": 3,
     "printPage": 3,
-    "note": "PDF page 2 is the editor’s New Year editorial «Праздник обновления». The signed article «Ярмарка интеллекта» with the byline «Антон (Палыч) МЕРКУРОВ» is on PDF/print page 3; the owner task refers to the 2–3 spread.",
+    "spreadPages": [2, 3],
+    "note": "The owner describes the article as being on the printed 2–3 spread. PDF/print page 2 is the editor’s New Year editorial «Праздник обновления»; the signed article «Ярмарка интеллекта» and its byline «Антон (Палыч) МЕРКУРОВ» are on PDF/print page 3.",
     "signedByline": "Антон (Палыч) МЕРКУРОВ",
     "textFile": "yarmarka-intellekta.txt",
     "encoding": "UTF-8",
@@ -97,7 +98,8 @@
         "sourceSha256": "b86b1dc5e4ef6f48c3563d0293e77873a0bcf9500803f3cddd8a12c41c041acf",
         "byteSize": 1716581,
         "pageCount": 16,
-        "articlePages": [3]
+        "articlePages": [3],
+        "articleSpreadPages": [2, 3]
       },
       "textFile": "yarmarka-intellekta.txt",
       "importedAt": "2026-11-23T14:01:18.382Z"
@@ -105,8 +107,20 @@
     "expectedKnowledgeDocumentId": "doc_media_775e8169a02e4b64b3f8e3722a48c28f"
   },
   "ingestion": {
-    "command": "npx tsx scripts/knowledge/import-media-archive-source.ts --apply --record-id 775e8169-a02e-4b64-b3f8-e3722a48c28f --pdf data/media-archive/775e8169-a02e-4b64-b3f8-e3722a48c28f/Pilot.pdf --text data/media-archive/775e8169-a02e-4b64-b3f8-e3722a48c28f/yarmarka-intellekta.txt",
+    "command": "npx tsx scripts/knowledge/import-media-archive-source.ts --apply --record-id 775e8169-a02e-4b64-b3f8-e3722a48c28f --pdf data/media-archive/775e8169-a02e-4b64-b3f8-e3722a48c28f/Pilot.pdf --text data/media-archive/775e8169-a02e-4b64-b3f8-e3722a48c28f/yarmarka-intellekta.txt --manifest data/media-archive/775e8169-a02e-4b64-b3f8-e3722a48c28f/manifest.json",
     "retrievalQuery": "Ярмарка интеллекта non/fiction CDпро Меркуров электронные книги"
   },
-  "generatedAt": "2026-11-23T00:00:00.000Z"
+  "verification": {
+    "liveSourceCheckedAt": "2026-11-23T14:59:05.000Z",
+    "liveSourceUrl": "https://www.expertiza.org/MAYDAYCO/CDPRO/Pilot.pdf",
+    "liveSourceHttpStatus": 200,
+    "liveSourceContentLength": 1716581,
+    "liveSourceLastModified": "Sat, 26 Dec 2020 13:37:38 GMT",
+    "liveSourceSha256": "b86b1dc5e4ef6f48c3563d0293e77873a0bcf9500803f3cddd8a12c41c041acf",
+    "matchesArchivedPdf": true,
+    "pdfPageCount": 16,
+    "articleTextMatchesPdfPage3": true,
+    "comparison": "Letters and digits only, after dropping the PDF font’s U+0019 soft-hyphen artefact and normalizing Cyrillic «С» to Latin «C»."
+  },
+  "generatedAt": "2026-11-23T14:59:05.000Z"
 }

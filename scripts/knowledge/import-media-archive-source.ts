@@ -95,6 +95,61 @@ function pageNumbers(valueToParse: string, fallback: number[]): number[] {
   return pages.length > 0 ? pages : fallback;
 }
 
+type BundleManifestExpectations = {
+  pdfSha256: string | null;
+  pdfPageCount: number | null;
+  textSha256: string | null;
+  contentHash: string | null;
+  sourcePath: string | null;
+};
+
+export function readBundleManifestExpectations(manifestPath: string): BundleManifestExpectations {
+  const parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
+    source?: { sha256?: unknown; pageCount?: unknown };
+    article?: { sha256?: unknown; contentHash?: unknown };
+    recordUpdate?: { source_path?: unknown };
+  };
+  const stringValue = (value: unknown): string | null =>
+    typeof value === 'string' && value.trim() ? value.trim() : null;
+
+  return {
+    pdfSha256: stringValue(parsed.source?.sha256),
+    pdfPageCount: typeof parsed.source?.pageCount === 'number' ? parsed.source.pageCount : null,
+    textSha256: stringValue(parsed.article?.sha256),
+    contentHash: stringValue(parsed.article?.contentHash),
+    sourcePath: stringValue(parsed.recordUpdate?.source_path),
+  };
+}
+
+/**
+ * Refuses to apply files that no longer match the audited bundle manifest.
+ * This keeps the archived PDF unchanged and prevents attaching a different
+ * text file to the existing media record.
+ */
+export function assertPlanMatchesManifest(plan: MediaArchiveTextPlan, manifestPath: string): void {
+  const expected = readBundleManifestExpectations(manifestPath);
+
+  if (expected.pdfSha256 && expected.pdfSha256 !== plan.pdf.sourceSha256) {
+    throw new Error('manifest_pdf_sha256_mismatch');
+  }
+
+  if (expected.pdfPageCount && expected.pdfPageCount !== plan.pdf.pageCount) {
+    throw new Error('manifest_pdf_page_count_mismatch');
+  }
+
+  if (expected.textSha256 && expected.textSha256 !== plan.text.sourceSha256) {
+    throw new Error('manifest_text_sha256_mismatch');
+  }
+
+  if (expected.contentHash && expected.contentHash !== plan.text.contentHash) {
+    throw new Error('manifest_content_hash_mismatch');
+  }
+
+  if (expected.sourcePath && expected.sourcePath !== plan.patch.source_path) {
+    throw new Error('manifest_source_path_mismatch');
+  }
+}
+
 function stubRecord(args: CliArgs): MediaArchiveRecord {
   const url = value(args, 'url', SOURCE_URL);
   const now = new Date().toISOString();
@@ -135,6 +190,7 @@ export function planFromFiles(
     textFilename: path.basename(textPath),
     pdfPageCount: integer(value(args, 'pdf-pages'), 16),
     articlePageNumbers: pageNumbers(value(args, 'article-pages'), [3]),
+    articleSpreadPages: pageNumbers(value(args, 'spread-pages'), [2, 3]),
     issue: {
       publication: value(args, 'issue', 'CDпро.ru'),
       number: integer(value(args, 'issue-number'), 27),
@@ -242,11 +298,12 @@ async function verify(input: {
   };
 }
 
-async function main(argv: string[]): Promise<number> {
+export async function main(argv: string[]): Promise<number> {
   const args = parseArgs(argv);
   const recordId = value(args, 'record-id', DEFAULT_RECORD_ID);
   const pdfPath = value(args, 'pdf');
   const textPath = value(args, 'text');
+  const manifestPath = value(args, 'manifest');
   const offline = flag(args, 'offline');
   const apply = flag(args, 'apply');
   const skipProcess = flag(args, 'no-process');
@@ -268,9 +325,15 @@ async function main(argv: string[]): Promise<number> {
     return 2;
   }
 
+  if (manifestPath && !fs.existsSync(manifestPath)) {
+    console.error(`Manifest not found: ${manifestPath}`);
+    return 2;
+  }
+
   if (offline) {
     const record = stubRecord(args);
     const plan = planFromFiles(record, pdfPath, textPath, args);
+    if (manifestPath) assertPlanMatchesManifest(plan, manifestPath);
     console.log(
       JSON.stringify(
         {
@@ -307,6 +370,7 @@ async function main(argv: string[]): Promise<number> {
   }
 
   const plan = planFromFiles(record, pdfPath, textPath, args);
+  if (manifestPath) assertPlanMatchesManifest(plan, manifestPath);
 
   if (!apply) {
     console.log(

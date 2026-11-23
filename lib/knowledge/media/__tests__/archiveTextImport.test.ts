@@ -48,6 +48,7 @@ function plan() {
     textFilename: 'yarmarka-intellekta.txt',
     pdfPageCount: 16,
     articlePageNumbers: [3],
+    articleSpreadPages: [2, 3],
     issue: {
       publication: 'CDпро.ru',
       number: 27,
@@ -98,6 +99,7 @@ describe('planMediaArchiveTextSource', () => {
         sourceSha256: string;
         pageCount: number;
         articlePages: number[];
+        articleSpreadPages: number[];
       };
       issue: { publication: string; number: string; year: string; publishedAt: string };
     };
@@ -109,6 +111,7 @@ describe('planMediaArchiveTextSource', () => {
     expect(diagnostics.originalPdf.sourceSha256).toBe(result.pdf.sourceSha256);
     expect(diagnostics.originalPdf.pageCount).toBe(16);
     expect(diagnostics.originalPdf.articlePages).toEqual([3]);
+    expect(diagnostics.originalPdf.articleSpreadPages).toEqual([2, 3]);
     expect(diagnostics.issue).toMatchObject({
       publication: 'CDпро.ru',
       number: '27',
