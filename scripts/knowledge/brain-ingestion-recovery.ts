@@ -11,12 +11,18 @@
  *   npx tsx scripts/knowledge/brain-ingestion-recovery.ts \
  *     --run 87443bd7-8af8-4bd7-86fb-5d19baf81e34 --status
  *   npx tsx scripts/knowledge/brain-ingestion-recovery.ts \
+ *     --run 87443bd7-8af8-4bd7-86fb-5d19baf81e34 --triage \
+ *     --report docs/audits/brain-ingestion-87443bd7-triage.json
+ *   npx tsx scripts/knowledge/brain-ingestion-recovery.ts \
  *     --run 87443bd7-8af8-4bd7-86fb-5d19baf81e34 \
- *     --retry-safe-failed --process --max-jobs 10
+ *     --retry-job <approved-job-id> --process --max-jobs 5
  *
- * `--process` calls the same bounded `runBrainWorker()` used by the admin and
- * cron endpoints. It only claims rows that already exist. `--retry-safe-failed`
- * requeues the same failed row in place and only for known transient errors.
+ * `--triage` is read-only and emits one explicit decision per failed/partial
+ * job. `--process` calls the same bounded `runBrainWorker()` used by the admin
+ * and cron endpoints. It only claims rows that already exist. `--retry-job`
+ * requeues only the explicitly approved failed row in place. The batch-wide
+ * `--retry-safe-failed` remains available but is not a substitute for the
+ * per-item approval required by the Media Archive recovery task.
  */
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -25,6 +31,11 @@ import dotenv from 'dotenv';
 import { Client } from 'pg';
 
 import { createBrainStore } from '@/lib/knowledge/brain/store';
+import {
+  buildTriageReport,
+  type TriageJobInput,
+  type TriageReport,
+} from '@/lib/knowledge/brain/jobTriage';
 import {
   classifyFailedJobRetry,
   summarizeBrainQueue,
@@ -70,6 +81,58 @@ type RetryCandidate = BrainQueueJobSnapshot & {
   max_attempts: number;
 };
 
+type TriageRow = {
+  id: string;
+  run_id: string;
+  status: string;
+  source_type: string;
+  media_record_id: string | null;
+  normalized_url: string | null;
+  input_url: string | null;
+  canonical_url: string | null;
+  final_url: string | null;
+  attempts: number;
+  max_attempts: number;
+  error_code: string | null;
+  error_detail: string | null;
+  extraction_status: string | null;
+  extraction_metadata: Record<string, unknown> | null;
+  title: string | null;
+  created_at: string;
+  processed_at: string | null;
+  media_id: string | null;
+  media_status: string | null;
+  media_url: string | null;
+  media_canonical_url: string | null;
+  media_published_date: string | null;
+  media_outlet: string | null;
+  media_kind: string | null;
+  media_indexing_status: string | null;
+  media_indexing_error: string | null;
+  media_ai_metadata: Record<string, unknown> | null;
+  document_id: string | null;
+  document_ingestion_status: string | null;
+  document_extraction_status: string | null;
+  document_coverage_status: string | null;
+  document_text_quality: string | null;
+  document_coverage_error_code: string | null;
+  document_chunk_count: number | string | null;
+  document_source_char_count: number | string | null;
+  document_content_origin: string | null;
+  document_updated_at: string | null;
+  chunk_rows: number | string | null;
+  chunk_min_chars: number | string | null;
+  chunk_max_chars: number | string | null;
+  chunk_first_index: number | string | null;
+  chunk_last_index: number | string | null;
+};
+
+type ActiveJobRow = {
+  id: string;
+  media_record_id: string | null;
+  normalized_url: string | null;
+};
+
 function hasFlag(name: string): boolean {
   return process.argv.includes(name);
 }
@@ -79,6 +142,19 @@ function argValue(name: string): string | null {
   if (index < 0) return null;
   const value = process.argv[index + 1];
   return value && !value.startsWith('--') ? value : null;
+}
+
+/** Supports repeated flags such as `--retry-job <id> --retry-job <id>`. */
+function argValues(name: string): string[] {
+  const values: string[] = [];
+
+  process.argv.forEach((arg, index) => {
+    if (arg !== name) return;
+    const value = process.argv[index + 1];
+    if (value && !value.startsWith('--')) values.push(value);
+  });
+
+  return Array.from(new Set(values));
 }
 
 function intArg(name: string, fallback: number, min: number, max: number): number {
@@ -163,21 +239,202 @@ async function loadCost(client: Client, runId: string | null) {
 }
 
 /**
+ * Read-only item-level evidence for every failed/partial job in a run: the job
+ * row and redacted debug metadata, the Media Archive record, the linked document
+ * and the real chunk row count. No row is mutated and no content is returned.
+ */
+async function loadTriageInputs(client: Client, runId: string | null): Promise<TriageJobInput[]> {
+  const [rows, active] = await Promise.all([
+    client.query<TriageRow>(
+      `select j.id::text as id,
+              j.run_id::text as run_id,
+              j.status,
+              j.source_type,
+              j.media_record_id::text as media_record_id,
+              j.normalized_url,
+              j.input_url,
+              j.canonical_url,
+              j.final_url,
+              j.attempts,
+              j.max_attempts,
+              j.error_code,
+              j.error_detail,
+              j.extraction_status,
+              j.extraction_metadata,
+              j.title,
+              j.created_at::text as created_at,
+              j.processed_at::text as processed_at,
+              m.id::text as media_id,
+              m.status as media_status,
+              m.url as media_url,
+              m.canonical_url as media_canonical_url,
+              m.published_date::text as media_published_date,
+              m.outlet as media_outlet,
+              m.kind as media_kind,
+              m.indexing_status as media_indexing_status,
+              m.indexing_error as media_indexing_error,
+              m.ai_metadata as media_ai_metadata,
+              d.id as document_id,
+              d.ingestion_status as document_ingestion_status,
+              d.extraction_status as document_extraction_status,
+              d.media_coverage_status as document_coverage_status,
+              d.media_text_quality as document_text_quality,
+              d.media_coverage_error_code as document_coverage_error_code,
+              d.chunk_count as document_chunk_count,
+              d.source_char_count as document_source_char_count,
+              nullif(d.metadata->>'content_origin', '') as document_content_origin,
+              d.updated_at::text as document_updated_at,
+              coalesce(cs.chunk_rows, 0)::int as chunk_rows,
+              cs.chunk_min_chars,
+              cs.chunk_max_chars,
+              cs.chunk_first_index,
+              cs.chunk_last_index
+         from public.brain_ingestion_jobs j
+         left join public.media_archive_records m on m.id = j.media_record_id
+         left join lateral (
+           select d.*
+             from public.knowledge_documents d
+            where (j.document_id is not null and d.id = j.document_id)
+               or (j.media_record_id is not null and d.media_record_id = j.media_record_id)
+            order by (d.id = j.document_id) desc, d.updated_at desc
+            limit 1
+         ) d on true
+         left join lateral (
+           select count(*)::int as chunk_rows,
+                  min(char_length(c.content))::int as chunk_min_chars,
+                  max(char_length(c.content))::int as chunk_max_chars,
+                  min(c.chunk_index)::int as chunk_first_index,
+                  max(c.chunk_index)::int as chunk_last_index
+             from public.knowledge_chunks c
+            where c.document_id = d.id
+         ) cs on true
+        where ($1::uuid is null or j.run_id = $1::uuid)
+          and j.status in ('failed', 'partial')
+        order by j.created_at, j.id`,
+      [runId]
+    ),
+    client.query<ActiveJobRow>(
+      `select id::text as id, media_record_id::text as media_record_id, normalized_url
+         from public.brain_ingestion_jobs
+        where status in ('queued', 'processing')`
+    ),
+  ]);
+
+  const activeByMedia = new Map<string, string[]>();
+  const activeByUrl = new Map<string, string[]>();
+
+  for (const job of active.rows) {
+    if (job.media_record_id) {
+      activeByMedia.set(job.media_record_id, [
+        ...(activeByMedia.get(job.media_record_id) || []),
+        job.id,
+      ]);
+    }
+    if (job.normalized_url) {
+      activeByUrl.set(job.normalized_url, [...(activeByUrl.get(job.normalized_url) || []), job.id]);
+    }
+  }
+
+  const numberOrNull = (value: number | string | null): number | null => {
+    if (value === null || value === undefined) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  return rows.rows.map((row) => {
+    const duplicateIds = new Set<string>();
+    for (const id of (row.media_record_id && activeByMedia.get(row.media_record_id)) || []) {
+      duplicateIds.add(id);
+    }
+    for (const id of (row.normalized_url && activeByUrl.get(row.normalized_url)) || []) {
+      duplicateIds.add(id);
+    }
+    duplicateIds.delete(row.id);
+
+    return {
+      job: {
+        id: row.id,
+        run_id: row.run_id,
+        status: row.status,
+        source_type: row.source_type,
+        media_record_id: row.media_record_id,
+        normalized_url: row.normalized_url,
+        input_url: row.input_url,
+        canonical_url: row.canonical_url,
+        final_url: row.final_url,
+        attempts: Number(row.attempts) || 0,
+        max_attempts: Number(row.max_attempts) || 0,
+        error_code: row.error_code,
+        error_detail: row.error_detail,
+        extraction_status: row.extraction_status,
+        extraction_metadata: row.extraction_metadata,
+        title: row.title,
+        created_at: row.created_at,
+        processed_at: row.processed_at,
+      },
+      media: row.media_id
+        ? {
+            id: row.media_id,
+            status: row.media_status,
+            url: row.media_url,
+            canonical_url: row.media_canonical_url,
+            published_date: row.media_published_date,
+            outlet: row.media_outlet,
+            kind: row.media_kind,
+            indexing_status: row.media_indexing_status,
+            indexing_error: row.media_indexing_error,
+            ai_metadata: row.media_ai_metadata,
+          }
+        : null,
+      document: row.document_id
+        ? {
+            id: row.document_id,
+            ingestion_status: row.document_ingestion_status,
+            extraction_status: row.document_extraction_status,
+            media_coverage_status: row.document_coverage_status,
+            media_text_quality: row.document_text_quality,
+            media_coverage_error_code: row.document_coverage_error_code,
+            chunk_count: Number(row.document_chunk_count) || 0,
+            source_char_count: Number(row.document_source_char_count) || 0,
+            content_origin: row.document_content_origin,
+            updated_at: row.document_updated_at,
+          }
+        : null,
+      chunks: row.document_id
+        ? {
+            count: Number(row.chunk_rows) || 0,
+            minChars: numberOrNull(row.chunk_min_chars),
+            maxChars: numberOrNull(row.chunk_max_chars),
+            firstIndex: numberOrNull(row.chunk_first_index),
+            lastIndex: numberOrNull(row.chunk_last_index),
+          }
+        : null,
+      activeDuplicateJobIds: Array.from(duplicateIds),
+    };
+  });
+}
+
+/**
  * Requeue only already-failed rows whose error is known transient. The update
  * is an in-place status reset: no new job row is inserted and partial/duplicate
  * jobs are left untouched. Active rows for the same media record or URL block a
  * retry so the partial unique index can never be violated.
+ *
+ * When `jobIds` is provided, only those explicit ids are considered. Item-level
+ * triage decisions still have to pass the same transient/budget/active checks,
+ * so an operator cannot force a retry for an access, paywall or metadata-only
+ * failure.
  */
 async function retrySafeFailedJobs(
   client: Client,
   runId: string | null,
-  jobs: BrainQueueJobSnapshot[]
+  jobs: BrainQueueJobSnapshot[],
+  options: { jobIds?: Set<string> } = {}
 ) {
-  const active = await client.query<{
-    media_record_id: string | null;
-    normalized_url: string | null;
-  }>(
-    `select media_record_id, normalized_url
+  const requestedIds = options.jobIds ? Array.from(options.jobIds) : [];
+  const selected = options.jobIds && options.jobIds.size > 0;
+  const active = await client.query<ActiveJobRow>(
+    `select id, media_record_id, normalized_url
        from public.brain_ingestion_jobs
       where status in ('queued', 'processing')`
   );
@@ -189,9 +446,12 @@ async function retrySafeFailedJobs(
     active.rows.map((row) => row.normalized_url).filter((url): url is string => Boolean(url))
   );
 
+  const inSelection = (job: BrainQueueJobSnapshot) => !selected || options.jobIds!.has(job.id);
+
   const classified = jobs.filter((job) => {
     if (runId && job.run_id !== runId) return false;
     if (job.status !== 'failed') return false;
+    if (!inSelection(job)) return false;
     return classifyFailedJobRetry(job).retryable;
   });
 
@@ -201,13 +461,40 @@ async function retrySafeFailedJobs(
     return true;
   }) as RetryCandidate[];
 
+  const accepted = new Set(candidates.map((job) => job.id));
+  const rejected = selected
+    ? requestedIds
+        .filter((id) => !accepted.has(id))
+        .map((id) => {
+          const job = jobs.find((entry) => entry.id === id);
+          if (!job) {
+            return { jobId: id, reason: 'Job is not part of the loaded queue snapshot.' };
+          }
+          if (job.status !== 'failed') {
+            return {
+              jobId: id,
+              reason: `Only failed jobs can be retried; status is ${job.status}.`,
+            };
+          }
+          const decision = classifyFailedJobRetry(job);
+          if (!decision.retryable) {
+            return { jobId: id, reason: decision.reason };
+          }
+          return {
+            jobId: id,
+            reason: 'An active queued/processing job exists for the same media record or URL.',
+          };
+        })
+    : [];
+
   if (candidates.length === 0) {
     return {
       classified: classified.length,
       blockedByActive: classified.length,
-      requested: 0,
+      requested: selected ? requestedIds.length : 0,
       reset: 0,
       rows: [],
+      rejected,
       reason: 'No safe failed job to retry.',
     };
   }
@@ -276,9 +563,10 @@ async function retrySafeFailedJobs(
   return {
     classified: classified.length,
     blockedByActive: classified.length - candidates.length,
-    requested: candidates.length,
+    requested: selected ? requestedIds.length : candidates.length,
     reset: resetRows.length,
     rows: resetRows,
+    rejected,
     reason: null,
   };
 }
@@ -519,9 +807,12 @@ async function verifyRetrieval(client: Client, runId: string | null) {
 async function main() {
   const runId = argValue('--run') || process.env.BRAIN_INGESTION_RUN_ID || null;
   const reportPath = argValue('--report');
-  const shouldRetry = hasFlag('--retry-safe-failed');
+  const retryJobIds = argValues('--retry-job');
+  const retrySelectedJobs = retryJobIds.length > 0;
+  const shouldRetry = hasFlag('--retry-safe-failed') || retrySelectedJobs;
   const shouldProcess = hasFlag('--process');
   const shouldVerify = hasFlag('--verify-retrieval');
+  const shouldTriage = hasFlag('--triage') || retrySelectedJobs;
   const withGraph = hasFlag('--with-graph');
   const maxJobs = intArg('--max-jobs', 10, 1, 20);
   const maxRounds = intArg('--max-rounds', 20, 1, 100);
@@ -547,9 +838,15 @@ async function main() {
         })
       : null;
 
+    let triage: TriageReport | null = null;
+    let triageAfter: TriageReport | null = null;
     let retry = null;
     let processing = null;
     let retrieval = null;
+
+    if (shouldTriage) {
+      triage = buildTriageReport(await loadTriageInputs(client, runId), { runId });
+    }
 
     if (shouldRetry && runId) {
       retry =
@@ -560,9 +857,15 @@ async function main() {
               requested: 0,
               reset: 0,
               rows: [],
+              rejected: [],
               reason: `Run is ${run.status}; resume it explicitly before retrying.`,
             }
-          : await retrySafeFailedJobs(client, runId, runJobs || []);
+          : await retrySafeFailedJobs(
+              client,
+              runId,
+              runJobs || [],
+              retrySelectedJobs ? { jobIds: new Set(retryJobIds) } : {}
+            );
     }
 
     if (shouldProcess) {
@@ -571,6 +874,10 @@ async function main() {
 
     if (shouldVerify) {
       retrieval = await verifyRetrieval(client, runId);
+    }
+
+    if (shouldTriage && (shouldRetry || shouldProcess)) {
+      triageAfter = buildTriageReport(await loadTriageInputs(client, runId), { runId });
     }
 
     const finalQueueJobs = shouldRetry || shouldProcess ? await loadJobs(client, null) : queueJobs;
@@ -627,11 +934,34 @@ async function main() {
     if (finalRun && (finalRun.status === 'paused' || finalRun.status === 'cancelled')) {
       warnings.push(`Target run is ${finalRun.status}; it was not resumed automatically.`);
     }
+    if (
+      retry &&
+      'rejected' in retry &&
+      Array.isArray(retry.rejected) &&
+      retry.rejected.length > 0
+    ) {
+      warnings.push(
+        `${retry.rejected.length} explicitly selected job(s) were rejected by the transient-retry safety rules; see retry.rejected.`
+      );
+    }
+    if (triage) {
+      warnings.push(...triage.warnings.map((warning) => `Triage: ${warning}`));
+    }
+    if (shouldTriage && !runId) {
+      warnings.push('Triage was run across the whole queue because no --run was provided.');
+    }
+    if (retrySelectedJobs && hasFlag('--retry-safe-failed')) {
+      warnings.push(
+        'Both --retry-job and --retry-safe-failed were passed; the explicit --retry-job selection takes precedence.'
+      );
+    }
 
     const report = {
       generatedAt: new Date().toISOString(),
       mode: {
         retrySafeFailed: shouldRetry,
+        retrySelectedJobs,
+        triage: shouldTriage,
         process: shouldProcess,
         verifyRetrieval: shouldVerify,
         withGraph,
@@ -654,6 +984,8 @@ async function main() {
         queue,
         run: runSummary,
       },
+      triage,
+      triageAfter,
       retry,
       processing,
       retrieval,
