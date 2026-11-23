@@ -80,8 +80,33 @@ export default async function AiCostsPage({
             <p className="font-semibold">Telemetry is not available.</p>
             <p className="mt-1 font-mono text-xs">{report.unavailableReason}</p>
             <p className="mt-2">
-              Apply <code>migrations/2026-11-18_pierrot_llm_call_telemetry.sql</code> manually.
-              Until then, failed calls are emitted only as redacted server logs.
+              {report.unavailableReason === 'telemetry_migration_not_applied' ? (
+                <>
+                  Apply <code>migrations/2026-11-18_pierrot_llm_call_telemetry.sql</code> manually.
+                  Until then, failed calls are emitted only as redacted server logs.
+                </>
+              ) : (
+                'Per-call telemetry could not be read. The source failure is listed under limitations.'
+              )}
+            </p>
+          </section>
+        ) : null}
+
+        {report.available && report.completeness === 'partial' ? (
+          <section
+            role="status"
+            className="border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+          >
+            <p className="font-semibold">This report is partial.</p>
+            <p className="mt-1">
+              The <code>pierrot_events</code> message source is unavailable
+              {report.messagesError ? (
+                <>
+                  {' '}
+                  (<span className="font-mono text-xs">{report.messagesError}</span>)
+                </>
+              ) : null}
+              . The message total is unknown, not zero.
             </p>
           </section>
         ) : null}
@@ -89,8 +114,14 @@ export default async function AiCostsPage({
         <section className="pw-dash-metrics" aria-label="AI telemetry totals">
           <article className="pw-dash-metric">
             <p className="pw-dash-metric-label">Messages</p>
-            <p className="pw-dash-number">{formatNumber(totals.messages)}</p>
-            <p className="pw-dash-metric-sub">assistant_replied events</p>
+            <p className="pw-dash-number">
+              {report.messagesAvailable ? formatNumber(totals.messages) : 'unknown'}
+            </p>
+            <p className="pw-dash-metric-sub">
+              {report.messagesAvailable
+                ? 'assistant_replied events'
+                : `source unavailable${report.messagesError ? ` · ${report.messagesError}` : ''}`}
+            </p>
           </article>
           <article className="pw-dash-metric">
             <p className="pw-dash-metric-label">Provider calls</p>
