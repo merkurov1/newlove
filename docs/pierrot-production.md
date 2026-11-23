@@ -16,7 +16,8 @@
   scoped candidate function. The migration is prepared but not applied to
   production; methodology, gates and rollback are documented in
   `docs/brain-hnsw-retrieval-optimization.md`. Final decision is **NO-GO for
-  production rollout** until the real-query benchmark runs on preview/staging.
+  production rollout** until the real-query benchmark runs on preview/staging
+  and passes the owner gates (Recall@20/40 ≥ 0.97, top-10 preserved ≥ 0.95).
 
 ## Model providers
 

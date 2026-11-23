@@ -34,11 +34,20 @@ order by c.embedding <=> $1::vector
 limit $6
 `;
 
+const HYBRID_SQL = `
+select *
+from public.brain_search_hybrid(
+  $1::vector,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14
+)
+`;
+
 describeIf('brain_search_hybrid HNSW integration (preview DB only)', () => {
   let client: Client;
   let probeVector: string;
   let probeDocumentId: string;
   let probeAccessClass: 'owner' | 'public';
+  let ownerDocumentIds: string[] = [];
+  let publicDocumentIds: string[] = [];
 
   beforeAll(async () => {
     client = new Client({
@@ -70,6 +79,19 @@ describeIf('brain_search_hybrid HNSW integration (preview DB only)', () => {
     probeVector = result.rows[0].embedding;
     probeDocumentId = String(result.rows[0].document_id);
     probeAccessClass = result.rows[0].access_class === 'public' ? 'public' : 'owner';
+
+    const documentIds = await client.query(
+      `select distinct document_id, access_class
+       from public.knowledge_chunks
+       where embedding_model = $1 and embedding_dimensions = $2`,
+      [MODEL, DIMENSIONS]
+    );
+    ownerDocumentIds = documentIds.rows
+      .filter((row) => row.access_class === 'owner')
+      .map((row) => String(row.document_id));
+    publicDocumentIds = documentIds.rows
+      .filter((row) => row.access_class === 'public')
+      .map((row) => String(row.document_id));
   });
 
   afterAll(async () => {
@@ -118,6 +140,103 @@ describeIf('brain_search_hybrid HNSW integration (preview DB only)', () => {
     } finally {
       await client.query('rollback');
     }
+  });
+
+  it('restores an unset hnsw.ef_search without leaking the probe value', async () => {
+    const efSetting = async () =>
+      (await client.query(`select current_setting('hnsw.ef_search', true) as ef`)).rows[0].ef as
+        | string
+        | null;
+
+    await client.query('begin');
+    try {
+      // Once pgvector is loaded the placeholder GUC has the documented default
+      // (40). Before that it is NULL/empty. Accept both, but never 80/120.
+      await client.query(`select set_config('hnsw.ef_search', null, true)`);
+      const before = await efSetting();
+      expect([null, '', '40']).toContain(before);
+
+      await client.query(
+        `select * from public.brain_vector_candidates($1::vector,$2,$3,$4,$5::text[],$6,$7)`,
+        [probeVector, MODEL, DIMENSIONS, probeAccessClass, null, 40, 80]
+      );
+
+      const after = await efSetting();
+      expect([null, '', '40']).toContain(after);
+      expect(after).not.toBe('80');
+      expect(after).not.toBe('120');
+    } finally {
+      await client.query('rollback');
+    }
+  });
+
+  it('returns to the prior hnsw.ef_search after a failed helper call', async () => {
+    const efSetting = async () =>
+      (await client.query(`select current_setting('hnsw.ef_search', true) as ef`)).rows[0].ef as
+        | string
+        | null;
+
+    await client.query('begin');
+    try {
+      await client.query(`select set_config('hnsw.ef_search', '77', true)`);
+      await client.query('savepoint helper_call');
+
+      await expect(
+        client.query(
+          `select * from public.brain_vector_candidates($1::vector,$2,$3,$4,$5::text[],$6,$7)`,
+          ['[0.1,0.2,0.3]', MODEL, DIMENSIONS, probeAccessClass, null, 40, 120]
+        )
+      ).rejects.toBeTruthy();
+
+      // A failed statement aborts the transaction. Recover to the savepoint
+      // and verify the caller still observes its prior 77, not the probe 120.
+      await client.query('rollback to savepoint helper_call');
+      expect(await efSetting()).toBe('77');
+    } finally {
+      await client.query('rollback');
+    }
+  });
+
+  it('keeps public and owner hybrid results inside the requested access class', async () => {
+    const run = async (accessClass: 'owner' | 'public') =>
+      (
+        await client.query(HYBRID_SQL, [
+          probeVector,
+          MODEL,
+          DIMENSIONS,
+          accessClass,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          40,
+          -1,
+        ])
+      ).rows.map((row) => String(row.document_id));
+
+    if (publicDocumentIds.length > 0) {
+      const publicRows = await run('public');
+      expect(publicRows.every((documentId) => publicDocumentIds.includes(documentId))).toBe(true);
+    }
+
+    if (ownerDocumentIds.length > 0) {
+      const ownerRows = await run('owner');
+      expect(ownerRows.every((documentId) => ownerDocumentIds.includes(documentId))).toBe(true);
+    }
+  });
+
+  it('never returns another document from the scoped helper path', async () => {
+    const result = await client.query(
+      `select document_id
+       from public.brain_vector_candidates($1::vector,$2,$3,$4,$5::text[],$6,$7)`,
+      [probeVector, MODEL, DIMENSIONS, probeAccessClass, [probeDocumentId], 40, 120]
+    );
+
+    expect(result.rows.every((row) => String(row.document_id) === probeDocumentId)).toBe(true);
   });
 
   it('uses the HNSW index on the whole-Brain helper path', async () => {
