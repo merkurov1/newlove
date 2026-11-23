@@ -3,7 +3,6 @@
 import React, { useMemo } from 'react';
 import PierrotMarkdown, { safeMarkdownUrl } from '@/components/pierrot/PierrotMarkdown';
 import { parsePierrotResponse } from '@/lib/pierrot/response/schema';
-import { buildPresentationResponseFromMarkdown } from '@/lib/pierrot/response/fromMarkdown';
 import { PIERROT_PRESENTATION } from './design';
 import type {
   PierrotComparisonBlock,
@@ -582,6 +581,20 @@ function renderBlock(
   }
 }
 
+/**
+ * Markdown-first response renderer.
+ *
+ * Ordinary model answers have no structured payload, so they are rendered as
+ * their original Markdown (`PierrotMarkdown` in the public chat, the owner
+ * Markdown renderer in the workspace). This keeps the editorial typography the
+ * owner already approved instead of decomposing every answer into presentation
+ * blocks.
+ *
+ * Structured blocks are rendered only from a server-provided payload that
+ * passes the closed schema. That path is reserved for data views such as site
+ * analytics, metrics, charts and diagrams. When the payload is missing or
+ * invalid, the answer stays visible as Markdown.
+ */
 export default React.memo(function PierrotResponseRenderer({
   response,
   fallbackMarkdown,
@@ -592,29 +605,26 @@ export default React.memo(function PierrotResponseRenderer({
   /** Optional owner renderer that adds citation links without changing blocks. */
   renderText?: (markdown: string) => React.ReactNode;
 }) {
-  const adapted = useMemo(() => {
-    const validated = response ? parsePierrotResponse(response) : null;
-    if (validated) return validated;
-    return buildPresentationResponseFromMarkdown(fallbackMarkdown);
-  }, [response, fallbackMarkdown]);
+  const validated = useMemo(
+    () => (response ? parsePierrotResponse(response) : null),
+    [response]
+  );
 
-  if (!adapted) {
-    return renderText ? (
-      <div data-pierrot-response className={PIERROT_PRESENTATION.root}>
-        {renderText(fallbackMarkdown)}
-      </div>
-    ) : (
-      <div data-pierrot-response className={PIERROT_PRESENTATION.root}>
-        <PierrotMarkdown content={fallbackMarkdown} />
+  if (!validated) {
+    // No schema work and no block tree for prose. The original Markdown keeps
+    // its own headings, lists, tables, quotes and code formatting.
+    return (
+      <div data-pierrot-response="markdown" className="min-w-0">
+        {renderText ? renderText(fallbackMarkdown) : <PierrotMarkdown content={fallbackMarkdown} />}
       </div>
     );
   }
 
-  const language = adapted.language || 'en';
+  const language = validated.language || 'en';
 
   return (
-    <div data-pierrot-response className={PIERROT_PRESENTATION.root}>
-      {adapted.blocks.map((block, index) => renderBlock(block, language, index, renderText))}
+    <div data-pierrot-response="structured" className={PIERROT_PRESENTATION.root}>
+      {validated.blocks.map((block, index) => renderBlock(block, language, index, renderText))}
     </div>
   );
 });

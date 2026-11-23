@@ -1,5 +1,9 @@
 /**
- * Shared presentation tokens for Pierrot responses.
+ * Presentation tokens for validated structured data views.
+ *
+ * Ordinary answers are rendered as Markdown and keep their own typography.
+ * These tokens are only used by server-produced analytics blocks (metrics,
+ * charts, tables, diagrams) and must not become a general text style.
  *
  * Tailwind class strings are used instead of inline styles so the owner PWA and
  * the public conversation keep the same hierarchy and reading rhythm. These are

@@ -439,7 +439,7 @@ describe('Pierrot structured response renderer', () => {
     expect(screen.getByText('UNFRAMED_BOOK')).toBeInTheDocument();
   });
 
-  it('adapts Markdown-only historical answers into the same visual system', () => {
+  it('renders Markdown-only historical answers with their original Markdown typography', () => {
     render(
       <PierrotResponseRenderer
         fallbackMarkdown={'## Итог\n\nКороткий абзац.\n\n1. Первый шаг.\n2. Второй шаг.'}
@@ -450,6 +450,51 @@ describe('Pierrot structured response renderer', () => {
     expect(screen.getByText('Короткий абзац.')).toBeInTheDocument();
     expect(screen.getByText('Первый шаг.')).toBeInTheDocument();
     expect(screen.getByText('Второй шаг.')).toBeInTheDocument();
+    expect(document.querySelector('[data-pierrot-response="markdown"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-pierrot-response="structured"]')).not.toBeInTheDocument();
+  });
+
+  it('does not decompose ordinary prose into presentation blocks', () => {
+    const markdown = [
+      '## Итог',
+      '',
+      'Короткий **абзац**.',
+      '',
+      '| День | Визиты |',
+      '| --- | --- |',
+      '| Пн | 120 |',
+      '',
+      '> Цитата без отдельного блока.',
+    ].join('\n');
+    const renderText = jest.fn((value: string) => (
+      <span data-testid="owner-markdown">{value}</span>
+    ));
+
+    render(<PierrotResponseRenderer fallbackMarkdown={markdown} renderText={renderText} />);
+
+    expect(renderText).toHaveBeenCalledTimes(1);
+    expect(renderText).toHaveBeenCalledWith(markdown);
+    expect(screen.getByTestId('owner-markdown')).toHaveTextContent('Цитата без отдельного блока.');
+    expect(document.querySelector('[data-pierrot-response="structured"]')).not.toBeInTheDocument();
+  });
+
+  it('still renders a validated structured data view as blocks', () => {
+    render(
+      <PierrotResponseRenderer
+        response={response([
+          {
+            type: 'metric',
+            title: 'Сайт',
+            metrics: [{ label: 'Сессии', value: 215, unit: 'count' }],
+          },
+        ])}
+        fallbackMarkdown="fallback"
+      />
+    );
+
+    expect(screen.getByText('Сессии')).toBeInTheDocument();
+    expect(screen.getByText('215')).toBeInTheDocument();
+    expect(document.querySelector('[data-pierrot-response="structured"]')).toBeInTheDocument();
   });
 
   it('keeps Markdown visible when a structured payload is invalid', () => {

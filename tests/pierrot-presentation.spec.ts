@@ -83,9 +83,69 @@ for (const viewport of VIEWPORTS) {
           path: `test-results/presentation/${viewport.label}-${caseId}.png`,
         });
       }
+
+      // Before/after Markdown-first preview for public chat and owner
+      // workspace, captured at each viewport for owner review.
+      for (const scenario of ['ordinary', 'table', 'quote-code', 'restored']) {
+        const section = page.locator(`#markdown-first-${scenario}`);
+        await expect(section).toBeVisible();
+        await section.scrollIntoViewIfNeeded();
+
+        const overflow = await section.evaluate((element) => ({
+          page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          section: element.scrollWidth - element.clientWidth,
+        }));
+        expect(overflow.page, `markdown-first ${scenario} page overflow`).toBeLessThanOrEqual(2);
+        expect(overflow.section, `markdown-first ${scenario} section overflow`).toBeLessThanOrEqual(2);
+
+        await section.screenshot({
+          path: `test-results/presentation/${viewport.label}-markdown-first-${scenario}.png`,
+        });
+      }
     });
   });
 }
+
+test.describe('Markdown-first ordinary answers', () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test('keeps prose, tables, quotes and code as Markdown and loads no charts', async ({ page }) => {
+    await page.goto('/dev/pierrot-rendering');
+
+    for (const scenario of ['ordinary', 'table', 'quote-code', 'restored']) {
+      const section = page.locator(`#markdown-first-${scenario}`);
+      await expect(section).toBeVisible();
+      await section.scrollIntoViewIfNeeded();
+
+      // The "after" public chat column is the middle one. It must be Markdown,
+      // not a structured block tree, and must not mount the chart runtime.
+      const publicColumn = section.locator('div.grid > div').nth(1);
+      await expect(publicColumn.locator('[data-pierrot-response="markdown"]')).toBeVisible();
+      await expect(publicColumn.locator('[data-pierrot-response="structured"]')).toHaveCount(0);
+      await expect(publicColumn.locator('svg.recharts-surface')).toHaveCount(0);
+
+      // The workspace column uses the owner Markdown renderer with the same source.
+      const ownerColumn = section.locator('div.grid > div').nth(2);
+      await expect(ownerColumn.locator('p, h2, h3, pre, blockquote').first()).toBeVisible();
+    }
+  });
+
+  test('does not autoload chart dependencies for a prose-only section', async ({ page }) => {
+    const chartRequests: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('PierrotChartImpl')) chartRequests.push(request.url());
+    });
+
+    await page.goto('/dev/pierrot-rendering?case=simple');
+    const section = page.locator('#case-simple');
+    await expect(section).toBeVisible();
+    await section.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+
+    await expect(section.locator('svg.recharts-surface')).toHaveCount(0);
+    expect(chartRequests).toHaveLength(0);
+  });
+});
 
 /**
  * The older suite only checked that a container existed. These assertions
