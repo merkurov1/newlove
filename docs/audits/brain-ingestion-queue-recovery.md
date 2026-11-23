@@ -52,6 +52,19 @@ pnpm brain:ingestion-recovery -- \
   --status
 ```
 
+Item-by-item triage for every failed/partial job (URL, redacted worker log,
+Media record, document and chunk state, plus one explicit decision per job):
+
+```bash
+pnpm brain:ingestion-recovery -- \
+  --run 87443bd7-8af8-4bd7-86fb-5d19baf81e34 \
+  --triage \
+  --report docs/audits/brain-ingestion-87443bd7-triage.json
+```
+
+The batch-specific decision matrix and the approval gate for targeted retries
+are in [`brain-ingestion-batch-87443bd7-triage.md`](./brain-ingestion-batch-87443bd7-triage.md).
+
 Retry only safe failed rows in that batch, then drain existing queued work
 through the normal bounded worker:
 
