@@ -17,17 +17,24 @@ import {
   commitUrl,
   getBranchHead,
   getCommitChecks,
+  getPullRequestFiles,
   getPullRequestStatus,
   mergeVerifiedPullRequest,
   type GitHubChecksSummary,
 } from './github';
+import {
+  blockingLandingRisks,
+  canMarkLanded,
+  detectLandingRisks,
+  formatLandingRiskReason,
+  type LandingRisk,
+} from './landing';
 import { readAttemptCost, summarizeCosts } from './costs';
 import { notifyDevOwner } from './notifications';
 import type {
   DevFinalizationCheckStatus,
   DevFinalizationPullRequest,
   DevFinalizationReport,
-  DevAttempt,
   DevFinalizationStage,
   DevLifecycleCost,
   DevWorkbenchTask,
@@ -53,6 +60,9 @@ type FinalizationState = {
     prNumber: number | null;
     url: string;
     sha: string | null;
+    headSha: string | null;
+    ciStatus: string | null;
+    attemptId: string | null;
     at: string;
   }>;
   prs: DevFinalizationPullRequest[];
@@ -212,6 +222,9 @@ function stateFromSetting(value: unknown): FinalizationState | null {
                 : null,
             url: text(item.url, 400),
             sha: text(item.sha, 40) || null,
+            headSha: text(item.headSha, 40) || null,
+            ciStatus: text(item.ciStatus, 20) || null,
+            attemptId: text(item.attemptId, 80) || null,
             at: text(item.at, 40) || nowIso(),
           }))
           .filter((item) => item.url)
@@ -327,8 +340,7 @@ function describeGitHubFailure(error: unknown): GitHubFailure {
       ? error.message.slice(0, 1200)
       : 'The GitHub request failed.';
   const endpoint = typeof value.endpoint === 'string' ? value.endpoint : null;
-  const permission =
-    typeof value.requiredPermission === 'string' ? value.requiredPermission : null;
+  const permission = typeof value.requiredPermission === 'string' ? value.requiredPermission : null;
   const retryAt = typeof value.retryAt === 'string' ? value.retryAt : null;
   const rateLimited = value.rateLimited === true || code === 'GITHUB_RATE_LIMITED';
   const permissionDenied =
@@ -357,10 +369,27 @@ function formatGitHubBlockReason(action: string, failure: GitHubFailure): string
 
 function recordIntegrated(
   state: FinalizationState,
-  input: { key: string; prNumber: number | null; url: string; sha: string | null }
+  input: {
+    key: string;
+    prNumber: number | null;
+    url: string;
+    sha: string | null;
+    headSha?: string | null;
+    ciStatus?: string | null;
+    attemptId?: string | null;
+  }
 ): boolean {
   if (state.integrated.some((item) => item.key === input.key)) return false;
-  state.integrated.push({ ...input, at: nowIso() });
+  state.integrated.push({
+    key: input.key,
+    prNumber: input.prNumber,
+    url: input.url,
+    sha: input.sha,
+    headSha: input.headSha ?? null,
+    ciStatus: input.ciStatus ?? null,
+    attemptId: input.attemptId ?? null,
+    at: nowIso(),
+  });
   return true;
 }
 
@@ -412,76 +441,101 @@ async function finalizationCost(taskIds: string[]): Promise<DevLifecycleCost | n
   }
 }
 
-function attemptHasStructuredEvidence(attempt: DevAttempt | null): boolean {
-  if (!attempt) return false;
-  if (
-    (attempt.warnings || []).some((warning) =>
-      /without a structured final report/i.test(String(warning))
-    )
-  ) {
-    return false;
-  }
-  const verification = attempt.verification || {};
-  const criteria = Array.isArray(verification.criteria) ? verification.criteria : [];
-  if (criteria.length === 0) return false;
-  if (
-    !criteria.every(
-      (criterion) =>
-        Boolean(criterion) &&
-        typeof criterion === 'object' &&
-        (criterion as { status?: unknown }).status === 'satisfied'
-    )
-  ) {
-    return false;
-  }
-  const commands = Array.isArray(attempt.commands) ? attempt.commands : [];
-  return commands.some((command) => command?.status === 'passed');
-}
-
+/**
+ * Mark a task landed only when the PR is really merged and real CI passed for
+ * the exact head SHA. Executor self-report is stored as attempt evidence but
+ * never used as the merge gate. A merged PR whose CI cannot be proven stays in
+ * review, so no unverified work is presented as complete.
+ */
 async function verifyTaskIntegrated(input: {
   taskId: string;
   sha: string | null;
   prUrl: string;
   state: FinalizationState;
-}): Promise<void> {
+  headSha: string | null;
+  ciStatus: string;
+  mergeSha?: string | null;
+  checks?: DevFinalizationPullRequest['checks'];
+}): Promise<string | null> {
   const task = (await listFinalizationTasks(200)).find((item) => item.id === input.taskId);
-  if (!task) return;
-  if (task.status === 'review' || task.status === 'verified') {
-    // Integration is not verification. A merged PR without a structured final
-    // report and satisfied criteria must stay in review; otherwise an attempt
-    // with an empty report would be marked verified exactly as before.
-    const attempts = (await listAttemptsForTasks([task.id], 5)).get(task.id) || [];
-    const latest = attempts.find((attempt) => attempt.status === 'completed') || attempts[0] || null;
+  if (!task) return null;
 
-    if (!attemptHasStructuredEvidence(latest)) {
+  const attempts = (await listAttemptsForTasks([task.id], 5)).get(task.id) || [];
+  const latest = attempts.find((attempt) => attempt.status === 'completed') || attempts[0] || null;
+  const attemptId = latest?.id || null;
+  const prState = input.state.prs.find((pr) => pr.url === input.prUrl);
+  if (prState) {
+    prState.attemptId = attemptId;
+    prState.mergeSha = input.mergeSha || input.sha || null;
+    if (input.headSha) prState.headSha = input.headSha;
+  }
+
+  if (task.status === 'review' || task.status === 'verified') {
+    const headSha = input.headSha || task.resultCommit;
+    const landed = canMarkLanded({
+      merged: true,
+      ciStatus: input.ciStatus,
+      headSha,
+      expectedHeadSha: headSha,
+    });
+
+    if (!landed) {
       await patchTask(task.id, {
         status: 'review',
-        verification_status: 'integration_only',
-        verification_notes: `Integrated into ${DEFAULT_BRANCH} by queue finalization (${input.prUrl}), but not verified: the latest attempt has no structured final report with satisfied acceptance criteria and a passing command.`,
+        verification_status:
+          input.ciStatus === 'passed' ? 'integration_only' : 'ci_evidence_missing',
+        verification_notes: `Integrated into ${DEFAULT_BRANCH} by automatic landing (${input.prUrl}), but not verified: real CI evidence for the exact head is required (observed CI: ${input.ciStatus}). No unverified work is marked complete.`,
         verified_at: null,
-        result_commit: input.sha || task.resultCommit,
+        result_commit: input.mergeSha || input.sha || task.resultCommit,
       }).catch(() => null);
       await appendEvent({
         taskId: task.id,
         type: 'task.verification_required',
         level: 'warn',
         message:
-          'PR integrated but task kept in review: structured final report, satisfied criteria and at least one passing command are required for verified.',
-        payload: { prUrl: input.prUrl, attemptId: latest?.id || null },
+          'PR merged but task kept in review: real CI checks for the exact head did not pass or could not be read. Executor self-report is not a merge gate.',
+        payload: {
+          prUrl: input.prUrl,
+          headSha,
+          mergeSha: input.mergeSha || input.sha,
+          attemptId,
+          ciStatus: input.ciStatus,
+          checks: input.checks || [],
+        },
+        dedupeKey: `task-verification-required:${task.id}:${input.prUrl}:${input.ciStatus}`,
       }).catch(() => undefined);
-      return;
+      return attemptId;
     }
 
+    const ciSummary = (input.checks || [])
+      .map((check) => `${check.name}=${check.conclusion || check.status || 'unknown'}`)
+      .slice(0, 10)
+      .join(', ');
     await patchTask(task.id, {
       status: 'verified',
       verification_status: 'passed',
-      verification_notes: `Integrated into ${DEFAULT_BRANCH} by queue finalization (${input.prUrl}) with structured criteria and passing commands.`,
+      verification_notes: `Landed in ${DEFAULT_BRANCH} by automatic landing (${input.prUrl}) at head ${headSha?.slice(0, 7) || 'unknown'} and merge ${(input.mergeSha || input.sha || '').slice(0, 7) || 'unknown'} with passing real CI${ciSummary ? `: ${ciSummary}` : ''}. Production deployment is tracked separately.`,
       verified_at: nowIso(),
-      result_commit: input.sha || task.resultCommit,
+      result_commit: input.mergeSha || input.sha || task.resultCommit,
     }).catch(() => null);
+    await appendEvent({
+      taskId: task.id,
+      type: 'task.verified',
+      message: `Task verified after merge into ${DEFAULT_BRANCH} with passing CI for the exact head.`,
+      payload: {
+        prUrl: input.prUrl,
+        headSha,
+        mergeSha: input.mergeSha || input.sha,
+        attemptId,
+        ciStatus: input.ciStatus,
+        checks: input.checks || [],
+      },
+      dedupeKey: `task-verified:${task.id}:${input.prUrl}:${input.sha || headSha}`,
+    }).catch(() => undefined);
   }
   const batchId = await getBatchIdForTask(task.id).catch(() => null);
   if (batchId) await maybeCompleteBatch(batchId).catch(() => false);
+  return attemptId;
 }
 
 async function block(
@@ -587,6 +641,9 @@ function basePullRequest(input: {
     checks: [],
     integrated: false,
     integrationSha: null,
+    mergeSha: null,
+    attemptId: null,
+    risks: [],
     reason: null,
     errorCode: null,
     errorDetail: null,
@@ -638,17 +695,29 @@ async function refreshPullRequest(input: {
     checks = await getCommitChecks(input.task.repository, status.headSha);
   }
 
+  // A PR that changes secrets, destructive SQL or the CI workflow must never be
+  // landed by the automatic path. The file list is real GitHub evidence; if it
+  // cannot be read, refresh throws and the caller stops with a precise reason.
+  let risks: LandingRisk[] = [];
+  if (!status.merged) {
+    const files = await getPullRequestFiles(input.task.repository, input.number);
+    risks = detectLandingRisks(files);
+  }
+  const blocking = blockingLandingRisks(risks);
+
   const reason = status.merged
     ? 'ALREADY_MERGED'
     : checks.status === 'failed'
       ? 'CI_FAILED'
       : checks.status === 'unknown'
         ? 'CI_UNKNOWN'
-        : checks.status === 'pending'
-          ? 'CI_PENDING'
-          : status.mergeable === false
-            ? 'MERGE_CONFLICT'
-            : null;
+        : blocking.length > 0
+          ? 'SECURITY_SENSITIVE_CHANGE'
+          : checks.status === 'pending'
+            ? 'CI_PENDING'
+            : status.mergeable === false
+              ? 'MERGE_CONFLICT'
+              : null;
   return {
     ...base,
     state: status.merged ? 'merged' : status.state,
@@ -657,10 +726,15 @@ async function refreshPullRequest(input: {
     mergeableState: status.mergeableState,
     headSha: status.headSha,
     ciStatus: checks.status,
-    ciDetail: checks.detail,
+    ciDetail:
+      blocking.length > 0
+        ? `${checks.detail} Landing blocked: ${formatLandingRiskReason(blocking)}`
+        : checks.detail,
     checks: checks.checks,
     integrated: status.merged,
-    integrationSha: status.merged ? status.headSha : null,
+    integrationSha: status.merged ? status.mergeCommitSha || status.headSha : null,
+    mergeSha: status.mergeCommitSha,
+    risks,
     reason,
     errorCode: reason,
   };
@@ -683,10 +757,18 @@ async function advanceLocked(input: {
   let state = stateFromSetting(await getSetting<unknown>(STATE_KEY, null));
   const activeStages: DevFinalizationStage[] = ['collecting', 'integrating', 'verifying'];
 
-  if (!drain.drained) {
+  // A drained queue is no longer required before landing finished work. In a
+  // batch, dependent tasks stay `queued` until their prerequisite is merged; if
+  // landing waited for the whole queue to drain, the batch would deadlock.
+  // What must be true is that no executor is actively running and the owner has
+  // not paused execution. Finished PRs still need green CI for their exact head.
+  const executionActive = queue.paused || queue.active > 0 || queue.activeTasks > 0;
+  if (executionActive) {
     if (state && activeStages.includes(state.stage)) {
       state.stage = 'idle';
-      state.blockedReason = `Queue refilled: ${drain.reasons.join(' ')}`;
+      state.blockedReason = queue.paused
+        ? 'The queue is paused.'
+        : `Execution is active: ${queue.activeTasks} task(s) in progress, ${queue.active} active attempt(s).`;
       state.failureStage = null;
       state.blockedCode = null;
       state.retryAt = null;
@@ -695,8 +777,14 @@ async function advanceLocked(input: {
       await appendEvent({
         type: 'queue.refilled',
         level: 'info',
-        message: 'Finalization stopped because executable work arrived.',
-        payload: { reasons: drain.reasons, finalizationId: state.id },
+        message: 'Finalization paused because execution became active again.',
+        payload: {
+          reasons: drain.reasons,
+          finalizationId: state.id,
+          activeAttempts: queue.active,
+          activeTasks: queue.activeTasks,
+          paused: queue.paused,
+        },
         dedupeKey: `queue-refilled:${state.id}:${Math.floor(Date.now() / 60_000)}`,
       }).catch(() => {});
     }
@@ -722,8 +810,10 @@ async function advanceLocked(input: {
     });
     await saveState(state);
     await appendEvent({
-      type: 'queue.drained',
-      message: `Queue drained: ${queue.queued} queued, ${queue.ready || 0} ready, ${queue.active} active attempt(s).`,
+      type: drain.drained ? 'queue.drained' : 'queue.landing_ready',
+      message: drain.drained
+        ? `Queue drained: ${queue.queued} queued, ${queue.ready || 0} ready, ${queue.active} active attempt(s).`
+        : `Execution idle; landing completed work while ${queue.queued} task(s) wait in the queue.`,
       payload: {
         finalizationId: state.id,
         queued: queue.queued,
@@ -731,6 +821,7 @@ async function advanceLocked(input: {
         activeAttempts: queue.active,
         activeTasks: queue.activeTasks,
         activeBatches: queue.activeBatches || 0,
+        reasons: drain.reasons,
       },
       dedupeKey: `queue-drained:${Math.floor(Date.now() / 600_000)}`,
     }).catch(() => {});
@@ -742,9 +833,11 @@ async function advanceLocked(input: {
     }).catch(() => {});
     await notifyDevOwner({
       eventKey: `queue-drained:${state.id}`,
-      title: 'Pierrot Dev · queue drained',
+      title: 'Pierrot Dev · landing started',
       lines: [
-        'All queued work is complete. Final integration has started.',
+        drain.drained
+          ? 'All queued work is complete. Final integration has started.'
+          : 'Execution is idle. Completed work is landing in main while the queue continues.',
         `Pull requests to integrate: ${candidates.length}`,
       ],
     }).catch(() => {});
@@ -852,13 +945,21 @@ async function advanceLocked(input: {
           prNumber: pr.number,
           url: pr.url,
           sha: pr.integrationSha,
+          headSha: pr.headSha,
+          ciStatus: pr.ciStatus,
         });
-        await verifyTaskIntegrated({
+        const attemptId = await verifyTaskIntegrated({
           taskId: pr.taskId,
           sha: pr.integrationSha,
           prUrl: pr.url,
           state,
+          headSha: pr.headSha,
+          ciStatus: pr.ciStatus,
+          mergeSha: pr.mergeSha || pr.integrationSha,
+          checks: pr.checks,
         });
+        const record = state.integrated.find((item) => item.key === pr.url);
+        if (record && attemptId) record.attemptId = attemptId;
       }
     }
     state.prs = refreshed;
@@ -886,6 +987,20 @@ async function advanceLocked(input: {
         await fail(state, {
           stage: 'collecting',
           reason: `CI failed for ${failedCi.map((pr) => `#${pr.number}`).join(', ')}. No merge was attempted.`,
+        })
+      );
+    }
+    const unsafe = refreshed.find(
+      (pr) => !pr.integrated && blockingLandingRisks(pr.risks || []).length > 0
+    );
+    if (unsafe) {
+      return reportFromState(
+        await block(state, {
+          stage: 'collecting',
+          reason: `PR #${unsafe.number} was stopped before landing: ${formatLandingRiskReason(
+            blockingLandingRisks(unsafe.risks || [])
+          )} No merge was attempted and no task was marked complete.`,
+          code: 'SECURITY_SENSITIVE_CHANGE',
         })
       );
     }
@@ -1016,22 +1131,31 @@ async function advanceLocked(input: {
           prNumber: refreshed.number,
           url: refreshed.url,
           sha: refreshed.integrationSha || refreshed.headSha,
+          headSha: refreshed.headSha,
+          ciStatus: refreshed.ciStatus,
         });
         if (current >= 0) {
           state.prs[current] = {
             ...refreshed,
             integrated: true,
             integrationSha: refreshed.integrationSha || refreshed.headSha,
+            mergeSha: refreshed.mergeSha || refreshed.integrationSha,
             state: 'merged',
             merged: true,
           };
         }
-        await verifyTaskIntegrated({
+        const attemptId = await verifyTaskIntegrated({
           taskId: refreshed.taskId,
           sha: refreshed.integrationSha || refreshed.headSha,
           prUrl: refreshed.url,
           state,
+          headSha: refreshed.headSha,
+          ciStatus: refreshed.ciStatus,
+          mergeSha: refreshed.mergeSha || refreshed.integrationSha || refreshed.headSha,
+          checks: refreshed.checks,
         });
+        const record = state.integrated.find((item) => item.key === refreshed.url);
+        if (record && attemptId) record.attemptId = attemptId;
         await saveState(state);
         return reportFromState(state);
       }
@@ -1053,6 +1177,18 @@ async function advanceLocked(input: {
           await block(state, {
             stage: 'integrating',
             reason: `CI status for PR #${refreshed.number} could not be read: ${refreshed.ciDetail}`,
+          })
+        );
+      }
+      const blockingRisks = blockingLandingRisks(refreshed.risks || []);
+      if (blockingRisks.length > 0) {
+        return reportFromState(
+          await block(state, {
+            stage: 'integrating',
+            reason: `PR #${refreshed.number} was stopped before landing: ${formatLandingRiskReason(
+              blockingRisks
+            )} No merge was attempted and no task was marked complete.`,
+            code: 'SECURITY_SENSITIVE_CHANGE',
           })
         );
       }
@@ -1098,12 +1234,15 @@ async function advanceLocked(input: {
           prNumber: refreshed.number,
           url: refreshed.url,
           sha,
+          headSha: expectedHead,
+          ciStatus: refreshed.ciStatus,
         });
         if (current >= 0) {
           state.prs[current] = {
             ...refreshed,
             integrated: true,
             integrationSha: sha,
+            mergeSha: sha,
             state: 'merged',
             merged: true,
             reason: 'ALREADY_MERGED',
@@ -1111,12 +1250,18 @@ async function advanceLocked(input: {
             errorDetail: null,
           };
         }
-        await verifyTaskIntegrated({
+        const attemptId = await verifyTaskIntegrated({
           taskId: refreshed.taskId,
           sha,
           prUrl: refreshed.url,
           state,
+          headSha: expectedHead,
+          ciStatus: refreshed.ciStatus,
+          mergeSha: sha,
+          checks: refreshed.checks,
         });
+        const record = state.integrated.find((item) => item.key === refreshed.url);
+        if (record && attemptId) record.attemptId = attemptId;
         await appendEvent({
           type: 'integration.completed',
           message: `PR #${refreshed.number} integrated into ${DEFAULT_BRANCH} at ${sha.slice(0, 7)}.`,
@@ -1124,14 +1269,26 @@ async function advanceLocked(input: {
             finalizationId: state.id,
             prNumber: refreshed.number,
             url: refreshed.url,
+            headSha: expectedHead,
+            mergeSha: sha,
             sha,
+            ciStatus: refreshed.ciStatus,
+            checks: refreshed.checks,
+            attemptId,
+            risks: refreshed.risks || [],
           },
           dedupeKey: `integration-completed:${refreshed.number}:${sha}`,
         }).catch(() => {});
         await appendEvent({
           type: 'push.completed',
           message: `Commit ${sha.slice(0, 7)} is on ${DEFAULT_BRANCH} via PR #${refreshed.number}.`,
-          payload: { finalizationId: state.id, sha, prNumber: refreshed.number },
+          payload: {
+            finalizationId: state.id,
+            sha,
+            headSha: expectedHead,
+            prNumber: refreshed.number,
+            attemptId,
+          },
           dedupeKey: `push-completed:${sha}`,
         }).catch(() => {});
         await notifyDevOwner({
@@ -1152,10 +1309,7 @@ async function advanceLocked(input: {
         return reportFromState(
           await block(state, {
             stage: 'integrating',
-            reason: formatGitHubBlockReason(
-              `PR #${refreshed.number} could not be merged`,
-              failure
-            ),
+            reason: formatGitHubBlockReason(`PR #${refreshed.number} could not be merged`, failure),
             code: failure.code,
             retryAt: failure.retryAt,
             level: failure.permissionDenied ? 'error' : 'warn',
@@ -1303,7 +1457,14 @@ export async function advanceFinalization(input: {
     return getFinalizationReport();
   }
   try {
-    return await advanceLocked(input);
+    const report = await advanceLocked(input);
+    // Only dispatch after a pass that actually landed something. This releases
+    // dependents whose prerequisite is now verified; the dispatcher refuses a
+    // paused queue, an active attempt and a duplicate reservation.
+    if (report && report.integrated > 0) {
+      await dispatchAfterLanding(`finalization:${input.trigger}`);
+    }
+    return report;
   } catch (error) {
     const message = error instanceof Error ? error.message.slice(0, 800) : 'Finalization failed.';
     const state = stateFromSetting(await getSetting<unknown>(STATE_KEY, null));
@@ -1311,6 +1472,21 @@ export async function advanceFinalization(input: {
       return reportFromState(await fail(state, { stage: state.stage, reason: message }));
     }
     return null;
+  }
+}
+
+/**
+ * Kick the existing dispatcher after a landing so a dependent batch task whose
+ * prerequisite just became `verified` can be claimed without waiting for the
+ * next Admin poll. The dispatcher keeps its own dedupe and active-attempt guard;
+ * a failure here never turns a successful merge into a failed landing.
+ */
+async function dispatchAfterLanding(source: string): Promise<void> {
+  try {
+    const { dispatchNextQueuedTask } = await import('./actions');
+    await dispatchNextQueuedTask({ source });
+  } catch {
+    // The queue will be recovered by the next Admin poll or scheduler tick.
   }
 }
 

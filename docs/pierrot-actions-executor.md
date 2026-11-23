@@ -23,7 +23,7 @@ the review/merge rules. Codespaces stay available as the manual reserve.
 | Settings             | `public.pierrot_dev_settings` (`queue_paused`, lifecycle/finalization state)                                                                                                         |
 | Worker API           | `POST /api/internal/pierrot/dev/worker` with `PIERROT_DEV_WORKER_TOKEN` (32+ chars, constant-time check)                                                                             |
 | Codespace worker     | `scripts/pierrot/dev-worker.mjs` + supervisor/lifecycle shell scripts                                                                                                                |
-| Commit/PR            | Worker commits only to `pierrot/dev/<task>/<attempt>`, pushes it; the server creates the PR after completion; merge/finalization stay in Admin with owner approval                   |
+| Commit/PR            | Worker commits only to `pierrot/dev/<task>/<attempt>`, pushes it; the server creates the PR after completion; automatic landing merges it only with green CI for the exact head SHA  |
 | CI                   | `.github/workflows/ci.yml` — typecheck, lint, Jest, production build on push/PR/dispatch                                                                                             |
 
 Supabase is already the only source of truth for queue, statuses, locks,
@@ -116,9 +116,12 @@ Ephemeral ubuntu-latest runner
   60 minutes, OpenCode 45 minutes, and the lease is renewed every 20 seconds.
   An `always()` cleanup step releases an interrupted attempt and requeues the
   task idempotently.
-- **Commit/PR/review**: unchanged. The runner pushes only an attempt branch. The
-  server creates a PR. Merge and production deploy still require explicit owner
-  approval; no automatic merge or deploy exists in this path.
+- **Commit/PR/landing**: the runner pushes only an attempt branch. The server
+  creates a PR. Automatic landing merges it only when real CI passed for the
+  exact head SHA, GitHub reports no conflicts, the head has not moved and the
+  pre-merge safety gate finds nothing destructive or security-sensitive. The
+  owner does not review individual tasks. Landing in `main` is recorded
+  separately from production deployment; this path never deploys.
 
 ### 2.1 DeepSeek / OpenCode configuration
 
@@ -291,8 +294,10 @@ For each run record:
 - comparison with the same class of Codespace attempt (success, time, cost,
   log quality, recovery).
 
-Do not mark the pilot green in Admin acceptance until CI has actually passed
-and the owner has reviewed the PR.
+Do not mark the pilot green until real CI has actually passed for the exact
+head SHA and the landing record contains the PR, head SHA, merge commit SHA,
+check runs and event evidence. Owner per-task review is not part of this path;
+a security-sensitive finding still stops the task with an explicit reason.
 
 ### 4.1 Local checks already run for this change
 

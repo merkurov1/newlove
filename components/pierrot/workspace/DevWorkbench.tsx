@@ -708,6 +708,21 @@ export default function DevWorkbench({
         if (action === 'pause_queue') setNotice('Очередь приостановлена.');
         if (action === 'resume_queue') setNotice('Очередь возобновлена.');
         if (action === 'finalize_queue') setNotice('Finalization pass requested.');
+        if (action === 'reconcile_legacy') {
+          const report = (
+            body as {
+              reconciliation?: {
+                scanned?: number;
+                landed?: number;
+                stillReview?: number;
+                changed?: number;
+              };
+            }
+          ).reconciliation;
+          setNotice(
+            `Reconciliation: scanned ${report?.scanned ?? 0}, landed ${report?.landed ?? 0}, still in review ${report?.stillReview ?? 0}, changed ${report?.changed ?? 0}.`
+          );
+        }
         if (action === 'start_codespace' || action === 'create_codespace') {
           setNotice('Codespace start requested. The worker starts automatically after boot.');
         }
@@ -2979,13 +2994,22 @@ export default function DevWorkbench({
                       Retry finalization
                     </button>
                   )}
+                  <button
+                    type="button"
+                    className="pw-wb-button is-quiet"
+                    disabled={busy === 'reconcile_legacy'}
+                    onClick={() => void runAction('reconcile_legacy', { confirm: true })}
+                  >
+                    Reconcile legacy review rows
+                  </button>
                 </div>
               </div>
             ) : (
               <div className="pw-wb-card">
                 <p className="pw-wb-card-body">
-                  Finalization has not run yet. It starts automatically when no queued, ready or
-                  in-progress tasks remain.
+                  Finalization has not run yet. It starts automatically whenever execution is idle,
+                  even while dependent tasks wait in the queue. It never waits for the owner to
+                  approve an individual task.
                 </p>
                 <button
                   type="button"

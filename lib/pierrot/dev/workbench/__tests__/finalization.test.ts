@@ -64,6 +64,7 @@ jest.mock('../github', () => {
   return {
     getPullRequestStatus: jest.fn(),
     getCommitChecks: jest.fn(),
+    getPullRequestFiles: jest.fn(),
     getBranchHead: jest.fn(),
     mergeVerifiedPullRequest: jest.fn(),
     commitUrl: jest.fn(
@@ -188,6 +189,7 @@ beforeEach(() => {
   asMock(store.getBatchIdForTask).mockResolvedValue(null);
   asMock(github.getBranchHead).mockResolvedValue(MAIN_SHA);
   asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
+  asMock(github.getPullRequestFiles).mockResolvedValue([]);
   asMock(github.mergeVerifiedPullRequest).mockResolvedValue({
     merged: true,
     sha: MERGE_SHA,
@@ -261,11 +263,11 @@ describe('queue finalization', () => {
       number: 1,
       expectedHeadSha: PR_HEAD,
     });
-    // Integration alone is not verification. Without a structured report the
-    // task must stay in review instead of silently becoming verified.
+    // Verification is based on real CI for the exact head, not on the
+    // executor's self-reported structured report.
     expect(store.patchTask).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
-      expect.objectContaining({ status: 'review', verification_status: 'integration_only' })
+      expect.objectContaining({ status: 'verified', verification_status: 'passed' })
     );
 
     const second = await advanceFinalization({ trigger: 'test' });
@@ -322,18 +324,39 @@ describe('queue finalization', () => {
     expect(mainChecksCalls).toHaveLength(0);
   });
 
-  it('stops finalization when executable work arrives', async () => {
+  it('pauses finalization while an executor is actively running a task', async () => {
     asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
     asMock(github.getPullRequestStatus).mockResolvedValue(prStatus());
     asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
     await advanceFinalization({ trigger: 'test' });
 
-    asMock(store.getQueueSnapshot).mockResolvedValue({ ...DRAINED, queued: 1 });
+    asMock(store.getQueueSnapshot).mockResolvedValue({ ...DRAINED, active: 1, activeTasks: 1 });
     const report = await advanceFinalization({ trigger: 'test' });
     expect(report?.stage).toBe('idle');
-    expect(report?.blockedReason).toMatch(/Queue refilled/i);
+    expect(report?.blockedReason).toMatch(/Execution is active/i);
     const events = asMock(store.appendEvent).mock.calls.map(([event]) => event.type);
     expect(events).toContain('queue.refilled');
+  });
+
+  it('lands finished work even when dependent tasks are still queued', async () => {
+    asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
+    asMock(github.getPullRequestStatus).mockResolvedValue(prStatus());
+    asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
+    // A batch keeps dependent tasks `queued` until their prerequisite lands.
+    // Waiting for a fully drained queue would deadlock the batch.
+    asMock(store.getQueueSnapshot).mockResolvedValue({ ...DRAINED, queued: 1, ready: 0 });
+
+    const report = await advanceFinalization({ trigger: 'test' });
+    expect(report).toMatchObject({ stage: 'integrating', integrated: 1 });
+    expect(github.mergeVerifiedPullRequest).toHaveBeenCalledTimes(1);
+    // The prerequisite is verified in the same pass, which is what releases
+    // its dependent tasks in the claim RPC.
+    expect(store.patchTask).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      expect.objectContaining({ status: 'verified', verification_status: 'passed' })
+    );
+    const events = asMock(store.appendEvent).mock.calls.map(([event]) => event.type);
+    expect(events).toContain('queue.landing_ready');
   });
 
   it('records a drained queue with nothing to integrate', async () => {
@@ -418,12 +441,10 @@ describe('queue finalization', () => {
     asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
     const retryAt = new Date(Date.now() + 60_000).toISOString();
     asMock(github.getPullRequestStatus).mockRejectedValue(
-      new github.WorkbenchGitHubError(
-        'GITHUB_RATE_LIMITED',
-        'GitHub rate limit reached.',
-        403,
-        { retryAt, rateLimited: true }
-      )
+      new github.WorkbenchGitHubError('GITHUB_RATE_LIMITED', 'GitHub rate limit reached.', 403, {
+        retryAt,
+        rateLimited: true,
+      })
     );
 
     const report = await advanceFinalization({ trigger: 'test' });
@@ -507,30 +528,74 @@ describe('queue finalization', () => {
     expect(github.mergeVerifiedPullRequest).toHaveBeenCalledTimes(2);
   });
 
-  it('verifies only when the attempt has a structured report and satisfied criteria', async () => {
+  it('stops when the PR head changed between collection and merge', async () => {
     asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
     asMock(github.getPullRequestStatus).mockResolvedValue(prStatus());
     asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
-    asMock(store.listAttemptsForTasks).mockResolvedValue(
-      new Map([
-        [
-          '11111111-1111-4111-8111-111111111111',
-          [
-            {
-              id: 'attempt-structured',
-              status: 'completed',
-              warnings: [],
-              commands: [{ name: 'pnpm test', status: 'passed', detail: 'exit 0' }],
-              verification: {
-                criteria: [
-                  { criterion: 'tests', status: 'satisfied', evidence: 'jest passed' },
-                ],
-              },
-            },
-          ],
-        ],
-      ])
+    asMock(github.mergeVerifiedPullRequest).mockRejectedValue(
+      new github.WorkbenchGitHubError(
+        'GITHUB_PR_STALE',
+        'The pull request head moved since review. Re-run review before merging.'
+      )
     );
+
+    const report = await advanceFinalization({ trigger: 'test' });
+    expect(report).toMatchObject({ stage: 'blocked', failureStage: 'integrating' });
+    expect(report?.blockedReason).toMatch(/head moved|stale/i);
+    expect(store.patchTask).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'verified' })
+    );
+  });
+
+  it('prevents a merge when required CI failed', async () => {
+    asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
+    asMock(github.getPullRequestStatus).mockResolvedValue(prStatus());
+    asMock(github.getCommitChecks).mockResolvedValue(checks('failed'));
+
+    const report = await advanceFinalization({ trigger: 'test' });
+    expect(report).toMatchObject({ stage: 'failed', failureStage: 'collecting' });
+    expect(github.mergeVerifiedPullRequest).not.toHaveBeenCalled();
+    expect(store.patchTask).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'verified' })
+    );
+  });
+
+  it('stops a security-sensitive PR before merging and never marks it complete', async () => {
+    asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
+    asMock(github.getPullRequestStatus).mockResolvedValue(prStatus());
+    asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
+    asMock(github.getPullRequestFiles).mockResolvedValue([
+      {
+        filename: 'migrations/2026-12-20_drop_orders.sql',
+        status: 'added',
+        additions: 4,
+        deletions: 0,
+        patch: '-DROP TABLE public.orders;',
+      },
+    ]);
+
+    const report = await advanceFinalization({ trigger: 'test' });
+    expect(report).toMatchObject({
+      stage: 'blocked',
+      failureStage: 'collecting',
+      blockedCode: 'SECURITY_SENSITIVE_CHANGE',
+    });
+    expect(report?.blockedReason).toMatch(/DESTRUCTIVE_SQL/);
+    expect(github.mergeVerifiedPullRequest).not.toHaveBeenCalled();
+    expect(store.patchTask).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'verified' })
+    );
+  });
+
+  it('verifies a landed task from real passing CI, not from executor self-report', async () => {
+    asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
+    asMock(github.getPullRequestStatus).mockResolvedValue(prStatus());
+    asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
+    // No attempt report at all: CI alone proves the landed head is green.
+    asMock(store.listAttemptsForTasks).mockResolvedValue(new Map());
 
     await advanceFinalization({ trigger: 'test' });
 
@@ -540,32 +605,21 @@ describe('queue finalization', () => {
     );
   });
 
-  it('keeps a task in review when the attempt only warned about a missing report', async () => {
+  it('keeps an already merged task in review when CI evidence cannot be read', async () => {
     asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
-    asMock(github.getPullRequestStatus).mockResolvedValue(prStatus());
-    asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
-    asMock(store.listAttemptsForTasks).mockResolvedValue(
-      new Map([
-        [
-          '11111111-1111-4111-8111-111111111111',
-          [
-            {
-              id: 'attempt-unstructured',
-              status: 'completed',
-              warnings: ['OpenCode finished without a structured final report.'],
-              commands: [{ name: 'pnpm test', status: 'passed', detail: 'exit 0' }],
-              verification: { criteria: [] },
-            },
-          ],
-        ],
-      ])
+    asMock(github.getPullRequestStatus).mockResolvedValue(
+      prStatus({ state: 'closed', merged: true })
     );
+    asMock(github.getCommitChecks).mockResolvedValue(checks('unknown'));
 
     await advanceFinalization({ trigger: 'test' });
 
     expect(store.patchTask).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
-      expect.objectContaining({ status: 'review', verification_status: 'integration_only' })
+      expect.objectContaining({ status: 'review', verification_status: 'ci_evidence_missing' })
     );
+    expect(github.mergeVerifiedPullRequest).not.toHaveBeenCalled();
+    const events = asMock(store.appendEvent).mock.calls.map(([event]) => event.type);
+    expect(events).toContain('task.verification_required');
   });
 });
