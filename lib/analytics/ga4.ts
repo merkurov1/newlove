@@ -12,6 +12,15 @@ export const GA_EVENTS = {
   artEngineInteraction: 'art_engine_interaction',
   artifactInteraction: 'artifact_interaction',
   outboundClick: 'outbound_click',
+  // Tribute is the Temple's primary financial KPI. Amounts are reported in
+  // whole currency units and never include donor identity or payment data.
+  tributeSupportView: 'tribute_support_view',
+  tributeAmountSelected: 'tribute_amount_selected',
+  tributeCheckoutCreated: 'tribute_checkout_created',
+  tributeCheckoutReturned: 'tribute_checkout_returned',
+  tributePaymentConfirmed: 'tribute_payment_confirmed',
+  tributePaymentFailed: 'tribute_payment_failed',
+  tributePaymentAbandoned: 'tribute_payment_abandoned',
 } as const;
 
 export type GaEventName = (typeof GA_EVENTS)[keyof typeof GA_EVENTS] | string;

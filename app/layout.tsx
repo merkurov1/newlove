@@ -221,7 +221,13 @@ const systemSans =
   'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
 const systemSerif = 'Garamond, Georgia, "Baskerville", "Times New Roman", serif';
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({
+  children,
+  modal,
+}: {
+  children: React.ReactNode;
+  modal: React.ReactNode;
+}) {
   const projects = await getPublicProjects();
   const subscriberCount = await getSubscriberCount();
 
@@ -264,6 +270,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <UserSidebar />
 
               <main id="main-content">{children}</main>
+              {modal}
 
               <Footer />
 

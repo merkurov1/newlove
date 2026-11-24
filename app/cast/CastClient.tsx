@@ -17,6 +17,12 @@ import {
 import { useAuth } from '@/components/AuthContext';
 import TempleTopBar from '@/components/TempleTopBar';
 import { createClient } from '@/lib/supabase/client';
+import {
+  readRitualDraft,
+  writeRitualDraft,
+} from '@/lib/temple/ritualDraft';
+
+const CAST_DRAFT_KEY = 'cast:draft:v1';
 
 const QUESTIONS_EN = [
   'Which object in your home do you keep because it reminds you of **failed ambition** or a **bad compromise**?',
@@ -71,6 +77,18 @@ interface CastResponse {
   captureToken?: string;
   error?: string;
 }
+
+type CastDraft = {
+  language: 'en' | 'ru' | null;
+  currentStep: number;
+  answers: string[];
+  currentAnswer: string;
+  analysisData: AnalysisData | null;
+  archetype: Archetype | '';
+  recordId: string | null;
+  captureToken: string | null;
+  emailSent: boolean;
+};
 
 function isValidArchetype(
   value: unknown
@@ -232,6 +250,86 @@ export default function CastClient() {
     () => createClient(),
     []
   );
+
+  const [draftReady, setDraftReady] =
+    useState(false);
+
+  // Restore once, then keep the draft in sync. Modal switching must not erase
+  // answers or a finished analysis.
+  useEffect(() => {
+    const draft = readRitualDraft<CastDraft>(
+      CAST_DRAFT_KEY
+    );
+
+    if (draft) {
+      if (
+        draft.language === 'en' ||
+        draft.language === 'ru'
+      ) {
+        setLanguage(draft.language);
+      }
+      if (
+        Number.isInteger(draft.currentStep) &&
+        draft.currentStep >= 0 &&
+        draft.currentStep <= 11
+      ) {
+        setCurrentStep(draft.currentStep);
+      }
+      if (Array.isArray(draft.answers)) {
+        setAnswers(
+          draft.answers.filter(
+            (answer): answer is string =>
+              typeof answer === 'string'
+          )
+        );
+      }
+      if (typeof draft.currentAnswer === 'string') {
+        setCurrentAnswer(draft.currentAnswer);
+      }
+      if (draft.analysisData) {
+        setAnalysisData(draft.analysisData);
+      }
+      if (isValidArchetype(draft.archetype)) {
+        setArchetype(draft.archetype);
+      }
+      if (typeof draft.recordId === 'string') {
+        setRecordId(draft.recordId);
+      }
+      if (typeof draft.captureToken === 'string') {
+        setCaptureToken(draft.captureToken);
+      }
+      setEmailSent(Boolean(draft.emailSent));
+    }
+
+    setDraftReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady) return;
+
+    writeRitualDraft<CastDraft>(CAST_DRAFT_KEY, {
+      language,
+      currentStep,
+      answers,
+      currentAnswer,
+      analysisData,
+      archetype,
+      recordId,
+      captureToken,
+      emailSent,
+    });
+  }, [
+    analysisData,
+    answers,
+    archetype,
+    captureToken,
+    currentAnswer,
+    currentStep,
+    draftReady,
+    emailSent,
+    language,
+    recordId,
+  ]);
 
   const questions =
     language === 'en'
