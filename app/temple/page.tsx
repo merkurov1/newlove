@@ -2,11 +2,11 @@
 
 import type { Metadata } from 'next';
 import TempleClient from './TempleClient';
+import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
 
 const TEMPLE_URL = 'https://www.merkurov.love/temple';
 
-const TEMPLE_IMAGE =
-  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png';
+const TEMPLE_IMAGE = TEMPLE_HOME_ASSETS.left;
 
 export const metadata: Metadata = {
   title: 'The Sanctuary — Digital Temple | Merkurov Love',
@@ -68,8 +68,7 @@ export const metadata: Metadata = {
 
     title: 'The Sanctuary — Digital Temple',
 
-    description:
-      'A living digital sanctuary of presence, ritual and traces.',
+    description: 'A living digital sanctuary of presence, ritual and traces.',
 
     images: [TEMPLE_IMAGE],
 

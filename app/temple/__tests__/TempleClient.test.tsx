@@ -7,6 +7,7 @@ import {
   within,
 } from '@testing-library/react';
 import TempleClient from '../TempleClient';
+import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/temple',
@@ -213,6 +214,34 @@ beforeEach(() => {
 });
 
 describe('Temple home composition', () => {
+  it('renders the supplied triptych with the exact owner URLs', () => {
+    render(<TempleClient />);
+
+    expect(screen.getByTestId('temple-heart')).toHaveAttribute(
+      'src',
+      TEMPLE_HOME_ASSETS.heart
+    );
+    expect(screen.getByTestId('temple-left-panel')).toHaveAttribute(
+      'src',
+      TEMPLE_HOME_ASSETS.left
+    );
+    expect(screen.getByTestId('temple-right-panel')).toHaveAttribute(
+      'src',
+      TEMPLE_HOME_ASSETS.right
+    );
+    expect(screen.getByAltText('Stained-glass Angel')).toBeInTheDocument();
+    expect(screen.getByAltText('Stained-glass Demon')).toBeInTheDocument();
+    expect(screen.getByAltText('Shared Temple heart')).toBeInTheDocument();
+  });
+
+  it('keeps the triptych heart linked to the Vigil', () => {
+    render(<TempleClient />);
+
+    expect(
+      screen.getByRole('link', { name: /Light the Vigil heart/ })
+    ).toHaveAttribute('href', '/vigil');
+  });
+
   it('renders the live supporter count on the heart', () => {
     render(<TempleClient />);
 
@@ -284,6 +313,24 @@ describe('Temple home composition', () => {
     await waitFor(() => {
       expect(checkoutCalls()).toHaveLength(1);
     });
+  });
+
+  it('builds the Traces mosaic from the real feed and clears only the view', async () => {
+    render(<TempleClient />);
+
+    const firstTrace = await screen.findByRole('button', {
+      name: /Let It Go trace by Alice/i,
+    });
+
+    expect(firstTrace).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear mine' }));
+
+    expect(
+      screen.queryByRole('button', { name: /Let It Go trace by Alice/i })
+    ).toBeNull();
+    expect(screen.getByText(/The archive is unchanged/)).toBeInTheDocument();
+    expect(screen.getByText(/7 recent traces/)).toBeInTheDocument();
   });
 
   it('renders only the seven server-filtered ritual traces', async () => {
