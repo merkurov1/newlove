@@ -18,6 +18,7 @@ export default defineConfig({
     'pierrot-browser.spec.ts',
     'absolution-redesign.spec.ts',
     'cast-redesign.spec.ts',
+    'temple-sanctuary.spec.ts',
   ],
   timeout: 90_000,
   expect: { timeout: 10_000 },

@@ -37,7 +37,7 @@ client falls back; no prepared id is fabricated.
 
 - Before: the Telegram shell forced a dark `#141210` header/background/bottom
   bar on every route and the Temple homepage had no native primary action.
-- After: Temple/Flow routes use the existing light `#FAF8F5` Temple palette;
+- After: Temple/Flow routes use the existing light `#f6f1e8` Temple palette;
   `/temple` exposes `KEEP THE VIGIL`, `/flow` exposes owner-only `WRITE`, and
   other routes keep their previous chrome.
 - Before: the global Header (and its `ComposerTrigger`) was hidden in Telegram,

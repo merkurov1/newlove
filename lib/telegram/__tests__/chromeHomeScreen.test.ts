@@ -59,7 +59,7 @@ describe('route-scoped Telegram chrome', () => {
   it('uses the Temple light palette on Temple and Flow routes', () => {
     for (const path of ['/temple', '/vigil', '/heartandangel/world', '/flow', '/flow/a-post']) {
       expect(resolveTelegramChrome(path).tone).toBe('temple');
-      expect(resolveTelegramChrome(path).colors.background).toBe('#FAF8F5');
+      expect(resolveTelegramChrome(path).colors.background).toBe('#f6f1e8');
     }
   });
 
