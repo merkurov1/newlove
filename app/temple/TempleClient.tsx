@@ -31,21 +31,13 @@ import RitualLink from '@/components/temple/RitualLink';
 import TempleTributeModal from '@/components/temple/TempleTributeModal';
 import { consumeLeftWithoutTrace } from '@/lib/temple/visitTrace';
 import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
+import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
 import { globalFlameRemainingMs } from '@/lib/vigil/flame';
 import { vigilHeartVisuals } from '@/lib/vigil/supporters';
 import { useVigilSupporters } from '@/hooks/useVigilSupporters';
 import { useTempleFeed } from '@/hooks/useTempleFeed';
 import { TEMPLE_TRACE_LIMIT } from '@/lib/temple/feed';
 import { trackTributeSupportView } from '@/lib/tributes/analytics';
-
-const ASSETS = {
-  heart:
-    'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Heart1.png',
-  angel:
-    'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png',
-  daemon:
-    'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Daemon1.png',
-};
 
 interface TemplePost {
   id: string | number;
@@ -513,17 +505,18 @@ export default function TempleClient() {
             />
 
             <div
-              className="relative grid grid-cols-[minmax(0,1fr)_minmax(7.5rem,13rem)_minmax(0,1fr)] items-center gap-1 sm:gap-5"
-              aria-label="Heart, Angel and Demon"
+              className="relative grid grid-cols-2 items-center gap-x-3 gap-y-5 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,15rem)_minmax(0,1fr)] sm:gap-x-4 sm:gap-y-0 lg:gap-x-6"
+              aria-label="Stained-glass Angel, living heart and Stained-glass Demon"
             >
-              <div className="relative h-40 sm:h-64 lg:h-72">
-                <div className="absolute inset-x-0 bottom-0 top-4 overflow-hidden rounded-t-[999px] rounded-b-2xl border border-amber-100/15 bg-white/[0.035] shadow-[inset_0_0_35px_rgba(0,0,0,0.28)]">
+              <div className="relative col-start-1 row-start-2 mx-auto aspect-[3/4] w-full max-w-[9rem] sm:col-start-1 sm:row-start-1 sm:max-w-[13rem] lg:max-w-[14rem]">
+                <div className="absolute inset-0 overflow-hidden rounded-t-[999px] rounded-b-2xl border border-amber-100/20 bg-[#100d0c] shadow-[inset_0_0_35px_rgba(0,0,0,0.4)]">
                   <Image
-                    src={ASSETS.angel}
+                    data-testid="temple-left-panel"
+                    src={TEMPLE_HOME_ASSETS.left}
                     alt="Stained-glass Angel"
                     fill
-                    sizes="(min-width: 1024px) 288px, (min-width: 640px) 240px, 120px"
-                    className="object-contain p-1 sm:p-2"
+                    sizes="(min-width: 1024px) 224px, (min-width: 640px) 208px, 144px"
+                    className="object-contain"
                     priority
                   />
                 </div>
@@ -532,9 +525,9 @@ export default function TempleClient() {
               <RitualLink
                 href="/vigil"
                 aria-label={`Light the Vigil heart. ${supporterLabel} in the last 24 hours. ${vigilLabel}.`}
-                className="group flex min-w-0 flex-col items-center text-center"
+                className="group col-span-2 row-start-1 flex min-w-0 flex-col items-center text-center sm:col-span-1 sm:col-start-2 sm:row-start-1"
               >
-                <div className="relative flex h-32 w-32 items-center justify-center sm:h-52 sm:w-52">
+                <div className="relative flex h-36 w-36 items-center justify-center sm:h-56 sm:w-56 lg:h-60 lg:w-60">
                   <div
                     aria-hidden="true"
                     className="absolute inset-2 rounded-full bg-amber-400/30 transition-all duration-700"
@@ -548,10 +541,10 @@ export default function TempleClient() {
                   <div className="relative h-full w-full">
                     <Image
                       data-testid="temple-heart"
-                      src={ASSETS.heart}
+                      src={TEMPLE_HOME_ASSETS.heart}
                       alt="Shared Temple heart"
                       fill
-                      sizes="(min-width: 640px) 208px, 128px"
+                      sizes="(min-width: 1024px) 240px, (min-width: 640px) 224px, 144px"
                       className="object-contain transition-all duration-700 group-hover:scale-105"
                       style={{
                         filter: `grayscale(${heartVisuals.grayscale}) brightness(${heartVisuals.brightness}) saturate(${heartVisuals.saturate})`,
@@ -586,14 +579,15 @@ export default function TempleClient() {
                 </span>
               </RitualLink>
 
-              <div className="relative h-40 sm:h-64 lg:h-72">
-                <div className="absolute inset-x-0 bottom-0 top-4 overflow-hidden rounded-t-[999px] rounded-b-2xl border border-amber-100/15 bg-white/[0.035] shadow-[inset_0_0_35px_rgba(0,0,0,0.28)]">
+              <div className="relative col-start-2 row-start-2 mx-auto aspect-[3/4] w-full max-w-[9rem] sm:col-start-3 sm:row-start-1 sm:max-w-[13rem] lg:max-w-[14rem]">
+                <div className="absolute inset-0 overflow-hidden rounded-t-[999px] rounded-b-2xl border border-amber-100/20 bg-[#100d0c] shadow-[inset_0_0_35px_rgba(0,0,0,0.4)]">
                   <Image
-                    src={ASSETS.daemon}
+                    data-testid="temple-right-panel"
+                    src={TEMPLE_HOME_ASSETS.right}
                     alt="Stained-glass Demon"
                     fill
-                    sizes="(min-width: 1024px) 288px, (min-width: 640px) 240px, 120px"
-                    className="object-contain p-1 sm:p-2"
+                    sizes="(min-width: 1024px) 224px, (min-width: 640px) 208px, 144px"
+                    className="object-contain"
                     priority
                   />
                 </div>
