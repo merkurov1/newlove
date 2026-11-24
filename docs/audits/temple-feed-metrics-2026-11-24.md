@@ -1,7 +1,33 @@
 # Temple Traces and Chronicles — metric definitions and cache contract
 
 Date: 2026-11-24
-Scope: `/temple` Traces panel, `/temple` Chronicles panel, `/api/temple_logs` GET, and the public profile/owner workspace consumers of the same response.
+Scope: the visible `/temple` homepage trace section, `/temple` Chronicles panel, `/api/temple_logs` GET, and the public profile/owner workspace consumers of the same response.
+
+## Production source audit (read-only)
+
+The public `/api/temple_logs` endpoint was read on 2026-11-24 at 15:19 UTC before
+changing the homepage composition. It already used the server-side feed from
+`public.temple_log`; the visible defect was that the seven records were only reachable
+behind the Traces button, not rendered on `/temple`.
+
+Observed event semantics in that read-only snapshot:
+
+| Category | Observed types | Count |
+| --- | --- | --- |
+| Ritual | `MEDITATION` 14, `ASH` 3, `ABSOLUTION` 2, `VIGIL_SPARK` 18 | 37 completed rituals |
+| Incomplete | modal-open / intensity signals | 2 |
+| Infrastructure | enter / navigation signals | 3 |
+
+Named author labels: 3. The endpoint returned seven eligible ritual rows in
+newest-first order (`id` 792 → 786) and no navigation rows, confirming the
+server-side filter and ordering. The audit uses only aggregate counts and
+public messages; no credentials or private rows are read.
+
+The new homepage section renders that same server response directly under the
+triptych, before the Rituals menu. It shows the canonical ritual label, author,
+UTC timestamp, the stored public message, and a one-line explanation of what the
+event represents. Entry, navigation, modal-open, intensity and unclassified
+rows never enter the list.
 
 ## Why the previous numbers changed
 
@@ -57,13 +83,27 @@ The dialog also reports the excluded infrastructure/incomplete counts when the c
 succeed, so short/incomplete events remain visible as excluded context rather than being
 silently presented as rituals.
 
+## Homepage journal surface
+
+The same seven-row feed is rendered visibly on `/temple` (the `Journal`
+section) rather than only inside the Traces dialog. The server page reads the
+bounded feed before rendering, so the seven real traces are present in the
+first HTML; the browser hook keeps the last known good snapshot and refreshes
+only on mount, TTL expiry, panel open, tab visibility or an explicit Refresh.
+The dialog remains available as a focused view of the same bounded payload.
+
 ## Cache and refresh contract
 
+- The `/temple` server render reads through the same shared feed cache and passes the
+  result as an initial payload, so the seven traces are present in the first HTML.
+  The page is dynamic; it never freezes a build-time snapshot.
 - Server cache: 60 seconds (`TEMPLE_FEED_TTL_SECONDS`).
-- Browser cache: one `localStorage` snapshot with the same 60-second TTL.
+- Browser cache: one `localStorage` snapshot with the same 60-second TTL. The
+  server-rendered first payload is stored for the next visit even if that browser
+  has not yet fetched the API.
 - A fresh cache is reused across visits without a network request.
-- An expired cache is refreshed on mount, when a Sanctuary panel opens after the TTL, when
-  the tab/app becomes visible again, or when the visitor presses Refresh.
+- An expired cache is refreshed on mount, when the tab/app becomes visible again,
+  when Chronicles opens after the TTL, or when the visitor presses Refresh.
 - There is no interval polling in the Temple page. The previous 15-second interval was
   removed.
 - A successful `/api/temple_logs` POST invalidates the server cache. Other write paths are
@@ -94,7 +134,8 @@ secrets. The fixture-based tests below exercise the same definitions and boundar
   paging, cache hit/miss/stale/invalidation.
 - `lib/temple/__tests__/feedCache.test.ts` — server TTL and browser cache fresh/expired/corrupt.
 - `hooks/__tests__/useTempleFeed.test.tsx` — no polling, fresh-cache reuse, stale fallback.
-- `app/temple/__tests__/TempleClient.test.tsx` — seven traces, full-window definitions and
-  excluded-event note.
-- `artifacts/temple-feed/` — Traces and Chronicles screenshots at desktop, iPhone, iPad and
-  emulated Telegram WebView widths.
+- `app/temple/__tests__/TempleClient.test.tsx` — seven traces visible directly on
+  `/temple` without opening a panel, server-rendered initial payload, full-window
+  definitions and excluded-event note.
+- `artifacts/temple-feed/` — visible homepage trace section and Chronicles screenshots at
+  desktop, iPhone, iPad and emulated Telegram WebView widths.

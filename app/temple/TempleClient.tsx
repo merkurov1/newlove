@@ -36,8 +36,59 @@ import { globalFlameRemainingMs } from '@/lib/vigil/flame';
 import { vigilHeartVisuals } from '@/lib/vigil/supporters';
 import { useVigilSupporters } from '@/hooks/useVigilSupporters';
 import { useTempleFeed } from '@/hooks/useTempleFeed';
-import { TEMPLE_TRACE_LIMIT } from '@/lib/temple/feed';
+import {
+  TEMPLE_TRACE_LIMIT,
+  type TempleFeedPayload,
+} from '@/lib/temple/feed';
 import { trackTributeSupportView } from '@/lib/tributes/analytics';
+import styles from './temple-home.module.css';
+
+type RitualIcon = React.ComponentType<{ size?: number; className?: string }>;
+
+const RITUAL_META: Record<
+  string,
+  {
+    descriptor: string;
+    accent: string;
+    soft: string;
+    icon: RitualIcon;
+  }
+> = {
+  '/heartandangel/calm': {
+    descriptor: 'Stillness · Breathe',
+    accent: '#6687a2',
+    soft: 'rgba(102, 135, 162, 0.26)',
+    icon: Moon,
+  },
+  '/heartandangel/letitgo': {
+    descriptor: 'Release · Ash',
+    accent: '#a06f6b',
+    soft: 'rgba(160, 111, 107, 0.26)',
+    icon: Trash2,
+  },
+  '/absolution': {
+    descriptor: 'Confession · Mercy',
+    accent: '#6f8c74',
+    soft: 'rgba(111, 140, 116, 0.26)',
+    icon: ShieldCheck,
+  },
+  '/cast': {
+    descriptor: 'The question · Fate',
+    accent: '#8176a8',
+    soft: 'rgba(129, 118, 168, 0.26)',
+    icon: Compass,
+  },
+};
+
+const CHAMBERS = [
+  ['Heritage', '/heritage'],
+  ['Media Archive', '/media'],
+  ['Unframed', '/unframed'],
+  ['Flow', '/flow'],
+  ['Flow Issues', '/flow-issues'],
+  ['Selection', '/selection'],
+  ['Journal', '/journal'],
+] as const;
 
 interface TemplePost {
   id: string | number;
@@ -45,6 +96,7 @@ interface TemplePost {
   label: string;
   author: string;
   time: string;
+  createdAt: string;
   content: string;
   audioUrl?: string | null;
   icon?: React.ComponentType<{ size?: number; className?: string }>;
@@ -121,80 +173,52 @@ function getEventVisuals(eventType: string) {
   }
 }
 
+/**
+ * A short, human explanation of what the stored ritual event represents. The
+ * canonical type comes from the server classifier; this map only supplies the
+ * display wording, so unknown future rituals still read as completed rituals
+ * rather than being mislabelled as navigation.
+ */
+const TEMPLE_TRACE_ACTIONS: Record<string, string> = {
+  VIGIL: 'Lit the Vigil heart',
+  VIGIL_SPARK: 'Sent a Vigil spark',
+  ASH: 'Released a burden',
+  CAST: 'Cast an archetype',
+  ABSOLUTION: 'Received absolution',
+  TRIBUTE: 'Offered a Tribute',
+  MEDITATION: 'Found calm',
+  SILENCE: 'Kept silence',
+  HEARTANDANGEL: 'Held the heart',
+  WHISPER: 'Left a whisper',
+};
+
+function getTraceAction(type: string) {
+  return TEMPLE_TRACE_ACTIONS[type.toUpperCase()] ?? 'Completed a ritual';
+}
+
 function formatTime(iso?: string) {
-  const d = iso ? new Date(iso) : new Date();
+  if (!iso) return '';
+
+  const d = new Date(iso);
 
   if (isNaN(d.getTime())) return '';
 
-  const time = d.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-
-  if (d.toDateString() === new Date().toDateString()) {
-    return time;
-  }
-
-  return `${d.toLocaleDateString([], {
+  // Stable UTC output keeps the server-rendered HTML identical to the first
+  // client render (no timezone/locale hydration difference) and matches the
+  // UTC boundaries documented for the Chronicles window.
+  const date = new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
-    month: 'short'
-  })}, ${time}`;
-}
+    month: 'short',
+    timeZone: 'UTC',
+  }).format(d);
+  const time = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC',
+  }).format(d);
 
-const DEFAULT_LIGHTING = {
-  bg: 'bg-[#FAF8F5]',
-  text: 'text-stone-900',
-  subText: 'text-stone-600',
-  glow: 'from-stone-200/40 via-transparent to-transparent',
-  vignette:
-    'radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.8) 0%, rgba(250, 248, 245, 1) 85%)',
-  cardBg:
-    'bg-white/95 border-stone-200 text-stone-900 shadow-2xl backdrop-blur-2xl'
-};
-
-function getTimeLighting() {
-  const hour = new Date().getHours();
-
-  if (hour >= 5 && hour < 11) {
-    return {
-      bg: 'bg-[#F5F2EB]',
-      text: 'text-stone-900',
-      subText: 'text-stone-600',
-      glow: 'from-amber-200/30 via-orange-100/10 to-transparent',
-      vignette:
-        'radial-gradient(circle at 50% 30%, rgba(255, 243, 224, 0.6) 0%, rgba(245, 242, 235, 1) 80%)',
-      cardBg:
-        'bg-white/95 border-stone-200 text-stone-900 shadow-2xl backdrop-blur-2xl'
-    };
-  }
-
-  if (hour >= 11 && hour < 17) {
-    return DEFAULT_LIGHTING;
-  }
-
-  if (hour >= 17 && hour < 21) {
-    return {
-      bg: 'bg-[#1f1a18]',
-      text: 'text-stone-100',
-      subText: 'text-stone-300',
-      glow: 'from-orange-900/30 via-rose-950/20 to-transparent',
-      vignette:
-        'radial-gradient(circle at 50% 40%, rgba(70, 35, 25, 0.4) 0%, rgba(31, 26, 24, 1) 90%)',
-      cardBg:
-        'bg-stone-900/95 border-stone-800 text-stone-100 shadow-2xl backdrop-blur-2xl'
-    };
-  }
-
-  return {
-    bg: 'bg-[#0b0c10]',
-    text: 'text-stone-200',
-    subText: 'text-stone-400',
-    glow: 'from-indigo-950/50 via-blue-950/20 to-transparent',
-    vignette:
-      'radial-gradient(circle at 50% 30%, rgba(20, 25, 45, 0.5) 0%, rgba(11, 12, 16, 1) 90%)',
-    cardBg:
-      'bg-zinc-900/95 border-zinc-800 text-zinc-100 shadow-2xl backdrop-blur-2xl'
-  };
+  return `${date}, ${time} UTC`;
 }
 
 /**
@@ -215,12 +239,16 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body);
 }
 
-export default function TempleClient() {
+export default function TempleClient({
+  initialFeed = null,
+}: {
+  /** Server-read feed so the seven traces are present in the first HTML. */
+  initialFeed?: TempleFeedPayload | null;
+}) {
   const pathname = usePathname();
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isTracesOpen, setIsTracesOpen] = useState(false);
   const [isChroniclesOpen, setIsChroniclesOpen] = useState(false);
-  const [lighting, setLighting] = useState(DEFAULT_LIGHTING);
   const [tgUser, setTgUser] = useState<any>(null);
   const isTelegramApp = useIsTelegram();
 
@@ -229,7 +257,7 @@ export default function TempleClient() {
     status: feedStatus,
     error: feedError,
     refresh: refreshFeed,
-  } = useTempleFeed();
+  } = useTempleFeed(initialFeed);
 
   const [vigilNow, setVigilNow] = useState(() => Date.now());
   const [sanctuaryHour, setSanctuaryHour] = useState(() => new Date().getHours());
@@ -274,6 +302,7 @@ export default function TempleClient() {
         label: visuals.label,
         author: cleanAuthor,
         time: formatTime(item.created_at),
+        createdAt: item.created_at,
         content: cleanContent,
         audioUrl: item.audio_url || null,
         icon: visuals.icon,
@@ -332,11 +361,9 @@ export default function TempleClient() {
       }
     }
 
-    setLighting(getTimeLighting());
     setSanctuaryHour(new Date().getHours());
 
     const timer = setInterval(() => {
-      setLighting(getTimeLighting());
       setSanctuaryHour(new Date().getHours());
     }, 60000);
 
@@ -441,96 +468,82 @@ export default function TempleClient() {
     setTributeEntry(null);
   }, []);
 
-  const actionButtonStyle =
-    lighting.bg.includes('1f1a18') ||
-    lighting.bg.includes('0b0c10')
-      ? 'bg-white/10 border-white/20 text-stone-200 hover:bg-white/20'
-      : 'bg-white/80 border-stone-300 text-stone-900 hover:bg-white';
-
-  const ritualButtonStyle = `w-full min-h-[54px] px-4 py-3 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center flex items-center justify-center ${actionButtonStyle}`;
-  const ritualAccent: Record<string, string> = {
-    '/heartandangel/calm': 'border-sky-400/30',
-    '/heartandangel/letitgo': 'border-rose-400/30',
-    '/absolution': 'border-emerald-400/30',
-    '/cast': 'border-indigo-400/30',
-  };
-
   return (
     <div
-      className={`relative w-full temple-screen telegram-viewport-min ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between px-4 sm:px-8 md:px-12 pt-4 pb-10 transition-colors duration-1000`}
-      style={{ backgroundImage: lighting.vignette }}
+      className={`${styles.stage} temple-screen telegram-viewport-min`}
     >
-      <h1 className="relative z-40 mx-auto w-full max-w-5xl px-4 pt-20 font-serif text-xs uppercase tracking-[0.3em] opacity-70 sm:pt-24">
-        The Sanctuary — Digital Temple
-      </h1>
+      {/*
+       * The supplied stained-glass photographs include a strip of studio wall
+       * around the glass. The clip follows the arch of the artwork itself so
+       * the figures stay open and unframed instead of reading as photo cards.
+       */}
+      <svg
+        aria-hidden="true"
+        focusable="false"
+        className={styles.archDefs}
+      >
+        <defs>
+          <clipPath
+            id="temple-window-arch-left"
+            clipPathUnits="objectBoundingBox"
+          >
+            {/*
+             * Follows the outer edge of the angel glass, not the studio wall
+             * around it. The supplied angel sits a few pixels narrower than
+             * the demon, so each figure gets its own crop.
+             */}
+            <path d="M0.5 0.012 L0.47 0.014 L0.381 0.052 L0.318 0.082 L0.285 0.102 L0.217 0.152 L0.167 0.202 L0.131 0.252 L0.104 0.302 L0.093 0.332 L0.077 0.402 L0.075 0.5 L0.075 0.972 L0.925 0.972 L0.925 0.5 L0.923 0.402 L0.907 0.332 L0.896 0.302 L0.869 0.252 L0.833 0.202 L0.783 0.152 L0.715 0.102 L0.682 0.082 L0.619 0.052 L0.53 0.014 Z" />
+          </clipPath>
+          <clipPath
+            id="temple-window-arch-right"
+            clipPathUnits="objectBoundingBox"
+          >
+            <path d="M0.5 0.016 L0.474 0.018 L0.374 0.052 L0.306 0.082 L0.269 0.102 L0.199 0.152 L0.148 0.202 L0.113 0.252 L0.088 0.302 L0.078 0.332 L0.066 0.402 L0.065 0.5 L0.065 0.997 L0.935 0.997 L0.935 0.5 L0.934 0.402 L0.921 0.332 L0.911 0.302 L0.886 0.252 L0.852 0.202 L0.801 0.152 L0.731 0.102 L0.695 0.082 L0.626 0.052 L0.526 0.018 Z" />
+          </clipPath>
+        </defs>
+      </svg>
 
-      {!isTelegramApp && (
-        <header className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 pt-2 pb-2">
-          <div className="flex items-center">
-            <Link
-              href="/heartandangel/world"
-              className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
-            >
-              <span>← Back to World</span>
-            </Link>
-          </div>
-
-          <SoundToggle
-            className={`px-3 py-2 border shadow-sm ${actionButtonStyle}`}
-          />
-        </header>
-      )}
-
-      {isTelegramApp && tgUser && (
-        <div className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 py-1">
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-xs font-serif">
-            <Send size={12} className="text-emerald-500" />
-            <span className="opacity-80">
-              @{tgUser.username || tgUser.first_name}
+      <div className={styles.page}>
+        <header className={styles.microNav}>
+          <RitualLink
+            href="/heartandangel/world"
+            className={styles.navLink}
+            aria-label="World"
+          >
+            <span className={styles.navLinkGlyph} aria-hidden="true">
+              ←
             </span>
+            <span>World</span>
+          </RitualLink>
+
+          <span className={styles.navMark}>Heart &amp; Angel</span>
+        </header>
+
+        {isTelegramApp && tgUser && (
+          <div className={styles.identity}>
+            <div className={styles.identityBadge}>
+              <Send size={12} className="text-emerald-500" aria-hidden="true" />
+              <span>@{tgUser.username || tgUser.first_name}</span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="relative w-full flex-1 px-2 sm:px-4 py-5 sm:py-7">
-        <div
-          className={`absolute w-[280px] h-[280px] sm:w-[450px] sm:h-[450px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`}
-        />
-
-        <div className="relative z-30 max-w-5xl mx-auto w-full">
-          <div className="relative mx-auto w-full max-w-4xl">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-2 top-1/2 h-28 -translate-y-1/2 rounded-[50%] bg-gradient-to-r from-transparent via-amber-200/15 to-transparent blur-2xl sm:h-40"
-            />
-
-            <div
-              className="relative grid grid-cols-2 items-center gap-x-3 gap-y-5 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,15rem)_minmax(0,1fr)] sm:gap-x-4 sm:gap-y-0 lg:gap-x-6"
-              aria-label="Stained-glass Angel, living heart and Stained-glass Demon"
-            >
-              <div className="relative col-start-1 row-start-2 mx-auto aspect-[3/4] w-full max-w-[9rem] sm:col-start-1 sm:row-start-1 sm:max-w-[13rem] lg:max-w-[14rem]">
-                <div className="absolute inset-0 overflow-hidden rounded-t-[999px] rounded-b-2xl border border-amber-100/20 bg-[#100d0c] shadow-[inset_0_0_35px_rgba(0,0,0,0.4)]">
-                  <Image
-                    data-testid="temple-left-panel"
-                    src={TEMPLE_HOME_ASSETS.left}
-                    alt="Stained-glass Angel"
-                    fill
-                    sizes="(min-width: 1024px) 224px, (min-width: 640px) 208px, 144px"
-                    className="object-contain"
-                    priority
-                  />
-                </div>
-              </div>
-
+        <main>
+          <section
+            className={styles.hero}
+            aria-label="Heart, Angel and Demon"
+          >
+            <div className={styles.heroCenter}>
               <RitualLink
                 href="/vigil"
                 aria-label={`Light the Vigil heart. ${supporterLabel} in the last 24 hours. ${vigilLabel}.`}
-                className="group col-span-2 row-start-1 flex min-w-0 flex-col items-center text-center sm:col-span-1 sm:col-start-2 sm:row-start-1"
+                className={styles.heartLink}
               >
-                <div className="relative flex h-36 w-36 items-center justify-center sm:h-56 sm:w-56 lg:h-60 lg:w-60">
-                  <div
+                <span className={styles.heartStage}>
+                  <span className={styles.heartHalo} aria-hidden="true" />
+                  <span
                     aria-hidden="true"
-                    className="absolute inset-2 rounded-full bg-amber-400/30 transition-all duration-700"
+                    className={styles.heartGlow}
                     style={{
                       opacity: heartVisuals.glowOpacity,
                       filter: `blur(${heartVisuals.glowBlurPx}px)`,
@@ -538,35 +551,40 @@ export default function TempleClient() {
                     }}
                   />
 
-                  <div className="relative h-full w-full">
-                    <Image
-                      data-testid="temple-heart"
-                      src={TEMPLE_HOME_ASSETS.heart}
-                      alt="Shared Temple heart"
-                      fill
-                      sizes="(min-width: 1024px) 240px, (min-width: 640px) 224px, 144px"
-                      className="object-contain transition-all duration-700 group-hover:scale-105"
-                      style={{
-                        filter: `grayscale(${heartVisuals.grayscale}) brightness(${heartVisuals.brightness}) saturate(${heartVisuals.saturate})`,
-                        transform: `scale(${heartVisuals.scale})`,
-                      }}
-                      priority
-                    />
-                  </div>
-                </div>
+                  <Image
+                    data-testid="temple-heart"
+                    src={TEMPLE_HOME_ASSETS.heart}
+                    alt="Shared Temple heart"
+                    width={672}
+                    height={672}
+                    sizes="(min-width: 860px) 232px, 168px"
+                    className={styles.heartImage}
+                    style={{
+                      filter: `grayscale(${heartVisuals.grayscale}) brightness(${heartVisuals.brightness}) saturate(${heartVisuals.saturate})`,
+                      transform: `scale(${heartVisuals.scale})`,
+                    }}
+                    priority
+                  />
+                </span>
 
-                <span
-                  className="mt-2 font-mono text-[10px] uppercase tracking-[.14em] sm:tracking-[.18em]"
-                  data-supporter-count={
-                    hasVigilState ? supporterCount : undefined
-                  }
-                >
-                  {supporterLabel} · {vigilLabel}
+                <span className={styles.vigilHint}>
+                  <span
+                    className={styles.vigilCount}
+                    data-supporter-count={
+                      hasVigilState ? supporterCount : undefined
+                    }
+                  >
+                    {supporterLabel}
+                  </span>
+                  <span className={styles.vigilDot} aria-hidden="true">
+                    ·
+                  </span>
+                  <span>{vigilLabel}</span>
                 </span>
 
                 {vigilStateProblem && (
                   <span
-                    className="mt-1 max-w-[11rem] font-mono text-[9px] uppercase leading-tight tracking-[.12em] opacity-50"
+                    className={styles.vigilProblem}
                     role="status"
                     aria-live="polite"
                   >
@@ -574,123 +592,383 @@ export default function TempleClient() {
                   </span>
                 )}
 
-                <span className="mt-2 rounded-full border border-amber-400/30 px-4 py-2 font-serif text-xs">
-                  Light the heart
-                </span>
+                <span className={styles.heartCta}>Light the heart</span>
               </RitualLink>
 
-              <div className="relative col-start-2 row-start-2 mx-auto aspect-[3/4] w-full max-w-[9rem] sm:col-start-3 sm:row-start-1 sm:max-w-[13rem] lg:max-w-[14rem]">
-                <div className="absolute inset-0 overflow-hidden rounded-t-[999px] rounded-b-2xl border border-amber-100/20 bg-[#100d0c] shadow-[inset_0_0_35px_rgba(0,0,0,0.4)]">
-                  <Image
-                    data-testid="temple-right-panel"
-                    src={TEMPLE_HOME_ASSETS.right}
-                    alt="Stained-glass Demon"
-                    fill
-                    sizes="(min-width: 1024px) 224px, (min-width: 640px) 208px, 144px"
-                    className="object-contain"
-                    priority
-                  />
-                </div>
-              </div>
+              <p className={styles.eyebrow}>The Sanctuary</p>
+              <h1 className={styles.title}>
+                <span className={styles.srOnly}>The Sanctuary — </span>
+                Digital Temple
+              </h1>
+              <p className={styles.lede}>
+                A quiet room for what cannot be said. Light the heart, choose a
+                ritual, leave a trace.
+              </p>
             </div>
 
-            <div
-              aria-hidden="true"
-              className="mx-auto mt-2 h-5 w-2/3 rounded-[50%] bg-black/10 blur-xl"
+            <figure className={`${styles.figure} ${styles.figureLeft}`}>
+              <Image
+                data-testid="temple-left-panel"
+                src={TEMPLE_HOME_ASSETS.left}
+                alt="Stained-glass Angel"
+                width={896}
+                height={1200}
+                sizes="(min-width: 1200px) 344px, (min-width: 861px) 28vw, 46vw"
+                className={styles.figureImage}
+                priority
+              />
+              <figcaption className={styles.figureCaption}>
+                Angel
+              </figcaption>
+            </figure>
+
+            <figure className={`${styles.figure} ${styles.figureRight}`}>
+              <Image
+                data-testid="temple-right-panel"
+                src={TEMPLE_HOME_ASSETS.right}
+                alt="Stained-glass Demon"
+                width={896}
+                height={1200}
+                sizes="(min-width: 1200px) 344px, (min-width: 861px) 28vw, 46vw"
+                className={styles.figureImage}
+                priority
+              />
+              <figcaption className={styles.figureCaption}>
+                Demon
+              </figcaption>
+            </figure>
+          </section>
+
+          <div className={styles.flow}>
+            <section
+              className={`${styles.section} ${styles.ritualsSection}`}
+              aria-labelledby="rituals-title"
+            >
+              <div className={styles.sectionHead}>
+                <h2 id="rituals-title" className={styles.sectionEyebrow}>
+                  Rituals
+                </h2>
+                <p className={styles.sectionSubtitle}>
+                  Four gestures for what words cannot hold.
+                </p>
+              </div>
+
+              <div className={styles.ritualGrid}>
+                {TEMPLE_RITUAL_LINKS.map((ritual) => {
+                  const meta = RITUAL_META[ritual.href] ?? {
+                    descriptor: 'Ritual',
+                    accent: '#8a7a6a',
+                    soft: 'rgba(138, 122, 106, 0.24)',
+                    icon: Sparkles,
+                  };
+                  const Icon = meta.icon;
+
+                  return (
+                    <RitualLink
+                      key={ritual.href}
+                      href={ritual.href}
+                      className={styles.ritualCard}
+                      aria-label={ritual.label}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={styles.ritualPane}
+                        style={{
+                          color: meta.accent,
+                          background: `linear-gradient(180deg, ${meta.soft} 0%, transparent 72%), linear-gradient(180deg, rgba(255,255,255,.18), transparent 45%)`,
+                        }}
+                      >
+                        <Icon size={15} />
+                      </span>
+
+                      <span className={styles.ritualBody}>
+                        <span className={styles.ritualTitle}>
+                          {ritual.label}
+                        </span>
+                        <span className={styles.ritualDescriptor}>
+                          {meta.descriptor}
+                        </span>
+                      </span>
+
+                      <span className={styles.ritualArrow} aria-hidden="true">
+                        ↗
+                      </span>
+                    </RitualLink>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section
+              className={`${styles.section} ${styles.tributeSection}`}
+              aria-labelledby="tribute-title"
+            >
+              <div className={styles.tributeBlock}>
+                <button
+                  type="button"
+                  onClick={() => openTribute()}
+                  className={styles.tributeRow}
+                  aria-label="Support the Temple — Tribute"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={styles.tributePane}
+                    style={{
+                      color: '#a98046',
+                      background:
+                        'linear-gradient(180deg, rgba(169,128,70,.3) 0%, transparent 78%), linear-gradient(180deg, rgba(255,255,255,.2), transparent 45%)',
+                    }}
+                  >
+                    <Heart size={16} />
+                  </span>
+
+                  <span className={styles.rowBody}>
+                    <span id="tribute-title" className={styles.rowTitle}>
+                      Tribute
+                    </span>
+                    <span className={styles.rowDescriptor}>
+                      Sustain the Temple
+                    </span>
+                  </span>
+
+                  <span className={styles.rowArrow} aria-hidden="true">
+                    →
+                  </span>
+                </button>
+
+                <div className={styles.tributeMeta}>
+                  <p className={styles.tributeExplainer}>
+                    Vigil contributes a spark. Tribute materially sustains the
+                    Temple.
+                  </p>
+
+                  <div
+                    className={styles.amounts}
+                    aria-label="Suggested Tribute amounts"
+                  >
+                    {[5, 20, 100].map((amount) => (
+                      <button
+                        key={amount}
+                        type="button"
+                        onClick={() => openTribute(amount)}
+                        className={styles.amount}
+                        title={`Open Tribute at $${amount}`}
+                      >
+                        ${amount}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {leftWithoutTrace && (
+                <p className={styles.leftWithoutTrace} role="status">
+                  Left without a trace
+                </p>
+              )}
+            </section>
+
+            <section
+              id="temple-journal"
+              className={`${styles.section} ${styles.tracesSection}`}
+              aria-label="Traces"
+            >
+              <div className={styles.tracesHead}>
+                <div className={styles.tracesHeading}>
+                  <h2 id="traces-title" className={styles.sectionEyebrow}>
+                    Journal
+                  </h2>
+                  <p className={styles.sectionSubtitle}>
+                    The latest {TEMPLE_TRACE_LIMIT} completed rituals, newest
+                    first.
+                  </p>
+                </div>
+
+                <div className={styles.tracesActions}>
+                  <button
+                    type="button"
+                    onClick={() => void refreshFeed({ force: true })}
+                    className={styles.tracesAction}
+                    aria-label="Refresh the latest Temple traces"
+                  >
+                    Refresh
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsTracesOpen(true)}
+                    className={styles.tracesAction}
+                    aria-label="Open the full Traces panel"
+                  >
+                    Open panel
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.tracesPanel}>
+                <div className={styles.tracesLogHead}>
+                  <span>Latest traces</span>
+                  <span className={styles.tracesCount}>
+                    {loaded
+                      ? `${posts.length} ${
+                          posts.length === 1 ? 'trace' : 'traces'
+                        }`
+                      : 'Reading the ether…'}
+                  </span>
+                </div>
+
+                {feedError && (
+                  <p className={styles.tracesNotice} role="status" aria-live="polite">
+                    {feedStatus === 'stale'
+                      ? 'Showing the last known good snapshot. '
+                      : ''}
+                    {feedError}
+                  </p>
+                )}
+
+                {!loaded ? (
+                  <p className={styles.tracesEmpty}>Reading the ether…</p>
+                ) : feedStatus === 'error' && posts.length === 0 ? (
+                  <p className={styles.tracesEmpty}>
+                    The chronicle is temporarily unavailable.
+                  </p>
+                ) : posts.length === 0 ? (
+                  <p className={styles.tracesEmpty}>
+                    No eligible ritual traces yet. Completed rituals will appear
+                    here.
+                  </p>
+                ) : (
+                  <ol
+                    className={styles.tracesLog}
+                    aria-label="Latest completed ritual traces"
+                  >
+                    {posts.map((post) => {
+                      const IconComponent = post.icon || Radio;
+                      const action = getTraceAction(post.type);
+
+                      return (
+                        <li key={String(post.id)} className={styles.traceRow}>
+                          <span
+                            className={`${styles.traceIcon} ${post.color || ''}`}
+                            aria-hidden="true"
+                          >
+                            <IconComponent size={15} />
+                          </span>
+
+                          <div className={styles.traceBody}>
+                            <div className={styles.traceMeta}>
+                              <span className={styles.traceLabel}>
+                                {post.label}
+                              </span>
+                              <span className={styles.traceAuthor}>
+                                {post.author}
+                              </span>
+                              <time
+                                dateTime={post.createdAt}
+                                className={styles.traceTime}
+                              >
+                                {post.time}
+                              </time>
+                            </div>
+
+                            <p className={styles.traceMessage}>
+                              {post.content || action}
+                            </p>
+
+                            {post.content && (
+                              <p className={styles.traceAction}>{action}</p>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+
+                <div className={styles.tracesFoot}>
+                  <span>
+                    {loaded
+                      ? stats.windowDays
+                        ? `${stats.completedRituals} ritual marks in the last ${stats.windowDays} days`
+                        : `${stats.completedRituals} ritual marks in the current window`
+                      : 'Live archive'}
+                  </span>
+
+                  <span className={styles.traceNote}>
+                    Live archive · entry, navigation and incomplete events
+                    excluded.
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            <section
+              className={`${styles.section} ${styles.chambersSection}`}
+              aria-labelledby="chambers-title"
+            >
+              <div className={styles.sectionHead}>
+                <h2 id="chambers-title" className={styles.sectionEyebrow}>
+                  Chambers
+                </h2>
+                <p className={styles.sectionSubtitle}>
+                  Other rooms in the house.
+                </p>
+              </div>
+
+              <ol className={styles.chamberGrid}>
+                {CHAMBERS.map(([label, href], index) => (
+                  <li key={href} className={styles.chamberItem}>
+                    <Link
+                      href={href}
+                      className={styles.chamberLink}
+                      aria-label={label}
+                    >
+                      <span className={styles.chamberNumber}>
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <span className={styles.chamberName}>{label}</span>
+                      <span className={styles.chamberArrow} aria-hidden="true">
+                        ↗
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          </div>
+        </main>
+
+        <footer className={styles.footer}>
+          <p className={styles.footerMark}>The Sanctuary · Digital Temple</p>
+
+          <div className={styles.footerActions}>
+            <button
+              type="button"
+              onClick={() => setIsInfoOpen(true)}
+              className={styles.footerButton}
+              aria-label="Open Sanctuary information"
+            >
+              Info
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsChroniclesOpen(true)}
+              className={styles.footerButton}
+              aria-label="Chronicles"
+            >
+              Chronicles
+            </button>
+
+            <SoundToggle
+              className={styles.soundToggle}
+              showTextOnMobile
             />
           </div>
 
-          <section className="mx-auto mt-8 w-full max-w-3xl" aria-labelledby="rituals-title">
-            <h2 id="rituals-title" className="mb-4 text-center font-serif text-2xl">Rituals</h2>
-            <div className="grid grid-cols-2 gap-3">
-              {TEMPLE_RITUAL_LINKS.map((ritual) => (
-                <RitualLink
-                  key={ritual.href}
-                  href={ritual.href}
-                  className={`${ritualButtonStyle} ${ritualAccent[ritual.href] ?? 'border-amber-400/20'}`}
-                >
-                  {ritual.label}
-                </RitualLink>
-              ))}
-            </div>
-
-            <div className="mt-5 rounded-3xl border border-amber-400/20 bg-black/10 p-5 text-center backdrop-blur-md">
-              <p className="font-serif text-lg">Support the Temple</p>
-              <p className="mt-1 text-xs opacity-70">
-                Vigil contributes a spark. Tribute materially sustains the Temple.
-              </p>
-              <button
-                type="button"
-                onClick={() => openTribute()}
-                className="mt-4 flex min-h-[48px] w-full items-center justify-center rounded-full border border-amber-300/50 bg-amber-300/15 px-5 font-serif text-xs uppercase tracking-[.18em] transition-all hover:bg-amber-300/25"
-              >
-                Support the Temple →
-              </button>
-              <div className="mt-3 flex justify-center gap-2">
-                {[5, 20, 100].map(amount => (
-                  <button
-                    key={amount}
-                    type="button"
-                    onClick={() => openTribute(amount)}
-                    className="min-h-[44px] rounded-full border border-amber-400/30 px-4 py-2 font-mono text-xs transition-colors hover:border-amber-300/60"
-                  >
-                    ${amount}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {leftWithoutTrace && (
-              <p
-                className="mt-3 text-center font-mono text-[10px] uppercase tracking-[.18em] opacity-60"
-                role="status"
-              >
-                Left without a trace
-              </p>
-            )}
-
-            {/* Temple utilities */}
-            <div className="flex items-center justify-center gap-2 mt-3 w-full">
-              <button
-                onClick={() => setIsChroniclesOpen(true)}
-                className={`flex-1 py-2.5 px-2.5 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1.5 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
-              >
-                <Activity size={12} className="opacity-80" />
-                <span>Chronicles</span>
-              </button>
-
-              <button
-                onClick={() => setIsTracesOpen(true)}
-                className={`flex-1 py-2.5 px-2.5 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1.5 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
-              >
-                <Layers size={12} className="opacity-80" />
-                <span>Traces</span>
-              </button>
-
-              <button
-                onClick={() => setIsInfoOpen(true)}
-                className={`w-10 h-10 rounded-xl border backdrop-blur-sm shadow-sm flex items-center justify-center transition-transform hover:scale-105 cursor-pointer font-serif text-sm italic shrink-0 ${actionButtonStyle}`}
-                title="About Temple"
-                aria-label="Open Sanctuary information"
-              >
-                ?
-              </button>
-            </div>
-          </section>
-
-          <section className="mx-auto mt-10 max-w-4xl text-center" aria-labelledby="chambers-title">
-            <h2 id="chambers-title" className="font-serif text-2xl">Chambers</h2>
-            <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
-              {[
-                ['Heritage', '/heritage'], ['Media Archive', '/media'], ['Unframed', '/unframed'],
-                ['Flow', '/flow'], ['Flow Issues', '/flow-issues'], ['Selection', '/selection'], ['Journal', '/journal'],
-              ].map(([label, href]) => <Link key={href} href={href} className={`rounded-full border px-4 py-2 ${actionButtonStyle}`}>{label}</Link>)}
-            </div>
-          </section>
-        </div>
+          <p className={styles.footerCopy}>Merkurov Love</p>
+        </footer>
       </div>
-
-      <div className="h-4" />
 
       <ModalPortal>
         <AnimatePresence>
@@ -711,7 +989,7 @@ export default function TempleClient() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="temple-info-title"
-              className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-md w-full border space-y-4 relative shadow-2xl`}
+              className={`${styles.modalPanel} rounded-md p-6 sm:p-8 max-w-md w-full border space-y-4 relative shadow-2xl`}
             >
               <button
                 onClick={() => setIsInfoOpen(false)}
@@ -729,9 +1007,9 @@ export default function TempleClient() {
               </h3>
 
               <p className="font-serif text-sm leading-relaxed font-light opacity-90">
-                This digital temple is a quiet space of presence. Lighting
-                shifts with the real hours of the world. Here, rituals work,
-                and every visitor leaves a trace.
+                This digital temple is a quiet space of presence. Light and
+                dark follow your device. Here, rituals work, and every visitor
+                leaves a trace.
               </p>
             </motion.div>
           </motion.div>
@@ -758,7 +1036,7 @@ export default function TempleClient() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="temple-traces-title"
-              className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-2xl w-full border space-y-4 relative shadow-2xl max-h-[80vh] flex flex-col`}
+              className={`${styles.modalPanel} rounded-md p-6 sm:p-8 max-w-2xl w-full border space-y-4 relative shadow-2xl max-h-[80vh] flex flex-col`}
             >
               <div className="flex items-center justify-between border-b pb-3 border-stone-500/20">
                 <div>
@@ -882,7 +1160,7 @@ export default function TempleClient() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="temple-chronicles-title"
-              className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-md w-full border space-y-6 relative shadow-2xl`}
+              className={`${styles.modalPanel} rounded-md p-6 sm:p-8 max-w-md w-full border space-y-6 relative shadow-2xl`}
             >
               <div className="flex items-center justify-between border-b pb-4 border-stone-500/20">
                 <div>

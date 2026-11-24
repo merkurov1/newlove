@@ -149,15 +149,29 @@ export function useTempleFeed(initialPayload: TempleFeedPayload | null = null) {
     const cached = readCachedTempleFeed();
 
     if (cached && !snapshotRef.current.payload) {
+      const usable = cached.fresh && !cached.payload.meta.stale;
+
       apply({
         payload: cached.payload,
-        status: cached.payload.meta.stale ? 'stale' : 'ready',
-        error: cached.payload.meta.stale
-          ? 'The Temple is showing its last known good snapshot.'
-          : null,
+        status: usable ? 'ready' : 'stale',
+        error: usable
+          ? null
+          : 'The Temple is showing its last known good snapshot.',
         lastUpdatedAt: cached.savedAt,
         fromCache: true,
       });
+    }
+
+    // A server-rendered feed is already a valid last-known-good snapshot. Keep
+    // the newest one for the next visit even if this browser has never fetched
+    // the API or holds an older cached copy.
+    if (initialPayload) {
+      const initialAt =
+        Date.parse(initialPayload.meta.generatedAt) || Date.now();
+
+      if (!cached || cached.savedAt < initialAt) {
+        writeCachedTempleFeed(initialPayload);
+      }
     }
 
     void refresh();
@@ -173,7 +187,7 @@ export function useTempleFeed(initialPayload: TempleFeedPayload | null = null) {
       requestIdRef.current += 1;
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [apply, refresh]);
+  }, [apply, initialPayload, refresh]);
 
   return {
     ...snapshot,

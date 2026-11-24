@@ -102,7 +102,7 @@ describe('useTempleFeed', () => {
 
     await waitFor(() => expect(result.current.status).toBe('stale'));
 
-    expect(result.current.error).toBe('network down');
+    await waitFor(() => expect(result.current.error).toBe('network down'));
     expect(result.current.payload?.data[0].id).toBe('trace-1');
   });
 

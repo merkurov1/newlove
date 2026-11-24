@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 /**
- * Captures the Temple Traces and Chronicles panels with a deterministic feed.
+ * Captures the visible Temple homepage trace section and the Chronicles panel
+ * with a deterministic client feed.
  *
  * Usage:
  *   node scripts/audit/temple-feed-screenshots.mjs
  *
  * The app must already be running at PIERROT_TEST_BASE_URL (default
  * http://localhost:3000). The script uses the system Chromium if Playwright's
- * bundled browser is not installed. `temple_log` is intercepted, so this never
- * touches a real database.
+ * bundled browser is not installed. Browser requests to `temple_log` are
+ * intercepted. If the local server has Supabase credentials, its optional
+ * server-rendered feed may also read the public table; the UI never writes.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -139,16 +141,22 @@ async function capture(browser, config) {
 
   await page.goto(`${baseUrl}/temple`, { waitUntil: 'networkidle' });
 
-  await page.getByRole('button', { name: 'Traces' }).click();
-  await page.getByRole('dialog', { name: 'Sanctuary Traces' }).waitFor();
-  await page.waitForTimeout(700);
-  await page.screenshot({
-    path: path.join(outDir, `traces-${config.name}.png`),
-    fullPage: false,
+  // The local dev server may show its own diagnostics portal when optional
+  // Supabase services are stubbed. It is not part of the page design.
+  await page.addStyleTag({
+    content: 'nextjs-portal { display: none !important; }',
   });
-  await page
-    .getByRole('button', { name: 'Close Sanctuary Traces' })
-    .click();
+
+  const traces = page.locator('#temple-traces');
+  await traces.waitFor({ state: 'visible' });
+  await traces
+    .getByText('Released a burden into the sky', { exact: false })
+    .first()
+    .waitFor();
+  await page.waitForTimeout(700);
+  await traces.screenshot({
+    path: path.join(outDir, `traces-${config.name}.png`),
+  });
 
   await page.getByRole('button', { name: 'Chronicles' }).click();
   await page.getByRole('dialog', { name: 'Chronicles' }).waitFor();

@@ -3,6 +3,11 @@
 import type { Metadata } from 'next';
 import TempleClient from './TempleClient';
 import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
+import { resolveTempleFeed } from '@/lib/temple/feed.server';
+import type { TempleFeedPayload } from '@/lib/temple/feed';
+
+export const dynamic = 'force-dynamic';
 
 const TEMPLE_URL = 'https://www.merkurov.love/temple';
 
@@ -91,6 +96,20 @@ export const metadata: Metadata = {
   category: 'art',
 };
 
-export default function TemplePage() {
-  return <TempleClient />;
+export default async function TemplePage() {
+  let initialFeed: TempleFeedPayload | null = null;
+
+  try {
+    const result = await resolveTempleFeed({
+      getClient: () => getServerSupabaseClient({ useServiceRole: true }),
+    });
+
+    initialFeed = result.payload;
+  } catch (error) {
+    // The client hook retries and falls back to its last known good browser
+    // snapshot. A server read failure must not take down the Temple.
+    console.error('[temple] initial feed unavailable:', error);
+  }
+
+  return <TempleClient initialFeed={initialFeed} />;
 }

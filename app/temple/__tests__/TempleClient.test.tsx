@@ -315,24 +315,41 @@ describe('Temple home composition', () => {
     });
   });
 
-  it('renders only the seven server-filtered ritual traces', async () => {
+  it('renders the seven server-filtered ritual traces directly on the homepage', async () => {
     render(<TempleClient />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Traces' }));
-
-    const dialog = await screen.findByRole('dialog', {
-      name: 'Sanctuary Traces',
-    });
+    const traces = screen.getByRole('region', { name: 'Traces' });
 
     await waitFor(() => {
-      expect(within(dialog).getByText('ASH trace 0')).toBeInTheDocument();
+      expect(within(traces).getByText('ASH trace 0')).toBeInTheDocument();
     });
 
-    expect(within(dialog).getAllByText(/\w+ trace \d/)).toHaveLength(7);
-    expect(within(dialog).getByText('Alice')).toBeInTheDocument();
+    expect(within(traces).getAllByRole('listitem')).toHaveLength(7);
+    expect(within(traces).getByText('Alice')).toBeInTheDocument();
     expect(
-      within(dialog).getByText(/entry, navigation and incomplete events excluded/i)
+      within(traces).getByText(/entry, navigation and incomplete events excluded/i)
     ).toBeInTheDocument();
+  });
+
+  it('shows the server-rendered traces before the client fetch resolves', () => {
+    global.fetch = jest.fn(
+      () => new Promise<Response>(() => undefined)
+    ) as unknown as typeof fetch;
+
+    render(
+      <TempleClient
+        initialFeed={
+          feedPayload() as unknown as Parameters<
+            typeof TempleClient
+          >[0]['initialFeed']
+        }
+      />
+    );
+
+    const traces = screen.getByRole('region', { name: 'Traces' });
+
+    expect(within(traces).getByText('ASH trace 0')).toBeInTheDocument();
+    expect(within(traces).getAllByRole('listitem')).toHaveLength(7);
   });
 
   it('shows full-window Chronicles definitions instead of latest-ten sample metrics', async () => {
