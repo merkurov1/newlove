@@ -22,6 +22,8 @@ describe('Temple route classification', () => {
   it('shows the Telegram navigation on World and Temple, hides it on topbar rituals', () => {
     expect(isTelegramNavigationHidden('/heartandangel/world')).toBe(false);
     expect(isTelegramNavigationHidden('/temple')).toBe(false);
+    expect(isTelegramNavigationHidden('/flow')).toBe(false);
+    expect(isTelegramNavigationHidden('/flow/existing-flow-entry')).toBe(false);
     expect(isTelegramNavigationHidden('/heartandangel/calm')).toBe(true);
     expect(isTelegramNavigationHidden('/heartandangel/letitgo')).toBe(true);
     expect(isTelegramNavigationHidden('/vigil')).toBe(true);
