@@ -9,7 +9,7 @@ added.
 
 | Capability | Requirement | Fallback when missing |
 | --- | --- | --- |
-| Native BottomButton | Telegram client with `WebApp.BottomButton` | Compact in-page owner `WRITE` on `/flow`; Temple keeps its inline controls |
+| Native BottomButton | Telegram client with `WebApp.BottomButton` | Temple keeps its inline controls; Flow adds no duplicate in-page writer/header row |
 | Haptics | `WebApp.HapticFeedback`; skipped for reduced-motion users | Silent no-op |
 | Stories | `WebApp.shareToStory` + HTTPS media (Temple heart asset or published Flow card) | Prepared message → Telegram share link → `navigator.share` → copy |
 | `shareMessage` | Bot API 8.0+ `savePreparedInlineMessage` and a server bot token (`PIERROT_BOT_TOKEN`, `OSIRIS_BOT_TOKEN` or `TELEGRAM_BOT_TOKEN`) | Telegram share deep link, native share, copy canonical URL |
@@ -43,10 +43,9 @@ client falls back; no prepared id is fabricated.
 - Before: the global Header (and its `ComposerTrigger`) was hidden in Telegram,
   so owners could not publish from `/flow`, and `/flow` still reserved the web
   header's `pt-20` space.
-- After: the native BottomButton or a compact in-page fallback opens the
-  existing `NewPostModal`; Telegram Flow padding is safe-area aware and the
-  global Telegram navigation is suppressed on `/flow` in favour of Flow's own
-  `← Temple` / `← Flow` links.
+- After: the native BottomButton opens the existing `NewPostModal`; Telegram
+  Flow keeps its pre-existing Telegram navigation and adds no extra top
+  header row; Telegram Flow padding is safe-area aware.
 
 ## Verification
 
