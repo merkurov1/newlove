@@ -7,6 +7,10 @@ import TempleTopBar from '@/components/TempleTopBar';
 import Image from 'next/image';
 import { useRitualModalTimer } from '@/components/temple/useRitualModalTimer';
 import { useVigilController } from './useVigilController';
+import VigilShare from '@/components/vigil/VigilShare';
+import useIsTelegram from '@/components/useIsTelegram';
+import { useTelegramBottomButton } from '@/components/telegram/useTelegramBottomButton';
+import { hapticImpact } from '@/lib/telegram/webApp';
 import { vigilHeartHeat } from '@/lib/vigil/flame';
 
 const ANGEL_GIF =
@@ -43,6 +47,18 @@ export default function VigilExperience() {
     userName,
     triggerRitual,
   } = useVigilController();
+
+  const isTelegram = useIsTelegram();
+
+  useTelegramBottomButton({
+    text: isOnCooldown ? `SPARK RETURNS IN ${cooldownLabel}` : 'SEND SPARK',
+    visible: isTelegram,
+    enabled: Boolean(userName) && !isLighting && !isOnCooldown,
+    onClick: () => {
+      hapticImpact('vigil');
+      void triggerRitual();
+    },
+  });
 
   // Publish the shared flame clock to the modal header. The visual intensity
   // below uses the same value, so the timer and the heart can never disagree.
@@ -342,6 +358,12 @@ export default function VigilExperience() {
                   role="status"
                 >
                   {rateLimitMsg}
+                </div>
+              )}
+
+              {isOnCooldown && (
+                <div className="pt-1">
+                  <VigilShare />
                 </div>
               )}
             </div>

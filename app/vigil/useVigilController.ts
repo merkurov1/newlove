@@ -13,6 +13,7 @@ import {
   formatGlobalFlameRemaining,
   globalFlameRemainingMs,
 } from '@/lib/vigil/flame';
+import { hapticNotification } from '@/lib/telegram/webApp';
 
 const FLAME_ID = 1;
 const CLOCK_REFRESH_MS = 30_000;
@@ -462,6 +463,9 @@ export function useVigilController() {
         applyCooldown(VIGIL_COOLDOWN_MS);
         void refreshGuardians();
 
+        // Confirmed server completion, not an optimistic tap.
+        hapticNotification('success');
+
         // Animation starts only after the server accepted the claim and only
         // then flies toward the shared heart.
         const end = measureHeartTarget();
@@ -469,6 +473,7 @@ export function useVigilController() {
         if (end) setSpark({ start: origin, end });
       } catch (error) {
         console.error('Vigil ritual error:', error);
+        hapticNotification('error');
         setRateLimitMsg(
           'The spark could not be transmitted. Please try again.'
         );

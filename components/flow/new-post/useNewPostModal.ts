@@ -1,5 +1,6 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { telegramAuthHeaders } from "@/lib/telegram/clientAuth";
 import type {
   FlowImageAttachment,
   FlowLinkAttachment,
@@ -159,7 +160,9 @@ export function useNewPostModal({
       try {
         const res = await fetch(
           `/api/flow/items/${encodeURIComponent(itemId!)}`,
-          { cache: "no-store" },
+          { cache: "no-store", ...(Object.keys(telegramAuthHeaders()).length
+            ? { headers: telegramAuthHeaders() }
+            : {}) },
         );
 
         const data = await readResponse(res);
@@ -333,6 +336,9 @@ export function useNewPostModal({
 
       const res = await fetch("/api/upload", {
         method: "POST",
+        ...(Object.keys(telegramAuthHeaders()).length
+          ? { headers: telegramAuthHeaders() }
+          : {}),
         body: formData,
       });
 
@@ -461,9 +467,11 @@ export function useNewPostModal({
     setError(null);
 
     try {
-      const res = await fetch(
-        `/api/flow/parse-url?url=${encodeURIComponent(normalized)}`,
-      );
+      const parseUrl = `/api/flow/parse-url?url=${encodeURIComponent(normalized)}`;
+      const authHeaders = telegramAuthHeaders();
+      const res = Object.keys(authHeaders).length
+        ? await fetch(parseUrl, { headers: authHeaders })
+        : await fetch(parseUrl);
       const data = await readResponse(res);
 
       if (!res.ok) {
@@ -535,9 +543,11 @@ export function useNewPostModal({
     setError(null);
 
     try {
-      const res = await fetch(
-        `/api/flow/parse-url?url=${encodeURIComponent(normalized)}`,
-      );
+      const parseUrl = `/api/flow/parse-url?url=${encodeURIComponent(normalized)}`;
+      const authHeaders = telegramAuthHeaders();
+      const res = Object.keys(authHeaders).length
+        ? await fetch(parseUrl, { headers: authHeaders })
+        : await fetch(parseUrl);
       const data = await readResponse(res);
 
       if (!res.ok || !data.youtube) {
@@ -814,6 +824,7 @@ export function useNewPostModal({
         method: isEditing ? "PATCH" : "POST",
         headers: {
           "Content-Type": "application/json",
+          ...telegramAuthHeaders(),
         },
         body: JSON.stringify(payload),
       });

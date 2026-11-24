@@ -24,9 +24,13 @@ import {
   Send
 } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import useIsTelegram from '@/components/useIsTelegram';
 import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
+import { hapticImpact, hapticSelection } from '@/lib/telegram/webApp';
+import { useTelegramBottomButton } from '@/components/telegram/useTelegramBottomButton';
+import AddToHomePrompt from '@/components/temple/AddToHomePrompt';
+import SharedVigil from '@/components/temple/SharedVigil';
 import RitualLink from '@/components/temple/RitualLink';
 import TempleTributeModal from '@/components/temple/TempleTributeModal';
 import { consumeLeftWithoutTrace } from '@/lib/temple/visitTrace';
@@ -251,6 +255,7 @@ export default function TempleClient({
   initialFeed?: TempleFeedPayload | null;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isChroniclesOpen, setIsChroniclesOpen] = useState(false);
   const [lighting, setLighting] = useState(DEFAULT_LIGHTING);
@@ -469,6 +474,21 @@ export default function TempleClient({
     setTributeEntry(null);
   }, []);
 
+  // In Telegram, the native BottomButton is the single primary Temple action.
+  // It is hidden while an in-page modal/payment surface owns the screen so it
+  // never competes with the modal's own actions.
+  const modalOpen = isInfoOpen || isChroniclesOpen || Boolean(tributeEntry);
+
+  useTelegramBottomButton({
+    text: 'KEEP THE VIGIL',
+    visible: isTelegramApp && !modalOpen,
+    enabled: hasVigilState,
+    onClick: () => {
+      hapticImpact('vigil');
+      router.push('/vigil');
+    },
+  });
+
   const actionButtonStyle =
     lighting.bg.includes('1f1a18') ||
     lighting.bg.includes('0b0c10')
@@ -552,6 +572,7 @@ export default function TempleClient({
 
               <RitualLink
                 href="/vigil"
+                onClick={() => hapticImpact('vigil')}
                 aria-label={`Light the Vigil heart. ${supporterLabel} in the last 24 hours. ${vigilLabel}.`}
                 className="group col-span-2 row-start-1 flex min-w-0 flex-col items-center text-center sm:col-span-1 sm:col-start-2 sm:row-start-1"
               >
@@ -748,6 +769,7 @@ export default function TempleClient({
                 <RitualLink
                   key={ritual.href}
                   href={ritual.href}
+                  onClick={() => hapticImpact('ritual-select')}
                   className={`${ritualButtonStyle} ${ritualAccent[ritual.href] ?? 'border-amber-400/20'}`}
                 >
                   {ritual.label}
@@ -762,7 +784,10 @@ export default function TempleClient({
               </p>
               <button
                 type="button"
-                onClick={() => openTribute()}
+                onClick={() => {
+                  hapticSelection();
+                  openTribute();
+                }}
                 className="mt-4 flex min-h-[48px] w-full items-center justify-center rounded-full border border-amber-300/50 bg-amber-300/15 px-5 font-serif text-xs uppercase tracking-[.18em] transition-all hover:bg-amber-300/25"
               >
                 Support the Temple →
@@ -772,13 +797,19 @@ export default function TempleClient({
                   <button
                     key={amount}
                     type="button"
-                    onClick={() => openTribute(amount)}
+                    onClick={() => {
+                      hapticSelection();
+                      openTribute(amount);
+                    }}
                     className="min-h-[44px] rounded-full border border-amber-400/30 px-4 py-2 font-mono text-xs transition-colors hover:border-amber-300/60"
                   >
                     ${amount}
                   </button>
                 ))}
               </div>
+
+              <SharedVigil />
+              <AddToHomePrompt />
             </div>
 
             {leftWithoutTrace && (

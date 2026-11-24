@@ -16,6 +16,23 @@ const SIMPLE_ROUTES: Record<string, string> = {
   selection: '/selection',
   art: '/art-engine',
   'art-engine': '/art-engine',
+  vigil: '/vigil',
+  cast: '/cast',
+  absolution: '/absolution',
+  tribute: '/tribute',
+};
+
+const SIMPLE_PATH_TO_PARAM: Record<string, string> = {
+  '/lobby': 'lobby',
+  '/flow': 'flow',
+  '/journal': 'journal',
+  '/temple': 'temple',
+  '/selection': 'selection',
+  '/art-engine': 'art',
+  '/vigil': 'vigil',
+  '/cast': 'cast',
+  '/absolution': 'absolution',
+  '/tribute': 'tribute',
 };
 
 const FLOW_SLUG = /^[\p{L}\p{N}][\p{L}\p{N}-]{0,119}$/u;
@@ -56,12 +73,9 @@ export function buildTelegramStartParam(path: string): string | null {
 
   if (!clean.startsWith('/')) return null;
 
-  if (clean === '/lobby') return 'lobby';
-  if (clean === '/flow') return 'flow';
-  if (clean === '/journal') return 'journal';
-  if (clean === '/temple') return 'temple';
-  if (clean === '/selection') return 'selection';
-  if (clean === '/art-engine') return 'art';
+  const simple = SIMPLE_PATH_TO_PARAM[clean.replace(/\/$/, '') || '/'];
+
+  if (simple) return simple;
 
   const flow = clean.match(/^\/flow\/([^/?#]+)$/);
 

@@ -16,6 +16,7 @@ import {
   isRitualRoute,
   isTelegramNavigationHidden,
 } from '@/lib/temple/routes';
+import { resolveTelegramChrome } from '@/lib/telegram/chrome';
 
 const WORLD_ROUTE = '/heartandangel/world';
 
@@ -164,7 +165,7 @@ export default function TelegramMiniApp() {
   const router = useRouter();
   const isTelegram = useIsTelegram();
   const { mode, closeConversation } = usePierrot();
-  const startParamHandledRef = useRef(false);
+  const startParamHandledRef = useRef<string | null>(null);
   const [overlayActive, setOverlayActive] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -234,25 +235,6 @@ export default function TelegramMiniApp() {
 
     applyTelegramTheme(tg);
 
-    // Keep the native Telegram chrome aligned with the dark Temple frame.
-    try {
-      tg.setHeaderColor?.('#141210');
-    } catch {
-      /* Telegram methods are optional. */
-    }
-
-    try {
-      tg.setBackgroundColor?.('#141210');
-    } catch {
-      /* Telegram methods are optional. */
-    }
-
-    try {
-      tg.setBottomBarColor?.('#141210');
-    } catch {
-      /* Telegram methods are optional. */
-    }
-
     syncSafeArea(tg);
     syncViewport(tg);
     setIsFullscreen(Boolean(tg.isFullscreen));
@@ -310,17 +292,79 @@ export default function TelegramMiniApp() {
     };
   }, [isTelegram]);
 
+  // Native chrome is route-scoped: the always-light Temple/Flow surfaces get a
+  // light header, background and bottom bar; every other route keeps the
+  // existing shell colour.
   useEffect(() => {
-    if (!isTelegram || startParamHandledRef.current) return;
+    if (!isTelegram) return;
 
     const tg = getTelegramWebApp();
-    const target = resolveTelegramStartParam(tg?.initDataUnsafe?.start_param);
 
-    startParamHandledRef.current = true;
+    if (!tg) return;
 
-    if (target && target !== pathname) {
-      router.replace(target);
+    const chrome = resolveTelegramChrome(pathname);
+
+    document.documentElement.dataset.telegramChrome = chrome.tone;
+
+    try {
+      tg.setHeaderColor?.(chrome.colors.header);
+    } catch {
+      /* Telegram methods are optional. */
     }
+
+    try {
+      tg.setBackgroundColor?.(chrome.colors.background);
+    } catch {
+      /* Telegram methods are optional. */
+    }
+
+    try {
+      tg.setBottomBarColor?.(chrome.colors.bottomBar);
+    } catch {
+      /* Telegram methods are optional. */
+    }
+
+    return () => {
+      delete document.documentElement.dataset.telegramChrome;
+    };
+  }, [isTelegram, pathname]);
+
+  useEffect(() => {
+    if (!isTelegram) return;
+
+    const handleStartParam = () => {
+      const tg = getTelegramWebApp();
+      const raw = tg?.initDataUnsafe?.start_param;
+      const value = typeof raw === 'string' ? raw.trim() : '';
+
+      if (!value || startParamHandledRef.current === value) return;
+
+      // Remember the raw value first: even an unknown/malformed payload must
+      // not be retried on every focus/visibility tick.
+      startParamHandledRef.current = value;
+
+      const target = resolveTelegramStartParam(value);
+
+      // Unknown payloads safely fall back to the Temple home only when the
+      // current route is not already a valid first-party destination.
+      if (target && target !== pathname) {
+        router.replace(target);
+      }
+    };
+
+    handleStartParam();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') handleStartParam();
+    };
+
+    window.addEventListener('focus', handleStartParam);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('focus', handleStartParam);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [isTelegram, pathname, router]);
 
   useEffect(() => {

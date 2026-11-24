@@ -11,6 +11,7 @@ import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/temple',
+  useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn(), refresh: jest.fn() }),
 }));
 
 jest.mock('next/link', () => {

@@ -10,9 +10,38 @@ describe('Telegram Mini App deep links', () => {
     expect(resolveTelegramStartParam('temple')).toBe('/temple');
     expect(resolveTelegramStartParam('selection')).toBe('/selection');
     expect(resolveTelegramStartParam('art')).toBe('/art-engine');
+    expect(resolveTelegramStartParam('vigil')).toBe('/vigil');
+    expect(resolveTelegramStartParam('cast')).toBe('/cast');
+    expect(resolveTelegramStartParam('absolution')).toBe('/absolution');
     expect(resolveTelegramStartParam('admin')).toBeNull();
     expect(resolveTelegramStartParam('https://evil.example')).toBeNull();
     expect(resolveTelegramStartParam('//evil.example')).toBeNull();
+  });
+
+  it('round-trips ritual destinations through the typed allowlist', () => {
+    for (const path of ['/vigil', '/cast', '/absolution', '/tribute']) {
+      const param = buildTelegramStartParam(path);
+
+      expect(param).toBeTruthy();
+      expect(resolveTelegramStartParam(param)).toBe(path);
+    }
+  });
+
+  it('falls back safely for malformed or unknown startapp payloads', () => {
+    for (const payload of [
+      null,
+      undefined,
+      123,
+      '',
+      '   ',
+      'admin',
+      'flow__not-valid-base64!!',
+      'flow_',
+      '../../etc/passwd',
+      'a'.repeat(600),
+    ]) {
+      expect(resolveTelegramStartParam(payload)).toBeNull();
+    }
   });
 
   it('round-trips a concrete published Flow slug', () => {
