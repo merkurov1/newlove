@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/components/AuthContext';
 import TempleTopBar from './TempleTopBar';
+import { useRitualModalTimer } from './temple/useRitualModalTimer';
 import { logTempleEvent } from '@/lib/templeLogger';
 
 const ANGEL_WITH_HEART =
@@ -97,6 +98,13 @@ export default function LetItGoAngel() {
     };
   }, []);
 
+  /*
+   * The shared modal header owns the only visible counter while this ritual is
+   * open over the Temple. On the canonical full page the modal is absent and
+   * TempleTopBar renders the same counter, so it is never shown twice.
+   */
+  useRitualModalTimer(`❤️ ${clickCount}`);
+
   const handleClick = () => {
     if (showWithoutHeart) return;
 
@@ -124,20 +132,46 @@ export default function LetItGoAngel() {
   };
 
   return (
-    <div className={`relative w-full min-h-[100dvh] overflow-x-hidden ${skyGradient} select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 animate-fade-in transition-colors duration-1000`}>
+    <div
+      className={`ritual-scene ritual-scene--letitgo relative flex h-full min-h-0 w-full flex-col overflow-hidden ${skyGradient} select-none p-3 sm:p-6 animate-fade-in transition-colors duration-1000`}
+    >
       <section className="sr-only" aria-labelledby="release-ritual-title">
         <h1 id="release-ritual-title">Let It Go — Heart &amp; Angel ritual</h1>
         <p>Release a burden into the sky and make room for lightness in the digital sanctuary.</p>
       </section>
-      
+
+      {/* Announced in both presentations; the visible counter lives in exactly
+          one place (modal header or TempleTopBar). */}
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {clickCount === 1
+          ? '1 heart released'
+          : `${clickCount} hearts released`}
+      </p>
+
       <TempleTopBar
         backTo="world"
-        right={<span className="rounded-full border border-amber-300/20 bg-black/40 px-3 py-2 text-[10px] uppercase tracking-[.14em] text-amber-100">❤️ {clickCount}</span>}
+        right={
+          <span
+            className="rounded-full border border-amber-300/20 bg-black/40 px-3 py-2 text-[10px] uppercase tracking-[.14em] text-amber-100"
+            aria-hidden="true"
+          >
+            ❤️ {clickCount}
+          </span>
+        }
       />
 
-      <div className="absolute bottom-0 left-0 w-full h-[22vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)] pointer-events-none" />
+      <div
+        className="pointer-events-none absolute bottom-0 left-0 z-10 w-full bg-gradient-to-t from-[#4A7c23] to-[#68a434] shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)]"
+        style={{ height: '22cqh' }}
+      />
 
-      <div className="relative w-full flex-1 flex items-end justify-center pb-[10vh] pt-12 z-20 my-auto">
+      <div
+        className="relative z-20 flex w-full flex-1 items-end justify-center"
+        style={{
+          paddingTop: 'clamp(0.75rem, 10cqh, 4rem)',
+          paddingBottom: 'clamp(0.5rem, 8cqh, 3rem)',
+        }}
+      >
         <button
           type="button"
           onClick={handleClick}
@@ -148,11 +182,15 @@ export default function LetItGoAngel() {
               : 'Release a burden with the angel'
           }
           title={showWithoutHeart ? "Wait for the angel..." : "Click to let go"}
-          className={`relative transition-transform duration-200 flex items-center justify-center p-4 w-[480px] h-[480px] max-w-[70vw] max-h-[55vh] animate-fade-in ${
+          className={`relative flex items-center justify-center p-4 transition-transform duration-200 animate-fade-in ${
             showWithoutHeart
               ? 'cursor-default'
               : 'cursor-pointer active:scale-95'
           }`}
+          style={{
+            width: 'min(480px, 70cqw, 60cqh)',
+            height: 'min(480px, 70cqw, 60cqh)',
+          }}
         >
           <Image
             src={ANGEL_WITH_HEART}
@@ -184,8 +222,8 @@ export default function LetItGoAngel() {
             style={{
               bottom: '24%',
               left: '50%',
-              width: 'min(450px, 70vw)',
-              height: 'min(450px, 70vw)',
+              width: 'min(450px, 70cqw, 60cqh)',
+              height: 'min(450px, 70cqw, 60cqh)',
               transform: 'translateX(-50%)',
             }}
           >
@@ -210,10 +248,19 @@ export default function LetItGoAngel() {
         @keyframes flyAway {
           0% { transform: translateY(0) scale(0.3) rotate(0deg); opacity: 1; }
           15% { opacity: 1; }
-          100% { transform: translateY(-85vh) scale(1.15) translateX(25px) rotate(15deg); opacity: 0; }
+          100% { transform: translateY(-92cqh) scale(1.15) translateX(25px) rotate(15deg); opacity: 0; }
         }
         .animate-fade-in { animation: fadeIn 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .animate-fly-away { animation: flyAway 6s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+        @media (prefers-reduced-motion: reduce) {
+          .ritual-scene--letitgo .animate-fade-in,
+          .ritual-scene--letitgo .animate-fly-away {
+            animation: none !important;
+          }
+          .ritual-scene--letitgo .animate-fly-away {
+            opacity: 0;
+          }
+        }
       ` }} />
     </div>
   );

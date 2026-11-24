@@ -761,16 +761,107 @@ body.custom-footer-route > footer {
   font-size: 12px;
 }
 
-.temple-modal__header strong { margin-right: auto; font-family: var(--font-cormorant), serif; font-size: 18px; }
-.temple-modal__header button, .temple-modal__header a { min-height: 44px; display: inline-flex; align-items: center; color: inherit; background: none; border: 0; cursor: pointer; }
+.temple-modal__header strong {
+  min-width: 0;
+  margin-right: auto;
+  overflow: hidden;
+  font-family: var(--font-cormorant), serif;
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.temple-modal__header button,
+.temple-modal__header a {
+  flex: 0 0 auto;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.temple-modal__header button:focus-visible,
+.temple-modal__header a:focus-visible,
+.temple-modal__dock a:focus-visible {
+  border-radius: 999px;
+  outline: 2px solid rgba(252, 211, 77, 0.8);
+  outline-offset: 2px;
+}
 .temple-modal__timer { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.temple-modal__content { min-height: 0; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.temple-modal__content {
+  position: relative;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
 .temple-modal__content > * { min-height: 100%; }
 .temple-modal .temple-topbar { display: none; }
+
+/*
+ * Immersive ritual scenes (Keep Calm, Let It Go) own exactly the space between
+ * the shared header and the ritual dock. They must not scroll or size
+ * themselves against the browser viewport.
+ */
+.temple-modal__content--scene {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.temple-modal__content--scene > * {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+/*
+ * Container-query units let the scene's own artwork, ground and flying hearts
+ * scale from the real modal slot. Browser targets already support cqw/cqh
+ * (Chrome 111+, Safari 16.4+); the full-page wrapper provides the same box.
+ */
+.ritual-scene--letitgo {
+  container-type: size;
+}
+.ritual-scene--calm canvas:focus-visible {
+  outline: 2px solid rgba(252, 211, 77, 0.9);
+  outline-offset: -4px;
+}
+
+/*
+ * Scrollable rituals (Absolution, Cast, Vigil, Tribute) keep their scroll but
+ * measure against the scene slot. Their standalone pages still provide the
+ * viewport height, so canonical URLs are unchanged.
+ */
+.temple-modal__content .absolution-page,
+.temple-modal__content .cast-page,
+.temple-modal__content .vigil-page,
+.temple-modal__content .tribute-page {
+  min-height: 100%;
+}
+.temple-modal__content .vigil-page,
+.temple-modal__content .tribute-page,
+.temple-modal__content .tribute-main {
+  padding-top: 1rem;
+}
+.temple-modal__content .tribute-main {
+  padding-bottom: 1.5rem;
+}
+.temple-modal__content .absolution-stage,
+.temple-modal__content .cast-stage {
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
+.temple-modal__content .cast-page > h1 {
+  margin-top: 1rem;
+}
 
 .temple-modal__dock {
   justify-content: center;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
   scrollbar-width: none;
   padding-top: 8px;
   padding-bottom: max(8px, env(safe-area-inset-bottom));
@@ -779,9 +870,18 @@ body.custom-footer-route > footer {
 }
 .temple-modal__dock::-webkit-scrollbar { display: none; }
 
-.temple-modal__dock a { flex: 0 0 auto; padding: 9px 12px; border-radius: 999px; color: #b9b0a5; white-space: nowrap; }
+.temple-modal__dock a {
+  flex: 0 0 auto;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 12px;
+  border-radius: 999px;
+  color: #b9b0a5;
+  white-space: nowrap;
+}
 .temple-modal__dock a[aria-current='page'] { background: rgba(245, 198, 110, .14); color: #f5d79b; }
-body.ritual-modal-open { overflow: hidden; }
+body.ritual-modal-open { overflow: hidden; overscroll-behavior: none; }
 
 @media (max-width: 640px) {
   .temple-modal__header { gap: 8px; }
@@ -837,6 +937,26 @@ body.ritual-route > header {
 .tribute-page {
   min-height: 100dvh;
   min-height: var(--tg-viewport-stable-height, 100dvh);
+}
+
+/*
+ * In-place Tribute sheet: keep its cap on the real Telegram viewport instead
+ * of a possibly stale browser 100dvh.
+ */
+.tribute-panel {
+  max-height: calc(100dvh - 0.5rem);
+  max-height: calc(
+    min(var(--tg-viewport-stable-height, 100dvh), 100dvh) - 0.5rem
+  );
+}
+
+@media (min-width: 640px) {
+  .tribute-panel {
+    max-height: calc(100dvh - 2rem);
+    max-height: calc(
+      min(var(--tg-viewport-stable-height, 100dvh), 100dvh) - 2rem
+    );
+  }
 }
 
 .vigil-page {

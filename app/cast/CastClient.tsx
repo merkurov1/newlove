@@ -709,7 +709,7 @@ export default function CastClient() {
   }
 
   return (
-    <div className="relative flex min-h-[100dvh] w-full flex-col overflow-x-hidden bg-[#141210] font-sans text-stone-200 antialiased selection:bg-amber-500/30">
+    <div className="cast-page relative flex min-h-[100dvh] w-full flex-col overflow-x-hidden bg-[#141210] font-sans text-stone-200 antialiased selection:bg-amber-500/30">
       {/* Ambient Temple light */}
       <div className="pointer-events-none fixed inset-0 z-0">
         <div className="absolute left-1/2 top-1/2 h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-900/20 blur-[130px]" />
@@ -725,7 +725,7 @@ export default function CastClient() {
 
       {/* LANGUAGE SELECT */}
       {currentStep === 0 && (
-        <div className="relative z-10 flex min-h-[100dvh] flex-1 items-center justify-center px-6 pb-16 pt-32 sm:pt-36">
+        <div className="cast-stage relative z-10 flex flex-1 items-center justify-center px-6 pb-16 pt-32 sm:pt-36">
           <div className="grid w-full max-w-4xl gap-6 md:grid-cols-2 md:gap-8 animate-in fade-in duration-700">
             {[
               {
@@ -788,7 +788,7 @@ export default function CastClient() {
       {currentStep > 0 &&
         currentStep <= 10 &&
         language && (
-          <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-1 flex-col items-center justify-center px-6 pb-16 pt-32 sm:pt-36">
+          <div className="cast-stage relative z-10 mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center px-6 pb-16 pt-32 sm:pt-36">
             <div className="w-full">
               <div className="mb-5 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.22em] text-stone-500">
                 <span className="flex items-center gap-2">
@@ -867,7 +867,7 @@ export default function CastClient() {
 
       {/* RESULT */}
       {currentStep === 11 && (
-        <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-1 flex-col px-6 pb-20 pt-32 sm:pt-36">
+        <div className="cast-stage relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 pb-20 pt-32 sm:pt-36">
           {loading ? (
             <div className="flex min-h-[60vh] flex-col items-center justify-center">
               <div

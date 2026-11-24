@@ -17,6 +17,7 @@ export default function HeartPhysics({
 }: Props) {
   const { user, profile } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const nudgeHeartRef = useRef<(() => void) | null>(null);
   const [showGyroPrompt, setShowGyroPrompt] = useState(false);
   const [gyroDenied, setGyroDenied] = useState(false);
   const [bgColor, setBgColor] = useState('#e8b4b8');
@@ -215,14 +216,36 @@ export default function HeartPhysics({
       );
     };
 
-    updateSceneSize(window.innerWidth, window.innerHeight, false);
+    /*
+     * The ritual now lives between the shared modal header and the ritual
+     * dock (or inside the full-page scene wrapper). Measure that actual scene
+     * box — never the browser viewport — so the canvas, daemon and
+     * string share the same coordinate space in every presentation.
+     */
+    const measureScene = () => {
+      /*
+       * clientWidth/clientHeight are layout sizes and ignore the scene's
+       * entrance scale animation. A getBoundingClientRect() measured during
+       * that 1.1s scale(0.98) transition would permanently undersize the
+       * canvas backing store because ResizeObserver does not fire for
+       * transforms.
+       */
+      return {
+        width: canvas.clientWidth,
+        height: canvas.clientHeight,
+      };
+    };
+
+    const initialScene = measureScene();
+
+    updateSceneSize(initialScene.width, initialScene.height, false);
 
     const handleResize = () => {
-      updateSceneSize(
-        canvas.clientWidth || window.innerWidth,
-        canvas.clientHeight || window.innerHeight,
-        true
-      );
+      const scene = measureScene();
+
+      if (scene.width < 2 || scene.height < 2) return;
+
+      updateSceneSize(scene.width, scene.height, true);
     };
 
     let resizeObserver: ResizeObserver | null = null;
@@ -230,9 +253,16 @@ export default function HeartPhysics({
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(handleResize);
       resizeObserver.observe(canvas);
-    } else {
-      window.addEventListener('resize', handleResize);
     }
+
+    /*
+     * ResizeObserver covers CSS/container changes, while these listeners cover
+     * orientation changes and Telegram viewport updates in older WebViews.
+     * Observing both is idempotent because updateSceneSize exits early when the
+     * measured box and DPR are unchanged.
+     */
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
 
     const handleOrientation = (e: DeviceOrientationEvent) => {
       if (e.gamma !== null && e.beta !== null) {
@@ -242,9 +272,13 @@ export default function HeartPhysics({
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      const offsetX =
-        (e.clientX - width / 2) /
-        (width / 2);
+      const rect = canvas.getBoundingClientRect();
+
+      if (!rect.width || !width) return;
+
+      const scale = rect.width / width;
+      const localX = (e.clientX - rect.left) / scale;
+      const offsetX = (localX - width / 2) / (width / 2);
 
       windX = offsetX * 12;
     };
@@ -259,40 +293,34 @@ export default function HeartPhysics({
       handleMouseMove
     );
 
-    const handleTouch = (
-      e: TouchEvent | MouseEvent
-    ) => {
-      const clientX =
-        'touches' in e
-          ? e.touches[0].clientX
-          : e.clientX;
+    const nudgeHeart = () => {
+      vx += (Math.random() - 0.5) * 20;
+      vy -= 15;
+      targetHeartScale = 1.25;
+      stringVibration = 15;
 
-      const clientY =
-        'touches' in e
-          ? e.touches[0].clientY
-          : e.clientY;
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(15);
+      }
+    };
 
-      const dist = Math.hypot(
-        clientX - balloonX,
-        clientY - balloonY
-      );
+    nudgeHeartRef.current = nudgeHeart;
+
+    const handleTouch = (e: TouchEvent | MouseEvent) => {
+      const point =
+        'touches' in e ? e.touches[0] : e;
+
+      if (!point) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = rect.width && width ? rect.width / width : 1;
+      const scaleY = rect.height && height ? rect.height / height : 1;
+      const localX = (point.clientX - rect.left) / scaleX;
+      const localY = (point.clientY - rect.top) / scaleY;
+      const dist = Math.hypot(localX - balloonX, localY - balloonY);
 
       if (dist < 140) {
-        vx +=
-          (Math.random() - 0.5) * 20;
-
-        vy -= 15;
-
-        targetHeartScale = 1.25;
-        stringVibration = 15;
-
-        if (
-          typeof navigator !==
-            'undefined' &&
-          navigator.vibrate
-        ) {
-          navigator.vibrate(15);
-        }
+        nudgeHeart();
       }
     };
 
@@ -541,9 +569,15 @@ export default function HeartPhysics({
 
     return () => {
       resizeObserver?.disconnect();
+      nudgeHeartRef.current = null;
 
       window.removeEventListener(
         'resize',
+        handleResize
+      );
+
+      window.removeEventListener(
+        'orientationchange',
         handleResize
       );
 
@@ -632,21 +666,29 @@ export default function HeartPhysics({
 
   return (
     <div
-      className="animate-fade-in"
+      className="ritual-scene ritual-scene--calm animate-fade-in"
       style={{
-        position: 'fixed',
+        position: 'absolute',
         inset: 0,
-        width: '100vw',
-        height: '100dvh',
+        width: '100%',
+        height: '100%',
         background: bgColor,
-        transition:
-          'background 1.5s ease',
+        transition: 'background 1.5s ease',
         overflow: 'hidden',
         touchAction: 'none',
       }}
     >
       <canvas
         ref={canvasRef}
+        role="button"
+        tabIndex={0}
+        aria-label="Keep Calm scene. Nudge the floating heart with Enter or Space."
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+
+          event.preventDefault();
+          nudgeHeartRef.current?.();
+        }}
         style={{
           display: 'block',
           width: '100%',
