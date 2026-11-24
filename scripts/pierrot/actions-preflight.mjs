@@ -15,6 +15,8 @@
  * no OpenAI or other provider/model fallback in this executor path.
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import process from 'node:process';
 import {
   isVersionAtLeast,
@@ -44,11 +46,35 @@ const PROVIDER_KEY = (process.env[PROVIDER_ENV_NAME] || '').trim();
 const ALLOW_PROVIDER_ENV = process.env.PIERROT_DEV_ALLOW_PROVIDER_ENV === 'true';
 const PREFLIGHT_MARKER = SELECTION.preflightMarker;
 const RUN_MODEL_CALL = process.env.PIERROT_DEV_MODEL_SMOKE_TEST !== 'false';
+// Non-secret machine-readable evidence for the workflow summary. The workflow
+// points this at ${{ runner.temp }}, outside the checkout, so the executor can
+// never commit it. Only provider/model/auth-source/result booleans are written.
+const PREFLIGHT_RESULT_PATH = (process.env.PIERROT_DEV_PREFLIGHT_RESULT || '').trim();
+
+function writePreflightResult(result) {
+  if (!PREFLIGHT_RESULT_PATH) return;
+  try {
+    fs.mkdirSync(path.dirname(PREFLIGHT_RESULT_PATH), { recursive: true });
+    fs.writeFileSync(
+      PREFLIGHT_RESULT_PATH,
+      JSON.stringify({ ...result, generatedAt: new Date().toISOString() }, null, 2),
+      'utf8'
+    );
+  } catch {
+    // The summary is best effort; a write failure must not change the verdict.
+  }
+}
 
 function fail(code, message) {
   // Every preflight failure gets its own non-secret diagnostic code. This lets
   // the owner distinguish a missing worker token from an OpenAI/model problem
   // in the Actions annotation without reading logs or exposing values.
+  writePreflightResult({
+    passed: false,
+    failureCode: code,
+    provider: PROVIDER,
+    model: MODEL,
+  });
   process.stdout.write(`[preflight] failed=${code}\n`);
   process.stderr.write(`::error title=Pierrot preflight (${code})::${message}\n`);
   process.exit(1);
@@ -243,6 +269,16 @@ async function main() {
     );
   }
   note('worker_api', 'ok');
+  writePreflightResult({
+    passed: true,
+    provider: PROVIDER,
+    model: MODEL,
+    authSource: auth.source,
+    opencodeVersion: versionText,
+    modelAvailable: true,
+    modelCall: RUN_MODEL_CALL ? 'ok' : 'skipped',
+    workerApi: 'ok',
+  });
   note('preflight', 'passed');
 }
 

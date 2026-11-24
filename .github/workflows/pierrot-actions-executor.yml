@@ -122,6 +122,8 @@ jobs:
         env:
           PIERROT_DEV_WORKER_TOKEN: ${{ secrets.PIERROT_DEV_WORKER_TOKEN }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          # Non-secret verified provider/model evidence for the run summary.
+          PIERROT_DEV_PREFLIGHT_RESULT: ${{ runner.temp }}/pierrot-preflight.json
         run: node scripts/pierrot/actions-preflight.mjs
 
       - name: Execute task
@@ -173,6 +175,23 @@ jobs:
             );
             outcome = JSON.parse(fs.readFileSync(file, 'utf8'));
           } catch {}
+          let preflight = null;
+          try {
+            const file = path.join(process.env.RUNNER_TEMP || '', 'pierrot-preflight.json');
+            const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+            // Only the non-secret fields the preflight is allowed to write.
+            preflight = {
+              passed: parsed?.passed === true,
+              failureCode: parsed?.failureCode || null,
+              provider: parsed?.provider || null,
+              model: parsed?.model || null,
+              authSource: parsed?.authSource || null,
+              opencodeVersion: parsed?.opencodeVersion || null,
+              modelAvailable: parsed?.modelAvailable === true,
+              modelCall: parsed?.modelCall || null,
+              workerApi: parsed?.workerApi || null,
+            };
+          } catch {}
           const summary = {
             taskId: process.env.PIERROT_DEV_TASK_ID || null,
             dispatchCorrelationId: process.env.PIERROT_DEV_DISPATCH_CORRELATION_ID || null,
@@ -194,6 +213,8 @@ jobs:
             activeAttempt: outcome?.activeAttempt || null,
             model: process.env.PIERROT_DEV_OPENCODE_MODEL || null,
             provider: process.env.PIERROT_DEV_OPENCODE_PROVIDER || null,
+            // Verified by the preflight step, not merely echoed from workflow env.
+            preflight,
             generatedAt: new Date().toISOString(),
             secretsIncluded: false,
           };

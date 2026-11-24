@@ -144,6 +144,11 @@ Ephemeral ubuntu-latest runner
   call that must return `DEEPSEEK_PREFLIGHT_OK`. It prints only presence
   booleans and the model id, never the key. The live call is mandatory whenever
   a task may execute; it can only be skipped on a `dry_run` preflight.
+- The preflight writes a non-secret `pierrot-preflight.json` under
+  `${{ runner.temp }}` and the run summary embeds the verified `provider`,
+  `model`, `authSource`, `modelCall` and any failure code. The file lives
+  outside the checkout so the executor can never commit it, and it never
+  contains the key or any other secret.
 - If neither a stored DeepSeek login nor `DEEPSEEK_API_KEY` is present the
   workflow stops with setup instructions. There is no fallback provider or
   model.
@@ -306,7 +311,18 @@ a security-sensitive finding still stops the task with an explicit reason.
 
 ### 4.1 Local checks already run for this change
 
-See the final execution evidence JSON. Real pilot rows cannot be fabricated.
+- `node --test scripts/pierrot/__tests__/dev-worker-lib.test.mjs
+scripts/pierrot/__tests__/actions-executor.test.mjs` — provider selection and
+  non-DeepSeek rejection, a positive preflight with an allowed
+  `DEEPSEEK_API_KEY`, DeepSeek model listing, key forwarding to the OpenCode
+  child with redaction from logs/API payloads, and the no-claim gate before a
+  rejected provider.
+- `pnpm typecheck`.
+- A tiny live DeepSeek smoke call with the pinned model returned
+  `DEEPSEEK_PREFLIGHT_OK`; the key was read from the environment, never printed
+  and never placed in argv.
+- A real GitHub Actions run and the owner's Temple queue operation are
+  production actions; they cannot be fabricated from a local checkout.
 
 ---
 
