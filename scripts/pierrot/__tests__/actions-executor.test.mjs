@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import http from 'node:http';
+import { once } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -476,12 +478,14 @@ test('preflight exits non-zero for an OpenAI selection before touching credentia
 test('preflight fails closed when DeepSeek auth is missing', () => {
   // An empty HOME makes `opencode auth list` deterministic: no stored login.
   const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), 'pierrot-preflight-'));
+  const resultPath = path.join(emptyHome, 'preflight-result.json');
   try {
     const result = runPreflight({
       HOME: emptyHome,
       PIERROT_DEV_OPENCODE_PROVIDER: 'deepseek',
       PIERROT_DEV_OPENCODE_MODEL: 'deepseek/deepseek-flash',
       PIERROT_DEV_ALLOW_PROVIDER_ENV: 'true',
+      PIERROT_DEV_PREFLIGHT_RESULT: resultPath,
     });
     assert.equal(result.status, 1);
     assert.match(result.stdout, /provider_key_present=false/);
@@ -489,6 +493,11 @@ test('preflight fails closed when DeepSeek auth is missing', () => {
     assert.match(result.stdout, /failed=PROVIDER_AUTH_MISSING/);
     assert.match(result.stderr, /Pierrot preflight \(PROVIDER_AUTH_MISSING\)/);
     assert.match(result.stderr, /DEEPSEEK_API_KEY/);
+    const evidence = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+    assert.equal(evidence.passed, false);
+    assert.equal(evidence.failureCode, 'PROVIDER_AUTH_MISSING');
+    assert.equal(evidence.provider, 'deepseek');
+    assert.doesNotMatch(JSON.stringify(evidence), /sk-[A-Za-z0-9]{12,}/);
   } finally {
     fs.rmSync(emptyHome, { recursive: true, force: true });
   }
@@ -507,4 +516,251 @@ test('Actions worker refuses a non-DeepSeek selection before claiming', () => {
   const guardIndex = worker.indexOf('if (!PROVIDER_SELECTION.ok)');
   const claimIndex = worker.indexOf("api(\n      'claim'");
   assert.ok(guardIndex > 0 && claimIndex > guardIndex);
+});
+
+function runNodeAsync(script, env, timeoutMs = 30_000) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [script], { env, cwd: repoRoot });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
+    const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
+    child.on('close', (status, signal) => {
+      clearTimeout(timer);
+      resolve({ status, signal, stdout, stderr });
+    });
+  });
+}
+
+async function startFakeWorkerApi(respond = () => ({ ok: true })) {
+  const requests = [];
+  const server = http.createServer((req, res) => {
+    let raw = '';
+    req.on('data', (chunk) => {
+      raw += chunk;
+    });
+    req.on('end', () => {
+      let body = {};
+      try {
+        body = JSON.parse(raw || '{}');
+      } catch {}
+      requests.push({ action: body.action || null, raw });
+      let payload;
+      try {
+        payload = respond(body, raw) || { ok: true };
+      } catch {
+        payload = { ok: true };
+      }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(payload));
+    });
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const { port } = server.address();
+  return { server, url: `http://127.0.0.1:${port}`, requests };
+}
+
+/**
+ * Deterministic stand-in for the OpenCode CLI. It records only a boolean
+ * "key was present", never the value, so the test itself cannot leak a secret.
+ */
+function writeFakeOpenCode(binDir, recordPath) {
+  fs.mkdirSync(binDir, { recursive: true });
+  const script = `#!/usr/bin/env node
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+const record = ${JSON.stringify(recordPath)};
+const key = process.env.DEEPSEEK_API_KEY || '';
+try {
+  const previous = fs.existsSync(record) ? JSON.parse(fs.readFileSync(record, 'utf8')) : {};
+  previous.calls = (previous.calls || 0) + 1;
+  previous.keyPresent = previous.keyPresent === true || key.length > 0;
+  if (args.includes('--model')) previous.model = args[args.indexOf('--model') + 1];
+  fs.writeFileSync(record, JSON.stringify(previous));
+} catch {}
+if (args.includes('--version')) { console.log('2.1.4'); process.exit(0); }
+if (args[0] === 'auth' && args[1] === 'list') { process.exit(0); }
+if (args[0] === 'models') { console.log('deepseek/deepseek-flash'); process.exit(0); }
+if (args[0] === 'run') {
+  console.log(JSON.stringify({ type: 'text', part: { text: 'DEEPSEEK_PREFLIGHT_OK' } }));
+  process.exit(0);
+}
+process.exit(0);
+`;
+  const file = path.join(binDir, 'opencode');
+  fs.writeFileSync(file, script);
+  fs.chmodSync(file, 0o755);
+  return file;
+}
+
+async function withTempDir(t, prefix) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+test('preflight accepts an allowed DeepSeek key, lists the pinned model and forwards the key to the child', async (t) => {
+  const tmp = await withTempDir(t, 'pierrot-preflight-ok-');
+  const record = path.join(tmp, 'opencode-child.json');
+  writeFakeOpenCode(path.join(tmp, 'bin'), record);
+  const home = path.join(tmp, 'home');
+  fs.mkdirSync(home);
+  const resultPath = path.join(tmp, 'preflight-result.json');
+  const api = await startFakeWorkerApi();
+  t.after(() => api.server.close());
+
+  const secret = 'deepseek-test-secret-value-0123456789';
+  const result = await runNodeAsync(path.join(repoRoot, 'scripts/pierrot/actions-preflight.mjs'), {
+    PATH: `${path.join(tmp, 'bin')}:${process.env.PATH || ''}`,
+    HOME: home,
+    PIERROT_DEV_WORKER_TOKEN: '0'.repeat(32),
+    PIERROT_DEV_API_URL: api.url,
+    PIERROT_DEV_OPENCODE_PROVIDER: 'deepseek',
+    PIERROT_DEV_OPENCODE_MODEL: 'deepseek/deepseek-flash',
+    PIERROT_DEV_ALLOW_PROVIDER_ENV: 'true',
+    PIERROT_DEV_MODEL_SMOKE_TEST: 'true',
+    PIERROT_DEV_PREFLIGHT_RESULT: resultPath,
+    DEEPSEEK_API_KEY: secret,
+  });
+
+  const evidence = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+  assert.equal(evidence.passed, true);
+  assert.equal(evidence.provider, 'deepseek');
+  assert.equal(evidence.model, 'deepseek/deepseek-flash');
+  assert.equal(evidence.authSource, 'environment');
+  assert.equal(evidence.modelAvailable, true);
+  assert.equal(evidence.modelCall, 'ok');
+  assert.equal(evidence.workerApi, 'ok');
+  assert.doesNotMatch(JSON.stringify(evidence), new RegExp(secret));
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /\[preflight\] provider=deepseek/);
+  assert.match(result.stdout, /\[preflight\] model=deepseek\/deepseek-flash/);
+  assert.match(result.stdout, /\[preflight\] auth_source=environment/);
+  assert.match(result.stdout, /\[preflight\] model_available=true/);
+  assert.match(result.stdout, /\[preflight\] model_call=ok/);
+  assert.match(result.stdout, /\[preflight\] preflight=passed/);
+  assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(secret));
+  assert.ok(api.requests.some((request) => request.action === 'health'));
+
+  const child = JSON.parse(fs.readFileSync(record, 'utf8'));
+  assert.equal(child.keyPresent, true, 'DEEPSEEK_API_KEY must reach the OpenCode child');
+  assert.equal(child.model, 'deepseek/deepseek-flash');
+});
+
+test('Actions worker cannot claim when the provider policy rejects the selection', async (t) => {
+  const tmp = await withTempDir(t, 'pierrot-worker-reject-');
+  const record = path.join(tmp, 'opencode-child.json');
+  writeFakeOpenCode(path.join(tmp, 'bin'), record);
+  const api = await startFakeWorkerApi();
+  t.after(() => api.server.close());
+
+  const result = await runNodeAsync(path.join(repoRoot, 'scripts/pierrot/dev-worker.mjs'), {
+    PATH: `${path.join(tmp, 'bin')}:${process.env.PATH || ''}`,
+    HOME: tmp,
+    RUNNER_ENVIRONMENT: 'github-hosted',
+    RUNNER_NAME: 'GitHub Actions 42',
+    GITHUB_RUN_ID: '4242',
+    GITHUB_RUN_ATTEMPT: '1',
+    PIERROT_DEV_EXECUTOR_MODE: 'actions',
+    PIERROT_DEV_WORK_ROOT: path.join(tmp, 'work'),
+    PIERROT_DEV_SKIP_ORPHAN_CLEANUP: 'true',
+    PIERROT_DEV_WORKER_TOKEN: '0'.repeat(32),
+    PIERROT_DEV_API_URL: api.url,
+    PIERROT_DEV_OPENCODE_PROVIDER: 'openai',
+    PIERROT_DEV_OPENCODE_MODEL: 'openai/gpt-5.6',
+    PIERROT_DEV_ALLOW_PROVIDER_ENV: 'true',
+    DEEPSEEK_API_KEY: 'deepseek-test-secret-value-0123456789',
+  });
+
+  assert.equal(result.status, 2);
+  assert.match(result.stdout, /PROVIDER_NOT_DEEPSEEK/);
+  assert.equal(fs.existsSync(record), false, 'OpenCode must not start for a rejected provider');
+  const actions = api.requests.map((request) => request.action);
+  assert.equal(actions.includes('register'), false);
+  assert.equal(
+    actions.includes('claim'),
+    false,
+    'a rejected provider must never reach the claim RPC'
+  );
+});
+
+test('Actions worker forwards the DeepSeek key to OpenCode and redacts it from logs and API payloads', async (t) => {
+  const tmp = await withTempDir(t, 'pierrot-worker-key-');
+  const record = path.join(tmp, 'opencode-child.json');
+  writeFakeOpenCode(path.join(tmp, 'bin'), record);
+  const api = await startFakeWorkerApi((body) => {
+    if (body.action === 'claim') {
+      return {
+        claim: null,
+        claimFailure: { code: 'NO_TASK', idempotent: true, reason: 'No queued task.' },
+      };
+    }
+    return { ok: true };
+  });
+  t.after(() => api.server.close());
+
+  const secret = 'deepseek-test-secret-value-9876543210';
+  const result = await runNodeAsync(path.join(repoRoot, 'scripts/pierrot/dev-worker.mjs'), {
+    PATH: `${path.join(tmp, 'bin')}:${process.env.PATH || ''}`,
+    HOME: tmp,
+    RUNNER_ENVIRONMENT: 'github-hosted',
+    RUNNER_NAME: 'GitHub Actions 43',
+    GITHUB_RUN_ID: '4343',
+    GITHUB_RUN_ATTEMPT: '1',
+    PIERROT_DEV_EXECUTOR_MODE: 'actions',
+    PIERROT_DEV_WORK_ROOT: path.join(tmp, 'work'),
+    PIERROT_DEV_SKIP_ORPHAN_CLEANUP: 'true',
+    PIERROT_DEV_WORKER_TOKEN: '0'.repeat(32),
+    PIERROT_DEV_API_URL: api.url,
+    PIERROT_DEV_OPENCODE_PROVIDER: 'deepseek',
+    PIERROT_DEV_OPENCODE_MODEL: 'deepseek/deepseek-flash',
+    PIERROT_DEV_ALLOW_PROVIDER_ENV: 'true',
+    DEEPSEEK_API_KEY: secret,
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /No claimable task/);
+  assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(secret));
+
+  const child = JSON.parse(fs.readFileSync(record, 'utf8'));
+  assert.equal(child.keyPresent, true, 'the worker must forward DEEPSEEK_API_KEY to OpenCode');
+  assert.ok(child.calls >= 2, 'the worker must probe OpenCode version/auth/models before claiming');
+
+  const actions = api.requests.map((request) => request.action);
+  assert.ok(actions.indexOf('health') >= 0);
+  assert.ok(actions.indexOf('register') > actions.indexOf('health'));
+  assert.ok(actions.indexOf('claim') > actions.indexOf('register'));
+  assert.equal(
+    api.requests.some((request) => request.raw.includes(secret)),
+    false,
+    'the provider key must never be sent to the worker API'
+  );
+});
+
+test('preflight is a hard gate: no bypass and no claim before it succeeds', () => {
+  const workflow = workflowText();
+  assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
+  const preflight = workflow.slice(
+    workflow.indexOf('- name: Preflight'),
+    workflow.indexOf('- name: Execute task')
+  );
+  const execute = workflow.slice(
+    workflow.indexOf('- name: Execute task'),
+    workflow.indexOf('- name: Release an interrupted attempt')
+  );
+  assert.ok(preflight.includes('actions-preflight.mjs'));
+  assert.match(preflight, /PIERROT_DEV_PREFLIGHT_RESULT:\s*\$\{\{\s*runner\.temp\s*\}\}/);
+  assert.doesNotMatch(preflight, /if:\s*always\(\)/);
+  assert.doesNotMatch(execute, /if:\s*always\(\)/);
+  assert.doesNotMatch(execute, /continue-on-error/);
+  // The run summary reports what preflight actually verified, not just env.
+  assert.match(workflow, /pierrot-preflight\.json/);
+  assert.match(workflow, /preflight,/);
 });
