@@ -14,6 +14,7 @@ jest.mock('../store', () => ({
   getTaskExecutionMaterial: jest.fn(),
   getTaskRow: jest.fn(),
   getTaskRowUnscoped: jest.fn(),
+  isExecutionRetrySchemaReady: jest.fn(async () => true),
   isUuid: jest.fn(),
   leaseExpiryIso: jest.fn(),
   listAttempts: jest.fn(),

@@ -16,6 +16,7 @@ jest.mock('../store', () => ({
   getTaskRow: jest.fn(),
   getTaskRowUnscoped: jest.fn(),
   getWorker: jest.fn(),
+  isExecutionRetrySchemaReady: jest.fn(async () => true),
   isUuid: jest.fn(),
   leaseExpiryIso: jest.fn(),
   listAttempts: jest.fn(),
@@ -177,6 +178,7 @@ describe('failed execution', () => {
     asMock(store.patchTask).mockResolvedValue({ ...task, status: 'failed' });
     asMock(store.clearWorkerAttempt).mockResolvedValue(undefined);
     asMock(store.appendEvent).mockResolvedValue(undefined);
+    asMock(store.isExecutionRetrySchemaReady).mockResolvedValue(true);
   });
 
   it('records a terminal failure and frees the worker slot', async () => {
@@ -205,8 +207,9 @@ describe('failed execution', () => {
     );
   });
 
-  it('resumes a retry from the partial commit preserved by the worker', async () => {
+  it('schedules a bounded retry and resumes from the preserved partial commit', async () => {
     const preserved = 'c'.repeat(40);
+    const before = Date.now();
     await failAttempt({
       workerId: attempt.workerId,
       attemptId: attempt.id,
@@ -216,9 +219,92 @@ describe('failed execution', () => {
       headSha: preserved,
     });
 
+    const patch = asMock(store.patchTask).mock.calls[0][1] as {
+      status: string;
+      base_commit: string;
+      retry_after_at: string;
+    };
+    expect(patch.status).toBe('queued');
+    expect(patch.base_commit).toBe(preserved);
+    const retryAt = Date.parse(patch.retry_after_at);
+    expect(retryAt).toBeGreaterThanOrEqual(before + 55_000);
+    expect(retryAt).toBeLessThanOrEqual(before + 65_000);
+    expect(store.appendEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'task.retry_scheduled' })
+    );
+  });
+
+  it('does not retry a permanent failure automatically', async () => {
+    await failAttempt({
+      workerId: attempt.workerId,
+      attemptId: attempt.id,
+      errorCode: 'COMMIT_SIGNING_FAILED',
+      errorMessage: 'The runner cannot sign commits.',
+      headSha: 'd'.repeat(40),
+    });
+
     expect(store.patchTask).toHaveBeenCalledWith(
       task.id,
-      expect.objectContaining({ status: 'failed', base_commit: preserved })
+      expect.objectContaining({ status: 'failed' })
+    );
+    expect(store.patchTask).not.toHaveBeenCalledWith(
+      task.id,
+      expect.objectContaining({ status: 'queued' })
+    );
+    expect(store.appendEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'task.retry_scheduled' })
+    );
+  });
+
+  it('hands a task to manual review after the bounded retry budget is spent', async () => {
+    asMock(store.getAttempt).mockResolvedValue({ ...attempt, attemptNumber: 3 });
+
+    await failAttempt({
+      workerId: attempt.workerId,
+      attemptId: attempt.id,
+      errorCode: 'OPENCODE_FAILED',
+      errorMessage: 'OpenCode exited with code 1.',
+      headSha: 'e'.repeat(40),
+    });
+
+    expect(store.patchTask).toHaveBeenCalledWith(
+      task.id,
+      expect.objectContaining({
+        status: 'manual_review',
+        retry_after_at: null,
+        base_commit: 'e'.repeat(40),
+      })
+    );
+    expect(store.patchTask).not.toHaveBeenCalledWith(
+      task.id,
+      expect.objectContaining({ status: 'queued' })
+    );
+    expect(store.appendEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'task.manual_review' })
+    );
+  });
+
+  it('degrades to a terminal failure when the retry migration is not applied', async () => {
+    asMock(store.isExecutionRetrySchemaReady).mockResolvedValue(false);
+
+    await failAttempt({
+      workerId: attempt.workerId,
+      attemptId: attempt.id,
+      errorCode: 'OPENCODE_FAILED',
+      errorMessage: 'OpenCode exited with code 1.',
+      headSha: 'f'.repeat(40),
+    });
+
+    expect(store.patchTask).toHaveBeenCalledWith(
+      task.id,
+      expect.objectContaining({ status: 'failed' })
+    );
+    expect(store.patchTask).not.toHaveBeenCalledWith(
+      task.id,
+      expect.objectContaining({ status: 'queued' })
+    );
+    expect(store.appendEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'task.retry_unavailable' })
     );
   });
 
@@ -294,6 +380,7 @@ describe('retry queueing', () => {
     asMock(store.getActiveAttempt).mockResolvedValue(null);
     asMock(store.nextQueuePosition).mockResolvedValue(4);
     asMock(store.transitionTask).mockResolvedValue({ ...task, status: 'queued' });
+    asMock(store.isExecutionRetrySchemaReady).mockResolvedValue(true);
   });
 
   it('uses the schema-compatible not_run value instead of null', async () => {

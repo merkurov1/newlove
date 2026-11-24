@@ -187,6 +187,7 @@ export type DevTaskStatus =
   | 'review'
   | 'verified'
   | 'failed'
+  | 'manual_review'
   | 'rejected'
   | 'cancelled'
   | 'archived'

@@ -822,3 +822,68 @@ describe('stale marker recovery', () => {
     expect(github.dispatchRepositoryEvent).not.toHaveBeenCalled();
   });
 });
+
+describe('execution retry backoff', () => {
+  it('does not dispatch a task whose bounded retry backoff has not elapsed', async () => {
+    const future = new Date(Date.now() + 60_000).toISOString();
+    asMock(store.getTaskRowUnscoped).mockResolvedValue({
+      ...queuedTask,
+      retryAfterAt: future,
+    });
+
+    const result = await dispatchTaskToActions({
+      taskId: TASK_ID,
+      source: 'admin:overview',
+    });
+
+    expect(result.dispatched).toBe(false);
+    expect(result.code).toBe('RETRY_BACKOFF');
+    expect(store.reserveTaskForActionsDispatch).not.toHaveBeenCalled();
+    expect(github.dispatchRepositoryEvent).not.toHaveBeenCalled();
+  });
+
+  it('skips a cooling-down task and dispatches the next due one', async () => {
+    const dueTask = {
+      ...queuedTask,
+      id: '99999999-9999-4999-8999-999999999999',
+      retryAfterAt: new Date(Date.now() - 1000).toISOString(),
+    };
+    asMock(store.listQueuedTasksForDispatch).mockResolvedValue([
+      { ...queuedTask, retryAfterAt: new Date(Date.now() + 60_000).toISOString() },
+      dueTask,
+    ]);
+    asMock(store.getTaskRowUnscoped).mockImplementation(async (id: string) =>
+      id === dueTask.id ? dueTask : queuedTask
+    );
+    asMock(store.reserveTaskForActionsDispatch).mockResolvedValue({
+      ...dueTask,
+      actionsDispatchRequestedAt: '2026-12-16T12:00:00.000Z',
+      actionsDispatchAttempts: 1,
+    });
+
+    const result = await dispatchNextQueuedTask({ source: 'admin:overview' });
+
+    expect(result.dispatched).toBe(true);
+    expect(result.taskId).toBe(dueTask.id);
+  });
+
+  it('lets an explicit owner retry bypass the automatic backoff', async () => {
+    const future = new Date(Date.now() + 60_000).toISOString();
+    const task = {
+      ...queuedTask,
+      retryAfterAt: future,
+      lastErrorCode: 'OPENCODE_FAILED',
+      actionsDispatchStatus: 'failed' as const,
+    };
+    asMock(store.getTaskRowUnscoped).mockResolvedValue(task);
+    asMock(store.reserveTaskForActionsDispatch).mockResolvedValue({
+      ...task,
+      actionsDispatchRequestedAt: '2026-12-16T12:00:00.000Z',
+      actionsDispatchAttempts: 1,
+    });
+
+    const result = await retryActionsDispatch({ taskId: TASK_ID, source: 'admin:retry' });
+
+    expect(result.dispatched).toBe(true);
+  });
+});

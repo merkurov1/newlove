@@ -770,3 +770,32 @@ test('preflight is a hard gate: no bypass and no claim before it succeeds', () =
   assert.match(workflow, /pierrot-preflight\.json/);
   assert.match(workflow, /preflight,/);
 });
+
+test('a worker or task failure fails the workflow run', () => {
+  const workflow = workflowText();
+  const start = workflow.indexOf('- name: Execute task');
+  const end = workflow.indexOf('- name: Release an interrupted attempt');
+  assert.ok(start >= 0 && end > start, 'execute step must precede the cleanup step');
+  const executeStep = workflow.slice(start, end);
+
+  // The worker exit code is propagated to the step. A non-zero worker/task
+  // failure must therefore fail the job, not be swallowed as a successful run.
+  assert.match(executeStep, /exit "\$code"/);
+  assert.doesNotMatch(executeStep, /continue-on-error:\s*true/);
+  assert.doesNotMatch(executeStep, /exit 0/);
+});
+
+test('cleanup and summary run for failed runs without masking the failure', () => {
+  const workflow = workflowText();
+  const release = workflow.indexOf('- name: Release an interrupted attempt');
+  const summary = workflow.indexOf('- name: Write non-secret execution summary');
+  assert.ok(release >= 0 && summary > release);
+
+  const releaseStep = workflow.slice(release, summary);
+  assert.match(releaseStep, /if:\s*always\(\)/);
+  // A cleanup step must not override the job conclusion to success.
+  assert.doesNotMatch(releaseStep, /continue-on-error:\s*true/);
+
+  const summaryStep = workflow.slice(summary);
+  assert.match(summaryStep, /if:\s*always\(\)/);
+});

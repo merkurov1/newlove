@@ -15,10 +15,15 @@ const TASK_TRANSITIONS: Record<DevWorkbenchTaskStatus, DevWorkbenchTaskStatus[]>
   draft: ['ready', 'blocked', 'cancelled', 'archived'],
   ready: ['queued', 'draft', 'blocked', 'cancelled', 'archived'],
   queued: ['ready', 'in_progress', 'blocked', 'cancelled'],
-  in_progress: ['review', 'failed', 'cancelled'],
+  // `queued` is only produced by the bounded automatic-retry path after a
+  // transient execution failure; it is not an owner transition.
+  in_progress: ['review', 'failed', 'manual_review', 'queued', 'cancelled'],
   review: ['verified', 'rejected', 'failed', 'queued', 'cancelled'],
   verified: ['archived'],
   failed: ['queued', 'cancelled', 'archived', 'review'],
+  // A task that exhausted the bounded automatic retry budget waits for an
+  // explicit owner decision. It is never re-claimed by the queue RPC.
+  manual_review: ['queued', 'blocked', 'cancelled', 'archived'],
   rejected: ['queued', 'archived', 'cancelled'],
   cancelled: ['queued', 'archived'],
   blocked: ['ready', 'cancelled', 'archived'],
@@ -102,6 +107,7 @@ export function taskStatusLabel(status: DevWorkbenchTaskStatus): string {
     review: 'Review',
     verified: 'Verified',
     failed: 'Failed',
+    manual_review: 'Manual review',
     rejected: 'Rejected',
     cancelled: 'Cancelled',
     archived: 'Archived',
