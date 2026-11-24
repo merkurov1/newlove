@@ -20,14 +20,19 @@ Observed event semantics in that read-only snapshot:
 
 Named author labels: 3. The endpoint returned seven eligible ritual rows in
 newest-first order (`id` 792 → 786) and no navigation rows, confirming the
-server-side filter and ordering. The audit uses only aggregate counts and
-public messages; no credentials or private rows are read.
+server-side filter and ordering. A second read at 16:46 UTC during the
+integration attempt returned ids 794 → 787 with the same shape
+(`completedRituals=38`, `namedAuthors=3`, `vigilSparks=18`, `stale=false`,
+`excluded.infrastructure=4`, `excluded.incomplete=2`), so the production data
+path is current, not a build-time snapshot. The audit uses only aggregate counts
+and public messages; no credentials or private rows are read.
 
-The new homepage section renders that same server response directly under the
-triptych, before the Rituals menu. It shows the canonical ritual label, author,
-UTC timestamp, the stored public message, and a one-line explanation of what the
-event represents. Entry, navigation, modal-open, intensity and unclassified
-rows never enter the list.
+The new homepage section renders that same server response visibly on
+`/temple`, after the hero, ritual menu and in-place Tribute row and before the
+Chambers index. It shows the canonical ritual label, author, UTC timestamp, the
+stored public message, and a one-line explanation of what the event represents.
+Entry, navigation, modal-open, intensity and unclassified rows never enter the
+list.
 
 ## Why the previous numbers changed
 
@@ -97,7 +102,11 @@ The dialog remains available as a focused view of the same bounded payload.
 - The `/temple` server render reads through the same shared feed cache and passes the
   result as an initial payload, so the seven traces are present in the first HTML.
   The page is dynamic; it never freezes a build-time snapshot.
-- Server cache: 60 seconds (`TEMPLE_FEED_TTL_SECONDS`).
+- Server cache: 60 seconds (`TEMPLE_FEED_TTL_SECONDS`). The cache is
+  module-scoped and shared by the Temple page and `/api/temple_logs` inside one
+  server process; a cold start or another server instance starts with its own
+  bounded 60-second entry. It is not a cross-instance store and no external
+  cache service was added.
 - Browser cache: one `localStorage` snapshot with the same 60-second TTL. The
   server-rendered first payload is stored for the next visit even if that browser
   has not yet fetched the API.
