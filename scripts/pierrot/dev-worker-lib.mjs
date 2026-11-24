@@ -28,14 +28,17 @@ export function providerFromModel(model) {
 }
 
 /**
- * The Dev executor is OpenAI-only by policy. DeepSeek remains in the product as
- * an unrelated generation provider, but it is never an executor fallback: a
- * workflow, repository variable or shell environment that selects DeepSeek
- * must stop the run before a task is claimed.
+ * The Dev executor is DeepSeek-primary by policy. DeepSeek is the only allowed
+ * executor provider: a workflow, repository variable or shell environment that
+ * selects any other provider or model must stop the run before a task is
+ * claimed. There is no automatic fallback to OpenAI or to another model.
+ *
+ * The pinned model is the one that is actually available to the stored
+ * OpenCode DeepSeek login used by this workspace. Do not invent model ids.
  */
-export const REQUIRED_DEV_PROVIDER = 'openai';
-export const DEFAULT_DEV_OPENCODE_MODEL = 'openai/gpt-5.6';
-export const DEV_PREFLIGHT_MARKER = 'OPENAI_PREFLIGHT_OK';
+export const REQUIRED_DEV_PROVIDER = 'deepseek';
+export const DEFAULT_DEV_OPENCODE_MODEL = 'deepseek/deepseek-flash';
+export const DEV_PREFLIGHT_MARKER = 'DEEPSEEK_PREFLIGHT_OK';
 
 export function providerEnvName(provider) {
   return `${String(provider || '')
@@ -45,7 +48,7 @@ export function providerEnvName(provider) {
 }
 
 /**
- * Resolve the executor provider/model and reject anything that is not OpenAI.
+ * Resolve the executor provider/model and reject anything that is not DeepSeek.
  * The provider is derived from the explicit provider variable first, then from
  * the model id; it never silently falls back to another provider.
  */
@@ -60,10 +63,10 @@ export function resolveDevProviderSelection(input = {}) {
   let reasonCode = null;
   let reason = null;
   if (provider !== REQUIRED_DEV_PROVIDER) {
-    reasonCode = 'PROVIDER_NOT_OPENAI';
-    reason = `Executor provider '${provider}' is not allowed; only '${REQUIRED_DEV_PROVIDER}' may be used. No fallback provider is available.`;
+    reasonCode = 'PROVIDER_NOT_DEEPSEEK';
+    reason = `Executor provider '${provider}' is not allowed; only '${REQUIRED_DEV_PROVIDER}' may be used. No fallback provider (including OpenAI) is available.`;
   } else if (modelProvider !== REQUIRED_DEV_PROVIDER) {
-    reasonCode = 'MODEL_NOT_OPENAI';
+    reasonCode = 'MODEL_NOT_DEEPSEEK';
     reason = `Executor model '${model}' does not belong to provider '${REQUIRED_DEV_PROVIDER}'. No fallback model is available.`;
   }
 
@@ -76,6 +79,67 @@ export function resolveDevProviderSelection(input = {}) {
     ok: reasonCode === null,
     reasonCode,
     reason,
+  };
+}
+
+/**
+ * Resolve how the executor authenticates. A stored OpenCode login is preferred
+ * because it is the credential the operator verified with `opencode auth
+ * login`; it is also the only credential available in a long-lived Codespace.
+ * An environment credential is accepted only when the caller explicitly allows
+ * it and the value is present. Missing or unreadable auth fails closed: there
+ * is no provider or credential fallback.
+ */
+export function resolveExecutorAuth(input = {}) {
+  const provider = String(input.provider || REQUIRED_DEV_PROVIDER)
+    .trim()
+    .toLowerCase();
+  const envName = String(input.envName || providerEnvName(provider)).trim();
+  const storedAuth = input.storedAuth === true;
+  const allowProviderEnv = input.allowProviderEnv === true;
+  const envKeyPresent =
+    typeof input.envKey === 'string' ? input.envKey.trim().length > 0 : input.envKey === true;
+  const authProbeOk = input.authProbeOk !== false;
+
+  if (storedAuth) {
+    return {
+      ok: true,
+      source: 'stored',
+      provider,
+      envName,
+      reasonCode: null,
+      reason: null,
+    };
+  }
+  if (allowProviderEnv && envKeyPresent) {
+    return {
+      ok: true,
+      source: 'environment',
+      provider,
+      envName,
+      reasonCode: null,
+      reason: null,
+    };
+  }
+  if (!authProbeOk) {
+    return {
+      ok: false,
+      source: 'unverified',
+      provider,
+      envName,
+      reasonCode: 'PROVIDER_AUTH_UNVERIFIED',
+      reason: `The OpenCode auth store could not be read; ${provider} authentication is unverified, not necessarily absent.`,
+    };
+  }
+  return {
+    ok: false,
+    source: 'missing',
+    provider,
+    envName,
+    reasonCode: 'PROVIDER_AUTH_MISSING',
+    reason: allowProviderEnv
+      ? `No stored ${provider} authentication was found and repository secret ${envName} is not set.`
+      : `No stored ${provider} authentication was found. Run opencode auth login.`,
   };
 }
 

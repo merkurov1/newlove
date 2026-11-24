@@ -3,19 +3,25 @@
  * Non-secret preflight for the Pierrot GitHub Actions executor.
  *
  * This script never prints secret values. It verifies:
- *   * the executor selection is OpenAI-only (provider and model id);
- *   * required repository secrets are present (presence only);
+ *   * the executor selection is DeepSeek-primary (provider and model id);
+ *   * OpenCode has a stored DeepSeek login or an explicitly allowed
+ *     DEEPSEEK_API_KEY (presence only);
  *   * the installed OpenCode CLI is new enough;
- *   * the exact configured OpenAI model is offered by the CLI;
+ *   * the exact configured DeepSeek model is offered by the CLI;
  *   * the worker API and its Supabase path are reachable;
  *   * optionally, a tiny live model call succeeds with the configured model.
  *
- * A missing OPENAI_API_KEY stops the workflow with setup instructions. There is
- * no DeepSeek or other provider/model fallback in this executor path.
+ * Missing authentication stops the workflow with setup instructions. There is
+ * no OpenAI or other provider/model fallback in this executor path.
  */
 
 import process from 'node:process';
-import { isVersionAtLeast, resolveDevProviderSelection } from './dev-worker-lib.mjs';
+import {
+  isVersionAtLeast,
+  parseStoredAuth,
+  resolveDevProviderSelection,
+  resolveExecutorAuth,
+} from './dev-worker-lib.mjs';
 import { runProcess } from './dev-worker-process.mjs';
 
 const API_BASE = (
@@ -35,6 +41,7 @@ const MODEL = SELECTION.model;
 const MIN_VERSION = (process.env.PIERROT_DEV_OPENCODE_MIN_VERSION || '2.1.4').trim();
 const PROVIDER_ENV_NAME = SELECTION.envName;
 const PROVIDER_KEY = (process.env[PROVIDER_ENV_NAME] || '').trim();
+const ALLOW_PROVIDER_ENV = process.env.PIERROT_DEV_ALLOW_PROVIDER_ENV === 'true';
 const PREFLIGHT_MARKER = SELECTION.preflightMarker;
 const RUN_MODEL_CALL = process.env.PIERROT_DEV_MODEL_SMOKE_TEST !== 'false';
 
@@ -51,13 +58,15 @@ function note(key, value) {
   process.stdout.write(`[preflight] ${key}=${value}\n`);
 }
 
-function opencodeEnv() {
+function opencodeEnv(includeProviderKey = false) {
   const allowed = ['PATH', 'HOME', 'LANG', 'LC_ALL', 'TERM', 'TMPDIR', 'SHELL'];
   const env = {};
   for (const key of allowed) {
     if (process.env[key]) env[key] = process.env[key];
   }
-  env[PROVIDER_ENV_NAME] = PROVIDER_KEY;
+  // A stored login is preferred. The environment credential is forwarded only
+  // when it is the resolved auth source and the operator explicitly allowed it.
+  if (includeProviderKey && PROVIDER_KEY) env[PROVIDER_ENV_NAME] = PROVIDER_KEY;
   env.CI = '1';
   env.NO_COLOR = '1';
   env.OPENCODE_DISABLE_AUTOUPDATE = '1';
@@ -77,25 +86,20 @@ async function main() {
   note('provider', PROVIDER);
   note('worker_token_present', WORKER_TOKEN.length >= 32);
   note('provider_key_present', PROVIDER_KEY.length > 0);
+  note('provider_env_allowed', ALLOW_PROVIDER_ENV);
 
   // Fail closed before any credential or network check when the workflow or a
-  // repository variable selects a non-OpenAI provider/model.
+  // repository variable selects a non-DeepSeek provider/model.
   if (!SELECTION.ok) {
     fail(
       SELECTION.reasonCode,
-      `${SELECTION.reason} Set PIERROT_DEV_OPENCODE_PROVIDER=openai and PIERROT_DEV_OPENCODE_MODEL to an openai/* model.`
+      `${SELECTION.reason} Set PIERROT_DEV_OPENCODE_PROVIDER=deepseek and PIERROT_DEV_OPENCODE_MODEL=deepseek/deepseek-flash.`
     );
   }
   if (!WORKER_TOKEN || WORKER_TOKEN.length < 32) {
     fail(
       'WORKER_TOKEN_MISSING',
       'Repository secret PIERROT_DEV_WORKER_TOKEN is missing or shorter than 32 characters. Add it in GitHub repository Settings → Secrets and variables → Actions.'
-    );
-  }
-  if (!PROVIDER_KEY) {
-    fail(
-      'PROVIDER_KEY_MISSING',
-      `Repository secret ${PROVIDER_ENV_NAME} is not set. In GitHub repository Settings → Secrets and variables → Actions add ${PROVIDER_ENV_NAME} with the OpenAI API key. The executor will not fall back to another provider or model.`
     );
   }
 
@@ -116,15 +120,55 @@ async function main() {
     fail('OPENCODE_VERSION', `OpenCode ${versionText} is older than the required ${MIN_VERSION}.`);
   }
 
+  // Prefer the stored `opencode auth login` credential. An environment key is
+  // accepted only when the workflow explicitly allows it and the key is present.
+  // A failed auth probe is reported as unverified, not as a missing secret.
+  let storedAuth = false;
+  let authProbeOk = true;
+  let authProbeError = null;
+  try {
+    const authProbe = await runProcess('opencode', ['auth', 'list', '--standalone'], {
+      env: opencodeEnv(),
+      timeoutMs: 30000,
+      maxCaptureBytes: 40000,
+    });
+    if (authProbe.code === 0) {
+      storedAuth = parseStoredAuth(authProbe.stdout, PROVIDER).authenticated;
+    } else {
+      authProbeOk = false;
+      authProbeError = authProbe.timedOut ? 'timeout' : `exit ${authProbe.code}`;
+    }
+  } catch (error) {
+    authProbeOk = false;
+    authProbeError = String(error?.message || error).slice(0, 120);
+  }
+  note('stored_auth_present', storedAuth);
+  note('auth_probe_ok', authProbeOk);
+  const auth = resolveExecutorAuth({
+    provider: PROVIDER,
+    envName: PROVIDER_ENV_NAME,
+    storedAuth,
+    envKey: PROVIDER_KEY,
+    allowProviderEnv: ALLOW_PROVIDER_ENV,
+    authProbeOk,
+  });
+  note('auth_source', auth.source);
+  if (!auth.ok) {
+    fail(
+      auth.reasonCode,
+      `${auth.reason} Run 'opencode auth login' for DeepSeek, or add the ${PROVIDER_ENV_NAME} repository secret and keep PIERROT_DEV_ALLOW_PROVIDER_ENV=true. The executor will not fall back to OpenAI or any other provider/model.${authProbeError ? ` Auth probe: ${authProbeError}.` : ''}`
+    );
+  }
+
   const models = await runProcess('opencode', ['models', '--standalone'], {
-    env: opencodeEnv(),
+    env: opencodeEnv(auth.source === 'environment'),
     timeoutMs: 60000,
     maxCaptureBytes: 200000,
   });
   if (models.code !== 0) {
     fail(
       'MODEL_LIST_FAILED',
-      'OpenCode could not list models. Check the pinned CLI installation and OpenAI provider configuration.'
+      'OpenCode could not list models. Check the pinned CLI installation and DeepSeek provider configuration.'
     );
   }
   const available = models.stdout
@@ -134,7 +178,7 @@ async function main() {
   if (!available.includes(MODEL)) {
     fail(
       'MODEL_UNAVAILABLE',
-      `Configured model ${MODEL} is not offered by the installed OpenCode CLI for the OpenAI provider. No fallback model will be used.`
+      `Configured model ${MODEL} is not offered by the installed OpenCode CLI for the DeepSeek provider. No fallback model will be used.`
     );
   }
   note('model_available', true);
@@ -156,7 +200,7 @@ async function main() {
         `Reply with exactly ${PREFLIGHT_MARKER} and do not use tools.`,
       ],
       {
-        env: opencodeEnv(),
+        env: opencodeEnv(auth.source === 'environment'),
         timeoutMs: 180000,
         maxCaptureBytes: 200000,
       }
@@ -165,7 +209,7 @@ async function main() {
     if (smoke.code !== 0 || !output.includes(PREFLIGHT_MARKER.toLowerCase())) {
       fail(
         'MODEL_CALL_FAILED',
-        `Live model check failed for ${MODEL} (exit ${smoke.code}). Verify the ${PROVIDER_ENV_NAME} value in repository secrets and that the OpenAI account/project has access to this model. No fallback model will be used.`
+        `Live model check failed for ${MODEL} (exit ${smoke.code}). Verify the stored DeepSeek login or the ${PROVIDER_ENV_NAME} repository secret and that the DeepSeek account has access to this model. No fallback model will be used.`
       );
     }
     note('model_call', 'ok');

@@ -23,7 +23,7 @@ on:
         default: false
         type: boolean
       model_smoke_test:
-        description: 'Prove provider/model with a tiny live OpenAI call. Only skippable on a dry run.'
+        description: 'Prove provider/model with a tiny live DeepSeek call. Only skippable on a dry run.'
         required: false
         default: true
         type: boolean
@@ -40,10 +40,11 @@ env:
   # Production redirects the apex host to www; a POST to the apex would lose
   # its body on the 301. Use the canonical host unless explicitly overridden.
   PIERROT_DEV_API_URL: ${{ vars.PIERROT_DEV_API_URL || 'https://www.merkurov.love' }}
-  # OpenAI-only executor path. The worker and preflight fail closed if these are
-  # overridden to any other provider or model; there is no other-provider fallback.
-  PIERROT_DEV_OPENCODE_PROVIDER: openai
-  PIERROT_DEV_OPENCODE_MODEL: openai/gpt-5.6
+  # DeepSeek-primary executor path. The worker and preflight fail closed if these
+  # are overridden to any other provider or model; there is no other-provider
+  # fallback. The pinned model is the one actually offered by the stored login.
+  PIERROT_DEV_OPENCODE_PROVIDER: deepseek
+  PIERROT_DEV_OPENCODE_MODEL: deepseek/deepseek-flash
   PIERROT_DEV_OPENCODE_MIN_VERSION: '2.1.4'
   PIERROT_DEV_TASK_ID: ${{ github.event.client_payload.task_id || inputs.task_id }}
   PIERROT_DEV_DISPATCH_CORRELATION_ID: ${{ github.event.client_payload.correlation_id || '' }}
@@ -117,10 +118,10 @@ jobs:
       - name: Install pinned OpenCode CLI
         run: npm install --global @opencode/cli@2.1.4
 
-      - name: Preflight (OpenAI-only selection, secrets presence, model, API)
+      - name: Preflight (DeepSeek-primary selection, auth presence, model, API)
         env:
           PIERROT_DEV_WORKER_TOKEN: ${{ secrets.PIERROT_DEV_WORKER_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: node scripts/pierrot/actions-preflight.mjs
 
       - name: Execute task
@@ -129,7 +130,7 @@ jobs:
         timeout-minutes: 60
         env:
           PIERROT_DEV_WORKER_TOKEN: ${{ secrets.PIERROT_DEV_WORKER_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.PIERROT_DEV_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
           PIERROT_DEV_EXECUTOR_MODE: actions
           # runner.* is not available in a workflow-level env block. The job

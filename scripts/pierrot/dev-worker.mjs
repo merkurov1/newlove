@@ -45,6 +45,7 @@ import {
   parseStoredAuth,
   resolveCommitPolicy,
   resolveDevProviderSelection,
+  resolveExecutorAuth,
   resolveGitIdentity,
 } from './dev-worker-lib.mjs';
 
@@ -117,7 +118,7 @@ const ACTIVE_ATTEMPT_FILE = path.join(WORK_ROOT, 'actions-active-attempt.json');
 const ACTIONS_OUTCOME_FILE = path.join(WORK_ROOT, 'actions-outcome.json');
 const RUN_LOG = path.join(LOG_DIR, 'worker.log');
 const BOOT_LOG = path.join(LOG_DIR, 'worker-boot.log');
-const WORKER_VERSION = '1.2.0';
+const WORKER_VERSION = '1.3.0';
 const WORKER_KIND = ACTIONS_MODE ? 'actions' : 'codespace';
 
 // Hard guard: the Actions executor must never run inside a Codespace or any
@@ -442,8 +443,11 @@ function startLeaseHeartbeat(attemptId) {
 
 /**
  * Working environment for OpenCode. Only non-secret values are forwarded:
- * the secret store stays in the parent process. Provider credentials are read
- * by OpenCode from its own login store under HOME.
+ * the secret store stays in the parent process. The preferred credential is the
+ * stored `opencode auth login` entry under HOME. A GitHub Actions runner has no
+ * stored login, so the workflow may pass the DeepSeek repository secret only
+ * to this process and only when explicitly allowed. The value is never logged,
+ * placed in argv or written to the repository.
  */
 function opencodeEnv() {
   const allowed = ['PATH', 'HOME', 'LANG', 'LC_ALL', 'TERM', 'TMPDIR', 'SHELL'];
@@ -451,10 +455,6 @@ function opencodeEnv() {
   for (const key of allowed) {
     if (process.env[key]) env[key] = process.env[key];
   }
-  // A GitHub Actions runner has no stored OpenCode login. The workflow passes
-  // the repository secret only to this process and the executor forwards it to
-  // OpenCode as the provider's documented environment variable. The value is
-  // never logged, placed in argv or written to the repository.
   if (ALLOW_PROVIDER_ENV && process.env[PROVIDER_ENV_NAME]) {
     env[PROVIDER_ENV_NAME] = process.env[PROVIDER_ENV_NAME];
   }
@@ -567,7 +567,7 @@ async function readCapabilities(context = {}) {
   let authProbeError = null;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const auth = await run('opencode', ['auth', 'list'], {
+      const auth = await run('opencode', ['auth', 'list', '--standalone'], {
         env: opencodeEnv(),
         timeoutMs: 30000,
       });
@@ -587,19 +587,29 @@ async function readCapabilities(context = {}) {
   }
   capabilities.authProbeOk = authProbeOk;
   capabilities.authProbeError = authProbeOk ? null : authProbeError || 'probe failed';
-  const environmentCredential =
-    ALLOW_PROVIDER_ENV && Boolean((process.env[PROVIDER_ENV_NAME] || '').trim());
-  capabilities.providerEnvConfigured = environmentCredential;
-  if (!capabilities.opencodeAuthenticated && environmentCredential) {
-    // The Actions runner intentionally has no stored login. An explicit
-    // provider environment credential is a different, valid auth source; the
-    // value is never recorded, only its presence.
-    capabilities.opencodeAuthenticated = true;
-    capabilities.authSource = 'environment';
+  // Prefer the stored OpenCode login. An Actions runner has no stored login, so
+  // its explicitly allowed provider secret is the second valid source. The
+  // value is never recorded, only its presence. Missing auth fails closed.
+  const environmentCredential = Boolean((process.env[PROVIDER_ENV_NAME] || '').trim());
+  const auth = resolveExecutorAuth({
+    provider: OPENCODE_PROVIDER,
+    envName: PROVIDER_ENV_NAME,
+    storedAuth: capabilities.opencodeAuthenticated === true,
+    envKey: environmentCredential,
+    allowProviderEnv: ALLOW_PROVIDER_ENV,
+    authProbeOk,
+  });
+  capabilities.providerEnvConfigured = Boolean(ALLOW_PROVIDER_ENV && environmentCredential);
+  capabilities.opencodeAuthenticated = auth.ok;
+  capabilities.authSource = auth.source;
+  capabilities.authReasonCode = auth.reasonCode;
+  if (auth.ok && auth.source === 'environment') {
     capabilities.authProbeOk = true;
     capabilities.authProbeError = null;
-  } else {
-    capabilities.authSource = capabilities.opencodeAuthenticated ? 'stored' : 'missing';
+  } else if (!auth.ok && auth.source === 'missing') {
+    // A successful but empty auth listing is proof that no stored login exists.
+    capabilities.authProbeOk = true;
+    capabilities.authProbeError = null;
   }
   capabilities.versionOk = Boolean(
     capabilities.opencodeAvailable &&
@@ -1626,9 +1636,9 @@ async function runActionsOnce() {
     process.exitCode = ACTIONS_EXIT.permanent;
     return;
   }
-  // The Actions executor is OpenAI-only. A stale repository variable, a manual
-  // dispatch or an inherited shell environment must never route a Dev task to
-  // DeepSeek (or any other provider). Fail before registering or claiming.
+  // The Actions executor is DeepSeek-primary. A stale repository variable, a
+  // manual dispatch or an inherited shell environment must never route a Dev
+  // task to OpenAI or any other provider. Fail before registering or claiming.
   if (!PROVIDER_SELECTION.ok) {
     await bootPhase('failed', `${PROVIDER_SELECTION.reasonCode}: ${PROVIDER_SELECTION.reason}`, {
       force: true,
@@ -1636,16 +1646,10 @@ async function runActionsOnce() {
     process.exitCode = ACTIONS_EXIT.permanent;
     return;
   }
-  if (ALLOW_PROVIDER_ENV && !(process.env[PROVIDER_ENV_NAME] || '').trim()) {
-    await bootPhase(
-      'failed',
-      `PROVIDER_KEY_MISSING: repository secret ${PROVIDER_ENV_NAME} is not present. Add it in GitHub repository Settings → Secrets and variables → Actions. No fallback provider or model will be used.`,
-      { force: true }
-    );
-    process.exitCode = ACTIONS_EXIT.permanent;
-    return;
-  }
 
+  // Authentication is resolved inside readCapabilities: a stored DeepSeek login
+  // is preferred; an explicitly allowed DEEPSEEK_API_KEY is the fallback auth
+  // source for an ephemeral runner. Missing auth fails before the claim.
   const capabilities = await readCapabilities({ configOk: true, apiOk: false, supabaseOk: false });
   capabilities.executor = 'github-actions';
   capabilities.executionId = EXECUTION_ID;

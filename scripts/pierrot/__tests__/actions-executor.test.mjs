@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -19,6 +20,7 @@ import {
   parseStoredAuth,
   resolveCommitPolicy,
   resolveDevProviderSelection,
+  resolveExecutorAuth,
 } from '../dev-worker-lib.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -181,8 +183,9 @@ test('Actions workflow has least-privilege permissions and no secret literals', 
   assert.doesNotMatch(workflow, /packages:\s*write/);
   assert.doesNotMatch(workflow, /deployments:\s*write/);
   // Secrets may only be referenced through the GitHub secrets context.
-  assert.match(workflow, /OPENAI_API_KEY:\s*\$\{\{\s*secrets\.OPENAI_API_KEY\s*\}\}/);
-  assert.doesNotMatch(workflow, /OPENAI_API_KEY\s*[:=]\s*['"]?sk-/i);
+  assert.match(workflow, /DEEPSEEK_API_KEY:\s*\$\{\{\s*secrets\.DEEPSEEK_API_KEY\s*\}\}/);
+  assert.doesNotMatch(workflow, /OPENAI_API_KEY/);
+  assert.doesNotMatch(workflow, /DEEPSEEK_API_KEY\s*[:=]\s*['"]?sk-/i);
   assert.doesNotMatch(workflow, /sk-[A-Za-z0-9]{12,}/);
   // The runner cannot merge or deploy; those remain owner-only server actions.
   assert.doesNotMatch(workflow, /\bgh\s+pr\s+merge\b/i);
@@ -190,40 +193,94 @@ test('Actions workflow has least-privilege permissions and no secret literals', 
   assert.doesNotMatch(workflow, /\bsupabase\s+db\s+push\b/i);
 });
 
-test('executor provider selection is OpenAI-only and fails closed otherwise', () => {
+test('executor provider selection is DeepSeek-primary and fails closed otherwise', () => {
   const defaults = resolveDevProviderSelection({});
   assert.equal(defaults.provider, REQUIRED_DEV_PROVIDER);
-  assert.equal(defaults.provider, 'openai');
+  assert.equal(defaults.provider, 'deepseek');
   assert.equal(defaults.model, DEFAULT_DEV_OPENCODE_MODEL);
-  assert.equal(defaults.model, 'openai/gpt-5.6');
-  assert.equal(defaults.envName, 'OPENAI_API_KEY');
+  assert.equal(defaults.model, 'deepseek/deepseek-flash');
+  assert.equal(defaults.envName, 'DEEPSEEK_API_KEY');
   assert.equal(defaults.preflightMarker, DEV_PREFLIGHT_MARKER);
+  assert.equal(defaults.preflightMarker, 'DEEPSEEK_PREFLIGHT_OK');
   assert.equal(defaults.ok, true);
 
   const explicit = resolveDevProviderSelection({
-    provider: 'openai',
-    model: 'openai/gpt-5.6',
+    provider: 'deepseek',
+    model: 'deepseek/deepseek-flash',
   });
   assert.equal(explicit.ok, true);
   assert.equal(explicit.reasonCode, null);
 
-  const deepseekProvider = resolveDevProviderSelection({
-    provider: 'deepseek',
-    model: 'deepseek/deepseek-flash',
-  });
-  assert.equal(deepseekProvider.ok, false);
-  assert.equal(deepseekProvider.reasonCode, 'PROVIDER_NOT_OPENAI');
-
-  const deepseekModel = resolveDevProviderSelection({
+  const openaiProvider = resolveDevProviderSelection({
     provider: 'openai',
-    model: 'deepseek/deepseek-flash',
+    model: 'openai/gpt-5.6',
   });
-  assert.equal(deepseekModel.ok, false);
-  assert.equal(deepseekModel.reasonCode, 'MODEL_NOT_OPENAI');
+  assert.equal(openaiProvider.ok, false);
+  assert.equal(openaiProvider.reasonCode, 'PROVIDER_NOT_DEEPSEEK');
 
-  const modelOnly = resolveDevProviderSelection({ model: 'deepseek/deepseek-flash' });
-  assert.equal(modelOnly.provider, 'deepseek');
-  assert.equal(modelOnly.ok, false);
+  const openaiModel = resolveDevProviderSelection({
+    provider: 'deepseek',
+    model: 'openai/gpt-5.6',
+  });
+  assert.equal(openaiModel.ok, false);
+  assert.equal(openaiModel.reasonCode, 'MODEL_NOT_DEEPSEEK');
+
+  const deepseekModelOnly = resolveDevProviderSelection({ model: 'deepseek/deepseek-flash' });
+  assert.equal(deepseekModelOnly.provider, 'deepseek');
+  assert.equal(deepseekModelOnly.ok, true);
+});
+
+test('DeepSeek auth prefers the stored login and never falls back to OpenAI', () => {
+  const stored = resolveExecutorAuth({
+    provider: 'deepseek',
+    storedAuth: true,
+    envKey: '',
+    allowProviderEnv: true,
+  });
+  assert.equal(stored.ok, true);
+  assert.equal(stored.source, 'stored');
+
+  const environment = resolveExecutorAuth({
+    provider: 'deepseek',
+    storedAuth: false,
+    envKey: 'present',
+    allowProviderEnv: true,
+  });
+  assert.equal(environment.ok, true);
+  assert.equal(environment.source, 'environment');
+
+  const notAllowed = resolveExecutorAuth({
+    provider: 'deepseek',
+    storedAuth: false,
+    envKey: 'present',
+    allowProviderEnv: false,
+  });
+  assert.equal(notAllowed.ok, false);
+  assert.equal(notAllowed.reasonCode, 'PROVIDER_AUTH_MISSING');
+  assert.equal(notAllowed.envName, 'DEEPSEEK_API_KEY');
+
+  const missing = resolveExecutorAuth({
+    provider: 'deepseek',
+    storedAuth: false,
+    envKey: '',
+    allowProviderEnv: true,
+    authProbeOk: true,
+  });
+  assert.equal(missing.ok, false);
+  assert.equal(missing.reasonCode, 'PROVIDER_AUTH_MISSING');
+  assert.match(missing.reason, /DEEPSEEK_API_KEY/);
+  assert.doesNotMatch(missing.reason, /OpenAI/i);
+
+  const unverified = resolveExecutorAuth({
+    provider: 'deepseek',
+    storedAuth: false,
+    envKey: '',
+    allowProviderEnv: true,
+    authProbeOk: false,
+  });
+  assert.equal(unverified.ok, false);
+  assert.equal(unverified.reasonCode, 'PROVIDER_AUTH_UNVERIFIED');
+  assert.equal(unverified.source, 'unverified');
 });
 
 test('the executor refuses any hidden Codespaces fallback', () => {
@@ -258,21 +315,22 @@ test('the executor refuses any hidden Codespaces fallback', () => {
   assert.doesNotMatch(workflow, /runs-on:\s*self-hosted/);
 });
 
-test('executor configuration pins the documented OpenAI model', () => {
+test('executor configuration pins the available DeepSeek model', () => {
   const config = JSON.parse(fs.readFileSync(path.join(repoRoot, 'opencode.json'), 'utf8'));
-  assert.equal(config.model, 'openai/gpt-5.6');
-  assert.match(workflowText(), /PIERROT_DEV_OPENCODE_PROVIDER:\s*openai\b/);
-  assert.match(workflowText(), /PIERROT_DEV_OPENCODE_MODEL:\s*openai\/gpt-5\.6\b/);
+  assert.equal(config.model, DEFAULT_DEV_OPENCODE_MODEL);
+  assert.equal(config.model, 'deepseek/deepseek-flash');
+  assert.match(workflowText(), /PIERROT_DEV_OPENCODE_PROVIDER:\s*deepseek\b/);
+  assert.match(workflowText(), /PIERROT_DEV_OPENCODE_MODEL:\s*deepseek\/deepseek-flash\b/);
 });
 
 test('executor workflow has no other-provider fallback', () => {
   const raw = workflowText();
   const workflow = raw.toLowerCase();
-  assert.doesNotMatch(workflow, /deepseek/);
+  assert.doesNotMatch(workflow, /openai/);
   assert.doesNotMatch(workflow, /openrouter/);
   assert.doesNotMatch(workflow, /anthropic/);
-  assert.match(workflow, /pierrot_dev_opencode_provider:\s*openai\b/);
-  assert.match(workflow, /pierrot_dev_opencode_model:\s*openai\//);
+  assert.match(workflow, /pierrot_dev_opencode_provider:\s*deepseek\b/);
+  assert.match(workflow, /pierrot_dev_opencode_model:\s*deepseek\/deepseek-flash\b/);
   // The preflight is a hard gate before the executor step.
   const preflightIndex = raw.indexOf('actions-preflight.mjs');
   const executeIndex = raw.indexOf('node scripts/pierrot/dev-worker.mjs');
@@ -349,14 +407,13 @@ test('cleanup cannot release another runner lease from a stale active-attempt fi
   assert.ok(release.indexOf('ownership.owned') < release.indexOf("api(\n      'release'"));
 });
 
-test('OpenAI preflight failures have separate non-secret diagnostics', () => {
+test('DeepSeek preflight failures have separate non-secret diagnostics', () => {
   const preflight = fs.readFileSync(
     path.join(repoRoot, 'scripts/pierrot/actions-preflight.mjs'),
     'utf8'
   );
   for (const code of [
     'WORKER_TOKEN_MISSING',
-    'PROVIDER_KEY_MISSING',
     'OPENCODE_UNAVAILABLE',
     'OPENCODE_VERSION',
     'MODEL_LIST_FAILED',
@@ -368,16 +425,20 @@ test('OpenAI preflight failures have separate non-secret diagnostics', () => {
     assert.match(preflight, new RegExp(`['"]${code}['"]`));
   }
   assert.match(preflight, /resolveDevProviderSelection/);
+  assert.match(preflight, /resolveExecutorAuth/);
   assert.match(preflight, /if \(!SELECTION\.ok\)/);
   assert.match(preflight, /SELECTION\.reasonCode/);
   const lib = fs.readFileSync(path.join(repoRoot, 'scripts/pierrot/dev-worker-lib.mjs'), 'utf8');
-  assert.match(lib, /PROVIDER_NOT_OPENAI/);
-  assert.match(lib, /MODEL_NOT_OPENAI/);
+  assert.match(lib, /PROVIDER_NOT_DEEPSEEK/);
+  assert.match(lib, /MODEL_NOT_DEEPSEEK/);
+  assert.match(lib, /PROVIDER_AUTH_MISSING/);
+  assert.match(lib, /PROVIDER_AUTH_UNVERIFIED/);
   assert.match(preflight, /::error title=Pierrot preflight/);
   assert.match(preflight, /PREFLIGHT_MARKER/);
-  assert.match(lib, /OPENAI_PREFLIGHT_OK/);
+  assert.match(lib, /DEEPSEEK_PREFLIGHT_OK/);
   assert.match(preflight, /\[['"]models['"],\s*['"]--standalone['"]\]/);
-  assert.doesNotMatch(preflight, /DEEPSEEK_PREFLIGHT_OK/);
+  assert.doesNotMatch(preflight, /OPENAI_PREFLIGHT_OK/);
+  assert.doesNotMatch(preflight, /OPENAI_API_KEY/);
   assert.doesNotMatch(preflight, /sk-[A-Za-z0-9]{12,}/);
 });
 
@@ -400,36 +461,47 @@ function runPreflight(extraEnv) {
   );
 }
 
-test('preflight exits non-zero for a DeepSeek selection before touching credentials', () => {
-  const result = runPreflight({
-    PIERROT_DEV_OPENCODE_PROVIDER: 'deepseek',
-    PIERROT_DEV_OPENCODE_MODEL: 'deepseek/deepseek-flash',
-    DEEPSEEK_API_KEY: 'not-a-real-key',
-  });
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /failed=PROVIDER_NOT_OPENAI/);
-  assert.match(result.stderr, /Pierrot preflight \(PROVIDER_NOT_OPENAI\)/);
-  assert.doesNotMatch(`${result.stdout}${result.stderr}`, /not-a-real-key/);
-});
-
-test('preflight fails closed when the OpenAI key is missing', () => {
+test('preflight exits non-zero for an OpenAI selection before touching credentials', () => {
   const result = runPreflight({
     PIERROT_DEV_OPENCODE_PROVIDER: 'openai',
     PIERROT_DEV_OPENCODE_MODEL: 'openai/gpt-5.6',
+    OPENAI_API_KEY: 'not-a-real-key',
   });
   assert.equal(result.status, 1);
-  assert.match(result.stdout, /provider_key_present=false/);
-  assert.match(result.stdout, /failed=PROVIDER_KEY_MISSING/);
-  assert.match(result.stderr, /Pierrot preflight \(PROVIDER_KEY_MISSING\)/);
+  assert.match(result.stdout, /failed=PROVIDER_NOT_DEEPSEEK/);
+  assert.match(result.stderr, /Pierrot preflight \(PROVIDER_NOT_DEEPSEEK\)/);
+  assert.doesNotMatch(`${result.stdout}${result.stderr}`, /not-a-real-key/);
 });
 
-test('Actions worker refuses a non-OpenAI selection before claiming', () => {
+test('preflight fails closed when DeepSeek auth is missing', () => {
+  // An empty HOME makes `opencode auth list` deterministic: no stored login.
+  const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), 'pierrot-preflight-'));
+  try {
+    const result = runPreflight({
+      HOME: emptyHome,
+      PIERROT_DEV_OPENCODE_PROVIDER: 'deepseek',
+      PIERROT_DEV_OPENCODE_MODEL: 'deepseek/deepseek-flash',
+      PIERROT_DEV_ALLOW_PROVIDER_ENV: 'true',
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /provider_key_present=false/);
+    assert.match(result.stdout, /stored_auth_present=false/);
+    assert.match(result.stdout, /failed=PROVIDER_AUTH_MISSING/);
+    assert.match(result.stderr, /Pierrot preflight \(PROVIDER_AUTH_MISSING\)/);
+    assert.match(result.stderr, /DEEPSEEK_API_KEY/);
+  } finally {
+    fs.rmSync(emptyHome, { recursive: true, force: true });
+  }
+});
+
+test('Actions worker refuses a non-DeepSeek selection before claiming', () => {
   const worker = fs.readFileSync(path.join(repoRoot, 'scripts/pierrot/dev-worker.mjs'), 'utf8');
   assert.match(worker, /resolveDevProviderSelection/);
+  assert.match(worker, /resolveExecutorAuth/);
   assert.match(worker, /if \(!PROVIDER_SELECTION\.ok\)/);
   assert.match(worker, /PROVIDER_SELECTION\.reasonCode/);
-  assert.match(worker, /PROVIDER_KEY_MISSING/);
-  assert.doesNotMatch(worker, /DEEPSEEK_CONFIG_MISSING/);
+  assert.match(worker, /OPENCODE_AUTH_MISSING/);
+  assert.doesNotMatch(worker, /PROVIDER_KEY_MISSING/);
   assert.match(worker, /\['models', '--standalone'\]/);
   // Fail before the claim RPC; a rejected provider must never reach the queue.
   const guardIndex = worker.indexOf('if (!PROVIDER_SELECTION.ok)');
