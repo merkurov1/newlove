@@ -4,9 +4,21 @@ import { ReactNode, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 
-export default function TemplePageTransition({ children }: { children: ReactNode }) {
+export default function TemplePageTransition({
+  children,
+  routeKey,
+}: {
+  children: ReactNode;
+  /**
+   * Keeps the same motion wrapper key while an intercepted ritual changes the
+   * URL above the Temple. The underlying page then stays mounted and visible
+   * instead of running its exit animation behind the compact modal.
+   */
+  routeKey?: string;
+}) {
   const pathname = usePathname() || '';
   const [reduceMotion, setReduceMotion] = useState(false);
+  const transitionKey = routeKey ?? pathname;
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -26,7 +38,7 @@ export default function TemplePageTransition({ children }: { children: ReactNode
   return (
     <AnimatePresence mode="wait" initial={false}>
       <motion.div
-        key={pathname}
+        key={transitionKey}
         initial={
           reduceMotion ? { opacity: 0 } : { opacity: 0, y: 9, scale: 0.995, filter: 'blur(5px)' }
         }

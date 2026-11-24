@@ -15,40 +15,56 @@ const PARITY = [
     modal: 'app/@modal/(.)vigil/page.tsx',
     standalone: 'app/vigil/page.tsx',
     experience: 'app/vigil/VigilExperience',
+    shell: 'RitualModal',
   },
   {
     ritual: 'Cast',
     modal: 'app/@modal/(.)cast/page.tsx',
     standalone: 'app/cast/page.tsx',
     experience: 'app/cast/CastClient',
+    shell: 'RitualModal',
   },
   {
     ritual: 'Tribute',
     modal: 'app/@modal/(.)tribute/page.tsx',
     standalone: 'app/tribute/page.tsx',
     experience: 'app/tribute/TributeExperience',
+    shell: 'RitualModal',
   },
   {
     ritual: 'Absolution',
     modal: 'app/@modal/(.)absolution/page.tsx',
     standalone: 'app/absolution/page.tsx',
     experience: 'app/absolution/AbsolutionClient',
+    shell: 'AbsolutionModal',
   },
 ] as const;
 
 describe('ritual modal and standalone route parity', () => {
   it.each(PARITY)(
     '$ritual uses one shared experience in modal and full page',
-    ({ modal, standalone, experience }) => {
+    ({ modal, standalone, experience, shell }) => {
       const modalSource = read(modal);
       const pageSource = read(standalone);
       const moduleName = experience.split('/').pop() as string;
 
       expect(modalSource).toContain(moduleName);
       expect(pageSource).toContain(moduleName);
-      expect(modalSource).toContain('RitualModal');
+      expect(modalSource).toContain(shell);
     }
   );
+
+  it('keeps Absolution in a dedicated compact modal over the Temple', () => {
+    const modalSource = read('app/@modal/(.)absolution/page.tsx');
+    const shellSource = read('components/temple/AbsolutionModal.tsx');
+
+    expect(modalSource).toContain('AbsolutionModal');
+    expect(modalSource).not.toContain('RitualModal');
+    expect(shellSource).toContain('absolution-modal');
+    expect(shellSource).toContain('registerTelegramBackHandler');
+    expect(shellSource).toContain('window.scrollTo');
+    expect(shellSource).toContain('returnFocusRef.current?.focus');
+  });
 
   it('renders immersive scenes in the modal scene slot', () => {
     expect(
