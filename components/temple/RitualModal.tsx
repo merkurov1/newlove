@@ -10,16 +10,8 @@ import {
   shouldRecordRitualTrace,
   visitDurationMinutes,
 } from '@/lib/temple/visitTrace';
+import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
 import { RITUAL_TIMER_EVENT } from './useRitualModalTimer';
-
-const RITUALS = [
-  ['Calm', '/heartandangel/calm'],
-  ['Let It Go', '/heartandangel/letitgo'],
-  ['Vigil', '/vigil'],
-  ['Absolution', '/absolution'],
-  ['Cast', '/cast'],
-  ['Tribute', '/tribute'],
-] as const;
 
 export default function RitualModal({
   title,
@@ -156,7 +148,7 @@ export default function RitualModal({
         <div className="temple-modal__content">{children}</div>
 
         <nav className="temple-modal__dock" aria-label="Switch ritual">
-          {RITUALS.map(([label, href]) => (
+          {TEMPLE_RITUAL_LINKS.map(({ label, href }) => (
             <Link
               key={href}
               href={href}

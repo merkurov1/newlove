@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Compass,
-  Flame,
-  Heart,
   Moon,
   ShieldCheck,
   Sparkles,
@@ -17,6 +15,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
 import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
+import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
 
 type NavigationItem = {
   href: string;
@@ -40,38 +39,18 @@ const PRIMARY_LINKS: NavigationItem[] = [
   },
 ];
 
-const RITUAL_LINKS: NavigationItem[] = [
-  {
-    href: '/heartandangel/calm',
-    label: 'Calm',
-    icon: Moon,
-  },
-  {
-    href: '/heartandangel/letitgo',
-    label: 'Let It Go',
-    icon: Trash2,
-  },
-  {
-    href: '/vigil',
-    label: 'Vigil',
-    icon: Flame,
-  },
-  {
-    href: '/absolution',
-    label: 'Absolution',
-    icon: ShieldCheck,
-  },
-  {
-    href: '/cast',
-    label: 'Cast',
-    icon: Terminal,
-  },
-  {
-    href: '/tribute',
-    label: 'Tribute',
-    icon: Heart,
-  },
-];
+const RITUAL_ICONS: Record<string, LucideIcon> = {
+  '/heartandangel/calm': Moon,
+  '/heartandangel/letitgo': Trash2,
+  '/absolution': ShieldCheck,
+  '/cast': Terminal,
+};
+
+const RITUAL_LINKS: NavigationItem[] = TEMPLE_RITUAL_LINKS.map((ritual) => ({
+  href: ritual.href,
+  label: ritual.label,
+  icon: RITUAL_ICONS[ritual.href] ?? Sparkles,
+}));
 
 function normalizePath(pathname: string) {
   return pathname.replace(/\/$/, '') || '/';

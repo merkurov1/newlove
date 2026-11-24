@@ -118,8 +118,21 @@ function formatAmount(amount: number): string {
   return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
 }
 
-export default function TributeExperience() {
-  const [amount, setAmount] = useState<number>(20);
+function presetAmount(value: unknown): number | null {
+  const amount = Number(value);
+
+  return PRESETS.includes(amount) ? amount : null;
+}
+
+export default function TributeExperience({
+  embedded = false,
+  initialAmount,
+}: {
+  embedded?: boolean;
+  initialAmount?: number;
+} = {}) {
+  const selectedPreset = presetAmount(initialAmount);
+  const [amount, setAmount] = useState<number>(selectedPreset ?? 20);
   const [isCustom, setIsCustom] = useState(false);
   const [customText, setCustomText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -150,6 +163,14 @@ export default function TributeExperience() {
   useEffect(() => {
     trackTributeSupportView('tribute_ritual');
 
+    if (embedded) {
+      if (selectedPreset !== null) {
+        trackTributeAmountSelected(selectedPreset, true);
+      }
+
+      return;
+    }
+
     const preset = Number(new URLSearchParams(window.location.search).get('amount'));
 
     if (PRESETS.includes(preset)) {
@@ -157,7 +178,7 @@ export default function TributeExperience() {
       setIsCustom(false);
       trackTributeAmountSelected(preset, true);
     }
-  }, []);
+  }, [embedded, selectedPreset]);
 
   const fetchTotal = useCallback(async () => {
     const requestId = summaryRequestRef.current + 1;
@@ -676,23 +697,35 @@ export default function TributeExperience() {
 
   return (
     <div
-      className="tribute-page relative flex w-full flex-col overflow-x-hidden bg-[#141210] font-sans text-stone-200"
+      className={
+        embedded
+          ? 'relative flex w-full flex-col overflow-x-hidden bg-[#141210] font-sans text-stone-200'
+          : 'tribute-page relative flex w-full flex-col overflow-x-hidden bg-[#141210] font-sans text-stone-200'
+      }
       style={{
         backgroundImage:
           'radial-gradient(circle at 50% 40%, rgba(55, 40, 32, 0.75) 0%, rgba(20, 18, 16, 1) 90%)',
       }}
     >
-      <div className="noise-overlay" />
+      {!embedded && <div className="noise-overlay" />}
 
       <div className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-tr from-amber-900/40 via-orange-950/20 to-transparent blur-[120px]" />
 
-      <TempleTopBar backTo="temple" />
+      {!embedded && <TempleTopBar backTo="temple" />}
 
-      <section className="tribute-main relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-5 sm:px-8">
-        <header className="mb-5 text-center sm:mb-6">
-          <h1 className="text-2xl font-semibold tracking-[0.3em] text-stone-100 sm:text-3xl">
-            TRIBUTE
-          </h1>
+      <section
+        className={
+          embedded
+            ? 'relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-4 pb-6 pt-3'
+            : 'tribute-main relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-5 sm:px-8'
+        }
+      >
+        <header className={embedded ? 'mb-3 text-center' : 'mb-5 text-center sm:mb-6'}>
+          {!embedded && (
+            <h1 className="text-2xl font-semibold tracking-[0.3em] text-stone-100 sm:text-3xl">
+              TRIBUTE
+            </h1>
+          )}
 
           <div
             className="mt-2 font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-stone-400"

@@ -130,4 +130,33 @@ describe('Telegram Pierrot uses the single conversation window', () => {
       screen.queryByRole('button', { name: 'Open Pierrot conversation' })
     ).not.toBeInTheDocument();
   });
+
+  it('keeps Vigil and Tribute out of the Telegram Temple menu', () => {
+    render(app());
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Open World, Temple and rituals navigation',
+      })
+    );
+
+    const dialog = screen.getByRole('dialog');
+
+    expect(within(dialog).getByText('Rituals')).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Calm' })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('link', { name: 'Let It Go' })
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('link', { name: 'Absolution' })
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Cast' })).toBeInTheDocument();
+
+    expect(
+      within(dialog).queryByRole('link', { name: 'Vigil' })
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('link', { name: 'Tribute' })
+    ).not.toBeInTheDocument();
+  });
 });
