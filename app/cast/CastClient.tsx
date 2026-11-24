@@ -24,6 +24,102 @@ import {
 
 const CAST_DRAFT_KEY = 'cast:draft:v1';
 
+export type CastVariant = 'page' | 'modal';
+
+type CastTheme = {
+  page: string;
+  title: string;
+  ambientCore: string;
+  ambientWash: string;
+  panel: string;
+  panelSoft: string;
+  heading: string;
+  body: string;
+  muted: string;
+  faint: string;
+  accent: string;
+  accentSoft: string;
+  divider: string;
+  input: string;
+  primaryButton: string;
+  secondaryButton: string;
+  choiceButton: string;
+  choiceMeta: string;
+  analysis: string;
+  cursor: string;
+  errorText: string;
+  stampSurface: string;
+};
+
+/**
+ * Standalone /cast keeps the Sanctuary's daylight palette. The intercepted
+ * modal uses the same type scale and geometry inside the dark ritual shell.
+ */
+const CAST_THEME: Record<CastVariant, CastTheme> = {
+  page: {
+    page: 'bg-[#FAF8F5] text-stone-900',
+    title: 'text-amber-800/80',
+    ambientCore: 'bg-amber-200/40',
+    ambientWash:
+      'bg-[radial-gradient(circle_at_50%_35%,rgba(160,120,60,0.12),transparent_48%)]',
+    panel:
+      'border-stone-300/80 bg-white/80 text-stone-900 shadow-[0_24px_80px_rgba(70,55,35,0.10)] backdrop-blur-xl',
+    panelSoft:
+      'border-stone-300/70 bg-white/65 text-stone-900 shadow-sm backdrop-blur-xl',
+    heading: 'text-stone-900',
+    body: 'text-stone-700',
+    muted: 'text-stone-500',
+    faint: 'text-stone-400',
+    accent: 'text-amber-700',
+    accentSoft: 'text-amber-800/80',
+    divider: 'border-stone-300/80',
+    input:
+      'border-stone-300 bg-white/80 text-stone-900 placeholder:text-stone-400 focus:border-amber-600 focus:bg-white',
+    primaryButton:
+      'border-amber-700/35 bg-amber-100/70 text-stone-900 hover:border-amber-700/60 hover:bg-amber-100 disabled:opacity-30',
+    secondaryButton:
+      'border-stone-300 bg-white/80 text-stone-700 hover:border-amber-600/50 hover:bg-white',
+    choiceButton:
+      'border-stone-300 bg-white/80 text-stone-900 hover:border-amber-700/60 hover:bg-white',
+    choiceMeta: 'text-amber-700/70',
+    analysis: 'text-stone-700',
+    cursor: 'bg-amber-600 text-stone-50',
+    errorText: 'text-red-600',
+    stampSurface: 'bg-white/70',
+  },
+  modal: {
+    page: 'bg-[#141210] text-stone-200',
+    title: 'text-amber-300/80',
+    ambientCore: 'bg-amber-900/20',
+    ambientWash:
+      'bg-[radial-gradient(circle_at_50%_35%,rgba(120,80,20,0.10),transparent_45%)]',
+    panel:
+      'border-stone-800/80 bg-stone-900/80 text-stone-100 shadow-xl backdrop-blur-xl',
+    panelSoft:
+      'border-stone-800/80 bg-stone-950/80 text-stone-200 shadow-xl backdrop-blur-xl',
+    heading: 'text-stone-100',
+    body: 'text-stone-300',
+    muted: 'text-stone-500',
+    faint: 'text-stone-600',
+    accent: 'text-amber-300',
+    accentSoft: 'text-amber-300/80',
+    divider: 'border-stone-800',
+    input:
+      'border-stone-800 bg-white/5 text-stone-200 placeholder:text-stone-600 focus:border-amber-400/60 focus:bg-white/10',
+    primaryButton:
+      'border-amber-300/30 bg-white/10 text-stone-100 hover:border-amber-300/60 hover:bg-white/15 disabled:opacity-25',
+    secondaryButton:
+      'border-amber-300/25 bg-white/5 text-stone-100 hover:border-amber-300/60 hover:bg-white/10',
+    choiceButton:
+      'border-stone-700/80 bg-white/[0.04] text-stone-100 hover:border-amber-300/50 hover:bg-white/[0.08]',
+    choiceMeta: 'text-amber-300/70',
+    analysis: 'text-stone-300',
+    cursor: 'bg-amber-400 text-stone-950',
+    errorText: 'text-red-400',
+    stampSurface: 'bg-stone-950/50',
+  },
+};
+
 const QUESTIONS_EN = [
   'Which object in your home do you keep because it reminds you of **failed ambition** or a **bad compromise**?',
   'At what age or event did you first realize the **person closest to you** could not protect you?',
@@ -112,7 +208,7 @@ function renderQuestionText(text: string) {
       return (
         <strong
           key={index}
-          className="font-semibold text-stone-100"
+          className="font-semibold"
         >
           {part.slice(2, -2)}
         </strong>
@@ -129,22 +225,32 @@ function renderQuestionText(text: string) {
 
 function Stamp({
   type,
+  variant,
 }: {
   type: string;
+  variant: CastVariant;
 }) {
-  const colors: Record<string, string> = {
-    VOID: 'text-stone-500 border-stone-500',
-    NOISE: 'text-amber-400 border-amber-400',
-    STONE: 'text-stone-300 border-stone-300',
-    UNFRAMED: 'text-stone-100 border-stone-100',
-  };
+  const colors: Record<string, string> =
+    variant === 'page'
+      ? {
+          VOID: 'text-stone-500 border-stone-500',
+          NOISE: 'text-amber-700 border-amber-700',
+          STONE: 'text-stone-700 border-stone-700',
+          UNFRAMED: 'text-stone-900 border-stone-900',
+        }
+      : {
+          VOID: 'text-stone-500 border-stone-500',
+          NOISE: 'text-amber-400 border-amber-400',
+          STONE: 'text-stone-300 border-stone-300',
+          UNFRAMED: 'text-stone-100 border-stone-100',
+        };
 
   const style = colors[type] || colors.VOID;
 
   return (
-    <div className="pointer-events-none absolute right-5 top-5 z-20 rotate-6 opacity-0 animate-in fade-in zoom-in duration-500 md:right-8 md:top-8">
+    <div className="cast-stamp pointer-events-none absolute right-5 top-5 z-20 md:right-8 md:top-8">
       <div
-        className={`border-2 ${style} bg-stone-950/50 px-3 py-2 font-mono text-xl font-bold uppercase tracking-[0.16em] backdrop-blur-sm md:px-4 md:py-2 md:text-3xl`}
+        className={`border-2 ${style} ${CAST_THEME[variant].stampSurface} px-2 py-1.5 font-mono text-lg font-bold uppercase tracking-[0.16em] backdrop-blur-sm sm:px-3 sm:py-2 sm:text-xl md:px-4 md:text-2xl md:text-3xl`}
       >
         [{type}]
       </div>
@@ -192,8 +298,14 @@ function useProcessing(isLoading: boolean) {
   };
 }
 
-export default function CastClient() {
+export default function CastClient({
+  variant = 'page',
+}: {
+  variant?: CastVariant;
+}) {
   const { user } = useAuth();
+  const isModal = variant === 'modal';
+  const ui = CAST_THEME[variant];
 
   const [language, setLanguage] =
     useState<'en' | 'ru' | null>(null);
@@ -709,78 +821,115 @@ export default function CastClient() {
   }
 
   return (
-    <div className="cast-page relative flex min-h-[100dvh] w-full flex-col overflow-x-hidden bg-[#141210] font-sans text-stone-200 antialiased selection:bg-amber-500/30">
+    <div
+      className={`cast-page ${
+        isModal ? 'cast-page--modal min-h-full' : 'min-h-[100dvh]'
+      } relative flex w-full flex-col overflow-x-hidden font-sans antialiased selection:bg-amber-500/30 ${ui.page}`}
+      data-cast-variant={variant}
+    >
       {/* Ambient Temple light */}
-      <div className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute left-1/2 top-1/2 h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-900/20 blur-[130px]" />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-0"
+      >
+        <div
+          className={`absolute left-1/2 top-[42%] h-[32rem] w-[32rem] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[130px] ${ui.ambientCore}`}
+        />
 
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(120,80,20,0.10),transparent_45%)]" />
+        <div
+          className={`absolute inset-0 ${ui.ambientWash}`}
+        />
       </div>
 
-      <TempleTopBar backTo="temple" />
+      {!isModal && <TempleTopBar backTo="temple" />}
 
-      <h1 className="relative z-10 mx-auto mt-24 max-w-4xl px-6 font-serif text-xs uppercase tracking-[0.3em] text-amber-300/80 sm:mt-28">
-        The Cast — Psychological Protocol
-      </h1>
+      {!isModal && (
+        <h1
+          className={`relative z-10 mx-auto mt-24 max-w-4xl px-6 font-serif text-xs uppercase tracking-[0.3em] sm:mt-28 ${ui.title}`}
+        >
+          The Cast — Psychological Protocol
+        </h1>
+      )}
 
-      {/* LANGUAGE SELECT */}
+      {/* LANGUAGE SELECT — minimal first screen, no card pair */}
       {currentStep === 0 && (
-        <div className="cast-stage relative z-10 flex flex-1 items-center justify-center px-6 pb-16 pt-32 sm:pt-36">
-          <div className="grid w-full max-w-4xl gap-6 md:grid-cols-2 md:gap-8 animate-in fade-in duration-700">
-            {[
-              {
-                lang: 'en' as const,
-                label:
-                  '[ START IN ENGLISH ]',
-                title: 'Protocol 01',
-                text:
-                  'I spent 20 years building a personal myth and 2 years deconstructing it with AI. This Protocol deconstructs your answers and measures your Agency Index.',
-              },
-              {
-                lang: 'ru' as const,
-                label:
-                  '[ НАЧАТЬ НА РУССКОМ ]',
-                title: 'Протокол 01',
-                text:
-                  'Этот Протокол анализирует ваши ответы, вычисляет Индекс Агентности и определяет ваш психологический архетип.',
-              },
-            ].map(item => (
-              <div
-                key={item.lang}
-                className="group flex flex-col justify-center space-y-6 rounded-[28px] border border-stone-800/80 bg-stone-900/80 p-7 shadow-2xl backdrop-blur-xl transition-all duration-300 hover:border-amber-300/30 hover:bg-stone-900/90 sm:p-9"
-              >
-                <div className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-amber-300">
-                  <Terminal size={13} />
-                  {item.title}
-                </div>
+        <div className="cast-stage relative z-10 flex flex-1 items-center justify-center px-6 pb-16 pt-12 sm:pt-16">
+          <section
+            className={`cast-intro w-full max-w-xl overflow-hidden rounded-[2rem] border p-7 text-center animate-in fade-in duration-700 sm:p-10 ${ui.panel}`}
+            aria-labelledby="cast-language-title"
+            data-testid="cast-language-select"
+          >
+            <span
+              className={`inline-flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] ${ui.accentSoft}`}
+            >
+              <Terminal size={12} aria-hidden="true" />
+              The Digital Temple
+            </span>
 
-                <div className="h-px w-12 bg-amber-300/30 transition-all duration-300 group-hover:w-20" />
+            <h2
+              id="cast-language-title"
+              className={`mt-4 font-serif text-3xl tracking-[0.02em] sm:text-4xl ${ui.heading}`}
+            >
+              Choose your language
+            </h2>
 
-                <p className="text-sm leading-relaxed tracking-wide text-stone-300 md:text-base">
-                  {item.text}
-                </p>
+            <div
+              aria-hidden="true"
+              className={`mx-auto mt-5 h-px w-14 ${
+                isModal ? 'bg-amber-300/30' : 'bg-amber-700/30'
+              }`}
+            />
 
+            <div
+              role="group"
+              aria-label="Protocol language"
+              className="mt-8 flex flex-col gap-3 sm:flex-row"
+            >
+              {(
+                [
+                  {
+                    lang: 'en' as const,
+                    label: 'English',
+                    meta: 'EN',
+                  },
+                  {
+                    lang: 'ru' as const,
+                    label: 'Русский',
+                    meta: 'RU',
+                  },
+                ] as const
+              ).map(item => (
                 <button
+                  key={item.lang}
                   type="button"
+                  lang={item.lang}
+                  aria-label={`Continue in ${item.label}`}
                   onClick={() =>
                     handleLanguageSelect(
                       item.lang
                     )
                   }
-                  className="group/button flex w-full cursor-pointer items-center justify-between rounded-full border border-amber-300/25 bg-white/5 px-6 py-4 font-serif text-xs uppercase tracking-[0.18em] text-stone-100 shadow-md backdrop-blur-md transition-all hover:border-amber-300/60 hover:bg-white/10"
+                  className={`group/button flex min-h-[3.5rem] flex-1 items-center justify-between gap-4 rounded-full border px-6 py-4 font-serif text-sm tracking-[0.08em] shadow-sm transition-all ${ui.choiceButton}`}
                 >
-                  <span>
-                    {item.label}
-                  </span>
+                  <span>{item.label}</span>
 
-                  <ArrowRight
-                    size={16}
-                    className="text-amber-300 transition-transform group-hover/button:translate-x-1"
-                  />
+                  <span className="flex items-center gap-3">
+                    <span
+                      className={`font-mono text-[10px] uppercase tracking-[0.2em] ${ui.choiceMeta}`}
+                    >
+                      {item.meta}
+                    </span>
+
+                    <ArrowRight
+                      size={16}
+                      aria-hidden="true"
+                      className="transition-transform group-hover/button:translate-x-1"
+                    />
+                  </span>
                 </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </section>
         </div>
       )}
 
@@ -788,13 +937,16 @@ export default function CastClient() {
       {currentStep > 0 &&
         currentStep <= 10 &&
         language && (
-          <div className="cast-stage relative z-10 mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center px-6 pb-16 pt-32 sm:pt-36">
+          <div className="cast-stage relative z-10 mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center px-6 pb-16 pt-10 sm:pt-14">
             <div className="w-full">
-              <div className="mb-5 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.22em] text-stone-500">
+              <div
+                className={`mb-5 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.22em] ${ui.muted}`}
+              >
                 <span className="flex items-center gap-2">
                   <Sparkles
                     size={12}
-                    className="text-amber-300"
+                    aria-hidden="true"
+                    className={ui.accent}
                   />
 
                   Query{' '}
@@ -809,7 +961,9 @@ export default function CastClient() {
                 </span>
               </div>
 
-              <div className="mb-6 rounded-[28px] border border-stone-800/80 bg-stone-900/80 p-6 text-lg leading-relaxed text-stone-100 shadow-xl backdrop-blur-xl md:p-8 md:text-xl">
+              <div
+                className={`mb-4 rounded-[28px] border p-4 text-base leading-relaxed sm:mb-6 sm:p-6 sm:text-lg md:p-8 md:text-xl ${ui.panel}`}
+              >
                 {renderQuestionText(
                   currentQuestion
                 )}
@@ -826,7 +980,7 @@ export default function CastClient() {
                 onKeyDown={handleKeyDown}
                 disabled={loading}
                 maxLength={4000}
-                className="mb-6 min-h-[150px] w-full resize-none rounded-2xl border border-stone-800 bg-white/5 p-5 text-base text-stone-200 outline-none shadow-inner transition-all placeholder:text-stone-600 focus:border-amber-400/60 focus:bg-white/10"
+                className={`mb-4 min-h-[96px] w-full resize-none rounded-2xl border p-4 text-sm outline-none shadow-inner transition-all sm:mb-6 sm:min-h-[150px] sm:p-5 sm:text-base ${ui.input}`}
                 placeholder={
                   language === 'ru'
                     ? 'Пишите честно...'
@@ -835,7 +989,9 @@ export default function CastClient() {
               />
 
               <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-                <span className="order-2 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600 sm:order-1">
+                <span
+                  className={`order-2 hidden font-mono text-[9px] uppercase tracking-[0.18em] sm:order-1 sm:inline ${ui.faint}`}
+                >
                   {language === 'ru'
                     ? '[ PRESS ENTER ДЛЯ ОТПРАВКИ ]'
                     : '[ PRESS ENTER TO TRANSMIT ]'}
@@ -850,7 +1006,7 @@ export default function CastClient() {
                     !isAnswerValid ||
                     loading
                   }
-                  className="order-1 w-full cursor-pointer rounded-full border border-amber-300/30 bg-white/10 px-8 py-4 font-serif text-xs font-medium uppercase tracking-[0.18em] text-stone-100 shadow-md backdrop-blur-md transition-all hover:border-amber-300/60 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-25 sm:order-2 sm:w-auto"
+                  className={`order-1 w-full cursor-pointer rounded-full border px-8 py-3 font-serif text-xs font-medium uppercase tracking-[0.18em] shadow-md backdrop-blur-md transition-all disabled:cursor-not-allowed sm:order-2 sm:w-auto sm:py-4 ${ui.primaryButton}`}
                 >
                   {currentStep === 10
                     ? language === 'ru'
@@ -867,43 +1023,53 @@ export default function CastClient() {
 
       {/* RESULT */}
       {currentStep === 11 && (
-        <div className="cast-stage relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 pb-20 pt-32 sm:pt-36">
+        <div className="cast-stage relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 pb-20 pt-10 sm:pt-14">
           {loading ? (
-            <div className="flex min-h-[60vh] flex-col items-center justify-center">
+            <div className="flex min-h-[50vh] flex-col items-center justify-center">
               <div
-                className="flex items-center gap-2 text-center font-mono text-xs tracking-[0.28em] text-amber-300 md:text-sm"
+                className={`flex items-center gap-2 text-center font-mono text-xs tracking-[0.28em] md:text-sm ${ui.accent}`}
                 role="status"
                 aria-live="polite"
               >
                 <RefreshCw
                   className="animate-spin"
                   size={15}
+                  aria-hidden="true"
                 />
 
                 {processingText ||
                   'INITIATING CORE...'}
               </div>
 
-              <div className="mt-8 h-px w-64 overflow-hidden bg-stone-800">
+              <div
+                className={`mt-8 h-px w-64 overflow-hidden ${
+                  isModal ? 'bg-stone-800' : 'bg-stone-200'
+                }`}
+              >
                 <div className="h-full w-1/3 animate-progress-indeterminate bg-amber-400" />
               </div>
             </div>
           ) : error ? (
-            <div className="flex min-h-[60vh] items-center justify-center text-center">
+            <div className="flex min-h-[50vh] items-center justify-center text-center">
               <div
-                className="w-full max-w-lg rounded-[28px] border border-stone-800/80 bg-stone-900/80 p-8 shadow-2xl backdrop-blur-xl"
+                className={`w-full max-w-lg rounded-[28px] border p-8 ${ui.panel}`}
                 role="alert"
               >
                 <AlertTriangle
                   size={24}
-                  className="mx-auto mb-5 text-amber-400"
+                  aria-hidden="true"
+                  className={`mx-auto mb-5 ${ui.accent}`}
                 />
 
-                <div className="mb-4 font-mono text-[10px] uppercase tracking-[0.25em] text-amber-300">
+                <div
+                  className={`mb-4 font-mono text-[10px] uppercase tracking-[0.25em] ${ui.accent}`}
+                >
                   Core Error
                 </div>
 
-                <p className="mb-7 text-sm leading-relaxed text-stone-400">
+                <p
+                  className={`mb-7 text-sm leading-relaxed ${ui.muted}`}
+                >
                   {error}
                 </p>
 
@@ -916,9 +1082,12 @@ export default function CastClient() {
                     answers.length !==
                       10 || loading
                   }
-                  className="inline-flex items-center gap-2 rounded-full border border-amber-300/25 bg-white/5 px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] text-stone-100 transition-all hover:border-amber-300/60 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                  className={`inline-flex items-center gap-2 rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] transition-all disabled:cursor-not-allowed ${ui.secondaryButton}`}
                 >
-                  <RefreshCw size={14} />
+                  <RefreshCw
+                    size={14}
+                    aria-hidden="true"
+                  />
 
                   {language === 'ru'
                     ? 'Повторить анализ'
@@ -928,15 +1097,20 @@ export default function CastClient() {
             </div>
           ) : analysisData ? (
             <>
-              <div className="relative mb-8 overflow-hidden rounded-[28px] border border-stone-800/80 bg-stone-900/85 p-6 shadow-2xl backdrop-blur-2xl md:p-10">
+              <div
+                className={`relative mb-8 overflow-hidden rounded-[28px] border p-6 md:p-10 ${ui.panel}`}
+              >
                 {showStamp &&
                   archetype && (
                     <Stamp
                       type={archetype}
+                      variant={variant}
                     />
                   )}
 
-                <div className="mb-6 flex flex-col justify-between gap-2 border-b border-stone-800 pb-4 font-mono text-[9px] uppercase tracking-[0.2em] text-stone-500 sm:flex-row">
+                <div
+                  className={`mb-6 flex flex-col justify-between gap-2 border-b pb-4 pr-24 font-mono text-[9px] uppercase tracking-[0.2em] sm:flex-row sm:pr-40 ${ui.divider} ${ui.muted}`}
+                >
                   <span>
                     Subject:{' '}
                     {user?.email ||
@@ -954,7 +1128,9 @@ export default function CastClient() {
                   </span>
                 </div>
 
-                <pre className="whitespace-pre-wrap font-mono text-xs font-light leading-loose text-stone-300 md:text-sm">
+                <pre
+                  className={`whitespace-pre-wrap font-mono text-xs font-light leading-loose md:text-sm ${ui.analysis}`}
+                >
                   {displayedText}
 
                   {displayedText.length <
@@ -962,7 +1138,9 @@ export default function CastClient() {
                       analysisData,
                       language
                     ).length && (
-                    <span className="ml-1 inline-block w-2 bg-amber-400 px-1 text-stone-950 animate-pulse">
+                    <span
+                      className={`ml-1 inline-block w-2 animate-pulse px-1 ${ui.cursor}`}
+                    >
                       {' '}
                     </span>
                   )}
@@ -971,15 +1149,21 @@ export default function CastClient() {
 
               {!user &&
                 recordId &&
-                captureToken && (
-                  <div className="mb-8 rounded-[28px] border border-stone-800/80 bg-stone-950/80 p-6 backdrop-blur-xl md:p-8">
-                    <h3 className="mb-2 font-serif text-sm uppercase tracking-[0.12em] text-stone-100">
+                (captureToken || emailSent) && (
+                  <div
+                    className={`mb-8 rounded-[28px] border p-6 md:p-8 ${ui.panelSoft}`}
+                  >
+                    <h3
+                      className={`mb-2 font-serif text-sm uppercase tracking-[0.12em] ${ui.heading}`}
+                    >
                       {language === 'ru'
                         ? 'Сохранить результат в Архиве'
                         : 'Persist Result in Archive'}
                     </h3>
 
-                    <p className="mb-5 text-xs leading-relaxed text-stone-400">
+                    <p
+                      className={`mb-5 text-xs leading-relaxed ${ui.muted}`}
+                    >
                       {language === 'ru'
                         ? 'Введите email, чтобы привязать профиль и получить копию.'
                         : 'Enter email to secure your archetype and receive records.'}
@@ -987,7 +1171,7 @@ export default function CastClient() {
 
                     {emailSent ? (
                       <div
-                        className="py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-amber-300"
+                        className={`py-3 font-mono text-[10px] uppercase tracking-[0.18em] ${ui.accent}`}
                         role="status"
                       >
                         {language === 'ru'
@@ -1016,7 +1200,7 @@ export default function CastClient() {
                             disabled={
                               emailLoading
                             }
-                            className="flex-1 rounded-full border border-stone-800 bg-white/5 px-5 py-3 text-sm text-stone-200 outline-none transition-all placeholder:text-stone-600 focus:border-amber-400/60 focus:bg-white/10 disabled:opacity-50"
+                            className={`flex-1 rounded-full border px-5 py-3 text-sm outline-none transition-all disabled:opacity-50 ${ui.input}`}
                           />
 
                           <button
@@ -1024,7 +1208,7 @@ export default function CastClient() {
                             disabled={
                               emailLoading
                             }
-                            className="rounded-full border border-amber-300/25 bg-white/5 px-6 py-3 font-serif text-xs uppercase tracking-[0.16em] text-stone-100 transition-all hover:border-amber-300/60 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                            className={`rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.16em] transition-all disabled:cursor-not-allowed ${ui.secondaryButton}`}
                           >
                             {emailLoading
                               ? '...'
@@ -1037,7 +1221,7 @@ export default function CastClient() {
 
                         {emailError && (
                           <p
-                            className="mt-3 text-xs text-red-400"
+                            className={`mt-3 text-xs ${ui.errorText}`}
                             role="alert"
                           >
                             {emailError}
@@ -1051,7 +1235,7 @@ export default function CastClient() {
               <div className="mt-8 text-center">
                 <Link
                   href="/temple"
-                  className="inline-block rounded-full border border-amber-300/20 bg-white/5 px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] text-stone-400 transition-all hover:border-amber-300/50 hover:bg-white/10 hover:text-stone-100"
+                  className={`inline-block rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] transition-all ${ui.secondaryButton}`}
                 >
                   [ Return to Temple ]
                 </Link>
