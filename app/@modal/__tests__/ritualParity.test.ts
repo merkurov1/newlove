@@ -54,6 +54,19 @@ describe('ritual modal and standalone route parity', () => {
     }
   );
 
+  it('keeps Cast in the shared RitualModal with a modal-specific experience', () => {
+    const modalSource = read('app/@modal/(.)cast/page.tsx');
+    const castSource = read('app/cast/CastClient.tsx');
+
+    expect(modalSource).toContain('RitualModal');
+    expect(modalSource).toContain('variant="modal"');
+    expect(castSource).toContain("variant = 'page'");
+    expect(castSource).toContain('cast-page--modal');
+    expect(castSource).toContain('!isModal && <TempleTopBar');
+    expect(castSource).toContain("'min-h-[100dvh]'");
+    expect(castSource).toContain('min-h-full');
+  });
+
   it('keeps Absolution in a dedicated compact modal over the Temple', () => {
     const modalSource = read('app/@modal/(.)absolution/page.tsx');
     const shellSource = read('components/temple/AbsolutionModal.tsx');

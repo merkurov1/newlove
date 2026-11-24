@@ -17,6 +17,7 @@ export default defineConfig({
     'pierrot-presentation.spec.ts',
     'pierrot-browser.spec.ts',
     'absolution-redesign.spec.ts',
+    'cast-redesign.spec.ts',
   ],
   timeout: 90_000,
   expect: { timeout: 10_000 },
