@@ -1,33 +1,61 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getServerSupabaseClient } from '@/lib/serverAuth'
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit'
+import {
+  invalidateTempleFeedCache,
+  resolveTempleFeed,
+} from '@/lib/temple/feed.server'
 
 export const runtime = 'nodejs'
 
-const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const supabase = createClient(sbUrl, sbKey)
 // VIGIL_SPARK and TRIBUTE are deliberately absent: only their trusted server
 // routes may write them (after identity/cooldown or verified payment).
 const EVENT_TYPES = new Set(['VIGIL', 'ASH', 'CAST', 'ABSOLUTION', 'MODAL_OPEN', 'INTENSITY', 'WHISPER', 'MEDITATION', 'SILENCE', 'HEARTANDANGEL'])
 
+function feedHeaders(cache: string) {
+  return {
+    // The route owns a documented TTL and the browser hook owns its own cache.
+    // Do not let an intermediary keep a permanent copy.
+    'Cache-Control': 'no-store',
+    'X-Temple-Feed-Cache': cache,
+  }
+}
+
 export async function GET() {
   try {
-    const { data, error } = await supabase
-      .from('temple_log')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(10)
+    const result = await resolveTempleFeed({
+      getClient: () => getServerSupabaseClient({ useServiceRole: true }),
+    })
 
-    if (error) {
-      console.error('API GET /api/temple_logs error', error)
-      return NextResponse.json({ ok: false, data: [], error: error.message || String(error) }, { status: 500 })
+    if (!result.payload) {
+      return NextResponse.json(
+        {
+          ok: false,
+          data: [],
+          stats: null,
+          meta: null,
+          error: result.error || 'Temple feed unavailable',
+        },
+        { status: 503, headers: feedHeaders(result.cache) }
+      )
     }
 
-    return NextResponse.json({ ok: true, data: data ?? [], error: null })
+    return NextResponse.json(result.payload, {
+      status: 200,
+      headers: feedHeaders(result.cache),
+    })
   } catch (e) {
     console.error('API GET /api/temple_logs unexpected', e)
-    return NextResponse.json({ ok: false, data: [], error: e instanceof Error ? e.message : String(e) }, { status: 500 })
+    return NextResponse.json(
+      {
+        ok: false,
+        data: [],
+        stats: null,
+        meta: null,
+        error: e instanceof Error ? e.message : String(e),
+      },
+      { status: 500, headers: feedHeaders('error') }
+    )
   }
 }
 
@@ -55,6 +83,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, data: null, error: 'Log fields are too long' }, { status: 400 })
     }
 
+    const supabase = getServerSupabaseClient({ useServiceRole: true })
     const authHeader = req.headers.get('authorization')
     let userId: string | null = null
     let authorName = body.author || 'Anonymous'
@@ -93,6 +122,10 @@ export async function POST(req: Request) {
       console.error('API POST /api/temple_logs error', error)
       return NextResponse.json({ ok: false, data: null, error: error.message || String(error) }, { status: 500 })
     }
+
+    // A successful write safely invalidates the read cache on this instance.
+    // Other instances/cold starts remain bounded by the documented TTL.
+    invalidateTempleFeedCache()
 
     return NextResponse.json({ ok: true, data, error: null }, { status: 201 })
   } catch (e) {

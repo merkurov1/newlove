@@ -2,7 +2,8 @@
 
 'use client';
 
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import SoundToggle from '@/components/SoundToggle';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,6 +34,8 @@ import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
 import { globalFlameRemainingMs } from '@/lib/vigil/flame';
 import { vigilHeartVisuals } from '@/lib/vigil/supporters';
 import { useVigilSupporters } from '@/hooks/useVigilSupporters';
+import { useTempleFeed } from '@/hooks/useTempleFeed';
+import { TEMPLE_TRACE_LIMIT } from '@/lib/temple/feed';
 import { trackTributeSupportView } from '@/lib/tributes/analytics';
 
 const ASSETS = {
@@ -202,6 +205,24 @@ function getTimeLighting() {
   };
 }
 
+/**
+ * The Temple page transition leaves a transformed ancestor around this page.
+ * A fixed modal rendered inside it is positioned against that ancestor and can
+ * be clipped after the page scrolls on a phone. Portals keep the Sanctuary
+ * panels anchored to the real viewport on iPhone, iPad and Telegram WebView.
+ */
+function ModalPortal({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
+  return createPortal(children, document.body);
+}
+
 export default function TempleClient() {
   const pathname = usePathname();
   const [isInfoOpen, setIsInfoOpen] = useState(false);
@@ -211,9 +232,15 @@ export default function TempleClient() {
   const [tgUser, setTgUser] = useState<any>(null);
   const isTelegramApp = useIsTelegram();
 
-  const [posts, setPosts] = useState<TemplePost[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const {
+    payload: templeFeed,
+    status: feedStatus,
+    error: feedError,
+    refresh: refreshFeed,
+  } = useTempleFeed();
+
   const [vigilNow, setVigilNow] = useState(() => Date.now());
+  const [sanctuaryHour, setSanctuaryHour] = useState(() => new Date().getHours());
   const [leftWithoutTrace, setLeftWithoutTrace] = useState(false);
   const [tributeEntry, setTributeEntry] = useState<{ amount?: number } | null>(
     null
@@ -226,13 +253,70 @@ export default function TempleClient() {
     error: vigilError,
   } = useVigilSupporters();
 
-  const [stats, setStats] = useState({
-    totalLogs: 0,
-    uniqueAuthors: 0,
-    vigilsCount: 0,
-    letItGoCount: 0,
-    sanctuaryHour: 12
-  });
+  const posts = useMemo<TemplePost[]>(() => {
+    const traces = templeFeed?.data ?? [];
+
+    return traces.map((item, index) => {
+      const type = (
+        item.canonical_type ||
+        item.event_type ||
+        'WHISPER'
+      ).toUpperCase();
+
+      const visuals = getEventVisuals(type);
+
+      let cleanContent = String(item.message ?? '');
+      const cleanAuthor = item.author || 'Anonymous';
+
+      if (type === 'ABSOLUTION' && cleanContent.includes('confessed:')) {
+        const splitMsg = cleanContent.split('confessed:');
+
+        if (splitMsg.length > 1) {
+          cleanContent = `Confessed:${splitMsg.slice(1).join('confessed:')}`;
+        }
+      }
+
+      return {
+        id: item.id ?? `${item.created_at}-${index}`,
+        type,
+        label: visuals.label,
+        author: cleanAuthor,
+        time: formatTime(item.created_at),
+        content: cleanContent,
+        audioUrl: item.audio_url || null,
+        icon: visuals.icon,
+        color: visuals.color,
+      };
+    });
+  }, [templeFeed]);
+
+  const stats = templeFeed?.stats ?? {
+    completedRituals: 0,
+    namedAuthors: 0,
+    vigilSparks: 0,
+    byType: {},
+    windowDays: 0,
+    windowStart: '',
+    windowEnd: '',
+    excluded: { infrastructure: null, incomplete: null },
+    truncated: false,
+  };
+  const loaded = feedStatus !== 'loading';
+  const excludedNote = [
+    stats.excluded?.infrastructure !== null &&
+    stats.excluded?.infrastructure !== undefined
+      ? `${stats.excluded.infrastructure} entry/navigation`
+      : null,
+    stats.excluded?.incomplete !== null &&
+    stats.excluded?.incomplete !== undefined
+      ? `${stats.excluded.incomplete} incomplete (modal open/intensity)`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const statsWindowLabel = stats.windowDays
+    ? `Last ${stats.windowDays} days · all eligible ritual events`
+    : 'Rolling window';
 
   useEffect(() => {
     if (typeof window !== 'undefined' && isTelegramApp) {
@@ -257,19 +341,11 @@ export default function TempleClient() {
     }
 
     setLighting(getTimeLighting());
-
-    setStats(prev => ({
-      ...prev,
-      sanctuaryHour: new Date().getHours()
-    }));
+    setSanctuaryHour(new Date().getHours());
 
     const timer = setInterval(() => {
       setLighting(getTimeLighting());
-
-      setStats(prev => ({
-        ...prev,
-        sanctuaryHour: new Date().getHours()
-      }));
+      setSanctuaryHour(new Date().getHours());
     }, 60000);
 
     return () => clearInterval(timer);
@@ -313,120 +389,12 @@ export default function TempleClient() {
   }, [isChroniclesOpen, isInfoOpen, isTracesOpen]);
 
   useEffect(() => {
-    if (pathname !== '/temple') return;
-    let cancelled = false;
+    if (!isTracesOpen && !isChroniclesOpen) return;
 
-    async function fetchLogs() {
-      if (
-        typeof document !== 'undefined' &&
-        document.visibilityState === 'hidden'
-      ) {
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/temple_logs', {
-          cache: 'no-store'
-        });
-
-        if (!res.ok) return;
-
-        const json = await res.json();
-
-        if (cancelled || !json || !Array.isArray(json.data)) {
-          return;
-        }
-
-        const rawData = json.data;
-
-        const ritualLogs = rawData.filter((item: any) => {
-          const type = String(item.event_type || '').toLowerCase();
-
-          return type !== 'enter' && type !== 'nav';
-        });
-
-        const formatted: TemplePost[] = ritualLogs.map(
-          (item: any, index: number) => {
-            const type = (
-              item.event_type || 'WHISPER'
-            ).toUpperCase();
-
-            const visuals = getEventVisuals(type);
-
-            let cleanContent = String(item.message ?? '');
-            const cleanAuthor = item.author || 'Anonymous';
-
-            if (
-              type === 'ABSOLUTION' &&
-              cleanContent.includes('confessed:')
-            ) {
-              const splitMsg = cleanContent.split('confessed:');
-
-              if (splitMsg.length > 1) {
-                cleanContent = `Confessed:${splitMsg
-                  .slice(1)
-                  .join('confessed:')}`;
-              }
-            }
-
-            return {
-              id: item.id ?? `${item.created_at}-${index}`,
-              type,
-              label: visuals.label,
-              author: cleanAuthor,
-              time: formatTime(item.created_at),
-              content: cleanContent,
-              audioUrl: item.audio_url || null,
-              icon: visuals.icon,
-              color: visuals.color
-            };
-          }
-        );
-
-        if (!cancelled) {
-          setPosts(formatted);
-
-          const authorsSet = new Set(
-            ritualLogs.map((i: any) => i.author).filter(Boolean)
-          );
-
-          const vigils = ritualLogs.filter((i: any) =>
-            ['VIGIL', 'VIGIL_SPARK'].includes(
-              String(i.event_type || '').toUpperCase()
-            )
-          ).length;
-
-          const ashes = ritualLogs.filter(
-            (i: any) =>
-              String(i.event_type || '').toUpperCase() === 'ASH'
-          ).length;
-
-          setStats({
-            totalLogs: ritualLogs.length,
-            uniqueAuthors: authorsSet.size,
-            vigilsCount: vigils,
-            letItGoCount: ashes,
-            sanctuaryHour: new Date().getHours()
-          });
-        }
-      } catch (e) {
-        console.warn('Failed to fetch temple logs', e);
-      } finally {
-        if (!cancelled) {
-          setLoaded(true);
-        }
-      }
-    }
-
-    fetchLogs();
-
-    const interval = setInterval(fetchLogs, 15000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [pathname]);
+    // Opening a panel is a user action, not a polling tick. The hook refreshes
+    // only when its documented TTL has expired.
+    void refreshFeed();
+  }, [isChroniclesOpen, isTracesOpen, refreshFeed]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setVigilNow(Date.now()), 30_000);
@@ -730,8 +698,9 @@ export default function TempleClient() {
 
       <div className="h-4" />
 
-      <AnimatePresence>
-        {isInfoOpen && (
+      <ModalPortal>
+        <AnimatePresence>
+          {isInfoOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -773,10 +742,12 @@ export default function TempleClient() {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>
+      </ModalPortal>
 
-      <AnimatePresence>
-        {isTracesOpen && (
+      <ModalPortal>
+        <AnimatePresence>
+          {isTracesOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -805,19 +776,40 @@ export default function TempleClient() {
                   </h3>
 
                   <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">
-                    Latest 10 ritual entries · entry and navigation events
-                    hidden
+                    Up to {TEMPLE_TRACE_LIMIT} most recent ritual traces ·
+                    entry, navigation and incomplete events excluded
                   </p>
                 </div>
 
-                <button
-                  onClick={() => setIsTracesOpen(false)}
-                  aria-label="Close Sanctuary Traces"
-                  className="w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
-                >
-                  <X size={16} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void refreshFeed({ force: true })}
+                    className="min-h-[32px] rounded-full bg-stone-500/10 px-3 font-mono text-[9px] uppercase tracking-widest opacity-70 transition-opacity hover:opacity-100"
+                  >
+                    Refresh
+                  </button>
+                  <button
+                    onClick={() => setIsTracesOpen(false)}
+                    aria-label="Close Sanctuary Traces"
+                    className="w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
+
+              {feedError && (
+                <p
+                  role="status"
+                  className="font-mono text-[10px] leading-relaxed opacity-60"
+                >
+                  {feedStatus === 'stale'
+                    ? 'Showing the last known good snapshot. '
+                    : ''}
+                  {feedError}
+                </p>
+              )}
 
               <div className="divide-y divide-stone-500/10 overflow-y-auto pr-1 flex-1">
                 {!loaded ? (
@@ -826,10 +818,10 @@ export default function TempleClient() {
                   </p>
                 ) : posts.length === 0 ? (
                   <p className="font-mono text-xs opacity-60 uppercase tracking-widest py-8 text-center">
-                    No traces recorded yet.
+                    No eligible ritual traces yet.
                   </p>
                 ) : (
-                  posts.slice(0, 10).map(post => {
+                  posts.map(post => {
                     const IconComponent = post.icon || Radio;
 
                     return (
@@ -874,10 +866,12 @@ export default function TempleClient() {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>
+      </ModalPortal>
 
-      <AnimatePresence>
-        {isChroniclesOpen && (
+      <ModalPortal>
+        <AnimatePresence>
+          {isChroniclesOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -906,33 +900,55 @@ export default function TempleClient() {
                   </h3>
 
                   <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">
-                    Latest 10 ritual entries · refreshes every 15 sec
+                    {statsWindowLabel} · cached for {templeFeed?.meta.ttlSeconds ?? 60}s
                   </p>
                 </div>
 
-                <button
-                  onClick={() => setIsChroniclesOpen(false)}
-                  aria-label="Close Chronicles"
-                  className="w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
-                >
-                  <X size={16} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void refreshFeed({ force: true })}
+                    className="min-h-[32px] rounded-full bg-stone-500/10 px-3 font-mono text-[9px] uppercase tracking-widest opacity-70 transition-opacity hover:opacity-100"
+                  >
+                    Refresh
+                  </button>
+                  <button
+                    onClick={() => setIsChroniclesOpen(false)}
+                    aria-label="Close Chronicles"
+                    className="w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
+
+              {feedError && (
+                <p
+                  role="status"
+                  className="font-mono text-[10px] leading-relaxed opacity-60"
+                >
+                  {feedStatus === 'stale'
+                    ? 'Showing the last known good snapshot. '
+                    : ''}
+                  {feedError}
+                </p>
+              )}
 
               <div className="grid grid-cols-2 gap-6 py-2">
                 <div className="flex flex-col items-center justify-center text-center space-y-1">
                   <Users size={20} className="opacity-60 mb-1" />
 
                   <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">
-                    {stats.uniqueAuthors}
+                    {stats.namedAuthors}
                   </span>
 
                   <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">
-                    Unique Seekers
+                    Named Authors
                   </span>
 
                   <span className="text-[10px] font-serif opacity-50">
-                    Named authors in these rituals
+                    Distinct display names in the window — not verified unique
+                    people
                   </span>
                 </div>
 
@@ -940,15 +956,15 @@ export default function TempleClient() {
                   <Activity size={20} className="opacity-60 mb-1" />
 
                   <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">
-                    {stats.totalLogs}
+                    {stats.completedRituals}
                   </span>
 
                   <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">
-                    Recent Rituals
+                    Completed Rituals
                   </span>
 
                   <span className="text-[10px] font-serif opacity-50">
-                    Rituals in the latest 10 ritual entries
+                    Eligible ritual events in the full window
                   </span>
                 </div>
 
@@ -956,7 +972,7 @@ export default function TempleClient() {
                   <Flame size={20} className="text-amber-500 mb-1" />
 
                   <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">
-                    {stats.vigilsCount}
+                    {stats.vigilSparks}
                   </span>
 
                   <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">
@@ -964,7 +980,7 @@ export default function TempleClient() {
                   </span>
 
                   <span className="text-[10px] font-serif opacity-50">
-                    VIGIL events in that same set
+                    VIGIL and VIGIL_SPARK events in the same window
                   </span>
                 </div>
 
@@ -972,7 +988,7 @@ export default function TempleClient() {
                   <Clock size={20} className="text-indigo-400 mb-1" />
 
                   <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">
-                    {stats.sanctuaryHour}:00
+                    {sanctuaryHour}:00
                   </span>
 
                   <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">
@@ -980,14 +996,27 @@ export default function TempleClient() {
                   </span>
 
                   <span className="text-[10px] font-serif opacity-50">
-                    Current device time (local)
+                    Current device time (local, not a dataset metric)
                   </span>
                 </div>
               </div>
+
+              {(excludedNote || stats.truncated) && (
+                <p className="border-t border-stone-500/20 pt-3 font-mono text-[9px] leading-relaxed opacity-50">
+                  {excludedNote
+                    ? `Excluded from ritual counts: ${excludedNote}.`
+                    : ''}
+                  {excludedNote && stats.truncated ? ' ' : ''}
+                  {stats.truncated
+                    ? 'Aggregate row limit reached; some window counts may be incomplete.'
+                    : ''}
+                </p>
+              )}
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>
+      </ModalPortal>
 
       {tributeEntry && (
         <TempleTributeModal
