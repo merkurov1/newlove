@@ -60,7 +60,7 @@ describe('RitualModal shell', () => {
     expect(screen.getByText('5h 12m remaining')).toBeInTheDocument();
   });
 
-  it('links every ritual to its canonical full page', () => {
+  it('links the remaining rituals to their canonical full pages', () => {
     render(
       <RitualModal title="Cast" canonicalPath="/cast">
         <div>Shared ritual</div>
@@ -71,7 +71,19 @@ describe('RitualModal shell', () => {
       screen.getByRole('link', { name: /Full page/ })
     ).toHaveAttribute('href', '/cast');
     expect(
-      screen.getByRole('link', { name: 'Tribute' })
-    ).toHaveAttribute('href', '/tribute');
+      screen.getByRole('link', { name: 'Calm' })
+    ).toHaveAttribute('href', '/heartandangel/calm');
+    expect(
+      screen.getByRole('link', { name: 'Let It Go' })
+    ).toHaveAttribute('href', '/heartandangel/letitgo');
+    expect(
+      screen.getByRole('link', { name: 'Absolution' })
+    ).toHaveAttribute('href', '/absolution');
+    expect(
+      screen.queryByRole('link', { name: 'Vigil' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Tribute' })
+    ).not.toBeInTheDocument();
   });
 });

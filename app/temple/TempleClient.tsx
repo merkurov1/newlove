@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import Image from 'next/image';
 import SoundToggle from '@/components/SoundToggle';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,9 +27,12 @@ import { usePathname } from 'next/navigation';
 import useIsTelegram from '@/components/useIsTelegram';
 import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
 import RitualLink from '@/components/temple/RitualLink';
-import { supabase } from '@/lib/supabase-browser';
+import TempleTributeModal from '@/components/temple/TempleTributeModal';
 import { consumeLeftWithoutTrace } from '@/lib/temple/visitTrace';
+import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
 import { globalFlameRemainingMs } from '@/lib/vigil/flame';
+import { vigilHeartVisuals } from '@/lib/vigil/supporters';
+import { useVigilSupporters } from '@/hooks/useVigilSupporters';
 import { trackTributeSupportView } from '@/lib/tributes/analytics';
 
 const ASSETS = {
@@ -210,9 +213,18 @@ export default function TempleClient() {
 
   const [posts, setPosts] = useState<TemplePost[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [vigil, setVigil] = useState({ guardians: 0, lastLitAt: null as string | null });
   const [vigilNow, setVigilNow] = useState(() => Date.now());
   const [leftWithoutTrace, setLeftWithoutTrace] = useState(false);
+  const [tributeEntry, setTributeEntry] = useState<{ amount?: number } | null>(
+    null
+  );
+
+  const {
+    supporterCount,
+    lastLitAt,
+    status: vigilStatus,
+    error: vigilError,
+  } = useVigilSupporters();
 
   const [stats, setStats] = useState({
     totalLogs: 0,
@@ -417,31 +429,10 @@ export default function TempleClient() {
   }, [pathname]);
 
   useEffect(() => {
-    if (pathname !== '/temple') return;
-    let cancelled = false;
-    const refreshVigil = async () => {
-      const since = new Date(Date.now() - 86_400_000).toISOString();
-      const [heartResult, sparkResult] = await Promise.all([
-        supabase.from('vigil_hearts').select('last_lit_at').eq('id', 1).maybeSingle(),
-        supabase.from('temple_log').select('author').in('event_type', ['VIGIL_SPARK', 'vigil_spark']).gt('created_at', since).limit(500),
-      ]);
-      if (cancelled) return;
-      const guardians = new Set(
-        (sparkResult.data ?? []).map((row: { author?: string | null }) => row.author?.trim()).filter(Boolean)
-      ).size;
-      setVigil({ guardians, lastLitAt: heartResult.data?.last_lit_at ?? null });
-      setVigilNow(Date.now());
-    };
-    void refreshVigil();
-    const interval = window.setInterval(() => {
-      setVigilNow(Date.now());
-      void refreshVigil();
-    }, 30_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [pathname]);
+    const timer = window.setInterval(() => setVigilNow(Date.now()), 30_000);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     trackTributeSupportView('temple_home');
@@ -459,10 +450,36 @@ export default function TempleClient() {
     return () => window.clearTimeout(timer);
   }, [pathname]);
 
-  const vigilRemaining = globalFlameRemainingMs(vigil.lastLitAt, vigilNow);
-  const vigilLabel = vigilRemaining > 0
-    ? `${Math.floor(vigilRemaining / 3_600_000)}h ${Math.floor((vigilRemaining % 3_600_000) / 60_000)}m`
-    : 'Flame extinguished';
+  const vigilRemaining = globalFlameRemainingMs(lastLitAt, vigilNow);
+  const hasVigilState =
+    vigilStatus === 'ready' || vigilStatus === 'stale';
+  const vigilLabel = !hasVigilState
+    ? vigilStatus === 'error'
+      ? 'Vigil state unavailable'
+      : 'Reading the Vigil…'
+    : vigilRemaining > 0
+      ? `${Math.floor(vigilRemaining / 3_600_000)}h ${Math.floor((vigilRemaining % 3_600_000) / 60_000)}m`
+      : 'Flame extinguished';
+  const heartVisuals = vigilHeartVisuals(
+    hasVigilState ? supporterCount : 0
+  );
+  const supporterLabel = hasVigilState
+    ? `${supporterCount} ${
+        supporterCount === 1 ? 'supporter' : 'supporters'
+      }`
+    : 'Vigil supporters';
+  const vigilStateProblem =
+    vigilStatus === 'stale' || vigilStatus === 'error'
+      ? vigilError || 'Vigil count reconnecting'
+      : null;
+
+  const openTribute = useCallback((amount?: number) => {
+    setTributeEntry(typeof amount === 'number' ? { amount } : {});
+  }, []);
+
+  const closeTribute = useCallback(() => {
+    setTributeEntry(null);
+  }, []);
 
   const actionButtonStyle =
     lighting.bg.includes('1f1a18') ||
@@ -471,18 +488,24 @@ export default function TempleClient() {
       : 'bg-white/80 border-stone-300 text-stone-900 hover:bg-white';
 
   const ritualButtonStyle = `w-full min-h-[54px] px-4 py-3 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center flex items-center justify-center ${actionButtonStyle}`;
+  const ritualAccent: Record<string, string> = {
+    '/heartandangel/calm': 'border-sky-400/30',
+    '/heartandangel/letitgo': 'border-rose-400/30',
+    '/absolution': 'border-emerald-400/30',
+    '/cast': 'border-indigo-400/30',
+  };
 
   return (
     <div
       className={`relative w-full temple-screen telegram-viewport-min ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between px-4 sm:px-8 md:px-12 pt-4 pb-10 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
-      <h1 className="relative z-40 mx-auto w-full max-w-5xl px-4 pt-24 font-serif text-xs uppercase tracking-[0.3em] opacity-70 sm:pt-28">
+      <h1 className="relative z-40 mx-auto w-full max-w-5xl px-4 pt-20 font-serif text-xs uppercase tracking-[0.3em] opacity-70 sm:pt-24">
         The Sanctuary — Digital Temple
       </h1>
 
       {!isTelegramApp && (
-        <header className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 pt-24 sm:pt-28 pb-2">
+        <header className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 pt-2 pb-2">
           <div className="flex items-center">
             <Link
               href="/heartandangel/world"
@@ -509,68 +532,124 @@ export default function TempleClient() {
         </div>
       )}
 
-      <div className="relative w-full flex-1 px-2 sm:px-4 py-8">
+      <div className="relative w-full flex-1 px-2 sm:px-4 py-5 sm:py-7">
         <div
           className={`absolute w-[280px] h-[280px] sm:w-[450px] sm:h-[450px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`}
         />
 
         <div className="relative z-30 max-w-5xl mx-auto w-full">
-          <div className="grid grid-cols-3 items-end gap-2 sm:gap-8" aria-label="Heart, Angel and Demon">
-            <div className="relative h-44 sm:h-72"><Image src={ASSETS.angel} alt="Stained-glass Angel" fill className="object-contain" priority /></div>
-            <RitualLink href="/vigil" className="group flex flex-col items-center text-center">
-              <div className={`relative h-32 w-32 sm:h-52 sm:w-52 transition-all ${vigilRemaining > 0 ? 'drop-shadow-[0_0_38px_rgba(245,158,11,.55)]' : 'grayscale opacity-60'}`}>
-                <Image src={ASSETS.heart} alt="Shared Temple heart" fill className="object-contain transition-transform group-hover:scale-105" priority />
+          <div className="relative mx-auto w-full max-w-4xl">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-2 top-1/2 h-28 -translate-y-1/2 rounded-[50%] bg-gradient-to-r from-transparent via-amber-200/15 to-transparent blur-2xl sm:h-40"
+            />
+
+            <div
+              className="relative grid grid-cols-[minmax(0,1fr)_minmax(7.5rem,13rem)_minmax(0,1fr)] items-center gap-1 sm:gap-5"
+              aria-label="Heart, Angel and Demon"
+            >
+              <div className="relative h-40 sm:h-64 lg:h-72">
+                <div className="absolute inset-x-0 bottom-0 top-4 overflow-hidden rounded-t-[999px] rounded-b-2xl border border-amber-100/15 bg-white/[0.035] shadow-[inset_0_0_35px_rgba(0,0,0,0.28)]">
+                  <Image
+                    src={ASSETS.angel}
+                    alt="Stained-glass Angel"
+                    fill
+                    sizes="(min-width: 1024px) 288px, (min-width: 640px) 240px, 120px"
+                    className="object-contain p-1 sm:p-2"
+                    priority
+                  />
+                </div>
               </div>
-              <span className="mt-2 font-mono text-[10px] uppercase tracking-[.18em]">{vigil.guardians} guardians · {vigilLabel}</span>
-              <span className="mt-2 rounded-full border border-amber-400/30 px-4 py-2 font-serif text-xs">Light the heart</span>
-            </RitualLink>
-            <div className="relative h-44 sm:h-72"><Image src={ASSETS.daemon} alt="Stained-glass Demon" fill className="object-contain" priority /></div>
-          </div>
-
-          <section className="mx-auto mt-10 w-full max-w-3xl" aria-labelledby="rituals-title">
-            <h2 id="rituals-title" className="mb-4 text-center font-serif text-2xl">Rituals</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <RitualLink
-                href="/heartandangel/calm"
-                className={`${ritualButtonStyle} border-sky-400/30`}
-              >
-                Calm
-              </RitualLink>
-
-              <RitualLink
-                href="/heartandangel/letitgo"
-                className={`${ritualButtonStyle} border-rose-400/30`}
-              >
-                Let It Go
-              </RitualLink>
 
               <RitualLink
                 href="/vigil"
-                className={`${ritualButtonStyle} border-amber-400/30`}
+                aria-label={`Light the Vigil heart. ${supporterLabel} in the last 24 hours. ${vigilLabel}.`}
+                className="group flex min-w-0 flex-col items-center text-center"
               >
-                Vigil
+                <div className="relative flex h-32 w-32 items-center justify-center sm:h-52 sm:w-52">
+                  <div
+                    aria-hidden="true"
+                    className="absolute inset-2 rounded-full bg-amber-400/30 transition-all duration-700"
+                    style={{
+                      opacity: heartVisuals.glowOpacity,
+                      filter: `blur(${heartVisuals.glowBlurPx}px)`,
+                      transform: `scale(${heartVisuals.scale})`,
+                    }}
+                  />
+
+                  <div className="relative h-full w-full">
+                    <Image
+                      data-testid="temple-heart"
+                      src={ASSETS.heart}
+                      alt="Shared Temple heart"
+                      fill
+                      sizes="(min-width: 640px) 208px, 128px"
+                      className="object-contain transition-all duration-700 group-hover:scale-105"
+                      style={{
+                        filter: `grayscale(${heartVisuals.grayscale}) brightness(${heartVisuals.brightness}) saturate(${heartVisuals.saturate})`,
+                        transform: `scale(${heartVisuals.scale})`,
+                      }}
+                      priority
+                    />
+                  </div>
+                </div>
+
+                <span
+                  className="mt-2 font-mono text-[10px] uppercase tracking-[.14em] sm:tracking-[.18em]"
+                  data-supporter-count={
+                    hasVigilState ? supporterCount : undefined
+                  }
+                >
+                  {supporterLabel} · {vigilLabel}
+                </span>
+
+                {vigilStateProblem && (
+                  <span
+                    className="mt-1 max-w-[11rem] font-mono text-[9px] uppercase leading-tight tracking-[.12em] opacity-50"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {vigilStateProblem}
+                  </span>
+                )}
+
+                <span className="mt-2 rounded-full border border-amber-400/30 px-4 py-2 font-serif text-xs">
+                  Light the heart
+                </span>
               </RitualLink>
 
-              <RitualLink
-                href="/absolution"
-                className={`${ritualButtonStyle} border-emerald-400/30`}
-              >
-                Absolution
-              </RitualLink>
+              <div className="relative h-40 sm:h-64 lg:h-72">
+                <div className="absolute inset-x-0 bottom-0 top-4 overflow-hidden rounded-t-[999px] rounded-b-2xl border border-amber-100/15 bg-white/[0.035] shadow-[inset_0_0_35px_rgba(0,0,0,0.28)]">
+                  <Image
+                    src={ASSETS.daemon}
+                    alt="Stained-glass Demon"
+                    fill
+                    sizes="(min-width: 1024px) 288px, (min-width: 640px) 240px, 120px"
+                    className="object-contain p-1 sm:p-2"
+                    priority
+                  />
+                </div>
+              </div>
+            </div>
 
-              <RitualLink
-                href="/cast"
-                className={`${ritualButtonStyle} border-indigo-400/30`}
-              >
-                Cast
-              </RitualLink>
+            <div
+              aria-hidden="true"
+              className="mx-auto mt-2 h-5 w-2/3 rounded-[50%] bg-black/10 blur-xl"
+            />
+          </div>
 
-              <RitualLink
-                href="/tribute"
-                className={`${ritualButtonStyle} border-yellow-400/30`}
-              >
-                Tribute
-              </RitualLink>
+          <section className="mx-auto mt-8 w-full max-w-3xl" aria-labelledby="rituals-title">
+            <h2 id="rituals-title" className="mb-4 text-center font-serif text-2xl">Rituals</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {TEMPLE_RITUAL_LINKS.map((ritual) => (
+                <RitualLink
+                  key={ritual.href}
+                  href={ritual.href}
+                  className={`${ritualButtonStyle} ${ritualAccent[ritual.href] ?? 'border-amber-400/20'}`}
+                >
+                  {ritual.label}
+                </RitualLink>
+              ))}
             </div>
 
             <div className="mt-5 rounded-3xl border border-amber-400/20 bg-black/10 p-5 text-center backdrop-blur-md">
@@ -578,21 +657,23 @@ export default function TempleClient() {
               <p className="mt-1 text-xs opacity-70">
                 Vigil contributes a spark. Tribute materially sustains the Temple.
               </p>
-              <RitualLink
-                href="/tribute"
+              <button
+                type="button"
+                onClick={() => openTribute()}
                 className="mt-4 flex min-h-[48px] w-full items-center justify-center rounded-full border border-amber-300/50 bg-amber-300/15 px-5 font-serif text-xs uppercase tracking-[.18em] transition-all hover:bg-amber-300/25"
               >
                 Support the Temple →
-              </RitualLink>
+              </button>
               <div className="mt-3 flex justify-center gap-2">
                 {[5, 20, 100].map(amount => (
-                  <RitualLink
+                  <button
                     key={amount}
-                    href={`/tribute?amount=${amount}`}
+                    type="button"
+                    onClick={() => openTribute(amount)}
                     className="min-h-[44px] rounded-full border border-amber-400/30 px-4 py-2 font-mono text-xs transition-colors hover:border-amber-300/60"
                   >
                     ${amount}
-                  </RitualLink>
+                  </button>
                 ))}
               </div>
             </div>
@@ -907,6 +988,13 @@ export default function TempleClient() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {tributeEntry && (
+        <TempleTributeModal
+          initialAmount={tributeEntry.amount}
+          onClose={closeTribute}
+        />
+      )}
     </div>
   );
 }
