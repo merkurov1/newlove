@@ -23,10 +23,15 @@ import {
   Send
 } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import useIsTelegram from '@/components/useIsTelegram';
 import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
+import RitualLink from '@/components/temple/RitualLink';
+import { supabase } from '@/lib/supabase-browser';
 
 const ASSETS = {
+  heart:
+    'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Heart1.png',
   angel:
     'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png',
   daemon:
@@ -185,7 +190,7 @@ function getTimeLighting() {
 }
 
 export default function TempleClient() {
-  const [heroUrl, setHeroUrl] = useState<string>('');
+  const pathname = usePathname();
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isTracesOpen, setIsTracesOpen] = useState(false);
   const [isChroniclesOpen, setIsChroniclesOpen] = useState(false);
@@ -195,6 +200,8 @@ export default function TempleClient() {
 
   const [posts, setPosts] = useState<TemplePost[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [vigil, setVigil] = useState({ guardians: 0, lastLitAt: null as string | null });
+  const [vigilNow, setVigilNow] = useState(() => Date.now());
 
   const [stats, setStats] = useState({
     totalLogs: 0,
@@ -225,9 +232,6 @@ export default function TempleClient() {
         localStorage.setItem('temple_user', displayName);
       }
     }
-
-    // Deliberately preserved: Angel / Daemon is random.
-    setHeroUrl(Math.random() > 0.5 ? ASSETS.angel : ASSETS.daemon);
 
     setLighting(getTimeLighting());
 
@@ -286,6 +290,7 @@ export default function TempleClient() {
   }, [isChroniclesOpen, isInfoOpen, isTracesOpen]);
 
   useEffect(() => {
+    if (pathname !== '/temple') return;
     let cancelled = false;
 
     async function fetchLogs() {
@@ -398,7 +403,41 @@ export default function TempleClient() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (pathname !== '/temple') return;
+    let cancelled = false;
+    const refreshVigil = async () => {
+      const since = new Date(Date.now() - 86_400_000).toISOString();
+      const [heartResult, sparkResult] = await Promise.all([
+        supabase.from('vigil_hearts').select('last_lit_at').eq('id', 1).maybeSingle(),
+        supabase.from('temple_log').select('author').in('event_type', ['VIGIL_SPARK', 'vigil_spark']).gt('created_at', since).limit(500),
+      ]);
+      if (cancelled) return;
+      const guardians = new Set(
+        (sparkResult.data ?? []).map((row: { author?: string | null }) => row.author?.trim()).filter(Boolean)
+      ).size;
+      setVigil({ guardians, lastLitAt: heartResult.data?.last_lit_at ?? null });
+      setVigilNow(Date.now());
+    };
+    void refreshVigil();
+    const interval = window.setInterval(() => {
+      setVigilNow(Date.now());
+      void refreshVigil();
+    }, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [pathname]);
+
+  const vigilRemaining = vigil.lastLitAt
+    ? Math.max(0, 86_400_000 - (vigilNow - new Date(vigil.lastLitAt).getTime()))
+    : 0;
+  const vigilLabel = vigilRemaining > 0
+    ? `${Math.floor(vigilRemaining / 3_600_000)}h ${Math.floor((vigilRemaining % 3_600_000) / 60_000)}m`
+    : 'Flame extinguished';
 
   const actionButtonStyle =
     lighting.bg.includes('1f1a18') ||
@@ -445,74 +484,76 @@ export default function TempleClient() {
         </div>
       )}
 
-      <div className="relative w-full flex-1 flex items-center justify-center px-2 sm:px-4 my-auto py-6">
+      <div className="relative w-full flex-1 px-2 sm:px-4 py-8">
         <div
           className={`absolute w-[280px] h-[280px] sm:w-[450px] sm:h-[450px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`}
         />
 
-        <div className="relative z-30 max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center">
-          {/* Guardian */}
-          <div className="flex flex-col items-center justify-center relative pointer-events-none my-auto order-1 md:order-1">
-            <div className="absolute bottom-0 w-24 h-5 bg-black/20 rounded-full blur-[10px]" />
-
-            {heroUrl && (
-              <div className="relative w-48 h-64 sm:w-64 sm:h-80 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
-                <Image
-                  src={heroUrl}
-                  alt="Temple Guardian"
-                  fill
-                  className="object-contain"
-                  priority
-                  draggable={false}
-                />
+        <div className="relative z-30 max-w-5xl mx-auto w-full">
+          <div className="grid grid-cols-3 items-end gap-2 sm:gap-8" aria-label="Heart, Angel and Demon">
+            <div className="relative h-44 sm:h-72"><Image src={ASSETS.angel} alt="Stained-glass Angel" fill className="object-contain" priority /></div>
+            <RitualLink href="/vigil" className="group flex flex-col items-center text-center">
+              <div className={`relative h-32 w-32 sm:h-52 sm:w-52 transition-all ${vigilRemaining > 0 ? 'drop-shadow-[0_0_38px_rgba(245,158,11,.55)]' : 'grayscale opacity-60'}`}>
+                <Image src={ASSETS.heart} alt="Shared Temple heart" fill className="object-contain transition-transform group-hover:scale-105" priority />
               </div>
-            )}
+              <span className="mt-2 font-mono text-[10px] uppercase tracking-[.18em]">{vigil.guardians} guardians · {vigilLabel}</span>
+              <span className="mt-2 rounded-full border border-amber-400/30 px-4 py-2 font-serif text-xs">Light the heart</span>
+            </RitualLink>
+            <div className="relative h-44 sm:h-72"><Image src={ASSETS.daemon} alt="Stained-glass Demon" fill className="object-contain" priority /></div>
           </div>
 
-          {/* Six rituals */}
-          <div className="w-full max-w-sm mx-auto md:mx-0 order-2 md:order-2">
+          <section className="mx-auto mt-10 w-full max-w-3xl" aria-labelledby="rituals-title">
+            <h2 id="rituals-title" className="mb-4 text-center font-serif text-2xl">Rituals</h2>
             <div className="grid grid-cols-2 gap-3">
-              <Link
+              <RitualLink
                 href="/heartandangel/calm"
-                className={ritualButtonStyle}
+                className={`${ritualButtonStyle} border-sky-400/30`}
               >
                 Calm
-              </Link>
+              </RitualLink>
 
-              <Link
+              <RitualLink
                 href="/heartandangel/letitgo"
-                className={ritualButtonStyle}
+                className={`${ritualButtonStyle} border-rose-400/30`}
               >
                 Let It Go
-              </Link>
+              </RitualLink>
 
-              <Link
+              <RitualLink
                 href="/vigil"
-                className={ritualButtonStyle}
+                className={`${ritualButtonStyle} border-amber-400/30`}
               >
                 Vigil
-              </Link>
+              </RitualLink>
 
-              <Link
+              <RitualLink
                 href="/absolution"
-                className={ritualButtonStyle}
+                className={`${ritualButtonStyle} border-emerald-400/30`}
               >
                 Absolution
-              </Link>
+              </RitualLink>
 
-              <Link
+              <RitualLink
                 href="/cast"
-                className={ritualButtonStyle}
+                className={`${ritualButtonStyle} border-indigo-400/30`}
               >
                 Cast
-              </Link>
+              </RitualLink>
 
-              <Link
+              <RitualLink
                 href="/tribute"
-                className={ritualButtonStyle}
+                className={`${ritualButtonStyle} border-yellow-400/30`}
               >
                 Tribute
-              </Link>
+              </RitualLink>
+            </div>
+
+            <div className="mt-5 rounded-3xl border border-amber-400/20 bg-black/10 p-5 text-center backdrop-blur-md">
+              <p className="font-serif text-lg">Support the Temple</p>
+              <p className="mt-1 text-xs opacity-70">Vigil contributes a spark. Tribute materially sustains the Temple.</p>
+              <div className="mt-4 flex justify-center gap-2">
+                {[5, 20, 100].map(amount => <RitualLink key={amount} href={`/tribute?amount=${amount}`} className="rounded-full border border-amber-400/30 px-4 py-2 font-mono text-xs">${amount}</RitualLink>)}
+              </div>
             </div>
 
             {/* Temple utilities */}
@@ -542,7 +583,17 @@ export default function TempleClient() {
                 ?
               </button>
             </div>
-          </div>
+          </section>
+
+          <section className="mx-auto mt-10 max-w-4xl text-center" aria-labelledby="chambers-title">
+            <h2 id="chambers-title" className="font-serif text-2xl">Chambers</h2>
+            <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
+              {[
+                ['Heritage', '/heritage'], ['Media Archive', '/media'], ['Unframed', '/unframed'],
+                ['Flow', '/flow'], ['Flow Issues', '/flow-issues'], ['Selection', '/selection'], ['Journal', '/journal'],
+              ].map(([label, href]) => <Link key={href} href={href} className={`rounded-full border px-4 py-2 ${actionButtonStyle}`}>{label}</Link>)}
+            </div>
+          </section>
         </div>
       </div>
 

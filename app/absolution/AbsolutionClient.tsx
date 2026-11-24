@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import html2canvas from 'html2canvas';
 import { RotateCcw, Download } from 'lucide-react';
 
 import TempleTopBar from '@/components/TempleTopBar';
@@ -66,8 +65,11 @@ export default function AbsolutionClient() {
 
   const [showStamp, setShowStamp] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [traceStatus, setTraceStatus] = useState<'idle' | 'saved' | 'failed'>('idle');
 
   const receiptRef = useRef<HTMLDivElement | null>(null);
+  const completionTimerRef = useRef<number | null>(null);
+  const stampTimerRef = useRef<number | null>(null);
 
   const t = TRANSLATIONS.en;
 
@@ -124,6 +126,11 @@ export default function AbsolutionClient() {
     }
   }, [profile, user]);
 
+  useEffect(() => () => {
+    if (completionTimerRef.current !== null) window.clearTimeout(completionTimerRef.current);
+    if (stampTimerRef.current !== null) window.clearTimeout(stampTimerRef.current);
+  }, []);
+
   const triggerHaptic = (
     style:
       | 'light'
@@ -149,29 +156,26 @@ export default function AbsolutionClient() {
     triggerHaptic('heavy');
 
     setStep('processing');
+    setTraceStatus('idle');
 
-    try {
-      await logTempleEvent({
+    const persisted = await logTempleEvent({
         event_type: 'ABSOLUTION',
         message: `${name} confessed: "${sinText}" and received joyous absolution.`,
         author: name,
       });
-    } catch (error) {
-      console.error(
-        'Failed to log absolution to temple:',
-        error
-      );
-    }
+    setTraceStatus(persisted ? 'saved' : 'failed');
 
-    window.setTimeout(() => {
+    completionTimerRef.current = window.setTimeout(() => {
       setStep('receipt');
 
       triggerHaptic('medium');
 
-      window.setTimeout(() => {
+      stampTimerRef.current = window.setTimeout(() => {
         setShowStamp(true);
         triggerHaptic('heavy');
+        stampTimerRef.current = null;
       }, STAMP_DELAY);
+      completionTimerRef.current = null;
     }, 2000);
   };
 
@@ -187,6 +191,7 @@ export default function AbsolutionClient() {
     setIsSaving(true);
 
     try {
+      const { default: html2canvas } = await import('html2canvas');
       const canvas = await html2canvas(element, {
         scale: 2,
         backgroundColor: '#ffffff',
@@ -345,6 +350,11 @@ export default function AbsolutionClient() {
 
         {step === 'receipt' && (
           <div className="flex w-full flex-col items-center gap-6 animate-in slide-in-from-bottom-6 duration-700">
+            <p className={`text-center font-mono text-[10px] uppercase tracking-[.14em] ${traceStatus === 'saved' ? 'text-emerald-300' : 'text-amber-300'}`} role="status">
+              {traceStatus === 'saved'
+                ? 'Ceremony complete · Temple trace recorded'
+                : 'Ceremony complete · trace could not be recorded'}
+            </p>
             <div
               ref={receiptRef}
               className="relative w-[320px] rotate-1 rounded-2xl border border-stone-200 bg-white p-8 font-mono text-stone-900 shadow-[0_20px_60px_rgba(0,0,0,0.5)]"

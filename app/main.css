@@ -726,6 +726,69 @@ body.custom-footer-route > footer {
   display: none !important;
 }
 
+/* Temple ritual parallel route. Providers and global audio remain mounted
+   above this layer while the underlying Temple is inert and visually covered. */
+.temple-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(8, 7, 6, 0.82);
+  overflow: hidden;
+  animation: temple-circular-reveal 420ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.temple-modal__dialog {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: #141210;
+  color: #eee8df;
+  outline: none;
+}
+
+.temple-modal__header,
+.temple-modal__dock {
+  z-index: 10020;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
+  background: rgba(20, 18, 16, .94);
+  border-bottom: 1px solid rgba(245, 198, 110, .16);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 12px;
+}
+
+.temple-modal__header strong { margin-right: auto; font-family: var(--font-cormorant), serif; font-size: 18px; }
+.temple-modal__header button, .temple-modal__header a { min-height: 44px; display: inline-flex; align-items: center; color: inherit; background: none; border: 0; cursor: pointer; }
+.temple-modal__content { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.temple-modal__content > * { min-height: 100%; }
+.temple-modal .temple-topbar { display: none; }
+
+.temple-modal__dock {
+  justify-content: center;
+  overflow-x: auto;
+  padding-top: 8px;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(245, 198, 110, .16);
+  border-bottom: 0;
+}
+
+.temple-modal__dock a { flex: 0 0 auto; padding: 9px 12px; border-radius: 999px; color: #b9b0a5; }
+.temple-modal__dock a[aria-current='page'] { background: rgba(245, 198, 110, .14); color: #f5d79b; }
+body.ritual-modal-open { overflow: hidden; }
+
+@keyframes temple-circular-reveal {
+  from { clip-path: circle(0 at var(--ritual-origin-x, 50%) var(--ritual-origin-y, 50%)); }
+  to { clip-path: circle(150vmax at var(--ritual-origin-x, 50%) var(--ritual-origin-y, 50%)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .temple-modal { animation: none; }
+}
+
 /*
  * Telegram's floating navigation occupies the bottom corners. On the shortest
  * phones, tighten the mobile hero artwork so the primary "Explore World" CTA

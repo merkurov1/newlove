@@ -27,7 +27,7 @@ export async function logTempleEvent({
 
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    await fetch('/api/temple_logs', {
+    const response = await fetch('/api/temple_logs', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -45,7 +45,14 @@ export async function logTempleEvent({
         }
       })
     });
+    if (!response.ok) {
+      console.error(`Temple log request failed (${response.status})`);
+      return false;
+    }
+    const result = await response.json().catch(() => null);
+    return result?.ok === true;
   } catch (error) {
     console.error('Temple log error:', error);
+    return false;
   }
 }

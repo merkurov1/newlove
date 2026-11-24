@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { verifyCastCaptureToken } from '@/lib/cast/captureToken';
 
 export const runtime = 'nodejs';
 
@@ -42,8 +43,9 @@ export async function POST(req: Request) {
       typeof body?.email === 'string'
         ? body.email.trim().toLowerCase()
         : '';
+    const captureToken = body?.captureToken;
 
-    if (!recordId || !email) {
+    if (!recordId || !email || typeof captureToken !== 'string') {
       return NextResponse.json(
         { error: 'Missing data.' },
         { status: 400 }
@@ -60,7 +62,7 @@ export async function POST(req: Request) {
     const { data: existingRecord, error: lookupError } =
       await supabase
         .from('casts')
-        .select('id')
+        .select('id, created_at')
         .eq('id', recordId)
         .maybeSingle();
 
@@ -80,6 +82,16 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: 'Protocol record not found.' },
         { status: 404 }
+      );
+    }
+
+    if (
+      typeof existingRecord.created_at !== 'string' ||
+      !verifyCastCaptureToken(captureToken, existingRecord.id, existingRecord.created_at)
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid or expired capture authorization.' },
+        { status: 403 }
       );
     }
 

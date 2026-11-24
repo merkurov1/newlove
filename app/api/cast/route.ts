@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { createHmac } from 'node:crypto';
+import { createCastCaptureToken } from '@/lib/cast/captureToken';
 
 export const runtime = 'nodejs';
 
@@ -299,28 +299,6 @@ function normalizeAnalysis(parsed: unknown) {
     core_assets: coreAssets,
     strategic_directive: strategicDirective,
   };
-}
-
-function createCaptureToken(
-  recordId: string,
-  createdAt: string
-) {
-  const secret =
-    process.env.CAST_CAPTURE_SECRET ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!secret) {
-    throw new Error(
-      'Cast capture secret is not configured.'
-    );
-  }
-
-  return createHmac(
-    'sha256',
-    secret
-  )
-    .update(`${recordId}:${createdAt}`)
-    .digest('hex');
 }
 
 async function resolveUser(req: Request) {
@@ -736,7 +714,7 @@ export async function POST(
     }
 
     const captureToken =
-      createCaptureToken(
+      createCastCaptureToken(
         record.id,
         record.created_at ||
           createdAt
