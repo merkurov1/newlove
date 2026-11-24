@@ -19,16 +19,14 @@ import {
   Users,
   Activity,
   Clock,
-  Layers,
   Heart,
-  Send
+  Send,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import useIsTelegram from '@/components/useIsTelegram';
 import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
 import RitualLink from '@/components/temple/RitualLink';
-import TempleTributeModal from '@/components/temple/TempleTributeModal';
 import { consumeLeftWithoutTrace } from '@/lib/temple/visitTrace';
 import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
 import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
@@ -36,8 +34,61 @@ import { globalFlameRemainingMs } from '@/lib/vigil/flame';
 import { vigilHeartVisuals } from '@/lib/vigil/supporters';
 import { useVigilSupporters } from '@/hooks/useVigilSupporters';
 import { useTempleFeed } from '@/hooks/useTempleFeed';
-import { TEMPLE_TRACE_LIMIT, type TempleFeedPayload } from '@/lib/temple/feed';
-import { trackTributeSupportView } from '@/lib/tributes/analytics';
+import {
+  TEMPLE_TRACE_LIMIT,
+  type TempleFeedPayload,
+} from '@/lib/temple/feed';
+import {
+  trackTributeCheckoutCreated,
+  trackTributeSupportView,
+} from '@/lib/tributes/analytics';
+import {
+  createTributeCheckout,
+  openSecureCheckout,
+} from '@/lib/tributes/checkoutClient';
+import styles from './temple.module.css';
+
+type RitualIcon = React.ComponentType<{ size?: number; className?: string }>;
+
+const RITUAL_META: Record<
+  string,
+  {
+    descriptor: string;
+    accent: string;
+    icon: RitualIcon;
+  }
+> = {
+  '/heartandangel/calm': {
+    descriptor: 'Stillness · Breathe',
+    accent: '#5d7f9b',
+    icon: Moon,
+  },
+  '/heartandangel/letitgo': {
+    descriptor: 'Release · Ash',
+    accent: '#9b6761',
+    icon: Trash2,
+  },
+  '/absolution': {
+    descriptor: 'Confession · Mercy',
+    accent: '#67836b',
+    icon: ShieldCheck,
+  },
+  '/cast': {
+    descriptor: 'The question · Fate',
+    accent: '#796fa0',
+    icon: Compass,
+  },
+};
+
+const CHAMBERS = [
+  ['Heritage', '/heritage'],
+  ['Media Archive', '/media'],
+  ['Unframed', '/unframed'],
+  ['Flow', '/flow'],
+  ['Flow Issues', '/flow-issues'],
+  ['Selection', '/selection'],
+  ['Journal', '/journal'],
+] as const;
 
 interface TemplePost {
   id: string | number;
@@ -49,7 +100,7 @@ interface TemplePost {
   content: string;
   audioUrl?: string | null;
   icon?: React.ComponentType<{ size?: number; className?: string }>;
-  color?: string;
+  accent?: string;
 }
 
 function getEventVisuals(eventType: string) {
@@ -58,36 +109,36 @@ function getEventVisuals(eventType: string) {
     case 'VIGIL_SPARK':
       return {
         icon: Flame,
-        color: 'text-amber-500',
-        label: 'Vigil'
+        accent: '#b77c1f',
+        label: 'Vigil',
       };
 
     case 'ASH':
       return {
         icon: Trash2,
-        color: 'text-rose-500',
-        label: 'Let It Go'
+        accent: '#a24c55',
+        label: 'Let It Go',
       };
 
     case 'CAST':
       return {
         icon: Compass,
-        color: 'text-indigo-400',
-        label: 'Cast'
+        accent: '#5f699f',
+        label: 'Cast',
       };
 
     case 'ABSOLUTION':
       return {
         icon: ShieldCheck,
-        color: 'text-emerald-400',
-        label: 'Absolution'
+        accent: '#4f7a58',
+        label: 'Absolution',
       };
 
     case 'TRIBUTE':
       return {
         icon: Heart,
-        color: 'text-amber-300',
-        label: 'Tribute'
+        accent: '#a9752c',
+        label: 'Tribute',
       };
 
     case 'HEARTANDANGEL':
@@ -95,29 +146,22 @@ function getEventVisuals(eventType: string) {
     case 'SILENCE':
       return {
         icon: Moon,
-        color: 'text-purple-400',
-        label: 'Calm'
+        accent: '#7d62a1',
+        label: 'Calm',
       };
 
     case 'WHISPER':
       return {
         icon: Sparkles,
-        color: 'text-amber-300',
-        label: 'Whisper'
-      };
-
-    case 'MODAL_OPEN':
-      return {
-        icon: Layers,
-        color: 'text-stone-300',
-        label: 'Trace'
+        accent: '#9a7437',
+        label: 'Whisper',
       };
 
     default:
       return {
         icon: Radio,
-        color: 'text-stone-400',
-        label: eventType || 'Log'
+        accent: '#85786b',
+        label: eventType || 'Log',
       };
   }
 }
@@ -138,7 +182,7 @@ const TEMPLE_TRACE_ACTIONS: Record<string, string> = {
   MEDITATION: 'Found calm',
   SILENCE: 'Kept silence',
   HEARTANDANGEL: 'Held the heart',
-  WHISPER: 'Left a whisper'
+  WHISPER: 'Left a whisper',
 };
 
 function getTraceAction(type: string) {
@@ -158,79 +202,24 @@ function formatTime(iso?: string) {
   const date = new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
     month: 'short',
-    timeZone: 'UTC'
+    timeZone: 'UTC',
   }).format(d);
   const time = new Intl.DateTimeFormat('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-    timeZone: 'UTC'
+    timeZone: 'UTC',
   }).format(d);
 
   return `${date}, ${time} UTC`;
 }
 
-const DEFAULT_LIGHTING = {
-  bg: 'bg-[#FAF8F5]',
-  text: 'text-stone-900',
-  subText: 'text-stone-600',
-  glow: 'from-stone-200/40 via-transparent to-transparent',
-  vignette:
-    'radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.8) 0%, rgba(250, 248, 245, 1) 85%)',
-  cardBg:
-    'bg-white/95 border-stone-200 text-stone-900 shadow-2xl backdrop-blur-2xl'
-};
-
-function getTimeLighting() {
-  const hour = new Date().getHours();
-
-  if (hour >= 5 && hour < 11) {
-    return {
-      bg: 'bg-[#F5F2EB]',
-      text: 'text-stone-900',
-      subText: 'text-stone-600',
-      glow: 'from-amber-200/30 via-orange-100/10 to-transparent',
-      vignette:
-        'radial-gradient(circle at 50% 30%, rgba(255, 243, 224, 0.6) 0%, rgba(245, 242, 235, 1) 80%)',
-      cardBg:
-        'bg-white/95 border-stone-200 text-stone-900 shadow-2xl backdrop-blur-2xl'
-    };
-  }
-
-  if (hour >= 11 && hour < 17) {
-    return DEFAULT_LIGHTING;
-  }
-
-  if (hour >= 17 && hour < 21) {
-    return {
-      bg: 'bg-[#1f1a18]',
-      text: 'text-stone-100',
-      subText: 'text-stone-300',
-      glow: 'from-orange-900/30 via-rose-950/20 to-transparent',
-      vignette:
-        'radial-gradient(circle at 50% 40%, rgba(70, 35, 25, 0.4) 0%, rgba(31, 26, 24, 1) 90%)',
-      cardBg:
-        'bg-stone-900/95 border-stone-800 text-stone-100 shadow-2xl backdrop-blur-2xl'
-    };
-  }
-
-  return {
-    bg: 'bg-[#0b0c10]',
-    text: 'text-stone-200',
-    subText: 'text-stone-400',
-    glow: 'from-indigo-950/50 via-blue-950/20 to-transparent',
-    vignette:
-      'radial-gradient(circle at 50% 30%, rgba(20, 25, 45, 0.5) 0%, rgba(11, 12, 16, 1) 90%)',
-    cardBg:
-      'bg-zinc-900/95 border-zinc-800 text-zinc-100 shadow-2xl backdrop-blur-2xl'
-  };
-}
-
 /**
  * The Temple page transition leaves a transformed ancestor around this page.
- * A fixed modal rendered inside it is positioned against that ancestor and can
- * be clipped after the page scrolls on a phone. Portals keep the Sanctuary
- * panels anchored to the real viewport on iPhone, iPad and Telegram WebView.
+ * A fixed dialog rendered inside it is positioned against that ancestor and
+ * can be clipped after the page scrolls on a phone. Portals keep the
+ * non-payment information dialogs anchored to the real viewport on iPhone,
+ * iPad and Telegram WebView.
  */
 function ModalPortal({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
@@ -253,8 +242,9 @@ export default function TempleClient({
   const pathname = usePathname();
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isChroniclesOpen, setIsChroniclesOpen] = useState(false);
-  const [lighting, setLighting] = useState(DEFAULT_LIGHTING);
   const [tgUser, setTgUser] = useState<any>(null);
+  const [pendingAmount, setPendingAmount] = useState<number | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const isTelegramApp = useIsTelegram();
 
   const {
@@ -267,9 +257,6 @@ export default function TempleClient({
   const [vigilNow, setVigilNow] = useState(() => Date.now());
   const [sanctuaryHour, setSanctuaryHour] = useState(() => new Date().getHours());
   const [leftWithoutTrace, setLeftWithoutTrace] = useState(false);
-  const [tributeEntry, setTributeEntry] = useState<{ amount?: number } | null>(
-    null
-  );
 
   const {
     supporterCount,
@@ -311,7 +298,7 @@ export default function TempleClient({
         content: cleanContent,
         audioUrl: item.audio_url || null,
         icon: visuals.icon,
-        color: visuals.color,
+        accent: visuals.accent,
       };
     });
   }, [templeFeed]);
@@ -366,11 +353,9 @@ export default function TempleClient({
       }
     }
 
-    setLighting(getTimeLighting());
     setSanctuaryHour(new Date().getHours());
 
     const timer = setInterval(() => {
-      setLighting(getTimeLighting());
       setSanctuaryHour(new Date().getHours());
     }, 60000);
 
@@ -461,572 +446,644 @@ export default function TempleClient({
       ? vigilError || 'Vigil count reconnecting'
       : null;
 
-  const openTribute = useCallback((amount?: number) => {
-    setTributeEntry(typeof amount === 'number' ? { amount } : {});
-  }, []);
+  /**
+   * A clicked amount is a complete instruction. It starts the existing secure
+   * Stripe Checkout session for that exact amount immediately; the visitor
+   * still confirms the payment on Stripe's hosted page. Nothing is charged
+   * from this page, and the server validates the amount again.
+   */
+  const startAmountCheckout = useCallback(
+    async (amount: number) => {
+      if (pendingAmount !== null) return;
 
-  const closeTribute = useCallback(() => {
-    setTributeEntry(null);
-  }, []);
+      setPendingAmount(amount);
+      setPaymentError(null);
 
-  const actionButtonStyle =
-    lighting.bg.includes('1f1a18') ||
-    lighting.bg.includes('0b0c10')
-      ? 'bg-white/10 border-white/20 text-stone-200 hover:bg-white/20'
-      : 'bg-white/80 border-stone-300 text-stone-900 hover:bg-white';
+      try {
+        const donorName =
+          typeof window !== 'undefined'
+            ? localStorage.getItem('temple_user') || 'Pilgrim'
+            : 'Pilgrim';
 
-  const ritualButtonStyle = `w-full min-h-[54px] px-4 py-3 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center flex items-center justify-center ${actionButtonStyle}`;
-  const ritualAccent: Record<string, string> = {
-    '/heartandangel/calm': 'border-sky-400/30',
-    '/heartandangel/letitgo': 'border-rose-400/30',
-    '/absolution': 'border-emerald-400/30',
-    '/cast': 'border-indigo-400/30',
-  };
+        const { url } = await createTributeCheckout({
+          amount,
+          donorName,
+          message: 'Fuel for the Temple',
+          search:
+            typeof window !== 'undefined'
+              ? window.location.search
+              : null,
+        });
+
+        trackTributeCheckoutCreated(amount);
+        openSecureCheckout(url);
+
+        // Keep the button in its pending state while the browser or Telegram
+        // WebView leaves for Stripe. A slow hand-off can be retried after the
+        // timeout without risking a second automatic charge.
+        window.setTimeout(() => setPendingAmount(null), 20_000);
+      } catch (error) {
+        console.error('Temple tribute checkout error:', error);
+        setPendingAmount(null);
+        setPaymentError(
+          error instanceof Error
+            ? error.message
+            : 'The secure checkout could not be opened. Please try again.'
+        );
+      }
+    },
+    [pendingAmount]
+  );
 
   return (
     <div
-      className={`relative w-full temple-screen telegram-viewport-min ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between px-4 sm:px-8 md:px-12 pt-4 pb-10 transition-colors duration-1000`}
-      style={{ backgroundImage: lighting.vignette }}
+      className={`${styles.stage} temple-screen telegram-viewport-min`}
+      data-temple-theme="light"
     >
-      <h1 className="relative z-40 mx-auto w-full max-w-5xl px-4 pt-20 font-serif text-xs uppercase tracking-[0.3em] opacity-70 sm:pt-24">
-        The Sanctuary — Digital Temple
-      </h1>
+      {/*
+       * The supplied stained-glass photographs include a strip of studio wall
+       * around the glass. The clip follows the arch of the artwork itself so
+       * the figures stay open and unframed and the blue backlight remains
+       * visible behind them. The source files are never modified.
+       */}
+      <svg aria-hidden="true" focusable="false" className={styles.archDefs}>
+        <defs>
+          <clipPath
+            id="temple-window-arch-left"
+            clipPathUnits="objectBoundingBox"
+          >
+            <path d="M0.5 0.012 L0.47 0.014 L0.381 0.052 L0.318 0.082 L0.285 0.102 L0.217 0.152 L0.167 0.202 L0.131 0.252 L0.104 0.302 L0.093 0.332 L0.077 0.402 L0.075 0.5 L0.075 0.972 L0.925 0.972 L0.925 0.5 L0.923 0.402 L0.907 0.332 L0.896 0.302 L0.869 0.252 L0.833 0.202 L0.783 0.152 L0.715 0.102 L0.682 0.082 L0.619 0.052 L0.53 0.014 Z" />
+          </clipPath>
+          <clipPath
+            id="temple-window-arch-right"
+            clipPathUnits="objectBoundingBox"
+          >
+            <path d="M0.5 0.016 L0.474 0.018 L0.374 0.052 L0.306 0.082 L0.269 0.102 L0.199 0.152 L0.148 0.202 L0.113 0.252 L0.088 0.302 L0.078 0.332 L0.066 0.402 L0.065 0.5 L0.065 0.997 L0.935 0.997 L0.935 0.5 L0.934 0.402 L0.921 0.332 L0.911 0.302 L0.886 0.252 L0.852 0.202 L0.801 0.152 L0.731 0.102 L0.695 0.082 L0.626 0.052 L0.526 0.018 Z" />
+          </clipPath>
+        </defs>
+      </svg>
 
-      {!isTelegramApp && (
-        <header className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 pt-2 pb-2">
-          <div className="flex items-center">
-            <Link
-              href="/heartandangel/world"
-              className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
-            >
-              <span>← Back to World</span>
-            </Link>
-          </div>
-
-          <SoundToggle
-            className={`px-3 py-2 border shadow-sm ${actionButtonStyle}`}
-          />
-        </header>
-      )}
-
-      {isTelegramApp && tgUser && (
-        <div className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 py-1">
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-xs font-serif">
-            <Send size={12} className="text-emerald-500" />
-            <span className="opacity-80">
-              @{tgUser.username || tgUser.first_name}
-            </span>
-          </div>
-        </div>
-      )}
-
-      <div className="relative w-full flex-1 px-2 sm:px-4 py-5 sm:py-7">
-        <div
-          className={`absolute w-[280px] h-[280px] sm:w-[450px] sm:h-[450px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`}
-        />
-
-        <div className="relative z-30 max-w-5xl mx-auto w-full">
-          <div className="relative mx-auto w-full max-w-4xl">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-2 top-1/2 h-28 -translate-y-1/2 rounded-[50%] bg-gradient-to-r from-transparent via-amber-200/15 to-transparent blur-2xl sm:h-40"
+      <div className={styles.layout}>
+        <aside
+          className={`${styles.rail} ${styles.railLeft}`}
+          data-testid="temple-left-rail"
+          aria-label="Stained-glass Angel"
+        >
+          <span className={styles.railGlow} aria-hidden="true" />
+          <figure className={`${styles.panel} ${styles.panelLeft}`}>
+            <Image
+              data-testid="temple-left-panel"
+              src={TEMPLE_HOME_ASSETS.left}
+              alt="Stained-glass Angel"
+              width={896}
+              height={1200}
+              sizes="(min-width: 1024px) 16rem, 32vw"
+              className={styles.panelImage}
+              priority
             />
+            <figcaption className={styles.panelCaption}>Angel</figcaption>
+          </figure>
+        </aside>
 
-            <div
-              className="relative grid grid-cols-2 items-center gap-x-3 gap-y-5 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,15rem)_minmax(0,1fr)] sm:gap-x-4 sm:gap-y-0 lg:gap-x-6"
-              aria-label="Stained-glass Angel, living heart and Stained-glass Demon"
-            >
-              <div className="relative col-start-1 row-start-2 mx-auto aspect-[3/4] w-full max-w-[9rem] sm:col-start-1 sm:row-start-1 sm:max-w-[13rem] lg:max-w-[14rem]">
-                <div className="absolute inset-0 overflow-hidden rounded-t-[999px] rounded-b-2xl border border-amber-100/20 bg-[#100d0c] shadow-[inset_0_0_35px_rgba(0,0,0,0.4)]">
-                  <Image
-                    data-testid="temple-left-panel"
-                    src={TEMPLE_HOME_ASSETS.left}
-                    alt="Stained-glass Angel"
-                    fill
-                    sizes="(min-width: 1024px) 224px, (min-width: 640px) 208px, 144px"
-                    className="object-contain"
-                    priority
-                  />
-                </div>
+        <div
+          className={styles.center}
+          data-testid="temple-center-scroll"
+        >
+          <header className={styles.topbar}>
+            {!isTelegramApp ? (
+              <Link
+                href="/heartandangel/world"
+                className={styles.navLink}
+                aria-label="Back to World"
+              >
+                <span aria-hidden="true">←</span>
+                <span>World</span>
+              </Link>
+            ) : (
+              <span />
+            )}
+
+            {isTelegramApp && tgUser ? (
+              <div className={styles.identityBadge}>
+                <Send size={12} className="text-emerald-500" aria-hidden="true" />
+                <span>@{tgUser.username || tgUser.first_name}</span>
               </div>
+            ) : (
+              <span className={styles.navMark}>Heart &amp; Angel</span>
+            )}
 
+            {!isTelegramApp && (
+              <SoundToggle className={styles.ghostButton} />
+            )}
+          </header>
+
+          <main className={styles.main}>
+            <section className={styles.hero} aria-label="The living heart">
               <RitualLink
                 href="/vigil"
                 aria-label={`Light the Vigil heart. ${supporterLabel} in the last 24 hours. ${vigilLabel}.`}
-                className="group col-span-2 row-start-1 flex min-w-0 flex-col items-center text-center sm:col-span-1 sm:col-start-2 sm:row-start-1"
+                className={styles.heartLink}
               >
-                <div className="relative flex h-36 w-36 items-center justify-center sm:h-56 sm:w-56 lg:h-60 lg:w-60">
-                  <div
+                <span className={styles.heartStage}>
+                  <span
                     aria-hidden="true"
-                    className="absolute inset-2 rounded-full bg-amber-400/30 transition-all duration-700"
+                    className={styles.heartRedGlow}
                     style={{
-                      opacity: heartVisuals.glowOpacity,
-                      filter: `blur(${heartVisuals.glowBlurPx}px)`,
-                      transform: `scale(${heartVisuals.scale})`,
+                      opacity: hasVigilState
+                        ? Math.min(0.9, 0.45 + heartVisuals.glowOpacity * 0.45)
+                        : 0.45,
                     }}
                   />
-
-                  <div className="relative h-full w-full">
+                  <span className={styles.heartPulse} data-testid="temple-heart-pulse">
                     <Image
                       data-testid="temple-heart"
                       src={TEMPLE_HOME_ASSETS.heart}
                       alt="Shared Temple heart"
-                      fill
-                      sizes="(min-width: 1024px) 240px, (min-width: 640px) 224px, 144px"
-                      className="object-contain transition-all duration-700 group-hover:scale-105"
-                      style={{
-                        filter: `grayscale(${heartVisuals.grayscale}) brightness(${heartVisuals.brightness}) saturate(${heartVisuals.saturate})`,
-                        transform: `scale(${heartVisuals.scale})`,
-                      }}
+                      width={672}
+                      height={672}
+                      sizes="(min-width: 1024px) 13.5rem, 40vw"
+                      className={styles.heartImage}
                       priority
                     />
-                  </div>
-                </div>
+                  </span>
+                </span>
 
-                <span
-                  className="mt-2 font-mono text-[10px] uppercase tracking-[.14em] sm:tracking-[.18em]"
-                  data-supporter-count={
-                    hasVigilState ? supporterCount : undefined
-                  }
-                >
-                  {supporterLabel} · {vigilLabel}
+                <span className={styles.vigilCaption}>
+                  VIGIL · TAP THE HEART TO KEEP WATCH
+                </span>
+
+                <span className={styles.vigilMeta}>
+                  <span
+                    className={styles.vigilCount}
+                    data-supporter-count={
+                      hasVigilState ? supporterCount : undefined
+                    }
+                  >
+                    {supporterLabel}
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span>{vigilLabel}</span>
                 </span>
 
                 {vigilStateProblem && (
                   <span
-                    className="mt-1 max-w-[11rem] font-mono text-[9px] uppercase leading-tight tracking-[.12em] opacity-50"
+                    className={styles.vigilProblem}
                     role="status"
                     aria-live="polite"
                   >
                     {vigilStateProblem}
                   </span>
                 )}
-
-                <span className="mt-2 rounded-full border border-amber-400/30 px-4 py-2 font-serif text-xs">
-                  Light the heart
-                </span>
               </RitualLink>
 
-              <div className="relative col-start-2 row-start-2 mx-auto aspect-[3/4] w-full max-w-[9rem] sm:col-start-3 sm:row-start-1 sm:max-w-[13rem] lg:max-w-[14rem]">
-                <div className="absolute inset-0 overflow-hidden rounded-t-[999px] rounded-b-2xl border border-amber-100/20 bg-[#100d0c] shadow-[inset_0_0_35px_rgba(0,0,0,0.4)]">
-                  <Image
-                    data-testid="temple-right-panel"
-                    src={TEMPLE_HOME_ASSETS.right}
-                    alt="Stained-glass Demon"
-                    fill
-                    sizes="(min-width: 1024px) 224px, (min-width: 640px) 208px, 144px"
-                    className="object-contain"
-                    priority
-                  />
-                </div>
+              <p className={styles.eyebrow}>THE SANCTUARY</p>
+              <h1 className={styles.title}>Digital Temple</h1>
+              <p className={styles.lede}>
+                A place to be present, to do something small, and to leave a
+                mark.
+              </p>
+            </section>
+
+            <section
+              className={`${styles.section} ${styles.ritualsSection}`}
+              aria-labelledby="rituals-title"
+            >
+              <div className={styles.sectionHeading}>
+                <h2 id="rituals-title" className={styles.sectionTitle}>
+                  Rituals
+                </h2>
+                <p className={styles.sectionNote}>
+                  Four gestures for what words cannot hold
+                </p>
               </div>
-            </div>
 
-            <div
-              aria-hidden="true"
-              className="mx-auto mt-2 h-5 w-2/3 rounded-[50%] bg-black/10 blur-xl"
-            />
-          </div>
+              <div className={styles.ritualGrid}>
+                {TEMPLE_RITUAL_LINKS.map((ritual) => {
+                  const meta = RITUAL_META[ritual.href] ?? {
+                    descriptor: 'Ritual',
+                    accent: '#9a7437',
+                    icon: Sparkles,
+                  };
+                  const Icon = meta.icon;
 
-          <section
-            id="temple-traces"
-            aria-labelledby="temple-traces-title"
-            className="mx-auto mt-8 w-full max-w-3xl"
-          >
-            <div className="rounded-3xl border border-amber-400/20 bg-black/10 p-5 text-left backdrop-blur-md sm:p-6">
-              <div className="flex items-start justify-between gap-3 border-b border-stone-500/20 pb-3">
-                <div className="min-w-0">
-                  <h2
-                    id="temple-traces-title"
-                    className="font-serif text-2xl"
-                  >
+                  return (
+                    <RitualLink
+                      key={ritual.href}
+                      href={ritual.href}
+                      className={styles.ritualCard}
+                      aria-label={ritual.label}
+                      style={{ '--accent': meta.accent } as React.CSSProperties}
+                    >
+                      <span className={styles.ritualIcon} aria-hidden="true">
+                        <Icon size={16} />
+                      </span>
+                      <span className={styles.ritualBody}>
+                        <span className={styles.ritualLabel}>
+                          {ritual.label}
+                        </span>
+                        <span className={styles.ritualHint}>
+                          {meta.descriptor}
+                        </span>
+                      </span>
+                    </RitualLink>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section
+              className={`${styles.section} ${styles.supportSection}`}
+              aria-labelledby="support-title"
+            >
+              <div className={styles.supportCard}>
+                <h2 id="support-title" className={styles.supportTitle}>
+                  Support the Temple
+                </h2>
+                <p className={styles.supportCopy}>
+                  Vigil contributes a spark. Tribute materially sustains the
+                  Temple.
+                </p>
+
+                <Link
+                  href="/temple/support"
+                  className={styles.supportPrimary}
+                  data-testid="support-temple-generic"
+                >
+                  Support the Temple →
+                </Link>
+
+                <div
+                  className={styles.amountRow}
+                  aria-label="Support the Temple with a specific amount"
+                >
+                  {[5, 20, 100].map(amount => (
+                    <button
+                      key={amount}
+                      type="button"
+                      onClick={() => void startAmountCheckout(amount)}
+                      disabled={pendingAmount !== null}
+                      className={styles.amountButton}
+                      title={`Continue to secure Stripe checkout for $${amount}`}
+                    >
+                      {pendingAmount === amount ? 'Opening…' : `$${amount}`}
+                    </button>
+                  ))}
+                </div>
+
+                {paymentError && (
+                  <p className={styles.supportError} role="alert">
+                    {paymentError}
+                  </p>
+                )}
+
+                <p className={styles.supportStatus} aria-live="polite">
+                  {pendingAmount !== null
+                    ? 'Opening the secure Stripe checkout…'
+                    : 'Amounts open Stripe directly. You confirm the payment there.'}
+                </p>
+              </div>
+
+              {leftWithoutTrace && (
+                <p className={styles.leftWithoutTrace} role="status">
+                  Left without a trace
+                </p>
+              )}
+            </section>
+
+            <section
+              className={`${styles.section} ${styles.tracesSection}`}
+              aria-labelledby="traces-title"
+            >
+              <div className={styles.sectionHeading}>
+                <div>
+                  <h2 id="traces-title" className={styles.sectionTitle}>
                     Traces
                   </h2>
-                  <p className="mt-1 font-mono text-[10px] uppercase leading-relaxed tracking-[.14em] opacity-60">
+                  <p className={styles.sectionNote}>
                     Latest {TEMPLE_TRACE_LIMIT} completed rituals · newest first
-                    · entry, navigation and incomplete events excluded
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => void refreshFeed({ force: true })}
-                  className="min-h-[44px] shrink-0 rounded-full border border-amber-400/30 px-3 font-mono text-[9px] uppercase tracking-widest opacity-75 transition-opacity hover:opacity-100"
-                  aria-label="Refresh the latest Temple traces"
-                >
-                  Refresh
-                </button>
+                <div className={styles.tracesActions}>
+                  <button
+                    type="button"
+                    onClick={() => void refreshFeed({ force: true })}
+                    className={styles.ghostButton}
+                    aria-label="Refresh the latest Temple traces"
+                  >
+                    Refresh
+                  </button>
+                </div>
               </div>
 
-              {feedError && (
-                <p
-                  role="status"
-                  aria-live="polite"
-                  className="mt-3 font-mono text-[10px] leading-relaxed opacity-60"
-                >
-                  {feedStatus === 'stale'
-                    ? 'Showing the last known good snapshot. '
-                    : ''}
-                  {feedError}
-                </p>
-              )}
+              <div className={styles.tracesPanel}>
+                {feedError && (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className={styles.traceNotice}
+                  >
+                    {feedStatus === 'stale'
+                      ? 'Showing the last known good snapshot. '
+                      : ''}
+                    {feedError}
+                  </p>
+                )}
 
-              {!loaded ? (
-                <p className="py-8 text-center font-mono text-xs uppercase tracking-widest opacity-60">
-                  Reading the ether…
-                </p>
-              ) : feedStatus === 'error' && posts.length === 0 ? (
-                <p className="py-8 text-center font-mono text-xs uppercase tracking-widest opacity-60">
-                  The chronicle is temporarily unavailable.
-                </p>
-              ) : posts.length === 0 ? (
-                <p className="py-8 text-center font-mono text-xs uppercase tracking-widest opacity-60">
-                  No eligible ritual traces yet. Completed rituals will appear
-                  here.
-                </p>
-              ) : (
-                <ol
-                  className="mt-2 divide-y divide-stone-500/10"
-                  aria-label="Latest completed ritual traces"
-                >
-                  {posts.map(post => {
-                    const IconComponent = post.icon || Radio;
-                    const action = getTraceAction(post.type);
+                {!loaded ? (
+                  <p className={styles.traceEmpty}>Reading the ether…</p>
+                ) : feedStatus === 'error' && posts.length === 0 ? (
+                  <p className={styles.traceEmpty}>
+                    The chronicle is temporarily unavailable.
+                  </p>
+                ) : posts.length === 0 ? (
+                  <p className={styles.traceEmpty}>
+                    No eligible ritual traces yet. Completed rituals will appear
+                    here.
+                  </p>
+                ) : (
+                  <ol
+                    className={styles.traceList}
+                    aria-label="Latest completed ritual traces"
+                  >
+                    {posts.map(post => {
+                      const IconComponent = post.icon || Radio;
+                      const action = getTraceAction(post.type);
+                      const fullText = `${post.label} — ${post.author} — ${
+                        post.content || action
+                      }`;
 
-                    return (
-                      <li
-                        key={post.id}
-                        className="flex items-start gap-3 py-3"
-                      >
-                        <span
-                          className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-500/10 ${
-                            post.color || 'text-stone-400'
-                          }`}
-                          aria-hidden="true"
+                      return (
+                        <li
+                          key={post.id}
+                          className={styles.traceRow}
+                          title={fullText}
+                          aria-label={fullText}
                         >
-                          <IconComponent size={16} />
-                        </span>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                            <span className="font-mono text-[10px] font-bold uppercase tracking-wider">
+                          <span className={styles.traceIdentity}>
+                            <span
+                              className={styles.traceIcon}
+                              aria-hidden="true"
+                              style={{ color: post.accent }}
+                            >
+                              <IconComponent size={14} />
+                            </span>
+                            <span className={styles.traceLabel}>
                               {post.label}
                             </span>
-                            <span className="font-serif text-xs opacity-70">
-                              {post.author}
+                          </span>
+
+                          <span className={styles.traceBody}>
+                            <span className={styles.traceText}>
+                              {post.content || action}
                             </span>
-                            <time
-                              dateTime={post.createdAt}
-                              className="ml-auto shrink-0 font-mono text-[9px] uppercase tracking-wider opacity-50"
-                            >
-                              {post.time}
-                            </time>
-                          </div>
+                            <span className={styles.traceAuthor}>
+                              · {post.author}
+                            </span>
+                          </span>
 
-                          <p className="mt-1 break-words font-serif text-sm font-light leading-relaxed opacity-85">
-                            {post.content || action}
-                          </p>
+                          <time
+                            dateTime={post.createdAt}
+                            className={styles.traceTime}
+                          >
+                            {post.time}
+                          </time>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+              </div>
+            </section>
 
-                          {post.content && (
-                            <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[.12em] opacity-45">
-                              {action}
-                            </p>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ol>
-              )}
-            </div>
-          </section>
+            <section
+              className={`${styles.section} ${styles.chambersSection}`}
+              aria-labelledby="chambers-title"
+            >
+              <div className={styles.sectionHeading}>
+                <h2 id="chambers-title" className={styles.sectionTitle}>
+                  Chambers
+                </h2>
+              </div>
 
-          <section className="mx-auto mt-8 w-full max-w-3xl" aria-labelledby="rituals-title">
-            <h2 id="rituals-title" className="mb-4 text-center font-serif text-2xl">Rituals</h2>
-            <div className="grid grid-cols-2 gap-3">
-              {TEMPLE_RITUAL_LINKS.map((ritual) => (
-                <RitualLink
-                  key={ritual.href}
-                  href={ritual.href}
-                  className={`${ritualButtonStyle} ${ritualAccent[ritual.href] ?? 'border-amber-400/20'}`}
-                >
-                  {ritual.label}
-                </RitualLink>
-              ))}
-            </div>
-
-            <div className="mt-5 rounded-3xl border border-amber-400/20 bg-black/10 p-5 text-center backdrop-blur-md">
-              <p className="font-serif text-lg">Support the Temple</p>
-              <p className="mt-1 text-xs opacity-70">
-                Vigil contributes a spark. Tribute materially sustains the Temple.
-              </p>
-              <button
-                type="button"
-                onClick={() => openTribute()}
-                className="mt-4 flex min-h-[48px] w-full items-center justify-center rounded-full border border-amber-300/50 bg-amber-300/15 px-5 font-serif text-xs uppercase tracking-[.18em] transition-all hover:bg-amber-300/25"
-              >
-                Support the Temple →
-              </button>
-              <div className="mt-3 flex justify-center gap-2">
-                {[5, 20, 100].map(amount => (
-                  <button
-                    key={amount}
-                    type="button"
-                    onClick={() => openTribute(amount)}
-                    className="min-h-[44px] rounded-full border border-amber-400/30 px-4 py-2 font-mono text-xs transition-colors hover:border-amber-300/60"
+              <div className={styles.chamberGrid}>
+                {CHAMBERS.map(([label, href]) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={styles.chamberLink}
                   >
-                    ${amount}
-                  </button>
+                    {label}
+                  </Link>
                 ))}
               </div>
-            </div>
+            </section>
+          </main>
 
-            {leftWithoutTrace && (
-              <p
-                className="mt-3 text-center font-mono text-[10px] uppercase tracking-[.18em] opacity-60"
-                role="status"
-              >
-                Left without a trace
-              </p>
-            )}
+          <footer className={styles.footer}>
+            <p className={styles.footerMark}>The Sanctuary · Digital Temple</p>
 
-            {/* Temple utilities */}
-            <div className="flex items-center justify-center gap-2 mt-3 w-full">
+            <div className={styles.footerActions}>
               <button
+                type="button"
                 onClick={() => setIsChroniclesOpen(true)}
-                className={`flex-1 py-2.5 px-2.5 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1.5 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
+                className={styles.ghostButton}
               >
-                <Activity size={12} className="opacity-80" />
-                <span>Chronicles</span>
+                <Activity size={12} className="mr-1.5" aria-hidden="true" />
+                Chronicles
               </button>
 
               <button
+                type="button"
                 onClick={() => setIsInfoOpen(true)}
-                className={`w-10 h-10 rounded-xl border backdrop-blur-sm shadow-sm flex items-center justify-center transition-transform hover:scale-105 cursor-pointer font-serif text-sm italic shrink-0 ${actionButtonStyle}`}
-                title="About Temple"
+                className={styles.ghostButton}
                 aria-label="Open Sanctuary information"
               >
-                ?
+                Info
               </button>
             </div>
-          </section>
-
-          <section className="mx-auto mt-10 max-w-4xl text-center" aria-labelledby="chambers-title">
-            <h2 id="chambers-title" className="font-serif text-2xl">Chambers</h2>
-            <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
-              {[
-                ['Heritage', '/heritage'], ['Media Archive', '/media'], ['Unframed', '/unframed'],
-                ['Flow', '/flow'], ['Flow Issues', '/flow-issues'], ['Selection', '/selection'], ['Journal', '/journal'],
-              ].map(([label, href]) => <Link key={href} href={href} className={`rounded-full border px-4 py-2 ${actionButtonStyle}`}>{label}</Link>)}
-            </div>
-          </section>
+          </footer>
         </div>
-      </div>
 
-      <div className="h-4" />
+        <aside
+          className={`${styles.rail} ${styles.railRight}`}
+          data-testid="temple-right-rail"
+          aria-label="Stained-glass Demon"
+        >
+          <span className={styles.railGlow} aria-hidden="true" />
+          <figure className={`${styles.panel} ${styles.panelRight}`}>
+            <Image
+              data-testid="temple-right-panel"
+              src={TEMPLE_HOME_ASSETS.right}
+              alt="Stained-glass Demon"
+              width={896}
+              height={1200}
+              sizes="(min-width: 1024px) 16rem, 32vw"
+              className={styles.panelImage}
+              priority
+            />
+            <figcaption className={styles.panelCaption}>Demon</figcaption>
+          </figure>
+        </aside>
+      </div>
 
       <ModalPortal>
         <AnimatePresence>
           {isInfoOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsInfoOpen(false)}
-            role="presentation"
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4"
-          >
             <motion.div
-              initial={{ scale: 0.95, y: 10 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 10 }}
-              onClick={(e: React.MouseEvent) => e.stopPropagation()}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="temple-info-title"
-              className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-md w-full border space-y-4 relative shadow-2xl`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsInfoOpen(false)}
+              role="presentation"
+              className={styles.modalOverlay}
             >
-              <button
-                onClick={() => setIsInfoOpen(false)}
-                aria-label="Close Sanctuary information"
-                className="absolute top-5 right-5 w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
+              <motion.div
+                initial={{ scale: 0.97, y: 8 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.97, y: 8 }}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="temple-info-title"
+                className={styles.modalPanel}
               >
-                <X size={16} />
-              </button>
+                <button
+                  onClick={() => setIsInfoOpen(false)}
+                  aria-label="Close Sanctuary information"
+                  className={styles.modalClose}
+                >
+                  <X size={16} />
+                </button>
 
-              <h3
-                id="temple-info-title"
-                className="font-serif text-2xl font-normal"
-              >
-                The Sanctuary
-              </h3>
+                <h3 id="temple-info-title" className={styles.modalTitle}>
+                  The Sanctuary
+                </h3>
 
-              <p className="font-serif text-sm leading-relaxed font-light opacity-90">
-                This digital temple is a quiet space of presence. Lighting
-                shifts with the real hours of the world. Here, rituals work,
-                and every visitor leaves a trace.
-              </p>
+                <p className={styles.modalLead}>
+                  This digital temple is a quiet space of presence. It stays
+                  light at every hour. Here, rituals work, and every visitor
+                  leaves a trace.
+                </p>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
+          )}
         </AnimatePresence>
       </ModalPortal>
 
       <ModalPortal>
         <AnimatePresence>
           {isChroniclesOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsChroniclesOpen(false)}
-            role="presentation"
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4"
-          >
             <motion.div
-              initial={{ scale: 0.95, y: 10 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 10 }}
-              onClick={(e: React.MouseEvent) => e.stopPropagation()}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="temple-chronicles-title"
-              className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-md w-full border space-y-6 relative shadow-2xl`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsChroniclesOpen(false)}
+              role="presentation"
+              className={styles.modalOverlay}
             >
-              <div className="flex items-center justify-between border-b pb-4 border-stone-500/20">
-                <div>
-                  <h3
-                    id="temple-chronicles-title"
-                    className="font-serif text-2xl font-normal"
-                  >
-                    Chronicles
-                  </h3>
+              <motion.div
+                initial={{ scale: 0.97, y: 8 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.97, y: 8 }}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="temple-chronicles-title"
+                className={styles.modalPanel}
+              >
+                <div className={styles.modalHead}>
+                  <div>
+                    <h3 id="temple-chronicles-title" className={styles.modalTitle}>
+                      Chronicles
+                    </h3>
+                    <p className={styles.supportStatus} style={{ textAlign: 'left' }}>
+                      {statsWindowLabel} · cached for{' '}
+                      {templeFeed?.meta.ttlSeconds ?? 60}s
+                    </p>
+                  </div>
 
-                  <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">
-                    {statsWindowLabel} · cached for {templeFeed?.meta.ttlSeconds ?? 60}s
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void refreshFeed({ force: true })}
-                    className="min-h-[32px] rounded-full bg-stone-500/10 px-3 font-mono text-[9px] uppercase tracking-widest opacity-70 transition-opacity hover:opacity-100"
-                  >
-                    Refresh
-                  </button>
                   <button
                     onClick={() => setIsChroniclesOpen(false)}
                     aria-label="Close Chronicles"
-                    className="w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
+                    className={styles.modalClose}
+                    style={{ position: 'static' }}
                   >
                     <X size={16} />
                   </button>
                 </div>
-              </div>
 
-              {feedError && (
-                <p
-                  role="status"
-                  className="font-mono text-[10px] leading-relaxed opacity-60"
-                >
-                  {feedStatus === 'stale'
-                    ? 'Showing the last known good snapshot. '
-                    : ''}
-                  {feedError}
-                </p>
-              )}
+                {feedError && (
+                  <p role="status" className={styles.traceNotice}>
+                    {feedStatus === 'stale'
+                      ? 'Showing the last known good snapshot. '
+                      : ''}
+                    {feedError}
+                  </p>
+                )}
 
-              <div className="grid grid-cols-2 gap-6 py-2">
-                <div className="flex flex-col items-center justify-center text-center space-y-1">
-                  <Users size={20} className="opacity-60 mb-1" />
+                <div className={styles.statGrid}>
+                  <div className={styles.stat}>
+                    <Users size={18} aria-hidden="true" />
+                    <span className={styles.statValue}>
+                      {stats.namedAuthors}
+                    </span>
+                    <span className={styles.statLabel}>Named Authors</span>
+                    <span className={styles.statNote}>
+                      Distinct display names — not verified unique people
+                    </span>
+                  </div>
 
-                  <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">
-                    {stats.namedAuthors}
-                  </span>
+                  <div className={styles.stat}>
+                    <Activity size={18} aria-hidden="true" />
+                    <span className={styles.statValue}>
+                      {stats.completedRituals}
+                    </span>
+                    <span className={styles.statLabel}>
+                      Completed Rituals
+                    </span>
+                    <span className={styles.statNote}>
+                      Eligible ritual events in the full window
+                    </span>
+                  </div>
 
-                  <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">
-                    Named Authors
-                  </span>
+                  <div className={styles.stat}>
+                    <Flame size={18} className="text-amber-600" aria-hidden="true" />
+                    <span className={styles.statValue}>
+                      {stats.vigilSparks}
+                    </span>
+                    <span className={styles.statLabel}>Vigil Sparks</span>
+                    <span className={styles.statNote}>
+                      VIGIL and VIGIL_SPARK events in the same window
+                    </span>
+                  </div>
 
-                  <span className="text-[10px] font-serif opacity-50">
-                    Distinct display names in the window — not verified unique
-                    people
-                  </span>
+                  <div className={styles.stat}>
+                    <Clock size={18} className="text-indigo-500" aria-hidden="true" />
+                    <span className={styles.statValue}>{sanctuaryHour}:00</span>
+                    <span className={styles.statLabel}>Sanctuary Hour</span>
+                    <span className={styles.statNote}>
+                      Current device time (local, not a dataset metric)
+                    </span>
+                  </div>
                 </div>
 
-                <div className="flex flex-col items-center justify-center text-center space-y-1">
-                  <Activity size={20} className="opacity-60 mb-1" />
-
-                  <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">
-                    {stats.completedRituals}
-                  </span>
-
-                  <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">
-                    Completed Rituals
-                  </span>
-
-                  <span className="text-[10px] font-serif opacity-50">
-                    Eligible ritual events in the full window
-                  </span>
-                </div>
-
-                <div className="flex flex-col items-center justify-center text-center space-y-1">
-                  <Flame size={20} className="text-amber-500 mb-1" />
-
-                  <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">
-                    {stats.vigilSparks}
-                  </span>
-
-                  <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">
-                    Vigil Sparks
-                  </span>
-
-                  <span className="text-[10px] font-serif opacity-50">
-                    VIGIL and VIGIL_SPARK events in the same window
-                  </span>
-                </div>
-
-                <div className="flex flex-col items-center justify-center text-center space-y-1">
-                  <Clock size={20} className="text-indigo-400 mb-1" />
-
-                  <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">
-                    {sanctuaryHour}:00
-                  </span>
-
-                  <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">
-                    Sanctuary Hour
-                  </span>
-
-                  <span className="text-[10px] font-serif opacity-50">
-                    Current device time (local, not a dataset metric)
-                  </span>
-                </div>
-              </div>
-
-              {(excludedNote || stats.truncated) && (
-                <p className="border-t border-stone-500/20 pt-3 font-mono text-[9px] leading-relaxed opacity-50">
-                  {excludedNote
-                    ? `Excluded from ritual counts: ${excludedNote}.`
-                    : ''}
-                  {excludedNote && stats.truncated ? ' ' : ''}
-                  {stats.truncated
-                    ? 'Aggregate row limit reached; some window counts may be incomplete.'
-                    : ''}
-                </p>
-              )}
+                {(excludedNote || stats.truncated) && (
+                  <p className={styles.modalNote}>
+                    {excludedNote
+                      ? `Excluded from ritual counts: ${excludedNote}.`
+                      : ''}
+                    {excludedNote && stats.truncated ? ' ' : ''}
+                    {stats.truncated
+                      ? 'Aggregate row limit reached; some window counts may be incomplete.'
+                      : ''}
+                  </p>
+                )}
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
+          )}
         </AnimatePresence>
       </ModalPortal>
-
-      {tributeEntry && (
-        <TempleTributeModal
-          initialAmount={tributeEntry.amount}
-          onClose={closeTribute}
-        />
-      )}
     </div>
   );
 }

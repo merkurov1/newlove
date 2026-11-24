@@ -82,6 +82,19 @@ jest.mock('@/lib/tributes/analytics', () => ({
   markTributeConfirmedOnce: jest.fn(() => false),
 }));
 
+jest.mock('@/lib/tributes/checkoutClient', () => ({
+  createTributeCheckout: jest.fn(async () => ({
+    url: 'https://checkout.stripe.com/c/pay/test',
+    sessionId: 'cs_test_1234567890',
+  })),
+  openSecureCheckout: jest.fn(() => 'browser'),
+}));
+
+const checkoutClient = require('@/lib/tributes/checkoutClient') as {
+  createTributeCheckout: jest.Mock;
+  openSecureCheckout: jest.Mock;
+};
+
 jest.mock('@/lib/supabase-browser', () => ({
   createClient: () => ({
     channel: () => ({
@@ -193,21 +206,13 @@ const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
     return jsonResponse({ total: 0 });
   }
 
-  if (url.includes('/api/tribute/checkout')) {
-    return jsonResponse({ error: 'checkout blocked in test' }, 500);
-  }
-
   return jsonResponse({});
 });
 
-function checkoutCalls() {
-  return fetchMock.mock.calls.filter(([input]) =>
-    String(input).includes('/api/tribute/checkout')
-  );
-}
-
 beforeEach(() => {
   fetchMock.mockClear();
+  checkoutClient.createTributeCheckout.mockClear();
+  checkoutClient.openSecureCheckout.mockClear();
   global.fetch = fetchMock as unknown as typeof fetch;
   window.sessionStorage.clear();
   window.localStorage.clear();
@@ -234,11 +239,26 @@ describe('Temple home composition', () => {
     expect(screen.getByAltText('Shared Temple heart')).toBeInTheDocument();
   });
 
-  it('renders the live supporter count on the heart', () => {
+  it('renders the exact Vigil caption, hierarchy and authoritative count', () => {
     render(<TempleClient />);
 
-    expect(screen.getByTestId('temple-heart')).toBeInTheDocument();
+    expect(
+      screen.getByText('VIGIL · TAP THE HEART TO KEEP WATCH')
+    ).toBeInTheDocument();
+    expect(screen.getByText('THE SANCTUARY')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Digital Temple', level: 1 })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'A place to be present, to do something small, and to leave a mark.'
+      )
+    ).toBeInTheDocument();
     expect(screen.getByText(/12 supporters/)).toBeInTheDocument();
+    expect(screen.getByText(/12 supporters/)).toHaveAttribute(
+      'data-supporter-count',
+      '12'
+    );
   });
 
   it('keeps the triptych heart linked to the Vigil', () => {
@@ -249,73 +269,77 @@ describe('Temple home composition', () => {
     ).toHaveAttribute('href', '/vigil');
   });
 
-  it('keeps Vigil and Tribute out of the rituals menu', () => {
+  it('renders exactly four canonical ritual links', () => {
     render(<TempleClient />);
 
     const rituals = screen
       .getByRole('heading', { name: 'Rituals' })
       .closest('section') as HTMLElement;
 
-    expect(within(rituals).getByRole('link', { name: 'Calm' })).toHaveAttribute(
+    expect(within(rituals).getAllByRole('link')).toHaveLength(4);
+    expect(within(rituals).getByRole('link', { name: /Calm/ })).toHaveAttribute(
       'href',
       '/heartandangel/calm'
     );
     expect(
-      within(rituals).getByRole('link', { name: 'Let It Go' })
+      within(rituals).getByRole('link', { name: /Let It Go/ })
     ).toHaveAttribute('href', '/heartandangel/letitgo');
     expect(
-      within(rituals).getByRole('link', { name: 'Absolution' })
+      within(rituals).getByRole('link', { name: /Absolution/ })
     ).toHaveAttribute('href', '/absolution');
-    expect(within(rituals).getByRole('link', { name: 'Cast' })).toHaveAttribute(
+    expect(within(rituals).getByRole('link', { name: /Cast/ })).toHaveAttribute(
       'href',
       '/cast'
     );
 
-    expect(within(rituals).queryByRole('link', { name: 'Vigil' })).toBeNull();
-    expect(within(rituals).queryByRole('link', { name: 'Tribute' })).toBeNull();
+    expect(within(rituals).queryByRole('link', { name: /Vigil/ })).toBeNull();
+    expect(within(rituals).queryByRole('link', { name: /Tribute/ })).toBeNull();
   });
 
-  it('opens the Tribute journey in place without navigating to /tribute or charging', async () => {
+  it('sends the generic Support CTA to the non-modal payment step', () => {
     render(<TempleClient />);
 
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(
-      screen.queryByRole('link', { name: /support the temple/i })
-    ).toBeNull();
-
-    fireEvent.click(
-      screen.getByRole('button', { name: /support the temple/i })
-    );
-
-    const dialog = await screen.findByRole('dialog', { name: 'Tribute' });
-
-    expect(dialog).toHaveTextContent('Offer $20 for the Temple');
-    expect(window.location.pathname).toBe('/');
-    expect(screen.queryByRole('link', { name: 'Tribute' })).toBeNull();
-    expect(checkoutCalls()).toHaveLength(0);
+      screen.getByRole('link', { name: /support the temple/i })
+    ).toHaveAttribute('href', '/temple/support');
+    expect(checkoutClient.createTributeCheckout).not.toHaveBeenCalled();
   });
 
-  it('keeps amount selection explicit before checkout can start', async () => {
+  it('starts the existing Stripe checkout immediately for a specific amount', async () => {
     render(<TempleClient />);
+
+    expect(screen.queryByRole('dialog')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '$5' }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Tribute' });
-
-    expect(dialog).toHaveTextContent('Offer $5 for the Temple');
-    expect(checkoutCalls()).toHaveLength(0);
-
-    fireEvent.click(
-      within(dialog).getByRole('button', {
-        name: 'Offer $5 for the Temple',
-      })
-    );
-
     await waitFor(() => {
-      expect(checkoutCalls()).toHaveLength(1);
+      expect(checkoutClient.createTributeCheckout).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 5 })
+      );
     });
+
+    expect(checkoutClient.openSecureCheckout).toHaveBeenCalledWith(
+      'https://checkout.stripe.com/c/pay/test'
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('renders the seven server-filtered ritual traces directly on the homepage', async () => {
+  it('never routes a specific amount through /tribute', async () => {
+    render(<TempleClient />);
+
+    fireEvent.click(screen.getByRole('button', { name: '$20' }));
+
+    await waitFor(() => {
+      expect(checkoutClient.createTributeCheckout).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 20 })
+      );
+    });
+
+    expect(window.location.pathname).toBe('/');
+  });
+
+  it('shows the full trace text in the DOM even when desktop rows truncate visually', async () => {
     render(<TempleClient />);
 
     const traces = screen.getByRole('region', { name: 'Traces' });
@@ -325,10 +349,18 @@ describe('Temple home composition', () => {
     });
 
     expect(within(traces).getAllByRole('listitem')).toHaveLength(7);
-    expect(within(traces).getByText('Alice')).toBeInTheDocument();
-    expect(
-      within(traces).getByText(/entry, navigation and incomplete events excluded/i)
-    ).toBeInTheDocument();
+    expect(within(traces).getByText(/Alice/)).toBeInTheDocument();
+
+    const firstRow = within(traces).getAllByRole('listitem')[0];
+
+    expect(firstRow).toHaveAttribute(
+      'title',
+      'Let It Go — Alice — ASH trace 0'
+    );
+    expect(firstRow).toHaveAttribute(
+      'aria-label',
+      'Let It Go — Alice — ASH trace 0'
+    );
   });
 
   it('shows the server-rendered traces before the client fetch resolves', () => {
@@ -352,7 +384,7 @@ describe('Temple home composition', () => {
     expect(within(traces).getAllByRole('listitem')).toHaveLength(7);
   });
 
-  it('shows full-window Chronicles definitions instead of latest-ten sample metrics', async () => {
+  it('keeps Chronicles available with the full-window definitions', async () => {
     render(<TempleClient />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Chronicles' }));
@@ -375,5 +407,17 @@ describe('Temple home composition', () => {
     expect(
       within(dialog).getByText(/Last 30 days · all eligible ritual events/i)
     ).toBeInTheDocument();
+  });
+
+  it('states that the Temple stays light at every hour', async () => {
+    render(<TempleClient />);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open Sanctuary information' })
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'The Sanctuary' });
+
+    expect(dialog).toHaveTextContent('It stays light at every hour');
   });
 });

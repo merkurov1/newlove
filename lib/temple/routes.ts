@@ -28,6 +28,7 @@ export const TELEGRAM_NAV_HIDDEN_ROUTES = [
   '/absolution',
   '/cast',
   '/tribute',
+  '/temple/support',
 ] as const;
 
 /**
@@ -59,6 +60,7 @@ export const TEMPLE_AUDIO_ROUTES = [
   '/heartandangel/calm',
   '/heartandangel/letitgo',
   '/temple',
+  '/temple/support',
   '/vigil',
   '/absolution',
   '/cast',
