@@ -7,6 +7,7 @@ import {
   within,
 } from '@testing-library/react';
 import TempleClient from '../TempleClient';
+import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/temple',
@@ -145,6 +146,26 @@ beforeEach(() => {
 });
 
 describe('Temple home composition', () => {
+  it('renders the supplied triptych with the exact owner URLs', () => {
+    render(<TempleClient />);
+
+    expect(screen.getByTestId('temple-heart')).toHaveAttribute(
+      'src',
+      TEMPLE_HOME_ASSETS.heart
+    );
+    expect(screen.getByTestId('temple-left-panel')).toHaveAttribute(
+      'src',
+      TEMPLE_HOME_ASSETS.left
+    );
+    expect(screen.getByTestId('temple-right-panel')).toHaveAttribute(
+      'src',
+      TEMPLE_HOME_ASSETS.right
+    );
+    expect(screen.getByAltText('Stained-glass Angel')).toBeInTheDocument();
+    expect(screen.getByAltText('Stained-glass Demon')).toBeInTheDocument();
+    expect(screen.getByAltText('Shared Temple heart')).toBeInTheDocument();
+  });
+
   it('renders the live supporter count on the heart', () => {
     render(<TempleClient />);
 
