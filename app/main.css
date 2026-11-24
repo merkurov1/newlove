@@ -883,6 +883,228 @@ body.custom-footer-route > footer {
 .temple-modal__dock a[aria-current='page'] { background: rgba(245, 198, 110, .14); color: #f5d79b; }
 body.ritual-modal-open { overflow: hidden; overscroll-behavior: none; }
 
+/* =========================================================
+   ABSOLUTION — dedicated compact ritual over the Temple
+   ========================================================= */
+
+body.absolution-modal-open { overflow: hidden; overscroll-behavior: none; }
+
+.absolution-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(0.75rem, env(safe-area-inset-top))
+    max(0.75rem, env(safe-area-inset-right))
+    max(0.75rem, env(safe-area-inset-bottom))
+    max(0.75rem, env(safe-area-inset-left));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: rgba(8, 7, 6, 0.58);
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
+  animation: absolution-modal-fade 220ms ease-out both;
+}
+
+.absolution-modal__dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 34rem);
+  max-height: calc(
+    min(var(--tg-viewport-stable-height, 100dvh), 100dvh) - 1.5rem
+  );
+  overflow: hidden;
+  border: 1px solid rgba(245, 198, 110, 0.28);
+  border-radius: 1.75rem;
+  background: #141210;
+  color: #eee8df;
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  outline: none;
+  animation: absolution-modal-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.absolution-modal__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem 0.8rem;
+  border-bottom: 1px solid rgba(245, 198, 110, 0.16);
+  background: linear-gradient(
+    180deg,
+    rgba(48, 38, 28, 0.92) 0%,
+    rgba(20, 18, 16, 0.96) 100%
+  );
+}
+
+.absolution-modal__heading {
+  min-width: 0;
+  margin-right: auto;
+}
+
+.absolution-modal__eyebrow {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 8px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(245, 198, 110, 0.62);
+}
+
+.absolution-modal__heading h2 {
+  margin: 2px 0 0;
+  overflow: hidden;
+  font-family: var(--font-cormorant), serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.absolution-modal__fullpage,
+.absolution-modal__close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  color: #f0dfbe;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.absolution-modal__fullpage {
+  padding: 0 10px;
+  border-radius: 999px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.absolution-modal__fullpage:hover,
+.absolution-modal__fullpage:focus-visible {
+  opacity: 1;
+  background: rgba(245, 198, 110, 0.1);
+}
+
+.absolution-modal__close {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #d8cec1;
+}
+
+.absolution-modal__close:hover,
+.absolution-modal__close:focus-visible {
+  opacity: 1;
+  border-color: rgba(245, 198, 110, 0.55);
+  background: rgba(245, 198, 110, 0.12);
+  color: #f5d79b;
+}
+
+.absolution-modal__fullpage:focus-visible,
+.absolution-modal__close:focus-visible {
+  outline: 2px solid rgba(252, 211, 77, 0.8);
+  outline-offset: 2px;
+}
+
+.absolution-modal__body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0.85rem 1rem max(1rem, env(safe-area-inset-bottom));
+  background:
+    radial-gradient(circle at 50% 18%, rgba(85, 58, 38, 0.3) 0%, transparent 68%),
+    #141210;
+}
+
+.absolution-modal__body .absolution-page {
+  min-height: 0;
+  background: transparent !important;
+}
+
+.absolution-modal__body .absolution-stage {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+@media (max-width: 480px) {
+  .absolution-modal {
+    padding: max(0.5rem, env(safe-area-inset-top))
+      max(0.5rem, env(safe-area-inset-right))
+      max(0.5rem, env(safe-area-inset-bottom))
+      max(0.5rem, env(safe-area-inset-left));
+  }
+
+  .absolution-modal__dialog {
+    max-height: calc(
+      min(var(--tg-viewport-stable-height, 100dvh), 100dvh) - 1rem
+    );
+    border-radius: 1.35rem;
+  }
+
+  .absolution-modal__header {
+    gap: 0.4rem;
+    padding: 0.7rem 0.75rem;
+  }
+
+  .absolution-modal__eyebrow {
+    font-size: 7px;
+    letter-spacing: 0.18em;
+  }
+
+  .absolution-modal__heading h2 {
+    font-size: 17px;
+  }
+
+  .absolution-modal__fullpage {
+    padding: 0 6px;
+    font-size: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  .absolution-modal__body {
+    padding: 0.7rem 0.7rem max(0.85rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .absolution-modal,
+  .absolution-modal__dialog {
+    animation: none !important;
+  }
+}
+
+@keyframes absolution-modal-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes absolution-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @media (max-width: 640px) {
   .temple-modal__header { gap: 8px; }
   .temple-modal__header strong { font-size: 15px; }
