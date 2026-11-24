@@ -476,11 +476,17 @@ test('preflight exits non-zero for an OpenAI selection before touching credentia
 });
 
 test('preflight fails closed when DeepSeek auth is missing', () => {
-  // An empty HOME makes `opencode auth list` deterministic: no stored login.
+  // A deterministic fake OpenCode keeps the auth probe independent of whether
+  // the CI image happens to ship the CLI. Its `auth list` exits 0 with no
+  // output, so no stored login is detected, and the empty HOME isolates config.
   const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), 'pierrot-preflight-'));
+  const binDir = path.join(emptyHome, 'bin');
+  const record = path.join(emptyHome, 'opencode-child.json');
+  writeFakeOpenCode(binDir, record);
   const resultPath = path.join(emptyHome, 'preflight-result.json');
   try {
     const result = runPreflight({
+      PATH: `${binDir}:${process.env.PATH || ''}`,
       HOME: emptyHome,
       PIERROT_DEV_OPENCODE_PROVIDER: 'deepseek',
       PIERROT_DEV_OPENCODE_MODEL: 'deepseek/deepseek-flash',
