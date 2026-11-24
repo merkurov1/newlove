@@ -49,6 +49,8 @@
 
 - `pnpm typecheck` — exit 0.
 - `pnpm lint` — exit 0, 0 errors (1386 pre-existing warnings).
+- `pnpm test --runInBand` — 535 suites passed, 1 skipped; 3818 tests passed,
+  10 skipped.
 - Targeted Jest: `app/temple lib/temple hooks/useTempleFeed app/cast
   app/absolution` — 11 suites / 61 tests passed.
 - `node --test scripts/pierrot/__tests__/*.test.mjs` — 53/53 passed;
@@ -90,3 +92,14 @@ worker token and Supabase queue tables are deliberately unavailable to the task
 process. The claim evidence above proves dispatch for this task; the remaining
 Temple queue rows must be reconciled by the runner/owner view. No queue row was
 paused or re-prioritised by this change.
+
+## Attempt-3 final branch state
+
+- The attempt-3 branch commit `46588afe` is a merge of `971f76d7` (attempt 1)
+  and main `d8e5aa07`. `git merge-tree --write-tree main HEAD` reports no
+  conflict, so the PR no longer inherits the dirty state of #105/#106/#107.
+- `git diff --stat main HEAD` is 28 files: the Temple home/layout/CSS, the
+  language-only Temple-palette `/cast` landing, the integration Playwright
+  spec, the artifact set and the two audit documents. No workbench, executor or
+  migration file is deleted or reverted by the branch.
+
