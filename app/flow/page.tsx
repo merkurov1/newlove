@@ -8,7 +8,6 @@ import useIsTelegram from '@/components/useIsTelegram';
 import { useTelegramBottomButton } from '@/components/telegram/useTelegramBottomButton';
 import { telegramAuthHeaders } from '@/lib/telegram/clientAuth';
 import { hapticSelection } from '@/lib/telegram/webApp';
-import { resolveFlowPrimaryAction } from '@/lib/telegram/flowActions';
 import { resolveFlowCardComposition } from '@/lib/flow/cardComposition';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { breadcrumbJsonLd, collectionPageJsonLd } from '@/lib/structuredData';
@@ -723,7 +722,7 @@ export default function FlowPage() {
     window.dispatchEvent(new CustomEvent('flow:updated'));
   }, []);
 
-  const writeAvailable = useTelegramBottomButton({
+  useTelegramBottomButton({
     text: 'WRITE',
     visible: isTelegram && isAdmin && !editingId && !composerOpen,
     enabled: true,
@@ -732,16 +731,6 @@ export default function FlowPage() {
       setComposerOpen(true);
     },
   });
-
-  const primaryAction = resolveFlowPrimaryAction({
-    isTelegram,
-    isAdmin,
-    bottomButtonAvailable: writeAvailable,
-    editing: Boolean(editingId),
-    composerOpen,
-  });
-
-  const showWriteFallback = primaryAction.kind === 'fallback-write';
 
   return (
     <>
@@ -762,26 +751,6 @@ export default function FlowPage() {
       />
       <div className="flow-page px-5 pb-24 pt-20 sm:px-8 sm:pt-24">
         <div className="flow-page__column">
-          {isTelegram && (
-            <div className="mb-4 flex items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-[0.16em] text-neutral-500">
-              <Link href="/temple" className="min-h-[36px] inline-flex items-center transition hover:text-neutral-900">
-                ← Temple
-              </Link>
-              {showWriteFallback && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    hapticSelection();
-                    setComposerOpen(true);
-                  }}
-                  className="inline-flex min-h-[36px] items-center rounded-full border border-neutral-300 px-4 font-mono text-[10px] uppercase tracking-[0.16em] text-neutral-800 transition hover:border-neutral-500"
-                >
-                  WRITE
-                </button>
-              )}
-            </div>
-          )}
-
           <header className="flow-page__header lg:hidden">
             <h1 className="flow-page__title">Flow</h1>
             <p className="flow-page__subtitle">Stream of thoughts &amp; media</p>
