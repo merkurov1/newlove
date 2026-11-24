@@ -234,21 +234,29 @@ export default function TelegramMiniApp() {
 
     applyTelegramTheme(tg);
 
-    // Keep the native Telegram chrome aligned with the dark Temple frame.
+    // The Temple never switches to a dark time-of-day theme, including inside
+    // Telegram. Keep the native chrome on the same light canvas as the page so
+    // the header, background and bottom bar cannot reintroduce a dark frame.
+    const templeLight =
+      pathname === '/temple' || pathname === '/temple/support';
+    const headerColor = templeLight ? '#f6f1e8' : '#141210';
+    const backgroundColor = templeLight ? '#f6f1e8' : '#141210';
+    const bottomBarColor = templeLight ? '#efe7da' : '#141210';
+
     try {
-      tg.setHeaderColor?.('#141210');
+      tg.setHeaderColor?.(headerColor);
     } catch {
       /* Telegram methods are optional. */
     }
 
     try {
-      tg.setBackgroundColor?.('#141210');
+      tg.setBackgroundColor?.(backgroundColor);
     } catch {
       /* Telegram methods are optional. */
     }
 
     try {
-      tg.setBottomBarColor?.('#141210');
+      tg.setBottomBarColor?.(bottomBarColor);
     } catch {
       /* Telegram methods are optional. */
     }
@@ -308,7 +316,7 @@ export default function TelegramMiniApp() {
 
       document.documentElement.classList.remove('telegram-mini-app');
     };
-  }, [isTelegram]);
+  }, [isTelegram, pathname]);
 
   useEffect(() => {
     if (!isTelegram || startParamHandledRef.current) return;
