@@ -22,12 +22,27 @@ export type TelegramInitDataUser = {
   isPremium: boolean;
 };
 
+export type TelegramSignedChatContext = {
+  /** Group/supergroup id derived from the signed `chat` object. */
+  id: string;
+  /** Opaque per-group instance from the signed launch data. */
+  instance: string;
+  type: 'group' | 'supergroup';
+  title: string | null;
+};
+
 export type TelegramInitDataResult =
   | {
       ok: true;
       user: TelegramInitDataUser;
       authDate: number;
       queryId: string | null;
+      /**
+       * Chat context is only present when Telegram launched the Mini App from
+       * a group. It comes from the HMAC-signed payload, never from
+       * `initDataUnsafe` or a client body field.
+       */
+      chat: TelegramSignedChatContext | null;
     }
   | {
       ok: false;
@@ -46,8 +61,50 @@ function readString(value: string | null): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-function safeHexEqual(expectedHex: string, receivedHex: string): boolean {
-  const expected = Buffer.from(expectedHex, 'hex');
+function readSignedChatContext(params: URLSearchParams): TelegramSignedChatContext | null {
+  const type = params.get('chat_type');
+  const instance = params.get('chat_instance');
+
+  if (type !== 'group' && type !== 'supergroup') return null;
+  if (!instance || !/^[\x21-\x7E]{8,256}$/.test(instance)) return null;
+
+  const rawChat = params.get('chat');
+  let chatId = '';
+
+  if (rawChat) {
+    try {
+      const parsed = JSON.parse(rawChat);
+
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const record = parsed as Record<string, unknown>;
+        const candidate =
+          typeof record.id === 'number' && Number.isSafeInteger(record.id)
+            ? String(record.id)
+            : typeof record.id === 'string'
+              ? record.id.trim()
+              : '';
+
+        if (/^-?\d+$/.test(candidate)) chatId = candidate;
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  // Older Bot API versions may send chat_instance/chat_type without `chat`.
+  // The signed instance still binds the group, but an explicit chat id must be
+  // valid when it is present.
+  if (!chatId && rawChat) return null;
+
+  return {
+    id: chatId || `instance:${instance}`,
+    instance,
+    type,
+    title: null,
+  };
+}
+
+function safeHexEqual(expectedHex: string, receivedHex: string): boolean {  const expected = Buffer.from(expectedHex, 'hex');
   const received = Buffer.from(receivedHex, 'hex');
 
   if (!expected.length || expected.length !== received.length) return false;
@@ -144,6 +201,7 @@ export function verifyTelegramInitData(
       ok: true,
       authDate,
       queryId: readString(params.get('query_id')),
+      chat: readSignedChatContext(params),
       user: {
         id,
         username: readString(typeof record.username === 'string' ? record.username : null),

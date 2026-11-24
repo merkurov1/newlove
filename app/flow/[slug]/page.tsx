@@ -20,6 +20,7 @@ import { getCachedFlowItem } from '@/lib/flow/items-cash';
 import { readDistributionUrl } from '@/lib/flow/distribution';
 import PierrotContextBlock from '@/components/flow/PierrotContextBlock';
 import FlowImageComponent from '@/components/flow/FlowImage';
+import FlowShare from '@/components/flow/FlowShare';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { breadcrumbJsonLd, flowContentJsonLd } from '@/lib/structuredData';
 
@@ -615,7 +616,7 @@ export default async function FlowItemPage({ params }: PageProps) {
         ])}
       />
 
-      <div className="min-h-screen bg-white px-5 pb-24 pt-20 text-stone-900 sm:px-8 sm:pt-24">
+      <div className="flow-post-page min-h-screen bg-white px-5 pb-24 pt-20 text-stone-900 sm:px-8 sm:pt-24">
         <article className="flow-item mx-auto max-w-3xl">
           <header className="mb-8 flex items-center justify-between gap-4 border-b border-stone-100 pb-5">
             <Link
@@ -682,6 +683,16 @@ export default async function FlowItemPage({ params }: PageProps) {
                 <span>{readingTime}</span>
               </>
             )}
+          </div>
+
+          <div className="mb-6">
+            <FlowShare
+              title={metadata.title}
+              url={metadata.canonicalUrl}
+              imageUrl={metadata.previewImage}
+              excerpt={metadata.description}
+              slug={decodedSlug}
+            />
           </div>
 
           <FlowHero content={content} />

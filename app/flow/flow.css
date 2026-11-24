@@ -30,6 +30,18 @@
   color: var(--flow-ink);
 }
 
+/*
+ * The global Header intentionally returns null in Telegram. Flow therefore
+ * must not reserve the web header's top padding inside the Mini App.
+ */
+body.telegram-app .flow-page,
+body.telegram-app .flow-post-page {
+  padding-top: max(1rem, env(safe-area-inset-top), var(--tg-safe-area-top, 0px)) !important;
+  padding-bottom: calc(6rem + max(env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px)));
+  padding-left: max(1.25rem, env(safe-area-inset-left), var(--tg-safe-area-left, 0px));
+  padding-right: max(1.25rem, env(safe-area-inset-right), var(--tg-safe-area-right, 0px));
+}
+
 .flow-page__column {
   width: 100%;
   max-width: 40rem;
