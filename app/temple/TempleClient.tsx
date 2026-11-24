@@ -36,7 +36,7 @@ import { globalFlameRemainingMs } from '@/lib/vigil/flame';
 import { vigilHeartVisuals } from '@/lib/vigil/supporters';
 import { useVigilSupporters } from '@/hooks/useVigilSupporters';
 import { useTempleFeed } from '@/hooks/useTempleFeed';
-import { TEMPLE_TRACE_LIMIT } from '@/lib/temple/feed';
+import { TEMPLE_TRACE_LIMIT, type TempleFeedPayload } from '@/lib/temple/feed';
 import { trackTributeSupportView } from '@/lib/tributes/analytics';
 
 interface TemplePost {
@@ -45,6 +45,7 @@ interface TemplePost {
   label: string;
   author: string;
   time: string;
+  createdAt: string;
   content: string;
   audioUrl?: string | null;
   icon?: React.ComponentType<{ size?: number; className?: string }>;
@@ -121,24 +122,52 @@ function getEventVisuals(eventType: string) {
   }
 }
 
+/**
+ * A short, human explanation of what the stored ritual event represents. The
+ * canonical type comes from the server classifier; this map only supplies the
+ * display wording, so unknown future rituals still read as completed rituals
+ * rather than being mislabelled as navigation.
+ */
+const TEMPLE_TRACE_ACTIONS: Record<string, string> = {
+  VIGIL: 'Lit the Vigil heart',
+  VIGIL_SPARK: 'Sent a Vigil spark',
+  ASH: 'Released a burden',
+  CAST: 'Cast an archetype',
+  ABSOLUTION: 'Received absolution',
+  TRIBUTE: 'Offered a Tribute',
+  MEDITATION: 'Found calm',
+  SILENCE: 'Kept silence',
+  HEARTANDANGEL: 'Held the heart',
+  WHISPER: 'Left a whisper'
+};
+
+function getTraceAction(type: string) {
+  return TEMPLE_TRACE_ACTIONS[type.toUpperCase()] ?? 'Completed a ritual';
+}
+
 function formatTime(iso?: string) {
-  const d = iso ? new Date(iso) : new Date();
+  if (!iso) return '';
+
+  const d = new Date(iso);
 
   if (isNaN(d.getTime())) return '';
 
-  const time = d.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-
-  if (d.toDateString() === new Date().toDateString()) {
-    return time;
-  }
-
-  return `${d.toLocaleDateString([], {
+  // Stable UTC output keeps the server-rendered HTML identical to the first
+  // client render (no timezone/locale hydration difference) and matches the
+  // UTC boundaries documented for the Chronicles window.
+  const date = new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
-    month: 'short'
-  })}, ${time}`;
+    month: 'short',
+    timeZone: 'UTC'
+  }).format(d);
+  const time = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC'
+  }).format(d);
+
+  return `${date}, ${time} UTC`;
 }
 
 const DEFAULT_LIGHTING = {
@@ -215,10 +244,14 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body);
 }
 
-export default function TempleClient() {
+export default function TempleClient({
+  initialFeed = null,
+}: {
+  /** Server-read feed so the seven traces are present in the first HTML. */
+  initialFeed?: TempleFeedPayload | null;
+}) {
   const pathname = usePathname();
   const [isInfoOpen, setIsInfoOpen] = useState(false);
-  const [isTracesOpen, setIsTracesOpen] = useState(false);
   const [isChroniclesOpen, setIsChroniclesOpen] = useState(false);
   const [lighting, setLighting] = useState(DEFAULT_LIGHTING);
   const [tgUser, setTgUser] = useState<any>(null);
@@ -229,7 +262,7 @@ export default function TempleClient() {
     status: feedStatus,
     error: feedError,
     refresh: refreshFeed,
-  } = useTempleFeed();
+  } = useTempleFeed(initialFeed);
 
   const [vigilNow, setVigilNow] = useState(() => Date.now());
   const [sanctuaryHour, setSanctuaryHour] = useState(() => new Date().getHours());
@@ -274,6 +307,7 @@ export default function TempleClient() {
         label: visuals.label,
         author: cleanAuthor,
         time: formatTime(item.created_at),
+        createdAt: item.created_at,
         content: cleanContent,
         audioUrl: item.audio_url || null,
         icon: visuals.icon,
@@ -347,7 +381,6 @@ export default function TempleClient() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsInfoOpen(false);
-        setIsTracesOpen(false);
         setIsChroniclesOpen(false);
       }
     };
@@ -358,16 +391,11 @@ export default function TempleClient() {
   }, []);
 
   useEffect(() => {
-    if (!isInfoOpen && !isTracesOpen && !isChroniclesOpen) return;
+    if (!isInfoOpen && !isChroniclesOpen) return;
 
     return registerTelegramBackHandler(() => {
       if (isChroniclesOpen) {
         setIsChroniclesOpen(false);
-        return true;
-      }
-
-      if (isTracesOpen) {
-        setIsTracesOpen(false);
         return true;
       }
 
@@ -378,15 +406,15 @@ export default function TempleClient() {
 
       return false;
     });
-  }, [isChroniclesOpen, isInfoOpen, isTracesOpen]);
+  }, [isChroniclesOpen, isInfoOpen]);
 
   useEffect(() => {
-    if (!isTracesOpen && !isChroniclesOpen) return;
+    if (!isChroniclesOpen) return;
 
-    // Opening a panel is a user action, not a polling tick. The hook refreshes
-    // only when its documented TTL has expired.
+    // Opening the panel is a user action, not a polling tick. The hook
+    // refreshes only when its documented TTL has expired.
     void refreshFeed();
-  }, [isChroniclesOpen, isTracesOpen, refreshFeed]);
+  }, [isChroniclesOpen, refreshFeed]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setVigilNow(Date.now()), 30_000);
@@ -600,6 +628,119 @@ export default function TempleClient() {
             />
           </div>
 
+          <section
+            id="temple-traces"
+            aria-labelledby="temple-traces-title"
+            className="mx-auto mt-8 w-full max-w-3xl"
+          >
+            <div className="rounded-3xl border border-amber-400/20 bg-black/10 p-5 text-left backdrop-blur-md sm:p-6">
+              <div className="flex items-start justify-between gap-3 border-b border-stone-500/20 pb-3">
+                <div className="min-w-0">
+                  <h2
+                    id="temple-traces-title"
+                    className="font-serif text-2xl"
+                  >
+                    Traces
+                  </h2>
+                  <p className="mt-1 font-mono text-[10px] uppercase leading-relaxed tracking-[.14em] opacity-60">
+                    Latest {TEMPLE_TRACE_LIMIT} completed rituals · newest first
+                    · entry, navigation and incomplete events excluded
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void refreshFeed({ force: true })}
+                  className="min-h-[44px] shrink-0 rounded-full border border-amber-400/30 px-3 font-mono text-[9px] uppercase tracking-widest opacity-75 transition-opacity hover:opacity-100"
+                  aria-label="Refresh the latest Temple traces"
+                >
+                  Refresh
+                </button>
+              </div>
+
+              {feedError && (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="mt-3 font-mono text-[10px] leading-relaxed opacity-60"
+                >
+                  {feedStatus === 'stale'
+                    ? 'Showing the last known good snapshot. '
+                    : ''}
+                  {feedError}
+                </p>
+              )}
+
+              {!loaded ? (
+                <p className="py-8 text-center font-mono text-xs uppercase tracking-widest opacity-60">
+                  Reading the ether…
+                </p>
+              ) : feedStatus === 'error' && posts.length === 0 ? (
+                <p className="py-8 text-center font-mono text-xs uppercase tracking-widest opacity-60">
+                  The chronicle is temporarily unavailable.
+                </p>
+              ) : posts.length === 0 ? (
+                <p className="py-8 text-center font-mono text-xs uppercase tracking-widest opacity-60">
+                  No eligible ritual traces yet. Completed rituals will appear
+                  here.
+                </p>
+              ) : (
+                <ol
+                  className="mt-2 divide-y divide-stone-500/10"
+                  aria-label="Latest completed ritual traces"
+                >
+                  {posts.map(post => {
+                    const IconComponent = post.icon || Radio;
+                    const action = getTraceAction(post.type);
+
+                    return (
+                      <li
+                        key={post.id}
+                        className="flex items-start gap-3 py-3"
+                      >
+                        <span
+                          className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-500/10 ${
+                            post.color || 'text-stone-400'
+                          }`}
+                          aria-hidden="true"
+                        >
+                          <IconComponent size={16} />
+                        </span>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                            <span className="font-mono text-[10px] font-bold uppercase tracking-wider">
+                              {post.label}
+                            </span>
+                            <span className="font-serif text-xs opacity-70">
+                              {post.author}
+                            </span>
+                            <time
+                              dateTime={post.createdAt}
+                              className="ml-auto shrink-0 font-mono text-[9px] uppercase tracking-wider opacity-50"
+                            >
+                              {post.time}
+                            </time>
+                          </div>
+
+                          <p className="mt-1 break-words font-serif text-sm font-light leading-relaxed opacity-85">
+                            {post.content || action}
+                          </p>
+
+                          {post.content && (
+                            <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[.12em] opacity-45">
+                              {action}
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </div>
+          </section>
+
           <section className="mx-auto mt-8 w-full max-w-3xl" aria-labelledby="rituals-title">
             <h2 id="rituals-title" className="mb-4 text-center font-serif text-2xl">Rituals</h2>
             <div className="grid grid-cols-2 gap-3">
@@ -657,14 +798,6 @@ export default function TempleClient() {
               >
                 <Activity size={12} className="opacity-80" />
                 <span>Chronicles</span>
-              </button>
-
-              <button
-                onClick={() => setIsTracesOpen(true)}
-                className={`flex-1 py-2.5 px-2.5 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1.5 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
-              >
-                <Layers size={12} className="opacity-80" />
-                <span>Traces</span>
               </button>
 
               <button
@@ -733,130 +866,6 @@ export default function TempleClient() {
                 shifts with the real hours of the world. Here, rituals work,
                 and every visitor leaves a trace.
               </p>
-            </motion.div>
-          </motion.div>
-        )}
-        </AnimatePresence>
-      </ModalPortal>
-
-      <ModalPortal>
-        <AnimatePresence>
-          {isTracesOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsTracesOpen(false)}
-            role="presentation"
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.95, y: 10 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 10 }}
-              onClick={(e: React.MouseEvent) => e.stopPropagation()}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="temple-traces-title"
-              className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-2xl w-full border space-y-4 relative shadow-2xl max-h-[80vh] flex flex-col`}
-            >
-              <div className="flex items-center justify-between border-b pb-3 border-stone-500/20">
-                <div>
-                  <h3
-                    id="temple-traces-title"
-                    className="font-serif text-xl sm:text-2xl font-normal"
-                  >
-                    Sanctuary Traces
-                  </h3>
-
-                  <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">
-                    Up to {TEMPLE_TRACE_LIMIT} most recent ritual traces ·
-                    entry, navigation and incomplete events excluded
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void refreshFeed({ force: true })}
-                    className="min-h-[32px] rounded-full bg-stone-500/10 px-3 font-mono text-[9px] uppercase tracking-widest opacity-70 transition-opacity hover:opacity-100"
-                  >
-                    Refresh
-                  </button>
-                  <button
-                    onClick={() => setIsTracesOpen(false)}
-                    aria-label="Close Sanctuary Traces"
-                    className="w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              </div>
-
-              {feedError && (
-                <p
-                  role="status"
-                  className="font-mono text-[10px] leading-relaxed opacity-60"
-                >
-                  {feedStatus === 'stale'
-                    ? 'Showing the last known good snapshot. '
-                    : ''}
-                  {feedError}
-                </p>
-              )}
-
-              <div className="divide-y divide-stone-500/10 overflow-y-auto pr-1 flex-1">
-                {!loaded ? (
-                  <p className="font-mono text-xs opacity-60 uppercase tracking-widest animate-pulse py-8 text-center">
-                    Reading the ether...
-                  </p>
-                ) : posts.length === 0 ? (
-                  <p className="font-mono text-xs opacity-60 uppercase tracking-widest py-8 text-center">
-                    No eligible ritual traces yet.
-                  </p>
-                ) : (
-                  posts.map(post => {
-                    const IconComponent = post.icon || Radio;
-
-                    return (
-                      <div
-                        key={post.id}
-                        className="py-3 flex items-center justify-between gap-3 text-xs sm:text-sm"
-                      >
-                        <div className="flex items-center gap-2.5 shrink-0">
-                          <div
-                            className={`w-7 h-7 rounded-full bg-stone-500/10 flex items-center justify-center ${
-                              post.color || 'text-stone-400'
-                            }`}
-                          >
-                            <IconComponent size={15} />
-                          </div>
-
-                          <span className="font-mono text-xs font-bold uppercase tracking-wider">
-                            {post.label}
-                          </span>
-                        </div>
-
-                        <div className="flex-1 font-serif text-xs sm:text-sm font-light opacity-85 truncate px-2 flex items-center gap-2 text-left">
-                          <span className="font-medium opacity-75 shrink-0 text-xs">
-                            {post.author}
-                          </span>
-
-                          <span className="opacity-40">•</span>
-
-                          <span className="truncate">
-                            {post.content}
-                          </span>
-                        </div>
-
-                        <div className="font-mono text-[10px] opacity-50 shrink-0 text-right">
-                          {post.time}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
             </motion.div>
           </motion.div>
         )}
