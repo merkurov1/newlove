@@ -17,6 +17,7 @@ import {
   getTaskRow,
   getTaskRowUnscoped,
   getWorker,
+  isExecutionRetrySchemaReady,
   isUuid,
   leaseExpiryIso,
   listAttempts,
@@ -38,14 +39,17 @@ import {
   truncateText,
 } from './state';
 import { buildExecutionPrompt } from './prompt';
+import { decideExecutionRetry } from './retry';
 import { collectAttemptEvidence } from './evidence';
 import { buildAttemptCost } from './costs';
 import { notifyDevOwner } from './notifications';
 import type { AttemptEvidence } from './evidence';
 import {
   createPullRequestForAttempt,
+  findPullRequestForBranch,
   getPullRequestStatus,
   getVercelDeploymentStatus,
+  mergeBranchInto,
   mergeVerifiedPullRequest,
 } from './github';
 import type { DevAttempt, DevReviewView, DevWorkbenchTask, DevWorkbenchTaskStatus } from './types';
@@ -635,6 +639,32 @@ export async function completeAttempt(
   return { attempt: (await getAttempt(attemptId)) || updatedAttempt, task };
 }
 
+type PullRequestMetadata = {
+  number: number;
+  url: string;
+  headSha: string | null;
+  headRef: string | null;
+  baseRef: string | null;
+  baseSha: string | null;
+  attemptNumber: number;
+  authoritative: true;
+  observedAt: string;
+};
+
+function samePrUrl(left: string | null | undefined, right: string | null | undefined): boolean {
+  return Boolean(left && right && left.trim() === right.trim());
+}
+
+/**
+ * Ensure one authoritative PR per task.
+ *
+ * - A PR already attached to this task is reused.
+ * - If the newest attempt is on a different branch, the attempt branch is
+ *   merged into the existing PR head branch (non-destructive, no force push)
+ *   so retries update the same PR instead of opening duplicates.
+ * - A new PR is created only when the task has no open PR at all.
+ * - The exact head/base branches and SHAs are persisted with the attempt.
+ */
 async function ensurePullRequest(input: {
   task: DevWorkbenchTask;
   attempt: DevAttempt;
@@ -642,8 +672,178 @@ async function ensurePullRequest(input: {
 }): Promise<void> {
   const { task, attempt, workerId } = input;
   if (!attempt.headSha || attempt.changedFiles.length === 0) return;
-  if (task.pullRequests.some((url) => url.includes('/pull/'))) return;
-  if (attempt.prUrl) return;
+
+  const persistMetadata = async (metadata: PullRequestMetadata): Promise<void> => {
+    await patchAttempt(attempt.id, {
+      pr_number: metadata.number,
+      pr_url: metadata.url,
+      verification: {
+        ...(attempt.verification || {}),
+        pullRequest: metadata,
+      },
+    });
+    const existing = task.pullRequests || [];
+    const next = existing.some((url) => samePrUrl(url, metadata.url))
+      ? existing
+      : [...existing, metadata.url].slice(-10);
+    await patchTask(task.id, { pull_requests: next });
+  };
+
+  // Already attached to this attempt: repair task links and refresh evidence.
+  if (attempt.prNumber && attempt.prUrl) {
+    try {
+      const status = await getPullRequestStatus(task.repository, attempt.prNumber);
+      if (status) {
+        await persistMetadata({
+          number: status.number,
+          url: status.url,
+          headSha: status.headSha,
+          headRef: status.headBranch,
+          baseRef: status.baseBranch,
+          baseSha: status.baseSha,
+          attemptNumber: attempt.attemptNumber,
+          authoritative: true,
+          observedAt: new Date().toISOString(),
+        });
+      }
+    } catch {
+      // The link is still valid evidence; a read failure must not create a PR.
+    }
+    return;
+  }
+
+  // Find an existing open PR for this task, newest first.
+  let existingStatus: Awaited<ReturnType<typeof getPullRequestStatus>> = null;
+  let historyReadFailed = false;
+  for (const url of [...task.pullRequests].reverse()) {
+    const number = Number(String(url).match(/\/pull\/(\d+)(?:\b|$)/)?.[1] || 0);
+    if (!number) continue;
+    try {
+      const status = await getPullRequestStatus(task.repository, number);
+      if (status && status.state === 'open' && !status.merged) {
+        existingStatus = status;
+        break;
+      }
+    } catch {
+      // Ignore unreadable history; the finalizer will report permission errors.
+      historyReadFailed = true;
+    }
+  }
+
+  // Also detect an already-open PR for the exact attempt branch (crash between
+  // PR creation and persistence).
+  if (!existingStatus) {
+    const found = await findPullRequestForBranch(task.repository, attempt.branch || '');
+    if (found) {
+      try {
+        existingStatus = await getPullRequestStatus(task.repository, found.number);
+      } catch {
+        existingStatus = null;
+      }
+    }
+  }
+
+  if (existingStatus) {
+    let current = existingStatus;
+    if (current.headBranch !== attempt.branch) {
+      if (!current.headBranch) {
+        await appendEvent({
+          taskId: task.id,
+          attemptId: attempt.id,
+          workerId,
+          type: 'pull_request.update_failed',
+          level: 'warn',
+          message: `PR #${current.number} has no readable head branch; a duplicate PR was not created.`,
+        });
+        return;
+      }
+      try {
+        await mergeBranchInto({
+          repository: task.repository,
+          base: current.headBranch,
+          head: attempt.branch || '',
+          commitMessage: `Update PR #${current.number} with attempt ${attempt.attemptNumber}.`,
+        });
+        const refreshed = await getPullRequestStatus(task.repository, current.number);
+        if (refreshed) current = refreshed;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'PR update failed.';
+        await patchAttempt(attempt.id, {
+          warnings: [...attempt.warnings, `PR update failed: ${message}`],
+        });
+        await appendEvent({
+          taskId: task.id,
+          attemptId: attempt.id,
+          workerId,
+          type: 'pull_request.update_failed',
+          level: 'warn',
+          message: `Existing PR #${current.number} could not be updated: ${message}. It was reused; no duplicate PR was created.`,
+        });
+        await persistMetadata({
+          number: current.number,
+          url: current.url,
+          headSha: current.headSha,
+          headRef: current.headBranch,
+          baseRef: current.baseBranch,
+          baseSha: current.baseSha,
+          attemptNumber: attempt.attemptNumber,
+          authoritative: true,
+          observedAt: new Date().toISOString(),
+        });
+        return;
+      }
+    }
+    await persistMetadata({
+      number: current.number,
+      url: current.url,
+      headSha: current.headSha,
+      headRef: current.headBranch,
+      baseRef: current.baseBranch,
+      baseSha: current.baseSha,
+      attemptNumber: attempt.attemptNumber,
+      authoritative: true,
+      observedAt: new Date().toISOString(),
+    });
+    await appendEvent({
+      taskId: task.id,
+      attemptId: attempt.id,
+      workerId,
+      type: 'pull_request.reused',
+      message: `Reused PR #${current.number} as the single authoritative pull request for this task.`,
+      payload: {
+        url: current.url,
+        headRef: current.headBranch,
+        baseRef: current.baseBranch,
+        headSha: current.headSha,
+        baseSha: current.baseSha,
+      },
+    });
+    return;
+  }
+
+  if (historyReadFailed && task.pullRequests.some((url) => url.includes('/pull/'))) {
+    await appendEvent({
+      taskId: task.id,
+      attemptId: attempt.id,
+      workerId,
+      type: 'pull_request.duplicate_suppressed',
+      level: 'warn',
+      message:
+        'Existing pull request state could not be read. No second PR was created; the task stays in review for an explicit retry.',
+    });
+    return;
+  }
+
+  if (task.pullRequests.some((url) => url.includes('/pull/'))) {
+    await appendEvent({
+      taskId: task.id,
+      attemptId: attempt.id,
+      workerId,
+      type: 'pull_request.history_preserved',
+      message:
+        'The task keeps its earlier merged/closed PR references. A new open PR is created only because none of them is still open.',
+    });
+  }
 
   try {
     const pr = await createPullRequestForAttempt({
@@ -660,19 +860,26 @@ async function ensurePullRequest(input: {
         'Acceptance criteria:',
         ...task.acceptanceCriteria.map((criterion) => `- ${criterion}`),
         '',
-        'This pull request requires explicit owner review in Pierrot Admin. It is not merged automatically.',
+        'This is the single authoritative pull request for this task. Retries update it instead of opening duplicates.',
       ].join('\n'),
     });
-    await patchAttempt(attempt.id, { pr_number: pr.number, pr_url: pr.url });
-    await patchTask(task.id, {
-      pull_requests: [...task.pullRequests, pr.url].slice(-10),
+    await persistMetadata({
+      number: pr.number,
+      url: pr.url,
+      headSha: attempt.headSha,
+      headRef: attempt.branch,
+      baseRef: resolveDevRepository(task.repository).defaultBranch,
+      baseSha: null,
+      attemptNumber: attempt.attemptNumber,
+      authoritative: true,
+      observedAt: new Date().toISOString(),
     });
     await appendEvent({
       taskId: task.id,
       attemptId: attempt.id,
       workerId,
       type: 'pull_request.created',
-      message: `Pull request #${pr.number} created.`,
+      message: `Pull request #${pr.number} created as the authoritative PR.`,
       payload: { url: pr.url },
     });
   } catch (error) {
@@ -775,27 +982,100 @@ export async function failAttempt(input: {
     throw new WorkbenchExecutionError('ATTEMPT_NOT_FOUND', 'Attempt not found.', 404);
   }
 
+  // Bounded automatic retry policy. A transient OpenCode failure is retried a
+  // few times with exponential backoff; the terminal attempt budget hands the
+  // task to manual review instead of looping. Permanent failures are never
+  // retried. Without the additive retry migration the policy degrades to the
+  // previous terminal failure instead of writing a missing column.
+  const retryDecision = decideExecutionRetry({
+    errorCode: input.errorCode,
+    attemptNumber: attempt.attemptNumber,
+  });
   const task = await getTaskRowUnscoped(attempt.taskId);
+  let retryScheduled = false;
+  let manualReview = false;
   if (task && task.status === 'in_progress') {
-    // When the worker preserved partial work on the attempt branch, retrying
+    const retrySchemaReady =
+      retryDecision.action === 'fail' ? false : await isExecutionRetrySchemaReady();
+    const retryableSchema = retrySchemaReady && retryDecision.action !== 'fail';
+    // When the worker preserved partial work on the attempt branch, a retry
     // must resume from that commit instead of throwing the work away. Only a
     // pushed SHA is ever recorded as the base by the worker.
-    const resumeFrom =
-      headSha &&
-      [
-        'EXECUTION_TIMEOUT',
-        'OPENCODE_FAILED',
-        'OPENCODE_INTERRUPTED',
-        'OPENCODE_REPORT_MISSING',
-      ].includes(input.errorCode)
-        ? headSha
-        : null;
-    await patchTask(task.id, {
-      status: 'failed',
+    const resumeFrom = headSha && retryDecision.retryable ? headSha : null;
+    const basePatch: Record<string, unknown> = {
       last_error_code: truncateText(input.errorCode, 120),
       last_error_message: truncateText(input.errorMessage, 2000),
       ...(resumeFrom ? { base_commit: resumeFrom } : {}),
-    });
+    };
+
+    if (retryableSchema && retryDecision.action === 'retry') {
+      retryScheduled = true;
+      await patchTask(task.id, {
+        ...basePatch,
+        status: 'queued',
+        queued_at: new Date().toISOString(),
+        retry_after_at: retryDecision.retryAfter,
+        blocked_reason: null,
+      });
+      await appendEvent({
+        taskId: task.id,
+        attemptId: attempt.id,
+        workerId: input.workerId,
+        type: 'task.retry_scheduled',
+        level: 'warn',
+        message: retryDecision.reason,
+        payload: {
+          errorCode: input.errorCode,
+          attemptNumber: attempt.attemptNumber,
+          maxAttempts: retryDecision.maxAttempts,
+          delayMs: retryDecision.delayMs,
+          retryAfter: retryDecision.retryAfter,
+          preservedCommit: resumeFrom,
+        },
+        dedupeKey: `task-retry-scheduled:${attempt.id}`,
+      });
+    } else if (retryableSchema && retryDecision.action === 'manual_review') {
+      manualReview = true;
+      await patchTask(task.id, {
+        ...basePatch,
+        status: 'manual_review',
+        retry_after_at: null,
+      });
+      await appendEvent({
+        taskId: task.id,
+        attemptId: attempt.id,
+        workerId: input.workerId,
+        type: 'task.manual_review',
+        level: 'error',
+        message: retryDecision.reason,
+        payload: {
+          errorCode: input.errorCode,
+          attemptNumber: attempt.attemptNumber,
+          maxAttempts: retryDecision.maxAttempts,
+          preservedCommit: resumeFrom,
+        },
+        dedupeKey: `task-manual-review:${attempt.id}`,
+      });
+    } else {
+      await patchTask(task.id, {
+        ...basePatch,
+        status: 'failed',
+        ...(retrySchemaReady ? { retry_after_at: null } : {}),
+      });
+      if (retryDecision.action !== 'fail' && !retrySchemaReady) {
+        await appendEvent({
+          taskId: task.id,
+          attemptId: attempt.id,
+          workerId: input.workerId,
+          type: 'task.retry_unavailable',
+          level: 'warn',
+          message:
+            'Automatic execution retry requires the additive migration 2026-12-16_pierrot_dev_execution_retry.sql; the task was marked failed so it cannot loop.',
+          payload: { errorCode: input.errorCode, action: retryDecision.action },
+          dedupeKey: `task-retry-unavailable:${attempt.id}`,
+        });
+      }
+    }
   }
 
   await clearWorkerAttempt(input.workerId, attempt.id);
@@ -812,6 +1092,9 @@ export async function failAttempt(input: {
       errorCode: input.errorCode,
       exitCode: input.exitCode ?? null,
       headSha,
+      disposition: retryScheduled ? 'retry_scheduled' : manualReview ? 'manual_review' : 'failed',
+      retryable: retryDecision.retryable,
+      attemptNumber: attempt.attemptNumber,
       cost: {
         modelUsd: cost.model.costUsd,
         codespaceEstimatedUsd: cost.codespace.estimatedUsd,
@@ -990,6 +1273,10 @@ export async function enqueueTask(
     last_error_message: null,
   };
   if (isUuid(batchId)) patch.queue_batch_id = batchId;
+  if (await isExecutionRetrySchemaReady()) {
+    // A fresh enqueue is immediately eligible; never inherit stale backoff.
+    patch.retry_after_at = null;
+  }
   const queued = await transitionTask({
     userId,
     taskId,
@@ -1093,24 +1380,31 @@ export async function retryTask(userId: string, taskId: string): Promise<DevWork
     message: `Retry estimate: expected $${estimate.total.expectedUsd ?? '—'} (${estimate.confidence} confidence).`,
     payload: { estimate: estimate as unknown as Record<string, unknown>, trigger: 'retry' },
   }).catch(() => {});
+  const retryPatch: Record<string, unknown> = {
+    queue_position: position,
+    queued_at: new Date().toISOString(),
+    result_commit: null,
+    // Keep authoritative PR references so a retry updates the same PR instead
+    // of creating a duplicate. Historical merged/closed links are preserved.
+    pull_requests: (task.pullRequests || []).slice(-10),
+    verification_status: 'not_run',
+    verification_notes: '',
+    verified_at: null,
+    last_error_code: null,
+    last_error_message: null,
+  };
+  if (await isExecutionRetrySchemaReady()) {
+    // An explicit owner retry overrides any automatic backoff.
+    retryPatch.retry_after_at = null;
+  }
   const updated = await transitionTask({
     userId,
     taskId,
     to: 'queued',
-    patch: {
-      queue_position: position,
-      queued_at: new Date().toISOString(),
-      result_commit: null,
-      pull_requests: [],
-      verification_status: 'not_run',
-      verification_notes: '',
-      verified_at: null,
-      last_error_code: null,
-      last_error_message: null,
-    },
+    patch: retryPatch,
     event: {
       type: 'task.retry_queued',
-      message: `Retry requested. Previous attempts are preserved; the next attempt will get a new ID and branch.`,
+      message: `Retry requested. Previous attempts are preserved; the next attempt will update the authoritative PR instead of opening a duplicate.`,
     },
   });
   if (updated) {

@@ -2,16 +2,16 @@ import type { Metadata } from 'next';
 import CastClient from './CastClient';
 
 export const metadata: Metadata = {
-  title: 'Cast — Psychological Protocol | Digital Temple',
+  title: 'Cast — Choose your language | Digital Temple',
   description:
-    'A psychological protocol of the Digital Temple: ten questions, an Agency Index and a perceptual archetype, built to deconstruct how you make choices.',
+    'Choose English or Русский to enter the Cast ritual of the Digital Temple.',
   alternates: {
     canonical: 'https://www.merkurov.love/cast',
   },
   openGraph: {
-    title: 'Cast — Psychological Protocol | Digital Temple',
+    title: 'Cast — Choose your language | Digital Temple',
     description:
-      'Ten questions. An Agency Index. A perceptual archetype.',
+      'Choose English or Русский to enter the Cast ritual of the Digital Temple.',
     url: 'https://www.merkurov.love/cast',
     siteName: 'Merkurov Love',
     images: [

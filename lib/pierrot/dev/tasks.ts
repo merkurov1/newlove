@@ -25,6 +25,7 @@ export const DEV_TASK_STATUSES: DevTaskStatus[] = [
   'review',
   'verified',
   'failed',
+  'manual_review',
   'rejected',
   'cancelled',
   'archived',

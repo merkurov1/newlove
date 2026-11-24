@@ -32,6 +32,7 @@ const BASE_TASK_COLUMNS =
 const ACTIONS_ROUTING_TASK_COLUMNS = ',assigned_executor,actions_dispatch_requested_at';
 const ACTIONS_DISPATCH_TASK_COLUMNS =
   ',actions_dispatch_status,actions_dispatch_reason_code,actions_dispatch_reason,actions_dispatch_correlation_id,actions_dispatch_attempts,actions_dispatch_last_attempt_at,actions_dispatch_next_retry_at,actions_dispatch_updated_at';
+const EXECUTION_RETRY_TASK_COLUMNS = ',retry_after_at';
 const ACTIONS_DISPATCH_STATUSES = new Set([
   'requested',
   'accepted',
@@ -46,6 +47,7 @@ const ATTEMPT_COLUMNS =
   'id,task_id,attempt_number,status,worker_id,branch,base_ref,base_commit,head_sha,pr_number,pr_url,opencode_session_id,exit_code,started_at,finished_at,heartbeat_at,lease_expires_at,progress_stage,result_summary,changed_files,commands,verification,warnings,error_code,error_message,log_excerpt,created_at';
 
 export const WORKBENCH_MIGRATION_FILE = '2026-11-22_pierrot_dev_workbench.sql';
+export const EXECUTION_RETRY_MIGRATION_FILE = '2026-12-16_pierrot_dev_execution_retry.sql';
 
 export function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_PATTERN.test(value);
@@ -105,6 +107,7 @@ function normalizeTaskStatus(value: unknown): DevWorkbenchTaskStatus {
     'review',
     'verified',
     'failed',
+    'manual_review',
     'rejected',
     'cancelled',
     'archived',
@@ -150,6 +153,7 @@ export function mapTaskRow(row: Record<string, unknown>): DevWorkbenchTask {
     blockedReason: typeof row.blocked_reason === 'string' ? row.blocked_reason : null,
     lastErrorCode: typeof row.last_error_code === 'string' ? row.last_error_code : null,
     lastErrorMessage: typeof row.last_error_message === 'string' ? row.last_error_message : null,
+    retryAfterAt: typeof row.retry_after_at === 'string' ? row.retry_after_at : null,
     assignedExecutor:
       row.assigned_executor === 'actions' || row.assigned_executor === 'codespace'
         ? row.assigned_executor
@@ -675,6 +679,7 @@ export async function listTaskRows(input: {
 
 let actionsRoutingSchemaReady: boolean | null = null;
 let actionsDispatchRecoverySchemaReady: boolean | null = null;
+let executionRetrySchemaReady: boolean | null = null;
 
 /**
  * True only when the additive Actions routing migration is applied. This is a
@@ -717,17 +722,35 @@ export async function isActionsDispatchRecoverySchemaReady(force = false): Promi
 }
 
 /**
- * Select only columns that exist. Before the routing/recovery migrations are
- * applied the rest of the workbench must keep working; dispatch then fails
- * explicitly with the migration file name.
+ * True only when the additive execution-retry migration is applied. Without it
+ * the workbench keeps operating, but automatic retries degrade to a normal
+ * terminal failure instead of writing a column that does not exist yet.
+ */
+export async function isExecutionRetrySchemaReady(force = false): Promise<boolean> {
+  if (!force && executionRetrySchemaReady !== null) return executionRetrySchemaReady;
+  try {
+    const { error } = await store().from('pierrot_dev_prompts').select('retry_after_at').limit(1);
+    executionRetrySchemaReady = !error;
+  } catch {
+    executionRetrySchemaReady = false;
+  }
+  return executionRetrySchemaReady;
+}
+
+/**
+ * Select only columns that exist. Before the routing/recovery/retry migrations
+ * are applied the rest of the workbench must keep working; callers then fail
+ * explicitly (or degrade safely) with the migration file name.
  */
 async function taskColumns(): Promise<string> {
   const routing = await isActionsRoutingSchemaReady();
-  if (!routing) return BASE_TASK_COLUMNS;
-  const recovery = await isActionsDispatchRecoverySchemaReady();
-  return recovery
-    ? `${BASE_TASK_COLUMNS}${ACTIONS_ROUTING_TASK_COLUMNS}${ACTIONS_DISPATCH_TASK_COLUMNS}`
-    : `${BASE_TASK_COLUMNS}${ACTIONS_ROUTING_TASK_COLUMNS}`;
+  const recovery = routing ? await isActionsDispatchRecoverySchemaReady() : false;
+  const retry = await isExecutionRetrySchemaReady();
+  let columns = BASE_TASK_COLUMNS;
+  if (routing) columns += ACTIONS_ROUTING_TASK_COLUMNS;
+  if (recovery) columns += ACTIONS_DISPATCH_TASK_COLUMNS;
+  if (retry) columns += EXECUTION_RETRY_TASK_COLUMNS;
+  return columns;
 }
 
 /**
@@ -2354,15 +2377,21 @@ export async function requeueTask(input: {
     acceptanceCriteria: task.acceptanceCriteria,
     trigger: 'requeue',
   });
+  const patch: Record<string, unknown> = {
+    queue_position: position,
+    queued_at: new Date().toISOString(),
+    blocked_reason: null,
+  };
+  if (await isExecutionRetrySchemaReady()) {
+    // An explicit owner requeue is not an automatic retry and must be eligible
+    // immediately.
+    patch.retry_after_at = null;
+  }
   const queued = await transitionTask({
     userId: input.userId,
     taskId: input.taskId,
     to: 'queued',
-    patch: {
-      queue_position: position,
-      queued_at: new Date().toISOString(),
-      blocked_reason: null,
-    },
+    patch,
     event: {
       type: 'task.queued',
       message: `Task queued for attempt ${task.attemptCount + 1}. ${input.reason}`.trim(),

@@ -176,6 +176,8 @@ export async function dispatchTaskToActions(input: {
    * that saw that exact revision can renew it. Omit for a first dispatch.
    */
   expectedRequestedAt?: string | null;
+  /** Explicit owner retry intentionally bypasses the automatic backoff. */
+  ignoreRetryBackoff?: boolean;
 }): Promise<ActionsDispatchResult> {
   if (await isQueuePaused()) {
     return skipped(
@@ -204,6 +206,20 @@ export async function dispatchTaskToActions(input: {
       'This task is explicitly assigned to the manual Codespace reserve and was not dispatched to Actions.',
       409,
       task.id
+    );
+  }
+
+  // Bounded automatic execution retry: the task is queued but not eligible
+  // until its backoff expires. The claim RPC enforces the same guard, so this
+  // check only avoids launching a workflow that is guaranteed to lose.
+  const retryAt = task.retryAfterAt ? Date.parse(task.retryAfterAt) : Number.NaN;
+  if (!input.ignoreRetryBackoff && Number.isFinite(retryAt) && retryAt > Date.now()) {
+    return skipped(
+      task.id,
+      'RETRY_BACKOFF',
+      `The task is waiting for its bounded retry backoff until ${task.retryAfterAt}.`,
+      task.repository,
+      { retryAt: task.retryAfterAt }
     );
   }
 
@@ -702,7 +718,11 @@ export async function retryActionsDispatch(input: {
     }
   }
 
-  return dispatchTaskToActions({ taskId: task.id, source: input.source });
+  return dispatchTaskToActions({
+    taskId: task.id,
+    source: input.source,
+    ignoreRetryBackoff: true,
+  });
 }
 
 /**
@@ -852,8 +872,16 @@ export async function dispatchNextQueuedTask(input: {
   }
 
   let sawIneligible = false;
+  let sawRetryBackoff = false;
   for (const task of tasks) {
     if (task.assignedExecutor === 'codespace') continue;
+    // A task in its bounded retry backoff is not eligible yet. Skip it instead
+    // of blocking a later task that is already due.
+    const retryAt = task.retryAfterAt ? Date.parse(task.retryAfterAt) : Number.NaN;
+    if (Number.isFinite(retryAt) && retryAt > Date.now()) {
+      sawRetryBackoff = true;
+      continue;
+    }
     try {
       if (task.actionsDispatchRequestedAt) {
         const recovered = await recoverDispatchMarker(task, input.source);
@@ -881,6 +909,16 @@ export async function dispatchNextQueuedTask(input: {
       null,
       'PROMOTED_NOT_DISPATCHED',
       `${promoted} approved task(s) were queued but none could be dispatched in this pass.`,
+      null,
+      { promoted }
+    );
+  }
+
+  if (sawRetryBackoff) {
+    return skipped(
+      null,
+      'RETRY_BACKOFF',
+      'Queued task(s) are waiting for their bounded automatic-retry backoff.',
       null,
       { promoted }
     );

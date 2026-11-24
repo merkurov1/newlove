@@ -145,6 +145,7 @@ type TaskStageKey =
   | 'running'
   | 'blocked'
   | 'failed'
+  | 'manual_review'
   | 'landed'
   | 'released'
   | 'finalizing'
@@ -158,6 +159,7 @@ const STAGE_LABELS: Record<TaskStageKey, string> = {
   running: 'running',
   blocked: 'blocked',
   failed: 'failed',
+  manual_review: 'manual review',
   landed: 'landed in main',
   released: 'released to production',
   finalizing: 'finalizing',
@@ -180,6 +182,9 @@ function taskStage(
       break;
     case 'blocked':
       key = 'blocked';
+      break;
+    case 'manual_review':
+      key = 'manual_review';
       break;
     case 'failed':
     case 'rejected':
@@ -904,7 +909,9 @@ export default function DevWorkbench({
   const attentionTasks = useMemo(
     () =>
       allTasks
-        .filter((task) => ['blocked', 'failed', 'rejected', 'review'].includes(task.status))
+        .filter((task) =>
+          ['blocked', 'failed', 'manual_review', 'rejected', 'review'].includes(task.status)
+        )
         .slice(0, 8),
     [allTasks]
   );
@@ -1659,6 +1666,7 @@ export default function DevWorkbench({
             'running',
             'blocked',
             'failed',
+            'manual_review',
             'landed',
             'released',
           ] as TaskStageKey[]
@@ -1687,7 +1695,7 @@ export default function DevWorkbench({
                 </span>
               </div>
               <div className="pw-wb-actions">
-                {['failed', 'rejected'].includes(task.status) && (
+                {['failed', 'manual_review', 'rejected'].includes(task.status) && (
                   <button
                     type="button"
                     className="pw-wb-button is-primary"
@@ -1834,7 +1842,7 @@ export default function DevWorkbench({
               <ArrowDown size={14} /> Queue task
             </button>
           )}
-          {['failed', 'rejected', 'cancelled'].includes(selectedTask.status) && (
+          {['failed', 'manual_review', 'rejected', 'cancelled'].includes(selectedTask.status) && (
             <button
               type="button"
               className="pw-wb-button is-primary"
@@ -1853,7 +1861,7 @@ export default function DevWorkbench({
               Edit
             </button>
           )}
-          {['failed', 'rejected', 'cancelled', 'verified', 'archived'].includes(
+          {['failed', 'manual_review', 'rejected', 'cancelled', 'verified', 'archived'].includes(
             selectedTask.status
           ) && (
             <button
@@ -2299,7 +2307,9 @@ export default function DevWorkbench({
                 <p className="pw-wb-empty">Попыток нет — задание было отменено до исполнения.</p>
               )}
               <div className="pw-wb-actions">
-                {['failed', 'rejected', 'cancelled'].includes(entry.task.status) && (
+                {['failed', 'manual_review', 'rejected', 'cancelled'].includes(
+                  entry.task.status
+                ) && (
                   <button
                     type="button"
                     className="pw-wb-button is-primary"
@@ -2308,7 +2318,9 @@ export default function DevWorkbench({
                     <RotateCcw size={14} /> Retry as new attempt
                   </button>
                 )}
-                {['verified', 'rejected', 'failed', 'cancelled'].includes(entry.task.status) && (
+                {['verified', 'rejected', 'failed', 'manual_review', 'cancelled'].includes(
+                  entry.task.status
+                ) && (
                   <button
                     type="button"
                     className="pw-wb-button is-quiet"

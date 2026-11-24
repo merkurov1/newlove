@@ -16,6 +16,7 @@ jest.mock('../store', () => ({
   getTaskRow: jest.fn(),
   getTaskRowUnscoped: jest.fn(),
   getWorker: jest.fn(),
+  isExecutionRetrySchemaReady: jest.fn(async () => true),
   isUuid: jest.fn(),
   leaseExpiryIso: jest.fn(),
   listAttempts: jest.fn(),
@@ -29,6 +30,7 @@ jest.mock('../store', () => ({
     confidence: 'low',
   })),
   setQueueOptOut: jest.fn(),
+  settleBatchForTask: jest.fn(),
   touchWorkerHeartbeat: jest.fn(),
   transitionTask: jest.fn(),
 }));
@@ -46,12 +48,15 @@ jest.mock('../prompt', () => ({ buildExecutionPrompt: jest.fn() }));
 jest.mock('../evidence', () => ({ collectAttemptEvidence: jest.fn() }));
 jest.mock('../github', () => ({
   createPullRequestForAttempt: jest.fn(),
+  findPullRequestForBranch: jest.fn(),
   getPullRequestStatus: jest.fn(),
   getVercelDeploymentStatus: jest.fn(),
+  mergeBranchInto: jest.fn(),
   mergeVerifiedPullRequest: jest.fn(),
 }));
 
 import * as store from '../store';
+import * as github from '../github';
 import {
   attemptExecutor,
   claimTaskForWorker,
@@ -177,6 +182,7 @@ describe('failed execution', () => {
     asMock(store.patchTask).mockResolvedValue({ ...task, status: 'failed' });
     asMock(store.clearWorkerAttempt).mockResolvedValue(undefined);
     asMock(store.appendEvent).mockResolvedValue(undefined);
+    asMock(store.isExecutionRetrySchemaReady).mockResolvedValue(true);
   });
 
   it('records a terminal failure and frees the worker slot', async () => {
@@ -205,8 +211,9 @@ describe('failed execution', () => {
     );
   });
 
-  it('resumes a retry from the partial commit preserved by the worker', async () => {
+  it('schedules a bounded retry and resumes from the preserved partial commit', async () => {
     const preserved = 'c'.repeat(40);
+    const before = Date.now();
     await failAttempt({
       workerId: attempt.workerId,
       attemptId: attempt.id,
@@ -216,9 +223,92 @@ describe('failed execution', () => {
       headSha: preserved,
     });
 
+    const patch = asMock(store.patchTask).mock.calls[0][1] as {
+      status: string;
+      base_commit: string;
+      retry_after_at: string;
+    };
+    expect(patch.status).toBe('queued');
+    expect(patch.base_commit).toBe(preserved);
+    const retryAt = Date.parse(patch.retry_after_at);
+    expect(retryAt).toBeGreaterThanOrEqual(before + 55_000);
+    expect(retryAt).toBeLessThanOrEqual(before + 65_000);
+    expect(store.appendEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'task.retry_scheduled' })
+    );
+  });
+
+  it('does not retry a permanent failure automatically', async () => {
+    await failAttempt({
+      workerId: attempt.workerId,
+      attemptId: attempt.id,
+      errorCode: 'COMMIT_SIGNING_FAILED',
+      errorMessage: 'The runner cannot sign commits.',
+      headSha: 'd'.repeat(40),
+    });
+
     expect(store.patchTask).toHaveBeenCalledWith(
       task.id,
-      expect.objectContaining({ status: 'failed', base_commit: preserved })
+      expect.objectContaining({ status: 'failed' })
+    );
+    expect(store.patchTask).not.toHaveBeenCalledWith(
+      task.id,
+      expect.objectContaining({ status: 'queued' })
+    );
+    expect(store.appendEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'task.retry_scheduled' })
+    );
+  });
+
+  it('hands a task to manual review after the bounded retry budget is spent', async () => {
+    asMock(store.getAttempt).mockResolvedValue({ ...attempt, attemptNumber: 3 });
+
+    await failAttempt({
+      workerId: attempt.workerId,
+      attemptId: attempt.id,
+      errorCode: 'OPENCODE_FAILED',
+      errorMessage: 'OpenCode exited with code 1.',
+      headSha: 'e'.repeat(40),
+    });
+
+    expect(store.patchTask).toHaveBeenCalledWith(
+      task.id,
+      expect.objectContaining({
+        status: 'manual_review',
+        retry_after_at: null,
+        base_commit: 'e'.repeat(40),
+      })
+    );
+    expect(store.patchTask).not.toHaveBeenCalledWith(
+      task.id,
+      expect.objectContaining({ status: 'queued' })
+    );
+    expect(store.appendEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'task.manual_review' })
+    );
+  });
+
+  it('degrades to a terminal failure when the retry migration is not applied', async () => {
+    asMock(store.isExecutionRetrySchemaReady).mockResolvedValue(false);
+
+    await failAttempt({
+      workerId: attempt.workerId,
+      attemptId: attempt.id,
+      errorCode: 'OPENCODE_FAILED',
+      errorMessage: 'OpenCode exited with code 1.',
+      headSha: 'f'.repeat(40),
+    });
+
+    expect(store.patchTask).toHaveBeenCalledWith(
+      task.id,
+      expect.objectContaining({ status: 'failed' })
+    );
+    expect(store.patchTask).not.toHaveBeenCalledWith(
+      task.id,
+      expect.objectContaining({ status: 'queued' })
+    );
+    expect(store.appendEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'task.retry_unavailable' })
     );
   });
 
@@ -287,6 +377,133 @@ describe('failed execution', () => {
   });
 });
 
+describe('authoritative pull request lifecycle', () => {
+  const headSha = 'a'.repeat(40);
+  const branch = 'pierrot/dev/task/1';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    asMock(store.expectedBranch).mockReturnValue(branch);
+    asMock(store.getAttempt).mockResolvedValue({
+      ...attempt,
+      status: 'running',
+      branch,
+      headSha,
+      changedFiles: ['app/temple/page.tsx'],
+      warnings: [],
+      verification: {},
+    });
+    asMock(store.patchAttempt).mockImplementation(async (_id: string, patch: object) => ({
+      ...attempt,
+      status: 'completed',
+      branch,
+      headSha,
+      changedFiles: ['app/temple/page.tsx'],
+      warnings: [],
+      ...patch,
+    }));
+    asMock(store.clearWorkerAttempt).mockResolvedValue(undefined);
+    asMock(store.settleBatchForTask).mockResolvedValue(undefined);
+    asMock(store.appendEvent).mockResolvedValue(undefined);
+    asMock(store.getSetting).mockResolvedValue({});
+    asMock(github.mergeBranchInto).mockResolvedValue({
+      merged: true,
+      sha: 'd'.repeat(40),
+      message: '',
+    });
+  });
+
+  function taskWithPr(pullRequests: string[]) {
+    return {
+      ...task,
+      status: 'in_progress' as const,
+      repository: 'merkurov1/newlove',
+      title: 'Temple work',
+      baseRef: 'main',
+      acceptanceCriteria: ['temple renders'],
+      pullRequests,
+      resultNotes: '',
+      resultCommit: null,
+      verificationStatus: null,
+      verificationNotes: '',
+      priority: 1,
+    };
+  }
+
+  it('updates an existing open PR instead of creating a duplicate', async () => {
+    const prUrl = 'https://github.com/merkurov1/newlove/pull/106';
+    asMock(store.getTaskRowUnscoped).mockResolvedValue(taskWithPr([prUrl]));
+    asMock(github.getPullRequestStatus).mockResolvedValue({
+      number: 106,
+      url: prUrl,
+      state: 'open',
+      merged: false,
+      mergeable: true,
+      mergeableState: 'clean',
+      headSha: 'b'.repeat(40),
+      headBranch: 'pierrot/dev/task/0',
+      baseBranch: 'main',
+      baseSha: 'c'.repeat(40),
+      mergeCommitSha: null,
+      mergedAt: null,
+      createdAt: null,
+      updatedAt: null,
+    });
+
+    await completeAttempt(attempt.workerId, attempt.id, {
+      exitCode: 0,
+      headSha,
+      changedFiles: ['app/temple/page.tsx'],
+      summary: 'Temple updated',
+    });
+
+    expect(github.createPullRequestForAttempt).not.toHaveBeenCalled();
+    expect(github.mergeBranchInto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repository: 'merkurov1/newlove',
+        base: 'pierrot/dev/task/0',
+        head: branch,
+      })
+    );
+    const taskPatch = asMock(store.patchTask).mock.calls.find(([, patch]) =>
+      Array.isArray((patch as { pull_requests?: unknown }).pull_requests)
+    )?.[1] as { pull_requests: string[] } | undefined;
+    expect(taskPatch?.pull_requests).toEqual([prUrl]);
+    expect(store.patchAttempt).toHaveBeenCalledWith(
+      attempt.id,
+      expect.objectContaining({
+        pr_number: 106,
+        pr_url: prUrl,
+        verification: expect.objectContaining({
+          pullRequest: expect.objectContaining({
+            number: 106,
+            headRef: 'pierrot/dev/task/0',
+            baseRef: 'main',
+          }),
+        }),
+      })
+    );
+  });
+
+  it('does not create a second PR while existing PR state is unreadable', async () => {
+    const prUrl = 'https://github.com/merkurov1/newlove/pull/107';
+    asMock(store.getTaskRowUnscoped).mockResolvedValue(taskWithPr([prUrl]));
+    asMock(github.getPullRequestStatus).mockRejectedValue(new Error('GitHub unavailable'));
+    asMock(github.findPullRequestForBranch).mockResolvedValue(null);
+
+    await completeAttempt(attempt.workerId, attempt.id, {
+      exitCode: 0,
+      headSha,
+      changedFiles: ['app/temple/page.tsx'],
+      summary: 'Temple updated',
+    });
+
+    expect(github.createPullRequestForAttempt).not.toHaveBeenCalled();
+    const events = asMock(store.appendEvent).mock.calls.map(([event]) => event.type);
+    expect(events).toContain('pull_request.duplicate_suppressed');
+  });
+});
+
 describe('retry queueing', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -294,6 +511,7 @@ describe('retry queueing', () => {
     asMock(store.getActiveAttempt).mockResolvedValue(null);
     asMock(store.nextQueuePosition).mockResolvedValue(4);
     asMock(store.transitionTask).mockResolvedValue({ ...task, status: 'queued' });
+    asMock(store.isExecutionRetrySchemaReady).mockResolvedValue(true);
   });
 
   it('uses the schema-compatible not_run value instead of null', async () => {

@@ -11,7 +11,6 @@ import {
   ArrowRight,
   RefreshCw,
   Sparkles,
-  Terminal,
 } from 'lucide-react';
 
 import { useAuth } from '@/components/AuthContext';
@@ -56,34 +55,37 @@ type CastTheme = {
  * modal uses the same type scale and geometry inside the dark ritual shell.
  */
 const CAST_THEME: Record<CastVariant, CastTheme> = {
+  // Temple daylight palette: warm canvas #f8f3ec, ink #241f1c, muted #786c63
+  // and the Sanctuary's soft gold #a98046. The protocol chrome (amber/stone
+  // terminal styling) is deliberately not used on the public landing screen.
   page: {
-    page: 'bg-[#FAF8F5] text-stone-900',
-    title: 'text-amber-800/80',
-    ambientCore: 'bg-amber-200/40',
+    page: 'bg-[#f8f3ec] text-[#241f1c]',
+    title: 'text-[#a98046]',
+    ambientCore: 'bg-[#f3e2d0]/50',
     ambientWash:
-      'bg-[radial-gradient(circle_at_50%_35%,rgba(160,120,60,0.12),transparent_48%)]',
+      'bg-[radial-gradient(circle_at_50%_20%,rgba(191,45,45,0.10),transparent_55%)]',
     panel:
-      'border-stone-300/80 bg-white/80 text-stone-900 shadow-[0_24px_80px_rgba(70,55,35,0.10)] backdrop-blur-xl',
+      'border-[rgba(76,58,47,0.16)] bg-[#fffdf9]/85 text-[#241f1c] shadow-[0_24px_80px_rgba(70,55,35,0.10)] backdrop-blur-xl',
     panelSoft:
-      'border-stone-300/70 bg-white/65 text-stone-900 shadow-sm backdrop-blur-xl',
-    heading: 'text-stone-900',
-    body: 'text-stone-700',
-    muted: 'text-stone-500',
-    faint: 'text-stone-400',
-    accent: 'text-amber-700',
-    accentSoft: 'text-amber-800/80',
-    divider: 'border-stone-300/80',
+      'border-[rgba(76,58,47,0.14)] bg-[#fffdf9]/65 text-[#241f1c] shadow-sm backdrop-blur-xl',
+    heading: 'text-[#241f1c]',
+    body: 'text-[#4a403a]',
+    muted: 'text-[#786c63]',
+    faint: 'text-[#a2958a]',
+    accent: 'text-[#a98046]',
+    accentSoft: 'text-[#a98046]',
+    divider: 'border-[rgba(76,58,47,0.16)]',
     input:
-      'border-stone-300 bg-white/80 text-stone-900 placeholder:text-stone-400 focus:border-amber-600 focus:bg-white',
+      'border-[rgba(76,58,47,0.2)] bg-white/80 text-[#241f1c] placeholder:text-[#a2958a] focus:border-[#a98046] focus:bg-white',
     primaryButton:
-      'border-amber-700/35 bg-amber-100/70 text-stone-900 hover:border-amber-700/60 hover:bg-amber-100 disabled:opacity-30',
+      'border-[#a98046]/45 bg-[#a98046]/15 text-[#241f1c] hover:border-[#a98046]/70 hover:bg-[#a98046]/20 disabled:opacity-30',
     secondaryButton:
-      'border-stone-300 bg-white/80 text-stone-700 hover:border-amber-600/50 hover:bg-white',
+      'border-[rgba(76,58,47,0.2)] bg-white/80 text-[#4a403a] hover:border-[#a98046]/50 hover:bg-white',
     choiceButton:
-      'border-stone-300 bg-white/80 text-stone-900 hover:border-amber-700/60 hover:bg-white',
-    choiceMeta: 'text-amber-700/70',
-    analysis: 'text-stone-700',
-    cursor: 'bg-amber-600 text-stone-50',
+      'border-[rgba(76,58,47,0.18)] bg-white/80 text-[#241f1c] hover:border-[#a98046]/60 hover:bg-white',
+    choiceMeta: 'text-[#a98046]',
+    analysis: 'text-[#4a403a]',
+    cursor: 'bg-[#a98046] text-[#fffdf9]',
     errorText: 'text-red-600',
     stampSurface: 'bg-white/70',
   },
@@ -365,6 +367,10 @@ export default function CastClient({
 
   const [draftReady, setDraftReady] =
     useState(false);
+
+  // The standalone landing owns the page h1; the intercepted ritual modal must
+  // not add a competing page-level heading inside the Temple document.
+  const LanguageHeading = isModal ? 'h2' : 'h1';
 
   // Restore once, then keep the draft in sync. Modal switching must not erase
   // answers or a finished analysis.
@@ -843,15 +849,8 @@ export default function CastClient({
 
       {!isModal && <TempleTopBar backTo="temple" />}
 
-      {!isModal && (
-        <h1
-          className={`relative z-10 mx-auto mt-24 max-w-4xl px-6 font-serif text-xs uppercase tracking-[0.3em] sm:mt-28 ${ui.title}`}
-        >
-          The Cast — Psychological Protocol
-        </h1>
-      )}
-
-      {/* LANGUAGE SELECT — minimal first screen, no card pair */}
+      {/* LANGUAGE SELECT — the standalone /cast landing is only the language
+          choice. No protocol preamble, cards or unrelated landing content. */}
       {currentStep === 0 && (
         <div className="cast-stage relative z-10 flex flex-1 items-center justify-center px-6 pb-16 pt-12 sm:pt-16">
           <section
@@ -860,18 +859,17 @@ export default function CastClient({
             data-testid="cast-language-select"
           >
             <span
-              className={`inline-flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] ${ui.accentSoft}`}
+              className={`font-serif text-[11px] uppercase tracking-[0.32em] ${ui.accentSoft}`}
             >
-              <Terminal size={12} aria-hidden="true" />
               The Digital Temple
             </span>
 
-            <h2
+            <LanguageHeading
               id="cast-language-title"
               className={`mt-4 font-serif text-3xl tracking-[0.02em] sm:text-4xl ${ui.heading}`}
             >
               Choose your language
-            </h2>
+            </LanguageHeading>
 
             <div
               aria-hidden="true"

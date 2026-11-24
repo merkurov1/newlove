@@ -15,13 +15,25 @@ import {
 } from './store';
 import {
   commitUrl,
+  closePullRequest,
   getBranchHead,
   getCommitChecks,
+  getCommitRange,
+  getLatestProductionDeployment,
   getPullRequestFiles,
   getPullRequestStatus,
+  mergeBranchInto,
   mergeVerifiedPullRequest,
   type GitHubChecksSummary,
 } from './github';
+import {
+  canRetirePullRequest,
+  parsePullRequestNumber,
+  selectAuthoritativePullRequest,
+  verifyProductionDeployment,
+} from './delivery';
+
+export { parsePullRequestNumber };
 import {
   blockingLandingRisks,
   canMarkLanded,
@@ -32,6 +44,7 @@ import {
 import { readAttemptCost, summarizeCosts } from './costs';
 import { notifyDevOwner } from './notifications';
 import type {
+  DevDeploymentStatus,
   DevFinalizationCheckStatus,
   DevFinalizationPullRequest,
   DevFinalizationReport,
@@ -45,6 +58,8 @@ assertServerOnly('lib/pierrot/dev/workbench/finalization');
 const STATE_KEY = 'finalization:state';
 const DEFAULT_BRANCH = 'main';
 const MAX_PULL_REQUESTS = 20;
+/** At most two non-destructive branch synchronisations per finalization. */
+const MAX_BRANCH_SYNCS = 2;
 
 type FinalizationState = {
   id: string;
@@ -78,6 +93,11 @@ type FinalizationState = {
   lastTrigger: string;
   blockedCode: string | null;
   retryAt: string | null;
+  deployment: DevDeploymentStatus | null;
+  productionVerified: boolean;
+  deliveryStage: DevFinalizationReport['deliveryStage'];
+  syncAttempts: number;
+  syncedHeads: string[];
 };
 
 export type QueueDrainState = {
@@ -106,13 +126,6 @@ function ciTimeoutMs(): number {
 
 function text(value: unknown, limit = 1600): string {
   return typeof value === 'string' ? value.trim().slice(0, limit) : '';
-}
-
-export function parsePullRequestNumber(url: string): number | null {
-  const match = String(url || '').match(/\/pull\/(\d+)(?:\b|$)/);
-  if (!match) return null;
-  const number = Number(match[1]);
-  return Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
 export function isQueueDrained(queue: {
@@ -151,21 +164,39 @@ type PrCandidate = {
   task: DevWorkbenchTask;
   url: string;
   number: number | null;
+  attemptNumber: number | null;
 };
 
-export function collectPrCandidates(tasks: DevWorkbenchTask[]): PrCandidate[] {
+type AttemptPrLink = {
+  attemptNumber: number;
+  prUrl?: string | null;
+};
+
+export function collectPrCandidates(
+  tasks: DevWorkbenchTask[],
+  attemptsByTask: Map<string, AttemptPrLink[]> = new Map()
+): PrCandidate[] {
   const seen = new Set<string>();
   const candidates: PrCandidate[] = [];
   for (const task of tasks) {
-    for (const url of task.pullRequests) {
-      if (!url || seen.has(url)) continue;
+    const attemptByUrl = new Map<string, number>();
+    for (const attempt of attemptsByTask.get(task.id) || []) {
+      if (!attempt.prUrl) continue;
+      const current = attemptByUrl.get(attempt.prUrl);
+      if (current === undefined || attempt.attemptNumber > current) {
+        attemptByUrl.set(attempt.prUrl, attempt.attemptNumber);
+      }
+    }
+    task.pullRequests.forEach((url, index) => {
+      if (!url || seen.has(url)) return;
       seen.add(url);
       candidates.push({
         task,
         url,
         number: parsePullRequestNumber(url),
+        attemptNumber: attemptByUrl.get(url) ?? index + 1,
       });
-    }
+    });
   }
   return candidates.slice(0, MAX_PULL_REQUESTS);
 }
@@ -248,6 +279,20 @@ function stateFromSetting(value: unknown): FinalizationState | null {
     lastTrigger: text(record.lastTrigger, 80) || 'unknown',
     blockedCode: text(record.blockedCode, 80) || null,
     retryAt: text(record.retryAt, 40) || null,
+    deployment:
+      record.deployment && typeof record.deployment === 'object'
+        ? (record.deployment as DevDeploymentStatus)
+        : null,
+    productionVerified: record.productionVerified === true,
+    deliveryStage:
+      (text(record.deliveryStage, 40) as DevFinalizationReport['deliveryStage']) || null,
+    syncAttempts:
+      typeof record.syncAttempts === 'number' && Number.isFinite(record.syncAttempts)
+        ? Math.min(Math.max(0, Math.trunc(record.syncAttempts)), MAX_BRANCH_SYNCS)
+        : 0,
+    syncedHeads: Array.isArray(record.syncedHeads)
+      ? record.syncedHeads.filter((item): item is string => typeof item === 'string').slice(-20)
+      : [],
   };
 }
 
@@ -283,6 +328,9 @@ function reportFromState(state: FinalizationState): DevFinalizationReport {
     attempts: state.attempts,
     blockedCode: state.blockedCode,
     retryAt: state.retryAt,
+    deployment: state.deployment,
+    productionVerified: state.productionVerified,
+    deliveryStage: state.deliveryStage,
   };
 }
 
@@ -421,6 +469,11 @@ function newState(input: {
     lastTrigger: input.trigger,
     blockedCode: null,
     retryAt: null,
+    deployment: null,
+    productionVerified: false,
+    deliveryStage: 'collecting',
+    syncAttempts: 0,
+    syncedHeads: [],
   };
 }
 
@@ -514,7 +567,7 @@ async function verifyTaskIntegrated(input: {
     await patchTask(task.id, {
       status: 'verified',
       verification_status: 'passed',
-      verification_notes: `Landed in ${DEFAULT_BRANCH} by automatic landing (${input.prUrl}) at head ${headSha?.slice(0, 7) || 'unknown'} and merge ${(input.mergeSha || input.sha || '').slice(0, 7) || 'unknown'} with passing real CI${ciSummary ? `: ${ciSummary}` : ''}. Production deployment is tracked separately.`,
+      verification_notes: `Landed in ${DEFAULT_BRANCH} by automatic landing (${input.prUrl}) at head ${headSha?.slice(0, 7) || 'unknown'} and merge ${(input.mergeSha || input.sha || '').slice(0, 7) || 'unknown'} with passing real CI${ciSummary ? `: ${ciSummary}` : ''}. Production deployment was observed at that commit; no task was marked verified before this check.`,
       verified_at: nowIso(),
       result_commit: input.mergeSha || input.sha || task.resultCommit,
     }).catch(() => null);
@@ -550,6 +603,7 @@ async function block(
 ): Promise<FinalizationState> {
   state.stage = 'blocked';
   state.failureStage = input.stage;
+  state.deliveryStage = 'blocked';
   state.blockedReason = text(input.reason, 2000) || 'Finalization was blocked.';
   state.blockedCode = input.code ?? null;
   state.retryAt = input.retryAt ?? null;
@@ -602,6 +656,7 @@ async function fail(
 ): Promise<FinalizationState> {
   state.stage = 'failed';
   state.failureStage = input.stage;
+  state.deliveryStage = 'failed';
   state.blockedReason = text(input.reason, 2000) || 'Finalization failed.';
   state.blockedCode = input.code ?? null;
   state.retryAt = null;
@@ -625,6 +680,7 @@ function basePullRequest(input: {
   task: DevWorkbenchTask;
   url: string;
   number: number | null;
+  attemptNumber?: number | null;
 }): DevFinalizationPullRequest {
   return {
     taskId: input.task.id,
@@ -636,6 +692,12 @@ function basePullRequest(input: {
     mergeable: null,
     mergeableState: null,
     headSha: input.task.resultCommit,
+    headRef: null,
+    baseRef: input.task.baseRef || DEFAULT_BRANCH,
+    baseSha: null,
+    attemptNumber: input.attemptNumber ?? null,
+    superseded: false,
+    supersededBy: null,
     ciStatus: 'unknown',
     ciDetail: 'PR status has not been read.',
     checks: [],
@@ -654,6 +716,7 @@ async function refreshPullRequest(input: {
   task: DevWorkbenchTask;
   url: string;
   number: number | null;
+  attemptNumber?: number | null;
 }): Promise<DevFinalizationPullRequest> {
   const base = basePullRequest(input);
   if (!input.number) {
@@ -725,6 +788,9 @@ async function refreshPullRequest(input: {
     mergeable: status.mergeable,
     mergeableState: status.mergeableState,
     headSha: status.headSha,
+    headRef: status.headBranch,
+    baseRef: status.baseBranch,
+    baseSha: status.baseSha,
     ciStatus: checks.status,
     ciDetail:
       blocking.length > 0
@@ -746,6 +812,227 @@ function ciFromChecks(checks: GitHubChecksSummary): {
   checks: DevFinalizationPullRequest['checks'];
 } {
   return { status: checks.status, detail: checks.detail, checks: checks.checks };
+}
+
+/** Convert a refreshed PR into the pure delivery-rule shape. */
+function deliveryRef(pr: DevFinalizationPullRequest) {
+  return {
+    taskId: pr.taskId,
+    url: pr.url,
+    number: pr.number,
+    state: pr.state,
+    merged: pr.merged,
+    attemptNumber: pr.attemptNumber ?? null,
+    headSha: pr.headSha,
+    headRef: pr.headRef ?? null,
+    baseRef: pr.baseRef ?? null,
+    updatedAt: null,
+  };
+}
+
+/**
+ * Synchronise an open PR branch with its base branch using a real merge (never
+ * a force push). The attempt is bounded per finalization so a persistent
+ * conflict cannot loop forever.
+ */
+async function synchronizePullRequestBranch(input: {
+  state: FinalizationState;
+  pr: DevFinalizationPullRequest;
+  repository: string;
+}): Promise<{
+  attempted: boolean;
+  synced: boolean;
+  reason: string;
+  code: string | null;
+  failure: GitHubFailure | null;
+}> {
+  const { state, pr, repository } = input;
+  if (!pr.headRef || !pr.baseRef) {
+    return {
+      attempted: false,
+      synced: false,
+      reason: 'The PR head or base branch is unknown, so it cannot be synchronised automatically.',
+      code: 'PR_BRANCH_UNKNOWN',
+      failure: null,
+    };
+  }
+  if (state.syncAttempts >= MAX_BRANCH_SYNCS) {
+    return {
+      attempted: false,
+      synced: false,
+      reason: `Branch synchronisation was already attempted ${state.syncAttempts} time(s); no further automatic merge will be tried.`,
+      code: 'BRANCH_SYNC_BUDGET_EXHAUSTED',
+      failure: null,
+    };
+  }
+  const key = `${pr.number}:${pr.headRef}:${pr.baseRef}:${pr.headSha || ''}:${pr.baseSha || ''}`;
+  if (state.syncedHeads.includes(key)) {
+    return {
+      attempted: false,
+      synced: false,
+      reason: 'This exact PR head was already synchronised with its base in an earlier pass.',
+      code: 'BRANCH_SYNC_ALREADY_ATTEMPTED',
+      failure: null,
+    };
+  }
+
+  state.syncAttempts += 1;
+  state.syncedHeads = [...state.syncedHeads, key].slice(-20);
+  try {
+    const merged = await mergeBranchInto({
+      repository,
+      base: pr.headRef,
+      head: pr.baseRef,
+      commitMessage: `Merge ${pr.baseRef} into ${pr.headRef} to synchronise PR #${pr.number} with the current base.`,
+    });
+    await appendEvent({
+      type: 'integration.branch_synced',
+      message: `PR #${pr.number} branch ${pr.headRef} was synchronised with ${pr.baseRef}${
+        merged.sha ? ` at ${merged.sha.slice(0, 7)}` : ''
+      }. CI must run again on the new head.`,
+      payload: {
+        finalizationId: state.id,
+        prNumber: pr.number,
+        headRef: pr.headRef,
+        baseRef: pr.baseRef,
+        headSha: pr.headSha,
+        mergeSha: merged.sha,
+        syncAttempt: state.syncAttempts,
+      },
+      dedupeKey: `branch-synced:${pr.number}:${merged.sha || state.syncAttempts}`,
+    }).catch(() => {});
+    return {
+      attempted: true,
+      synced: true,
+      reason: `PR #${pr.number} was synchronised with ${pr.baseRef}. Waiting for CI on the new head.`,
+      code: null,
+      failure: null,
+    };
+  } catch (error) {
+    const failure = describeGitHubFailure(error);
+    await appendEvent({
+      type: 'integration.branch_sync_failed',
+      level: 'warn',
+      message: formatGitHubBlockReason(`Could not synchronise PR #${pr.number}`, failure),
+      payload: {
+        finalizationId: state.id,
+        prNumber: pr.number,
+        headRef: pr.headRef,
+        baseRef: pr.baseRef,
+        code: failure.code,
+        endpoint: failure.endpoint,
+        requiredPermission: failure.permission,
+      },
+      dedupeKey: `branch-sync-failed:${pr.number}:${failure.code}`,
+    }).catch(() => {});
+    return { attempted: true, synced: false, reason: failure.message, code: failure.code, failure };
+  }
+}
+
+/**
+ * Keep exactly one authoritative PR per task. An obsolete open PR is closed
+ * only after its work is provably redundant (older attempt supersession or a
+ * GitHub compare proving the authoritative head contains it). Anything
+ * ambiguous blocks instead of merging or silently discarding work.
+ */
+async function reconcileAuthoritativePullRequests(input: {
+  state: FinalizationState;
+  prs: DevFinalizationPullRequest[];
+  repository: string;
+}): Promise<{
+  authoritative: DevFinalizationPullRequest[];
+  obsolete: DevFinalizationPullRequest[];
+  blocked: { reason: string; code: string; failure: GitHubFailure | null } | null;
+}> {
+  const { state, prs, repository } = input;
+  const byTask = new Map<string, DevFinalizationPullRequest[]>();
+  for (const pr of prs) {
+    const list = byTask.get(pr.taskId) || [];
+    list.push(pr);
+    byTask.set(pr.taskId, list);
+  }
+
+  const authoritative: DevFinalizationPullRequest[] = [];
+  const obsolete: DevFinalizationPullRequest[] = [];
+
+  for (const [taskId, taskPrs] of byTask) {
+    const selection = selectAuthoritativePullRequest(taskPrs.map(deliveryRef));
+    const chosen = selection.authoritative
+      ? taskPrs.find((pr) => pr.url === selection.authoritative!.url) || null
+      : null;
+    if (!chosen) continue;
+    authoritative.push({ ...chosen, superseded: false, supersededBy: null });
+
+    for (const ref of selection.obsolete) {
+      const pr = taskPrs.find((item) => item.url === ref.url);
+      if (!pr) continue;
+      let containsObsoleteHead: boolean | null = null;
+      const isOpen = String(pr.state || '').toLowerCase() === 'open' && !pr.merged;
+      if (isOpen && pr.headSha && chosen.headSha && pr.url !== chosen.url) {
+        try {
+          const range = await getCommitRange(repository, pr.headSha, chosen.headSha);
+          containsObsoleteHead = range.behindBy === 0;
+        } catch {
+          containsObsoleteHead = null;
+        }
+      }
+      const canRetire = canRetirePullRequest({
+        obsolete: ref,
+        authoritative: deliveryRef(chosen),
+        containsObsoleteHead,
+      });
+      if (!canRetire) {
+        return {
+          authoritative,
+          obsolete,
+          blocked: {
+            reason: `Task ${taskId} has more than one open PR and PR #${pr.number} cannot be proven redundant to the authoritative PR #${chosen.number}. No merge or close was attempted; an explicit review is required.`,
+            code: 'AMBIGUOUS_DUPLICATE_PR',
+            failure: null,
+          },
+        };
+      }
+      if (isOpen && pr.number) {
+        try {
+          await closePullRequest({
+            repository,
+            number: pr.number,
+            comment: `Superseded by #${chosen.number}, which is the single authoritative PR for this task. Its work is preserved by the newer attempt; no commits were deleted.`,
+          });
+          await appendEvent({
+            type: 'integration.superseded_pr_closed',
+            message: `Obsolete PR #${pr.number} was closed after redundancy was proved; authoritative PR #${chosen.number} was kept.`,
+            payload: {
+              finalizationId: state.id,
+              taskId,
+              closedPr: pr.number,
+              authoritativePr: chosen.number,
+            },
+            dedupeKey: `superseded-pr-closed:${taskId}:${pr.number}:${chosen.number}`,
+          }).catch(() => {});
+        } catch (error) {
+          const failure = describeGitHubFailure(error);
+          return {
+            authoritative,
+            obsolete,
+            blocked: {
+              reason: formatGitHubBlockReason(`Could not close obsolete PR #${pr.number}`, failure),
+              code: failure.code,
+              failure,
+            },
+          };
+        }
+      }
+      obsolete.push({
+        ...pr,
+        superseded: true,
+        supersededBy: chosen.url,
+        reason: pr.merged ? 'ALREADY_MERGED' : 'SUPERSEDED_BY_AUTHORITATIVE_PR',
+      });
+    }
+  }
+
+  return { authoritative, obsolete, blocked: null };
 }
 
 async function advanceLocked(input: {
@@ -791,7 +1078,11 @@ async function advanceLocked(input: {
     return state ? reportFromState(state) : null;
   }
 
-  const candidates = collectPrCandidates(tasks);
+  const attemptsByTask = await listAttemptsForTasks(
+    tasks.map((task) => task.id),
+    10
+  ).catch(() => new Map());
+  const candidates = collectPrCandidates(tasks, attemptsByTask);
   const integrated = integratedKeys(state);
   const pending = candidates.filter((candidate) => !integrated.has(candidate.url));
 
@@ -855,6 +1146,8 @@ async function advanceLocked(input: {
     empty.completedAt = nowIso();
     empty.ciStatus = 'none';
     empty.ciDetail = 'No completed task with a pull request needed integration.';
+    empty.deliveryStage = null;
+    empty.productionVerified = false;
     await saveState(empty);
     await appendEvent({
       type: 'queue.drained',
@@ -906,12 +1199,18 @@ async function advanceLocked(input: {
   }
 
   if (state.stage === 'collecting') {
-    const refreshed: DevFinalizationPullRequest[] = [];
-    for (const candidate of pending) {
+    state.deliveryStage = 'collecting';
+    const refreshedAll: DevFinalizationPullRequest[] = [];
+    for (const candidate of candidates) {
       const existing = state.prs.find((pr) => pr.url === candidate.url);
-      if (existing?.integrated) {
-        refreshed.push(existing);
-        continue;
+      if (integrated.has(candidate.url)) {
+        if (existing) {
+          refreshedAll.push(existing);
+          continue;
+        }
+        // The ledger remembers this PR but the bounded report no longer has
+        // its row (for example after a restart). Re-read it from GitHub instead
+        // of silently dropping the only evidence for the task.
       }
       let pr: DevFinalizationPullRequest;
       try {
@@ -926,8 +1225,8 @@ async function advanceLocked(input: {
           errorCode: failure.code,
           errorDetail: failure.message,
         };
-        refreshed.push(pr);
-        state.prs = refreshed;
+        refreshedAll.push(pr);
+        state.prs = refreshedAll;
         return reportFromState(
           await block(state, {
             stage: 'collecting',
@@ -938,36 +1237,46 @@ async function advanceLocked(input: {
           })
         );
       }
-      refreshed.push(pr);
-      if (pr.integrated) {
-        recordIntegrated(state, {
-          key: pr.url,
-          prNumber: pr.number,
-          url: pr.url,
-          sha: pr.integrationSha,
-          headSha: pr.headSha,
-          ciStatus: pr.ciStatus,
-        });
-        const attemptId = await verifyTaskIntegrated({
-          taskId: pr.taskId,
-          sha: pr.integrationSha,
-          prUrl: pr.url,
-          state,
-          headSha: pr.headSha,
-          ciStatus: pr.ciStatus,
-          mergeSha: pr.mergeSha || pr.integrationSha,
-          checks: pr.checks,
-        });
-        const record = state.integrated.find((item) => item.key === pr.url);
-        if (record && attemptId) record.attemptId = attemptId;
-      }
+      refreshedAll.push(pr);
     }
-    state.prs = refreshed;
+
+    const reconciled = await reconcileAuthoritativePullRequests({
+      state,
+      prs: refreshedAll,
+      repository: candidates[0]?.task.repository || 'newlove',
+    });
+    state.prs = [...reconciled.authoritative, ...reconciled.obsolete];
+    if (reconciled.blocked) {
+      return reportFromState(
+        await block(state, {
+          stage: 'collecting',
+          reason: reconciled.blocked.reason,
+          code: reconciled.blocked.code,
+          retryAt: reconciled.blocked.failure?.retryAt ?? null,
+          level: reconciled.blocked.failure?.permissionDenied ? 'error' : 'warn',
+        })
+      );
+    }
+
+    const refreshed = reconciled.authoritative;
+    for (const pr of refreshed) {
+      if (!pr.integrated) continue;
+      recordIntegrated(state, {
+        key: pr.url,
+        prNumber: pr.number,
+        url: pr.url,
+        sha: pr.integrationSha,
+        headSha: pr.headSha,
+        ciStatus: pr.ciStatus,
+      });
+    }
     if (refreshed.length === 0) {
       state.stage = 'completed';
       state.completedAt = nowIso();
       state.ciStatus = 'none';
       state.ciDetail = 'No pull requests needed integration.';
+      state.deliveryStage = null;
+      state.productionVerified = false;
       await saveState(state);
       return reportFromState(state);
     }
@@ -1008,20 +1317,84 @@ async function advanceLocked(input: {
       (pr) => !pr.integrated && pr.state === 'open' && pr.mergeable === false
     );
     if (conflict) {
+      const sync = await synchronizePullRequestBranch({
+        state,
+        pr: conflict,
+        repository: conflict.taskId
+          ? candidates.find((candidate) => candidate.task.id === conflict.taskId)?.task
+              .repository ||
+            candidates[0]?.task.repository ||
+            'newlove'
+          : 'newlove',
+      });
+      if (sync.synced) {
+        state.waitingSince = null;
+        state.deliveryStage = 'checks_pending';
+        await saveState(state);
+        return reportFromState(state);
+      }
       return reportFromState(
         await block(state, {
           stage: 'collecting',
-          reason: `PR #${conflict.number} has a merge conflict (${conflict.mergeableState || 'dirty'}). An architectural decision is required; no merge was attempted.`,
+          reason:
+            sync.failure && sync.code
+              ? formatGitHubBlockReason(
+                  `PR #${conflict.number} could not be synchronised with ${conflict.baseRef || DEFAULT_BRANCH}`,
+                  sync.failure
+                )
+              : `PR #${conflict.number} has a merge conflict (${conflict.mergeableState || 'dirty'}). ${sync.reason} No merge was attempted.`,
+          code: sync.code || 'MERGE_CONFLICT',
+          retryAt: sync.failure?.retryAt ?? null,
+          level: sync.failure?.permissionDenied ? 'error' : 'warn',
         })
       );
     }
+
+    // The PR head must actually contain the newest completed attempt. A retry
+    // whose update failed (for example a branch conflict) would otherwise let
+    // the finalizer merge an older PR and silently lose the retry's work.
+    for (const pr of refreshed) {
+      if (pr.integrated || !pr.headSha) continue;
+      const latest = (attemptsByTask.get(pr.taskId) || []).find(
+        (attempt: { status?: string; headSha?: string | null }) =>
+          attempt.status === 'completed' && attempt.headSha
+      );
+      if (!latest?.headSha || latest.headSha.toLowerCase() === pr.headSha.toLowerCase()) continue;
+      const repository =
+        candidates.find((candidate) => candidate.task.id === pr.taskId)?.task.repository ||
+        candidates[0]?.task.repository ||
+        'newlove';
+      let containsLatest = false;
+      try {
+        const range = await getCommitRange(repository, latest.headSha, pr.headSha);
+        containsLatest = range.behindBy === 0;
+      } catch {
+        containsLatest = false;
+      }
+      if (!containsLatest) {
+        return reportFromState(
+          await block(state, {
+            stage: 'collecting',
+            reason: `PR #${pr.number} head ${pr.headSha.slice(
+              0,
+              7
+            )} does not contain the newest completed attempt ${latest.headSha.slice(
+              0,
+              7
+            )}. The retry update did not reach the authoritative PR, so no merge was attempted and the attempt work is preserved.`,
+            code: 'PR_DOES_NOT_CONTAIN_LATEST_ATTEMPT',
+          })
+        );
+      }
+    }
     state.stage = 'integrating';
+    state.deliveryStage = 'merge_pending';
     state.waitingSince = null;
     await saveState(state);
   }
 
   if (state.stage === 'integrating') {
-    const open = state.prs.filter((pr) => !pr.integrated);
+    const open = state.prs.filter((pr) => !pr.integrated && !pr.superseded);
     if (open.length === 0) {
       state.stage = 'verifying';
       state.waitingSince = nowIso();
@@ -1058,10 +1431,35 @@ async function advanceLocked(input: {
         }
         const notMergeable = open.find((pr) => pr.state === 'open' && pr.mergeable === false);
         if (notMergeable) {
+          const sync = await synchronizePullRequestBranch({
+            state,
+            pr: notMergeable,
+            repository:
+              tasks.find((task) => task.id === notMergeable.taskId)?.repository ||
+              tasks[0]?.repository ||
+              'newlove',
+          });
+          if (sync.synced) {
+            state.waitingSince = null;
+            state.deliveryStage = 'checks_pending';
+            await saveState(state);
+            return reportFromState(state);
+          }
           return reportFromState(
             await block(state, {
               stage: 'integrating',
-              reason: `PR #${notMergeable.number} is not mergeable (${notMergeable.mergeableState || 'dirty'}). No merge was attempted.`,
+              reason:
+                sync.failure && sync.code
+                  ? formatGitHubBlockReason(
+                      `PR #${notMergeable.number} could not be synchronised with ${
+                        notMergeable.baseRef || DEFAULT_BRANCH
+                      }`,
+                      sync.failure
+                    )
+                  : `PR #${notMergeable.number} is not mergeable (${notMergeable.mergeableState || 'dirty'}). ${sync.reason} No merge was attempted.`,
+              code: sync.code || 'MERGE_CONFLICT',
+              retryAt: sync.failure?.retryAt ?? null,
+              level: sync.failure?.permissionDenied ? 'error' : 'warn',
             })
           );
         }
@@ -1144,18 +1542,9 @@ async function advanceLocked(input: {
             merged: true,
           };
         }
-        const attemptId = await verifyTaskIntegrated({
-          taskId: refreshed.taskId,
-          sha: refreshed.integrationSha || refreshed.headSha,
-          prUrl: refreshed.url,
-          state,
-          headSha: refreshed.headSha,
-          ciStatus: refreshed.ciStatus,
-          mergeSha: refreshed.mergeSha || refreshed.integrationSha || refreshed.headSha,
-          checks: refreshed.checks,
-        });
-        const record = state.integrated.find((item) => item.key === refreshed.url);
-        if (record && attemptId) record.attemptId = attemptId;
+        // Do not verify yet: main CI and production are checked in the
+        // verifying stage. The merge itself is recorded exactly once.
+        state.deliveryStage = 'checks_pending';
         await saveState(state);
         return reportFromState(state);
       }
@@ -1250,18 +1639,8 @@ async function advanceLocked(input: {
             errorDetail: null,
           };
         }
-        const attemptId = await verifyTaskIntegrated({
-          taskId: refreshed.taskId,
-          sha,
-          prUrl: refreshed.url,
-          state,
-          headSha: expectedHead,
-          ciStatus: refreshed.ciStatus,
-          mergeSha: sha,
-          checks: refreshed.checks,
-        });
-        const record = state.integrated.find((item) => item.key === refreshed.url);
-        if (record && attemptId) record.attemptId = attemptId;
+        const attemptId =
+          state.integrated.find((item) => item.key === refreshed.url)?.attemptId || null;
         await appendEvent({
           type: 'integration.completed',
           message: `PR #${refreshed.number} integrated into ${DEFAULT_BRANCH} at ${sha.slice(0, 7)}.`,
@@ -1301,6 +1680,7 @@ async function advanceLocked(input: {
           url: commitUrl(mergeTask.repository, sha),
         }).catch(() => {});
         state.stage = 'integrating';
+        state.deliveryStage = 'checks_pending';
         state.waitingSince = null;
         await saveState(state);
         return reportFromState(state);
@@ -1365,6 +1745,7 @@ async function advanceLocked(input: {
         })
       );
     }
+    const previousCiStatus = state.ciStatus;
     state.ciStatus = checks.status;
     state.ciDetail = checks.detail;
     state.checks = checks.checks;
@@ -1389,6 +1770,82 @@ async function advanceLocked(input: {
         })
       );
     }
+    // Main CI is settled; start one fresh bounded window for production.
+    if (previousCiStatus !== 'passed') state.waitingSince = nowIso();
+
+    // A merged PR is not delivered until the exact landed commit is observed
+    // live in production. Deployment is read-only; this process never deploys.
+    const landedShas = [
+      mainSha,
+      ...state.integrated.map((item) => item.sha),
+      ...state.prs.map((pr) => pr.mergeSha || pr.integrationSha),
+    ].filter((sha): sha is string => typeof sha === 'string' && sha.length > 0);
+    let deployment: DevDeploymentStatus | null = null;
+    try {
+      deployment = await getLatestProductionDeployment(repository);
+    } catch (error) {
+      const failure = describeGitHubFailure(error);
+      return reportFromState(
+        await block(state, {
+          stage: 'verifying',
+          reason: `Could not read the production deployment: ${failure.message}. A merged PR is not marked verified without deployment evidence.`,
+          code: 'PRODUCTION_VERIFICATION_UNAVAILABLE',
+        })
+      );
+    }
+    state.deployment = deployment;
+    const production = verifyProductionDeployment({ deployment, landedShas });
+    state.productionVerified = production.status === 'verified';
+    if (production.status === 'pending') {
+      state.deliveryStage = 'deployment_pending';
+      state.waitingSince = state.waitingSince || nowIso();
+      if (Date.now() - new Date(state.waitingSince).getTime() > ciTimeoutMs()) {
+        return reportFromState(
+          await fail(state, {
+            stage: 'verifying',
+            reason: `Production did not serve the landed commit within the finalization timeout. ${production.reason}`,
+          })
+        );
+      }
+      await saveState(state);
+      return reportFromState(state);
+    }
+    if (production.status === 'failed') {
+      return reportFromState(
+        await fail(state, {
+          stage: 'verifying',
+          reason: `Production deployment failed: ${production.reason}`,
+        })
+      );
+    }
+    if (production.status !== 'verified') {
+      return reportFromState(
+        await block(state, {
+          stage: 'verifying',
+          reason: `Production verification is ${production.status}: ${production.reason} Required: read the production deployment (VERCEL_TOKEN plus VERCEL_PROJECT_ID when auto-detection fails) and confirm the exact landed commit is ready. No task was marked verified.`,
+          code: 'PRODUCTION_VERIFICATION_UNAVAILABLE',
+        })
+      );
+    }
+    state.deliveryStage = 'production_verified';
+
+    // Only now, with merged PR + green main CI + verified production, mark the
+    // integrated tasks verified. Every task keeps its exact PR/head/merge SHA.
+    for (const record of state.integrated) {
+      const pr = state.prs.find((item) => item.url === record.key);
+      const attemptId = await verifyTaskIntegrated({
+        taskId: pr?.taskId || '',
+        sha: record.sha,
+        prUrl: record.url,
+        state,
+        headSha: record.headSha || pr?.headSha || null,
+        ciStatus: pr?.ciStatus || 'passed',
+        mergeSha: record.sha,
+        checks: pr?.checks || [],
+      });
+      if (record && attemptId) record.attemptId = attemptId;
+    }
+
     state.stage = 'completed';
     state.completedAt = nowIso();
     state.cost = await finalizationCost([...new Set(state.prs.map((pr) => pr.taskId))]);
@@ -1396,6 +1853,19 @@ async function advanceLocked(input: {
       state.batchId || (await getBatchIdForTask(state.prs[0]?.taskId || '').catch(() => null));
     if (state.batchId) await maybeCompleteBatch(state.batchId).catch(() => false);
     await saveState(state);
+    await appendEvent({
+      type: 'production.verified',
+      message: `Production is ${deployment?.state || 'unknown'} at ${
+        deployment?.commitSha?.slice(0, 7) || 'unknown'
+      }, matching the landed ${DEFAULT_BRANCH} commit ${mainSha.slice(0, 7)}.`,
+      payload: {
+        finalizationId: state.id,
+        deployment,
+        mainSha,
+        integrated: state.integrated.length,
+      },
+      dedupeKey: `production-verified:${state.id}:${deployment?.commitSha || mainSha}`,
+    }).catch(() => {});
     await appendEvent({
       type: 'integration.completed',
       message: `Final ${DEFAULT_BRANCH} CI ${checks.status}; ${state.integrated.length} PR(s) integrated.`,
@@ -1503,6 +1973,9 @@ export async function retryFinalization(
     state.retryAt = null;
     state.waitingSince = null;
     state.attempts = 0;
+    state.syncAttempts = 0;
+    state.productionVerified = false;
+    state.deliveryStage = 'collecting';
     await saveState(state);
   }
   return advanceFinalization({ trigger, force: true });

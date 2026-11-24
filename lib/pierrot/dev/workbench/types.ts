@@ -13,6 +13,7 @@ export type DevWorkbenchTaskStatus =
   | 'review'
   | 'verified'
   | 'failed'
+  | 'manual_review'
   | 'rejected'
   | 'cancelled'
   | 'archived'
@@ -57,6 +58,12 @@ export type DevWorkbenchTask = {
   blockedReason: string | null;
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
+  /**
+   * Earliest time the task may be claimed again after an automatic retry.
+   * Null means immediately eligible. Set only by the bounded execution retry
+   * policy and cleared by a claim or an explicit owner retry.
+   */
+  retryAfterAt?: string | null;
   /**
    * Durable routing decision for the queued task. `actions` means only an
    * ephemeral GitHub Actions runner may claim it; `codespace` is the explicit
@@ -699,6 +706,15 @@ export type DevFinalizationPullRequest = {
   mergeable: boolean | null;
   mergeableState: string | null;
   headSha: string | null;
+  /** Exact head and base branch/SHA observed on GitHub. */
+  headRef?: string | null;
+  baseRef?: string | null;
+  baseSha?: string | null;
+  /** Immutable attempt that produced this PR head, when it can be mapped. */
+  attemptNumber?: number | null;
+  /** True when another PR is the single authoritative PR for this task. */
+  superseded?: boolean;
+  supersededBy?: string | null;
   ciStatus: DevFinalizationCheckStatus;
   ciDetail: string;
   checks: DevFinalizationCheck[];
@@ -748,6 +764,19 @@ export type DevFinalizationReport = {
   attempts: number;
   blockedCode?: string | null;
   retryAt?: string | null;
+  /** Read-only production deployment evidence for this finalization pass. */
+  deployment?: DevDeploymentStatus | null;
+  /** True only when production is serving the exact landed commit. */
+  productionVerified?: boolean;
+  deliveryStage?:
+    | 'collecting'
+    | 'checks_pending'
+    | 'merge_pending'
+    | 'deployment_pending'
+    | 'production_verified'
+    | 'blocked'
+    | 'failed'
+    | null;
 };
 
 export type DevReleaseCommit = {
@@ -769,9 +798,10 @@ export type DevReleaseCheck = {
 };
 
 /**
- * Read-only production release readiness. A verified/merged task is "landed in
- * main"; it is only "released" when its commit is the production deployment
- * commit. Merge and deploy are never conflated.
+ * Read-only production release readiness. A verified task is already required
+ * to be both merged into `main`, green on real CI and observed in the exact
+ * production deployment. This report still shows the live deployment and any
+ * later commits separately so merge and deploy are never conflated.
  */
 export type DevReleaseOverview = {
   repository: string;

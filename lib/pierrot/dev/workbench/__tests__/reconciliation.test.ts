@@ -11,6 +11,7 @@ jest.mock('../github', () => ({
   getPullRequestStatus: jest.fn(),
   getCommitChecks: jest.fn(),
   getPullRequestFiles: jest.fn(async () => []),
+  getLatestProductionDeployment: jest.fn(),
 }));
 
 import * as store from '../store';
@@ -76,6 +77,14 @@ beforeEach(() => {
   asMock(github.getPullRequestStatus).mockResolvedValue(status());
   asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
   asMock(github.getPullRequestFiles).mockResolvedValue([]);
+  asMock(github.getLatestProductionDeployment).mockResolvedValue({
+    state: 'ready',
+    url: 'https://www.merkurov.love',
+    target: 'production',
+    commitSha: MERGE,
+    checkedAt: new Date().toISOString(),
+    reason: null,
+  });
 });
 
 describe('legacy review reconciliation', () => {
@@ -122,6 +131,25 @@ describe('legacy review reconciliation', () => {
 
     const report = await reconcileLegacyReviewRows({ apply: true });
     expect(report.rows[0]).toMatchObject({ state: 'ci_missing', toStatus: 'review' });
+    expect(report.landed).toBe(0);
+    expect(store.patchTask).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      expect.objectContaining({ status: 'review', verification_status: 'reconciled_not_landed' })
+    );
+  });
+
+  it('keeps a merged row in review when production does not serve the landed commit', async () => {
+    asMock(github.getLatestProductionDeployment).mockResolvedValue({
+      state: 'ready',
+      url: 'https://www.merkurov.love',
+      target: 'production',
+      commitSha: 'c'.repeat(40),
+      checkedAt: new Date().toISOString(),
+      reason: null,
+    });
+
+    const report = await reconcileLegacyReviewRows({ apply: true });
+    expect(report.rows[0]).toMatchObject({ state: 'production_missing', toStatus: 'review' });
     expect(report.landed).toBe(0);
     expect(store.patchTask).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
