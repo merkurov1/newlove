@@ -5,6 +5,8 @@ import { describe, expect, it } from '@jest/globals';
 import { normalizeFlowItem } from '../content';
 import {
   composeTelegramPublication,
+  ensureTelegramLinks,
+  formatTelegramMessage,
   splitTelegramHtml,
   takeTelegramHtmlHead,
   telegramFlowLabel,
@@ -53,7 +55,7 @@ describe('Telegram composition — text', () => {
       lang: 'en',
       source_url: SOURCE_URL,
     });
-    expect(result.fullHtml).toContain('Read on Flow');
+    expect(result.fullHtml).toContain(`>${telegramFlowLabel('en')}</a>`);
     expect(result.fullHtml).toContain('>Source</a>');
     expect(result.fullHtml).not.toContain('Источник');
   });
@@ -207,6 +209,187 @@ describe('Telegram composition — links', () => {
   });
 });
 
+describe('Telegram composition — compact link row', () => {
+  const VIDEO_URL = 'https://www.youtube.com/watch?v=abc123def45';
+  const SECOND_URL = 'https://example.com/second-article';
+
+  it('appends a single link directly after the body text without a blank line', () => {
+    const result = composition({
+      body_md: 'Публикация.',
+      source_url: SOURCE_URL,
+      metadata: {},
+    });
+
+    expect(result.fullHtml).toContain(
+      `Публикация. <a href="${SOURCE_URL}">Источник</a> | <a href="${FLOW_URL}">Flow</a>`
+    );
+    expect(result.fullHtml).not.toContain('Читать в Flow');
+    expect(result.fullHtml).not.toMatch(/Публикация\.\s*\n+\s*<a /);
+  });
+
+  it('formats the compatibility helper and legacy text formatter compactly', async () => {
+    const expected =
+      `Текст. <a href="${SOURCE_URL}">Источник</a> | ` +
+      `<a href="${FLOW_URL}">Flow</a>`;
+
+    expect(ensureTelegramLinks('Текст.', FLOW_URL, SOURCE_URL, 'ru')).toBe(expected);
+    await expect(
+      formatTelegramMessage(null, 'Текст.', FLOW_URL, 'ru', SOURCE_URL)
+    ).resolves.toBe(expected);
+  });
+
+  it('keeps multiple links in one inline row separated by the exact separator', () => {
+    const result = composition({
+      body_md: 'Текст поста.',
+      metadata: {
+        link_previews: [
+          {
+            url: SOURCE_URL,
+            title: 'Source title',
+            site_name: 'Example',
+          },
+          {
+            url: SECOND_URL,
+            title: 'Second article',
+            site_name: 'Example Two',
+          },
+        ],
+      },
+    });
+
+    expect(result.fullHtml).toContain(
+      `Текст поста. <a href="${SECOND_URL}">Second article</a> | ` +
+        `<a href="${SOURCE_URL}">Источник</a> | <a href="${FLOW_URL}">Flow</a>`
+    );
+    expect(result.fullHtml.match(/ \| /g)).toHaveLength(2);
+    expect(result.fullHtml).not.toMatch(/\|\s*\n/);
+  });
+
+  it('starts the message with the link row when there is no body text', () => {
+    const result = composition({
+      body_md: '',
+      type: 'note',
+      source_url: SOURCE_URL,
+      metadata: {},
+    });
+
+    expect(result.titleVisible).toBe(true);
+    expect(result.fullHtml.startsWith(`<a href="${SOURCE_URL}">Источник</a>`)).toBe(
+      true
+    );
+    expect(result.fullHtml).toContain('<b>Заголовок</b>');
+    expect(result.fullHtml).toContain(
+      `<a href="${SOURCE_URL}">Источник</a> | <a href="${FLOW_URL}">Flow</a>`
+    );
+  });
+
+  it('uses the same compact row for video attachments and keeps the source URL', () => {
+    const result = composition({
+      type: 'video',
+      body_md: 'Видео.',
+      metadata: {
+        videos: [
+          {
+            url: VIDEO_URL,
+            title: 'Clip',
+            thumbnail: 'https://i.ytimg.com/vi/abc123def45/hqdefault.jpg',
+          },
+        ],
+      },
+    });
+
+    expect(result.fullHtml).toContain(
+      `Видео. <a href="${VIDEO_URL}">Видео</a> | <a href="${FLOW_URL}">Flow</a>`
+    );
+    expect(hrefCount(result.fullHtml, VIDEO_URL)).toBe(1);
+    expect(hrefCount(result.fullHtml, FLOW_URL)).toBe(1);
+  });
+
+  it('uses the compact row in image and article captions too', () => {
+    const result = composition({
+      type: 'article',
+      title: 'Статья с обложкой',
+      body_md: 'Короткий текст статьи.',
+      source_url: SOURCE_URL,
+      metadata: { image: 'https://cdn.example.com/cover.jpg' },
+    });
+
+    expect(result.mediaCaption).toContain(
+      `Короткий текст статьи. <a href="${SOURCE_URL}">Источник</a> | ` +
+        `<a href="${FLOW_URL}">Flow</a>`
+    );
+    expect(result.messageParts[0].kind).toBe('media');
+  });
+
+  it('does not repeat a destination that is both an attachment and a source', () => {
+    const result = composition({
+      type: 'video',
+      body_md: 'Видео.',
+      source_url: VIDEO_URL,
+      metadata: {
+        videos: [
+          {
+            url: VIDEO_URL,
+            title: 'Clip',
+            thumbnail: 'https://i.ytimg.com/vi/abc123def45/hqdefault.jpg',
+          },
+        ],
+      },
+    });
+
+    expect(hrefCount(result.fullHtml, VIDEO_URL)).toBe(1);
+    expect(result.fullHtml).toContain(
+      `<a href="${VIDEO_URL}">Видео</a> | <a href="${FLOW_URL}">Flow</a>`
+    );
+  });
+
+  it('escapes link labels and hrefs while preserving anchor entities', () => {
+    const result = composition({
+      body_md: 'A & B <tag>',
+      source_url: SOURCE_URL,
+      metadata: {
+        link_previews: [
+          { url: SOURCE_URL, title: 'Source', site_name: 'Example' },
+          {
+            url: 'https://example.com/a?x=1&y=2',
+            title: '<unsafe> & label',
+            site_name: 'Example',
+          },
+        ],
+      },
+    });
+
+    expect(result.fullHtml).toContain('A &amp; B &lt;tag&gt;');
+    expect(result.fullHtml).toContain(
+      '<a href="https://example.com/a?x=1&amp;y=2">&lt;unsafe&gt; &amp; label</a>'
+    );
+    expect(result.fullHtml).not.toContain('<unsafe>');
+    expect(result.validation.ok).toBe(true);
+  });
+
+  it('keeps anchors balanced when a long body is split into messages', () => {
+    const result = composition({
+      title: 'Длинный текст',
+      body_md: `${'Длинный текст про память и сети. '.repeat(300)}КОНЕЦ`,
+      source_url: SOURCE_URL,
+      metadata: {},
+    });
+
+    const joined = result.textOnlyParts.join(' ');
+    expect(result.textOnlyParts.length).toBeGreaterThan(1);
+    expect(joined).toContain('КОНЕЦ');
+    expect(joined).toContain(SOURCE_URL);
+    expect(joined).toContain(FLOW_URL);
+    expect(
+      result.textOnlyParts.every(
+        (part) =>
+          (part.match(/<a\b/g) ?? []).length === (part.match(/<\/a>/g) ?? []).length
+      )
+    ).toBe(true);
+    expect(result.textOnlyParts.every((part) => part.length <= 3900)).toBe(true);
+  });
+});
+
 describe('Telegram composition — media', () => {
   it('uses a single photograph as the lead element with a caption', () => {
     const result = composition({
@@ -354,10 +537,12 @@ describe('Telegram composition — validation', () => {
   it('uses the localized Flow and source labels', () => {
     const ru = composition({ source_url: SOURCE_URL, lang: 'ru' });
     const en = composition({ source_url: SOURCE_URL, lang: 'en' });
-    expect(ru.fullHtml).toContain('Читать в Flow');
+    expect(ru.fullHtml).toContain('>Flow</a>');
     expect(ru.fullHtml).toContain('Источник');
-    expect(en.fullHtml).toContain('Read on Flow');
+    expect(en.fullHtml).toContain('>Flow</a>');
     expect(en.fullHtml).toContain('Source');
+    expect(ru.fullHtml).not.toContain('Читать в Flow');
+    expect(en.fullHtml).not.toContain('Read on Flow');
     expect(telegramSourceLabel('en')).toBe('Source');
   });
 });
