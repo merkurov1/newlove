@@ -49,6 +49,30 @@ export function normalizeRoute(pathname: string): string {
   return pathname.replace(/\/$/, '') || '/';
 }
 
+/**
+ * Routes where the shared Temple ambient track (Drift of Glass) must keep
+ * playing across internal navigation. The audio element itself lives once in
+ * the root GlobalAudioProvider; this list only classifies routes.
+ */
+export const TEMPLE_AUDIO_ROUTES = [
+  '/heartandangel/world',
+  '/heartandangel/calm',
+  '/heartandangel/letitgo',
+  '/temple',
+  '/vigil',
+  '/absolution',
+  '/cast',
+  '/tribute',
+] as const;
+
+export function isTempleAudioRoute(pathname: string): boolean {
+  const normalized = normalizeRoute(pathname);
+
+  return TEMPLE_AUDIO_ROUTES.some(
+    (route) => normalized === normalizeRoute(route)
+  );
+}
+
 export function isRouteOrChild(pathname: string, route: string): boolean {
   const normalized = normalizeRoute(pathname);
   const target = normalizeRoute(route);

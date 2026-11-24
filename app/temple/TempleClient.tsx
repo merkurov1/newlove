@@ -28,6 +28,9 @@ import useIsTelegram from '@/components/useIsTelegram';
 import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
 import RitualLink from '@/components/temple/RitualLink';
 import { supabase } from '@/lib/supabase-browser';
+import { consumeLeftWithoutTrace } from '@/lib/temple/visitTrace';
+import { globalFlameRemainingMs } from '@/lib/vigil/flame';
+import { trackTributeSupportView } from '@/lib/tributes/analytics';
 
 const ASSETS = {
   heart:
@@ -102,6 +105,13 @@ function getEventVisuals(eventType: string) {
         icon: Sparkles,
         color: 'text-amber-300',
         label: 'Whisper'
+      };
+
+    case 'MODAL_OPEN':
+      return {
+        icon: Layers,
+        color: 'text-stone-300',
+        label: 'Trace'
       };
 
     default:
@@ -202,6 +212,7 @@ export default function TempleClient() {
   const [loaded, setLoaded] = useState(false);
   const [vigil, setVigil] = useState({ guardians: 0, lastLitAt: null as string | null });
   const [vigilNow, setVigilNow] = useState(() => Date.now());
+  const [leftWithoutTrace, setLeftWithoutTrace] = useState(false);
 
   const [stats, setStats] = useState({
     totalLogs: 0,
@@ -432,9 +443,23 @@ export default function TempleClient() {
     };
   }, [pathname]);
 
-  const vigilRemaining = vigil.lastLitAt
-    ? Math.max(0, 86_400_000 - (vigilNow - new Date(vigil.lastLitAt).getTime()))
-    : 0;
+  useEffect(() => {
+    trackTributeSupportView('temple_home');
+  }, []);
+
+  useEffect(() => {
+    if (pathname !== '/temple') return;
+
+    if (!consumeLeftWithoutTrace()) return;
+
+    setLeftWithoutTrace(true);
+
+    const timer = window.setTimeout(() => setLeftWithoutTrace(false), 8000);
+
+    return () => window.clearTimeout(timer);
+  }, [pathname]);
+
+  const vigilRemaining = globalFlameRemainingMs(vigil.lastLitAt, vigilNow);
   const vigilLabel = vigilRemaining > 0
     ? `${Math.floor(vigilRemaining / 3_600_000)}h ${Math.floor((vigilRemaining % 3_600_000) / 60_000)}m`
     : 'Flame extinguished';
@@ -550,11 +575,36 @@ export default function TempleClient() {
 
             <div className="mt-5 rounded-3xl border border-amber-400/20 bg-black/10 p-5 text-center backdrop-blur-md">
               <p className="font-serif text-lg">Support the Temple</p>
-              <p className="mt-1 text-xs opacity-70">Vigil contributes a spark. Tribute materially sustains the Temple.</p>
-              <div className="mt-4 flex justify-center gap-2">
-                {[5, 20, 100].map(amount => <RitualLink key={amount} href={`/tribute?amount=${amount}`} className="rounded-full border border-amber-400/30 px-4 py-2 font-mono text-xs">${amount}</RitualLink>)}
+              <p className="mt-1 text-xs opacity-70">
+                Vigil contributes a spark. Tribute materially sustains the Temple.
+              </p>
+              <RitualLink
+                href="/tribute"
+                className="mt-4 flex min-h-[48px] w-full items-center justify-center rounded-full border border-amber-300/50 bg-amber-300/15 px-5 font-serif text-xs uppercase tracking-[.18em] transition-all hover:bg-amber-300/25"
+              >
+                Support the Temple →
+              </RitualLink>
+              <div className="mt-3 flex justify-center gap-2">
+                {[5, 20, 100].map(amount => (
+                  <RitualLink
+                    key={amount}
+                    href={`/tribute?amount=${amount}`}
+                    className="min-h-[44px] rounded-full border border-amber-400/30 px-4 py-2 font-mono text-xs transition-colors hover:border-amber-300/60"
+                  >
+                    ${amount}
+                  </RitualLink>
+                ))}
               </div>
             </div>
+
+            {leftWithoutTrace && (
+              <p
+                className="mt-3 text-center font-mono text-[10px] uppercase tracking-[.18em] opacity-60"
+                role="status"
+              >
+                Left without a trace
+              </p>
+            )}
 
             {/* Temple utilities */}
             <div className="flex items-center justify-center gap-2 mt-3 w-full">

@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { usePathname } from 'next/navigation';
+import { isTempleAudioRoute } from '@/lib/temple/routes';
 
 const ASSETS = {
   ambientAudio: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Drift%20of%20Glass.mp3',
@@ -26,7 +27,7 @@ export function GlobalAudioProvider(props: React.PropsWithChildren<{}>) {
   const audioRef = React.useRef(null) as { current: HTMLAudioElement | null };
   const [isPlaying, setIsPlaying] = React.useState(false);
   const pathname = usePathname() || '';
-  const inHeartAndAngel = pathname === '/heartandangel/world' || pathname === '/temple' || pathname === '/vigil' || pathname === '/absolution' || pathname === '/tribute' || pathname === '/heartandangel/calm' || pathname === '/heartandangel/letitgo';
+  const inHeartAndAngel = isTempleAudioRoute(pathname);
 
   React.useEffect(() => {
     if (!inHeartAndAngel && audioRef.current && !audioRef.current.paused) {

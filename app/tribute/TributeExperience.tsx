@@ -16,6 +16,17 @@ import {
   isTributeTempleLogEvent,
   tributeSignalDonorName,
 } from '@/lib/tributes/realtime';
+import {
+  markTributeConfirmedOnce,
+  trackTributeAmountSelected,
+  trackTributeCheckoutCreated,
+  trackTributeCheckoutReturned,
+  trackTributePaymentAbandoned,
+  trackTributePaymentConfirmed,
+  trackTributePaymentFailed,
+  trackTributeSupportView,
+} from '@/lib/tributes/analytics';
+import { parseTributeReturn } from '@/lib/tributes/returnFlow';
 
 const HEART_VIDEO =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-5300087847065473569.mp4';
@@ -122,6 +133,13 @@ export default function TributeExperience() {
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(
     null
   );
+  const [checkoutFallbackUrl, setCheckoutFallbackUrl] = useState<string | null>(
+    null
+  );
+
+  const channelNameRef = useRef(
+    `tribute-live-${Math.random().toString(36).slice(2, 10)}`
+  );
 
   const pulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const donorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -130,10 +148,14 @@ export default function TributeExperience() {
   const lastFocusVerifyRef = useRef(0);
 
   useEffect(() => {
+    trackTributeSupportView('tribute_ritual');
+
     const preset = Number(new URLSearchParams(window.location.search).get('amount'));
+
     if (PRESETS.includes(preset)) {
       setAmount(preset);
       setIsCustom(false);
+      trackTributeAmountSelected(preset, true);
     }
   }, []);
 
@@ -267,6 +289,13 @@ export default function TributeExperience() {
           setPendingSessionId(null);
           writePendingSession(null);
           triggerNotification('success');
+
+          if (markTributeConfirmedOnce(sessionId)) {
+            trackTributePaymentConfirmed(
+              typeof payload.amount === 'number' ? payload.amount : null
+            );
+          }
+
           void fetchTotal();
 
           return;
@@ -282,6 +311,7 @@ export default function TributeExperience() {
 
           setPendingSessionId(null);
           writePendingSession(null);
+          trackTributePaymentAbandoned('checkout_cancelled');
 
           return;
         }
@@ -298,6 +328,7 @@ export default function TributeExperience() {
           setPendingSessionId(null);
           writePendingSession(null);
           triggerNotification('error');
+          trackTributePaymentFailed('verification_failed');
 
           return;
         }
@@ -324,6 +355,7 @@ export default function TributeExperience() {
 
         setPendingSessionId(sessionId);
         writePendingSession(sessionId);
+        trackTributePaymentFailed('verification_unreachable');
       }
     },
     [fetchTotal, triggerNotification]
@@ -333,7 +365,7 @@ export default function TributeExperience() {
     void fetchTotal();
 
     const channel = supabase
-      .channel('tribute-live')
+      .channel(channelNameRef.current)
       .on(
         'postgres_changes',
         {
@@ -384,11 +416,11 @@ export default function TributeExperience() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const params = new URLSearchParams(window.location.search);
-    const status = params.get('status');
-    const sessionId = params.get('session_id');
+    const parsedReturn = parseTributeReturn(window.location.search);
 
-    if (status === 'cancel') {
+    if (parsedReturn.kind === 'cancel') {
+      trackTributeCheckoutReturned('cancel');
+      trackTributePaymentAbandoned('return_cancel');
       setResult({
         state: 'cancelled',
         title: 'Checkout closed',
@@ -402,8 +434,10 @@ export default function TributeExperience() {
       return;
     }
 
-    if (status === 'success') {
-      if (!sessionId) {
+    if (parsedReturn.kind === 'success') {
+      trackTributeCheckoutReturned('success');
+
+      if (!parsedReturn.sessionId) {
         setResult({
           state: 'failed',
           title: 'Payment not confirmed',
@@ -414,7 +448,7 @@ export default function TributeExperience() {
         return;
       }
 
-      void verifySession(sessionId);
+      void verifySession(parsedReturn.sessionId);
 
       return;
     }
@@ -422,6 +456,7 @@ export default function TributeExperience() {
     const pending = readPendingSession();
 
     if (pending) {
+      trackTributeCheckoutReturned('pending');
       void verifySession(pending);
     }
   }, [verifySession]);
@@ -494,6 +529,11 @@ export default function TributeExperience() {
     setLoading(true);
     setErrorMsg(null);
     setResult(null);
+    setCheckoutFallbackUrl(null);
+
+    if (isCustom) {
+      trackTributeAmountSelected(submitAmount, false);
+    }
 
     try {
       const donorName =
@@ -547,15 +587,30 @@ export default function TributeExperience() {
         writePendingSession(data.sessionId);
       }
 
+      trackTributeCheckoutCreated(submitAmount);
+
       try {
         const tg = getTelegramWebApp();
 
         if (tg && typeof tg.openLink === 'function') {
           tg.openLink(data.url, { try_instant_view: false });
+        } else if (tg) {
+          // Embedded Telegram webviews can block wallet redirects. Keep the
+          // session alive and offer an explicit external-browser hand-off
+          // instead of losing the payment.
+          setCheckoutFallbackUrl(data.url);
+          setLoading(false);
+          return;
         } else {
           window.location.assign(data.url);
         }
       } catch {
+        if (getTelegramWebApp()) {
+          setCheckoutFallbackUrl(data.url);
+          setLoading(false);
+          return;
+        }
+
         window.location.assign(data.url);
       }
 
@@ -574,6 +629,7 @@ export default function TributeExperience() {
       );
       setLoading(false);
       triggerNotification('error');
+      trackTributePaymentFailed('checkout_create_failed');
     }
   };
 
@@ -630,7 +686,7 @@ export default function TributeExperience() {
 
       <div className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-tr from-amber-900/40 via-orange-950/20 to-transparent blur-[120px]" />
 
-      <TempleTopBar />
+      <TempleTopBar backTo="temple" />
 
       <section className="tribute-main relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-5 sm:px-8">
         <header className="mb-5 text-center sm:mb-6">
@@ -752,6 +808,7 @@ export default function TributeExperience() {
                     setIsCustom(false);
                     setErrorMsg(null);
                     triggerHaptic('light');
+                    trackTributeAmountSelected(value, true);
                   }}
                   className={`h-11 min-h-[44px] flex-1 rounded-full border px-3 font-mono text-xs tracking-wider transition-all active:scale-95 ${
                     active
@@ -830,6 +887,37 @@ export default function TributeExperience() {
               role="alert"
             >
               {errorMsg}
+            </div>
+          )}
+
+          {checkoutFallbackUrl && (
+            <div
+              className="mt-4 rounded-2xl border border-amber-300/25 bg-amber-950/20 p-4 text-center"
+              role="status"
+            >
+              <p className="font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-amber-100/90">
+                Telegram in-app browser cannot complete card or wallet
+                payment here. Your checkout is saved.
+              </p>
+
+              <a
+                href={checkoutFallbackUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-full border border-amber-300/40 bg-white/10 px-5 font-serif text-[10px] uppercase tracking-[0.16em] text-amber-50"
+              >
+                Open checkout in browser
+              </a>
+
+              {pendingSessionId && (
+                <button
+                  type="button"
+                  onClick={() => void verifySession(pendingSessionId)}
+                  className="mt-2 block w-full min-h-[44px] rounded-full border border-white/15 bg-white/5 px-4 font-mono text-[10px] uppercase tracking-[0.14em] text-stone-200"
+                >
+                  Check payment status
+                </button>
+              )}
             </div>
           )}
 

@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthContext';
 import TempleTopBar from './TempleTopBar';
+import { useRitualModalTimer } from './temple/useRitualModalTimer';
 import { logTempleEvent } from '@/lib/templeLogger';
 
 interface Props {
@@ -626,6 +627,8 @@ export default function HeartPhysics({
         : ''
     }${remainSecs}`;
   };
+
+  useRitualModalTimer(`⏳ ${formatTime(seconds)}`);
 
   return (
     <div

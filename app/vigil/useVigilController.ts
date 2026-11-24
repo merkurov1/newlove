@@ -1,0 +1,520 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { supabase } from '@/lib/supabase-browser';
+import usePrefersReducedMotion from '@/components/pierrot/usePrefersReducedMotion';
+import useTempleIdentity from '@/hooks/useTempleIdentity';
+import {
+  VIGIL_COOLDOWN_MS,
+  formatVigilCooldown,
+  vigilCooldownMessage,
+} from '@/lib/vigil/cooldown';
+import {
+  formatGlobalFlameRemaining,
+  globalFlameRemainingMs,
+} from '@/lib/vigil/flame';
+
+const FLAME_ID = 1;
+const CLOCK_REFRESH_MS = 30_000;
+
+export type VigilFlameData = {
+  id: number;
+  owner_name: string | null;
+  last_lit_at: string | null;
+  [key: string]: unknown;
+};
+
+type TempleLogRow = {
+  author: string | null;
+  message: string | null;
+  created_at: string;
+};
+
+export type VigilSparkPosition = {
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+};
+
+type VigilStatusResponse = {
+  authenticated?: boolean;
+  canSpark?: boolean;
+  remainingMs?: number;
+  remainingLabel?: string;
+  lastSparkAt?: string | null;
+};
+
+function channelName(): string {
+  return `vigil_live_sync_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Vigil controller: identity, server-authoritative cooldown, public flame
+ * state, timers, Realtime and the claim request. It owns no artwork, so the
+ * modal and the standalone route render exactly the same behaviour.
+ */
+export function useVigilController() {
+  const identity = useTempleIdentity();
+  const reduceMotion = usePrefersReducedMotion();
+
+  const angelRef = useRef<HTMLDivElement | null>(null);
+  const heartRef = useRef<HTMLDivElement | null>(null);
+  const cooldownEndsAtRef = useRef<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sparkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statusRetryRef = useRef(false);
+
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [flameData, setFlameData] = useState<VigilFlameData | null>(null);
+  const [guardians, setGuardians] = useState<string[]>([]);
+  const [isLighting, setIsLighting] = useState(false);
+  const [spark, setSpark] = useState<VigilSparkPosition | null>(null);
+  const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
+  const [cooldownRemainingMs, setCooldownRemainingMs] = useState<number | null>(
+    null
+  );
+
+  const userName = identity.displayName;
+  const identityIsLoading = identity.isLoading;
+  const identitySource = identity.source;
+  const refreshIdentity = identity.refresh;
+
+  const isOnCooldown =
+    cooldownRemainingMs !== null && cooldownRemainingMs > 0;
+  const cooldownLabel = isOnCooldown
+    ? formatVigilCooldown(cooldownRemainingMs)
+    : '';
+
+  const flameRemainingMs = useMemo(
+    () => globalFlameRemainingMs(flameData?.last_lit_at, nowMs),
+    [flameData?.last_lit_at, nowMs]
+  );
+  const flameLit = flameRemainingMs > 0;
+  const flameLabel = formatGlobalFlameRemaining(flameRemainingMs);
+
+  const applyCooldown = useCallback((remainingMs: number) => {
+    const safeRemaining = Number.isFinite(remainingMs)
+      ? Math.max(0, Math.min(VIGIL_COOLDOWN_MS, remainingMs))
+      : 0;
+
+    if (safeRemaining <= 0) {
+      cooldownEndsAtRef.current = null;
+      setCooldownRemainingMs(null);
+      return;
+    }
+
+    cooldownEndsAtRef.current = Date.now() + safeRemaining;
+    setCooldownRemainingMs(safeRemaining);
+  }, []);
+
+  const refreshGuardians = useCallback(async (): Promise<number> => {
+    try {
+      const yesterday = new Date(
+        Date.now() - 24 * 60 * 60 * 1000
+      ).toISOString();
+
+      const { data, error } = await supabase
+        .from('temple_log')
+        .select('author, message, created_at')
+        .in('event_type', ['vigil_spark', 'VIGIL_SPARK'])
+        .gt('created_at', yesterday)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) {
+        console.error('Vigil guardians error:', error);
+        return 0;
+      }
+
+      if (!data) return 0;
+
+      const rows = data as TempleLogRow[];
+      const names: string[] = [];
+
+      rows.forEach((row) => {
+        if (row.author?.trim()) {
+          names.push(row.author.trim());
+          return;
+        }
+
+        if (row.message?.trim()) {
+          const parts = row.message.trim().split(/\s+/);
+
+          if (parts[0]) names.push(parts[0].trim());
+        }
+      });
+
+      const unique = Array.from(new Set(names));
+
+      setGuardians(unique.slice(0, 8));
+
+      return unique.length;
+    } catch (error) {
+      console.error('Vigil guardians exception:', error);
+      return 0;
+    }
+  }, []);
+
+  const refreshData = useCallback(async () => {
+    try {
+      const { data: flame, error } = await supabase
+        .from('vigil_hearts')
+        .select('*')
+        .eq('id', FLAME_ID)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Vigil flame error:', error);
+      } else if (flame) {
+        setFlameData(flame as VigilFlameData);
+      }
+
+      await refreshGuardians();
+    } catch (error) {
+      console.error('Vigil refresh error:', error);
+    }
+  }, [refreshGuardians]);
+
+  const updateClock = useCallback(() => {
+    setNowMs(Date.now());
+
+    const endsAt = cooldownEndsAtRef.current;
+
+    if (!endsAt) return;
+
+    const remaining = endsAt - Date.now();
+
+    if (remaining <= 0) {
+      cooldownEndsAtRef.current = null;
+      setCooldownRemainingMs(null);
+      return;
+    }
+
+    setCooldownRemainingMs(remaining);
+  }, []);
+
+  useEffect(() => {
+    void refreshData();
+
+    const channel = supabase
+      .channel(channelName())
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'vigil_hearts' },
+        (payload) => {
+          const newRow = payload.new as Partial<VigilFlameData> | null;
+
+          if (newRow && newRow.id === FLAME_ID) {
+            setFlameData(newRow as VigilFlameData);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'temple_log' },
+        (payload) => {
+          const newRow = payload.new as { event_type?: string | null };
+
+          if (String(newRow?.event_type || '').toUpperCase() === 'VIGIL_SPARK') {
+            void refreshGuardians();
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.error('Vigil realtime channel error');
+        }
+      });
+
+    // One interval for both clocks: the public flame countdown and the private
+    // cooldown. It is never recreated by state changes, so opening/closing the
+    // modal cannot stack duplicates.
+    timerRef.current = setInterval(updateClock, CLOCK_REFRESH_MS);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') updateClock();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      supabase.removeChannel(channel);
+
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      if (sparkTimeoutRef.current) {
+        clearTimeout(sparkTimeoutRef.current);
+        sparkTimeoutRef.current = null;
+      }
+
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [refreshData, refreshGuardians, updateClock]);
+
+  // Ask the server for this identity's own cooldown. The public flame timer is
+  // never used to infer whether this visitor may spark.
+  useEffect(() => {
+    if (identityIsLoading || !userName) return;
+
+    let cancelled = false;
+
+    const loadStatus = async (): Promise<VigilStatusResponse | null> => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const response = await fetch('/api/vigil/claim', {
+          method: 'GET',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : undefined,
+        });
+
+        if (!response.ok) return null;
+
+        return (await response.json().catch(() => null)) as
+          | VigilStatusResponse
+          | null;
+      } catch {
+        return null;
+      }
+    };
+
+    const resolveStatus = async () => {
+      let status = await loadStatus();
+
+      // A cached Telegram name can survive while the HttpOnly cookie expired.
+      // Re-exchange the signed initData once, then retry.
+      if (
+        !cancelled &&
+        status &&
+        status.authenticated === false &&
+        identitySource === 'telegram' &&
+        !statusRetryRef.current
+      ) {
+        statusRetryRef.current = true;
+        const refreshed = await refreshIdentity();
+
+        if (refreshed && !cancelled) status = await loadStatus();
+      }
+
+      if (cancelled || !status?.authenticated) return;
+
+      applyCooldown(
+        typeof status.remainingMs === 'number' ? status.remainingMs : 0
+      );
+    };
+
+    void resolveStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    applyCooldown,
+    identityIsLoading,
+    refreshIdentity,
+    identitySource,
+    userName,
+  ]);
+
+  const measureHeartTarget = useCallback(() => {
+    if (!heartRef.current) return null;
+
+    const heartRect = heartRef.current.getBoundingClientRect();
+
+    return {
+      x: heartRect.left + heartRect.width / 2,
+      y: heartRect.top + heartRect.height / 2,
+    };
+  }, []);
+
+  // Keep the flight target attached to the heart while the page scrolls or
+  // the viewport changes. The origin remains the visitor's action point.
+  useEffect(() => {
+    if (!spark) return;
+
+    const syncTarget = () => {
+      const end = measureHeartTarget();
+
+      if (!end) return;
+
+      setSpark((current) => (current ? { ...current, end } : current));
+    };
+
+    window.addEventListener('scroll', syncTarget, { passive: true });
+    window.addEventListener('resize', syncTarget);
+
+    return () => {
+      window.removeEventListener('scroll', syncTarget);
+      window.removeEventListener('resize', syncTarget);
+    };
+  }, [spark, measureHeartTarget]);
+
+  const triggerRitual = useCallback(
+    async (event?: React.MouseEvent<HTMLButtonElement>) => {
+      if (isLighting) return;
+
+      if (!userName) {
+        setRateLimitMsg(
+          identity.isTelegram
+            ? identity.error || 'Telegram identity is not available yet.'
+            : 'Please sign in to participate.'
+        );
+        return;
+      }
+
+      if (isOnCooldown) {
+        setRateLimitMsg(vigilCooldownMessage(cooldownRemainingMs ?? 0));
+        return;
+      }
+
+      setIsLighting(true);
+      setRateLimitMsg(null);
+
+      // The spark begins exactly where the visitor acted. Keyboard activation
+      // falls back to the centre of the button.
+      let origin = { x: 0, y: 0 };
+
+      if (event) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        origin = {
+          x: event.clientX || rect.left + rect.width / 2,
+          y: event.clientY || rect.top + rect.height / 2,
+        };
+      } else if (heartRef.current) {
+        const rect = heartRef.current.getBoundingClientRect();
+        origin = { x: rect.left, y: rect.top };
+      }
+
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const requestClaim = async () => {
+          const response = await fetch('/api/vigil/claim', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token
+                ? { Authorization: `Bearer ${session.access_token}` }
+                : {}),
+            },
+            body: JSON.stringify({ id: FLAME_ID }),
+          });
+
+          const payload = await response.json().catch(() => null);
+
+          return { response, payload };
+        };
+
+        let { response, payload } = await requestClaim();
+
+        if (response.status === 401 && identity.source === 'telegram') {
+          const refreshed = await identity.refresh();
+
+          if (refreshed) ({ response, payload } = await requestClaim());
+        }
+
+        if (response.status === 429) {
+          const remainingMs =
+            typeof payload?.remainingMs === 'number'
+              ? payload.remainingMs
+              : VIGIL_COOLDOWN_MS;
+
+          applyCooldown(remainingMs);
+          setRateLimitMsg(
+            payload?.message || vigilCooldownMessage(remainingMs)
+          );
+          setSpark(null);
+          setIsLighting(false);
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            payload?.error || `Vigil claim failed (${response.status})`
+          );
+        }
+
+        const record = payload?.record as VigilFlameData | undefined;
+        const nowISO = new Date().toISOString();
+
+        setFlameData((current) => ({
+          ...(current ?? {
+            id: FLAME_ID,
+            owner_name: null,
+            last_lit_at: null,
+          }),
+          ...(record ?? {}),
+          owner_name: record?.owner_name ?? userName,
+          last_lit_at: record?.last_lit_at ?? nowISO,
+        }));
+        setNowMs(Date.now());
+
+        applyCooldown(VIGIL_COOLDOWN_MS);
+        void refreshGuardians();
+
+        // Animation starts only after the server accepted the claim and only
+        // then flies toward the shared heart.
+        const end = measureHeartTarget();
+
+        if (end) setSpark({ start: origin, end });
+      } catch (error) {
+        console.error('Vigil ritual error:', error);
+        setRateLimitMsg(
+          'The spark could not be transmitted. Please try again.'
+        );
+        setSpark(null);
+        setIsLighting(false);
+        return;
+      }
+
+      if (sparkTimeoutRef.current) {
+        clearTimeout(sparkTimeoutRef.current);
+      }
+
+      sparkTimeoutRef.current = setTimeout(() => {
+        setSpark(null);
+        setIsLighting(false);
+        sparkTimeoutRef.current = null;
+      }, 1200);
+    },
+    [
+      applyCooldown,
+      cooldownRemainingMs,
+      identity,
+      isLighting,
+      isOnCooldown,
+      measureHeartTarget,
+      refreshGuardians,
+      userName,
+    ]
+  );
+
+  return {
+    identity,
+    reduceMotion,
+    angelRef,
+    heartRef,
+    guardians,
+    flameData,
+    flameLit,
+    flameLabel,
+    isLighting,
+    isOnCooldown,
+    cooldownLabel,
+    cooldownRemainingMs,
+    rateLimitMsg,
+    spark,
+    userName,
+    triggerRitual,
+  };
+}

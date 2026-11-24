@@ -763,30 +763,44 @@ body.custom-footer-route > footer {
 
 .temple-modal__header strong { margin-right: auto; font-family: var(--font-cormorant), serif; font-size: 18px; }
 .temple-modal__header button, .temple-modal__header a { min-height: 44px; display: inline-flex; align-items: center; color: inherit; background: none; border: 0; cursor: pointer; }
-.temple-modal__content { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.temple-modal__timer { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.temple-modal__content { min-height: 0; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .temple-modal__content > * { min-height: 100%; }
 .temple-modal .temple-topbar { display: none; }
 
 .temple-modal__dock {
   justify-content: center;
   overflow-x: auto;
+  scrollbar-width: none;
   padding-top: 8px;
   padding-bottom: max(8px, env(safe-area-inset-bottom));
   border-top: 1px solid rgba(245, 198, 110, .16);
   border-bottom: 0;
 }
+.temple-modal__dock::-webkit-scrollbar { display: none; }
 
-.temple-modal__dock a { flex: 0 0 auto; padding: 9px 12px; border-radius: 999px; color: #b9b0a5; }
+.temple-modal__dock a { flex: 0 0 auto; padding: 9px 12px; border-radius: 999px; color: #b9b0a5; white-space: nowrap; }
 .temple-modal__dock a[aria-current='page'] { background: rgba(245, 198, 110, .14); color: #f5d79b; }
 body.ritual-modal-open { overflow: hidden; }
 
-@keyframes temple-circular-reveal {
-  from { clip-path: circle(0 at var(--ritual-origin-x, 50%) var(--ritual-origin-y, 50%)); }
-  to { clip-path: circle(150vmax at var(--ritual-origin-x, 50%) var(--ritual-origin-y, 50%)); }
+@media (max-width: 640px) {
+  .temple-modal__header { gap: 8px; }
+  .temple-modal__header strong { font-size: 15px; }
+  .temple-modal__timer { font-size: 8px; max-width: 34vw; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .temple-modal { animation: none; }
+  .temple-modal *,
+  .temple-modal *::before,
+  .temple-modal *::after {
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes temple-circular-reveal {
+  from { clip-path: circle(0 at var(--ritual-origin-x, 50%) var(--ritual-origin-y, 50%)); }
+  to { clip-path: circle(150vmax at var(--ritual-origin-x, 50%) var(--ritual-origin-y, 50%)); }
 }
 
 /*

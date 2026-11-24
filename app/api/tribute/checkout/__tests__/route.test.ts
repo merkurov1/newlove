@@ -146,4 +146,17 @@ describe('POST /api/tribute/checkout', () => {
     expect(session.cancel_url).toContain('status=cancel');
     expect(session.cancel_url).toContain(`pierrot=${encodeURIComponent(attribution)}`);
   });
+
+  it('lets Stripe Checkout offer wallets and Link instead of forcing card-only', async () => {
+    const response = await POST(makeRequest({ amount: 20 }));
+
+    expect(response.status).toBe(200);
+
+    const [session] = mockCreateSession.mock.calls[0] as [Record<string, any>];
+
+    // Omitting payment_method_types enables Stripe's dynamic payment methods:
+    // Apple Pay / Google Pay / Link where supported, card everywhere else.
+    expect(session).not.toHaveProperty('payment_method_types');
+    expect(session.mode).toBe('payment');
+  });
 });

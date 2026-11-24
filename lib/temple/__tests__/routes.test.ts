@@ -3,6 +3,7 @@ import {
   isImmersiveRoute,
   isRitualRoute,
   isTelegramNavigationHidden,
+  isTempleAudioRoute,
 } from '@/lib/temple/routes';
 
 describe('Temple route classification', () => {
@@ -24,6 +25,16 @@ describe('Temple route classification', () => {
     expect(isTelegramNavigationHidden('/heartandangel/calm')).toBe(true);
     expect(isTelegramNavigationHidden('/heartandangel/letitgo')).toBe(true);
     expect(isTelegramNavigationHidden('/vigil')).toBe(true);
+  });
+
+  it('keeps the shared Temple audio across every ritual route', () => {
+    expect(isTempleAudioRoute('/temple')).toBe(true);
+    expect(isTempleAudioRoute('/cast')).toBe(true);
+    expect(isTempleAudioRoute('/vigil')).toBe(true);
+    expect(isTempleAudioRoute('/tribute')).toBe(true);
+    expect(isTempleAudioRoute('/absolution')).toBe(true);
+    expect(isTempleAudioRoute('/heartandangel/calm')).toBe(true);
+    expect(isTempleAudioRoute('/journal')).toBe(false);
   });
 
   it('hides the global footer only on pages with their own footer', () => {
