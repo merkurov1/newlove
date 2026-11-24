@@ -428,6 +428,21 @@ const OPERATIONS = {
     requiredPermission: 'Contents: write',
     fallbackCode: 'GITHUB_MERGE_FAILED',
   },
+  mergeBranch: {
+    endpoint: 'POST /repos/{owner}/{repo}/merges',
+    requiredPermission: 'Contents: write',
+    fallbackCode: 'GITHUB_BRANCH_MERGE_FAILED',
+  },
+  updatePullRequest: {
+    endpoint: 'PATCH /repos/{owner}/{repo}/pulls/{pull_number}',
+    requiredPermission: 'Pull requests: write',
+    fallbackCode: 'GITHUB_PR_UPDATE_FAILED',
+  },
+  commentPullRequest: {
+    endpoint: 'POST /repos/{owner}/{repo}/issues/{issue_number}/comments',
+    requiredPermission: 'Pull requests: write',
+    fallbackCode: 'GITHUB_PR_COMMENT_FAILED',
+  },
   getRepository: {
     endpoint: 'GET /repos/{owner}/{repo}',
     requiredPermission: 'Metadata: read',
@@ -584,10 +599,15 @@ export async function getPullRequestStatus(
   mergeable: boolean | null;
   mergeableState: string | null;
   headSha: string;
-  baseBranch: string;
   /** Exact merge commit reported by GitHub (null until merged). */
   mergeCommitSha: string | null;
   mergedAt: string | null;
+  /** Exact head branch and base branch/SHA observed on the PR. */
+  headBranch: string;
+  baseBranch: string;
+  baseSha: string;
+  createdAt: string | null;
+  updatedAt: string | null;
 } | null> {
   const config = getDevRepositoryConfig(repoKey(repository));
   try {
@@ -606,9 +626,13 @@ export async function getPullRequestStatus(
       mergeable: response.data.mergeable ?? null,
       mergeableState: response.data.mergeable_state ?? null,
       headSha: response.data.head.sha,
+      headBranch: response.data.head.ref,
       baseBranch: response.data.base.ref,
+      baseSha: response.data.base.sha,
       mergeCommitSha: response.data.merge_commit_sha || null,
       mergedAt: response.data.merged_at || null,
+      createdAt: response.data.created_at || null,
+      updatedAt: response.data.updated_at || null,
     };
   } catch (error) {
     const normalized = toError(error, OPERATIONS.getPullRequest);
@@ -860,6 +884,88 @@ export async function getCommitRange(
     };
   } catch (error) {
     throw toError(error, OPERATIONS.compareCommits);
+  }
+}
+
+/**
+ * Merge one branch into another without rewriting history. This is used only
+ * to synchronise an already-open task PR branch with the current base branch.
+ * A conflict is returned as a structured error; no force push or reset is ever
+ * used, so user work cannot be discarded.
+ */
+export async function mergeBranchInto(input: {
+  repository: DevRepositoryKey | string;
+  base: string;
+  head: string;
+  commitMessage?: string;
+}): Promise<{ merged: boolean; sha: string | null; message: string }> {
+  const config = getDevRepositoryConfig(repoKey(input.repository));
+  const base = safeBranch(input.base);
+  const head = safeBranch(input.head);
+  if (base === head) return { merged: true, sha: null, message: 'Already up to date.' };
+  try {
+    const response = await requestGitHubWithRetry(OPERATIONS.mergeBranch, () =>
+      client().rest.repos.merge({
+        owner: config.owner,
+        repo: config.repo,
+        base,
+        head,
+        commit_message:
+          input.commitMessage?.slice(0, 240) ||
+          `Merge ${head} into ${base} to synchronise with the current base branch.`,
+      })
+    );
+    const data = response.data as { sha?: string; message?: string } | undefined;
+    return {
+      merged: true,
+      sha: data?.sha || null,
+      message: data?.message || 'Already up to date.',
+    };
+  } catch (error) {
+    if (statusOf(error) === 409) {
+      throw new WorkbenchGitHubError(
+        'GITHUB_MERGE_CONFLICT',
+        `Branch ${head} has conflicts with ${base}. No force push was performed; resolve the conflict in a reviewed commit and retry.`,
+        409,
+        { endpoint: OPERATIONS.mergeBranch.endpoint, requiredPermission: 'Contents: write' }
+      );
+    }
+    throw toError(error, OPERATIONS.mergeBranch);
+  }
+}
+
+/**
+ * Close an obsolete PR after the caller has proved it is redundant or
+ * superseded. Closing is reversible and never deletes commits or history.
+ */
+export async function closePullRequest(input: {
+  repository: DevRepositoryKey | string;
+  number: number;
+  comment?: string;
+}): Promise<{ closed: boolean }> {
+  const config = getDevRepositoryConfig(repoKey(input.repository));
+  try {
+    const response = await requestGitHubWithRetry(OPERATIONS.updatePullRequest, () =>
+      client().rest.pulls.update({
+        owner: config.owner,
+        repo: config.repo,
+        pull_number: input.number,
+        state: 'closed',
+      })
+    );
+    if (input.comment) {
+      await requestGitHubWithRetry(OPERATIONS.commentPullRequest, () =>
+        client().rest.issues.createComment({
+          owner: config.owner,
+          repo: config.repo,
+          issue_number: input.number,
+          body: input.comment!.slice(0, 8000),
+        })
+      ).catch(() => undefined);
+    }
+    return { closed: response.data.state === 'closed' };
+  } catch (error) {
+    throw toError(error, OPERATIONS.updatePullRequest);
   }
 }
 

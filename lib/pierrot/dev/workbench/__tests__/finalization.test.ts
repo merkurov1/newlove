@@ -66,6 +66,10 @@ jest.mock('../github', () => {
     getCommitChecks: jest.fn(),
     getPullRequestFiles: jest.fn(),
     getBranchHead: jest.fn(),
+    getLatestProductionDeployment: jest.fn(),
+    mergeBranchInto: jest.fn(),
+    closePullRequest: jest.fn(),
+    getCommitRange: jest.fn(),
     mergeVerifiedPullRequest: jest.fn(),
     commitUrl: jest.fn(
       (_repository: string, sha: string) => `https://github.com/merkurov1/newlove/commit/${sha}`
@@ -159,7 +163,13 @@ function prStatus(overrides: Record<string, unknown> = {}) {
     mergeable: true,
     mergeableState: 'clean',
     headSha: PR_HEAD,
+    headBranch: 'pierrot/dev/task/1',
     baseBranch: 'main',
+    baseSha: MAIN_SHA,
+    mergeCommitSha: null,
+    mergedAt: null,
+    createdAt: '2026-11-24T00:00:00.000Z',
+    updatedAt: '2026-11-24T00:00:00.000Z',
     ...overrides,
   };
 }
@@ -190,6 +200,28 @@ beforeEach(() => {
   asMock(github.getBranchHead).mockResolvedValue(MAIN_SHA);
   asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
   asMock(github.getPullRequestFiles).mockResolvedValue([]);
+  asMock(github.getLatestProductionDeployment).mockResolvedValue({
+    state: 'ready',
+    url: 'https://www.merkurov.love',
+    target: 'production',
+    commitSha: MAIN_SHA,
+    checkedAt: new Date().toISOString(),
+    reason: null,
+  });
+  asMock(github.mergeBranchInto).mockRejectedValue(
+    new github.WorkbenchGitHubError(
+      'GITHUB_MERGE_CONFLICT',
+      'Branches have conflicts; resolve them in a reviewed commit.',
+      409
+    )
+  );
+  asMock(github.closePullRequest).mockResolvedValue({ closed: true });
+  asMock(github.getCommitRange).mockResolvedValue({
+    status: 'ahead',
+    aheadBy: 1,
+    behindBy: 0,
+    commits: [],
+  });
   asMock(github.mergeVerifiedPullRequest).mockResolvedValue({
     merged: true,
     sha: MERGE_SHA,
@@ -263,11 +295,11 @@ describe('queue finalization', () => {
       number: 1,
       expectedHeadSha: PR_HEAD,
     });
-    // Verification is based on real CI for the exact head, not on the
-    // executor's self-reported structured report.
-    expect(store.patchTask).toHaveBeenCalledWith(
+    // A merged PR is not marked verified in the merge pass. Verification waits
+    // for main CI and production deployment.
+    expect(store.patchTask).not.toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
-      expect.objectContaining({ status: 'verified', verification_status: 'passed' })
+      expect.objectContaining({ status: 'verified' })
     );
 
     const second = await advanceFinalization({ trigger: 'test' });
@@ -276,8 +308,13 @@ describe('queue finalization', () => {
       integrated: 1,
       commitSha: MAIN_SHA,
       ciStatus: 'passed',
+      productionVerified: true,
     });
     expect(github.mergeVerifiedPullRequest).toHaveBeenCalledTimes(1);
+    expect(store.patchTask).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      expect.objectContaining({ status: 'verified', verification_status: 'passed' })
+    );
 
     const third = await advanceFinalization({ trigger: 'test' });
     expect(third).toMatchObject({ stage: 'completed', integrated: 1 });
@@ -349,8 +386,14 @@ describe('queue finalization', () => {
     const report = await advanceFinalization({ trigger: 'test' });
     expect(report).toMatchObject({ stage: 'integrating', integrated: 1 });
     expect(github.mergeVerifiedPullRequest).toHaveBeenCalledTimes(1);
-    // The prerequisite is verified in the same pass, which is what releases
-    // its dependent tasks in the claim RPC.
+    // The prerequisite is verified only after main CI and production pass,
+    // which is what releases its dependent tasks in the claim RPC.
+    expect(store.patchTask).not.toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      expect.objectContaining({ status: 'verified' })
+    );
+    const settled = await advanceFinalization({ trigger: 'test' });
+    expect(settled).toMatchObject({ stage: 'completed', productionVerified: true });
     expect(store.patchTask).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
       expect.objectContaining({ status: 'verified', verification_status: 'passed' })
@@ -594,9 +637,10 @@ describe('queue finalization', () => {
     asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
     asMock(github.getPullRequestStatus).mockResolvedValue(prStatus());
     asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
-    // No attempt report at all: CI alone proves the landed head is green.
+    // No attempt report at all: real CI, main CI and production prove delivery.
     asMock(store.listAttemptsForTasks).mockResolvedValue(new Map());
 
+    await advanceFinalization({ trigger: 'test' });
     await advanceFinalization({ trigger: 'test' });
 
     expect(store.patchTask).toHaveBeenCalledWith(
@@ -605,21 +649,183 @@ describe('queue finalization', () => {
     );
   });
 
-  it('keeps an already merged task in review when CI evidence cannot be read', async () => {
+  it('reconciles duplicate PRs and closes only the provably superseded one', async () => {
+    const oldUrl = 'https://github.com/merkurov1/newlove/pull/107';
+    const newUrl = 'https://github.com/merkurov1/newlove/pull/106';
+    asMock(store.listFinalizationTasks).mockResolvedValue([
+      task({ pullRequests: [oldUrl, newUrl] }),
+    ]);
+    asMock(store.listAttemptsForTasks).mockResolvedValue(
+      new Map([
+        [
+          '11111111-1111-4111-8111-111111111111',
+          [
+            { attemptNumber: 2, prUrl: newUrl },
+            { attemptNumber: 1, prUrl: oldUrl },
+          ],
+        ],
+      ])
+    );
+    asMock(github.getPullRequestStatus).mockImplementation(async (_repo: string, number: number) =>
+      prStatus({
+        number,
+        url: number === 107 ? oldUrl : newUrl,
+        headSha: number === 107 ? 'd'.repeat(40) : PR_HEAD,
+        headBranch: `pierrot/dev/task/${number === 107 ? 1 : 2}`,
+      })
+    );
+    asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
+
+    const report = await advanceFinalization({ trigger: 'test' });
+
+    expect(github.closePullRequest).toHaveBeenCalledWith(expect.objectContaining({ number: 107 }));
+    expect(github.mergeVerifiedPullRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ number: 106, expectedHeadSha: PR_HEAD })
+    );
+    expect(report).toMatchObject({ stage: 'integrating', integrated: 1, pullRequests: 2 });
+    expect(report?.prs.find((pr) => pr.number === 107)).toMatchObject({
+      superseded: true,
+      supersededBy: newUrl,
+    });
+  });
+
+  it('blocks ambiguous duplicate PRs when redundancy cannot be proved', async () => {
+    const firstUrl = 'https://github.com/merkurov1/newlove/pull/105';
+    const secondUrl = 'https://github.com/merkurov1/newlove/pull/106';
+    asMock(store.listFinalizationTasks).mockResolvedValue([
+      task({ pullRequests: [firstUrl, secondUrl] }),
+    ]);
+    asMock(store.listAttemptsForTasks).mockResolvedValue(
+      new Map([
+        [
+          '11111111-1111-4111-8111-111111111111',
+          [
+            { attemptNumber: 2, prUrl: firstUrl },
+            { attemptNumber: 2, prUrl: secondUrl },
+          ],
+        ],
+      ])
+    );
+    asMock(github.getPullRequestStatus).mockImplementation(async (_repo: string, number: number) =>
+      prStatus({
+        number,
+        url: number === 105 ? firstUrl : secondUrl,
+        headSha: number === 105 ? 'e'.repeat(40) : PR_HEAD,
+        headBranch: `pierrot/dev/task/${number}`,
+      })
+    );
+    asMock(github.getCommitRange).mockResolvedValue({
+      status: 'diverged',
+      aheadBy: 2,
+      behindBy: 2,
+      commits: [],
+    });
+
+    const report = await advanceFinalization({ trigger: 'test' });
+
+    expect(report).toMatchObject({
+      stage: 'blocked',
+      blockedCode: 'AMBIGUOUS_DUPLICATE_PR',
+    });
+    expect(github.closePullRequest).not.toHaveBeenCalled();
+    expect(github.mergeVerifiedPullRequest).not.toHaveBeenCalled();
+  });
+
+  it('synchronises a conflicted PR with main without force-pushing', async () => {
+    asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
+    asMock(github.getPullRequestStatus)
+      .mockResolvedValueOnce(prStatus({ mergeable: false, mergeableState: 'dirty' }))
+      .mockResolvedValue(prStatus());
+    asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
+    asMock(github.mergeBranchInto).mockResolvedValue({
+      merged: true,
+      sha: 'f'.repeat(40),
+      message: '',
+    });
+
+    const first = await advanceFinalization({ trigger: 'test' });
+    expect(first).toMatchObject({ stage: 'collecting', blockedReason: null });
+    expect(github.mergeBranchInto).toHaveBeenCalledWith(
+      expect.objectContaining({ base: 'pierrot/dev/task/1', head: 'main' })
+    );
+    expect(github.mergeVerifiedPullRequest).not.toHaveBeenCalled();
+
+    const second = await advanceFinalization({ trigger: 'test' });
+    expect(second).toMatchObject({ stage: 'integrating', integrated: 1 });
+    expect(github.mergeVerifiedPullRequest).toHaveBeenCalledTimes(1);
+    expect(github.mergeBranchInto).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks when the authoritative PR does not contain the newest completed attempt', async () => {
+    asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
+    asMock(store.listAttemptsForTasks).mockResolvedValue(
+      new Map([
+        [
+          '11111111-1111-4111-8111-111111111111',
+          [
+            {
+              attemptNumber: 2,
+              status: 'completed',
+              headSha: 'd'.repeat(40),
+              prUrl: 'https://github.com/merkurov1/newlove/pull/1',
+            },
+          ],
+        ],
+      ])
+    );
+    asMock(github.getPullRequestStatus).mockResolvedValue(prStatus());
+    asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
+    asMock(github.getCommitRange).mockResolvedValue({
+      status: 'diverged',
+      aheadBy: 2,
+      behindBy: 2,
+      commits: [],
+    });
+
+    const report = await advanceFinalization({ trigger: 'test' });
+
+    expect(report).toMatchObject({
+      stage: 'blocked',
+      blockedCode: 'PR_DOES_NOT_CONTAIN_LATEST_ATTEMPT',
+    });
+    expect(github.mergeVerifiedPullRequest).not.toHaveBeenCalled();
+    expect(store.patchTask).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'verified' })
+    );
+  });
+
+  it('does not mark a merged task verified until production serves the landed commit', async () => {
     asMock(store.listFinalizationTasks).mockResolvedValue([task()]);
     asMock(github.getPullRequestStatus).mockResolvedValue(
       prStatus({ state: 'closed', merged: true })
     );
-    asMock(github.getCommitChecks).mockResolvedValue(checks('unknown'));
+    asMock(github.getCommitChecks).mockResolvedValue(checks('passed'));
+    asMock(github.getLatestProductionDeployment).mockResolvedValueOnce({
+      state: 'unavailable',
+      url: null,
+      target: 'production',
+      commitSha: null,
+      checkedAt: new Date().toISOString(),
+      reason: 'VERCEL_TOKEN is not configured.',
+    });
 
-    await advanceFinalization({ trigger: 'test' });
+    const blocked = await advanceFinalization({ trigger: 'test' });
+    expect(blocked).toMatchObject({
+      stage: 'blocked',
+      blockedCode: 'PRODUCTION_VERIFICATION_UNAVAILABLE',
+      productionVerified: false,
+    });
+    expect(store.patchTask).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'verified' })
+    );
 
+    const resumed = await retryFinalization('test:retry');
+    expect(resumed).toMatchObject({ stage: 'completed', productionVerified: true });
     expect(store.patchTask).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
-      expect.objectContaining({ status: 'review', verification_status: 'ci_evidence_missing' })
+      expect.objectContaining({ status: 'verified', verification_status: 'passed' })
     );
-    expect(github.mergeVerifiedPullRequest).not.toHaveBeenCalled();
-    const events = asMock(store.appendEvent).mock.calls.map(([event]) => event.type);
-    expect(events).toContain('task.verification_required');
   });
 });

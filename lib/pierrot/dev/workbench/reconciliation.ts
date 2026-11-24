@@ -1,6 +1,12 @@
 import { assertServerOnly } from '@/lib/serverOnly';
-import { getCommitChecks, getPullRequestFiles, getPullRequestStatus } from './github';
+import {
+  getCommitChecks,
+  getLatestProductionDeployment,
+  getPullRequestFiles,
+  getPullRequestStatus,
+} from './github';
 import { blockingLandingRisks, detectLandingRisks } from './landing';
+import { verifyProductionDeployment } from './delivery';
 import { appendEvent, isWorkbenchSchemaReady, listFinalizationTasks, patchTask } from './store';
 import type { DevWorkbenchTask } from './types';
 
@@ -14,6 +20,7 @@ export type ReviewReconciliationState =
   | 'ci_missing'
   | 'unreadable'
   | 'security_blocked'
+  | 'production_missing'
   | 'missing_pull_request';
 
 export type ReviewReconciliationRow = {
@@ -199,7 +206,28 @@ export async function reconcileLegacyReviewRows(
     }
 
     const merged = status.merged;
-    const landed = merged && ciStatus === 'passed' && !risksReason;
+    let production: ReturnType<typeof verifyProductionDeployment> | null = null;
+    if (merged && ciStatus === 'passed' && !risksReason) {
+      try {
+        const deployment = await getLatestProductionDeployment(task.repository);
+        production = verifyProductionDeployment({
+          deployment,
+          landedShas: [status.mergeCommitSha, status.headSha],
+        });
+      } catch (error) {
+        production = {
+          status: 'unavailable',
+          reason:
+            error instanceof Error
+              ? error.message.slice(0, 300)
+              : 'Production deployment could not be read.',
+          deployment: null,
+          matchedSha: null,
+        };
+      }
+    }
+    const landed =
+      merged && ciStatus === 'passed' && !risksReason && production?.status === 'verified';
     const nextStatus: 'review' | 'verified' = landed ? 'verified' : 'review';
     const state: ReviewReconciliationState = landed
       ? 'landed'
@@ -209,17 +237,23 @@ export async function reconcileLegacyReviewRows(
           : 'not_merged'
         : risksReason
           ? 'security_blocked'
-          : ciStatus === 'failed'
-            ? 'ci_failed'
-            : 'ci_missing';
+          : ciStatus !== 'passed'
+            ? ciStatus === 'failed'
+              ? 'ci_failed'
+              : 'ci_missing'
+            : 'production_missing';
 
     const reason = landed
-      ? `PR #${number} is merged at ${status.mergeCommitSha || status.headSha} and CI passed for head ${status.headSha}.`
+      ? `PR #${number} is merged at ${status.mergeCommitSha || status.headSha} and CI passed for head ${status.headSha}; production is ready at the landed commit.`
       : !merged
         ? `PR #${number} is ${status.state}, not merged. It is not complete.`
         : risksReason
           ? `PR #${number} was merged, but reconciliation does not certify it: ${risksReason}`
-          : `PR #${number} is merged, but real CI evidence is ${ciStatus}: ${ciDetail}`;
+          : ciStatus !== 'passed'
+            ? `PR #${number} is merged, but real CI evidence is ${ciStatus}: ${ciDetail}`
+            : `PR #${number} is merged and CI passed, but production is not verified: ${
+                production?.reason || 'the deployed commit is unknown.'
+              } The task stays in review.`;
 
     const needsChange =
       apply &&
@@ -253,6 +287,14 @@ export async function reconcileLegacyReviewRows(
         mergeSha: status.mergeCommitSha,
         ciStatus,
         ciDetail,
+        production: production
+          ? {
+              status: production.status,
+              reason: production.reason,
+              commitSha: production.deployment?.commitSha || null,
+              state: production.deployment?.state || null,
+            }
+          : null,
         risks: risksReason || null,
         previousStatus: task.status,
         nextStatus: needsChange ? nextStatus : task.status,

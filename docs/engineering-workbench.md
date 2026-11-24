@@ -30,9 +30,9 @@ remains infrastructure; the owner works from Admin.
 
 Task: `draft → ready → queued → in_progress → review → verified`
 
-`verified` means "landed in main with passing real CI", not "owner accepted"
-and not "deployed to production". Additional states: `failed`, `rejected`,
-`cancelled`, `archived`, `blocked`. Transitions are closed in
+`verified` means "landed in main with passing real CI and observed in the
+production deployment", not "owner accepted". Additional states: `failed`,
+`rejected`, `cancelled`, `archived`, `blocked`. Transitions are closed in
 `lib/pierrot/dev/workbench/state.ts`.
 
 Attempt: `created → claimed → running → completed | failed | cancelled | timed_out`.
@@ -156,24 +156,40 @@ poll; only one instance can advance it per 30-second window.
 Stages:
 
 1. **Collect** — every `review`/`verified` task with a pull request is read from
-   GitHub. CI checks, mergeability, head SHA, conflicts and the real PR file
-   list are recorded.
-2. **Safety gate** — a PR that changes secret/credential files, contains private
+   GitHub. CI checks, mergeability, head/base branches and SHAs, conflicts and
+   the real PR file list are recorded.
+2. **Authoritative PR** — one PR per task is selected (newest open attempt).
+   Older open PRs are closed only after redundancy is proved: the newer attempt
+   supersedes them by immutable attempt number, or GitHub compare proves the
+   authoritative head contains the old head. Ambiguous duplicates block instead
+   of merging or discarding work. Resolved/merged history is preserved.
+3. **Safety gate** — a PR that changes secret/credential files, contains private
    key material or destructive SQL, or modifies the CI workflow itself is
    stopped before any merge. The task keeps its PR link, attempts, reports and
    notes; nothing is marked complete. Non-blocking security-sensitive paths
    (auth, RLS, migrations) are recorded as warnings.
-3. **Integrate** — one PR per pass is merged (never force-pushed) only when the
+4. **Synchronise** — a conflicting PR branch is merged with the current base
+   branch (never force-pushed). The sync is bounded per finalization; a real
+   conflict blocks with the exact reason and no merge is attempted.
+5. **Integrate** — one PR per pass is merged (never force-pushed) only when the
    PR is open, its exact head SHA is unchanged, CI is green and GitHub reports
    it mergeable. A conflict, branch-protection rejection, failed CI, missing CI
    evidence, stale head or security finding stops integration with a precise
    diagnostic; nothing is discarded.
-4. **Verify** — CI is checked again on the integrated `main` commit.
-5. **Complete** — tasks become `verified` with `verification_status: passed`
-   from **real CI for the exact head**, not from executor self-report, and the
-   batch is settled, cost and duration are recorded, and the owner is notified.
-   Only then are dependent batch tasks claimable. `verified` means landed in
-   `main`; it never means deployed to production.
+6. **Verify main** — CI is checked again on the integrated `main` commit.
+   Tasks are **not** marked verified at merge time.
+7. **Verify production** — the read-only Vercel production deployment is
+   matched against the exact landed commit. A building/queued deployment is
+   waited on with the bounded timeout; a missing/unavailable deployment blocks
+   with the exact configuration/permission reason. This process never deploys.
+8. **Complete** — only after merged PR + green main CI + verified production do
+   tasks become `verified` with `verification_status: passed`, with the PR
+   number/URL, head SHA, merge SHA and deployment evidence attached. The batch
+   is settled, cost/duration are recorded, and the owner is notified. Only then
+   are dependent batch tasks claimable.
+
+`verified` therefore means delivered: the exact landed commit passed real CI and
+is the commit served by the observed production deployment.
 
 The report is stored in `pierrot_dev_settings` (`finalization:state`), so a
 retry is idempotent: already integrated PRs are skipped, merge SHAs are
@@ -340,9 +356,9 @@ heartbeats.
   is unchanged and whose required checks are green. A failed check, missing
   evidence, stale head, conflict or destructive/security-sensitive finding
   stops that task with a precise reason.
-- `verified` / "landed in main" is distinct from "released to production".
-  Production deployment status is read separately from Vercel; landing never
-  implies a deploy and this process never deploys.
+- `verified` requires the merged PR, green CI for the exact head/main commit and
+  an observed production deployment at that commit. Landing and deployment are
+  recorded separately; this process reads production status and never deploys.
 
 ## Dev Cost Ledger
 

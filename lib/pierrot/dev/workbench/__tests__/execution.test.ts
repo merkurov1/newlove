@@ -30,6 +30,7 @@ jest.mock('../store', () => ({
     confidence: 'low',
   })),
   setQueueOptOut: jest.fn(),
+  settleBatchForTask: jest.fn(),
   touchWorkerHeartbeat: jest.fn(),
   transitionTask: jest.fn(),
 }));
@@ -47,12 +48,15 @@ jest.mock('../prompt', () => ({ buildExecutionPrompt: jest.fn() }));
 jest.mock('../evidence', () => ({ collectAttemptEvidence: jest.fn() }));
 jest.mock('../github', () => ({
   createPullRequestForAttempt: jest.fn(),
+  findPullRequestForBranch: jest.fn(),
   getPullRequestStatus: jest.fn(),
   getVercelDeploymentStatus: jest.fn(),
+  mergeBranchInto: jest.fn(),
   mergeVerifiedPullRequest: jest.fn(),
 }));
 
 import * as store from '../store';
+import * as github from '../github';
 import {
   attemptExecutor,
   claimTaskForWorker,
@@ -370,6 +374,133 @@ describe('failed execution', () => {
 
     expect(store.patchAttempt).not.toHaveBeenCalled();
     expect(store.patchTask).not.toHaveBeenCalled();
+  });
+});
+
+describe('authoritative pull request lifecycle', () => {
+  const headSha = 'a'.repeat(40);
+  const branch = 'pierrot/dev/task/1';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    asMock(store.expectedBranch).mockReturnValue(branch);
+    asMock(store.getAttempt).mockResolvedValue({
+      ...attempt,
+      status: 'running',
+      branch,
+      headSha,
+      changedFiles: ['app/temple/page.tsx'],
+      warnings: [],
+      verification: {},
+    });
+    asMock(store.patchAttempt).mockImplementation(async (_id: string, patch: object) => ({
+      ...attempt,
+      status: 'completed',
+      branch,
+      headSha,
+      changedFiles: ['app/temple/page.tsx'],
+      warnings: [],
+      ...patch,
+    }));
+    asMock(store.clearWorkerAttempt).mockResolvedValue(undefined);
+    asMock(store.settleBatchForTask).mockResolvedValue(undefined);
+    asMock(store.appendEvent).mockResolvedValue(undefined);
+    asMock(store.getSetting).mockResolvedValue({});
+    asMock(github.mergeBranchInto).mockResolvedValue({
+      merged: true,
+      sha: 'd'.repeat(40),
+      message: '',
+    });
+  });
+
+  function taskWithPr(pullRequests: string[]) {
+    return {
+      ...task,
+      status: 'in_progress' as const,
+      repository: 'merkurov1/newlove',
+      title: 'Temple work',
+      baseRef: 'main',
+      acceptanceCriteria: ['temple renders'],
+      pullRequests,
+      resultNotes: '',
+      resultCommit: null,
+      verificationStatus: null,
+      verificationNotes: '',
+      priority: 1,
+    };
+  }
+
+  it('updates an existing open PR instead of creating a duplicate', async () => {
+    const prUrl = 'https://github.com/merkurov1/newlove/pull/106';
+    asMock(store.getTaskRowUnscoped).mockResolvedValue(taskWithPr([prUrl]));
+    asMock(github.getPullRequestStatus).mockResolvedValue({
+      number: 106,
+      url: prUrl,
+      state: 'open',
+      merged: false,
+      mergeable: true,
+      mergeableState: 'clean',
+      headSha: 'b'.repeat(40),
+      headBranch: 'pierrot/dev/task/0',
+      baseBranch: 'main',
+      baseSha: 'c'.repeat(40),
+      mergeCommitSha: null,
+      mergedAt: null,
+      createdAt: null,
+      updatedAt: null,
+    });
+
+    await completeAttempt(attempt.workerId, attempt.id, {
+      exitCode: 0,
+      headSha,
+      changedFiles: ['app/temple/page.tsx'],
+      summary: 'Temple updated',
+    });
+
+    expect(github.createPullRequestForAttempt).not.toHaveBeenCalled();
+    expect(github.mergeBranchInto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repository: 'merkurov1/newlove',
+        base: 'pierrot/dev/task/0',
+        head: branch,
+      })
+    );
+    const taskPatch = asMock(store.patchTask).mock.calls.find(([, patch]) =>
+      Array.isArray((patch as { pull_requests?: unknown }).pull_requests)
+    )?.[1] as { pull_requests: string[] } | undefined;
+    expect(taskPatch?.pull_requests).toEqual([prUrl]);
+    expect(store.patchAttempt).toHaveBeenCalledWith(
+      attempt.id,
+      expect.objectContaining({
+        pr_number: 106,
+        pr_url: prUrl,
+        verification: expect.objectContaining({
+          pullRequest: expect.objectContaining({
+            number: 106,
+            headRef: 'pierrot/dev/task/0',
+            baseRef: 'main',
+          }),
+        }),
+      })
+    );
+  });
+
+  it('does not create a second PR while existing PR state is unreadable', async () => {
+    const prUrl = 'https://github.com/merkurov1/newlove/pull/107';
+    asMock(store.getTaskRowUnscoped).mockResolvedValue(taskWithPr([prUrl]));
+    asMock(github.getPullRequestStatus).mockRejectedValue(new Error('GitHub unavailable'));
+    asMock(github.findPullRequestForBranch).mockResolvedValue(null);
+
+    await completeAttempt(attempt.workerId, attempt.id, {
+      exitCode: 0,
+      headSha,
+      changedFiles: ['app/temple/page.tsx'],
+      summary: 'Temple updated',
+    });
+
+    expect(github.createPullRequestForAttempt).not.toHaveBeenCalled();
+    const events = asMock(store.appendEvent).mock.calls.map(([event]) => event.type);
+    expect(events).toContain('pull_request.duplicate_suppressed');
   });
 });
 
