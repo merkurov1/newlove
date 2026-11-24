@@ -117,11 +117,16 @@ Ephemeral ubuntu-latest runner
   An `always()` cleanup step releases an interrupted attempt and requeues the
   task idempotently.
 - **Commit/PR/landing**: the runner pushes only an attempt branch. The server
-  creates a PR. Automatic landing merges it only when real CI passed for the
-  exact head SHA, GitHub reports no conflicts, the head has not moved and the
-  pre-merge safety gate finds nothing destructive or security-sensitive. The
-  owner does not review individual tasks. Landing in `main` is recorded
-  separately from production deployment; this path never deploys.
+  creates or reuses one authoritative PR per task. A retry merges its attempt
+  branch into the existing PR head (a non-destructive merge, never a force
+  push); a new PR is opened only when no open PR exists. Duplicate open PRs are
+  closed only after attempt supersession or commit containment is proved.
+  Automatic landing merges only when real CI passed for the exact head SHA,
+  GitHub reports no conflicts, the head has not moved and the pre-merge safety
+  gate finds nothing destructive or security-sensitive. After merge, main CI is
+  checked and the read-only production deployment must serve the exact landed
+  commit before the task is marked verified. Landing and deployment are recorded
+  separately; this path never deploys.
 
 ### 2.1 DeepSeek / OpenCode configuration
 
