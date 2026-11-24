@@ -90,6 +90,13 @@ and production-build runs:
   the repair — exit 0, 0 errors and 18 warnings.
 - `git diff --check` — exit 0.
 
+## Publication
+
+The reconciled tree includes current `main` as a parent and keeps the previous
+PR #113 head commit as its first parent, so the existing PR can be updated by a
+fast-forward ref update rather than a new PR or a force-push. Publication and PR
+state verification are performed by the runner-owned completion flow.
+
 ## Telegram device verification
 
 The Telegram screenshot was produced with Playwright emulation of the Telegram
