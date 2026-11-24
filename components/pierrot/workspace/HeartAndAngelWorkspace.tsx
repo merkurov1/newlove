@@ -17,6 +17,7 @@ type TraceSignals = {
   recent: number | null;
   latestType: string | null;
   latestAt: string | null;
+  limit: number | null;
 };
 
 const ROOMS = [
@@ -104,6 +105,7 @@ export default function HeartAndAngelWorkspace() {
     recent: null,
     latestType: null,
     latestAt: null,
+    limit: null,
   });
 
   useEffect(() => {
@@ -152,16 +154,29 @@ export default function HeartAndAngelWorkspace() {
 
       if (traceResult.status === 'fulfilled' && traceResult.value.ok) {
         try {
-          const payload = (await traceResult.value.json()) as { data?: unknown };
+          const payload = (await traceResult.value.json()) as {
+            data?: unknown;
+            meta?: unknown;
+          };
           const list = Array.isArray(payload.data) ? payload.data : [];
           const latest =
             list[0] && typeof list[0] === 'object' ? (list[0] as Record<string, unknown>) : null;
+          const meta =
+            payload.meta && typeof payload.meta === 'object'
+              ? (payload.meta as Record<string, unknown>)
+              : null;
 
           setTraces({
             state: 'ready',
             recent: list.length,
-            latestType: latest && typeof latest.event_type === 'string' ? latest.event_type : null,
+            latestType:
+              latest &&
+              (typeof latest.canonical_type === 'string' ||
+                typeof latest.event_type === 'string')
+                ? String(latest.canonical_type ?? latest.event_type)
+                : null,
             latestAt: latest && typeof latest.created_at === 'string' ? latest.created_at : null,
+            limit: meta && typeof meta.traceLimit === 'number' ? meta.traceLimit : null,
           });
         } catch {
           setTraces({
@@ -169,6 +184,7 @@ export default function HeartAndAngelWorkspace() {
             recent: null,
             latestType: null,
             latestAt: null,
+            limit: null,
           });
         }
       } else {
@@ -177,6 +193,7 @@ export default function HeartAndAngelWorkspace() {
           recent: null,
           latestType: null,
           latestAt: null,
+          limit: null,
         });
       }
     }
@@ -270,7 +287,7 @@ export default function HeartAndAngelWorkspace() {
                 <strong>{traces.state === 'ready' ? traces.recent : '—'}</strong>
                 <em>
                   {traces.state === 'ready'
-                    ? 'last 10 events'
+                    ? `up to ${traces.limit ?? 7} recent rituals`
                     : traces.state === 'error'
                       ? 'unavailable'
                       : 'loading'}

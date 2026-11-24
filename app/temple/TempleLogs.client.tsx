@@ -4,7 +4,8 @@ import React, { useEffect, useState } from 'react';
 
 export interface TempleLog {
   id: string;
-  event_type?: string;
+  event_type?: string | null;
+  canonical_type?: string | null;
   message?: string;
   created_at?: string;
   [key: string]: any;
@@ -40,13 +41,16 @@ export default function TempleLogsClient({ initialLogs = [], serverError = null 
 
     fetchLogs();
 
-    // Use a longer polling interval when running inside the Telegram MiniApp
-    // to avoid excessive log refreshes there. Default to 5s for web.
-    const isTelegramWebApp = typeof window !== 'undefined' && (window as any).Telegram && (window as any).Telegram.WebApp
-    // Mini-app: 30s; Web: 5 minutes to reduce frequent refreshes
-    const intervalMs = isTelegramWebApp ? 30000 : 5 * 60 * 1000
-    const iv = setInterval(fetchLogs, intervalMs);
-    return () => { mounted = false; clearInterval(iv); };
+    // No interval polling: refresh when the tab/app becomes visible again.
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void fetchLogs();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      mounted = false;
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [initialLogs.length]);
 
   if (error) return <div className="p-4 text-red-400">Error: {error}</div>;

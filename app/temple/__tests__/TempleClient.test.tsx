@@ -118,8 +118,75 @@ function jsonResponse(payload: unknown, status = 200): Response {
   } as unknown as Response;
 }
 
+function trace(index: number, eventType: string) {
+  const createdAt = new Date(
+    Date.parse('2026-11-24T12:00:00.000Z') - index * 60_000
+  ).toISOString();
+
+  return {
+    id: `trace-${index}`,
+    event_type: eventType.toLowerCase(),
+    canonical_type: eventType,
+    category: 'ritual',
+    author: index === 0 ? 'Alice' : 'Pilgrim',
+    message: `${eventType} trace ${index}`,
+    created_at: createdAt,
+    audio_url: null,
+  };
+}
+
+function feedPayload() {
+  return {
+    ok: true,
+    data: [
+      trace(0, 'ASH'),
+      trace(1, 'VIGIL_SPARK'),
+      trace(2, 'CAST'),
+      trace(3, 'ABSOLUTION'),
+      trace(4, 'TRIBUTE'),
+      trace(5, 'MEDITATION'),
+      trace(6, 'WHISPER'),
+    ],
+    stats: {
+      completedRituals: 42,
+      namedAuthors: 3,
+      vigilSparks: 9,
+      byType: {
+        ASH: 7,
+        VIGIL_SPARK: 9,
+        CAST: 6,
+        ABSOLUTION: 5,
+        TRIBUTE: 4,
+        MEDITATION: 6,
+        WHISPER: 5,
+      },
+      windowDays: 30,
+      windowStart: '2026-10-25T12:00:00.000Z',
+      windowEnd: '2026-11-24T12:00:00.000Z',
+      excluded: { infrastructure: 11, incomplete: 4 },
+      truncated: false,
+    },
+    meta: {
+      generatedAt: '2026-11-24T12:00:00.000Z',
+      cachedAt: '2026-11-24T12:00:00.000Z',
+      ttlSeconds: 60,
+      traceLimit: 7,
+      windowDays: 30,
+      stale: false,
+      cache: 'miss',
+      truncated: false,
+      definitions: {},
+    },
+    error: null,
+  };
+}
+
 const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
   const url = String(input);
+
+  if (url.includes('/api/temple_logs')) {
+    return jsonResponse(feedPayload());
+  }
 
   if (url.includes('/api/tribute/summary')) {
     return jsonResponse({ total: 0 });
@@ -142,6 +209,7 @@ beforeEach(() => {
   fetchMock.mockClear();
   global.fetch = fetchMock as unknown as typeof fetch;
   window.sessionStorage.clear();
+  window.localStorage.clear();
 });
 
 describe('Temple home composition', () => {
@@ -216,5 +284,50 @@ describe('Temple home composition', () => {
     await waitFor(() => {
       expect(checkoutCalls()).toHaveLength(1);
     });
+  });
+
+  it('renders only the seven server-filtered ritual traces', async () => {
+    render(<TempleClient />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Traces' }));
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Sanctuary Traces',
+    });
+
+    await waitFor(() => {
+      expect(within(dialog).getByText('ASH trace 0')).toBeInTheDocument();
+    });
+
+    expect(within(dialog).getAllByText(/\w+ trace \d/)).toHaveLength(7);
+    expect(within(dialog).getByText('Alice')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/entry, navigation and incomplete events excluded/i)
+    ).toBeInTheDocument();
+  });
+
+  it('shows full-window Chronicles definitions instead of latest-ten sample metrics', async () => {
+    render(<TempleClient />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chronicles' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Chronicles' });
+
+    expect(within(dialog).getByText('Named Authors')).toBeInTheDocument();
+    expect(within(dialog).getByText('Completed Rituals')).toBeInTheDocument();
+    expect(within(dialog).getByText('Vigil Sparks')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(within(dialog).getByText('42')).toBeInTheDocument();
+    });
+    expect(within(dialog).getByText('9')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/not verified unique people/i)
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/11 entry\/navigation/i)
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/Last 30 days · all eligible ritual events/i)
+    ).toBeInTheDocument();
   });
 });
