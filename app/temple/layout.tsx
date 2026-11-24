@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
+import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
 
 const TEMPLE_URL =
   'https://www.merkurov.love/temple';
 
-const TEMPLE_IMAGE =
-  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png';
+const TEMPLE_IMAGE = TEMPLE_HOME_ASSETS.left;
 
 export const metadata: Metadata = {
   title: 'The Sanctuary — Digital Temple',
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     images: [
       {
         url: TEMPLE_IMAGE,
-        width: 1200,
+        width: 896,
         height: 1200,
         alt: 'The Sanctuary — Heart & Angel',
       },
