@@ -17,6 +17,7 @@ import {
   getTaskRow,
   getTaskRowUnscoped,
   getWorker,
+  isExecutionRetrySchemaReady,
   isUuid,
   leaseExpiryIso,
   listAttempts,
@@ -38,6 +39,7 @@ import {
   truncateText,
 } from './state';
 import { buildExecutionPrompt } from './prompt';
+import { decideExecutionRetry } from './retry';
 import { collectAttemptEvidence } from './evidence';
 import { buildAttemptCost } from './costs';
 import { notifyDevOwner } from './notifications';
@@ -775,27 +777,100 @@ export async function failAttempt(input: {
     throw new WorkbenchExecutionError('ATTEMPT_NOT_FOUND', 'Attempt not found.', 404);
   }
 
+  // Bounded automatic retry policy. A transient OpenCode failure is retried a
+  // few times with exponential backoff; the terminal attempt budget hands the
+  // task to manual review instead of looping. Permanent failures are never
+  // retried. Without the additive retry migration the policy degrades to the
+  // previous terminal failure instead of writing a missing column.
+  const retryDecision = decideExecutionRetry({
+    errorCode: input.errorCode,
+    attemptNumber: attempt.attemptNumber,
+  });
   const task = await getTaskRowUnscoped(attempt.taskId);
+  let retryScheduled = false;
+  let manualReview = false;
   if (task && task.status === 'in_progress') {
-    // When the worker preserved partial work on the attempt branch, retrying
+    const retrySchemaReady =
+      retryDecision.action === 'fail' ? false : await isExecutionRetrySchemaReady();
+    const retryableSchema = retrySchemaReady && retryDecision.action !== 'fail';
+    // When the worker preserved partial work on the attempt branch, a retry
     // must resume from that commit instead of throwing the work away. Only a
     // pushed SHA is ever recorded as the base by the worker.
-    const resumeFrom =
-      headSha &&
-      [
-        'EXECUTION_TIMEOUT',
-        'OPENCODE_FAILED',
-        'OPENCODE_INTERRUPTED',
-        'OPENCODE_REPORT_MISSING',
-      ].includes(input.errorCode)
-        ? headSha
-        : null;
-    await patchTask(task.id, {
-      status: 'failed',
+    const resumeFrom = headSha && retryDecision.retryable ? headSha : null;
+    const basePatch: Record<string, unknown> = {
       last_error_code: truncateText(input.errorCode, 120),
       last_error_message: truncateText(input.errorMessage, 2000),
       ...(resumeFrom ? { base_commit: resumeFrom } : {}),
-    });
+    };
+
+    if (retryableSchema && retryDecision.action === 'retry') {
+      retryScheduled = true;
+      await patchTask(task.id, {
+        ...basePatch,
+        status: 'queued',
+        queued_at: new Date().toISOString(),
+        retry_after_at: retryDecision.retryAfter,
+        blocked_reason: null,
+      });
+      await appendEvent({
+        taskId: task.id,
+        attemptId: attempt.id,
+        workerId: input.workerId,
+        type: 'task.retry_scheduled',
+        level: 'warn',
+        message: retryDecision.reason,
+        payload: {
+          errorCode: input.errorCode,
+          attemptNumber: attempt.attemptNumber,
+          maxAttempts: retryDecision.maxAttempts,
+          delayMs: retryDecision.delayMs,
+          retryAfter: retryDecision.retryAfter,
+          preservedCommit: resumeFrom,
+        },
+        dedupeKey: `task-retry-scheduled:${attempt.id}`,
+      });
+    } else if (retryableSchema && retryDecision.action === 'manual_review') {
+      manualReview = true;
+      await patchTask(task.id, {
+        ...basePatch,
+        status: 'manual_review',
+        retry_after_at: null,
+      });
+      await appendEvent({
+        taskId: task.id,
+        attemptId: attempt.id,
+        workerId: input.workerId,
+        type: 'task.manual_review',
+        level: 'error',
+        message: retryDecision.reason,
+        payload: {
+          errorCode: input.errorCode,
+          attemptNumber: attempt.attemptNumber,
+          maxAttempts: retryDecision.maxAttempts,
+          preservedCommit: resumeFrom,
+        },
+        dedupeKey: `task-manual-review:${attempt.id}`,
+      });
+    } else {
+      await patchTask(task.id, {
+        ...basePatch,
+        status: 'failed',
+        ...(retrySchemaReady ? { retry_after_at: null } : {}),
+      });
+      if (retryDecision.action !== 'fail' && !retrySchemaReady) {
+        await appendEvent({
+          taskId: task.id,
+          attemptId: attempt.id,
+          workerId: input.workerId,
+          type: 'task.retry_unavailable',
+          level: 'warn',
+          message:
+            'Automatic execution retry requires the additive migration 2026-12-16_pierrot_dev_execution_retry.sql; the task was marked failed so it cannot loop.',
+          payload: { errorCode: input.errorCode, action: retryDecision.action },
+          dedupeKey: `task-retry-unavailable:${attempt.id}`,
+        });
+      }
+    }
   }
 
   await clearWorkerAttempt(input.workerId, attempt.id);
@@ -812,6 +887,9 @@ export async function failAttempt(input: {
       errorCode: input.errorCode,
       exitCode: input.exitCode ?? null,
       headSha,
+      disposition: retryScheduled ? 'retry_scheduled' : manualReview ? 'manual_review' : 'failed',
+      retryable: retryDecision.retryable,
+      attemptNumber: attempt.attemptNumber,
       cost: {
         modelUsd: cost.model.costUsd,
         codespaceEstimatedUsd: cost.codespace.estimatedUsd,
@@ -990,6 +1068,10 @@ export async function enqueueTask(
     last_error_message: null,
   };
   if (isUuid(batchId)) patch.queue_batch_id = batchId;
+  if (await isExecutionRetrySchemaReady()) {
+    // A fresh enqueue is immediately eligible; never inherit stale backoff.
+    patch.retry_after_at = null;
+  }
   const queued = await transitionTask({
     userId,
     taskId,
@@ -1093,21 +1175,26 @@ export async function retryTask(userId: string, taskId: string): Promise<DevWork
     message: `Retry estimate: expected $${estimate.total.expectedUsd ?? '—'} (${estimate.confidence} confidence).`,
     payload: { estimate: estimate as unknown as Record<string, unknown>, trigger: 'retry' },
   }).catch(() => {});
+  const retryPatch: Record<string, unknown> = {
+    queue_position: position,
+    queued_at: new Date().toISOString(),
+    result_commit: null,
+    pull_requests: [],
+    verification_status: 'not_run',
+    verification_notes: '',
+    verified_at: null,
+    last_error_code: null,
+    last_error_message: null,
+  };
+  if (await isExecutionRetrySchemaReady()) {
+    // An explicit owner retry overrides any automatic backoff.
+    retryPatch.retry_after_at = null;
+  }
   const updated = await transitionTask({
     userId,
     taskId,
     to: 'queued',
-    patch: {
-      queue_position: position,
-      queued_at: new Date().toISOString(),
-      result_commit: null,
-      pull_requests: [],
-      verification_status: 'not_run',
-      verification_notes: '',
-      verified_at: null,
-      last_error_code: null,
-      last_error_message: null,
-    },
+    patch: retryPatch,
     event: {
       type: 'task.retry_queued',
       message: `Retry requested. Previous attempts are preserved; the next attempt will get a new ID and branch.`,

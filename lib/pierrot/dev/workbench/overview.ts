@@ -21,7 +21,14 @@ import type { DevCostEstimate, DevWorkbenchOverview, DevWorkbenchTask } from './
 
 assertServerOnly('lib/pierrot/dev/workbench/overview');
 
-const HISTORY_STATUSES = ['failed', 'rejected', 'cancelled', 'verified', 'archived'];
+const HISTORY_STATUSES = [
+  'failed',
+  'manual_review',
+  'rejected',
+  'cancelled',
+  'verified',
+  'archived',
+];
 let lastReapAt = 0;
 
 export type WorkbenchOverviewOptions = {

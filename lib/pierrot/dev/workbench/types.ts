@@ -13,6 +13,7 @@ export type DevWorkbenchTaskStatus =
   | 'review'
   | 'verified'
   | 'failed'
+  | 'manual_review'
   | 'rejected'
   | 'cancelled'
   | 'archived'
@@ -57,6 +58,12 @@ export type DevWorkbenchTask = {
   blockedReason: string | null;
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
+  /**
+   * Earliest time the task may be claimed again after an automatic retry.
+   * Null means immediately eligible. Set only by the bounded execution retry
+   * policy and cleared by a claim or an explicit owner retry.
+   */
+  retryAfterAt?: string | null;
   /**
    * Durable routing decision for the queued task. `actions` means only an
    * ephemeral GitHub Actions runner may claim it; `codespace` is the explicit

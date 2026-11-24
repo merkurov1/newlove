@@ -6689,6 +6689,7 @@ a.pw-home-indicator:hover {
 }
 
 .pw-wb-badge.is-failed,
+.pw-wb-badge.is-manual_review,
 .pw-wb-badge.is-rejected,
 .pw-wb-badge.is-timed_out,
 .pw-wb-badge.is-error,
@@ -7373,7 +7374,8 @@ a.pw-home-indicator:hover {
 }
 
 .pw-exec-state.is-blocked,
-.pw-exec-state.is-failed {
+.pw-exec-state.is-failed,
+.pw-exec-state.is-manual_review {
   border-color: #b05345;
   background: #fbeceb;
   color: #8f3427;
