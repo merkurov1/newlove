@@ -28,9 +28,6 @@ export const TELEGRAM_NAV_HIDDEN_ROUTES = [
   '/absolution',
   '/cast',
   '/tribute',
-  // Flow owns its own Telegram navigation (← Temple / ← Flow) so the global
-  // Temple navigation does not overlap the editorial reading column.
-  '/flow',
 ] as const;
 
 /**
