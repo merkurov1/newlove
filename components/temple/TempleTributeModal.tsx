@@ -21,11 +21,14 @@ export default function TempleTributeModal({
   initialAmount?: number;
   onClose: () => void;
 }) {
+  const panelRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
 
+    returnFocusRef.current = document.activeElement as HTMLElement | null;
     document.body.style.overflow = 'hidden';
 
     const focusTimer = window.setTimeout(() => {
@@ -36,6 +39,28 @@ export default function TempleTributeModal({
       if (event.key === 'Escape') {
         event.preventDefault();
         onClose();
+        return;
+      }
+
+      if (event.key !== 'Tab' || !panelRef.current) return;
+
+      const focusable = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+      );
+
+      if (!focusable.length) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
@@ -51,6 +76,7 @@ export default function TempleTributeModal({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', handleKeyDown);
       unregisterBack();
+      returnFocusRef.current?.focus?.();
     };
   }, [onClose]);
 
@@ -63,10 +89,11 @@ export default function TempleTributeModal({
       }}
     >
       <section
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="temple-tribute-title"
-        className="relative flex max-h-[calc(100dvh-0.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl border border-amber-300/20 bg-[#141210] text-stone-200 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl"
+        className="tribute-panel relative flex w-full max-w-xl flex-col overflow-hidden rounded-t-3xl border border-amber-300/20 bg-[#141210] text-stone-200 shadow-2xl sm:rounded-3xl"
       >
         <header className="flex items-center gap-3 border-b border-amber-300/15 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <h2

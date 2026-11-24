@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { runTopTelegramBackHandler } from '@/lib/telegram/backHandler';
 import TempleTributeModal from '../TempleTributeModal';
 
@@ -59,5 +59,52 @@ describe('in-place Temple Tribute modal', () => {
 
     unmount();
     expect(document.body.style.overflow).toBe('');
+  });
+
+  it('restores focus to the trigger when the panel unmounts', async () => {
+    const trigger = document.createElement('button');
+    const onClose = jest.fn();
+
+    document.body.appendChild(trigger);
+    trigger.focus();
+
+    const { unmount } = render(
+      <TempleTributeModal onClose={onClose} />
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Close Tribute' })
+      ).toHaveFocus()
+    );
+
+    unmount();
+
+    expect(trigger).toHaveFocus();
+
+    trigger.remove();
+  });
+
+  it('keeps Tab focus inside the panel', async () => {
+    render(<TempleTributeModal onClose={jest.fn()} />);
+
+    const close = screen.getByRole('button', { name: 'Close Tribute' });
+
+    await waitFor(() => expect(close).toHaveFocus());
+
+    const focusable = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[aria-labelledby="temple-tribute-title"] a[href], [aria-labelledby="temple-tribute-title"] button:not([disabled])'
+      )
+    );
+
+    expect(focusable.length).toBeGreaterThan(0);
+
+    const last = focusable[focusable.length - 1];
+
+    last.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+
+    expect(close).toHaveFocus();
   });
 });

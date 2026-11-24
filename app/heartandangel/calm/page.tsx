@@ -117,7 +117,7 @@ export default function CalmPage() {
       />
       <div
         aria-labelledby="calm-title"
-        className="min-h-[100dvh]"
+        className="relative h-[100dvh] w-full overflow-hidden"
       >
       <section className="sr-only">
         <h1 id="calm-title">

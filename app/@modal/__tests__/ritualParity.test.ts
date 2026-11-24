@@ -50,6 +50,27 @@ describe('ritual modal and standalone route parity', () => {
     }
   );
 
+  it('renders immersive scenes in the modal scene slot', () => {
+    expect(
+      read('app/@modal/(.)heartandangel/calm/page.tsx')
+    ).toContain('scene');
+    expect(
+      read('app/@modal/(.)heartandangel/letitgo/page.tsx')
+    ).toContain('scene');
+  });
+
+  it('sizes Keep Calm and Let It Go from their scene container', () => {
+    const heartPhysics = read('components/HeartPhysics.tsx');
+    const letItGo = read('components/LetItGoAngel.tsx');
+
+    expect(heartPhysics).not.toContain('100dvh');
+    expect(heartPhysics).not.toContain('100vw');
+    expect(heartPhysics).not.toContain('window.innerWidth');
+    expect(letItGo).not.toContain('100dvh');
+    expect(letItGo).not.toContain('100vw');
+    expect(letItGo).toContain('useRitualModalTimer');
+  });
+
   it('keeps an intercepting slot and a default for never-matched modals', () => {
     expect(fs.existsSync(path.join(ROOT, 'app/@modal/default.tsx'))).toBe(
       true

@@ -58,7 +58,9 @@ export default function Page() {
           { name: 'Let It Go', path: '/heartandangel/letitgo' },
         ])}
       />
-      <LetItGoAngel />
+      <div className="relative h-[100dvh] w-full overflow-hidden">
+        <LetItGoAngel />
+      </div>
     </>
   );
 }

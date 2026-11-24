@@ -11,18 +11,29 @@ import {
   visitDurationMinutes,
 } from '@/lib/temple/visitTrace';
 import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
-import { RITUAL_TIMER_EVENT } from './useRitualModalTimer';
+import {
+  RITUAL_TIMER_EVENT,
+  getRitualTimerLabel,
+} from './useRitualModalTimer';
 
 export default function RitualModal({
   title,
   canonicalPath,
+  scene = false,
   children,
 }: {
   title: string;
   canonicalPath: string;
+  /**
+   * Immersive rituals (Keep Calm, Let It Go) draw a single scene. They must
+   * fill the space between this shell's header and ritual dock instead of
+   * asking for the viewport size, and must never make the content scroll.
+   */
+  scene?: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const goBack = router.back;
   const dialogRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const startedAtRef = useRef<number>(0);
@@ -54,8 +65,8 @@ export default function RitualModal({
 
   const close = useCallback(() => {
     finalizeVisit();
-    router.back();
-  }, [finalizeVisit, router]);
+    goBack();
+  }, [finalizeVisit, goBack]);
 
   useEffect(() => {
     startedAtRef.current = Date.now();
@@ -102,6 +113,10 @@ export default function RitualModal({
     document.addEventListener('keydown', handleKey);
     window.addEventListener(RITUAL_TIMER_EVENT, handleTimer);
 
+    // The child ritual published its first label before this effect ran.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTimerLabel(getRitualTimerLabel());
+
     const unregisterBack = registerTelegramBackHandler(() => {
       close();
       return true;
@@ -135,7 +150,7 @@ export default function RitualModal({
           {timerLabel && (
             <span
               className="temple-modal__timer font-mono text-[10px] uppercase tracking-[.14em] text-amber-200/80"
-              aria-live="polite"
+              role="timer"
             >
               {timerLabel}
             </span>
@@ -145,7 +160,14 @@ export default function RitualModal({
           </Link>
         </header>
 
-        <div className="temple-modal__content">{children}</div>
+        <div
+          className={`temple-modal__content${
+            scene ? ' temple-modal__content--scene' : ''
+          }`}
+          data-ritual-scene={scene ? 'immersive' : 'scroll'}
+        >
+          {children}
+        </div>
 
         <nav className="temple-modal__dock" aria-label="Switch ritual">
           {TEMPLE_RITUAL_LINKS.map(({ label, href }) => (

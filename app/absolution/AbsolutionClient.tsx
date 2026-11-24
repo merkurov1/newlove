@@ -273,7 +273,7 @@ export default function AbsolutionClient() {
 
   return (
     <div
-      className={`relative flex min-h-[100dvh] w-full flex-col overflow-x-hidden ${roomTheme.bg} ${roomTheme.text} font-sans`}
+      className={`absolution-page relative flex min-h-[100dvh] w-full flex-col overflow-x-hidden ${roomTheme.bg} ${roomTheme.text} font-sans`}
       style={{
         backgroundImage:
           'radial-gradient(circle at 50% 40%, rgba(55, 40, 32, 0.75) 0%, rgba(20, 18, 16, 1) 90%)',
@@ -285,7 +285,7 @@ export default function AbsolutionClient() {
 
       <TempleTopBar backTo="temple" />
 
-      <section className="relative z-20 mx-auto flex min-h-[100dvh] w-full max-w-md flex-1 flex-col items-center justify-center px-6 py-28 sm:px-8 sm:py-32">
+      <section className="absolution-stage relative z-20 mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-6 py-28 sm:px-8 sm:py-32">
         {step === 'confess' && (
           <div
             className={`w-full space-y-7 rounded-3xl border ${roomTheme.cardBg} p-6 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-500 sm:p-8`}
