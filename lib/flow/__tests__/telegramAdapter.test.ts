@@ -269,7 +269,7 @@ describe('Telegram publisher', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toContain('/sendPhoto');
     expect(calls[0].body.caption).toContain('Короткая подпись.');
-    expect(calls[0].body.caption).toContain('Читать в Flow');
+    expect(calls[0].body.caption).toContain('>Flow</a>');
     expect(calls[0].body.show_caption_above_media).toBe(true);
   });
 

@@ -94,9 +94,14 @@ export function telegramLanguage(lang: string | null | undefined): TelegramLangu
     : 'ru';
 }
 
-export function telegramFlowLabel(lang: string | null | undefined): string {
-  return telegramLanguage(lang) === 'en' ? 'Read on Flow' : 'Читать в Flow';
+export function telegramFlowLabel(_lang?: string | null): string {
+  // The destination name is enough in a compact link row. Avoid phrases such
+  // as "Читать в Flow" / "Read on Flow" that only add vertical weight.
+  return 'Flow';
 }
+
+/** Separator between links in the compact row (Telegram-safe plain text). */
+export const TELEGRAM_LINK_SEPARATOR = ' | ';
 
 export function telegramSourceLabel(lang: string | null | undefined): string {
   return telegramLanguage(lang) === 'en' ? 'Source' : 'Источник';
@@ -617,14 +622,42 @@ export function takeTelegramHtmlHead(
 /* Link protocol                                                       */
 /* ------------------------------------------------------------------ */
 
-function flowLinkHtml(flowUrl: string, lang: TelegramLanguage): string {
-  return `<a href="${escapeHtmlAttribute(flowUrl)}">${escapeHtml(telegramFlowLabel(lang))}</a>`;
+type TelegramLinkEntry = {
+  url: string;
+  label: string;
+};
+
+function compactLinkAnchor(link: TelegramLinkEntry): string {
+  return `<a href="${escapeHtmlAttribute(link.url)}">${escapeHtml(link.label)}</a>`;
 }
 
-function sourceLinkHtml(sourceUrl: string, lang: TelegramLanguage, label?: string): string {
-  return `<a href="${escapeHtmlAttribute(sourceUrl)}">${escapeHtml(
-    label ?? telegramSourceLabel(lang)
-  )}</a>`;
+function compactLinkKey(url: string): string {
+  return (normalizeHttpUrl(url) ?? url).trim().toLowerCase();
+}
+
+/**
+ * Build one Telegram-safe inline row. Duplicate destinations are collapsed so
+ * a source/video link is never repeated as both an attachment and a text link.
+ */
+function compactLinkRow(links: TelegramLinkEntry[]): string {
+  const seen = new Set<string>();
+  const anchors: string[] = [];
+
+  for (const link of links) {
+    const key = compactLinkKey(link.url);
+    const label = link.label.trim();
+    if (!key || !label || seen.has(key)) continue;
+    seen.add(key);
+    anchors.push(compactLinkAnchor({ url: link.url, label }));
+  }
+
+  return anchors.join(TELEGRAM_LINK_SEPARATOR);
+}
+
+function appendCompactLinkRow(text: string, row: string): string {
+  const body = text.trim();
+  if (!row) return body;
+  return body ? `${body} ${row}` : row;
 }
 
 function labelForLink(link: FlowLink): string {
@@ -636,7 +669,7 @@ function labelForLink(link: FlowLink): string {
 
 /**
  * Enforce one canonical Flow link and at most one appended source label.
- * This is kept for callers that format text outside the composition layer.
+ * The links are kept in the same compact row used by the composition layer.
  */
 export function ensureTelegramLinks(
   html: string,
@@ -645,17 +678,23 @@ export function ensureTelegramLinks(
   lang: string | null | undefined = 'ru'
 ): string {
   const language = telegramLanguage(lang);
-  const canonicalFlow = flowLinkHtml(flowUrl, language);
-  let result = removeAnchorsTo(html, flowUrl).trim();
-  result += `${result ? '\n\n' : ''}${canonicalFlow}`;
-
   const cleanSource = normalizeHttpUrl(sourceUrl);
-  if (cleanSource && !htmlContainsHref(html, cleanSource)) {
-    const canonicalSource = sourceLinkHtml(cleanSource, language);
-    result = result.replace(canonicalFlow, `${canonicalSource}\n\n${canonicalFlow}`);
+  const links: TelegramLinkEntry[] = [];
+
+  if (
+    cleanSource &&
+    !hrefMatches(cleanSource, flowUrl) &&
+    !htmlContainsHref(html, cleanSource)
+  ) {
+    links.push({ url: cleanSource, label: telegramSourceLabel(language) });
   }
 
-  return result.replace(/\n{3,}/g, '\n\n').trim();
+  links.push({ url: flowUrl, label: telegramFlowLabel(language) });
+
+  const body = removeAnchorsTo(html, flowUrl).trim();
+  const row = compactLinkRow(links);
+
+  return appendCompactLinkRow(body, row).replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /* ------------------------------------------------------------------ */
@@ -815,33 +854,43 @@ function buildHtmlSections(input: {
 
   if (input.bodyHtml) sections.push(input.bodyHtml);
 
-  const extraLinks = input.content.links
-    .slice(1)
-    .filter((link) => !link.inBody)
-    .filter((link) => !hrefMatches(link.url, input.flowUrl))
-    .filter((link) => !input.sourceUrl || !hrefMatches(link.url, input.sourceUrl))
-    .map((link) => `<a href="${escapeHtmlAttribute(link.url)}">${escapeHtml(labelForLink(link))}</a>`);
+  const links: TelegramLinkEntry[] = [];
 
-  if (extraLinks.length) sections.push(extraLinks.join('\n'));
+  for (const link of input.content.links.slice(1)) {
+    if (link.inBody) continue;
+    if (hrefMatches(link.url, input.flowUrl)) continue;
+    if (input.sourceUrl && hrefMatches(link.url, input.sourceUrl)) continue;
+    links.push({ url: link.url, label: labelForLink(link) });
+  }
 
-  const videoLinks = input.content.videos
-    .filter((video) => !input.sourceUrl || !hrefMatches(video.url, input.sourceUrl))
-    .filter((video) => !htmlContainsHref(input.bodyHtml, video.url))
-    .map(
-      (video) =>
-        `<a href="${escapeHtmlAttribute(video.url)}">${escapeHtml(
-          telegramVideoLabel(input.language)
-        )}</a>`
-    );
-
-  if (videoLinks.length) sections.push(videoLinks.join('\n'));
+  for (const video of input.content.videos) {
+    if (input.sourceUrl && hrefMatches(video.url, input.sourceUrl)) continue;
+    if (htmlContainsHref(input.bodyHtml, video.url)) continue;
+    links.push({
+      url: video.url,
+      label: telegramVideoLabel(input.language),
+    });
+  }
 
   if (input.sourceUrl && !sourceIncluded) {
-    sections.push(sourceLinkHtml(input.sourceUrl, input.language, input.sourceLabel));
+    links.push({ url: input.sourceUrl, label: input.sourceLabel });
     sourceIncluded = true;
   }
 
-  sections.push(flowLinkHtml(input.flowUrl, input.language));
+  links.push({ url: input.flowUrl, label: telegramFlowLabel(input.language) });
+
+  const linkRow = compactLinkRow(links);
+
+  if (linkRow) {
+    if (input.bodyHtml && sections.length) {
+      const last = sections.length - 1;
+      sections[last] = appendCompactLinkRow(sections[last], linkRow);
+    } else {
+      // No body text: the compact row starts the message (the title, when
+      // present, follows as the first text block).
+      sections.unshift(linkRow);
+    }
+  }
 
   return {
     html: sections
