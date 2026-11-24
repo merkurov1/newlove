@@ -28,6 +28,7 @@ export const TELEGRAM_NAV_HIDDEN_ROUTES = [
   '/absolution',
   '/cast',
   '/tribute',
+  '/temple/support',
   // Flow owns its own Telegram navigation (← Temple / ← Flow) so the global
   // Temple navigation does not overlap the editorial reading column.
   '/flow',
@@ -66,6 +67,7 @@ export const TEMPLE_AUDIO_ROUTES = [
   '/absolution',
   '/cast',
   '/tribute',
+  '/temple/support',
 ] as const;
 
 export function isTempleAudioRoute(pathname: string): boolean {

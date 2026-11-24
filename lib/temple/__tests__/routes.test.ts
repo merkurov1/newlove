@@ -25,10 +25,12 @@ describe('Temple route classification', () => {
     expect(isTelegramNavigationHidden('/heartandangel/calm')).toBe(true);
     expect(isTelegramNavigationHidden('/heartandangel/letitgo')).toBe(true);
     expect(isTelegramNavigationHidden('/vigil')).toBe(true);
+    expect(isTelegramNavigationHidden('/temple/support')).toBe(true);
   });
 
   it('keeps the shared Temple audio across every ritual route', () => {
     expect(isTempleAudioRoute('/temple')).toBe(true);
+    expect(isTempleAudioRoute('/temple/support')).toBe(true);
     expect(isTempleAudioRoute('/cast')).toBe(true);
     expect(isTempleAudioRoute('/vigil')).toBe(true);
     expect(isTempleAudioRoute('/tribute')).toBe(true);

@@ -6,9 +6,9 @@
  */
 
 export const TEMPLE_LIGHT_CHROME = {
-  header: '#FAF8F5',
-  background: '#FAF8F5',
-  bottomBar: '#FAF8F5',
+  header: '#f6f1e8',
+  background: '#f6f1e8',
+  bottomBar: '#efe7da',
 } as const;
 
 export const DEFAULT_DARK_CHROME = {

@@ -1,0 +1,1408 @@
+/*
+ * The Sanctuary — Digital Temple
+ *
+ * One deliberately light canvas at every hour and under every OS theme.
+ * Desktop is a three-column stage: the two supplied stained-glass panels are
+ * stationary rails and only the centre column scrolls. Below the desktop
+ * breakpoint the same nodes reflow into a single document so phones, tablets
+ * and Telegram WebViews never inherit a nested scroll trap.
+ */
+
+/*
+ * The document behind the stage must stay light too. Without this, an OS dark
+ * preference paints the global body dark and it can show through overscroll,
+ * safe-area gaps or Telegram WebView chrome even though the page itself is
+ * light. The rule is scoped to the Temple stage, so the rest of the site keeps
+ * its own theme behaviour.
+ */
+:global(html:has([data-temple-theme='light'])) {
+  color-scheme: light;
+}
+
+:global(body:has([data-temple-theme='light'])) {
+  background-color: #f6f1e8;
+}
+
+.stage {
+  --canvas: #f6f1e8;
+  --canvas-deep: #efe7da;
+  --ink: #251f1a;
+  --muted: #75695e;
+  --faint: #9c8e81;
+  --line: rgba(55, 43, 34, 0.14);
+  --line-strong: rgba(55, 43, 34, 0.28);
+  --card: rgba(255, 253, 249, 0.66);
+  --card-solid: #fbf8f2;
+  --blue: rgba(91, 132, 190, 0.34);
+  --red: rgba(176, 56, 48, 0.3);
+  --gold: #9a7437;
+  --focus: #2f5f9e;
+
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  color: var(--ink);
+  color-scheme: light;
+  background:
+    radial-gradient(ellipse 46% 42% at 50% 6%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 72%),
+    radial-gradient(ellipse 34% 52% at 0% 50%, rgba(91, 132, 190, 0.1) 0%, rgba(91, 132, 190, 0) 70%),
+    radial-gradient(ellipse 34% 52% at 100% 50%, rgba(91, 132, 190, 0.1) 0%, rgba(91, 132, 190, 0) 70%),
+    linear-gradient(180deg, var(--canvas) 0%, var(--canvas-deep) 100%);
+  font-family:
+    var(--font-inter),
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+.stage::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background-image: radial-gradient(rgba(37, 31, 26, 0.035) 0.6px, transparent 0.6px);
+  background-size: 5px 5px;
+  content: '';
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.stage a,
+.stage button {
+  color: inherit;
+}
+
+.stage a:hover,
+.stage a:focus,
+.stage button:hover,
+.stage button:focus {
+  opacity: 1;
+}
+
+.stage a:focus-visible,
+.stage button:focus-visible,
+.stage input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 44rem) minmax(0, 1fr);
+  width: 100%;
+  max-width: 1680px;
+  height: 100dvh;
+  margin: 0 auto;
+}
+
+/* --- Stationary stained-glass rails ------------------------------------ */
+
+.rail {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100dvh;
+  min-width: 0;
+  padding: 2rem clamp(1rem, 2vw, 2.25rem);
+}
+
+.railLeft {
+  justify-content: flex-end;
+}
+
+.railRight {
+  justify-content: flex-start;
+}
+
+.railGlow {
+  position: absolute;
+  width: min(34vw, 26rem);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: radial-gradient(circle at 50% 50%, var(--blue) 0%, rgba(91, 132, 190, 0.13) 46%, rgba(91, 132, 190, 0) 72%);
+  filter: blur(38px);
+  pointer-events: none;
+}
+
+.panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  max-width: min(20vw, 16.5rem);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.panelImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: min(74dvh, 34rem);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  object-fit: contain;
+  box-shadow: none;
+}
+
+.panelLeft .panelImage {
+  -webkit-clip-path: url('#temple-window-arch-left');
+  clip-path: url('#temple-window-arch-left');
+}
+
+.panelRight .panelImage {
+  -webkit-clip-path: url('#temple-window-arch-right');
+  clip-path: url('#temple-window-arch-right');
+}
+
+.archDefs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.panelCaption {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--faint);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.panelCaption::before,
+.panelCaption::after {
+  display: block;
+  width: 1.1rem;
+  height: 1px;
+  background: var(--line);
+  content: '';
+}
+
+/* --- Centre scroll column ---------------------------------------------- */
+
+.center {
+  position: relative;
+  height: 100dvh;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 clamp(1.25rem, 3vw, 2.75rem) 4rem;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+.main {
+  min-width: 0;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 3.5rem;
+  padding: max(0.55rem, env(safe-area-inset-top), var(--tg-safe-area-top, 0px)) 0 0.55rem;
+  background: linear-gradient(180deg, rgba(246, 241, 232, 0.97) 0%, rgba(246, 241, 232, 0.82) 72%, rgba(246, 241, 232, 0) 100%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  line-height: 1;
+  text-transform: uppercase;
+  transition: color 180ms ease;
+}
+
+.navLink:hover {
+  color: var(--ink);
+}
+
+.navMark {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--faint);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  line-height: 1;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding-bottom: 0.4rem;
+}
+
+.identityBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 32px;
+  padding: 0.28rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+/* --- Hero --------------------------------------------------------------- */
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 38rem;
+  margin: 0 auto;
+  padding: clamp(1rem, 3.2vh, 2.2rem) 0 clamp(2rem, 4.5vh, 3rem);
+  text-align: center;
+}
+
+.heartLink {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  color: inherit;
+  text-align: center;
+}
+
+.heartStage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(9rem, 20vh, 13.5rem);
+  aspect-ratio: 1;
+}
+
+.heartRedGlow {
+  position: absolute;
+  inset: 2%;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 50%, var(--red) 0%, rgba(176, 56, 48, 0.12) 52%, rgba(176, 56, 48, 0) 72%);
+  filter: blur(24px);
+  pointer-events: none;
+  transition: opacity 600ms ease, filter 600ms ease;
+}
+
+.heartPulse {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 54%;
+  will-change: transform;
+}
+
+.heartImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border: 0;
+  background: transparent;
+}
+
+.heartLink:hover .heartPulse,
+.heartLink:focus .heartPulse,
+.heartLink:focus-visible .heartPulse {
+  animation: temple-heart-pulse 2200ms cubic-bezier(0.37, 0, 0.63, 1) infinite;
+}
+
+.heartLink:hover .heartRedGlow,
+.heartLink:focus .heartRedGlow,
+.heartLink:focus-visible .heartRedGlow {
+  filter: blur(29px);
+  opacity: 0.95;
+}
+
+@keyframes temple-heart-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  42% {
+    transform: scale(1.045);
+  }
+  58% {
+    transform: scale(1.03);
+  }
+}
+
+.vigilCaption {
+  margin-top: 0.1rem;
+  color: var(--ink);
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: clamp(0.72rem, 1.6vw, 0.86rem);
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.vigilMeta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 18px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.vigilCount {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.vigilProblem {
+  max-width: 18rem;
+  color: var(--muted);
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.eyebrow {
+  margin: clamp(1.3rem, 3vh, 2.1rem) 0 0;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0.55rem 0 0;
+  color: var(--ink);
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: clamp(3rem, 6vh, 4.6rem);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 0.94;
+}
+
+.lede {
+  max-width: 28rem;
+  margin: 0.9rem auto 0;
+  color: var(--muted);
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: clamp(1.05rem, 2vh, 1.24rem);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.005em;
+  line-height: 1.55;
+}
+
+/* --- Shared sections ---------------------------------------------------- */
+
+.section {
+  width: 100%;
+  max-width: 38rem;
+  margin: 0 auto;
+  padding-top: clamp(1.6rem, 4vh, 2.6rem);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.45rem;
+  font-weight: 500;
+  letter-spacing: 0.015em;
+  line-height: 1;
+}
+
+.sectionNote {
+  margin: 0;
+  color: var(--faint);
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  line-height: 1.5;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+/* --- Rituals ------------------------------------------------------------ */
+
+.ritualGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.ritualCard {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 4.2rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+.ritualCard:hover,
+.ritualCard:focus-visible {
+  border-color: var(--line-strong);
+  background: rgba(255, 253, 249, 0.95);
+  transform: translateY(-1px);
+}
+
+.ritualIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--accent, var(--gold));
+}
+
+.ritualBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.ritualLabel {
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+}
+
+.ritualHint {
+  color: var(--faint);
+  font-size: 8px;
+  letter-spacing: 0.15em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+/* --- Support / Tribute -------------------------------------------------- */
+
+.supportCard {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background:
+    radial-gradient(ellipse 80% 120% at 50% 0%, rgba(154, 116, 55, 0.12) 0%, rgba(154, 116, 55, 0) 72%),
+    var(--card);
+}
+
+.supportTitle {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.supportCopy {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: 0.98rem;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.supportPrimary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin-top: 0.8rem;
+  padding: 0.65rem 1.1rem;
+  border: 1px solid rgba(154, 116, 55, 0.5);
+  border-radius: 999px;
+  background: rgba(154, 116, 55, 0.12);
+  color: var(--ink);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
+
+.supportPrimary:hover,
+.supportPrimary:focus-visible {
+  border-color: rgba(154, 116, 55, 0.8);
+  background: rgba(154, 116, 55, 0.2);
+}
+
+.amountRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.amountButton {
+  min-width: 4.4rem;
+  min-height: 44px;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
+
+.amountButton:hover,
+.amountButton:focus-visible {
+  border-color: rgba(154, 116, 55, 0.6);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.amountButton:disabled,
+.supportPrimary:disabled,
+.supportSubmit:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.supportStatus {
+  margin: 0.65rem 0 0;
+  color: var(--muted);
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  line-height: 1.6;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.supportError {
+  margin: 0.65rem 0 0;
+  color: #8d2f28;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  line-height: 1.6;
+  text-align: center;
+}
+
+/* --- Traces ------------------------------------------------------------- */
+
+.tracesPanel {
+  border-top: 1px solid var(--line);
+}
+
+.tracesActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ghostButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: color 180ms ease, border-color 180ms ease;
+}
+
+.ghostButton:hover,
+.ghostButton:focus-visible {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.traceNotice {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+}
+
+.traceList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.traceRow {
+  display: grid;
+  grid-template-columns: 6.7rem minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.7rem;
+  min-height: 2.55rem;
+  padding: 0.34rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.traceRow:last-child {
+  border-bottom: 0;
+}
+
+.traceIdentity {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  color: var(--muted);
+}
+
+.traceIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--accent, var(--muted));
+}
+
+.traceLabel {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.traceBody {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.traceText {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traceAuthor {
+  flex: 0 0 auto;
+  color: var(--faint);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.traceTime {
+  color: var(--faint);
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  line-height: 1.4;
+  text-align: right;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.traceEmpty {
+  margin: 0;
+  padding: 1.4rem 0;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* --- Chambers / footer -------------------------------------------------- */
+
+.chamberGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.chamberLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: color 180ms ease, border-color 180ms ease;
+}
+
+.chamberLink:hover,
+.chamberLink:focus-visible {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  max-width: 38rem;
+  margin: 1.5rem auto 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.footerMark {
+  margin: 0;
+  color: var(--faint);
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.footerActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/*
+ * Telegram keeps two floating navigation triggers pinned to the bottom edges.
+ * Reserve their height at the end of the scroll column so the footer actions
+ * are never covered on small phones or in a WebView with a safe-area inset.
+ */
+:global(body.telegram-app) .footer {
+  padding-bottom: calc(5rem + max(env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px)));
+}
+
+.leftWithoutTrace {
+  margin: 0.7rem 0 0;
+  color: var(--muted);
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* --- Non-payment dialogs (Chronicles / info) ---------------------------- */
+
+.modalOverlay {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(37, 31, 26, 0.45);
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
+}
+
+.modalPanel {
+  position: relative;
+  width: min(100%, 30rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  padding: 1.35rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--card-solid);
+  color: var(--ink);
+  box-shadow: 0 30px 80px rgba(37, 31, 26, 0.24);
+}
+
+.modalClose {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  background: rgba(55, 43, 34, 0.08);
+  color: var(--ink);
+}
+
+.modalTitle {
+  margin: 0;
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.6rem;
+  font-weight: 500;
+}
+
+.modalLead {
+  margin: 0.6rem 0 0;
+  color: var(--muted);
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.modalHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.8rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  text-align: center;
+}
+
+.statValue {
+  font-size: 1.6rem;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.statLabel {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.statNote {
+  color: var(--faint);
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.modalNote {
+  margin: 0.9rem 0 0;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  line-height: 1.6;
+}
+
+/* --- Non-modal support / payment selection route ------------------------ */
+
+.supportStage {
+  --canvas: #f6f1e8;
+  --canvas-deep: #efe7da;
+  --ink: #251f1a;
+  --muted: #75695e;
+  --faint: #9c8e81;
+  --line: rgba(55, 43, 34, 0.14);
+  --line-strong: rgba(55, 43, 34, 0.28);
+  --card: rgba(255, 253, 249, 0.66);
+  --card-solid: #fbf8f2;
+  --focus: #2f5f9e;
+
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  padding: max(1rem, env(safe-area-inset-top), var(--tg-safe-area-top, 0px))
+    max(1rem, env(safe-area-inset-right), var(--tg-safe-area-right, 0px))
+    max(1.5rem, env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))
+    max(1rem, env(safe-area-inset-left), var(--tg-safe-area-left, 0px));
+  color: var(--ink);
+  color-scheme: light;
+  background:
+    radial-gradient(ellipse 46% 30% at 50% 0%, rgba(154, 116, 55, 0.12) 0%, rgba(154, 116, 55, 0) 74%),
+    linear-gradient(180deg, var(--canvas) 0%, var(--canvas-deep) 100%);
+  font-family:
+    var(--font-inter),
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+.supportStage::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background-image: radial-gradient(rgba(37, 31, 26, 0.035) 0.6px, transparent 0.6px);
+  background-size: 5px 5px;
+  content: '';
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.supportShell {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 30rem;
+  margin: 0 auto;
+}
+
+.supportHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 3.25rem;
+}
+
+.supportHero {
+  margin: clamp(1.4rem, 6vh, 3rem) 0 0;
+  text-align: center;
+}
+
+.supportEyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+}
+
+.supportHeading {
+  margin: 0.55rem 0 0;
+  color: var(--ink);
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: clamp(2.4rem, 8vw, 3.4rem);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 0.96;
+}
+
+.supportLead {
+  max-width: 24rem;
+  margin: 0.8rem auto 0;
+  color: var(--muted);
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.06rem;
+  font-style: italic;
+  line-height: 1.55;
+}
+
+.supportForm {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--card);
+}
+
+.supportFormLabel {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.supportPresets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.supportPreset {
+  min-height: 3.25rem;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--ink);
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+
+.supportPreset:hover,
+.supportPreset:focus-visible {
+  border-color: rgba(154, 116, 55, 0.62);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.customRow {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.customInput {
+  min-width: 0;
+  flex: 1;
+  min-height: 48px;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.customInput::placeholder {
+  color: var(--faint);
+}
+
+.supportSubmit {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0.6rem 1rem;
+  border: 1px solid rgba(154, 116, 55, 0.5);
+  border-radius: 0.75rem;
+  background: rgba(154, 116, 55, 0.14);
+  color: var(--ink);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.secureNote {
+  margin: 1rem auto 0;
+  max-width: 26rem;
+  color: var(--faint);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  line-height: 1.7;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* --- Tablet / phone / Telegram ----------------------------------------- */
+
+@media (max-width: 1023px) {
+  .stage {
+    height: auto;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'topbar topbar'
+      'hero hero'
+      'left right'
+      'rituals rituals'
+      'support support'
+      'traces traces'
+      'chambers chambers'
+      'footer footer';
+    width: 100%;
+    max-width: 44rem;
+    height: auto;
+    padding: 0 clamp(1rem, 4vw, 1.75rem) 2.25rem;
+  }
+
+  .center {
+    display: contents;
+  }
+
+  .main {
+    display: contents;
+  }
+
+  .topbar {
+    grid-area: topbar;
+    position: relative;
+    min-height: 3.25rem;
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .hero {
+    grid-area: hero;
+    padding-top: 0.8rem;
+  }
+
+  .rail {
+    position: relative;
+    top: auto;
+    height: auto;
+    min-height: 0;
+    padding: 0.35rem 0 0.6rem;
+  }
+
+  .railLeft {
+    grid-area: left;
+    justify-content: flex-end;
+    padding-right: 0.45rem;
+  }
+
+  .railRight {
+    grid-area: right;
+    justify-content: flex-start;
+    padding-left: 0.45rem;
+  }
+
+  .railGlow {
+    width: min(48vw, 16rem);
+    filter: blur(30px);
+  }
+
+  .panel {
+    max-width: min(34vw, 12rem);
+  }
+
+  .panelImage {
+    max-height: 30dvh;
+  }
+
+  .section {
+    grid-area: rituals;
+    max-width: 44rem;
+  }
+
+  .ritualsSection {
+    grid-area: rituals;
+  }
+
+  .supportSection {
+    grid-area: support;
+  }
+
+  .tracesSection {
+    grid-area: traces;
+  }
+
+  .chambersSection {
+    grid-area: chambers;
+  }
+
+  .footer {
+    grid-area: footer;
+    max-width: 44rem;
+  }
+
+  .traceRow {
+    grid-template-columns: 6.7rem minmax(0, 1fr) auto;
+  }
+}
+
+@media (max-width: 639px) {
+  .layout {
+    padding-right: max(0.9rem, env(safe-area-inset-right), var(--tg-safe-area-right, 0px));
+    padding-left: max(0.9rem, env(safe-area-inset-left), var(--tg-safe-area-left, 0px));
+  }
+
+  .heartStage {
+    width: clamp(8.5rem, 40vw, 10.5rem);
+  }
+
+  .title {
+    font-size: clamp(2.65rem, 13vw, 3.8rem);
+  }
+
+  .ritualGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .ritualCard {
+    min-height: 3.9rem;
+  }
+
+  .sectionHeading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .sectionNote {
+    text-align: left;
+  }
+
+  .traceRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 0.15rem;
+    padding: 0.55rem 0;
+  }
+
+  .traceIdentity {
+    grid-column: 1;
+  }
+
+  .traceTime {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .traceBody {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .traceText {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .traceAuthor {
+    white-space: normal;
+  }
+
+  .supportPresets {
+    gap: 0.4rem;
+  }
+
+  .customRow {
+    flex-direction: column;
+  }
+
+  .supportSubmit {
+    width: 100%;
+  }
+
+  .footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* --- Reduced motion ----------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .heartLink:hover .heartPulse,
+  .heartLink:focus .heartPulse,
+  .heartLink:focus-visible .heartPulse {
+    animation: none;
+  }
+
+  .heartLink:hover .heartRedGlow,
+  .heartLink:focus .heartRedGlow,
+  .heartLink:focus-visible .heartRedGlow {
+    filter: blur(24px);
+  }
+
+  .stage *,
+  .stage *::before,
+  .stage *::after,
+  .supportStage *,
+  .supportStage *::before,
+  .supportStage *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
