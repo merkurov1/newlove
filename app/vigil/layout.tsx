@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   title: 'Vigil — Digital Temple',
 
   description:
-    'Keep the heart alive. Vigil is a shared digital ritual of presence, light and guardianship inside the Heart & Angel Digital Temple.',
+    'An angel keeps a candle and lights the shared heart. Vigil is a digital ritual of presence, light and guardianship inside the Heart & Angel Digital Temple.',
 
   alternates: {
     canonical: VIGIL_URL,
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     title: 'Vigil — Digital Temple',
 
     description:
-      'Keep the heart alive. A shared digital ritual of presence and light.',
+      'An angel keeps a candle and lights the shared heart. A digital ritual of presence and light.',
 
     url: VIGIL_URL,
 
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
         url: VIGIL_IMAGE,
         width: 800,
         height: 800,
-        alt: 'Vigil — Heart & Angel',
+        alt: 'Vigil — the angel, the candle and the heart',
       },
     ],
 
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
     title: 'Vigil — Digital Temple',
 
     description:
-      'Keep the heart alive. A shared digital ritual of presence and light.',
+      'An angel keeps a candle and lights the shared heart. A digital ritual of presence and light.',
 
     images: [VIGIL_IMAGE],
   },

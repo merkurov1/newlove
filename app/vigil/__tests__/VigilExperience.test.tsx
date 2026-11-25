@@ -197,6 +197,19 @@ beforeEach(() => {
 });
 
 describe('/vigil shared flame surface', () => {
+  it('stages the ritual as an angel, a candle and the shared heart', () => {
+    render(<VigilExperience />);
+
+    expect(screen.getByText(/an angel keeps a candle/i)).toBeInTheDocument();
+    expect(
+      screen.getByAltText(/guardian angel keeping the candle/i)
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('vigil-heart')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /sign in to send a spark/i })
+    ).toBeDisabled();
+  });
+
   it('renders the same intensity as the shared calculation for the same server state', async () => {
     const state = snapshot({ supporterCount: 8 });
 

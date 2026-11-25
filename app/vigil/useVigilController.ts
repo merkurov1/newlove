@@ -26,12 +26,6 @@ export type VigilFlameData = {
   [key: string]: unknown;
 };
 
-type TempleLogRow = {
-  author: string | null;
-  message: string | null;
-  created_at: string;
-};
-
 export type VigilSparkPosition = {
   start: { x: number; y: number };
   end: { x: number; y: number };
@@ -59,7 +53,6 @@ export function useVigilController() {
   const reduceMotion = usePrefersReducedMotion();
 
   // The homepage and this ritual read the very same authoritative snapshot.
-  // Guardian names below are display-only and never feed the artwork.
   const {
     supporterCount,
     lastLitAt,
@@ -79,7 +72,6 @@ export function useVigilController() {
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [flameData, setFlameData] = useState<VigilFlameData | null>(null);
-  const [guardians, setGuardians] = useState<string[]>([]);
   const [isLighting, setIsLighting] = useState(false);
   const [spark, setSpark] = useState<VigilSparkPosition | null>(null);
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
@@ -138,54 +130,6 @@ export function useVigilController() {
     setCooldownRemainingMs(safeRemaining);
   }, []);
 
-  const refreshGuardians = useCallback(async (): Promise<number> => {
-    try {
-      const yesterday = new Date(
-        Date.now() - 24 * 60 * 60 * 1000
-      ).toISOString();
-
-      const { data, error } = await supabase
-        .from('temple_log')
-        .select('author, message, created_at')
-        .in('event_type', ['vigil_spark', 'VIGIL_SPARK'])
-        .gt('created_at', yesterday)
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (error) {
-        console.error('Vigil guardians error:', error);
-        return 0;
-      }
-
-      if (!data) return 0;
-
-      const rows = data as TempleLogRow[];
-      const names: string[] = [];
-
-      rows.forEach((row) => {
-        if (row.author?.trim()) {
-          names.push(row.author.trim());
-          return;
-        }
-
-        if (row.message?.trim()) {
-          const parts = row.message.trim().split(/\s+/);
-
-          if (parts[0]) names.push(parts[0].trim());
-        }
-      });
-
-      const unique = Array.from(new Set(names));
-
-      setGuardians(unique.slice(0, 8));
-
-      return unique.length;
-    } catch (error) {
-      console.error('Vigil guardians exception:', error);
-      return 0;
-    }
-  }, []);
-
   const refreshData = useCallback(async () => {
     try {
       const { data: flame, error } = await supabase
@@ -199,12 +143,10 @@ export function useVigilController() {
       } else if (flame) {
         setFlameData(flame as VigilFlameData);
       }
-
-      await refreshGuardians();
     } catch (error) {
       console.error('Vigil refresh error:', error);
     }
-  }, [refreshGuardians]);
+  }, []);
 
   const updateClock = useCallback(() => {
     setNowMs(Date.now());
@@ -240,17 +182,6 @@ export function useVigilController() {
           }
         }
       )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'temple_log' },
-        (payload) => {
-          const newRow = payload.new as { event_type?: string | null };
-
-          if (String(newRow?.event_type || '').toUpperCase() === 'VIGIL_SPARK') {
-            void refreshGuardians();
-          }
-        }
-      )
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR') {
           console.error('Vigil realtime channel error');
@@ -283,7 +214,7 @@ export function useVigilController() {
 
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [refreshData, refreshGuardians, updateClock]);
+  }, [refreshData, updateClock]);
 
   // Ask the server for this identity's own cooldown. The public flame timer is
   // never used to infer whether this visitor may spark.
@@ -542,7 +473,6 @@ export function useVigilController() {
     reduceMotion,
     angelRef,
     heartRef,
-    guardians,
     flameData,
     flameLit,
     flameLabel,
