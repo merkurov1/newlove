@@ -121,8 +121,8 @@ export default function TempleSupportClient() {
             <p className={styles.supportEyebrow}>THE SANCTUARY</p>
             <h1 className={styles.supportHeading}>Support the Temple</h1>
             <p className={styles.supportLead}>
-              Choose an amount. The secure Stripe checkout opens immediately;
-              nothing is charged until you confirm there.
+              Choose an amount. Secure checkout opens immediately; nothing is
+              charged until you confirm there.
             </p>
           </div>
 
@@ -142,7 +142,8 @@ export default function TempleSupportClient() {
                   onClick={() => void startCheckout(amount, true)}
                   disabled={pending !== null}
                   className={styles.supportPreset}
-                  title={`Continue to secure Stripe checkout for $${amount}`}
+                  aria-label={`Support the Temple with $${amount}`}
+                  title={`Continue to secure checkout for $${amount}`}
                 >
                   {pending === amount ? 'Opening…' : `$${amount}`}
                 </button>
@@ -192,8 +193,8 @@ export default function TempleSupportClient() {
 
             <p className={styles.supportStatus} aria-live="polite">
               {pending !== null
-                ? 'Opening the secure Stripe checkout…'
-                : 'Preset amounts open Stripe immediately.'}
+                ? 'Opening secure checkout…'
+                : 'Preset amounts open secure checkout immediately.'}
             </p>
           </section>
 
@@ -203,9 +204,8 @@ export default function TempleSupportClient() {
               aria-hidden="true"
               style={{ display: 'inline', verticalAlign: '-2px' }}
             />{' '}
-            Payment is handled by Stripe. The Temple validates the amount and
-            confirms success only through Stripe verification and its webhook.
-            Nothing is charged automatically.
+            Payment is handled securely by Stripe. Nothing is charged until you
+            confirm it there.
           </p>
 
           <p className={styles.secureNote}>

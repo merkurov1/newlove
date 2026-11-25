@@ -6,7 +6,7 @@ const SUPPORT_URL = 'https://www.merkurov.love/temple/support';
 export const metadata: Metadata = {
   title: 'Support the Temple — Digital Temple',
   description:
-    'Choose an amount and continue to the secure Stripe checkout for the Digital Temple.',
+    'Choose an amount and continue to secure checkout for the Digital Temple.',
   alternates: {
     canonical: SUPPORT_URL,
   },

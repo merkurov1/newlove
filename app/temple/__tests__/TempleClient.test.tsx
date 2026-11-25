@@ -612,13 +612,13 @@ describe('Temple home composition', () => {
       within(tribute).getByRole('link', { name: /support the temple/i })
     ).toHaveAttribute('href', '/temple/support');
     expect(
-      within(tribute).getByRole('button', { name: '$5' })
+      within(tribute).getByRole('button', { name: /Support the Temple with \$5/ })
     ).toBeInTheDocument();
     expect(
-      within(tribute).getByRole('button', { name: '$20' })
+      within(tribute).getByRole('button', { name: /Support the Temple with \$20/ })
     ).toBeInTheDocument();
     expect(
-      within(tribute).getByRole('button', { name: '$100' })
+      within(tribute).getByRole('button', { name: /Support the Temple with \$100/ })
     ).toBeInTheDocument();
     expect(screen.queryByTestId('shared-vigil-group')).toBeNull();
   });
@@ -707,7 +707,7 @@ describe('Temple home composition', () => {
 
     expect(screen.queryByRole('dialog')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: '$5' }));
+    fireEvent.click(screen.getByRole('button', { name: /Support the Temple with \$5/ }));
 
     await waitFor(() => {
       expect(checkoutClient.createTributeCheckout).toHaveBeenCalledWith(
@@ -724,7 +724,7 @@ describe('Temple home composition', () => {
   it('never routes a specific amount through /tribute', async () => {
     render(<TempleClient />);
 
-    fireEvent.click(screen.getByRole('button', { name: '$20' }));
+    fireEvent.click(screen.getByRole('button', { name: /Support the Temple with \$20/ }));
 
     await waitFor(() => {
       expect(checkoutClient.createTributeCheckout).toHaveBeenCalledWith(
@@ -792,7 +792,7 @@ describe('Temple home composition', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Chronicles' });
 
     expect(within(dialog).getByText('Named pilgrims')).toBeInTheDocument();
-    expect(within(dialog).getByText('Rituals completed')).toBeInTheDocument();
+    expect(within(dialog).getByText('Rituals kept')).toBeInTheDocument();
     expect(within(dialog).getByText('Vigil sparks')).toBeInTheDocument();
     await waitFor(() => {
       expect(within(dialog).getByText('42')).toBeInTheDocument();
@@ -864,5 +864,35 @@ describe('Temple home composition', () => {
     const dialog = await screen.findByRole('dialog', { name: 'The Sanctuary' });
 
     expect(dialog).toHaveTextContent('It stays light at every hour');
+  });
+
+  it('moves focus into the information dialog and restores it on Escape', async () => {
+    render(<TempleClient />);
+
+    const trigger = screen.getByRole('button', {
+      name: 'Open Sanctuary information',
+    });
+
+    trigger.focus();
+    fireEvent.click(trigger);
+
+    const dialog = await screen.findByRole('dialog', { name: 'The Sanctuary' });
+
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole('button', {
+          name: 'Close Sanctuary information',
+        })
+      ).toHaveFocus()
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'The Sanctuary' })
+      ).toBeNull()
+    );
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 });

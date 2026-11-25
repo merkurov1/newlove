@@ -11,8 +11,11 @@ export default function SoundToggle({ className = '' }: SoundToggleProps) {
 
   return (
     <button
+      type="button"
       onClick={toggleAudio}
-      className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-mono uppercase tracking-wider transition-all cursor-pointer bg-white/80 backdrop-blur-md border border-stone-200 shadow-sm hover:bg-stone-100 ${className}`}
+      aria-label={isPlaying ? 'Pause ambient audio' : 'Play ambient audio'}
+      aria-pressed={isPlaying}
+      className={`flex min-h-[44px] items-center gap-2 px-4 py-2 rounded-full text-xs font-mono uppercase tracking-wider transition-all cursor-pointer bg-white/80 backdrop-blur-md border border-stone-200 shadow-sm hover:bg-stone-100 ${className}`}
       title={isPlaying ? 'Pause ambient audio' : 'Play ambient audio'}
     >
       {isPlaying ? (

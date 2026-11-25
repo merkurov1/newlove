@@ -60,7 +60,7 @@ type CastTheme = {
 const CAST_THEME: Record<CastVariant, CastTheme> = {
   page: {
     page: 'bg-[#FAF8F5] text-stone-900',
-    title: 'text-amber-800/80',
+    title: 'text-amber-800',
     ambientCore: 'bg-amber-200/40',
     ambientWash:
       'bg-[radial-gradient(circle_at_50%_35%,rgba(160,120,60,0.12),transparent_48%)]',
@@ -70,23 +70,23 @@ const CAST_THEME: Record<CastVariant, CastTheme> = {
       'border-stone-300/70 bg-white/65 text-stone-900 shadow-sm backdrop-blur-xl',
     heading: 'text-stone-900',
     body: 'text-stone-700',
-    muted: 'text-stone-500',
-    faint: 'text-stone-400',
+    muted: 'text-stone-600',
+    faint: 'text-stone-600',
     accent: 'text-amber-700',
-    accentSoft: 'text-amber-800/80',
+    accentSoft: 'text-amber-800',
     divider: 'border-stone-300/80',
     input:
-      'border-stone-300 bg-white/80 text-stone-900 placeholder:text-stone-400 focus:border-amber-600 focus:bg-white',
+      'border-stone-300 bg-white/80 text-stone-900 placeholder:text-stone-500 focus:border-amber-600 focus:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700',
     primaryButton:
       'border-amber-700/35 bg-amber-100/70 text-stone-900 hover:border-amber-700/60 hover:bg-amber-100 disabled:opacity-30',
     secondaryButton:
       'border-stone-300 bg-white/80 text-stone-700 hover:border-amber-600/50 hover:bg-white',
     choiceButton:
       'border-stone-300 bg-white/80 text-stone-900 hover:border-amber-700/60 hover:bg-white',
-    choiceMeta: 'text-amber-700/70',
+    choiceMeta: 'text-amber-800',
     analysis: 'text-stone-700',
     cursor: 'bg-amber-600 text-stone-50',
-    errorText: 'text-red-600',
+    errorText: 'text-red-700',
     stampSurface: 'bg-white/70',
   },
   modal: {
@@ -101,23 +101,23 @@ const CAST_THEME: Record<CastVariant, CastTheme> = {
       'border-stone-800/80 bg-stone-950/80 text-stone-200 shadow-xl backdrop-blur-xl',
     heading: 'text-stone-100',
     body: 'text-stone-300',
-    muted: 'text-stone-500',
-    faint: 'text-stone-600',
+    muted: 'text-stone-300',
+    faint: 'text-stone-400',
     accent: 'text-amber-300',
     accentSoft: 'text-amber-300/80',
     divider: 'border-stone-800',
     input:
-      'border-stone-800 bg-white/5 text-stone-200 placeholder:text-stone-600 focus:border-amber-400/60 focus:bg-white/10',
+      'border-stone-800 bg-white/5 text-stone-200 placeholder:text-stone-400 focus:border-amber-400/60 focus:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300',
     primaryButton:
       'border-amber-300/30 bg-white/10 text-stone-100 hover:border-amber-300/60 hover:bg-white/15 disabled:opacity-25',
     secondaryButton:
       'border-amber-300/25 bg-white/5 text-stone-100 hover:border-amber-300/60 hover:bg-white/10',
     choiceButton:
       'border-stone-700/80 bg-white/[0.04] text-stone-100 hover:border-amber-300/50 hover:bg-white/[0.08]',
-    choiceMeta: 'text-amber-300/70',
+    choiceMeta: 'text-amber-200',
     analysis: 'text-stone-300',
     cursor: 'bg-amber-400 text-stone-950',
-    errorText: 'text-red-400',
+    errorText: 'text-red-300',
     stampSurface: 'bg-stone-950/50',
   },
 };
@@ -156,6 +156,172 @@ const ARCHETYPES = [
 ] as const;
 
 type Archetype = (typeof ARCHETYPES)[number];
+
+type CastLanguage = 'en' | 'ru';
+
+/**
+ * One locale policy for the Cast.
+ *
+ * The Temple, Vigil and Absolution are authored in English only. The Cast is
+ * the single ritual that offers a full Russian reading, and the choice is
+ * explicit, stored in the draft, and applied to every stage of the ritual
+ * (questions, progress, result labels, errors and controls). Never mix the
+ * two languages inside one stage.
+ */
+const CAST_COPY: Record<
+  CastLanguage,
+  {
+    pageTitle: string;
+    languageTitle: string;
+    languageGroup: string;
+    disclosureTitle: string;
+    disclosure: string;
+    questionCounter: (step: number) => string;
+    stageLabel: string;
+    shortDisclosure: string;
+    placeholder: string;
+    enterHint: string;
+    next: string;
+    analyze: string;
+    processing: string[];
+    initiating: string;
+    errorTitle: string;
+    retry: string;
+    subject: string;
+    readingNumber: string;
+    interpretation: string;
+    archiveTitle: string;
+    archiveBody: string;
+    saved: string;
+    secure: string;
+    returnToTemple: string;
+    genericError: string;
+    emailError: string;
+    labels: {
+      agency: string;
+      scores: string;
+      summary: string;
+      weaknesses: string;
+      assets: string;
+      directive: string;
+    };
+  }
+> = {
+  en: {
+    pageTitle: 'The Cast — A Reading of the Self',
+    languageTitle: 'Choose your language',
+    languageGroup: 'Reading language',
+    disclosureTitle: 'Before you begin',
+    disclosure:
+      'Your answers are sent to an external AI model (DeepSeek) to generate this reflection. The result is stored privately in the Temple Cast archive; signed-in readings keep the answers in your account, while anonymous readings do not retain raw answers. Adding an email links the result to you. Only the archetype and a display name may appear in the public Temple trace — never your answers. This is an interpretive ritual, not a clinical diagnosis.',
+    questionCounter: (step) =>
+      `Question ${String(step).padStart(2, '0')} / 10`,
+    stageLabel: 'The Cast',
+    shortDisclosure:
+      'Answers are sent to DeepSeek AI and stored privately. Only the archetype may appear publicly. This is not a diagnosis.',
+    placeholder: 'Answer honestly...',
+    enterHint: '[ PRESS ENTER TO SEND ]',
+    next: 'NEXT',
+    analyze: 'ANALYZE',
+    processing: [
+      'The Temple is listening…',
+      'Reading what you left unsaid…',
+      'Weighing your answers…',
+      'Your archetype is taking shape…',
+    ],
+    initiating: 'The reading begins…',
+    errorTitle: 'The reading was interrupted',
+    retry: 'Try the reading again',
+    subject: 'Pilgrim',
+    readingNumber: 'Reading No.',
+    interpretation: 'Archetype interpretation · not a clinical diagnosis',
+    archiveTitle: 'Keep this reading',
+    archiveBody:
+      'Enter an email to keep this reading and receive a copy.',
+    saved: '✓ Reading secured to your email',
+    secure: 'Secure',
+    returnToTemple: 'Return to the Temple',
+    genericError: 'The reading could not be completed. Please try again.',
+    emailError: 'This reading could not be linked to that email.',
+    labels: {
+      agency: 'AGENCY INDEX',
+      scores: 'ARCHETYPE SCORES',
+      summary: 'SUMMARY',
+      weaknesses: 'WHERE YOU HESITATE',
+      assets: 'WHAT HOLDS YOU',
+      directive: 'WHAT TO DO NEXT',
+    },
+  },
+  ru: {
+    pageTitle: 'Каст — прочтение себя',
+    languageTitle: 'Выберите язык',
+    languageGroup: 'Язык прочтения',
+    disclosureTitle: 'Прежде чем начать',
+    disclosure:
+      'Ответы отправляются внешней ИИ-модели (DeepSeek), чтобы создать это отражение. Результат хранится приватно в архиве Каста; у авторизованных чтений ответы остаются в аккаунте, а анонимные чтения не сохраняют сырые ответы. Если добавить email, результат привяжется к вам. В публичной хронике могут появиться только архетип и отображаемое имя — никогда ваши ответы. Это интерпретирующий ритуал, а не клинический диагноз.',
+    questionCounter: (step) =>
+      `Вопрос ${String(step).padStart(2, '0')} / 10`,
+    stageLabel: 'Каст',
+    shortDisclosure:
+      'Ответы отправляются ИИ DeepSeek и хранятся приватно. Публично может появиться только архетип. Это не диагноз.',
+    placeholder: 'Пишите честно...',
+    enterHint: '[ ENTER — ОТПРАВИТЬ ]',
+    next: 'ДАЛЕЕ',
+    analyze: 'АНАЛИЗ',
+    processing: [
+      'Храм слушает…',
+      'Читаем то, что осталось несказанным…',
+      'Взвешиваем ваши ответы…',
+      'Ваш архетип обретает форму…',
+    ],
+    initiating: 'Прочтение начинается…',
+    errorTitle: 'Прочтение прервалось',
+    retry: 'Попробовать снова',
+    subject: 'Пилигрим',
+    readingNumber: 'Прочтение №',
+    interpretation: 'Интерпретация архетипа · не клинический диагноз',
+    archiveTitle: 'Сохранить прочтение',
+    archiveBody:
+      'Введите email, чтобы сохранить прочтение и получить копию.',
+    saved: '✓ Прочтение привязано к вашему email',
+    secure: 'Сохранить',
+    returnToTemple: 'Вернуться в Храм',
+    genericError: 'Прочтение не завершилось. Попробуйте ещё раз.',
+    emailError: 'Не удалось привязать прочтение к этому email.',
+    labels: {
+      agency: 'ИНДЕКС АГЕНТНОСТИ',
+      scores: 'БАЛЛЫ АРХЕТИПОВ',
+      summary: 'КОРОТКО',
+      weaknesses: 'ГДЕ ВЫ МЕДЛИТЕ',
+      assets: 'ЧТО ВАС ДЕРЖИТ',
+      directive: 'ЧТО ДЕЛАТЬ ДАЛЬШЕ',
+    },
+  },
+};
+
+const CAST_TECHNICAL_ERROR =
+  /core|protocol|database|supabase|payload|http\s*\d|network|invalid response|incomplete|internal|api|claim|unavailable/i;
+
+function castErrorMessage(
+  message: unknown,
+  language: CastLanguage | null
+): string {
+  const copy = CAST_COPY[language ?? 'en'];
+
+  if (typeof message !== 'string' || !message.trim()) {
+    return copy.genericError;
+  }
+
+  if (
+    CAST_TECHNICAL_ERROR.test(message) ||
+    (language === 'ru' && !/[А-Яа-яЁё]/.test(message))
+  ) {
+    return copy.genericError;
+  }
+
+  return message;
+}
+
 
 interface AnalysisData {
   archetype: Archetype;
@@ -260,17 +426,15 @@ function Stamp({
   );
 }
 
-function useProcessing(isLoading: boolean) {
+function useProcessing(
+  isLoading: boolean,
+  language: CastLanguage | null
+) {
   const [text, setText] = useState('');
 
   const messages = useMemo(
-    () => [
-      'CORE ACCESS GRANTED...',
-      'ANALYZING AGENCY & DIGITAL NOISE...',
-      'CALCULATING ARCHETYPE INDEX...',
-      'MANIFESTING PSYCHOLOGICAL CAST...',
-    ],
-    []
+    () => CAST_COPY[language ?? 'en'].processing,
+    [language]
   );
 
   useEffect(() => {
@@ -312,7 +476,7 @@ export default function CastClient({
   const subjectName = identity.displayName || user?.email || 'Anonymous';
 
   const [language, setLanguage] =
-    useState<'en' | 'ru' | null>(null);
+    useState<CastLanguage | null>(null);
 
   const [currentStep, setCurrentStep] =
     useState(0);
@@ -360,7 +524,9 @@ export default function CastClient({
     useState('');
 
   const { processingText } =
-    useProcessing(loading);
+    useProcessing(loading, language);
+
+  const copy = CAST_COPY[language ?? 'en'];
 
   const supabase = useMemo(
     () => createClient(),
@@ -519,7 +685,7 @@ export default function CastClient({
   ]);
 
   function handleLanguageSelect(
-    lang: 'en' | 'ru'
+    lang: CastLanguage
   ) {
     setLanguage(lang);
     setCurrentStep(1);
@@ -539,29 +705,9 @@ export default function CastClient({
 
   function formatAnalysisText(
     parsed: AnalysisData,
-    resultArchetype: 'en' | 'ru' | null
+    resultArchetype: CastLanguage | null
   ) {
-    const labels =
-      resultArchetype === 'ru'
-        ? {
-            agency: 'ИНДЕКС АГЕНТНОСТИ',
-            scores: 'БАЛЛЫ АРХЕТИПОВ',
-            summary: 'РЕЗЮМЕ',
-            weaknesses:
-              'СТРУКТУРНЫЕ СЛАБОСТИ',
-            assets: 'КЛЮЧЕВЫЕ АКТИВЫ',
-            directive:
-              'СТРАТЕГИЧЕСКАЯ ДИРЕКТИВА',
-          }
-        : {
-            agency: 'AGENCY INDEX',
-            scores: 'ARCHETYPE SCORES',
-            summary: 'EXECUTIVE SUMMARY',
-            weaknesses:
-              'STRUCTURAL WEAKNESSES',
-            assets: 'CORE ASSETS',
-            directive: 'STRATEGIC DIRECTIVE',
-          };
+    const labels = CAST_COPY[resultArchetype ?? 'en'].labels;
 
     return [
       `[ ${
@@ -639,14 +785,14 @@ export default function CastClient({
         data = await res.json();
       } catch {
         throw new Error(
-          'Invalid response from the Core.'
+          'The reading could not be completed.'
         );
       }
 
       if (!res.ok) {
         throw new Error(
           data.error ||
-            'The Core could not complete the analysis.'
+            'The reading could not be completed.'
         );
       }
 
@@ -657,7 +803,7 @@ export default function CastClient({
         !data.captureToken
       ) {
         throw new Error(
-          'The Core returned an incomplete psychological cast.'
+          'The reading came back incomplete.'
         );
       }
 
@@ -670,7 +816,7 @@ export default function CastClient({
         )
       ) {
         throw new Error(
-          'The Core returned an invalid archetype.'
+          'The reading returned an unknown archetype.'
         );
       }
 
@@ -679,7 +825,7 @@ export default function CastClient({
         data.analysis.agency_index > 100
       ) {
         throw new Error(
-          'The Core returned an invalid Agency Index.'
+          'The reading returned an invalid score.'
         );
       }
 
@@ -698,9 +844,10 @@ export default function CastClient({
       );
 
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Connection to the Core failed.'
+        castErrorMessage(
+          err instanceof Error ? err.message : null,
+          language
+        )
       );
     } finally {
       setLoading(false);
@@ -803,7 +950,7 @@ export default function CastClient({
       if (!res.ok) {
         throw new Error(
           data?.error ||
-            'Unable to secure the protocol.'
+            'This reading could not be linked to that email.'
         );
       }
 
@@ -816,9 +963,10 @@ export default function CastClient({
       );
 
       setEmailError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to secure the protocol.'
+        castErrorMessage(
+          err instanceof Error ? err.message : null,
+          language
+        )
       );
     } finally {
       setEmailLoading(false);
@@ -831,6 +979,7 @@ export default function CastClient({
         isModal ? 'cast-page--modal min-h-full' : 'min-h-[100dvh]'
       } relative flex w-full flex-col overflow-x-hidden font-sans antialiased selection:bg-amber-500/30 ${ui.page}`}
       data-cast-variant={variant}
+      lang={language ?? 'en'}
     >
       {/* Ambient Temple light */}
       <div
@@ -852,7 +1001,7 @@ export default function CastClient({
         <h1
           className={`relative z-10 mx-auto mt-24 max-w-4xl px-6 font-serif text-xs uppercase tracking-[0.3em] sm:mt-28 ${ui.title}`}
         >
-          The Cast — Psychological Protocol
+          The Cast — A Reading of the Self
         </h1>
       )}
 
@@ -875,7 +1024,7 @@ export default function CastClient({
               id="cast-language-title"
               className={`mt-4 font-serif text-3xl tracking-[0.02em] sm:text-4xl ${ui.heading}`}
             >
-              Choose your language
+              {copy.languageTitle}
             </h2>
 
             <div
@@ -910,12 +1059,12 @@ export default function CastClient({
               <p className={`mt-2 text-[11px] leading-relaxed ${ui.body}`}>
                 Your answers are sent to an external AI model (DeepSeek) to
                 generate this reflection. The result is stored privately in the
-                Temple Cast archive; signed-in protocols keep the answers in
-                your account, while anonymous protocols do not retain raw
-                answers. Adding an email links the result to you. Only the
-                archetype and a display name may appear in the public Temple
-                trace — never your answers. This is an interpretive ritual, not
-                a clinical diagnosis.
+                Temple Cast archive; signed-in readings keep the answers in your
+                account, while anonymous readings do not retain raw answers.
+                Adding an email links the result to you. Only the archetype and
+                a display name may appear in the public Temple trace — never
+                your answers. This is an interpretive ritual, not a clinical
+                diagnosis.
               </p>
 
               <p
@@ -923,16 +1072,16 @@ export default function CastClient({
                 className={`mt-2 text-[10px] leading-relaxed ${ui.muted}`}
               >
                 Ответы отправляются внешней ИИ-модели DeepSeek. Результат
-                хранится приватно; у авторизованных протоколов ответы остаются
-                в аккаунте, а анонимные протоколы не сохраняют сырые ответы. В
-                публичной хронике появляется только архетип и отображаемое имя,
+                хранится приватно; у авторизованных чтений ответы остаются в
+                аккаунте, а анонимные чтения не сохраняют сырые ответы. В
+                публичной хронике появляются только архетип и отображаемое имя,
                 но не ответы. Это не клинический диагноз.
               </p>
             </section>
 
             <div
               role="group"
-              aria-label="Protocol language"
+              aria-label={copy.languageGroup}
               className="mt-8 flex flex-col gap-3 sm:flex-row"
             >
               {(
@@ -999,25 +1148,19 @@ export default function CastClient({
                     className={ui.accent}
                   />
 
-                  Query{' '}
-                  {String(
-                    currentStep
-                  ).padStart(2, '0')}{' '}
-                  / 10
+                  {copy.questionCounter(currentStep)}
                 </span>
 
                 <span>
-                  Cast Protocol
+                  {copy.stageLabel}
                 </span>
               </div>
 
               <p
                 data-testid="cast-question-disclosure"
-                className={`mb-3 text-[9px] uppercase leading-relaxed tracking-[0.12em] ${ui.faint}`}
+                className={`mb-3 text-[10px] uppercase leading-relaxed tracking-[0.12em] ${ui.faint}`}
               >
-                {language === 'ru'
-                  ? 'Ответы отправляются ИИ DeepSeek и хранятся приватно. Публично может появиться только архетип. Это не диагноз.'
-                  : 'Answers are sent to DeepSeek AI and stored privately. Only the archetype may appear publicly. This is not a diagnosis.'}
+                {copy.shortDisclosure}
               </p>
 
               <div
@@ -1040,20 +1183,14 @@ export default function CastClient({
                 disabled={loading}
                 maxLength={4000}
                 className={`mb-4 min-h-[96px] w-full resize-none rounded-2xl border p-4 text-sm outline-none shadow-inner transition-all sm:mb-6 sm:min-h-[150px] sm:p-5 sm:text-base ${ui.input}`}
-                placeholder={
-                  language === 'ru'
-                    ? 'Пишите честно...'
-                    : 'Answer honestly...'
-                }
+                placeholder={copy.placeholder}
               />
 
               <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
                 <span
-                  className={`order-2 hidden font-mono text-[9px] uppercase tracking-[0.18em] sm:order-1 sm:inline ${ui.faint}`}
+                  className={`order-2 hidden font-mono text-[10px] uppercase tracking-[0.18em] sm:order-1 sm:inline ${ui.faint}`}
                 >
-                  {language === 'ru'
-                    ? '[ PRESS ENTER ДЛЯ ОТПРАВКИ ]'
-                    : '[ PRESS ENTER TO TRANSMIT ]'}
+                  {copy.enterHint}
                 </span>
 
                 <button
@@ -1065,15 +1202,11 @@ export default function CastClient({
                     !isAnswerValid ||
                     loading
                   }
-                  className={`order-1 w-full cursor-pointer rounded-full border px-8 py-3 font-serif text-xs font-medium uppercase tracking-[0.18em] shadow-md backdrop-blur-md transition-all disabled:cursor-not-allowed sm:order-2 sm:w-auto sm:py-4 ${ui.primaryButton}`}
+                  className={`order-1 min-h-[44px] w-full cursor-pointer rounded-full border px-8 py-3 font-serif text-xs font-medium uppercase tracking-[0.18em] shadow-md backdrop-blur-md transition-all disabled:cursor-not-allowed sm:order-2 sm:w-auto sm:py-4 ${ui.primaryButton}`}
                 >
                   {currentStep === 10
-                    ? language === 'ru'
-                      ? 'АНАЛИЗ'
-                      : 'ANALYZE'
-                    : language === 'ru'
-                      ? 'ДАЛЕЕ'
-                      : 'NEXT'}
+                    ? copy.analyze
+                    : copy.next}
                 </button>
               </div>
             </div>
@@ -1097,7 +1230,7 @@ export default function CastClient({
                 />
 
                 {processingText ||
-                  'INITIATING CORE...'}
+                  copy.initiating}
               </div>
 
               <div
@@ -1123,7 +1256,7 @@ export default function CastClient({
                 <div
                   className={`mb-4 font-mono text-[10px] uppercase tracking-[0.25em] ${ui.accent}`}
                 >
-                  Core Error
+                  {copy.errorTitle}
                 </div>
 
                 <p
@@ -1141,16 +1274,14 @@ export default function CastClient({
                     answers.length !==
                       10 || loading
                   }
-                  className={`inline-flex items-center gap-2 rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] transition-all disabled:cursor-not-allowed ${ui.secondaryButton}`}
+                  className={`inline-flex min-h-[44px] items-center gap-2 rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] transition-all disabled:cursor-not-allowed ${ui.secondaryButton}`}
                 >
                   <RefreshCw
                     size={14}
                     aria-hidden="true"
                   />
 
-                  {language === 'ru'
-                    ? 'Повторить анализ'
-                    : 'Retry Analysis'}
+                  {copy.retry}
                 </button>
               </div>
             </div>
@@ -1170,10 +1301,10 @@ export default function CastClient({
                 <div
                   className={`mb-6 flex flex-col justify-between gap-2 border-b pb-4 pr-24 font-mono text-[9px] uppercase tracking-[0.2em] sm:flex-row sm:pr-40 ${ui.divider} ${ui.muted}`}
                 >
-                  <span>Subject: {subjectName}</span>
+                  <span>{copy.subject}: {subjectName}</span>
 
                   <span>
-                    Protocol ID:{' '}
+                    {copy.readingNumber}{' '}
                     {recordId
                       ? recordId.slice(
                           0,
@@ -1186,9 +1317,7 @@ export default function CastClient({
                 <p
                   className={`mb-4 text-[10px] uppercase leading-relaxed tracking-[0.12em] ${ui.muted}`}
                 >
-                  {language === 'ru'
-                    ? 'Интерпретация архетипа · не клинический диагноз'
-                    : 'Archetype interpretation · not a clinical diagnosis'}
+                  {copy.interpretation}
                 </p>
 
                 <pre
@@ -1219,17 +1348,13 @@ export default function CastClient({
                     <h3
                       className={`mb-2 font-serif text-sm uppercase tracking-[0.12em] ${ui.heading}`}
                     >
-                      {language === 'ru'
-                        ? 'Сохранить результат в Архиве'
-                        : 'Persist Result in Archive'}
+                      {copy.archiveTitle}
                     </h3>
 
                     <p
                       className={`mb-5 text-xs leading-relaxed ${ui.muted}`}
                     >
-                      {language === 'ru'
-                        ? 'Введите email, чтобы привязать профиль и получить копию.'
-                        : 'Enter email to secure your archetype and receive records.'}
+                      {copy.archiveBody}
                     </p>
 
                     {emailSent ? (
@@ -1237,9 +1362,7 @@ export default function CastClient({
                         className={`py-3 font-mono text-[10px] uppercase tracking-[0.18em] ${ui.accent}`}
                         role="status"
                       >
-                        {language === 'ru'
-                          ? '✓ Протокол зафиксирован за вашим email'
-                          : '✓ Protocol secured to your email'}
+                        {copy.saved}
                       </div>
                     ) : (
                       <>
@@ -1263,7 +1386,7 @@ export default function CastClient({
                             disabled={
                               emailLoading
                             }
-                            className={`flex-1 rounded-full border px-5 py-3 text-sm outline-none transition-all disabled:opacity-50 ${ui.input}`}
+                            className={`min-h-[44px] flex-1 rounded-full border px-5 py-3 text-sm outline-none transition-all disabled:opacity-50 ${ui.input}`}
                           />
 
                           <button
@@ -1271,14 +1394,11 @@ export default function CastClient({
                             disabled={
                               emailLoading
                             }
-                            className={`rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.16em] transition-all disabled:cursor-not-allowed ${ui.secondaryButton}`}
+                            className={`min-h-[44px] rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.16em] transition-all disabled:cursor-not-allowed ${ui.secondaryButton}`}
                           >
                             {emailLoading
                               ? '...'
-                              : language ===
-                                  'ru'
-                                ? 'Сохранить'
-                                : 'Secure'}
+                              : copy.secure}
                           </button>
                         </form>
 
@@ -1298,9 +1418,9 @@ export default function CastClient({
               <div className="mt-8 text-center">
                 <Link
                   href="/temple"
-                  className={`inline-block rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] transition-all ${ui.secondaryButton}`}
+                  className={`inline-block min-h-[44px] rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] transition-all ${ui.secondaryButton}`}
                 >
-                  [ Return to Temple ]
+                  {copy.returnToTemple}
                 </Link>
               </div>
             </>

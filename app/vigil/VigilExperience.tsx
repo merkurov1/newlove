@@ -94,16 +94,16 @@ export default function VigilExperience({
   const identityAwaitingLaunch = identity.status === 'telegram-init-pending';
 
   const actionLabel = isLighting
-    ? 'Transmitting Spark...'
+    ? 'Sending your spark…'
     : isOnCooldown
       ? `Spark returns in ${cooldownLabel}`
       : !userName
         ? identityAwaitingLaunch
-          ? 'Waiting for Telegram…'
+          ? 'Waiting for your Telegram name…'
           : identityPreparing || identity.isLoading
             ? 'Preparing your identity…'
             : identity.isTelegram
-              ? 'Identity unavailable'
+              ? 'We could not confirm your name'
               : 'Sign in to send a spark'
         : 'Send Spark';
 
@@ -158,7 +158,7 @@ export default function VigilExperience({
     if (identity.status === 'telegram-init-pending') {
       return (
         <span className={styles.muted}>
-          Waiting for Telegram launch data…
+          Waiting for Telegram to confirm your name…
         </span>
       );
     }
@@ -185,7 +185,7 @@ export default function VigilExperience({
     if (identity.isTelegram) {
       return (
         <span className={styles.warning}>
-          {identity.error || 'Telegram identity is not available. You can still witness the Vigil.'}
+          {identity.error || 'We could not confirm your Telegram name. You can still keep watch.'}
           {identity.error && (
             <button
               type="button"
@@ -456,7 +456,7 @@ export default function VigilExperience({
 
           {(flameStatus === 'stale' || flameStatus === 'error') && (
             <p className={styles.notice} role="status">
-              {flameError || 'Shared flame reconnecting'}
+              {flameError || 'The shared flame is catching up'}
             </p>
           )}
 

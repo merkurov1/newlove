@@ -2,14 +2,14 @@ import type { Metadata } from 'next';
 import CastClient from './CastClient';
 
 export const metadata: Metadata = {
-  title: 'Cast — Psychological Protocol | Digital Temple',
+  title: 'Cast — A Reading of the Self | Digital Temple',
   description:
-    'A psychological protocol of the Digital Temple: ten questions, an Agency Index and a perceptual archetype, built to deconstruct how you make choices.',
+    'A reading of the Digital Temple: ten questions, an Agency Index and a perceptual archetype, built to question how you make choices.',
   alternates: {
     canonical: 'https://www.merkurov.love/cast',
   },
   openGraph: {
-    title: 'Cast — Psychological Protocol | Digital Temple',
+    title: 'Cast — A Reading of the Self | Digital Temple',
     description:
       'Ten questions. An Agency Index. A perceptual archetype.',
     url: 'https://www.merkurov.love/cast',
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Cast — Psychological Protocol | Digital Temple',
+    title: 'Cast — A Reading of the Self | Digital Temple',
     description:
       'Ten questions. An Agency Index. A perceptual archetype.',
     images: [

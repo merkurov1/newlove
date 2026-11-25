@@ -37,7 +37,7 @@ export default function SharedVigil() {
       const initData = getTelegramInitData();
 
       if (!initData) {
-        setError('Telegram launch data is unavailable.');
+        setError('Telegram could not confirm this launch.');
         return;
       }
 
@@ -122,7 +122,7 @@ export default function SharedVigil() {
           hapticSelection();
           void call(state?.joined ? 'leave' : 'join');
         }}
-        className="mt-2 min-h-[40px] rounded-full border border-amber-400/40 px-4 font-mono text-[10px] uppercase tracking-[.14em] disabled:opacity-50"
+        className="mt-2 min-h-[44px] min-w-[44px] rounded-full border border-amber-400/40 px-4 font-mono text-[10px] uppercase tracking-[.14em] disabled:opacity-50"
       >
         {busy ? '…' : state?.joined ? 'Leave the shared Vigil' : 'Join the shared Vigil'}
       </button>

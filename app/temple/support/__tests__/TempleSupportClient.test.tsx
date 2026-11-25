@@ -64,7 +64,7 @@ describe('Temple support payment step', () => {
   it('opens Stripe immediately for a preset amount', async () => {
     render(<TempleSupportClient />);
 
-    fireEvent.click(screen.getByRole('button', { name: '$20' }));
+    fireEvent.click(screen.getByRole('button', { name: /Support the Temple with \$20/ }));
 
     await waitFor(() => {
       expect(checkoutClient.createTributeCheckout).toHaveBeenCalledWith(

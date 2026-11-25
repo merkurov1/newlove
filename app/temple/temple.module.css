@@ -1292,7 +1292,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0.4rem 0.7rem;
   border: 1px solid var(--line);
   border-radius: 0.2rem;
@@ -1456,6 +1456,7 @@
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
+  min-height: 44px;
   color: var(--muted);
   font-family: var(--font-display);
   font-size: 0.8rem;
@@ -1583,7 +1584,7 @@
 
 .chronicleMore {
   align-self: center;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0.45rem 0.9rem;
   border: 1px solid var(--line-strong);
   border-radius: 0.2rem;
@@ -1744,10 +1745,12 @@
 .leftWithoutTrace {
   margin: 0.7rem 0 0;
   color: var(--muted);
-  font-size: 8px;
-  letter-spacing: 0.16em;
+  font-family: var(--font-display);
+  font-size: 0.84rem;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
   text-align: center;
-  text-transform: uppercase;
 }
 
 /* --- Non-payment dialogs (Chronicles / info) ---------------------------- */
@@ -1797,8 +1800,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 999px;
   background: rgba(55, 43, 34, 0.08);
   color: var(--ink);

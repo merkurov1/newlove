@@ -37,6 +37,7 @@ import AddToHomePrompt from '@/components/temple/AddToHomePrompt';
 import SharedVigil from '@/components/temple/SharedVigil';
 import RitualLink from '@/components/temple/RitualLink';
 import TempleChronicles from '@/components/temple/TempleChronicles';
+import { useDialogFocus } from '@/components/temple/useDialogFocus';
 import { readPublicIdentityPreference } from '@/lib/temple/publicIdentity';
 import { consumeLeftWithoutTrace } from '@/lib/temple/visitTrace';
 import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
@@ -249,7 +250,7 @@ function getEventVisuals(eventType: string) {
 /**
  * A short, human explanation of what the stored ritual event represents. The
  * canonical type comes from the server classifier; this map only supplies the
- * display wording, so unknown future rituals still read as completed rituals
+ * display wording, so unknown future rituals still read as a kept ritual
  * rather than being mislabelled as navigation.
  */
 const TEMPLE_TRACE_ACTIONS: Record<string, string> = {
@@ -266,7 +267,7 @@ const TEMPLE_TRACE_ACTIONS: Record<string, string> = {
 };
 
 function getTraceAction(type: string) {
-  return TEMPLE_TRACE_ACTIONS[type.toUpperCase()] ?? 'Completed a ritual';
+  return TEMPLE_TRACE_ACTIONS[type.toUpperCase()] ?? 'Kept a ritual';
 }
 
 function formatTime(iso?: string) {
@@ -323,6 +324,12 @@ export default function TempleClient({
   const router = useRouter();
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isChroniclesOpen, setIsChroniclesOpen] = useState(false);
+  const infoDialogRef = useRef<HTMLDivElement>(null);
+  const infoCloseRef = useRef<HTMLButtonElement>(null);
+  const chroniclesDialogRef = useRef<HTMLDivElement>(null);
+  const chroniclesCloseRef = useRef<HTMLButtonElement>(null);
+  const closeInfo = useCallback(() => setIsInfoOpen(false), []);
+  const closeChronicles = useCallback(() => setIsChroniclesOpen(false), []);
   const [tgUser, setTgUser] = useState<any>(null);
   const [pendingAmount, setPendingAmount] = useState<number | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -422,36 +429,42 @@ export default function TempleClient({
 
   }, [isTelegramApp]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setIsInfoOpen(false);
-        setIsChroniclesOpen(false);
-      }
-    };
+  useDialogFocus({
+    open: isInfoOpen,
+    onClose: closeInfo,
+    dialogRef: infoDialogRef,
+    initialFocusRef: infoCloseRef,
+  });
 
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  useDialogFocus({
+    open: isChroniclesOpen,
+    onClose: closeChronicles,
+    dialogRef: chroniclesDialogRef,
+    initialFocusRef: chroniclesCloseRef,
+  });
 
   useEffect(() => {
     if (!isInfoOpen && !isChroniclesOpen) return;
 
     return registerTelegramBackHandler(() => {
       if (isChroniclesOpen) {
-        setIsChroniclesOpen(false);
+        closeChronicles();
         return true;
       }
 
       if (isInfoOpen) {
-        setIsInfoOpen(false);
+        closeInfo();
         return true;
       }
 
       return false;
     });
-  }, [isChroniclesOpen, isInfoOpen]);
+  }, [
+    closeChronicles,
+    closeInfo,
+    isChroniclesOpen,
+    isInfoOpen,
+  ]);
 
   useEffect(() => {
     if (!isChroniclesOpen) return;
@@ -521,8 +534,8 @@ export default function TempleClient({
   const vigilRemaining = heartVisuals.remainingMs;
   const vigilLabel = !hasVigilState
     ? vigilStatus === 'error'
-      ? 'Vigil state unavailable'
-      : 'Reading the Vigil…'
+      ? 'The Vigil is resting'
+      : 'The Vigil is waking…'
     : flameActive
       ? `${Math.floor(vigilRemaining / 3_600_000)}h ${Math.floor((vigilRemaining % 3_600_000) / 60_000)}m`
       : 'Flame extinguished';
@@ -533,7 +546,7 @@ export default function TempleClient({
     : 'Vigil supporters';
   const vigilStateProblem =
     vigilStatus === 'stale' || vigilStatus === 'error'
-      ? vigilError || 'Vigil count reconnecting'
+      ? vigilError || 'The count is catching up'
       : null;
 
   const heartInstruction = isAuthenticated
@@ -636,7 +649,7 @@ export default function TempleClient({
         const message =
           typeof payload?.message === 'string' && payload.message
             ? payload.message
-            : 'Your next spark is not available yet.';
+            : 'Your next spark is still resting.';
 
         setSparkStatus('cooldown');
         setSparkMessage(message);
@@ -647,7 +660,7 @@ export default function TempleClient({
         throw new Error(
           typeof payload?.error === 'string'
             ? payload.error
-            : `The spark could not be sent (${response.status}).`
+            : 'The spark did not reach the heart. Please try again.'
         );
       }
 
@@ -1070,7 +1083,7 @@ export default function TempleClient({
                     Tribute
                   </h2>
                   <p className={styles.sectionNote}>
-                    Direct support · secure Stripe checkout
+                    Direct support · secure checkout
                   </p>
                 </div>
                 <Heart
@@ -1109,7 +1122,8 @@ export default function TempleClient({
                       }}
                       disabled={pendingAmount !== null}
                       className={styles.amountButton}
-                      title={`Continue to secure Stripe checkout for $${amount}`}
+                      aria-label={`Support the Temple with $${amount}`}
+                      title={`Continue to secure checkout for $${amount}`}
                     >
                       {pendingAmount === amount ? 'Opening…' : `$${amount}`}
                     </button>
@@ -1124,14 +1138,14 @@ export default function TempleClient({
 
                 <p className={styles.supportStatus} aria-live="polite">
                   {pendingAmount !== null
-                    ? 'Opening the secure Stripe checkout…'
-                    : 'Amounts open Stripe directly. You confirm the payment there.'}
+                    ? 'Opening secure checkout…'
+                    : 'Amounts open secure checkout. You confirm the payment there.'}
                 </p>
               </div>
 
               {leftWithoutTrace && (
                 <p className={styles.leftWithoutTrace} role="status">
-                  Left without a trace
+                  Your visit stays with the Temple
                 </p>
               )}
             </section>
@@ -1176,7 +1190,7 @@ export default function TempleClient({
                     Traces
                   </h2>
                   <p className={styles.sectionNote}>
-                    Latest {TEMPLE_TRACE_LIMIT} completed rituals · newest first
+                    The last {TEMPLE_TRACE_LIMIT} traces · newest first
                   </p>
                 </div>
 
@@ -1213,27 +1227,26 @@ export default function TempleClient({
                     className={styles.traceNotice}
                   >
                     {feedStatus === 'stale'
-                      ? 'Showing the last traces received. '
+                      ? 'Showing the traces already received. '
                       : ''}
-                    The chronicle will reconnect on its own.
+                    The chronicle will catch up shortly.
                   </p>
                 )}
 
                 {!loaded ? (
-                  <p className={styles.traceEmpty}>Reading the ether…</p>
+                  <p className={styles.traceEmpty}>The chronicle is opening…</p>
                 ) : feedStatus === 'error' && posts.length === 0 ? (
                   <p className={styles.traceEmpty}>
-                    The chronicle is temporarily unavailable.
+                    The chronicle is resting for a moment.
                   </p>
                 ) : posts.length === 0 ? (
                   <p className={styles.traceEmpty}>
-                    No eligible ritual traces yet. Completed rituals will appear
-                    here.
+                    No traces yet. The first ritual will leave a mark.
                   </p>
                 ) : (
                   <ol
                     className={styles.traceList}
-                    aria-label="Latest completed ritual traces"
+                    aria-label="Latest ritual traces"
                   >
                     {posts.map(post => {
                       const IconComponent = post.icon || Radio;
@@ -1376,11 +1389,12 @@ export default function TempleClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsInfoOpen(false)}
+              onClick={closeInfo}
               role="presentation"
               className={styles.modalOverlay}
             >
               <motion.div
+                ref={infoDialogRef}
                 initial={{ scale: 0.97, y: 8 }}
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.97, y: 8 }}
@@ -1388,24 +1402,28 @@ export default function TempleClient({
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="temple-info-title"
+                aria-describedby="temple-info-lead"
+                tabIndex={-1}
                 className={styles.modalPanel}
               >
                 <button
-                  onClick={() => setIsInfoOpen(false)}
+                  ref={infoCloseRef}
+                  type="button"
+                  onClick={closeInfo}
                   aria-label="Close Sanctuary information"
                   className={styles.modalClose}
                 >
-                  <X size={16} />
+                  <X size={16} aria-hidden="true" />
                 </button>
 
                 <h3 id="temple-info-title" className={styles.modalTitle}>
                   The Sanctuary
                 </h3>
 
-                <p className={styles.modalLead}>
+                <p id="temple-info-lead" className={styles.modalLead}>
                   This digital temple is a quiet space of presence. It stays
-                  light at every hour. Here, rituals work, and every visitor
-                  leaves a trace.
+                  light at every hour. Here, rituals work, and every visit
+                  leaves a mark.
                 </p>
               </motion.div>
             </motion.div>
@@ -1420,11 +1438,12 @@ export default function TempleClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsChroniclesOpen(false)}
+              onClick={closeChronicles}
               role="presentation"
               className={styles.modalOverlay}
             >
               <motion.div
+                ref={chroniclesDialogRef}
                 initial={{ scale: 0.97, y: 8 }}
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.97, y: 8 }}
@@ -1432,6 +1451,7 @@ export default function TempleClient({
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="temple-chronicles-title"
+                tabIndex={-1}
                 className={styles.modalPanel}
               >
                 <div className={styles.modalHead}>
@@ -1448,12 +1468,14 @@ export default function TempleClient({
                   </div>
 
                   <button
-                    onClick={() => setIsChroniclesOpen(false)}
+                    ref={chroniclesCloseRef}
+                    type="button"
+                    onClick={closeChronicles}
                     aria-label="Close Chronicles"
                     className={styles.modalClose}
                     style={{ position: 'static' }}
                   >
-                    <X size={16} />
+                    <X size={16} aria-hidden="true" />
                   </button>
                 </div>
 

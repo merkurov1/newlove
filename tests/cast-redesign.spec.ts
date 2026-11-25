@@ -110,7 +110,7 @@ async function selectLanguage(
     })
     .click();
 
-  await expect(root.getByText(/Query 01 \/ 10/i)).toBeVisible();
+  await expect(root.getByText(/Question 01 \/ 10/i)).toBeVisible();
 }
 
 async function answerAllQuestions(page: Page, scope: 'page' | 'modal') {
@@ -159,7 +159,7 @@ test.describe('Cast language selector, question and result stages', () => {
 
       await openStandalone(page);
 
-      await expect(page.getByRole('group', { name: /Protocol language/i })).toBeVisible();
+      await expect(page.getByRole('group', { name: /Reading language/i })).toBeVisible();
       await expect(page.getByRole('button', { name: /Continue in English/i })).toBeVisible();
       await expect(page.getByRole('button', { name: /Continue in Русский/i })).toBeVisible();
       await expect(page.getByText(/Protocol 01/i)).toHaveCount(0);
@@ -227,7 +227,7 @@ test.describe('Cast language selector, question and result stages', () => {
     await page.getByPlaceholder('name@domain.com').fill('pilgrim@example.com');
     await page.getByRole('button', { name: /Secure/i }).click();
 
-    await expect(page.getByText(/Protocol secured to your email/i)).toBeVisible();
+    await expect(page.getByText(/Reading secured to your email/i)).toBeVisible();
 
     await page.screenshot({
       path: path.join(ARTIFACT_DIR, 'phone-390x844-standalone-email.png'),
@@ -274,7 +274,9 @@ test.describe('Cast modal behaviour', () => {
     const dialog = page.getByRole('dialog', { name: 'Cast ritual' });
 
     await expect(dialog).toBeVisible();
-    await expect(dialog).toBeFocused();
+    await expect(
+      dialog.getByRole('button', { name: '← Temple' })
+    ).toBeFocused();
 
     await page.keyboard.press('Escape');
 
@@ -297,13 +299,13 @@ test.describe('Cast modal behaviour', () => {
     await page.getByRole('textbox').fill('A draft answer kept across modes');
     await page.getByRole('button', { name: /NEXT/i }).click();
 
-    await expect(page.getByText(/Query 02 \/ 10/i)).toBeVisible();
+    await expect(page.getByText(/Question 02 \/ 10/i)).toBeVisible();
 
     await openModal(page, { fresh: false });
 
     const dialog = page.getByRole('dialog', { name: 'Cast ritual' });
 
-    await expect(dialog.getByText(/Query 02 \/ 10/i)).toBeVisible();
+    await expect(dialog.getByText(/Question 02 \/ 10/i)).toBeVisible();
     await expect(dialog.getByRole('button', { name: /NEXT/i })).toBeDisabled();
   });
 
@@ -337,10 +339,16 @@ test.describe('Cast modal behaviour', () => {
     });
 
     await dialog.getByRole('button', { name: /NEXT/i }).click();
-    await expect(dialog.getByText(/Query 02 \/ 10/i)).toBeVisible();
+    await expect(dialog.getByText(/Question 02 \/ 10/i)).toBeVisible();
   });
 
   test('closes from the Telegram BackButton in an emulated WebView', async ({ page }) => {
+    // The production SDK is loaded lazily and would overwrite the stub. Block
+    // it so the emulated launch data stays authoritative and deterministic.
+    await page.route('https://telegram.org/js/telegram-web-app.js', (route) =>
+      route.abort()
+    );
+
     await page.addInitScript(() => {
       type BackHandler = () => void;
       type TestWindow = Window & {

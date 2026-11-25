@@ -6,13 +6,13 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 const OG_IMAGE_URL = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/cast_og.jpeg'
 
 export const metadata: Metadata = {
-  title: 'THE CAST // MERKUROV PROTOCOL',
-  description: '10 Questions. AI Deconstruction. Are you Noise, Stone, or Void? The Protocol is waiting.',
+  title: 'THE CAST // MERKUROV',
+  description: '10 Questions. An AI reading. Are you Noise, Stone, or Void? The Cast is waiting.',
   metadataBase: new URL('https://www.merkurov.love'),
   alternates: { canonical: 'https://www.merkurov.love/cast' },
   openGraph: {
-    title: 'THE CAST // MERKUROV PROTOCOL',
-    description: 'Strict Psychological Protocol. No Flattery. Only Truth.',
+    title: 'THE CAST // MERKUROV',
+    description: 'A strict reading. No flattery. Only truth.',
     url: '/cast',
     siteName: 'MERKUROV.LOVE',
     locale: 'en_US',
@@ -22,14 +22,14 @@ export const metadata: Metadata = {
         url: OG_IMAGE_URL,
         width: 1200,
         height: 630,
-        alt: 'The Merkurov Protocol',
+        alt: 'The Cast',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'THE CAST // DECONSTRUCTION',
-    description: 'Strict Psychological Protocol. No Flattery. Only Truth.',
+    title: 'THE CAST // A READING',
+    description: 'A strict reading. No flattery. Only truth.',
     images: [OG_IMAGE_URL],
   },
   robots: {

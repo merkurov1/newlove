@@ -101,11 +101,11 @@ describe('Absolution ceremony and trace status', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText(/trace could not be recorded/i)
+        screen.getByText(/held in this moment/i)
       ).toBeInTheDocument()
     );
     expect(
-      screen.queryByText(/Temple trace recorded/i)
+      screen.queryByText(/kept in the chronicle/i)
     ).not.toBeInTheDocument();
   });
 
@@ -119,10 +119,10 @@ describe('Absolution ceremony and trace status', () => {
     await advanceCeremony();
 
     await waitFor(() =>
-      expect(screen.getByText(/Temple trace recorded/i)).toBeInTheDocument()
+      expect(screen.getByText(/kept in the chronicle/i)).toBeInTheDocument()
     );
     expect(
-      screen.queryByText(/trace could not be recorded/i)
+      screen.queryByText(/held in this moment/i)
     ).not.toBeInTheDocument();
   });
 
@@ -240,7 +240,7 @@ describe('Absolution ceremony and trace status', () => {
     const note = screen.getByTestId('absolution-privacy');
 
     expect(note).toHaveTextContent(/name and burden stay on this certificate/i);
-    expect(note).toHaveTextContent(/Only the completed ritual is recorded/i);
+    expect(note).toHaveTextContent(/Only the ceremony itself joins/i);
   });
 
   it('keeps the canonical standalone page mode as the default', () => {

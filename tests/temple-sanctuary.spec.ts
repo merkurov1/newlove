@@ -26,6 +26,7 @@ function feedPayload() {
         category: 'ritual',
         author: 'Alice',
         message: LONG_TRACE,
+        description: LONG_TRACE,
         created_at: createdAt,
         audio_url: null,
       },
@@ -36,6 +37,7 @@ function feedPayload() {
         category: 'ritual',
         author: 'Pilgrim',
         message: 'Sent a Vigil spark.',
+        description: 'Sent a Vigil spark.',
         created_at: '2026-11-24T11:59:00.000Z',
         audio_url: null,
       },
@@ -46,6 +48,7 @@ function feedPayload() {
         category: 'ritual',
         author: 'Anton Merkurov',
         message: 'Cast an archetype.',
+        description: 'Cast an archetype.',
         created_at: '2026-11-24T11:58:00.000Z',
         audio_url: null,
       },
@@ -56,6 +59,7 @@ function feedPayload() {
         category: 'ritual',
         author: 'Pilgrim',
         message: 'Received absolution.',
+        description: 'Completed the Absolution ritual.',
         created_at: '2026-11-24T11:57:00.000Z',
         audio_url: null,
       },
@@ -66,6 +70,7 @@ function feedPayload() {
         category: 'ritual',
         author: 'Anonymous',
         message: 'Offered a Tribute.',
+        description: 'Offered a Tribute.',
         created_at: '2026-11-24T11:56:00.000Z',
         audio_url: null,
       },
@@ -76,6 +81,7 @@ function feedPayload() {
         category: 'ritual',
         author: 'Pilgrim',
         message: 'Found calm.',
+        description: 'Found calm.',
         created_at: '2026-11-24T11:55:00.000Z',
         audio_url: null,
       },
@@ -86,6 +92,7 @@ function feedPayload() {
         category: 'ritual',
         author: 'Pilgrim',
         message: 'Left a whisper.',
+        description: 'Left a whisper.',
         created_at: '2026-11-24T11:54:00.000Z',
         audio_url: null,
       },
@@ -178,10 +185,10 @@ async function openTemple(page: Page) {
     .click();
 
   await expect(
-    page.getByRole('list', { name: 'Latest completed ritual traces' })
+    page.getByRole('list', { name: 'Latest ritual traces' })
   ).toBeVisible();
   await expect(
-    page.getByRole('list', { name: 'Latest completed ritual traces' }).locator('li')
+    page.getByRole('list', { name: 'Latest ritual traces' }).locator('li')
   ).toHaveCount(7);
 }
 
@@ -294,7 +301,7 @@ test.describe('Temple Sanctuary', () => {
     await openTemple(page);
 
     const rows = page
-      .getByRole('list', { name: 'Latest completed ritual traces' })
+      .getByRole('list', { name: 'Latest ritual traces' })
       .locator('li');
     const firstRow = rows.first();
 
@@ -379,6 +386,10 @@ test.describe('Temple Sanctuary', () => {
   test('Telegram WebView stays light and usable without a nested scroll trap', async ({
     page,
   }) => {
+    await page.route('https://telegram.org/js/telegram-web-app.js', (route) =>
+      route.abort()
+    );
+
     await page.addInitScript(() => {
       type TestWindow = Window & {
         Telegram?: { WebApp: Record<string, unknown> };
@@ -795,7 +806,7 @@ test.describe('Temple Sanctuary', () => {
 
     await expect(page.getByRole('dialog')).toHaveCount(0);
 
-    await page.getByRole('button', { name: '$5' }).click();
+    await page.getByRole('button', { name: /Support the Temple with \$5/ }).click();
 
     await page.waitForURL('https://checkout.stripe.com/**');
 
@@ -854,7 +865,7 @@ test.describe('Temple Sanctuary', () => {
       path: path.join(ARTIFACT_DIR, 'support-step-1440x900.png'),
     });
 
-    await page.getByRole('button', { name: '$20' }).click();
+    await page.getByRole('button', { name: /Support the Temple with \$20/ }).click();
     await page.waitForURL('https://checkout.stripe.com/**');
 
     expect(checkoutBodies).toHaveLength(1);

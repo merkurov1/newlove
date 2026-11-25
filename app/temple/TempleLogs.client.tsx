@@ -53,8 +53,8 @@ export default function TempleLogsClient({ initialLogs = [], serverError = null 
     };
   }, [initialLogs.length]);
 
-  if (error) return <div className="p-4 text-red-400">Error: {error}</div>;
-  if (loading) return <div className="p-4 text-gray-400">Loading...</div>;
+  if (error) return <div className="p-4 text-red-400">The chronicle is resting for a moment.</div>;
+  if (loading) return <div className="p-4 text-gray-400">Opening the chronicle…</div>;
   if (!logs || logs.length === 0) return <div className="p-4 text-gray-500">...silence...</div>;
 
   return (
