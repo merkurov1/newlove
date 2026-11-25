@@ -72,7 +72,7 @@ jest.mock('@/components/telegram/useTelegramBottomButton', () => ({
 
 jest.mock('@/components/useIsTelegram', () => ({
   __esModule: true,
-  default: () => false,
+  default: jest.fn(() => false),
 }));
 
 jest.mock('@/components/pierrot/usePrefersReducedMotion', () => ({
@@ -129,6 +129,12 @@ const identityModule = require('@/hooks/useTempleIdentity') as {
 const supportersModule = require('@/hooks/useVigilSupporters') as {
   useVigilSupporters: jest.Mock;
 };
+const useIsTelegramModule = require('@/components/useIsTelegram') as {
+  default: jest.Mock;
+};
+const bottomButtonModule = require('@/components/telegram/useTelegramBottomButton') as {
+  useTelegramBottomButton: jest.Mock;
+};
 
 const HOUR = 60 * 60 * 1000;
 
@@ -179,6 +185,7 @@ const fetchMock = jest.fn();
 
 beforeEach(() => {
   jest.clearAllMocks();
+  useIsTelegramModule.default.mockReturnValue(false);
   identityModule.default.mockReturnValue(identity());
   supportersModule.useVigilSupporters.mockReturnValue(snapshot());
   fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
@@ -252,6 +259,46 @@ describe('/vigil shared flame surface', () => {
     expect(button).toHaveTextContent(/^Send Spark$/);
     expect(button.childElementCount).toBe(0);
     expect(button.querySelector('img, svg, picture, canvas')).toBeNull();
+  });
+
+  it('uses only the native Telegram BottomButton for the spark action', () => {
+    useIsTelegramModule.default.mockReturnValue(true);
+    identityModule.default.mockReturnValue(
+      identity({ displayName: 'Anna', source: 'telegram' })
+    );
+
+    render(<VigilExperience />);
+
+    expect(
+      screen.queryByRole('button', { name: /^send spark$/i })
+    ).toBeNull();
+
+    expect(
+      bottomButtonModule.useTelegramBottomButton
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'SEND SPARK',
+        visible: true,
+      })
+    );
+  });
+
+  it('keeps the in-scene Send Spark action in a browser', () => {
+    identityModule.default.mockReturnValue(
+      identity({ displayName: 'Anna', source: 'supabase' })
+    );
+
+    render(<VigilExperience />);
+
+    expect(
+      screen.getByRole('button', { name: /^send spark$/i })
+    ).toBeInTheDocument();
+
+    expect(
+      bottomButtonModule.useTelegramBottomButton
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({ visible: false })
+    );
   });
 
   it('uses the exact Temple homepage heart artwork', () => {

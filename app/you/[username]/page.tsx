@@ -5,6 +5,8 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
+import { normalizeTempleEventType } from '@/lib/temple/feed';
+import { redactPublicTempleTrace } from '@/lib/temple/publicTrace';
 
 export const dynamic = 'force-dynamic';
 
@@ -208,7 +210,18 @@ async function getTempleEvents(userId: string): Promise<TempleEvent[]> {
     return [];
   }
 
-  return (data ?? []) as TempleEvent[];
+  return ((data ?? []) as TempleEvent[]).map((event) => {
+    const redacted = redactPublicTempleTrace({
+      eventType: normalizeTempleEventType(event.event_type),
+      author: '',
+      message: String(event.message ?? ''),
+    });
+
+    return {
+      ...event,
+      message: redacted.message,
+    };
+  });
 }
 
 export async function generateMetadata({

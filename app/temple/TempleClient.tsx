@@ -2,7 +2,13 @@
 
 'use client';
 
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import React, {
+  useCallback,
+  useMemo,
+  useState,
+  useEffect,
+  useRef,
+} from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import SoundToggle from '@/components/SoundToggle';
@@ -36,7 +42,9 @@ import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
 import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
 import { resolveVigilFlame } from '@/lib/vigil/flame';
 import { useVigilSupporters } from '@/hooks/useVigilSupporters';
+import useTempleIdentity from '@/hooks/useTempleIdentity';
 import { useTempleFeed } from '@/hooks/useTempleFeed';
+import { supabase } from '@/lib/supabase-browser';
 import {
   TEMPLE_TRACE_LIMIT,
   type TempleFeedPayload,
@@ -269,7 +277,19 @@ export default function TempleClient({
     flameLit: serverFlameLit,
     status: vigilStatus,
     error: vigilError,
+    refresh: refreshSupporters,
   } = useVigilSupporters();
+
+  const identity = useTempleIdentity();
+  const isAuthenticated =
+    identity.status === 'verified' && Boolean(identity.displayName);
+  const [sparkStatus, setSparkStatus] = useState<
+    'idle' | 'holding' | 'sending' | 'sent' | 'cooldown' | 'error'
+  >('idle');
+  const [sparkMessage, setSparkMessage] = useState('');
+  const holdTimerRef = useRef<number | null>(null);
+  const lastHoldAtRef = useRef(0);
+  const sendingRef = useRef(false);
 
   const posts = useMemo<TemplePost[]>(() => {
     const traces = templeFeed?.data ?? [];
@@ -284,14 +304,14 @@ export default function TempleClient({
       const visuals = getEventVisuals(type);
 
       let cleanContent = String(item.message ?? '');
-      const cleanAuthor = item.author || 'Anonymous';
+      let cleanAuthor = item.author || 'Anonymous';
 
-      if (type === 'ABSOLUTION' && cleanContent.includes('confessed:')) {
-        const splitMsg = cleanContent.split('confessed:');
-
-        if (splitMsg.length > 1) {
-          cleanContent = `Confessed:${splitMsg.slice(1).join('confessed:')}`;
-        }
+      // Defense in depth for any cached or legacy payload that bypassed the
+      // server redaction: Absolution never exposes confession text, the
+      // selected burden or the pilgrim's identity in the public feed.
+      if (type === 'ABSOLUTION') {
+        cleanContent = 'Completed the Absolution ritual.';
+        cleanAuthor = 'Anonymous';
       }
 
       return {
@@ -482,6 +502,10 @@ export default function TempleClient({
       ? vigilError || 'Vigil count reconnecting'
       : null;
 
+  const heartInstruction = isAuthenticated
+    ? 'Hold to send a spark · Tap to enter the Vigil'
+    : 'Tap or hold the heart · Enter the Vigil';
+
   /**
    * A clicked amount is a complete instruction. It starts the existing secure
    * Stripe Checkout session for that exact amount immediately; the visitor
@@ -530,6 +554,152 @@ export default function TempleClient({
     },
     [pendingAmount]
   );
+
+  const clearHeartHold = useCallback(() => {
+    if (holdTimerRef.current !== null) {
+      window.clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+
+    setSparkStatus((current) => (current === 'holding' ? 'idle' : current));
+    setSparkMessage((current) =>
+      current === 'Keep holding to send your spark…' ? '' : current
+    );
+  }, []);
+
+  const sendHeartSpark = useCallback(async () => {
+    if (!isAuthenticated || sendingRef.current) return;
+
+    sendingRef.current = true;
+    setSparkStatus('sending');
+    setSparkMessage('Sending your spark…');
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const response = await fetch('/api/vigil/claim', {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {}),
+        },
+        body: JSON.stringify({ id: 1 }),
+      });
+
+      const payload = await response.json().catch(() => null);
+
+      if (response.status === 429) {
+        const message =
+          typeof payload?.message === 'string' && payload.message
+            ? payload.message
+            : 'Your next spark is not available yet.';
+
+        setSparkStatus('cooldown');
+        setSparkMessage(message);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          typeof payload?.error === 'string'
+            ? payload.error
+            : `The spark could not be sent (${response.status}).`
+        );
+      }
+
+      // Only a confirmed server response may change the success state or
+      // trigger the refreshed statistics/flame.
+      setSparkStatus('sent');
+      setSparkMessage('Spark received · the shared heart is lit');
+
+      await Promise.allSettled([
+        refreshSupporters(),
+        refreshFeed({ force: true }),
+      ]);
+    } catch (error) {
+      console.error(
+        'Temple heart spark error:',
+        error instanceof Error ? error.message : error
+      );
+      setSparkStatus('error');
+      setSparkMessage('The spark could not be sent. Please try again.');
+    } finally {
+      sendingRef.current = false;
+    }
+  }, [isAuthenticated, refreshFeed, refreshSupporters]);
+
+  const startHeartHold = useCallback(() => {
+    if (!isAuthenticated || sendingRef.current) return;
+
+    if (holdTimerRef.current !== null) {
+      window.clearTimeout(holdTimerRef.current);
+    }
+
+    setSparkStatus('holding');
+    setSparkMessage('Keep holding to send your spark…');
+
+    holdTimerRef.current = window.setTimeout(() => {
+      holdTimerRef.current = null;
+      lastHoldAtRef.current = Date.now();
+      void sendHeartSpark();
+    }, 650);
+  }, [isAuthenticated, sendHeartSpark]);
+
+  const handleHeartClick = useCallback(
+    (event: React.MouseEvent<HTMLAnchorElement>) => {
+      if (Date.now() - lastHoldAtRef.current < 1200) {
+        event.preventDefault();
+        lastHoldAtRef.current = 0;
+      }
+    },
+    []
+  );
+
+  const handleHeartKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLAnchorElement>) => {
+      if (!isAuthenticated) return;
+      if (event.key !== ' ' && event.key !== 'Enter') return;
+
+      event.preventDefault();
+
+      if (!event.repeat) startHeartHold();
+    },
+    [isAuthenticated, startHeartHold]
+  );
+
+  const handleHeartKeyUp = useCallback(
+    (event: React.KeyboardEvent<HTMLAnchorElement>) => {
+      if (!isAuthenticated) return;
+      if (event.key !== ' ' && event.key !== 'Enter') return;
+
+      event.preventDefault();
+      const didHold = Date.now() - lastHoldAtRef.current < 1200;
+
+      clearHeartHold();
+
+      // A short Enter remains a normal navigation to the Vigil; a hold has
+      // already sent the spark. Space is only a hold gesture.
+      if (!didHold && event.key === 'Enter') {
+        router.push('/vigil');
+      }
+    },
+    [clearHeartHold, isAuthenticated, router]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (holdTimerRef.current !== null) {
+        window.clearTimeout(holdTimerRef.current);
+        holdTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // In Telegram, the native BottomButton is the single primary Temple action.
   // It is hidden while an in-page modal/payment surface owns the screen so it
@@ -631,8 +801,28 @@ export default function TempleClient({
             <section className={styles.hero} aria-label="The living heart">
               <RitualLink
                 href="/vigil"
-                onClick={() => hapticImpact('vigil')}
-                aria-label={`Light the Vigil heart. ${supporterLabel} in the last 24 hours. ${vigilLabel}.`}
+                onClick={(event) => {
+                  handleHeartClick(event);
+                  hapticImpact('vigil');
+                }}
+                onPointerDown={(event) => {
+                  if (typeof event.button === 'number' && event.button !== 0) {
+                    return;
+                  }
+                  lastHoldAtRef.current = 0;
+                  startHeartHold();
+                }}
+                onPointerUp={clearHeartHold}
+                onPointerLeave={clearHeartHold}
+                onPointerCancel={clearHeartHold}
+                onKeyDown={handleHeartKeyDown}
+                onKeyUp={handleHeartKeyUp}
+                onContextMenu={(event) => {
+                  if (isAuthenticated) event.preventDefault();
+                }}
+                aria-label={`Light the Vigil heart. ${supporterLabel} in the last 24 hours. ${vigilLabel}. ${heartInstruction}.`}
+                data-heart-auth={isAuthenticated ? 'authenticated' : 'anonymous'}
+                data-spark-status={sparkStatus}
                 className={styles.heartLink}
                 style={{ '--c': '#c8202b' } as React.CSSProperties}
               >
@@ -707,10 +897,25 @@ export default function TempleClient({
                   <span>{vigilLabel}</span>
                 </span>
 
-                <span className={styles.vigilEntry} aria-hidden="true">
-                  Tap or hold the heart · Enter the Vigil
+                <span
+                  id="temple-heart-instruction"
+                  className={styles.vigilEntry}
+                  aria-hidden="true"
+                >
+                  {heartInstruction}
                   <span className={styles.vigilEntryArrow}>→</span>
                 </span>
+
+                {sparkMessage && (
+                  <span
+                    data-testid="temple-heart-spark-status"
+                    className={styles.vigilProblem}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {sparkMessage}
+                  </span>
+                )}
 
                 {vigilStateProblem && (
                   <span

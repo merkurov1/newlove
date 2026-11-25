@@ -156,6 +156,44 @@ describe('Temple trace selection', () => {
     expect(traces[1].canonical_type).toBe('VIGIL_SPARK');
   });
 
+  it('redacts legacy Absolution confessions and private identities', () => {
+    const rows: TempleLogRow[] = [
+      {
+        id: 'absolution-legacy',
+        event_type: 'ABSOLUTION',
+        author: 'Alice Example',
+        message:
+          'Alice Example confessed: "Lust: Digital voyeurism" and received joyous absolution.',
+        created_at: iso(WINDOW_END),
+      },
+    ];
+
+    const [trace] = selectTempleTraces(rows);
+
+    expect(trace.author).toBe('Anonymous');
+    expect(trace.message).toBe('Completed the Absolution ritual.');
+    expect(trace.message).not.toContain('Lust');
+    expect(trace.message).not.toContain('Alice');
+    expect(trace.author).not.toContain('Alice');
+  });
+
+  it('does not let raw Cast answers appear in a public trace', () => {
+    const rows: TempleLogRow[] = [
+      {
+        id: 'cast-legacy',
+        event_type: 'CAST',
+        author: 'Pilgrim',
+        message: 'answer 1: a private answer that must never be public',
+        created_at: iso(WINDOW_END),
+      },
+    ];
+
+    const [trace] = selectTempleTraces(rows);
+
+    expect(trace.message).toBe('Completed the Cast ritual.');
+    expect(trace.message).not.toContain('private answer');
+  });
+
   it('does not let infrastructure or incomplete rows crowd out rituals', () => {
     const rows = [
       ...Array.from({ length: 20 }, (_, index) =>

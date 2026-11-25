@@ -279,17 +279,24 @@ export default function VigilExperience({
             <path className={styles.threadLine} d="M 8 92 C 34 66 60 36 100 18" />
           </svg>
 
-          <button
-            type="button"
-            onClick={(event) => void triggerRitual(event)}
-            disabled={isLighting || !userName || isOnCooldown}
-            aria-busy={isLighting}
-            aria-label={actionLabel}
-            className={styles.sparkButton}
-            data-state={isLighting ? 'lighting' : isOnCooldown ? 'cooldown' : 'ready'}
-          >
-            {actionLabel}
-          </button>
+          {/*
+           * Telegram owns exactly one primary action: the native BottomButton.
+           * Rendering the in-scene button there would create two competing
+           * Send Spark controls. The browser keeps the in-scene action.
+           */}
+          {!isTelegram && (
+            <button
+              type="button"
+              onClick={(event) => void triggerRitual(event)}
+              disabled={isLighting || !userName || isOnCooldown}
+              aria-busy={isLighting}
+              aria-label={actionLabel}
+              className={styles.sparkButton}
+              data-state={isLighting ? 'lighting' : isOnCooldown ? 'cooldown' : 'ready'}
+            >
+              {actionLabel}
+            </button>
+          )}
 
           <div
             ref={heartRef}

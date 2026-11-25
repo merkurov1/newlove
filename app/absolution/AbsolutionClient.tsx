@@ -153,10 +153,15 @@ export default function AbsolutionClient({
     // The ceremony is not conditioned on database availability. The trace is
     // reported separately and only ever claims persistence after the write
     // actually succeeded.
+    //
+    // The public chronicle receives a completion signal only. The pilgrim's
+    // name, the selected burden and any confession text stay in this browser
+    // and on the locally generated certificate; they are never written to the
+    // public temple journal.
     void logTempleEvent({
       event_type: 'ABSOLUTION',
-      message: `${name} confessed: "${sinText}" and received joyous absolution.`,
-      author: name,
+      message: 'Completed the Absolution ritual.',
+      author: 'Anonymous',
     }).then((persisted) => {
       if (activeRef.current) {
         setTraceStatus(persisted ? 'saved' : 'failed');
@@ -377,6 +382,15 @@ export default function AbsolutionClient({
                   className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-xs uppercase tracking-wider text-stone-200 outline-none transition-colors placeholder:text-stone-600 focus:border-amber-400/60 focus:bg-white/10 sm:py-3.5"
                 />
               </div>
+
+              <p
+                data-testid="absolution-privacy"
+                className="text-[9px] leading-relaxed tracking-[0.06em] text-stone-500"
+              >
+                Private by design: your name and burden stay on this
+                certificate. Only the completed ritual is recorded in the
+                public Temple chronicle.
+              </p>
 
               <button
                 type="button"

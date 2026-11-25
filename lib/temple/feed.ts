@@ -15,6 +15,8 @@
  *   presented as a completed ritual.
  */
 
+import { redactPublicTempleTrace } from '@/lib/temple/publicTrace';
+
 export const TEMPLE_TRACE_LIMIT = 7;
 export const TEMPLE_TRACE_FETCH_LIMIT = 50;
 export const TEMPLE_FEED_TTL_SECONDS = 60;
@@ -301,8 +303,16 @@ export function selectTempleTraces(
     seen.add(key);
 
     const canonical = normalizeTempleEventType(row.event_type);
-    const author = String(row.author ?? '').trim() || 'Anonymous';
-    const message = String(row.message ?? '').trim();
+    const rawAuthor = String(row.author ?? '').trim() || 'Anonymous';
+    const rawMessage = String(row.message ?? '').trim();
+
+    // Absolution keeps its certificate private. Legacy and malformed rows are
+    // reduced to a completion signal here, before any public payload is built.
+    const { author, message } = redactPublicTempleTrace({
+      eventType: canonical,
+      author: rawAuthor,
+      message: rawMessage,
+    });
 
     eligible.push({
       row,

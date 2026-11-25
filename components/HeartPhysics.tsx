@@ -6,6 +6,11 @@ import useTempleIdentity from '@/hooks/useTempleIdentity';
 import TempleTopBar from './TempleTopBar';
 import { useRitualModalTimer } from './temple/useRitualModalTimer';
 import { logTempleEvent } from '@/lib/templeLogger';
+import {
+  CALM_COMPLETION_THRESHOLD_SECONDS,
+  calmCompletionMessage,
+  isCalmRitualComplete,
+} from '@/lib/temple/calm';
 
 interface Props {
   daemonUrl?: string;
@@ -24,6 +29,8 @@ export default function HeartPhysics({
   const [gyroDenied, setGyroDenied] = useState(false);
   const [bgColor, setBgColor] = useState('#e8b4b8');
   const [seconds, setSeconds] = useState(0);
+  const completed = isCalmRitualComplete(seconds);
+  const loggedCompletionRef = useRef(false);
 
   const currentAuthorName =
     identity.displayName ||
@@ -32,9 +39,6 @@ export default function HeartPhysics({
     user?.email?.split('@')[0] ||
     (typeof window !== 'undefined' ? localStorage.getItem('temple_user') : null) ||
     'Guardian';
-
-  const secondsRef = useRef(seconds);
-  secondsRef.current = seconds;
 
   const authorRef = useRef(currentAuthorName);
   authorRef.current = currentAuthorName;
@@ -59,21 +63,24 @@ export default function HeartPhysics({
     return () => clearInterval(timer);
   }, []);
 
+  /*
+   * Completion is a moment, not a page view. The ritual is complete only once
+   * the visitor has stayed for the shared threshold; leaving earlier records
+   * nothing. Logging at the threshold also means a completed ritual is
+   * reported even if the tab is closed immediately afterwards.
+   */
   useEffect(() => {
-    return () => {
-      const currentSeconds = secondsRef.current;
+    if (loggedCompletionRef.current || !completed) return;
 
-      if (currentSeconds > 2) {
-        void logTempleEvent({
-          event_type: 'MEDITATION',
-          message: `Spent ${currentSeconds} ${
-            currentSeconds === 1 ? 'second' : 'seconds'
-          } finding calm.`,
-          author: authorRef.current,
-        });
-      }
-    };
-  }, []);
+    loggedCompletionRef.current = true;
+
+    void logTempleEvent({
+      event_type: 'MEDITATION',
+      message: calmCompletionMessage(seconds),
+      author: authorRef.current,
+      metadata: { durationSeconds: seconds },
+    });
+  }, [completed, seconds]);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -698,6 +705,37 @@ export default function HeartPhysics({
           height: '100%',
         }}
       />
+
+      <p
+        data-testid="calm-completion-status"
+        data-complete={completed ? 'true' : 'false'}
+        role="status"
+        aria-live="polite"
+        style={{
+          position: 'absolute',
+          top: 'max(72px, calc(env(safe-area-inset-top) + 64px))',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 30,
+          margin: 0,
+          width: 'min(90vw, 340px)',
+          padding: '9px 16px',
+          borderRadius: '24px',
+          border: '1px solid rgba(26, 26, 26, 0.18)',
+          background: 'rgba(255, 255, 255, 0.88)',
+          textAlign: 'center',
+          fontFamily: 'sans-serif',
+          fontSize: '10px',
+          letterSpacing: '0.08em',
+          lineHeight: 1.45,
+          color: '#1a1a1a',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+        }}
+      >
+        {completed
+          ? 'Calm complete · ritual threshold reached'
+          : `Stay with the heart for ${CALM_COMPLETION_THRESHOLD_SECONDS} seconds to complete the ritual`}
+      </p>
 
       <TempleTopBar
         backTo="world"

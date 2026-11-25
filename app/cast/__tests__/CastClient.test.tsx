@@ -182,6 +182,25 @@ describe('Cast language selector', () => {
     expect(container.querySelector('.cast-page')).toHaveAttribute('data-cast-variant', 'page');
   });
 
+  it('discloses AI processing, private storage and public visibility before the first question', () => {
+    render(<CastClient />);
+
+    const disclosure = screen.getByTestId('cast-disclosure');
+
+    expect(disclosure).toBeVisible();
+    expect(disclosure).toHaveTextContent(
+      /answers are sent to an external AI model/i
+    );
+    expect(disclosure).toHaveTextContent(/stored privately/i);
+    expect(disclosure).toHaveTextContent(/anonymous protocols do not retain raw answers/i);
+    expect(disclosure).toHaveTextContent(/public Temple trace/i);
+    expect(disclosure).toHaveTextContent(/never your answers/i);
+    expect(disclosure).toHaveTextContent(/not a clinical diagnosis/i);
+
+    // The disclosure is on the initial screen, before a language is chosen.
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
   it('enters the existing English protocol on selection', () => {
     render(<CastClient />);
 
@@ -189,6 +208,9 @@ describe('Cast language selector', () => {
 
     expect(screen.getByText(/Query 01 \/ 10/i)).toBeInTheDocument();
     expect(screen.getByText(/failed ambition/i)).toBeInTheDocument();
+    expect(
+      screen.getByTestId('cast-question-disclosure')
+    ).toHaveTextContent(/not a diagnosis/i);
     expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'Answer honestly...');
     expect(screen.getByRole('button', { name: /NEXT/i })).toBeDisabled();
   });
@@ -346,6 +368,10 @@ describe('Cast analysis, result and email capture', () => {
     expect(screen.getByText(/82\/100/)).toBeInTheDocument();
     expect(screen.getByText('[UNFRAMED]')).toBeInTheDocument();
     expect(screen.getByText(/You act from clear intent/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/not a clinical diagnosis/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/true diagnosis/i)).toBeNull();
   });
 
   it('secures the result to an email without changing the capture contract', async () => {

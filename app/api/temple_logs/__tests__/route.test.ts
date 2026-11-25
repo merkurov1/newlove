@@ -71,7 +71,7 @@ describe('POST /api/temple_logs identity attribution', () => {
 
     const response = await POST(
       makeRequest({
-        event_type: 'ABSOLUTION',
+        event_type: 'WHISPER',
         message: 'A trace',
         author: 'Mallory',
       })
@@ -81,7 +81,7 @@ describe('POST /api/temple_logs identity attribution', () => {
     expect(insertedRow()).toMatchObject({
       user_id: USER_ID,
       author: 'Pilgrim',
-      event_type: 'ABSOLUTION',
+      event_type: 'WHISPER',
     });
   });
 
@@ -116,6 +116,7 @@ describe('POST /api/temple_logs identity attribution', () => {
         event_type: 'MEDITATION',
         message: 'Stayed calm',
         author: 'Mallory',
+        metadata: { durationSeconds: 30 },
       })
     );
 
@@ -123,7 +124,68 @@ describe('POST /api/temple_logs identity attribution', () => {
     expect(insertedRow()).toMatchObject({
       user_id: null,
       author: 'Mallory',
+      message: 'Completed 30 seconds of calm.',
     });
+  });
+
+  it('records Absolution as an anonymous completion signal only', async () => {
+    mockIdentity.mockResolvedValue({
+      key: `sb:${USER_ID}`,
+      userId: USER_ID,
+      displayName: 'Alice',
+      source: 'supabase',
+      email: 'alice@example.com',
+    });
+
+    const response = await POST(
+      makeRequest({
+        event_type: 'ABSOLUTION',
+        message:
+          'Alice confessed: "Lust: Digital voyeurism" and received absolution.',
+        author: 'Alice',
+      })
+    );
+
+    expect(response.status).toBe(201);
+
+    const row = insertedRow();
+
+    expect(row).toMatchObject({
+      user_id: null,
+      event_type: 'ABSOLUTION',
+      author: 'Anonymous',
+      message: 'Completed the Absolution ritual.',
+    });
+    expect(JSON.stringify(row)).not.toContain('Lust');
+    expect(JSON.stringify(row)).not.toContain('Alice');
+    expect(JSON.stringify(row)).not.toContain(USER_ID);
+  });
+
+  it('does not accept a Calm trace before the shared completion threshold', async () => {
+    const response = await POST(
+      makeRequest({
+        event_type: 'MEDITATION',
+        message: 'Left after a moment',
+        author: 'Mallory',
+        metadata: { durationSeconds: 5 },
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it('rejects a Calm trace that omits its duration', async () => {
+    const response = await POST(
+      makeRequest({
+        event_type: 'MEDITATION',
+        message: 'Stayed calm',
+        author: 'Mallory',
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockInsert).not.toHaveBeenCalled();
   });
 
   it('still rejects event types owned by trusted server routes', async () => {
