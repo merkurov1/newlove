@@ -130,9 +130,16 @@ type MessageApi = {
   shareMessage?: (messageId: string, callback?: (sent: boolean) => void) => void;
 };
 
+export type StoryMode = 'off' | 'auto' | 'only';
+
 /**
  * Execute the best supported share path. Dismissal is a normal outcome and is
  * never surfaced as an error that could interrupt a ritual or reading.
+ *
+ * `storyMode` keeps the historical `auto` default for existing callers such
+ * as the Vigil. Flow explicitly passes `off` for its normal Share action and
+ * `only` for its separate contextual Story action, so a reader is never
+ * silently sent into the story editor.
  */
 export async function performShare(input: {
   request: ShareRequest;
@@ -141,12 +148,16 @@ export async function performShare(input: {
   prepareMessage?: () => Promise<string | null>;
   openTelegramLink?: (url: string) => void;
   copy?: (text: string) => Promise<void>;
+  storyMode?: StoryMode;
 }): Promise<ShareOutcome> {
   const story = planStoryShare(input.request);
+  const storyMode = input.storyMode ?? 'auto';
+  const storyAvailable =
+    story.supported && typeof input.storyApi?.shareToStory === 'function';
 
-  if (story.supported && typeof input.storyApi?.shareToStory === 'function') {
+  if (storyMode !== 'off' && storyAvailable) {
     try {
-      input.storyApi.shareToStory(
+      input.storyApi?.shareToStory?.(
         story.mediaUrl,
         story.text
           ? { text: story.text, widget_link: buildShareWidgetLink(input.request) }
@@ -156,6 +167,12 @@ export async function performShare(input: {
     } catch {
       return 'dismissed';
     }
+  }
+
+  if (storyMode === 'only') {
+    // No honest story path exists: never fall through to a message share that
+    // the reader did not ask for.
+    return 'failed';
   }
 
   if (typeof input.messageApi?.shareMessage === 'function' && input.prepareMessage) {

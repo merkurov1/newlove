@@ -4,11 +4,21 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import NewPostModal from '@/components/flow/NewPostModal';
 import FlowImageComponent from '@/components/flow/FlowImage';
+import FlowHomeScreenPrompt from '@/components/flow/FlowHomeScreenPrompt';
 import useIsTelegram from '@/components/useIsTelegram';
 import { useTelegramBottomButton } from '@/components/telegram/useTelegramBottomButton';
 import { telegramAuthHeaders } from '@/lib/telegram/clientAuth';
 import { hapticSelection } from '@/lib/telegram/webApp';
 import { resolveFlowCardComposition } from '@/lib/flow/cardComposition';
+import { formatReadingProgress } from '@/lib/flow/readingProgress';
+import {
+  readFlowFeedPosition,
+  readFlowReaderState,
+  safeLocalStorage,
+  safeSessionStorage,
+  writeFlowFeedPosition,
+  type FlowFeedPosition,
+} from '@/lib/flow/readerState';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { breadcrumbJsonLd, collectionPageJsonLd } from '@/lib/structuredData';
 import { GA_EVENTS, trackGaEvent } from '@/lib/analytics/ga4';
@@ -451,6 +461,7 @@ function Entry({
     <article
       className={`group flow-entry flow-entry--${composition}`}
       data-content-type={item.contentType || item.type}
+      data-flow-entry-id={item.id}
     >
       <EntryMeta item={item} admin={admin} onEdit={onEdit} onDelete={onDelete} />
 
@@ -537,6 +548,11 @@ export default function FlowPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [continueItem, setContinueItem] = useState<{
+    slug: string;
+    title: string;
+    progress: number;
+  } | null>(null);
   const isTelegram = useIsTelegram();
 
   const observerRef = useRef<HTMLDivElement>(null);
@@ -545,6 +561,10 @@ export default function FlowPage() {
   const mountedRef = useRef(false);
   const flowViewSentRef = useRef(false);
   const scrollRestoredRef = useRef(false);
+  const pendingRestoreRef = useRef<{
+    position: FlowFeedPosition | null;
+    attempts: number;
+  } | null>(null);
 
   const loadItems = useCallback(async (reset = false) => {
     if (isFetchingRef.current) return;
@@ -667,35 +687,156 @@ export default function FlowPage() {
     };
   }, [checkAdmin, loadItems]);
 
+  // Persist a stable anchor, not just a pixel offset: images can load, the
+  // Telegram viewport can resize and pagination can change the total height.
   useEffect(() => {
-    const saveScroll = () => {
-      try {
-        window.sessionStorage.setItem('flow_scroll_y', String(window.scrollY));
-      } catch {
-        /* Storage can be unavailable in private webviews. */
+    let frame = 0;
+    let lastSavedAt = 0;
+
+    const persist = () => {
+      const entries = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-flow-entry-id]')
+      );
+      let anchorId: string | null = null;
+      let anchorOffset = 0;
+
+      for (const entry of entries) {
+        const rect = entry.getBoundingClientRect();
+
+        if (rect.bottom > 0) {
+          anchorId = entry.dataset.flowEntryId ?? null;
+          anchorOffset = Math.round(rect.top);
+          break;
+        }
       }
+
+      writeFlowFeedPosition(safeSessionStorage(), {
+        scrollY: window.scrollY,
+        anchorId,
+        anchorOffset,
+        loadedCount: itemsRef.current.length,
+      });
+    };
+
+    // One anchor write per quarter second is enough for a stable return; a
+    // per-frame sessionStorage write would compete with scrolling.
+    const saveScroll = () => {
+      if (frame) return;
+
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+
+        const now = Date.now();
+
+        if (now - lastSavedAt < 250) return;
+
+        lastSavedAt = now;
+        persist();
+      });
+    };
+
+    const flush = () => {
+      if (frame) window.cancelAnimationFrame(frame);
+
+      frame = 0;
+      persist();
     };
 
     window.addEventListener('scroll', saveScroll, { passive: true });
+    window.addEventListener('pagehide', flush);
 
-    return () => window.removeEventListener('scroll', saveScroll);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+
+      window.removeEventListener('scroll', saveScroll);
+      window.removeEventListener('pagehide', flush);
+    };
   }, []);
 
   useEffect(() => {
     if (loading || scrollRestoredRef.current || items.length === 0) return;
 
+    if (!pendingRestoreRef.current) {
+      pendingRestoreRef.current = {
+        position: readFlowFeedPosition(safeSessionStorage()),
+        attempts: 0,
+      };
+    }
+
+    const pending = pendingRestoreRef.current;
+    const position = pending.position;
+
+    if (!position) {
+      scrollRestoredRef.current = true;
+      return;
+    }
+
+    const anchor = position.anchorId
+      ? Array.from(document.querySelectorAll<HTMLElement>('[data-flow-entry-id]')).find(
+          (entry) => entry.dataset.flowEntryId === position.anchorId
+        )
+      : null;
+
+    if (anchor) {
+      scrollRestoredRef.current = true;
+
+      // Two frames let the media boxes and font metrics settle before the
+      // anchor is measured, so the reader lands on the exact entry.
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          const top =
+            anchor.getBoundingClientRect().top + window.scrollY - position.anchorOffset;
+
+          window.scrollTo({ top: Math.max(0, Math.round(top)), behavior: 'auto' });
+        });
+      });
+      return;
+    }
+
+    // The saved entry lives on a later page. Load a bounded number of pages
+    // until it is present, then restore; never loop forever.
+    if (position.anchorId && hasMore && !loadingMore && pending.attempts < 4) {
+      pending.attempts += 1;
+      void loadItems(false);
+      return;
+    }
+
     scrollRestoredRef.current = true;
 
-    try {
-      const saved = Number(window.sessionStorage.getItem('flow_scroll_y'));
-
-      if (Number.isFinite(saved) && saved > 0) {
-        window.requestAnimationFrame(() => window.scrollTo({ top: saved, behavior: 'auto' }));
-      }
-    } catch {
-      /* Restoring position is an enhancement, never a requirement. */
+    if (position.scrollY > 0) {
+      window.requestAnimationFrame(() =>
+        window.scrollTo({ top: position.scrollY, behavior: 'auto' })
+      );
     }
-  }, [items.length, loading]);
+  }, [hasMore, items.length, loadItems, loading, loadingMore]);
+
+  // A quiet continuation affordance, only for an item that is still in the
+  // loaded feed. Deleted or unavailable publications are never linked.
+  useEffect(() => {
+    if (loading || items.length === 0) {
+      setContinueItem(null);
+      return;
+    }
+
+    const lastRead = readFlowReaderState(safeLocalStorage()).lastRead;
+
+    if (!lastRead || lastRead.progress <= 0.02 || lastRead.progress >= 0.98) {
+      setContinueItem(null);
+      return;
+    }
+
+    const matching = items.find((item) => item.slug === lastRead.slug);
+
+    setContinueItem(
+      matching?.slug
+        ? {
+            slug: matching.slug,
+            title: matching.title || lastRead.title || 'Continue reading',
+            progress: lastRead.progress,
+          }
+        : null
+    );
+  }, [items, loading]);
 
   useEffect(() => {
     if (!hasMore || loadingMore || loading || loadError) return;
@@ -755,6 +896,19 @@ export default function FlowPage() {
             <h1 className="flow-page__title">Flow</h1>
             <p className="flow-page__subtitle">Stream of thoughts &amp; media</p>
           </header>
+
+          {continueItem && (
+            <Link
+              href={`/flow/${encodeURIComponent(continueItem.slug)}`}
+              className="flow-continue"
+            >
+              <span className="flow-continue__label">Continue reading</span>
+              <span className="flow-continue__title">{continueItem.title}</span>
+              <span className="flow-continue__progress">
+                {formatReadingProgress(continueItem.progress)}
+              </span>
+            </Link>
+          )}
 
           {loadError && items.length === 0 ? (
             <Message
@@ -829,6 +983,8 @@ export default function FlowPage() {
                   </button>
                 )}
               </div>
+
+              <FlowHomeScreenPrompt className="flow-home-screen--feed" />
             </>
           )}
         </div>
