@@ -1,40 +1,45 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Clock, Sparkles } from 'lucide-react';
+import { type CSSProperties } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
-import TempleTopBar from '@/components/TempleTopBar';
 import Image from 'next/image';
+
+import TempleTopBar from '@/components/TempleTopBar';
 import { useRitualModalTimer } from '@/components/temple/useRitualModalTimer';
-import { useVigilController } from './useVigilController';
-import VigilShare from '@/components/vigil/VigilShare';
 import useIsTelegram from '@/components/useIsTelegram';
 import { useTelegramBottomButton } from '@/components/telegram/useTelegramBottomButton';
 import { hapticImpact } from '@/lib/telegram/webApp';
+import VigilShare from '@/components/vigil/VigilShare';
 
-const ANGEL_GIF =
+import { useVigilController } from './useVigilController';
+import styles from './vigil.module.css';
+
+const ANGEL_ART =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0966.gif';
 
-// Постоянная тема темной комнаты / часовни
-const roomTheme = {
-  bg: 'bg-[#141210]',
-  text: 'text-stone-200',
-  glow: 'from-amber-900/40 via-orange-950/20 to-transparent',
-  vignette:
-    'radial-gradient(circle at 50% 40%, rgba(55, 40, 32, 0.75) 0%, rgba(20, 18, 16, 1) 90%)',
-  cardBg:
-    'bg-stone-900/90 border-stone-800/80 text-stone-100 shadow-2xl',
-  buttonClass:
-    'bg-white/10 border-white/20 text-stone-200 hover:bg-white/20',
-};
+/**
+ * The Heart & Angel heart already used by the other rituals. Keeping the
+ * familiar symbol means the Vigil lights the same heart the visitor meets
+ * elsewhere in the Temple.
+ */
+const HEART_ART =
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Heart1.png';
 
+/**
+ * Vigil — a single ritual scene.
+ *
+ * The page keeps one idea and removes everything that used to compete with it:
+ * an angel keeps a candle, the visitor offers a spark, and the candle's light
+ * crosses the dark room to the shared heart. The server state, cooldown and
+ * identity rules are unchanged; only the way the ritual is staged is new.
+ */
 export default function VigilExperience() {
   const {
     identity,
     reduceMotion,
     angelRef,
     heartRef,
-    guardians,
     flameData,
     flameLit,
     flameLabel,
@@ -64,226 +69,287 @@ export default function VigilExperience() {
     },
   });
 
-  // Publish the shared flame clock to the modal header. The visual intensity
-  // below uses the same server snapshot and calculation as the homepage, so
-  // the timer and the heart can never disagree.
+  // The shared flame clock is published once to the modal header. The same
+  // server snapshot also drives the heart and the candle below.
   useRitualModalTimer(flameReady ? flameLabel : null);
 
-  const heartScale = flameLit
-    ? 0.9 + flameVisuals.intensity * 0.35
-    : 0.8;
-  const flameStateLabel = flameReady
-    ? flameLit
-      ? 'lit'
-      : 'extinguished'
-    : 'unknown';
-  const glowOpacity = Math.min(
-    1,
-    Math.max(0, flameVisuals.glowOpacity)
-  );
+  const flameStateLabel = flameReady ? (flameLit ? 'lit' : 'extinguished') : 'unknown';
+
+  const heartGlow = Math.min(1, Math.max(0, flameVisuals.glowOpacity));
+  const heartScale = flameLit ? 0.92 + flameVisuals.intensity * 0.2 : 0.86;
+  const heartAuraScale = 0.9 + heartGlow * 0.24;
+  const flameScale = isLighting ? 1.25 : flameLit ? 0.86 + flameVisuals.intensity * 0.34 : 0.52;
+  const sceneStyle = {
+    '--heart-glow': heartGlow.toFixed(3),
+    '--heart-aura-scale': heartAuraScale.toFixed(3),
+    '--flame-scale': flameScale.toFixed(3),
+  } as CSSProperties;
+
+  const actionLabel = isLighting
+    ? 'Transmitting Spark...'
+    : isOnCooldown
+      ? `Spark returns in ${cooldownLabel}`
+      : !userName
+        ? identity.isLoading
+          ? 'Preparing your identity…'
+          : identity.isTelegram
+            ? 'Identity unavailable'
+            : 'Sign in to send a spark'
+        : 'Send Spark';
+
+  const flameCaption = !flameReady
+    ? 'Reading the shared flame'
+    : flameLit
+      ? 'The heart is lit'
+      : 'The heart is waiting';
+
+  const keeperLabel = supporterCount === 1 ? 'keeper' : 'keepers';
+
   const identityStatus = (() => {
     if (identity.isLoading) {
-      return (
-        <span className="opacity-50">
-          Preparing your Temple identity...
-        </span>
-      );
+      return <span className={styles.muted}>Preparing your identity…</span>;
     }
 
     if (userName) {
       return (
-        <div className="opacity-90">
-          Connected as{' '}
-          <span className="font-semibold">{userName}</span>
-        </div>
+        <span>
+          Keeping watch as <strong className={styles.identityName}>{userName}</strong>
+        </span>
       );
     }
 
     if (identity.isTelegram) {
       return (
-        <div className="text-amber-400/90">
-          {identity.error ||
-            'Telegram identity is not available. You can still witness the Vigil.'}
+        <span className={styles.warning}>
+          {identity.error || 'Telegram identity is not available. You can still witness the Vigil.'}
           {identity.error && (
             <button
               type="button"
               onClick={() => void identity.refresh()}
-              className="ml-2 min-h-[44px] align-middle underline underline-offset-2 hover:opacity-80"
+              className={styles.inlineButton}
             >
               Retry
             </button>
           )}
-        </div>
+        </span>
       );
     }
 
     return (
-      <div className="text-amber-400 flex items-center justify-center gap-1.5">
-        <Sparkles size={14} />
-        <span>
-          Please{' '}
-          <Link
-            href="/login?next=%2Fvigil"
-            className="underline hover:opacity-80"
-          >
-            sign in
-          </Link>{' '}
-          to participate
-        </span>
-      </div>
+      <span>
+        <Link href="/login?next=%2Fvigil" className={styles.signInLink}>
+          Sign in
+        </Link>{' '}
+        to offer a spark of your own.
+      </span>
     );
   })();
 
   return (
-    <div
-      className={`vigil-page relative w-full ${roomTheme.bg} ${roomTheme.text} font-sans overflow-x-hidden select-none flex flex-col px-5 sm:px-10`}
-      style={{ backgroundImage: roomTheme.vignette }}
-    >
+    <div className={`vigil-page ${styles.page}`} data-vigil-theme="chapel">
+      <div className={styles.roomGlow} aria-hidden="true" />
+      <div className={styles.grain} aria-hidden="true" />
+
       <TempleTopBar backTo="temple" />
 
-      <h1 className="relative z-20 mx-auto w-full max-w-5xl px-1 font-serif text-xs uppercase tracking-[0.3em] text-stone-400">
-        Vigil — Digital Temple
-      </h1>
+      <main className={styles.scene}>
+        <header className={styles.heading}>
+          <p className={styles.eyebrow}>Heart &amp; Angel · Digital Temple</p>
+          <h1 className={styles.title}>Vigil</h1>
+          <p className={styles.subtitle}>An angel keeps a candle. Your spark becomes the light.</p>
+        </header>
 
-      {/* Мягкое внутреннее свечение в темной комнате */}
-      <div
-        className={`pointer-events-none absolute top-1/2 left-1/2 z-0 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-tr ${roomTheme.glow} blur-[120px] transition-opacity duration-700`}
-        style={{ opacity: flameLit ? 0.25 + glowOpacity * 0.75 : 0 }}
-      />
+        <section
+          className={styles.altar}
+          style={sceneStyle}
+          aria-label="The angel, the candle and the shared heart"
+        >
+          <div className={styles.arch} aria-hidden="true">
+            <span className={styles.archLine} />
+            <span className={styles.archHalo} />
+          </div>
 
-      <div className="vigil-stage relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-5 py-3 lg:max-w-5xl lg:gap-0 lg:py-6">
-        {/*
-          On phones and tablets the Angel and the Heart sit together above the
-          control panel, so neither is hidden behind it. From large screens the
-          original side composition returns.
-        */}
-        <div className="vigil-art flex w-full items-end justify-between gap-4 lg:contents">
+          <div className={styles.stars} aria-hidden="true">
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+
           <div
             ref={angelRef}
-            className="pointer-events-none relative z-10 flex shrink-0 flex-col items-center lg:absolute lg:bottom-[14%] lg:left-[6%] lg:z-30"
+            className={styles.angel}
+            data-lighting={isLighting ? 'true' : 'false'}
           >
-            <div className="absolute -bottom-2 h-5 w-24 rounded-full bg-black/40 blur-[10px] sm:w-32" />
-
-            <div
-              className={`absolute inset-0 rounded-full bg-amber-600/15 blur-3xl transition-all duration-700 ${
-                isLighting ? 'scale-150 opacity-100' : 'opacity-40'
-              }`}
-            />
-
-            <div className="relative flex h-32 w-24 items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.6)] sm:h-44 sm:w-36 lg:h-52 lg:w-44">
+            <span className={styles.angelHalo} aria-hidden="true" />
+            <div className={styles.angelFigure}>
               <Image
-                src={ANGEL_GIF}
-                alt="Guardian Angel"
+                src={ANGEL_ART}
+                alt="Guardian angel keeping the candle"
                 fill
-                sizes="(min-width: 1024px) 176px, 144px"
-                className={`object-contain transition-all duration-500 ${
-                  isLighting
-                    ? 'scale-105 brightness-125 drop-shadow-[0_0_30px_rgba(255,165,0,0.8)]'
-                    : ''
-                }`}
+                sizes="(min-width: 1024px) 260px, 180px"
+                className={styles.angelImage}
                 priority
                 unoptimized
               />
             </div>
+            <span className={styles.angelShadow} aria-hidden="true" />
           </div>
+
+          <svg
+            className={styles.thread}
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            data-lit={flameLit ? 'true' : 'false'}
+          >
+            <defs>
+              <linearGradient id="vigil-thread-gradient" x1="0" y1="1" x2="1" y2="0">
+                <stop offset="0%" stopColor="rgba(255, 196, 112, 0.05)" />
+                <stop offset="55%" stopColor="rgba(255, 186, 92, 0.55)" />
+                <stop offset="100%" stopColor="rgba(255, 138, 60, 0.9)" />
+              </linearGradient>
+            </defs>
+            <path className={styles.threadGlow} d="M 8 92 C 34 66 60 36 100 18" />
+            <path className={styles.threadLine} d="M 8 92 C 34 66 60 36 100 18" />
+          </svg>
+
+          <button
+            type="button"
+            onClick={(event) => void triggerRitual(event)}
+            disabled={isLighting || !userName || isOnCooldown}
+            aria-busy={isLighting}
+            aria-label={actionLabel}
+            className={styles.candleControl}
+            data-state={isLighting ? 'lighting' : isOnCooldown ? 'cooldown' : 'ready'}
+          >
+            <span className={styles.candleHalo} aria-hidden="true" />
+
+            <span className={styles.candleArt} aria-hidden="true">
+              <span className={styles.flameWrap} data-lit={flameLit ? 'true' : 'false'}>
+                <span className={styles.flameGlow} />
+                <svg className={styles.flameSvg} viewBox="0 0 40 66" focusable="false">
+                  <defs>
+                    <radialGradient id="vigil-flame-outer" cx="50%" cy="72%" r="62%">
+                      <stop offset="0%" stopColor="#fff6d8" />
+                      <stop offset="38%" stopColor="#ffd27a" />
+                      <stop offset="72%" stopColor="#ff8b2e" />
+                      <stop offset="100%" stopColor="rgba(255, 92, 24, 0.12)" />
+                    </radialGradient>
+                    <radialGradient id="vigil-flame-inner" cx="50%" cy="78%" r="58%">
+                      <stop offset="0%" stopColor="#ffffff" />
+                      <stop offset="62%" stopColor="#ffe6a3" />
+                      <stop offset="100%" stopColor="rgba(255, 214, 130, 0.1)" />
+                    </radialGradient>
+                  </defs>
+                  <path
+                    className={styles.flameOuter}
+                    d="M20 2 C31 19 37 28 34 42 C32 55 26 62 20 62 C14 62 8 55 6 42 C3 28 9 19 20 2 Z"
+                    fill="url(#vigil-flame-outer)"
+                  />
+                  <path
+                    className={styles.flameInner}
+                    d="M20 24 C26 34 29 40 27 48 C26 55 23 58 20 58 C17 58 14 55 13 48 C11 40 14 34 20 24 Z"
+                    fill="url(#vigil-flame-inner)"
+                  />
+                </svg>
+              </span>
+
+              <span className={styles.wick} />
+              <span className={styles.wax}>
+                <span className={styles.waxDrip} />
+                <span className={styles.waxHighlight} />
+              </span>
+              <span className={styles.dish} />
+            </span>
+
+            <span className={styles.candleLabel}>{actionLabel}</span>
+          </button>
 
           <div
             ref={heartRef}
             data-testid="vigil-heart"
-            className="relative z-10 flex h-32 w-32 shrink-0 items-center justify-center sm:h-44 sm:w-44 lg:absolute lg:right-[7%] lg:top-[26%] lg:z-30 lg:h-auto lg:w-auto"
+            className={styles.heart}
             data-vigil-flame-state={flameStateLabel}
             data-vigil-intensity={flameVisuals.intensity.toFixed(4)}
             data-vigil-remaining-ms={Math.floor(flameVisuals.remainingMs)}
             data-supporter-count={supporterCount}
           >
-            <div
-              className="relative transition-all duration-700 ease-in-out"
-              style={{ transform: `scale(${heartScale})` }}
-            >
-              <motion.div
-                animate={
-                  !flameLit || reduceMotion
-                    ? {
-                        opacity: flameLit ? glowOpacity * 0.6 : 0,
-                        scale: 1,
-                      }
-                    : {
-                        scale: [1, 1.15, 1],
-                        opacity: [
-                          glowOpacity * 0.55,
-                          glowOpacity,
-                          glowOpacity * 0.55,
-                        ],
-                      }
-                }
-                transition={
-                  !flameLit || reduceMotion
-                    ? { duration: 0 }
-                    : {
-                        duration: 2.5,
-                        repeat: Infinity,
-                        ease: 'easeInOut',
-                      }
-                }
-                className="h-32 w-32 rounded-full bg-gradient-to-t from-orange-600 via-rose-600 to-transparent mix-blend-screen blur-[45px] sm:h-44 sm:w-44"
-              />
+            <span className={styles.heartAura} aria-hidden="true" />
+            <span className={styles.heartRing} aria-hidden="true" />
+            <span className={styles.heartOrbit} aria-hidden="true" />
 
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Heart
-                  size={65 + flameVisuals.intensity * 30}
-                  className={`transition-all duration-700 ${
-                    flameLit
-                      ? 'fill-orange-600/30 text-stone-100'
-                      : 'fill-stone-700/20 text-stone-500'
-                  } stroke-[1.5]`}
-                  style={
-                    flameLit
-                      ? {
-                          filter: `brightness(${flameVisuals.brightness.toFixed(
-                            3
-                          )}) saturate(${flameVisuals.saturate.toFixed(
-                            3
-                          )}) grayscale(${flameVisuals.grayscale.toFixed(
-                            3
-                          )}) drop-shadow(0 0 ${Math.max(
-                            10,
-                            Math.round(flameVisuals.glowBlurPx / 2)
-                          )}px rgba(255, 140, 0, ${(
-                            0.25 +
-                            flameVisuals.intensity * 0.5
-                          ).toFixed(3)}))`,
-                        }
-                      : undefined
-                  }
-                />
-              </div>
-            </div>
+            <motion.div
+              className={styles.heartBody}
+              animate={
+                !flameLit || reduceMotion
+                  ? { scale: 1, opacity: 1 }
+                  : {
+                      scale: [1, 1.045, 1],
+                      opacity: [0.94, 1, 0.94],
+                    }
+              }
+              transition={
+                !flameLit || reduceMotion
+                  ? { duration: 0 }
+                  : {
+                      duration: 2.8,
+                      repeat: Infinity,
+                      ease: 'easeInOut',
+                    }
+              }
+            >
+              <Image
+                src={HEART_ART}
+                alt=""
+                fill
+                sizes="(min-width: 1024px) 260px, 180px"
+                className={styles.heartImage}
+                style={
+                  flameLit
+                    ? {
+                        filter: `brightness(${flameVisuals.brightness.toFixed(
+                          3
+                        )}) saturate(${flameVisuals.saturate.toFixed(
+                          3
+                        )}) grayscale(${flameVisuals.grayscale.toFixed(
+                          3
+                        )}) drop-shadow(0 0 ${Math.max(
+                          10,
+                          Math.round(flameVisuals.glowBlurPx / 2)
+                        )}px rgba(255, 140, 60, ${(0.24 + flameVisuals.intensity * 0.46).toFixed(
+                          3
+                        )}))`,
+                        transform: `scale(${heartScale.toFixed(3)})`,
+                      }
+                    : {
+                        transform: `scale(${heartScale.toFixed(3)})`,
+                      }
+                }
+              />
+            </motion.div>
+
+            <span className={styles.heartCaption} aria-hidden="true">
+              {flameLit ? 'LIT' : 'WAITING'}
+            </span>
 
             <AnimatePresence>
               {spark && (
                 <motion.div
+                  key="vigil-spark"
                   initial={
-                    reduceMotion
-                      ? { opacity: 0, scale: 1 }
-                      : { x: 0, y: 0, opacity: 0, scale: 0.5 }
+                    reduceMotion ? { opacity: 0, scale: 1 } : { x: 0, y: 0, opacity: 0, scale: 0.4 }
                   }
                   animate={
                     reduceMotion
                       ? { opacity: [0, 1, 0], scale: 1 }
                       : {
-                          x: [
-                            0,
-                            (spark.end.x - spark.start.x) * 0.45,
-                            spark.end.x - spark.start.x,
-                          ],
-                          y: [
-                            0,
-                            -90,
-                            spark.end.y - spark.start.y,
-                          ],
+                          x: [0, (spark.end.x - spark.start.x) * 0.45, spark.end.x - spark.start.x],
+                          y: [0, -104, spark.end.y - spark.start.y],
                           opacity: [0, 1, 1, 0],
-                          scale: [0.55, 1.8, 1.35, 0.25],
-                          rotate: [0, 18, -12, 0],
+                          scale: [0.6, 1.9, 1.35, 0.22],
+                          rotate: [0, 20, -14, 0],
                         }
                   }
                   exit={{ opacity: 0 }}
@@ -296,151 +362,80 @@ export default function VigilExperience() {
                           ease: [0.22, 1, 0.36, 1],
                         }
                   }
-                  className="pointer-events-none fixed z-50 flex items-center justify-center"
+                  className={styles.spark}
                   style={{ left: spark.start.x, top: spark.start.y }}
                 >
-                  <div className="h-10 w-10 rounded-full bg-amber-300 shadow-[0_0_30px_10px_#ff9900] blur-[3px]" />
-                  <div className="absolute h-4 w-4 rounded-full bg-white shadow-[0_0_15px_4px_#ffffff]" />
+                  <span className={styles.sparkTrail} />
+                  <span className={styles.sparkCore} />
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-        </div>
+        </section>
 
-        {/* Центральный блок управления */}
-        <div className="vigil-control relative z-20 flex w-full max-w-md flex-col items-center justify-center">
-          <div
-            className={`flex w-full flex-col items-center gap-5 rounded-3xl border p-5 text-center backdrop-blur-xl sm:gap-6 sm:p-7 ${roomTheme.cardBg} shadow-2xl`}
-          >
-            <div className="w-full space-y-3">
-              <div className="font-mono text-xs uppercase tracking-[0.3em] opacity-70">
-                Active Guardians (24h)
-              </div>
-
-              <div
-                className="font-serif text-sm opacity-80"
-                aria-live="polite"
-              >
-                {flameReady
-                  ? `${supporterCount} ${
-                      supporterCount === 1
-                        ? 'supporter'
-                        : 'supporters'
-                    }`
-                  : 'Reading participants…'}
-              </div>
-
-              <div className="flex min-h-[40px] flex-wrap items-center justify-center gap-2">
-                {guardians.length === 0 ? (
-                  <div className="font-serif text-sm italic opacity-50">
-                    {supporterCount > 0
-                      ? 'Sparks are present; guardian names stay private.'
-                      : 'No recent sparks recorded yet. Be the first.'}
-                  </div>
-                ) : (
-                  guardians.map((guardian, index) => (
-                    <div
-                      key={`${guardian}-${index}`}
-                      className={`max-w-[12rem] truncate rounded-full border px-3.5 py-1.5 font-serif text-xs shadow-sm transition-transform hover:scale-105 sm:text-sm ${roomTheme.buttonClass}`}
-                    >
-                      {guardian}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="h-[1px] w-full bg-white/10" />
-
-            <div className="w-full space-y-4">
-              <div className="space-y-1.5 text-center">
-                <div className="font-mono text-xs">{identityStatus}</div>
-
-                <div className="flex items-center justify-center gap-2">
-                  <Clock size={13} className="text-amber-400" />
-                  <span
-                    className={`font-mono text-xs uppercase tracking-wider ${
-                      flameLit ? 'opacity-85' : 'text-stone-500'
-                    }`}
-                    aria-live="polite"
-                  >
-                    {flameReady ? flameLabel : 'Checking status...'}
-                  </span>
-                </div>
-
-                {(flameStatus === 'stale' || flameStatus === 'error') && (
-                  <div
-                    className="font-mono text-[10px] uppercase tracking-[0.14em] text-amber-300/70"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    {flameError || 'Shared flame reconnecting'}
-                  </div>
-                )}
-
-                {isOnCooldown && (
-                  <div
-                    className="font-mono text-[11px] uppercase tracking-[0.14em] text-amber-300/80"
-                    aria-live="polite"
-                  >
-                    Next spark in {cooldownLabel}
-                  </div>
-                )}
-
-                {flameData?.owner_name && (
-                  <div
-                    className="font-serif text-sm text-amber-200/90"
-                    aria-live="polite"
-                  >
-                    {flameLit ? 'Heart lit by' : 'Last spark by'}{' '}
-                    <span className="font-semibold text-amber-100">
-                      {flameData.owner_name}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={(event) => void triggerRitual(event)}
-                disabled={isLighting || !userName || isOnCooldown}
-                aria-busy={isLighting}
-                className="group relative flex h-12 w-full cursor-pointer items-center justify-center gap-2.5 rounded-full border border-white/20 bg-white/10 font-serif text-xs uppercase tracking-widest text-stone-200 shadow-md backdrop-blur-md transition-all hover:bg-white/20 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Heart
-                  size={14}
-                  className={`text-orange-500 ${
-                    flameLit ? 'fill-orange-500/30' : ''
-                  } ${isLighting ? 'animate-bounce' : ''}`}
-                />
-
-                <span>
-                  {isLighting
-                    ? 'Transmitting Spark...'
-                    : isOnCooldown
-                      ? `Spark returns in ${cooldownLabel}`
-                      : 'Send Spark'}
-                </span>
-              </button>
-
-              {rateLimitMsg && (
-                <div
-                  className="text-center font-mono text-xs text-rose-400"
-                  role="status"
-                >
-                  {rateLimitMsg}
-                </div>
-              )}
-
-              {isOnCooldown && (
-                <div className="pt-1">
-                  <VigilShare />
-                </div>
-              )}
-            </div>
+        <section className={styles.meta} aria-live="polite" aria-label="Vigil status">
+          <div className={styles.metaItem}>
+            <span className={styles.metaValue}>{supporterCount}</span>
+            <span className={styles.metaLabel}>{keeperLabel} · 24h</span>
           </div>
-        </div>
-      </div>
+
+          <span className={styles.metaDivider} aria-hidden="true" />
+
+          <div className={`${styles.metaItem} ${styles.metaWide}`}>
+            <span
+              className={`${styles.metaValue} ${styles.metaValueSmall}`}
+              data-flame-state={flameStateLabel}
+            >
+              {flameReady ? flameLabel : 'Reading the flame…'}
+            </span>
+            <span className={styles.metaLabel}>{flameCaption}</span>
+          </div>
+
+          <span className={styles.metaDivider} aria-hidden="true" />
+
+          <div className={styles.metaItem}>
+            <span className={styles.metaValue}>{flameReady ? (flameLit ? '●' : '○') : '…'}</span>
+            <span className={styles.metaLabel}>{flameLit ? 'Shared flame' : 'Candle kept'}</span>
+          </div>
+        </section>
+
+        <section className={styles.details} aria-live="polite">
+          <p className={styles.identity}>{identityStatus}</p>
+
+          {flameData?.owner_name && (
+            <p className={styles.owner}>
+              {flameLit ? 'Heart lit by' : 'Last spark from'}{' '}
+              <strong>{flameData.owner_name}</strong>
+            </p>
+          )}
+
+          {(flameStatus === 'stale' || flameStatus === 'error') && (
+            <p className={styles.notice} role="status">
+              {flameError || 'Shared flame reconnecting'}
+            </p>
+          )}
+
+          {isOnCooldown && (
+            <p className={styles.notice}>Your next spark returns in {cooldownLabel}.</p>
+          )}
+
+          {rateLimitMsg && (
+            <p className={styles.error} role="status">
+              {rateLimitMsg}
+            </p>
+          )}
+
+          {isOnCooldown && (
+            <div className={styles.share}>
+              <VigilShare />
+            </div>
+          )}
+        </section>
+
+        <p className={styles.footnote}>
+          One candle. One heart. Keep the light alive for another day.
+        </p>
+      </main>
     </div>
   );
 }
