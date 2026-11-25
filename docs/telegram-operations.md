@@ -19,7 +19,15 @@ Optional:
 TELEGRAM_MINI_APP_URL=https://www.merkurov.love/lobby
 OPENAI_API_KEY=...                 # existing provider; voice transcription only
 TELEGRAM_BOT_WEBHOOK_ENFORCE_SECRET=1  # only if /api/bot has its own bot token
+TEMPLE_BOT_TOKEN=...              # existing love_temple_bot; Mini App auth + Vigil channel post
+TEMPLE_CHANNEL_ID=@heartandangel  # optional channel override for the Vigil post
 ```
+
+The ordinary Vigil publishes one anonymous channel message after a
+server-confirmed spark. It uses the Temple bot and the Heart & Angel channel;
+when `TEMPLE_CHANNEL_ID` is unset, the public `@heartandangel` channel is used.
+A missing token/channel or a Telegram failure never changes the Vigil result.
+There is no retry loop and no extra bot command.
 
 Never add bot tokens or webhook secrets as `NEXT_PUBLIC_*`.
 
