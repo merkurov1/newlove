@@ -61,33 +61,101 @@ import styles from './temple.module.css';
 
 type RitualIcon = React.ComponentType<{ size?: number; className?: string }>;
 
+/*
+ * Chamber sigils are drawn here rather than imported as generic UI icons. They
+ * are abstract engravings — an opening crescent, a falling curl, a sealed
+ * circle and a cast star — so the four entrances belong to the Temple's own
+ * symbolic language instead of a dashboard icon set. No new figure is drawn.
+ */
+const SIGIL_PROPS = {
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.1,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+  focusable: 'false' as const,
+};
+
+function CalmSigil({ size = 18, className }: { size?: number; className?: string }) {
+  return (
+    <svg {...SIGIL_PROPS} width={size} height={size} className={className}>
+      <path d="M19.6 15.1A8.4 8.4 0 0 1 8.9 4.4a7 7 0 1 0 10.7 10.7Z" />
+      <path d="M16.7 11.9a5.4 5.4 0 0 1-5.1-5.1" opacity="0.55" />
+    </svg>
+  );
+}
+
+function LetItGoSigil({ size = 18, className }: { size?: number; className?: string }) {
+  return (
+    <svg {...SIGIL_PROPS} width={size} height={size} className={className}>
+      <path d="M12.4 3.2c3.4 2 5.4 5 5.4 8.6 0 4.2-2.8 7.3-6.2 7.3-2.6 0-4.6-1.8-4.6-4.3 0-2.4 1.8-4.1 4.1-4.1 2.1 0 3.6 1.5 3.6 3.5" />
+      <path d="M7.1 20.5c1.5-.9 2.6-2 3.2-3.4" opacity="0.55" />
+    </svg>
+  );
+}
+
+function AbsolutionSigil({ size = 18, className }: { size?: number; className?: string }) {
+  return (
+    <svg {...SIGIL_PROPS} width={size} height={size} className={className}>
+      <circle cx="12" cy="12" r="7.6" />
+      <circle cx="12" cy="12" r="5.1" opacity="0.45" />
+      <circle cx="12" cy="10.7" r="2" />
+      <path d="M12 12.7v3.6" />
+    </svg>
+  );
+}
+
+function CastSigil({ size = 18, className }: { size?: number; className?: string }) {
+  return (
+    <svg {...SIGIL_PROPS} width={size} height={size} className={className}>
+      <circle cx="12" cy="12" r="7.4" opacity="0.45" />
+      <path d="M12 3.6v16.8M3.6 12h16.8M6.4 6.4l11.2 11.2M17.6 6.4 6.4 17.6" opacity="0.55" />
+      <path d="m12 8.2 1.2 2.6 2.6 1.2-2.6 1.2L12 15.8l-1.2-2.6L8.2 12l2.6-1.2Z" />
+    </svg>
+  );
+}
+
 const RITUAL_META: Record<
   string,
   {
+    key: 'calm' | 'letitgo' | 'absolution' | 'cast' | 'ritual';
     descriptor: string;
+    /** Used for the ritual-specific reveal and focus state. */
     accent: string;
+    /** Only ever a low-opacity chamber light, never a category colour. */
+    atmosphere: string;
     icon: RitualIcon;
   }
 > = {
   '/heartandangel/calm': {
+    key: 'calm',
     descriptor: 'Stillness · Breathe',
     accent: '#5d7f9b',
-    icon: Moon,
+    atmosphere: '#9db4c6',
+    icon: CalmSigil,
   },
   '/heartandangel/letitgo': {
+    key: 'letitgo',
     descriptor: 'Release · Ash',
     accent: '#9b6761',
-    icon: Trash2,
+    atmosphere: '#c4a08c',
+    icon: LetItGoSigil,
   },
   '/absolution': {
+    key: 'absolution',
     descriptor: 'Confession · Mercy',
     accent: '#67836b',
-    icon: ShieldCheck,
+    atmosphere: '#a9b79b',
+    icon: AbsolutionSigil,
   },
   '/cast': {
+    key: 'cast',
     descriptor: 'The question · Fate',
     accent: '#796fa0',
-    icon: Compass,
+    atmosphere: '#b3a9c8',
+    icon: CastSigil,
   },
 };
 
@@ -799,6 +867,23 @@ export default function TempleClient({
 
           <main className={styles.main}>
             <section className={styles.hero} aria-label="The living heart">
+              {/*
+               * The heart is set into an architectural niche rather than
+               * placed on a card: an arched stone reveal, shallow fluting, a
+               * warm lamp and a stepped altar shelf. Everything here is
+               * decorative and never intercepts the heart's own gesture.
+               */}
+              <div
+                className={styles.altarNiche}
+                data-testid="temple-altar"
+                aria-hidden="true"
+              >
+                <span className={styles.altarHalo} />
+                <span className={styles.altarArch} />
+                <span className={styles.altarFlutes} />
+                <span className={styles.altarShelf} />
+              </div>
+
               <RitualLink
                 href="/vigil"
                 onClick={(event) => {
@@ -928,12 +1013,14 @@ export default function TempleClient({
                 )}
               </RitualLink>
 
-              <p className={styles.eyebrow}>THE SANCTUARY</p>
-              <h1 className={styles.title}>Digital Temple</h1>
-              <p className={styles.lede}>
-                A place to be present, to do something small, and to leave a
-                mark.
-              </p>
+              <div className={styles.altarInscription}>
+                <p className={styles.eyebrow}>THE SANCTUARY</p>
+                <h1 className={styles.title}>Digital Temple</h1>
+                <p className={styles.lede}>
+                  A place to be present, to do something small, and to leave a
+                  mark.
+                </p>
+              </div>
             </section>
 
             <section
@@ -952,8 +1039,10 @@ export default function TempleClient({
               <div className={styles.ritualGrid}>
                 {TEMPLE_RITUAL_LINKS.map((ritual) => {
                   const meta = RITUAL_META[ritual.href] ?? {
+                    key: 'ritual' as const,
                     descriptor: 'Ritual',
                     accent: '#9a7437',
+                    atmosphere: '#b39a74',
                     icon: Sparkles,
                   };
                   const Icon = meta.icon;
@@ -964,16 +1053,18 @@ export default function TempleClient({
                       href={ritual.href}
                       onClick={() => hapticImpact('ritual-select')}
                       className={styles.ritualCard}
+                      data-ritual={meta.key}
                       aria-label={ritual.label}
                       style={
                         {
                           '--accent': meta.accent,
                           '--c': meta.accent,
+                          '--atmosphere': meta.atmosphere,
                         } as React.CSSProperties
                       }
                     >
                       <span className={styles.ritualIcon} aria-hidden="true">
-                        <Icon size={16} />
+                        <Icon size={18} />
                       </span>
                       <span className={styles.ritualBody}>
                         <span className={styles.ritualLabel}>
@@ -983,6 +1074,16 @@ export default function TempleClient({
                           {meta.descriptor}
                         </span>
                       </span>
+                      {/* Empty, aria-hidden architecture: the chamber vault
+                          and its votive light. */}
+                      <span
+                        className={styles.ritualVault}
+                        aria-hidden="true"
+                      />
+                      <span
+                        className={styles.ritualLight}
+                        aria-hidden="true"
+                      />
                     </RitualLink>
                   );
                 })}
