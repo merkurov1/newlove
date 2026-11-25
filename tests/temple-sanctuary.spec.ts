@@ -552,6 +552,105 @@ test.describe('Temple Sanctuary', () => {
     }
   });
 
+  test('ritual grid is 4 columns on desktop, 2 on tablet and 1 on mobile', async ({
+    page,
+  }) => {
+    const layouts = [
+      { label: 'desktop-min', width: 1024, height: 768, columns: 4 },
+      { label: 'desktop', width: 1440, height: 900, columns: 4 },
+      { label: 'tablet', width: 768, height: 1024, columns: 2 },
+      { label: 'mobile', width: 390, height: 844, columns: 1 },
+      { label: 'mobile-narrow', width: 320, height: 568, columns: 1 },
+    ] as const;
+
+    for (const layout of layouts) {
+      await page.setViewportSize({
+        width: layout.width,
+        height: layout.height,
+      });
+      await openTemple(page);
+
+      const cards = page.locator(
+        'section[aria-labelledby="rituals-title"] a'
+      );
+
+      await expect(cards).toHaveCount(4);
+
+      const metrics = await cards.evaluateAll((elements) =>
+        elements.map((element) => {
+          const card = element as HTMLElement;
+          const body = card.children[1] as HTMLElement;
+          const label = body.children[0] as HTMLElement;
+          const hint = body.children[1] as HTMLElement;
+          const rect = card.getBoundingClientRect();
+
+          return {
+            top: rect.top,
+            width: rect.width,
+            height: rect.height,
+            label: {
+              text: label.textContent,
+              scrollWidth: label.scrollWidth,
+              clientWidth: label.clientWidth,
+              scrollHeight: label.scrollHeight,
+              clientHeight: label.clientHeight,
+            },
+            hint: {
+              text: hint.textContent,
+              scrollWidth: hint.scrollWidth,
+              clientWidth: hint.clientWidth,
+              scrollHeight: hint.scrollHeight,
+              clientHeight: hint.clientHeight,
+            },
+          };
+        })
+      );
+
+      const rows = Array.from(
+        metrics.reduce((grouped, card) => {
+          const key = Math.round(card.top);
+
+          grouped.set(key, [...(grouped.get(key) ?? []), card]);
+
+          return grouped;
+        }, new Map<number, typeof metrics>())
+      );
+
+      expect(
+        rows.map(([, row]) => row.length),
+        `${layout.label} should use ${layout.columns} equal columns`
+      ).toEqual(
+        Array.from({ length: 4 / layout.columns }, () => layout.columns)
+      );
+
+      for (const [, row] of rows) {
+        const heights = row.map((card) => card.height);
+
+        expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(
+          1
+        );
+      }
+
+      for (const card of metrics) {
+        expect(card.width).toBeGreaterThanOrEqual(44);
+        expect(card.height).toBeGreaterThanOrEqual(44);
+
+        for (const text of [card.label, card.hint]) {
+          expect(
+            text.scrollWidth,
+            `${layout.label} "${text.text}" should not be clipped`
+          ).toBeLessThanOrEqual(text.clientWidth + 1);
+          expect(
+            text.scrollHeight,
+            `${layout.label} "${text.text}" should not be clipped vertically`
+          ).toBeLessThanOrEqual(text.clientHeight + 1);
+        }
+      }
+
+      await expectNoHorizontalOverflow(page);
+    }
+  });
+
   test('a specific amount starts Stripe immediately with no modal or /tribute hop', async ({
     page,
   }) => {

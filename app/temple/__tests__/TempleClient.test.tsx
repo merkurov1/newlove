@@ -363,6 +363,33 @@ describe('Temple home composition', () => {
     expect(within(rituals).queryByRole('link', { name: /Tribute/ })).toBeNull();
   });
 
+  it('keeps the canonical ritual order and descriptors on every card', () => {
+    render(<TempleClient />);
+
+    const rituals = screen
+      .getByRole('heading', { name: 'Rituals' })
+      .closest('section') as HTMLElement;
+    const links = within(rituals).getAllByRole('link');
+
+    expect(links.map(link => link.getAttribute('href'))).toEqual([
+      '/heartandangel/calm',
+      '/heartandangel/letitgo',
+      '/absolution',
+      '/cast',
+    ]);
+    expect(links.map(link => link.textContent)).toEqual([
+      'CalmStillness · Breathe',
+      'Let It GoRelease · Ash',
+      'AbsolutionConfession · Mercy',
+      'CastThe question · Fate',
+    ]);
+    expect(links).toHaveLength(4);
+    links.forEach(link => {
+      expect(link.querySelector('svg')).not.toBeNull();
+      expect(link).toHaveAttribute('aria-label');
+    });
+  });
+
   it('sends the generic Support CTA to the non-modal payment step', () => {
     render(<TempleClient />);
 
