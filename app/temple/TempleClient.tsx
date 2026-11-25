@@ -707,6 +707,11 @@ export default function TempleClient({
                   <span>{vigilLabel}</span>
                 </span>
 
+                <span className={styles.vigilEntry} aria-hidden="true">
+                  Tap or hold the heart · Enter the Vigil
+                  <span className={styles.vigilEntryArrow}>→</span>
+                </span>
+
                 {vigilStateProblem && (
                   <span
                     className={styles.vigilProblem}
@@ -783,10 +788,23 @@ export default function TempleClient({
               className={`${styles.section} ${styles.supportSection}`}
               aria-labelledby="support-title"
             >
+              <div className={styles.sectionHeading}>
+                <div>
+                  <h2 id="support-title" className={styles.sectionTitle}>
+                    Tribute
+                  </h2>
+                  <p className={styles.sectionNote}>
+                    Direct support · secure Stripe checkout
+                  </p>
+                </div>
+                <Heart
+                  size={15}
+                  className={styles.sectionMark}
+                  aria-hidden="true"
+                />
+              </div>
+
               <div className={styles.supportCard}>
-                <h2 id="support-title" className={styles.supportTitle}>
-                  Support the Temple
-                </h2>
                 <p className={styles.supportCopy}>
                   Vigil contributes a spark. Tribute materially sustains the
                   Temple.
@@ -833,9 +851,6 @@ export default function TempleClient({
                     ? 'Opening the secure Stripe checkout…'
                     : 'Amounts open Stripe directly. You confirm the payment there.'}
                 </p>
-
-                <SharedVigil />
-                <AddToHomePrompt />
               </div>
 
               {leftWithoutTrace && (
@@ -844,6 +859,36 @@ export default function TempleClient({
                 </p>
               )}
             </section>
+
+            {isTelegramApp && (
+              <section
+                className={`${styles.section} ${styles.communitySection}`}
+                aria-labelledby="shared-vigil-title"
+                data-testid="shared-vigil-group"
+              >
+                <div className={styles.communityCard}>
+                  <div className={styles.groupHeading}>
+                    <span className={styles.groupIcon} aria-hidden="true">
+                      <Users size={15} />
+                    </span>
+                    <div>
+                      <h2
+                        id="shared-vigil-title"
+                        className={styles.groupTitle}
+                      >
+                        Shared Vigil
+                      </h2>
+                      <p className={styles.groupNote}>
+                        A small circle of keepers in your group chat.
+                      </p>
+                    </div>
+                  </div>
+                  <SharedVigil />
+                </div>
+              </section>
+            )}
+
+            <AddToHomePrompt className={styles.homeHintSection} />
 
             <section
               className={`${styles.section} ${styles.tracesSection}`}
@@ -867,6 +912,19 @@ export default function TempleClient({
                     aria-label="Refresh the latest Temple traces"
                   >
                     Refresh
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsChroniclesOpen(true)}
+                    className={`${styles.ghostButton} ${styles.chroniclesLink}`}
+                    aria-label="Open full Chronicles"
+                    data-testid="traces-chronicles"
+                  >
+                    <Activity size={12} aria-hidden="true" />
+                    Chronicles
+                    <span className={styles.chroniclesArrow} aria-hidden="true">
+                      →
+                    </span>
                   </button>
                 </div>
               </div>
@@ -956,22 +1014,31 @@ export default function TempleClient({
               aria-labelledby="chambers-title"
             >
               <div className={styles.sectionHeading}>
-                <h2 id="chambers-title" className={styles.sectionTitle}>
-                  Chambers
-                </h2>
+                <div>
+                  <h2 id="chambers-title" className={styles.sectionTitle}>
+                    Chambers
+                  </h2>
+                  <p className={styles.sectionNote}>
+                    A small library of rooms to wander
+                  </p>
+                </div>
               </div>
 
-              <div className={styles.chamberGrid}>
-                {CHAMBERS.map(([label, href]) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={styles.chamberLink}
-                  >
-                    {label}
-                  </Link>
+              <ul className={styles.chamberGrid}>
+                {CHAMBERS.map(([label, href], index) => (
+                  <li key={href} className={styles.chamberItem}>
+                    <Link href={href} className={styles.chamberLink}>
+                      <span className={styles.chamberIndex} aria-hidden="true">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <span className={styles.chamberLabel}>{label}</span>
+                      <span className={styles.chamberArrow} aria-hidden="true">
+                        →
+                      </span>
+                    </Link>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </section>
           </main>
 

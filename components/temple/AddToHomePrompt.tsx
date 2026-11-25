@@ -16,7 +16,11 @@ import {
  * disappears entirely for already-added, unsupported or recently dismissed
  * clients.
  */
-export default function AddToHomePrompt() {
+export default function AddToHomePrompt({
+  className,
+}: {
+  className?: string;
+} = {}) {
   const isTelegram = useIsTelegram();
   const [status, setStatus] = useState<HomeScreenStatus>('unknown');
   const [supported, setSupported] = useState(false);
@@ -87,27 +91,40 @@ export default function AddToHomePrompt() {
   };
 
   return (
-    <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-50/40 p-4 text-center">
-      <p className="font-serif text-sm">Keep the Temple close</p>
-      <p className="mt-1 text-[11px] leading-relaxed opacity-70">
-        Add it to your Home Screen for a quieter way back.
-      </p>
-      <div className="mt-3 flex items-center justify-center gap-2">
-        <button
-          type="button"
-          onClick={add}
-          className="min-h-[40px] rounded-full border border-amber-400/50 bg-amber-200/30 px-4 font-mono text-[10px] uppercase tracking-[.14em]"
-        >
-          Add
-        </button>
-        <button
-          type="button"
-          onClick={dismiss}
-          className="min-h-[40px] rounded-full px-3 font-mono text-[10px] uppercase tracking-[.14em] opacity-60"
-        >
-          Not now
-        </button>
+    <section
+      className={className}
+      aria-labelledby="temple-add-to-home-title"
+      data-testid="add-to-home-group"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/20 bg-white/30 px-3 py-2.5">
+        <div className="min-w-0 text-left">
+          <p
+            id="temple-add-to-home-title"
+            className="font-mono text-[8px] uppercase tracking-[.22em] opacity-55"
+          >
+            Add to Home
+          </p>
+          <p className="mt-0.5 font-serif text-[13px] leading-snug opacity-75">
+            Keep the Temple one tap away.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={add}
+            className="min-h-[36px] rounded-full border border-amber-400/40 px-3 font-mono text-[9px] uppercase tracking-[.14em]"
+          >
+            Add
+          </button>
+          <button
+            type="button"
+            onClick={dismiss}
+            className="min-h-[36px] px-2 font-mono text-[9px] uppercase tracking-[.14em] opacity-55"
+          >
+            Not now
+          </button>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
