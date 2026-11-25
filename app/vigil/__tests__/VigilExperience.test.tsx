@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import VigilExperience from '../VigilExperience';
 import { resolveVigilFlame } from '@/lib/vigil/flame';
+import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/vigil',
@@ -197,7 +198,7 @@ beforeEach(() => {
 });
 
 describe('/vigil shared flame surface', () => {
-  it('stages the ritual as an angel, a candle and the shared heart', () => {
+  it('stages the ritual as an angel and the shared heart', () => {
     render(<VigilExperience />);
 
     expect(screen.getByText(/an angel keeps a candle/i)).toBeInTheDocument();
@@ -208,6 +209,30 @@ describe('/vigil shared flame surface', () => {
     expect(
       screen.getByRole('button', { name: /sign in to send a spark/i })
     ).toBeDisabled();
+  });
+
+  it('renders Send Spark as a plain text button without candle artwork', () => {
+    identityModule.default.mockReturnValue(
+      identity({ displayName: 'Anna', source: 'supabase' })
+    );
+
+    render(<VigilExperience />);
+
+    const button = screen.getByRole('button', { name: /^send spark$/i });
+
+    expect(button).toHaveTextContent(/^Send Spark$/);
+    expect(button.childElementCount).toBe(0);
+    expect(button.querySelector('img, svg, picture, canvas')).toBeNull();
+  });
+
+  it('uses the exact Temple homepage heart artwork', () => {
+    render(<VigilExperience />);
+
+    const heart = screen.getByTestId('vigil-heart');
+    const heartImage = heart.querySelector('img');
+
+    expect(heartImage).not.toBeNull();
+    expect(heartImage).toHaveAttribute('src', TEMPLE_HOME_ASSETS.heart);
   });
 
   it('renders the same intensity as the shared calculation for the same server state', async () => {
