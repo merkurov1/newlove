@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { publishVigilChannelPost } from '@/lib/vigil/channelPost';
 import {
   claimVigilSpark,
   getVigilSparkStatus,
@@ -154,6 +155,10 @@ export async function POST(req: Request) {
         }
       );
     }
+
+    // The spark is already committed. The channel post is a best-effort
+    // announcement and must never turn a successful Vigil into an error.
+    await publishVigilChannelPost().catch(() => undefined);
 
     const { data: record, error: recordError } = await supabaseAdmin
       .from('vigil_hearts')

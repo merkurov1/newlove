@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 const mockIdentity = jest.fn();
 const mockClaim = jest.fn();
 const mockStatus = jest.fn();
+const mockChannelPost = jest.fn();
 
 jest.mock('@/lib/vigil/identity', () => ({
   resolveVigilIdentity: (...args: unknown[]) => mockIdentity(...args),
@@ -13,6 +14,10 @@ jest.mock('@/lib/vigil/identity', () => ({
 jest.mock('@/lib/vigil/claim', () => ({
   claimVigilSpark: (...args: unknown[]) => mockClaim(...args),
   getVigilSparkStatus: (...args: unknown[]) => mockStatus(...args),
+}));
+
+jest.mock('@/lib/vigil/channelPost', () => ({
+  publishVigilChannelPost: (...args: unknown[]) => mockChannelPost(...args),
 }));
 
 jest.mock('@supabase/supabase-js', () => ({
@@ -61,6 +66,11 @@ beforeEach(() => {
     allowed: true,
     lastSparkAt: '2026-11-04T12:00:00.000Z',
   });
+  mockChannelPost.mockResolvedValue({
+    ok: true,
+    messageId: 42,
+    chatId: -1001,
+  });
 });
 
 describe('/api/vigil/claim', () => {
@@ -71,6 +81,7 @@ describe('/api/vigil/claim', () => {
 
     expect(response.status).toBe(401);
     expect(mockClaim).not.toHaveBeenCalled();
+    expect(mockChannelPost).not.toHaveBeenCalled();
   });
 
   it('returns 429 with the server-calculated remaining time', async () => {
@@ -91,6 +102,7 @@ describe('/api/vigil/claim', () => {
       remainingMs: 23 * 60 * 60 * 1000,
       remainingLabel: '23h',
     });
+    expect(mockChannelPost).not.toHaveBeenCalled();
   });
 
   it('returns the verified identity result and never trusts a client name', async () => {
@@ -108,6 +120,18 @@ describe('/api/vigil/claim', () => {
       null,
       false
     );
+    expect(mockChannelPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the Vigil successful when the channel post fails', async () => {
+    mockChannelPost.mockRejectedValueOnce(new Error('Telegram unavailable'));
+
+    const response = await POST(makeRequest());
+    const payload = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(mockChannelPost).toHaveBeenCalledTimes(1);
   });
 
   it('passes explicit public-name consent to the claim writer', async () => {
