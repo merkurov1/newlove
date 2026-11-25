@@ -173,14 +173,53 @@ export async function claimVigilSpark(
     heartUpdate.intention = intention.trim().slice(0, 280);
   }
 
-  const { data: record, error: heartError } = await supabaseAdmin
+  // Move the shared clock forward only. Two different identities may spark at
+  // the same moment; if the newer timestamp already reached the row, the older
+  // request must not pull the shared expiry backwards.
+  const { data: updatedRecord, error: heartError } = await supabaseAdmin
     .from('vigil_hearts')
-    .upsert(heartUpdate, { onConflict: 'id' })
+    .update(heartUpdate)
+    .eq('id', heartId)
+    .or(`last_lit_at.is.null,last_lit_at.lte."${nowISO}"`)
     .select()
-    .single();
+    .maybeSingle();
 
   if (heartError) {
     throw new Error(`Vigil heart update failed: ${heartError.message}`);
+  }
+
+  let record = updatedRecord as
+    | { last_lit_at?: string | null }
+    | null;
+
+  if (!record) {
+    const { data: existingRecord, error: readError } = await supabaseAdmin
+      .from('vigil_hearts')
+      .select('*')
+      .eq('id', heartId)
+      .maybeSingle();
+
+    if (readError) {
+      throw new Error(`Vigil heart read failed: ${readError.message}`);
+    }
+
+    record = existingRecord as { last_lit_at?: string | null } | null;
+
+    // A missing row is unusual (the table is seeded), but must not drop the
+    // spark. Insert it only when no concurrent writer created it first.
+    if (!record) {
+      const { data: insertedRecord, error: insertError } = await supabaseAdmin
+        .from('vigil_hearts')
+        .upsert(heartUpdate, { onConflict: 'id' })
+        .select()
+        .single();
+
+      if (insertError) {
+        throw new Error(`Vigil heart update failed: ${insertError.message}`);
+      }
+
+      record = insertedRecord as { last_lit_at?: string | null } | null;
+    }
   }
 
   // The public ritual log is written by the server with the verified display

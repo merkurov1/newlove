@@ -134,12 +134,17 @@ async function mockPublicApis(page: Page) {
   });
 
   await page.route('**/api/vigil/state*', async (route) => {
+    const lastLitAt = new Date().toISOString();
+
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         supporterCount: 12,
-        lastLitAt: new Date().toISOString(),
+        lastLitAt,
+        flameExpiresAt: new Date(
+          Date.parse(lastLitAt) + 86_400_000
+        ).toISOString(),
         flameLit: true,
         windowStartedAt: new Date(Date.now() - 86_400_000).toISOString(),
         updatedAt: new Date().toISOString(),

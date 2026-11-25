@@ -9,19 +9,20 @@ import {
   formatVigilCooldown,
   vigilCooldownMessage,
 } from '@/lib/vigil/cooldown';
-import {
-  formatGlobalFlameRemaining,
-  globalFlameRemainingMs,
-} from '@/lib/vigil/flame';
+import { resolveVigilFlame } from '@/lib/vigil/flame';
+import { useVigilSupporters } from '@/hooks/useVigilSupporters';
 import { hapticNotification } from '@/lib/telegram/webApp';
 
 const FLAME_ID = 1;
 const CLOCK_REFRESH_MS = 30_000;
 
+/**
+ * Supplementary heart display data only. The shared flame clock itself comes
+ * from `/api/vigil/state`; this record must never drive lit state or intensity.
+ */
 export type VigilFlameData = {
   id: number;
   owner_name: string | null;
-  last_lit_at: string | null;
   [key: string]: unknown;
 };
 
@@ -57,6 +58,18 @@ export function useVigilController() {
   const identity = useTempleIdentity();
   const reduceMotion = usePrefersReducedMotion();
 
+  // The homepage and this ritual read the very same authoritative snapshot.
+  // Guardian names below are display-only and never feed the artwork.
+  const {
+    supporterCount,
+    lastLitAt,
+    flameExpiresAt,
+    flameLit: serverFlameLit,
+    status: sharedFlameStatus,
+    error: sharedFlameError,
+    refresh: refreshSharedFlame,
+  } = useVigilSupporters();
+
   const angelRef = useRef<HTMLDivElement | null>(null);
   const heartRef = useRef<HTMLDivElement | null>(null);
   const cooldownEndsAtRef = useRef<number | null>(null);
@@ -85,12 +98,30 @@ export function useVigilController() {
     ? formatVigilCooldown(cooldownRemainingMs)
     : '';
 
-  const flameRemainingMs = useMemo(
-    () => globalFlameRemainingMs(flameData?.last_lit_at, nowMs),
-    [flameData?.last_lit_at, nowMs]
+  const flameReady =
+    sharedFlameStatus === 'ready' || sharedFlameStatus === 'stale';
+  const flameVisuals = useMemo(
+    () =>
+      resolveVigilFlame(
+        {
+          flameLit: flameReady ? serverFlameLit : false,
+          lastLitAt,
+          flameExpiresAt,
+          supporterCount: flameReady ? supporterCount : 0,
+        },
+        nowMs
+      ),
+    [
+      flameExpiresAt,
+      flameReady,
+      lastLitAt,
+      nowMs,
+      serverFlameLit,
+      supporterCount,
+    ]
   );
-  const flameLit = flameRemainingMs > 0;
-  const flameLabel = formatGlobalFlameRemaining(flameRemainingMs);
+  const flameLit = flameReady && flameVisuals.active;
+  const flameLabel = flameVisuals.remainingLabel;
 
   const applyCooldown = useCallback((remainingMs: number) => {
     const safeRemaining = Number.isFinite(remainingMs)
@@ -159,7 +190,7 @@ export function useVigilController() {
     try {
       const { data: flame, error } = await supabase
         .from('vigil_hearts')
-        .select('*')
+        .select('id, owner_name, intention')
         .eq('id', FLAME_ID)
         .maybeSingle();
 
@@ -446,7 +477,6 @@ export function useVigilController() {
         }
 
         const record = payload?.record as VigilFlameData | undefined;
-        const nowISO = new Date().toISOString();
 
         setFlameData((current) => ({
           ...(current ?? {
@@ -456,12 +486,14 @@ export function useVigilController() {
           }),
           ...(record ?? {}),
           owner_name: record?.owner_name ?? userName,
-          last_lit_at: record?.last_lit_at ?? nowISO,
         }));
         setNowMs(Date.now());
 
+        // The cooldown is personal; the shared flame is re-read from the same
+        // authoritative endpoint the homepage uses.
         applyCooldown(VIGIL_COOLDOWN_MS);
-        void refreshGuardians();
+        void refreshSharedFlame();
+        void refreshData();
 
         // Confirmed server completion, not an optimistic tap.
         hapticNotification('success');
@@ -499,7 +531,8 @@ export function useVigilController() {
       isLighting,
       isOnCooldown,
       measureHeartTarget,
-      refreshGuardians,
+      refreshData,
+      refreshSharedFlame,
       userName,
     ]
   );
@@ -513,6 +546,11 @@ export function useVigilController() {
     flameData,
     flameLit,
     flameLabel,
+    flameVisuals,
+    flameReady,
+    flameStatus: sharedFlameStatus,
+    flameError: sharedFlameError,
+    supporterCount,
     isLighting,
     isOnCooldown,
     cooldownLabel,

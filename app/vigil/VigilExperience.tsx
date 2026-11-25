@@ -11,7 +11,6 @@ import VigilShare from '@/components/vigil/VigilShare';
 import useIsTelegram from '@/components/useIsTelegram';
 import { useTelegramBottomButton } from '@/components/telegram/useTelegramBottomButton';
 import { hapticImpact } from '@/lib/telegram/webApp';
-import { vigilHeartHeat } from '@/lib/vigil/flame';
 
 const ANGEL_GIF =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0966.gif';
@@ -39,6 +38,11 @@ export default function VigilExperience() {
     flameData,
     flameLit,
     flameLabel,
+    flameVisuals,
+    flameReady,
+    flameStatus,
+    flameError,
+    supporterCount,
     isLighting,
     isOnCooldown,
     cooldownLabel,
@@ -61,11 +65,22 @@ export default function VigilExperience() {
   });
 
   // Publish the shared flame clock to the modal header. The visual intensity
-  // below uses the same value, so the timer and the heart can never disagree.
-  useRitualModalTimer(flameData ? flameLabel : null);
+  // below uses the same server snapshot and calculation as the homepage, so
+  // the timer and the heart can never disagree.
+  useRitualModalTimer(flameReady ? flameLabel : null);
 
-  const heat = vigilHeartHeat(flameLit, guardians.length);
-  const heartScale = flameLit ? 0.9 + (heat / 10) * 0.35 : 0.8;
+  const heartScale = flameLit
+    ? 0.9 + flameVisuals.intensity * 0.35
+    : 0.8;
+  const flameStateLabel = flameReady
+    ? flameLit
+      ? 'lit'
+      : 'extinguished'
+    : 'unknown';
+  const glowOpacity = Math.min(
+    1,
+    Math.max(0, flameVisuals.glowOpacity)
+  );
   const identityStatus = (() => {
     if (identity.isLoading) {
       return (
@@ -133,7 +148,7 @@ export default function VigilExperience() {
       {/* Мягкое внутреннее свечение в темной комнате */}
       <div
         className={`pointer-events-none absolute top-1/2 left-1/2 z-0 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-tr ${roomTheme.glow} blur-[120px] transition-opacity duration-700`}
-        style={{ opacity: flameLit ? 1 : 0.15 }}
+        style={{ opacity: flameLit ? 0.25 + glowOpacity * 0.75 : 0 }}
       />
 
       <div className="vigil-stage relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-5 py-3 lg:max-w-5xl lg:gap-0 lg:py-6">
@@ -174,7 +189,12 @@ export default function VigilExperience() {
 
           <div
             ref={heartRef}
+            data-testid="vigil-heart"
             className="relative z-10 flex h-32 w-32 shrink-0 items-center justify-center sm:h-44 sm:w-44 lg:absolute lg:right-[7%] lg:top-[26%] lg:z-30 lg:h-auto lg:w-auto"
+            data-vigil-flame-state={flameStateLabel}
+            data-vigil-intensity={flameVisuals.intensity.toFixed(4)}
+            data-vigil-remaining-ms={Math.floor(flameVisuals.remainingMs)}
+            data-supporter-count={supporterCount}
           >
             <div
               className="relative transition-all duration-700 ease-in-out"
@@ -183,10 +203,17 @@ export default function VigilExperience() {
               <motion.div
                 animate={
                   !flameLit || reduceMotion
-                    ? { opacity: flameLit ? 0.45 : 0, scale: 1 }
+                    ? {
+                        opacity: flameLit ? glowOpacity * 0.6 : 0,
+                        scale: 1,
+                      }
                     : {
                         scale: [1, 1.15, 1],
-                        opacity: [0.4, 0.75, 0.4],
+                        opacity: [
+                          glowOpacity * 0.55,
+                          glowOpacity,
+                          glowOpacity * 0.55,
+                        ],
                       }
                 }
                 transition={
@@ -203,12 +230,31 @@ export default function VigilExperience() {
 
               <div className="absolute inset-0 flex items-center justify-center">
                 <Heart
-                  size={65 + heat * 3}
+                  size={65 + flameVisuals.intensity * 30}
                   className={`transition-all duration-700 ${
                     flameLit
-                      ? 'fill-orange-600/30 text-stone-100 drop-shadow-[0_0_35px_rgba(255,140,0,0.8)]'
+                      ? 'fill-orange-600/30 text-stone-100'
                       : 'fill-stone-700/20 text-stone-500'
                   } stroke-[1.5]`}
+                  style={
+                    flameLit
+                      ? {
+                          filter: `brightness(${flameVisuals.brightness.toFixed(
+                            3
+                          )}) saturate(${flameVisuals.saturate.toFixed(
+                            3
+                          )}) grayscale(${flameVisuals.grayscale.toFixed(
+                            3
+                          )}) drop-shadow(0 0 ${Math.max(
+                            10,
+                            Math.round(flameVisuals.glowBlurPx / 2)
+                          )}px rgba(255, 140, 0, ${(
+                            0.25 +
+                            flameVisuals.intensity * 0.5
+                          ).toFixed(3)}))`,
+                        }
+                      : undefined
+                  }
                 />
               </div>
             </div>
@@ -271,10 +317,25 @@ export default function VigilExperience() {
                 Active Guardians (24h)
               </div>
 
+              <div
+                className="font-serif text-sm opacity-80"
+                aria-live="polite"
+              >
+                {flameReady
+                  ? `${supporterCount} ${
+                      supporterCount === 1
+                        ? 'supporter'
+                        : 'supporters'
+                    }`
+                  : 'Reading participants…'}
+              </div>
+
               <div className="flex min-h-[40px] flex-wrap items-center justify-center gap-2">
                 {guardians.length === 0 ? (
                   <div className="font-serif text-sm italic opacity-50">
-                    No recent sparks recorded yet. Be the first.
+                    {supporterCount > 0
+                      ? 'Sparks are present; guardian names stay private.'
+                      : 'No recent sparks recorded yet. Be the first.'}
                   </div>
                 ) : (
                   guardians.map((guardian, index) => (
@@ -303,9 +364,19 @@ export default function VigilExperience() {
                     }`}
                     aria-live="polite"
                   >
-                    {flameData ? flameLabel : 'Checking status...'}
+                    {flameReady ? flameLabel : 'Checking status...'}
                   </span>
                 </div>
+
+                {(flameStatus === 'stale' || flameStatus === 'error') && (
+                  <div
+                    className="font-mono text-[10px] uppercase tracking-[0.14em] text-amber-300/70"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {flameError || 'Shared flame reconnecting'}
+                  </div>
+                )}
 
                 {isOnCooldown && (
                   <div

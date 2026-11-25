@@ -1,6 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { assertServerOnly } from '@/lib/serverOnly';
-import { globalFlameRemainingMs } from '@/lib/vigil/flame';
+import {
+  globalFlameExpiresAt,
+  globalFlameRemainingMs,
+} from '@/lib/vigil/flame';
 import {
   VIGIL_SUPPORTER_WINDOW_MS,
   normalizeSupporterCount,
@@ -66,6 +69,7 @@ export async function getVigilPublicState(
   return {
     supporterCount: normalizeSupporterCount(claimResult.count),
     lastLitAt,
+    flameExpiresAt: globalFlameExpiresAt(lastLitAt),
     flameLit: globalFlameRemainingMs(lastLitAt, nowMs) > 0,
     windowStartedAt,
     updatedAt: new Date(nowMs).toISOString(),
