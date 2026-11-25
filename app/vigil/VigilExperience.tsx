@@ -88,16 +88,23 @@ export default function VigilExperience({
     '--heart-aura-scale': heartAuraScale.toFixed(3),
   } as CSSProperties;
 
+  const identityPreparing =
+    identity.status === 'detecting' ||
+    identity.status === 'telegram-verifying';
+  const identityAwaitingLaunch = identity.status === 'telegram-init-pending';
+
   const actionLabel = isLighting
     ? 'Transmitting Spark...'
     : isOnCooldown
       ? `Spark returns in ${cooldownLabel}`
       : !userName
-        ? identity.isLoading
-          ? 'Preparing your identity…'
-          : identity.isTelegram
-            ? 'Identity unavailable'
-            : 'Sign in to send a spark'
+        ? identityAwaitingLaunch
+          ? 'Waiting for Telegram…'
+          : identityPreparing || identity.isLoading
+            ? 'Preparing your identity…'
+            : identity.isTelegram
+              ? 'Identity unavailable'
+              : 'Sign in to send a spark'
         : 'Send Spark';
 
   useEffect(() => {
@@ -148,6 +155,21 @@ export default function VigilExperience({
   const keeperLabel = supporterCount === 1 ? 'keeper' : 'keepers';
 
   const identityStatus = (() => {
+    if (identity.status === 'telegram-init-pending') {
+      return (
+        <span className={styles.muted}>
+          Waiting for Telegram launch data…
+        </span>
+      );
+    }
+
+    if (
+      identity.status === 'telegram-verifying' ||
+      identity.status === 'detecting'
+    ) {
+      return <span className={styles.muted}>Preparing your identity…</span>;
+    }
+
     if (identity.isLoading) {
       return <span className={styles.muted}>Preparing your identity…</span>;
     }
@@ -409,7 +431,14 @@ export default function VigilExperience({
         </section>
 
         <section className={styles.details} aria-live="polite">
-          <p className={styles.identity}>{identityStatus}</p>
+          <p
+            className={styles.identity}
+            data-testid="vigil-identity"
+            data-identity-status={identity.status}
+            data-identity-source={identity.source ?? 'none'}
+          >
+            {identityStatus}
+          </p>
 
           {flameData?.owner_name && (
             <p className={styles.owner}>

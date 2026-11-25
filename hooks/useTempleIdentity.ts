@@ -2,36 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthContext';
-import useIsTelegram from '@/components/useIsTelegram';
+import { readTelegramInitData, useTelegramEnvironment } from '@/lib/telegram/detection';
 
 const IDENTITY_CACHE_KEY = 'temple_telegram_identity_v1';
 
-type TelegramWebApp = {
-  initData?: string;
+type TelegramIdentityPayload = {
+  displayName?: unknown;
+  source?: unknown;
+  error?: unknown;
 };
 
-function telegramWebApp(): TelegramWebApp | null {
-  if (typeof window === 'undefined') return null;
-
-  const webApp = (
-    window as Window & {
-      Telegram?: { WebApp?: TelegramWebApp };
-    }
-  ).Telegram?.WebApp;
-
-  return webApp && typeof webApp === 'object' ? webApp : null;
-}
-
-function readCachedTelegramName(): string | null {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    const value = window.sessionStorage.getItem(IDENTITY_CACHE_KEY);
-
-    return value && value.trim() ? value.trim() : null;
-  } catch {
-    return null;
-  }
+function readDisplayName(payload: TelegramIdentityPayload | null): string {
+  return payload && typeof payload.displayName === 'string' ? payload.displayName.trim() : '';
 }
 
 function cacheTelegramName(name: string | null) {
@@ -50,9 +32,25 @@ function cacheTelegramName(name: string | null) {
 
 export type TempleIdentitySource = 'supabase' | 'telegram' | null;
 
+/**
+ * UI-level identity states. Detection is intentionally separate from identity:
+ * `telegram-init-pending`/`telegram-verifying` are not authenticated, and only
+ * `verified` comes from a server-validated session.
+ */
+export type TempleIdentityStatus =
+  | 'detecting'
+  | 'telegram-init-pending'
+  | 'telegram-verifying'
+  | 'verified'
+  | 'telegram-unverified'
+  | 'anonymous';
+
 export type TempleIdentity = {
   displayName: string;
   source: TempleIdentitySource;
+  status: TempleIdentityStatus;
+  /** Telegram shell detected, raw initData not received yet. */
+  initDataPending: boolean;
   isLoading: boolean;
   error: string | null;
   isTelegram: boolean;
@@ -60,23 +58,44 @@ export type TempleIdentity = {
   refresh: () => Promise<boolean>;
 };
 
+const TELEGRAM_FAILED_MESSAGE =
+  'Telegram identity could not be verified. You can still witness the Vigil.';
+
+function telegramPayload(payload: unknown): TelegramIdentityPayload | null {
+  return payload && typeof payload === 'object' ? (payload as TelegramIdentityPayload) : null;
+}
+
 /**
  * Single identity for the Temple rituals.
  *
  * - Supabase users keep using their verified Supabase session.
  * - Telegram visitors exchange raw, signed `initData` for the existing
- *   `temple_session` HttpOnly cookie. The client never invents the identity.
+ *   `temple_session` HttpOnly cookie. The client never invents the identity
+ *   and never promotes `initDataUnsafe`, a client name or sessionStorage into
+ *   an authenticated identity.
+ * - An existing HttpOnly cookie can restore the session before initData
+ *   arrives (e.g. when a Mini App is reopened).
  */
 export function useTempleIdentity(): TempleIdentity {
   const { user, profile, isLoading: authLoading } = useAuth();
-  const isTelegram = useIsTelegram();
+  const environment = useTelegramEnvironment();
+  const isTelegram = environment.isTelegram;
 
   const [telegramName, setTelegramName] = useState<string | null>(null);
   const [isResolving, setIsResolving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
-  const bootstrapRef = useRef<Promise<boolean> | null>(null);
+  const telegramNameRef = useRef<string | null>(null);
+  const verifiedInitDataRef = useRef<string | null>(null);
+  const failedInitDataRef = useRef<string | null>(null);
+  const pendingExchangeRef = useRef<{
+    initData: string;
+    promise: Promise<boolean>;
+  } | null>(null);
+  const restoreRef = useRef<Promise<boolean> | null>(null);
+  const restoreAttemptedRef = useRef(false);
+  const attemptIdRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -87,39 +106,29 @@ export function useTempleIdentity(): TempleIdentity {
   }, []);
 
   const supabaseName = (() => {
-    const profileName =
-      profile && typeof profile.name === 'string' ? profile.name.trim() : '';
+    const profileName = profile && typeof profile.name === 'string' ? profile.name.trim() : '';
 
     const metadataName =
-      typeof user?.user_metadata?.name === 'string'
-        ? user.user_metadata.name.trim()
-        : '';
+      typeof user?.user_metadata?.name === 'string' ? user.user_metadata.name.trim() : '';
 
-    return (
-      profileName ||
-      metadataName ||
-      user?.email?.split('@')[0]?.trim() ||
-      ''
-    );
+    return profileName || metadataName || user?.email?.split('@')[0]?.trim() || '';
   })();
 
-  const bootstrapTelegram = useCallback(async (): Promise<boolean> => {
-    if (bootstrapRef.current) return bootstrapRef.current;
+  const exchangeInitData = useCallback(async (initData: string): Promise<boolean> => {
+    if (!initData) return false;
+
+    const pending = pendingExchangeRef.current;
+
+    if (pending?.initData === initData) return pending.promise;
+
+    if (verifiedInitDataRef.current === initData && telegramNameRef.current) {
+      return true;
+    }
+
+    const attemptId = attemptIdRef.current + 1;
+    attemptIdRef.current = attemptId;
 
     const request = (async () => {
-      const webApp = telegramWebApp();
-      const initData = webApp?.initData;
-
-      if (!initData) {
-        if (mountedRef.current) {
-          setError(
-            'Telegram identity is not available. You can still witness the Vigil.'
-          );
-        }
-
-        return false;
-      }
-
       if (mountedRef.current) {
         setIsResolving(true);
         setError(null);
@@ -134,34 +143,102 @@ export function useTempleIdentity(): TempleIdentity {
           body: JSON.stringify({ initData }),
         });
 
-        const payload = await response.json().catch(() => null);
-        const displayName =
-          payload && typeof payload.displayName === 'string'
-            ? payload.displayName.trim()
-            : '';
+        const payload = telegramPayload(await response.json().catch(() => null));
+        const displayName = readDisplayName(payload);
 
         if (!response.ok || !displayName) {
-          throw new Error(payload?.error || 'Telegram session failed');
+          throw new Error(
+            typeof payload?.error === 'string' ? payload.error : 'Telegram session failed'
+          );
         }
 
+        if (attemptId !== attemptIdRef.current) return false;
+
+        verifiedInitDataRef.current = initData;
+        failedInitDataRef.current = null;
         cacheTelegramName(displayName);
 
         if (mountedRef.current) {
+          telegramNameRef.current = displayName;
           setTelegramName(displayName);
           setError(null);
         }
 
         return true;
       } catch (bootstrapError) {
-        console.error('Temple identity error:', bootstrapError);
+        if (attemptId !== attemptIdRef.current) return false;
+
+        verifiedInitDataRef.current = null;
+        failedInitDataRef.current = initData;
+
+        // Never log the raw launch data or a bot/session secret.
+        console.error(
+          'Temple identity error:',
+          bootstrapError instanceof Error ? bootstrapError.message : 'Telegram session failed'
+        );
 
         if (mountedRef.current) {
+          telegramNameRef.current = null;
           setTelegramName(null);
-          setError(
-            'Telegram identity could not be verified. You can still witness the Vigil.'
-          );
+          setError(TELEGRAM_FAILED_MESSAGE);
         }
 
+        return false;
+      } finally {
+        if (attemptId === attemptIdRef.current && mountedRef.current) {
+          setIsResolving(false);
+        }
+      }
+    })();
+
+    pendingExchangeRef.current = { initData, promise: request };
+
+    try {
+      return await request;
+    } finally {
+      if (pendingExchangeRef.current?.promise === request) {
+        pendingExchangeRef.current = null;
+      }
+    }
+  }, []);
+
+  const restoreSession = useCallback(async (force = false): Promise<boolean> => {
+    if (restoreRef.current) return restoreRef.current;
+
+    if (!force && restoreAttemptedRef.current) return false;
+
+    restoreAttemptedRef.current = true;
+
+    const request = (async () => {
+      if (mountedRef.current) {
+        setIsResolving(true);
+        setError(null);
+      }
+
+      try {
+        const response = await fetch('/api/temple/me', {
+          method: 'GET',
+          credentials: 'same-origin',
+          cache: 'no-store',
+        });
+        const payload = telegramPayload(await response.json().catch(() => null));
+        const displayName = readDisplayName(payload);
+
+        if (response.ok && payload?.source === 'telegram' && displayName) {
+          cacheTelegramName(displayName);
+
+          if (mountedRef.current) {
+            telegramNameRef.current = displayName;
+            setTelegramName(displayName);
+            setError(null);
+          }
+
+          return true;
+        }
+
+        return false;
+      } catch {
+        // A missing/expired cookie is not an error: initData may still arrive.
         return false;
       } finally {
         if (mountedRef.current) {
@@ -170,49 +247,117 @@ export function useTempleIdentity(): TempleIdentity {
       }
     })();
 
-    bootstrapRef.current = request;
+    restoreRef.current = request;
 
     try {
       return await request;
     } finally {
-      bootstrapRef.current = null;
+      if (restoreRef.current === request) {
+        restoreRef.current = null;
+      }
     }
   }, []);
+
+  const refresh = useCallback(async (): Promise<boolean> => {
+    const initData = readTelegramInitData();
+
+    if (initData) {
+      return exchangeInitData(initData);
+    }
+
+    if (!isTelegram) return false;
+
+    // No launch data: only a still-valid HttpOnly cookie can restore identity.
+    return restoreSession(true);
+  }, [exchangeInitData, isTelegram, restoreSession]);
 
   useEffect(() => {
     if (authLoading) return;
 
     if (supabaseName) {
+      verifiedInitDataRef.current = null;
+      failedInitDataRef.current = null;
+      telegramNameRef.current = null;
       setTelegramName(null);
-      cacheTelegramName(null);
       setError(null);
+      cacheTelegramName(null);
       return;
     }
 
-    if (!isTelegram) return;
-
-    const cached = readCachedTelegramName();
-
-    if (cached) {
-      setTelegramName(cached);
+    if (environment.status === 'detecting') {
       return;
     }
 
-    void bootstrapTelegram();
-  }, [authLoading, bootstrapTelegram, isTelegram, supabaseName]);
+    if (!environment.isTelegram) {
+      verifiedInitDataRef.current = null;
+      failedInitDataRef.current = null;
+      telegramNameRef.current = null;
+      setTelegramName(null);
+      setError(null);
+      cacheTelegramName(null);
+      return;
+    }
+
+    if (environment.initData) {
+      if (verifiedInitDataRef.current === environment.initData) return;
+      if (failedInitDataRef.current === environment.initData) return;
+
+      void exchangeInitData(environment.initData);
+      return;
+    }
+
+    // Telegram shell without raw initData yet: try the existing signed cookie
+    // once, then wait for initData (which may arrive later).
+    if (!restoreAttemptedRef.current) {
+      void restoreSession();
+    }
+  }, [
+    authLoading,
+    environment.initData,
+    environment.isTelegram,
+    environment.status,
+    exchangeInitData,
+    restoreSession,
+    supabaseName,
+  ]);
 
   const displayName = supabaseName || telegramName || '';
 
+  let status: TempleIdentityStatus;
+
+  if (authLoading) {
+    status = 'detecting';
+  } else if (supabaseName) {
+    status = 'verified';
+  } else if (environment.status === 'detecting') {
+    status = 'detecting';
+  } else if (!environment.isTelegram) {
+    status = 'anonymous';
+  } else if (telegramName) {
+    status = 'verified';
+  } else if (error) {
+    status = 'telegram-unverified';
+  } else if (isResolving) {
+    status = 'telegram-verifying';
+  } else {
+    status = 'telegram-init-pending';
+  }
+
+  const source: TempleIdentitySource = supabaseName ? 'supabase' : telegramName ? 'telegram' : null;
+
   return {
     displayName,
-    source: supabaseName ? 'supabase' : telegramName ? 'telegram' : null,
+    source,
+    status,
+    initDataPending: environment.isTelegram && !environment.initData,
     isLoading:
       authLoading ||
-      (isTelegram && !supabaseName && !telegramName && !error) ||
-      isResolving,
-    error: !supabaseName && isTelegram ? error : null,
+      status === 'detecting' ||
+      status === 'telegram-verifying' ||
+      status === 'telegram-init-pending',
+    error: !supabaseName && environment.isTelegram ? error : null,
     isTelegram,
-    refresh: bootstrapTelegram,
+    refresh,
   };
 }
 
