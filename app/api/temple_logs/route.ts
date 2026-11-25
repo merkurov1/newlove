@@ -5,6 +5,7 @@ import {
   invalidateTempleFeedCache,
   resolveTempleFeed,
 } from '@/lib/temple/feed.server'
+import { resolveTempleIdentity } from '@/lib/temple/identity'
 
 export const runtime = 'nodejs'
 
@@ -84,30 +85,17 @@ export async function POST(req: Request) {
     }
 
     const supabase = getServerSupabaseClient({ useServiceRole: true })
-    const authHeader = req.headers.get('authorization')
-    let userId: string | null = null
-    let authorName = body.author || 'Anonymous'
 
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '')
-      const { data: { user } } = await supabase.auth.getUser(token)
-      if (user) {
-        userId = user.id
-        const { data: profile } = await supabase
-          .from('users')
-          .select('name')
-          .eq('id', userId)
-          .maybeSingle()
-
-        if (profile?.name) {
-          authorName = profile.name
-        } else if (user.user_metadata?.name) {
-          authorName = user.user_metadata.name
-        } else if (user.email) {
-          authorName = user.email.split('@')[0]
-        }
-      }
-    }
+    // Ritual traces are public, but a claimed identity is only ever taken from
+    // a verified Telegram session or Supabase token. The body's `author` is a
+    // display hint for anonymous visitors and never grants rights or matches a
+    // real account automatically.
+    const identity = await resolveTempleIdentity(req, supabase)
+    const userId =
+      identity?.source === 'supabase' ? identity.userId : null
+    const claimedAuthor =
+      typeof body.author === 'string' ? body.author.trim().slice(0, 120) : ''
+    const authorName = identity?.displayName || claimedAuthor || 'Anonymous'
 
     const { data, error } = await supabase.from('temple_log').insert({
       user_id: userId,

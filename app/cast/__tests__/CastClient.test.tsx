@@ -31,6 +31,18 @@ jest.mock('@/components/AuthContext', () => ({
   useAuth: () => ({ user: mockUser }),
 }));
 
+jest.mock('@/hooks/useTempleIdentity', () => ({
+  __esModule: true,
+  default: () => ({
+    displayName: '',
+    source: null,
+    isLoading: false,
+    error: null,
+    isTelegram: false,
+    refresh: async () => false,
+  }),
+}));
+
 jest.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     auth: {

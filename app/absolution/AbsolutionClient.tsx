@@ -6,6 +6,7 @@ import { RotateCcw, Download } from 'lucide-react';
 
 import TempleTopBar from '@/components/TempleTopBar';
 import { useAuth } from '@/components/AuthContext';
+import useTempleIdentity from '@/hooks/useTempleIdentity';
 import { logTempleEvent } from '@/lib/templeLogger';
 
 const STAMP_DELAY = 1200;
@@ -55,6 +56,7 @@ export default function AbsolutionClient({
   variant?: AbsolutionVariant;
 }) {
   const { user, profile } = useAuth();
+  const identity = useTempleIdentity();
   const isModal = variant === 'modal';
 
   const [step, setStep] = useState<
@@ -99,45 +101,22 @@ export default function AbsolutionClient({
 
     const tg = (window as any).Telegram?.WebApp;
 
-    if (tg) {
-      try {
-        tg.expand?.();
-      } catch {}
+    try {
+      tg?.expand?.();
+    } catch {}
 
-      const telegramName =
-        tg.initDataUnsafe?.user?.username ||
-        tg.initDataUnsafe?.user?.first_name;
-
-      const resolved =
-        telegramName ||
+    // Only a server-verified Temple/Supabase name is prefilled. A raw
+    // `initDataUnsafe` value is client-controlled and is never used here.
+    setName(
+      identity.displayName ||
         profile?.name ||
         profile?.full_name ||
         user?.user_metadata?.name ||
         user?.email?.split('@')[0] ||
         localStorage.getItem('temple_user') ||
-        'Pilgrim';
-
-      setName(
-        telegramName
-          ? `@${telegramName}`
-          : resolved
-      );
-
-      localStorage.setItem(
-        'temple_user',
-        resolved
-      );
-    } else {
-      setName(
-        profile?.name ||
-          profile?.full_name ||
-          user?.user_metadata?.name ||
-          user?.email?.split('@')[0] ||
-          localStorage.getItem('temple_user') ||
-          'Pilgrim'
-      );
-    }
-  }, [profile, user]);
+        'Pilgrim'
+    );
+  }, [identity.displayName, profile, user]);
 
   useEffect(() => () => {
     if (completionTimerRef.current !== null) window.clearTimeout(completionTimerRef.current);

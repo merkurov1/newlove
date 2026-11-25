@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { createCastCaptureToken } from '@/lib/cast/captureToken';
+import { resolveTempleIdentity } from '@/lib/temple/identity';
 
 export const runtime = 'nodejs';
 
@@ -301,95 +302,38 @@ function normalizeAnalysis(parsed: unknown) {
   };
 }
 
-async function resolveUser(req: Request) {
-  const authHeader =
-    req.headers.get('authorization');
+type CastActor = {
+  /** UUID only. Telegram numeric ids never enter the Supabase `casts.user_id`. */
+  userId: string | null;
+  userEmail: string | null;
+  userName: string;
+  source: 'telegram' | 'supabase' | null;
+};
 
-  if (!authHeader) {
-    return {
-      userId: null as string | null,
-      userEmail: null as string | null,
-      userName: 'Visitor',
-    };
-  }
+/**
+ * Cast is a public ritual, so participation does not require an account.
+ * When the visitor does present a credential, it is verified server-side and
+ * only that verified identity is recorded. A forged token never becomes an
+ * identity and never grants anything.
+ */
+async function resolveCastActor(req: Request): Promise<CastActor> {
+  const identity = await resolveTempleIdentity(req, supabase);
 
-  if (
-    !/^Bearer\s+/i.test(authHeader)
-  ) {
-    return {
-      userId: null,
-      userEmail: null,
-      userName: 'Visitor',
-    };
-  }
-
-  const token = authHeader
-    .replace(/^Bearer\s+/i, '')
-    .trim();
-
-  if (!token) {
+  if (!identity) {
     return {
       userId: null,
       userEmail: null,
       userName: 'Visitor',
+      source: null,
     };
   }
 
-  try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser(
-      token
-    );
-
-    if (!user) {
-      return {
-        userId: null,
-        userEmail: null,
-        userName: 'Visitor',
-      };
-    }
-
-    let userName = 'Visitor';
-
-    const { data: profile } =
-      await supabase
-        .from('users')
-        .select('name, username')
-        .eq('id', user.id)
-        .maybeSingle();
-
-    if (profile?.name) {
-      userName = profile.name;
-    } else if (profile?.username) {
-      userName = profile.username;
-    } else if (
-      user.user_metadata?.name
-    ) {
-      userName =
-        user.user_metadata.name;
-    } else if (user.email) {
-      userName =
-        user.email.split('@')[0];
-    }
-
-    return {
-      userId: user.id,
-      userEmail: user.email || null,
-      userName,
-    };
-  } catch (error) {
-    console.warn(
-      '[Cast] Could not resolve auth user:',
-      error
-    );
-
-    return {
-      userId: null,
-      userEmail: null,
-      userName: 'Visitor',
-    };
-  }
+  return {
+    userId: identity.source === 'supabase' ? identity.userId : null,
+    userEmail: identity.source === 'supabase' ? identity.email : null,
+    userName: identity.displayName,
+    source: identity.source,
+  };
 }
 
 export async function POST(
@@ -538,7 +482,7 @@ export async function POST(
       userId,
       userEmail,
       userName,
-    } = await resolveUser(req);
+    } = await resolveCastActor(req);
 
     const attempts: Array<{
       client: OpenAI;

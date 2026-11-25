@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/components/AuthContext';
+import useTempleIdentity from '@/hooks/useTempleIdentity';
 import TempleTopBar from './TempleTopBar';
 import { useRitualModalTimer } from './temple/useRitualModalTimer';
 import { logTempleEvent } from '@/lib/templeLogger';
@@ -16,23 +17,17 @@ const HEART_IMAGE =
 
 type TelegramWebApp = {
   expand?: () => void;
-  initDataUnsafe?: {
-    user?: {
-      username?: string;
-      first_name?: string;
-    };
-  };
 };
 
 export default function LetItGoAngel() {
   const { user, profile } = useAuth();
+  const identity = useTempleIdentity();
   const [flyingHearts, setFlyingHearts] = useState<{ id: number }[]>([]);
   const [clickCount, setClickCount] = useState(0);
   const [showWithoutHeart, setShowWithoutHeart] = useState(false);
   const [skyGradient, setSkyGradient] = useState('bg-gradient-to-b from-[#87CEEB] via-[#B0E0E6] to-[#E0F6FF]');
-  const [telegramName, setTelegramName] = useState('');
 
-  const currentAuthorName = telegramName || profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || (typeof window !== 'undefined' ? localStorage.getItem('temple_user') : null) || 'Visitor';
+  const currentAuthorName = identity.displayName || profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || (typeof window !== 'undefined' ? localStorage.getItem('temple_user') : null) || 'Visitor';
 
   const clickCountRef = useRef(clickCount);
   clickCountRef.current = clickCount;
@@ -48,10 +43,10 @@ export default function LetItGoAngel() {
     const tg = (window as Window & { Telegram?: { WebApp?: TelegramWebApp } })
       .Telegram?.WebApp;
 
-    if (tg) {
-      tg.expand?.();
-      const name = tg.initDataUnsafe?.user?.username || tg.initDataUnsafe?.user?.first_name;
-      if (name) { setTelegramName(name); localStorage.setItem('temple_user', name); }
+    try {
+      tg?.expand?.();
+    } catch {
+      // Telegram expansion is optional.
     }
   }, []);
 
