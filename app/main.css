@@ -568,8 +568,10 @@ body.telegram-app .temple-screen {
 }
 
 /*
- * The Mini App navigation is intentionally a small threshold, not a
- * dashboard. It only renders inside Telegram.
+ * The Mini App navigation is one small, route-aware layer. It is not a
+ * dashboard and it never obscures the product it belongs to:
+ * Temple gets a light architectural sheet, Flow gets an editorial index.
+ * Both share the same position, behaviour and safe-area rules.
  */
 
 .telegram-nav-trigger {
@@ -585,49 +587,148 @@ body.telegram-app .temple-screen {
 
   min-height: 44px;
   min-width: 44px;
-  padding: 0.55rem 0.95rem;
+  padding: 0.5rem 0.8rem;
 
-  border: 1px solid rgba(251, 191, 36, 0.24);
-  border-radius: 999px;
+  border: 1px solid transparent;
+  border-radius: 2px;
 
-  background: rgba(20, 18, 16, 0.78);
   color: #f5f0e8;
 
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 10px;
-  letter-spacing: 0.18em;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  line-height: 1;
   text-transform: uppercase;
-
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-
-  -webkit-backdrop-filter: blur(18px);
-  backdrop-filter: blur(18px);
 
   cursor: pointer;
   transition:
+    color 180ms ease,
     border-color 180ms ease,
     background-color 180ms ease,
-    transform 180ms ease;
+    box-shadow 180ms ease,
+    transform 160ms ease;
 }
 
 .telegram-nav-trigger:hover,
-.telegram-nav-trigger:focus-visible {
-  border-color: rgba(252, 211, 77, 0.55);
-  background: rgba(20, 18, 16, 0.9);
+.telegram-nav-trigger:focus {
   opacity: 1;
-  outline: none;
-}
-
-.telegram-pierrot-trigger {
-  right: auto;
-  left: calc(0.75rem + max(env(safe-area-inset-left), var(--tg-safe-area-left, 0px)));
-  border-color: rgba(251, 191, 36, 0.38);
-  background: rgba(24, 21, 18, 0.88);
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.32);
 }
 
 .telegram-nav-trigger:active {
   transform: scale(0.97);
+}
+
+.telegram-nav-trigger:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.telegram-nav-trigger__mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+}
+
+.telegram-nav-trigger__label {
+  display: none;
+}
+
+.telegram-nav-trigger__accent {
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+@media (min-width: 640px) {
+  .telegram-nav-trigger__label {
+    display: inline;
+  }
+}
+
+/* Temple: a small paper plaque with a blue window line and a red heart dot. */
+
+.telegram-nav-trigger--temple {
+  border-color: rgba(55, 43, 34, 0.22);
+  border-radius: 2px;
+  background: rgba(251, 248, 242, 0.94);
+  color: #251f1a;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 10px 28px -16px rgba(37, 31, 26, 0.5);
+
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.telegram-nav-trigger--temple .telegram-nav-trigger__mark {
+  color: #4f78ab;
+}
+
+.telegram-nav-trigger--temple .telegram-nav-trigger__accent {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #c8202b;
+  box-shadow: 0 0 0 2px rgba(176, 56, 48, 0.12);
+}
+
+.telegram-nav-trigger--temple:hover,
+.telegram-nav-trigger--temple:focus-visible {
+  border-color: rgba(176, 56, 48, 0.42);
+  background: #fffdf9;
+  box-shadow: 0 14px 34px -18px rgba(37, 31, 26, 0.55);
+}
+
+/* Flow: a folio tab. No pill, no amber, no sanctuary ornament. */
+
+.telegram-nav-trigger--flow {
+  border-color: #d8d3ca;
+  border-bottom-color: #1d1b18;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.94);
+  color: #1d1b18;
+  box-shadow: 0 8px 22px -18px rgba(29, 27, 24, 0.55);
+
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.telegram-nav-trigger--flow .telegram-nav-trigger__mark {
+  color: #1d1b18;
+}
+
+.telegram-nav-trigger--flow .telegram-nav-trigger__accent {
+  width: 10px;
+  height: 1px;
+  background: #1d1b18;
+}
+
+.telegram-nav-trigger--flow:hover,
+.telegram-nav-trigger--flow:focus-visible {
+  border-color: #1d1b18;
+  background: #fff;
+}
+
+/* Pierrot keeps its own quiet dark control on the opposite side. */
+
+.telegram-pierrot-trigger {
+  right: auto;
+  left: calc(0.75rem + max(env(safe-area-inset-left), var(--tg-safe-area-left, 0px)));
+  gap: 0.5rem;
+  border-color: rgba(251, 191, 36, 0.38);
+  border-radius: 999px;
+  background: rgba(24, 21, 18, 0.88);
+  color: #f5f0e8;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.32);
+
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.telegram-pierrot-trigger:focus-visible {
+  outline: 2px solid rgba(252, 211, 77, 0.8);
+  outline-offset: 2px;
 }
 
 .telegram-nav-backdrop {
@@ -636,55 +737,488 @@ body.telegram-app .temple-screen {
   z-index: 80;
 
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-end;
+  justify-content: flex-end;
 
   padding: calc(0.75rem + max(env(safe-area-inset-top), var(--tg-safe-area-top, 0px)))
     calc(0.75rem + max(env(safe-area-inset-right), var(--tg-safe-area-right, 0px)))
     calc(0.75rem + max(env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px)))
     calc(0.75rem + max(env(safe-area-inset-left), var(--tg-safe-area-left, 0px)));
 
-  background: rgba(8, 7, 6, 0.72);
-
-  -webkit-backdrop-filter: blur(18px);
-  backdrop-filter: blur(18px);
-
   overflow-y: auto;
 }
 
+/* A veil, not a takeover: the sanctuary stays visible behind the sheet. */
+
+.telegram-nav-backdrop--temple {
+  background: rgba(246, 241, 232, 0.26);
+
+  -webkit-backdrop-filter: blur(1px);
+  backdrop-filter: blur(1px);
+}
+
+.telegram-nav-backdrop--flow {
+  background: rgba(255, 255, 255, 0.34);
+
+  -webkit-backdrop-filter: blur(1px);
+  backdrop-filter: blur(1px);
+}
+
 .telegram-nav-panel {
-  width: min(100%, 30rem);
-  max-height: calc(var(--tg-viewport-stable-height, 100dvh) - 1.5rem);
+  position: relative;
+
+  width: min(100%, 22rem);
+  max-height: calc(
+    min(var(--tg-viewport-stable-height, 100dvh), var(--tg-viewport-height, 100dvh)) - 4.75rem -
+      max(env(safe-area-inset-top), var(--tg-safe-area-top, 0px)) -
+      max(env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))
+  );
+
+  margin-bottom: 3.25rem;
   overflow-y: auto;
-
-  padding: 1.25rem;
-
-  border: 1px solid rgba(251, 191, 36, 0.18);
-  border-radius: 1.5rem;
-
-  background: rgba(20, 18, 16, 0.96);
-
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
-
-  animation: telegramNavIn 180ms ease-out;
+  overscroll-behavior: contain;
 
   -webkit-overflow-scrolling: touch;
 }
 
+/* Temple sheet: paper, a blue glass rule, a red heart accent. */
+
+.telegram-nav-panel--temple {
+  --nav-ink: #251f1a;
+  --nav-muted: #75695e;
+  --nav-faint: #9c8e81;
+  --nav-line: rgba(55, 43, 34, 0.13);
+  --nav-accent: #b03830;
+  --nav-blue: rgba(91, 132, 190, 0.62);
+
+  border: 1px solid rgba(55, 43, 34, 0.16);
+  border-radius: 2px;
+  background: rgba(251, 248, 242, 0.975);
+  color: var(--nav-ink);
+  box-shadow:
+    0 28px 70px -36px rgba(37, 31, 26, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.8) inset;
+
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+
+  animation: telegramNavSheetIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.telegram-nav-panel--temple::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--nav-blue), rgba(91, 132, 190, 0.06));
+  content: '';
+}
+
+/* Flow sheet: white paper, one dark masthead rule, editorial typography. */
+
+.telegram-nav-panel--flow {
+  --nav-ink: #1d1b18;
+  --nav-muted: #6b665e;
+  --nav-faint: #8a8380;
+  --nav-line: #e8e4dc;
+  --nav-accent: #1d1b18;
+
+  border: 1px solid #ded8ce;
+  border-top: 2px solid var(--nav-ink);
+  border-radius: 0;
+  background: #fff;
+  color: var(--nav-ink);
+  box-shadow: 0 30px 70px -44px rgba(29, 27, 24, 0.6);
+
+  animation: telegramNavSheetIn 190ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 .telegram-nav-panel a:hover,
-.telegram-nav-panel a:focus {
+.telegram-nav-panel a:focus,
+.telegram-nav-panel button:hover,
+.telegram-nav-panel button:focus {
+  opacity: 1;
+  text-decoration: none;
+}
+
+.telegram-nav__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.2rem 1.2rem 0.8rem;
+}
+
+.telegram-nav__heading {
+  min-width: 0;
+}
+
+.telegram-nav__eyebrow {
+  margin: 0;
+  color: var(--nav-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.telegram-nav__title {
+  margin: 0.35rem 0 0;
+  color: var(--nav-ink);
+  font-family: var(--font-cormorant), Georgia, 'Times New Roman', serif;
+  font-size: 1.8rem;
+  font-weight: 400;
+  letter-spacing: 0.005em;
+  line-height: 1;
+}
+
+.telegram-nav-panel--flow .telegram-nav__title {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  font-size: 1.9rem;
+  letter-spacing: -0.02em;
+}
+
+.telegram-nav__close {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+
+  border: 1px solid var(--nav-line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--nav-muted);
+
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+.telegram-nav__close:hover,
+.telegram-nav__close:focus-visible {
+  border-color: var(--nav-accent);
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--nav-ink);
   opacity: 1;
 }
 
-@keyframes telegramNavIn {
+.telegram-nav__close:focus-visible {
+  outline: 2px solid var(--nav-accent);
+  outline-offset: 2px;
+}
+
+.telegram-nav__note {
+  margin: 0;
+  padding: 0 1.2rem 1rem;
+  border-bottom: 1px solid var(--nav-line);
+  color: var(--nav-muted);
+  font-family: var(--font-cormorant), Georgia, 'Times New Roman', serif;
+  font-size: 0.84rem;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.telegram-nav-panel--flow .telegram-nav__note {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  font-size: 0.78rem;
+  font-style: normal;
+}
+
+.telegram-nav__group {
+  padding: 1rem 1.2rem 1.1rem;
+  border-bottom: 1px solid var(--nav-line);
+}
+
+.telegram-nav__group-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  margin-bottom: 0.4rem;
+}
+
+.telegram-nav__group-index {
+  color: var(--nav-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  line-height: 1;
+}
+
+.telegram-nav__group-title {
+  margin: 0;
+  color: var(--nav-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.telegram-nav-panel--temple .telegram-nav__group-title {
+  font-family: var(--font-cormorant), Georgia, 'Times New Roman', serif;
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.telegram-nav__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.telegram-nav__list li + li {
+  border-top: 1px solid var(--nav-line);
+}
+
+.telegram-nav__link {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+
+  min-height: 3.25rem;
+  padding: 0.6rem 0;
+
+  color: inherit;
+  opacity: 1;
+
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.telegram-nav__link:hover,
+.telegram-nav__link:focus {
+  background: color-mix(in srgb, var(--nav-ink) 4%, transparent);
+  color: var(--nav-accent);
+  opacity: 1;
+}
+
+.telegram-nav__link:focus-visible {
+  outline: 2px solid var(--nav-accent);
+  outline-offset: 2px;
+  border-radius: 1px;
+}
+
+.telegram-nav__link-mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+
+  width: 1.75rem;
+  height: 1.75rem;
+
+  border: 1px solid var(--nav-line);
+  color: var(--nav-muted);
+
+  transition:
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.telegram-nav-panel--temple .telegram-nav__link-mark {
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.telegram-nav-panel--flow .telegram-nav__link-mark {
+  width: 1.5rem;
+  border: 0;
+  border-right: 1px solid var(--nav-line);
+  border-radius: 0;
+}
+
+.telegram-nav__link:hover .telegram-nav__link-mark,
+.telegram-nav__link[data-active='true'] .telegram-nav__link-mark {
+  border-color: color-mix(in srgb, var(--nav-accent) 45%, var(--nav-line));
+  color: var(--nav-accent);
+}
+
+.telegram-nav__link-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.telegram-nav__link-label {
+  color: var(--nav-ink);
+  font-family: var(--font-cormorant), Georgia, 'Times New Roman', serif;
+  font-size: 1.06rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+}
+
+.telegram-nav-panel--flow .telegram-nav__link-label {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  letter-spacing: -0.01em;
+}
+
+.telegram-nav__link-description {
+  color: var(--nav-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 7.5px;
+  letter-spacing: 0.13em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.telegram-nav-panel--flow .telegram-nav__link-description {
+  color: var(--nav-muted);
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  font-size: 0.72rem;
+  font-style: italic;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.telegram-nav__current {
+  flex: 0 0 auto;
+
+  width: 5px;
+  height: 5px;
+
+  border-radius: 50%;
+  background: var(--nav-accent);
+
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.telegram-nav__link[data-active='true'] .telegram-nav__current {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.telegram-nav__link[data-active='true'] .telegram-nav__link-label {
+  color: var(--nav-accent);
+}
+
+.telegram-nav-panel--flow .telegram-nav__current {
+  width: 0.75rem;
+  height: 1px;
+  border-radius: 0;
+  background: var(--nav-ink);
+}
+
+.telegram-nav-panel--flow .telegram-nav__link[data-active='true'] .telegram-nav__link-label {
+  color: var(--nav-ink);
+  font-weight: 600;
+}
+
+.telegram-nav__cross {
+  padding: 1rem 1.2rem 1.1rem;
+  border-bottom: 1px solid var(--nav-line);
+}
+
+.telegram-nav__cross .telegram-nav__eyebrow {
+  margin-bottom: 0.45rem;
+}
+
+.telegram-nav__cross-link {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+
+  min-height: 2.75rem;
+
+  color: var(--nav-ink);
+  opacity: 1;
+}
+
+.telegram-nav__cross-link:hover,
+.telegram-nav__cross-link:focus {
+  color: var(--nav-accent);
+  opacity: 1;
+}
+
+.telegram-nav__cross-link:focus-visible {
+  outline: 2px solid var(--nav-accent);
+  outline-offset: 2px;
+}
+
+.telegram-nav__cross-mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--nav-muted);
+}
+
+.telegram-nav__cross-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.telegram-nav__cross-label {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.telegram-nav__cross-description {
+  color: var(--nav-muted);
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  font-size: 0.72rem;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.telegram-nav__cross-arrow {
+  flex: 0 0 auto;
+  color: var(--nav-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.telegram-nav__footnote {
+  margin: 0;
+  padding: 0.9rem 1.2rem 1.1rem;
+  color: var(--nav-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 7.5px;
+  letter-spacing: 0.12em;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+
+.telegram-nav-panel--flow .telegram-nav__footnote {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  font-size: 0.65rem;
+  font-style: italic;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+@keyframes telegramNavSheetIn {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.985);
+    transform: translateY(10px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
@@ -703,7 +1237,10 @@ body.telegram-app .temple-screen {
   }
 
   .telegram-nav-trigger,
-  .telegram-nav-panel {
+  .telegram-nav-panel,
+  .telegram-nav__link,
+  .telegram-nav__current,
+  .telegram-nav__close {
     animation: none !important;
     transition: none !important;
   }
