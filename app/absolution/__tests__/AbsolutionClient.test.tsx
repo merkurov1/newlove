@@ -14,6 +14,18 @@ jest.mock('@/components/AuthContext', () => ({
   useAuth: () => ({ user: null, profile: null }),
 }));
 
+jest.mock('@/hooks/useTempleIdentity', () => ({
+  __esModule: true,
+  default: () => ({
+    displayName: '',
+    source: null,
+    isLoading: false,
+    error: null,
+    isTelegram: false,
+    refresh: async () => false,
+  }),
+}));
+
 jest.mock('@/lib/templeLogger', () => ({
   logTempleEvent: (...args: unknown[]) => logTempleEvent(...args),
 }));

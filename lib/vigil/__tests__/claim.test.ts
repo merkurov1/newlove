@@ -222,6 +222,7 @@ const telegram: VigilIdentity = {
   userId: '100200300',
   displayName: 'Anna',
   source: 'telegram',
+  email: null,
 };
 
 const supabaseIdentity: VigilIdentity = {
@@ -229,6 +230,7 @@ const supabaseIdentity: VigilIdentity = {
   userId: '11111111-1111-4111-8111-111111111111',
   displayName: 'Pilgrim',
   source: 'supabase',
+  email: 'pilgrim@example.com',
 };
 
 describe('Vigil spark claim', () => {

@@ -1,19 +1,28 @@
 export async function templeTrack(eventType: string, message: string) {
   try {
-    let displayName = typeof window !== 'undefined' ? (localStorage.getItem('temple_user') || null) : null;
-    if (!displayName && typeof window !== 'undefined') {
-      // Try server-side session as a fallback
+    // Prefer the server-verified session. localStorage is only a display
+    // fallback for anonymous visitors and never proves an identity.
+    let displayName: string | null = null;
+
+    if (typeof window !== 'undefined') {
       try {
         const res = await fetch('/api/temple/me');
         if (res.ok) {
           const j = await res.json();
-          if (j?.displayName) {
-            displayName = j.displayName;
-            try { if (displayName) localStorage.setItem('temple_user', displayName); } catch (e) {}
+          const verifiedName =
+            typeof j?.displayName === 'string' ? j.displayName.trim() : '';
+
+          if (verifiedName) {
+            displayName = verifiedName;
+            try { localStorage.setItem('temple_user', verifiedName); } catch {}
           }
         }
-      } catch (e) {
+      } catch {
         // ignore
+      }
+
+      if (!displayName) {
+        displayName = localStorage.getItem('temple_user') || null;
       }
     }
 

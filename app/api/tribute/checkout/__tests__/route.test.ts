@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 type MockFn = {
   mock: { calls: unknown[][] };
+  mockClear: () => void;
   mockResolvedValue: (value: unknown) => void;
 };
 
@@ -39,10 +40,13 @@ const { POST } = require('../route') as {
 const conversationId = '11111111-1111-4111-8111-111111111111';
 const attribution = `ptri_${conversationId}`;
 
-function makeRequest(overrides: Record<string, unknown> = {}): Request {
+function makeRequest(
+  overrides: Record<string, unknown> = {},
+  headers: Record<string, string> = {}
+): Request {
   return new Request('http://localhost/api/tribute/checkout', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify({
       amount: 20,
       currency: 'usd',
@@ -158,5 +162,20 @@ describe('POST /api/tribute/checkout', () => {
     // Apple Pay / Google Pay / Link where supported, card everywhere else.
     expect(session).not.toHaveProperty('payment_method_types');
     expect(session.mode).toBe('payment');
+  });
+
+  it('keeps the same guest checkout for anonymous, Telegram and Supabase callers', async () => {
+    for (const headers of [
+      {},
+      { cookie: 'temple_session=verified-telegram-session' },
+      { authorization: 'Bearer supabase-access-token' },
+    ]) {
+      mockCreateSession.mockClear();
+
+      const response = await POST(makeRequest({ amount: 20 }, headers));
+
+      expect(response.status).toBe(200);
+      expect(mockCreateSession.mock.calls).toHaveLength(1);
+    }
   });
 });

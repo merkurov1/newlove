@@ -16,6 +16,7 @@ import {
 
 import { useAuth } from '@/components/AuthContext';
 import TempleTopBar from '@/components/TempleTopBar';
+import useTempleIdentity from '@/hooks/useTempleIdentity';
 import { createClient } from '@/lib/supabase/client';
 import {
   readRitualDraft,
@@ -304,8 +305,10 @@ export default function CastClient({
   variant?: CastVariant;
 }) {
   const { user } = useAuth();
+  const identity = useTempleIdentity();
   const isModal = variant === 'modal';
   const ui = CAST_THEME[variant];
+  const subjectName = identity.displayName || user?.email || 'Anonymous';
 
   const [language, setLanguage] =
     useState<'en' | 'ru' | null>(null);
@@ -1111,11 +1114,7 @@ export default function CastClient({
                 <div
                   className={`mb-6 flex flex-col justify-between gap-2 border-b pb-4 pr-24 font-mono text-[9px] uppercase tracking-[0.2em] sm:flex-row sm:pr-40 ${ui.divider} ${ui.muted}`}
                 >
-                  <span>
-                    Subject:{' '}
-                    {user?.email ||
-                      'Anonymous'}
-                  </span>
+                  <span>Subject: {subjectName}</span>
 
                   <span>
                     Protocol ID:{' '}

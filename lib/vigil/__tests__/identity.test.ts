@@ -66,6 +66,7 @@ describe('Vigil identity', () => {
       userId: '100200300',
       displayName: 'Anna',
       source: 'telegram',
+      email: null,
     });
   });
 
@@ -95,6 +96,7 @@ describe('Vigil identity', () => {
       userId: USER_ID,
       displayName: 'Pilgrim',
       source: 'supabase',
+      email: 'pilgrim@example.com',
     });
   });
 

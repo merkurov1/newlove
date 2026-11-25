@@ -109,6 +109,28 @@ describe('/api/vigil/claim', () => {
     );
   });
 
+  it('accepts a verified Supabase identity on the same claim route', async () => {
+    const supabaseIdentity = {
+      key: 'sb:11111111-1111-4111-8111-111111111111',
+      userId: '11111111-1111-4111-8111-111111111111',
+      displayName: 'Pilgrim',
+      source: 'supabase' as const,
+      email: 'pilgrim@example.com',
+    };
+
+    mockIdentity.mockResolvedValue(supabaseIdentity);
+
+    const response = await POST(makeRequest({ id: 1 }));
+
+    expect(response.status).toBe(200);
+    expect(mockClaim).toHaveBeenCalledWith(
+      expect.anything(),
+      supabaseIdentity,
+      1,
+      null
+    );
+  });
+
   it('rejects invalid heart ids and oversized intentions', async () => {
     expect((await POST(makeRequest({ id: 99 }))).status).toBe(400);
     expect(

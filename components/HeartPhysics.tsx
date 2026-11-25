@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthContext';
+import useTempleIdentity from '@/hooks/useTempleIdentity';
 import TempleTopBar from './TempleTopBar';
 import { useRitualModalTimer } from './temple/useRitualModalTimer';
 import { logTempleEvent } from '@/lib/templeLogger';
@@ -16,6 +17,7 @@ export default function HeartPhysics({
   heartUrl = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Heart1.png',
 }: Props) {
   const { user, profile } = useAuth();
+  const identity = useTempleIdentity();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const nudgeHeartRef = useRef<(() => void) | null>(null);
   const [showGyroPrompt, setShowGyroPrompt] = useState(false);
@@ -24,6 +26,7 @@ export default function HeartPhysics({
   const [seconds, setSeconds] = useState(0);
 
   const currentAuthorName =
+    identity.displayName ||
     profile?.name ||
     user?.user_metadata?.name ||
     user?.email?.split('@')[0] ||
