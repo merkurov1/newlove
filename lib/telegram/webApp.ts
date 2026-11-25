@@ -24,18 +24,46 @@ export type TelegramBottomButton = {
   offClick?: (handler: () => void) => void;
 };
 
+export type TelegramThemeParams = {
+  bg_color?: string;
+  secondary_bg_color?: string;
+  header_bg_color?: string;
+  bottom_bar_bg_color?: string;
+  text_color?: string;
+  hint_color?: string;
+  link_color?: string;
+  button_color?: string;
+  button_text_color?: string;
+};
+
 export type TelegramWebApp = {
   initData?: string;
+  /**
+   * Launch-only metadata. Flow reads `start_param` for deep links; identity and
+   * permissions always come from server-verified `initData`.
+   */
+  initDataUnsafe?: {
+    start_param?: string;
+  };
   version?: string;
   platform?: string;
+  colorScheme?: 'light' | 'dark' | string;
   viewportHeight?: number;
   viewportStableHeight?: number;
+  headerHeight?: number;
   safeAreaInset?: TelegramInset;
   contentSafeAreaInset?: TelegramInset;
+  themeParams?: TelegramThemeParams;
   isExpanded?: boolean;
   isFullscreen?: boolean;
+  isActive?: boolean;
+  isClosingConfirmationEnabled?: boolean;
   ready?: () => void;
   expand?: () => void;
+  requestFullscreen?: () => void;
+  exitFullscreen?: () => void;
+  disableVerticalSwipes?: () => void;
+  enableVerticalSwipes?: () => void;
   close?: () => void;
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
@@ -43,6 +71,7 @@ export type TelegramWebApp = {
   onEvent?: (event: string, handler: () => void) => void;
   offEvent?: (event: string, handler: () => void) => void;
   openLink?: (url: string) => void;
+  openTelegramLink?: (url: string) => void;
   HapticFeedback?: {
     impactOccurred?: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
     notificationOccurred?: (type: 'error' | 'success' | 'warning') => void;
@@ -50,6 +79,7 @@ export type TelegramWebApp = {
   };
   BottomButton?: TelegramBottomButton;
   BackButton?: {
+    isVisible?: boolean;
     show?: () => void;
     hide?: () => void;
     onClick?: (handler: () => void) => void;
@@ -131,7 +161,9 @@ export function detectTelegramCapabilities(webApp?: TelegramWebApp | null): Tele
     homeScreen:
       typeof tg?.checkHomeScreenStatus === 'function' && typeof tg?.addToHomeScreen === 'function',
     backButton: typeof tg?.BackButton?.show === 'function',
-    fullscreen: typeof tg?.ready === 'function',
+    // `ready` exists on every client since 6.0 and says nothing about the
+    // fullscreen API (Bot API 8.0). Only the method itself is evidence.
+    fullscreen: typeof tg?.requestFullscreen === 'function',
   };
 }
 
@@ -155,7 +187,10 @@ export type HapticKind =
   | 'vigil'
   | 'success'
   | 'error'
-  | 'selection';
+  | 'selection'
+  | 'reader-open'
+  | 'reader-close'
+  | 'gallery';
 
 function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
@@ -198,11 +233,13 @@ function runHaptic(kind: HapticKind, now = Date.now()): boolean {
       return true;
     }
 
-    if (kind === 'selection') {
+    if (kind === 'selection' || kind === 'gallery') {
       tg.HapticFeedback?.selectionChanged?.();
       return true;
     }
 
+    // Reader open/close and ritual selection share the gentlest impact. The
+    // per-kind throttle in `runHaptic` keeps scrolling or re-renders silent.
     tg.HapticFeedback?.impactOccurred?.('light');
     return true;
   } catch {
@@ -221,6 +258,16 @@ export function hapticSelection() {
 
 export function hapticNotification(kind: 'success' | 'error') {
   return runHaptic(kind);
+}
+
+/** A single gentle confirmation when a reader or viewer opens/closes. */
+export function hapticReader(action: 'open' | 'close') {
+  return runHaptic(action === 'open' ? 'reader-open' : 'reader-close');
+}
+
+/** Discrete gallery movement only, never continuous scrolling. */
+export function hapticGallery() {
+  return runHaptic('gallery');
 }
 
 export function resetHapticThrottle() {

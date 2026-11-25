@@ -58,6 +58,16 @@ describe('Telegram capability detection', () => {
     expect(isTelegramVersionAtLeast('7.10', '7.2')).toBe(true);
     expect(isTelegramVersionAtLeast('6.9', '7.0')).toBe(false);
   });
+
+  it('reports fullscreen support from requestFullscreen, not from ready()', () => {
+    installTelegram({ ready: jest.fn() });
+
+    expect(detectTelegramCapabilities().fullscreen).toBe(false);
+
+    installTelegram({ ready: jest.fn(), requestFullscreen: jest.fn() });
+
+    expect(detectTelegramCapabilities().fullscreen).toBe(true);
+  });
 });
 
 describe('haptic guardrails', () => {

@@ -61,11 +61,25 @@ describe('share planning', () => {
 });
 
 describe('performShare', () => {
-  it('uses shareToStory only with valid media and a story-capable client', async () => {
+  it('uses shareToStory only when the caller explicitly asks for a story', async () => {
     const shareToStory = jest.fn();
+    const openTelegramLink = jest.fn();
+
+    // The default share must not hijack the reader into the story editor.
+    const normal = await performShare({
+      request,
+      storyApi: { shareToStory },
+      openTelegramLink,
+      storyMode: 'off',
+    });
+
+    expect(normal).toBe('telegram-link');
+    expect(shareToStory).not.toHaveBeenCalled();
+
     const outcome = await performShare({
       request,
       storyApi: { shareToStory },
+      storyMode: 'auto',
     });
 
     expect(outcome).toBe('story');
@@ -77,9 +91,26 @@ describe('performShare', () => {
     );
   });
 
+  it('story-only never falls through to a different share destination', async () => {
+    const openTelegramLink = jest.fn();
+    const copy = jest.fn(async () => undefined);
+
+    const outcome = await performShare({
+      request,
+      storyMode: 'only',
+      openTelegramLink,
+      copy,
+    });
+
+    expect(outcome).toBe('failed');
+    expect(openTelegramLink).not.toHaveBeenCalled();
+    expect(copy).not.toHaveBeenCalled();
+  });
+
   it('falls back when story sharing throws, without blocking the flow', async () => {
     const outcome = await performShare({
       request,
+      storyMode: 'auto',
       storyApi: {
         shareToStory: () => {
           throw new Error('story unavailable');

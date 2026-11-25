@@ -16,10 +16,12 @@ import {
   resolveFlowMetadataFromContent,
   type FlowSocialMetadata,
 } from '@/lib/flow/metadata';
-import { getCachedFlowItem } from '@/lib/flow/items-cash';
+import { getCachedFlowItem, getCachedFlowNeighbors } from '@/lib/flow/items-cash';
 import { readDistributionUrl } from '@/lib/flow/distribution';
 import PierrotContextBlock from '@/components/flow/PierrotContextBlock';
 import FlowImageComponent from '@/components/flow/FlowImage';
+import FlowHomeScreenPrompt from '@/components/flow/FlowHomeScreenPrompt';
+import FlowReaderShell from '@/components/flow/FlowReaderShell';
 import FlowShare from '@/components/flow/FlowShare';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { breadcrumbJsonLd, flowContentJsonLd } from '@/lib/structuredData';
@@ -221,22 +223,38 @@ function MarkdownBody({ body }: { body: string }) {
               </a>
             );
           },
-          img: ({ src, alt }) => (
-            <figure className="my-7">
-              <FlowImageComponent
-                src={typeof src === 'string' ? src : undefined}
-                alt={alt ?? ''}
-                aspectRatio="4 / 3"
-                objectFit="contain"
-                sizes="(max-width: 768px) 100vw, 720px"
-              />
-              {alt && (
-                <figcaption className="mt-2 font-serif text-sm italic text-stone-500">
-                  {alt}
-                </figcaption>
-              )}
-            </figure>
-          ),
+          img: ({ src, alt }) => {
+            const imageSrc = typeof src === 'string' ? src : '';
+
+            return (
+              <figure className="my-7">
+                <a
+                  href={imageSrc || undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block overflow-hidden rounded-2xl bg-stone-100"
+                  data-flow-image
+                  data-flow-image-src={imageSrc}
+                  data-flow-image-alt={alt ?? ''}
+                  data-flow-image-caption={alt ?? ''}
+                  aria-label={alt ? `Open image: ${alt}` : 'Open image'}
+                >
+                  <FlowImageComponent
+                    src={imageSrc || undefined}
+                    alt={alt ?? ''}
+                    aspectRatio="4 / 3"
+                    objectFit="contain"
+                    sizes="(max-width: 768px) 100vw, 720px"
+                  />
+                </a>
+                {alt && (
+                  <figcaption className="mt-2 font-serif text-sm italic text-stone-500">
+                    {alt}
+                  </figcaption>
+                )}
+              </figure>
+            );
+          },
           ul: ({ children }) => (
             <ul className="mb-6 list-disc space-y-2 pl-6 font-serif text-[18px] font-normal leading-8 text-stone-800 sm:text-[20px]">
               {children}
@@ -289,6 +307,11 @@ function ImageFigure({
         target="_blank"
         rel="noopener noreferrer"
         className="block overflow-hidden rounded-2xl bg-stone-100"
+        data-flow-image
+        data-flow-image-src={image.url}
+        data-flow-image-alt={caption || `Image ${index + 1}`}
+        data-flow-image-caption={caption || ''}
+        aria-label={caption ? `Open image: ${caption}` : `Open image ${index + 1}`}
       >
         <FlowImageComponent
           src={image.url}
@@ -432,9 +455,17 @@ function VideoBlock({ videos }: { videos: FlowVideo[] }) {
               </span>
             </a>
           )}
-          {video.title && video.embedUrl && (
-            <figcaption className="mt-2 text-center font-serif text-sm text-stone-600">
-              {video.title}
+          {video.embedUrl && (
+            <figcaption className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center font-serif text-sm text-stone-600">
+              {video.title && <span>{video.title}</span>}
+              <a
+                href={video.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500 underline decoration-stone-300 underline-offset-4 transition hover:text-stone-900"
+              >
+                Watch on {video.provider === 'youtube' ? 'YouTube' : 'source'} ↗
+              </a>
             </figcaption>
           )}
         </figure>
@@ -592,6 +623,10 @@ export default async function FlowItemPage({ params }: PageProps) {
       String((content.metadata as Record<string, unknown> | null)?.schema_type || '')
     );
 
+  // Neighbours come from the same public ordering as the feed. If the query is
+  // unavailable the reader simply ends without pager links.
+  const neighbors = await getCachedFlowNeighbors(content.publishedAt);
+
   return (
     <>
       <JsonLd
@@ -616,86 +651,109 @@ export default async function FlowItemPage({ params }: PageProps) {
         ])}
       />
 
-      <div className="flow-post-page min-h-screen bg-white px-5 pb-24 pt-20 text-stone-900 sm:px-8 sm:pt-24">
+      <FlowReaderShell slug={decodedSlug} title={metadata.title} />
+
+      <div className="flow-post-page flow-post-page--reader min-h-screen bg-white px-5 pb-24 pt-20 text-stone-900 sm:px-8 sm:pt-24">
         <article className="flow-item mx-auto max-w-3xl">
-          <header className="mb-8 flex items-center justify-between gap-4 border-b border-stone-100 pb-5">
-            <Link
-              href="/flow"
-              className="font-mono text-[11px] uppercase tracking-[0.2em] text-stone-500 transition hover:text-stone-950"
-            >
+          <header className="flow-reader__bar">
+            <Link href="/flow" className="flow-reader__back">
               ← Flow
             </Link>
 
-            <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider text-stone-500">
-              <a
-                href={bskyUrl || 'https://bsky.app/profile/merkurov.love'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition hover:text-stone-900"
-              >
-                Bluesky ↗
-              </a>
-              <span className="text-stone-200">·</span>
-              <a
-                href={tgUrl || 'https://t.me/unframed_am'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition hover:text-stone-900"
-              >
-                Telegram ↗
-              </a>
-              <span className="text-stone-200">·</span>
-              {threadsUrl && (
-                <>
-                  <a
-                    href={threadsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="transition hover:text-stone-900"
-                  >
-                    Threads ↗
-                  </a>
-                  <span className="text-stone-200">·</span>
-                </>
-              )}
-              <Link href="/journal" className="transition hover:text-stone-900">
-                Journal ↗
-              </Link>
-            </div>
+            <span className="flow-reader__identity" aria-hidden="true">
+              Flow
+            </span>
           </header>
 
-          <div className="mb-6 flex flex-wrap items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500">
+          <div className="flow-reader__meta">
             <span>{typeLabels[content.contentType] ?? 'Post'}</span>
 
             {content.publishedAt && (
               <>
-                <span>·</span>
-                <span>{formatDate(content.publishedAt)}</span>
+                <span aria-hidden="true">·</span>
+                <time dateTime={content.publishedAt}>{formatDate(content.publishedAt)}</time>
               </>
             )}
 
-            <span>·</span>
+            <span aria-hidden="true">·</span>
             <span>{content.language.toUpperCase()}</span>
 
             {readingTime && (
               <>
-                <span>·</span>
+                <span aria-hidden="true">·</span>
                 <span>{readingTime}</span>
               </>
             )}
           </div>
 
-          <div className="mb-6">
-            <FlowShare
-              title={metadata.title}
-              url={metadata.canonicalUrl}
-              imageUrl={metadata.previewImage}
-              excerpt={metadata.description}
-              slug={decodedSlug}
-            />
-          </div>
-
           <FlowHero content={content} />
+
+          <footer className="flow-reader__footer">
+            <div className="flow-reader__share">
+              <FlowShare
+                title={metadata.title}
+                url={metadata.canonicalUrl}
+                imageUrl={metadata.previewImage}
+                excerpt={metadata.description}
+                slug={decodedSlug}
+              />
+            </div>
+
+            <div className="flow-reader__sources" aria-label="This publication elsewhere">
+              <span className="flow-reader__sources-label">Elsewhere</span>
+
+              <a
+                href={bskyUrl || 'https://bsky.app/profile/merkurov.love'}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Bluesky ↗
+              </a>
+              <a
+                href={tgUrl || 'https://t.me/unframed_am'}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Telegram ↗
+              </a>
+              {threadsUrl && (
+                <a href={threadsUrl} target="_blank" rel="noopener noreferrer">
+                  Threads ↗
+                </a>
+              )}
+              <Link href="/journal">Journal ↗</Link>
+            </div>
+
+            {(neighbors.newer || neighbors.older) && (
+              <nav className="flow-reader__pager" aria-label="More from Flow">
+                {neighbors.newer?.slug && (
+                  <Link
+                    href={`/flow/${encodeURIComponent(neighbors.newer.slug)}`}
+                    className="flow-reader__step"
+                  >
+                    <span className="flow-reader__step-label">Newer</span>
+                    <span className="flow-reader__step-title">
+                      {neighbors.newer.title || 'Next publication'}
+                    </span>
+                  </Link>
+                )}
+
+                {neighbors.older?.slug && (
+                  <Link
+                    href={`/flow/${encodeURIComponent(neighbors.older.slug)}`}
+                    className="flow-reader__step flow-reader__step--older"
+                  >
+                    <span className="flow-reader__step-label">Older</span>
+                    <span className="flow-reader__step-title">
+                      {neighbors.older.title || 'Earlier publication'}
+                    </span>
+                  </Link>
+                )}
+              </nav>
+            )}
+
+            <FlowHomeScreenPrompt className="flow-home-screen--reader" />
+          </footer>
 
           {content.contentType !== 'photo' && (
             <PierrotContextBlock

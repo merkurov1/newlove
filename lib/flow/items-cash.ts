@@ -300,3 +300,112 @@ export async function getCachedFlowItem(
   return readCachedFlowItem(slug);
 }
 
+export type FlowNeighborItem = {
+  id: string;
+  title: string | null;
+  slug: string | null;
+  publishedAt: string | null;
+};
+
+export type FlowNeighbors = {
+  /** The next-newer publication in the same public ordering. */
+  newer: FlowNeighborItem | null;
+  /** The next-older publication in the same public ordering. */
+  older: FlowNeighborItem | null;
+};
+
+const NEIGHBOR_FIELDS = 'id,title,slug,published_at';
+
+function toNeighbor(
+  row: Record<string, unknown> | null | undefined
+): FlowNeighborItem | null {
+  if (!row) return null;
+
+  const slug = typeof row.slug === 'string' && row.slug.trim() ? row.slug.trim() : null;
+
+  if (!slug) return null;
+
+  return {
+    id: String(row.id ?? ''),
+    title: typeof row.title === 'string' && row.title.trim() ? row.title.trim() : null,
+    slug,
+    publishedAt:
+      typeof row.published_at === 'string' && row.published_at.trim()
+        ? row.published_at
+        : null,
+  };
+}
+
+/**
+ * Contextual previous/next publications from the existing ordered content
+ * model. Nothing is recommended or generated: only the immediate neighbours
+ * by `published_at` are returned.
+ */
+const readCachedFlowNeighbors = unstable_cache(
+  async (publishedAt: string): Promise<FlowNeighbors> => {
+    const supabase = getSupabaseAdmin();
+
+    const makeQuery = () =>
+      supabase
+        .from('items')
+        .select(NEIGHBOR_FIELDS)
+        .eq('status', 'published')
+        .eq('visibility', 'public')
+        .not('published_at', 'is', null);
+
+    const [newerResult, olderResult] = await Promise.all([
+      makeQuery()
+        .gt('published_at', publishedAt)
+        .order('published_at', { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      makeQuery()
+        .lt('published_at', publishedAt)
+        .order('published_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    if (newerResult.error) {
+      console.warn('[flow/neighbors] newer unavailable:', newerResult.error.message);
+    }
+
+    if (olderResult.error) {
+      console.warn('[flow/neighbors] older unavailable:', olderResult.error.message);
+    }
+
+    return {
+      newer: toNeighbor(
+        (newerResult.data as unknown as Record<string, unknown> | null) ?? null
+      ),
+      older: toNeighbor(
+        (olderResult.data as unknown as Record<string, unknown> | null) ?? null
+      ),
+    };
+  },
+  ['flow-public-neighbors-v1'],
+  {
+    revalidate: 900,
+    tags: [FLOW_ITEMS_CACHE_TAG],
+  }
+);
+
+export async function getCachedFlowNeighbors(
+  publishedAt: string | null | undefined
+): Promise<FlowNeighbors> {
+  const value = typeof publishedAt === 'string' ? publishedAt.trim() : '';
+
+  if (!value) return { newer: null, older: null };
+
+  try {
+    return await readCachedFlowNeighbors(value);
+  } catch (error) {
+    console.warn(
+      '[flow/neighbors] unavailable:',
+      error instanceof Error ? error.message : 'unknown error'
+    );
+
+    return { newer: null, older: null };
+  }
+}
+

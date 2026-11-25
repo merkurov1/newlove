@@ -26,6 +26,7 @@
 
 .flow-page {
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--flow-paper);
   color: var(--flow-ink);
 }
@@ -36,10 +37,23 @@
  */
 body.telegram-app .flow-page,
 body.telegram-app .flow-post-page {
+  min-height: var(--tg-viewport-stable-height, 100dvh);
   padding-top: max(1rem, env(safe-area-inset-top), var(--tg-safe-area-top, 0px)) !important;
   padding-bottom: calc(6rem + max(env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px)));
-  padding-left: max(1.25rem, env(safe-area-inset-left), var(--tg-safe-area-left, 0px));
-  padding-right: max(1.25rem, env(safe-area-inset-right), var(--tg-safe-area-right, 0px));
+  /* `body` already owns the Telegram/browser safe-area padding on the
+   * horizontal axis. Adding it here again would double the gutter in
+   * landscape, so Flow only contributes its own editorial margin. */
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+/* The fullscreen close affordance is a floating 44px target at the top-left.
+ * Flow reserves a clean masthead band instead of letting it overlap type. */
+body.telegram-app.telegram-fullscreen-close .flow-page,
+body.telegram-app.telegram-fullscreen-close .flow-post-page {
+  padding-top: calc(
+    max(0.75rem, env(safe-area-inset-top), var(--tg-safe-area-top, 0px)) + 3.25rem
+  ) !important;
 }
 
 .flow-page__column {
@@ -288,9 +302,551 @@ body.telegram-app .flow-post-page {
   }
 }
 
+/* ---------------------------------------------------------------
+ * Continuity: a quiet return path, never a dashboard card.
+ * ------------------------------------------------------------- */
+
+.flow-continue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.65rem;
+  margin: 0 0 2rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--flow-line);
+  border-bottom: 1px solid var(--flow-line);
+  color: var(--flow-body);
+  text-decoration: none;
+}
+
+.flow-continue__label,
+.flow-continue__progress {
+  font-family: var(--flow-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--flow-muted);
+}
+
+.flow-continue__title {
+  min-width: 0;
+  flex: 1 1 12rem;
+  font-family: var(--flow-serif);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.flow-continue:hover .flow-continue__title {
+  color: #52504b;
+}
+
+.flow-continue:focus-visible {
+  outline: 2px solid var(--flow-ink);
+  outline-offset: 4px;
+}
+
+/* ---------------------------------------------------------------
+ * Focused reader on the existing publication route.
+ * ------------------------------------------------------------- */
+
+.flow-post-page--reader {
+  background: var(--flow-paper);
+}
+
+.flow-post-page--reader .flow-item {
+  animation: flow-reader-enter 260ms ease-out both;
+}
+
+.flow-reader__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--flow-line);
+}
+
+.flow-reader__back {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  font-family: var(--flow-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--flow-muted);
+  transition: color 140ms ease;
+}
+
+.flow-reader__back:hover {
+  color: var(--flow-ink);
+}
+
+.flow-reader__identity {
+  font-family: var(--flow-serif);
+  font-size: 0.8rem;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  color: var(--flow-muted);
+}
+
+.flow-reader__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 1.6rem;
+  font-family: var(--flow-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--flow-muted);
+}
+
+.flow-reader__meta time {
+  font-family: var(--flow-mono);
+}
+
+.flow-reader__footer {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--flow-line);
+}
+
+.flow-reader__share {
+  margin-bottom: 1.65rem;
+}
+
+.flow-reader__sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  font-family: var(--flow-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--flow-muted);
+}
+
+.flow-reader__sources a {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  color: var(--flow-body);
+  text-decoration: none;
+  transition: color 140ms ease;
+}
+
+.flow-reader__sources a:hover {
+  color: var(--flow-ink);
+}
+
+.flow-reader__sources-label {
+  color: #9a948a;
+  letter-spacing: 0.18em;
+}
+
+.flow-reader__pager {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  margin-top: 1.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--flow-line);
+}
+
+.flow-reader__step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-height: 44px;
+  padding: 0.5rem 0;
+  text-decoration: none;
+  color: var(--flow-ink);
+}
+
+.flow-reader__step--older {
+  text-align: right;
+}
+
+.flow-reader__step-label {
+  font-family: var(--flow-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--flow-muted);
+}
+
+.flow-reader__step-title {
+  font-family: var(--flow-serif);
+  font-size: 1.02rem;
+  line-height: 1.35;
+}
+
+.flow-reader__step:hover .flow-reader__step-title {
+  color: #52504b;
+}
+
+.flow-reader__back:focus-visible,
+.flow-reader__sources a:focus-visible,
+.flow-reader__step:focus-visible {
+  outline: 2px solid var(--flow-ink);
+  outline-offset: 3px;
+}
+
+/* Reading line: thin, fixed, and below Telegram's own chrome affordances. */
+.flow-reader-progress {
+  position: fixed;
+  top: max(0px, env(safe-area-inset-top), var(--tg-safe-area-top, 0px));
+  left: 0;
+  right: 0;
+  z-index: 60;
+  height: 2px;
+  pointer-events: none;
+  background: transparent;
+}
+
+.flow-reader-progress__bar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  background: var(--flow-ink);
+  opacity: 0.55;
+  will-change: transform;
+}
+
+/* ---------------------------------------------------------------
+ * Share actions: small, local, post-reading.
+ * ------------------------------------------------------------- */
+
+.flow-share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.65rem;
+  font-family: var(--flow-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--flow-muted);
+}
+
+.flow-share__button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--flow-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--flow-muted);
+  transition:
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.flow-share__button:hover:not(:disabled) {
+  border-color: #c9c2b6;
+  color: var(--flow-ink);
+}
+
+.flow-share__button:disabled {
+  opacity: 0.55;
+}
+
+.flow-share__button--story {
+  border-style: dashed;
+}
+
+.flow-share__status {
+  font-family: var(--flow-serif);
+  font-size: 0.85rem;
+  font-style: italic;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--flow-muted);
+}
+
+.flow-share__button:focus-visible {
+  outline: 2px solid var(--flow-ink);
+  outline-offset: 3px;
+}
+
+/* ---------------------------------------------------------------
+ * Home Screen offer: discreet, cooldown-bound.
+ * ------------------------------------------------------------- */
+
+.flow-home-screen {
+  margin-top: 2.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--flow-line);
+}
+
+.flow-home-screen__label {
+  margin: 0;
+  font-family: var(--flow-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #9a948a;
+}
+
+.flow-home-screen__copy {
+  margin: 0.3rem 0 0.75rem;
+  font-family: var(--flow-serif);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: var(--flow-body);
+}
+
+.flow-home-screen__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.flow-home-screen__add,
+.flow-home-screen__dismiss {
+  min-height: 38px;
+  padding: 0 0.85rem;
+  border-radius: 999px;
+  font-family: var(--flow-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.flow-home-screen__add {
+  border: 1px solid var(--flow-ink);
+  color: var(--flow-ink);
+}
+
+.flow-home-screen__dismiss {
+  border: 1px solid transparent;
+  color: var(--flow-muted);
+}
+
+.flow-home-screen__add:focus-visible,
+.flow-home-screen__dismiss:focus-visible {
+  outline: 2px solid var(--flow-ink);
+  outline-offset: 3px;
+}
+
+/* ---------------------------------------------------------------
+ * Fullscreen image viewer.
+ * ------------------------------------------------------------- */
+
+.flow-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: flex;
+  flex-direction: column;
+  background: #0c0b0a;
+  color: #f5f0e8;
+  outline: none;
+  overscroll-behavior: contain;
+  animation: flow-viewer-enter 160ms ease-out both;
+}
+
+.flow-viewer__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding:
+    calc(0.5rem + max(env(safe-area-inset-top), var(--tg-safe-area-top, 0px)))
+    calc(0.75rem + max(env(safe-area-inset-right), var(--tg-safe-area-right, 0px)))
+    0.35rem
+    calc(0.75rem + max(env(safe-area-inset-left), var(--tg-safe-area-left, 0px)));
+}
+
+.flow-viewer__counter {
+  margin: 0;
+  font-family: var(--flow-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.2em;
+  color: rgba(245, 240, 232, 0.68);
+}
+
+.flow-viewer__close {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(245, 240, 232, 0.22);
+  border-radius: 999px;
+  background: rgba(12, 11, 10, 0.6);
+  color: #f5f0e8;
+  backdrop-filter: blur(8px);
+}
+
+.flow-viewer__close:hover {
+  background: rgba(245, 240, 232, 0.12);
+}
+
+.flow-viewer__stage {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding:
+    0.5rem
+    calc(0.5rem + max(env(safe-area-inset-right), var(--tg-safe-area-right, 0px)))
+    0.5rem
+    calc(0.5rem + max(env(safe-area-inset-left), var(--tg-safe-area-left, 0px)));
+  touch-action: none;
+  overflow: hidden;
+}
+
+.flow-viewer__figure {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.flow-viewer__image {
+  display: block;
+  max-width: 100%;
+  max-height: calc(
+    var(--tg-viewport-stable-height, 100dvh) - 11rem -
+      max(env(safe-area-inset-top), var(--tg-safe-area-top, 0px)) -
+      max(env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))
+  );
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  will-change: transform;
+}
+
+.flow-viewer__caption {
+  max-width: 34rem;
+  padding: 0 1rem;
+  font-family: var(--flow-serif);
+  font-size: 0.9rem;
+  font-style: italic;
+  line-height: 1.45;
+  text-align: center;
+  color: rgba(245, 240, 232, 0.74);
+}
+
+.flow-viewer__nav {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(245, 240, 232, 0.2);
+  border-radius: 999px;
+  background: rgba(12, 11, 10, 0.55);
+  color: #f5f0e8;
+  font-size: 1rem;
+  transform: translateY(-50%);
+  backdrop-filter: blur(8px);
+}
+
+.flow-viewer__nav:disabled {
+  opacity: 0.3;
+}
+
+.flow-viewer__nav--prev {
+  left: max(0.5rem, env(safe-area-inset-left), var(--tg-safe-area-left, 0px));
+}
+
+.flow-viewer__nav--next {
+  right: max(0.5rem, env(safe-area-inset-right), var(--tg-safe-area-right, 0px));
+}
+
+.flow-viewer__hint {
+  margin: 0;
+  padding: 0.35rem 1rem
+    calc(0.75rem + max(env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px)));
+  font-family: var(--flow-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  color: rgba(245, 240, 232, 0.45);
+}
+
+.flow-viewer__close:focus-visible,
+.flow-viewer__nav:focus-visible {
+  outline: 2px solid #f5f0e8;
+  outline-offset: 3px;
+}
+
+@keyframes flow-reader-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes flow-viewer-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (min-width: 640px) {
+  .flow-reader__pager {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .flow-reader__bar {
+    margin-bottom: 1.75rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .flow-entry__admin button,
-  .flow-entry__more {
+  .flow-entry__more,
+  .flow-continue__title,
+  .flow-reader__back,
+  .flow-reader__sources a,
+  .flow-share__button {
     transition: none;
+  }
+
+  .flow-post-page--reader .flow-item,
+  .flow-viewer {
+    animation: none;
+  }
+
+  .flow-viewer__image {
+    transition: none !important;
+  }
+
+  .flow-reader-progress__bar {
+    will-change: auto;
   }
 }

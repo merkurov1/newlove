@@ -20,6 +20,7 @@ export default defineConfig({
     'cast-redesign.spec.ts',
     'temple-sanctuary.spec.ts',
     'telegram-navigation.spec.ts',
+    'flow-telegram-reader.spec.ts',
   ],
   timeout: 90_000,
   expect: { timeout: 10_000 },
