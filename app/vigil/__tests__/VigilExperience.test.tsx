@@ -136,6 +136,8 @@ function identity(overrides: Record<string, unknown> = {}) {
   return {
     displayName: '',
     source: null,
+    status: 'anonymous',
+    initDataPending: false,
     isLoading: false,
     error: null,
     isTelegram: false,
@@ -344,6 +346,92 @@ describe('/vigil shared flame surface', () => {
     expect(screen.getByTestId('vigil-heart')).toHaveAttribute(
       'data-vigil-flame-state',
       'extinguished'
+    );
+  });
+
+  it('shows a neutral Telegram waiting state instead of a Google sign-in path', () => {
+    identityModule.default.mockReturnValue(
+      identity({
+        status: 'telegram-init-pending',
+        isTelegram: true,
+        initDataPending: true,
+        isLoading: true,
+      })
+    );
+
+    render(<VigilExperience />);
+
+    const status = screen.getByTestId('vigil-identity');
+
+    expect(status).toHaveAttribute(
+      'data-identity-status',
+      'telegram-init-pending'
+    );
+    expect(status).toHaveTextContent(/waiting for telegram launch data/i);
+    expect(screen.queryByRole('link', { name: /sign in/i })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /waiting for telegram/i })
+    ).toBeDisabled();
+  });
+
+  it('shows verification progress without offering Google to Telegram users', () => {
+    identityModule.default.mockReturnValue(
+      identity({
+        status: 'telegram-verifying',
+        isTelegram: true,
+        isLoading: true,
+      })
+    );
+
+    render(<VigilExperience />);
+
+    const status = screen.getByTestId('vigil-identity');
+
+    expect(status).toHaveAttribute(
+      'data-identity-status',
+      'telegram-verifying'
+    );
+    expect(status).toHaveTextContent(/preparing your identity/i);
+    expect(screen.queryByRole('link', { name: /sign in/i })).toBeNull();
+  });
+
+  it('offers Retry for failed Telegram verification, never Google', () => {
+    const refresh = jest.fn(async () => false);
+
+    identityModule.default.mockReturnValue(
+      identity({
+        status: 'telegram-unverified',
+        isTelegram: true,
+        error:
+          'Telegram identity could not be verified. You can still witness the Vigil.',
+        refresh,
+      })
+    );
+
+    render(<VigilExperience />);
+
+    const status = screen.getByTestId('vigil-identity');
+
+    expect(status).toHaveAttribute(
+      'data-identity-status',
+      'telegram-unverified'
+    );
+    expect(status).toHaveTextContent(/could not be verified/i);
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /sign in/i })).toBeNull();
+  });
+
+  it('keeps the ordinary browser sign-in path for anonymous web visitors', () => {
+    identityModule.default.mockReturnValue(identity({ status: 'anonymous' }));
+
+    render(<VigilExperience />);
+
+    const status = screen.getByTestId('vigil-identity');
+
+    expect(status).toHaveAttribute('data-identity-status', 'anonymous');
+    expect(screen.getByRole('link', { name: /^sign in$/i })).toHaveAttribute(
+      'href',
+      '/login?next=%2Fvigil'
     );
   });
 });
