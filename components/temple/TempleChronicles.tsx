@@ -181,7 +181,7 @@ export default function TempleChronicles({
         <div className={styles.stat}>
           <Activity size={18} aria-hidden="true" />
           <span className={styles.statValue}>{completedRituals}</span>
-          <span className={styles.statLabel}>Rituals completed</span>
+          <span className={styles.statLabel}>Rituals kept</span>
           <span className={styles.statNote}>
             In the last 30 days
           </span>
@@ -237,14 +237,14 @@ export default function TempleChronicles({
 
       {status === 'stale' && events.length > 0 && (
         <p className={styles.chronicleNotice} role="status">
-          Showing the last entries received. The chronicle will reconnect on
-          its own.
+          Showing the entries already received. The chronicle will catch up
+          shortly.
         </p>
       )}
 
       {status === 'error' && events.length === 0 && (
         <p className={styles.chronicleEmpty} role="status">
-          The chronicle is briefly out of reach. Please try again in a moment.
+          The chronicle is resting for a moment. Please try again shortly.
         </p>
       )}
 
@@ -258,8 +258,7 @@ export default function TempleChronicles({
         status !== 'error' &&
         events.length === 0 && (
           <p className={styles.chronicleEmpty}>
-            No public rituals have been recorded yet. The first completed
-            ritual will open the chronicle.
+            The chronicle is still empty. The first ritual will open it.
           </p>
         )}
 
@@ -284,7 +283,8 @@ export default function TempleChronicles({
 
       {error && events.length > 0 && status !== 'stale' && (
         <p className={styles.chronicleNotice} role="status">
-          The last update did not arrive. Older entries remain readable.
+          The newest entries are still on their way. The older ones remain
+          here.
         </p>
       )}
     </div>

@@ -155,7 +155,7 @@ describe('Cast language selector', () => {
 
     expect(
       screen.getByRole('group', {
-        name: /Protocol language/i,
+        name: /Reading language/i,
       })
     ).toBeInTheDocument();
 
@@ -192,7 +192,7 @@ describe('Cast language selector', () => {
       /answers are sent to an external AI model/i
     );
     expect(disclosure).toHaveTextContent(/stored privately/i);
-    expect(disclosure).toHaveTextContent(/anonymous protocols do not retain raw answers/i);
+    expect(disclosure).toHaveTextContent(/anonymous readings do not retain raw answers/i);
     expect(disclosure).toHaveTextContent(/public Temple trace/i);
     expect(disclosure).toHaveTextContent(/never your answers/i);
     expect(disclosure).toHaveTextContent(/not a clinical diagnosis/i);
@@ -206,7 +206,7 @@ describe('Cast language selector', () => {
 
     startEnglishProtocol();
 
-    expect(screen.getByText(/Query 01 \/ 10/i)).toBeInTheDocument();
+    expect(screen.getByText(/Question 01 \/ 10/i)).toBeInTheDocument();
     expect(screen.getByText(/failed ambition/i)).toBeInTheDocument();
     expect(
       screen.getByTestId('cast-question-disclosure')
@@ -224,7 +224,7 @@ describe('Cast language selector', () => {
       })
     );
 
-    expect(screen.getByText(/Query 01 \/ 10/i)).toBeInTheDocument();
+    expect(screen.getByText(/Вопрос 01 \/ 10/i)).toBeInTheDocument();
     expect(container).toHaveTextContent(/нереализованном потенциале/i);
     expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'Пишите честно...');
   });
@@ -249,7 +249,7 @@ describe('Cast drafts and presentation switching', () => {
 
     const { container } = render(<CastClient />);
 
-    expect(screen.getByText(/Query 03 \/ 10/i)).toBeInTheDocument();
+    expect(screen.getByText(/Вопрос 03 \/ 10/i)).toBeInTheDocument();
     expect(container).toHaveTextContent(/самый большой защитный механизм/i);
     expect(screen.getByRole('textbox')).toHaveValue('черновик ответа');
   });
@@ -289,7 +289,7 @@ describe('Cast drafts and presentation switching', () => {
     startEnglishProtocol();
     answerQuestion('My first honest answer');
 
-    expect(screen.getByText(/Query 02 \/ 10/i)).toBeInTheDocument();
+    expect(screen.getByText(/Question 02 \/ 10/i)).toBeInTheDocument();
 
     await waitFor(() => {
       const draft = JSON.parse(window.sessionStorage.getItem(CAST_DRAFT_KEY) || '{}');
@@ -302,7 +302,7 @@ describe('Cast drafts and presentation switching', () => {
 
     const modal = render(<CastClient variant="modal" />);
 
-    expect(screen.getByText(/Query 02 \/ 10/i)).toBeInTheDocument();
+    expect(screen.getByText(/Question 02 \/ 10/i)).toBeInTheDocument();
     expect(screen.getByRole('textbox')).toHaveValue('');
 
     const root = modal.container.querySelector('.cast-page');
@@ -326,7 +326,7 @@ describe('Cast drafts and presentation switching', () => {
     });
     fireEvent.keyDown(textarea, { key: 'Enter' });
 
-    expect(screen.getByText(/Query 02 \/ 10/i)).toBeInTheDocument();
+    expect(screen.getByText(/Question 02 \/ 10/i)).toBeInTheDocument();
 
     await waitFor(() => {
       const draft = JSON.parse(window.sessionStorage.getItem(CAST_DRAFT_KEY) || '{}');
@@ -411,7 +411,7 @@ describe('Cast analysis, result and email capture', () => {
       })
     );
 
-    expect(screen.getByText(/Protocol secured to your email/i)).toBeInTheDocument();
+    expect(screen.getByText(/Reading secured to your email/i)).toBeInTheDocument();
   });
 
   it('shows a retry path when the analysis fails', async () => {
@@ -430,7 +430,7 @@ describe('Cast analysis, result and email capture', () => {
     await flushPromises();
     await flushPromises();
 
-    expect(screen.getByText('Core unavailable.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Retry Analysis/i })).toBeEnabled();
+    expect(screen.getByText('The reading could not be completed. Please try again.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Try the reading again/i })).toBeEnabled();
   });
 });

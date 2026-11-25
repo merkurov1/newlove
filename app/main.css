@@ -1674,6 +1674,17 @@ body.absolution-modal-open { overflow: hidden; overscroll-behavior: none; }
   }
 }
 
+@media (max-height: 620px) {
+  .absolution-modal__header {
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+  }
+
+  .absolution-modal__body {
+    padding-top: 0.45rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .absolution-modal {
     transition: none;

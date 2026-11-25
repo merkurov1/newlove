@@ -112,14 +112,14 @@ export default function AddToHomePrompt({
           <button
             type="button"
             onClick={add}
-            className="min-h-[36px] rounded-full border border-amber-400/40 px-3 font-mono text-[9px] uppercase tracking-[.14em]"
+            className="min-h-[44px] min-w-[44px] rounded-full border border-amber-400/40 px-3 font-mono text-[9px] uppercase tracking-[.14em]"
           >
             Add
           </button>
           <button
             type="button"
             onClick={dismiss}
-            className="min-h-[36px] px-2 font-mono text-[9px] uppercase tracking-[.14em] opacity-55"
+            className="min-h-[44px] min-w-[44px] px-2 font-mono text-[9px] uppercase tracking-[.14em] opacity-55"
           >
             Not now
           </button>

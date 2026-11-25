@@ -326,7 +326,7 @@ export function useVigilController() {
       if (!userName) {
         setRateLimitMsg(
           identity.isTelegram
-            ? identity.error || 'Telegram identity is not available yet.'
+            ? identity.error || 'We could not confirm your Telegram name yet.'
             : 'Please sign in to participate.'
         );
         return;
@@ -403,7 +403,7 @@ export function useVigilController() {
 
         if (!response.ok) {
           throw new Error(
-            payload?.error || `Vigil claim failed (${response.status})`
+            payload?.error || 'The spark did not reach the heart.'
           );
         }
 
@@ -438,7 +438,7 @@ export function useVigilController() {
         console.error('Vigil ritual error:', error);
         hapticNotification('error');
         setRateLimitMsg(
-          'The spark could not be transmitted. Please try again.'
+          'The spark did not reach the heart. Please try again.'
         );
         setSpark(null);
         setIsLighting(false);

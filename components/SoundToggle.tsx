@@ -23,7 +23,7 @@ export default function SoundToggle({
       onClick={toggleAudio}
       aria-label={isPlaying ? 'Pause ambient audio' : 'Play ambient audio'}
       aria-pressed={isPlaying}
-      className={`flex items-center gap-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${className}`}
+      className={`flex min-h-[44px] items-center gap-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${className}`}
     >
       {isPlaying ? (
         <Volume2 size={14} className={`animate-pulse ${iconClassName}`} />

@@ -19,7 +19,7 @@ const HEART_IMAGE =
 
 const TRANSLATIONS = {
   en: {
-    title: 'ONLINE ABSOLUTION',
+    title: 'ABSOLUTION',
 
     subtitle:
       'Your digital burden is lifted. Lightness restored.',
@@ -346,7 +346,7 @@ export default function AbsolutionClient({
                   onChange={(e) =>
                     setSinKey(e.target.value)
                   }
-                  className="w-full rounded-xl border border-white/15 bg-white/5 p-3 text-xs uppercase tracking-wider text-stone-200 outline-none transition-colors focus:border-amber-400/60 focus:bg-white/10 sm:p-3.5"
+                  className="w-full rounded-xl border border-white/15 bg-white/5 p-3 text-xs uppercase tracking-wider text-stone-200 outline-none transition-colors focus:border-amber-400/60 focus:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 sm:p-3.5"
                 >
                   {Object.entries(t.sins).map(
                     ([key, value]) => (
@@ -379,17 +379,17 @@ export default function AbsolutionClient({
                   }
                   placeholder={t.placeholder}
                   maxLength={120}
-                  className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-xs uppercase tracking-wider text-stone-200 outline-none transition-colors placeholder:text-stone-600 focus:border-amber-400/60 focus:bg-white/10 sm:py-3.5"
+                  className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-xs uppercase tracking-wider text-stone-200 outline-none transition-colors placeholder:text-stone-400 focus:border-amber-400/60 focus:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 sm:py-3.5"
                 />
               </div>
 
               <p
                 data-testid="absolution-privacy"
-                className="text-[9px] leading-relaxed tracking-[0.06em] text-stone-500"
+                className="text-[9px] leading-relaxed tracking-[0.06em] text-stone-400"
               >
                 Private by design: your name and burden stay on this
-                certificate. Only the completed ritual is recorded in the
-                public Temple chronicle.
+                certificate. Only the ceremony itself joins the public
+                chronicle.
               </p>
 
               <button
@@ -438,15 +438,15 @@ export default function AbsolutionClient({
               className={`text-center font-mono text-[10px] uppercase tracking-[.14em] ${
                 traceStatus === 'saved'
                   ? 'text-emerald-300'
-                  : 'text-amber-300'
+                  : 'text-amber-200'
               }`}
               role="status"
             >
               {traceStatus === 'saved'
-                ? 'Ceremony complete · Temple trace recorded'
+                ? 'Ceremony complete · kept in the chronicle'
                 : traceStatus === 'failed'
-                  ? 'Ceremony complete · trace could not be recorded'
-                  : 'Ceremony complete · recording trace…'}
+                  ? 'Ceremony complete · held in this moment'
+                  : 'Ceremony complete'}
             </p>
 
             <div
@@ -472,7 +472,7 @@ export default function AbsolutionClient({
                   />
                 </div>
 
-                <p className="text-[8px] uppercase tracking-[0.28em] text-stone-500">
+                <p className="text-[8px] uppercase tracking-[0.28em] text-stone-600">
                   Digital Temple · Certificate
                 </p>
 
@@ -480,7 +480,7 @@ export default function AbsolutionClient({
                   {t.receipt.header}
                 </h2>
 
-                <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[8px] uppercase tracking-[0.12em] text-stone-500">
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[8px] uppercase tracking-[0.12em] text-stone-600">
                   <span>{new Date().toLocaleDateString()}</span>
                   <span aria-hidden="true">·</span>
                   <span>ID: {ticketId}</span>
@@ -495,7 +495,7 @@ export default function AbsolutionClient({
 
               <dl className="relative z-10 space-y-3">
                 <div>
-                  <dt className="text-[8px] uppercase tracking-[0.22em] text-stone-500">
+                  <dt className="text-[8px] uppercase tracking-[0.22em] text-stone-600">
                     Pilgrim
                   </dt>
                   <dd className="truncate font-serif text-sm font-semibold uppercase tracking-wide text-stone-900">
@@ -504,7 +504,7 @@ export default function AbsolutionClient({
                 </div>
 
                 <div>
-                  <dt className="text-[8px] uppercase tracking-[0.22em] text-stone-500">
+                  <dt className="text-[8px] uppercase tracking-[0.22em] text-stone-600">
                     Released burden
                   </dt>
                   <dd className="font-serif text-sm font-semibold uppercase leading-tight text-emerald-700">
@@ -514,15 +514,15 @@ export default function AbsolutionClient({
 
                 <div className="flex items-end justify-between gap-3">
                   <div>
-                    <dt className="text-[8px] uppercase tracking-[0.22em] text-stone-500">
+                    <dt className="text-[8px] uppercase tracking-[0.22em] text-stone-600">
                       Karma balance
                     </dt>
-                    <dd className="font-serif text-sm font-semibold uppercase tracking-wide text-[#9a7438]">
+                    <dd className="font-serif text-sm font-semibold uppercase tracking-wide text-[#83601f]">
                       ✨ Pure
                     </dd>
                   </div>
 
-                  <span className="font-mono text-[8px] uppercase tracking-[0.18em] text-stone-400">
+                  <span className="font-mono text-[8px] uppercase tracking-[0.18em] text-stone-600">
                     Absolved
                   </span>
                 </div>
@@ -550,7 +550,7 @@ export default function AbsolutionClient({
                 <Image
                   data-testid="absolution-stamp-image"
                   src={STAMP_IMAGE}
-                  alt="Absolution Stamp"
+                  alt=""
                   width={480}
                   height={480}
                   crossOrigin="anonymous"

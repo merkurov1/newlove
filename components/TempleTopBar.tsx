@@ -26,7 +26,7 @@ export default function TempleTopBar({
       <Link
         href={href}
         className="temple-topbar__back"
-        aria-label={`Return ${label.toLowerCase()}`}
+        aria-label={label}
       >
         <span aria-hidden="true">
           ←

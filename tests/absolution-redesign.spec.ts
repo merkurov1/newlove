@@ -246,6 +246,10 @@ test.describe('Absolution compact modal and certificate', () => {
   });
 
   test('Telegram BackButton closes the compact ritual', async ({ page }) => {
+    await page.route('https://telegram.org/js/telegram-web-app.js', (route) =>
+      route.abort()
+    );
+
     await page.addInitScript(() => {
       type BackHandler = () => void;
       type TestWindow = Window & {

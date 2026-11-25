@@ -414,10 +414,10 @@ describe('/vigil shared flame surface', () => {
       'data-identity-status',
       'telegram-init-pending'
     );
-    expect(status).toHaveTextContent(/waiting for telegram launch data/i);
+    expect(status).toHaveTextContent(/waiting for telegram to confirm your name/i);
     expect(screen.queryByRole('link', { name: /sign in/i })).toBeNull();
     expect(
-      screen.getByRole('button', { name: /waiting for telegram/i })
+      screen.getByRole('button', { name: /waiting for your telegram/i })
     ).toBeDisabled();
   });
 
