@@ -78,9 +78,10 @@ Tone: cold, clinical, precise and brutally honest.
 
 You analyze a psychological self-reflection protocol.
 
-There are nine diagnostic answers and one ritual threshold answer.
-ANSWER 10 IS NOT A DIAGNOSTIC VARIABLE.
+There are nine reflection answers and one ritual threshold answer.
+ANSWER 10 IS NOT AN ANALYTICAL VARIABLE.
 It only indicates that the subject agrees to see the result.
+This is an interpretive archetype, not a clinical or medical diagnosis.
 
 ${agencyRules}
 
@@ -531,7 +532,7 @@ export async function POST(
       buildSystemPrompt(lang);
 
     const userText = [
-      'DIAGNOSTIC ANSWERS:',
+      'REFLECTION ANSWERS:',
       ...diagnosticAnswers.map(
         (
           answer: string,
@@ -630,7 +631,11 @@ export async function POST(
       .insert({
         user_id: userId,
         email: userEmail,
-        answers: normalizedAnswers,
+        // Raw answers are sensitive. A signed-in protocol keeps them in this
+        // private, user-scoped record so the owner can retrieve the reading;
+        // an anonymous protocol stores only the result and keeps no raw
+        // answers after the analysis has been produced.
+        answers: userId ? normalizedAnswers : [],
         language: lang,
         analysis: normalized,
         archetype:

@@ -118,8 +118,18 @@ describe('POST /api/cast identity policy', () => {
 
     expect(response.status).toBe(200);
     expect(payload.recordId).toBe('cast-1');
-    expect(castRow()).toMatchObject({ user_id: null, email: null });
+    expect(payload).not.toHaveProperty('answers');
+    expect(castRow()).toMatchObject({
+      user_id: null,
+      email: null,
+      answers: [],
+    });
     expect(logRow()).toMatchObject({ user_id: null, author: 'Anna' });
+
+    const publicMessage = String(logRow().message ?? '');
+
+    expect(publicMessage).not.toContain('answer 1');
+    expect(publicMessage).not.toContain('answer 10');
   });
 
   it('records a verified Supabase identity with its UUID and email', async () => {
@@ -137,6 +147,7 @@ describe('POST /api/cast identity policy', () => {
     expect(castRow()).toMatchObject({
       user_id: USER_ID,
       email: 'pilgrim@example.com',
+      answers: Array.from({ length: 10 }, (_, index) => `answer ${index + 1}`),
     });
     expect(logRow()).toMatchObject({ user_id: USER_ID, author: 'Pilgrim' });
   });
@@ -145,7 +156,11 @@ describe('POST /api/cast identity policy', () => {
     const response = await POST(makeRequest());
 
     expect(response.status).toBe(200);
-    expect(castRow()).toMatchObject({ user_id: null, email: null });
+    expect(castRow()).toMatchObject({
+      user_id: null,
+      email: null,
+      answers: [],
+    });
     expect(logRow()).toMatchObject({ user_id: null, author: 'Visitor' });
   });
 });

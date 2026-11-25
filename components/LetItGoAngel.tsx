@@ -155,6 +155,14 @@ export default function LetItGoAngel() {
         }
       />
 
+      <p
+        id="letitgo-instruction"
+        data-testid="letitgo-instruction"
+        className="relative z-30 mx-auto mt-2 max-w-[22rem] rounded-full border border-white/35 bg-black/35 px-4 py-2 text-center text-[10px] uppercase tracking-[0.16em] text-white shadow-sm backdrop-blur-sm sm:text-[11px]"
+      >
+        Tap the angel to release a burden
+      </p>
+
       <div
         className="pointer-events-none absolute bottom-0 left-0 z-10 w-full bg-gradient-to-t from-[#4A7c23] to-[#68a434] shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)]"
         style={{ height: '22cqh' }}
@@ -170,13 +178,20 @@ export default function LetItGoAngel() {
         <button
           type="button"
           onClick={handleClick}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+
+            event.preventDefault();
+            handleClick();
+          }}
           disabled={showWithoutHeart}
+          aria-describedby="letitgo-instruction"
           aria-label={
             showWithoutHeart
               ? 'Angel is releasing the heart. Please wait.'
               : 'Release a burden with the angel'
           }
-          title={showWithoutHeart ? "Wait for the angel..." : "Click to let go"}
+          title={showWithoutHeart ? 'Wait for the angel…' : 'Tap to let go'}
           className={`relative flex items-center justify-center p-4 transition-transform duration-200 animate-fade-in ${
             showWithoutHeart
               ? 'cursor-default'

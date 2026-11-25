@@ -131,7 +131,7 @@ const QUESTIONS_EN = [
   'What is the **largest material asset** you acquired purely for **status confirmation**, not happiness?',
   'In complete silence: do you attempt to **structure** future steps or **deconstruct** past mistakes?',
   "Finish the sentence: 'I am a person who...'",
-  'Are you ready to see your true diagnosis?',
+  'Are you ready to see your archetype?',
 ];
 
 const QUESTIONS_RU = [
@@ -144,7 +144,7 @@ const QUESTIONS_RU = [
   'Какой **самый крупный материальный актив** вы приобрели исключительно для **утверждения своего статуса**, а не для счастья?',
   'В полной тишине: вы пытаетесь **структурировать** будущие шаги или **деконструировать** прошлые ошибки?',
   'Закончите фразу: «Я человек, который...»',
-  'Вы готовы узнать свой диагноз?',
+  'Вы готовы увидеть свой архетип?',
 ];
 
 const ARCHETYPES = [
@@ -883,6 +883,51 @@ export default function CastClient({
               }`}
             />
 
+            {/*
+             * Consent must precede participation. This disclosure is visible on
+             * the first screen, before a language is chosen or any question is
+             * answered, and names the AI processor, private storage and the
+             * public boundary in plain language.
+             */}
+            <section
+              data-testid="cast-disclosure"
+              aria-labelledby="cast-disclosure-title"
+              className={`mt-6 rounded-2xl border px-4 py-4 text-left ${
+                isModal
+                  ? 'border-stone-700/80 bg-stone-950/45'
+                  : 'border-stone-300/80 bg-white/60'
+              }`}
+            >
+              <h3
+                id="cast-disclosure-title"
+                className={`font-mono text-[9px] font-semibold uppercase tracking-[0.22em] ${ui.accentSoft}`}
+              >
+                Before you begin
+              </h3>
+
+              <p className={`mt-2 text-[11px] leading-relaxed ${ui.body}`}>
+                Your answers are sent to an external AI model (DeepSeek) to
+                generate this reflection. The result is stored privately in the
+                Temple Cast archive; signed-in protocols keep the answers in
+                your account, while anonymous protocols do not retain raw
+                answers. Adding an email links the result to you. Only the
+                archetype and a display name may appear in the public Temple
+                trace — never your answers. This is an interpretive ritual, not
+                a clinical diagnosis.
+              </p>
+
+              <p
+                lang="ru"
+                className={`mt-2 text-[10px] leading-relaxed ${ui.muted}`}
+              >
+                Ответы отправляются внешней ИИ-модели DeepSeek. Результат
+                хранится приватно; у авторизованных протоколов ответы остаются
+                в аккаунте, а анонимные протоколы не сохраняют сырые ответы. В
+                публичной хронике появляется только архетип и отображаемое имя,
+                но не ответы. Это не клинический диагноз.
+              </p>
+            </section>
+
             <div
               role="group"
               aria-label="Protocol language"
@@ -963,6 +1008,15 @@ export default function CastClient({
                   Cast Protocol
                 </span>
               </div>
+
+              <p
+                data-testid="cast-question-disclosure"
+                className={`mb-3 text-[9px] uppercase leading-relaxed tracking-[0.12em] ${ui.faint}`}
+              >
+                {language === 'ru'
+                  ? 'Ответы отправляются ИИ DeepSeek и хранятся приватно. Публично может появиться только архетип. Это не диагноз.'
+                  : 'Answers are sent to DeepSeek AI and stored privately. Only the archetype may appear publicly. This is not a diagnosis.'}
+              </p>
 
               <div
                 className={`mb-4 rounded-[28px] border p-4 text-base leading-relaxed sm:mb-6 sm:p-6 sm:text-lg md:p-8 md:text-xl ${ui.panel}`}
@@ -1126,6 +1180,14 @@ export default function CastClient({
                       : 'LOCAL'}
                   </span>
                 </div>
+
+                <p
+                  className={`mb-4 text-[10px] uppercase leading-relaxed tracking-[0.12em] ${ui.muted}`}
+                >
+                  {language === 'ru'
+                    ? 'Интерпретация архетипа · не клинический диагноз'
+                    : 'Archetype interpretation · not a clinical diagnosis'}
+                </p>
 
                 <pre
                   className={`whitespace-pre-wrap font-mono text-xs font-light leading-loose md:text-sm ${ui.analysis}`}

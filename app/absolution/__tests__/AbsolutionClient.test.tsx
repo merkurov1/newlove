@@ -84,8 +84,18 @@ describe('Absolution ceremony and trace status', () => {
     await flushTrace();
 
     expect(logTempleEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ event_type: 'ABSOLUTION' })
+      expect.objectContaining({
+        event_type: 'ABSOLUTION',
+        message: 'Completed the Absolution ritual.',
+        author: 'Anonymous',
+      })
     );
+
+    const logged = JSON.stringify(logTempleEvent.mock.calls[0][0]);
+
+    expect(logged).not.toContain('Doomscrolling');
+    expect(logged).not.toContain('confessed');
+    expect(logged).not.toContain('Pilgrim');
 
     await advanceCeremony();
 
@@ -222,6 +232,15 @@ describe('Absolution ceremony and trace status', () => {
     unmount();
 
     expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('explains that the certificate is private and only completion is public', () => {
+    render(<AbsolutionClient />);
+
+    const note = screen.getByTestId('absolution-privacy');
+
+    expect(note).toHaveTextContent(/name and burden stay on this certificate/i);
+    expect(note).toHaveTextContent(/Only the completed ritual is recorded/i);
   });
 
   it('keeps the canonical standalone page mode as the default', () => {

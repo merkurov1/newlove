@@ -526,15 +526,27 @@ test.describe('Temple Sanctuary', () => {
       .toBe('none');
   });
 
-  test('heart links to the real Vigil and shows the authoritative count', async ({
+  test('anonymous heart tap enters the Vigil without claiming a spark', async ({
     page,
   }) => {
+    let claimRequests = 0;
+
+    await page.route('**/api/vigil/claim*', async (route) => {
+      claimRequests += 1;
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'not authenticated' }),
+      });
+    });
+
     await page.setViewportSize({ width: 1440, height: 900 });
     await openTemple(page);
 
     const heartLink = page.getByRole('link', { name: /Light the Vigil heart/ });
 
     await expect(heartLink).toHaveAttribute('href', '/vigil');
+    await expect(heartLink).toHaveAttribute('data-heart-auth', 'anonymous');
     await expect(page.getByText('12 supporters')).toHaveAttribute(
       'data-supporter-count',
       '12'
@@ -542,6 +554,93 @@ test.describe('Temple Sanctuary', () => {
 
     await heartLink.click();
     await page.waitForURL('**/vigil');
+
+    expect(claimRequests).toBe(0);
+  });
+
+  test('authenticated hold sends a spark only after the server confirms it', async ({
+    page,
+  }) => {
+    let claimRequests = 0;
+
+    await page.addInitScript(() => {
+      (window as unknown as { Telegram?: unknown }).Telegram = {
+        WebApp: {
+          initData: 'audit-init-data',
+          platform: 'ios',
+          viewportHeight: window.innerHeight,
+          viewportStableHeight: window.innerHeight,
+          safeAreaInset: { top: 0, right: 0, bottom: 0, left: 0 },
+          contentSafeAreaInset: { top: 0, right: 0, bottom: 0, left: 0 },
+          ready() {},
+          expand() {},
+          onEvent() {},
+          offEvent() {},
+          setHeaderColor() {},
+          setBackgroundColor() {},
+          setBottomBarColor() {},
+          HapticFeedback: { impactOccurred() {} },
+          BackButton: {
+            show() {},
+            hide() {},
+            onClick() {},
+            offClick() {},
+          },
+        },
+      };
+    });
+
+    await page.route('**/api/temple/auth', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          displayName: 'Anna',
+          source: 'telegram',
+        }),
+      });
+    });
+
+    await page.route('**/api/vigil/claim*', async (route) => {
+      if (route.request().method() === 'POST') {
+        claimRequests += 1;
+
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            record: { id: 1 },
+            cooldown: { remainingMs: 86_400_000, remainingLabel: '24h' },
+          }),
+        });
+        return;
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ authenticated: true }),
+      });
+    });
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openTemple(page);
+
+    const heart = page.getByRole('link', { name: /Light the Vigil heart/ });
+
+    await expect(heart).toHaveAttribute('data-heart-auth', 'authenticated');
+
+    await heart.hover();
+    await page.mouse.down();
+    await page.waitForTimeout(750);
+    await page.mouse.up();
+
+    await expect(
+      page.getByTestId('temple-heart-spark-status')
+    ).toContainText(/Spark received/i);
+    expect(claimRequests).toBe(1);
+    await expect(page).toHaveURL(/\/temple$/);
   });
 
   test('four canonical ritual buttons keep their existing routes', async ({

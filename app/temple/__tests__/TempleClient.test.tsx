@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -67,9 +68,31 @@ jest.mock('@/hooks/useVigilSupporters', () => ({
   useVigilSupporters: jest.fn(),
 }));
 
+jest.mock('@/hooks/useTempleIdentity', () => ({
+  __esModule: true,
+  default: jest.fn(),
+}));
+
 const vigilSupporters = require('@/hooks/useVigilSupporters') as {
   useVigilSupporters: jest.Mock;
 };
+const identityModule = require('@/hooks/useTempleIdentity') as {
+  default: jest.Mock;
+};
+
+function templeIdentity(overrides: Record<string, unknown> = {}) {
+  return {
+    displayName: '',
+    source: null,
+    status: 'anonymous',
+    initDataPending: false,
+    isLoading: false,
+    error: null,
+    isTelegram: false,
+    refresh: jest.fn(async () => false),
+    ...overrides,
+  };
+}
 
 function vigilSnapshot(
   overrides: Record<string, unknown> = {}
@@ -140,6 +163,9 @@ jest.mock('@/lib/supabase-browser', () => ({
       },
     }),
     removeChannel: jest.fn(),
+    auth: {
+      getSession: async () => ({ data: { session: null } }),
+    },
   },
 }));
 
@@ -218,7 +244,7 @@ function feedPayload() {
   };
 }
 
-const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
+async function defaultFetchMock(input: RequestInfo | URL) {
   const url = String(input);
 
   if (url.includes('/api/temple_logs')) {
@@ -230,12 +256,16 @@ const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
   }
 
   return jsonResponse({});
-});
+}
+
+const fetchMock = jest.fn(defaultFetchMock);
 
 beforeEach(() => {
   vigilSupporters.useVigilSupporters.mockReturnValue(vigilSnapshot());
+  identityModule.default.mockReturnValue(templeIdentity());
   useIsTelegramMock.mockReturnValue(false);
-  fetchMock.mockClear();
+  fetchMock.mockReset();
+  fetchMock.mockImplementation(defaultFetchMock);
   checkoutClient.createTributeCheckout.mockClear();
   checkoutClient.openSecureCheckout.mockClear();
   global.fetch = fetchMock as unknown as typeof fetch;
@@ -378,6 +408,132 @@ describe('Temple home composition', () => {
     expect(
       screen.getByRole('link', { name: /Light the Vigil heart/ })
     ).toHaveAttribute('href', '/vigil');
+  });
+
+  it('lets an anonymous visitor tap the heart without sending a spark', () => {
+    render(<TempleClient />);
+
+    const heart = screen.getByRole('link', { name: /Light the Vigil heart/ });
+
+    expect(heart).toHaveAttribute('data-heart-auth', 'anonymous');
+    expect(
+      screen.getByText(/Tap or hold the heart · Enter the Vigil/)
+    ).toBeInTheDocument();
+
+    fireEvent.click(heart);
+
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).includes('/api/vigil/claim')
+      )
+    ).toBe(false);
+  });
+
+  it('sends a spark only after a hold and after the server confirms it', async () => {
+    jest.useFakeTimers();
+
+    identityModule.default.mockReturnValue(
+      templeIdentity({
+        displayName: 'Anna',
+        source: 'supabase',
+        status: 'verified',
+      })
+    );
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/api/vigil/claim')) {
+        return jsonResponse({
+          ok: true,
+          record: { id: 1 },
+          cooldown: { remainingMs: 86_400_000, remainingLabel: '24h' },
+        });
+      }
+
+      return defaultFetchMock(input);
+    });
+
+    render(<TempleClient />);
+
+    const heart = screen.getByRole('link', { name: /Light the Vigil heart/ });
+
+    expect(heart).toHaveAttribute('data-heart-auth', 'authenticated');
+    expect(
+      screen.getByText(/Hold to send a spark · Tap to enter the Vigil/)
+    ).toBeInTheDocument();
+
+    fireEvent.pointerDown(heart, { button: 0 });
+
+    await act(async () => {
+      jest.advanceTimersByTime(700);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/vigil/claim',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(
+      screen.getByTestId('temple-heart-spark-status')
+    ).toHaveTextContent(/Spark received/i);
+
+    // The visual success state is not set before the POST resolves.
+    expect(
+      screen.queryByText(/Sending your spark/i)
+    ).not.toBeInTheDocument();
+
+    jest.useRealTimers();
+  });
+
+  it('shows no success when the server rejects the held spark', async () => {
+    jest.useFakeTimers();
+
+    identityModule.default.mockReturnValue(
+      templeIdentity({
+        displayName: 'Anna',
+        source: 'supabase',
+        status: 'verified',
+      })
+    );
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/api/vigil/claim')) {
+        return jsonResponse(
+          { error: 'The spark could not be transmitted.' },
+          503
+        );
+      }
+
+      return defaultFetchMock(input);
+    });
+
+    render(<TempleClient />);
+
+    fireEvent.pointerDown(
+      screen.getByRole('link', { name: /Light the Vigil heart/ }),
+      { button: 0 }
+    );
+
+    await act(async () => {
+      jest.advanceTimersByTime(700);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByTestId('temple-heart-spark-status')
+    ).toHaveTextContent(/could not be sent/i);
+    expect(
+      screen.queryByText(/Spark received/i)
+    ).not.toBeInTheDocument();
+
+    jest.useRealTimers();
   });
 
   it('adds a quiet tap-or-hold cue without replacing the Vigil caption', () => {
