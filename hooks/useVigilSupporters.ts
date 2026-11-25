@@ -17,6 +17,7 @@ export type VigilSupporterSnapshot = VigilPublicState & {
 const EMPTY_STATE: VigilSupporterSnapshot = {
   supporterCount: 0,
   lastLitAt: null,
+  flameExpiresAt: null,
   flameLit: false,
   windowStartedAt: '',
   updatedAt: '',
@@ -105,10 +106,19 @@ export function useVigilSupporters(): VigilSupporterSnapshot & {
       void refresh();
     }, REFRESH_INTERVAL_MS);
 
+    // Reconcile immediately when a backgrounded tab becomes visible again;
+    // the client may have missed a Realtime spark while it was asleep.
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
       mountedRef.current = false;
       requestIdRef.current += 1;
       window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [refresh]);
 

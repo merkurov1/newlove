@@ -66,6 +66,9 @@ describe('authoritative Vigil public state', () => {
     expect(state).toMatchObject({
       supporterCount: 14,
       lastLitAt,
+      flameExpiresAt: new Date(
+        new Date(lastLitAt).getTime() + 86_400_000
+      ).toISOString(),
       flameLit: true,
       windowStartedAt: new Date(NOW - 86_400_000).toISOString(),
       updatedAt: new Date(NOW).toISOString(),
@@ -96,6 +99,19 @@ describe('authoritative Vigil public state', () => {
     const state = await getVigilPublicState(admin as never, NOW);
 
     expect(state.supporterCount).toBe(2);
+    expect(state.flameExpiresAt).toBe(
+      new Date(NOW - 60 * 60 * 1000).toISOString()
+    );
+    expect(state.flameLit).toBe(false);
+  });
+
+  it('reports no expiry when the heart has never been lit', async () => {
+    const admin = createAdmin({ count: 0, lastLitAt: null });
+
+    const state = await getVigilPublicState(admin as never, NOW);
+
+    expect(state.lastLitAt).toBeNull();
+    expect(state.flameExpiresAt).toBeNull();
     expect(state.flameLit).toBe(false);
   });
 

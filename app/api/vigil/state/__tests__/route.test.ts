@@ -19,6 +19,7 @@ const { GET } = require('../route') as {
 const state = {
   supporterCount: 9,
   lastLitAt: '2026-11-24T12:00:00.000Z',
+  flameExpiresAt: '2026-11-25T12:00:00.000Z',
   flameLit: true,
   windowStartedAt: '2026-11-23T12:00:00.000Z',
   updatedAt: '2026-11-24T12:00:01.000Z',
@@ -43,6 +44,7 @@ describe('GET /api/vigil/state', () => {
       [
         'supporterCount',
         'lastLitAt',
+        'flameExpiresAt',
         'flameLit',
         'windowStartedAt',
         'updatedAt',

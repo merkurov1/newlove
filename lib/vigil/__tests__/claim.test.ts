@@ -125,6 +125,34 @@ function createAdmin(initialClaims: Row[] = []) {
         conditions.push((row) => row[column] !== value);
         return builder;
       },
+      or(expression: string) {
+        const clauses = expression.split(',').map((clause) => {
+          const [column, operator, ...rest] = clause.split('.');
+          return { column, operator, value: rest.join('.') };
+        });
+
+        conditions.push((row) =>
+          clauses.some(({ column, operator, value: rawValue }) => {
+            const value = rawValue.replace(/^"|"$/g, '');
+
+            if (operator === 'is' && value === 'null') {
+              return row[column] === null || row[column] === undefined;
+            }
+
+            if (operator === 'lt') {
+              return String(row[column] ?? '') < value;
+            }
+
+            if (operator === 'lte') {
+              return String(row[column] ?? '') <= value;
+            }
+
+            return false;
+          })
+        );
+
+        return builder;
+      },
       maybeSingle() {
         return terminal();
       },
@@ -212,6 +240,12 @@ describe('Vigil spark claim', () => {
     expect(result.allowed).toBe(true);
     expect(admin.claims.get(telegram.key)?.display_name).toBe('Anna');
     expect(admin.hearts.get(1)?.owner_name).toBe('Anna');
+
+    const lastLitAt = Date.parse(
+      String(admin.hearts.get(1)?.last_lit_at)
+    );
+
+    expect(Date.now() - lastLitAt).toBeLessThan(5_000);
     expect(admin.logs).toHaveLength(1);
     expect(admin.logs[0]).toMatchObject({
       event_type: 'VIGIL_SPARK',
@@ -265,6 +299,24 @@ describe('Vigil spark claim', () => {
     ]);
 
     expect([first.allowed, second.allowed].sort()).toEqual([false, true]);
+    expect(admin.logs).toHaveLength(1);
+  });
+
+  it('never pulls the shared flame expiry backwards behind a newer spark', async () => {
+    const newerSpark = new Date(Date.now() + 5_000).toISOString();
+    const admin = createAdmin();
+
+    admin.hearts.set(1, {
+      id: 1,
+      owner_name: 'Newer',
+      owner_id: null,
+      last_lit_at: newerSpark,
+    });
+
+    const result = await claimVigilSpark(admin as any, telegram, 1);
+
+    expect(result.allowed).toBe(true);
+    expect(admin.hearts.get(1)?.last_lit_at).toBe(newerSpark);
     expect(admin.logs).toHaveLength(1);
   });
 

@@ -34,8 +34,7 @@ import RitualLink from '@/components/temple/RitualLink';
 import { consumeLeftWithoutTrace } from '@/lib/temple/visitTrace';
 import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
 import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
-import { globalFlameRemainingMs } from '@/lib/vigil/flame';
-import { vigilHeartVisuals } from '@/lib/vigil/supporters';
+import { resolveVigilFlame } from '@/lib/vigil/flame';
 import { useVigilSupporters } from '@/hooks/useVigilSupporters';
 import { useTempleFeed } from '@/hooks/useTempleFeed';
 import {
@@ -266,6 +265,8 @@ export default function TempleClient({
   const {
     supporterCount,
     lastLitAt,
+    flameExpiresAt,
+    flameLit: serverFlameLit,
     status: vigilStatus,
     error: vigilError,
   } = useVigilSupporters();
@@ -407,9 +408,18 @@ export default function TempleClient({
   }, [isChroniclesOpen, refreshFeed]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setVigilNow(Date.now()), 30_000);
+    const tick = () => setVigilNow(Date.now());
+    const timer = window.setInterval(tick, 30_000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
 
-    return () => window.clearInterval(timer);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   useEffect(() => {
@@ -428,19 +438,40 @@ export default function TempleClient({
     return () => window.clearTimeout(timer);
   }, [pathname]);
 
-  const vigilRemaining = globalFlameRemainingMs(lastLitAt, vigilNow);
   const hasVigilState =
     vigilStatus === 'ready' || vigilStatus === 'stale';
+  // One authoritative snapshot + one shared calculation. Client time only
+  // interpolates between the server timestamps, so the heart fades to exactly
+  // zero at the shared expiry even if a refresh is briefly delayed.
+  const heartVisuals = useMemo(
+    () =>
+      resolveVigilFlame(
+        {
+          flameLit: hasVigilState ? serverFlameLit : false,
+          lastLitAt,
+          flameExpiresAt,
+          supporterCount: hasVigilState ? supporterCount : 0,
+        },
+        vigilNow
+      ),
+    [
+      flameExpiresAt,
+      hasVigilState,
+      lastLitAt,
+      serverFlameLit,
+      supporterCount,
+      vigilNow,
+    ]
+  );
+  const flameActive = hasVigilState && heartVisuals.active;
+  const vigilRemaining = heartVisuals.remainingMs;
   const vigilLabel = !hasVigilState
     ? vigilStatus === 'error'
       ? 'Vigil state unavailable'
       : 'Reading the Vigil…'
-    : vigilRemaining > 0
+    : flameActive
       ? `${Math.floor(vigilRemaining / 3_600_000)}h ${Math.floor((vigilRemaining % 3_600_000) / 60_000)}m`
       : 'Flame extinguished';
-  const heartVisuals = vigilHeartVisuals(
-    hasVigilState ? supporterCount : 0
-  );
   const supporterLabel = hasVigilState
     ? `${supporterCount} ${
         supporterCount === 1 ? 'supporter' : 'supporters'
@@ -609,13 +640,35 @@ export default function TempleClient({
                   <span
                     aria-hidden="true"
                     className={styles.heartRedGlow}
+                    data-testid="temple-heart-glow"
                     style={{
-                      opacity: hasVigilState
-                        ? Math.min(0.9, 0.45 + heartVisuals.glowOpacity * 0.45)
-                        : 0.45,
+                      opacity: flameActive
+                        ? Math.min(
+                            0.95,
+                            0.2 + heartVisuals.glowOpacity * 0.75
+                          )
+                        : 0,
+                      filter:
+                        flameActive && heartVisuals.glowBlurPx > 0
+                          ? `blur(${heartVisuals.glowBlurPx}px)`
+                          : undefined,
                     }}
                   />
-                  <span className={styles.heartPulse} data-testid="temple-heart-pulse">
+                  <span
+                    className={styles.heartPulse}
+                    data-testid="temple-heart-pulse"
+                    data-vigil-flame-state={
+                      hasVigilState
+                        ? flameActive
+                          ? 'lit'
+                          : 'extinguished'
+                        : 'unknown'
+                    }
+                    data-vigil-intensity={heartVisuals.intensity.toFixed(4)}
+                    data-vigil-remaining-ms={Math.floor(
+                      heartVisuals.remainingMs
+                    )}
+                  >
                     <Image
                       data-testid="temple-heart"
                       src={TEMPLE_HOME_ASSETS.heart}
@@ -624,6 +677,14 @@ export default function TempleClient({
                       height={672}
                       sizes="(min-width: 1024px) 13.5rem, 40vw"
                       className={styles.heartImage}
+                      style={{
+                        filter: `brightness(${heartVisuals.brightness.toFixed(
+                          3
+                        )}) saturate(${heartVisuals.saturate.toFixed(
+                          3
+                        )}) grayscale(${heartVisuals.grayscale.toFixed(3)})`,
+                        transform: `scale(${heartVisuals.scale.toFixed(3)})`,
+                      }}
                       priority
                     />
                   </span>

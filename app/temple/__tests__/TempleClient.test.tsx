@@ -8,6 +8,7 @@ import {
 } from '@testing-library/react';
 import TempleClient from '../TempleClient';
 import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
+import { resolveVigilFlame } from '@/lib/vigil/flame';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/temple',
@@ -60,17 +61,35 @@ jest.mock('@/components/useIsTelegram', () => ({
 }));
 
 jest.mock('@/hooks/useVigilSupporters', () => ({
-  useVigilSupporters: () => ({
+  useVigilSupporters: jest.fn(),
+}));
+
+const vigilSupporters = require('@/hooks/useVigilSupporters') as {
+  useVigilSupporters: jest.Mock;
+};
+
+function vigilSnapshot(
+  overrides: Record<string, unknown> = {}
+) {
+  const lastLitAt = new Date().toISOString();
+
+  return {
     supporterCount: 12,
-    lastLitAt: new Date().toISOString(),
+    lastLitAt,
+    flameExpiresAt: new Date(
+      Date.parse(lastLitAt) + 24 * 60 * 60 * 1000
+    ).toISOString(),
     flameLit: true,
-    windowStartedAt: new Date().toISOString(),
+    windowStartedAt: new Date(
+      Date.now() - 24 * 60 * 60 * 1000
+    ).toISOString(),
     updatedAt: new Date().toISOString(),
     status: 'ready',
     error: null,
     refresh: jest.fn(async () => undefined),
-  }),
-}));
+    ...overrides,
+  };
+}
 
 jest.mock('@/lib/tributes/analytics', () => ({
   trackTributeSupportView: jest.fn(),
@@ -211,6 +230,7 @@ const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
 });
 
 beforeEach(() => {
+  vigilSupporters.useVigilSupporters.mockReturnValue(vigilSnapshot());
   fetchMock.mockClear();
   checkoutClient.createTributeCheckout.mockClear();
   checkoutClient.openSecureCheckout.mockClear();
@@ -260,6 +280,52 @@ describe('Temple home composition', () => {
       'data-supporter-count',
       '12'
     );
+  });
+
+  it('renders the same shared flame intensity as the shared calculation', () => {
+    const state = vigilSnapshot({ supporterCount: 4 });
+
+    vigilSupporters.useVigilSupporters.mockReturnValue(state);
+
+    render(<TempleClient />);
+
+    const pulse = screen.getByTestId('temple-heart-pulse');
+    const rendered = Number(pulse.getAttribute('data-vigil-intensity'));
+    const expected = resolveVigilFlame(state, Date.now());
+
+    expect(pulse).toHaveAttribute('data-vigil-flame-state', 'lit');
+    expect(rendered).toBeCloseTo(expected.intensity, 3);
+    expect(rendered).toBeGreaterThan(0);
+    expect(rendered).toBeLessThanOrEqual(1);
+  });
+
+  it('renders the heart fully off at the shared 24h expiry', () => {
+    const lastLitAt = new Date(
+      Date.now() - 25 * 60 * 60 * 1000
+    ).toISOString();
+
+    vigilSupporters.useVigilSupporters.mockReturnValue(
+      vigilSnapshot({
+        supporterCount: 99,
+        lastLitAt,
+        flameExpiresAt: new Date(
+          Date.parse(lastLitAt) + 24 * 60 * 60 * 1000
+        ).toISOString(),
+        flameLit: true,
+      })
+    );
+
+    render(<TempleClient />);
+
+    expect(screen.getByTestId('temple-heart-pulse')).toHaveAttribute(
+      'data-vigil-flame-state',
+      'extinguished'
+    );
+    expect(screen.getByTestId('temple-heart-pulse')).toHaveAttribute(
+      'data-vigil-intensity',
+      '0.0000'
+    );
+    expect(screen.getByText('Flame extinguished')).toBeInTheDocument();
   });
 
   it('keeps the triptych heart linked to the Vigil', () => {
