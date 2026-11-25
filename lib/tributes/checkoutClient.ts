@@ -4,6 +4,8 @@ export type TributeCheckoutRequest = {
   amount: number;
   donorName?: string;
   message?: string;
+  /** Explicit consent to show the donor name in the public chronicle. */
+  publicIdentity?: boolean;
   /** The current query string, used only for opaque Pierrot attribution. */
   search?: string | null;
 };
@@ -60,6 +62,7 @@ export async function createTributeCheckout({
   amount,
   donorName = 'Pilgrim',
   message = 'Fuel for the Temple',
+  publicIdentity = false,
   search = null,
 }: TributeCheckoutRequest): Promise<TributeCheckout> {
   const attribution = readPierrotTributeAttribution(search);
@@ -75,6 +78,7 @@ export async function createTributeCheckout({
       currency: 'usd',
       donor_name: donorName,
       message,
+      public_identity: publicIdentity === true,
       ...(attribution ? { pierrotAttribution: attribution } : {}),
     }),
   });

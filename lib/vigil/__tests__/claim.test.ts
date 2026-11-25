@@ -237,7 +237,13 @@ describe('Vigil spark claim', () => {
   it('allows the first spark, records the heart once and writes the public log', async () => {
     const admin = createAdmin();
 
-    const result = await claimVigilSpark(admin as any, telegram, 1);
+    const result = await claimVigilSpark(
+      admin as any,
+      telegram,
+      1,
+      null,
+      true
+    );
 
     expect(result.allowed).toBe(true);
     expect(admin.claims.get(telegram.key)?.display_name).toBe('Anna');
@@ -252,6 +258,21 @@ describe('Vigil spark claim', () => {
     expect(admin.logs[0]).toMatchObject({
       event_type: 'VIGIL_SPARK',
       author: 'Anna',
+      is_public_identity: true,
+    });
+  });
+
+  it('keeps a spark anonymous unless public identity is explicitly chosen', async () => {
+    const admin = createAdmin();
+
+    const result = await claimVigilSpark(admin as any, telegram, 1);
+
+    expect(result.allowed).toBe(true);
+    expect(admin.logs).toHaveLength(1);
+    expect(admin.logs[0]).toMatchObject({
+      event_type: 'VIGIL_SPARK',
+      author: 'Anonymous',
+      is_public_identity: false,
     });
   });
 

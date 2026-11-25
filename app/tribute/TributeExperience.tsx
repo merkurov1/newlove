@@ -392,12 +392,16 @@ export default function TributeExperience({
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'temple_log',
+          table: 'temple_chronicle_signals',
           filter: 'event_type=eq.TRIBUTE',
         },
         (payload) => {
           const newRow = payload.new as
-            | { event_type?: unknown; author?: unknown }
+            | {
+                event_type?: unknown;
+                public_name?: unknown;
+                author?: unknown;
+              }
             | null;
 
           if (!isTributeTempleLogEvent(newRow)) return;

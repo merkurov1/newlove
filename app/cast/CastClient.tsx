@@ -22,6 +22,7 @@ import {
   readRitualDraft,
   writeRitualDraft,
 } from '@/lib/temple/ritualDraft';
+import { readPublicIdentityPreference } from '@/lib/temple/publicIdentity';
 
 const CAST_DRAFT_KEY = 'cast:draft:v1';
 
@@ -627,6 +628,7 @@ export default function CastClient({
           body: JSON.stringify({
             answers: finalAnswers,
             language,
+            show_identity: readPublicIdentityPreference(),
           }),
         }
       );

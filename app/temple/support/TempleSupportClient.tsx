@@ -18,6 +18,7 @@ import {
   createTributeCheckout,
   openSecureCheckout,
 } from '@/lib/tributes/checkoutClient';
+import { readPublicIdentityPreference } from '@/lib/temple/publicIdentity';
 import styles from '../temple.module.css';
 
 const PRESETS = [5, 20, 100] as const;
@@ -65,6 +66,7 @@ export default function TempleSupportClient() {
           amount,
           donorName,
           message: 'Fuel for the Temple',
+          publicIdentity: readPublicIdentityPreference(),
           search:
             typeof window !== 'undefined'
               ? window.location.search

@@ -138,10 +138,19 @@ export async function POST(req: Request) {
         ? calmCompletionMessage(durationSeconds)
         : String(body.message || '')
 
+    // Identity is opt-in. A display name supplied by the browser or resolved
+    // from a verified session is hidden unless the visitor explicitly chose to
+    // be named for this ritual. Absolution is anonymous in every case.
+    const showIdentity =
+      (body.show_identity === true || body.public_identity === true) &&
+      eventType !== 'ABSOLUTION'
+
     // Write-side allowlist: Absolution is anonymous completion-only and Cast
     // never journals raw answers. Read-side redaction in lib/temple/feed.ts
     // protects legacy rows as well.
-    const authorName = publicTempleTraceAuthor(eventType, rawAuthor)
+    const authorName = showIdentity
+      ? publicTempleTraceAuthor(eventType, rawAuthor)
+      : 'Anonymous'
     const publicMessage = publicTempleTraceMessage(eventType, rawMessage)
     const publicUserId = publicTempleTraceUserId(eventType, userId)
 
@@ -151,6 +160,7 @@ export async function POST(req: Request) {
       event_type: eventType,
       message: publicMessage,
       audio_url: body.audio_url || null,
+      is_public_identity: showIdentity,
       created_at: new Date().toISOString(),
     }).select().single()
 

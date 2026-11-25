@@ -181,6 +181,16 @@ function jsonResponse(payload: unknown, status = 200): Response {
   } as unknown as Response;
 }
 
+const TRACE_DESCRIPTIONS: Record<string, string> = {
+  ASH: 'Released a burden and let it go.',
+  VIGIL_SPARK: 'Added a spark to the shared Vigil.',
+  CAST: 'Completed the Cast ritual.',
+  ABSOLUTION: 'Completed the Absolution ritual.',
+  TRIBUTE: 'Offered a tribute to the Temple.',
+  MEDITATION: 'Completed a Calm meditation.',
+  WHISPER: 'Left a whisper in the Temple.',
+};
+
 function trace(index: number, eventType: string) {
   const createdAt = new Date(
     Date.parse('2026-11-24T12:00:00.000Z') - index * 60_000
@@ -191,10 +201,52 @@ function trace(index: number, eventType: string) {
     event_type: eventType.toLowerCase(),
     canonical_type: eventType,
     category: 'ritual',
-    author: index === 0 ? 'Alice' : 'Pilgrim',
-    message: `${eventType} trace ${index}`,
+    author: index === 0 ? 'Alice' : 'Anonymous',
+    description: TRACE_DESCRIPTIONS[eventType],
+    public_identity: index === 0,
+    message: TRACE_DESCRIPTIONS[eventType],
     created_at: createdAt,
     audio_url: null,
+  };
+}
+
+function chroniclesPayload() {
+  return {
+    ok: true,
+    events: [
+      {
+        id: 'chronicle-0',
+        ritual: 'ASH',
+        ritualLabel: 'Let It Go',
+        description: 'Released a burden and let it go.',
+        occurredAt: '2026-11-24T12:00:00.000Z',
+        visitor: 'Alice',
+      },
+      {
+        id: 'chronicle-1',
+        ritual: 'VIGIL_SPARK',
+        ritualLabel: 'Vigil',
+        description: 'Added a spark to the shared Vigil.',
+        occurredAt: '2026-11-23T11:00:00.000Z',
+        visitor: null,
+      },
+    ],
+    pageInfo: {
+      nextCursor: 'next-page',
+      hasMore: true,
+      limit: 20,
+    },
+    aggregates: {
+      completedRituals: 42,
+      namedAuthors: 3,
+      vigilSparks: 9,
+      byType: { ASH: 7 },
+      windowDays: 30,
+      windowStart: '2026-10-25T12:00:00.000Z',
+      windowEnd: '2026-11-24T12:00:00.000Z',
+      truncated: false,
+    },
+    error: null,
   };
 }
 
@@ -246,6 +298,10 @@ function feedPayload() {
 
 async function defaultFetchMock(input: RequestInfo | URL) {
   const url = String(input);
+
+  if (url.includes('/api/temple_logs/chronicles')) {
+    return jsonResponse(chroniclesPayload());
+  }
 
   if (url.includes('/api/temple_logs')) {
     return jsonResponse(feedPayload());
@@ -685,7 +741,9 @@ describe('Temple home composition', () => {
     const traces = screen.getByRole('region', { name: 'Traces' });
 
     await waitFor(() => {
-      expect(within(traces).getByText('ASH trace 0')).toBeInTheDocument();
+      expect(
+        within(traces).getByText('Released a burden and let it go.')
+      ).toBeInTheDocument();
     });
 
     expect(within(traces).getAllByRole('listitem')).toHaveLength(7);
@@ -695,11 +753,11 @@ describe('Temple home composition', () => {
 
     expect(firstRow).toHaveAttribute(
       'title',
-      'Let It Go — Alice — ASH trace 0'
+      'Let It Go — Released a burden and let it go. — Alice'
     );
     expect(firstRow).toHaveAttribute(
       'aria-label',
-      'Let It Go — Alice — ASH trace 0'
+      'Let It Go — Released a burden and let it go. — Alice'
     );
   });
 
@@ -720,33 +778,36 @@ describe('Temple home composition', () => {
 
     const traces = screen.getByRole('region', { name: 'Traces' });
 
-    expect(within(traces).getByText('ASH trace 0')).toBeInTheDocument();
+    expect(
+      within(traces).getByText('Released a burden and let it go.')
+    ).toBeInTheDocument();
     expect(within(traces).getAllByRole('listitem')).toHaveLength(7);
   });
 
-  it('keeps Chronicles available with the full-window definitions', async () => {
+  it('renders Chronicles as a readable public timeline without cache details', async () => {
     render(<TempleClient />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Chronicles' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Chronicles' });
 
-    expect(within(dialog).getByText('Named Authors')).toBeInTheDocument();
-    expect(within(dialog).getByText('Completed Rituals')).toBeInTheDocument();
-    expect(within(dialog).getByText('Vigil Sparks')).toBeInTheDocument();
+    expect(within(dialog).getByText('Named pilgrims')).toBeInTheDocument();
+    expect(within(dialog).getByText('Rituals completed')).toBeInTheDocument();
+    expect(within(dialog).getByText('Vigil sparks')).toBeInTheDocument();
     await waitFor(() => {
       expect(within(dialog).getByText('42')).toBeInTheDocument();
     });
     expect(within(dialog).getByText('9')).toBeInTheDocument();
     expect(
-      within(dialog).getByText(/not verified unique people/i)
+      within(dialog).getByText(/Only visitors who chose to be named/i)
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByText(/11 entry\/navigation/i)
+      within(dialog).getByText('Released a burden and let it go.')
     ).toBeInTheDocument();
-    expect(
-      within(dialog).getByText(/Last 30 days · all eligible ritual events/i)
-    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/Alice/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/cached for/i)).toBeNull();
+    expect(within(dialog).queryByText(/entry\/navigation/i)).toBeNull();
+    expect(within(dialog).queryByText(/cached/i)).toBeNull();
   });
 
   it('opens Chronicles from the Traces heading while Refresh remains available', async () => {

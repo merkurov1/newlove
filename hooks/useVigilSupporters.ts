@@ -129,7 +129,11 @@ export function useVigilSupporters(): VigilSupporterSnapshot & {
       )
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'temple_log' },
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'temple_chronicle_signals',
+        },
         (payload) => {
           const eventType = String(
             (payload?.new as { event_type?: unknown } | null)?.event_type || ''

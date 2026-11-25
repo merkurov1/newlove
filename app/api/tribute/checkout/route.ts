@@ -123,6 +123,7 @@ export async function POST(req: Request) {
           type: 'tribute_v1',
           donor_name: donorName,
           message,
+          public_identity: body?.public_identity === true ? 'true' : 'false',
           ...(pierrotAttribution
             ? { pierrotAttribution }
             : {}),

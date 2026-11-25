@@ -24,7 +24,6 @@ import {
   X,
   Users,
   Activity,
-  Clock,
   Heart,
   Send,
 } from 'lucide-react';
@@ -37,6 +36,8 @@ import { useTelegramBottomButton } from '@/components/telegram/useTelegramBottom
 import AddToHomePrompt from '@/components/temple/AddToHomePrompt';
 import SharedVigil from '@/components/temple/SharedVigil';
 import RitualLink from '@/components/temple/RitualLink';
+import TempleChronicles from '@/components/temple/TempleChronicles';
+import { readPublicIdentityPreference } from '@/lib/temple/publicIdentity';
 import { consumeLeftWithoutTrace } from '@/lib/temple/visitTrace';
 import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
 import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
@@ -335,7 +336,6 @@ export default function TempleClient({
   } = useTempleFeed(initialFeed);
 
   const [vigilNow, setVigilNow] = useState(() => Date.now());
-  const [sanctuaryHour, setSanctuaryHour] = useState(() => new Date().getHours());
   const [leftWithoutTrace, setLeftWithoutTrace] = useState(false);
 
   const {
@@ -371,25 +371,24 @@ export default function TempleClient({
 
       const visuals = getEventVisuals(type);
 
-      let cleanContent = String(item.message ?? '');
-      let cleanAuthor = item.author || 'Anonymous';
-
-      // Defense in depth for any cached or legacy payload that bypassed the
-      // server redaction: Absolution never exposes confession text, the
-      // selected burden or the pilgrim's identity in the public feed.
-      if (type === 'ABSOLUTION') {
-        cleanContent = 'Completed the Absolution ritual.';
-        cleanAuthor = 'Anonymous';
-      }
+      // The public API already projects an allowlisted description. Keep a
+      // local guard for older cached payloads: Absolution never exposes
+      // confession text or a name.
+      const isPublicIdentity =
+        item.public_identity === true && type !== 'ABSOLUTION';
+      const description =
+        type === 'ABSOLUTION'
+          ? 'Completed the Absolution ritual.'
+          : item.description || getTraceAction(type);
 
       return {
         id: item.id ?? `${item.created_at}-${index}`,
         type,
         label: visuals.label,
-        author: cleanAuthor,
+        author: isPublicIdentity ? item.author || '' : '',
         time: formatTime(item.created_at),
         createdAt: item.created_at,
-        content: cleanContent,
+        content: description,
         audioUrl: item.audio_url || null,
         icon: visuals.icon,
         accent: visuals.accent,
@@ -397,33 +396,7 @@ export default function TempleClient({
     });
   }, [templeFeed]);
 
-  const stats = templeFeed?.stats ?? {
-    completedRituals: 0,
-    namedAuthors: 0,
-    vigilSparks: 0,
-    byType: {},
-    windowDays: 0,
-    windowStart: '',
-    windowEnd: '',
-    excluded: { infrastructure: null, incomplete: null },
-    truncated: false,
-  };
   const loaded = feedStatus !== 'loading';
-  const excludedNote = [
-    stats.excluded?.infrastructure !== null &&
-    stats.excluded?.infrastructure !== undefined
-      ? `${stats.excluded.infrastructure} entry/navigation`
-      : null,
-    stats.excluded?.incomplete !== null &&
-    stats.excluded?.incomplete !== undefined
-      ? `${stats.excluded.incomplete} incomplete (modal open/intensity)`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  const statsWindowLabel = stats.windowDays
-    ? `Last ${stats.windowDays} days · all eligible ritual events`
-    : 'Rolling window';
 
   useEffect(() => {
     if (typeof window !== 'undefined' && isTelegramApp) {
@@ -447,13 +420,6 @@ export default function TempleClient({
       }
     }
 
-    setSanctuaryHour(new Date().getHours());
-
-    const timer = setInterval(() => {
-      setSanctuaryHour(new Date().getHours());
-    }, 60000);
-
-    return () => clearInterval(timer);
   }, [isTelegramApp]);
 
   useEffect(() => {
@@ -597,6 +563,7 @@ export default function TempleClient({
           amount,
           donorName,
           message: 'Fuel for the Temple',
+          publicIdentity: readPublicIdentityPreference(),
           search:
             typeof window !== 'undefined'
               ? window.location.search
@@ -657,7 +624,10 @@ export default function TempleClient({
             ? { Authorization: `Bearer ${session.access_token}` }
             : {}),
         },
-        body: JSON.stringify({ id: 1 }),
+        body: JSON.stringify({
+          id: 1,
+          show_identity: readPublicIdentityPreference(),
+        }),
       });
 
       const payload = await response.json().catch(() => null);
@@ -1243,9 +1213,9 @@ export default function TempleClient({
                     className={styles.traceNotice}
                   >
                     {feedStatus === 'stale'
-                      ? 'Showing the last known good snapshot. '
+                      ? 'Showing the last traces received. '
                       : ''}
-                    {feedError}
+                    The chronicle will reconnect on its own.
                   </p>
                 )}
 
@@ -1267,10 +1237,13 @@ export default function TempleClient({
                   >
                     {posts.map(post => {
                       const IconComponent = post.icon || Radio;
-                      const action = getTraceAction(post.type);
-                      const fullText = `${post.label} — ${post.author} — ${
-                        post.content || action
-                      }`;
+                      const fullText = [
+                        post.label,
+                        post.content || getTraceAction(post.type),
+                        post.author || null,
+                      ]
+                        .filter(Boolean)
+                        .join(' — ');
 
                       return (
                         <li
@@ -1294,11 +1267,13 @@ export default function TempleClient({
 
                           <span className={styles.traceBody}>
                             <span className={styles.traceText}>
-                              {post.content || action}
+                              {post.content || getTraceAction(post.type)}
                             </span>
-                            <span className={styles.traceAuthor}>
-                              · {post.author}
-                            </span>
+                            {post.author && (
+                              <span className={styles.traceAuthor}>
+                                · {post.author}
+                              </span>
+                            )}
                           </span>
 
                           <time
@@ -1464,9 +1439,11 @@ export default function TempleClient({
                     <h3 id="temple-chronicles-title" className={styles.modalTitle}>
                       Chronicles
                     </h3>
-                    <p className={styles.supportStatus} style={{ textAlign: 'left' }}>
-                      {statsWindowLabel} · cached for{' '}
-                      {templeFeed?.meta.ttlSeconds ?? 60}s
+                    <p
+                      className={styles.supportStatus}
+                      style={{ textAlign: 'left' }}
+                    >
+                      A living memory of public rituals
                     </p>
                   </div>
 
@@ -1480,72 +1457,9 @@ export default function TempleClient({
                   </button>
                 </div>
 
-                {feedError && (
-                  <p role="status" className={styles.traceNotice}>
-                    {feedStatus === 'stale'
-                      ? 'Showing the last known good snapshot. '
-                      : ''}
-                    {feedError}
-                  </p>
-                )}
-
-                <div className={styles.statGrid}>
-                  <div className={styles.stat}>
-                    <Users size={18} aria-hidden="true" />
-                    <span className={styles.statValue}>
-                      {stats.namedAuthors}
-                    </span>
-                    <span className={styles.statLabel}>Named Authors</span>
-                    <span className={styles.statNote}>
-                      Distinct display names — not verified unique people
-                    </span>
-                  </div>
-
-                  <div className={styles.stat}>
-                    <Activity size={18} aria-hidden="true" />
-                    <span className={styles.statValue}>
-                      {stats.completedRituals}
-                    </span>
-                    <span className={styles.statLabel}>
-                      Completed Rituals
-                    </span>
-                    <span className={styles.statNote}>
-                      Eligible ritual events in the full window
-                    </span>
-                  </div>
-
-                  <div className={styles.stat}>
-                    <Flame size={18} className="text-amber-600" aria-hidden="true" />
-                    <span className={styles.statValue}>
-                      {stats.vigilSparks}
-                    </span>
-                    <span className={styles.statLabel}>Vigil Sparks</span>
-                    <span className={styles.statNote}>
-                      VIGIL and VIGIL_SPARK events in the same window
-                    </span>
-                  </div>
-
-                  <div className={styles.stat}>
-                    <Clock size={18} className="text-indigo-500" aria-hidden="true" />
-                    <span className={styles.statValue}>{sanctuaryHour}:00</span>
-                    <span className={styles.statLabel}>Sanctuary Hour</span>
-                    <span className={styles.statNote}>
-                      Current device time (local, not a dataset metric)
-                    </span>
-                  </div>
-                </div>
-
-                {(excludedNote || stats.truncated) && (
-                  <p className={styles.modalNote}>
-                    {excludedNote
-                      ? `Excluded from ritual counts: ${excludedNote}.`
-                      : ''}
-                    {excludedNote && stats.truncated ? ' ' : ''}
-                    {stats.truncated
-                      ? 'Aggregate row limit reached; some window counts may be incomplete.'
-                      : ''}
-                  </p>
-                )}
+                <TempleChronicles
+                  initialAggregates={templeFeed?.stats ?? null}
+                />
               </motion.div>
             </motion.div>
           )}

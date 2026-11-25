@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase-browser';
+import { readPublicIdentityPreference } from '@/lib/temple/publicIdentity';
 
 export type TempleEventType =
   | 'VIGIL' | 'VIGIL_SPARK' | 'ASH' | 'ABSOLUTION' | 'TRIBUTE'
@@ -38,6 +39,9 @@ export async function logTempleEvent({
         event_type,
         message,
         author: resolvedAuthor,
+        // Explicit local consent only. Without it the server stores an
+        // anonymous public trace even if a display name is available.
+        show_identity: readPublicIdentityPreference(),
         metadata: {
           client: 'web_app',
           timestamp: new Date().toISOString(),

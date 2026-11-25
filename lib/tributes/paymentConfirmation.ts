@@ -56,12 +56,14 @@ async function recordDonationAttribution(
  */
 async function recordTributeTempleSignal(
   supabase: SupabaseClient,
-  donorName: string
+  donorName: string,
+  publicIdentity: boolean
 ): Promise<void> {
   const { error } = await supabase.from('temple_log').insert({
-    author: donorName,
+    author: publicIdentity ? donorName : 'Anonymous',
     event_type: 'TRIBUTE',
-    message: `${donorName} offered light to the Temple`,
+    message: 'Offered light to the Temple',
+    is_public_identity: publicIdentity,
     created_at: new Date().toISOString(),
   });
 
@@ -101,6 +103,7 @@ export async function confirmTributeCheckoutSession(
       : 'Anonymous';
   const message =
     typeof metadata.message === 'string' ? metadata.message.slice(0, 500) : '';
+  const publicIdentity = metadata.public_identity === 'true';
 
   // The unique index on tributes.stripe_session_id is the idempotency source
   // of truth. Attribution is retried on duplicates so a transient analytics
@@ -139,7 +142,7 @@ export async function confirmTributeCheckoutSession(
     return { status: 'rejected', code: 'insert_failed', sessionId: session.id };
   }
 
-  await recordTributeTempleSignal(supabase, donorName);
+  await recordTributeTempleSignal(supabase, donorName, publicIdentity);
   await recordDonationAttribution(supabase, session);
 
   return { status: 'confirmed', sessionId: session.id };

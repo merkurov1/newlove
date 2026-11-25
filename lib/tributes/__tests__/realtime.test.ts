@@ -22,6 +22,21 @@ describe('Tribute realtime signal', () => {
       })
     ).toBe('Anna');
 
+    expect(
+      tributeSignalDonorName({
+        event_type: 'TRIBUTE',
+        public_name: '  Anna  ',
+      })
+    ).toBe('Anna');
+
+    expect(
+      tributeSignalDonorName({
+        event_type: 'TRIBUTE',
+        public_name: null,
+        author: 'Legacy private name',
+      })
+    ).toBe('Legacy private name');
+
     expect(tributeSignalDonorName({ author: '   ' })).toBe('PILGRIM');
     expect(tributeSignalDonorName(null)).toBe('PILGRIM');
   });

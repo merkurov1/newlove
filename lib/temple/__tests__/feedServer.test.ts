@@ -127,7 +127,8 @@ function row(
   id: string,
   eventType: string,
   createdAt: string,
-  author = 'Pilgrim'
+  author = 'Pilgrim',
+  isPublicIdentity = false
 ): TempleLogRow {
   return {
     id,
@@ -135,13 +136,14 @@ function row(
     author,
     message: `${eventType} message`,
     created_at: createdAt,
+    is_public_identity: isPublicIdentity,
   };
 }
 
 function ritualRows(): TempleLogRow[] {
   return [
-    row('older', 'ASH', '2026-11-20T10:00:00.000Z', 'Alice'),
-    row('newer', 'VIGIL_SPARK', '2026-11-24T11:00:00.000Z', 'Alice'),
+    row('older', 'ASH', '2026-11-20T10:00:00.000Z', 'Alice', true),
+    row('newer', 'VIGIL_SPARK', '2026-11-24T11:00:00.000Z', 'Alice', true),
   ];
 }
 
@@ -229,7 +231,8 @@ describe('feed assembly and cache behaviour', () => {
         `row-${index}`,
         index % 2 === 0 ? 'ash' : 'VIGIL_SPARK',
         new Date(NOW - index * 60_000).toISOString(),
-        index === 0 ? 'Alice' : 'Pilgrim'
+        index === 0 ? 'Alice' : 'Pilgrim',
+        index === 0
       )
     );
     const client = clientFor(rows, { infrastructure: 9, incomplete: 2 });
@@ -244,12 +247,9 @@ describe('feed assembly and cache behaviour', () => {
     expect(payload.stats.completedRituals).toBe(12);
     expect(payload.stats.vigilSparks).toBe(6);
     expect(payload.stats.namedAuthors).toBe(1);
-    expect(payload.stats.excluded).toEqual({
-      infrastructure: 9,
-      incomplete: 2,
-    });
-    expect(payload.meta.cache).toBe('miss');
-    expect(payload.meta.ttlSeconds).toBe(60);
+    expect(payload.meta.stale).toBe(false);
+    expect(payload.meta).not.toHaveProperty('ttlSeconds');
+    expect(payload.stats).not.toHaveProperty('excluded');
   });
 
   it('reuses a fresh cache without calling the database', async () => {
@@ -297,7 +297,7 @@ describe('feed assembly and cache behaviour', () => {
     expect(result.error).toBe('database unavailable');
     expect(result.payload?.data).toHaveLength(2);
     expect(result.payload?.meta.stale).toBe(true);
-    expect(result.payload?.meta.cache).toBe('stale');
+    expect(result.payload?.meta).not.toHaveProperty('cache');
   });
 
   it('refreshes after invalidation and returns an error only when no snapshot exists', async () => {

@@ -107,7 +107,7 @@ describe('useVigilSupporters', () => {
     fetchMock.mockResolvedValue(jsonResponse(snapshot(11)));
 
     await act(async () => {
-      channelHandlers['temple_log:INSERT']?.({
+      channelHandlers['temple_chronicle_signals:INSERT']?.({
         new: { event_type: 'VIGIL_SPARK' },
       });
     });
@@ -123,7 +123,9 @@ describe('useVigilSupporters', () => {
     const callsBefore = fetchMock.mock.calls.length;
 
     await act(async () => {
-      channelHandlers['temple_log:INSERT']?.({ new: { event_type: 'ASH' } });
+      channelHandlers['temple_chronicle_signals:INSERT']?.({
+        new: { event_type: 'ASH' },
+      });
     });
 
     expect(fetchMock.mock.calls.length).toBe(callsBefore);

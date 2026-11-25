@@ -121,7 +121,8 @@ describe('Tribute payment confirmation', () => {
     expect(templeLogs).toHaveLength(1);
     expect(templeLogs[0]).toMatchObject({
       event_type: 'TRIBUTE',
-      author: 'Pilgrim',
+      author: 'Anonymous',
+      is_public_identity: false,
     });
     expect(analytics.recordPierrotDonationCompleted).toHaveBeenCalledWith(
       store,
@@ -134,6 +135,21 @@ describe('Tribute payment confirmation', () => {
         source: 'tribute_webhook',
       })
     );
+  });
+
+  it('publishes the donor name only when the checkout recorded explicit consent', async () => {
+    const { store, templeLogs } = makeStore();
+
+    await confirmTributeCheckoutSession(
+      store,
+      session({ public_identity: 'true' })
+    );
+
+    expect(templeLogs[0]).toMatchObject({
+      event_type: 'TRIBUTE',
+      author: 'Pilgrim',
+      is_public_identity: true,
+    });
   });
 
   it('does not insert a second Tribute on a repeated webhook but can backfill attribution', async () => {

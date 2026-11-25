@@ -85,9 +85,18 @@ describe('Temple Chronicles aggregation', () => {
       row('1', 'vigil_spark', iso(WINDOW_END - 6_000), 'Pilgrim'),
       row('2', 'VIGIL_SPARK', iso(WINDOW_END - 5_000), 'pilgrim'),
       row('3', 'vigil-spark', iso(WINDOW_END - 4_000), '  PILGRIM '),
-      row('4', 'Vigil Spark', iso(WINDOW_END - 3_000), 'Alice'),
-      row('4', 'Vigil Spark', iso(WINDOW_END - 3_000), 'Alice'),
-      row('5', 'VIGILSPARK', iso(WINDOW_END - 2_000), 'alice'),
+      {
+        ...row('4', 'Vigil Spark', iso(WINDOW_END - 3_000), 'Alice'),
+        is_public_identity: true,
+      },
+      {
+        ...row('4', 'Vigil Spark', iso(WINDOW_END - 3_000), 'Alice'),
+        is_public_identity: true,
+      },
+      {
+        ...row('5', 'VIGILSPARK', iso(WINDOW_END - 2_000), 'alice'),
+        is_public_identity: true,
+      },
       row('6', 'vigil', iso(WINDOW_END - 1_000), 'Anonymous'),
     ];
 

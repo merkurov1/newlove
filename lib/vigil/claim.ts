@@ -74,7 +74,8 @@ export async function claimVigilSpark(
   supabaseAdmin: SupabaseClient,
   identity: VigilIdentity,
   heartId: number,
-  intention?: string | null
+  intention?: string | null,
+  publicIdentity: boolean = false
 ): Promise<VigilClaimResult> {
   const now = Date.now();
   const nowISO = new Date(now).toISOString();
@@ -226,9 +227,12 @@ export async function claimVigilSpark(
   // name. A logging failure must not turn a successful spark into an error.
   const { error: logError } = await supabaseAdmin.from('temple_log').insert({
     user_id: identity.source === 'supabase' ? identity.userId : null,
-    author: identity.displayName,
+    author: publicIdentity ? identity.displayName : 'Anonymous',
     event_type: 'VIGIL_SPARK',
-    message: `${identity.displayName} transmitted a spark`,
+    message: publicIdentity
+      ? `${identity.displayName} transmitted a spark`
+      : 'A pilgrim transmitted a spark',
+    is_public_identity: publicIdentity,
     created_at: nowISO,
   });
 

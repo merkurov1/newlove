@@ -105,7 +105,23 @@ describe('/api/vigil/claim', () => {
       expect.anything(),
       identity,
       1,
-      null
+      null,
+      false
+    );
+  });
+
+  it('passes explicit public-name consent to the claim writer', async () => {
+    const response = await POST(
+      makeRequest({ id: 1, show_identity: true })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockClaim).toHaveBeenCalledWith(
+      expect.anything(),
+      identity,
+      1,
+      null,
+      true
     );
   });
 
@@ -127,7 +143,8 @@ describe('/api/vigil/claim', () => {
       expect.anything(),
       supabaseIdentity,
       1,
-      null
+      null,
+      false
     );
   });
 
