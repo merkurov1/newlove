@@ -10,6 +10,7 @@ import { useRitualModalTimer } from '@/components/temple/useRitualModalTimer';
 import useIsTelegram from '@/components/useIsTelegram';
 import { useTelegramBottomButton } from '@/components/telegram/useTelegramBottomButton';
 import { hapticImpact } from '@/lib/telegram/webApp';
+import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
 import VigilShare from '@/components/vigil/VigilShare';
 
 import { useVigilController } from './useVigilController';
@@ -19,20 +20,12 @@ const ANGEL_ART =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0966.gif';
 
 /**
- * The Heart & Angel heart already used by the other rituals. Keeping the
- * familiar symbol means the Vigil lights the same heart the visitor meets
- * elsewhere in the Temple.
- */
-const HEART_ART =
-  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Heart1.png';
-
-/**
  * Vigil — a single ritual scene.
  *
  * The page keeps one idea and removes everything that used to compete with it:
- * an angel keeps a candle, the visitor offers a spark, and the candle's light
- * crosses the dark room to the shared heart. The server state, cooldown and
- * identity rules are unchanged; only the way the ritual is staged is new.
+ * an angel keeps watch, the visitor offers a spark, and its light crosses the
+ * dark room to the shared heart. The server state, cooldown and identity rules
+ * are unchanged; only the way the ritual is staged is new.
  */
 export default function VigilExperience() {
   const {
@@ -70,7 +63,7 @@ export default function VigilExperience() {
   });
 
   // The shared flame clock is published once to the modal header. The same
-  // server snapshot also drives the heart and the candle below.
+  // server snapshot also drives the heart below.
   useRitualModalTimer(flameReady ? flameLabel : null);
 
   const flameStateLabel = flameReady ? (flameLit ? 'lit' : 'extinguished') : 'unknown';
@@ -78,11 +71,9 @@ export default function VigilExperience() {
   const heartGlow = Math.min(1, Math.max(0, flameVisuals.glowOpacity));
   const heartScale = flameLit ? 0.92 + flameVisuals.intensity * 0.2 : 0.86;
   const heartAuraScale = 0.9 + heartGlow * 0.24;
-  const flameScale = isLighting ? 1.25 : flameLit ? 0.86 + flameVisuals.intensity * 0.34 : 0.52;
   const sceneStyle = {
     '--heart-glow': heartGlow.toFixed(3),
     '--heart-aura-scale': heartAuraScale.toFixed(3),
-    '--flame-scale': flameScale.toFixed(3),
   } as CSSProperties;
 
   const actionLabel = isLighting
@@ -221,50 +212,10 @@ export default function VigilExperience() {
             disabled={isLighting || !userName || isOnCooldown}
             aria-busy={isLighting}
             aria-label={actionLabel}
-            className={styles.candleControl}
+            className={styles.sparkButton}
             data-state={isLighting ? 'lighting' : isOnCooldown ? 'cooldown' : 'ready'}
           >
-            <span className={styles.candleHalo} aria-hidden="true" />
-
-            <span className={styles.candleArt} aria-hidden="true">
-              <span className={styles.flameWrap} data-lit={flameLit ? 'true' : 'false'}>
-                <span className={styles.flameGlow} />
-                <svg className={styles.flameSvg} viewBox="0 0 40 66" focusable="false">
-                  <defs>
-                    <radialGradient id="vigil-flame-outer" cx="50%" cy="72%" r="62%">
-                      <stop offset="0%" stopColor="#fff6d8" />
-                      <stop offset="38%" stopColor="#ffd27a" />
-                      <stop offset="72%" stopColor="#ff8b2e" />
-                      <stop offset="100%" stopColor="rgba(255, 92, 24, 0.12)" />
-                    </radialGradient>
-                    <radialGradient id="vigil-flame-inner" cx="50%" cy="78%" r="58%">
-                      <stop offset="0%" stopColor="#ffffff" />
-                      <stop offset="62%" stopColor="#ffe6a3" />
-                      <stop offset="100%" stopColor="rgba(255, 214, 130, 0.1)" />
-                    </radialGradient>
-                  </defs>
-                  <path
-                    className={styles.flameOuter}
-                    d="M20 2 C31 19 37 28 34 42 C32 55 26 62 20 62 C14 62 8 55 6 42 C3 28 9 19 20 2 Z"
-                    fill="url(#vigil-flame-outer)"
-                  />
-                  <path
-                    className={styles.flameInner}
-                    d="M20 24 C26 34 29 40 27 48 C26 55 23 58 20 58 C17 58 14 55 13 48 C11 40 14 34 20 24 Z"
-                    fill="url(#vigil-flame-inner)"
-                  />
-                </svg>
-              </span>
-
-              <span className={styles.wick} />
-              <span className={styles.wax}>
-                <span className={styles.waxDrip} />
-                <span className={styles.waxHighlight} />
-              </span>
-              <span className={styles.dish} />
-            </span>
-
-            <span className={styles.candleLabel}>{actionLabel}</span>
+            {actionLabel}
           </button>
 
           <div
@@ -301,7 +252,7 @@ export default function VigilExperience() {
               }
             >
               <Image
-                src={HEART_ART}
+                src={TEMPLE_HOME_ASSETS.heart}
                 alt=""
                 fill
                 sizes="(min-width: 1024px) 260px, 180px"

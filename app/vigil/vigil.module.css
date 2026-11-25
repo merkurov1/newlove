@@ -1,7 +1,7 @@
 /*
  * Vigil — the chapel of the kept flame.
  *
- * One dark room, one angel, one candle and one shared heart. The layout is
+ * One dark room, one angel, one spark and one shared heart. The layout is
  * deliberately reduced to that single gesture; typography and light do the
  * rest. All sizes are fluid so the same scene works in the full-page route and
  * inside the Temple ritual modal without a separate variant.
@@ -334,222 +334,75 @@
   opacity: 0.12;
 }
 
-/* --- Candle ------------------------------------------------------------ */
+/* --- Spark button ------------------------------------------------------ */
 
-.candleControl {
+.sparkButton {
   position: absolute;
   z-index: 3;
-  bottom: 0;
-  left: 30%;
-  display: flex;
-  flex-direction: column;
+  bottom: 11%;
+  left: 38%;
+  display: inline-flex;
   align-items: center;
-  width: 10rem;
-  padding: 0.5rem 0.5rem 0;
-  border: 0;
-  border-radius: 1.5rem;
-  background: transparent;
-  color: var(--muted);
+  justify-content: center;
+  min-width: 10.5rem;
+  max-width: 14rem;
+  min-height: 3rem;
+  padding: 0.85rem 1.6rem;
+  border: 1px solid rgba(231, 183, 102, 0.42);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 186, 92, 0.16) 0%, rgba(255, 186, 92, 0) 70%),
+    rgba(20, 14, 10, 0.62);
+  box-shadow:
+    0 0 24px rgba(255, 170, 70, 0.08),
+    inset 0 0 18px rgba(255, 196, 112, 0.05);
+  color: var(--gold);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  line-height: 1.35;
+  text-align: center;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: opacity 250ms ease;
+  transition:
+    color 250ms ease,
+    border-color 250ms ease,
+    box-shadow 250ms ease,
+    background-color 250ms ease,
+    opacity 250ms ease;
 }
 
-.candleControl:disabled {
-  cursor: not-allowed;
+.sparkButton:not(:disabled):hover {
+  border-color: rgba(255, 208, 120, 0.72);
+  box-shadow:
+    0 0 34px rgba(255, 170, 70, 0.2),
+    inset 0 0 22px rgba(255, 196, 112, 0.08);
 }
 
-.candleControl:not(:disabled):active {
-  transform: scale(0.985);
+.sparkButton:not(:disabled):active {
+  translate: 0 1px;
 }
 
-.candleControl:focus-visible {
+.sparkButton:focus-visible {
   outline: 2px solid rgba(255, 208, 120, 0.8);
   outline-offset: 6px;
 }
 
-.candleHalo {
-  position: absolute;
-  bottom: 2.1rem;
-  left: 50%;
-  width: 8.5rem;
-  height: 8.5rem;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(255, 168, 70, 0.22) 0%, rgba(255, 168, 70, 0) 68%);
-  filter: blur(6px);
-  transform: translateX(-50%);
-  transition:
-    opacity 700ms ease,
-    transform 700ms ease;
-  pointer-events: none;
-}
-
-.candleControl:not(:disabled):hover .candleHalo {
-  transform: translateX(-50%) scale(1.12);
-}
-
-.candleControl[data-state='lighting'] .candleHalo {
-  opacity: 1;
-  transform: translateX(-50%) scale(1.28);
-}
-
-.candleControl[data-state='lighting'] .flameSvg {
-  animation-duration: 0.8s;
-  filter: drop-shadow(0 0 24px rgba(255, 184, 94, 0.95));
-}
-
-.candleArt {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  width: 6rem;
-  height: 10.5rem;
-}
-
-.flameWrap {
-  position: relative;
-  z-index: 3;
-  width: 2.7rem;
-  height: 4.1rem;
-  margin-bottom: -0.15rem;
-  transform: scale(var(--flame-scale, 0.52));
-  transform-origin: 50% 100%;
-  transition:
-    transform 1s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 700ms ease;
-}
-
-.flameWrap[data-lit='false'] {
-  opacity: 0.78;
-}
-
-.flameGlow {
-  position: absolute;
-  top: 6%;
-  left: 50%;
-  width: 170%;
-  aspect-ratio: 1;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(255, 172, 78, 0.55) 0%, rgba(255, 172, 78, 0) 66%);
-  filter: blur(10px);
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-
-.flameSvg {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  filter: drop-shadow(0 0 12px rgba(255, 154, 58, 0.65));
-  transform-origin: 50% 100%;
-  animation: candle-flicker 2.8s ease-in-out infinite;
-}
-
-.flameOuter {
-  transform-origin: 50% 90%;
-}
-
-.flameInner {
-  opacity: 0.92;
-}
-
-.candleControl:not(:disabled):hover .flameSvg {
-  filter: drop-shadow(0 0 20px rgba(255, 172, 78, 0.85));
-}
-
-.wick {
-  position: relative;
-  z-index: 2;
-  width: 3px;
-  height: 0.8rem;
-  margin-bottom: -0.1rem;
-  border-radius: 2px;
-  background: linear-gradient(180deg, #1b130c 0%, #4a3522 100%);
-}
-
-.wax {
-  position: relative;
-  z-index: 1;
-  width: 2.5rem;
-  height: 6.3rem;
-  border-radius: 0.35rem 0.35rem 0.22rem 0.22rem;
-  background: linear-gradient(
-    90deg,
-    #a78c68 0%,
-    #d9c4a2 18%,
-    #f6ead3 44%,
-    #dcc7a4 70%,
-    #9b8060 100%
-  );
-  box-shadow:
-    inset -0.5rem 0 0.9rem rgba(44, 30, 18, 0.42),
-    inset 0.45rem 0 0.8rem rgba(255, 249, 231, 0.28),
-    0 1.1rem 2rem rgba(0, 0, 0, 0.5);
-}
-
-.waxDrip {
-  position: absolute;
-  top: -0.15rem;
-  left: 0.35rem;
-  width: 0.55rem;
-  height: 1.4rem;
-  border-radius: 0 0 999px 999px;
-  background: linear-gradient(180deg, #f6ead3 0%, #cbb18b 100%);
-  box-shadow: 0.9rem -0.2rem 0 -0.1rem rgba(246, 234, 211, 0.8);
-  opacity: 0.85;
-}
-
-.waxHighlight {
-  position: absolute;
-  top: 0.2rem;
-  bottom: 0.4rem;
-  left: 32%;
-  width: 0.18rem;
-  border-radius: 999px;
-  background: rgba(255, 252, 241, 0.55);
-  filter: blur(0.4px);
-}
-
-.dish {
-  position: relative;
-  z-index: 0;
-  width: 5.6rem;
-  height: 0.72rem;
-  margin-top: -0.18rem;
-  border-radius: 50%;
-  background: radial-gradient(ellipse at 50% 26%, #7a644a 0%, #463525 48%, #1d1510 82%);
-  box-shadow: 0 0.7rem 1.1rem rgba(0, 0, 0, 0.55);
-}
-
-.candleLabel {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.6em;
-  max-width: 9.5rem;
-  margin-top: 0.5rem;
-  color: var(--muted);
-  font-family: var(--font-inter), system-ui, sans-serif;
-  font-size: 0.56rem;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  line-height: 1.4;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.candleControl[data-state='lighting'] .candleLabel {
-  color: var(--gold);
-}
-
-.candleControl[data-state='cooldown'] .candleLabel {
+.sparkButton:disabled {
+  border-color: var(--line);
+  box-shadow: none;
   color: var(--faint);
+  cursor: not-allowed;
 }
 
-.candleControl:disabled .candleHalo {
-  opacity: 0.55;
+.sparkButton[data-state='lighting'] {
+  border-color: rgba(255, 208, 120, 0.7);
+  color: var(--ink);
+}
+
+.sparkButton[data-state='cooldown'] {
+  color: var(--faint);
 }
 
 /* --- Heart ------------------------------------------------------------- */
@@ -858,9 +711,8 @@
     width: clamp(9.5rem, 27vw, 14rem);
   }
 
-  .candleControl {
-    left: 34%;
-    width: 8.5rem;
+  .sparkButton {
+    left: 40%;
   }
 
   .heart {
@@ -908,22 +760,13 @@
     width: clamp(8rem, 34vw, 10.5rem);
   }
 
-  .candleControl {
+  .sparkButton {
+    bottom: 8%;
     left: 50%;
-    width: 7.6rem;
+    min-width: 8.5rem;
+    padding: 0.75rem 1.2rem;
+    font-size: 0.56rem;
     transform: translateX(-50%);
-  }
-
-  .candleArt {
-    height: 9rem;
-  }
-
-  .wax {
-    height: 5.2rem;
-  }
-
-  .dish {
-    width: 4.9rem;
   }
 
   .heart {
@@ -994,12 +837,10 @@
     width: 6.4rem;
   }
 
-  .candleControl {
-    width: 7rem;
-  }
-
-  .candleLabel {
-    font-size: 0.5rem;
+  .sparkButton {
+    min-width: 7.5rem;
+    padding: 0.7rem 1rem;
+    font-size: 0.52rem;
   }
 
   .metaValueSmall {
@@ -1055,8 +896,8 @@
     width: 8.5rem;
   }
 
-  .candleControl {
-    left: 38%;
+  .sparkButton {
+    left: 42%;
   }
 
   .heart {
@@ -1078,25 +919,6 @@
 }
 
 /* --- Motion ------------------------------------------------------------ */
-
-@keyframes candle-flicker {
-  0%,
-  100% {
-    transform: rotate(-1deg) scaleY(1);
-  }
-
-  24% {
-    transform: rotate(1.4deg) scaleY(1.045);
-  }
-
-  48% {
-    transform: rotate(-0.8deg) scaleY(0.97);
-  }
-
-  72% {
-    transform: rotate(1deg) scaleY(1.025);
-  }
-}
 
 @keyframes halo-breathe {
   0%,
@@ -1148,7 +970,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .flameSvg,
   .angelHalo,
   .threadLine,
   .stars span,
@@ -1156,13 +977,11 @@
     animation: none !important;
   }
 
-  .flameWrap,
   .heartAura,
   .heartImage,
   .heartRing,
   .heartOrbit,
   .thread,
-  .candleHalo,
   .angelImage {
     transition-duration: 0.01ms !important;
   }
