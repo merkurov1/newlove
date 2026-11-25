@@ -12,10 +12,7 @@ import {
   type FlowVideo,
   normalizeFlowItem,
 } from '@/lib/flow/content';
-import {
-  resolveFlowMetadataFromContent,
-  type FlowSocialMetadata,
-} from '@/lib/flow/metadata';
+import { resolveFlowMetadataFromContent, type FlowSocialMetadata } from '@/lib/flow/metadata';
 import { getCachedFlowItem, getCachedFlowNeighbors } from '@/lib/flow/items-cash';
 import { readDistributionUrl } from '@/lib/flow/distribution';
 import PierrotContextBlock from '@/components/flow/PierrotContextBlock';
@@ -25,6 +22,7 @@ import FlowReaderShell from '@/components/flow/FlowReaderShell';
 import FlowShare from '@/components/flow/FlowShare';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { breadcrumbJsonLd, flowContentJsonLd } from '@/lib/structuredData';
+import { extractHeadings, headingIdsByLine } from '@/lib/reader/headings';
 
 // Publication data and its ready AI context share one tagged cache entry.
 // Edits, deletes and AI context generation invalidate the same tag.
@@ -64,9 +62,7 @@ function imageDimensions(metadata: FlowSocialMetadata) {
     : {};
 }
 
-export async function generateMetadata({
-  params,
-}: PageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const decodedSlug = decodeURIComponent(slug);
 
@@ -163,24 +159,38 @@ function estimateReadingTime(text: string): string {
   return `${Math.max(1, Math.ceil(words / 170))} min read`;
 }
 
-function MarkdownBody({ body }: { body: string }) {
+function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<number, string> }) {
+  const headingId = (line: number | undefined) => (line ? headingIds.get(line) : undefined);
+
   return (
     <div className="min-w-0">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          h1: ({ children }) => (
-            <h2 className="mb-5 mt-10 font-serif text-3xl font-light leading-tight text-stone-900 first:mt-0 sm:text-4xl">
+          h1: ({ children, node }) => (
+            <h2
+              id={headingId(node?.position?.start.line)}
+              tabIndex={-1}
+              className="mb-5 mt-10 font-serif text-3xl font-light leading-tight text-stone-900 first:mt-0 sm:text-4xl"
+            >
               {children}
             </h2>
           ),
-          h2: ({ children }) => (
-            <h2 className="mb-4 mt-8 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl">
+          h2: ({ children, node }) => (
+            <h2
+              id={headingId(node?.position?.start.line)}
+              tabIndex={-1}
+              className="mb-4 mt-8 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl"
+            >
               {children}
             </h2>
           ),
-          h3: ({ children }) => (
-            <h3 className="mb-3 mt-7 font-serif text-xl font-light leading-tight text-stone-900 sm:text-2xl">
+          h3: ({ children, node }) => (
+            <h3
+              id={headingId(node?.position?.start.line)}
+              tabIndex={-1}
+              className="mb-3 mt-7 font-serif text-xl font-light leading-tight text-stone-900 sm:text-2xl"
+            >
               {children}
             </h3>
           ),
@@ -267,9 +277,7 @@ function MarkdownBody({ body }: { body: string }) {
           ),
           hr: () => <hr className="my-9 border-0 border-t border-stone-200" />,
           code: ({ children }) => (
-            <code className="bg-stone-100 px-1 py-0.5 font-mono text-[0.85em]">
-              {children}
-            </code>
+            <code className="bg-stone-100 px-1 py-0.5 font-mono text-[0.85em]">{children}</code>
           ),
         }}
       >
@@ -388,8 +396,8 @@ function SmartGallery({ images }: { images: FlowImage[] }) {
               image={image}
               index={index + 1}
               imageClassName="transition duration-300 hover:scale-[1.01]"
-            aspectRatio="4 / 3"
-            objectFit="cover"
+              aspectRatio="4 / 3"
+              objectFit="cover"
             />
           ))}
         </div>
@@ -450,9 +458,7 @@ function VideoBlock({ videos }: { videos: FlowVideo[] }) {
                   className="mb-3 rounded-xl"
                 />
               )}
-              <span className="font-serif text-lg text-stone-900">
-                {video.title ?? video.url}
-              </span>
+              <span className="font-serif text-lg text-stone-900">{video.title ?? video.url}</span>
             </a>
           )}
           {video.embedUrl && (
@@ -533,7 +539,13 @@ function SmartLinks({ links }: { links: FlowLink[] }) {
   );
 }
 
-function FlowHero({ content }: { content: FlowContent }) {
+function FlowHero({
+  content,
+  headingIds,
+}: {
+  content: FlowContent;
+  headingIds: Map<number, string>;
+}) {
   const links = content.links.filter((link) => !link.inBody);
   const videosFirst = content.contentType === 'video' && content.videos.length > 0;
   const imagesFirst = content.contentType === 'photo' && content.images.length > 0;
@@ -549,7 +561,7 @@ function FlowHero({ content }: { content: FlowContent }) {
         </h1>
       )}
 
-      {content.body && <MarkdownBody body={content.body} />}
+      {content.body && <MarkdownBody body={content.body} headingIds={headingIds} />}
 
       {!imagesFirst && <SmartGallery images={content.images} />}
       {!videosFirst && <VideoBlock videos={content.videos} />}
@@ -560,9 +572,7 @@ function FlowHero({ content }: { content: FlowContent }) {
         content.images.length === 0 &&
         content.videos.length === 0 &&
         links.length === 0 &&
-        !content.showTitle && (
-          <p className="text-sm text-stone-400">No content.</p>
-        )}
+        !content.showTitle && <p className="text-sm text-stone-400">No content.</p>}
     </div>
   );
 }
@@ -577,6 +587,8 @@ export default async function FlowItemPage({ params }: PageProps) {
   const bundle = await getCachedFlowItem(decodedSlug);
   const context = (bundle?.aiContext as AIContext | null) ?? null;
   const metadata = resolveFlowMetadataFromContent(content);
+  const headings = content.body ? extractHeadings(content.body) : [];
+  const headingIds = headingIdsByLine(headings);
 
   const typeLabels: Record<string, string> = {
     note: 'Note',
@@ -588,10 +600,7 @@ export default async function FlowItemPage({ params }: PageProps) {
     mixed: 'Post',
   };
 
-  const readingTime =
-    content.bodyText.length > 350
-      ? estimateReadingTime(content.bodyText)
-      : null;
+  const readingTime = content.bodyText.length > 350 ? estimateReadingTime(content.bodyText) : null;
 
   const tgUrl =
     typeof bundle?.item.telegram_message_id === 'number' ||
@@ -651,8 +660,6 @@ export default async function FlowItemPage({ params }: PageProps) {
         ])}
       />
 
-      <FlowReaderShell slug={decodedSlug} title={metadata.title} />
-
       <div className="flow-post-page flow-post-page--reader min-h-screen bg-white px-5 pb-24 pt-20 text-stone-900 sm:px-8 sm:pt-24">
         <article className="flow-item mx-auto max-w-3xl">
           <header className="flow-reader__bar">
@@ -660,9 +667,13 @@ export default async function FlowItemPage({ params }: PageProps) {
               ← Flow
             </Link>
 
-            <span className="flow-reader__identity" aria-hidden="true">
-              Flow
-            </span>
+            <div className="flow-reader__bar-end">
+              <span className="flow-reader__identity" aria-hidden="true">
+                Flow
+              </span>
+
+              <FlowReaderShell slug={decodedSlug} title={metadata.title} headings={headings} />
+            </div>
           </header>
 
           <div className="flow-reader__meta">
@@ -686,7 +697,7 @@ export default async function FlowItemPage({ params }: PageProps) {
             )}
           </div>
 
-          <FlowHero content={content} />
+          <FlowHero content={content} headingIds={headingIds} />
 
           <footer className="flow-reader__footer">
             <div className="flow-reader__share">
@@ -756,10 +767,7 @@ export default async function FlowItemPage({ params }: PageProps) {
           </footer>
 
           {content.contentType !== 'photo' && (
-            <PierrotContextBlock
-              context={context}
-              defaultLang={content.language}
-            />
+            <PierrotContextBlock context={context} defaultLang={content.language} />
           )}
         </article>
       </div>

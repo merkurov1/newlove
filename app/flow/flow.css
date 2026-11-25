@@ -350,11 +350,185 @@ body.telegram-app.telegram-fullscreen-close .flow-post-page {
  * ------------------------------------------------------------- */
 
 .flow-post-page--reader {
-  background: var(--flow-paper);
+  --flow-reader-bg: var(--flow-paper);
+  --flow-reader-ink: var(--flow-ink);
+  --flow-reader-body: var(--flow-body);
+  --flow-reader-muted: var(--flow-muted);
+  --flow-reader-line: var(--flow-line);
+  --flow-reader-font-scale: 1;
+  --flow-reader-line-height: 1.75;
+  background: var(--flow-reader-bg);
+  color: var(--flow-reader-body);
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+html[data-flow-reader-theme='sepia'] .flow-post-page--reader {
+  --flow-reader-bg: #f4ecd8;
+  --flow-reader-ink: #2f2a22;
+  --flow-reader-body: #4b4336;
+  --flow-reader-muted: #776b59;
+  --flow-reader-line: #ddcfb4;
+}
+
+html[data-flow-reader-theme='dark'] .flow-post-page--reader {
+  --flow-reader-bg: #121212;
+  --flow-reader-ink: #f2ede4;
+  --flow-reader-body: #d8d2c7;
+  --flow-reader-muted: #a7a096;
+  --flow-reader-line: #322f2a;
 }
 
 .flow-post-page--reader .flow-item {
   animation: flow-reader-enter 260ms ease-out both;
+}
+
+/* Appearance controls scale rem-based body copy, so browser text zoom and
+ * iOS text-size settings continue to work instead of being overridden. */
+.flow-post-page--reader .flow-item :is(p, li) {
+  font-size: calc(1.125rem * var(--flow-reader-font-scale));
+  line-height: var(--flow-reader-line-height);
+  color: var(--flow-reader-body);
+}
+
+@media (min-width: 640px) {
+  .flow-post-page--reader .flow-item p {
+    font-size: calc(1.25rem * var(--flow-reader-font-scale));
+  }
+
+  .flow-post-page--reader .flow-item li {
+    font-size: calc(1.25rem * var(--flow-reader-font-scale));
+  }
+}
+
+.flow-post-page--reader .flow-item :is(h1, h2, h3, h4, strong) {
+  color: var(--flow-reader-ink);
+}
+
+.flow-post-page--reader .flow-item h2 {
+  font-size: calc(1.875rem * var(--flow-reader-font-scale));
+}
+
+.flow-post-page--reader .flow-item h3 {
+  font-size: calc(1.25rem * var(--flow-reader-font-scale));
+}
+
+@media (min-width: 640px) {
+  .flow-post-page--reader .flow-item h2 {
+    font-size: calc(2.25rem * var(--flow-reader-font-scale));
+  }
+
+  .flow-post-page--reader .flow-item h3 {
+    font-size: calc(1.5rem * var(--flow-reader-font-scale));
+  }
+}
+
+.flow-post-page--reader .flow-item blockquote {
+  border-color: var(--flow-reader-line);
+  color: var(--flow-reader-muted);
+  font-size: calc(1.25rem * var(--flow-reader-font-scale));
+}
+
+.flow-post-page--reader .flow-item :is(a, figcaption, time) {
+  color: inherit;
+}
+
+.flow-post-page--reader .flow-item a {
+  text-decoration-color: color-mix(in srgb, var(--flow-reader-muted) 55%, transparent);
+}
+
+.flow-post-page--reader .flow-item a:hover {
+  text-decoration-color: var(--flow-reader-ink);
+}
+
+.flow-post-page--reader .flow-item code {
+  background: color-mix(in srgb, var(--flow-reader-ink) 8%, transparent);
+  color: var(--flow-reader-ink);
+}
+
+.flow-post-page--reader .flow-item figcaption {
+  color: var(--flow-reader-muted);
+}
+
+.flow-post-page--reader .flow-item hr {
+  border-color: var(--flow-reader-line);
+}
+
+.flow-post-page--reader
+  :is(
+    .flow-reader__back:hover,
+    .flow-reader__sources a:hover,
+    .flow-reader__step:hover .flow-reader__step-title
+  ) {
+  color: var(--flow-reader-ink);
+}
+
+.flow-post-page--reader .flow-reader__bar,
+.flow-post-page--reader .flow-reader__footer,
+.flow-post-page--reader .flow-reader__pager {
+  border-color: var(--flow-reader-line);
+}
+
+.flow-post-page--reader :is(.flow-reader__back, .flow-reader__identity, .flow-reader__meta) {
+  color: var(--flow-reader-muted);
+}
+
+.flow-post-page--reader :is(.flow-reader__step, .flow-reader__step-title) {
+  color: var(--flow-reader-ink);
+}
+
+.flow-post-page--reader .flow-reader__sources,
+.flow-post-page--reader .flow-reader__sources a,
+.flow-post-page--reader .flow-reader__sources-label {
+  color: var(--flow-reader-muted);
+}
+
+.flow-post-page--reader .flow-share {
+  color: var(--flow-reader-muted);
+}
+
+.flow-post-page--reader .flow-share__button {
+  border-color: var(--flow-reader-line);
+  background: color-mix(in srgb, var(--flow-reader-bg) 88%, transparent);
+  color: var(--flow-reader-muted);
+}
+
+.flow-post-page--reader .flow-share__button:hover:not(:disabled) {
+  border-color: var(--flow-reader-muted);
+  color: var(--flow-reader-ink);
+}
+
+.flow-post-page--reader .flow-home-screen {
+  border-color: var(--flow-reader-line);
+}
+
+.flow-post-page--reader .flow-home-screen__label {
+  color: var(--flow-reader-muted);
+}
+
+.flow-post-page--reader .flow-home-screen__copy {
+  color: var(--flow-reader-body);
+}
+
+.flow-post-page--reader .flow-home-screen__add {
+  border-color: var(--flow-reader-ink);
+  color: var(--flow-reader-ink);
+}
+
+.flow-post-page--reader .flow-home-screen__dismiss {
+  color: var(--flow-reader-muted);
+}
+
+/* Heading anchors are focused programmatically from the contents panel. */
+.flow-post-page--reader .flow-item :is(h1, h2, h3, h4)[id] {
+  scroll-margin-top: 6rem;
+  outline: none;
+}
+
+.flow-post-page--reader .flow-item :is(h1, h2, h3, h4)[id]:focus-visible {
+  outline: 2px solid var(--flow-reader-ink);
+  outline-offset: 6px;
 }
 
 .flow-reader__bar {
@@ -514,9 +688,356 @@ body.telegram-app.telegram-fullscreen-close .flow-post-page {
   height: 100%;
   transform: scaleX(0);
   transform-origin: 0 50%;
-  background: var(--flow-ink);
+  background: var(--flow-reader-ink, var(--flow-ink));
   opacity: 0.55;
   will-change: transform;
+}
+
+/* Reader controls live in the header row, outside the text column. They are
+ * never fixed over the article, so selections and long lines stay clear. */
+.flow-reader__bar-end {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.flow-reader__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.flow-reader__percent {
+  min-width: 3.25ch;
+  font-family: var(--flow-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-align: right;
+  color: var(--flow-reader-muted, var(--flow-muted));
+  font-variant-numeric: tabular-nums;
+}
+
+.flow-reader__control {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--flow-reader-line, var(--flow-line));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--flow-reader-muted, var(--flow-muted));
+  font-family: var(--flow-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-transform: uppercase;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    background-color 140ms ease;
+}
+
+.flow-reader__control span {
+  display: none;
+}
+
+.flow-reader__control:hover {
+  border-color: var(--flow-reader-muted, var(--flow-muted));
+  color: var(--flow-reader-ink, var(--flow-ink));
+}
+
+.flow-reader__control[aria-pressed='true'] {
+  border-color: var(--flow-reader-ink, var(--flow-ink));
+  background: color-mix(in srgb, var(--flow-reader-ink, var(--flow-ink)) 9%, transparent);
+  color: var(--flow-reader-ink, var(--flow-ink));
+}
+
+.flow-reader__control:focus-visible,
+.flow-reader-dialog__close:focus-visible,
+.flow-reader-dialog__title:focus-visible {
+  outline: 2px solid var(--flow-reader-ink, var(--flow-ink));
+  outline-offset: 3px;
+}
+
+@media (min-width: 640px) {
+  .flow-reader__control span {
+    display: inline;
+  }
+}
+
+/* Focus mode hides surrounding publication chrome but keeps the text, the
+ * reading line and every exit path visible. The global site header is hidden
+ * only outside Telegram (where it is already absent). */
+body.flow-reader-focus:not(.telegram-app) header.site-header {
+  display: none;
+}
+
+body.flow-reader-focus:not(.telegram-app) .flow-post-page--reader {
+  padding-top: 2rem;
+}
+
+body.flow-reader-focus .flow-reader__identity,
+body.flow-reader-focus .flow-reader__meta,
+body.flow-reader-focus .flow-reader__sources,
+body.flow-reader-focus .flow-home-screen--reader {
+  display: none;
+}
+
+/* ---------------------------------------------------------------
+ * Reader sheets: opened only on request, never over the reading column.
+ * ------------------------------------------------------------- */
+
+.flow-reader-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: flex;
+  color: var(--flow-reader-body, var(--flow-body));
+}
+
+.flow-reader-dialog__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(18, 16, 13, 0.38);
+  backdrop-filter: blur(2px);
+}
+
+.flow-reader-dialog__panel {
+  position: relative;
+  display: flex;
+  width: min(22rem, 100%);
+  max-width: 100%;
+  height: 100%;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-color: var(--flow-reader-line, var(--flow-line));
+  background: var(--flow-reader-bg, var(--flow-paper));
+  box-shadow: 0 20px 60px rgba(18, 16, 13, 0.18);
+  outline: none;
+  animation: flow-reader-sheet-enter 180ms ease-out both;
+}
+
+.flow-reader-dialog__panel--left {
+  margin-right: auto;
+  border-right: 1px solid var(--flow-reader-line, var(--flow-line));
+}
+
+.flow-reader-dialog__panel--right {
+  margin-left: auto;
+  border-left: 1px solid var(--flow-reader-line, var(--flow-line));
+}
+
+.flow-reader-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.15rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--flow-reader-line, var(--flow-line));
+}
+
+.flow-reader-dialog__title {
+  margin: 0;
+  font-family: var(--flow-mono);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--flow-reader-ink, var(--flow-ink));
+}
+
+.flow-reader-dialog__close {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--flow-reader-muted, var(--flow-muted));
+}
+
+.flow-reader-dialog__close:hover {
+  color: var(--flow-reader-ink, var(--flow-ink));
+}
+
+.flow-reader-toc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 1.25rem 1.5rem 2rem;
+}
+
+.flow-reader-toc__item {
+  min-height: 44px;
+  padding: 0.55rem 0;
+  text-align: left;
+  font-family: var(--flow-serif);
+  font-size: 0.98rem;
+  line-height: 1.4;
+  color: var(--flow-reader-body, var(--flow-body));
+}
+
+.flow-reader-toc__item:hover {
+  color: var(--flow-reader-ink, var(--flow-ink));
+}
+
+.flow-reader-toc__item--level-2 {
+  padding-left: 0.9rem;
+  font-size: 0.92rem;
+}
+
+.flow-reader-toc__item--level-3 {
+  padding-left: 1.8rem;
+  font-size: 0.86rem;
+  color: var(--flow-reader-muted, var(--flow-muted));
+}
+
+.flow-reader-toc__item:focus-visible {
+  outline: 2px solid var(--flow-reader-ink, var(--flow-ink));
+  outline-offset: 3px;
+}
+
+.flow-reader-toc__empty {
+  margin: 0;
+  font-family: var(--flow-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--flow-reader-muted, var(--flow-muted));
+}
+
+.flow-reader-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 1.5rem;
+}
+
+.flow-reader-settings__group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.flow-reader-settings__legend {
+  display: block;
+  margin: 0 0 0.65rem;
+  padding: 0;
+  font-family: var(--flow-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--flow-reader-muted, var(--flow-muted));
+}
+
+.flow-reader-settings__themes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.flow-reader-settings__theme {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.35rem;
+  border: 1px solid var(--flow-reader-line, var(--flow-line));
+  border-radius: 0.65rem;
+  color: var(--flow-reader-muted, var(--flow-muted));
+  font-family: var(--flow-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.flow-reader-settings__theme[aria-pressed='true'] {
+  border-color: var(--flow-reader-ink, var(--flow-ink));
+  background: color-mix(in srgb, var(--flow-reader-ink, var(--flow-ink)) 9%, transparent);
+  color: var(--flow-reader-ink, var(--flow-ink));
+}
+
+.flow-reader-settings__theme:focus-visible,
+.flow-reader-settings__step:focus-visible,
+.flow-reader-settings__range:focus-visible {
+  outline: 2px solid var(--flow-reader-ink, var(--flow-ink));
+  outline-offset: 3px;
+}
+
+.flow-reader-settings__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.flow-reader-settings__value {
+  font-family: var(--flow-mono);
+  font-size: 0.68rem;
+  color: var(--flow-reader-ink, var(--flow-ink));
+  font-variant-numeric: tabular-nums;
+}
+
+.flow-reader-settings__stepper {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--flow-reader-line, var(--flow-line));
+  border-radius: 0.65rem;
+}
+
+.flow-reader-settings__step {
+  display: inline-flex;
+  min-height: 44px;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  color: var(--flow-reader-ink, var(--flow-ink));
+}
+
+.flow-reader-settings__step:disabled {
+  opacity: 0.35;
+}
+
+.flow-reader-settings__step-divider {
+  width: 1px;
+  background: var(--flow-reader-line, var(--flow-line));
+}
+
+.flow-reader-settings__range {
+  width: 100%;
+  min-height: 44px;
+  accent-color: var(--flow-reader-ink, var(--flow-ink));
+}
+
+.flow-reader-settings__note {
+  margin: 0;
+  font-family: var(--flow-serif);
+  font-size: 0.82rem;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--flow-reader-muted, var(--flow-muted));
+}
+
+@keyframes flow-reader-sheet-enter {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /* ---------------------------------------------------------------
@@ -659,10 +1180,8 @@ body.telegram-app.telegram-fullscreen-close .flow-post-page {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding:
-    calc(0.5rem + max(env(safe-area-inset-top), var(--tg-safe-area-top, 0px)))
-    calc(0.75rem + max(env(safe-area-inset-right), var(--tg-safe-area-right, 0px)))
-    0.35rem
+  padding: calc(0.5rem + max(env(safe-area-inset-top), var(--tg-safe-area-top, 0px)))
+    calc(0.75rem + max(env(safe-area-inset-right), var(--tg-safe-area-right, 0px))) 0.35rem
     calc(0.75rem + max(env(safe-area-inset-left), var(--tg-safe-area-left, 0px)));
 }
 
@@ -698,11 +1217,8 @@ body.telegram-app.telegram-fullscreen-close .flow-post-page {
   align-items: center;
   justify-content: center;
   min-height: 0;
-  padding:
-    0.5rem
-    calc(0.5rem + max(env(safe-area-inset-right), var(--tg-safe-area-right, 0px)))
-    0.5rem
-    calc(0.5rem + max(env(safe-area-inset-left), var(--tg-safe-area-left, 0px)));
+  padding: 0.5rem calc(0.5rem + max(env(safe-area-inset-right), var(--tg-safe-area-right, 0px)))
+    0.5rem calc(0.5rem + max(env(safe-area-inset-left), var(--tg-safe-area-left, 0px)));
   touch-action: none;
   overflow: hidden;
 }
@@ -833,13 +1349,22 @@ body.telegram-app.telegram-fullscreen-close .flow-post-page {
   .flow-continue__title,
   .flow-reader__back,
   .flow-reader__sources a,
-  .flow-share__button {
+  .flow-reader__control,
+  .flow-reader__footer,
+  .flow-share__button,
+  .flow-reader-settings__theme,
+  .flow-reader-settings__step {
     transition: none;
   }
 
   .flow-post-page--reader .flow-item,
-  .flow-viewer {
+  .flow-viewer,
+  .flow-reader-dialog__panel {
     animation: none;
+  }
+
+  .flow-post-page--reader {
+    transition: none;
   }
 
   .flow-viewer__image {
@@ -848,5 +1373,30 @@ body.telegram-app.telegram-fullscreen-close .flow-post-page {
 
   .flow-reader-progress__bar {
     will-change: auto;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .flow-reader__control,
+  .flow-reader-settings__theme,
+  .flow-reader-settings__stepper {
+    border-color: currentColor;
+  }
+
+  .flow-reader__control[aria-pressed='true'] {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+}
+
+@media (forced-colors: active) {
+  .flow-reader-progress__bar {
+    background: Highlight;
+  }
+
+  .flow-reader__control,
+  .flow-reader-settings__theme,
+  .flow-reader-settings__stepper {
+    border-color: CanvasText;
   }
 }
