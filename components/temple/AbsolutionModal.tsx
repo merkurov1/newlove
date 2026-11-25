@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
 import { logTempleEvent } from '@/lib/templeLogger';
+import { useModalReveal } from '@/lib/temple/useModalReveal';
 import {
   markLeftWithoutTrace,
   shouldRecordRitualTrace,
@@ -32,6 +33,7 @@ export default function AbsolutionModal({
   const router = useRouter();
   const goBack = router.back;
   const dialogRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const startedAtRef = useRef<number>(0);
@@ -65,6 +67,19 @@ export default function AbsolutionModal({
     goBack();
   }, [finalizeVisit, goBack]);
 
+  const { open: revealOpen, close: closeWithReveal } = useModalReveal({
+    path: canonicalPath,
+    overlayRef,
+    accent: '#67836b',
+    onClosed: close,
+  });
+
+  useEffect(() => {
+    if (!revealOpen) return;
+
+    closeRef.current?.focus();
+  }, [revealOpen]);
+
   useEffect(() => {
     startedAtRef.current = Date.now();
     finalizedRef.current = false;
@@ -80,10 +95,6 @@ export default function AbsolutionModal({
     body.style.overscrollBehavior = 'none';
     body.classList.add('absolution-modal-open');
 
-    const focusTimer = window.setTimeout(() => {
-      closeRef.current?.focus();
-    }, 0);
-
     const getFocusable = () => {
       const dialog = dialogRef.current;
       if (!dialog) return [];
@@ -98,7 +109,7 @@ export default function AbsolutionModal({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        close();
+        closeWithReveal();
         return;
       }
 
@@ -122,12 +133,11 @@ export default function AbsolutionModal({
     document.addEventListener('keydown', handleKeyDown);
 
     const unregisterBack = registerTelegramBackHandler(() => {
-      close();
+      closeWithReveal();
       return true;
     });
 
     return () => {
-      window.clearTimeout(focusTimer);
       finalizeVisit();
 
       body.style.overflow = previousOverflow;
@@ -148,14 +158,17 @@ export default function AbsolutionModal({
         // Scroll restoration is best effort in restricted webviews.
       }
     };
-  }, [close, finalizeVisit]);
+  }, [closeWithReveal, finalizeVisit]);
 
   return (
     <div
-      className="absolution-modal"
+      ref={overlayRef}
+      className={`absolution-modal${revealOpen ? ' on' : ''}`}
       role="presentation"
+      data-testid="absolution-modal-overlay"
+      data-state={revealOpen ? 'open' : 'closed'}
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) close();
+        if (event.target === event.currentTarget) closeWithReveal();
       }}
     >
       <div

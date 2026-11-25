@@ -508,6 +508,33 @@
   white-space: nowrap;
 }
 
+/*
+ * Inside the intercepted Temple modal the shared heart is a breathing
+ * exercise. The 10s phase and the Inhale/Exhale caption are read from this
+ * one animation instead of running a second, drifting timer.
+ */
+.heartModal {
+  --c: #c8202b;
+
+  border-radius: 50%;
+  box-shadow: 0 0 120px 20px var(--c);
+  animation: temple-heart-breathing 10s ease-in-out infinite;
+}
+
+@keyframes temple-heart-breathing {
+  0% {
+    transform: scale(0.9);
+  }
+
+  40% {
+    transform: scale(1.08);
+  }
+
+  100% {
+    transform: scale(0.9);
+  }
+}
+
 /* --- Flying spark ------------------------------------------------------ */
 
 .spark {
@@ -973,7 +1000,8 @@
   .angelHalo,
   .threadLine,
   .stars span,
-  .heart[data-vigil-flame-state='lit'] .heartRing {
+  .heart[data-vigil-flame-state='lit'] .heartRing,
+  .heartModal {
     animation: none !important;
   }
 

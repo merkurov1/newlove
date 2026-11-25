@@ -198,6 +198,33 @@ beforeEach(() => {
 });
 
 describe('/vigil shared flame surface', () => {
+  it('runs the modal heart on the 10s Inhale/Exhale cycle', async () => {
+    render(<VigilExperience presentation="modal" />);
+
+    const heart = screen.getByTestId('vigil-heart');
+
+    expect(heart).toHaveAttribute('data-breathing-phase', 'Inhale');
+    expect(screen.getByTestId('vigil-heart-breath-label')).toHaveTextContent(
+      'Inhale'
+    );
+
+    await waitFor(() => {
+      expect(heart).toHaveAttribute('data-breathing-phase', 'Inhale');
+      expect(screen.getByTestId('vigil-heart-breath-label')).toHaveTextContent(
+        'Inhale'
+      );
+    });
+  });
+
+  it('keeps the page heart caption on the flame state', () => {
+    render(<VigilExperience />);
+
+    expect(screen.getByTestId('vigil-heart-state-label')).toHaveTextContent(
+      'LIT'
+    );
+    expect(screen.queryByTestId('vigil-heart-breath-label')).toBeNull();
+  });
+
   it('stages the ritual as an angel and the shared heart', () => {
     render(<VigilExperience />);
 

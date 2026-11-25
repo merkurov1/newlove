@@ -1,6 +1,7 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import RitualModal from '@/components/temple/RitualModal';
 import { useRitualModalTimer } from '@/components/temple/useRitualModalTimer';
+import { resetRevealSourceForTests } from '@/lib/temple/modalReveal';
 
 const back = jest.fn();
 const logTempleEvent = jest.fn(async () => true);
@@ -19,9 +20,10 @@ describe('RitualModal shell', () => {
     logTempleEvent.mockClear();
     window.sessionStorage.clear();
     document.body.className = '';
+    resetRevealSourceForTests();
   });
 
-  it('closes on Escape, locks scroll and restores the body on unmount', () => {
+  it('closes on Escape after the reveal collapses, locks and restores scroll', async () => {
     const { unmount } = render(
       <RitualModal title="Vigil" canonicalPath="/vigil">
         <div>Shared ritual</div>
@@ -31,16 +33,90 @@ describe('RitualModal shell', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('Shared ritual')).toBeInTheDocument();
     expect(document.body).toHaveClass('ritual-modal-open');
+    await waitFor(() =>
+      expect(screen.getByTestId('temple-modal')).toHaveAttribute(
+        'data-state',
+        'open'
+      )
+    );
 
     fireEvent.keyDown(document, { key: 'Escape' });
 
-    expect(back).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('temple-modal')).toHaveAttribute(
+      'data-state',
+      'closed'
+    );
+
+    await waitFor(() => expect(back).toHaveBeenCalledTimes(1), {
+      timeout: 1500,
+    });
 
     unmount();
 
     expect(document.body).not.toHaveClass('ritual-modal-open');
     expect(window.sessionStorage.length).toBeGreaterThan(0);
     expect(logTempleEvent).not.toHaveBeenCalled();
+  });
+
+  it('reveals from the trigger centre and collapses to freshly measured coordinates', async () => {
+    const trigger = document.createElement('a');
+
+    trigger.href = '/cast';
+    trigger.style.setProperty('--c', '#796fa0');
+
+    let rect = {
+      left: 100,
+      top: 200,
+      width: 40,
+      height: 20,
+      right: 140,
+      bottom: 220,
+      x: 100,
+      y: 200,
+      toJSON: () => ({}),
+    };
+
+    Object.defineProperty(trigger, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => rect,
+    });
+
+    document.body.appendChild(trigger);
+    trigger.focus();
+
+    render(
+      <RitualModal title="Cast" canonicalPath="/cast">
+        <div>Shared ritual</div>
+      </RitualModal>
+    );
+
+    const overlay = screen.getByTestId('temple-modal');
+
+    await waitFor(() =>
+      expect(overlay).toHaveAttribute('data-state', 'open')
+    );
+
+    expect(overlay.style.getPropertyValue('--x')).toBe('120px');
+    expect(overlay.style.getPropertyValue('--y')).toBe('210px');
+    expect(overlay.style.getPropertyValue('--c')).toBe('#796fa0');
+
+    rect = {
+      ...rect,
+      left: 150,
+      top: 250,
+      right: 190,
+      bottom: 270,
+      x: 150,
+      y: 250,
+    };
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(overlay).toHaveAttribute('data-state', 'closed');
+    expect(overlay.style.getPropertyValue('--x')).toBe('170px');
+    expect(overlay.style.getPropertyValue('--y')).toBe('260px');
+
+    trigger.remove();
   });
 
   it('renders the ritual timer published by the shared experience', () => {
@@ -107,7 +183,7 @@ describe('RitualModal shell', () => {
     expect(content).toHaveAttribute('data-ritual-scene', 'scroll');
   });
 
-  it('restores focus to the trigger after unmount', () => {
+  it('moves focus to ← Temple and restores the trigger after unmount', async () => {
     const trigger = document.createElement('button');
 
     document.body.appendChild(trigger);
@@ -119,7 +195,9 @@ describe('RitualModal shell', () => {
       </RitualModal>
     );
 
-    expect(screen.getByRole('dialog')).toHaveFocus();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '← Temple' })).toHaveFocus()
+    );
 
     unmount();
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
 import { logTempleEvent } from '@/lib/templeLogger';
+import { useModalReveal } from '@/lib/temple/useModalReveal';
 import {
   markLeftWithoutTrace,
   shouldRecordRitualTrace,
@@ -15,6 +16,15 @@ import {
   RITUAL_TIMER_EVENT,
   getRitualTimerLabel,
 } from './useRitualModalTimer';
+
+const MODAL_ACCENTS: Record<string, string> = {
+  '/heartandangel/calm': '#5d7f9b',
+  '/heartandangel/letitgo': '#9b6761',
+  '/absolution': '#67836b',
+  '/cast': '#796fa0',
+  '/vigil': '#c8202b',
+  '/tribute': '#9a7437',
+};
 
 export default function RitualModal({
   title,
@@ -35,6 +45,8 @@ export default function RitualModal({
   const router = useRouter();
   const goBack = router.back;
   const dialogRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const startedAtRef = useRef<number>(0);
   const finalizedRef = useRef(false);
@@ -68,23 +80,35 @@ export default function RitualModal({
     goBack();
   }, [finalizeVisit, goBack]);
 
+  const { open: revealOpen, close: closeWithReveal } = useModalReveal({
+    path: canonicalPath,
+    overlayRef,
+    accent: MODAL_ACCENTS[canonicalPath],
+    onClosed: close,
+  });
+
+  useEffect(() => {
+    if (!revealOpen) return;
+
+    closeButtonRef.current?.focus();
+  }, [revealOpen]);
+
   useEffect(() => {
     startedAtRef.current = Date.now();
     finalizedRef.current = false;
     returnFocusRef.current = document.activeElement as HTMLElement | null;
 
-    const dialog = dialogRef.current;
-    dialog?.focus();
     document.body.classList.add('ritual-modal-open');
 
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        close();
+        closeWithReveal();
         return;
       }
-      if (event.key !== 'Tab' || !dialog) return;
+      if (event.key !== 'Tab' || !dialogRef.current) return;
 
+      const dialog = dialogRef.current;
       const focusable = Array.from(
         dialog.querySelectorAll<HTMLElement>(
           'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
@@ -118,7 +142,7 @@ export default function RitualModal({
     setTimerLabel(getRitualTimerLabel());
 
     const unregisterBack = registerTelegramBackHandler(() => {
-      close();
+      closeWithReveal();
       return true;
     });
 
@@ -130,10 +154,16 @@ export default function RitualModal({
       unregisterBack();
       returnFocusRef.current?.focus?.();
     };
-  }, [close, finalizeVisit]);
+  }, [closeWithReveal, finalizeVisit]);
 
   return (
-    <div className="temple-modal" role="presentation">
+    <div
+      ref={overlayRef}
+      className={`temple-modal${revealOpen ? ' on' : ''}`}
+      role="presentation"
+      data-testid="temple-modal"
+      data-state={revealOpen ? 'open' : 'closed'}
+    >
       <div
         ref={dialogRef}
         className="temple-modal__dialog"
@@ -143,7 +173,11 @@ export default function RitualModal({
         tabIndex={-1}
       >
         <header className="temple-modal__header">
-          <button type="button" onClick={close}>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={closeWithReveal}
+          >
             ← Temple
           </button>
           <strong>{title}</strong>
