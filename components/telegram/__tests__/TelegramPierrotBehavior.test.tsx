@@ -15,10 +15,12 @@ jest.mock('next/link', () => {
   return function MockLink({
     href,
     children,
+    prefetch: _prefetch,
     ...props
   }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     href: string;
     children: React.ReactNode;
+    prefetch?: boolean;
   }) {
     return (
       <a href={href} {...props}>
@@ -76,9 +78,7 @@ describe('Telegram Pierrot uses the single conversation window', () => {
     render(app());
 
     expect(screen.getByRole('button', { name: /^Open Pierrot/ })).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Open World, Temple and rituals navigation' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Temple navigation' })).toBeInTheDocument();
 
     // The single header P control replaces the retired floating launcher.
     expect(
@@ -95,7 +95,7 @@ describe('Telegram Pierrot uses the single conversation window', () => {
     expect(within(dialog).getByRole('textbox', { name: 'Message Pierrot' })).toBeInTheDocument();
 
     expect(
-      screen.queryByRole('button', { name: 'Open World, Temple and rituals navigation' })
+      screen.queryByRole('button', { name: 'Open Temple navigation' })
     ).not.toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close Pierrot' }));
@@ -104,9 +104,7 @@ describe('Telegram Pierrot uses the single conversation window', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: /^Open Pierrot/ })).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Open World, Temple and rituals navigation' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Temple navigation' })).toBeInTheDocument();
   });
 
   it('does not render a duplicate floating Pierrot launcher in Telegram', async () => {
@@ -136,27 +134,19 @@ describe('Telegram Pierrot uses the single conversation window', () => {
 
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Open World, Temple and rituals navigation',
+        name: 'Open Temple navigation',
       })
     );
 
     const dialog = screen.getByRole('dialog');
 
     expect(within(dialog).getByText('Rituals')).toBeInTheDocument();
-    expect(within(dialog).getByRole('link', { name: 'Calm' })).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole('link', { name: 'Let It Go' })
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole('link', { name: 'Absolution' })
-    ).toBeInTheDocument();
-    expect(within(dialog).getByRole('link', { name: 'Cast' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: /^Calm/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: /^Let It Go/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: /^Absolution/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: /^Cast/ })).toBeInTheDocument();
 
-    expect(
-      within(dialog).queryByRole('link', { name: 'Vigil' })
-    ).not.toBeInTheDocument();
-    expect(
-      within(dialog).queryByRole('link', { name: 'Tribute' })
-    ).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('link', { name: 'Vigil' })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('link', { name: 'Tribute' })).not.toBeInTheDocument();
   });
 });

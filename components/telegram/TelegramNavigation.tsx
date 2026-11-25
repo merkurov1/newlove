@@ -3,63 +3,213 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  Compass,
-  Moon,
-  ShieldCheck,
-  Sparkles,
-  Terminal,
-  Trash2,
-  X,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
 import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
-import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
+import { hapticSelection } from '@/lib/telegram/webApp';
+import {
+  resolveTelegramNavigation,
+  type TelegramNavigationGroup,
+  type TelegramNavigationIcon,
+  type TelegramNavigationLink,
+} from '@/lib/telegram/navigation';
 
-type NavigationItem = {
-  href: string;
-  label: string;
-  note?: string;
-  icon: LucideIcon;
-};
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
 
-const PRIMARY_LINKS: NavigationItem[] = [
-  {
-    href: '/heartandangel/world',
-    label: 'World',
-    note: 'The living landscape',
-    icon: Compass,
-  },
-  {
-    href: '/temple',
-    label: 'Temple',
-    note: 'The Sanctuary',
-    icon: Sparkles,
-  },
-];
+/**
+ * Authored line marks instead of a stock icon grid. Each shape is deliberately
+ * drawn on the same 16px optical grid so the two navigation modes share a
+ * rhythm while reading as different products.
+ */
+function NavigationMark({ icon, className }: { icon: TelegramNavigationIcon; className?: string }) {
+  const shared = {
+    viewBox: '0 0 16 16',
+    width: 16,
+    height: 16,
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.1,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+    focusable: false,
+    className,
+  };
 
-const RITUAL_ICONS: Record<string, LucideIcon> = {
-  '/heartandangel/calm': Moon,
-  '/heartandangel/letitgo': Trash2,
-  '/absolution': ShieldCheck,
-  '/cast': Terminal,
-};
+  switch (icon) {
+    case 'world':
+      return (
+        <svg {...shared}>
+          <path d="M2 12.25h12" />
+          <path d="M3.1 12.25 6 7.9l2.3 2.8 2.1-3.4 2.5 4.95" />
+        </svg>
+      );
 
-const RITUAL_LINKS: NavigationItem[] = TEMPLE_RITUAL_LINKS.map((ritual) => ({
-  href: ritual.href,
-  label: ritual.label,
-  icon: RITUAL_ICONS[ritual.href] ?? Sparkles,
-}));
+    case 'temple':
+      return (
+        <svg {...shared}>
+          <path d="M4 13V7a4 4 0 0 1 8 0v6" />
+          <path d="M2.75 13h10.5" />
+        </svg>
+      );
 
-function normalizePath(pathname: string) {
-  return pathname.replace(/\/$/, '') || '/';
+    case 'calm':
+      return (
+        <svg {...shared}>
+          <circle cx="8" cy="7.25" r="3.75" />
+          <path d="M2.75 13h10.5" />
+        </svg>
+      );
+
+    case 'release':
+      return (
+        <svg {...shared}>
+          <path d="M8 2.75v8.5" />
+          <path d="m5.25 8.5 2.75 2.75 2.75-2.75" />
+        </svg>
+      );
+
+    case 'absolution':
+      return (
+        <svg {...shared}>
+          <path d="M8 2.25 12 3.9v3.6c0 2.8-1.7 4.8-4 6.25-2.3-1.45-4-3.45-4-6.25V3.9z" />
+        </svg>
+      );
+
+    case 'cast':
+      return (
+        <svg {...shared}>
+          <path d="M3 13 13 3" />
+          <path d="M7.5 3H13v5.5" />
+        </svg>
+      );
+
+    case 'issues':
+      return (
+        <svg {...shared}>
+          <path d="M4.25 3h7.5v10h-7.5z" />
+          <path d="M6.25 1.5h7.5V11" />
+        </svg>
+      );
+
+    case 'flow':
+    default:
+      return (
+        <svg {...shared}>
+          <path d="M2.5 5h11" />
+          <path d="M2.5 8h7.5" />
+          <path d="M2.5 11h5" />
+        </svg>
+      );
+  }
 }
 
-function isActiveRoute(pathname: string, href: string) {
-  const current = normalizePath(pathname);
+function CloseMark() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width={16}
+      height={16}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.1}
+      strokeLinecap="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="m4 4 8 8" />
+      <path d="m12 4-8 8" />
+    </svg>
+  );
+}
 
-  return current === href || current.startsWith(`${href}/`);
+function NavigationGroup({
+  group,
+  index,
+  activeHref,
+  onNavigate,
+}: {
+  group: TelegramNavigationGroup;
+  index: number;
+  activeHref: string | null;
+  onNavigate: () => void;
+}) {
+  return (
+    <div className="telegram-nav__group">
+      <div className="telegram-nav__group-heading">
+        <span className="telegram-nav__group-index" aria-hidden="true">
+          {String(index + 1).padStart(2, '0')}
+        </span>
+        <h3 className="telegram-nav__group-title">{group.label}</h3>
+      </div>
+
+      <ul className="telegram-nav__list">
+        {group.links.map((link) => (
+          <li key={link.href}>
+            <Link
+              href={link.href}
+              prefetch={false}
+              onClick={onNavigate}
+              aria-current={activeHref === link.href ? 'page' : undefined}
+              data-active={activeHref === link.href ? 'true' : 'false'}
+              className="telegram-nav__link"
+            >
+              <span className="telegram-nav__link-mark" aria-hidden="true">
+                <NavigationMark icon={link.icon} />
+              </span>
+
+              <span className="telegram-nav__link-text">
+                <span className="telegram-nav__link-label">{link.label}</span>
+                <span className="telegram-nav__link-description">{link.description}</span>
+              </span>
+
+              <span className="telegram-nav__current" aria-hidden="true" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function CrossSpaceLink({
+  link,
+  onNavigate,
+}: {
+  link: TelegramNavigationLink;
+  onNavigate: () => void;
+}) {
+  return (
+    <div className="telegram-nav__cross">
+      <p className="telegram-nav__eyebrow">Elsewhere</p>
+
+      <Link
+        href={link.href}
+        prefetch={false}
+        onClick={onNavigate}
+        className="telegram-nav__cross-link"
+      >
+        <span className="telegram-nav__cross-mark" aria-hidden="true">
+          <NavigationMark icon={link.icon} />
+        </span>
+
+        <span className="telegram-nav__cross-text">
+          <span className="telegram-nav__cross-label">{link.label}</span>
+          <span className="telegram-nav__cross-description">{link.description}</span>
+        </span>
+
+        <span className="telegram-nav__cross-arrow" aria-hidden="true">
+          →
+        </span>
+      </Link>
+    </div>
+  );
 }
 
 export default function TelegramNavigation() {
@@ -68,8 +218,11 @@ export default function TelegramNavigation() {
   const [isOpen, setIsOpen] = useState(false);
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-
+  const panelRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
+
+  const navigation = resolveTelegramNavigation(pathname);
+  const { context } = navigation;
 
   const closeMenu = useCallback(() => {
     setIsOpen(false);
@@ -77,6 +230,16 @@ export default function TelegramNavigation() {
     window.requestAnimationFrame(() => {
       triggerRef.current?.focus();
     });
+  }, []);
+
+  const handleNavigate = useCallback(() => {
+    hapticSelection();
+    closeMenu();
+  }, [closeMenu]);
+
+  const openMenu = useCallback(() => {
+    hapticSelection();
+    setIsOpen(true);
   }, []);
 
   useEffect(() => {
@@ -96,26 +259,49 @@ export default function TelegramNavigation() {
     if (!isOpen) return;
 
     const previousOverflow = document.body.style.overflow;
+    let focusFrame = 0;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        event.preventDefault();
         closeMenu();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusable = panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+
+      if (!focusable || focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+        return;
+      }
+
+      if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', handleKeyDown);
 
-    const focusTimer = window.setTimeout(() => {
+    focusFrame = window.requestAnimationFrame(() => {
       closeRef.current?.focus();
-    }, 0);
+    });
 
     return () => {
       document.body.style.overflow = previousOverflow;
 
       document.removeEventListener('keydown', handleKeyDown);
 
-      window.clearTimeout(focusTimer);
+      window.cancelAnimationFrame(focusFrame);
     };
   }, [isOpen, closeMenu]);
 
@@ -145,36 +331,48 @@ export default function TelegramNavigation() {
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setIsOpen(true)}
+        onClick={openMenu}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
-        aria-label="Open World, Temple and rituals navigation"
-        className="telegram-nav-trigger"
+        aria-controls="telegram-navigation-panel"
+        aria-label={navigation.triggerAriaLabel}
+        data-nav-context={context}
+        className={`telegram-nav-trigger telegram-nav-trigger--${context}`}
       >
-        <Compass size={14} aria-hidden="true" />
-        <span className="hidden sm:inline">World · Temple</span>
+        <span className="telegram-nav-trigger__mark" aria-hidden="true">
+          <NavigationMark icon={context === 'flow' ? 'flow' : 'temple'} />
+        </span>
+
+        <span className="telegram-nav-trigger__label">{navigation.triggerLabel}</span>
+
+        <span className="telegram-nav-trigger__accent" aria-hidden="true" />
       </button>
 
       {isOpen && (
-        <div className="telegram-nav-backdrop" role="presentation" onClick={closeMenu}>
+        <div
+          className={`telegram-nav-backdrop telegram-nav-backdrop--${context}`}
+          data-nav-context={context}
+          role="presentation"
+          onClick={closeMenu}
+        >
           <section
+            id="telegram-navigation-panel"
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="telegram-nav-title"
-            className="telegram-nav-panel"
+            aria-describedby="telegram-nav-note"
+            data-nav-context={context}
+            data-testid="telegram-navigation-panel"
+            className={`telegram-nav-panel telegram-nav-panel--${context}`}
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
-              <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-amber-300/80">
-                  The Threshold
-                </p>
+            <header className="telegram-nav__header">
+              <div className="telegram-nav__heading">
+                <p className="telegram-nav__eyebrow">{navigation.eyebrow}</p>
 
-                <h2
-                  id="telegram-nav-title"
-                  className="mt-2 font-serif text-2xl font-normal text-stone-100"
-                >
-                  Where do you want to go?
+                <h2 id="telegram-nav-title" className="telegram-nav__title">
+                  {navigation.title}
                 </h2>
               </div>
 
@@ -183,80 +381,33 @@ export default function TelegramNavigation() {
                 type="button"
                 onClick={closeMenu}
                 aria-label="Close navigation"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-stone-300 transition-colors hover:bg-white/10 hover:text-stone-100"
+                className="telegram-nav__close"
               >
-                <X size={16} aria-hidden="true" />
+                <CloseMark />
               </button>
             </header>
 
-            <nav
-              aria-label="World and Temple"
-              className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2"
-            >
-              {PRIMARY_LINKS.map((item) => {
-                const Icon = item.icon;
-                const active = isActiveRoute(pathname, item.href);
+            <p id="telegram-nav-note" className="telegram-nav__note">
+              {navigation.note}
+            </p>
 
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    prefetch={false}
-                    onClick={closeMenu}
-                    aria-current={active ? 'page' : undefined}
-                    className={`group flex min-h-[92px] flex-col justify-between rounded-2xl border p-4 transition-colors ${
-                      active
-                        ? 'border-amber-300/60 bg-amber-300/10'
-                        : 'border-white/10 bg-white/[0.04] hover:border-amber-300/40 hover:bg-white/[0.07]'
-                    }`}
-                  >
-                    <span className="flex items-center justify-between gap-3">
-                      <span className="font-serif text-lg text-stone-100">{item.label}</span>
-
-                      <Icon size={18} className="text-amber-300/80" aria-hidden="true" />
-                    </span>
-
-                    <span className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500">
-                      {item.note}
-                    </span>
-                  </Link>
-                );
-              })}
+            <nav aria-label={`${navigation.title} navigation`}>
+              {navigation.groups.map((group, index) => (
+                <NavigationGroup
+                  key={group.id}
+                  group={group}
+                  index={index}
+                  activeHref={navigation.activeHref}
+                  onNavigate={handleNavigate}
+                />
+              ))}
             </nav>
 
-            <div className="mt-6 border-t border-white/10 pt-4">
-              <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-stone-500">
-                Rituals
-              </p>
+            {navigation.crossSpace && (
+              <CrossSpaceLink link={navigation.crossSpace} onNavigate={handleNavigate} />
+            )}
 
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {RITUAL_LINKS.map((item) => {
-                  const Icon = item.icon;
-                  const active = isActiveRoute(pathname, item.href);
-
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      prefetch={false}
-                      onClick={closeMenu}
-                      aria-current={active ? 'page' : undefined}
-                      className={`flex min-h-[48px] items-center gap-2.5 rounded-xl border px-3 py-2 text-xs transition-colors ${
-                        active
-                          ? 'border-amber-300/60 bg-amber-300/10 text-amber-100'
-                          : 'border-white/10 bg-white/[0.03] text-stone-300 hover:border-amber-300/40 hover:bg-white/[0.07] hover:text-stone-100'
-                      }`}
-                    >
-                      <Icon size={14} className="shrink-0 text-amber-300/75" aria-hidden="true" />
-
-                      <span className="truncate font-serif text-sm">{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-
-            <p className="mt-5 border-t border-white/10 pt-4 font-mono text-[9px] uppercase leading-relaxed tracking-[0.14em] text-stone-600">
+            <p className="telegram-nav__footnote">
               The full site remains available in a regular browser.
             </p>
           </section>

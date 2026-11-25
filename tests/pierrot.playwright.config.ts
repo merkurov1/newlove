@@ -19,6 +19,7 @@ export default defineConfig({
     'absolution-redesign.spec.ts',
     'cast-redesign.spec.ts',
     'temple-sanctuary.spec.ts',
+    'telegram-navigation.spec.ts',
   ],
   timeout: 90_000,
   expect: { timeout: 10_000 },
