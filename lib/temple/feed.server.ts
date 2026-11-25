@@ -5,19 +5,15 @@ import {
   TEMPLE_CHRONICLES_WINDOW_DAYS,
   TEMPLE_CHRONICLES_WINDOW_MS,
   TEMPLE_FEED_TTL_MS,
-  TEMPLE_FEED_TTL_SECONDS,
-  TEMPLE_INCOMPLETE_OR_FILTER,
-  TEMPLE_INFRASTRUCTURE_OR_FILTER,
-  TEMPLE_METRIC_DEFINITIONS,
   TEMPLE_RITUAL_OR_FILTER,
   TEMPLE_TRACE_FETCH_LIMIT,
   TEMPLE_TRACE_LIMIT,
   aggregateTempleRows,
   selectTempleTraces,
   type TempleChroniclesStats,
-  type TempleExcludedCounts,
   type TempleFeedPayload,
   type TempleLogRow,
+  type TemplePublicAggregates,
 } from '@/lib/temple/feed';
 import { TtlCache } from '@/lib/temple/feedCache';
 
@@ -70,7 +66,7 @@ export async function fetchRecentRitualRows(
 ): Promise<TempleLogRow[]> {
   const { data, error } = await client
     .from('temple_log')
-    .select('id,event_type,author,message,created_at,audio_url')
+    .select('id,event_type,author,created_at,audio_url,is_public_identity')
     .or(TEMPLE_RITUAL_OR_FILTER)
     .lte('created_at', iso(nowMs))
     .order('created_at', { ascending: false })
@@ -83,7 +79,8 @@ export async function fetchRecentRitualRows(
 
 /**
  * Reads every eligible ritual row in the inclusive Chronicles window, paging
- * server-side rather than sampling the latest ten records.
+ * server-side rather than sampling the latest ten records. The stored message
+ * column is deliberately not selected: public aggregates never need it.
  */
 export async function fetchWindowRitualRows(
   client: QueryClient,
@@ -97,7 +94,7 @@ export async function fetchWindowRitualRows(
   while (true) {
     const { data, error } = await client
       .from('temple_log')
-      .select('id,event_type,author,message,created_at')
+      .select('id,event_type,author,created_at,is_public_identity')
       .or(TEMPLE_RITUAL_OR_FILTER)
       .gte('created_at', iso(windowStartMs))
       .lte('created_at', iso(windowEndMs))
@@ -123,50 +120,43 @@ export async function fetchWindowRitualRows(
   return { rows, truncated };
 }
 
-async function countRows(
-  client: QueryClient,
-  windowStartMs: number,
-  windowEndMs: number,
-  orFilter?: string
-): Promise<number | null> {
-  try {
-    const base = client
-      .from('temple_log')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', iso(windowStartMs))
-      .lte('created_at', iso(windowEndMs));
-
-    const query = orFilter ? base.or(orFilter) : base;
-    const { count, error } = await query;
-
-    if (error) return null;
-
-    return typeof count === 'number' && Number.isFinite(count) ? count : null;
-  } catch {
-    return null;
-  }
-}
+export type TempleAggregateStats = {
+  aggregates: TemplePublicAggregates;
+  truncated: boolean;
+};
 
 /**
- * Excluded counts are supporting metadata, never a fabricated metric. If a
- * count query fails the field stays null and the UI omits it.
+ * The public aggregate panel is intentionally small: completed rituals, public
+ * names and Vigil sparks inside the same rolling window. It never returns
+ * exclusion counts, cache details or implementation labels.
  */
-export async function fetchExcludedCounts(
+export async function loadTemplePublicAggregates(
   client: QueryClient,
-  windowStartMs: number,
-  windowEndMs: number
-): Promise<TempleExcludedCounts> {
-  const [infrastructure, incomplete] = await Promise.all([
-    countRows(
-      client,
-      windowStartMs,
-      windowEndMs,
-      TEMPLE_INFRASTRUCTURE_OR_FILTER
-    ),
-    countRows(client, windowStartMs, windowEndMs, TEMPLE_INCOMPLETE_OR_FILTER),
-  ]);
+  nowMs: number = Date.now()
+): Promise<TempleAggregateStats> {
+  const windowStartMs = nowMs - TEMPLE_CHRONICLES_WINDOW_MS;
+  const windowEndMs = nowMs;
+  const result = await fetchWindowRitualRows(
+    client,
+    windowStartMs,
+    windowEndMs
+  );
+  const aggregate = aggregateTempleRows(
+    result.rows,
+    windowStartMs,
+    windowEndMs
+  );
 
-  return { infrastructure, incomplete };
+  return {
+    aggregates: {
+      ...aggregate,
+      windowDays: TEMPLE_CHRONICLES_WINDOW_DAYS,
+      windowStart: iso(windowStartMs),
+      windowEnd: iso(windowEndMs),
+      truncated: result.truncated,
+    },
+    truncated: result.truncated,
+  };
 }
 
 export type LoadTempleFeedOptions = {
@@ -178,47 +168,23 @@ export async function loadTempleFeed(
   options: LoadTempleFeedOptions = {}
 ): Promise<TempleFeedPayload> {
   const nowMs = options.nowMs ?? Date.now();
-  const windowStartMs = nowMs - TEMPLE_CHRONICLES_WINDOW_MS;
-  const windowEndMs = nowMs;
 
-  const [traceRows, aggregate, excluded] = await Promise.all([
+  const [traceRows, aggregate] = await Promise.all([
     fetchRecentRitualRows(client, nowMs),
-    fetchWindowRitualRows(client, windowStartMs, windowEndMs),
-    fetchExcludedCounts(client, windowStartMs, windowEndMs),
+    loadTemplePublicAggregates(client, nowMs),
   ]);
 
   const traces = selectTempleTraces(traceRows, TEMPLE_TRACE_LIMIT);
-  const aggregateStats = aggregateTempleRows(
-    aggregate.rows,
-    windowStartMs,
-    windowEndMs
-  );
 
-  const stats: TempleChroniclesStats = {
-    ...aggregateStats,
-    windowDays: TEMPLE_CHRONICLES_WINDOW_DAYS,
-    windowStart: iso(windowStartMs),
-    windowEnd: iso(windowEndMs),
-    excluded,
-    truncated: aggregate.truncated,
-  };
-
-  const generatedAt = iso(nowMs);
+  const stats: TempleChroniclesStats = aggregate.aggregates;
 
   return {
     ok: true,
     data: traces,
     stats,
     meta: {
-      generatedAt,
-      cachedAt: generatedAt,
-      ttlSeconds: TEMPLE_FEED_TTL_SECONDS,
-      traceLimit: TEMPLE_TRACE_LIMIT,
-      windowDays: TEMPLE_CHRONICLES_WINDOW_DAYS,
+      generatedAt: iso(nowMs),
       stale: false,
-      cache: 'miss',
-      truncated: aggregate.truncated,
-      definitions: { ...TEMPLE_METRIC_DEFINITIONS },
     },
     error: null,
   };
@@ -226,14 +192,12 @@ export async function loadTempleFeed(
 
 function withCacheMeta(
   payload: TempleFeedPayload,
-  cache: Exclude<TempleFeedCacheStatus, 'error'>,
   stale: boolean
 ): TempleFeedPayload {
   return {
     ...payload,
     meta: {
       ...payload.meta,
-      cache,
       stale,
     },
   };
@@ -261,7 +225,7 @@ export async function resolveTempleFeed(
 
   if (cached) {
     return {
-      payload: withCacheMeta(cached.value, 'hit', false),
+      payload: withCacheMeta(cached.value, false),
       cache: 'hit',
       error: null,
     };
@@ -272,7 +236,7 @@ export async function resolveTempleFeed(
     cache.set(payload, nowMs);
 
     return {
-      payload: withCacheMeta(payload, 'miss', false),
+      payload: withCacheMeta(payload, false),
       cache: 'miss',
       error: null,
     };
@@ -281,7 +245,7 @@ export async function resolveTempleFeed(
 
     if (stale) {
       return {
-        payload: withCacheMeta(stale.value, 'stale', true),
+        payload: withCacheMeta(stale.value, true),
         cache: 'stale',
         error: messageOf(error),
       };

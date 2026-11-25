@@ -57,7 +57,7 @@ const { POST } = require('../route') as {
   POST: (request: Request) => Promise<Response>;
 };
 
-function makeRequest() {
+function makeRequest(extra: Record<string, unknown> = {}) {
   return new Request('http://localhost/api/cast', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -67,6 +67,7 @@ function makeRequest() {
       // Client-supplied identity fields must never affect attribution.
       userId: 'forged-user',
       author: 'Mallory',
+      ...extra,
     }),
   });
 }
@@ -113,7 +114,7 @@ describe('POST /api/cast identity policy', () => {
       email: null,
     });
 
-    const response = await POST(makeRequest());
+    const response = await POST(makeRequest({ show_identity: true }));
     const payload = (await response.json()) as Record<string, unknown>;
 
     expect(response.status).toBe(200);
@@ -124,7 +125,11 @@ describe('POST /api/cast identity policy', () => {
       email: null,
       answers: [],
     });
-    expect(logRow()).toMatchObject({ user_id: null, author: 'Anna' });
+    expect(logRow()).toMatchObject({
+      user_id: null,
+      author: 'Anna',
+      is_public_identity: true,
+    });
 
     const publicMessage = String(logRow().message ?? '');
 
@@ -149,7 +154,11 @@ describe('POST /api/cast identity policy', () => {
       email: 'pilgrim@example.com',
       answers: Array.from({ length: 10 }, (_, index) => `answer ${index + 1}`),
     });
-    expect(logRow()).toMatchObject({ user_id: USER_ID, author: 'Pilgrim' });
+    expect(logRow()).toMatchObject({
+      user_id: USER_ID,
+      author: 'Anonymous',
+      is_public_identity: false,
+    });
   });
 
   it('keeps Cast open to anonymous visitors without inventing an identity', async () => {
@@ -161,6 +170,10 @@ describe('POST /api/cast identity policy', () => {
       email: null,
       answers: [],
     });
-    expect(logRow()).toMatchObject({ user_id: null, author: 'Visitor' });
+    expect(logRow()).toMatchObject({
+      user_id: null,
+      author: 'Anonymous',
+      is_public_identity: false,
+    });
   });
 });

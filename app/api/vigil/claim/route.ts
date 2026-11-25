@@ -124,7 +124,8 @@ export async function POST(req: Request) {
       supabaseAdmin,
       identity,
       heartId,
-      typeof intention === 'string' ? intention : null
+      typeof intention === 'string' ? intention : null,
+      body?.show_identity === true
     );
 
     if (!result.allowed) {

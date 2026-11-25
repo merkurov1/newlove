@@ -60,7 +60,34 @@ beforeEach(() => {
 });
 
 describe('POST /api/temple_logs identity attribution', () => {
-  it('uses a verified Supabase name and UUID, never the body author', async () => {
+  it('uses a verified Supabase name and UUID only after explicit opt-in', async () => {
+    mockIdentity.mockResolvedValue({
+      key: `sb:${USER_ID}`,
+      userId: USER_ID,
+      displayName: 'Pilgrim',
+      source: 'supabase',
+      email: 'pilgrim@example.com',
+    });
+
+    const response = await POST(
+      makeRequest({
+        event_type: 'WHISPER',
+        message: 'A trace',
+        author: 'Mallory',
+        show_identity: true,
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect(insertedRow()).toMatchObject({
+      user_id: USER_ID,
+      author: 'Pilgrim',
+      event_type: 'WHISPER',
+      is_public_identity: true,
+    });
+  });
+
+  it('keeps a verified identity private when consent is absent', async () => {
     mockIdentity.mockResolvedValue({
       key: `sb:${USER_ID}`,
       userId: USER_ID,
@@ -79,9 +106,8 @@ describe('POST /api/temple_logs identity attribution', () => {
 
     expect(response.status).toBe(201);
     expect(insertedRow()).toMatchObject({
-      user_id: USER_ID,
-      author: 'Pilgrim',
-      event_type: 'WHISPER',
+      author: 'Anonymous',
+      is_public_identity: false,
     });
   });
 
@@ -99,6 +125,7 @@ describe('POST /api/temple_logs identity attribution', () => {
         event_type: 'ASH',
         message: 'Released a burden',
         author: 'Mallory',
+        show_identity: true,
       })
     );
 
@@ -107,10 +134,11 @@ describe('POST /api/temple_logs identity attribution', () => {
       user_id: null,
       author: 'Anna',
       event_type: 'ASH',
+      is_public_identity: true,
     });
   });
 
-  it('keeps anonymous traces working with an untrusted display label only', async () => {
+  it('keeps anonymous traces anonymous by default even with a display label', async () => {
     const response = await POST(
       makeRequest({
         event_type: 'MEDITATION',
@@ -123,8 +151,28 @@ describe('POST /api/temple_logs identity attribution', () => {
     expect(response.status).toBe(201);
     expect(insertedRow()).toMatchObject({
       user_id: null,
-      author: 'Mallory',
+      author: 'Anonymous',
+      is_public_identity: false,
       message: 'Completed 30 seconds of calm.',
+    });
+  });
+
+  it('accepts an anonymous display label only after explicit opt-in', async () => {
+    const response = await POST(
+      makeRequest({
+        event_type: 'MEDITATION',
+        message: 'Stayed calm',
+        author: 'Mallory',
+        show_identity: true,
+        metadata: { durationSeconds: 30 },
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect(insertedRow()).toMatchObject({
+      user_id: null,
+      author: 'Mallory',
+      is_public_identity: true,
     });
   });
 
@@ -143,6 +191,7 @@ describe('POST /api/temple_logs identity attribution', () => {
         message:
           'Alice confessed: "Lust: Digital voyeurism" and received absolution.',
         author: 'Alice',
+        show_identity: true,
       })
     );
 
@@ -154,6 +203,7 @@ describe('POST /api/temple_logs identity attribution', () => {
       user_id: null,
       event_type: 'ABSOLUTION',
       author: 'Anonymous',
+      is_public_identity: false,
       message: 'Completed the Absolution ritual.',
     });
     expect(JSON.stringify(row)).not.toContain('Lust');

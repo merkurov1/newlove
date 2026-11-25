@@ -77,6 +77,7 @@ const PRIVATE_TABLES = [
   'todo',
   'newsletter_jobs',
   'newsletter_logs',
+  'temple_log',
 ];
 
 const PUBLIC_TABLES = [
@@ -89,7 +90,7 @@ const PUBLIC_TABLES = [
   'lots',
   'Tag',
   '_ArticleToTag',
-  'temple_log',
+  'temple_chronicle_signals',
   'vigil_hearts',
 ];
 

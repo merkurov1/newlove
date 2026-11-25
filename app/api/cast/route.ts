@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { createCastCaptureToken } from '@/lib/cast/captureToken';
 import { resolveTempleIdentity } from '@/lib/temple/identity';
+import { publicTempleTraceMessage } from '@/lib/temple/publicTrace';
 
 export const runtime = 'nodejs';
 
@@ -389,6 +390,8 @@ export async function POST(
     const source =
       body as Record<string, unknown>;
 
+    const showIdentity = source.show_identity === true;
+
     const { answers, language } =
       source;
 
@@ -675,10 +678,10 @@ export async function POST(
       .from('temple_log')
       .insert({
         user_id: userId,
-        author: userName,
+        author: showIdentity ? userName : 'Anonymous',
         event_type: 'CAST',
-        message:
-          `Perceptual archetype manifested: ${normalized.archetype}`,
+        message: publicTempleTraceMessage('CAST', normalized.archetype),
+        is_public_identity: showIdentity,
         created_at: createdAt,
       });
 

@@ -1419,6 +1419,194 @@
   text-transform: uppercase;
 }
 
+/* --- Public chronicle timeline ----------------------------------------- */
+
+.chronicleBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.chronicleLive {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.chronicleLiveDot {
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 999px;
+  background: #6f8a63;
+  box-shadow: 0 0 0 2px rgba(111, 138, 99, 0.14);
+}
+
+.chronicleLiveDotIdle {
+  background: var(--faint);
+  box-shadow: none;
+}
+
+.chronicleIdentity {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.chronicleIdentity input {
+  margin-top: 0.15rem;
+  accent-color: var(--gold);
+}
+
+.chronicleNotice {
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.25rem;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.chronicleEmpty {
+  margin: 0;
+  padding: 1.4rem 0;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 0.86rem;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.chronicleTimeline {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.chronicleDay {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.chronicleDayTitle {
+  margin: 0;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--gold);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.chronicleList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chronicleEvent {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 0.55rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.chronicleEvent:last-child {
+  border-bottom: 0;
+}
+
+.chronicleEventIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--accent, var(--muted));
+}
+
+.chronicleEventBody {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.45rem;
+  min-width: 0;
+}
+
+.chronicleEventRitual {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.chronicleEventText {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.chronicleEventVisitor {
+  color: var(--faint);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chronicleEventTime {
+  color: var(--faint);
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  line-height: 1.6;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.chronicleMore {
+  align-self: center;
+  min-height: 36px;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 0.2rem;
+  background: transparent;
+  color: var(--gold);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: color 180ms ease, border-color 180ms ease;
+}
+
+.chronicleMore:hover,
+.chronicleMore:focus-visible {
+  border-color: var(--gold-soft);
+  color: var(--ink);
+}
+
+.chronicleMore:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 /* --- Chambers / footer -------------------------------------------------- */
 
 /*

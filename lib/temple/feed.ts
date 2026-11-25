@@ -15,8 +15,6 @@
  *   presented as a completed ritual.
  */
 
-import { redactPublicTempleTrace } from '@/lib/temple/publicTrace';
-
 export const TEMPLE_TRACE_LIMIT = 7;
 export const TEMPLE_TRACE_FETCH_LIMIT = 50;
 export const TEMPLE_FEED_TTL_SECONDS = 60;
@@ -26,7 +24,14 @@ export const TEMPLE_CHRONICLES_WINDOW_MS =
   TEMPLE_CHRONICLES_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 export const TEMPLE_AGGREGATE_PAGE_SIZE = 1000;
 export const TEMPLE_AGGREGATE_MAX_ROWS = 10_000;
-export const TEMPLE_FEED_CACHE_KEY = 'temple:feed:v1';
+// v2 contains only allowlisted descriptions and opt-in identity. The previous
+// key is intentionally not reused so an old browser snapshot with raw stored
+// messages can never be rendered after this privacy change.
+export const TEMPLE_FEED_CACHE_KEY = 'temple:feed:v2';
+
+/** Default page size for the browsable public chronology. */
+export const TEMPLE_CHRONICLES_PAGE_SIZE = 20;
+export const TEMPLE_CHRONICLES_MAX_PAGE_SIZE = 50;
 
 export const RITUAL_EVENT_TYPES = [
   'VIGIL',
@@ -40,6 +45,62 @@ export const RITUAL_EVENT_TYPES = [
   'HEARTANDANGEL',
   'WHISPER',
 ] as const;
+
+/**
+ * The only public wording the chronicle uses. Raw stored messages are never
+ * copied into a public event: some legacy rows contain confession text,
+ * archetype answers or client telemetry from older versions of the Temple.
+ */
+export const TEMPLE_RITUAL_DEFINITIONS: Record<
+  string,
+  { label: string; description: string }
+> = {
+  VIGIL: {
+    label: 'Vigil',
+    description: 'Kept watch at the Vigil.',
+  },
+  VIGIL_SPARK: {
+    label: 'Vigil',
+    description: 'Added a spark to the shared Vigil.',
+  },
+  ASH: {
+    label: 'Let It Go',
+    description: 'Released a burden and let it go.',
+  },
+  CAST: {
+    label: 'Cast',
+    description: 'Completed the Cast ritual.',
+  },
+  ABSOLUTION: {
+    label: 'Absolution',
+    description: 'Completed the Absolution ritual.',
+  },
+  TRIBUTE: {
+    label: 'Tribute',
+    description: 'Offered a tribute to the Temple.',
+  },
+  MEDITATION: {
+    label: 'Calm',
+    description: 'Completed a Calm meditation.',
+  },
+  SILENCE: {
+    label: 'Calm',
+    description: 'Kept a moment of silence.',
+  },
+  HEARTANDANGEL: {
+    label: 'Calm',
+    description: 'Held the Heart & Angel.',
+  },
+  WHISPER: {
+    label: 'Whisper',
+    description: 'Left a whisper in the Temple.',
+  },
+};
+
+export const TEMPLE_FALLBACK_RITUAL_DEFINITION = {
+  label: 'Ritual',
+  description: 'Completed a ritual at the Temple.',
+} as const;
 
 export const INCOMPLETE_EVENT_TYPES = ['MODAL_OPEN', 'INTENSITY'] as const;
 
@@ -178,6 +239,22 @@ export type TempleLogRow = {
   message?: string | null;
   created_at?: string | null;
   audio_url?: string | null;
+  /** Explicit visitor opt-in. Missing on legacy rows and therefore private. */
+  is_public_identity?: boolean | null;
+};
+
+/**
+ * One public chronicle event. This is the projection allowlist: no stored
+ * message, user id, audio URL, email or other metadata crosses this boundary.
+ */
+export type TempleChronicleEvent = {
+  id: string;
+  ritual: string;
+  ritualLabel: string;
+  description: string;
+  occurredAt: string;
+  /** Present only when the visitor explicitly opted in. */
+  visitor: string | null;
 };
 
 export type TempleTrace = {
@@ -187,38 +264,29 @@ export type TempleTrace = {
   canonical_type: string;
   category: 'ritual';
   author: string;
+  description: string;
+  public_identity: boolean;
+  /** Kept for older consumers; contains the human description, not raw data. */
   message: string;
   created_at: string;
   audio_url: string | null;
 };
 
-export type TempleExcludedCounts = {
-  infrastructure: number | null;
-  incomplete: number | null;
-};
-
 export type TempleChroniclesStats = {
   completedRituals: number;
+  /** Distinct publicly named visitors. Anonymous visitors are never counted. */
   namedAuthors: number;
   vigilSparks: number;
   byType: Record<string, number>;
   windowDays: number;
   windowStart: string;
   windowEnd: string;
-  excluded: TempleExcludedCounts;
   truncated: boolean;
 };
 
 export type TempleFeedMeta = {
   generatedAt: string;
-  cachedAt: string;
-  ttlSeconds: number;
-  traceLimit: number;
-  windowDays: number;
   stale: boolean;
-  cache: 'hit' | 'miss' | 'stale' | 'error';
-  truncated: boolean;
-  definitions: Record<string, string>;
 };
 
 export type TempleFeedPayload = {
@@ -229,18 +297,21 @@ export type TempleFeedPayload = {
   error: null;
 };
 
-export const TEMPLE_METRIC_DEFINITIONS = {
-  traces:
-    'Up to seven most recent eligible completed ritual events. Entry, navigation, incomplete and unclassified events are excluded.',
-  completedRituals:
-    'All eligible completed ritual events inside the rolling 30-day window. Entry, navigation, modal-open and intensity events are excluded.',
-  namedAuthors:
-    'Distinct case-insensitive author display names among eligible rituals in the window. Display names are not verified unique people.',
-  vigilSparks:
-    'VIGIL and VIGIL_SPARK ritual events inside the same rolling window.',
-  window:
-    'Rolling 30-day window ending at the server request time. UTC boundaries are inclusive.',
-} as const;
+export type TemplePublicAggregates = TempleChroniclesStats;
+
+export type TempleChroniclesPageInfo = {
+  nextCursor: string | null;
+  hasMore: boolean;
+  limit: number;
+};
+
+export type TempleChroniclesPage = {
+  ok: true;
+  events: TempleChronicleEvent[];
+  pageInfo: TempleChroniclesPageInfo;
+  aggregates: TemplePublicAggregates | null;
+  error: null;
+};
 
 function parseTimestamp(value: unknown): number | null {
   if (typeof value !== 'string' || !value.trim()) return null;
@@ -275,10 +346,51 @@ function compareRowsNewestFirst(
   return bId.localeCompare(aId);
 }
 
+const PRIVATE_IDENTITY_EVENTS = new Set(['ABSOLUTION']);
+
+function publicVisitorName(row: TempleLogRow, canonical: string): string | null {
+  if (row.is_public_identity !== true) return null;
+  if (PRIVATE_IDENTITY_EVENTS.has(canonical)) return null;
+  if (!isNamedTempleAuthor(row.author)) return null;
+
+  return String(row.author ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, 80);
+}
+
 /**
- * Turns eligible rows into the trace shape returned by the API. Keeping the
- * raw snake_case fields means older consumers keep working while new consumers
- * can use the canonical classification.
+ * Builds the only public shape of a Temple event. It deliberately ignores the
+ * stored `message` column: older rows may contain confession text, raw Cast
+ * answers or client telemetry. Identity is included only after an explicit
+ * opt-in, and Absolution can never publish a name.
+ */
+export function projectPublicTempleEvent(
+  row: TempleLogRow,
+  index: number = 0
+): TempleChronicleEvent | null {
+  const createdAtMs = parseTimestamp(row.created_at);
+  if (createdAtMs === null) return null;
+  if (classifyTempleEventType(row.event_type) !== 'ritual') return null;
+
+  const canonical = normalizeTempleEventType(row.event_type);
+  const definition =
+    TEMPLE_RITUAL_DEFINITIONS[canonical] ?? TEMPLE_FALLBACK_RITUAL_DEFINITION;
+
+  return {
+    id: String(row.id ?? `${row.created_at}-${index}`),
+    ritual: canonical,
+    ritualLabel: definition.label,
+    description: definition.description,
+    occurredAt: new Date(createdAtMs).toISOString(),
+    visitor: publicVisitorName(row, canonical),
+  };
+}
+
+/**
+ * Turns eligible rows into the trace shape returned by the home API. Keeping
+ * the raw snake_case fields means older consumers keep working while new
+ * consumers can use the canonical classification and human description.
  */
 export function selectTempleTraces(
   rows: readonly TempleLogRow[],
@@ -295,36 +407,26 @@ export function selectTempleTraces(
     const createdAtMs = parseTimestamp(row.created_at);
     if (createdAtMs === null) return;
 
-    const category = classifyTempleEventType(row.event_type);
-    if (category !== 'ritual') return;
-
     const key = rowDedupeKey(row, index);
     if (seen.has(key)) return;
+
+    const event = projectPublicTempleEvent(row, index);
+    if (!event) return;
     seen.add(key);
-
-    const canonical = normalizeTempleEventType(row.event_type);
-    const rawAuthor = String(row.author ?? '').trim() || 'Anonymous';
-    const rawMessage = String(row.message ?? '').trim();
-
-    // Absolution keeps its certificate private. Legacy and malformed rows are
-    // reduced to a completion signal here, before any public payload is built.
-    const { author, message } = redactPublicTempleTrace({
-      eventType: canonical,
-      author: rawAuthor,
-      message: rawMessage,
-    });
 
     eligible.push({
       row,
       createdAtMs,
       trace: {
-        id: String(row.id ?? `${row.created_at}-${index}`),
+        id: event.id,
         event_type: row.event_type ?? null,
-        canonical_type: canonical,
+        canonical_type: event.ritual,
         category: 'ritual',
-        author,
-        message,
-        created_at: String(row.created_at),
+        author: event.visitor ?? 'Anonymous',
+        description: event.description,
+        public_identity: event.visitor !== null,
+        message: event.description,
+        created_at: event.occurredAt,
         audio_url: row.audio_url ?? null,
       },
     });
@@ -377,7 +479,9 @@ export function aggregateTempleRows(
       vigilSparks += 1;
     }
 
-    if (isNamedTempleAuthor(row.author)) {
+    // A name is a public aggregate only when the visitor explicitly opted in.
+    // Otherwise the count could reveal that named rows exist in the archive.
+    if (row.is_public_identity === true && isNamedTempleAuthor(row.author)) {
       authors.add(normalizeAuthorKey(row.author));
     }
   });
@@ -420,12 +524,42 @@ export function isTempleFeedPayload(value: unknown): value is TempleFeedPayload 
   if (typeof s.windowStart !== 'string' || typeof s.windowEnd !== 'string') {
     return false;
   }
-  if (typeof m.generatedAt !== 'string' || typeof m.cachedAt !== 'string') {
-    return false;
-  }
-  if (!isFiniteNumber(m.ttlSeconds) || !isFiniteNumber(m.traceLimit)) {
-    return false;
-  }
+  if (typeof m.generatedAt !== 'string') return false;
+  if (typeof m.stale !== 'boolean') return false;
 
   return true;
+}
+
+/**
+ * Client-side validator for a chronicle page. A malformed page must never
+ * replace a valid timeline with partial or arbitrary data.
+ */
+export function isTempleChroniclesPage(
+  value: unknown
+): value is TempleChroniclesPage {
+  if (!value || typeof value !== 'object') return false;
+  const page = value as Record<string, unknown>;
+
+  if (page.ok !== true || !Array.isArray(page.events)) return false;
+
+  const info = page.pageInfo;
+  if (!info || typeof info !== 'object') return false;
+
+  const i = info as Record<string, unknown>;
+  if (i.nextCursor !== null && typeof i.nextCursor !== 'string') return false;
+  if (typeof i.hasMore !== 'boolean') return false;
+
+  return page.events.every((event) => {
+    if (!event || typeof event !== 'object') return false;
+    const e = event as Record<string, unknown>;
+
+    return (
+      typeof e.id === 'string' &&
+      typeof e.ritual === 'string' &&
+      typeof e.ritualLabel === 'string' &&
+      typeof e.description === 'string' &&
+      typeof e.occurredAt === 'string' &&
+      (e.visitor === null || typeof e.visitor === 'string')
+    );
+  });
 }

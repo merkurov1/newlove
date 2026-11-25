@@ -1,5 +1,8 @@
 export type TributeTempleLogRow = {
   event_type?: unknown;
+  /** Public-safe signal column, populated only after explicit opt-in. */
+  public_name?: unknown;
+  /** Legacy shape kept for tests and older cached signals. */
   author?: unknown;
 };
 
@@ -17,7 +20,12 @@ export function isTributeTempleLogEvent(
 export function tributeSignalDonorName(
   row: TributeTempleLogRow | null | undefined
 ): string {
-  return typeof row?.author === 'string' && row.author.trim()
-    ? row.author.trim().slice(0, 120)
-    : 'PILGRIM';
+  const value =
+    typeof row?.public_name === 'string'
+      ? row.public_name
+      : typeof row?.author === 'string'
+        ? row.author
+        : '';
+
+  return value.trim() ? value.trim().slice(0, 120) : 'PILGRIM';
 }

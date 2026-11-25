@@ -358,6 +358,7 @@ describe('Cast analysis, result and email capture', () => {
         body: JSON.stringify({
           answers: Array.from({ length: 10 }, (_, index) => `Answer number ${index + 1}`),
           language: 'en',
+          show_identity: false,
         }),
       })
     );
